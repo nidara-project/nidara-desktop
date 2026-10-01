@@ -6,6 +6,7 @@ import { ScaleRevealer, attachSwipeDismiss } from "../../common/ScaleRevealer"
 import notifConfig from "../../core/NotifConfig"
 import { type Notification, getNotification, isCritical, dontDisturb, watchNotified, watchResolved } from "../../core/NotifService"
 import status from "../../core/Status"
+import { gameSilencing } from "../../core/GameSession"
 
 const MAX_VISIBLE = 4       // cap stacked banners; oldest gets retired first
 const ANIM_MS = 300         // grow/shrink in+out duration
@@ -125,9 +126,11 @@ export function NotificationPopupsWidget() {
     const onNotified = (id: number, replaced: boolean) => {
         const n = getNotification(id)
         if (!n) return
-        // CRITICAL cuts through DND (that's what critical is for — battery dying);
-        // an open CC/NC still suppresses banners (the user is looking right there).
-        const dndSuppressed = dontDisturb() && !isCritical(n)
+        // CRITICAL cuts through DND (that's what critical is for — battery dying), and
+        // through a game's silence (Settings → Gaming) the same way; an open CC/NC still
+        // suppresses banners (the user is looking right there). Held back is not lost:
+        // the notification is in the centre.
+        const dndSuppressed = (dontDisturb() || gameSilencing()) && !isCritical(n)
         if (dndSuppressed || status.cc_open || status.nc_open) {
             // A transient that never gets its banner has nowhere else to live (the
             // NC excludes it) — drop it so it doesn't linger invisible in notifd.

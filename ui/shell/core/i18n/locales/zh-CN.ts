@@ -717,8 +717,6 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "游戏启动时显示的内容",
     "settings.gaming.custom-wallpaper":            "图片",
     "settings.gaming.custom-wallpaper.desc":             "所有游戏通用的壁纸",
-    "settings.gaming.transition":                        "过渡效果",
-    "settings.gaming.transition.desc":                   "切换到游戏壁纸时的过渡效果",
     "settings.gaming.performance-profile":         "高性能配置",
     "settings.gaming.performance-profile.desc":          "游戏启动时自动激活高性能电源配置",
     "settings.gaming.dialog.wallpaper":    "选择壁纸",

@@ -56,7 +56,7 @@ pub struct RuleConfig {
     pub float: Option<bool>,
     /// Centred in the usable area — not over its parent, not stepped off another window.
     pub center: bool,
-    /// `"3"`, or `"special:NAME"`.
+    /// `"3"`, `"special:NAME"` or `"name:NAME"` (a named workspace, `gamespace`).
     pub workspace: Option<String>,
     /// With `workspace`: the window goes there without taking the user with it.
     pub silent: bool,
@@ -78,6 +78,9 @@ pub struct RuleMatch {
     /// What the window was called when it was first shown.
     pub initial_app_id: Option<String>,
     pub initial_title: Option<String>,
+    /// A game (wm/games.rs: Steam's app id or environment, or a surface whose content is a
+    /// game) — or, `false`, anything that is not.
+    pub game: Option<bool>,
 }
 
 /// How windows are laid out. The defaults are the Hyprland session's (`config/hypr/

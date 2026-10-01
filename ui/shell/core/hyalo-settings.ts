@@ -13,7 +13,7 @@
 // in — what is in force, not what Settings last said.
 //
 // What Hyalo does not have yet is a no-op here and false in `caps`: its own animations, its
-// per-surface blur (both #684) and game mode (#682's game-mode item).
+// per-surface blur (both #684).
 
 import * as hyalo from "./hyalo-ipc"
 import { GLASS_BLUR } from "./NidaraTheme"
@@ -62,7 +62,7 @@ function put(obj: any, path: string, value: unknown) {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: false, sharedBlur: false, gameMode: false, vrrFullscreenOnly: false },
+        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false },
 
         async readInput(current) {
             const input = config()?.input
@@ -128,7 +128,6 @@ export function createHyaloSettings(): CompositorSettings {
             patch("workspace modes", { workspaces: { default_mode: defaultMode, modes } })
         },
 
-        setGamingPolicy() { /* caps.gameMode */ },
         setReduceMotion() { /* caps.animations: Hyalo draws no animation yet */ },
         setBlur() { /* caps.sharedBlur: Hyalo's blur is per surface (#684) */ },
         blurBaseline: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),

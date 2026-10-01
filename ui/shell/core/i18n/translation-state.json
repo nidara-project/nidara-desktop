@@ -811,6 +811,7 @@
     "settings.gaming.title": "c0ecc0d2",
     "settings.gaming.group.wallpaper": "466891e2",
     "settings.gaming.group.performance": "63c90455",
+    "settings.gaming.group.notifications": "753a22b2",
     "settings.gaming.mode.artwork": "1b0a4d7c",
     "settings.gaming.mode.custom": "081ae3fd",
     "settings.gaming.mode.none": "6eef6648",
@@ -818,10 +819,10 @@
     "settings.gaming.wallpaper-mode.desc": "7e4c7deb",
     "settings.gaming.custom-wallpaper": "50e19fda",
     "settings.gaming.custom-wallpaper.desc": "1eba006a",
-    "settings.gaming.transition": "4ead496f",
-    "settings.gaming.transition.desc": "60cc1e34",
     "settings.gaming.performance-profile": "66733164",
     "settings.gaming.performance-profile.desc": "d6ed983d",
+    "settings.gaming.silence-notifications": "2b9a9236",
+    "settings.gaming.silence-notifications.desc": "ff5d4628",
     "settings.gaming.dialog.wallpaper": "4842be93",
     "consent.allow": "3ad0e369",
     "consent.deny": "53577bb5",
@@ -831,8 +832,8 @@
   },
   "locales": {
     "de": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -893,6 +894,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -942,14 +946,14 @@
       "stale": []
     },
     "es": {
-      "translated": 827,
-      "of": 827,
+      "translated": 828,
+      "of": 828,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1010,6 +1014,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1059,8 +1066,8 @@
       "stale": []
     },
     "it": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1121,6 +1128,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1170,8 +1180,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1232,6 +1242,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1281,8 +1294,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1343,6 +1356,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1392,8 +1408,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1454,6 +1470,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1503,8 +1522,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1565,6 +1584,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1614,8 +1636,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1676,6 +1698,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1725,8 +1750,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1787,6 +1812,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",
@@ -1836,8 +1864,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 723,
-      "of": 827,
+      "translated": 721,
+      "of": 828,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1898,6 +1926,9 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.gaming.group.notifications",
+        "settings.gaming.silence-notifications",
+        "settings.gaming.silence-notifications.desc",
         "settings.network.ethernet.details",
         "settings.network.ethernet.status.desc",
         "settings.network.ethernet.switch.desc",

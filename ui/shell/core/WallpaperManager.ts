@@ -217,6 +217,32 @@ class WallpaperManager extends GObject.Object {
         }
     }
 
+    /**
+     * Game mode (core/GameSession.ts): `path` on one output while a game runs, WITHOUT making
+     * it the wallpaper — nothing saved, nothing announced, no hook. No transition: the game
+     * covers it at once, and an awww transition running under a fullscreen game froze halfway
+     * until the game closed (2026-05).
+     */
+    async showForGame(path: string, output: string) {
+        try {
+            await execAsync(["awww", "img", path, "--transition-type", "none", "--outputs", output])
+        } catch (e) {
+            console.error("[WallpaperManager] game wallpaper:", e)
+        }
+    }
+
+    /** The wallpaper back on `output` after `showForGame`, with the user's transition. Read
+     *  from disk: the user may have chosen another one while the game ran. */
+    async restoreAfterGame(output: string) {
+        const path = resolveWallpaper("shell")
+        if (!path) return
+        try {
+            await execAsync(["awww", "img", path, "--transition-type", this._transition, "--outputs", output])
+        } catch (e) {
+            console.error("[WallpaperManager] restore after game:", e)
+        }
+    }
+
     setTransition(t: TransitionType) {
         this._transition = t
         this._save()
@@ -258,8 +284,8 @@ class WallpaperManager extends GObject.Object {
      * Decode the wallpaper into `preview`, off the main loop, and emit "preview".
      *
      * Re-resolves the path from disk on every call rather than trusting
-     * `_current`: the wallpaper also changes behind this manager's back — gaming
-     * hero-art swaps it through hyprland.lua, and `_current` is only a hint the
+     * `_current`: the wallpaper also changes behind this manager's back — anyone
+     * can run `awww`, and `_current` is only a hint the
      * config carries (awww owns the live one). A call whose path and cached copy
      * already agree is free, so surfaces can just warm on open and self-heal.
      *

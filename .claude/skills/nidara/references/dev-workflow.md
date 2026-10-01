@@ -1992,35 +1992,41 @@ syntax error, and the shape of that mistake is that it prints an error and keeps
 built on it reports differences that are really the window never having moved (that happened while
 writing this one — the first table it produced was noise).
 
-### Driving `hyprland.lua`'s game mode without Hyprland (`scripts/dev/hypr-game-mode-test.lua`) — a CI GATE
+### Driving game mode's session without a game (`scripts/dev/game-session-probe.ts`) — a CI GATE
 
 ```bash
-lua scripts/dev/hypr-game-mode-test.lua        # exits 1 on failure
-# run it against another copy of the config — e.g. to confirm it can still fail:
-git show main:config/hypr/hyprland.lua > /tmp/old.lua
-NIDARA_HYPR_CONFIG=/tmp/old.lua lua scripts/dev/hypr-game-mode-test.lua
+npx --yes esbuild@0.28.2 scripts/dev/game-session-probe.ts --bundle --platform=node \
+    --format=esm --outfile=/tmp/game-session-probe.mjs && node /tmp/game-session-probe.mjs
 ```
 
-The game-mode handlers only run when **Steam** opens a window, which is not something a test can
-arrange — so it fakes **Hyprland** instead of faking a game: a stub `hl` table records what the
-config asks the compositor to do, the real `config/hypr/hyprland.lua` is loaded against it, and the
-registered `window.open` / `window.destroy` callbacks are invoked directly with a game-shaped
-payload. `powerprofilesctl` is intercepted in both directions (`hl.exec_cmd` when the config sets a
-profile, `io.popen` when it reads one), the test SETS the `NIDARA_GAMING` table the shell would hand
-over and `HOME` points at a fixture, so the test states its own preconditions and never touches the live session.
+What game mode does around a game (`ui/shell/core/game-session-logic.ts`, architecture.md → "Game
+mode") only runs when a game opens, which is not something a test can arrange — so it fakes the
+WORLD instead: a profiles daemon that remembers the profile, an awww that remembers what each output
+shows, a compositor with a focused workspace, timers that fire when told. That is why the logic is a
+file of its own with no `gi://` import: the probe bundles it for node.
 
-What it asserts is that a game session is **undone**: the power profile after it is the one from
-before it, across all three profiles, across two windows for one game, when the user changes the
-profile mid-game, when they quit from another workspace, and — with the toggle off — that
-`powerprofilesctl` is never run at all. That last one is checked by counting commands rather than by
-reading the final value; a value can be right for the wrong reason.
+What it asserts is that a session is **undone**: the profile after it is the one from before, across
+all three profiles, two windows for one game, a profile changed mid-game, a quit from another
+workspace, the setting off (counted as writes, not read off the final value — a value can be right
+for the wrong reason), no daemon at all; the artwork on the game's output and the wallpaper back; the
+grace that keeps a session across a launcher handing over to its game; silencing on, off mid-game,
+and over; and a shell that restarts mid-session adopting the record instead of capturing
+"performance". CI runs it in the `hypr-config` job with a control that deletes the "still the one
+we set" condition and requires the probe to fail.
 
-It is a CI gate alongside `luac -p` on the same file, and the parse check is the more important
-half: the session's whole config is one Lua chunk, so a syntax error anywhere in it means Hyprland
-starts with **no Nidara config at all** — no keybinds, no rules, no game mode.
+It replaced `scripts/dev/hypr-game-mode-test.lua`, which drove the same rules inside `hyprland.lua`
+against a stubbed `hl` while the session lived there.
 
-⚠️ The pattern generalises to anything else in `hyprland.lua` that keeps state across events. What
-made game mode worth covering is that it has some: what the wallpaper and the profile *were*.
+**End to end, on Hyalo nested** (how #682's game mode was verified, 2026-10-01): `headless-shell.sh`
+with `HYALO_CONFIG=config/hyalo/hyalo.toml` (the default, `/dev/null`, has no `[rules.games]`),
+`GSETTINGS_SCHEMA_DIR` pointing at the repo's schemas compiled into a temp dir (a new key is not in
+the installed schema), a fake `powerprofilesctl` first in `PATH` (the sandbox copies the user's dconf,
+and with the profile setting on the shell would otherwise switch the REAL machine's profile), a
+`HYALO_DRIVER` that starts `SteamAppId=440 gjs -m fakegame.js` and takes `nidara-hyalo msg
+screenshot`s, and fake artwork at `$NIDARA_SANDBOX/.steam/steam/appcache/librarycache/440/
+library_hero.jpg`. ⚠️ Keep `NIDARA_SANDBOX` SHORT (the harness's own `/tmp/nidara-hyalo-home.*`):
+the sandbox's runtime dir is inside it, and awww refuses a socket path that long ("File name too
+long") — no wallpaper at all, before or during the game.
 
 ### Do the shipped locales still FIT? (`scripts/dev/text-budget.js`) — a CI GATE
 
@@ -3715,7 +3721,7 @@ What still lives in `~/.config/nidara/` as a file, and why (every PREFERENCE is 
 | `wallpaper` | Current wallpaper path + transition — read by `hyprland.lua` and the lock screen too, which cannot read GSettings (JSON; reserves a `surfaces` block for per-surface wallpapers — schema in `ui/lib/wallpaper.ts`) |
 | `greeter-prefs.json` | Greeter preferences (read by the greeter, another user) |
 | `app-frequency.json` | Launch counts — a cache written on every launch, not a preference |
-| `nidara-settings.lua`, `nidara-monitor.lua`, `nidara-workspaces.lua`, `nidara-gaming.lua` | OUTPUTS the shell generates for Hyprland, which cannot read GSettings |
+| `nidara-settings.lua`, `nidara-monitor.lua`, `nidara-workspaces.lua` | OUTPUTS the shell generates for Hyprland, which cannot read GSettings (`nidara-gaming.lua` was one until #682; a stale copy left behind is required by nothing) |
 | `*.migrated` | The user's original files, kept after the one-time import (#573) |
 
 ### Hyprland config ownership model (settled 2026-06-05 — do NOT re-litigate)
@@ -3798,8 +3804,8 @@ the first login of every machine and on every boot of the live medium, and until
 attempted paths) at the user for it. Now `package.searchpath` decides: no file → a
 `print()` and nothing on screen; a file that exists and fails → the notification, first
 line only. **A new generated file therefore needs no guard of its own** — the old
-`io.open` check around `nidara-gaming.lua` was exactly that, and it is gone, which is
-also why only one of the two shell-written files ever shouted at anybody.
+`io.open` check around `nidara-gaming.lua` (a generated file until #682) was exactly
+that, and it is gone.
 
 ### How the shared config actually loads (`-c` through `start-hyprland` — subtle)
 

@@ -268,13 +268,18 @@ export const manifest = [
                         i18n: "settings.gaming.custom-wallpaper",
                         visibleWhen: { key: "gaming.wallpaperMode", in: ["custom"] },
                     },
-                    "gaming.transition",
                 ],
             },
             {
                 i18n: "settings.gaming.group.performance",
                 items: [
                     "gaming.performanceProfile",
+                ],
+            },
+            {
+                i18n: "settings.gaming.group.notifications",
+                items: [
+                    "gaming.silenceNotifications",
                 ],
             },
         ],

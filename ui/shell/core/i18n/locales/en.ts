@@ -915,6 +915,7 @@ export default {
     "settings.gaming.title":                     "Gaming",
     "settings.gaming.group.wallpaper":                       "Wallpaper",
     "settings.gaming.group.performance":                     "Performance",
+    "settings.gaming.group.notifications":                   "Notifications",
     "settings.gaming.mode.artwork":                          "Game art",
     "settings.gaming.mode.custom":                           "Custom",
     "settings.gaming.mode.none":                             "None",
@@ -922,10 +923,10 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "What to display when a game launches",
     "settings.gaming.custom-wallpaper":            "Image",
     "settings.gaming.custom-wallpaper.desc":             "Wallpaper shown for all games",
-    "settings.gaming.transition":                        "Transition",
-    "settings.gaming.transition.desc":                   "Transition when switching to game wallpaper",
     "settings.gaming.performance-profile":         "High-performance profile",
     "settings.gaming.performance-profile.desc":          "Activate performance power profile automatically when a game launches",
+    "settings.gaming.silence-notifications":       "Silence notifications",
+    "settings.gaming.silence-notifications.desc":        "While you play. Critical alerts still show",
     "settings.gaming.dialog.wallpaper":    "Select wallpaper",
     // XDG portal consent prompts (surfaces/consent) — fallback button labels only;
     // the frontend normally supplies its own, already translated.

@@ -616,7 +616,7 @@ jobs:
           git diff --quiet ui/shell/widgets/clipboard.ts
 
   hypr-config:
-    name: Hyprland config (parses + game mode)
+    name: Compositor config (parses + rules) and game mode
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -628,12 +628,6 @@ jobs:
       # no game mode. `luac -p` needs none of the `hl` API to catch that.
       - name: luac -p config/hypr/hyprland.lua (must parse)
         run: luac5.4 -p config/hypr/hyprland.lua
-      # Beyond parsing, the game-mode handlers are the one part of this file with
-      # state that outlives a single event (what the profile and wallpaper were
-      # before the game). The harness stubs `hl` and drives the handlers directly,
-      # so it needs neither Hyprland nor Steam.
-      - name: Game-mode session handlers (must succeed)
-        run: lua5.4 scripts/dev/hypr-game-mode-test.lua
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
@@ -670,6 +664,37 @@ jobs:
       # is a required check that stalls the queue.
       - name: The Lua the shell generates parses (must succeed)
         run: node scripts/ci/hypr-lua-check.mjs
+      # Game mode's session — the wallpaper, the power profile, the notifications and the
+      # way back, on both compositors (ui/shell/core/game-session-logic.ts) — has state that
+      # outlives a single event: what the profile and the wallpaper WERE before the game.
+      # The probe drives the logic against a fake world (profiles daemon, awww, compositor,
+      # timers), so it needs neither a compositor nor Steam. It replaced the Lua harness
+      # that drove hyprland.lua's handlers when this lived there.
+      - name: Game mode's session is undone (must succeed)
+        run: |
+          npx --yes esbuild@0.28.2 scripts/dev/game-session-probe.ts --bundle \
+            --platform=node --format=esm --log-level=warning --outfile=/tmp/game-session-probe.mjs
+          node /tmp/game-session-probe.mjs
+      # And the control: the profile a user picks mid-game must survive the game. Delete
+      # the "is it still the one we set" condition and the probe must notice.
+      - name: The game-session probe can fail (control, must be caught)
+        run: |
+          f=ui/shell/core/game-session-logic.ts
+          cp "$f" /tmp/game-session-logic.bak
+          sed -i 's|rec.prevProfile !== "performance" \&\& await w.readProfile() === "performance")|rec.prevProfile !== "performance")|' "$f"
+          if git diff --quiet "$f"; then
+            echo "::error::the control patched nothing — the condition has moved or been reworded"
+            exit 1
+          fi
+          npx --yes esbuild@0.28.2 scripts/dev/game-session-probe.ts --bundle \
+            --platform=node --format=esm --log-level=warning --outfile=/tmp/game-session-probe-defect.mjs
+          if node /tmp/game-session-probe-defect.mjs; then
+            echo "::error::the probe passed with a mid-game choice undone — it is not checking what it prints"
+            cp /tmp/game-session-logic.bak "$f"
+            exit 1
+          fi
+          cp /tmp/game-session-logic.bak "$f"
+          git diff --quiet "$f"
 
   skill-docs:
     name: Docs + prose shape

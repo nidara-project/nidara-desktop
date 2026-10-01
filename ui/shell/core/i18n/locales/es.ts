@@ -889,6 +889,7 @@ export default {
     "settings.gaming.title":                     "Gaming",
     "settings.gaming.group.wallpaper":                       "Fondo de pantalla",
     "settings.gaming.group.performance":                     "Rendimiento",
+    "settings.gaming.group.notifications":                   "Notificaciones",
     "settings.gaming.mode.artwork":                          "Arte del juego",
     "settings.gaming.mode.custom":                           "Personalizado",
     "settings.gaming.mode.none":                             "Sin cambio",
@@ -896,10 +897,10 @@ export default {
     "settings.gaming.wallpaper-mode.desc":               "Qué mostrar al lanzar un juego",
     "settings.gaming.custom-wallpaper":            "Imagen",
     "settings.gaming.custom-wallpaper.desc":             "Fondo de pantalla para todos los juegos",
-    "settings.gaming.transition":                        "Transición",
-    "settings.gaming.transition.desc":                   "Efecto de transición al cambiar al fondo de juego",
     "settings.gaming.performance-profile":         "Perfil de alto rendimiento",
     "settings.gaming.performance-profile.desc":          "Activa automáticamente el perfil de rendimiento al lanzar un juego",
+    "settings.gaming.silence-notifications":       "Silenciar notificaciones",
+    "settings.gaming.silence-notifications.desc":        "Mientras juegas. Las alertas críticas se muestran igual",
     "settings.gaming.dialog.wallpaper":    "Seleccionar fondo de pantalla",
     // XDG portal consent prompts (surfaces/consent) — fallback button labels only;
     // the frontend normally supplies its own, already translated.

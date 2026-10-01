@@ -245,9 +245,8 @@
   </schema>
 
   <!--
-    Game mode. The compositor needs these too and cannot read dconf: the shell
-    writes them into ~/.config/nidara/nidara-gaming.lua and pushes them live
-    (core/GamingSync.ts); config/hypr/hyprland.lua reads NIDARA_GAMING.
+    Game mode, around a game: read by the shell (ui/shell/core/GameSession.ts) on
+    both compositors. The compositor only gives a game its own workspace.
   -->
   <schema id="org.nidara.gaming" path="/org/nidara/gaming/">
     <key name="wallpaper-mode" type="s">
@@ -263,27 +262,13 @@
       <default>""</default>
       <summary>Image used when wallpaper-mode is custom</summary>
     </key>
-    <key name="transition" type="s">
-      <choices>
-        <choice value="random"/>
-        <choice value="simple"/>
-        <choice value="fade"/>
-        <choice value="center"/>
-        <choice value="grow"/>
-        <choice value="outer"/>
-        <choice value="wipe"/>
-        <choice value="wave"/>
-        <choice value="left"/>
-        <choice value="right"/>
-        <choice value="top"/>
-        <choice value="bottom"/>
-      </choices>
-      <default>"grow"</default>
-      <summary>Wallpaper transition into and out of game mode</summary>
-    </key>
     <key name="performance-profile" type="b">
       <default>false</default>
       <summary>Switch the power profile to performance while a game runs</summary>
+    </key>
+    <key name="silence-notifications" type="b">
+      <default>true</default>
+      <summary>Hold notification banners back while a game runs (critical ones still show)</summary>
     </key>
   </schema>
 
