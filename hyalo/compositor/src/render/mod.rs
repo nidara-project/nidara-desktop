@@ -131,13 +131,37 @@ fn push_surface<R: HyaloRenderer>(
 /// backend (which renders them).
 pub struct Scene<'a> {
     pub space: &'a Space<Window>,
+    pub wm: &'a crate::wm::Wm,
     pub pointer: Point<f64, Logical>,
     pub cursor_status: &'a CursorImageStatus,
 }
 
 impl<'a> Scene<'a> {
-    pub fn new(space: &'a Space<Window>, seat: &Seat<Hyalo>, cursor_status: &'a CursorImageStatus) -> Self {
-        Self { space, pointer: seat.get_pointer().unwrap().current_location(), cursor_status }
+    pub fn new(
+        space: &'a Space<Window>,
+        wm: &'a crate::wm::Wm,
+        seat: &Seat<Hyalo>,
+        cursor_status: &'a CursorImageStatus,
+    ) -> Self {
+        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status }
+    }
+}
+
+/// The windows shown on `output`, front to back, split where top layers go between them: a
+/// fullscreen window covers the bar, so it — and anything stacked above it, like a special
+/// workspace — is drawn over the top layers; every other window under them.
+pub fn windows_front_to_back(space: &Space<Window>, wm: &crate::wm::Wm, output: &Output) -> (Vec<Window>, Vec<Window>) {
+    let all: Vec<Window> = space.elements_for_output(output).rev().cloned().collect();
+    let fullscreen = all.iter().position(|w| {
+        wm.by_window(w).is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen)
+    });
+    match fullscreen {
+        Some(i) => {
+            let mut above = all;
+            let below = above.split_off(i + 1);
+            (above, below)
+        }
+        None => (Vec::new(), all),
     }
 }
 
@@ -162,17 +186,23 @@ pub fn output_elements<R: HyaloRenderer>(
     let layer_loc = |l: &smithay::desktop::LayerSurface| {
         map.layer_geometry(l).unwrap_or_default().loc.to_f64().to_physical_precise_round(scale)
     };
-    for layer in [Layer::Overlay, Layer::Top] {
-        for l in map.layers_on(layer).rev() {
-            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);
+    let (above, below) = windows_front_to_back(state.space, state.wm, output);
+    let push_windows = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, windows: &[Window]| {
+        for window in windows {
+            let Some(loc) = state.space.element_location(window) else { continue };
+            let Some(surface) = window.wl_surface() else { continue };
+            let loc = (loc - window.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
+            push_surface(out, renderer, &surface, loc, scale, output_size);
         }
+    };
+    for l in map.layers_on(Layer::Overlay).rev() {
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);
     }
-    for window in state.space.elements_for_output(output).rev() {
-        let Some(loc) = state.space.element_location(window) else { continue };
-        let Some(surface) = window.wl_surface() else { continue };
-        let loc = (loc - window.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
-        push_surface(&mut out, renderer, &surface, loc, scale, output_size);
+    push_windows(&mut out, renderer, &above);
+    for l in map.layers_on(Layer::Top).rev() {
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);
     }
+    push_windows(&mut out, renderer, &below);
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);

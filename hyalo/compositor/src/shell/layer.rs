@@ -57,7 +57,10 @@ impl WlrLayerShellHandler for Hyalo {
                 map.unmap_layer(&layer);
             }
         }
-        self.queue_redraw(None);
+        // A panel that had the keyboard is gone: it goes back to the focused window, and the
+        // usable area may have grown.
+        self.restore_keyboard_focus();
+        self.arrange_all();
     }
 
     fn new_popup(&mut self, _parent: WlrLayerSurface, popup: smithay::wayland::shell::xdg::PopupSurface) {
@@ -93,12 +96,24 @@ impl Hyalo {
                 .initial_configure_sent
         });
         let mut map = layer_map_for_output(&output);
+        let zone_before = map.non_exclusive_zone();
         map.arrange();
+        let zone_changed = map.non_exclusive_zone() != zone_before;
         if !initial_configure_sent {
             map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
                 .unwrap()
                 .layer_surface()
                 .send_configure();
+        }
+        drop(map);
+        // The bar or the dock took or gave back room: the windows on that output follow.
+        if zone_changed {
+            let name = output.name();
+            let on: Vec<i32> = self.wm.workspaces.values().filter(|w| w.output == name).map(|w| w.id).collect();
+            for ws in on {
+                self.arrange_workspace(ws);
+            }
+            self.sync_space();
         }
     }
 

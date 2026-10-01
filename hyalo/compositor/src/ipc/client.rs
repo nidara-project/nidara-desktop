@@ -15,6 +15,13 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   output <NAME> [enabled=on|off] [mode=WxH[@HZ]] [scale=S] [transform=T] [position=X,Y] [vrr=on|off]
   power on|off [NAME]             switch outputs on or off (DPMS); no NAME = all
   screenshot PATH [NAME]          a PNG of one output (no NAME = the first)
+  windows                         every window: id, app id, title, workspace, state, box
+  workspaces                      every workspace: id, output, mode, shown
+  do <command…>                   a window-manager command, as in a binding:
+                                    workspace 3 · focus-window ID · move-to-workspace 2 [ID]
+                                    toggle-floating [ID] · fullscreen [ID] · close-window [ID]
+                                    set-workspace-mode 3 tiling · spawn CMD …
+                                  (every command: hyalo/compositor/src/wm/actions.rs)
   reload                          re-read the configuration
   events                          stream events, one JSON object per line
   quit                            end the session
@@ -90,6 +97,14 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "raw" => return args.get(1).cloned().map(Some).ok_or_else(|| "raw needs a JSON request".into()),
         "version" => Request::Version,
         "outputs" => Request::Outputs,
+        "windows" => Request::Windows,
+        "workspaces" => Request::Workspaces,
+        "do" => {
+            let command = args[1..].join(" ");
+            // Checked here too, so a typo is said before anything is sent.
+            command.parse::<crate::wm::actions::Action>()?;
+            Request::Do { command }
+        }
         "reload" => Request::ReloadConfig,
         "quit" => Request::Quit,
         "events" => Request::EventStream,

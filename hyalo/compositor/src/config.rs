@@ -34,6 +34,52 @@ pub struct Config {
     /// Commands run once the compositor is up, in order, through `sh -c`.
     pub autostart: Vec<String>,
     pub cursor: CursorConfig,
+    pub layout: LayoutConfig,
+    pub workspaces: WorkspacesConfig,
+    /// Key and pointer bindings: `"Super+Q" = "close-window"` (binds.rs).
+    pub binds: BTreeMap<String, crate::binds::BindConfig>,
+}
+
+/// How windows are laid out. The defaults are the Hyprland session's (`config/hypr/
+/// hyprland.lua`), so the bar's ends line up with the windows the same way in both.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct LayoutConfig {
+    /// The tiling layout of every workspace (`wm/layout/`): `dwindle`.
+    pub tiling: String,
+    /// Between a window and its neighbour, each (so twice this between two windows).
+    pub gaps_in: i32,
+    /// Between the windows and the usable area's edge — the bar's margin.
+    pub gaps_out: i32,
+    /// Kept around every window for its border.
+    pub border: i32,
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self { tiling: "dwindle".into(), gaps_in: 2, gaps_out: 4, border: 1 }
+    }
+}
+
+/// Floating or tiling, per workspace (#513 on Hyprland). Settings writes `modes`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WorkspacesConfig {
+    pub default_mode: crate::wm::WorkspaceMode,
+    /// By workspace number: `modes = { "3" = "tiling" }`.
+    pub modes: BTreeMap<String, crate::wm::WorkspaceMode>,
+}
+
+impl Default for WorkspacesConfig {
+    fn default() -> Self {
+        Self { default_mode: crate::wm::WorkspaceMode::Floating, modes: BTreeMap::new() }
+    }
+}
+
+impl WorkspacesConfig {
+    pub fn mode_of(&self, ws: i32) -> crate::wm::WorkspaceMode {
+        self.modes.get(&ws.to_string()).copied().unwrap_or(self.default_mode)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -287,6 +333,22 @@ pub fn load_from(paths: &[PathBuf]) -> Result<Config, ConfigError> {
     let config: Config = toml::Value::Table(merged)
         .try_into()
         .map_err(|e: toml::de::Error| ConfigError::Invalid(e.to_string()))?;
+    if crate::wm::layout::new(&config.layout.tiling).is_none() {
+        return Err(ConfigError::Invalid(format!(
+            "layout.tiling: unknown {:?} (one of {})",
+            config.layout.tiling,
+            crate::wm::layout::NAMES.join(", ")
+        )));
+    }
+    for (k, v) in [("gaps_in", config.layout.gaps_in), ("gaps_out", config.layout.gaps_out), ("border", config.layout.border)] {
+        if !(0..=200).contains(&v) {
+            return Err(ConfigError::Invalid(format!("layout.{k}: {v} is outside 0..200")));
+        }
+    }
+    if let Some(k) = config.workspaces.modes.keys().find(|k| k.parse::<i32>().map_or(true, |n| n < 1)) {
+        return Err(ConfigError::Invalid(format!("workspaces.modes: {k:?} is not a workspace number")));
+    }
+    crate::binds::parse_binds(&config.binds).map_err(ConfigError::Invalid)?;
     for (name, o) in &config.outputs {
         if !o.mode.is_empty() && o.parsed_mode().is_none() {
             return Err(ConfigError::Invalid(format!("outputs.{name}.mode: cannot read {:?}", o.mode)));
@@ -348,6 +410,24 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
     if old.cursor != new.cursor {
         state.backend.reload_cursors(&new.cursor);
     }
+    if old.binds != new.binds {
+        // Validated by `load`, so this cannot fail here.
+        state.binds = crate::binds::parse_binds(&new.binds).unwrap_or_default();
+    }
+    if old.layout.tiling != new.layout.tiling {
+        state.change_tiling_layout();
+    }
+    if old.workspaces != new.workspaces {
+        // Each workspace whose mode changed (and was not set at runtime) takes the new one.
+        let ids: Vec<i32> = state.wm.workspaces.keys().copied().filter(|i| *i > 0).collect();
+        for ws in ids {
+            if !state.wm.mode_overrides.contains_key(&ws) && old.workspaces.mode_of(ws) != new.workspaces.mode_of(ws) {
+                let floating = new.workspaces.mode_of(ws) == crate::wm::WorkspaceMode::Floating;
+                state.set_all_floating(ws, floating);
+            }
+        }
+        state.wm.dirty_workspaces = true;
+    }
     let names: std::collections::BTreeSet<String> =
         old.outputs.keys().chain(new.outputs.keys()).cloned().collect();
     for name in names {
@@ -359,6 +439,7 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
         }
     }
     crate::outputs::arrange(state);
+    state.arrange_all();
     crate::ipc::server::broadcast(state, &crate::ipc::Event::ConfigReloaded);
     crate::ipc::server::outputs_changed(state);
     tracing::info!("configuration reloaded");
@@ -420,6 +501,27 @@ mod tests {
         assert_eq!(o.scale, 1.5, "the user's hand edit wins over Settings");
         assert_eq!(o.mode, "2560x1440@144", "Settings' value where the user set nothing");
         assert!(o.vrr, "the shipped value where neither did");
+    }
+
+    #[test]
+    fn the_shipped_file_loads_with_every_binding() {
+        let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config/hyalo/hyalo.toml");
+        let c = load_from(&[shipped]).expect("config/hyalo/hyalo.toml must load");
+        let binds = crate::binds::parse_binds(&c.binds).unwrap();
+        assert!(binds.len() >= 54, "the Hyprland session's bindings are all there");
+        assert_eq!(c.workspaces.default_mode, crate::wm::WorkspaceMode::Floating);
+    }
+
+    #[test]
+    fn layout_and_workspace_modes_are_checked() {
+        let d = tmpdir("layout");
+        let ok = write(&d, "ok.toml", "[layout]\ngaps_in = 0\n[workspaces.modes]\n3 = \"tiling\"\n");
+        let c = load_from(&[ok]).unwrap();
+        assert_eq!(c.workspaces.mode_of(3), crate::wm::WorkspaceMode::Tiling);
+        assert_eq!(c.workspaces.mode_of(4), crate::wm::WorkspaceMode::Floating);
+        assert!(load_from(&[write(&d, "l.toml", "[layout]\ntiling = \"spiral\"\n")]).is_err());
+        assert!(load_from(&[write(&d, "m.toml", "[workspaces.modes]\nzero = \"tiling\"\n")]).is_err());
+        assert!(load_from(&[write(&d, "b.toml", "[binds]\n\"Super+Q\" = \"explode\"\n")]).is_err());
     }
 
     #[test]

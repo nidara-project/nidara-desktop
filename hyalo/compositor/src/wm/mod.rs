@@ -1,0 +1,1095 @@
+//! The window manager: workspaces, which windows are tiled or floating, fullscreen and
+//! maximized, focus, and where each window goes.
+//!
+//! Hyalo is dual (#682): every workspace is floating or tiling, as the desktop has been on
+//! Hyprland (`WorkspaceModes`, #513), floating by default. A tiled window's box comes from the
+//! workspace's tiling layout (`layout/`); a floating one keeps the box it asked for or was
+//! dragged to, held inside the usable area (#11).
+//!
+//! `Wm` is the model; Smithay's `Space` holds only what is VISIBLE, in stacking order, and is
+//! rebuilt from the model by `sync_space` after every change — so a window on a hidden
+//! workspace is not in the space at all, and gets no frames, no input and no outputs.
+//!
+//! #594, by construction: a workspace remembers its HOME output. When that output goes away
+//! the workspace is shown on another one; when it returns (same connector name), the workspace
+//! goes back. A floating window's box is kept relative to its output, so it comes back where
+//! it was.
+
+pub mod actions;
+pub mod grabs;
+pub mod layout;
+
+use std::collections::{BTreeMap, HashMap};
+
+use serde::{Deserialize, Serialize};
+use smithay::{
+    desktop::{Window, layer_map_for_output},
+    output::Output,
+    reexports::{
+        wayland_protocols::xdg::shell::server::xdg_toplevel,
+        wayland_server::{Resource, protocol::wl_surface::WlSurface},
+    },
+    utils::{Logical, Point, Rectangle, SERIAL_COUNTER, Size},
+    wayland::{
+        compositor::with_states,
+        seat::WaylandFocus,
+        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
+    },
+};
+
+use crate::{
+    config::LayoutConfig,
+    state::Hyalo,
+};
+use layout::{Layout, Rect};
+
+pub type WindowId = u64;
+
+/// How much of the screen a window takes, over its tiled or floating box. (Named for the
+/// question the shell asks — "is it fullscreen?" — hence a variant of the same name.)
+#[allow(clippy::enum_variant_names)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Fullscreen {
+    None,
+    /// The usable area, inside the gaps: bar and dock stay.
+    Maximized,
+    /// The whole output, over the bar.
+    Fullscreen,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceMode {
+    Floating,
+    Tiling,
+}
+
+impl WorkspaceMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "floating" => Some(Self::Floating),
+            "tiling" => Some(Self::Tiling),
+            _ => None,
+        }
+    }
+}
+
+/// A window and everything the window manager knows about it.
+#[derive(Debug)]
+pub struct Managed {
+    pub id: WindowId,
+    pub window: Window,
+    pub workspace: i32,
+    pub floating: bool,
+    /// The floating box (the client's own geometry, no border), relative to the origin of the
+    /// workspace's output. `None` until the window has been floating once.
+    pub float_rect: Option<Rect>,
+    pub fullscreen: Fullscreen,
+    pub pseudo: bool,
+    pub pinned: bool,
+    /// Placed for the first time (it has a buffer and a size).
+    pub mapped: bool,
+    /// Where it is, global logical pixels: the box it was laid out at.
+    pub rect: Rect,
+    /// The order of focus, most recent highest.
+    pub focus_serial: u64,
+    /// A size we asked a floating window to shrink to, and the size it had then: a client
+    /// whose minimum is larger than the usable area refuses, and must not be asked forever.
+    pub clamp_ask: Option<(Size<i32, Logical>, Size<i32, Logical>)>,
+}
+
+pub struct Workspace {
+    pub id: i32,
+    /// `"3"`, or `"special:magic"` for a special one.
+    pub name: String,
+    /// The output it is on now, and the one it belongs to.
+    pub output: String,
+    pub home: String,
+    pub layout: Box<dyn Layout>,
+}
+
+impl std::fmt::Debug for Workspace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Workspace").field("id", &self.id).field("name", &self.name).field("output", &self.output).finish()
+    }
+}
+
+impl Workspace {
+    pub fn is_special(&self) -> bool {
+        self.id < 0
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Wm {
+    /// Every window, in stacking order, bottom first.
+    pub windows: Vec<Managed>,
+    pub workspaces: BTreeMap<i32, Workspace>,
+    /// The workspace each output shows, by connector name.
+    pub active: HashMap<String, i32>,
+    /// A special workspace shown over an output.
+    pub special_shown: HashMap<String, i32>,
+    pub focused: Option<WindowId>,
+    /// The output the user is on: the focused window's, or the pointer's.
+    pub focused_output: Option<String>,
+    /// Where `workspace previous` goes back to.
+    pub previous_workspace: Option<i32>,
+    /// Per-workspace modes set at runtime (IPC), over the configuration's.
+    pub mode_overrides: BTreeMap<i32, WorkspaceMode>,
+    next_id: WindowId,
+    focus_counter: u64,
+    /// What changed since the last IPC broadcast (`Hyalo::broadcast_wm_changes`).
+    pub dirty_windows: bool,
+    pub dirty_workspaces: bool,
+    pub announced_focus: Option<Option<WindowId>>,
+    /// A window being moved or resized with the pointer.
+    pub grab: Option<grabs::Active>,
+}
+
+impl Wm {
+    pub fn get(&self, id: WindowId) -> Option<&Managed> {
+        self.windows.iter().find(|m| m.id == id)
+    }
+
+    pub fn get_mut(&mut self, id: WindowId) -> Option<&mut Managed> {
+        self.windows.iter_mut().find(|m| m.id == id)
+    }
+
+    pub fn by_window(&self, window: &Window) -> Option<&Managed> {
+        self.windows.iter().find(|m| &m.window == window)
+    }
+
+    pub fn by_surface(&self, surface: &WlSurface) -> Option<&Managed> {
+        self.windows
+            .iter()
+            .find(|m| m.window.toplevel().is_some_and(|t| t.wl_surface() == surface))
+    }
+
+    pub fn on_workspace(&self, ws: i32) -> impl Iterator<Item = &Managed> {
+        self.windows.iter().filter(move |m| m.workspace == ws && m.mapped)
+    }
+
+    /// The workspaces on screen: each output's active one, and any special one shown.
+    pub fn visible_workspaces(&self) -> Vec<i32> {
+        self.active.values().chain(self.special_shown.values()).copied().collect()
+    }
+
+    pub fn is_visible(&self, ws: i32) -> bool {
+        self.active.values().any(|w| *w == ws) || self.special_shown.values().any(|w| *w == ws)
+    }
+
+    /// The most recently focused window of a workspace.
+    pub fn last_focused_on(&self, ws: i32) -> Option<WindowId> {
+        self.on_workspace(ws).filter(|m| m.focus_serial > 0).max_by_key(|m| m.focus_serial).map(|m| m.id)
+            .or_else(|| self.on_workspace(ws).last().map(|m| m.id))
+    }
+
+    pub fn special_id(&self, name: &str) -> Option<i32> {
+        self.workspaces.values().find(|w| w.is_special() && w.name == format!("special:{name}")).map(|w| w.id)
+    }
+}
+
+/// `r` shrunk by `by` on every side.
+pub fn inset(r: Rect, by: i32) -> Rect {
+    Rectangle::new(
+        (r.loc.x + by, r.loc.y + by).into(),
+        ((r.size.w - 2 * by).max(1), (r.size.h - 2 * by).max(1)).into(),
+    )
+}
+
+/// A floating box held inside `area`: no larger than it, and moved in with the TOP edge
+/// winning — if it still does not fit it hangs off the bottom, never off the top, where its
+/// header is. The law KWin, mutter and niri implement (#11; `config/hypr/hyprland.lua` has
+/// the long version for Hyprland, which does neither).
+pub fn clamp_floating(r: Rect, area: Rect) -> Rect {
+    let w = r.size.w.min(area.size.w).max(1);
+    let h = r.size.h.min(area.size.h).max(1);
+    let mut x = r.loc.x;
+    let mut y = r.loc.y;
+    x = x.min(area.loc.x + area.size.w - w);
+    x = x.max(area.loc.x);
+    y = y.min(area.loc.y + area.size.h - h);
+    y = y.max(area.loc.y);
+    Rectangle::new((x, y).into(), (w, h).into())
+}
+
+/// The corner radius windows are drawn with (`config/hypr/hyprland.lua` ROUNDING): the
+/// cascade's smallest step leaves a covered window's corner reading as a corner.
+const WINDOW_ROUNDING: i32 = 24;
+
+/// A new floating window that would COMPLETELY cover another is stepped down and right
+/// until it does not — KWin's `Placement::cascadeIfCovering`, as the Hyprland session does it
+/// (`config/hypr/hyprland.lua`, "A new floating window does not land on top of the last
+/// one"). It does not cascade everything: the first window of a workspace stays centred, and
+/// a small dialog over its big parent never moves. Out of room, the original place stays.
+pub fn cascade(r: Rect, others: &[Rect], area: Rect, gaps_out: i32) -> Rect {
+    let step = (WINDOW_ROUNDING + gaps_out).max(area.size.w.min(area.size.h) / 48);
+    let mut p = r;
+    for _ in 0..8 {
+        let covered = others.iter().find(|o| {
+            p.loc.x <= o.loc.x
+                && p.loc.y <= o.loc.y
+                && p.loc.x + p.size.w >= o.loc.x + o.size.w
+                && p.loc.y + p.size.h >= o.loc.y + o.size.h
+        });
+        let Some(o) = covered else { return p };
+        p.loc = (o.loc.x + step, o.loc.y + step).into();
+        if p.loc.x + p.size.w > area.loc.x + area.size.w || p.loc.y + p.size.h > area.loc.y + area.size.h {
+            return r;
+        }
+    }
+    p
+}
+
+/// A box of `size` centred in `area`.
+pub fn centered(size: Size<i32, Logical>, area: Rect) -> Rect {
+    Rectangle::new(
+        (area.loc.x + (area.size.w - size.w) / 2, area.loc.y + (area.size.h - size.h) / 2).into(),
+        size,
+    )
+}
+
+fn toplevel_data<T>(
+    window: &Window,
+    f: impl FnOnce(&smithay::wayland::shell::xdg::XdgToplevelSurfaceRoleAttributes) -> T,
+) -> Option<T> {
+    let t = window.toplevel()?;
+    Some(with_states(t.wl_surface(), |states| {
+        f(&states.data_map.get::<XdgToplevelSurfaceData>().unwrap().lock().unwrap())
+    }))
+}
+
+pub fn app_id(window: &Window) -> String {
+    toplevel_data(window, |d| d.app_id.clone()).flatten().unwrap_or_default()
+}
+
+pub fn title(window: &Window) -> String {
+    toplevel_data(window, |d| d.title.clone()).flatten().unwrap_or_default()
+}
+
+/// A dialog, or a window that cannot be resized: these float wherever they open, as on
+/// every desktop — a tile would stretch a fixed-size window or tear a dialog off its parent.
+fn wants_floating(window: &Window) -> bool {
+    let Some(t) = window.toplevel() else { return false };
+    if t.parent().is_some() {
+        return true;
+    }
+    with_states(t.wl_surface(), |states| {
+        let mut cached = states.cached_state.get::<SurfaceCachedState>();
+        let s = cached.current();
+        s.min_size.w > 0 && s.min_size == s.max_size
+    })
+}
+
+impl Hyalo {
+    // ── Lookups ────────────────────────────────────────────────────────────────────────
+
+    pub fn output_named(&self, name: &str) -> Option<Output> {
+        self.space.outputs().find(|o| o.name() == name).cloned()
+    }
+
+    /// The output the user is on.
+    pub fn focused_output(&self) -> Option<Output> {
+        self.wm
+            .focused_output
+            .as_deref()
+            .and_then(|n| self.output_named(n))
+            .or_else(|| {
+                let p = self.seat.get_pointer()?.current_location();
+                self.space.output_under(p).next().cloned()
+            })
+            .or_else(|| self.space.outputs().next().cloned())
+    }
+
+    /// The usable area of an output: what the bar and dock leave, global coordinates.
+    pub fn work_area(&self, output: &Output) -> Rect {
+        let Some(og) = self.space.output_geometry(output) else { return Rect::default() };
+        let zone = layer_map_for_output(output).non_exclusive_zone();
+        Rectangle::new(og.loc + zone.loc, zone.size)
+    }
+
+    /// Where floating windows may be: the usable area inside the gaps and the border.
+    fn floating_area(&self, output: &Output) -> Rect {
+        let l = &self.config.layout;
+        inset(self.work_area(output), l.gaps_out + l.border)
+    }
+
+    pub fn workspace_mode(&self, ws: i32) -> WorkspaceMode {
+        if let Some(m) = self.wm.mode_overrides.get(&ws) {
+            return *m;
+        }
+        self.config.workspaces.mode_of(ws)
+    }
+
+    /// The workspace an output shows, created if it shows none yet.
+    pub fn active_workspace(&mut self, output: &str) -> i32 {
+        if let Some(ws) = self.wm.active.get(output) {
+            return *ws;
+        }
+        // A workspace that belongs here and is not shown elsewhere, else the lowest free number.
+        let shown: Vec<i32> = self.wm.active.values().copied().collect();
+        let id = self
+            .wm
+            .workspaces
+            .values()
+            .find(|w| !w.is_special() && w.home == output && !shown.contains(&w.id))
+            .map(|w| w.id)
+            .unwrap_or_else(|| (1..).find(|i| !self.wm.workspaces.contains_key(i)).unwrap());
+        self.ensure_workspace(id, output);
+        if let Some(w) = self.wm.workspaces.get_mut(&id) {
+            w.output = output.into();
+        }
+        self.wm.active.insert(output.into(), id);
+        self.wm.dirty_workspaces = true;
+        id
+    }
+
+    fn ensure_workspace(&mut self, id: i32, output: &str) {
+        if self.wm.workspaces.contains_key(&id) {
+            return;
+        }
+        let layout = layout::new(&self.config.layout.tiling).unwrap_or_else(|| layout::new("dwindle").unwrap());
+        self.wm.workspaces.insert(
+            id,
+            Workspace { id, name: id.to_string(), output: output.into(), home: output.into(), layout },
+        );
+        self.wm.dirty_workspaces = true;
+    }
+
+    fn ensure_special(&mut self, name: &str, output: &str) -> i32 {
+        if let Some(id) = self.wm.special_id(name) {
+            return id;
+        }
+        let id = (1..).map(|i: i32| -i).find(|i| !self.wm.workspaces.contains_key(i)).unwrap();
+        let layout = layout::new(&self.config.layout.tiling).unwrap_or_else(|| layout::new("dwindle").unwrap());
+        self.wm.workspaces.insert(
+            id,
+            Workspace { id, name: format!("special:{name}"), output: output.into(), home: output.into(), layout },
+        );
+        self.wm.dirty_workspaces = true;
+        id
+    }
+
+    /// Drops workspaces nobody sees and nothing is on.
+    fn prune_workspaces(&mut self) {
+        let keep: Vec<i32> = self
+            .wm
+            .workspaces
+            .keys()
+            .copied()
+            .filter(|id| self.wm.is_visible(*id) || self.wm.windows.iter().any(|m| m.workspace == *id))
+            .collect();
+        let before = self.wm.workspaces.len();
+        self.wm.workspaces.retain(|id, _| keep.contains(id));
+        if self.wm.workspaces.len() != before {
+            self.wm.dirty_workspaces = true;
+        }
+    }
+
+    // ── Windows coming and going ──────────────────────────────────────────────────────────
+
+    /// A new toplevel: known from now on, placed on its first buffer (`window_mapped`).
+    pub fn window_created(&mut self, window: Window) {
+        let output = self.focused_output().map(|o| o.name()).unwrap_or_default();
+        // A special workspace shown over the output takes the windows opened there, as on
+        // Hyprland — the scratchpad is opened to be filled.
+        let workspace = match self.wm.special_shown.get(&output).copied() {
+            Some(s) => s,
+            None => self.active_workspace(&output),
+        };
+        self.wm.next_id += 1;
+        let id = self.wm.next_id;
+        self.wm.windows.push(Managed {
+            id,
+            window,
+            workspace,
+            floating: true,
+            float_rect: None,
+            fullscreen: Fullscreen::None,
+            pseudo: false,
+            pinned: false,
+            mapped: false,
+            rect: Rect::default(),
+            focus_serial: 0,
+            clamp_ask: None,
+        });
+    }
+
+    /// Before the first configure: a window that will be tiled is told its tile's size, so
+    /// it draws its first frame at the size it will have.
+    pub fn initial_configure(&mut self, window: &Window) {
+        let Some(m) = self.wm.by_window(window) else { return };
+        let (id, ws) = (m.id, m.workspace);
+        let Some(t) = window.toplevel() else { return };
+        if self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window)
+            && let Some(rect) = self.predicted_tile(ws, id)
+        {
+            t.with_pending_state(|s| {
+                s.size = Some(rect.size);
+                for st in TILED {
+                    s.states.set(st);
+                }
+            });
+        }
+        if let Some(o) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) {
+            let bounds = self.floating_area(&o).size;
+            t.with_pending_state(|s| s.bounds = Some(bounds));
+        }
+        t.send_configure();
+    }
+
+    /// The box `id` would get if tiled on `ws` now.
+    fn predicted_tile(&self, ws: i32, id: WindowId) -> Option<Rect> {
+        let w = self.wm.workspaces.get(&ws)?;
+        let output = self.output_named(&w.output)?;
+        let area = inset(self.work_area(&output), self.config.layout.gaps_out);
+        // A throwaway copy of the layout: the same placement `window_mapped` will make.
+        let mut probe = layout::new(w.layout.name())?;
+        for other in w.layout.windows() {
+            probe.insert(other, area, None, None);
+        }
+        // Rebuilding loses the split ratios; good enough for a first size, corrected at map.
+        let near = self.wm.last_focused_on(ws).filter(|n| w.layout.contains(*n));
+        probe.insert(id, area, near, None);
+        let b = probe.arrange(area, self.config.layout.gaps_in).into_iter().find(|(w, _)| *w == id)?.1;
+        Some(inset(b, self.config.layout.border))
+    }
+
+    /// The window's first buffer: it is placed — tiled or floating — and takes the focus.
+    pub fn window_mapped(&mut self, window: &Window) {
+        let Some(m) = self.wm.by_window(window) else { return };
+        let (id, ws) = (m.id, m.workspace);
+        let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
+        let tiled = self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window);
+        let size = window.geometry().size;
+        let og = self.space.output_geometry(&output).unwrap_or_default();
+        // A dialog opens over its parent; anything else in the middle of the usable area.
+        let parent_rect = window
+            .toplevel()
+            .and_then(|t| t.parent())
+            .and_then(|p| self.wm.by_surface(&p))
+            .filter(|p| p.mapped)
+            .map(|p| p.rect);
+        let area = self.floating_area(&output);
+        let others: Vec<Rect> = self
+            .wm
+            .on_workspace(ws)
+            .filter(|o| o.id != id && o.fullscreen == Fullscreen::None)
+            .map(|o| o.rect)
+            .collect();
+        let float = clamp_floating(centered(size, parent_rect.unwrap_or(area)), area);
+        let float = cascade(float, &others, area, self.config.layout.gaps_out);
+        let near = self.wm.focused.filter(|f| self.wm.get(*f).is_some_and(|m| m.workspace == ws));
+        let cursor = self.seat.get_pointer().map(|p| p.current_location());
+        let tiled_area = inset(self.work_area(&output), self.config.layout.gaps_out);
+        if let Some(m) = self.wm.get_mut(id) {
+            m.mapped = true;
+            m.floating = !tiled;
+            m.float_rect = Some(Rectangle::new(float.loc - og.loc, float.size));
+        }
+        if tiled && let Some(w) = self.wm.workspaces.get_mut(&ws) {
+            w.layout.insert(id, tiled_area, near, cursor);
+        }
+        if float.size != size && !tiled
+            && let Some(m) = self.wm.get_mut(id)
+        {
+            m.clamp_ask = Some((float.size, size));
+        }
+        self.wm.dirty_windows = true;
+        self.focus_window(Some(id));
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    pub fn window_destroyed(&mut self, window: &Window) {
+        let Some(m) = self.wm.by_window(window) else { return };
+        let (id, ws) = (m.id, m.workspace);
+        if let Some(w) = self.wm.workspaces.get_mut(&ws) {
+            w.layout.remove(id);
+        }
+        self.wm.windows.retain(|m| m.id != id);
+        self.wm.dirty_windows = true;
+        if self.wm.focused == Some(id) {
+            self.wm.focused = None;
+            // The keyboard goes to the window focused before it on the same workspace.
+            let next = self.wm.last_focused_on(ws);
+            self.focus_window(next);
+        }
+        self.arrange_workspace(ws);
+        self.prune_workspaces();
+        self.sync_space();
+    }
+
+    /// A commit of a mapped window: a floating one's box follows the client's own size.
+    pub fn window_committed(&mut self, window: &Window) {
+        let Some(m) = self.wm.by_window(window) else { return };
+        if self.wm.grab.is_some_and(|g| g.id == m.id) {
+            let id = m.id;
+            self.grab_commit(id);
+            return;
+        }
+        if !m.mapped || !m.floating || m.fullscreen != Fullscreen::None {
+            return;
+        }
+        let (id, ws) = (m.id, m.workspace);
+        let size = window.geometry().size;
+        let Some(fr) = m.float_rect else { return };
+        if fr.size == size {
+            return;
+        }
+        let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
+        let og = self.space.output_geometry(&output).unwrap_or_default();
+        let area = self.floating_area(&output);
+        let global = Rectangle::new(fr.loc + og.loc, size);
+        let clamped = clamp_floating(global, area);
+        let ask = m.clamp_ask;
+        let m = self.wm.get_mut(id).unwrap();
+        m.float_rect = Some(Rectangle::new(clamped.loc - og.loc, size));
+        // Larger than the usable area: asked to shrink once per size it grows to — a client
+        // whose minimum does not fit refuses, and is left hanging off the bottom.
+        if clamped.size != size && ask.is_none_or(|(_, seen)| seen != size) {
+            m.clamp_ask = Some((clamped.size, size));
+            m.float_rect = Some(Rectangle::new(clamped.loc - og.loc, clamped.size));
+        }
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    // ── Laying out ────────────────────────────────────────────────────────────────────
+
+    /// Gives every window of `ws` its box and tells it its size and state.
+    pub fn arrange_workspace(&mut self, ws: i32) {
+        let Some(w) = self.wm.workspaces.get(&ws) else { return };
+        let Some(output) = self.output_named(&w.output) else { return };
+        let og = self.space.output_geometry(&output).unwrap_or_default();
+        let l: LayoutConfig = self.config.layout.clone();
+        let work = self.work_area(&output);
+        let tiled_area = inset(work, l.gaps_out);
+        let boxes: HashMap<WindowId, Rect> = w.layout.arrange(tiled_area, l.gaps_in).into_iter().collect();
+        let float_area = self.floating_area(&output);
+        for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped) {
+            let Some(t) = m.window.toplevel() else { continue };
+            let tiled = boxes.get(&m.id).copied();
+            let (rect, size): (Rect, Option<Size<i32, Logical>>) = match (m.fullscreen, tiled) {
+                (Fullscreen::Fullscreen, _) => (og, Some(og.size)),
+                (Fullscreen::Maximized, _) => (float_area, Some(float_area.size)),
+                (Fullscreen::None, Some(b)) => {
+                    let b = inset(b, l.border);
+                    if m.pseudo {
+                        // Its own size, centred in its tile and no larger than it.
+                        let want = m.float_rect.map(|r| r.size).unwrap_or(b.size);
+                        let s = Size::from((want.w.min(b.size.w), want.h.min(b.size.h)));
+                        (centered(s, b), Some(s))
+                    } else {
+                        (b, Some(b.size))
+                    }
+                }
+                (Fullscreen::None, None) => {
+                    let fr = m.float_rect.unwrap_or_else(|| Rectangle::new((0, 0).into(), m.window.geometry().size));
+                    (Rectangle::new(fr.loc + og.loc, fr.size), Some(fr.size))
+                }
+            };
+            m.rect = rect;
+            let is_tiled = tiled.is_some() && m.fullscreen == Fullscreen::None;
+            t.with_pending_state(|s| {
+                s.size = size.filter(|s| s.w > 0 && s.h > 0);
+                s.bounds = Some(float_area.size);
+                for st in TILED {
+                    if is_tiled {
+                        s.states.set(st);
+                    } else {
+                        s.states.unset(st);
+                    }
+                }
+                match m.fullscreen {
+                    Fullscreen::Fullscreen => {
+                        s.states.set(xdg_toplevel::State::Fullscreen);
+                        s.states.unset(xdg_toplevel::State::Maximized);
+                        s.fullscreen_output = output.client_outputs(&t.wl_surface().client().unwrap()).next();
+                    }
+                    Fullscreen::Maximized => {
+                        s.states.unset(xdg_toplevel::State::Fullscreen);
+                        s.states.set(xdg_toplevel::State::Maximized);
+                        s.fullscreen_output = None;
+                    }
+                    Fullscreen::None => {
+                        s.states.unset(xdg_toplevel::State::Fullscreen);
+                        s.states.unset(xdg_toplevel::State::Maximized);
+                        s.fullscreen_output = None;
+                    }
+                }
+            });
+            if t.is_initial_configure_sent() {
+                t.send_pending_configure();
+            }
+        }
+    }
+
+    pub fn arrange_all(&mut self) {
+        let ids: Vec<i32> = self.wm.workspaces.keys().copied().collect();
+        for ws in ids {
+            self.arrange_workspace(ws);
+        }
+        self.sync_space();
+    }
+
+    /// The space made to match the model: what is visible, where, in what order, and which
+    /// window is active.
+    pub fn sync_space(&mut self) {
+        let mut order: Vec<WindowId> = Vec::new();
+        let outputs: Vec<String> = self.space.outputs().map(|o| o.name()).collect();
+        for o in &outputs {
+            let layer_ids = |ws: i32, order: &mut Vec<WindowId>| {
+                let on: Vec<&Managed> = self.wm.on_workspace(ws).collect();
+                // A fullscreen window hides the rest of its workspace.
+                if let Some(fs) = on.iter().rev().find(|m| m.fullscreen == Fullscreen::Fullscreen) {
+                    order.push(fs.id);
+                    return;
+                }
+                let tiled = |m: &Managed| !m.floating && m.fullscreen == Fullscreen::None;
+                order.extend(on.iter().filter(|m| tiled(m)).map(|m| m.id));
+                order.extend(on.iter().filter(|m| !tiled(m)).map(|m| m.id));
+            };
+            if let Some(ws) = self.wm.active.get(o).copied() {
+                layer_ids(ws, &mut order);
+            }
+            if let Some(ws) = self.wm.special_shown.get(o).copied() {
+                layer_ids(ws, &mut order);
+            }
+        }
+        let hidden: Vec<Window> = self
+            .space
+            .elements()
+            .filter(|w| self.wm.by_window(w).is_none_or(|m| !order.contains(&m.id)))
+            .cloned()
+            .collect();
+        for w in hidden {
+            self.space.unmap_elem(&w);
+        }
+        let focused = self.wm.focused;
+        for id in order {
+            let Some(m) = self.wm.get(id) else { continue };
+            let window = m.window.clone();
+            // A space element's location is its GEOMETRY's origin; Smithay subtracts the
+            // client's decoration offset itself where it draws and hit-tests.
+            let loc = m.rect.loc;
+            if self.wm.grab.is_none_or(|g| g.id != id) {
+                self.space.map_element(window.clone(), loc, false);
+            } else {
+                self.space.raise_element(&window, false);
+            }
+            if window.set_activated(focused == Some(id))
+                && let Some(t) = window.toplevel()
+                && t.is_initial_configure_sent()
+            {
+                t.send_pending_configure();
+            }
+        }
+        self.queue_redraw(None);
+    }
+
+    // ── Focus ─────────────────────────────────────────────────────────────────────────
+
+    /// Gives a window the keyboard, showing its workspace first if it is hidden. `None` = no
+    /// window has the focus (a click on the bare desktop).
+    pub fn focus_window(&mut self, id: Option<WindowId>) {
+        let serial = SERIAL_COUNTER.next_serial();
+        let keyboard = self.seat.get_keyboard().unwrap();
+        let Some(id) = id else {
+            self.wm.focused = None;
+            keyboard.set_focus(self, Option::<WlSurface>::None, serial);
+            self.sync_space();
+            return;
+        };
+        let Some(m) = self.wm.get(id) else { return };
+        let ws = m.workspace;
+        if !self.wm.is_visible(ws) {
+            if ws < 0 {
+                let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
+                self.wm.special_shown.insert(output, ws);
+                self.wm.dirty_workspaces = true;
+            } else {
+                self.show_workspace(ws, false);
+            }
+        }
+        // Another window of the workspace in fullscreen gives way, or this one would be
+        // focused behind it.
+        let others: Vec<WindowId> = self
+            .wm
+            .on_workspace(ws)
+            .filter(|o| o.id != id && o.fullscreen == Fullscreen::Fullscreen)
+            .map(|o| o.id)
+            .collect();
+        for o in others {
+            if let Some(o) = self.wm.get_mut(o) {
+                o.fullscreen = Fullscreen::None;
+            }
+            self.wm.dirty_windows = true;
+        }
+        self.wm.focus_counter += 1;
+        let counter = self.wm.focus_counter;
+        let pos = self.wm.windows.iter().position(|m| m.id == id).unwrap();
+        let mut m = self.wm.windows.remove(pos);
+        m.focus_serial = counter;
+        let surface = m.window.toplevel().map(|t| t.wl_surface().clone());
+        // To the top of the stack (tiled windows stay under floating ones: `sync_space`).
+        self.wm.windows.push(m);
+        self.wm.focused = Some(id);
+        self.wm.focused_output = self.wm.workspaces.get(&ws).map(|w| w.output.clone());
+        keyboard.set_focus(self, surface, serial);
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    /// The keyboard back to the focused window, after a layer surface that had it went away.
+    pub fn restore_keyboard_focus(&mut self) {
+        let keyboard = self.seat.get_keyboard().unwrap();
+        if keyboard.current_focus().is_some_and(|f| f.is_alive()) {
+            return;
+        }
+        let surface = self.wm.focused.and_then(|f| self.wm.get(f)).and_then(|m| m.window.wl_surface()).map(|s| s.into_owned());
+        if surface.is_some() {
+            keyboard.set_focus(self, surface, SERIAL_COUNTER.next_serial());
+        }
+    }
+
+    // ── Workspaces ────────────────────────────────────────────────────────────────────
+
+    /// Shows workspace `id` on the output it is on (created on the focused output if new) —
+    /// or, when `here`, brings it to the focused output.
+    pub fn show_workspace(&mut self, id: i32, here: bool) {
+        let focused_out = self.focused_output().map(|o| o.name()).unwrap_or_default();
+        self.ensure_workspace(id, &focused_out);
+        let mut output = self.wm.workspaces[&id].output.clone();
+        if here && output != focused_out {
+            output = focused_out.clone();
+            self.wm.workspaces.get_mut(&id).unwrap().output = output.clone();
+        }
+        let current = self.wm.active.get(&output).copied();
+        if current == Some(id) {
+            self.wm.focused_output = Some(output);
+            return;
+        }
+        if let Some(c) = current {
+            self.wm.previous_workspace = Some(c);
+        }
+        self.wm.active.insert(output.clone(), id);
+        self.wm.focused_output = Some(output.clone());
+        // Pinned windows go with the output, whatever workspace it shows.
+        let pinned: Vec<WindowId> = self
+            .wm
+            .windows
+            .iter()
+            .filter(|m| m.pinned && current == Some(m.workspace))
+            .map(|m| m.id)
+            .collect();
+        for p in pinned {
+            self.wm.get_mut(p).unwrap().workspace = id;
+        }
+        self.wm.dirty_workspaces = true;
+        self.wm.dirty_windows = true;
+        self.arrange_workspace(id);
+        self.prune_workspaces();
+        // The keyboard follows: the workspace's last focused window, or nothing.
+        let next = self.wm.last_focused_on(id);
+        if self.wm.focused != next {
+            self.focus_window(next);
+        } else {
+            self.sync_space();
+        }
+    }
+
+    /// Shows or hides a special workspace over the focused output.
+    pub fn toggle_special(&mut self, name: &str) {
+        let output = self.focused_output().map(|o| o.name()).unwrap_or_default();
+        let id = self.ensure_special(name, &output);
+        if self.wm.special_shown.get(&output) == Some(&id) {
+            self.wm.special_shown.remove(&output);
+            let active = self.active_workspace(&output);
+            let next = self.wm.last_focused_on(active);
+            self.wm.dirty_workspaces = true;
+            self.prune_workspaces();
+            self.focus_window(next);
+            return;
+        }
+        // Shown on one output at a time: it comes here from wherever it was.
+        self.wm.special_shown.retain(|_, w| *w != id);
+        self.wm.special_shown.insert(output.clone(), id);
+        self.wm.workspaces.get_mut(&id).unwrap().output = output;
+        self.wm.dirty_workspaces = true;
+        self.arrange_workspace(id);
+        let next = self.wm.last_focused_on(id);
+        match next {
+            Some(n) => self.focus_window(Some(n)),
+            None => self.sync_space(),
+        }
+    }
+
+    /// Moves a window to another workspace; with `follow`, the view goes with it.
+    pub fn move_to_workspace(&mut self, id: WindowId, target: i32, follow: bool) {
+        let Some(m) = self.wm.get(id) else { return };
+        let from = m.workspace;
+        if from == target {
+            return;
+        }
+        let focused_out = self.focused_output().map(|o| o.name()).unwrap_or_default();
+        if target >= 0 {
+            self.ensure_workspace(target, &focused_out);
+        }
+        let to_output = self.wm.workspaces.get(&target).and_then(|w| self.output_named(&w.output));
+        if let Some(w) = self.wm.workspaces.get_mut(&from) {
+            w.layout.remove(id);
+        }
+        let window = self.wm.get(id).unwrap().window.clone();
+        let floating_before = self.wm.get(id).unwrap().floating;
+        // It takes the target's mode, as a window opened there would — except one that must
+        // float (a dialog) or that was floated by hand on a tiling workspace.
+        let floated_by_hand = self.workspace_mode(from) == WorkspaceMode::Tiling && floating_before;
+        let tiled = self.workspace_mode(target) == WorkspaceMode::Tiling && !wants_floating(&window) && !floated_by_hand;
+        if let Some(o) = &to_output {
+            if tiled {
+                let area = inset(self.work_area(o), self.config.layout.gaps_out);
+                let near = self.wm.last_focused_on(target);
+                if let Some(w) = self.wm.workspaces.get_mut(&target) {
+                    w.layout.insert(id, area, near, None);
+                }
+            } else {
+                // Its place relative to the output is kept, pulled inside a smaller one.
+                let og = self.space.output_geometry(o).unwrap_or_default();
+                let area = self.floating_area(o);
+                let m = self.wm.get_mut(id).unwrap();
+                let fr = m.float_rect.unwrap_or(Rectangle::new(m.rect.loc - og.loc, m.rect.size));
+                let fr = clamp_floating(Rectangle::new(fr.loc + og.loc, fr.size), area);
+                m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
+            }
+        }
+        let m = self.wm.get_mut(id).unwrap();
+        m.workspace = target;
+        m.floating = !tiled;
+        m.pinned = false;
+        self.wm.dirty_windows = true;
+        self.wm.dirty_workspaces = true;
+        self.arrange_workspace(from);
+        self.arrange_workspace(target);
+        if follow {
+            if target < 0 {
+                if let Some(name) = self.wm.workspaces.get(&target).map(|w| w.name.trim_start_matches("special:").to_string())
+                    && !self.wm.is_visible(target)
+                {
+                    self.toggle_special(&name);
+                }
+            } else {
+                self.show_workspace(target, false);
+            }
+            self.focus_window(Some(id));
+        } else {
+            if self.wm.focused == Some(id) {
+                let next = self.wm.last_focused_on(from);
+                self.focus_window(next);
+            }
+            self.prune_workspaces();
+            self.sync_space();
+        }
+    }
+
+    /// The numbered workspace `step` places from `from` among those that exist (`e+1`/`e-1`),
+    /// round the end.
+    pub fn relative_workspace(&self, from: i32, step: i32) -> i32 {
+        let ids: Vec<i32> = self.wm.workspaces.keys().copied().filter(|i| *i > 0).collect();
+        let Some(pos) = ids.iter().position(|i| *i == from) else { return from };
+        let n = ids.len() as i32;
+        ids[((pos as i32 + step).rem_euclid(n)) as usize]
+    }
+
+    /// The runtime mode of a workspace changed: its windows follow — all tiled, or all
+    /// floating where they were.
+    pub fn set_workspace_mode(&mut self, ws: i32, mode: Option<WorkspaceMode>) {
+        match mode {
+            Some(m) => self.wm.mode_overrides.insert(ws, m),
+            None => self.wm.mode_overrides.remove(&ws),
+        };
+        let mode = self.workspace_mode(ws);
+        self.set_all_floating(ws, mode == WorkspaceMode::Floating);
+        self.wm.dirty_workspaces = true;
+    }
+
+    /// Floats (or tiles) every window of a workspace that can be.
+    pub fn set_all_floating(&mut self, ws: i32, floating: bool) {
+        let ids: Vec<WindowId> = self
+            .wm
+            .on_workspace(ws)
+            .filter(|m| m.floating != floating && !(!floating && wants_floating(&m.window)))
+            .map(|m| m.id)
+            .collect();
+        for id in ids {
+            self.set_floating(id, floating);
+        }
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    pub fn set_floating(&mut self, id: WindowId, floating: bool) {
+        let Some(m) = self.wm.get(id) else { return };
+        if m.floating == floating {
+            return;
+        }
+        let (ws, rect) = (m.workspace, m.rect);
+        let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
+        let og = self.space.output_geometry(&output).unwrap_or_default();
+        if floating {
+            if let Some(w) = self.wm.workspaces.get_mut(&ws) {
+                w.layout.remove(id);
+            }
+            let area = self.floating_area(&output);
+            let m = self.wm.get_mut(id).unwrap();
+            // Back to its last floating box, else where it was tiled.
+            let fr = m.float_rect.map(|r| Rectangle::new(r.loc + og.loc, r.size)).unwrap_or(rect);
+            let fr = clamp_floating(fr, area);
+            m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
+            m.floating = true;
+        } else {
+            let area = inset(self.work_area(&output), self.config.layout.gaps_out);
+            let near = self.wm.last_focused_on(ws).filter(|n| *n != id);
+            let cursor = self.seat.get_pointer().map(|p| p.current_location());
+            let m = self.wm.get_mut(id).unwrap();
+            m.floating = false;
+            m.pinned = false;
+            if let Some(w) = self.wm.workspaces.get_mut(&ws) {
+                w.layout.insert(id, area, near, cursor);
+            }
+        }
+        self.wm.dirty_windows = true;
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    pub fn set_fullscreen(&mut self, id: WindowId, mode: Fullscreen) {
+        let Some(m) = self.wm.get_mut(id) else { return };
+        if m.fullscreen == mode {
+            return;
+        }
+        m.fullscreen = mode;
+        let ws = m.workspace;
+        self.wm.dirty_windows = true;
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    // ── Outputs ───────────────────────────────────────────────────────────────────────
+
+    /// Outputs came or went: each workspace goes home if it can, or to an output that is
+    /// there; every output shows a workspace.
+    pub fn outputs_changed(&mut self) {
+        let present: Vec<String> = self.space.outputs().map(|o| o.name()).collect();
+        self.wm.active.retain(|o, _| present.contains(o));
+        self.wm.special_shown.retain(|o, _| present.contains(o));
+        let Some(first) = present.first().cloned() else { return };
+        let ids: Vec<i32> = self.wm.workspaces.keys().copied().collect();
+        for id in ids {
+            let w = &self.wm.workspaces[&id];
+            let target = if present.contains(&w.home) {
+                w.home.clone()
+            } else if present.contains(&w.output) {
+                w.output.clone()
+            } else {
+                first.clone()
+            };
+            if target != w.output {
+                let back_home = target == w.home;
+                self.wm.workspaces.get_mut(&id).unwrap().output = target.clone();
+                self.wm.active.retain(|_, a| *a != id);
+                // Home again: shown where it was shown before it left, if nothing better is.
+                if back_home && id > 0 && !self.wm.active.contains_key(&target) {
+                    self.wm.active.insert(target.clone(), id);
+                }
+                self.wm.dirty_workspaces = true;
+            }
+        }
+        for o in &present {
+            self.active_workspace(o);
+        }
+        if self.wm.focused_output.as_ref().is_some_and(|o| !present.contains(o)) {
+            self.wm.focused_output = None;
+        }
+        self.arrange_all();
+    }
+
+    /// The output under the pointer is the one the user is on, when no window says otherwise.
+    pub fn pointer_on_output(&mut self, pos: Point<f64, Logical>) {
+        let Some(name) = self.space.output_under(pos).next().map(|o| o.name()) else { return };
+        if self.wm.focused_output.as_deref() != Some(&name) {
+            self.wm.focused_output = Some(name);
+            self.wm.dirty_workspaces = true;
+        }
+    }
+
+    /// The configured tiling layout changed: every workspace re-tiles its windows with it.
+    pub fn change_tiling_layout(&mut self) {
+        let name = self.config.layout.tiling.clone();
+        let ids: Vec<i32> = self.wm.workspaces.keys().copied().collect();
+        for ws in ids {
+            let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { continue };
+            let area = inset(self.work_area(&output), self.config.layout.gaps_out);
+            let Some(mut fresh) = layout::new(&name) else { return };
+            let w = self.wm.workspaces.get_mut(&ws).unwrap();
+            for id in w.layout.windows() {
+                fresh.insert(id, area, None, None);
+            }
+            w.layout = fresh;
+        }
+        self.arrange_all();
+    }
+
+    /// The window under a point among those shown.
+    pub fn window_under(&self, pos: Point<f64, Logical>) -> Option<WindowId> {
+        let (w, _) = self.space.element_under(pos)?;
+        self.wm.by_window(w).map(|m| m.id)
+    }
+}
+
+const TILED: [xdg_toplevel::State; 4] = [
+    xdg_toplevel::State::TiledLeft,
+    xdg_toplevel::State::TiledRight,
+    xdg_toplevel::State::TiledTop,
+    xdg_toplevel::State::TiledBottom,
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn r(x: i32, y: i32, w: i32, h: i32) -> Rect {
+        Rectangle::new((x, y).into(), (w, h).into())
+    }
+
+    #[test]
+    fn a_floating_window_stays_inside_with_its_top_edge_first() {
+        let area = r(5, 45, 2550, 1290);
+        // Fits: untouched.
+        assert_eq!(clamp_floating(r(300, 300, 900, 700), area), r(300, 300, 900, 700));
+        // Hanging off the right and the bottom: moved in.
+        assert_eq!(clamp_floating(r(2000, 1000, 900, 700), area), r(1655, 635, 900, 700));
+        // Larger than the area: shrunk to it, top-left at its corner.
+        assert_eq!(clamp_floating(r(0, -101, 2560, 1440), area), r(5, 45, 2550, 1290));
+        // Above the top: brought down.
+        assert_eq!(clamp_floating(r(100, -50, 400, 300), area), r(100, 45, 400, 300));
+    }
+
+    #[test]
+    fn a_new_window_steps_off_one_it_would_cover_and_only_then() {
+        let area = r(0, 0, 2000, 1000);
+        let centred = r(700, 300, 600, 400);
+        // Nothing under it, or something it only partly covers: it stays.
+        assert_eq!(cascade(centred, &[], area, 4), centred);
+        assert_eq!(cascade(centred, &[r(600, 300, 600, 400)], area, 4), centred);
+        // A small dialog over a big parent covers nothing whole: it stays.
+        assert_eq!(cascade(r(850, 400, 300, 200), &[centred], area, 4), r(850, 400, 300, 200));
+        // The same terminal opened twice, then three times: down and right, 28 at a time.
+        let second = cascade(centred, &[centred], area, 4);
+        assert_eq!(second, r(728, 328, 600, 400));
+        assert_eq!(cascade(centred, &[centred, second], area, 4), r(756, 356, 600, 400));
+        // No room left: the original place.
+        assert_eq!(cascade(r(1400, 600, 600, 400), &[r(1400, 600, 600, 400)], area, 4), r(1400, 600, 600, 400));
+    }
+}

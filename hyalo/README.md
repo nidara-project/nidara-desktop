@@ -28,13 +28,18 @@ Needs `rust`, `seatd` (libseat), `libinput`, `libdisplay-info`, `mesa`, `libxkbc
     nidara-hyalo --winit -c gtk4-widget-factory    # in a window of your current session
     nidara-hyalo                                   # on a VT, as a real session (DRM/KMS)
     nidara-hyalo msg outputs                       # ask the running one
+    nidara-hyalo msg windows                       # every window, its workspace and state
+    nidara-hyalo msg do workspace 3                # a window-manager command, as in a binding
 
 The session entry the greeter lists is "Nidara — Hyalo preview" (`config/wayland-sessions/`).
 `Ctrl+Alt+Backspace` ends a Hyalo session — the way out while nothing else is.
 
 Configuration: `/usr/share/nidara/hyalo/hyalo.toml` (shipped), then
 `~/.config/nidara/hyalo.toml` on top, key by key; the file is watched. Runtime changes go
-through IPC, never by rewriting the file.
+through IPC, never by rewriting the file. The shipped file has the layout (gaps, the tiling
+layout), the per-workspace floating/tiling default, and the key bindings — the same set as the
+Hyprland session; `[binds]` syntax in `compositor/src/binds.rs`, the commands in
+`compositor/src/wm/actions.rs`.
 
 A crash leaves a report in `~/.local/state/nidara/hyalo/`, which `nidara-doctor` lists.
 

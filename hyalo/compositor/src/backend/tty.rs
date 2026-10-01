@@ -718,7 +718,6 @@ fn connector_disconnected(state: &mut Hyalo, node: DrmNode, connector: connector
     device.disabled.remove(&connector.handle());
     if let Some(mut surface) = device.surfaces.remove(&crtc) {
         tracing::info!(name = %surface.output.name(), "output gone");
-        outputs::remember_windows_of(state, &surface.output);
         if let Redraw::WaitingForEstimatedVBlank { token, .. } = surface.redraw {
             state.loop_handle.remove(token);
         }
@@ -938,7 +937,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
-    let Hyalo { backend, space, seat, cursor_status, start_time, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, start_time, wm, .. } = state;
     let cursor_status = &*cursor_status;
     let Backend::Tty(tty) = backend else { return };
     if !tty.session.is_active() {
@@ -953,7 +952,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
-    let scene = render::Scene::new(space, seat, cursor_status);
+    let scene = render::Scene::new(space, wm, seat, cursor_status);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,

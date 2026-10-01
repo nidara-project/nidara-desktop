@@ -147,6 +147,16 @@ phase_run() {
         || { log "FAIL: Hyalo has no output on"; cat /tmp/hyalo/outputs.json; exit 1; }
     log "outputs: $(jq -r '.ok.outputs[] | "\(.name) \(.current_mode.width)x\(.current_mode.height)"' /tmp/hyalo/outputs.json | tr '\n' ' ')"
 
+    # The window manager: every output shows a workspace, and a command switches it.
+    nidara-hyalo msg workspaces > /tmp/hyalo/workspaces.json
+    jq -e '.ok.workspaces | map(select(.active)) | length > 0' /tmp/hyalo/workspaces.json >/dev/null \
+        || { log "FAIL: no output shows a workspace"; cat /tmp/hyalo/workspaces.json; exit 1; }
+    nidara-hyalo msg do workspace 2 >/dev/null || { log "FAIL: 'do workspace 2' refused"; exit 1; }
+    nidara-hyalo msg workspaces | jq -e '.ok.workspaces | map(select(.id == 2 and .active)) | length == 1' >/dev/null \
+        || { log "FAIL: workspace 2 is not shown after 'do workspace 2'"; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "window manager OK"
+
     # ── 2. The shell, exactly as the Hyprland smoke runs it.
     log "booting the shell…"
     export GDK_BACKEND=wayland NIDARA_SHELL_ROOT="$REPO/ui/shell"

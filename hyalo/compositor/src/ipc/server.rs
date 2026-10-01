@@ -143,6 +143,15 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
                 Err(e) => Reply::Error(e),
             }
         }
+        Request::Windows => Reply::Ok(Response::Windows { windows: state.window_infos() }),
+        Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
+        Request::Do { command } => match command.parse::<crate::wm::actions::Action>() {
+            Ok(action) => match state.run_action(action) {
+                Ok(()) => Reply::Ok(Response::Handled),
+                Err(e) => Reply::Error(e),
+            },
+            Err(e) => Reply::Error(e),
+        },
         Request::ReloadConfig => match config::reload(state) {
             Ok(()) => Reply::Ok(Response::Handled),
             Err(e) => Reply::Error(e),
@@ -172,4 +181,95 @@ pub fn outputs_changed(state: &mut Hyalo) {
     }
     let event = Event::OutputsChanged { outputs: outputs::info(state) };
     broadcast(state, &event);
+}
+
+impl Hyalo {
+    pub fn window_infos(&self) -> Vec<super::WindowInfo> {
+        let dh = &self.display_handle;
+        self.wm
+            .windows
+            .iter()
+            .filter(|m| m.mapped)
+            .map(|m| {
+                let surface = m.window.toplevel().map(|t| t.wl_surface().clone());
+                let pid = surface
+                    .as_ref()
+                    .and_then(|s| dh.get_client(smithay::reexports::wayland_server::Resource::id(s)).ok())
+                    .and_then(|c| c.get_credentials(dh).ok())
+                    .map(|c| c.pid);
+                let parent = m.window.toplevel().and_then(|t| t.parent()).and_then(|p| self.wm.by_surface(&p)).map(|p| p.id);
+                super::WindowInfo {
+                    id: m.id,
+                    app_id: crate::wm::app_id(&m.window),
+                    title: crate::wm::title(&m.window),
+                    pid,
+                    parent,
+                    workspace: m.workspace,
+                    output: self.wm.workspaces.get(&m.workspace).map(|w| w.output.clone()).unwrap_or_default(),
+                    floating: m.floating,
+                    fullscreen: m.fullscreen,
+                    pinned: m.pinned,
+                    pseudo: m.pseudo,
+                    focused: self.wm.focused == Some(m.id),
+                    visible: self.wm.is_visible(m.workspace),
+                    focus_order: m.focus_serial,
+                    x: m.rect.loc.x,
+                    y: m.rect.loc.y,
+                    width: m.rect.size.w,
+                    height: m.rect.size.h,
+                }
+            })
+            .collect()
+    }
+
+    pub fn workspace_infos(&self) -> Vec<super::WorkspaceInfo> {
+        let focused_output = self.focused_output().map(|o| o.name());
+        self.wm
+            .workspaces
+            .values()
+            .map(|w| super::WorkspaceInfo {
+                id: w.id,
+                name: w.name.clone(),
+                output: w.output.clone(),
+                special: w.is_special(),
+                mode: self.workspace_mode(w.id),
+                windows: self.wm.on_workspace(w.id).count(),
+                active: self.wm.is_visible(w.id),
+                focused: focused_output.as_deref() == Some(&w.output) && self.wm.active.get(&w.output) == Some(&w.id),
+                last_window: self.wm.last_focused_on(w.id),
+            })
+            .collect()
+    }
+
+    /// What changed in the window manager since the last round, to the event stream: once per
+    /// round of the event loop, however many changes it made.
+    pub fn broadcast_wm_changes(&mut self) {
+        let focus = self.wm.focused;
+        let focus_changed = self.wm.announced_focus != Some(focus);
+        if !(self.wm.dirty_windows || self.wm.dirty_workspaces || focus_changed) {
+            return;
+        }
+        if self.ipc.has_subscribers() {
+            if self.wm.dirty_windows {
+                let event = Event::WindowsChanged { windows: self.window_infos() };
+                broadcast(self, &event);
+            }
+            if self.wm.dirty_workspaces || focus_changed {
+                let event = Event::WorkspacesChanged { workspaces: self.workspace_infos() };
+                broadcast(self, &event);
+            }
+            if focus_changed {
+                broadcast(self, &Event::FocusChanged { id: focus });
+            }
+        }
+        self.wm.dirty_windows = false;
+        self.wm.dirty_workspaces = false;
+        self.wm.announced_focus = Some(focus);
+    }
+}
+
+impl IpcState {
+    pub fn has_subscribers(&self) -> bool {
+        !self.subscribers.is_empty()
+    }
 }

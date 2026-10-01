@@ -16,6 +16,8 @@ is the WHY and the traps.
 | `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`) |
 | `hyalo/compositor/src/outputs.rs` | outputs as configured: arrange, apply, power, the windows' way home (#594) |
 | `hyalo/compositor/src/config.rs` | the TOML layers and the watcher |
+| `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`) |
+| `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
@@ -48,6 +50,50 @@ go back to that.
   lives in the damage tracker's per-element cache, and is deleted through a trash list on the next
   capture, because a cache is dropped where no context is current.
 
+## The window manager
+
+Hyalo is **dual** (owner, 2026-10-01): each workspace is floating or tiling, floating by
+default, exactly as `WorkspaceModes` (#513) made it on Hyprland. **No tab groups, and dwindle is
+the only tiling layout** — groups and `master` existed because Hyprland had them; the owner
+dropped groups and kept the door open for more layouts. That door is `wm/layout/`: a `Layout`
+trait that only knows window ids and rectangles, so a new layout is a file plus a line in
+`layout::new`, tested on its own. A new layout never touches the window manager.
+
+- **The model is `Wm`; Smithay's `Space` holds only what is VISIBLE**, rebuilt from the model by
+  `sync_space()` after every change, in stacking order: per output, the active workspace's tiled
+  windows, then its floating ones, then a special workspace over it. A window on a hidden
+  workspace is not in the space at all (no frames, no input, no `wl_surface.enter`). A
+  fullscreen window hides the rest of its workspace and is drawn ABOVE the top layers (it covers
+  the bar); `render::windows_front_to_back` is the one place that decides that order, and both
+  drawing and hit-testing (`surface_under`) use it.
+- **#594 is now per workspace, not per window.** A workspace remembers its home output; when
+  that output goes, the workspace is shown elsewhere (not active), and when it returns under the
+  same connector name the workspace goes back and is shown again. A floating window's box is
+  stored relative to its output (`float_rect`), so it returns to where it was. Verified in the
+  VM with two outputs, switching one off and on (2026-10-01).
+- **Floating placement** is the Hyprland session's, ported from `hyprland.lua`: centred (a
+  dialog over its parent), clamped inside the usable area with the top edge winning (#11,
+  `clamp_floating`), and stepped off a window it would cover entirely (`cascade`, KWin's
+  `cascadeIfCovering`). A dialog, or a window whose min size equals its max, floats even on a
+  tiling workspace (`wants_floating`).
+- **Client maximize requests are refused** (the Hyprland session's `suppress_event = "maximize"`):
+  Super+M maximizes. Fullscreen requests are granted.
+- **One command language** for bindings and IPC (`wm/actions.rs`): `workspace 3`,
+  `move-to-workspace-silent 2 ID`, `toggle-floating`, `set-workspace-mode 3 tiling`,
+  `focus-output DP-2`… A command without a window id acts on the focused window. The shell
+  reaches it with `nidara-hyalo msg do <command>` (or the `do` request); `windows` and
+  `workspaces` list the state, and the event stream sends `windows_changed`,
+  `workspaces_changed`, `focus_changed` (once per event-loop round, however many changes) and
+  `window_title_changed` on its own — the same split as HyprlandState's "changed" vs
+  "title-changed", for the same reason (a terminal spinner renames its window constantly).
+- **Bindings** (`binds.rs`) match the key's unshifted symbol in the first Latin layout, so
+  `Super+1` works with Shift held and on any layout. `release = true` fires only if nothing else
+  was pressed while the key was held (Super alone opens the app grid; Super+T does not).
+  Ctrl+Alt+F1…F12 and Ctrl+Alt+Backspace are built in and cannot be bound over.
+- **Border and rounding are not drawn yet**: the geometry reserves `layout.border` (1 px) so
+  windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
+  shadows in #684.
+
 ## Three config layers, and runtime changes over IPC
 
 Read in order, merged table by table, last wins: `/usr/share/nidara/hyalo/hyalo.toml` (shipped),
@@ -72,8 +118,10 @@ Display page and `core/MonitorConfig.ts` read only that. **This is the pattern #
 the rest of the shell** (workspaces, windows, rules): a facade per concern, Hyprland behind one
 side, Hyalo's IPC behind the other — not `if (hyalo)` sprinkled through surfaces.
 
-What does not work yet on Hyalo is everything else behind `HyprlandState` (workspaces, window
-list, `hyprctl` options): the shell logs it as CRITICALs and carries on. That is #682.
+Hyalo has workspaces, windows and focus of its own (above) and says so over IPC, but the
+shell does not ask it yet: everything behind `HyprlandState` still looks for Hyprland, logs
+CRITICALs and carries on. Moving the shell onto a compositor interface (`CompositorState`, one
+backend per compositor) is the next part of #682.
 
 ## Traps found running Hyalo for real
 
@@ -102,6 +150,18 @@ list, `hyprctl` options): the shell logs it as CRITICALs and carries on. That is
   it with the render formats). Drop that intersection and the sticky rule becomes a bug. Hyprland
   never shows this, because it uses no overlay planes. Its only direct scan-out is a fullscreen
   window.
+- **A space element's location is its GEOMETRY's origin**, not its surface's. Smithay subtracts
+  the client's decoration offset (`window.geometry().loc`) itself when it draws and hit-tests, so
+  `map_element(window, rect.loc)` is right and `rect.loc - geometry().loc` puts a kitty 25 px
+  too low and a GTK window 22 px up-left (both measured, 2026-10-01). When YOU hit-test a
+  window's surfaces, it is the other way round: `location - geometry().loc`.
+- **Never ask the pointer for anything inside a `PointerGrab` callback.** `unset` runs with the
+  pointer's lock held, and `seat.get_pointer().current_location()` there deadlocked the whole
+  compositor on the first Super+drag. The grab keeps the last location itself, and settling the
+  window runs from an idle callback.
+- **Never run a bare `nidara-hyalo` from a shell in the live session**, not even for its help
+  (`--help` is the flag): with `WAYLAND_DISPLAY` set it starts a compositor in a window of the
+  live desktop. The harnesses below are the way to run it.
 - `xcursor`'s `pixels_rgba` is the file's byte order, i.e. DRM `Argb8888`, whatever its name says.
 - A screenshot's read-back (`ExportMem::copy_framebuffer`): a mapping that is NOT `flipped()`
   holds the bottom row first.
@@ -111,7 +171,11 @@ list, `hyprctl` options): the shell logs it as CRITICALs and carries on. That is
 - Never against the live session. `hyalo/scripts/headless-shot.sh` and `headless-shell.sh` run
   Hyalo in a window of a HEADLESS `cage` on the real GPU (the real shell sealed off by
   `sandboxed-shell.sh`), with `HYALO_CONTROL` for input and `nidara-hyalo msg screenshot` for
-  pictures.
+  pictures. `HYALO_CONTROL` keys go through the same path as a keyboard's, bindings included
+  (`key`, `keydown`, `keyup` take evdev codes; `press`/`release` for buttons), so a binding can
+  be tested headless. A test config must not bind anything that reaches the live session
+  (`nidara-ipc`, `uwsm app`, `systemctl --user`): the nested Hyalo's children share its D-Bus
+  and systemd.
 - The tty backend — the one that matters — is tested in the VM (maintainer harness), as a session
   from the greeter or from a VT; QEMU's `virtio-gpu,max_outputs=2` gives two outputs.
 - On real hardware: `hyalo/scripts/install-preview.sh` installs the session on a dev install
