@@ -5,6 +5,107 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-10-01
+
+**Settings that every process agrees on, an installer that asks the hard questions, glass that
+keeps its text legible — and the first piece of Nidara's own compositor, kept out of the release.**
+
+Settings moved to GSettings, so a change made anywhere — Settings, the Control Center, the
+Assistant, `gsettings` — reaches the desktop at once, and your old files are imported once, on
+update. Applications learn the appearance from the portal and nothing else. The shell stopped
+borrowing a GTK theme: what it draws is ours, and the apps it launches get their own theme back.
+
+The installer can encrypt the disk, pick a kernel and the NVIDIA driver for your card, measures
+its mirrors from your machine, and says before touching anything when the machine cannot take
+the install — not enough memory, a legacy BIOS, Secure Boot enforced, a BitLocker volume.
+
+**Hyalo**, Nidara's own Wayland compositor (#680), is in the source tree and runs the whole
+desktop as a preview session. It is **not** in this release's packages: it cannot lock the screen
+or notice you are idle yet, and a desktop that does not lock is not one to hand out. Hyprland
+remains the session everybody gets.
+
+### Added
+
+- **Disk encryption in the installer** (LUKS, opt-in), with what it costs and what it does not
+  protect stated before you choose (#310).
+- **A System step**: the kernel, and the NVIDIA driver that matches your card (#311, #495);
+  multilib on, printing (CUPS) in the system package (#492).
+- **The installer checks the machine first**: low memory, legacy BIOS, Secure Boot enforced,
+  BitLocker volumes that cannot be shrunk (#448, #493); a battery warning that reads UPower and
+  clears when the charger goes in; country and time zone suggested from your network.
+- **Mirrors measured from this machine**, not read off a table (#311). A stalled install says it
+  is the network, and can be stopped; the run page is one card that counts five phases with
+  real package numbers and the elapsed time.
+- **Floating or tiling, per workspace** — Settings → Desktop, and where you read a workspace's
+  mode you can change it (#513).
+- **Each app has a page in Settings**: who it is, whether it is isolated (Flatpak), and its
+  permissions — Ask, Allow or Deny — editable. Camera, microphone and location are asked for
+  with Nidara's own consent prompt (#535).
+- **Nidara's icon spec and its own interface icon theme**, chosen in Settings → Appearance (#587).
+- **Three glass materials and Reduce transparency**; windows can be transparent (#674).
+- **Wi-Fi in the bar and the Control Center**: signal and state in the bar, known and other
+  networks, leave a network, details behind a chevron. **Ethernet**: a switch that holds across a
+  reboot, and IP and DNS of your own — for the cable and for every saved Wi-Fi network.
+- **The Control Center, Notification Center, bar panels and dock work from the keyboard**, with
+  one focus ring.
+- **Typing Chinese and Japanese**: an input method ships with the languages we offer (#500).
+- **Game mode silences notifications while you play** (Settings → Gaming, on by default;
+  critical ones still show).
+- **`nidara-kit`, the platform library, is its own package** (LGPL-3.0-or-later), with types and
+  a guide for authors of apps outside this repository (#108).
+
+### Changed
+
+- **Settings live in GSettings** — widgets and the Control Center layout, dock pins, the clock,
+  appearance, the Assistant's gates, game mode and more (#573). Your old JSON files are imported
+  once and kept as `*.migrated`.
+- **Applications read the appearance from the portal only**: accent, colour scheme, contrast and
+  font reach ours and everybody else's apps the same way (#534).
+- **The shell runs on no GTK theme**: GTK's geometry, our paint, for every widget it draws (#107).
+- **Apps start as systemd services** — the session's environment, their output in the journal, not
+  the shell's children.
+- **The bar**: three pieces of glass, every icon at 18 px on a 4 px grid, a tooltip on every
+  capsule, one order for its right side edited in the bar itself, an overflow that unfolds in line,
+  the "Ni" mark, a Control Center icon that shows it is open, and a Top bar page in Settings.
+- **The glass keeps its text legible by itself**, adapting its tint to what is behind it; the
+  shell's skin is dark whatever the wallpaper.
+- **Game mode's session runs in the shell** — the wallpaper, the power profile, notifications and
+  the way back — and the compositor only gives a game its own workspace. The **Transition**
+  setting is gone: it had done nothing since May.
+- **kitty is the terminal for apps that ask for one** (`Terminal=true`), unless you chose another.
+- **A new floating window steps aside only when it would bury another**, and the top edge — where
+  the header is — always stays on screen (#11, #512).
+- Packaging: `pavucontrol` is no longer a dependency; `rtkit` is, so PipeWire gets realtime
+  priority; printing moved to `nidara-system`.
+
+### Fixed
+
+- **Apps launched from the desktop came up with no GTK theme** — the shell's own setting leaked
+  into every child.
+- **An unanswered Wi-Fi password dialog blocked every later join**; Wi-Fi secrets go through
+  NetworkManager's agent, never a command line.
+- **The dock no longer fills memory** (#100), and magnification stopped redrawing icons on the CPU.
+- **Floating windows go back where they were when the only monitor returns** (#594).
+- **The login screen** has one skin with fixed ink, and logs to the journal again.
+- **Installer**: the keyboard you choose reaches the desktop, from the whole catalogue (#498); the
+  EFI partition has one place to go (#430); a disk too small is refused on the disk page; networks
+  joined on the live medium reach the installed system; the log outlives the window; a reinstall
+  hides the entry it replaced; an NVIDIA GPU no longer breaks the System and Summary pages.
+- **A switch says what it toggles**, to a screen reader and to the Assistant's computer use.
+- **The computer-control kill switch (Super+Shift+Escape) works even while an app holds the
+  shortcuts** (a virtual machine, Chrome's keyboard lock).
+
+### Hyalo (preview — in the source, not in the packages)
+
+The compositor of our own, on Smithay (#680): a real session on hardware (#681) running the whole
+desktop through one compositor interface the shell shares with Hyprland (#682) — its own window
+manager (floating and tiling, rules, bindings), Settings' input and display pages, window
+thumbnails, the Assistant's computer use, game mode, and the protocols applications expect:
+sandboxed (Flatpak) clients kept away from privileged interfaces, activation, held shortcuts,
+touchpad gestures (#699), modal dialogs (#700), and an app holding the shortcuts — a virtual
+machine, a remote desktop — with Super+Escape to take them back (#698). From a source checkout:
+`hyalo/scripts/install-preview.sh`.
+
 ## [0.12.1] — 2026-09-07
 
 **The AI-control notice still stuck out of the panel, and 0.12.0 said it was fixed.**

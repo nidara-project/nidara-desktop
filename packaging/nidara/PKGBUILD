@@ -47,7 +47,7 @@
 # still doing its job: a package named `nidara` and a package replacing `nidara`
 # in the same repository is a resolution somebody's `-Syu` has to guess at.
 pkgname=(nidara-desktop nidara-kit nidara-installer nidara-hyalo)
-pkgver=0.12.1
+pkgver=0.13.0
 pkgrel=1
 # The kit's API version (tech-debt #108) — NOT the release's. It must equal
 # ui/lib/nidara-kit/package.json's "version": package_nidara-kit() refuses to
