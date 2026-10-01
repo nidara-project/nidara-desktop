@@ -8,6 +8,7 @@
 
 mod backend;
 mod binds;
+mod capture;
 mod config;
 mod control;
 mod crash;

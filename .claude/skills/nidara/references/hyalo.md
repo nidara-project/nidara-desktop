@@ -19,6 +19,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`) |
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
+| `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
@@ -108,6 +109,27 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
 - **Border and rounding are not drawn yet**: the geometry reserves `layout.border` (1 px) so
   windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
   shadows in #684.
+
+## Window capture (thumbnails)
+
+`capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`
+(every shown window, kept up to date on title/app-id changes), toplevel
+`ext-image-capture-source-v1` and `ext-image-copy-capture-v1`. The window is drawn ALONE from
+its surface tree (`import_surface_tree` first: a window on a hidden workspace has not been
+drawn since its last commits) into a texture and copied into the client's shm buffer — so a
+window on a hidden workspace captures, as on Hyprland. One draw per request, never continuous.
+
+- **Identity without a Hyprland protocol.** Each window is listed with `identifier` = its id in
+  hex, which IS the shell's address for it (`HyaloState.ts`). lib/nidara-wl asks
+  `hyprland-toplevel-mapping` when the compositor offers it and falls back to the identifier
+  when it does not — Hyalo carries no Hyprland protocol for this.
+- ⚠️ **Smithay's `Session` stops the client's session when it is DROPPED.** `new_session` must
+  keep it (`capture_sessions`) until `session_destroyed`; dropping it answered every capture
+  "stopped" before a frame was asked for (measured, 2026-10-01).
+- The shell does NOT capture the screen on Hyalo (`caps.backdropCapture` false): the adaptive
+  glass's backdrop is the compositor's to measure while drawing the glass (#684).
+- CI: the Hyalo smoke parks a window of a known colour on a hidden workspace and requires the
+  capture's centre to come back as that colour (`scripts/ci/hyalo-capture-probe.js`).
 
 ## Three config layers, and runtime changes over IPC
 

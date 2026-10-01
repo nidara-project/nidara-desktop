@@ -104,6 +104,8 @@ pub struct Managed {
     pub initial_title: String,
     /// The rules that have applied to it, by name: a rule applies once (wm/rules.rs).
     pub rules_applied: Vec<String>,
+    /// Its entry in ext-foreign-toplevel-list, once shown (capture.rs).
+    pub listed: Option<smithay::wayland::foreign_toplevel_list::ForeignToplevelHandle>,
 }
 
 pub struct Workspace {
@@ -426,6 +428,7 @@ impl Hyalo {
             initial_app_id: String::new(),
             initial_title: String::new(),
             rules_applied: Vec::new(),
+            listed: None,
         });
     }
 
@@ -531,6 +534,7 @@ impl Hyalo {
         {
             m.clamp_ask = Some((float.size, size));
         }
+        self.list_window(id);
         self.wm.dirty_windows = true;
         self.wm.dirty_workspaces = true;
         // Sent elsewhere `silent`ly: it opens there without taking the user — or the focus.
@@ -547,6 +551,8 @@ impl Hyalo {
         if let Some(w) = self.wm.workspaces.get_mut(&ws) {
             w.layout.remove(id);
         }
+        let listed = self.wm.get_mut(id).and_then(|m| m.listed.take());
+        self.unlist_window(listed);
         self.wm.windows.retain(|m| m.id != id);
         self.wm.dirty_windows = true;
         if self.wm.focused == Some(id) {

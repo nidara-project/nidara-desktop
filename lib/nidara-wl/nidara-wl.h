@@ -10,7 +10,11 @@
  *     demand into an export framebuffer — verified in ScreenshareFrame.cpp and in
  *     the field — so a window on a hidden workspace captures fine and costs one
  *     render pass, not continuous rendering. This is what makes real thumbnails
- *     affordable in the Overview and the window switcher.
+ *     affordable in the Overview and the window switcher. A window is found by the
+ *     shell's address for it: on Hyprland through hyprland-toplevel-mapping, on Hyalo
+ *     through ext-foreign-toplevel-list's own `identifier`, which Hyalo sets to that
+ *     address (hyalo/compositor/src/capture.rs) — Hyalo draws the window alone, from
+ *     its surface tree, so a hidden workspace captures there too.
  *
  *  2. VISIBLE REGION (hyprland-surface-v1 v2). Hyprland charges layer blur by the
  *     surface's BOX, not by the pixels that end up visible, so Nidara's three

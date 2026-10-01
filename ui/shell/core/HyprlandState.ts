@@ -58,7 +58,7 @@ export class HyprlandStateClass extends GObject.Object implements Compositor {
     }
 
     readonly kind = "hyprland" as const
-    readonly caps: CompositorCaps = { groups: true, layouts: true, glow: true }
+    readonly caps: CompositorCaps = { groups: true, layouts: true, glow: true, backdropCapture: true }
 
     private _refreshPending = false
     private _lastRefreshUs = 0

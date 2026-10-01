@@ -123,6 +123,7 @@ impl XdgShellHandler for Hyalo {
         self.wm.dirty_windows = true;
         // A GTK window takes its real app id when it is mapped: a rule naming it applies now.
         if let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) {
+            self.relist_window(id);
             self.apply_late_rules(id);
         }
     }
@@ -132,6 +133,7 @@ impl XdgShellHandler for Hyalo {
             let id = m.id;
             let event = crate::ipc::Event::WindowTitleChanged { id, title: crate::wm::title(&m.window) };
             crate::ipc::server::broadcast(self, &event);
+            self.relist_window(id);
             self.apply_late_rules(id);
         }
     }

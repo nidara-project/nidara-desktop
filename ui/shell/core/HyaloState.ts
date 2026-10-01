@@ -109,7 +109,7 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
 
     readonly kind = "hyalo" as const
     // No tab groups and dwindle only (owner, 2026-10-01); the glow comes with #684.
-    readonly caps: CompositorCaps = { groups: false, layouts: false, glow: false }
+    readonly caps: CompositorCaps = { groups: false, layouts: false, glow: false, backdropCapture: false }
 
     clients: CompositorWindow[] = []
     workspaces: CompositorWorkspace[] = []
