@@ -179,8 +179,8 @@ pub fn post_repaint(
         window.with_surfaces(|surface, s| update(surface, s));
         window.send_frame(output, time, throttle, surface_primary_scanout_output);
         if let Some(fb) = feedback {
-            window.send_dmabuf_feedback(output, surface_primary_scanout_output, |surface, _| {
-                select_dmabuf_feedback(surface, states, &fb.render, &fb.scanout)
+            window.send_dmabuf_feedback(output, surface_primary_scanout_output, |surface, s| {
+                pick_feedback(surface, s, states, fb)
             });
         }
     }
@@ -189,8 +189,8 @@ pub fn post_repaint(
         layer.with_surfaces(|surface, s| update(surface, s));
         layer.send_frame(output, time, throttle, surface_primary_scanout_output);
         if let Some(fb) = feedback {
-            layer.send_dmabuf_feedback(output, surface_primary_scanout_output, |surface, _| {
-                select_dmabuf_feedback(surface, states, &fb.render, &fb.scanout)
+            layer.send_dmabuf_feedback(output, surface_primary_scanout_output, |surface, s| {
+                pick_feedback(surface, s, states, fb)
             });
         }
     }
@@ -199,6 +199,32 @@ pub fn post_repaint(
         with_surfaces_surface_tree(surface, |surface, s| update(surface, s));
         smithay::desktop::utils::send_frames_surface_tree(surface, output, time, throttle, surface_primary_scanout_output);
     }
+}
+
+/// Marks a surface that has been offered the scan-out feedback once.
+struct ScanoutOffered;
+
+/// The dmabuf feedback a surface gets after a frame. Smithay's choice follows the frame: the
+/// scan-out feedback while the surface is on a plane (or tried for one), the render feedback
+/// otherwise. Every switch is a new set of modifiers, and a Vulkan client rebuilds its swapchain
+/// for each one (Mesa answers VK_SUBOPTIMAL_KHR, GTK recreates on it): the shell rebuilt 55 times
+/// in its first 25 s, as the one free overlay plane passed between its layers. The scan-out
+/// tranche only offers formats we can also render from, so a surface keeps it once offered: at
+/// most one rebuild per surface, and a buffer that loses its plane is still composited.
+fn pick_feedback<'a>(
+    surface: &WlSurface,
+    s: &smithay::wayland::compositor::SurfaceData,
+    states: &RenderElementStates,
+    fb: &'a SurfaceDmabufFeedback,
+) -> &'a DmabufFeedback {
+    if s.data_map.get::<ScanoutOffered>().is_some() {
+        return &fb.scanout;
+    }
+    let chosen = select_dmabuf_feedback(surface, states, &fb.render, &fb.scanout);
+    if std::ptr::eq(chosen, &fb.scanout) {
+        s.data_map.insert_if_missing_threadsafe(|| ScanoutOffered);
+    }
+    chosen
 }
 
 /// The presentation feedback of everything shown on `output` in the frame just queued.

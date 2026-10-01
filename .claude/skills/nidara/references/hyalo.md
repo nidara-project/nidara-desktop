@@ -92,6 +92,16 @@ list, `hyprctl` options): the shell logs it as CRITICALs and carries on. That is
   adding it, re-read the primary node, which may now be the card node. `HYALO_DRM_DEVICE` names the
   ONE GPU to use and then only it.
 - **A refusal is said.** `vrr=on` on a monitor without VRR is an error, not a silent no-op.
+- **The scan-out feedback is sticky** (`pick_feedback` in `backend/mod.rs`). Smithay's
+  `select_dmabuf_feedback` follows the frame, and each switch is a new modifier set. Mesa's
+  Wayland WSI answers that with `VK_SUBOPTIMAL_KHR`, and GTK rebuilds its swapchain on it, so the
+  shell logs a `Gdk-WARNING … VK_SUBOPTIMAL_KHR` for each rebuild. It counted 55 in its first
+  25 s on an amdgpu (2026-10-01), while the one free overlay plane passed between its
+  monitor-sized layers. Once offered, the scan-out feedback stays. This is safe only while the
+  scan-out tranche lists nothing we cannot render from (`surface_feedback` in tty.rs intersects
+  it with the render formats). Drop that intersection and the sticky rule becomes a bug. Hyprland
+  never shows this, because it uses no overlay planes. Its only direct scan-out is a fullscreen
+  window.
 - `xcursor`'s `pixels_rgba` is the file's byte order, i.e. DRM `Argb8888`, whatever its name says.
 - A screenshot's read-back (`ExportMem::copy_framebuffer`): a mapping that is NOT `flipped()`
   holds the bottom row first.
