@@ -490,6 +490,17 @@ void nidara_wl_material_set_glass (GdkSurface *surface,
                                    double refraction, double rim, double saturation);
 
 /**
+ * nidara_wl_material_set_lensing:
+ * @surface: the #GdkSurface
+ * @size_fraction: of each shape's shorter side, 0..1; 0 = set_glass's refraction everywhere
+ *
+ * Each shape's edge displacement becomes the larger of set_glass's refraction and this
+ * fraction of its shorter side: a large pane bends more than a small control. Nothing on a
+ * compositor without nidara-material-v1 version 4.
+ */
+void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
+
+/**
  * nidara_wl_material_clear_glass:
  * @surface: the #GdkSurface
  *

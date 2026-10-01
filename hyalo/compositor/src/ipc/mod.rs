@@ -70,6 +70,8 @@ pub struct LayerInfo {
 pub struct GlassInfo {
     pub shapes: usize,
     pub compositor_paints: bool,
+    /// Each shape's edge displacement, logical px (`set_lensing`): empty when blur only.
+    pub refraction: Vec<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]

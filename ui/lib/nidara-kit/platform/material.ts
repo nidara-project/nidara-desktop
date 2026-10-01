@@ -66,7 +66,11 @@ export type GlassParams = {
     alphaMin: number
     alphaMax: number
     target: number
+    /** Edge displacement, logical px: every shape's least. */
     refraction: number
+    /** A fraction of each shape's shorter side, where that bends more than `refraction`:
+     *  large panes lens more than small controls (nidara_material_v1.set_lensing, v4). */
+    lensing: number
     rim: number
     saturation: number
 }
@@ -112,6 +116,7 @@ type Shim = {
     material_commit(surface: Gdk.Surface, size: number, passes: number): boolean
     material_set_glass(surface: Gdk.Surface, r: number, g: number, b: number, aMin: number, aMax: number,
         target: number, refraction: number, rim: number, saturation: number): void
+    material_set_lensing?(surface: Gdk.Surface, sizeFraction: number): void
     material_clear_glass(surface: Gdk.Surface): void
     material_has_ink?(): boolean
     material_add_ink_box?(surface: Gdk.Surface, id: number, x: number, y: number, w: number, h: number): void
@@ -531,6 +536,7 @@ function flush(native: Gtk.Native, st: NativeState) {
         const t = glass.tint
         shim.material_set_glass(surface, t.r, t.g, t.b, glass.alphaMin, glass.alphaMax, glass.target,
             glass.refraction, glass.rim, glass.saturation)
+        shim.material_set_lensing?.(surface, glass.lensing)
     } else {
         shim.material_clear_glass(surface)
     }

@@ -81,8 +81,8 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
     {
       /* v2 adds a shape's own opacity and clip (add_shape_clipped); a v1
        * compositor gets plain shapes. v3 adds the ink (add_ink_box, set_ink,
-       * the ink event). */
-      material_version = MIN (version, 3);
+       * the ink event). v4 adds set_lensing. */
+      material_version = MIN (version, 4);
       material_mgr = wl_registry_bind (registry, name,
                                        &nidara_material_manager_v1_interface,
                                        material_version);
@@ -466,6 +466,15 @@ nidara_wl_material_set_glass (GdkSurface *surface,
                                 wl_fixed_from_double (target_luminance),
                                 wl_fixed_from_double (refraction), wl_fixed_from_double (rim),
                                 wl_fixed_from_double (saturation));
+}
+
+void
+nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m && material_version >= 4)
+    nidara_material_v1_set_lensing (m, wl_fixed_from_double (size_fraction));
 }
 
 void

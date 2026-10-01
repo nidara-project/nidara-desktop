@@ -260,6 +260,11 @@ impl Hyalo {
                         glass: crate::protocols::material::current(l.wl_surface()).map(|m| super::GlassInfo {
                             shapes: m.state.shapes.len(),
                             compositor_paints: m.state.glass.is_some(),
+                            refraction: if m.state.glass.is_some() {
+                                m.state.shapes.iter().map(|s| (m.state.refraction_of(s) * 10.0).round() / 10.0).collect()
+                            } else {
+                                Vec::new()
+                            },
                         }),
                     });
                 }

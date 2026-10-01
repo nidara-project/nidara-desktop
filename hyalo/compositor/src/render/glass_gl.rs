@@ -310,6 +310,9 @@ pub struct Shape {
     pub ink_dark: bool,
     /// A pointer spliced into it (v3).
     pub pointer: Option<PointerPx>,
+    /// How far its edge reads the backdrop from outside it, output pixels: the glass's
+    /// refraction, or more on a large shape (`set_lensing`, v4). 0 where there is no glass.
+    pub refraction: f64,
 }
 
 impl Shape {
@@ -393,7 +396,6 @@ pub struct Glass {
     pub alpha_min: f32,
     pub alpha_max: f32,
     pub target: f32,
-    pub refraction: f32,
     pub rim: f32,
     pub saturation: f32,
     /// The veil over a shape whose content is dark (`set_ink`).
@@ -744,7 +746,6 @@ pub unsafe fn draw(
             gl.Uniform1f(p.loc(gl, c"alpha_min"), g.alpha_min);
             gl.Uniform1f(p.loc(gl, c"alpha_max"), g.alpha_max);
             gl.Uniform1f(p.loc(gl, c"target"), g.target);
-            gl.Uniform1f(p.loc(gl, c"refraction"), g.refraction);
             gl.Uniform1f(p.loc(gl, c"rim"), g.rim);
             gl.Uniform1f(p.loc(gl, c"saturation"), g.saturation);
             gl.Uniform3f(p.loc(gl, c"ink_tint"), g.ink_tint[0], g.ink_tint[1], g.ink_tint[2]);
@@ -784,6 +785,7 @@ pub unsafe fn draw(
             gl.Uniform1f(p.loc(gl, c"exponent"), s.exponent as f32);
             gl.Uniform1f(p.loc(gl, c"opacity"), s.opacity);
             gl.Uniform1f(p.loc(gl, c"ink_dark"), s.ink_dark as i32 as f32);
+            gl.Uniform1f(p.loc(gl, c"refraction"), s.refraction as f32);
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);

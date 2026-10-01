@@ -73,7 +73,6 @@ impl GlassElement {
             alpha_min: g.alpha_min as f32,
             alpha_max: g.alpha_max as f32,
             target: g.target_luminance as f32,
-            refraction: (g.refraction * scale.x) as f32,
             rim: g.rim as f32,
             saturation: g.saturation as f32,
             ink_tint,
@@ -227,10 +226,10 @@ fn groups(
     location: Point<i32, Physical>,
     m: &material::MaterialState,
 ) -> Vec<(Rectangle<i32, Physical>, Vec<glass_gl::Shape>)> {
+    let blur_reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1);
     // Plus how far the refractive glass's edge reads from outside the shape.
-    let reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1)
-        + m.glass.map_or(0.0, |g| g.refraction * scale.x);
-    let grow = |r: &Rectangle<f64, Physical>| {
+    let grow = |r: &Rectangle<f64, Physical>, refraction: f64| {
+        let reach = blur_reach + refraction;
         Rectangle::<f64, Physical>::new(
             r.loc - Point::from((reach, reach)),
             (r.size.w + 2.0 * reach, r.size.h + 2.0 * reach).into(),
@@ -254,6 +253,7 @@ fn groups(
                 )
             }),
             ink_dark: false,
+            refraction: m.refraction_of(s) * scale.x,
             pointer: s.pointer.and_then(|p| {
                 let at = |q: [f64; 2]| {
                     let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));
@@ -275,7 +275,7 @@ fn groups(
     }
     for a in 0..shapes.len() {
         for b in a + 1..shapes.len() {
-            if grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
+            if grow(&shapes[a].bounds(), shapes[a].refraction).overlaps(grow(&shapes[b].bounds(), shapes[b].refraction)) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }
@@ -293,7 +293,8 @@ fn groups(
             for s in &shapes[1..] {
                 bounds = bounds.merge(s.bounds());
             }
-            let region = grow(&bounds).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
+            let most = shapes.iter().map(|s| s.refraction).fold(0.0, f64::max);
+            let region = grow(&bounds, most).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
             (region.size.w >= 2 && region.size.h >= 2).then_some((region, shapes))
         })
         .collect()

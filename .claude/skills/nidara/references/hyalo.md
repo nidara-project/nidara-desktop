@@ -99,9 +99,14 @@ What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
 
 `NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
-`~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction rim
-saturation`, `blur = SIZE:PASSES`, `glass = off` for the A/B) is re-read as it is saved — it is
-how the numbers are tuned with the owner on screen.
+`~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
+rim saturation inkDarkAbove inkLightBelow`, `blur`/`popoverBlur = SIZE:PASSES`, `glass = off` /
+`ink = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
+— it is how the numbers are tuned with the owner on screen.
+The refraction is PER SHAPE (protocol v4, `set_lensing`): `refraction` is every shape's least,
+and `lensing` × the shape's shorter side wins where it is more, so a large pane lenses more than
+a capsule without a number per surface. The capture region grows by each group's largest
+refraction, since the edge reads the backdrop from that far outside.
 ⚠️ `target` is a WCAG relative luminance — LINEAR light, the adaptive glass's own number (primary
 text at 4.5:1 → 0.183), and `alphaMax` is its ceiling (`GLASS_ADAPT_CEILING`). The shader mixes
 the tint into the ENCODED colour, so it searches for the least alpha that meets it (8 bisection

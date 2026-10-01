@@ -27,7 +27,7 @@ import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/n
  * ⚠️ The other numbers are the prototype's (#679), not calibrated: #684 tunes them with the owner
  * on screen. For that, a dev install (`~/.config/nidara/.dev`) reads
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
- *   alphaMin alphaMax target refraction rim saturation   the glass (see GlassParams)
+ *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
@@ -51,7 +51,11 @@ const DEFAULTS = {
     alphaMax: GLASS_ADAPT_CEILING,   // the most, over the brightest
     // The backdrop's WCAG luminance (linear) after tint ≤ this: white text at 4.5:1.
     target: 1.05 / LEGIBILITY_TARGET.primary - 0.05,
-    refraction: 10,       // logical px of edge displacement
+    refraction: 10,       // logical px of edge displacement: every shape's least
+    // A fraction of the shape's shorter side, where that is more: a large pane lenses more
+    // than a small control (2026-10-02). 0.15, measured nested: the bar's capsules (28 px)
+    // keep 10, a CC tile (76) bends 11, the dock (92) 14, the media card (172) 26.
+    lensing: 0.15,
     rim: 0.7,
     saturation: 1.35,
     // ≈ #e7e7e7 at the darkest point under the text: only a white page or window turns it.
@@ -71,10 +75,10 @@ function params(): GlassParams | null {
     const t = GLASS_TINT.dark
     if (Theme.reduceTransparency) {
         return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: SOLID_GLASS, alphaMax: SOLID_GLASS,
-            target: p.target, refraction: 0, rim: p.rim, saturation: 1 }
+            target: p.target, refraction: 0, lensing: 0, rim: p.rim, saturation: 1 }
     }
     return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: p.alphaMin, alphaMax: p.alphaMax, target: p.target,
-        refraction: p.refraction, rim: p.rim, saturation: p.saturation }
+        refraction: p.refraction, lensing: p.lensing, rim: p.rim, saturation: p.saturation }
 }
 
 function inkParams(): InkParams | null {

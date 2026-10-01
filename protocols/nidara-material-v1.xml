@@ -12,7 +12,7 @@
     blurred because it is not in a shape.
   </description>
 
-  <interface name="nidara_material_manager_v1" version="3">
+  <interface name="nidara_material_manager_v1" version="4">
     <request name="destroy" type="destructor"/>
     <request name="get_material">
       <description summary="the material object of a surface">
@@ -23,7 +23,7 @@
     </request>
   </interface>
 
-  <interface name="nidara_material_v1" version="3">
+  <interface name="nidara_material_v1" version="4">
     <request name="destroy" type="destructor">
       <description summary="remove the material on the next commit"/>
     </request>
@@ -176,5 +176,15 @@
       <arg name="id" type="uint"/>
       <arg name="dark" type="uint" summary="1: dark content; 0: light"/>
     </event>
+    <request name="set_lensing" since="4">
+      <description summary="pending: the refraction grows with the shape">
+        The edge displacement of each shape of the glass becomes the larger
+        of set_glass's refraction and size_fraction times the shape's shorter
+        side, so a large pane bends its backdrop more than a small control.
+        0 (the initial value) gives every shape set_glass's refraction.
+        Meaningful only while the compositor paints the glass (set_glass).
+      </description>
+      <arg name="size_fraction" type="fixed" summary="of the shape's shorter side, 0..1"/>
+    </request>
   </interface>
 </protocol>

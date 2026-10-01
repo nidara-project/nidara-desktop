@@ -87,6 +87,16 @@ pub struct MaterialState {
     pub glass: Option<Glass>,
     pub ink_boxes: Vec<InkBox>,
     pub ink: Option<Ink>,
+    /// v4: each shape's refraction is at least this fraction of its shorter side.
+    pub lensing: f64,
+}
+
+impl MaterialState {
+    /// How far a shape's edge displaces the backdrop, logical px: the glass's refraction, or
+    /// `lensing` of its shorter side where that is more (v4). 0 without the compositor's glass.
+    pub fn refraction_of(&self, s: &Shape) -> f64 {
+        self.glass.map_or(0.0, |g| g.refraction.max(self.lensing * s.w.min(s.h)))
+    }
 }
 
 impl Cacheable for MaterialState {
@@ -201,7 +211,7 @@ pub struct MaterialGlobal;
 pub struct MaterialData(Weak<WlSurface>);
 
 pub fn init(dh: &DisplayHandle) {
-    dh.create_global::<Hyalo, NidaraMaterialManagerV1, _>(3, MaterialGlobal);
+    dh.create_global::<Hyalo, NidaraMaterialManagerV1, _>(4, MaterialGlobal);
 }
 
 impl GlobalDispatch2<NidaraMaterialManagerV1, Hyalo> for MaterialGlobal {
@@ -335,6 +345,9 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         saturation,
                     })
                 });
+            }
+            Request::SetLensing { size_fraction } => {
+                self.pending(|m| m.lensing = size_fraction.clamp(0.0, 1.0));
             }
             Request::ClearGlass => {
                 self.pending(|m| m.glass = None);
