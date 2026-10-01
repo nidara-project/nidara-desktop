@@ -20,6 +20,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
+| `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
@@ -132,10 +133,31 @@ Smithay's virtual keyboard (zwp_virtual_keyboard_v1, what `wtype` speaks). Every
 goes through the same calls as a real device (`pointer_moved_to`, `pointer_button`, the seat's
 axis), so focus, hit-testing and grabs treat it as one. Absolute motion without a bound output
 spans every output together (wlroots' rule). Gating is the helpers' (Settings → AI), as on
-Hyprland, which also lets any local client create one. The helpers read the compositor
+Hyprland, which also lets any local client create one — except a sandboxed one here (below). The helpers read the compositor
 through `bin/nidara-wm` (state-and-ipc.md → the computer-use layer). Verified nested
 (2026-10-01): nidara-click clicks a button and an entry, nidara-type types into it, a
 not-focused app is refused.
+
+## Sandboxed clients (wp-security-context-v1)
+
+`sandbox.rs`. Flatpak's bwrap asks the compositor for a socket of its own and gives the app only
+that one; every client that comes in through it carries the context (`ClientState::
+security_context`), and the privileged globals are NOT ADVERTISED to it — a filter on each global
+(`sandbox::unrestricted`: Smithay's `new_with_filter` for its own, `can_view` in our
+`protocols/`), so the app cannot bind what it never sees. Hidden: the virtual pointer and keyboard,
+the window list and window capture, layer-shell, the focus grab, the glass material, and the
+security-context manager itself (a sandboxed client must not mint a looser context). Kept:
+everything an application needs.
+
+- 🔑 **A NEW privileged global gets the filter in the same change.** Nothing fails if it does not:
+  the global is simply offered to every Flatpak app. Add its interface name to `hidden[]` in
+  `scripts/ci/hyalo-sandbox-probe.c` too.
+- CI: the Hyalo smoke runs the probe, which creates a context the way Flatpak does, connects
+  through it, and compares the two registries. Its control is built in — every hidden global must
+  be offered OUTSIDE — and taking the filter away makes all nine fail (checked, 2026-10-01).
+- Not covered here: Hyalo's JSON IPC socket (`HYALO_SOCKET`) is a file in the runtime dir. A
+  Flatpak app gets a runtime dir of its own with the Wayland socket in it, not this one — unless it
+  is granted the host's (`--filesystem=xdg-run/…`), and then nothing here stops it.
 
 ## Window capture (thumbnails)
 

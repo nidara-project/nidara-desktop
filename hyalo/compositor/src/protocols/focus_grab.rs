@@ -53,6 +53,11 @@ impl GlobalDispatch2<HyprlandFocusGrabManagerV1, Hyalo> for FocusGrabGlobal {
     ) {
         data_init.init(resource, FocusGrabGlobal);
     }
+
+    /// Not for a sandboxed client (sandbox.rs).
+    fn can_view(&self, client: &Client) -> bool {
+        crate::sandbox::unrestricted(client)
+    }
 }
 
 impl Dispatch2<HyprlandFocusGrabManagerV1, Hyalo> for FocusGrabGlobal {

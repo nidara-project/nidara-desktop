@@ -111,6 +111,11 @@ impl GlobalDispatch2<NidaraMaterialManagerV1, Hyalo> for MaterialGlobal {
     ) {
         data_init.init(resource, MaterialGlobal);
     }
+
+    /// Not for a sandboxed client (sandbox.rs).
+    fn can_view(&self, client: &Client) -> bool {
+        crate::sandbox::unrestricted(client)
+    }
 }
 
 impl Dispatch2<NidaraMaterialManagerV1, Hyalo> for MaterialGlobal {
