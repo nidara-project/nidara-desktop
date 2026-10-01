@@ -21,6 +21,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
+| `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
@@ -167,6 +168,25 @@ everything an application needs.
 - Not covered here: Hyalo's JSON IPC socket (`HYALO_SOCKET`) is a file in the runtime dir. A
   Flatpak app gets a runtime dir of its own with the Wayland socket in it, not this one — unless it
   is granted the host's (`--filesystem=xdg-run/…`), and then nothing here stops it.
+
+## Bringing a window to the front (xdg-activation-v1)
+
+`activation.rs`. An app asks for one of its windows to come forward with a token. The rule is
+GNOME's, KDE's and niri's: honoured only if the token came from what the user just did — the
+client that asked for it has the keyboard OR the pointer (the dock and the notifications never
+take the keyboard; their click is under the pointer), its serial is no older than that focus's
+`last_enter` (niri's test: an old click says nothing about now), and it is used within 10 s.
+Anything else changes nothing. A NEW window needs none of this — Hyalo focuses it when it maps.
+
+The Hyprland session honours none (`misc:focus_on_activate` is off by default), so there a
+link clicked in a terminal leaves the browser behind; on Hyalo it comes forward.
+
+CI: `scripts/ci/hyalo-activation-check.sh` (with `hyalo-activation-probe.js`) clicks with the
+virtual pointer: the app the user clicked raises its other window (honoured); an app on another
+workspace asks to come forward (refused — the user stays where they are). A Hyalo that honoured
+every token fails the second half (checked, 2026-10-01). ⚠️ The check CLICKS: run it only inside a
+nested Hyalo or the smoke, and with the freshly built `nidara-hyalo` first in `PATH` —
+`bin/nidara-wm` asks `nidara-hyalo msg`, and an older installed one does not know `workspaces`.
 
 ## Window capture (thumbnails)
 

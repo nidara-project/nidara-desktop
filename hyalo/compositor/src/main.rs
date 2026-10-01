@@ -6,6 +6,7 @@
 //!     nidara-hyalo -c CMD          also run CMD once the socket is up
 //!     nidara-hyalo msg …           talk to the running compositor (see `msg --help`)
 
+mod activation;
 mod backend;
 mod binds;
 mod capture;
