@@ -67,6 +67,13 @@ phase_build() {
     ln -sf libnidara-wl.so.0.0.0 /usr/lib/libnidara-wl.so.0
     install -Dm644 "$wl_build/NidaraWl-1.0.typelib" /usr/lib/girepository-1.0/NidaraWl-1.0.typelib
     ldconfig
+    # nidara-input (the Assistant's virtual pointer), exactly as install.sh builds it.
+    local vp_xml=/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml vp="$REPO/build/vp"
+    mkdir -p "$vp"
+    wayland-scanner client-header "$vp_xml" "$vp/wlr-virtual-pointer-unstable-v1-client-protocol.h"
+    wayland-scanner private-code  "$vp_xml" "$vp/wlr-virtual-pointer-unstable-v1-protocol.c"
+    cc -O2 "$REPO/bin/nidara-input.c" "$vp/wlr-virtual-pointer-unstable-v1-protocol.c" \
+        -I"$vp" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/nidara-input
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
@@ -218,6 +225,22 @@ phase_run() {
     echo "$got" | awk '{ split($2, c, ","); ok = ($1 ~ /^[0-9]+x[0-9]+$/) && c[1] >= 26 && c[1] <= 46 && c[2] >= 103 && c[2] <= 123 && c[3] >= 153 && c[3] <= 173; exit !ok }' \
         || { log "FAIL: the window capture did not come back as #2471a3 (36,113,163)"; cat /tmp/hyalo/capture-probe.log; exit 1; }
     log "window capture OK"
+
+    # Computer use (#682): the compositor's state through bin/nidara-wm (Hyprland's shapes,
+    # built from Hyalo's IPC) and the virtual pointer nidara-input speaks: a move to a point
+    # must leave the cursor exactly there.
+    local mons w h
+    mons="$("$REPO/bin/nidara-wm" monitors)"
+    echo "$mons" | jq -e 'length > 0 and (.[0] | has("x") and has("y") and has("width") and has("scale") and has("focused"))' >/dev/null \
+        || { log "FAIL: nidara-wm monitors is not in the shape the helpers read"; echo "$mons"; exit 1; }
+    "$REPO/bin/nidara-wm" clients | jq -e 'type == "array"' >/dev/null \
+        || { log "FAIL: nidara-wm clients is not a list"; exit 1; }
+    w="$(echo "$mons" | jq '.[0].width / .[0].scale | floor')"; h="$(echo "$mons" | jq '.[0].height / .[0].scale | floor')"
+    nidara-input move 123 77 "$w" "$h"
+    sleep 0.3
+    "$REPO/bin/nidara-wm" cursorpos | jq -e '.x == 123 and .y == 77' >/dev/null \
+        || { log "FAIL: the virtual pointer did not land at 123,77 ($("$REPO/bin/nidara-wm" cursorpos | jq -c .))"; exit 1; }
+    log "computer use OK (nidara-wm, virtual pointer)"
 
     # ── 3. Pictures for a person.
     sleep 4

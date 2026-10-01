@@ -95,9 +95,10 @@ if _pkg="$(_installed_desktop_pkg)"; then
         # the live compositor: Hyprland's config watch fires mid-extract, errors
         # "cannot open … hyprland.lua", and the banner sticks — the watch died
         # with the old inode, so it never sees the new file land. Reload now
-        # that it's in place. No-op outside a Hyprland session.
-        if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
-            hyprctl reload >/dev/null 2>&1 || true
+        # that it's in place. (Hyalo polls its files and sees the new one land; the
+        # reload is harmless there.) No-op outside a graphical session.
+        if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] || [ -n "$HYALO_SOCKET" ]; then
+            nidara-wm reload >/dev/null 2>&1 || true
         fi
         # The user's own scripts for this event, if any (see bin/nidara-hook).
         # LAST, and only when the version actually moved: hooks are synchronous

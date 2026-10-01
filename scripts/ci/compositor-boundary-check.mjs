@@ -13,7 +13,11 @@
  *     hyalo-ipc, hyprland-settings, hyalo-settings) or the Lua generator (hyprland-lua);
  *   - spawn `hyprctl` (a "hyprctl" string literal in code).
  *
- * No exceptions. Until #682's third part this had a shrink-only allowlist of the files
+ * And no script in bin/ may run `hyprctl`: they ask `bin/nidara-wm`, which answers from
+ * whichever compositor runs (Hyprland's JSON shapes, built from Hyalo's IPC on Hyalo). The
+ * one exception is nidara-doctor's version line, which reports Hyprland the package.
+ *
+ * No exceptions otherwise. Until #682's third part this had a shrink-only allowlist of the files
  * that wrote Hyprland options as Lua; they now go through `settings` (CompositorSettings),
  * and the list went with its last line.
  *
@@ -76,9 +80,22 @@ for (const base of SCAN) {
     }
 }
 
+// bin/: scripts in any language, so a line-based look — comments (# or //) skipped.
+for (const name of readdirSync(join(ROOT, "bin"))) {
+    if (name === "nidara-wm") continue
+    const rel = `bin/${name}`
+    if (statSync(join(ROOT, rel)).isDirectory()) continue
+    const hits = readFileSync(join(ROOT, rel), "utf8").split("\n")
+        .map((line, i) => [line.replace(/(^|\s)(#|\/\/).*$/, ""), i + 1])
+        .filter(([line]) => /\bhyprctl\b/.test(line) && !/hyprctl version/.test(line))
+    if (hits.length) offenders.set(rel, hits.map(([, n]) => `runs hyprctl (line ${n})`))
+}
+
 for (const [file, v] of [...offenders].sort()) {
     console.error(`✗ ${file} reaches past the compositor interface (${[...new Set(v)].join(", ")}).`)
-    console.error("  Ask core/CompositorState.ts (`compositor`, `settings`) instead; if the interface lacks it, add it to both backends.")
+    console.error(file.startsWith("bin/")
+        ? "  Ask bin/nidara-wm instead (it answers from Hyprland or Hyalo); if it lacks the question, add it there for both."
+        : "  Ask core/CompositorState.ts (`compositor`, `settings`) instead; if the interface lacks it, add it to both backends.")
 }
 if (offenders.size) process.exit(1)
-console.log(`compositor-boundary-check: ok — nothing outside the ${COMPOSITOR.size} compositor modules names a compositor (#682)`)
+console.log(`compositor-boundary-check: ok — nothing outside the ${COMPOSITOR.size} compositor modules names a compositor, and no script in bin/ runs hyprctl (#682)`)

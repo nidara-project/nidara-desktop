@@ -563,6 +563,16 @@ jobs:
           fi
           cp /tmp/Bar.bak ui/shell/surfaces/bar/Bar.tsx
           git diff --quiet ui/shell/surfaces/bar/Bar.tsx
+          # …and a script in bin/ that runs hyprctl instead of asking nidara-wm.
+          cp bin/nidara-act /tmp/nidara-act.bak
+          echo 'GLib.spawn_command_line_sync("hyprctl clients -j")' >> bin/nidara-act
+          if node scripts/ci/compositor-boundary-check.mjs; then
+            echo "::error::the check passed with bin/nidara-act running hyprctl"
+            cp /tmp/nidara-act.bak bin/nidara-act
+            exit 1
+          fi
+          cp /tmp/nidara-act.bak bin/nidara-act
+          git diff --quiet bin/nidara-act
       # The kit is a package (tech-debt #108): an app outside this repo has
       # nidara-kit and nothing else of this tree, while the four bundles here can
       # always resolve a path the kit should not have reached for.

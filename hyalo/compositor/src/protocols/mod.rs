@@ -4,6 +4,7 @@
 
 pub mod focus_grab;
 pub mod material;
+pub mod virtual_pointer;
 
 pub mod gen_focus_grab {
     use wayland_server;

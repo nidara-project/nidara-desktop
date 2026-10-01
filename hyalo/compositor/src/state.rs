@@ -113,6 +113,9 @@ impl Hyalo {
         PointerConstraintsState::new::<Self>(&dh);
         // Ours (protocols/ at the repo root).
         focus_grab::init(&dh);
+        // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).
+        crate::protocols::virtual_pointer::init(&dh);
+        smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(&dh, |_client| true);
         // Window capture for the shell's thumbnails (capture.rs).
         let foreign_toplevel_list = smithay::wayland::foreign_toplevel_list::ForeignToplevelListState::new::<Self>(&dh);
         let toplevel_capture_source = smithay::wayland::image_capture_source::ToplevelCaptureSourceState::new::<Self>(&dh);

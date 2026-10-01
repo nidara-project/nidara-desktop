@@ -110,6 +110,18 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
   shadows in #684.
 
+## Computer use (the Assistant's synthetic input)
+
+`protocols/virtual_pointer.rs` (zwlr_virtual_pointer_v1, what `bin/nidara-input` speaks) and
+Smithay's virtual keyboard (zwp_virtual_keyboard_v1, what `wtype` speaks). Every virtual event
+goes through the same calls as a real device (`pointer_moved_to`, `pointer_button`, the seat's
+axis), so focus, hit-testing and grabs treat it as one. Absolute motion without a bound output
+spans every output together (wlroots' rule). Gating is the helpers' (Settings → AI), as on
+Hyprland, which also lets any local client create one. The helpers read the compositor
+through `bin/nidara-wm` (state-and-ipc.md → the computer-use layer). Verified nested
+(2026-10-01): nidara-click clicks a button and an entry, nidara-type types into it, a
+not-focused app is refused.
+
 ## Window capture (thumbnails)
 
 `capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`

@@ -55,7 +55,7 @@ static const struct { const char *name, *path, *iface; } DOORS[] = {
     { "org.nidara.Shell", "/org/nidara/Shell",      "org.nidara.Shell" },
 };
 
-/* Long enough for the slowest command (listWindows shells out to hyprctl,
+/* Long enough for the slowest command (listWindows asks the compositor,
  * screenshot writes a PNG), short enough that a wedged shell cannot hang a
  * keybind forever. */
 #define TIMEOUT_MS 15000

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# nidara-wm — the window manager's state as JSON, from whichever compositor runs the session.
+#
+#   nidara-wm activewindow | clients | monitors | cursorpos     (reads, JSON)
+#   nidara-wm dpms on|off | reload | lock-binds on|off          (actions)
+#
+# The SHAPES are Hyprland's (`hyprctl -j …`), because that is what the scripts in bin/ were
+# written against: on Hyprland this is `hyprctl -j` itself; on Hyalo ($HYALO_SOCKET set, the
+# compositor of our own, #680) the same fields are built from `nidara-hyalo msg`. A script
+# that needs the compositor's state asks this, never `hyprctl` (#682) — the shell's own
+# equivalent is core/CompositorState.ts.
+#
+# The fields that exist on both (what the computer-use helpers read):
+#   activewindow / clients  address ("0x…"), class, title, initialClass, initialTitle, pid,
+#                           at [x,y], size [w,h], workspace {id,name}, monitor (an index
+#                           into `monitors`' ids), floating, fullscreen (0/1/2), pinned,
+#                           mapped, hidden. `activewindow` with no window is `{}`.
+#   monitors                id, name, description, make, model, serial, width, height (the
+#                           mode, in pixels), refreshRate, x, y (logical), scale,
+#                           transform (0-7), focused, activeWorkspace {id,name}.
+#   cursorpos               {x, y} in global logical pixels.
+#
+# The actions:
+#   dpms on|off        every output on or off (after a wake: bin/nidara-after-sleep).
+#   reload             the compositor re-reads its configuration (bin/nidara-update).
+#   lock-binds on|off  the session's key bindings off while the screen is locked
+#                      (bin/nidara-lock). Hyprland: its `lock` submap. Hyalo: nothing to do
+#                      here — a compositor with ext-session-lock refuses bindings itself
+#                      while locked, and Hyalo's lock is block #683.
+set -euo pipefail
+
+what="${1:-}"
+arg="${2:-}"
+usage() { echo "usage: nidara-wm activewindow|clients|monitors|cursorpos | dpms on|off | reload | lock-binds on|off" >&2; exit 2; }
+case "$what" in
+    activewindow|clients|monitors|cursorpos|reload) ;;
+    dpms|lock-binds) [ "$arg" = on ] || [ "$arg" = off ] || usage ;;
+    *) usage ;;
+esac
+
+if [ -z "${HYALO_SOCKET:-}" ]; then
+    case "$what" in
+        # Lua-parser syntax: the legacy `hyprctl dispatch dpms on` is a Lua error on Nidara's
+        # Hyprland — and a wake that cannot switch the screens back on leaves them black.
+        dpms) [ "$arg" = on ] && a=enable || a=disable
+              exec hyprctl dispatch "hl.dsp.dpms({ action = \"$a\" })" ;;
+        reload) exec hyprctl reload ;;
+        lock-binds) [ "$arg" = on ] && m=lock || m=reset
+                    exec hyprctl dispatch "hl.dsp.submap(\"$m\")" ;;
+        *) exec hyprctl -j "$what" ;;
+    esac
+fi
+
+case "$what" in
+    dpms) exec nidara-hyalo msg power "$arg" ;;
+    reload) exec nidara-hyalo msg reload ;;
+    lock-binds) exit 0 ;;
+esac
+
+msg() { nidara-hyalo msg "$@" | jq -e '.ok' ; }
+
+# Outputs that are on, in Hyalo's order: their index is the monitor id both lists use.
+outputs() { msg outputs | jq '[.outputs[] | select(.enabled)]'; }
+focused_output() { msg workspaces | jq -r '[.workspaces[] | select(.focused and .active and (.special | not))][0].output // ""'; }
+
+case "$what" in
+    cursorpos)
+        msg cursor | jq '{x: (.x | floor), y: (.y | floor)}'
+        ;;
+    monitors)
+        fo="$(focused_output)"
+        ws="$(msg workspaces)"
+        outputs | jq --arg fo "$fo" --argjson ws "$ws" '
+            def tnum: {"normal":0,"90":1,"180":2,"270":3,"flipped":4,"flipped-90":5,"flipped-180":6,"flipped-270":7}[.] // 0;
+            to_entries | map(.key as $i | .value as $o | {
+                id: $i, name: $o.name,
+                description: ([$o.make, $o.model] | map(select(. != "")) | join(" ")),
+                make: $o.make, model: $o.model, serial: $o.serial,
+                width: ($o.current_mode.width // 0), height: ($o.current_mode.height // 0),
+                refreshRate: (($o.current_mode.refresh // 0) / 1000),
+                x: ($o.position[0] // 0), y: ($o.position[1] // 0),
+                scale: $o.scale, transform: ($o.transform | tnum),
+                focused: ($o.name == $fo),
+                activeWorkspace: ([$ws.workspaces[] | select(.output == $o.name and .active and (.special | not))][0]
+                                  | if . then {id, name} else {id: 0, name: ""} end)
+            })'
+        ;;
+    activewindow|clients)
+        mons="$(outputs | jq '[.[].name]')"
+        ws="$(msg workspaces)"
+        # The address is the window id in hex: core/HyaloState.ts's, and the identifier the
+        # window is listed under for capture (hyalo/compositor/src/capture.rs).
+        msg windows | jq --argjson mons "$mons" --argjson ws "$ws" --arg what "$what" '
+            def fs: {"none":0,"maximized":1,"fullscreen":2}[.] // 0;
+            def hex: if . == 0 then "0" else
+                [recurse(if . >= 16 then (. / 16 | floor) else empty end) | . % 16]
+                | reverse | map("0123456789abcdef"[.:.+1]) | join("") end;
+            [.windows[] | .workspace as $wid | {
+                address: ("0x" + (.id | hex)),
+                class: .app_id, title: .title,
+                initialClass: .initial_app_id, initialTitle: .initial_title,
+                pid: (.pid // -1),
+                at: [.x, .y], size: [.width, .height],
+                workspace: {id: $wid, name: ([$ws.workspaces[] | select(.id == $wid)][0].name // ($wid | tostring))},
+                monitor: (.output as $o | ($mons | index($o)) // -1),
+                floating: .floating, fullscreen: (.fullscreen | fs), pinned: .pinned,
+                mapped: true, hidden: (.visible | not),
+                focused: .focused
+            }]
+            | if $what == "activewindow" then (map(select(.focused))[0] // {}) else . end'
+        ;;
+esac

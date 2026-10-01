@@ -98,8 +98,8 @@ section "Versions"
 section "Hardware"
 codeblock sh -c "lspci -nn 2>/dev/null | grep -Ei 'vga|3d|display|network|wireless' ; lscpu 2>/dev/null | grep 'Model name' ; free -h 2>/dev/null | grep Mem"
 
-section "Monitors (hyprctl)"
-codeblock sh -c "hyprctl monitors -j 2>/dev/null | head -100"
+section "Monitors"
+codeblock sh -c "nidara-wm monitors 2>/dev/null | head -100"
 
 # Hyalo (#680), only when it is installed: its outputs when it is the running compositor,
 # and the newest crash report it left. A compositor crash ends the session, so the report
