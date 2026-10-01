@@ -417,7 +417,7 @@ gboolean nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint
  * @rim: specular rim strength, 0..1
  * @saturation: backdrop saturation, 1 = unchanged
  *
- * Asks the compositor to paint the whole glass (liquid glass); the client paints content only.
+ * Asks the compositor to paint the whole glass (refractive glass); the client paints content only.
  */
 void nidara_wl_material_set_glass (GdkSurface *surface,
                                    double tint_r, double tint_g, double tint_b,

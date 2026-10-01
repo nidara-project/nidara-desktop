@@ -6,7 +6,7 @@
 //!   shapes out of the frame (glCopyTexSubImage2D), then dual-kawase down and up through a
 //!   pyramid of textures owned by this glass, stopping one level short of full size.
 //! - **draw**, whenever the glass's own area is damaged: the last up-sample, straight into the
-//!   frame, cut to each shape by its signed distance — and, with liquid glass, refracted,
+//!   frame, cut to each shape by its signed distance — and, with refractive glass, refracted,
 //!   saturated, tinted per pixel and lit along the rim.
 //!
 //! Driving the passes through Smithay's `bind`/`render`/`finish` instead cost a framebuffer
@@ -112,7 +112,7 @@ uniform mat2 out_to_fb;     // output-pixel offsets → framebuffer-pixel offset
 uniform vec4 rect;          // the shape, output pixels
 uniform float radius;
 uniform float exponent;
-uniform float glass;        // 1: liquid glass — the compositor paints the whole glass
+uniform float glass;        // 1: refractive glass — the compositor paints the whole glass
 uniform vec3 tint;
 uniform float alpha_min;
 uniform float alpha_max;
@@ -150,7 +150,7 @@ void main() {
         return;
     }
 
-    // ── Liquid glass ──────────────────────────────────────────────────────
+    // ── Refractive glass ──────────────────────────────────────────────────
     // The outward normal, from the distance field.
     vec2 n = vec2(sdf(v_out + vec2(1.0, 0.0)) - sdf(v_out - vec2(1.0, 0.0)),
                   sdf(v_out + vec2(0.0, 1.0)) - sdf(v_out - vec2(0.0, 1.0)));
@@ -196,7 +196,7 @@ pub struct Shape {
     pub exponent: f64,
 }
 
-/// Liquid glass parameters, in output pixels.
+/// Refractive glass parameters, in output pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glass {
     pub tint: [f32; 3],

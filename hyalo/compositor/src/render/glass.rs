@@ -183,7 +183,7 @@ fn groups(
     location: Point<i32, Physical>,
     m: &material::MaterialState,
 ) -> Vec<(Rectangle<i32, Physical>, Vec<glass_gl::Shape>)> {
-    // Plus how far the liquid glass's edge reads from outside the shape.
+    // Plus how far the refractive glass's edge reads from outside the shape.
     let reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1)
         + m.glass.map_or(0.0, |g| g.refraction * scale.x);
     let grow = |r: &Rectangle<f64, Physical>| {

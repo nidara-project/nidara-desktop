@@ -32,7 +32,7 @@ pub struct Shape {
     pub exponent: f64,
 }
 
-/// Liquid glass: the compositor paints the whole glass (src/render/glass_gl.rs, the last pass).
+/// Refractive glass: the compositor paints the whole glass (src/render/glass_gl.rs, the last pass).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glass {
     pub tint: [f64; 3],
