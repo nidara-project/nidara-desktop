@@ -138,6 +138,9 @@ phase_run() {
     # so the `settings` request has somewhere to write that is not a real ~/.config.
     export HYALO_SETTINGS=/tmp/hyalo/hyalo-settings.toml
     rm -f "$HYALO_SETTINGS"
+    # Input for the checks below (keys, a pinch), through the same path as a device (control.rs).
+    export HYALO_CONTROL=/tmp/hyalo/control
+    rm -f "$HYALO_CONTROL"; mkfifo "$HYALO_CONTROL"
     HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
@@ -283,6 +286,12 @@ phase_run() {
     "$REPO/bin/nidara-wm" cursorpos | jq -e '.x == 123 and .y == 77' >/dev/null \
         || { log "FAIL: the virtual pointer did not land at 123,77 ($("$REPO/bin/nidara-wm" cursorpos | jq -c .))"; exit 1; }
     log "computer use OK (nidara-wm, virtual pointer)"
+
+    # pointer-gestures (#682): a touchpad pinch over a GTK window drives its zoom gesture. Without
+    # the global the seat still sees the pinch and the app hears nothing. Through HYALO_CONTROL.
+    GESTURE_LOG=/tmp/hyalo/gesture-client.log "$REPO/scripts/ci/hyalo-gesture-check.sh" >/tmp/hyalo/gesture.log 2>&1 \
+        || { log "FAIL: pointer gestures"; cat /tmp/hyalo/gesture.log; exit 1; }
+    log "pointer gestures OK ($(sed -n 's/^ok *//p' /tmp/hyalo/gesture.log))"
 
     # ── 3. Pictures for a person.
     sleep 4
