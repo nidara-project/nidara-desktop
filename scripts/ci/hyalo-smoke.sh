@@ -210,11 +210,13 @@ phase_run() {
     [ -n "$cid" ] || { log "FAIL: the capture probe's window never appeared"; cat /tmp/hyalo/capture-window.log; exit 1; }
     nidara-hyalo msg do move-to-workspace-silent 3 "$cid" >/dev/null
     local got
-    got="$(gjs -m "$REPO/scripts/ci/hyalo-capture-probe.js" capture "$(printf '%x' "$cid")" 2>&1 | tail -1)"
+    gjs -m "$REPO/scripts/ci/hyalo-capture-probe.js" capture "$(printf '%x' "$cid")" >/tmp/hyalo/capture-probe.log 2>&1 || true
+    got="$(sed -n 's/^RESULT //p' /tmp/hyalo/capture-probe.log | tail -1)"
+    [ -n "$got" ] || { log "FAIL: the capture probe said nothing"; cat /tmp/hyalo/capture-probe.log; exit 1; }
     log "capture of a window on a hidden workspace: $got"
     kill "$probe_pid" 2>/dev/null || true
     echo "$got" | awk '{ split($2, c, ","); ok = ($1 ~ /^[0-9]+x[0-9]+$/) && c[1] >= 26 && c[1] <= 46 && c[2] >= 103 && c[2] <= 123 && c[3] >= 153 && c[3] <= 173; exit !ok }' \
-        || { log "FAIL: the window capture did not come back as #2471a3 (36,113,163)"; exit 1; }
+        || { log "FAIL: the window capture did not come back as #2471a3 (36,113,163)"; cat /tmp/hyalo/capture-probe.log; exit 1; }
     log "window capture OK"
 
     # ── 3. Pictures for a person.
