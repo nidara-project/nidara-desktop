@@ -3,8 +3,9 @@
 //! Three layers, read in order and merged table by table:
 //!
 //! 1. the defaults the package ships, `/usr/share/nidara/hyalo/hyalo.toml`;
-//! 2. what Settings chose, `~/.config/nidara/hyalo-settings.toml` — written by the shell
-//!    (core/MonitorConfig.ts), never by hand: the counterpart of `nidara-monitor.lua`;
+//! 2. what Settings chose, `~/.config/nidara/hyalo-settings.toml` — written by Hyalo itself
+//!    when the shell asks (the `settings` request, `apply_settings` below), never by hand: the
+//!    counterpart of the `nidara-*.lua` files the shell writes for Hyprland;
 //! 3. the user's own `~/.config/nidara/hyalo.toml`, last, so a hand edit wins — the same
 //!    order as Hyprland's `nidara-*.lua` then `hyprland-user.lua`.
 //!
@@ -101,6 +102,8 @@ pub struct Keyboard {
     /// Milliseconds before a held key repeats, and repeats per second.
     pub repeat_delay: i32,
     pub repeat_rate: i32,
+    /// Num Lock on when the keyboard is set up (Hyprland's `numlock_by_default`).
+    pub numlock: bool,
 }
 
 impl Default for Keyboard {
@@ -113,22 +116,34 @@ impl Default for Keyboard {
             options: String::new(),
             repeat_delay: 600,
             repeat_rate: 25,
+            numlock: false,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Pointer {
     /// libinput's acceleration speed, -1..1.
+    #[serde(deserialize_with = "number")]
     pub accel_speed: f64,
+    /// `adaptive` or `flat` (libinput's acceleration profiles).
+    pub accel_profile: String,
     pub natural_scroll: bool,
+}
+
+impl Default for Pointer {
+    fn default() -> Self {
+        Self { accel_speed: 0.0, accel_profile: "adaptive".into(), natural_scroll: false }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Touchpad {
+    #[serde(deserialize_with = "number")]
     pub accel_speed: f64,
+    pub accel_profile: String,
     pub natural_scroll: bool,
     pub tap: bool,
     pub disable_while_typing: bool,
@@ -136,7 +151,13 @@ pub struct Touchpad {
 
 impl Default for Touchpad {
     fn default() -> Self {
-        Self { accel_speed: 0.0, natural_scroll: true, tap: true, disable_while_typing: true }
+        Self {
+            accel_speed: 0.0,
+            accel_profile: "adaptive".into(),
+            natural_scroll: true,
+            tap: true,
+            disable_while_typing: true,
+        }
     }
 }
 
@@ -287,17 +308,31 @@ pub fn user_config_path() -> PathBuf {
     base.join("nidara").join("hyalo.toml")
 }
 
-/// The file Settings writes: `$XDG_CONFIG_HOME/nidara/hyalo-settings.toml`.
+/// The file Settings' choices go to: `$XDG_CONFIG_HOME/nidara/hyalo-settings.toml`, or
+/// `HYALO_SETTINGS`.
 pub fn settings_config_path() -> PathBuf {
-    user_config_path().with_file_name("hyalo-settings.toml")
+    match std::env::var_os("HYALO_SETTINGS") {
+        Some(p) => PathBuf::from(p),
+        None => user_config_path().with_file_name("hyalo-settings.toml"),
+    }
 }
 
-/// The layers in the order they apply. `HYALO_CONFIG` replaces them all (tests, CI).
+/// The layers in the order they apply. `HYALO_CONFIG` replaces them all (tests, CI), and then
+/// there is a settings layer only if `HYALO_SETTINGS` names one: a test must not write the
+/// real `~/.config`.
 pub fn layer_paths() -> Vec<PathBuf> {
     if let Some(p) = std::env::var_os("HYALO_CONFIG") {
-        return vec![PathBuf::from(p)];
+        let mut v = vec![PathBuf::from(p)];
+        v.extend(std::env::var_os("HYALO_SETTINGS").map(PathBuf::from));
+        return v;
     }
     vec![PathBuf::from(SYSTEM_CONFIG), settings_config_path(), user_config_path()]
+}
+
+/// The settings layer of this session, if it has one (`layer_paths`).
+fn settings_layer() -> Option<PathBuf> {
+    let path = settings_config_path();
+    layer_paths().contains(&path).then_some(path)
 }
 
 fn read_layer(path: &Path) -> Result<Option<toml::Table>, ConfigError> {
@@ -324,11 +359,18 @@ fn merge(base: &mut toml::Table, over: toml::Table) {
 }
 
 pub fn load_from(paths: &[PathBuf]) -> Result<Config, ConfigError> {
-    let mut merged = toml::Table::new();
+    let mut layers = Vec::new();
     for p in paths {
-        if let Some(layer) = read_layer(p)? {
-            merge(&mut merged, layer);
-        }
+        layers.extend(read_layer(p)?);
+    }
+    from_layers(layers)
+}
+
+/// The configuration the layers make, bottom first, checked.
+fn from_layers(layers: Vec<toml::Table>) -> Result<Config, ConfigError> {
+    let mut merged = toml::Table::new();
+    for layer in layers {
+        merge(&mut merged, layer);
     }
     let config: Config = toml::Value::Table(merged)
         .try_into()
@@ -343,6 +385,17 @@ pub fn load_from(paths: &[PathBuf]) -> Result<Config, ConfigError> {
     for (k, v) in [("gaps_in", config.layout.gaps_in), ("gaps_out", config.layout.gaps_out), ("border", config.layout.border)] {
         if !(0..=200).contains(&v) {
             return Err(ConfigError::Invalid(format!("layout.{k}: {v} is outside 0..200")));
+        }
+    }
+    for (name, profile, speed) in [
+        ("pointer", &config.input.pointer.accel_profile, config.input.pointer.accel_speed),
+        ("touchpad", &config.input.touchpad.accel_profile, config.input.touchpad.accel_speed),
+    ] {
+        if !matches!(profile.as_str(), "adaptive" | "flat") {
+            return Err(ConfigError::Invalid(format!("input.{name}.accel_profile: {profile:?} is not adaptive or flat")));
+        }
+        if !(-1.0..=1.0).contains(&speed) {
+            return Err(ConfigError::Invalid(format!("input.{name}.accel_speed: {speed} is outside -1..1")));
         }
     }
     if let Some(k) = config.workspaces.modes.keys().find(|k| k.parse::<i32>().map_or(true, |n| n < 1)) {
@@ -378,6 +431,8 @@ pub fn stamps() -> Vec<Option<SystemTime>> {
 /// Re-reads the configuration and applies what changed. A file that does not load leaves the
 /// running configuration as it is.
 pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
+    // Before reading: a write landing between the stamp and the read is read again next poll.
+    state.config_stamps = stamps();
     let new = match load() {
         Ok(c) => c,
         Err(err) => {
@@ -402,6 +457,11 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
                 tracing::warn!(?err, "keyboard layout refused");
             }
             keyboard.change_repeat_info(kb.repeat_rate, kb.repeat_delay);
+            // A new keymap starts with Num Lock off; turning the option OFF leaves the key
+            // as the user has it.
+            if kb.numlock {
+                set_numlock(&keyboard);
+            }
         }
     }
     if old.input.pointer != new.input.pointer || old.input.touchpad != new.input.touchpad {
@@ -450,16 +510,120 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
 /// immune to editors that replace the file rather than write into it.
 pub fn watch(state: &mut crate::Hyalo) {
     use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
-    let mut last = stamps();
     let interval = std::time::Duration::from_secs(1);
     let _ = state.loop_handle.insert_source(Timer::from_duration(interval), move |_, _, state| {
-        let now = stamps();
-        if now != last {
-            last = now;
+        if stamps() != state.config_stamps {
             let _ = reload(state);
         }
         TimeoutAction::ToDuration(interval)
     });
+}
+
+pub fn set_numlock(keyboard: &smithay::input::keyboard::KeyboardHandle<crate::Hyalo>) {
+    let mut mods = keyboard.modifier_state();
+    mods.num_lock = true;
+    keyboard.set_modifier_state(mods);
+}
+
+/// What Settings chose, applied: `patch` (JSON, the shape of the config) is merged into the
+/// settings layer, the whole stack is checked, the file is written and the configuration
+/// reloaded — once. A `null` removes a key, so the layer below shows through again. Returns
+/// whether anything changed: re-stating what the layer already says writes nothing and
+/// reloads nothing, so a shell that re-sends its settings on every `config_reloaded` cannot
+/// loop.
+///
+/// Hyalo is the one writer of this file. Before, the shell wrote it whole from each module's
+/// state, and two modules writing one file would have dropped each other's tables.
+pub fn apply_settings(state: &mut crate::Hyalo, patch: serde_json::Value) -> Result<bool, String> {
+    let serde_json::Value::Object(patch) = patch else {
+        return Err("settings: the patch must be an object".into());
+    };
+    let Some(path) = settings_layer() else {
+        return Err("settings: this session has no settings layer (HYALO_CONFIG without HYALO_SETTINGS)".into());
+    };
+    let current = read_layer(&path).map_err(|e| e.to_string())?.unwrap_or_default();
+    let mut patched = current.clone();
+    merge_patch(&mut patched, patch)?;
+    if patched == current {
+        return Ok(false);
+    }
+    let mut layers = Vec::new();
+    for p in layer_paths() {
+        if p == path {
+            layers.push(patched.clone());
+        } else {
+            layers.extend(read_layer(&p).map_err(|e| e.to_string())?);
+        }
+    }
+    from_layers(layers).map_err(|e| format!("settings refused: {e}"))?;
+    let body = toml::to_string(&patched).map_err(|e| e.to_string())?;
+    write_atomically(&path, &format!("{SETTINGS_HEADER}\n{body}")).map_err(|e| format!("{}: {e}", path.display()))?;
+    reload(state)?;
+    Ok(true)
+}
+
+const SETTINGS_HEADER: &str = "\
+# Written by Hyalo for Nidara Settings — do not edit: it is rewritten on every change.
+# Your own settings go in hyalo.toml next to it, which is read after this file and wins.
+";
+
+fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("toml.tmp");
+    let mut f = std::fs::File::create(&tmp)?;
+    f.write_all(text.as_bytes())?;
+    f.sync_all()?;
+    std::fs::rename(&tmp, path)
+}
+
+/// JSON merge patch (RFC 7396) onto a TOML table; tables a removal leaves empty go too.
+fn merge_patch(base: &mut toml::Table, patch: serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+    use serde_json::Value as J;
+    for (k, v) in patch {
+        match v {
+            J::Null => {
+                base.remove(&k);
+            }
+            J::Object(o) => {
+                let mut t = match base.remove(&k) {
+                    Some(toml::Value::Table(t)) => t,
+                    _ => toml::Table::new(),
+                };
+                merge_patch(&mut t, o)?;
+                if !t.is_empty() {
+                    base.insert(k, toml::Value::Table(t));
+                }
+            }
+            v => {
+                base.insert(k.clone(), json_to_toml(v).map_err(|e| format!("settings: {k}: {e}"))?);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn json_to_toml(v: serde_json::Value) -> Result<toml::Value, String> {
+    use serde_json::Value as J;
+    Ok(match v {
+        J::Null => return Err("null inside a value".into()),
+        J::Bool(b) => toml::Value::Boolean(b),
+        J::Number(n) => match n.as_i64() {
+            Some(i) => toml::Value::Integer(i),
+            None => toml::Value::Float(n.as_f64().ok_or("not a number")?),
+        },
+        J::String(s) => toml::Value::String(s),
+        J::Array(a) => toml::Value::Array(a.into_iter().map(json_to_toml).collect::<Result<_, _>>()?),
+        J::Object(o) => {
+            let mut t = toml::Table::new();
+            for (k, v) in o {
+                t.insert(k, json_to_toml(v)?);
+            }
+            toml::Value::Table(t)
+        }
+    })
 }
 
 #[cfg(test)]
@@ -535,6 +699,34 @@ mod tests {
         let mode = write(&d, "mode.toml", "[outputs.X]\nmode = \"big\"\n");
         assert!(load_from(&[mode]).is_err());
     }
+
+    #[test]
+    fn a_settings_patch_merges_removes_and_keeps_types() {
+        let mut layer: toml::Table = toml::from_str(
+            "[outputs.DP-1]\nscale = 1.25\n[workspaces.modes]\n3 = \"tiling\"\n4 = \"floating\"\n",
+        )
+        .unwrap();
+        let patch = serde_json::json!({
+            "input": { "pointer": { "accel_speed": 0, "accel_profile": "flat" }, "keyboard": { "numlock": true } },
+            "workspaces": { "modes": { "3": null, "4": null } },
+            "outputs": { "DP-1": { "scale": 1 } },
+        });
+        let serde_json::Value::Object(patch) = patch else { unreachable!() };
+        merge_patch(&mut layer, patch).unwrap();
+        assert!(layer.get("workspaces").is_none(), "a table emptied by removals goes");
+        let c = from_layers(vec![layer]).expect("integers where floats are expected still load");
+        assert_eq!(c.input.pointer.accel_speed, 0.0);
+        assert_eq!(c.input.pointer.accel_profile, "flat");
+        assert!(c.input.keyboard.numlock);
+        assert_eq!(c.outputs["DP-1"].scale, 1.0);
+        assert_eq!(c.workspaces.mode_of(3), crate::wm::WorkspaceMode::Floating);
+    }
+
+    #[test]
+    fn input_values_are_checked() {
+        let bad = |t: &str| from_layers(vec![toml::from_str(t).unwrap()]).is_err();
+        assert!(bad("[input.pointer]\naccel_profile = \"custom\"\n"));
+        assert!(bad("[input.touchpad]\naccel_speed = 2.0\n"));
+        assert!(!bad("[input.touchpad]\naccel_speed = -1\naccel_profile = \"flat\"\n"));
+    }
 }
-
-

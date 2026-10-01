@@ -14,20 +14,22 @@
 // in silence — the window menu hides its group rows on Hyalo, which has no tab groups by
 // the owner's decision (2026-10-01).
 //
-// What is still Hyprland's alone — its config options, the Lua the shell generates for
-// it — is reached through `hyprlandOnly()`, which is null on Hyalo: those callers do
-// nothing there instead of failing. Moving them onto requests both compositors answer is
-// #682's next part; `scripts/ci/compositor-boundary-check.mjs` holds the list of files
-// still allowed to do it, and the list only shrinks.
+// What Settings chooses for the compositor — input, displays, workspace modes, game mode,
+// reduce motion, the glass's blur — goes through `settings` (`CompositorSettings`): applied
+// live and persisted in the compositor's own layer, Hyprland's `nidara-*.lua`
+// (`core/hyprland-settings.ts`) or Hyalo's `hyalo-settings.toml` (`core/hyalo-settings.ts`).
+// `scripts/ci/compositor-boundary-check.mjs` keeps every other file off the backends.
 //
 // The shapes below are the ones the shell was written against (they were AstalHyprland's,
 // then HyprlandState's): a window's address is BARE hex, `fullscreen` is a mode number.
 // Hyalo's backend maps its own JSON into them, so no surface had to change what it reads.
 
 import GLib from "gi://GLib"
-import type { CompositorObject } from "./compositor-types"
+import type { CompositorObject, CompositorSettings } from "./compositor-types"
 import { createHyprlandState, type HyprlandStateClass } from "./HyprlandState"
 import { createHyaloState } from "./HyaloState"
+import { createHyprlandSettings } from "./hyprland-settings"
+import { createHyaloSettings } from "./hyalo-settings"
 
 export * from "./compositor-types"
 
@@ -40,10 +42,9 @@ export function onHyalo(): boolean {
 // on Hyalo would connect to sockets that are not there and say so loudly.
 const instance = (onHyalo() ? createHyaloState() : createHyprlandState()) as unknown as CompositorObject
 
-/** Hyprland's own state, for what only Hyprland has (its config options, Lua) — null on
- *  Hyalo, where the caller does nothing. Shrinks away in #682's next part. */
-export function hyprlandOnly(): HyprlandStateClass | null {
-    return instance.kind === "hyprland" ? (instance as unknown as HyprlandStateClass) : null
-}
+/** The settings the compositor owns, for this session's compositor. */
+export const settings: CompositorSettings = instance.kind === "hyalo"
+    ? createHyaloSettings()
+    : createHyprlandSettings(instance as unknown as HyprlandStateClass)
 
 export default instance

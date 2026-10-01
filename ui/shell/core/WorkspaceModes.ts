@@ -1,9 +1,6 @@
 import GObject from "gi://GObject"
-import GLib from "gi://GLib"
-import { writeFile } from "../../lib/nidara-kit/platform/file"
 import { defineSettings } from "./configFile"
-import compositor from "./CompositorState"
-import { luaWorkspaceModesBlock } from "./hyprland-lua"
+import compositor, { settings } from "./CompositorState"
 
 export type WorkspaceMode = "floating" | "tiling"
 
@@ -49,13 +46,14 @@ class WorkspaceModeManager extends GObject.Object {
         super()
         config.subscribeAll(() => this.emit("changed"))
 
-        // When Hyprland reloads its config externally, re-push the live table
+        // A config reload drops what was applied live: re-apply, writing nothing (a write
+        // there could trigger the reload that called it).
         compositor.connect("config-reloaded", () => {
             this.pushAll()
         })
 
-        // On boot: write nidara-workspaces.lua and push the full table to Hyprland
-        this._saveLua()
+        // On boot: persist the table in the compositor's layer and apply it.
+        this.save()
         this.pushAll()
     }
 
@@ -89,7 +87,7 @@ class WorkspaceModeManager extends GObject.Object {
         if (this.defaultMode === mode) return
 
         config.set("defaultMode", mode)
-        this._saveLua()
+        this.save()
         await this.pushAll()
 
         // Reorganize windows on workspaces inheriting defaultMode
@@ -115,12 +113,12 @@ class WorkspaceModeManager extends GObject.Object {
         if (mode === "default") {
             delete currentModes[String(wsId)]
             config.set("workspaces", currentModes)
-            this._saveLua()
+            this.save()
             await this.pushAll()
         } else {
             currentModes[String(wsId)] = mode
             config.set("workspaces", currentModes)
-            this._saveLua()
+            this.save()
             await this.pushAll()
         }
 
@@ -147,16 +145,9 @@ class WorkspaceModeManager extends GObject.Object {
         return next
     }
 
-    private _saveLua(): void {
-        const content = luaWorkspaceModesBlock(this.defaultMode, config.get("workspaces"))
-        const configPath = GLib.build_filenamev([
-            GLib.get_home_dir(), ".config", "nidara", "nidara-workspaces.lua"
-        ])
-        try {
-            writeFile(configPath, content)
-        } catch (e) {
-            console.error("[WorkspaceModes] Failed to write nidara-workspaces.lua:", e)
-        }
+    /** The table, persisted where the compositor reads it at login (`settings`). */
+    private save(): void {
+        settings.saveWorkspaceModes(this.defaultMode, config.get("workspaces"))
     }
 
     /** The whole table to the running compositor (Hyprland's `NIDARA_WS_MODES`, Hyalo's

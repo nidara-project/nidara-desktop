@@ -25,6 +25,10 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
                                     set-workspace-mode 3 tiling · spawn CMD …
                                   (every command: hyalo/compositor/src/wm/actions.rs)
   reload                          re-read the configuration
+  config                          the configuration in force (the three layers merged)
+  settings '<json>'               persist and apply a change in the settings layer, as a
+                                    JSON merge patch: '{"input":{"keyboard":{"numlock":true}}}'
+                                    (null removes a key; your hyalo.toml still wins)
   events                          stream events, one JSON object per line
   quit                            end the session
   raw '<json>'                    send a request as written
@@ -110,6 +114,12 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
             Request::Do { command }
         }
         "reload" => Request::ReloadConfig,
+        "config" => Request::Config,
+        "settings" => {
+            let text = args.get(1).ok_or("settings needs a JSON object")?;
+            let patch: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("settings: {e}"))?;
+            Request::Settings { patch }
+        }
         "quit" => Request::Quit,
         "events" => Request::EventStream,
         "screenshot" => {

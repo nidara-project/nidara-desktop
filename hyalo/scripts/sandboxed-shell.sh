@@ -42,6 +42,12 @@ export LD_LIBRARY_PATH="$wl_build${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 awww-daemon >/dev/null 2>&1 &
 ( for _ in 1 2 3 4 5 6 7 8 9 10; do sleep 0.5; awww img "$wp" --transition-type none 2>/dev/null && break; done ) &
 
+# HYALO_DRIVER=script: a script run on the private bus beside the shell (nidara-ipc reaches
+# the sandboxed shell, nidara-hyalo msg the nested Hyalo); the shell stops when it ends.
+if [ -n "${HYALO_DRIVER:-}" ]; then
+  exec dbus-run-session -- sh -c '"$1" "$2" & shell=$!; sh "$3"; kill $shell' \
+    sh "$repo/scripts/run.sh" "$repo/ui/shell/app.ts" "$(realpath "$HYALO_DRIVER")"
+fi
 # HYALO_IPC_AFTER="20:toggleCC": one nidara-ipc action on the private bus after N seconds.
 if [ -n "${HYALO_IPC_AFTER:-}" ]; then
   exec dbus-run-session -- sh -c '"$1" "$2" & sleep "${3%%:*}"; nidara-ipc "${3#*:}"; wait' \

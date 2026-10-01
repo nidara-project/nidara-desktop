@@ -8,7 +8,7 @@
 //
 // `ui/shell/core/hyprland-lua.ts` exists as a pure module precisely so this can
 // run: `HyprlandState` opens the compositor's event socket at import time and
-// `InputConfig` reads effective options the moment it is constructed, so
+// `InputConfig` reads effective options (through hyprland-settings) the moment it is constructed, so
 // neither is reachable from CI. The builders are.
 //
 // ⚠️ This check carries its OWN positive control. `luac -p` returning 0 proves
@@ -74,7 +74,7 @@ if (parses("hl.config({ input = { ", "control") === null) {
 ok(`${LUAC} rejects a broken chunk (control)`)
 
 // ── The real generated file ──────────────────────────────────────────────────
-// The ten options `InputConfig` declares, with values chosen to exercise every
+// The ten options `core/hyprland-settings.ts` declares (INPUT), with values chosen to exercise every
 // literal kind and the nested table.
 const ENTRIES = [
     ["input:sensitivity", "0.35"],

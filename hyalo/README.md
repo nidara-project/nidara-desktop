@@ -30,13 +30,16 @@ Needs `rust`, `seatd` (libseat), `libinput`, `libdisplay-info`, `mesa`, `libxkbc
     nidara-hyalo msg outputs                       # ask the running one
     nidara-hyalo msg windows                       # every window, its workspace and state
     nidara-hyalo msg do workspace 3                # a window-manager command, as in a binding
+    nidara-hyalo msg config                        # the configuration in force
+    nidara-hyalo msg settings '{"input":{"keyboard":{"numlock":true}}}'   # what Settings does
 
 The session entry the greeter lists is "Nidara — Hyalo preview" (`config/wayland-sessions/`).
 `Ctrl+Alt+Backspace` ends a Hyalo session — the way out while nothing else is.
 
 Configuration: `/usr/share/nidara/hyalo/hyalo.toml` (shipped), then
-`~/.config/nidara/hyalo.toml` on top, key by key; the file is watched. Runtime changes go
-through IPC, never by rewriting the file. The shipped file has the layout (gaps, the tiling
+`~/.config/nidara/hyalo-settings.toml` (what Settings chose — Hyalo writes it when the shell
+sends a `settings` patch), then `~/.config/nidara/hyalo.toml` on top, key by key; the files are
+watched. Runtime changes go through IPC, never by rewriting a file. The shipped file has the layout (gaps, the tiling
 layout), the per-workspace floating/tiling default, and the key bindings — the same set as the
 Hyprland session; `[binds]` syntax in `compositor/src/binds.rs`, the commands in
 `compositor/src/wm/actions.rs`.

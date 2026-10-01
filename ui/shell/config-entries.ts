@@ -44,12 +44,12 @@ import workspaceModes, {
 // The installer derived its own from the system and the two never met, so
 // installing with any of the other 36 left this row showing a raw code (#473).
 // Both surfaces now read `ui/lib/keyboards.ts`. Settings takes the WHOLE
-// catalogue — it writes Hyprland's layout and nothing else, so unlike the
+// catalogue — it writes the compositor's layout and nothing else, so unlike the
 // installer it has no console keymap to be honest about and no reason to
 // withhold a keyboard.
 
 /**
- * The id of whatever Hyprland currently holds — derived, not looked up.
+ * The id of whatever the compositor currently holds — derived, not looked up.
  *
  * 🔑 It does not have to be IN the catalogue. `kb_layout` accepts things no list
  * offers ("es,us"), and the kit adds an unknown value to the dropdown rather than
@@ -399,8 +399,8 @@ export function registerConfigEntries() {
         ui: {
             i18n: "settings.input.mouse.speed",
             slider: {
-                // Sink caro: `inputConfig` ejecuta Lua en el compositor Y reescribe
-                // `nidara-settings.lua` entero en cada confirmación. Con los 32 ms
+                // Sink caro: `inputConfig` aplica en el compositor Y reescribe
+                // su capa de ajustes entera (`nidara-settings.lua`, `hyalo-settings.toml`) en cada confirmación. Con los 32 ms
                 // de debounce del kit, arrastrar el pulgar son ~30 de esas por
                 // segundo. `commitOnRelease` confirma UNA vez, al soltar; el valor
                 // se sigue viendo moverse porque la etiqueta la pinta
@@ -498,8 +498,8 @@ export function registerConfigEntries() {
         subscribe: onInputCfg(() => inputConfig.kbRepeatDelay),
         ui: {
             i18n: "settings.input.keyboard.repeat-delay",
-            // Sink caro: `inputConfig` ejecuta Lua en el compositor Y reescribe
-            // `nidara-settings.lua` entero en cada confirmación. Con los 32 ms de
+            // Sink caro: `inputConfig` aplica en el compositor Y reescribe
+            // su capa de ajustes entera (`nidara-settings.lua`, `hyalo-settings.toml`) en cada confirmación. Con los 32 ms de
             // debounce del kit, arrastrar el pulgar son ~30 de esas por segundo.
             // `commitOnRelease` confirma UNA vez, al soltar; el valor sigue
             // viéndose moverse porque la etiqueta la pinta `onValueChanged`, que
@@ -517,8 +517,8 @@ export function registerConfigEntries() {
         subscribe: onInputCfg(() => inputConfig.kbRepeatRate),
         ui: {
             i18n: "settings.input.keyboard.repeat-rate",
-            // Sink caro: `inputConfig` ejecuta Lua en el compositor Y reescribe
-            // `nidara-settings.lua` entero en cada confirmación. Con los 32 ms de
+            // Sink caro: `inputConfig` aplica en el compositor Y reescribe
+            // su capa de ajustes entera (`nidara-settings.lua`, `hyalo-settings.toml`) en cada confirmación. Con los 32 ms de
             // debounce del kit, arrastrar el pulgar son ~30 de esas por segundo.
             // `commitOnRelease` confirma UNA vez, al soltar; el valor sigue
             // viéndose moverse porque la etiqueta la pinta `onValueChanged`, que
@@ -652,7 +652,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("accessibility.reduceMotion", {
-        desc: "Reduce motion: overlays appear without their pop, dock icons snap instead of springing, and Hyprland's window/workspace animations are switched off.",
+        desc: "Reduce motion: overlays appear without their pop, dock icons snap instead of springing, and the compositor's window/workspace animations are switched off.",
         type: "boolean",
         get: () => reduceMotion(),
         set: v => setReduceMotion(v as boolean),

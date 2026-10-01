@@ -161,6 +161,16 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             Ok(()) => Reply::Ok(Response::Handled),
             Err(e) => Reply::Error(e),
         },
+        Request::Config => {
+            // What is in force: an unset layout is the system's (localectl), as applied.
+            let mut config = state.config.clone();
+            config.input.keyboard = config.input.keyboard.with_system_defaults();
+            Reply::Ok(Response::Config { config: Box::new(config) })
+        }
+        Request::Settings { patch } => match config::apply_settings(state, patch) {
+            Ok(changed) => Reply::Ok(Response::Settings { changed }),
+            Err(e) => Reply::Error(e),
+        },
         Request::Quit => {
             state.loop_signal.stop();
             Reply::Ok(Response::Handled)

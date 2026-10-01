@@ -47,6 +47,9 @@ pub struct Hyalo {
 
     pub backend: Backend,
     pub config: Config,
+    /// The config layers' modification times as of the last (re)load: the watcher reloads when
+    /// they differ, and a reload Hyalo did itself (`settings`) does not happen twice.
+    pub config_stamps: Vec<Option<std::time::SystemTime>>,
 
     pub space: Space<Window>,
     pub popups: PopupManager,
@@ -114,10 +117,16 @@ impl Hyalo {
             variant: &kb.variant,
             options: (!kb.options.is_empty()).then(|| kb.options.clone()),
         };
-        if let Err(err) = seat.add_keyboard(xkb, kb.repeat_delay, kb.repeat_rate) {
-            tracing::warn!(?err, "keyboard config refused, falling back to the default keymap");
-            seat.add_keyboard(Default::default(), kb.repeat_delay, kb.repeat_rate)
-                .expect("default keymap");
+        let keyboard = match seat.add_keyboard(xkb, kb.repeat_delay, kb.repeat_rate) {
+            Ok(k) => k,
+            Err(err) => {
+                tracing::warn!(?err, "keyboard config refused, falling back to the default keymap");
+                seat.add_keyboard(Default::default(), kb.repeat_delay, kb.repeat_rate)
+                    .expect("default keymap")
+            }
+        };
+        if kb.numlock {
+            crate::config::set_numlock(&keyboard);
         }
         seat.add_pointer();
 
@@ -136,6 +145,7 @@ impl Hyalo {
             loop_signal,
             backend,
             config,
+            config_stamps: crate::config::stamps(),
             space: Space::default(),
             popups: PopupManager::default(),
             compositor_state,

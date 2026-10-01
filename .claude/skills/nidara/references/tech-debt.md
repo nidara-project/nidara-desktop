@@ -155,8 +155,8 @@ windows uses `$fse-*`.*
 ### 4. Effective-config re-sync exists at the service layer, not the page layer
 `HyprlandState` now emits **`config-reloaded`** (caught from Hyprland's `configreloaded` IPC
 event — `hyprctl reload` / a `hyprland-user.lua` edit) and refreshes its `availableModesByName`
-cache. The effective-config services subscribe and re-read: `InputConfig.syncFromHyprland()`
-and `MonitorConfig._vrr`. This protects against the **clobber bug** — both services rewrite
+cache. The effective-config services subscribe and re-read: `InputConfig.sync()`
+and `MonitorConfig._vrr` (on either compositor since #682: Hyalo sends `config_reloaded` too). This protects against the **clobber bug** — both services rewrite
 their whole `.lua` override from in-memory state on the next `setX()`, so without re-sync an
 external edit would be overwritten.
 **Mostly closed now.** The shared helpers `toggleRow` / `dropdownRow` (in `SettingsHelpers.ts`)

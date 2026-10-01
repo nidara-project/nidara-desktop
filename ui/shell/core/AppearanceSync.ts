@@ -30,7 +30,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
-import compositor, { hyprlandOnly } from "./CompositorState"
+import compositor, { settings } from "./CompositorState"
 import { initGlassBlur } from "./GlassBlur"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
@@ -159,18 +159,17 @@ function writeXcursorDefault(cursor: string): void {
  */
 
 /**
- * Push the accent into Hyprland's groupbar (active tab = persistent selection — the one
- * place accent enters compositor chrome; window borders stay neutral glass on purpose).
- * The rest of the groupbar styling is static in hyprland.lua's `group` block. Gotcha: a
- * groupbar bakes its colors at group creation, so this colors FUTURE groups — existing
- * ones keep the old accent until recreated.
+ * Push the accent into the compositor's chrome — on Hyprland the groupbar's active tab
+ * (persistent selection, the one place accent enters compositor chrome; window borders stay
+ * neutral glass on purpose). The rest of the groupbar styling is static in hyprland.lua's
+ * `group` block, and a groupbar bakes its colors at group creation, so this colors FUTURE
+ * groups (core/hyprland-settings.ts).
  */
 function syncGroupbarAccent(): void {
     const accent = keep[0].get_string("accent-color")
     if (!(accent in ACCENT_PALETTE)) return
     const hex = ACCENT_PALETTE[accent as AccentKey].color.slice(1)
-    const col = `rgba(${hex}99)`
-    hyprlandOnly()?.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
+    settings.setAccent(`${hex}99`)
 }
 
 /**

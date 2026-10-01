@@ -208,3 +208,110 @@ export type CompositorObject = Compositor & {
     connect(signal: CompositorSignal, cb: (...args: any[]) => any): number
     disconnect(id: number): void
 }
+
+// ── Settings the compositor owns ─────────────────────────────────────────────
+//
+// What Settings chooses for the compositor — input, displays, workspace modes, game mode,
+// motion, the blur — goes through `CompositorSettings` (`settings` in CompositorState.ts).
+// Each backend applies it live AND persists it in the compositor's own layer: Hyprland's
+// `nidara-*.lua` files (core/hyprland-settings.ts), Hyalo's `hyalo-settings.toml`, which
+// Hyalo writes itself when asked (core/hyalo-settings.ts). On both the user's own file
+// (`hyprland-user.lua`, `hyalo.toml`) is read last and wins.
+
+/** The input options both compositors take, in Settings' terms. */
+export interface InputSettings {
+    /** -1..1, every pointing device. */
+    pointerSpeed: number
+    /** `adaptive` or `flat`. */
+    accelProfile: string
+    mouseNaturalScroll: boolean
+    numlockOnBoot: boolean
+    kbLayout: string
+    kbVariant: string
+    /** ms before a held key repeats; repeats per second. */
+    kbRepeatDelay: number
+    kbRepeatRate: number
+    touchpadNaturalScroll: boolean
+    touchpadTap: boolean
+}
+
+export type InputKey = keyof InputSettings
+
+/** One monitor as Settings configures it. */
+export interface MonitorSetting {
+    scale: number
+    /** wl_output transform, 0–7. */
+    transform: number
+    /** `WxH@Hz`; undefined = the monitor's preferred mode. */
+    mode?: string
+}
+
+/** What game mode asks of the compositor when a game opens (#573). */
+export interface GamingPolicy {
+    wallpaperMode: string
+    customWallpaper: string
+    transition: string
+    performanceProfile: boolean
+}
+
+/** A blur, as the glass material sets it (#674). */
+export interface BlurStrength { size: number; passes: number }
+
+/** The blur's colour settings: what it does to a backdrop before our glass is laid on it
+ *  (common/AdaptiveGlass.ts models it). */
+export interface BlurColour { contrast: number; brightness: number; vibrancy: number; vibrancyDarkness: number }
+
+/** What one compositor's settings can do and the other's cannot (yet). A caller does not
+ *  need to ask before calling — a setting the compositor lacks is a no-op there — but a page
+ *  that OFFERS one should. */
+export interface SettingsCaps {
+    /** Animations the compositor draws, which reduce motion turns off. Hyalo draws none yet (#684). */
+    animations: boolean
+    /** One blur for every surface, set by the glass material. Hyalo's is per surface (#684). */
+    sharedBlur: boolean
+    /** Game mode's compositor half (#573). Hyalo's is #682's game-mode item. */
+    gameMode: boolean
+    /** VRR "fullscreen only" (Hyprland's `misc:vrr = 2`); Hyalo has on and off, per output. */
+    vrrFullscreenOnly: boolean
+}
+
+export interface CompositorSettings {
+    readonly caps: SettingsCaps
+
+    /** The options in force (the user's own file included), `current` where one cannot be read. */
+    readInput(current: InputSettings): Promise<InputSettings>
+    /** `next` is the whole state; `changed` what to apply live. Persists. */
+    setInput(next: InputSettings, changed: readonly InputKey[]): void
+
+    /** 0 off, 1 on, 2 fullscreen only. Synchronous: Display reads it right after `init`. */
+    readVrr(current: number): number
+    /** Live, NOT persisted: a mode the user has not confirmed must not reach the file. */
+    applyMonitor(name: string, m: MonitorSetting): void
+    applyVrr(vrr: number): void
+    /** Every monitor Settings knows and the VRR choice, to the compositor's file. */
+    saveMonitors(monitors: ReadonlyMap<string, MonitorSetting>, vrr: number): void
+
+    /** Persists the workspace modes; `Compositor.applyWorkspaceModes` applies them live. */
+    saveWorkspaceModes(defaultMode: "floating" | "tiling", overrides: Record<string, "floating" | "tiling">): void
+
+    /** `reassert`: the compositor re-read its config — put back what it does not carry and
+     *  write no file (a write there could trigger the reload that called it). */
+    setGamingPolicy(p: GamingPolicy, reassert: boolean): void
+
+    /** Reduce motion. The compositor's own animation setting is the baseline: turning it
+     *  off restores that, never a hard-coded "on", and the backend re-asserts it on reload. */
+    setReduceMotion(reduce: boolean): void
+
+    /** The glass material's blur; null = the compositor's own config (the default material). */
+    setBlur(b: BlurStrength | null): void
+    /** The compositor's own blur, as its config sets it. */
+    blurBaseline(): BlurStrength
+    /** null when the compositor does not process the backdrop's colour. */
+    blurColour(): BlurColour | null
+
+    /** The accent, where the compositor draws one (Hyprland's tab groups). */
+    setAccent(rgbaHex: string): void
+
+    /** For dumpState: the effective layout numbers, null where the compositor has none. */
+    effectiveLayout(): { gapsIn: number | null; gapsOut: number | null; rounding: number | null; borderSize: number | null }
+}

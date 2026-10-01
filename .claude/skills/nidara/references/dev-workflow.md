@@ -3743,9 +3743,9 @@ verified-live model. Two tiers, cleanly split:
   wrote there), else creates the canonical nidara one — so the UI always edits the
   file Lua actually loads. Legacy files are edited in place, never migrated.
 - `nidara-settings.lua` — UI-generated input/keyboard config (sensitivity,
-  `kb_layout`, repeat, touchpad), written by `InputConfig.ts` from the Input page.
+  `kb_layout`, repeat, touchpad), written by `core/hyprland-settings.ts` for the Input page.
 - `nidara-monitor.lua` — UI-generated monitor config (output/mode/scale/vrr),
-  written by `MonitorConfig.ts` from the Display page.
+  written by `core/hyprland-settings.ts` for the Display page.
 - `hypridle.conf` — idle config, WRITTEN by Settings → Power (user state; seeded by nidara-setup, suspend listener only on battery hardware).
 
 One seeded config lives OUTSIDE both dirs: `~/.config/kitty/` (from `defaults/kitty/`,

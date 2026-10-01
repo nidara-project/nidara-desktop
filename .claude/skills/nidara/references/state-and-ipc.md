@@ -800,19 +800,23 @@ Rules:
   translation of the `hyprland.conf` key. `hyprctl keyword` is not an option: the Lua
   parser answers "Use eval.", which costs nothing and changes nothing, so a `keyword`
   call looks like it worked.
-- **A compositor-backed setting names its option ONCE — `compositorOption(name, kind)`.**
+- **A compositor-backed setting names its option ONCE — `option(hs, name, kind)` in
+  `core/hyprland-settings.ts`** (it was `compositorOption` in HyprlandState until #682 moved
+  every setting behind `CompositorSettings`; Hyalo's side is `core/hyalo-settings.ts`, see
+  `hyalo.md`).
   Reading and writing such a setting are not symmetric with a JSON one: the effective value
   is our file + `hyprland-user.lua` + defaults merged and only Hyprland computes that sum, so
   the READ asks the compositor; the WRITE is two steps and both are required, because
   `evalLua` changes the running session and does not survive a restart while the generated
   `.lua` survives a restart and does not apply. In-memory state is a CACHE of the compositor,
-  not the source. `compositorOption` (in `HyprlandState.ts`) hands back `read(fallback)` — the
+  not the source. `option` hands back `read(fallback)` — the
   right typed reader, picked by `kind` — and `apply(value)`, so the two halves cannot come to
   disagree about where the option lives or what its values look like. They HAD: `InputConfig`
   typed its reads after #338 while its writer still named each option again as a bare string
   and spelled booleans `1`, and `kb_variant` had a place in the reader and in the file but no
   option path in the writer, so setting a layout smuggled it through a hook and evalled twice.
-  🔑 **The persisted file is rendered from the same table**, so a new input option is one row
+  🔑 **The persisted file is rendered from the same table** (`INPUT` in hyprland-settings.ts, a
+  row per option, with its Hyalo path in hyalo-settings.ts' `INPUT`), so a new input option is one row
   rather than an edit in three places that nothing checks. Miss the file and the setting
   applies live and is gone at the next login; miss the re-sync and the next change to ANY
   option in that file rewrites the whole thing from stale state.
@@ -829,7 +833,13 @@ Rules:
   came with it: the baseline must NOT be read from the live option while the override is
   already active (a shell reload would capture our own value as the user's), and a
   `hyprctl reload` discards the eval, so re-assert on `config-reloaded` — which is also
-  the moment the live value is trustworthy as the baseline again.
+  the moment the live value is trustworthy as the baseline again. Both baselines (motion and
+  the glass material's blur) live in `core/hyprland-settings.ts` since #682: the modules say
+  only "reduce" / "this blur or the compositor's own", and the backend keeps the baseline and
+  re-asserts on its own reload, from a handler connected at construction so it runs before any
+  module's reload handler reads `blurColour()`. ⚠️ No file is written in answer to
+  `config-reloaded` (`setGamingPolicy(p, reassert = true)` evals only): `hyprland.lua` requires
+  those files, and a write on reload is a reload loop.
 - **A `desc` should not restate the DEFAULT.** `value` sits in the same JSON object, so a
   default is a second answer to the question the reader came with. (It was first suspected of
   causing a misread of `ai.allowFileWrite`; removing it did not fix that — the cause was the

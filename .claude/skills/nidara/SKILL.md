@@ -179,7 +179,7 @@ killall gjs                              # nuke stuck old UI when reload misbeha
 cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
 cd ui/shell && npm run build            # SCSS compile + scripts/bundle.sh (needs the `esbuild` package)
 nidara-ipc listActions                  # discover the shell's IPC surface (JSON)
-nidara-ipc dumpState                    # live shell state as JSON (overlays, version, effective Hyprland config…)
+nidara-ipc dumpState                    # live shell state as JSON (overlays, version, effective compositor layout `compositorLayout`…)
 nidara-ipc describeConfig               # agent-facing settings: schema + current values (JSON)
 nidara-ipc setConfig <key> <value>      # change a setting officially (validated; gated by Settings → AI)
 nidara-ipc screenshot [path]            # capture the focused monitor → PNG path (visual verification; gated)

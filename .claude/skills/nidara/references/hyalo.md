@@ -97,7 +97,7 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
 ## Three config layers, and runtime changes over IPC
 
 Read in order, merged table by table, last wins: `/usr/share/nidara/hyalo/hyalo.toml` (shipped),
-`~/.config/nidara/hyalo-settings.toml` (written by Settings, never by hand),
+`~/.config/nidara/hyalo-settings.toml` (Settings' choices, written by Hyalo, never by hand),
 `~/.config/nidara/hyalo.toml` (the user's own) — the order of `nidara-*.lua` then
 `hyprland-user.lua`. The files are watched (an mtime poll, immune to editors that replace the
 file); a broken file is refused and the running settings stay. An unknown key is an error, not
@@ -105,8 +105,25 @@ silently ignored (`deny_unknown_fields`).
 
 Runtime changes go through the IPC socket, never by rewriting a file — the 09-12 freeze came
 from Hyprland's config being rewritten twice in a second (`project_freeze_after_533_checkout`).
-A setting changed over IPC is runtime only; persisting it is the shell's job (MonitorConfig
-writes `hyalo-settings.toml`).
+Two kinds of request:
+
+- **`set_output`, `do …` are runtime only.** A display mode the user has not confirmed yet is
+  applied this way, so a mode the monitor cannot show is reverted before it reaches any file.
+- **`settings` persists.** The shell sends a JSON merge patch in the config's own shape
+  (`{"input":{"keyboard":{"numlock":true}}}`, `null` removes a key so the layer below shows
+  through); Hyalo merges it into `hyalo-settings.toml`, checks the WHOLE stack, writes the file
+  (fsync + rename) and reloads once (`config::apply_settings`). **Hyalo is that file's one
+  writer** — the shell never renders TOML. Before #682's third part MonitorConfig wrote the file
+  whole from its own state, which works for one module and drops the other's tables the moment
+  a second one writes. A patch that changes nothing writes nothing and reloads nothing: the shell
+  re-states settings on `config_reloaded`, and an unconditional reload there would loop.
+  `config` answers with the configuration in force (the keyboard with the system layout filled
+  in), which is what Settings shows.
+- A reload Hyalo did itself updates `config_stamps`, so the file watcher does not reload the same
+  write a second time a second later.
+- **`HYALO_CONFIG` replaces the layers** (tests, CI), and then there is a settings layer only if
+  `HYALO_SETTINGS` names one; `settings` is refused without it. The harnesses set both, so a
+  nested test never writes the preview session's real `hyalo-settings.toml`.
 
 ## The shell on Hyalo
 
@@ -124,10 +141,20 @@ both rows). The bar's title, the window menu, the dock, the island and its overv
 grid, the agent pointer and the IPC verbs (`listWindows`, `focusWorkspace`, `screenshot`…)
 work on Hyalo; the CRITICAL flood the shell logged there is gone. What only one compositor has
 is in `caps` (Hyalo: no tab groups, dwindle only, no glow yet), and the shell hides it rather
-than failing. Still Hyprland-only — their config options and the Lua the shell writes for
-them — are the files in `scripts/ci/compositor-boundary-allowlist.txt` (Input, Display, gaming,
-reduce motion, blur…): they do nothing on Hyalo until they become requests both compositors
-answer.
+than failing.
+
+**Since #682's third part, settings too.** What Settings chooses for the compositor — input,
+displays, workspace modes, game mode, reduce motion, the glass's blur, the groupbar accent —
+goes through `settings` (`CompositorSettings`, exported by CompositorState.ts), and the modules
+that own those settings (InputConfig, MonitorConfig, WorkspaceModes, GamingSync, ReduceMotion,
+GlassBlur, AdaptiveGlass, AppearanceSync) name no compositor. Each backend applies live AND
+persists in its own layer: `core/hyprland-settings.ts` (the `nidara-*.lua` files, `hl.config`
+evals, the baselines below) and `core/hyalo-settings.ts` (`settings` patches). Hyprland's
+sensitivity and acceleration profile reach every pointing device; Hyalo has them per kind, so
+both kinds get them. What Hyalo does not have yet is a no-op there and false in
+`settings.caps`: its own animations and per-surface blur (#684), game mode (#682), VRR
+"fullscreen only". `scripts/ci/compositor-boundary-check.mjs` has no allowlist any more: no
+file outside the compositor modules may import a backend or spawn `hyprctl`.
 
 Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell relies on:
 - **A layer surface that changes level goes to the TOP of its new level** (`layer_commit`).
