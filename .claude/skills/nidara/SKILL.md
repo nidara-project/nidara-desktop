@@ -150,6 +150,8 @@ Before doing anything that touches code:
 - **Working on the installer, build, or session boot** → read `references/dev-workflow.md`.
 - **Touching the Assistant** (`bin/nidara-agent`, a wire lane, or what it can perceive) → read `references/dev-workflow.md`: the fake-brain walk, the wire-lane re-sync procedure, and the terminal bench for perception claims (a model that answers from a stale read looks identical in the island — only the log tells you).
 - **Debugging something weird, or considering a refactor** → check `references/tech-debt.md` first — it might already be a known issue, or a **standing decision** telling you not to do what you were about to do. It holds only what is still owed; the bodies of resolved items live beside it in `references/tech-debt-resolved.md` (same numbers, never reused, indexed at the bottom of the live file).
+- **Working on Hyalo** (`hyalo/`, the compositor of our own — a preview session until #685),
+  or on anything in the shell that must work on BOTH compositors → `references/hyalo.md`.
 - **Adding an event a user's scripts can react to, or asked "can I run something when X happens?"** → `references/user-hooks.md`. The event table lives in `bin/nidara-hook` and nowhere else.
 - **Helping a user customize their OWN installed copy** (not the canonical repo) → read `references/agent-contribution.md` FIRST. It tells you whether a change is personal (→ config layer), should become a Setting, or is a global improvement worth proposing back upstream as a PR.
 
@@ -191,7 +193,7 @@ nidara-agent                      # the built-in Assistant's BRAIN: a BYOK LLM t
 nidara-mcp                        # all of the above as MCP tools over stdio (incl. list_windows/list_workspaces (reads), focus_window (ungated WM op), query_app → nidara-a11y, do_app_action → nidara-act, type_text/press_key → nidara-type, click_app/click_at (left + button:"right") / hover_app/hover_at / scroll_app/scroll_at / drag_app/drag_at → nidara-click; WM action verbs via run_action; .mcp.json: repo root for dev; installer-managed copy in ~/.config/nidara/ for users)
 ```
 
-There is no test runner; **ten CI jobs** stand in for one (`.github/workflows/ci.yml`, every
+There is no test runner; **eleven CI jobs** stand in for one (`.github/workflows/ci.yml`, every
 one with a `timeout-minutes`):
 
 | job | gates |
@@ -205,6 +207,7 @@ one with a `timeout-minutes`):
 | `pkgbuild` | `bash -n` on the PKGBUILD + `depends=()` still sources as an array of ≥40 (v0.6.0 shipped with an unquoted `hyprland>=0.56` that bash read as a redirection and silently truncated the array) + **config migrations are valid bash, no-op on a fresh install and idempotent with the marker cleared** (`migrations-check.mjs`; a migration mutates a user's config once, on a machine nobody can inspect afterwards) |
 | `hypr-config` | `luac -p config/hypr/hyprland.lua` (one syntax error = the session boots with NO Nidara config at all) + the game-mode handlers driven against a stubbed `hl` + **every window rule names something the source declares** (`hypr-rule-check.mjs`: a rule is a string matched against a string a GTK window announces, and our windows change class at MAP — a STATIC effect sees only the birth class, a DYNAMIC one only the current one, and both traps are silent) + **the Lua the shell GENERATES parses** (`hypr-lua-check.mjs`: `nidara-settings.lua` and `nidara-monitor.lua` are built from TypeScript strings, so `tsc` sees a string and `luac` never sees what it produced — and `hyprland.lua` requires both at every login) |
 | `agent-loop` | drives `bin/nidara-agent` against a mock provider (`scripts/ci/agent-loop-test.py`) |
+| `hyalo` | Hyalo (`hyalo/`, the compositor of our own): `cargo build --locked`, clippy `-D warnings`, unit tests, then a boot of its tty backend (DRM/KMS through seatd) on the same vkms with the real shell on it, held to the smoke's log bar; screenshots over Hyalo's IPC. **Not required** while Hyalo is a preview (`scripts/ci/hyalo-smoke.sh`, `references/hyalo.md`) |
 | `installer-logic` | the installer's rules as pure functions — no disk, no window, no GTK. The `disk_config` it emits and the layouts `manualProblems` must REFUSE (`disk-config-probe.ts`); what the account form accepts and refuses (`account-rules-probe.ts`), whose rules are all that stand between a capitalised username and a `useradd` failure inside the chroot; and what we may touch on an EFI partition that is **not only ours** (`bootloader-rules-probe.ts`) — a shared ESP is the one case whose damage lands on somebody else's operating system, and it is unreachable from this repo. And what the run page COUNTS (`run-progress-probe.ts`), fed lines from a real install — a bar that fell back to the start would read as the install starting over. ⚠️ Each probe is preceded by a step that deletes one of its rules and requires the probe to CATCH it — a probe that has only ever printed "ok" has been run, not tested, and both of these exited 0 while printing `N FAILURE(S)` until 2026-09-05 |
 
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
