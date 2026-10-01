@@ -79,6 +79,8 @@ pub struct Hyalo {
     pub image_copy_capture: smithay::wayland::image_copy_capture::ImageCopyCaptureState,
     /// Capture sessions a client holds open (capture.rs: dropping one stops it).
     pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
+    /// xdg-activation (activation.rs).
+    pub activation_state: smithay::wayland::xdg_activation::XdgActivationState,
     /// The window rules in force (wm/rules.rs).
     pub rules: Vec<crate::wm::rules::Rule>,
     pub keys: crate::input::KeyTracking,
@@ -133,6 +135,8 @@ impl Hyalo {
         material::init(&dh);
         // Flatpak's way to say "this client is sandboxed" — offered only to clients that are not.
         smithay::wayland::security_context::SecurityContextState::new::<Self, _>(&dh, unrestricted);
+        // An app asking for its window to come to the front (activation.rs).
+        let activation_state = smithay::wayland::xdg_activation::XdgActivationState::new::<Self>(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, backend.seat_name());
@@ -196,6 +200,7 @@ impl Hyalo {
             toplevel_capture_source,
             image_copy_capture,
             capture_sessions: Vec::new(),
+            activation_state,
             rules: crate::wm::rules::compile(&rules_config).unwrap_or_else(|err| {
                 tracing::error!("window rules not loaded: {err}");
                 Vec::new()

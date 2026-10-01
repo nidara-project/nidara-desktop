@@ -308,6 +308,15 @@ phase_run() {
     GESTURE_LOG=/tmp/hyalo/gesture-client.log "$REPO/scripts/ci/hyalo-gesture-check.sh" >/tmp/hyalo/gesture.log 2>&1 \
         || { log "FAIL: pointer gestures"; cat /tmp/hyalo/gesture.log; exit 1; }
     log "pointer gestures OK ($(sed -n 's/^ok *//p' /tmp/hyalo/gesture.log))"
+    # xdg-activation (#682): an app the user just clicked may raise its other window; an app the
+    # user is not in may not take the front (the control — a compositor that honoured every
+    # request would pass the first half only). Real clicks, through the virtual pointer.
+    nidara-hyalo msg do workspace 1 >/dev/null
+    ACTIVATION_LOG=/tmp/hyalo/activation-clients.log "$REPO/scripts/ci/hyalo-activation-check.sh" \
+        >/tmp/hyalo/activation.log 2>&1 \
+        || { log "FAIL: xdg-activation"; cat /tmp/hyalo/activation.log /tmp/hyalo/activation-clients.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "xdg-activation OK (honoured from the user's app, refused from another)"
 
     # ── 3. Pictures for a person.
     sleep 4
