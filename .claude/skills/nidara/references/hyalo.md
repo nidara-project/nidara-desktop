@@ -103,6 +103,12 @@ What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
 rim saturation inkDarkAbove inkLightBelow`, `blur`/`popoverBlur = SIZE:PASSES`, `glass = off` /
 `ink = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
+A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
+(`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
+at `size` source texels, the up-sample's at ¼ and ½ of that. Until 2026-10-02 the up-sample's sat
+four times as far, and 2:2 blurred a step edge over 28 px against Hyprland's 12 (owner-caught:
+"1:2 here blurs more than Hyprland's 2:2"). Measured since on the real GPU, nested, glass off,
+over a black/white wallpaper (`HYALO_WALLPAPER`): 1:2 → 8 px, 2:2 → 12 px, 10–90 % of the edge.
 The refraction is PER SHAPE (protocol v4, `set_lensing`): `refraction` is every shape's least,
 and `lensing` × the shape's shorter side wins where it is more, so a large pane lenses more than
 a capsule without a number per surface. The capture region grows by each group's largest

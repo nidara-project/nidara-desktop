@@ -70,9 +70,15 @@ uniform vec2 src_size;
 uniform vec2 src_used;
 uniform float offset;
 vec4 tap(vec2 uv) { return texture2D(tex, clamp(uv, 0.5 / src_size, (src_used - 0.5) / src_size)); }
+// The up-sample's taps sit a quarter and a half of a SOURCE texel per unit of offset: the
+// half-pixel of the destination, as dual kawase has it and as Hyprland's blur2 does. Until
+// 2026-10-02 they sat 1 and 2 texels out — four times as far — and a given size:passes
+// blurred over twice as wide as the same numbers on Hyprland (a step edge, 10-90 %: 2:2 was
+// 28 px against 12), which is what the owner saw: "1:2 here blurs more than Hyprland's 2:2".
+// The numbers are shared with Hyprland (`GLASS_BLUR`), so they must mean the same blur.
 vec4 up(vec2 src_px) {
     vec2 uv = src_px / src_size;
-    vec2 o = offset / src_size;
+    vec2 o = 0.25 * offset / src_size;
     vec4 sum = tap(uv + vec2(-o.x * 2.0, 0.0));
     sum += tap(uv + vec2(-o.x, o.y)) * 2.0;
     sum += tap(uv + vec2(0.0, o.y * 2.0));
