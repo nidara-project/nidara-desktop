@@ -68,11 +68,23 @@ on Hyprland nothing offers the protocol and all of it is a no-op.
 state — the accent fill, the hover/open veil, the shadow — never the body or the rim. The
 painters that do: `SquircleContainer` (every pane with `useShellOpacity` and no explicit
 `alpha`), the dock's pill on both axes (`DockAxis.ts`), the island's morph clone
-(`MorphRevealer.glassShape`), the Notification Center's stacked-card bands. Tooltips and kit
-menus (`trackBubbleGlass`) are declared `clientPaints`: their pointer is no shape the protocol
-describes, so Hyalo only blurs behind the body and they paint their own glass — and a surface
-holding any such shape is blurred only, never given the compositor's glass under a client's.
-A new glass painter goes through the same two calls, or it is a pane Hyalo knows nothing about.
+(`MorphRevealer.glassShape`), the Notification Center's stacked-card bands, and tooltips and kit
+menus (`trackBubbleGlass`, owner 2026-10-01: refractive too, and blurred MORE than panels). A
+bubble's pointer is part of its shape (protocol v3, `add_shape_pointed`: base, tip, width, tip
+radius, base radius — one geometry, `bubbleGeometry`, for the painter and the protocol); Hyalo
+unions an inset triangle grown back by the tip radius with the body through a round union of
+the base radius (`shape_sdf`), so body and pointer are one glass with one rim. A popover's blur
+is `popoverBlur` (default: one pass more than the panels'). On a compositor that cannot draw a
+pointer the bubble is `clientPaints` (asked every frame: `compositorDrawsPointers`), and a
+surface holding any such shape is blurred only, never given the compositor's glass under a
+client's. A new glass painter goes through the same two calls, or it is a pane Hyalo knows
+nothing about.
+
+🔴 Every shape and box of an entry needs its OWN clip object: `move` shifts each one, so a
+clip shared between two moved twice. `intersect` always returns a new rectangle — when it
+returned its argument, a notification's clip ended 4× off-screen once its three ink boxes
+shared it; Hyalo got no shape, the painter believed Hyalo painted it, and its white text sat on
+the bare white backdrop.
 
 What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
 - **snapshot-time transforms** of the ancestors — `ScaleRevealer.glassPaintTransform()`; GTK's own

@@ -254,6 +254,15 @@ fn groups(
                 )
             }),
             ink_dark: false,
+            pointer: s.pointer.and_then(|p| {
+                let at = |q: [f64; 2]| {
+                    let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));
+                    [o.x, o.y]
+                };
+                glass_gl::PointerPx::new(
+                    at(p.base), at(p.tip), p.width * scale.x, p.tip_radius * scale.x, p.base_radius * scale.x,
+                )
+            }),
         })
         .collect();
     let mut root: Vec<usize> = (0..shapes.len()).collect();
@@ -266,7 +275,7 @@ fn groups(
     }
     for a in 0..shapes.len() {
         for b in a + 1..shapes.len() {
-            if grow(&shapes[a].rect).overlaps(grow(&shapes[b].rect)) {
+            if grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }
@@ -280,9 +289,9 @@ fn groups(
     by_root
         .into_values()
         .filter_map(|shapes| {
-            let mut bounds = shapes[0].rect;
+            let mut bounds = shapes[0].bounds();
             for s in &shapes[1..] {
-                bounds = bounds.merge(s.rect);
+                bounds = bounds.merge(s.bounds());
             }
             let region = grow(&bounds).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
             (region.size.w >= 2 && region.size.h >= 2).then_some((region, shapes))

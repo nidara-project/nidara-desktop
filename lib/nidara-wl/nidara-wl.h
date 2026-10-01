@@ -423,6 +423,39 @@ void nidara_wl_material_add_shape_clipped (GdkSurface *surface,
                                            double clip_width, double clip_height);
 
 /**
+ * nidara_wl_material_add_shape_pointed:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ * @corner_radius: each corner's radius
+ * @exponent: each corner is a superellipse quadrant with this exponent (2 = arc)
+ * @opacity: the whole glass in this shape over the plain backdrop, 0..1
+ * @clip_x: left of what of the shape may show, same coordinates
+ * @clip_y: its top
+ * @clip_width: its width; 0 = no clip
+ * @clip_height: its height; 0 = no clip
+ * @base_x: the pointer's base, centred on the shape's edge: x
+ * @base_y: y
+ * @tip_x: the pointer's tip: x
+ * @tip_y: y
+ * @pointer_width: the pointer's base width
+ * @tip_radius: the tip's arc
+ * @base_radius: the concave arc where the pointer meets the edge
+ *
+ * As nidara_wl_material_add_shape_clipped(), with a pointer (a tooltip's, a menu's): body
+ * and pointer are one glass. Before version 3 of the protocol, the body alone.
+ */
+void nidara_wl_material_add_shape_pointed (GdkSurface *surface,
+                                           double x, double y, double width, double height,
+                                           double corner_radius, double exponent, double opacity,
+                                           double clip_x, double clip_y,
+                                           double clip_width, double clip_height,
+                                           double base_x, double base_y, double tip_x, double tip_y,
+                                           double pointer_width, double tip_radius, double base_radius);
+
+/**
  * nidara_wl_material_commit:
  * @surface: the #GdkSurface
  * @blur_size: the blur's kawase offset, logical pixels

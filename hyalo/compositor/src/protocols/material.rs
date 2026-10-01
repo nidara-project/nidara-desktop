@@ -34,6 +34,19 @@ pub struct Shape {
     pub opacity: f64,
     /// What of the shape may show, same coordinates (v2): x, y, w, h. None = all of it.
     pub clip: Option<[f64; 4]>,
+    /// A pointer spliced into one side (v3, a tooltip's or a menu's), same coordinates.
+    pub pointer: Option<Pointer>,
+}
+
+/// A pointer from a shape's edge (v3): its base centred on `base`, `width` wide, to `tip`; a
+/// circular tip of `tip_radius`, a concave join of `base_radius` where it meets the edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pointer {
+    pub base: [f64; 2],
+    pub tip: [f64; 2],
+    pub width: f64,
+    pub tip_radius: f64,
+    pub base_radius: f64,
 }
 
 /// Refractive glass: the compositor paints the whole glass (src/render/glass_gl.rs, the last pass).
@@ -258,6 +271,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                 self.pending(|m| {
                     m.shapes.push(Shape {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
+                        pointer: None,
                     })
                 });
             }
@@ -273,7 +287,31 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                 });
                 if opacity > 0.0 && shows {
                     self.pending(|m| {
-                        m.shapes.push(Shape { x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip })
+                        m.shapes.push(Shape {
+                            x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
+                        })
+                    });
+                }
+            }
+            Request::AddShapePointed {
+                x, y, width, height, corner_radius, exponent, opacity,
+                clip_x, clip_y, clip_width, clip_height,
+                base_x, base_y, tip_x, tip_y, pointer_width, tip_radius, base_radius,
+            } => {
+                let opacity = opacity.clamp(0.0, 1.0);
+                let clip = (clip_width > 0.0 && clip_height > 0.0).then_some([clip_x, clip_y, clip_width, clip_height]);
+                let pointer = (pointer_width > 0.0 && (tip_x - base_x).hypot(tip_y - base_y) > 0.0).then_some(Pointer {
+                    base: [base_x, base_y],
+                    tip: [tip_x, tip_y],
+                    width: pointer_width,
+                    tip_radius: tip_radius.max(0.0),
+                    base_radius: base_radius.max(0.0),
+                });
+                if opacity > 0.0 {
+                    self.pending(|m| {
+                        m.shapes.push(Shape {
+                            x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
+                        })
                     });
                 }
             }

@@ -50,6 +50,14 @@ export type GlassShape = {
     opacity?: number,
     /** What of it the painter shows, same coordinates (a stacked card's band). */
     clip?: { x: number, y: number, w: number, h: number },
+    /** A pointer spliced into one side (a tooltip's, a menu's), same coordinates: its base
+     *  centred on the edge, its tip, its width, the tip's arc and the concave join's. */
+    pointer?: GlassPointer,
+}
+
+export type GlassPointer = {
+    baseX: number, baseY: number, tipX: number, tipY: number,
+    width: number, tipRadius: number, baseRadius: number,
 }
 
 /** The glass the compositor paints itself (nidara_material_v1.set_glass). */
@@ -98,6 +106,9 @@ type Shim = {
     material_add_shape(surface: Gdk.Surface, x: number, y: number, w: number, h: number, r: number, e: number): void
     material_add_shape_clipped?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, r: number, e: number,
         opacity: number, cx: number, cy: number, cw: number, ch: number): void
+    material_add_shape_pointed?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, r: number, e: number,
+        opacity: number, cx: number, cy: number, cw: number, ch: number,
+        bx: number, by: number, tx: number, ty: number, pw: number, tipR: number, baseR: number): void
     material_commit(surface: Gdk.Surface, size: number, passes: number): boolean
     material_set_glass(surface: Gdk.Surface, r: number, g: number, b: number, aMin: number, aMax: number,
         target: number, refraction: number, rim: number, saturation: number): void
@@ -120,9 +131,9 @@ type Entry = {
      *  null for glass that holds nothing of its own. */
     scope: Gtk.Widget | null
     shapes: () => GlassShape[]
-    /** Paints its own glass whatever the surface's source says (a shape the protocol
-     *  cannot describe, such as a bubble's pointer): the compositor only blurs. */
-    clientPaints: boolean
+    /** Paints its own glass whatever the surface's source says (a shape the compositor
+     *  cannot draw): the compositor only blurs. Asked every frame. */
+    clientPaints: () => boolean
     native: Gtk.Native | null
     /** Its ink group: the compositor's ink event names it. */
     inkId: number
@@ -159,8 +170,14 @@ export function setMaterialSource(s: MaterialSource): void {
  *  and state. Asked from inside a draw function; the same answer the shapes were sent on. */
 export function compositorPaintsGlass(widget: Gtk.Widget): boolean {
     const e = entries.get(widget)
-    if (!e || !shim || e.clientPaints || !e.native) return false
+    if (!e || !shim || e.clientPaints() || !e.native) return false
     return (natives.get(e.native)?.paints ?? false) && !nested(e, e.native)
+}
+
+/** Whether the compositor can draw a shape with a pointer (`GlassShape.pointer`, protocol
+ *  v3). Until it can, a bubble keeps painting its own glass (`clientPaints`). */
+export function compositorDrawsPointers(): boolean {
+    return !!shim?.material_add_shape_pointed && !!shim.material_has_ink?.()
 }
 
 /** Whether the compositor said the content of the pane of glass `widget` sits in is dark
@@ -169,7 +186,7 @@ export function compositorPaintsGlass(widget: Gtk.Widget): boolean {
 export function darkInkFor(widget: Gtk.Widget | null): boolean {
     for (let w: Gtk.Widget | null = widget; w; w = w.get_parent()) {
         const e = scopes.get(w)
-        if (e && !e.clientPaints) return e.darkInk
+        if (e && !e.clientPaints()) return e.darkInk
     }
     return false
 }
@@ -197,10 +214,11 @@ function setDarkInk(e: Entry, dark: boolean) {
  * are panes of their own). `shapes` is read every frame the surface draws.
  */
 export function trackGlass(widget: Gtk.Widget, shapes: () => GlassShape[],
-    opts: { scope?: Gtk.Widget | null, clientPaints?: boolean } = {}): void {
+    opts: { scope?: Gtk.Widget | null, clientPaints?: boolean | (() => boolean) } = {}): void {
     load()
     const scope = opts.scope === undefined ? widget : opts.scope
-    const entry: Entry = { widget, scope, shapes, clientPaints: opts.clientPaints ?? false, native: null,
+    const cp = opts.clientPaints
+    const entry: Entry = { widget, scope, shapes, clientPaints: typeof cp === "function" ? cp : () => cp ?? false, native: null,
         inkId: nextInkId++, darkInk: false }
     entries.set(widget, entry)
     byInkId.set(entry.inkId, entry)
@@ -239,7 +257,7 @@ function glassOf(native: Gtk.Native): GlassParams | null {
 function nested(e: Entry, native: Gtk.Native): boolean {
     for (let p = (e.scope ?? e.widget).get_parent(); p && (p as unknown) !== native; p = p.get_parent()) {
         const outer = scopes.get(p)
-        if (outer && outer !== e && outer.native === native && !outer.clientPaints && outer.widget.get_mapped()) return true
+        if (outer && outer !== e && outer.native === native && !outer.clientPaints() && outer.widget.get_mapped()) return true
     }
     return false
 }
@@ -329,7 +347,8 @@ function sortByTree(list: Entry[]) {
 }
 
 type Rect = { x: number, y: number, w: number, h: number }
-type Placed = { x: number, y: number, w: number, h: number, r: number, e: number, o: number, clip: Rect | null }
+type Placed = { x: number, y: number, w: number, h: number, r: number, e: number, o: number, clip: Rect | null,
+    pointer?: GlassPointer }
 
 /** Past this many boxes a pane sends one, their union: a stricter measure, never a looser one. */
 const MAX_INK_BOXES_PER_PANE = 8
@@ -373,8 +392,11 @@ function transformOf(w: Gtk.Widget): PaintTransform | null {
     return typeof f === "function" ? f.call(w) : null
 }
 
+/** A NEW rectangle, always: every shape and box of an entry gets its own clip, and `move`
+ *  shifts each one — a clip shared between two of them moved twice (the notification's
+ *  ended 4× off-screen once its three ink boxes shared it, 2026-10-02). */
 function intersect(a: Rect | null, b: Rect): Rect {
-    if (!a) return b
+    if (!a) return { x: b.x, y: b.y, w: b.w, h: b.h }
     const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y)
     return { x, y, w: Math.max(0, Math.min(a.x + a.w, b.x + b.w) - x), h: Math.max(0, Math.min(a.y + a.h, b.y + b.h) - y) }
 }
@@ -390,7 +412,7 @@ function place(e: Entry, native: Gtk.Native, ink = false): { shapes: Placed[], b
     if (opacity < 0.005) return none
     const shapes: Placed[] = e.shapes().filter(s => s.w > 0 && s.h > 0).map(s => ({
         x: s.x, y: s.y, w: s.w, h: s.h, r: s.radius, e: s.exponent, o: opacity * (s.opacity ?? 1),
-        clip: s.clip ? { ...s.clip } : null,
+        clip: s.clip ? { ...s.clip } : null, pointer: s.pointer ? { ...s.pointer } : undefined,
     }))
     // The content goes through every transform and clip the shapes go through: a box is cut
     // where the pane is (a label scrolled out of its list is no content of the pane).
@@ -402,6 +424,7 @@ function place(e: Entry, native: Gtk.Native, ink = false): { shapes: Placed[], b
         for (const s of [...shapes, ...boxes]) {
             s.x += dx; s.y += dy
             if (s.clip) { s.clip.x += dx; s.clip.y += dy }
+            if (s.pointer) { s.pointer.baseX += dx; s.pointer.baseY += dy; s.pointer.tipX += dx; s.pointer.tipY += dy }
         }
     }
     const nw = native as unknown as Gtk.Widget
@@ -424,6 +447,14 @@ function place(e: Entry, native: Gtk.Native, ink = false): { shapes: Placed[], b
                 map(s)
                 s.r *= t.scale
                 if (s.clip) map(s.clip)
+                const p = s.pointer
+                if (p) {
+                    p.baseX = t.pivotX + (p.baseX - t.pivotX) * t.scale + t.dx
+                    p.baseY = t.pivotY + (p.baseY - t.pivotY) * t.scale + t.dy
+                    p.tipX = t.pivotX + (p.tipX - t.pivotX) * t.scale + t.dx
+                    p.tipY = t.pivotY + (p.tipY - t.pivotY) * t.scale + t.dy
+                    p.width *= t.scale; p.tipRadius *= t.scale; p.baseRadius *= t.scale
+                }
             }
         }
         // The clip is pushed before the widget's own snapshot transform: unscaled, in its box.
@@ -458,8 +489,8 @@ function flush(native: Gtk.Native, st: NativeState) {
     let anyClient = false
     for (const e of st.entries) {
         if (nested(e, native)) continue
-        const p = place(e, native, inkWanted !== null && !e.clientPaints)
-        if (p.shapes.length && e.clientPaints) anyClient = true
+        const p = place(e, native, inkWanted !== null && !e.clientPaints())
+        if (p.shapes.length && e.clientPaints()) anyClient = true
         placed.push(...p.shapes)
         for (const box of p.boxes) inkBoxes.push({ id: e.inkId, box })
     }
@@ -476,13 +507,20 @@ function flush(native: Gtk.Native, st: NativeState) {
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
-        s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)]]), paints && glass, blur,
+        s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],
+        s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
+            round(s.pointer.width)]]), paints && glass, blur,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)])])
     if (key === st.last) return
     st.last = key
     shim.material_begin(surface)
     for (const s of placed) {
-        if (shim.material_add_shape_clipped) {
+        const p = s.pointer
+        if (p && shim.material_add_shape_pointed) {
+            const c = s.clip ?? { x: 0, y: 0, w: 0, h: 0 }
+            shim.material_add_shape_pointed(surface, s.x, s.y, s.w, s.h, s.r, s.e, Math.min(1, s.o), c.x, c.y, c.w, c.h,
+                p.baseX, p.baseY, p.tipX, p.tipY, p.width, p.tipRadius, p.baseRadius)
+        } else if (shim.material_add_shape_clipped) {
             const c = s.clip ?? { x: 0, y: 0, w: 0, h: 0 }
             shim.material_add_shape_clipped(surface, s.x, s.y, s.w, s.h, s.r, s.e, Math.min(1, s.o), c.x, c.y, c.w, c.h)
         } else {

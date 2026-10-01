@@ -414,6 +414,42 @@ nidara_wl_material_add_shape_clipped (GdkSurface *surface,
 }
 
 void
+nidara_wl_material_add_shape_pointed (GdkSurface *surface,
+                                      double x, double y, double width, double height,
+                                      double corner_radius, double exponent, double opacity,
+                                      double clip_x, double clip_y,
+                                      double clip_width, double clip_height,
+                                      double base_x, double base_y, double tip_x, double tip_y,
+                                      double pointer_width, double tip_radius, double base_radius)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || width <= 0 || height <= 0 || opacity <= 0)
+    return;
+  if (material_version < 3)
+    {
+      /* Before v3 the pointer is no shape: the body alone. */
+      nidara_wl_material_add_shape_clipped (surface, x, y, width, height, corner_radius, exponent,
+                                            opacity, clip_x, clip_y, clip_width, clip_height);
+      return;
+    }
+  nidara_material_v1_add_shape_pointed (m,
+                                        wl_fixed_from_double (x), wl_fixed_from_double (y),
+                                        wl_fixed_from_double (width), wl_fixed_from_double (height),
+                                        wl_fixed_from_double (corner_radius),
+                                        wl_fixed_from_double (exponent),
+                                        wl_fixed_from_double (MIN (opacity, 1.0)),
+                                        wl_fixed_from_double (clip_x), wl_fixed_from_double (clip_y),
+                                        wl_fixed_from_double (clip_width),
+                                        wl_fixed_from_double (clip_height),
+                                        wl_fixed_from_double (base_x), wl_fixed_from_double (base_y),
+                                        wl_fixed_from_double (tip_x), wl_fixed_from_double (tip_y),
+                                        wl_fixed_from_double (pointer_width),
+                                        wl_fixed_from_double (tip_radius),
+                                        wl_fixed_from_double (base_radius));
+}
+
+void
 nidara_wl_material_set_glass (GdkSurface *surface,
                               double tint_r, double tint_g, double tint_b,
                               double alpha_min, double alpha_max, double target_luminance,

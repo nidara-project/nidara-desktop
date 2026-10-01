@@ -1,6 +1,6 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import type Gtk from "gi://Gtk?version=4.0"
+import Gtk from "gi://Gtk?version=4.0"
 import Theme from "./ThemeManager"
 import { safeDisconnect } from "./signals"
 import { glassBlurInForce } from "./GlassBlur"
@@ -30,6 +30,9 @@ import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/n
  *   alphaMin alphaMax target refraction rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
  *   blur = SIZE:PASSES                                   every surface's blur
+ *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
+ *                                                        pass more than the panels', owner
+ *                                                        2026-10-01: more blur than panels)
  *   glass = off                                          blur only: the shell paints its own
  *                                                        glass, as on Hyprland (A/B)
  *   ink = off                                            the text stays white everywhere
@@ -57,7 +60,8 @@ const DEFAULTS = {
     inkLightBelow: 0.65,
 }
 
-type Tuning = Partial<typeof DEFAULTS> & { blur?: { size: number, passes: number }, off?: boolean, inkOff?: boolean }
+type Blur = { size: number, passes: number }
+type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
 
@@ -86,9 +90,9 @@ function parse(text: string): Tuning {
         const m = line.replace(/#.*/, "").match(/^\s*([A-Za-z]+)\s*=\s*(\S+)\s*$/)
         if (!m) continue
         const [, k, v] = m
-        if (k === "blur") {
+        if (k === "blur" || k === "popoverBlur") {
             const [size, passes] = v.split(":").map(Number)
-            if (Number.isFinite(size) && Number.isInteger(passes)) out.blur = { size, passes }
+            if (Number.isFinite(size) && Number.isInteger(passes)) out[k] = { size, passes }
         } else if (k === "glass") {
             out.off = v === "off"
         } else if (k === "ink") {
@@ -129,7 +133,12 @@ export function initCompositorGlass() {
     setMaterialSource({
         glass: (_native: Gtk.Native) => params(),
         ink: (_native: Gtk.Native) => inkParams(),
-        blur: (_native: Gtk.Native) => tuning.blur ?? glassBlurInForce(),
+        blur: (native: Gtk.Native) => {
+            const panels = tuning.blur ?? glassBlurInForce()
+            // A tooltip or a menu is a popover: a surface of its own, blurred more.
+            if (!(native instanceof Gtk.Popover)) return panels
+            return tuning.popoverBlur ?? { size: panels.size, passes: panels.passes + 1 }
+        },
         onChange: (cb) => {
             const id = Theme.connect("changed", cb)
             listeners.add(cb)

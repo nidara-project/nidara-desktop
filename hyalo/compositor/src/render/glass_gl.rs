@@ -125,6 +125,12 @@ uniform float rim;
 uniform float saturation;
 uniform float ink_dark;     // 1: this shape holds dark content (the ink event)
 uniform vec3 ink_tint;
+uniform float has_pointer;  // 1: a pointer is spliced into the shape (a tooltip, a menu)
+uniform vec2 ptr_a;         // the pointer's triangle, inset by its tip radius, output px
+uniform vec2 ptr_b;
+uniform vec2 ptr_t;
+uniform float ptr_tip_r;
+uniform float ptr_base_r;
 varying vec2 v_out;
 varying vec2 v_fb;
 
@@ -147,12 +153,39 @@ float luminance(vec3 c) {
     return 0.2126 * to_linear(c.r) + 0.7152 * to_linear(c.g) + 0.0722 * to_linear(c.b);
 }
 
+// A triangle's signed distance (Inigo Quilez's, exact): negative inside, either winding.
+float sd_triangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
+    vec2 e0 = p1 - p0, e1 = p2 - p1, e2 = p0 - p2;
+    vec2 v0 = p - p0, v1 = p - p1, v2 = p - p2;
+    vec2 pq0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.0, 1.0);
+    vec2 pq1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.0, 1.0);
+    vec2 pq2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.0, 1.0);
+    float s = sign(e0.x * e2.y - e0.y * e2.x);
+    vec2 d = min(min(vec2(dot(pq0, pq0), s * (v0.x * e0.y - v0.y * e0.x)),
+                     vec2(dot(pq1, pq1), s * (v1.x * e1.y - v1.y * e1.x))),
+                     vec2(dot(pq2, pq2), s * (v2.x * e2.y - v2.y * e2.x)));
+    return -sqrt(d.x) * sign(d.y);
+}
+
+// The whole silhouette: the shape, and its pointer if it has one — the inset triangle grown
+// back by the tip radius (a round tip, straight sides where they were), joined to the body
+// by a concave arc of the base radius (hg_sdf's round union).
+float shape_sdf(vec2 px) {
+    float d = sdf(px);
+    if (has_pointer > 0.5) {
+        float p = sd_triangle(px, ptr_a, ptr_b, ptr_t) - ptr_tip_r;
+        vec2 u = max(vec2(ptr_base_r - d, ptr_base_r - p), vec2(0.0));
+        d = max(ptr_base_r, min(d, p)) - length(u);
+    }
+    return d;
+}
+
 // Framebuffer pixels → the blurred copy (level 1, half size).
 vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
 vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
 
 void main() {
-    float d = sdf(v_out);
+    float d = shape_sdf(v_out);
     // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased.
     vec2 cin = min(v_out - clip.xy, clip.xy + clip.zw - v_out);
     float clipped = clamp(min(cin.x, cin.y) + 0.5, 0.0, 1.0);
@@ -166,8 +199,8 @@ void main() {
 
     // ── Refractive glass ──────────────────────────────────────────────────
     // The outward normal, from the distance field.
-    vec2 n = vec2(sdf(v_out + vec2(1.0, 0.0)) - sdf(v_out - vec2(1.0, 0.0)),
-                  sdf(v_out + vec2(0.0, 1.0)) - sdf(v_out - vec2(0.0, 1.0)));
+    vec2 n = vec2(shape_sdf(v_out + vec2(1.0, 0.0)) - shape_sdf(v_out - vec2(1.0, 0.0)),
+                  shape_sdf(v_out + vec2(0.0, 1.0)) - shape_sdf(v_out - vec2(0.0, 1.0)));
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0);
     float inside = max(-d, 0.0);
     // Refraction: within a band along the edge the backdrop is read from further OUT, more so
@@ -275,6 +308,82 @@ pub struct Shape {
     pub clip: Option<Rectangle<f64, Physical>>,
     /// It holds an ink group whose content is dark (v3): the light veil, not the dark tint.
     pub ink_dark: bool,
+    /// A pointer spliced into it (v3).
+    pub pointer: Option<PointerPx>,
+}
+
+impl Shape {
+    /// Everything it covers: the shape, and its pointer.
+    pub fn bounds(&self) -> Rectangle<f64, Physical> {
+        match &self.pointer {
+            Some(p) => self.rect.merge(p.bounds),
+            None => self.rect,
+        }
+    }
+}
+
+/// A pointer in output pixels, ready for the shader: its triangle inset by the tip radius.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PointerPx {
+    pub a: [f64; 2],
+    pub b: [f64; 2],
+    pub t: [f64; 2],
+    pub tip_radius: f64,
+    pub base_radius: f64,
+    /// The whole pointer, base join included.
+    pub bounds: Rectangle<f64, Physical>,
+}
+
+impl PointerPx {
+    /// From the protocol's description: the base centred on `base`, `width` wide, the tip at
+    /// `tip`. The triangle's base is pushed `base_radius` into the shape along its own sides,
+    /// so its two base corners are inside the body and only the concave join shows; then
+    /// every corner is inset by the tip radius (the shader grows it back, rounding the tip).
+    pub fn new(base: [f64; 2], tip: [f64; 2], width: f64, tip_radius: f64, base_radius: f64) -> Option<Self> {
+        let (dx, dy) = (tip[0] - base[0], tip[1] - base[1]);
+        let h = dx.hypot(dy);
+        if h <= 0.0 || width <= 0.0 {
+            return None;
+        }
+        let u = [dx / h, dy / h];
+        let v = [-u[1], u[0]];
+        let e = base_radius;
+        let half = width / 2.0 * (h + e) / h;
+        let bc = [base[0] - u[0] * e, base[1] - u[1] * e];
+        let a = [bc[0] - v[0] * half, bc[1] - v[1] * half];
+        let b = [bc[0] + v[0] * half, bc[1] + v[1] * half];
+        let t = tip;
+        // The inradius bounds how far a corner can be rounded.
+        let side = |p: [f64; 2], q: [f64; 2]| (q[0] - p[0]).hypot(q[1] - p[1]);
+        let (la, lb, lc) = (side(b, t), side(a, t), side(a, b));
+        let area = ((b[0] - a[0]) * (t[1] - a[1]) - (t[0] - a[0]) * (b[1] - a[1])).abs() / 2.0;
+        let inradius = 2.0 * area / (la + lb + lc);
+        let r = tip_radius.min(inradius * 0.9);
+        let inset = |p: [f64; 2], q: [f64; 2], s: [f64; 2]| {
+            let n1 = side(p, q);
+            let n2 = side(p, s);
+            let d1 = [(q[0] - p[0]) / n1, (q[1] - p[1]) / n1];
+            let d2 = [(s[0] - p[0]) / n2, (s[1] - p[1]) / n2];
+            let half_angle = (d1[0] * d2[0] + d1[1] * d2[1]).clamp(-1.0, 1.0).acos() / 2.0;
+            let bis = [d1[0] + d2[0], d1[1] + d2[1]];
+            let nb = bis[0].hypot(bis[1]);
+            let k = r / half_angle.sin().max(1e-6) / nb.max(1e-9);
+            [p[0] + bis[0] * k, p[1] + bis[1] * k]
+        };
+        let pad = base_radius + 1.0;
+        let xs = [base[0] - v[0] * width / 2.0, base[0] + v[0] * width / 2.0, tip[0]];
+        let ys = [base[1] - v[1] * width / 2.0, base[1] + v[1] * width / 2.0, tip[1]];
+        let (x0, x1) = (xs.iter().cloned().fold(f64::MAX, f64::min) - pad, xs.iter().cloned().fold(f64::MIN, f64::max) + pad);
+        let (y0, y1) = (ys.iter().cloned().fold(f64::MAX, f64::min) - pad, ys.iter().cloned().fold(f64::MIN, f64::max) + pad);
+        Some(Self {
+            a: inset(a, b, t),
+            b: inset(b, t, a),
+            t: inset(t, a, b),
+            tip_radius: r,
+            base_radius,
+            bounds: Rectangle::new((x0, y0).into(), (x1 - x0, y1 - y0).into()),
+        })
+    }
 }
 
 /// Refractive glass parameters, in output pixels.
@@ -641,7 +750,7 @@ pub unsafe fn draw(
             gl.Uniform3f(p.loc(gl, c"ink_tint"), g.ink_tint[0], g.ink_tint[1], g.ink_tint[2]);
         }
         for s in shapes {
-            let sr = s.rect;
+            let sr = s.bounds();
             // One pixel of margin for the anti-aliased edge.
             let mut bounds = Rectangle::<i32, Physical>::new(
                 ((sr.loc.x - 1.0).floor() as i32, (sr.loc.y - 1.0).floor() as i32).into(),
@@ -658,7 +767,19 @@ pub unsafe fn draw(
                 bounds = b;
             }
             gl.Uniform4f(p.loc(gl, c"clip"), cl.loc.x as f32, cl.loc.y as f32, cl.size.w as f32, cl.size.h as f32);
-            gl.Uniform4f(p.loc(gl, c"rect"), sr.loc.x as f32, sr.loc.y as f32, sr.size.w as f32, sr.size.h as f32);
+            let rr = s.rect;
+            gl.Uniform4f(p.loc(gl, c"rect"), rr.loc.x as f32, rr.loc.y as f32, rr.size.w as f32, rr.size.h as f32);
+            match &s.pointer {
+                Some(ptr) => {
+                    gl.Uniform1f(p.loc(gl, c"has_pointer"), 1.0);
+                    gl.Uniform2f(p.loc(gl, c"ptr_a"), ptr.a[0] as f32, ptr.a[1] as f32);
+                    gl.Uniform2f(p.loc(gl, c"ptr_b"), ptr.b[0] as f32, ptr.b[1] as f32);
+                    gl.Uniform2f(p.loc(gl, c"ptr_t"), ptr.t[0] as f32, ptr.t[1] as f32);
+                    gl.Uniform1f(p.loc(gl, c"ptr_tip_r"), ptr.tip_radius as f32);
+                    gl.Uniform1f(p.loc(gl, c"ptr_base_r"), ptr.base_radius as f32);
+                }
+                None => gl.Uniform1f(p.loc(gl, c"has_pointer"), 0.0),
+            }
             gl.Uniform1f(p.loc(gl, c"radius"), s.radius as f32);
             gl.Uniform1f(p.loc(gl, c"exponent"), s.exponent as f32);
             gl.Uniform1f(p.loc(gl, c"opacity"), s.opacity);
@@ -886,6 +1007,24 @@ mod tests {
         // Normal: output (x, y) → ndc (2x/w - 1, 2y/h - 1); Flipped180 negates y.
         let s = if flip_y { -1.0 } else { 1.0 };
         [2.0 / w, 0.0, 0.0, 0.0, s * 2.0 / h, 0.0, -1.0, -s, 1.0]
+    }
+
+    #[test]
+    fn a_pointer_reaches_its_tip_and_rounds_it() {
+        // A tooltip's pointer pointing down: base centred at (50, 20), 16 wide, tip at (50, 28).
+        let p = PointerPx::new([50.0, 20.0], [50.0, 28.0], 16.0, 4.0, 8.0).unwrap();
+        // The shader grows the inset triangle back by the tip radius: the apex is then where
+        // an arc of that radius tangent to both sides puts it — as Cairo's path does (the
+        // sides meet at 90° here, so the arc cuts r·(√2 − 1) off the sharp tip).
+        let apex = p.t[1] + p.tip_radius;
+        let expected = 28.0 - 4.0 * (2f64.sqrt() - 1.0);
+        assert!((apex - expected).abs() < 0.01, "apex at {apex}, expected {expected}");
+        assert!((p.t[0] - 50.0).abs() < 1e-9, "the tip stays on the axis");
+        // Its base corners sit inside the body (above y = 20), so only the join shows.
+        assert!(p.a[1] < 20.0 && p.b[1] < 20.0, "base corners {:?} {:?}", p.a, p.b);
+        // Everything it covers is in its bounds.
+        assert!(p.bounds.loc.y <= 20.0 - 8.0 && p.bounds.loc.y + p.bounds.size.h >= 28.0);
+        assert!(PointerPx::new([0.0, 0.0], [0.0, 0.0], 16.0, 4.0, 8.0).is_none(), "no length, no pointer");
     }
 
     #[test]

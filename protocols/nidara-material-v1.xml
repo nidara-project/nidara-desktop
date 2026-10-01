@@ -139,6 +139,34 @@
     <request name="clear_ink" since="3">
       <description summary="pending: no ink measurement; every group is light again"/>
     </request>
+    <request name="add_shape_pointed" since="3">
+      <description summary="pending: add one glass shape with a pointer">
+        As add_shape_clipped, plus a pointer spliced into one side: a
+        triangle from the shape's edge (its base centred on base_x, base_y,
+        pointer_width wide) to the tip at tip_x, tip_y, whose tip is a
+        circular arc of tip_radius and which meets the shape's edge in a
+        concave arc of base_radius. Body and pointer are one glass: one
+        refraction, one rim. The coordinates are the shape's.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="corner_radius" type="fixed"/>
+      <arg name="exponent" type="fixed"/>
+      <arg name="opacity" type="fixed"/>
+      <arg name="clip_x" type="fixed"/>
+      <arg name="clip_y" type="fixed"/>
+      <arg name="clip_width" type="fixed"/>
+      <arg name="clip_height" type="fixed"/>
+      <arg name="base_x" type="fixed"/>
+      <arg name="base_y" type="fixed"/>
+      <arg name="tip_x" type="fixed"/>
+      <arg name="tip_y" type="fixed"/>
+      <arg name="pointer_width" type="fixed"/>
+      <arg name="tip_radius" type="fixed"/>
+      <arg name="base_radius" type="fixed"/>
+    </request>
     <event name="ink" since="3">
       <description summary="the content of an ink group should be dark, or light">
         Sent when a group's decision changes; a group starts light (white
