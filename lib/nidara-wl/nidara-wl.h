@@ -359,4 +359,77 @@ void nidara_wl_focus_grab_release (void);
  */
 gboolean nidara_wl_focus_grab_active (void);
 
+
+/**
+ * nidara_wl_has_material:
+ *
+ * Returns: %TRUE if the compositor offers nidara-material-v1 (Hyalo, the
+ *   compositor of our own — #680; Hyprland does not).
+ */
+gboolean nidara_wl_has_material (void);
+
+/**
+ * nidara_wl_material_begin:
+ * @surface: a mapped #GdkSurface
+ *
+ * Starts a new list of glass shapes for @surface (the previous one is dropped).
+ */
+void nidara_wl_material_begin (GdkSurface *surface);
+
+/**
+ * nidara_wl_material_add_shape:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ * @corner_radius: each corner's radius
+ * @exponent: each corner is a superellipse quadrant with this exponent (2 = arc)
+ *
+ * Adds one glass shape.
+ */
+void nidara_wl_material_add_shape (GdkSurface *surface,
+                                   double x, double y, double width, double height,
+                                   double corner_radius, double exponent);
+
+/**
+ * nidara_wl_material_commit:
+ * @surface: the #GdkSurface
+ * @blur_size: the blur's kawase offset, logical pixels
+ * @blur_passes: downsampling levels; 0 = no blur
+ *
+ * Sends the shapes and the blur; they take effect with @surface's next commit.
+ *
+ * Returns: %FALSE if the compositor has no nidara-material-v1
+ */
+gboolean nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint blur_passes);
+
+/**
+ * nidara_wl_material_set_glass:
+ * @surface: the #GdkSurface
+ * @tint_r: tint red, 0..1
+ * @tint_g: tint green
+ * @tint_b: tint blue
+ * @alpha_min: the tint's least opacity
+ * @alpha_max: its most
+ * @target_luminance: backdrop luminance, after tint, not to exceed (legibility of white content)
+ * @refraction: edge displacement, logical pixels
+ * @rim: specular rim strength, 0..1
+ * @saturation: backdrop saturation, 1 = unchanged
+ *
+ * Asks the compositor to paint the whole glass (liquid glass); the client paints content only.
+ */
+void nidara_wl_material_set_glass (GdkSurface *surface,
+                                   double tint_r, double tint_g, double tint_b,
+                                   double alpha_min, double alpha_max, double target_luminance,
+                                   double refraction, double rim, double saturation);
+
+/**
+ * nidara_wl_material_clear_glass:
+ * @surface: the #GdkSurface
+ *
+ * Back to blur only: the client paints its own glass.
+ */
+void nidara_wl_material_clear_glass (GdkSurface *surface);
+
 G_END_DECLS

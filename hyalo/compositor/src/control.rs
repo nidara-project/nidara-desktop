@@ -1,0 +1,70 @@
+//! A test channel: when HYALO_CONTROL names a FIFO, each line is fed to the seat as if it came
+//! from a device. It goes through the same seat calls as real input, so what it proves about
+//! hit-testing and focus holds for a mouse; it exists because synthetic input through a
+//! headless host compositor never delivers motion to a nested window (found in #679).
+//! Off unless the variable is set; the session never sets it.
+//!
+//!   move X Y · click X Y · rclick X Y · key KEYCODE
+use std::io::BufRead;
+
+use smithay::{
+    backend::input::{ButtonState, InputTime, KeyState},
+    input::keyboard::FilterResult,
+    reexports::calloop::{EventLoop, channel},
+    utils::SERIAL_COUNTER,
+};
+
+use crate::state::Hyalo;
+
+pub fn init(event_loop: &mut EventLoop<Hyalo>) {
+    let Some(path) = std::env::var_os("HYALO_CONTROL") else { return };
+    let (tx, rx) = channel::channel::<String>();
+    std::thread::spawn(move || loop {
+        let Ok(f) = std::fs::File::open(&path) else { return };
+        for line in std::io::BufReader::new(f).lines().map_while(Result::ok) {
+            if tx.send(line).is_err() {
+                return;
+            }
+        }
+    });
+    event_loop
+        .handle()
+        .insert_source(rx, |ev, _, state| {
+            if let channel::Event::Msg(line) = ev {
+                state.control(&line);
+            }
+        })
+        .unwrap();
+}
+
+impl Hyalo {
+    fn control(&mut self, line: &str) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        let num = |i: usize| parts.get(i).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+        let time = InputTime::now();
+        match parts.first().copied() {
+            Some("move") => self.control_move(num(1), num(2), time),
+            Some(verb @ ("click" | "rclick")) => {
+                self.control_move(num(1), num(2), time);
+                let button = if verb == "click" { 0x110 } else { 0x111 };
+                for state in [ButtonState::Pressed, ButtonState::Released] {
+                    self.pointer_button(button, state, time);
+                }
+            }
+            Some("key") => {
+                let code = num(1) as u32 + 8;
+                let kb = self.seat.get_keyboard().unwrap();
+                for state in [KeyState::Pressed, KeyState::Released] {
+                    kb.input::<(), _>(self, code.into(), state, SERIAL_COUNTER.next_serial(), time, |_, _, _| {
+                        FilterResult::Forward
+                    });
+                }
+            }
+            _ => eprintln!("[hyalo] control: unknown {line:?}"),
+        }
+    }
+
+    fn control_move(&mut self, x: f64, y: f64, time: InputTime) {
+        self.pointer_moved_to((x, y).into(), time);
+    }
+}

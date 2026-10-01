@@ -37,6 +37,9 @@ PROTOCOLS=(
   "$HYPR_PROTO_DIR/hyprland-toplevel-mapping-v1.xml"
   "$WLR_PROTO_DIR/wlr-foreign-toplevel-management-unstable-v1.xml"
   "$WLR_PROTO_DIR/wlr-screencopy-unstable-v1.xml"
+  # Ours, from the repository's protocols/: the compositor (hyalo/) builds its server half
+  # from the same file. Hyprland does not offer it; the functions then report so and do nothing.
+  "$SRC_DIR/../../protocols/nidara-material-v1.xml"
 )
 
 rm -rf "$OUT_DIR"
