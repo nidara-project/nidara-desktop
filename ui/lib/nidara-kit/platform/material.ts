@@ -28,6 +28,13 @@ import Gdk from "gi://Gdk?version=4.0"
  * Glass inside glass is not declared: a control painted on a panel is not a second pane
  * of glass (the compositor would draw its rim inside the panel). It keeps painting itself.
  *
+ * The INK (v3, decided by the owner 2026-10-01, #684): the text on Hyalo's glass is white,
+ * and turns dark only where the whole backdrop under it is white. Each pane of glass is an
+ * ink group; its labels and icons are its boxes; the compositor measures the darkest point
+ * under them and says when the group turns dark and back (with hysteresis, never by an
+ * average). The pane then carries `INK_DARK_CLASS`, which the bundle's stylesheet gives the
+ * light skin's tokens, and a Cairo painter asks `darkInkFor(itsWidget)`.
+ *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
  * reinstalling libnidara-wl must not take the shell down. `NIDARA_MATERIAL=0` turns the
  * whole thing off — every painter back to its own glass, the compositor blurring nothing.
@@ -56,11 +63,25 @@ export type GlassParams = {
     saturation: number
 }
 
+/** The ink measurement (nidara_material_v1.set_ink): WCAG luminances, and the veil over a
+ *  pane whose content is dark. */
+export type InkParams = {
+    darkAbove: number
+    lightBelow: number
+    tint: { r: number, g: number, b: number }
+}
+
+/** The class a pane of glass carries while its content is dark. */
+export const INK_DARK_CLASS = "nidara-ink-dark"
+
 /** Where the bundle's glass comes from: registered once, from its `app.ts`. */
 export interface MaterialSource {
     /** The glass the compositor paints on this surface, or null: it only blurs behind
      *  the client's own paint. */
     glass(native: Gtk.Native): GlassParams | null
+    /** Whether, and how, the compositor decides the ink of this surface's panes; null: the
+     *  content stays as the bundle paints it. Asked only where the compositor paints the glass. */
+    ink?(native: Gtk.Native): InkParams | null
     blur(native: Gtk.Native): { size: number, passes: number }
     onChange(cb: () => void): () => void
 }
@@ -81,6 +102,11 @@ type Shim = {
     material_set_glass(surface: Gdk.Surface, r: number, g: number, b: number, aMin: number, aMax: number,
         target: number, refraction: number, rim: number, saturation: number): void
     material_clear_glass(surface: Gdk.Surface): void
+    material_has_ink?(): boolean
+    material_add_ink_box?(surface: Gdk.Surface, id: number, x: number, y: number, w: number, h: number): void
+    material_set_ink?(surface: Gdk.Surface, darkAbove: number, lightBelow: number, r: number, g: number, b: number): void
+    material_clear_ink?(surface: Gdk.Surface): void
+    material_set_ink_func?(func: (surface: Gdk.Surface, id: number, dark: boolean) => void): void
 }
 
 const SHIM_MODULE = "gi://NidaraWl"   // in a variable on purpose: see VisibleRegion.ts
@@ -98,6 +124,10 @@ type Entry = {
      *  cannot describe, such as a bubble's pointer): the compositor only blurs. */
     clientPaints: boolean
     native: Gtk.Native | null
+    /** Its ink group: the compositor's ink event names it. */
+    inkId: number
+    /** The compositor said its content is dark (`INK_DARK_CLASS` on its pane). */
+    darkInk: boolean
 }
 type NativeState = {
     entries: Entry[]
@@ -113,6 +143,8 @@ let sourceOff: (() => void) | null = null
 const entries = new Map<Gtk.Widget, Entry>()
 const scopes = new WeakMap<Gtk.Widget, Entry>()
 const natives = new Map<Gtk.Native, NativeState>()
+const byInkId = new Map<number, Entry>()
+let nextInkId = 1
 
 /** Register this bundle's glass. Without one, every surface gets a plain blur behind its
  *  own paint. */
@@ -131,6 +163,33 @@ export function compositorPaintsGlass(widget: Gtk.Widget): boolean {
     return (natives.get(e.native)?.paints ?? false) && !nested(e, e.native)
 }
 
+/** Whether the compositor said the content of the pane of glass `widget` sits in is dark
+ *  (the ink, v3). A Cairo painter on the glass asks it with its own widget, as it asks for
+ *  the skin; false outside any pane, and wherever the compositor does not decide the ink. */
+export function darkInkFor(widget: Gtk.Widget | null): boolean {
+    for (let w: Gtk.Widget | null = widget; w; w = w.get_parent()) {
+        const e = scopes.get(w)
+        if (e && !e.clientPaints) return e.darkInk
+    }
+    return false
+}
+
+/** A Cairo painter does not repaint when an ancestor is queued: each one is asked. */
+function redrawSubtree(w: Gtk.Widget) {
+    w.queue_draw()
+    for (let c = w.get_first_child(); c; c = c.get_next_sibling()) redrawSubtree(c)
+}
+
+function setDarkInk(e: Entry, dark: boolean) {
+    if (e.darkInk === dark) return
+    e.darkInk = dark
+    const pane = e.scope ?? e.widget
+    if (dark) pane.add_css_class(INK_DARK_CLASS)
+    else pane.remove_css_class(INK_DARK_CLASS)
+    redrawSubtree(pane)
+    if (DEBUG) console.log(`[Material] ink ${e.inkId} (${pane.get_name() || pane.constructor.name}): ${dark ? "dark" : "light"}`)
+}
+
 /**
  * Register a piece of glass. `widget` is what paints it (shapes are in its coordinates,
  * its opacity is the glass's); `scope` is the subtree it is the pane of — by default the
@@ -141,12 +200,14 @@ export function trackGlass(widget: Gtk.Widget, shapes: () => GlassShape[],
     opts: { scope?: Gtk.Widget | null, clientPaints?: boolean } = {}): void {
     load()
     const scope = opts.scope === undefined ? widget : opts.scope
-    const entry: Entry = { widget, scope, shapes, clientPaints: opts.clientPaints ?? false, native: null }
+    const entry: Entry = { widget, scope, shapes, clientPaints: opts.clientPaints ?? false, native: null,
+        inkId: nextInkId++, darkInk: false }
     entries.set(widget, entry)
+    byInkId.set(entry.inkId, entry)
     if (scope) scopes.set(scope, entry)
     widget.connect("map", () => attach(entry))
     widget.connect("unmap", () => detach(entry))
-    widget.connect("destroy", () => { detach(entry); entries.delete(widget) })
+    widget.connect("destroy", () => { detach(entry); entries.delete(widget); byInkId.delete(entry.inkId) })
     if (widget.get_mapped()) attach(entry)
 }
 
@@ -158,7 +219,12 @@ function load() {
             const wl = (mod.default ?? mod) as unknown as Shim
             if (!wl.init() || !wl.has_material?.()) return
             shim = wl
-            console.log(`[Material] nidara-material-v1 ready${wl.material_add_shape_clipped ? "" : " (old libnidara-wl: no fades or clips)"}`)
+            wl.material_set_ink_func?.((_surface, id, dark) => {
+                const e = byInkId.get(id)
+                if (e) setDarkInk(e, dark)
+            })
+            const ink = wl.material_has_ink?.() ? ", ink" : wl.material_add_ink_box ? "" : " (old libnidara-wl: no ink)"
+            console.log(`[Material] nidara-material-v1 ready${wl.material_add_shape_clipped ? "" : " (old libnidara-wl: no fades or clips)"}${ink}`)
             invalidateAll()
         })
         .catch(e => console.log(`[Material] unavailable: ${e}`))
@@ -265,6 +331,36 @@ function sortByTree(list: Entry[]) {
 type Rect = { x: number, y: number, w: number, h: number }
 type Placed = { x: number, y: number, w: number, h: number, r: number, e: number, o: number, clip: Rect | null }
 
+/** Past this many boxes a pane sends one, their union: a stricter measure, never a looser one. */
+const MAX_INK_BOXES_PER_PANE = 8
+
+/** Where a pane's content sits, in the glass widget's coordinates: every LEAF it draws on
+ *  its glass — labels with text, icons, Cairo areas, CSS-painted boxes like the workspace
+ *  dots — what changes colour with the ink. Not the glass's own painter. A widget type
+ *  list would miss whatever it does not name (the dots did); an empty spacer counted as
+ *  content only makes the measure stricter. A nested pane of glass is the outer pane's
+ *  content (it is not declared, and follows the outer pane's ink). */
+function contentBoxes(e: Entry): Rect[] {
+    const out: Rect[] = []
+    const visit = (w: Gtk.Widget) => {
+        if (!w.is_drawable() || w === e.widget) return
+        const leaf = w.get_first_child() === null || w instanceof Gtk.Label
+        if (leaf) {
+            if (w instanceof Gtk.Label && w.get_text() === "") return
+            const [ok, b] = w.compute_bounds(e.widget)
+            if (ok && b.get_width() > 0 && b.get_height() > 0)
+                out.push({ x: b.get_x(), y: b.get_y(), w: b.get_width(), h: b.get_height() })
+            return
+        }
+        for (let c = w.get_first_child(); c; c = c.get_next_sibling()) visit(c)
+    }
+    if (e.scope) visit(e.scope)
+    if (out.length <= MAX_INK_BOXES_PER_PANE) return out
+    const x0 = Math.min(...out.map(r => r.x)), y0 = Math.min(...out.map(r => r.y))
+    const x1 = Math.max(...out.map(r => r.x + r.w)), y1 = Math.max(...out.map(r => r.y + r.h))
+    return [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }]
+}
+
 const ORIGIN = new Graphene.Point()
 
 function offset(from: Gtk.Widget, to: Gtk.Widget): [number, number] | null {
@@ -283,20 +379,27 @@ function intersect(a: Rect | null, b: Rect): Rect {
     return { x, y, w: Math.max(0, Math.min(a.x + a.w, b.x + b.w) - x), h: Math.max(0, Math.min(a.y + a.h, b.y + b.h) - y) }
 }
 
-/** The shapes of one entry as the surface shows them, surface-local; [] when nothing shows. */
-function place(e: Entry, native: Gtk.Native): Placed[] {
+/** The shapes of one entry as the surface shows them, surface-local, and (with `ink`) where
+ *  its content sits; nothing when nothing shows. */
+function place(e: Entry, native: Gtk.Native, ink = false): { shapes: Placed[], boxes: Rect[] } {
+    const none = { shapes: [], boxes: [] }
     const w = e.widget
-    if (!w.get_mapped() || !w.is_drawable()) return []
+    if (!w.get_mapped() || !w.is_drawable()) return none
     let opacity = 1
     for (let p: Gtk.Widget | null = w; p; p = p.get_parent()) opacity *= p.get_opacity()
-    if (opacity < 0.005) return []
+    if (opacity < 0.005) return none
     const shapes: Placed[] = e.shapes().filter(s => s.w > 0 && s.h > 0).map(s => ({
         x: s.x, y: s.y, w: s.w, h: s.h, r: s.radius, e: s.exponent, o: opacity * (s.opacity ?? 1),
         clip: s.clip ? { ...s.clip } : null,
     }))
+    // The content goes through every transform and clip the shapes go through: a box is cut
+    // where the pane is (a label scrolled out of its list is no content of the pane).
+    const boxes: Placed[] = (ink && shapes.length ? contentBoxes(e) : []).map(b => ({
+        ...b, r: 0, e: 2, o: 1, clip: null,
+    }))
     let cur: Gtk.Widget = w
     const move = (dx: number, dy: number) => {
-        for (const s of shapes) {
+        for (const s of [...shapes, ...boxes]) {
             s.x += dx; s.y += dy
             if (s.clip) { s.clip.x += dx; s.clip.y += dy }
         }
@@ -307,7 +410,7 @@ function place(e: Entry, native: Gtk.Native): Placed[] {
         const clips = a.get_overflow() === Gtk.Overflow.HIDDEN
         if (!t && !clips) continue
         const d = offset(cur, a)
-        if (!d) return []
+        if (!d) return none
         move(d[0], d[1])
         cur = a
         if (t) {
@@ -317,7 +420,7 @@ function place(e: Entry, native: Gtk.Native): Placed[] {
                 r.w *= t.scale
                 r.h *= t.scale
             }
-            for (const s of shapes) {
+            for (const s of [...shapes, ...boxes]) {
                 map(s)
                 s.r *= t.scale
                 if (s.clip) map(s.clip)
@@ -326,16 +429,20 @@ function place(e: Entry, native: Gtk.Native): Placed[] {
         // The clip is pushed before the widget's own snapshot transform: unscaled, in its box.
         if (clips) {
             const box = { x: 0, y: 0, w: a.get_width(), h: a.get_height() }
-            for (const s of shapes) s.clip = intersect(s.clip, box)
+            for (const s of [...shapes, ...boxes]) s.clip = intersect(s.clip, box)
         }
     }
     const d = offset(cur, nw)
-    if (!d) return []
+    if (!d) return none
     const [tx, ty] = native.get_surface_transform()
     move(d[0] + tx, d[1] + ty)
-    return shapes.filter(s => !s.clip || (s.clip.w > 0 && s.clip.h > 0
+    const shows = (s: Placed) => !s.clip || (s.clip.w > 0 && s.clip.h > 0
         && s.clip.x < s.x + s.w && s.x < s.clip.x + s.clip.w
-        && s.clip.y < s.y + s.h && s.y < s.clip.y + s.clip.h))
+        && s.clip.y < s.y + s.h && s.y < s.clip.y + s.clip.h)
+    return {
+        shapes: shapes.filter(shows),
+        boxes: boxes.filter(shows).map(b => b.clip ? intersect(b.clip, b) : { x: b.x, y: b.y, w: b.w, h: b.h }),
+    }
 }
 
 const round = (v: number) => Math.round(v * 100) / 100
@@ -345,13 +452,16 @@ function flush(native: Gtk.Native, st: NativeState) {
     const surface = native.get_surface()
     if (!surface) return
     const glass = glassOf(native)
+    const inkWanted = glass !== null && !!shim.material_has_ink?.() ? source?.ink?.(native) ?? null : null
     const placed: Placed[] = []
+    const inkBoxes: { id: number, box: Rect }[] = []
     let anyClient = false
     for (const e of st.entries) {
         if (nested(e, native)) continue
-        const p = place(e, native)
-        if (p.length && e.clientPaints) anyClient = true
-        placed.push(...p)
+        const p = place(e, native, inkWanted !== null && !e.clientPaints)
+        if (p.shapes.length && e.clientPaints) anyClient = true
+        placed.push(...p.shapes)
+        for (const box of p.boxes) inkBoxes.push({ id: e.inkId, box })
     }
     // A surface whose glass is partly the client's own is blurred only: the compositor's
     // glass under a client's paint would be two panes in one.
@@ -361,9 +471,13 @@ function flush(native: Gtk.Native, st: NativeState) {
         st.paints = paints
         for (const e of st.entries) e.widget.queue_draw()
     }
+    const ink = paints ? inkWanted : null
+    // Nobody decides this surface's ink any more: its panes are light again, on both ends.
+    if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
-        s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)]]), paints && glass, blur])
+        s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)]]), paints && glass, blur,
+        ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)])])
     if (key === st.last) return
     st.last = key
     shim.material_begin(surface)
@@ -382,6 +496,12 @@ function flush(native: Gtk.Native, st: NativeState) {
     } else {
         shim.material_clear_glass(surface)
     }
+    if (ink) {
+        for (const { id, box } of inkBoxes) shim.material_add_ink_box?.(surface, id, box.x, box.y, box.w, box.h)
+        shim.material_set_ink?.(surface, ink.darkAbove, ink.lightBelow, ink.tint.r, ink.tint.g, ink.tint.b)
+    } else {
+        shim.material_clear_ink?.(surface)
+    }
     shim.material_commit(surface, blur.size, placed.length ? blur.passes : 0)
-    if (DEBUG) console.log(`[Material] ${(native as unknown as Gtk.Widget).get_name()}: ${placed.length} shapes, ${paints ? "compositor glass" : "blur only"} ${key}`)
+    if (DEBUG) console.log(`[Material] ${(native as unknown as Gtk.Widget).get_name()}: ${placed.length} shapes, ${inkBoxes.length} ink boxes, ${paints ? "compositor glass" : "blur only"} ${key}`)
 }

@@ -7,7 +7,7 @@ import { glassBlurInForce } from "./GlassBlur"
 import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
 import { SOLID_GLASS } from "../../lib/nidara-kit/platform/theme-tokens"
 import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "../../lib/nidara-kit/platform/glass-legibility"
-import { setMaterialSource, type GlassParams } from "../../lib/nidara-kit/platform/material"
+import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/nidara-kit/platform/material"
 
 /**
  * The glass a compositor of our own paints for the shell (#684): the source behind
@@ -28,9 +28,19 @@ import { setMaterialSource, type GlassParams } from "../../lib/nidara-kit/platfo
  * on screen. For that, a dev install (`~/.config/nidara/.dev`) reads
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction rim saturation   the glass (see GlassParams)
+ *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   glass = off                                          blur only: the shell paints its own
  *                                                        glass, as on Hyprland (A/B)
+ *   ink = off                                            the text stays white everywhere
+ *
+ * The ink (owner, 2026-10-01, #684): the shell's text on Hyalo's glass is white and turns
+ * dark only where even the DARKEST point under it is brighter than `inkDarkAbove` (WCAG
+ * luminance, the glass's own treatment of the backdrop: blurred, saturated, before its
+ * tint); it turns back only below `inkLightBelow`. Hyalo measures, per pane of glass; the
+ * pane then wears the light skin's tokens (`INK_DARK_CLASS`) and Hyalo lays a light veil
+ * under it instead of darkening. ⚠️ Both thresholds are a starting point, to be calibrated
+ * with the owner on screen.
  */
 
 const DEFAULTS = {
@@ -41,9 +51,13 @@ const DEFAULTS = {
     refraction: 10,       // logical px of edge displacement
     rim: 0.7,
     saturation: 1.35,
+    // ≈ #e7e7e7 at the darkest point under the text: only a white page or window turns it.
+    inkDarkAbove: 0.80,
+    // ≈ #d3d3d3: the gap is the hysteresis, so a backdrop on the line does not flicker.
+    inkLightBelow: 0.65,
 }
 
-type Tuning = Partial<typeof DEFAULTS> & { blur?: { size: number, passes: number }, off?: boolean }
+type Tuning = Partial<typeof DEFAULTS> & { blur?: { size: number, passes: number }, off?: boolean, inkOff?: boolean }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
 
@@ -59,6 +73,13 @@ function params(): GlassParams | null {
         refraction: p.refraction, rim: p.rim, saturation: p.saturation }
 }
 
+function inkParams(): InkParams | null {
+    if (tuning.off || tuning.inkOff || Theme.reduceTransparency) return null
+    const p = { ...DEFAULTS, ...tuning }
+    const t = GLASS_TINT.light
+    return { darkAbove: p.inkDarkAbove, lightBelow: p.inkLightBelow, tint: { r: t.r, g: t.g, b: t.b } }
+}
+
 function parse(text: string): Tuning {
     const out: Tuning = {}
     for (const line of text.split("\n")) {
@@ -70,6 +91,8 @@ function parse(text: string): Tuning {
             if (Number.isFinite(size) && Number.isInteger(passes)) out.blur = { size, passes }
         } else if (k === "glass") {
             out.off = v === "off"
+        } else if (k === "ink") {
+            out.inkOff = v === "off"
         } else if (k in DEFAULTS && Number.isFinite(Number(v))) {
             (out as Record<string, number>)[k] = Number(v)
         }
@@ -105,6 +128,7 @@ export function initCompositorGlass() {
     watchTuning()
     setMaterialSource({
         glass: (_native: Gtk.Native) => params(),
+        ink: (_native: Gtk.Native) => inkParams(),
         blur: (_native: Gtk.Native) => tuning.blur ?? glassBlurInForce(),
         onChange: (cb) => {
             const id = Theme.connect("changed", cb)

@@ -19,7 +19,7 @@ use smithay::{
         gles::GlesError,
         utils::CommitCounter,
     },
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::wayland_server::{Resource, Weak, protocol::wl_surface::WlSurface},
     utils::{Buffer as BufferCoords, Physical, Point, Rectangle, Scale, user_data::UserDataMap},
     wayland::compositor::with_states,
 };
@@ -38,6 +38,9 @@ pub struct GlassElement {
     offset: f32,
     passes: usize,
     glass: Option<glass_gl::Glass>,
+    /// The ink boxes that fall in this group (v3), measured when the capture or they change.
+    ink_boxes: Vec<glass_gl::InkBox>,
+    surface: Weak<WlSurface>,
 }
 
 /// One id per group of a surface's shapes, stable across frames.
@@ -64,6 +67,7 @@ impl GlassElement {
             }
             ids[..groups.len()].to_vec()
         });
+        let ink_tint = m.ink.map_or([1.0; 3], |i| [i.tint[0] as f32, i.tint[1] as f32, i.tint[2] as f32]);
         let glass = m.glass.map(|g| glass_gl::Glass {
             tint: [g.tint[0] as f32, g.tint[1] as f32, g.tint[2] as f32],
             alpha_min: g.alpha_min as f32,
@@ -72,18 +76,55 @@ impl GlassElement {
             refraction: (g.refraction * scale.x) as f32,
             rim: g.rim as f32,
             saturation: g.saturation as f32,
+            ink_tint,
         });
+        // The ink is measured only where the compositor paints the glass: it is that glass's
+        // tint the decision changes.
+        let ink_boxes: Vec<glass_gl::InkBox> = if m.ink.is_some() && glass.is_some() {
+            m.ink_boxes
+                .iter()
+                .map(|b| glass_gl::InkBox {
+                    id: b.id,
+                    rect: Rectangle::new(
+                        location.to_f64() + Point::from((b.x * scale.x, b.y * scale.y)),
+                        (b.w * scale.x, b.h * scale.y).into(),
+                    ),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let surface_weak = surface.downgrade();
         groups
             .into_iter()
             .zip(ids)
-            .map(|((region, shapes), id)| GlassElement {
-                id,
-                commit: current.commit,
-                region,
-                shapes,
-                offset: (m.blur_size * scale.x) as f32,
-                passes: m.blur_passes as usize,
-                glass,
+            .map(|((region, mut shapes), id)| {
+                let center = |b: &glass_gl::InkBox| {
+                    Point::<f64, Physical>::from((b.rect.loc.x + b.rect.size.w / 2.0, b.rect.loc.y + b.rect.size.h / 2.0))
+                };
+                let mine: Vec<glass_gl::InkBox> = ink_boxes
+                    .iter()
+                    .filter(|b| shapes.iter().any(|s| s.rect.contains(center(b))))
+                    .copied()
+                    .collect();
+                // A dark group darkens no shape: the topmost shape holding one of its boxes
+                // wears the light veil.
+                for b in mine.iter().filter(|b| current.dark_ink.contains(&b.id)) {
+                    if let Some(s) = shapes.iter_mut().rev().find(|s| s.rect.contains(center(b))) {
+                        s.ink_dark = true;
+                    }
+                }
+                GlassElement {
+                    id,
+                    commit: current.commit,
+                    region,
+                    shapes,
+                    offset: (m.blur_size * scale.x) as f32,
+                    passes: m.blur_passes as usize,
+                    glass,
+                    ink_boxes: mine,
+                    surface: surface_weak.clone(),
+                }
             })
             .collect()
     }
@@ -109,7 +150,7 @@ impl GlassElement {
         cache: Option<&UserDataMap>,
     ) -> Result<(), GlesError> {
         let Some(c) = cache.and_then(|c| c.get::<RefCell<glass_gl::Cache>>()) else { return Ok(()) };
-        let c = c.borrow();
+        let mut c = c.borrow_mut();
         let projection = *frame.projection();
         let user_data = frame.egl_context().user_data() as *const UserDataMap;
         // Damage is relative to the element; the GL side works in output pixels.
@@ -120,6 +161,9 @@ impl GlassElement {
         frame.with_context(|gl| unsafe {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
+            if let Some(g) = &self.glass {
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, g.saturation, &self.surface);
+            }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref());
         })
     }
@@ -209,6 +253,7 @@ fn groups(
                     (c[2] * scale.x, c[3] * scale.y).into(),
                 )
             }),
+            ink_dark: false,
         })
         .collect();
     let mut root: Vec<usize> = (0..shapes.len()).collect();

@@ -80,8 +80,9 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
   else if (g_strcmp0 (interface, nidara_material_manager_v1_interface.name) == 0)
     {
       /* v2 adds a shape's own opacity and clip (add_shape_clipped); a v1
-       * compositor gets plain shapes. */
-      material_version = MIN (version, 2);
+       * compositor gets plain shapes. v3 adds the ink (add_ink_box, set_ink,
+       * the ink event). */
+      material_version = MIN (version, 3);
       material_mgr = wl_registry_bind (registry, name,
                                        &nidara_material_manager_v1_interface,
                                        material_version);
@@ -300,6 +301,40 @@ nidara_wl_has_material (void)
   return wl_ok && material_mgr != NULL;
 }
 
+static NidaraWlMaterialInkFunc ink_cb = NULL;
+static gpointer                ink_cb_data = NULL;
+static GDestroyNotify          ink_cb_destroy = NULL;
+
+static void
+material_handle_ink (void *data, struct nidara_material_v1 *m, uint32_t id, uint32_t dark)
+{
+  (void) m;
+  if (ink_cb)
+    ink_cb (GDK_SURFACE (data), id, dark != 0, ink_cb_data);
+}
+
+static const struct nidara_material_v1_listener material_listener = {
+  .ink = material_handle_ink,
+};
+
+void
+nidara_wl_material_set_ink_func (NidaraWlMaterialInkFunc func,
+                                 gpointer                user_data,
+                                 GDestroyNotify          destroy)
+{
+  if (ink_cb_destroy)
+    ink_cb_destroy (ink_cb_data);
+  ink_cb = func;
+  ink_cb_data = user_data;
+  ink_cb_destroy = destroy;
+}
+
+gboolean
+nidara_wl_material_has_ink (void)
+{
+  return nidara_wl_has_material () && material_version >= 3;
+}
+
 static struct nidara_material_v1 *
 material_get (GdkSurface *surface)
 {
@@ -315,7 +350,11 @@ material_get (GdkSurface *surface)
     return NULL;
 
   m = nidara_material_manager_v1_get_material (material_mgr, wls);
-  wl_proxy_set_queue ((struct wl_proxy *) m, shim_queue);
+  /* GDK's own queue, not ours: the one event this object has (ink, v3) is then
+   * dispatched by GDK's reader on the main loop, as it arrives — nothing of ours
+   * has to poll for it (see grab_pump for what that costs). */
+  wl_proxy_set_queue ((struct wl_proxy *) m, NULL);
+  nidara_material_v1_add_listener (m, &material_listener, surface);
   g_object_set_data_full (G_OBJECT (surface), "nidara-wl-material", m,
                           (GDestroyNotify) nidara_material_v1_destroy);
   return m;
@@ -400,6 +439,41 @@ nidara_wl_material_clear_glass (GdkSurface *surface)
   struct nidara_material_v1 *m = material_get (surface);
   if (m)
     nidara_material_v1_clear_glass (m);
+}
+
+void
+nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
+                                double x, double y, double width, double height)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || material_version < 3 || width <= 0 || height <= 0)
+    return;
+  nidara_material_v1_add_ink_box (m, id,
+                                  wl_fixed_from_double (x), wl_fixed_from_double (y),
+                                  wl_fixed_from_double (width), wl_fixed_from_double (height));
+}
+
+void
+nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below,
+                            double tint_r, double tint_g, double tint_b)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || material_version < 3)
+    return;
+  nidara_material_v1_set_ink (m, wl_fixed_from_double (dark_above), wl_fixed_from_double (light_below),
+                              wl_fixed_from_double (tint_r), wl_fixed_from_double (tint_g),
+                              wl_fixed_from_double (tint_b));
+}
+
+void
+nidara_wl_material_clear_ink (GdkSurface *surface)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m && material_version >= 3)
+    nidara_material_v1_clear_ink (m);
 }
 
 gboolean

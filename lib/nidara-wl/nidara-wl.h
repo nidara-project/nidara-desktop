@@ -462,4 +462,75 @@ void nidara_wl_material_set_glass (GdkSurface *surface,
  */
 void nidara_wl_material_clear_glass (GdkSurface *surface);
 
+/**
+ * nidara_wl_material_has_ink:
+ *
+ * Returns: %TRUE if the compositor measures the ink (nidara-material-v1 version 3)
+ */
+gboolean nidara_wl_material_has_ink (void);
+
+/**
+ * nidara_wl_material_add_ink_box:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @id: the ink group (one per pane of glass, of the caller's choosing)
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ *
+ * Declares where content of ink group @id sits (text, symbolic icons). Cleared by
+ * nidara_wl_material_begin(). Nothing on a compositor without version 3.
+ */
+void nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
+                                     double x, double y, double width, double height);
+
+/**
+ * nidara_wl_material_set_ink:
+ * @surface: the #GdkSurface
+ * @dark_above: the content turns dark when even the darkest point under it is brighter
+ *   than this (WCAG relative luminance, 0..1)
+ * @light_below: and light again only below this
+ * @tint_r: the veil over a shape whose content is dark: red, 0..1
+ * @tint_g: green
+ * @tint_b: blue
+ *
+ * Asks the compositor to measure the ink boxes; the answer is the ink function's
+ * (nidara_wl_material_set_ink_func()).
+ */
+void nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below,
+                                 double tint_r, double tint_g, double tint_b);
+
+/**
+ * nidara_wl_material_clear_ink:
+ * @surface: the #GdkSurface
+ *
+ * No measurement: every group is light again (the caller resets its own content).
+ */
+void nidara_wl_material_clear_ink (GdkSurface *surface);
+
+/**
+ * NidaraWlMaterialInkFunc:
+ * @surface: the #GdkSurface the ink group belongs to
+ * @id: the ink group
+ * @dark: %TRUE: its content should be dark; %FALSE: light
+ * @user_data: data passed to nidara_wl_material_set_ink_func()
+ *
+ * The compositor's decision for one ink group changed.
+ */
+typedef void (*NidaraWlMaterialInkFunc) (GdkSurface *surface, guint id, gboolean dark,
+                                         gpointer user_data);
+
+/**
+ * nidara_wl_material_set_ink_func:
+ * @func: (nullable) (scope notified) (closure user_data) (destroy destroy): called on the
+ *   main loop when an ink group's decision changes
+ * @user_data: data for @func
+ * @destroy: (nullable): called when @user_data is no longer needed
+ *
+ * One function for the whole process; a second call replaces the first.
+ */
+void nidara_wl_material_set_ink_func (NidaraWlMaterialInkFunc func,
+                                      gpointer                user_data,
+                                      GDestroyNotify          destroy);
+
 G_END_DECLS

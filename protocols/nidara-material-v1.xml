@@ -12,7 +12,7 @@
     blurred because it is not in a shape.
   </description>
 
-  <interface name="nidara_material_manager_v1" version="2">
+  <interface name="nidara_material_manager_v1" version="3">
     <request name="destroy" type="destructor"/>
     <request name="get_material">
       <description summary="the material object of a surface">
@@ -23,12 +23,14 @@
     </request>
   </interface>
 
-  <interface name="nidara_material_v1" version="2">
+  <interface name="nidara_material_v1" version="3">
     <request name="destroy" type="destructor">
       <description summary="remove the material on the next commit"/>
     </request>
     <request name="clear_shapes">
-      <description summary="pending: no shapes (no material)"/>
+      <description summary="pending: no shapes (no material)">
+        Since version 3 it clears the ink boxes too (add_ink_box).
+      </description>
     </request>
     <request name="add_shape">
       <description summary="pending: add one glass shape">
@@ -99,5 +101,52 @@
       <arg name="clip_width" type="fixed"/>
       <arg name="clip_height" type="fixed"/>
     </request>
+    <!-- Version 3: the ink. Appended, so the opcodes of versions 1 and 2 stay put. -->
+    <request name="add_ink_box" since="3">
+      <description summary="pending: where content of one ink group sits">
+        Surface-local, logical coordinates: a box where the client draws
+        content (text, symbolic icons) whose colour it can switch, belonging
+        to the ink group id (a number of the client's choosing, one per pane
+        of glass). A group may have several boxes. Cleared by clear_shapes.
+
+        While set_ink is in force, the compositor measures the darkest point
+        of the backdrop under each group's boxes, as the glass treats it
+        (blurred and saturated, before its tint), and tells the client with
+        the ink event when the group's content should turn dark: only when
+        even that darkest point is brighter than dark_above, and back only
+        when it falls below light_below. Never by an area's average.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+    </request>
+    <request name="set_ink" since="3">
+      <description summary="pending: measure the ink boxes, with these thresholds">
+        Thresholds are WCAG relative (linear) luminances, 0..1, with
+        light_below below dark_above (the gap is the hysteresis). Over a
+        shape that holds a group whose ink is dark, the compositor's glass
+        stops darkening the backdrop for white content: it lays the tint
+        given here at alpha_min instead.
+      </description>
+      <arg name="dark_above" type="fixed"/>
+      <arg name="light_below" type="fixed"/>
+      <arg name="tint_r" type="fixed"/>
+      <arg name="tint_g" type="fixed"/>
+      <arg name="tint_b" type="fixed"/>
+    </request>
+    <request name="clear_ink" since="3">
+      <description summary="pending: no ink measurement; every group is light again"/>
+    </request>
+    <event name="ink" since="3">
+      <description summary="the content of an ink group should be dark, or light">
+        Sent when a group's decision changes; a group starts light (white
+        content), so the first event for a group is always dark = 1. A group
+        no longer declared keeps its last decision, and so does the client.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="dark" type="uint" summary="1: dark content; 0: light"/>
+    </event>
   </interface>
 </protocol>

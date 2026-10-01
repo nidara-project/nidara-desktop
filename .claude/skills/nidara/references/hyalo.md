@@ -106,6 +106,41 @@ message was read with the wrong arguments, and the shell hung on its first frame
 needs its line too. And a new request goes at the END of its interface, with `since`: inserting
 one renumbers every request after it, and an older client then speaks a different protocol.
 
+### The ink: white text, dark only where the whole backdrop under it is white (#684)
+
+Owner's decision, 2026-10-01, Hyalo only (on Hyprland the shell's skin stays dark, 2026-09-30).
+There is no skin on Hyalo's glass: the text is white, and a pane's content turns dark only when
+even the DARKEST point of the backdrop under it — as the glass treats it: blurred, saturated,
+before its tint — is brighter than `inkDarkAbove`, and back only below `inkLightBelow`
+(hysteresis). Never by an area's average: a mostly-light wallpaper with one dark stroke under the
+text keeps it white.
+
+- **Groups and boxes (client).** Each `trackGlass` entry is an ink group (`inkId`); its boxes are
+  every LEAF widget its scope draws — labels with text, icons, Cairo areas, CSS-painted boxes like
+  the workspace dots — except the glass's own painter, through the same transforms and clips as
+  the shapes. More than 8 → their union (stricter, never looser). A type list (labels, images)
+  missed the CSS-painted dots: the island's capsule stayed dark while everything else turned.
+- **Measured by Hyalo (protocol v3: `add_ink_box`, `set_ink`, event `ink`).** In the glass's
+  draw, when the capture or the boxes changed: one small pass samples a 12×12 grid of the blurred
+  copy per box into a 64×1 target (one texel per box, the minimum as two bytes), read into a
+  pixel-pack buffer behind a fence. `backend::poll_ink` collects it from a 4 ms timer that
+  exists only while a readback is in flight — no frame waits, nothing ticks at rest. The
+  hysteresis (`material::next_ink`, unit-tested with a control) runs there; a change sends `ink`
+  and redraws.
+- **The glass follows.** A shape holding a dark group is not darkened for white content: it gets
+  the light veil (`set_ink`'s tint at `alpha_min`).
+- **The client follows.** `libnidara-wl` puts the material object on GDK's own event queue, so
+  GDK dispatches `ink` on the main loop as it arrives (no pump). The pane gets `INK_DARK_CLASS`,
+  which `generateSkinFlipScope` gives the light skin's tokens; `chromeIsDarkFor` answers
+  `darkInkFor` first, so Cairo painters follow; the subtree is redrawn.
+- A group no longer declared keeps its decision on both ends (a panel reopens as it closed);
+  `clear_ink` makes every group light on both ends.
+- Thresholds: `CompositorGlass.ts` (0.80 / 0.65 to start), live in `glass-tuning.conf`
+  (`inkDarkAbove`, `inkLightBelow`, `ink = off`) — calibrated with the owner, not final.
+  `NIDARA_MATERIAL_DEBUG=1` logs every ink decision.
+- To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
+  backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
+
 ## The window manager
 
 Hyalo is **dual** (owner, 2026-10-01): each workspace is floating or tiling, floating by

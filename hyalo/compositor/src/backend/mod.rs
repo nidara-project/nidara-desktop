@@ -160,6 +160,60 @@ pub fn redraw_queued(state: &mut Hyalo) {
     }
 }
 
+// ── The ink's readback (`nidara-material-v1` v3, render/glass_gl.rs) ───────────────────────
+
+/// How often a measurement in flight is looked for: about a frame. The timer exists only
+/// while one is in flight — nothing ticks while the glass is still.
+const INK_POLL: Duration = Duration::from_millis(4);
+
+thread_local! {
+    static INK_POLL_ARMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// A frame issued an ink measurement: look for its result shortly, without waiting for it.
+fn arm_ink_poll(state: &mut Hyalo) {
+    if INK_POLL_ARMED.with(|a| a.replace(true)) {
+        return;
+    }
+    let armed = state.loop_handle.insert_source(smithay::reexports::calloop::timer::Timer::from_duration(INK_POLL), |_, _, state| {
+        if poll_ink(state) {
+            smithay::reexports::calloop::timer::TimeoutAction::ToDuration(INK_POLL)
+        } else {
+            INK_POLL_ARMED.with(|a| a.set(false));
+            smithay::reexports::calloop::timer::TimeoutAction::Drop
+        }
+    });
+    if armed.is_err() {
+        INK_POLL_ARMED.with(|a| a.set(false));
+    }
+}
+
+/// Collects the measurements the GPU has finished and applies them (the ink event, and a redraw
+/// where a shape's veil changed). Whether any is still in flight.
+fn poll_ink(state: &mut Hyalo) -> bool {
+    let poll = |r: &mut smithay::backend::renderer::gles::GlesRenderer| {
+        let user_data = r.egl_context().user_data() as *const smithay::utils::user_data::UserDataMap;
+        // Safety: the EGL context, and its user data with it, outlives this call.
+        r.with_context(|gl| unsafe { crate::render::glass_gl::poll_ink(gl, &*user_data) }).ok()
+    };
+    let polled = match &mut state.backend {
+        Backend::Winit(w) => poll(w.renderer()),
+        Backend::Tty(t) => t.primary_renderer().ok().and_then(|mut r| poll(r.as_mut())),
+    };
+    let Some((results, pending)) = polled else { return false };
+    let mut redraw = false;
+    for (surface, darkest) in results {
+        if let Ok(surface) = surface.upgrade() {
+            redraw |= crate::protocols::material::ink_measured(&surface, &darkest);
+        }
+    }
+    if redraw {
+        state.queue_redraw(None);
+    }
+    let _ = state.display_handle.flush_clients();
+    pending
+}
+
 /// After a frame on `output`: which surfaces it scanned out, frame callbacks, dmabuf feedback.
 pub fn post_repaint(
     state: &mut Hyalo,
@@ -167,6 +221,9 @@ pub fn post_repaint(
     states: &RenderElementStates,
     feedback: Option<&SurfaceDmabufFeedback>,
 ) {
+    if crate::render::glass_gl::take_ink_issued() {
+        arm_ink_poll(state);
+    }
     let time = state.start_time.elapsed();
     let throttle = Some(Duration::from_secs(1));
     let update = |surface: &WlSurface, s: &smithay::wayland::compositor::SurfaceData| {
