@@ -121,6 +121,26 @@ pub fn tty_rescan_all(state: &mut Hyalo) {
     }
 }
 
+/// A PNG of one output (`None` = the first), drawn again offscreen.
+pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Path) -> Result<(), String> {
+    let output = state
+        .space
+        .outputs()
+        .find(|o| output.is_none_or(|n| o.name() == n))
+        .cloned()
+        .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
+    let Hyalo { backend, space, seat, cursor_status, .. } = state;
+    let scene = crate::render::Scene::new(space, seat, cursor_status);
+    let (w, h, rgba) = match backend {
+        Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, &output)?,
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            crate::screenshot::capture(renderer.as_mut(), &scene, &output)?
+        }
+    };
+    crate::screenshot::write_png(path, w, h, &rgba)
+}
+
 /// Draws every output with a redraw queued (`Hyalo::queue_redraw`).
 pub fn redraw_queued(state: &mut Hyalo) {
     match &state.backend {

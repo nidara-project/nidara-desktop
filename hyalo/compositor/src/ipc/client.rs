@@ -14,6 +14,7 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   outputs
   output <NAME> [enabled=on|off] [mode=WxH[@HZ]] [scale=S] [transform=T] [position=X,Y] [vrr=on|off]
   power on|off [NAME]             switch outputs on or off (DPMS); no NAME = all
+  screenshot PATH [NAME]          a PNG of one output (no NAME = the first)
   reload                          re-read the configuration
   events                          stream events, one JSON object per line
   quit                            end the session
@@ -92,6 +93,12 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "reload" => Request::ReloadConfig,
         "quit" => Request::Quit,
         "events" => Request::EventStream,
+        "screenshot" => {
+            let path = args.get(1).ok_or("screenshot needs a path")?;
+            // Hyalo writes the file; a relative path would land in ITS working directory.
+            let path = std::path::absolute(path).map_err(|e| e.to_string())?;
+            Request::Screenshot { path: path.to_string_lossy().into(), output: args.get(2).cloned() }
+        }
         "power" => {
             let on = on_off(args.get(1).ok_or("power needs on or off")?)?;
             Request::OutputPower { name: args.get(2).cloned(), on }

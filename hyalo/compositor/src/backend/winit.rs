@@ -66,6 +66,10 @@ impl WinitBackend {
         &mut self.dmabuf_state
     }
 
+    pub fn renderer(&mut self) -> &mut GlesRenderer {
+        self.graphics.renderer()
+    }
+
     pub fn import_dmabuf(&mut self, dmabuf: &Dmabuf) -> bool {
         self.graphics.renderer().import_dmabuf(dmabuf, None).is_ok()
     }

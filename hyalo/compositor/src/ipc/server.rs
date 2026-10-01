@@ -137,6 +137,12 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             }
             Err(e) => Reply::Error(e),
         },
+        Request::Screenshot { path, output } => {
+            match crate::backend::screenshot(state, output.as_deref(), std::path::Path::new(&path)) {
+                Ok(()) => Reply::Ok(Response::Handled),
+                Err(e) => Reply::Error(e),
+            }
+        }
         Request::ReloadConfig => match config::reload(state) {
             Ok(()) => Reply::Ok(Response::Handled),
             Err(e) => Reply::Error(e),

@@ -199,6 +199,11 @@ impl TtyBackend {
         ok
     }
 
+    /// The primary GPU's renderer, for work outside a frame (screenshots).
+    pub fn primary_renderer(&mut self) -> Result<render::UdevRenderer<'_>, String> {
+        self.gpus.single_renderer(&self.primary_gpu).map_err(|e| e.to_string())
+    }
+
     pub fn early_import(&mut self, surface: &WlSurface) {
         if let Err(err) = self.gpus.early_import(self.primary_gpu, surface) {
             tracing::trace!(?err, "early import failed");
@@ -368,7 +373,14 @@ pub fn init(state: &mut Hyalo) -> Result<(), Box<dyn std::error::Error>> {
     let primary_node = primary.node_with_type(NodeType::Primary).and_then(|n| n.ok());
     let mut list: Vec<_> = udev.device_list().map(|(id, p)| (id, p.to_path_buf())).collect();
     list.sort_by_key(|(id, _)| !(Some(*id) == primary_node.map(|n| n.dev_id()) || *id == primary.dev_id()));
+    // HYALO_DRM_DEVICE names the one GPU to use, and then ONLY it: CI's runner also exposes a
+    // hyperv_drm card next to vkms, and a VM may show several.
+    let exclusive = std::env::var_os("HYALO_DRM_DEVICE").is_some();
     for (id, path) in list {
+        if exclusive && id != primary.dev_id() && Some(id) != primary_node.map(|n| n.dev_id()) {
+            tracing::info!(?path, "skipped: HYALO_DRM_DEVICE names another GPU");
+            continue;
+        }
         match DrmNode::from_dev_id(id) {
             Ok(node) => {
                 if let Err(err) = device_added(state, node, &path) {
@@ -379,8 +391,10 @@ pub fn init(state: &mut Hyalo) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Globals that depend on the primary GPU.
+    // Globals that depend on the primary GPU — re-read: adding it may have replaced a render
+    // node that cannot render (a software EGL device) with its card node.
     let Backend::Tty(tty) = &mut state.backend else { unreachable!() };
+    let primary = tty.primary_gpu;
     let renderer = tty.gpus.single_renderer(&primary)?;
     state.shm_state.update_formats(renderer.shm_formats());
     let formats = renderer.dmabuf_formats();
@@ -438,17 +452,28 @@ fn device_added(state: &mut Hyalo, node: DrmNode, path: &Path) -> Result<(), Str
         .map_err(|e| e.to_string())?;
 
     // Can this GPU render? A display-only one (DisplayLink, some docks) scans out what the
-    // primary renders.
+    // primary renders. Software rendering (llvmpipe) is accepted for the primary GPU only —
+    // that is CI's vkms and a VM without 3D acceleration; for any other device the primary's
+    // hardware is the better renderer.
+    let is_primary = node == tty.primary_gpu
+        || tty.primary_gpu.node_with_type(NodeType::Primary).and_then(|n| n.ok()) == Some(node);
     let render_node = (|| {
         let display = unsafe { EGLDisplay::new(gbm.clone()).ok()? };
         let device = EGLDevice::device_for_display(&display).ok()?;
         if device.is_software() {
-            return None;
+            if !is_primary {
+                return None;
+            }
+            tracing::warn!(%node, "rendering in software (no 3D acceleration on this GPU)");
         }
         let render_node = device.try_get_render_node().ok().flatten().unwrap_or(node);
         tty.gpus.as_mut().add_node(render_node, gbm.clone()).ok()?;
         Some(render_node)
     })();
+    // A KMS-only device (vkms) has no render node: the card node itself renders.
+    if is_primary && let Some(rn) = render_node {
+        tty.primary_gpu = rn;
+    }
 
     let allocator = match render_node {
         Some(_) => GbmAllocator::new(gbm.clone(), GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT),
@@ -511,11 +536,7 @@ pub fn device_changed(state: &mut Hyalo, node: DrmNode) {
         match event {
             DrmScanEvent::Connected { connector, crtc: Some(crtc) } => connector_connected(state, node, connector, crtc),
             DrmScanEvent::Disconnected { connector, crtc: Some(crtc) } => connector_disconnected(state, node, connector, crtc),
-            DrmScanEvent::Changed { connector, crtc: Some(crtc) } => {
-                // New modes (EDID arrived late): set the output up again from its config.
-                connector_disconnected(state, node, connector.clone(), crtc);
-                connector_connected(state, node, connector, crtc);
-            }
+            DrmScanEvent::Changed { connector, crtc: Some(crtc) } => connector_changed(state, node, connector, crtc),
             _ => {}
         }
     }
@@ -648,6 +669,47 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
     state.space.map_output(&output, (i32::MAX / 4, 0));
     state.queue_redraw(Some(&output));
     crate::ipc::server::outputs_changed(state);
+}
+
+/// The monitor's mode list changed while it stayed connected (EDID arriving late; a VM
+/// window resized). The output stays — tearing it down would close every surface on it —
+/// and only the list is updated; if the mode in use is no longer offered, the configured or
+/// preferred one is applied.
+fn connector_changed(state: &mut Hyalo, node: DrmNode, connector: connector::Info, crtc: crtc::Handle) {
+    let name = connector_name(&connector);
+    let wanted = state.config.outputs.get(&name).and_then(|c| c.parsed_mode());
+    let output = {
+        let Backend::Tty(tty) = &mut state.backend else { return };
+        let Some(device) = tty.devices.get_mut(&node) else { return };
+        if let Some(entry) = device.disabled.get_mut(&connector.handle()) {
+            *entry = (connector, crtc);
+            return;
+        }
+        let Some(surface) = device.surfaces.get_mut(&crtc) else {
+            connector_connected(state, node, connector, crtc);
+            return;
+        };
+        let current = surface.output.current_mode();
+        let still_offered = current.is_some_and(|m| connector.modes().iter().any(|d| WlMode::from(*d) == m));
+        if let Some(preferred) = connector.modes().iter().find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED)) {
+            surface.output.set_preferred(WlMode::from(*preferred));
+        }
+        surface.connector = connector.clone();
+        if still_offered {
+            tracing::debug!(%name, "mode list changed; the current mode is still offered");
+            return;
+        }
+        surface.output.clone()
+    };
+    let target = pick_mode(&connector, wanted).map(|m| {
+        let m = WlMode::from(m);
+        (m.size.w, m.size.h, Some(m.refresh))
+    });
+    if let Some(target) = target
+        && let Err(err) = set_mode(state, &output, target)
+    {
+        tracing::warn!(%name, %err, "the mode in use went away and no other could be set");
+    }
 }
 
 fn connector_disconnected(state: &mut Hyalo, node: DrmNode, connector: connector::Info, crtc: crtc::Handle) {

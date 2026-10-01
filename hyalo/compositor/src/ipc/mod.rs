@@ -42,6 +42,12 @@ pub enum Request {
         name: Option<String>,
         on: bool,
     },
+    /// A PNG of one output (no name = the first) at `path`.
+    Screenshot {
+        path: String,
+        #[serde(default)]
+        output: Option<String>,
+    },
     ReloadConfig,
     Quit,
     EventStream,
