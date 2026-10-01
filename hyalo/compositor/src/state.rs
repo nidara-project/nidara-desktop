@@ -97,7 +97,9 @@ impl Hyalo {
 
         let compositor_state = CompositorState::new_v6::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
-        let layer_shell_state = WlrLayerShellState::new::<Self>(&dh);
+        // The privileged globals are not advertised to a sandboxed client (sandbox.rs).
+        let unrestricted = crate::sandbox::unrestricted;
+        let layer_shell_state = WlrLayerShellState::new_with_filter::<Self, _>(&dh, unrestricted);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let data_device_state = DataDeviceState::new::<Self>(&dh);
@@ -117,12 +119,17 @@ impl Hyalo {
         focus_grab::init(&dh);
         // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).
         crate::protocols::virtual_pointer::init(&dh);
-        smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(&dh, |_client| true);
+        smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(&dh, unrestricted);
         // Window capture for the shell's thumbnails (capture.rs).
-        let foreign_toplevel_list = smithay::wayland::foreign_toplevel_list::ForeignToplevelListState::new::<Self>(&dh);
-        let toplevel_capture_source = smithay::wayland::image_capture_source::ToplevelCaptureSourceState::new::<Self>(&dh);
-        let image_copy_capture = smithay::wayland::image_copy_capture::ImageCopyCaptureState::new::<Self>(&dh);
+        let foreign_toplevel_list =
+            smithay::wayland::foreign_toplevel_list::ForeignToplevelListState::new_with_filter::<Self>(&dh, unrestricted);
+        let toplevel_capture_source =
+            smithay::wayland::image_capture_source::ToplevelCaptureSourceState::new_with_filter::<Self, _>(&dh, unrestricted);
+        let image_copy_capture =
+            smithay::wayland::image_copy_capture::ImageCopyCaptureState::new_with_filter::<Self, _>(&dh, unrestricted);
         material::init(&dh);
+        // Flatpak's way to say "this client is sandboxed" — offered only to clients that are not.
+        smithay::wayland::security_context::SecurityContextState::new::<Self, _>(&dh, unrestricted);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, backend.seat_name());
@@ -301,6 +308,8 @@ impl Hyalo {
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
+    /// Set for a client that connected through a sandbox's socket (sandbox.rs).
+    pub security_context: Option<smithay::wayland::security_context::SecurityContext>,
 }
 
 impl ClientData for ClientState {

@@ -56,6 +56,11 @@ impl GlobalDispatch2<ZwlrVirtualPointerManagerV1, Hyalo> for VirtualPointerGloba
     ) {
         data_init.init(resource, VirtualPointerGlobal);
     }
+
+    /// Not for a sandboxed client (sandbox.rs).
+    fn can_view(&self, client: &Client) -> bool {
+        crate::sandbox::unrestricted(client)
+    }
 }
 
 impl Dispatch2<ZwlrVirtualPointerManagerV1, Hyalo> for VirtualPointerGlobal {

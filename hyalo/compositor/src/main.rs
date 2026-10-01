@@ -19,6 +19,7 @@ mod ipc;
 mod outputs;
 mod protocols;
 mod render;
+mod sandbox;
 mod screenshot;
 mod shell;
 mod state;

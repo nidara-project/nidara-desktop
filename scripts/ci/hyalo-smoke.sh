@@ -74,6 +74,13 @@ phase_build() {
     wayland-scanner private-code  "$vp_xml" "$vp/wlr-virtual-pointer-unstable-v1-protocol.c"
     cc -O2 "$REPO/bin/nidara-input.c" "$vp/wlr-virtual-pointer-unstable-v1-protocol.c" \
         -I"$vp" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/nidara-input
+    # The sandbox probe (what a Flatpak app sees, hyalo/compositor/src/sandbox.rs).
+    local sc_xml=/usr/share/wayland-protocols/staging/security-context/security-context-v1.xml sc="$REPO/build/sc"
+    mkdir -p "$sc"
+    wayland-scanner client-header "$sc_xml" "$sc/security-context-v1-client-protocol.h"
+    wayland-scanner private-code  "$sc_xml" "$sc/security-context-v1-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-sandbox-probe.c" "$sc/security-context-v1-protocol.c" \
+        -I"$sc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-sandbox-probe
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
@@ -267,6 +274,15 @@ phase_run() {
     done
     [ "$back" = "1" ] || { log "FAIL: the shell did not take the user back to workspace 1 after the game (on '$back')"; exit 1; }
     log "game mode OK (a game to gamespace, a plain window left alone, back to workspace 1)"
+
+    # Sandboxed clients (wp-security-context-v1, #682): a client that connects through a
+    # sandbox's socket, as a Flatpak app does, must not be offered synthetic input, window
+    # capture, the window list or the shell's own globals — and must still get what an
+    # application needs. The probe's control is built in: every hidden global must be offered
+    # OUTSIDE the sandbox, or it fails (a probe that saw nothing anywhere would pass).
+    hyalo-sandbox-probe >/tmp/hyalo/sandbox-probe.log 2>&1 \
+        || { log "FAIL: the sandbox probe"; cat /tmp/hyalo/sandbox-probe.log; exit 1; }
+    log "sandboxed clients OK ($(sed -n 's/^RESULT //p' /tmp/hyalo/sandbox-probe.log))"
 
     # Computer use (#682): the compositor's state through bin/nidara-wm (Hyprland's shapes,
     # built from Hyalo's IPC) and the virtual pointer nidara-input speaks: a move to a point
