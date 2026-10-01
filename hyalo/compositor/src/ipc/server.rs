@@ -257,6 +257,10 @@ impl Hyalo {
                         y: og.loc.y + g.loc.y,
                         width: g.size.w,
                         height: g.size.h,
+                        glass: crate::protocols::material::current(l.wl_surface()).map(|m| super::GlassInfo {
+                            shapes: m.state.shapes.len(),
+                            compositor_paints: m.state.glass.is_some(),
+                        }),
                     });
                 }
             }

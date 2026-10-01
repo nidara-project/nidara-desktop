@@ -59,6 +59,17 @@ pub struct LayerInfo {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    /// The glass this layer declared (nidara-material-v1), if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass: Option<GlassInfo>,
+}
+
+/// What a surface asked of its glass: how many shapes, and whether the compositor paints the
+/// glass itself (true) or only blurs behind the client's own paint (false).
+#[derive(Debug, Clone, Serialize)]
+pub struct GlassInfo {
+    pub shapes: usize,
+    pub compositor_paints: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

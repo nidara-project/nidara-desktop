@@ -32,6 +32,7 @@ import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import compositor, { settings } from "./CompositorState"
 import { initGlassBlur } from "./GlassBlur"
+import { initCompositorGlass } from "./CompositorGlass"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
 
@@ -273,6 +274,8 @@ export function startAppearanceSync(): void {
     // since #536 — pushing a copy over them at start is what reverted a theme set elsewhere.
     schedule("ini", "cursor", "groupbar", "mirror")
 
-    // The glass material's compositor half: Hyprland's blur (#674).
+    // The glass material's compositor half: Hyprland's blur (#674) — and on a compositor
+    // of our own, the whole glass (#684).
     initGlassBlur()
+    initCompositorGlass()
 }

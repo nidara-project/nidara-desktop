@@ -26,6 +26,7 @@ is the WHY and the traps.
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
 | `ui/shell/core/hyalo-ipc.ts`, `ui/shell/core/Displays.ts` | the shell's side (below) |
+| `ui/lib/nidara-kit/platform/material.ts`, `ui/shell/core/CompositorGlass.ts` | the glass's client half: the shapes, and the numbers (below) |
 
 ## Smithay is a library we never patch
 
@@ -52,6 +53,53 @@ go back to that.
 - GL objects that belong to a context live in the EGL context's user data; a glass's own pyramid
   lives in the damage tracker's per-element cache, and is deleted through a trash list on the next
   capture, because a cache is dropped where no context is current.
+
+## The shell's glass is declared, and on Hyalo the compositor paints it (#684)
+
+Every pane of the shell's glass tells the compositor exactly where it is:
+`ui/lib/nidara-kit/platform/material.ts` (`trackGlass`) collects the shapes of each surface and
+sends them in the frame clock's LAYOUT phase — after GTK allocated, before it paints and
+commits, so they land with the buffer they describe. A paint-only frame (an animation that only
+queues draws) skips that phase, so every before-paint asks for it. The source of the glass's
+numbers is the bundle's (`ui/shell/core/CompositorGlass.ts`, registered from AppearanceSync);
+on Hyprland nothing offers the protocol and all of it is a no-op.
+
+**A painter asks `compositorPaintsGlass(itsWidget)`** and, when true, paints only content and
+state — the accent fill, the hover/open veil, the shadow — never the body or the rim. The
+painters that do: `SquircleContainer` (every pane with `useShellOpacity` and no explicit
+`alpha`), the dock's pill on both axes (`DockAxis.ts`), the island's morph clone
+(`MorphRevealer.glassShape`), the Notification Center's stacked-card bands. Tooltips and kit
+menus (`trackBubbleGlass`) are declared `clientPaints`: their pointer is no shape the protocol
+describes, so Hyalo only blurs behind the body and they paint their own glass — and a surface
+holding any such shape is blurred only, never given the compositor's glass under a client's.
+A new glass painter goes through the same two calls, or it is a pane Hyalo knows nothing about.
+
+What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
+- **snapshot-time transforms** of the ancestors — `ScaleRevealer.glassPaintTransform()`; GTK's own
+  geometry never sees a scale applied in `vfunc_snapshot`;
+- **the opacity** of the widget and every ancestor, per shape: a panel fading in or out fades its
+  blur, glass and rim with it;
+- **the clip** of every ancestor whose overflow is hidden, per shape: a card scrolled half out of
+  its list is cut straight, not rounded. The clip is pushed BEFORE that ancestor's own snapshot
+  transform, so it is its unscaled box.
+- Glass inside glass is not declared (`nested`): a control painted on a panel keeps painting
+  itself, or Hyalo would draw a rim inside the panel. Shapes are drawn in tree order.
+
+`NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
+`NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
+`~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction rim
+saturation`, `blur = SIZE:PASSES`, `glass = off` for the A/B) is re-read as it is saved — it is
+how the numbers are tuned with the owner on screen. `nidara-hyalo msg layers` shows what each
+layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
+dock and the island to declare theirs.
+
+🔴 **Cargo does not see the protocol XML.** The scanner macros read `protocols/*.xml` at compile
+time without telling cargo, so an edited protocol left Hyalo built from the OLD file while
+`lib/nidara-wl` was built from the new one; the two ends numbered the requests differently, a
+message was read with the wrong arguments, and the shell hung on its first frame (2026-10-01).
+`protocols/mod.rs` now `include_bytes!`s every XML it generates from — a new protocol there
+needs its line too. And a new request goes at the END of its interface, with `since`: inserting
+one renumbers every request after it, and an older client then speaks a different protocol.
 
 ## The window manager
 

@@ -2,7 +2,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { RADIUS, rowInsetFor } from "./platform/tokens"
 import { kitAppearance } from "./appearance"
-import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "./glass-bubble"
+import { sideFor, paintGlassBubble, trackBubbleGlass, ARROW_H, BUF, type ArrowSide } from "./glass-bubble"
 import { cairoDraw } from "./platform/cairo-draw"
 
 // Universal Cairo glass bubble menu popover. Shared by dock context menu,
@@ -69,6 +69,7 @@ export class GlassBubbleMenu {
             paintGlassBubble(cr, w, h, this._side, { radiusMax: this._radiusMax, n: this._n, widget: this.popover })
         ))
         grid.attach(this.drawingArea, 0, 0, 1, 1)
+        trackBubbleGlass(this.drawingArea, () => this._side, () => this._radiusMax, () => this._n)
 
         this.rows = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,

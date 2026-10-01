@@ -4,6 +4,7 @@ import Theme from "../core/ThemeManager"
 import { chromeIsDarkFor, glassAlphaFor, glassTintFor } from "./AdaptiveGlass"
 import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
+import { compositorPaintsGlass, trackGlass } from "../../lib/nidara-kit/platform/material"
 
 export enum Shape {
     SQUIRCLE,
@@ -113,6 +114,8 @@ interface SquircleContainerProps {
  */
 export const GLASS_INSET = 2.0
 
+const NO_BORDER = { r: 0, g: 0, b: 0, a: 0 }
+
 /** The one drop-shadow recipe, moved to `ui/lib/nidara-kit/platform/glass-paint.ts` on 2026-08-24 with the
  *  primitives it parameterises, so the greeter and the lockscreen float their glass on
  *  the SAME numbers instead of on none. Re-exported here: this is still where the shell
@@ -193,6 +196,10 @@ export default function SquircleContainer({
         Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     }
 
+    // A pane of the shell's glass (not a control on one, not a near-opaque card): its
+    // shape goes to a compositor of our own, which may paint it (#684).
+    const isGlass = useShellOpacity && alpha === undefined && chrome
+
     da.set_draw_func(cairoDraw((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         // Shell-skin capsules (default) follow the shell's skin;
@@ -218,10 +225,12 @@ export default function SquircleContainer({
         let shareAlpha = baseAlpha
         let shareBorder = borderColor
         let fillFrac: number | undefined = undefined
+        let filled = false
 
         if (getFill || getActive) {
             const frac = getFill ? Math.max(0, Math.min(1, getFill())) : (getActive!() ? 1 : 0)
             if (frac > 0) {
+                filled = true
                 const activeColor = hexToFloatRgb(activeColorHex ?? Theme.accentPalette[Theme.accentColor].color)
                 const resolvedAlpha = typeof activeAlpha === "function" ? activeAlpha() : activeAlpha
                 if (frac >= 1) {
@@ -262,6 +271,10 @@ export default function SquircleContainer({
 
         const { radius: drawRadius, n: drawN, perfect: drawPerfect } = resolveDrawParams(shape, radius, n, perfect, w, h)
 
+        // On a compositor of our own the glass itself is the compositor's (#684): what is
+        // left here is state — the accent fill, the hover/open veil — and the shadow.
+        const glassIsCompositors = isGlass && compositorPaintsGlass(da)
+
         // The shadow goes down FIRST, outside the silhouette, in the room `techInset`
         // reserved for it above. Same geometry as the glass, so it tracks the shape.
         if (shadow) {
@@ -270,6 +283,29 @@ export default function SquircleContainer({
                 drawRadius, drawN, drawPerfect,
                 shadow.spread ?? 4, shadow.alpha ?? 0.18, shadow.drop ?? 1,
             )
+        }
+
+        if (glassIsCompositors) {
+            // No rim (the compositor draws its own) and no glass body: the accent fill alone
+            // (a gauge's empty part shows the compositor's glass), or the veil alone.
+            if (filled) {
+                drawSquircle(
+                    cr, w, h, undefined,
+                    shareAlpha, false, shareColor,
+                    drawRadius, drawPerfect, NO_BORDER,
+                    drawN, borderWidth, techInset,
+                    undefined, fillFrac, baseColor, 0,
+                )
+            } else if (stateMix) {
+                const v = dark ? stateMix.dark : stateMix.light
+                drawSquircle(
+                    cr, w, h, undefined,
+                    v, false, dark ? GLASS_SPECULAR : GLASS_TINT.dark,
+                    drawRadius, drawPerfect, NO_BORDER,
+                    drawN, borderWidth, techInset,
+                )
+            }
+            return
         }
 
         drawSquircle(
@@ -329,6 +365,17 @@ export default function SquircleContainer({
     if (watchOpen) {
         const cleanup = watchOpen(() => { if (da.get_mapped()) da.queue_draw() })
         grid.connect("unrealize", cleanup)
+    }
+
+    if (isGlass) {
+        trackGlass(da, () => {
+            const w = da.get_width(), h = da.get_height()
+            const p = resolveDrawParams(shape, radius, n, perfect, w, h)
+            const gw = w - techInset * 2, gh = h - techInset * 2
+            // `perfect` is drawn with circular arcs whatever `n` says (createSquirclePath).
+            return [{ x: techInset, y: techInset, w: gw, h: gh, exponent: p.perfect ? 2 : p.n,
+                radius: Math.min(p.radius, gw / 2, gh / 2) }]
+        }, { scope: grid })
     }
 
     // Handle for morph layers (common/MorphRevealer.ts): a morphing overlay

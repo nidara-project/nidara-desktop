@@ -6,6 +6,13 @@ pub mod focus_grab;
 pub mod material;
 pub mod virtual_pointer;
 
+// The scanner macros read the XML at compile time, but nothing tells cargo: an edited protocol
+// left the server built from the OLD file while lib/nidara-wl was built from the new one, and
+// the two ends numbered the requests differently — the shell hung on its first message
+// (2026-10-01). `include_bytes!` makes each file a dependency of this crate.
+const _: &[u8] = include_bytes!("../../../../protocols/hyprland-focus-grab-v1.xml");
+const _: &[u8] = include_bytes!("../../../../protocols/nidara-material-v1.xml");
+
 pub mod gen_focus_grab {
     use wayland_server;
     use wayland_server::protocol::*;

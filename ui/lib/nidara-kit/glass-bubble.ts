@@ -5,6 +5,7 @@ import { GLASS_TINT, GLASS_SPECULAR } from "./platform/tokens"
 import { glassRimGradient, squircleCorner, drawShadowFromPath, GLASS_SHADOW } from "./platform/glass-paint"
 import { kitAppearance } from "./appearance"
 import { frostedFill } from "./platform/glass-legibility"
+import { trackGlass } from "./platform/material"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -162,6 +163,33 @@ export interface GlassBubbleOpts {
     widget?: Gtk.Widget | null
 }
 
+/** The bubble's body, without its pointer: inset by BUF all round plus ARROW_H on the
+ *  pointer's side, with the near-pill radius clamped so the pointer's base fits in the
+ *  straight segment. Its corners are superellipse quadrants of the painter's `n`. */
+export const bubbleBody = (w: number, h: number, side: ArrowSide, radiusMax = 13):
+    { x: number, y: number, w: number, h: number, r: number } | null => {
+    const x = BUF + (side === "left" ? ARROW_H : 0)
+    const y = BUF + (side === "top" ? ARROW_H : 0)
+    const bw = w - 2 * BUF - ((side === "left" || side === "right") ? ARROW_H : 0)
+    const bh = h - 2 * BUF - ((side === "top" || side === "bottom") ? ARROW_H : 0)
+    if (bw <= 0 || bh <= 0) return null
+    const edgeLen = (side === "top" || side === "bottom") ? bw : bh
+    let r = Math.min(bh, bw) / 2
+    r = Math.min(r, radiusMax)
+    r = Math.min(r, (edgeLen - ARROW_W) / 2 - 2)
+    r = Math.max(r, 4)
+    return { x, y, w: bw, h: bh, r }
+}
+
+/** Tell a compositor of our own where a bubble painted by `da` is, so it blurs what lies
+ *  behind its body (nidara-material-v1). The bubble keeps painting its own glass: its
+ *  pointer is no shape the protocol describes. */
+export const trackBubbleGlass = (da: Gtk.Widget, side: () => ArrowSide, radiusMax: () => number, n: () => number) =>
+    trackGlass(da, () => {
+        const b = bubbleBody(da.get_width(), da.get_height(), side(), radiusMax())
+        return b ? [{ x: b.x, y: b.y, w: b.w, h: b.h, radius: b.r, exponent: n() }] : []
+    }, { clientPaints: true })
+
 export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide, opts: GlassBubbleOpts = {}) => {
     const { chrome = true, radiusMax = 13, n = 2 } = opts
     const arrowW = ARROW_W, arrowH = ARROW_H, tipR = TIP_R
@@ -177,19 +205,10 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     // and the material's haze over it, folded into the one fill (`frostedFill`).
     const { tint, alpha } = frostedFill(baseTint, opts.alpha ?? Math.max(app.overlayOpacity?.() ?? 0.55, 0.38), app.glassFrost?.() ?? 0)
 
-    // Body rect: inset by BUF all round, plus arrowH on the arrow side.
-    const bx = BUF + (side === "left" ? arrowH : 0)
-    const by = BUF + (side === "top" ? arrowH : 0)
-    const bw = w - 2 * BUF - ((side === "left" || side === "right") ? arrowH : 0)
-    const bh = h - 2 * BUF - ((side === "top" || side === "bottom") ? arrowH : 0)
-    if (bw <= 0 || bh <= 0) return
-
-    // Near-pill radius, but clamped so the arrow base fits in the straight segment.
-    let r = Math.min(bh, bw) / 2
-    r = Math.min(r, radiusMax)
+    const body = bubbleBody(w, h, side, radiusMax)
+    if (!body) return
+    const { x: bx, y: by, w: bw, h: bh, r } = body
     const edgeLen = (side === "top" || side === "bottom") ? bw : bh
-    r = Math.min(r, (edgeLen - arrowW) / 2 - 2)
-    r = Math.max(r, 4)
 
     // Fit pointer's base inside the straight portion.
     const aw = Math.min(arrowW, Math.max(edgeLen - 2 * r - 4, 6))

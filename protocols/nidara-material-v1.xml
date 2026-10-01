@@ -12,7 +12,7 @@
     blurred because it is not in a shape.
   </description>
 
-  <interface name="nidara_material_manager_v1" version="1">
+  <interface name="nidara_material_manager_v1" version="2">
     <request name="destroy" type="destructor"/>
     <request name="get_material">
       <description summary="the material object of a surface">
@@ -23,7 +23,7 @@
     </request>
   </interface>
 
-  <interface name="nidara_material_v1" version="1">
+  <interface name="nidara_material_v1" version="2">
     <request name="destroy" type="destructor">
       <description summary="remove the material on the next commit"/>
     </request>
@@ -72,6 +72,32 @@
     </request>
     <request name="clear_glass">
       <description summary="pending: back to blur only; the client paints its glass"/>
+    </request>
+    <request name="add_shape_clipped" since="2">
+      <description summary="pending: add one glass shape, faded and clipped">
+        As add_shape, plus what a toolkit does to the widget that paints
+        the glass. opacity is the whole glass's opacity in this shape over
+        the plain backdrop, 0..1: the blur, the compositor's glass and its
+        rim fade together, so a panel fading in or out sends it every frame
+        (add_shape is opacity 1). The clip rectangle, in the same
+        coordinates, is what of the shape may show: a card scrolled half out
+        of its list is cut straight where the list ends, not rounded. A clip
+        of zero width or height means no clip.
+
+        Shapes are drawn in the order they are added, a later one over an
+        earlier one.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="corner_radius" type="fixed"/>
+      <arg name="exponent" type="fixed"/>
+      <arg name="opacity" type="fixed"/>
+      <arg name="clip_x" type="fixed"/>
+      <arg name="clip_y" type="fixed"/>
+      <arg name="clip_width" type="fixed"/>
+      <arg name="clip_height" type="fixed"/>
     </request>
   </interface>
 </protocol>

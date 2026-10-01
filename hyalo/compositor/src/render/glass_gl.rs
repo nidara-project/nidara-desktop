@@ -112,6 +112,8 @@ uniform mat2 out_to_fb;     // output-pixel offsets → framebuffer-pixel offset
 uniform vec4 rect;          // the shape, output pixels
 uniform float radius;
 uniform float exponent;
+uniform float opacity;      // the whole glass in this shape, over the plain backdrop
+uniform vec4 clip;          // what of the shape may show, output px: x, y, w, h
 uniform float glass;        // 1: refractive glass — the compositor paints the whole glass
 uniform vec3 tint;
 uniform float alpha_min;
@@ -142,7 +144,10 @@ vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)
 
 void main() {
     float d = sdf(v_out);
-    float cov = clamp(0.5 - d, 0.0, 1.0);
+    // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased.
+    vec2 cin = min(v_out - clip.xy, clip.xy + clip.zw - v_out);
+    float clipped = clamp(min(cin.x, cin.y) + 0.5, 0.0, 1.0);
+    float cov = clamp(0.5 - d, 0.0, 1.0) * clipped * opacity;
     if (cov <= 0.0) discard;
     if (glass < 0.5) {
         vec4 c = backdrop(vec2(0.0));
@@ -194,6 +199,10 @@ pub struct Shape {
     pub rect: Rectangle<f64, Physical>,
     pub radius: f64,
     pub exponent: f64,
+    /// The glass's opacity in this shape over the plain backdrop, 0..1.
+    pub opacity: f32,
+    /// What of the shape may show, output pixels. None = all of it.
+    pub clip: Option<Rectangle<f64, Physical>>,
 }
 
 /// Refractive glass parameters, in output pixels.
@@ -549,13 +558,25 @@ pub unsafe fn draw(
         for s in shapes {
             let sr = s.rect;
             // One pixel of margin for the anti-aliased edge.
-            let bounds = Rectangle::<i32, Physical>::new(
+            let mut bounds = Rectangle::<i32, Physical>::new(
                 ((sr.loc.x - 1.0).floor() as i32, (sr.loc.y - 1.0).floor() as i32).into(),
                 ((sr.size.w + 3.0).ceil() as i32, (sr.size.h + 3.0).ceil() as i32).into(),
             );
+            // No clip: one far larger than any output.
+            let cl = s.clip.unwrap_or(Rectangle::new((-1e6, -1e6).into(), (2e6, 2e6).into()));
+            if s.clip.is_some() {
+                let cb = Rectangle::<i32, Physical>::new(
+                    ((cl.loc.x - 1.0).floor() as i32, (cl.loc.y - 1.0).floor() as i32).into(),
+                    ((cl.size.w + 3.0).ceil() as i32, (cl.size.h + 3.0).ceil() as i32).into(),
+                );
+                let Some(b) = bounds.intersection(cb) else { continue };
+                bounds = b;
+            }
+            gl.Uniform4f(p.loc(gl, c"clip"), cl.loc.x as f32, cl.loc.y as f32, cl.size.w as f32, cl.size.h as f32);
             gl.Uniform4f(p.loc(gl, c"rect"), sr.loc.x as f32, sr.loc.y as f32, sr.size.w as f32, sr.size.h as f32);
             gl.Uniform1f(p.loc(gl, c"radius"), s.radius as f32);
             gl.Uniform1f(p.loc(gl, c"exponent"), s.exponent as f32);
+            gl.Uniform1f(p.loc(gl, c"opacity"), s.opacity);
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);

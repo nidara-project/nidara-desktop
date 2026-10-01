@@ -195,6 +195,33 @@ phase_run() {
     [ -n "$ok" ] || { log "FAIL: the shell never answered nidara-ipc"; exit 1; }
     log "shell IPC OK"
 
+    # The glass (#684): every shell surface tells Hyalo where its glass is (nidara-material-v1)
+    # and Hyalo paints it. The bar, the dock and the island each declare theirs; opening the
+    # Control Center adds its panes to the bar's, so the shapes follow what is on screen.
+    glass_shapes() {
+        nidara-hyalo msg layers | jq -r --arg ns "$1" \
+            '[.ok.layers[] | select(.namespace == $ns) | .glass | select(. != null and .compositor_paints) | .shapes] | max // 0'
+    }
+    for i in $(seq 1 20); do
+        [ "$(glass_shapes nidara-bar)" -gt 0 ] && [ "$(glass_shapes nidara-dock)" -gt 0 ] \
+            && [ "$(glass_shapes nidara-island)" -gt 0 ] && break
+        sleep 0.5
+    done
+    for ns in nidara-bar nidara-dock nidara-island; do
+        [ "$(glass_shapes "$ns")" -gt 0 ] \
+            || { log "FAIL: $ns declared no glass for Hyalo to paint"; nidara-hyalo msg layers; exit 1; }
+    done
+    local bar_rest bar_cc
+    bar_rest="$(glass_shapes nidara-bar)"
+    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    sleep 2
+    bar_cc="$(glass_shapes nidara-bar)"
+    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    sleep 1
+    [ "$bar_cc" -gt "$bar_rest" ] \
+        || { log "FAIL: the Control Center's panes never reached Hyalo ($bar_rest shapes closed, $bar_cc open)"; exit 1; }
+    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open; the dock's, the island's)"
+
     # Settings reach Hyalo through the compositor interface (#682): the shell states its
     # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is
     # applied, and re-stating it changes nothing (or the shell's reload handlers would loop).

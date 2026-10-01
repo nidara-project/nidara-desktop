@@ -54,6 +54,7 @@ static struct hyprland_surface_manager_v1 *surface_mgr = NULL;
 static struct hyprland_focus_grab_manager_v1 *focus_grab_mgr = NULL;
 static gboolean                        capture_supported = FALSE;
 static struct nidara_material_manager_v1 *material_mgr = NULL;
+static uint32_t material_version = 0;
 
 static void
 init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
@@ -77,8 +78,14 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
                       ext_image_copy_capture_manager_v1_interface.name) == 0)
     capture_supported = TRUE;
   else if (g_strcmp0 (interface, nidara_material_manager_v1_interface.name) == 0)
-    material_mgr = wl_registry_bind (registry, name,
-                                     &nidara_material_manager_v1_interface, 1);
+    {
+      /* v2 adds a shape's own opacity and clip (add_shape_clipped); a v1
+       * compositor gets plain shapes. */
+      material_version = MIN (version, 2);
+      material_mgr = wl_registry_bind (registry, name,
+                                       &nidara_material_manager_v1_interface,
+                                       material_version);
+    }
 }
 
 static void
@@ -337,6 +344,34 @@ nidara_wl_material_add_shape (GdkSurface *surface,
                                 wl_fixed_from_double (width), wl_fixed_from_double (height),
                                 wl_fixed_from_double (corner_radius),
                                 wl_fixed_from_double (exponent));
+}
+
+void
+nidara_wl_material_add_shape_clipped (GdkSurface *surface,
+                                      double x, double y, double width, double height,
+                                      double corner_radius, double exponent, double opacity,
+                                      double clip_x, double clip_y,
+                                      double clip_width, double clip_height)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || width <= 0 || height <= 0 || opacity <= 0)
+    return;
+  if (material_version < 2)
+    {
+      /* A v1 compositor has neither: the glass is there whole and at full, or not at all. */
+      nidara_wl_material_add_shape (surface, x, y, width, height, corner_radius, exponent);
+      return;
+    }
+  nidara_material_v1_add_shape_clipped (m,
+                                        wl_fixed_from_double (x), wl_fixed_from_double (y),
+                                        wl_fixed_from_double (width), wl_fixed_from_double (height),
+                                        wl_fixed_from_double (corner_radius),
+                                        wl_fixed_from_double (exponent),
+                                        wl_fixed_from_double (MIN (opacity, 1.0)),
+                                        wl_fixed_from_double (clip_x), wl_fixed_from_double (clip_y),
+                                        wl_fixed_from_double (clip_width),
+                                        wl_fixed_from_double (clip_height));
 }
 
 void

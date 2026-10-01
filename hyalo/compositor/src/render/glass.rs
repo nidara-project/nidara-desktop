@@ -202,6 +202,13 @@ fn groups(
             ),
             radius: s.radius * scale.x,
             exponent: s.exponent,
+            opacity: s.opacity as f32,
+            clip: s.clip.map(|c| {
+                Rectangle::new(
+                    location.to_f64() + Point::from((c[0] * scale.x, c[1] * scale.y)),
+                    (c[2] * scale.x, c[3] * scale.y).into(),
+                )
+            }),
         })
         .collect();
     let mut root: Vec<usize> = (0..shapes.len()).collect();

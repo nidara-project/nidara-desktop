@@ -397,6 +397,32 @@ void nidara_wl_material_add_shape (GdkSurface *surface,
                                    double corner_radius, double exponent);
 
 /**
+ * nidara_wl_material_add_shape_clipped:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ * @corner_radius: each corner's radius
+ * @exponent: each corner is a superellipse quadrant with this exponent (2 = arc)
+ * @opacity: the whole glass in this shape over the plain backdrop, 0..1
+ * @clip_x: left of what of the shape may show, same coordinates
+ * @clip_y: its top
+ * @clip_width: its width; 0 = no clip
+ * @clip_height: its height; 0 = no clip
+ *
+ * Adds one glass shape as the toolkit shows it: faded (a panel fading in or out) and
+ * clipped (a card scrolled half out of its list). Shapes are drawn in the order they are
+ * added. On a compositor with only version 1 of the protocol the shape is added whole,
+ * at full opacity.
+ */
+void nidara_wl_material_add_shape_clipped (GdkSurface *surface,
+                                           double x, double y, double width, double height,
+                                           double corner_radius, double exponent, double opacity,
+                                           double clip_x, double clip_y,
+                                           double clip_width, double clip_height);
+
+/**
  * nidara_wl_material_commit:
  * @surface: the #GdkSurface
  * @blur_size: the blur's kawase offset, logical pixels

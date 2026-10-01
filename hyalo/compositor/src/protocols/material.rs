@@ -30,6 +30,10 @@ pub struct Shape {
     pub h: f64,
     pub radius: f64,
     pub exponent: f64,
+    /// The whole glass's opacity in this shape over the plain backdrop (v2; 1 from add_shape).
+    pub opacity: f64,
+    /// What of the shape may show, same coordinates (v2): x, y, w, h. None = all of it.
+    pub clip: Option<[f64; 4]>,
 }
 
 /// Refractive glass: the compositor paints the whole glass (src/render/glass_gl.rs, the last pass).
@@ -97,7 +101,7 @@ pub struct MaterialGlobal;
 pub struct MaterialData(Weak<WlSurface>);
 
 pub fn init(dh: &DisplayHandle) {
-    dh.create_global::<Hyalo, NidaraMaterialManagerV1, _>(1, MaterialGlobal);
+    dh.create_global::<Hyalo, NidaraMaterialManagerV1, _>(2, MaterialGlobal);
 }
 
 impl GlobalDispatch2<NidaraMaterialManagerV1, Hyalo> for MaterialGlobal {
@@ -158,8 +162,26 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
                 self.pending(|m| {
-                    m.shapes.push(Shape { x, y, w: width, h: height, radius: corner_radius, exponent })
+                    m.shapes.push(Shape {
+                        x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
+                    })
                 });
+            }
+            Request::AddShapeClipped {
+                x, y, width, height, corner_radius, exponent, opacity,
+                clip_x, clip_y, clip_width, clip_height,
+            } => {
+                let opacity = opacity.clamp(0.0, 1.0);
+                let clip = (clip_width > 0.0 && clip_height > 0.0).then_some([clip_x, clip_y, clip_width, clip_height]);
+                // A shape faded out entirely, or clipped away, is no shape: nothing to blur for it.
+                let shows = clip.is_none_or(|c| {
+                    c[0] < x + width && x < c[0] + c[2] && c[1] < y + height && y < c[1] + c[3]
+                });
+                if opacity > 0.0 && shows {
+                    self.pending(|m| {
+                        m.shapes.push(Shape { x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip })
+                    });
+                }
             }
             Request::SetBlur { size, passes } => {
                 self.pending(|m| {

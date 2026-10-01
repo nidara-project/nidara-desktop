@@ -2,7 +2,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./glass-bubble"
+import { ARROW_H, BUF, sideFor, paintGlassBubble, trackBubbleGlass, type ArrowSide } from "./glass-bubble"
 import { kitAppearance } from "./appearance"
 import { cairoDraw } from "./platform/cairo-draw"
 import { TOOLTIP_GLASS_FLOOR } from "./platform/glass-legibility"
@@ -96,6 +96,7 @@ export function attachTooltip(
         paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark, alpha, widget })
     }))
     grid.attach(da, 0, 0, 1, 1)
+    trackBubbleGlass(da, () => side, () => 13, () => 2)
 
     const label = new Gtk.Label({ css_classes: ["nidara-tooltip-label"] })
     const applyMargins = () => {
