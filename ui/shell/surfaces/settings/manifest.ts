@@ -107,7 +107,7 @@ export const manifest = [
                 items: [
                     {
                         key: "appearance.windowTransparency",
-                        note: "Windows are NOT Liquid Glass (owner, 2026-09-30): the material above is for the interface's surfaces; Nidara's windows are only translucent or solid. Named transparency, not 'tinting': the blur behind them is Hyprland's one blur, which the material sets, so a tint of our own cannot be promised. On = WINDOW_GLASS_OPACITY, off = solid.",
+                        note: "Windows are NOT part of the glass material (owner, 2026-09-30): the material above is for the interface's surfaces; Nidara's windows are only translucent or solid. Named transparency, not 'tinting': the blur behind them is Hyprland's one blur, which the material sets, so a tint of our own cannot be promised. On = WINDOW_GLASS_OPACITY, off = solid.",
                         sensitiveWhen: { key: "accessibility.reduceTransparency", in: ["false"] },
                     },
                 ],

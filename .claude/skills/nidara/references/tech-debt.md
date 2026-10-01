@@ -2370,7 +2370,7 @@ it samples past the edge and a curve-hugging clip would cut the samples it needs
 needs MORE pad, not less.
 
 **Refraction itself is settled and CLOSED (2026-06-12) — do not re-explore it either.** True
-Liquid-Glass refraction needs the backdrop pixels, which by Wayland's design only the compositor has:
+Glass refraction needs the backdrop pixels, which by Wayland's design only the compositor has:
 there is no client-side path (GTK4 has no `backdrop-filter`, SVG filters cannot touch the backdrop,
 and `GskGLShader` is deprecated and non-functional on the current renderers). A Hyprland **plugin**
 could do it per drawn element, alpha-mask-driven exactly like blur — hyprglass's whole-window look

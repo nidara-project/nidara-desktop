@@ -119,7 +119,7 @@ export const blurSafeOpacity = (glassAlpha: number) =>
 /**
  * The glass MATERIAL (#674, owner's decision 2026-09-30): the one choice Settings →
  * Appearance offers, in place of the five opacity sliders it had (a master and four
- * per surface). Three positions, like the single Liquid Glass control of macOS 27 —
+ * per surface). Three positions, one control —
  * `clear` shows the most backdrop, `frosted` the least.
  *
  * A position is a TABLE, not a number: a floor per surface (`GLASS_FLOORS`) and a
@@ -142,7 +142,7 @@ export const GLASS_MATERIAL_DEFAULT: GlassMaterial = "regular"
 export interface GlassFloors { bar: number; overlay: number; dock: number }
 
 /** Per material, per surface. Every entry lies in `GLASS_RANGE`. The WINDOWS are not
- *  here: they are not Liquid Glass (`WINDOW_GLASS_OPACITY`). */
+ *  here: they are not part of the glass material (`WINDOW_GLASS_OPACITY`). */
 export const GLASS_FLOORS: Record<GlassMaterial, GlassFloors> = {
   clear:   { bar: GLASS_RANGE.min, overlay: GLASS_RANGE.min, dock: GLASS_RANGE.min },
   regular: { bar: 0.32,            overlay: 0.36,            dock: GLASS_RANGE.min },
@@ -150,7 +150,7 @@ export const GLASS_FLOORS: Record<GlassMaterial, GlassFloors> = {
 }
 
 /**
- * Nidara's WINDOWS (Settings, About, the installer, their dialogs) are not Liquid Glass
+ * Nidara's WINDOWS (Settings, About, the installer, their dialogs) are not glass material
  * and do not follow the material (owner's decision, 2026-09-30). The glass material is
  * for the interface's surfaces and controls; a window is only translucent or not — one
  * switch (`windowTransparency`), on by default, and one opacity: this, or solid. 0.80 is

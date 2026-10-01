@@ -637,7 +637,7 @@ class ThemeManager extends GObject.Object {
     }
 
     /** Settings → Appearance → Windows: Nidara's windows translucent or solid. Not the
-     *  glass material — windows are not Liquid Glass (`WINDOW_GLASS_OPACITY`). */
+     *  glass material, which is for the interface's surfaces (`WINDOW_GLASS_OPACITY`). */
     get windowTransparency(): boolean { return this.fcConfig.windowTransparency }
     /** The material's haze (derived; `GLASS_FROST`). */
     get glassFrost(): number { return this.fcConfig.glassFrost }

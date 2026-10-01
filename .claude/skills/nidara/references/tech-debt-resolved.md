@@ -1775,7 +1775,7 @@ The owner wants the mixers reviewed regardless.
 became ONE choice of three — `glass-material` = clear / regular / frosted — and a position is a
 TABLE (`GLASS_FLOORS` in the kit's `theme-tokens.ts`), so the dock can sit thinner than a panel
 full of text and nothing claims a uniformity it does not have. The windows the question began with
-left the material altogether: they are not Liquid Glass, and have their own switch
+left the material altogether: they are not part of the glass material, and have their own switch
 (`window-transparency`). The four opacities are derived, stored nowhere. `design-system.md` →
 "Opacity — one glass material of three…" has the model.
 
