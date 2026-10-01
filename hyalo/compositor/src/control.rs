@@ -6,6 +6,7 @@
 //!
 //!   move X Y · click X Y · rclick X Y · press X Y BUTTON · release BUTTON
 //!   key KEYCODE · keydown KEYCODE · keyup KEYCODE      (evdev codes: 125 = Super, 42 = Shift)
+//!   pinch X Y SCALE                                    (two fingers, to SCALE in ten steps)
 //!
 //! Keys go through the same path as a keyboard's, bindings included.
 use std::io::BufRead;
@@ -66,11 +67,27 @@ impl Hyalo {
                     self.on_key(code, KeyState::Released, time);
                 }
             }
+            Some("pinch") => {
+                self.control_move(num(1), num(2), time);
+                self.control_pinch(num(3), time);
+            }
             _ => eprintln!("[hyalo] control: unknown {line:?}"),
         }
     }
 
     fn control_move(&mut self, x: f64, y: f64, time: InputTime) {
         self.pointer_moved_to((x, y).into(), time);
+    }
+
+    /// A touchpad pinch, through the seat calls a real one goes through (input.rs).
+    fn control_pinch(&mut self, to: f64, time: InputTime) {
+        use smithay::{input::pointer::{GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent}, utils::SERIAL_COUNTER};
+        let pointer = self.seat.get_pointer().unwrap();
+        pointer.gesture_pinch_begin(self, &GesturePinchBeginEvent { serial: SERIAL_COUNTER.next_serial(), time, fingers: 2 });
+        for step in 1..=10 {
+            let scale = 1.0 + (to - 1.0) * f64::from(step) / 10.0;
+            pointer.gesture_pinch_update(self, &GesturePinchUpdateEvent { time, delta: (0.0, 0.0).into(), scale, rotation: 0.0 });
+        }
+        pointer.gesture_pinch_end(self, &GesturePinchEndEvent { serial: SERIAL_COUNTER.next_serial(), time, cancelled: false });
     }
 }

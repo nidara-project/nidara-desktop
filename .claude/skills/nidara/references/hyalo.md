@@ -126,6 +126,15 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
   shadows in #684.
 
+## Touchpad gestures (pointer-gestures-v1)
+
+`input.rs` hands libinput's swipe, pinch and hold to the seat; the `PointerGesturesState` global
+(state.rs) is what lets an app receive them — without it the seat has them and every app hears
+nothing, silently (pinch-to-zoom in a browser, an image viewer). Hyalo binds no gesture to an
+action of its own yet. CI: `scripts/ci/hyalo-gesture-check.sh` pinches to 2× over a GTK window
+through `HYALO_CONTROL` (`pinch X Y SCALE`) and requires its `GtkGestureZoom` to report 2×; a Hyalo
+without the global fails it (checked, 2026-10-01).
+
 ## Computer use (the Assistant's synthetic input)
 
 `protocols/virtual_pointer.rs` (zwlr_virtual_pointer_v1, what `bin/nidara-input` speaks) and
