@@ -28,8 +28,14 @@ phase_deps() {
     log "pacman deps…"
     # The shell's runtime (as in headless-smoke.sh) plus Hyalo's build: rust and the
     # libraries Smithay links against.
+    #
+    # `hyprland` although Hyprland never runs here: the shell still calls `hyprctl` at start,
+    # some of it synchronously (its Hyprland dependency is #682's to remove). On every real
+    # install the binary exists — nidara-desktop depends on hyprland — and answers "no
+    # instance", which the shell survives; with no binary at all the spawn throws at module
+    # top level and the shell never starts (the first run of this job, 2026-10-01).
     pacman -Syu --needed --noconfirm \
-        base-devel git rust clang \
+        base-devel git rust clang hyprland \
         libinput seatd libdisplay-info libxkbcommon mesa systemd dbus \
         gobject-introspection glib2-devel esbuild \
         gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
