@@ -286,6 +286,11 @@ phase_run() {
     hyalo-sandbox-probe >/tmp/hyalo/sandbox-probe.log 2>&1 \
         || { log "FAIL: the sandbox probe"; cat /tmp/hyalo/sandbox-probe.log; exit 1; }
     log "sandboxed clients OK ($(sed -n 's/^RESULT //p' /tmp/hyalo/sandbox-probe.log))"
+    # xdg-dialog (#682): focusing a window that has a MODAL dialog open focuses the dialog; with
+    # a dialog that is not modal the parent takes the focus (the control).
+    DIALOG_LOG=/tmp/hyalo/dialog-clients.log "$REPO/scripts/ci/hyalo-dialog-check.sh" >/tmp/hyalo/dialog.log 2>&1 \
+        || { log "FAIL: modal dialogs"; cat /tmp/hyalo/dialog.log; exit 1; }
+    log "modal dialogs OK (the parent gives way to its modal dialog, not to a plain one)"
 
     # Computer use (#682): the compositor's state through bin/nidara-wm (Hyprland's shapes,
     # built from Hyalo's IPC) and the virtual pointer nidara-input speaks: a move to a point

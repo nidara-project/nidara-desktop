@@ -35,7 +35,7 @@ use smithay::{
     wayland::{
         compositor::with_states,
         seat::WaylandFocus,
-        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData},
+        shell::xdg::{SurfaceCachedState, XdgToplevelSurfaceData, dialog::ToplevelDialogHint},
     },
 };
 
@@ -782,7 +782,10 @@ impl Hyalo {
     // ── Focus ─────────────────────────────────────────────────────────────────────────
 
     /// Gives a window the keyboard, showing its workspace first if it is hidden. `None` = no
-    /// window has the focus (a click on the bare desktop).
+    /// window has the focus (a click on the bare desktop). A window with a MODAL dialog open
+    /// (xdg-dialog-v1) gives way to the dialog: every route to focus comes through here — a
+    /// click, the keyboard, the IPC, the overview — so the parent cannot be worked in behind
+    /// a dialog that is waiting for an answer.
     pub fn focus_window(&mut self, id: Option<WindowId>) {
         let serial = SERIAL_COUNTER.next_serial();
         let keyboard = self.seat.get_keyboard().unwrap();
@@ -792,6 +795,7 @@ impl Hyalo {
             self.sync_space();
             return;
         };
+        let id = self.modal_target(id);
         let Some(m) = self.wm.get(id) else { return };
         let ws = m.workspace;
         if !self.wm.is_visible(ws) {
@@ -830,6 +834,29 @@ impl Hyalo {
         keyboard.set_focus(self, surface, serial);
         self.arrange_workspace(ws);
         self.sync_space();
+    }
+
+    /// The window that takes the focus meant for `id`: its open modal dialog, or that
+    /// dialog's own, all the way down; `id` itself when it has none.
+    fn modal_target(&self, id: WindowId) -> WindowId {
+        let mut target = id;
+        // Bounded: a client could make a cycle of parents.
+        for _ in 0..8 {
+            let Some(surface) = self.wm.get(target).and_then(|m| m.window.toplevel().map(|t| t.wl_surface().clone()))
+            else {
+                break;
+            };
+            let modal = self.wm.windows.iter().find(|m| {
+                m.mapped
+                    && m.window.toplevel().and_then(|t| t.parent()).as_ref() == Some(&surface)
+                    && toplevel_data(&m.window, |d| d.dialog_hint) == Some(ToplevelDialogHint::Modal)
+            });
+            match modal {
+                Some(m) => target = m.id,
+                None => break,
+            }
+        }
+        target
     }
 
     /// The keyboard back to the focused window, after a layer surface that had it went away.
