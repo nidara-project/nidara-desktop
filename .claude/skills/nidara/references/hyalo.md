@@ -514,6 +514,23 @@ lock.
 - IPC: `nidara-hyalo msg idle` (`idle_secs`, `inhibited`, the config). Tested by
   `scripts/ci/hyalo-idle-check.sh` in the smoke (`hyalo-idle-inhibit-probe.c` is the inhibitor).
 
+## Input methods (text-input-v3 + input-method-v2)
+
+`handlers.rs` (`InputMethodHandler`) + both managers in `state.rs`. fcitx5 is an
+input-method-v2 client; GTK4 speaks text-input-v3 natively (still no `GTK_IM_MODULE`). Smithay
+moves the text-input focus WITH the keyboard focus (`wayland/seat/keyboard.rs`), and in Hyalo every
+keyboard focus change goes through `set_keyboard_focus` — so a layer surface that took the keyboard
+through a focus grab (the shell's search) gets the input method too. On Hyprland it never did (its
+grab path skipped the focus event the IME relay listens to: #679 #10, #503). The candidate window is
+a popup of the surface being typed into (`parent_geometry`: a window's geometry, or a layer
+surface's whole area), drawn with that surface's popups. input-method-v2 reads every key: hidden
+from sandboxed clients.
+- Verified nested with the real fcitx5 (private bus, throwaway config, `LANG=zh_CN.UTF-8`):
+  Ctrl+Space, `nihao`, space → 你好 in a GTK window AND in the shell's search.
+- CI: `scripts/ci/hyalo-ime-check.sh` with `hyalo-ime-probe.c`, a stand-in input method that
+  commits a fixed string when a field activates (fcitx5's Chinese engine would be ~540 MiB in the
+  container). Its XML is not in wayland-protocols: it comes from the wayland-protocols-misc crate.
+
 ## Window capture (thumbnails)
 
 `capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`
@@ -548,8 +565,12 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
   which speaks nothing else. `copy_with_damage` waits for the output's NEXT frame
   (`complete_screencopy` from post_repaint), so a still screen records nothing — never queue a
   redraw for it, or it records at full refresh. shm only, a CPU read-back per frame.
-  ⚠️ Orientation is MEASURED, not read off the spec: wf-recorder 0.6 records upright only with
-  top-first rows AND `Y_INVERT`; the two other combinations came out upside down.
+  The buffer is in the OUTPUT's orientation (`to_buffer`: flip, then rotate counter-clockwise),
+  top row first, no `Y_INVERT` — the client turns it upright with the output's transform
+  (wf-recorder: a `vflip`/`transpose` filter). ⚠️ Nested, the winit output is `flipped-180`: an
+  upright buffer WITH `Y_INVERT` looked right there (two flips cancelling) and recorded upside
+  down on a real output. Never settle an orientation on the nested output alone; CI's vkms is a
+  Normal one (wf-recorder's source, `frame-writer.cpp`, is what settled it).
 - **data-control**, both (`ext-` and `zwlr-`): `wl-paste --watch` → cliphist, the clipboard
   history, autostarted in `config/hyalo/hyalo.toml` (two watchers, one per type — why is there).
 - All four are privileged: hidden from sandboxed clients (the sandbox probe lists them), and

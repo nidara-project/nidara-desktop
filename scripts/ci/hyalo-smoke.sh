@@ -92,6 +92,15 @@ phase_build() {
     wayland-scanner private-code  "$ii_xml" "$ii/idle-inhibit-unstable-v1-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-idle-inhibit-probe.c" "$ii/xdg-shell-protocol.c" "$ii/idle-inhibit-unstable-v1-protocol.c" \
         -I"$ii" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-idle-inhibit-probe
+    # The stand-in input method (hyalo-ime-check.sh). input-method-v2 is not in wayland-protocols:
+    # its XML comes with the wayland-protocols-misc crate Hyalo was just built with.
+    local im="$REPO/build/im" im_xml
+    im_xml=$(find "${CARGO_HOME:-$HOME/.cargo}/registry/src" -name input-method-unstable-v2.xml | head -1)
+    mkdir -p "$im"
+    wayland-scanner client-header "$im_xml" "$im/input-method-unstable-v2-client-protocol.h"
+    wayland-scanner private-code  "$im_xml" "$im/input-method-unstable-v2-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-ime-probe.c" "$im/input-method-unstable-v2-protocol.c" \
+        -I"$im" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-ime-probe
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
@@ -409,6 +418,11 @@ phase_run() {
     CAPTURE_LOG=/tmp/hyalo/screen-capture "$REPO/scripts/ci/hyalo-screen-capture-check.sh" >/tmp/hyalo/screen-capture.log 2>&1 \
         || { log "FAIL: screen capture"; cat /tmp/hyalo/screen-capture.log; exit 1; }
     log "screen capture OK ($(grep -c '^ok' /tmp/hyalo/screen-capture.log) steps: output, region, clipboard, watch, recording)"
+    # Input methods (#683, #503): a stand-in input method's text reaches a focused window's
+    # field (empty before it ran: the control) and the shell's search under its focus grab.
+    PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \
+        || { log "FAIL: input methods"; cat /tmp/hyalo/ime.log; exit 1; }
+    log "input methods OK ($(grep -c '^ok' /tmp/hyalo/ime.log) of 2: a window, the shell's search)"
 
     # ── 3. Pictures for a person.
     sleep 4

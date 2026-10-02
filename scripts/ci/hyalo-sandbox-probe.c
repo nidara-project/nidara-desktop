@@ -61,6 +61,7 @@ static const char *hidden[] = {
     "ext_data_control_manager_v1",
     "zwlr_data_control_manager_v1",
     "zwlr_screencopy_manager_v1",
+    "zwp_input_method_manager_v2",
     "zwlr_layer_shell_v1",
     "hyprland_focus_grab_manager_v1",
     "nidara_material_manager_v1",

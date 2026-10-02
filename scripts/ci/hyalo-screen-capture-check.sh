@@ -51,7 +51,9 @@ timeout 5 wl-paste --type text --watch sh -c 'echo "SAW $(cat)"' >"$log/watch.lo
 pids="$pids $!"
 sleep 0.5
 # wl-copy stays behind serving the clipboard: its output goes nowhere, or it lands in ours later.
-grim -g "$geo" - | wl-copy 2>/dev/null || fail "grim | wl-copy failed"
+# --type: without it wl-copy guesses through xdg-mime, and where that is missing (CI's container)
+# it offers the PNG as text/plain — the check failed on that, not on Hyalo (2026-10-02).
+grim -g "$geo" - | wl-copy --type image/png 2>/dev/null || fail "grim | wl-copy failed"
 sleep 0.5
 wl-paste --list-types | grep -qx image/png || fail "the screenshot is not on the clipboard ($(wl-paste --list-types | tr '\n' ' '))"
 wl-paste --type image/png >"$log/pasted.png"

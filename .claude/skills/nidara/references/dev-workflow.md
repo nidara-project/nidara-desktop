@@ -1546,9 +1546,10 @@ locale's answer over a correct one. Measured for `zh_CN`; `ja_JP` takes the same
 assumed, not measured. **Read a claim about `buildDefaultGroup` against a running fcitx5 before
 acting on it.**
 
-🔴 **What IS missing is #503**: the IME does not reach our **layer-shell** surfaces. Same session,
-same keys — 你好 in kitty and in our own GTK4 Settings window (xdg toplevels), raw `nihao` in the
-search overlay. No profile would have fixed that.
+🔴 **What IS missing is #503 — on Hyprland**: the IME does not reach our **layer-shell** surfaces
+under a focus grab. Same session, same keys — 你好 in kitty and in our own GTK4 Settings window
+(xdg toplevels), raw `nihao` in the search overlay. No profile would have fixed that. ✅ On Hyalo it
+works (2026-10-02, `references/hyalo.md` → "Input methods"); Hyprland is frozen, so it stays there.
 
 ### The installer's log is not a terminal, and the children writing to it assume one
 
