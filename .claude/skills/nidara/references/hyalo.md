@@ -236,16 +236,16 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
   "a shadow downward separating the top from the bottom").
   - **The Control Center and the Notification Center share ONE region** (`trackScrimRegion(widget)`
-    in Bar.tsx): their CONTAINER, a little darker at its centre and sweeping out to `scrimEdge`
-    (0.7) of that at its edges, then fading to nothing over `scrimFalloff` (160) px — 48 read as a step ("there must be no jump between the shadow and the backdrop", owner). Tuned live. How it got
+    in Bar.tsx): their CONTAINER, EVEN across it (`scrimEdge` 1 — the shadow is what the glass
+    lacks at the brightest point, so a sweep leaves the edge tiles short of it; 0.7 did not read
+    on screen either, owner 2026-10-02: settled, no more tuning rounds), then fading to nothing over `scrimFalloff` (160) px — 48 read as a step ("there must be no jump between the shadow and the backdrop", owner). Tuned live. How it got
     there, all on 2026-10-02: first the screen's whole right-hand strip, down to the bottom,
     shading wallpaper far below a short panel — the owner, from a reference video: "the shadow
     occupies only the CC's area"; then the panel's block, even: "it looks like a translucent
     dark panel with a gradient at its border"; an ELLIPSE darkest at the centre was written and
     thrown away unseen — "I did not say an ellipse … very subtle, very slightly darker at the
-    centre, sweeping from the centre, over the container's area". ⚠️ Away from the centre the
-    shadow is weaker than what the brightest tile asked for, so an edge tile over white is a
-    little less legible than on the even block — the owner's trade, subtle over even. The region
+    centre, sweeping from the centre, over the container's area"; the sweep then went back to
+    even, above. The region
     no longer reaches past the screen's edges: its centre has to be the panel's. Its core ends
     at its GLASS's edges plus what
     that glass refracts (`placeScrimRegions`), not at the widget's box, which holds margins:

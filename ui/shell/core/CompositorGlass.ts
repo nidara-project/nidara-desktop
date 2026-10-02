@@ -58,8 +58,8 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * `scrimMax`, because a tint above the limit is the grey plastic again. A pane's own
  * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's); the
  * Control Center and the Notification Center share one the size of the panel
- * (`trackScrimRegion` in Bar.tsx), whole at its centre and sweeping out to `scrimEdge` of
- * that at its edges, then fading over `scrimFalloff` px. Owner, 2026-10-02: even across the
+ * (`trackScrimRegion` in Bar.tsx), even across the container (`scrimEdge` 1; below 1 it
+ * sweeps from the centre), then fading over `scrimFalloff` px. Owner, 2026-10-02: even across the
  * panel "it looks like a translucent dark panel with a gradient at its border", where it
  * should be "very subtle, very slightly darker at the centre, sweeping from the centre, over
  * the container's area". The bar and the dock cast none for now (`trackNoScrim`): a shadow that
@@ -94,9 +94,11 @@ const DEFAULTS = {
     // see (owner, 2026-10-02: "it has to end with no jump between the shadow and the
     // backdrop"); with the sweep from the centre a long fade reads as none.
     scrimFalloff: 160,
-    // The Control Center's shadow at its edges, as a fraction of its centre's (1: even). A
-    // starting point, to tune on screen with the owner.
-    scrimEdge: 0.7,
+    // The Control Center's shadow at its edges, as a fraction of its centre's (1: even). Even
+    // (owner, 2026-10-02): the shadow is what the glass lacks at the brightest point, so it holds
+    // across the whole container and only fades outside it; the sweep (0.7) left the edge tiles
+    // short of it and did not read on screen anyway.
+    scrimEdge: 1,
     // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
     // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
     tintLimit: 0.25,
