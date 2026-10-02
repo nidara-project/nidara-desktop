@@ -707,8 +707,12 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   `layer::usable_zone`, never `LayerMap::layer_geometry`/`non_exclusive_zone`. ⚠️ Never call
   `LayerMap::arrange` besides it: Smithay still runs it inside `map_layer`/`unmap_layer` (a
   single configure each time, corrected right after), but called on every commit the two rules
-  would answer each other's configures forever. CI: the smoke has the shell hide and show its
-  bar and dock as a lock does, and requires both back at the top of the output.
+  would answer each other's configures forever. The same rule keeps a SIDE dock from pushing
+  the bar in or cutting it short by its 80 px, which Smithay's rule did when the dock was mapped
+  first (the owner asked, 2026-10-02; Hyprland never did it). CI: the smoke has the shell hide and
+  show its bar and dock as a lock does, and requires both back at the top of the output; and
+  `scripts/ci/hyalo-layers-check.sh` (+ `hyalo-layers-probe.js`) maps a bar and a dock at the
+  bottom, left and right, in both orders, and requires both over the whole output.
 - **The scan-out feedback is sticky** (`pick_feedback` in `backend/mod.rs`). Smithay's
   `select_dmabuf_feedback` follows the frame, and each switch is a new modifier set. Mesa's
   Wayland WSI answers that with `VK_SUBOPTIMAL_KHR`, and GTK rebuilds its swapchain on it, so the

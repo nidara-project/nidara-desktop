@@ -445,6 +445,11 @@ phase_run() {
     echo "$placed" | jq -e 'length == 2 and all(.y == 0)' >/dev/null \
         || { log "FAIL: after hiding and showing them again, the bar or the dock is out of place ($placed)"; exit 1; }
     log "layer placement OK (bar and dock back at the top of the output after a lock's hide and show)"
+    # The same rule for every dock position and mapping order: a side dock must not push the
+    # bar in or cut it short (it did, by its 80 px, under Smithay's rule).
+    LAYERS_LOG=/tmp/hyalo/layers-probe.log "$REPO/scripts/ci/hyalo-layers-check.sh" >/tmp/hyalo/layers.log 2>&1 \
+        || { log "FAIL: layer placement by dock position"; cat /tmp/hyalo/layers.log; exit 1; }
+    log "layer placement OK ($(grep -c '^ok' /tmp/hyalo/layers.log) of 6: dock at the bottom, left and right, mapped before and after the bar)"
     # Every process Hyalo starts is waited for (#683). Unwaited they stayed zombies, and
     # nidara-lock, which will not start while a process of its name exists, refused every lock
     # after the first (owner-caught 2026-10-02; 5 spawns left 5 zombies before the fix).
