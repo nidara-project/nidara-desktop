@@ -137,7 +137,7 @@ workspace = "name:gamespace"
 "Super+Ctrl+Shift+Right" = "move-to-workspace e+1"
 "Super+Ctrl+Shift+Left" = "move-to-workspace e-1"
 # Screenshots.
-"Print" = "spawn grim -g \"$(slurp -d)\" - | wl-copy"
+"Print" = "spawn grim -g \"$(slurp -d)\" - | wl-copy --type image/png"
 "Shift+Print" = "spawn grim -g \"$(slurp -d)\" ~/Pictures/Screenshot_$(date +'%Y-%m-%d_%H-%M-%S').png && notify-send \"Captura\" \"Guardada en Imágenes\""
 # Hardware and media keys; `locked` = they keep working on the lock screen.
 "XF86AudioRaiseVolume" = { action = "spawn wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+", locked = true, repeat = true }

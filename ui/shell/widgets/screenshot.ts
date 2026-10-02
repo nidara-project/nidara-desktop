@@ -38,7 +38,9 @@ function buildCommand(mode: CaptureMode, action: CaptureAction): string {
     const grimFlag = geometry ? `-g "${geometry}"` : ""
 
     if (action === "copy") {
-        return `grim ${grimFlag} - | wl-copy`.trim()
+        // The type, not wl-copy's guess: it guesses through xdg-mime, and without it a PNG is
+        // offered as text/plain and pastes as nothing (measured 2026-10-02).
+        return `grim ${grimFlag} - | wl-copy --type image/png`.trim()
     } else {
         const file = saveFilename()
         return `grim ${grimFlag} "${file}" && notify-send "${t("widget.screenshot.saved")}" "${file}"`.trim()
