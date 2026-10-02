@@ -41,8 +41,8 @@ import Gdk from "gi://Gdk?version=4.0"
  * glass takes no more tint than its limit and the compositor lays a soft shadow under it, even
  * across the pane, with exactly what the glass is missing to keep the text legible — none
  * where the glass reaches it alone. A pane gets one of its own; panes that sit together share one through
- * `trackScrimRegion` — the Control Center's is the whole right-hand strip of the screen, fading
- * to the left — and panes that must cast none say so through `trackNoScrim` (the bar's, the
+ * `trackScrimRegion` — the Control Center's is its panel's block, reaching past the screen's
+ * right and top edges and fading to the left and below — and panes that must cast none say so through `trackNoScrim` (the bar's, the
  * dock's, owner 2026-10-02: a halo around them ran over the windows).
  *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
@@ -201,8 +201,8 @@ const PAST_THE_EDGE = 100000
 /**
  * One shadow under every pane of glass inside `widget`'s box (v5), instead of one each: panes
  * side by side lie on one even shadow, fading only outside it. `edges` says which edges of the
- * screen the region reaches past — the Control Center's is the screen's whole right-hand strip
- * (right, top and bottom), so its shadow fades only toward the left. Declared while the
+ * screen the region reaches past — the Control Center's reaches past the right and the top,
+ * so its shadow fades toward the left and below the panel, never down the whole screen. Declared while the
  * widget is shown; it shares its surface's material (`trackGlass`). Where two regions hold a
  * pane, the one declared first wins.
  */

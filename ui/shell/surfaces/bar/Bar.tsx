@@ -149,15 +149,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right", unclipAtRest: true })
   const ncWidget = NotificationCenter()
   const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
-  // On Hyalo, the panes of both lie on ONE shadow under their glass, over the screen's whole
-  // right-hand strip, fading only toward the left (owner, 2026-10-02): one per tile would show
-  // as patches with and without shadow. Hyalo lays it only where the backdrop needs it.
+  // On Hyalo, the panes of both lie on ONE shadow under their glass, as tall as the panel
+  // and fading toward the left and below it (owner, 2026-10-02): one per tile would show as
+  // patches with and without shadow, and a strip down to the bottom of the screen shaded
+  // what the panel does not cover. Hyalo lays it only where the backdrop needs it.
   // The bar's capsules cast none (owner, 2026-10-02: a halo, or a band hugging the bar, ran
   // over the windows). Declared FIRST: a capsule on the right also lies in the Control
   // Center's strip, and must not join it.
   trackNoScrim(barBox)
-  trackScrimRegion(cc, { right: true, top: true, bottom: true })
-  trackScrimRegion(nc, { right: true, top: true, bottom: true })
+  trackScrimRegion(cc, { right: true, top: true })
+  trackScrimRegion(nc, { right: true, top: true })
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })

@@ -223,9 +223,12 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
 - **Who casts what.** A pane in no region gets a halo, its outline fading outward over
   `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
   "a shadow downward separating the top from the bottom").
-  - **The Control Center and the Notification Center share ONE region**, the screen's whole
-    right-hand strip (`trackScrimRegion(widget, { right, top, bottom })` in Bar.tsx), fading
-    over `scrimFalloff` px (48) to the left. Its core ends at its GLASS's left edge plus what
+  - **The Control Center and the Notification Center share ONE region**, the panel's block:
+    it reaches past the screen's right and top edges (`trackScrimRegion(widget, { right, top })`
+    in Bar.tsx) and fades over `scrimFalloff` px (48) to the left and below. Until 2026-10-02 it
+    also reached past the BOTTOM — the screen's whole right-hand strip, shading wallpaper far
+    below a short panel; the owner, from a reference video: "the shadow occupies only the CC's
+    area". Its core ends at its GLASS's left and bottom edges plus what
     that glass refracts (`placeScrimRegions`), not at the widget's box, which holds margins:
     "the fade should start right where the CC ends" (owner; it was 32 px of margin and 380 of
     fade — 800 px of shadow for a 368 px panel). Measured nested without it: each tile got its own
