@@ -618,6 +618,11 @@ Two kinds of request:
   re-states settings on `config_reloaded`, and an unconditional reload there would loop.
   `config` answers with the configuration in force (the keyboard with the system layout filled
   in), which is what Settings shows.
+- ⚠️ **A runtime action must not write `state.config` directly.** The next reload replaces
+  `state.config` with the files' merge, so anything set only in memory is put back the moment
+  Settings changes anything else. `set-cursor` did exactly that until 2026-10-02 (the shell's
+  cursor theme reverted to `default` on a keyboard-layout change); it now goes through
+  `apply_settings`. Runtime-only state lives outside `config` (`mode_overrides`, `cursor_hidden`).
 - A reload Hyalo did itself updates `config_stamps`, so the file watcher does not reload the same
   write a second time a second later.
 - **`HYALO_CONFIG` replaces the layers** (tests, CI), and then there is a settings layer only if
