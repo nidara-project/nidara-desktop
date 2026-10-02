@@ -29,7 +29,7 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
- *   scrimMax scrimSize scrimFalloff scrimSpread          the shadow under the glass (below)
+ *   scrimMax scrimSize scrimFalloff scrimStrip scrimSpread   the shadow under the glass (below)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -53,9 +53,14 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * across the pane, just strong enough that the brightest point under it comes down to
  * `target`, and only where the tint alone would split a pane — the tint its darkest and its
  * brightest point need differing by more than `scrimSpread`: none over a dark backdrop, none
- * over an evenly light one, none over an all-white one (the ink's light veil serves that). A pane's own shadow fades over `scrimSize` of its shorter side;
- * the Control Center and the Notification Center share one over the screen's whole right-hand
- * strip (`trackScrimRegion` in Bar.tsx), fading over `scrimFalloff` px to the left.
+ * over an evenly light one, none over an all-white one (the ink's light veil serves that).
+ * A last resort (owner, 2026-10-02): the least shadow that evens the pane out — the two
+ * points' tints within half of `scrimSpread` of each other — and the tint does the rest.
+ * A pane's own shadow fades over `scrimSize` of its shorter side (the app grid's); the Control
+ * Center and the Notification Center share one over the screen's whole right-hand strip
+ * (`trackScrimRegion` in Bar.tsx), fading over `scrimFalloff` px to the left; the bar and the
+ * dock shade the whole band of the screen they sit on, fading over `scrimStrip` times their
+ * thickness.
  */
 
 const DEFAULTS = {
@@ -84,6 +89,9 @@ const DEFAULTS = {
     // panel is wide, so the step from shadow to wallpaper cannot be seen (owner: "as soft as
     // possible").
     scrimFalloff: 380,
+    // The bar's and the dock's band fades over this multiple of their thickness, past the
+    // margin the refraction reads: 72 px under the bar (36), 184 beside the dock (92).
+    scrimStrip: 2,
     // A shadow only where the tint the darkest and the brightest point under the panes need
     // differ by more than this (of 0.05..0.60): a pane that would be visibly grey in one part
     // and clear in another. To be calibrated with the owner on screen.
@@ -117,7 +125,8 @@ function inkParams(): InkParams | null {
 function scrimParams(): ScrimParams | null {
     if (tuning.off || tuning.scrimOff || Theme.reduceTransparency) return null
     const p = { ...DEFAULTS, ...tuning }
-    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, minSpread: p.scrimSpread }
+    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, panelFalloff: p.scrimFalloff,
+        stripFalloff: p.scrimStrip, minSpread: p.scrimSpread }
 }
 
 function parse(text: string): Tuning {

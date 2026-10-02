@@ -277,17 +277,38 @@ fn tint_needed(l: f64, glass: &Glass) -> f64 {
 /// The shadow one unit wants (v5), from the darkest and brightest WCAG luminance of the
 /// backdrop under its shapes without any shadow, and whether it has one now (`on`): a shadow
 /// only while the tint those two points need differs by more than `min_spread` — a pane grey
-/// in one part and clear in another — and until it falls below half of it. Its strength
-/// brings the brightest point down to the target: black laid over the encoded colour scales
-/// it, so the encoded value is what is solved for.
+/// in one part and clear in another — and until it falls below half of it.
+///
+/// Its strength is the LEAST that evens the pane out (owner, 2026-10-02: a last resort, there
+/// only so the glass does not look painted grey over half of it): it brings the tint the two
+/// points need to within half of `min_spread` of each other — the difference the hysteresis
+/// already lets stand — and the tint does the rest, evenly. Bringing the brightest point all
+/// the way down to the target (the first rule) made the tint idle and the shadow carry
+/// everything. Black laid over the encoded colour scales it, so the encoded value is what is
+/// solved for.
 fn scrim_target(on: bool, darkest: f64, brightest: f64, glass: &Glass, scrim: &Scrim) -> f64 {
-    let spread = tint_needed(brightest, glass) - tint_needed(darkest, glass);
+    let spread_under = |s: f64| {
+        let left = |l: f64| to_linear(encode(l) * (1.0 - s));
+        tint_needed(left(brightest), glass) - tint_needed(left(darkest), glass)
+    };
+    let spread = spread_under(0.0);
     let wanted = if on { spread > scrim.min_spread * 0.5 } else { spread > scrim.min_spread };
     if !wanted || brightest <= glass.target_luminance {
         return 0.0;
     }
-    let s = 1.0 - encode(glass.target_luminance) / encode(brightest).max(1e-6);
-    s.clamp(0.0, scrim.max_strength.clamp(0.0, 1.0))
+    // At this strength the brightest point is at the target, and the spread is none.
+    let full = (1.0 - encode(glass.target_luminance) / encode(brightest).max(1e-6))
+        .clamp(0.0, scrim.max_strength.clamp(0.0, 1.0));
+    let tolerated = scrim.min_spread * 0.5;
+    if spread_under(full) > tolerated {
+        return full;
+    }
+    let (mut lo, mut hi) = (0.0, full);
+    for _ in 0..16 {
+        let m = 0.5 * (lo + hi);
+        if spread_under(m) > tolerated { lo = m } else { hi = m }
+    }
+    hi
 }
 
 /// The surface's material object, for the ink event.
@@ -637,11 +658,13 @@ mod tests {
     fn a_shadow_only_where_the_tint_would_split_the_pane() {
         let g = glass();
         let scrim = Scrim { max_strength: 0.7, size_fraction: 0.5, min_spread: 0.12 };
-        // Black over the encoded colour scales it: what the strength leaves of white must be
-        // the target, in linear light.
+        // The least that evens it out: black over the encoded colour scales it, and what the
+        // strength leaves of the two points needs tints within half of min_spread — no closer.
         let s = scrim_target(false, 0.02, 1.0, &g, &scrim);
-        let left = to_linear(1.0 - s);
-        assert!((left - g.target_luminance).abs() < 0.005, "white under the shadow comes to the target: {left} for {s}");
+        let spread_left = |s: f64| tint_needed(to_linear(1.0 - s), &g) - tint_needed(to_linear(encode(0.02) * (1.0 - s)), &g);
+        assert!((spread_left(s) - scrim.min_spread * 0.5).abs() < 0.005, "evened to the tolerated spread: {} for {s}", spread_left(s));
+        let full = 1.0 - encode(g.target_luminance);
+        assert!(s < full - 0.02, "less than bringing white to the target ({full}): {s}");
         assert_eq!(scrim_target(false, 0.0, 0.15, &g, &scrim), 0.0, "dark enough everywhere: none");
         assert_eq!(scrim_target(false, 0.55, 0.65, &g, &scrim), 0.0, "evenly light: an even tint, no shadow");
         assert_eq!(scrim_target(false, 0.9, 1.0, &g, &scrim), 0.0, "white everywhere: no shadow (the ink's veil)");

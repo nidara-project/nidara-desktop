@@ -152,6 +152,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // On Hyalo, the panes of both lie on ONE shadow under their glass, over the screen's whole
   // right-hand strip, fading only toward the left (owner, 2026-10-02): one per tile would show
   // as patches with and without shadow. Hyalo lays it only where the backdrop needs it.
+  // The bar's capsules likewise shade the whole top band of the screen, fading downward, not
+  // a halo each (owner, 2026-10-02). Declared FIRST: a capsule on the right also lies in the
+  // Control Center's strip, and must stay on the bar's.
+  trackScrimRegion(barBox, { top: true, left: true, right: true }, { fade: "strip" })
   trackScrimRegion(cc, { right: true, top: true, bottom: true })
   trackScrimRegion(nc, { right: true, top: true, bottom: true })
   const prism = Prism()

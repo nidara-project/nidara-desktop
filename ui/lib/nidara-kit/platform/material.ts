@@ -38,10 +38,11 @@ import Gdk from "gi://Gdk?version=4.0"
  * The SHADOW under the glass (v5, owner 2026-10-02, #684): where the backdrop under a pane is
  * bright in one place and dark in another, the compositor's per-pixel tint left it grey in one
  * part and clear in the other. With a scrim the compositor lays a soft shadow under the glass,
- * even across the pane, only as strong as that backdrop needs, and only then — never under a
- * pane over an evenly light backdrop, whose tint is even anyway. A pane gets one
- * of its own; panes that sit together share one through `trackScrimRegion` — the Control
- * Center's is the whole right-hand strip of the screen, fading to the left.
+ * even across the pane, and only then — never under a pane over an evenly light backdrop,
+ * whose tint is even anyway. A last resort: the least that evens the pane out, the tint doing
+ * the rest. A pane gets one of its own; panes that sit together share one through
+ * `trackScrimRegion` — the Control Center's is the whole right-hand strip of the screen, fading
+ * to the left; the bar and the dock shade the whole band of the screen they sit on.
  *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
  * reinstalling libnidara-wl must not take the shell down. `NIDARA_MATERIAL=0` turns the
@@ -101,8 +102,12 @@ export type ScrimParams = {
      *  differs by more than this (an opacity): a pane that would be grey in one part and
      *  clear in another. An evenly light backdrop gets an even tint and no shadow. */
     minSpread: number
-    /** A region's shadow fades over this many logical px outside it. */
-    regionFalloff: number
+    /** A panel region's shadow (`trackScrimRegion`, `fade: "panel"`) fades over this many
+     *  logical px outside it. */
+    panelFalloff: number
+    /** A strip's (`fade: "strip"`) fades over this multiple of its thickness: the bar's is a
+     *  few dozen px, the dock's a little more, never half the screen. */
+    stripFalloff: number
 }
 
 /** The class a pane of glass carries while its content is dark. */
@@ -191,7 +196,10 @@ let nextInkId = 1
 
 /** Which edges of the screen a scrim region reaches past. */
 export type ScrimEdges = { left?: boolean, right?: boolean, top?: boolean, bottom?: boolean }
-type ScrimRegion = { widget: Gtk.Widget, edges: ScrimEdges }
+/** How a region's shadow fades where it does not reach an edge: over a panel's width
+ *  (`panelFalloff` px), or over a multiple of a strip's thickness (`stripFalloff`). */
+export type ScrimFade = "panel" | "strip"
+type ScrimRegion = { widget: Gtk.Widget, edges: ScrimEdges, fade: ScrimFade, area?: () => Rect | null }
 const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
 /** Far past any screen: the compositor cuts a region to its output. */
 const PAST_THE_EDGE = 100000
@@ -204,12 +212,17 @@ const SCRIM_MARGIN = 32
  * One shadow under every pane of glass inside `widget`'s box (v5), instead of one each: panes
  * side by side lie on one even shadow, fading only outside it. `edges` says which edges of the
  * screen the region reaches past — the Control Center's is the screen's whole right-hand strip
- * (right, top and bottom), so its shadow fades only toward the left. Declared while the widget
- * is shown; it shares its surface's material (`trackGlass`).
+ * (right, top and bottom), so its shadow fades only toward the left. Chrome that sits on an
+ * edge — the bar, the dock — shades its whole band of the screen this way, not a halo around
+ * its glass (owner, 2026-10-02: "the region, not the area right around the glass"), with
+ * `fade: "strip"`. `area` narrows the box to part of the widget (widget-local), for a widget
+ * wider than its glass. Declared while the widget is shown; it shares its surface's material
+ * (`trackGlass`). Where two regions hold a pane, the one declared first wins.
  */
-export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges): void {
+export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges,
+    opts: { fade?: ScrimFade, area?: () => Rect | null } = {}): void {
     load()
-    const r: ScrimRegion = { widget, edges }
+    const r: ScrimRegion = { widget, edges, fade: opts.fade ?? "panel", area: opts.area }
     scrimRegions.set(widget, r)
     const resend = () => {
         const native = widget.get_native()
@@ -221,20 +234,27 @@ export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges): void {
     widget.connect("destroy", () => scrimRegions.delete(widget))
 }
 
-/** The scrim regions shown on `native`, surface-local. */
-function placeScrimRegions(native: Gtk.Native): Rect[] {
+/** The scrim regions shown on `native`, surface-local, each with its falloff. */
+function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams): (Rect & { falloff: number })[] {
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
-    const out: Rect[] = []
-    for (const { widget, edges } of scrimRegions.values()) {
+    const out: (Rect & { falloff: number })[] = []
+    for (const { widget, edges, fade, area } of scrimRegions.values()) {
         if (widget.get_native() !== native || !widget.get_mapped() || !widget.is_drawable()) continue
         const [ok, b] = widget.compute_bounds(nw)
-        if (!ok || b.get_width() <= 0 || b.get_height() <= 0) continue
-        const x0 = edges.left ? -PAST_THE_EDGE : b.get_x() + tx - SCRIM_MARGIN
-        const y0 = edges.top ? -PAST_THE_EDGE : b.get_y() + ty - SCRIM_MARGIN
-        const x1 = edges.right ? PAST_THE_EDGE : b.get_x() + tx + b.get_width() + SCRIM_MARGIN
-        const y1 = edges.bottom ? PAST_THE_EDGE : b.get_y() + ty + b.get_height() + SCRIM_MARGIN
-        out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
+        if (!ok) continue
+        const a = area ? area() : { x: 0, y: 0, w: b.get_width(), h: b.get_height() }
+        if (!a || a.w <= 0 || a.h <= 0) continue
+        const bx = b.get_x() + tx + a.x, by = b.get_y() + ty + a.y
+        const x0 = edges.left ? -PAST_THE_EDGE : bx - SCRIM_MARGIN
+        const y0 = edges.top ? -PAST_THE_EDGE : by - SCRIM_MARGIN
+        const x1 = edges.right ? PAST_THE_EDGE : bx + a.w + SCRIM_MARGIN
+        const y1 = edges.bottom ? PAST_THE_EDGE : by + a.h + SCRIM_MARGIN
+        // A strip's thickness runs across the side it fades from: the bar's height, a side
+        // dock's width.
+        const thickness = edges.top && edges.bottom ? a.w : a.h
+        const falloff = fade === "strip" ? scrim.stripFalloff * thickness : scrim.panelFalloff
+        out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff })
     }
     return out
 }
@@ -586,7 +606,7 @@ function flush(native: Gtk.Native, st: NativeState) {
     }
     const ink = paints ? inkWanted : null
     const scrim = paints && shim.material_set_scrim ? source?.scrim?.(native) ?? null : null
-    const regions = scrim ? placeScrimRegions(native) : []
+    const regions = scrim ? placeScrimRegions(native, scrim) : []
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
@@ -595,7 +615,7 @@ function flush(native: Gtk.Native, st: NativeState) {
         s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
             round(s.pointer.width)]]), paints && glass, blur,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
-        scrim, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h)])])
+        scrim, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff)])])
     if (key === st.last) return
     st.last = key
     shim.material_begin(surface)
@@ -627,7 +647,7 @@ function flush(native: Gtk.Native, st: NativeState) {
         shim.material_clear_ink?.(surface)
     }
     if (scrim) {
-        for (const r of regions) shim.material_add_scrim_region?.(surface, r.x, r.y, r.w, r.h, scrim.regionFalloff)
+        for (const r of regions) shim.material_add_scrim_region?.(surface, r.x, r.y, r.w, r.h, r.falloff)
         shim.material_set_scrim?.(surface, scrim.maxStrength, scrim.sizeFraction, scrim.minSpread)
     } else {
         shim.material_set_scrim?.(surface, 0, 0, 0)
