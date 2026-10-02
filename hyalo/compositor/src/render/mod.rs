@@ -113,7 +113,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.06, 0.06, 0.07, 1.0);
 
 /// A surface tree and its popups, front to back, each with its glass right below it, and the
-/// shadow under that glass (v5) below the glass — unless `floor` is given: the shell's chrome
+/// shadow under that glass below the glass — unless `floor` is given: the shell's chrome
 /// casts ONE floor of shadows under all of it (`chrome_scrims`, drawn by the caller), so the
 /// Control Center's never falls on the dock, which sits in the same layer, and each glass
 /// measures its backdrop with the whole floor divided out — not only its own shadow, or the
@@ -150,7 +150,7 @@ fn push_surface<R: HyaloRenderer>(
     layer(out, surface, location, Kind::ScanoutCandidate);
 }
 
-/// The shadows a surface tree and its popups cast (v5), for the chrome's floor.
+/// The shadows a surface tree and its popups cast, for the chrome's floor.
 fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<scrim::ScrimPx> {
     let mut out = Vec::new();
     for (popup, offset) in PopupManager::popups_for_surface(surface) {

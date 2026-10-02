@@ -54,7 +54,6 @@ static struct hyprland_surface_manager_v1 *surface_mgr = NULL;
 static struct hyprland_focus_grab_manager_v1 *focus_grab_mgr = NULL;
 static gboolean                        capture_supported = FALSE;
 static struct nidara_material_manager_v1 *material_mgr = NULL;
-static uint32_t material_version = 0;
 
 static void
 init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
@@ -79,14 +78,11 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
     capture_supported = TRUE;
   else if (g_strcmp0 (interface, nidara_material_manager_v1_interface.name) == 0)
     {
-      /* v2 adds a shape's own opacity and clip (add_shape_clipped); a v1
-       * compositor gets plain shapes. v3 adds the ink (add_ink_box, set_ink,
-       * the ink event). v4 adds set_lensing. v5 adds the shadow under the glass
-       * (set_scrim, add_scrim_region). */
-      material_version = MIN (version, 5);
+      /* Version 1 is the whole protocol: it is ours and unpublished, so a request
+       * it gains goes into version 1 rather than a new one (owner, 2026-10-02). The
+       * library and Hyalo are therefore installed together. */
       material_mgr = wl_registry_bind (registry, name,
-                                       &nidara_material_manager_v1_interface,
-                                       material_version);
+                                       &nidara_material_manager_v1_interface, 1);
     }
 }
 
@@ -333,7 +329,7 @@ nidara_wl_material_set_ink_func (NidaraWlMaterialInkFunc func,
 gboolean
 nidara_wl_material_has_ink (void)
 {
-  return nidara_wl_has_material () && material_version >= 3;
+  return nidara_wl_has_material ();
 }
 
 static struct nidara_material_v1 *
@@ -351,7 +347,7 @@ material_get (GdkSurface *surface)
     return NULL;
 
   m = nidara_material_manager_v1_get_material (material_mgr, wls);
-  /* GDK's own queue, not ours: the one event this object has (ink, v3) is then
+  /* GDK's own queue, not ours: the one event this object has (ink) is then
    * dispatched by GDK's reader on the main loop, as it arrives — nothing of ours
    * has to poll for it (see grab_pump for what that costs). */
   wl_proxy_set_queue ((struct wl_proxy *) m, NULL);
@@ -397,12 +393,6 @@ nidara_wl_material_add_shape_clipped (GdkSurface *surface,
   struct nidara_material_v1 *m = material_get (surface);
   if (!m || width <= 0 || height <= 0 || opacity <= 0)
     return;
-  if (material_version < 2)
-    {
-      /* A v1 compositor has neither: the glass is there whole and at full, or not at all. */
-      nidara_wl_material_add_shape (surface, x, y, width, height, corner_radius, exponent);
-      return;
-    }
   nidara_material_v1_add_shape_clipped (m,
                                         wl_fixed_from_double (x), wl_fixed_from_double (y),
                                         wl_fixed_from_double (width), wl_fixed_from_double (height),
@@ -427,13 +417,6 @@ nidara_wl_material_add_shape_pointed (GdkSurface *surface,
   struct nidara_material_v1 *m = material_get (surface);
   if (!m || width <= 0 || height <= 0 || opacity <= 0)
     return;
-  if (material_version < 3)
-    {
-      /* Before v3 the pointer is no shape: the body alone. */
-      nidara_wl_material_add_shape_clipped (surface, x, y, width, height, corner_radius, exponent,
-                                            opacity, clip_x, clip_y, clip_width, clip_height);
-      return;
-    }
   nidara_material_v1_add_shape_pointed (m,
                                         wl_fixed_from_double (x), wl_fixed_from_double (y),
                                         wl_fixed_from_double (width), wl_fixed_from_double (height),
@@ -474,20 +457,21 @@ nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
-  if (m && material_version >= 4)
+  if (m)
     nidara_material_v1_set_lensing (m, wl_fixed_from_double (size_fraction));
 }
 
 void
 nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
-                              double tint_limit)
+                              double tint_limit, double region_edge)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
-  if (m && material_version >= 5)
+  if (m)
     nidara_material_v1_set_scrim (m, wl_fixed_from_double (max_strength),
                                   wl_fixed_from_double (size_fraction),
-                                  wl_fixed_from_double (tint_limit));
+                                  wl_fixed_from_double (tint_limit),
+                                  wl_fixed_from_double (region_edge));
 }
 
 void
@@ -497,7 +481,7 @@ nidara_wl_material_add_scrim_region (GdkSurface *surface,
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
-  if (!m || material_version < 5 || width <= 0 || height <= 0)
+  if (!m || width <= 0 || height <= 0)
     return;
   nidara_material_v1_add_scrim_region (m,
                                        wl_fixed_from_double (x), wl_fixed_from_double (y),
@@ -520,7 +504,7 @@ nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
-  if (!m || material_version < 3 || width <= 0 || height <= 0)
+  if (!m || width <= 0 || height <= 0)
     return;
   nidara_material_v1_add_ink_box (m, id,
                                   wl_fixed_from_double (x), wl_fixed_from_double (y),
@@ -533,7 +517,7 @@ nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
-  if (!m || material_version < 3)
+  if (!m)
     return;
   nidara_material_v1_set_ink (m, wl_fixed_from_double (dark_above), wl_fixed_from_double (light_below),
                               wl_fixed_from_double (tint_r), wl_fixed_from_double (tint_g),
@@ -545,7 +529,7 @@ nidara_wl_material_clear_ink (GdkSurface *surface)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
-  if (m && material_version >= 3)
+  if (m)
     nidara_material_v1_clear_ink (m);
 }
 

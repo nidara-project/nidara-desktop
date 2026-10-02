@@ -1,4 +1,4 @@
-//! The shadow under a surface's glass (`nidara-material-v1` v5), as a render element of its
+//! The shadow under a surface's glass (`nidara-material-v1`), as a render element of its
 //! own, drawn below the glass — inside what the glass captures and blurs.
 //!
 //! Why it exists: the glass's tint thickens per pixel where the backdrop is too bright for
@@ -32,16 +32,20 @@ use crate::protocols::material;
 /// The most shadows one surface draws; past it, the strongest.
 pub const MAX_SCRIMS: usize = 32;
 
-/// The fragment shader. Each shadow: a rounded-rectangle core at its strength, fading over its
-/// falloff with smootherstep — no visible edge where the core ends nor where the fade does —
-/// and a half-level of dither, so a long, faint gradient over 8 bits does not band.
+/// The fragment shader. Each shadow: a rounded-rectangle core, whole at its centre and swept
+/// out to `edge` of that at its rim (a superellipse norm, so the sweep follows the core's
+/// shape: a tall panel sweeps from its centre to its sides and its ends alike), then fading
+/// over its falloff with smootherstep — no visible edge where the core ends nor where the fade
+/// does — and a half-level of dither, so a long, faint gradient over 8 bits does not band.
+/// `edge` 1: even across the core.
 pub const FS_SCRIM: &str = r#"#version 100
 precision highp float;
 uniform vec4 cores[32];     // x, y, w, h — output pixels
-uniform vec4 pars[32];      // corner radius, falloff, opacity, unused
+uniform vec4 pars[32];      // corner radius, falloff, opacity, edge
 uniform int count;
 varying vec2 v_out;
 varying vec2 v_fb;
+float ss(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
 float rr(vec2 p, vec4 r, float rad) {
     vec2 h = r.zw * 0.5;
     vec2 q = abs(p - r.xy - h) - h + vec2(rad);
@@ -51,9 +55,17 @@ void main() {
     float a = 0.0;
     for (int i = 0; i < 32; i++) {
         if (i >= count) break;
-        float d = max(rr(v_out, cores[i], pars[i].x), 0.0);
-        float t = clamp(d / max(pars[i].y, 1.0), 0.0, 1.0);
-        float k = 1.0 - t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+        float d = rr(v_out, cores[i], pars[i].x);
+        float k;
+        if (d > 0.0) {
+            k = pars[i].w * (1.0 - ss(clamp(d / max(pars[i].y, 1.0), 0.0, 1.0)));
+        } else {
+            vec2 h = cores[i].zw * 0.5;
+            vec2 q = abs(v_out - cores[i].xy - h) / max(h, vec2(1.0));
+            vec2 q2 = q * q;
+            float n = sqrt(sqrt(q2.x * q2.x + q2.y * q2.y));
+            k = mix(1.0, pars[i].w, ss(min(n, 1.0)));
+        }
         a = max(a, pars[i].z * k);
     }
     if (a <= 0.0) discard;
@@ -70,18 +82,25 @@ pub struct ScrimPx {
     pub radius: f64,
     pub falloff: f64,
     pub alpha: f64,
+    /// At the core's rim, as a fraction of its centre (the shader's sweep); 1: even.
+    pub edge: f64,
 }
 
 impl ScrimPx {
     /// The shader's value at `p`: what the glass's measurement divides out there.
     fn at(&self, p: Point<f64, Physical>) -> f64 {
+        let ss = |t: f64| t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
         let [x, y, w, h] = self.core;
         let (hw, hh) = (w / 2.0, h / 2.0);
         let qx = (p.x - x - hw).abs() - hw + self.radius;
         let qy = (p.y - y - hh).abs() - hh + self.radius;
-        let d = (qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - self.radius).max(0.0);
-        let t = (d / self.falloff.max(1.0)).clamp(0.0, 1.0);
-        self.alpha * (1.0 - t * t * t * (t * (t * 6.0 - 15.0) + 10.0))
+        let d = qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - self.radius;
+        if d > 0.0 {
+            return self.alpha * self.edge * (1.0 - ss((d / self.falloff.max(1.0)).clamp(0.0, 1.0)));
+        }
+        let (nx, ny) = (((p.x - x - hw) / hw.max(1.0)).powi(4), ((p.y - y - hh) / hh.max(1.0)).powi(4));
+        let n = (nx + ny).sqrt().sqrt().min(1.0);
+        self.alpha * (1.0 + (self.edge - 1.0) * ss(n))
     }
 
     fn reach(&self) -> Rectangle<f64, Physical> {
@@ -129,6 +148,7 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
             radius: unit.radius * scale.x,
             falloff: unit.falloff * scale.x,
             alpha,
+            edge: unit.edge,
         });
     }
     if out.len() > MAX_SCRIMS {
@@ -192,7 +212,7 @@ impl ScrimElement {
         let mut pars = [0f32; MAX_SCRIMS * 4];
         for (i, s) in self.scrims.iter().enumerate() {
             cores[i * 4..i * 4 + 4].copy_from_slice(&s.core.map(|v| v as f32));
-            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.radius as f32, s.falloff as f32, s.alpha as f32, 0.0]);
+            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.radius as f32, s.falloff as f32, s.alpha as f32, s.edge as f32]);
         }
         frame.with_context(|gl| unsafe {
             // Safety: the EGL context outlives this frame, and its user data with it.
@@ -264,12 +284,27 @@ mod tests {
 
     #[test]
     fn the_shadow_is_even_over_its_core_and_gone_past_its_falloff() {
-        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 100.0, alpha: 0.5 };
+        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 100.0, alpha: 0.5, edge: 1.0 };
         assert_eq!(s.at((250.0, 100.0).into()), 0.5, "inside: the whole strength");
         assert_eq!(s.at((100.0, 100.0).into()), 0.5, "on the core's edge: still whole");
         assert!((s.at((50.0, 100.0).into()) - 0.25).abs() < 1e-9, "halfway out: half (smootherstep is symmetric)");
         assert_eq!(s.at((0.0, 100.0).into()), 0.0, "past the falloff: nothing");
-        let other = ScrimPx { core: [0.0, 0.0, 50.0, 50.0], radius: 0.0, falloff: 10.0, alpha: 0.3 };
+        let other = ScrimPx { core: [0.0, 0.0, 50.0, 50.0], radius: 0.0, falloff: 10.0, alpha: 0.3, edge: 1.0 };
         assert_eq!(alpha_at(&[s, other], (40.0, 25.0).into()), s.at((40.0, 25.0).into()).max(0.3), "two shadows: the stronger, never their sum");
+    }
+
+    #[test]
+    fn a_swept_core_is_whole_at_its_centre_and_at_its_edge_on_the_rim() {
+        let s = ScrimPx { core: [100.0, 100.0, 200.0, 400.0], radius: 0.0, falloff: 50.0, alpha: 0.4, edge: 0.75 };
+        assert_eq!(s.at((200.0, 300.0).into()), 0.4, "the centre: the whole strength");
+        let side = s.at((100.0, 300.0).into());
+        let end = s.at((200.0, 100.0).into());
+        assert!((side - 0.3).abs() < 1e-9 && (end - 0.3).abs() < 1e-9, "the rim, sides and ends alike: the edge's ({side}, {end})");
+        let halfway = s.at((150.0, 300.0).into());
+        assert!(halfway < 0.4 && halfway > 0.3, "between: the sweep ({halfway})");
+        assert!((s.at((75.0, 300.0).into()) - 0.15).abs() < 1e-9, "halfway through the falloff: half the edge's");
+        assert_eq!(s.at((40.0, 300.0).into()), 0.0, "past it: nothing");
+        let even = ScrimPx { edge: 1.0, ..s };
+        assert_eq!(even.at((101.0, 101.0).into()), 0.4, "edge 1: even across the core");
     }
 }

@@ -260,10 +260,10 @@ void main() {
 }
 "#;
 
-/// The darkest and brightest WCAG luminance under one box (`nidara-material-v1` v3, v5), from
+/// The darkest and brightest WCAG luminance under one box (`nidara-material-v1`), from
 /// the blurred backdrop as the glass treats it before its tint: blurred and saturated. A grid
 /// of samples is enough because the backdrop is blurred: nothing narrower than the blur
-/// survives it. `unscale` divides out the shadow under the box (v5: what the backdrop is
+/// survives it. `unscale` divides out the shadow under the box (what the backdrop is
 /// without it; 1 for an ink box, whose question is what the content sits on now). Each is
 /// written as two bytes (high, low) so 8-bit readback keeps ~16 bits of it: the darkest in
 /// red and green, the brightest in blue and alpha.
@@ -299,14 +299,14 @@ void main() {
 }
 "#;
 
-/// One ink box (`nidara-material-v1` v3), output pixels.
+/// One ink box (`nidara-material-v1`), output pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct InkBox {
     pub id: u32,
     pub rect: Rectangle<f64, Physical>,
 }
 
-/// Where the backdrop under one shape is measured for its shadow (v5), output pixels: the
+/// Where the backdrop under one shape is measured for its shadow, output pixels: the
 /// shape's body, inset where a round corner leaves it, and how much of it the shadow already
 /// takes (1 / (1 − the shadow's opacity there)).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -325,7 +325,7 @@ const MEASURE_WIDTH: usize = MAX_INK_BOXES + MAX_LIGHT_PROBES;
 /// A shape in output pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shape {
-    /// Its index in the material's shapes (the shadow's measurement is by shape, v5).
+    /// Its index in the material's shapes (the shadow's measurement is by shape).
     pub index: usize,
     pub rect: Rectangle<f64, Physical>,
     pub radius: f64,
@@ -334,12 +334,12 @@ pub struct Shape {
     pub opacity: f32,
     /// What of the shape may show, output pixels. None = all of it.
     pub clip: Option<Rectangle<f64, Physical>>,
-    /// It holds an ink group whose content is dark (v3): the light veil, not the dark tint.
+    /// It holds an ink group whose content is dark: the light veil, not the dark tint.
     pub ink_dark: bool,
-    /// A pointer spliced into it (v3).
+    /// A pointer spliced into it.
     pub pointer: Option<PointerPx>,
     /// How far its edge reads the backdrop from outside it, output pixels: the glass's
-    /// refraction, or more on a large shape (`set_lensing`, v4). 0 where there is no glass.
+    /// refraction, or more on a large shape (`set_lensing`). 0 where there is no glass.
     pub refraction: f64,
 }
 
@@ -448,7 +448,7 @@ pub(super) struct Programs {
     up: Program,
     last: Program,
     ink: Program,
-    /// The shadow under the glass (v5, render/scrim.rs).
+    /// The shadow under the glass (render/scrim.rs).
     pub(super) scrim: Program,
     /// The measurement's target: MEASURE_WIDTH × 1, one texel per box. Made on first use.
     ink_target: std::cell::Cell<(u32, u32)>,
@@ -830,7 +830,7 @@ pub unsafe fn draw(
     }
 }
 
-// ── The ink (`nidara-material-v1` v3) ─────────────────────────────────────────
+// ── The ink (`nidara-material-v1`) ─────────────────────────────────────────
 
 /// A measurement on its way back from the GPU: read into a pixel-pack buffer, fenced, and
 /// mapped only once the fence has passed, so no frame ever waits for it.
@@ -866,7 +866,7 @@ fn can_measure(gl: &Gles2) -> bool {
 }
 
 /// Measure the darkest point under each ink box, and the darkest and brightest under each
-/// shape that casts a shadow (v5), if the capture, the boxes or the probes changed since the
+/// shape that casts a shadow, if the capture, the boxes or the probes changed since the
 /// last measurement. Called from `draw`'s context, inside the frame; leaves the GL state as
 /// it found it.
 #[allow(clippy::too_many_arguments)]
@@ -995,7 +995,7 @@ pub unsafe fn measure_ink(
 }
 
 /// One finished measurement: per ink group the darkest luminance under it (the least over its
-/// boxes), and per shape the darkest and brightest under it, its shadow divided out (v5).
+/// boxes), and per shape the darkest and brightest under it, its shadow divided out.
 pub struct Measured {
     pub surface: Weak<WlSurface>,
     pub ink: Vec<(u32, f32)>,

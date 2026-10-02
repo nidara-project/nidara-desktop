@@ -224,7 +224,7 @@ phase_run() {
     /tmp/hyalo/nidara-ipc toggleCC >/dev/null
     sleep 2
     bar_cc="$(glass_shapes nidara-bar)"
-    # The shadow under the glass (v5): the Control Center's panes share ONE, as tall as the
+    # The shadow under the glass: the Control Center's panes share ONE, centred on the
     # panel (trackScrimRegion), rather than one each. Its strength depends on the
     # wallpaper; what is checked is that the region reached Hyalo and holds the panes (the
     # bar's own region casts nothing, so Hyalo lists none for it).

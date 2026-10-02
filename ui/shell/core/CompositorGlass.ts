@@ -29,7 +29,7 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
- *   tintLimit scrimMax scrimSize scrimFalloff            the shadow under the glass (below)
+ *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -57,9 +57,12 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * The glass's ceiling IS `tintLimit` while there is a shadow: nothing makes up past
  * `scrimMax`, because a tint above the limit is the grey plastic again. A pane's own
  * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's); the
- * Control Center and the Notification Center share one as tall as the panel
- * (`trackScrimRegion` in Bar.tsx), starting at their glass's left and bottom edges and fading
- * over `scrimFalloff` px. The bar and the dock cast none for now (`trackNoScrim`): a shadow that
+ * Control Center and the Notification Center share one the size of the panel
+ * (`trackScrimRegion` in Bar.tsx), whole at its centre and sweeping out to `scrimEdge` of
+ * that at its edges, then fading over `scrimFalloff` px. Owner, 2026-10-02: even across the
+ * panel "it looks like a translucent dark panel with a gradient at its border", where it
+ * should be "very subtle, very slightly darker at the centre, sweeping from the centre, over
+ * the container's area". The bar and the dock cast none for now (`trackNoScrim`): a shadow that
  * hugs them cannot fade without running over the windows — an edge shadow drawn by Hyalo,
  * under the windows, is the next step.
  */
@@ -86,10 +89,12 @@ const DEFAULTS = {
     // A pane's own shadow fades over this fraction of its shorter side (a notification
     // ≈35 px; the app grid, the overview).
     scrimSize: 0.5,
-    // The Control Center's shadow fades over this many px to the left and below, from its
-    // glass. Was 380 (as wide as the panel): the owner, 2026-10-02, "totally
+    // The Control Center's shadow fades over this many px outside its glass. Was 380 (as wide as the panel): the owner, 2026-10-02, "totally
     // exaggerated — the fade should start right where the CC ends".
     scrimFalloff: 48,
+    // The Control Center's shadow at its edges, as a fraction of its centre's (1: even). A
+    // starting point, to tune on screen with the owner.
+    scrimEdge: 0.7,
     // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
     // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
     tintLimit: 0.25,
@@ -126,7 +131,8 @@ function inkParams(): InkParams | null {
 function scrimParams(): ScrimParams | null {
     if (tuning.off || tuning.scrimOff || Theme.reduceTransparency) return null
     const p = { ...DEFAULTS, ...tuning }
-    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, tintLimit: p.tintLimit }
+    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, tintLimit: p.tintLimit,
+        regionEdge: p.scrimEdge }
 }
 
 function parse(text: string): Tuning {

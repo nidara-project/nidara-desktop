@@ -30,15 +30,15 @@ pub struct Shape {
     pub h: f64,
     pub radius: f64,
     pub exponent: f64,
-    /// The whole glass's opacity in this shape over the plain backdrop (v2; 1 from add_shape).
+    /// The whole glass's opacity in this shape over the plain backdrop (1 from add_shape).
     pub opacity: f64,
-    /// What of the shape may show, same coordinates (v2): x, y, w, h. None = all of it.
+    /// What of the shape may show, same coordinates: x, y, w, h. None = all of it.
     pub clip: Option<[f64; 4]>,
-    /// A pointer spliced into one side (v3, a tooltip's or a menu's), same coordinates.
+    /// A pointer spliced into one side (a tooltip's or a menu's), same coordinates.
     pub pointer: Option<Pointer>,
 }
 
-/// A pointer from a shape's edge (v3): its base centred on `base`, `width` wide, to `tip`; a
+/// A pointer from a shape's edge: its base centred on `base`, `width` wide, to `tip`; a
 /// circular tip of `tip_radius`, a concave join of `base_radius` where it meets the edge.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pointer {
@@ -61,7 +61,7 @@ pub struct Glass {
     pub saturation: f64,
 }
 
-/// Where content of one ink group sits (v3), surface-local logical coordinates.
+/// Where content of one ink group sits, surface-local logical coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct InkBox {
     pub id: u32,
@@ -71,7 +71,7 @@ pub struct InkBox {
     pub h: f64,
 }
 
-/// The ink measurement (v3): WCAG luminance thresholds, and the tint over a dark-ink shape.
+/// The ink measurement: WCAG luminance thresholds, and the tint over a dark-ink shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ink {
     pub dark_above: f64,
@@ -79,7 +79,7 @@ pub struct Ink {
     pub tint: [f64; 3],
 }
 
-/// The shadow under the glass (v5): its strongest, and how far a lone shape's fades.
+/// The shadow under the glass: its strongest, and how far a lone shape's fades.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Scrim {
     /// The shadow's opacity at its core, at most: 0..1.
@@ -89,9 +89,12 @@ pub struct Scrim {
     /// The most tint the glass takes while a shadow can make up the rest (an opacity): the
     /// glass's own limit — past it the pane looks painted grey. The shadow is what is missing.
     pub tint_limit: f64,
+    /// A region's shadow at its rim, as a fraction of its centre's: it sweeps from the centre
+    /// out following the region's shape. 1: even across it.
+    pub region_edge: f64,
 }
 
-/// One shadow shared by the shapes whose centre lies inside it (v5), surface-local logical
+/// One shadow shared by the shapes whose centre lies inside it, surface-local logical
 /// coordinates; it may reach past the surface.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScrimRegion {
@@ -110,16 +113,16 @@ pub struct MaterialState {
     pub glass: Option<Glass>,
     pub ink_boxes: Vec<InkBox>,
     pub ink: Option<Ink>,
-    /// v4: each shape's refraction is at least this fraction of its shorter side.
+    /// each shape's refraction is at least this fraction of its shorter side.
     pub lensing: f64,
-    /// v5: the shadow under the glass, and the regions shapes share one in.
+    /// the shadow under the glass, and the regions shapes share one in.
     pub scrim: Option<Scrim>,
     pub scrim_regions: Vec<ScrimRegion>,
 }
 
 impl MaterialState {
     /// How far a shape's edge displaces the backdrop, logical px: the glass's refraction, or
-    /// `lensing` of its shorter side where that is more (v4). 0 without the compositor's glass.
+    /// `lensing` of its shorter side where that is more. 0 without the compositor's glass.
     pub fn refraction_of(&self, s: &Shape) -> f64 {
         self.glass.map_or(0.0, |g| g.refraction.max(self.lensing * s.w.min(s.h)))
     }
@@ -135,6 +138,9 @@ pub struct ScrimUnit {
     pub core: [f64; 4],
     pub radius: f64,
     pub falloff: f64,
+    /// The shadow at the core's rim, as a fraction of its centre's: it sweeps between the two
+    /// following the core's shape. 1: even across the core (a lone shape's).
+    pub edge: f64,
     /// Indices into `MaterialState::shapes`.
     pub members: Vec<usize>,
 }
@@ -143,7 +149,7 @@ pub struct ScrimUnit {
 pub const LONE_SCRIM: u32 = 0x1_0000;
 
 impl MaterialState {
-    /// The shadows this material asks for (v5): one per region that holds a shape, and one
+    /// The shadows this material asks for: one per region that holds a shape, and one
     /// per shape inside no region — none for a region whose falloff is negative, which claims
     /// its shapes and casts nothing. Nothing without set_scrim, or without the compositor's
     /// glass (the shadow is there for its tint).
@@ -160,6 +166,7 @@ impl MaterialState {
                 core: [r.x, r.y, r.w, r.h],
                 radius: 0.0,
                 falloff: r.falloff,
+                edge: scrim.region_edge,
                 members: Vec::new(),
             })
             .collect();
@@ -176,6 +183,7 @@ impl MaterialState {
                     core: [s.x, s.y, s.w, s.h],
                     radius: s.radius.min(s.w.min(s.h) / 2.0),
                     falloff: scrim.size_fraction.max(0.0) * s.w.min(s.h),
+                    edge: 1.0,
                     members: vec![i],
                 }),
             }
@@ -204,15 +212,15 @@ pub struct Current {
     /// The ink groups whose content is dark now (the hysteresis' memory). A group no longer
     /// declared keeps its decision, as the client does: a panel reopened starts as it closed.
     pub dark_ink: std::collections::BTreeSet<u32>,
-    /// The backdrop under each shape as the glass treats it, WITHOUT the shadow (v5): its
+    /// The backdrop under each shape as the glass treats it, WITHOUT the shadow: its
     /// darkest and brightest WCAG luminance, by shape index. Measured with the ink.
     pub shape_light: std::collections::BTreeMap<usize, (f32, f32)>,
-    /// Each shadow's strength over time (v5), by `ScrimUnit::key`. Kept when its unit goes,
+    /// Each shadow's strength over time, by `ScrimUnit::key`. Kept when its unit goes,
     /// like the ink: a panel reopened lies on the shadow it closed on.
     pub scrims: std::collections::BTreeMap<u32, ScrimAnim>,
 }
 
-/// A shadow's strength, easing from one value to the next (v5).
+/// A shadow's strength, easing from one value to the next.
 #[derive(Debug, Clone, Copy)]
 pub struct ScrimAnim {
     pub from: f64,
@@ -261,7 +269,7 @@ fn tinted(c: f64, a: f64, glass: &Glass) -> f64 {
     0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
 }
 
-/// The shadow one unit wants (v5), from the brightest WCAG luminance of the backdrop under its
+/// The shadow one unit wants, from the brightest WCAG luminance of the backdrop under its
 /// light-ink shapes without any shadow: exactly what the glass is missing at that point to make
 /// the text legible within its own limit (owner, 2026-10-02: "the limit has to be in the
 /// glass"). The glass takes up to `tint_limit` — past it a pane looks painted grey — and the
@@ -442,7 +450,7 @@ pub struct MaterialGlobal;
 pub struct MaterialData(Weak<WlSurface>);
 
 pub fn init(dh: &DisplayHandle) {
-    dh.create_global::<Hyalo, NidaraMaterialManagerV1, _>(5, MaterialGlobal);
+    dh.create_global::<Hyalo, NidaraMaterialManagerV1, _>(1, MaterialGlobal);
 }
 
 impl GlobalDispatch2<NidaraMaterialManagerV1, Hyalo> for MaterialGlobal {
@@ -601,13 +609,14 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             Request::ClearInk => {
                 self.pending(|m| m.ink = None);
             }
-            Request::SetScrim { max_strength, size_fraction, tint_limit } => {
+            Request::SetScrim { max_strength, size_fraction, tint_limit, region_edge } => {
                 let max_strength = max_strength.clamp(0.0, 1.0);
                 self.pending(|m| {
                     m.scrim = (max_strength > 0.0).then_some(Scrim {
                         max_strength,
                         size_fraction: size_fraction.clamp(0.0, 4.0),
                         tint_limit: tint_limit.clamp(0.0, 1.0),
+                        region_edge: region_edge.clamp(0.0, 1.0),
                     })
                 });
             }
@@ -650,7 +659,7 @@ mod tests {
     #[test]
     fn the_shadow_is_what_the_glass_is_missing() {
         let g = glass();
-        let scrim = Scrim { max_strength: 0.7, size_fraction: 0.5, tint_limit: 0.25 };
+        let scrim = Scrim { max_strength: 0.7, size_fraction: 0.5, tint_limit: 0.25, region_edge: 1.0 };
         // The shader's last pass, written out: a grey under the tint at opacity a.
         let lum = |c: f64, a: f64| {
             let ch = |k: usize| to_linear(c * (1.0 - a) + g.tint[k] * a);
@@ -684,7 +693,7 @@ mod tests {
                 tint: [0.0; 3], alpha_min: 0.05, alpha_max: 0.6, target_luminance: 0.183, refraction: 10.0, rim: 0.7,
                 saturation: 1.0,
             }),
-            scrim: Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25 }),
+            scrim: Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25, region_edge: 0.7 }),
             scrim_regions: vec![
                 ScrimRegion { x: 850.0, y: -1e5, w: 1e5, h: 2e5, falloff: 300.0 },
                 ScrimRegion { x: 0.0, y: 600.0, w: 10.0, h: 10.0, falloff: 50.0 },
@@ -696,6 +705,7 @@ mod tests {
         assert_eq!((units[0].key, units[0].members.clone()), (0, vec![1, 2]), "the two panes on the right share one");
         assert_eq!((units[1].key, units[1].members.clone()), (LONE_SCRIM, vec![0]), "the other gets its own");
         assert_eq!(units[1].falloff, 20.0, "fading over half its shorter side");
+        assert_eq!((units[0].edge, units[1].edge), (0.7, 1.0), "a region sweeps from its centre; a lone shape's is even");
         // A region that casts nothing claims the shape anyway: no shadow of its own either.
         m.scrim_regions.insert(0, ScrimRegion { x: 0.0, y: 0.0, w: 200.0, h: 100.0, falloff: -1.0 });
         let units = m.scrim_units();

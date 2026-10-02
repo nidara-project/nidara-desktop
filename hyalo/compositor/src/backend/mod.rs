@@ -160,7 +160,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
     }
 }
 
-// ── The ink's readback (`nidara-material-v1` v3, render/glass_gl.rs) ───────────────────────
+// ── The ink's readback (`nidara-material-v1`, render/glass_gl.rs) ───────────────────────
 
 /// How often a measurement in flight is looked for: about a frame. The timer exists only
 /// while one is in flight — nothing ticks while the glass is still.
@@ -189,7 +189,7 @@ fn arm_ink_poll(state: &mut Hyalo) {
 }
 
 /// Collects the measurements the GPU has finished and applies them (the ink event, and a redraw
-/// where a shape's veil changed; the shadow under the glass, v5). Whether any is still in flight.
+/// where a shape's veil changed; the shadow under the glass). Whether any is still in flight.
 fn poll_ink(state: &mut Hyalo) -> bool {
     let poll = |r: &mut smithay::backend::renderer::gles::GlesRenderer| {
         let user_data = r.egl_context().user_data() as *const smithay::utils::user_data::UserDataMap;
@@ -230,7 +230,7 @@ pub fn post_repaint(
     if crate::render::glass_gl::take_ink_issued() {
         arm_ink_poll(state);
     }
-    // A shadow under the glass is easing toward its strength (v5): the next frame too.
+    // A shadow under the glass is easing toward its strength: the next frame too.
     if crate::render::scrim::take_easing() {
         state.queue_redraw(Some(output));
     }

@@ -413,8 +413,7 @@ void nidara_wl_material_add_shape (GdkSurface *surface,
  *
  * Adds one glass shape as the toolkit shows it: faded (a panel fading in or out) and
  * clipped (a card scrolled half out of its list). Shapes are drawn in the order they are
- * added. On a compositor with only version 1 of the protocol the shape is added whole,
- * at full opacity.
+ * added.
  */
 void nidara_wl_material_add_shape_clipped (GdkSurface *surface,
                                            double x, double y, double width, double height,
@@ -445,7 +444,7 @@ void nidara_wl_material_add_shape_clipped (GdkSurface *surface,
  * @base_radius: the concave arc where the pointer meets the edge
  *
  * As nidara_wl_material_add_shape_clipped(), with a pointer (a tooltip's, a menu's): body
- * and pointer are one glass. Before version 3 of the protocol, the body alone.
+ * and pointer are one glass.
  */
 void nidara_wl_material_add_shape_pointed (GdkSurface *surface,
                                            double x, double y, double width, double height,
@@ -495,8 +494,7 @@ void nidara_wl_material_set_glass (GdkSurface *surface,
  * @size_fraction: of each shape's shorter side, 0..1; 0 = set_glass's refraction everywhere
  *
  * Each shape's edge displacement becomes the larger of set_glass's refraction and this
- * fraction of its shorter side: a large pane bends more than a small control. Nothing on a
- * compositor without nidara-material-v1 version 4.
+ * fraction of its shorter side: a large pane bends more than a small control.
  */
 void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
 
@@ -506,13 +504,15 @@ void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
  * @max_strength: the shadow's opacity at its core, at most, 0..1; 0 = no shadow
  * @size_fraction: a shape inside no scrim region fades over this fraction of its shorter side
  * @tint_limit: the most tint the glass takes while the shadow makes up the rest (0..1)
+ * @region_edge: a region's shadow at its rim, as a fraction of its centre's (0..1): it sweeps
+ *   from the centre out, following the region's shape; 1 = even across it
  *
  * A soft black shadow under the glass with exactly the strength the glass is missing, within
- * @tint_limit, to keep the content legible: the glass never looks painted grey (nidara-material-v1
- * version 5, set_scrim). Nothing on an older compositor.
+ * @tint_limit, to keep the content legible: the glass never looks painted grey
+ * (nidara-material-v1.set_scrim).
  */
 void nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
-                                   double tint_limit);
+                                   double tint_limit, double region_edge);
 
 /**
  * nidara_wl_material_add_scrim_region:
@@ -524,8 +524,7 @@ void nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, dou
  * @falloff: how far the shadow fades outside the region, logical pixels
  *
  * One shadow shared by every shape whose centre lies inside the region. Pending until
- * nidara_wl_material_commit(); cleared by nidara_wl_material_begin(). Nothing on a compositor
- * without nidara-material-v1 version 5.
+ * nidara_wl_material_commit(); cleared by nidara_wl_material_begin().
  */
 void nidara_wl_material_add_scrim_region (GdkSurface *surface,
                                           double x, double y, double width, double height,
@@ -542,7 +541,7 @@ void nidara_wl_material_clear_glass (GdkSurface *surface);
 /**
  * nidara_wl_material_has_ink:
  *
- * Returns: %TRUE if the compositor measures the ink (nidara-material-v1 version 3)
+ * Returns: %TRUE if the compositor measures the ink (it offers nidara-material-v1)
  */
 gboolean nidara_wl_material_has_ink (void);
 
@@ -556,7 +555,7 @@ gboolean nidara_wl_material_has_ink (void);
  * @height: height
  *
  * Declares where content of ink group @id sits (text, symbolic icons). Cleared by
- * nidara_wl_material_begin(). Nothing on a compositor without version 3.
+ * nidara_wl_material_begin().
  */
 void nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
                                      double x, double y, double width, double height);

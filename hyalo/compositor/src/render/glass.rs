@@ -38,9 +38,9 @@ pub struct GlassElement {
     offset: f32,
     passes: usize,
     glass: Option<glass_gl::Glass>,
-    /// The ink boxes that fall in this group (v3), measured when the capture or they change.
+    /// The ink boxes that fall in this group, measured when the capture or they change.
     ink_boxes: Vec<glass_gl::InkBox>,
-    /// Where the backdrop under this group's shadowed shapes is measured (v5).
+    /// Where the backdrop under this group's shadowed shapes is measured.
     probes: Vec<glass_gl::LightProbe>,
     surface: Weak<WlSurface>,
 }
@@ -62,7 +62,7 @@ impl GlassElement {
     ) -> Vec<GlassElement> {
         let Some(current) = material::current(surface) else { return Vec::new() };
         let m = &current.state;
-        // The shapes that lie under a shadow (v5): the backdrop under each is measured.
+        // The shapes that lie under a shadow: the backdrop under each is measured.
         let shadowed: std::collections::BTreeSet<usize> =
             m.scrim_units().into_iter().flat_map(|u| u.members).collect();
         let groups = groups(output_size, scale, location, m);

@@ -45,6 +45,14 @@ So a bar over a still wallpaper re-blurs nothing per frame, and the rest of the 
 damage tracking and direct scanout. The prototype drew every frame whole into a texture; do not
 go back to that.
 
+🔴 **`nidara-material-v1` stays at VERSION 1 until it is published** (owner, 2026-10-02: "stop
+raising the protocol's version, we'll be at 89 before publishing anything"). It is ours and
+nobody else speaks it, so a new request goes INTO version 1 — appended, no `since=` — never into
+a version 2. It went to v5 on the #684 branch and was collapsed back. The cost: the C library
+(`lib/nidara-wl`) and Hyalo have to be installed TOGETHER: a new library on an old Hyalo sends
+requests that compositor's v1 does not have, a protocol error that kills the shell. Only the KIT
+tolerates skew (an older library lacks a function → `shim.material_…?.()` falls back).
+
 - **The shader works in OUTPUT pixels and borrows Smithay's projection** (`GlesFrame::projection()`),
   so every rotation or flip of an output is handled once, there. The captured copy is in
   framebuffer orientation; the blur is isotropic, so the pyramid does not care.
@@ -70,7 +78,7 @@ painters that do: `SquircleContainer` (every pane with `useShellOpacity` and no 
 `alpha`), the dock's pill on both axes (`DockAxis.ts`), the island's morph clone
 (`MorphRevealer.glassShape`), the Notification Center's stacked-card bands, and tooltips and kit
 menus (`trackBubbleGlass`, owner 2026-10-01: refractive too, and blurred MORE than panels). A
-bubble's pointer is part of its shape (protocol v3, `add_shape_pointed`: base, tip, width, tip
+bubble's pointer is part of its shape (`add_shape_pointed`: base, tip, width, tip
 radius, base radius — one geometry, `bubbleGeometry`, for the painter and the protocol); Hyalo
 unions an inset triangle grown back by the tip radius with the body through a round union of
 the base radius (`shape_sdf`), so body and pointer are one glass with one rim. A popover's blur
@@ -86,7 +94,7 @@ returned its argument, a notification's clip ended 4× off-screen once its three
 shared it; Hyalo got no shape, the painter believed Hyalo painted it, and its white text sat on
 the bare white backdrop.
 
-What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
+What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 - **snapshot-time transforms** of the ancestors — `ScaleRevealer.glassPaintTransform()`; GTK's own
   geometry never sees a scale applied in `vfunc_snapshot`;
 - **the opacity** of the widget and every ancestor, per shape: a panel fading in or out fades its
@@ -109,7 +117,7 @@ at `size` source texels, the up-sample's at ¼ and ½ of that. Until 2026-10-02 
 four times as far, and 2:2 blurred a step edge over 28 px against Hyprland's 12 (owner-caught:
 "1:2 here blurs more than Hyprland's 2:2"). Measured since on the real GPU, nested, glass off,
 over a black/white wallpaper (`HYALO_WALLPAPER`): 1:2 → 8 px, 2:2 → 12 px, 10–90 % of the edge.
-The refraction is PER SHAPE (protocol v4, `set_lensing`): `refraction` is every shape's least,
+The refraction is PER SHAPE (`set_lensing`): `refraction` is every shape's least,
 and `lensing` × the shape's shorter side wins where it is more, so a large pane lenses more than
 a capsule without a number per surface. The capture region grows by each group's largest
 refraction, since the edge reads the backdrop from that far outside.
@@ -153,7 +161,7 @@ text keeps it white.
   the workspace dots — except the glass's own painter, through the same transforms and clips as
   the shapes. More than 8 → their union (stricter, never looser). A type list (labels, images)
   missed the CSS-painted dots: the island's capsule stayed dark while everything else turned.
-- **Measured by Hyalo (protocol v3: `add_ink_box`, `set_ink`, event `ink`).** In the glass's
+- **Measured by Hyalo (`add_ink_box`, `set_ink`, event `ink`).** In the glass's
   draw, when the capture or the boxes changed: one small pass samples a 12×12 grid of the blurred
   copy per box into a 64×1 target (one texel per box, the minimum as two bytes), read into a
   pixel-pack buffer behind a fence. `backend::poll_ink` collects it from a 4 ms timer that
@@ -182,9 +190,13 @@ grey in one part and clear in the other — on the owner's own wallpaper (light 
 purple) the CC's camera and volume tiles went grey while Focus stayed clear. The fix is the
 owner's idea: a soft black shadow UNDER the glass, even across the pane, only when needed.
 
-- **Protocol v5** (`set_scrim(max_strength, size_fraction, tint_limit)`, `add_scrim_region(x, y,
-  w, h, falloff)`). A region is shared by every shape whose centre lies in it; a shape in none
-  gets its own (its outline as core, fading over `size_fraction` of its shorter side).
+- **The protocol** (`set_scrim(max_strength, size_fraction, tint_limit, region_edge)`,
+  `add_scrim_region(x, y, w, h, falloff)`). A region is shared by every shape whose centre lies
+  in it; a shape in none gets its own (its outline as core, fading over `size_fraction` of its
+  shorter side, even across it). A region's shadow is whole at its CENTRE and sweeps out to
+  `region_edge` of that at its rim — a superellipse norm (exponent 4) of the offset from the
+  centre over the half-size, so the sweep follows the container's shape, sides and ends alike —
+  then fades over its falloff (`render/scrim.rs`, unit-tested). `region_edge` 1: even.
 - **The rule** (`material::scrim_target`, unit-tested with a control). Owner, 2026-10-02: "the
   limit has to be in the glass". The glass takes no more tint than `tint_limit` (0.25) — past it
   a pane reads as painted grey — and the shadow is EXACTLY what the glass is missing for the
@@ -223,12 +235,19 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
 - **Who casts what.** A pane in no region gets a halo, its outline fading outward over
   `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
   "a shadow downward separating the top from the bottom").
-  - **The Control Center and the Notification Center share ONE region**, the panel's block:
-    it reaches past the screen's right and top edges (`trackScrimRegion(widget, { right, top })`
-    in Bar.tsx) and fades over `scrimFalloff` px (48) to the left and below. Until 2026-10-02 it
-    also reached past the BOTTOM — the screen's whole right-hand strip, shading wallpaper far
-    below a short panel; the owner, from a reference video: "the shadow occupies only the CC's
-    area". Its core ends at its GLASS's left and bottom edges plus what
+  - **The Control Center and the Notification Center share ONE region** (`trackScrimRegion(widget)`
+    in Bar.tsx): their CONTAINER, a little darker at its centre and sweeping out to `scrimEdge`
+    (0.7) of that at its edges, then fading over `scrimFalloff` (48) px. Tuned live. How it got
+    there, all on 2026-10-02: first the screen's whole right-hand strip, down to the bottom,
+    shading wallpaper far below a short panel — the owner, from a reference video: "the shadow
+    occupies only the CC's area"; then the panel's block, even: "it looks like a translucent
+    dark panel with a gradient at its border"; an ELLIPSE darkest at the centre was written and
+    thrown away unseen — "I did not say an ellipse … very subtle, very slightly darker at the
+    centre, sweeping from the centre, over the container's area". ⚠️ Away from the centre the
+    shadow is weaker than what the brightest tile asked for, so an edge tile over white is a
+    little less legible than on the even block — the owner's trade, subtle over even. The region
+    no longer reaches past the screen's edges: its centre has to be the panel's. Its core ends
+    at its GLASS's edges plus what
     that glass refracts (`placeScrimRegions`), not at the widget's box, which holds margins:
     "the fade should start right where the CC ends" (owner; it was 32 px of margin and 380 of
     fade — 800 px of shadow for a 368 px panel). Measured nested without it: each tile got its own

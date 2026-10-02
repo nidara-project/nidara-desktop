@@ -28,21 +28,21 @@ import Gdk from "gi://Gdk?version=4.0"
  * Glass inside glass is not declared: a control painted on a panel is not a second pane
  * of glass (the compositor would draw its rim inside the panel). It keeps painting itself.
  *
- * The INK (v3, decided by the owner 2026-10-01, #684): the text on Hyalo's glass is white,
+ * The INK (decided by the owner 2026-10-01, #684): the text on Hyalo's glass is white,
  * and turns dark only where the whole backdrop under it is white. Each pane of glass is an
  * ink group; its labels and icons are its boxes; the compositor measures the darkest point
  * under them and says when the group turns dark and back (with hysteresis, never by an
  * average). The pane then carries `INK_DARK_CLASS`, which the bundle's stylesheet gives the
  * light skin's tokens, and a Cairo painter asks `darkInkFor(itsWidget)`.
  *
- * The SHADOW under the glass (v5, owner 2026-10-02, #684): where the backdrop under a pane is
+ * The SHADOW under the glass (owner 2026-10-02, #684): where the backdrop under a pane is
  * bright in one place and dark in another, the compositor's per-pixel tint left it grey in one
  * part and clear in the other, and past a point a pane looks painted grey. With a scrim the
  * glass takes no more tint than its limit and the compositor lays a soft shadow under it, even
  * across the pane, with exactly what the glass is missing to keep the text legible — none
  * where the glass reaches it alone. A pane gets one of its own; panes that sit together share one through
- * `trackScrimRegion` — the Control Center's is its panel's block, reaching past the screen's
- * right and top edges and fading to the left and below — and panes that must cast none say so through `trackNoScrim` (the bar's, the
+ * `trackScrimRegion` — the Control Center's, the size of the panel and a little darker at
+ * its centre — and panes that must cast none say so through `trackNoScrim` (the bar's, the
  * dock's, owner 2026-10-02: a halo around them ran over the windows).
  *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
@@ -79,7 +79,7 @@ export type GlassParams = {
     /** Edge displacement, logical px: every shape's least. */
     refraction: number
     /** A fraction of each shape's shorter side, where that bends more than `refraction`:
-     *  large panes lens more than small controls (nidara_material_v1.set_lensing, v4). */
+     *  large panes lens more than small controls (nidara_material_v1.set_lensing). */
     lensing: number
     rim: number
     saturation: number
@@ -93,7 +93,7 @@ export type InkParams = {
     tint: { r: number, g: number, b: number }
 }
 
-/** The shadow under the glass (nidara_material_v1.set_scrim, v5). */
+/** The shadow under the glass (nidara_material_v1.set_scrim). */
 export type ScrimParams = {
     /** The shadow's opacity at its core, at most (the compositor picks less where less does). */
     maxStrength: number
@@ -104,6 +104,9 @@ export type ScrimParams = {
     tintLimit: number
     /** A region's shadow fades over this many logical px outside it. */
     regionFalloff: number
+    /** A region's shadow at its rim, as a fraction of its centre's: it sweeps from the centre
+     *  out following the container's shape (1: even across it). */
+    regionEdge: number
 }
 
 /** The class a pane of glass carries while its content is dark. */
@@ -149,7 +152,9 @@ type Shim = {
     material_set_ink?(surface: Gdk.Surface, darkAbove: number, lightBelow: number, r: number, g: number, b: number): void
     material_clear_ink?(surface: Gdk.Surface): void
     material_set_ink_func?(func: (surface: Gdk.Surface, id: number, dark: boolean) => void): void
-    material_set_scrim?(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number): void
+    /** `regionEdge` is the library's since 2026-10-02; an older one takes the first four. */
+    material_set_scrim?(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number,
+        regionEdge?: number): void
     material_add_scrim_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number): void
 }
 
@@ -190,34 +195,29 @@ const natives = new Map<Gtk.Native, NativeState>()
 const byInkId = new Map<number, Entry>()
 let nextInkId = 1
 
-/** Which edges of the screen a scrim region reaches past. */
-export type ScrimEdges = { left?: boolean, right?: boolean, top?: boolean, bottom?: boolean }
 /** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). */
-type ScrimRegion = { widget: Gtk.Widget, edges: ScrimEdges, casts: boolean }
+type ScrimRegion = { widget: Gtk.Widget, casts: boolean }
 const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
-/** Far past any screen: the compositor cuts a region to its output. */
-const PAST_THE_EDGE = 100000
 
 /**
- * One shadow under every pane of glass inside `widget`'s box (v5), instead of one each: panes
- * side by side lie on one even shadow, fading only outside it. `edges` says which edges of the
- * screen the region reaches past — the Control Center's reaches past the right and the top,
- * so its shadow fades toward the left and below the panel, never down the whole screen. Declared while the
+ * One shadow under every pane of glass inside `widget`'s box, instead of one each: the panes
+ * lie on one shadow the size of their container, at one strength, whole at its centre and
+ * swept out to `regionEdge` of that at its rim, fading only outside it. Declared while the
  * widget is shown; it shares its surface's material (`trackGlass`). Where two regions hold a
  * pane, the one declared first wins.
  */
-export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges): void {
-    addScrimRegion({ widget, edges, casts: true })
+export function trackScrimRegion(widget: Gtk.Widget): void {
+    addScrimRegion({ widget, casts: true })
 }
 
 /**
- * The panes of glass inside `widget`'s box cast no shadow (v5) — not a shared one, not one of
+ * The panes of glass inside `widget`'s box cast no shadow — not a shared one, not one of
  * their own. The bar and the dock, for now (owner, 2026-10-02): a halo around their glass ran
  * over the windows, and a band hugging them could not fade without reaching the windows
  * either. Declare it BEFORE any region that could also hold those panes: the first one wins.
  */
 export function trackNoScrim(widget: Gtk.Widget): void {
-    addScrimRegion({ widget, edges: {}, casts: false })
+    addScrimRegion({ widget, casts: false })
 }
 
 function addScrimRegion(r: ScrimRegion): void {
@@ -236,18 +236,19 @@ function addScrimRegion(r: ScrimRegion): void {
 
 /**
  * The scrim regions shown on `native`, surface-local, each with its falloff: negative for one
- * that casts nothing (nidara_material_v1.add_scrim_region). Where a region does not reach an
- * edge of the screen, its core ends where its GLASS ends — not its widget, whose box holds
- * margins — plus as far as that glass refracts (it reads its backdrop from beyond its own
- * edge, and that must lie on the even part of the shadow): the fade starts right at the
- * Control Center's left edge (owner, 2026-10-02).
+ * that casts nothing (nidara_material_v1.add_scrim_region). A casting region is its panes'
+ * CONTAINER: it ends where their GLASS ends — not the widget's box, which holds margins — plus
+ * as far as that glass refracts (it reads its backdrop from beyond its own edge): the fade
+ * starts right at the Control Center's edge (owner, 2026-10-02), and the sweep is centred on
+ * the panel itself. It used to reach past the screen's edges (the whole right-hand strip),
+ * which put its centre off the screen.
  */
 function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassParams,
     placed: Placed[]): (Rect & { falloff: number })[] {
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
     const out: (Rect & { falloff: number })[] = []
-    for (const { widget, edges, casts } of scrimRegions.values()) {
+    for (const { widget, casts } of scrimRegions.values()) {
         if (widget.get_native() !== native || !widget.get_mapped() || !widget.is_drawable()) continue
         const [ok, b] = widget.compute_bounds(nw)
         if (!ok || b.get_width() <= 0 || b.get_height() <= 0) continue
@@ -261,13 +262,23 @@ function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassP
         if (!panes.length) continue
         // How far each refracts is the compositor's rule (refraction_of).
         const margin = Math.max(...panes.map(s => Math.max(glass.refraction, glass.lensing * Math.min(s.w, s.h))))
-        const x0 = edges.left ? -PAST_THE_EDGE : Math.min(...panes.map(s => s.x)) - margin
-        const y0 = edges.top ? -PAST_THE_EDGE : Math.min(...panes.map(s => s.y)) - margin
-        const x1 = edges.right ? PAST_THE_EDGE : Math.max(...panes.map(s => s.x + s.w)) + margin
-        const y1 = edges.bottom ? PAST_THE_EDGE : Math.max(...panes.map(s => s.y + s.h)) + margin
+        const x0 = Math.min(...panes.map(s => s.x)) - margin
+        const y0 = Math.min(...panes.map(s => s.y)) - margin
+        const x1 = Math.max(...panes.map(s => s.x + s.w)) + margin
+        const y1 = Math.max(...panes.map(s => s.y + s.h)) + margin
         out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: scrim.regionFalloff })
     }
     return out
+}
+
+/** set_scrim; an older library takes four arguments (GJS warns on a fifth), and its regions'
+ *  shadows are even. */
+function setScrim(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number,
+    regionEdge: number): void {
+    const f = shim?.material_set_scrim
+    if (!f) return
+    if (f.length >= 5) f(surface, maxStrength, sizeFraction, tintLimit, regionEdge)
+    else f(surface, maxStrength, sizeFraction, tintLimit)
 }
 
 /** Register this bundle's glass. Without one, every surface gets a plain blur behind its
@@ -287,14 +298,14 @@ export function compositorPaintsGlass(widget: Gtk.Widget): boolean {
     return (natives.get(e.native)?.paints ?? false) && !nested(e, e.native)
 }
 
-/** Whether the compositor can draw a shape with a pointer (`GlassShape.pointer`, protocol
- *  v3). Until it can, a bubble keeps painting its own glass (`clientPaints`). */
+/** Whether the compositor can draw a shape with a pointer (`GlassShape.pointer`). Until it
+ *  can, a bubble keeps painting its own glass (`clientPaints`). */
 export function compositorDrawsPointers(): boolean {
     return !!shim?.material_add_shape_pointed && !!shim.material_has_ink?.()
 }
 
 /** Whether the compositor said the content of the pane of glass `widget` sits in is dark
- *  (the ink, v3). A Cairo painter on the glass asks it with its own widget, as it asks for
+ *  (the ink). A Cairo painter on the glass asks it with its own widget, as it asks for
  *  the skin; false outside any pane, and wherever the compositor does not decide the ink. */
 export function darkInkFor(widget: Gtk.Widget | null): boolean {
     for (let w: Gtk.Widget | null = widget; w; w = w.get_parent()) {
@@ -659,9 +670,9 @@ function flush(native: Gtk.Native, st: NativeState) {
     }
     if (scrim) {
         for (const r of regions) shim.material_add_scrim_region?.(surface, r.x, r.y, r.w, r.h, r.falloff)
-        shim.material_set_scrim?.(surface, scrim.maxStrength, scrim.sizeFraction, scrim.tintLimit)
+        setScrim(surface, scrim.maxStrength, scrim.sizeFraction, scrim.tintLimit, scrim.regionEdge)
     } else {
-        shim.material_set_scrim?.(surface, 0, 0, 0)
+        setScrim(surface, 0, 0, 0, 1)
     }
     shim.material_commit(surface, blur.size, placed.length ? blur.passes : 0)
     if (DEBUG) console.log(`[Material] ${(native as unknown as Gtk.Widget).get_name()}: ${placed.length} shapes, ${inkBoxes.length} ink boxes, ${regions.length} scrim regions, ${paints ? "compositor glass" : "blur only"} ${key}`)
