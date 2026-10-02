@@ -224,6 +224,22 @@ if [ -z "$USER_ONLY" ] && [ -f /etc/locale.gen ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+# The system language's input engine (system — skipped by --user)
+# A Chinese system needs fcitx5-chinese-addons to be typable, and since #703 that
+# is no longer a dependency of nidara-desktop (it costs ~540 MiB). This is where
+# the INSTALLER gets it — archinstall wrote /etc/locale.conf before the plan's
+# custom_commands run this script in the target — and where an install that was
+# already Chinese keeps it on `nidara-update`. The map lives in nidara-language.
+# Best-effort: a failed download must not cost the rest of the setup.
+# ─────────────────────────────────────────────────────────────────────────────
+if [ -z "$USER_ONLY" ] && command -v nidara-language >/dev/null 2>&1; then
+    if ! sudo nidara-language ensure-engine; then
+        echo "  [WARN] the input engine for this language could not be installed;"
+        echo "         run 'sudo nidara-language ensure-engine' once you are online"
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Per-user configuration (first run only, never overwrites)
 # ─────────────────────────────────────────────────────────────────────────────
 echo "  Initializing user configuration..."

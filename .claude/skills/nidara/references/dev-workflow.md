@@ -1483,10 +1483,28 @@ offered — `LANGUAGES` in `ui/installer/lib/languages.ts` has carried `zh-CN` a
 got written down and never applied, which is the worst of the three possible states: an installer
 promising a language its owner could not write in, and a document saying it did not.
 
-**The IME ships now** (#500): `fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-chinese-addons
-fcitx5-anthy`, ~23 MB, all in Arch's `extra`. Unconditional, not gated on the chosen language — the
-engines are 5 MB of the 23, and the framework earns its keep for everyone as the thing that turns
-`~/.XCompose` sequences into text for Wayland clients.
+**The IME ships now** (#500): `fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool fcitx5-anthy` are
+dependencies of `nidara-desktop`, all in Arch's `extra`. The framework earns its keep for everyone
+as the thing that turns `~/.XCompose` sequences into text for Wayland clients; anthy adds ~24 MiB.
+
+🔑 **The Chinese engine is installed with the LANGUAGE, not with the desktop** (#703). This section
+used to say "the engines are 5 MB of the 23" — their own size, not their dependency trees.
+`fcitx5-chinese-addons` pulls in qt6-webengine: **~540 MiB** on top of the rest of the desktop's
+dependency closure (measured with `pactree -s -u` minus that closure, then `pacman -Si`; `fcitx5-rime`
+was measured as the alternative and is still ~150 MiB, so the engine choice does not change the
+mechanism). `bin/nidara-language` is the ONE map from a language to its engine, and every path that
+can make Chinese the system language goes through it:
+
+| path | how |
+|---|---|
+| the installer | archinstall writes `/etc/locale.conf`; the plan's `custom_commands` run `nidara-setup` in the target, which runs `nidara-language ensure-engine` — no installer code of its own |
+| Settings → Region → Language | `pkexec nidara-language set <LANG>`: the engine FIRST, then `localectl`, under one password prompt. If the engine cannot be installed the language is NOT changed — a desktop in Chinese with no way to type it is #500 by another route. Prompt dismissed = exit 126 = no error shown |
+| `nidara-update` | ends in `nidara-setup` → `ensure-engine` marks an engine the system language needs `--asexplicit`, so the orphan left by the dropped dependency is not one `pacman -Rns $(pacman -Qdtq)` would take |
+| a plain `pacman -Syu` from ≤ 0.13.0 | `nidara.install` only PRINTS (a scriptlet cannot run pacman): the `pacman -Rns` line for a non-Chinese system, `sudo nidara-language ensure-engine` for a Chinese one. Nothing is removed silently |
+
+⚠️ `ensure-engine` runs `pacman -S` **without `-y`** on purpose: refreshing the databases without
+upgrading is a partial upgrade. A stale database fails with a download error, which Settings shows
+as "Couldn't apply" and `nidara-setup` as a warning.
 
 ⛔ **Do NOT export `GTK_IM_MODULE`.** It is the variable every guide sets and it is wrong here: GTK4
 speaks `zwp_text_input_v3` to the compositor natively, and setting the variable OVERRIDES that

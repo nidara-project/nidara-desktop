@@ -57,6 +57,8 @@ export default {
     "settings.region.locale.group": "语言与格式",
     "settings.region.locale.lang": "语言(区域设置)",
     "settings.region.locale.lang.desc": "适用于整个系统，而不仅是当前账户。下次登录时生效。",
+    "settings.region.locale.lang.installing": "正在安装中文输入法…",
+    "settings.region.locale.lang.failed": "无法应用",
     "settings.region.locale.regional": "区域格式",
     "settings.region.locale.regional.desc": "日期、数字、货币和单位。仅适用于当前账户，从下次登录开始生效。",
     "settings.region.locale.regional.same": "与界面语言相同",

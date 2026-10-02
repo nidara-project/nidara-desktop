@@ -57,6 +57,8 @@ export default {
     "settings.region.locale.group": "Lingua e formati",
     "settings.region.locale.lang": "Lingua (locale)",
     "settings.region.locale.lang.desc": "Per tutto il sistema, non solo per il proprio account. Ha effetto al prossimo accesso.",
+    "settings.region.locale.lang.installing": "Installazione dell’input cinese…",
+    "settings.region.locale.lang.failed": "Impossibile applicare",
     "settings.region.locale.regional": "Formato regionale",
     "settings.region.locale.regional.desc": "Date, numeri, valuta e unità di misura. Solo il proprio account, dal prossimo accesso.",
     "settings.region.locale.regional.same": "Come la lingua",

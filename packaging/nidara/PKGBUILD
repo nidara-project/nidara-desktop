@@ -145,16 +145,20 @@ depends=(
   # Without these the offer was a promise we could not keep — the desktop came up
   # in Chinese and its owner could not enter a single character (#500).
   #
-  # Unconditional rather than installed only when a CJK language is chosen: the
-  # engines are 5 MB of the 23, conditional package selection at install time is a
-  # whole mechanism to save that, and the FRAMEWORK earns its keep for everyone —
-  # it is also what turns ~/.XCompose sequences into text for Wayland clients.
+  # The FRAMEWORK is for everyone — it is also what turns ~/.XCompose sequences
+  # into text for Wayland clients. The Chinese ENGINE is not (#703): this comment
+  # used to call the engines "5 MB of the 23", which counted their own size and
+  # not their dependency trees. `fcitx5-chinese-addons` pulls in qt6-webengine and
+  # adds ~540 MiB on top of everything else listed here. It is installed when
+  # Chinese is the system language — at install time and from Settings → Region —
+  # by bin/nidara-language, and listed in optdepends below. Japanese stays: anthy
+  # adds ~24 MiB.
   #
   # ⚠️ `fcitx5-gtk` is for GTK3 and XWayland apps only. GTK4 speaks
   # `zwp_text_input_v3` to the compositor natively and needs no module — which is
   # why GTK_IM_MODULE is deliberately NOT exported; see bin/nidara.
   fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool
-  fcitx5-chinese-addons fcitx5-anthy
+  fcitx5-anthy
   # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors
@@ -300,6 +304,9 @@ package_nidara-desktop() {
   license=(GPL-3.0-or-later LGPL-3.0-or-later ISC MIT)
   backup=(etc/xdg-desktop-portal/hyprland-portals.conf
           etc/pam.d/nidara-lock)
+  # Installed by bin/nidara-language when the system language needs it (#703),
+  # not by pacman for everybody — see the input-method note in depends.
+  optdepends=('fcitx5-chinese-addons: typing Chinese (installed with Chinese as the system language)')
   # The rename dance, and all three are load-bearing:
   #   replaces  — an existing install migrates on the next `pacman -Syu`, with no
   #               instruction to anybody. This is the only one that touches
@@ -330,7 +337,7 @@ package_nidara-desktop() {
   for b in nidara nidara-ui nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click nidara-wm \
-           nidara-hook nidara-update nidara-setup nidara-migrate; do
+           nidara-hook nidara-update nidara-setup nidara-migrate nidara-language; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"

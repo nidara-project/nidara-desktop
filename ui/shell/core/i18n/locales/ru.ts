@@ -57,6 +57,8 @@ export default {
     "settings.region.locale.group": "Язык и форматы",
     "settings.region.locale.lang": "Язык (локаль)",
     "settings.region.locale.lang.desc": "Для всей системы, а не только для вашей учётной записи. Вступит в силу при следующем входе.",
+    "settings.region.locale.lang.installing": "Установка китайского ввода…",
+    "settings.region.locale.lang.failed": "Не удалось применить",
     "settings.region.locale.regional": "Региональный формат",
     "settings.region.locale.regional.desc": "Даты, числа, валюта и единицы измерения. Только ваша учётная запись, со следующего входа.",
     "settings.region.locale.regional.same": "Как язык интерфейса",

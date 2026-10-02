@@ -57,6 +57,8 @@ export default {
     "settings.region.locale.group": "Langue et formats",
     "settings.region.locale.lang": "Langue (locale)",
     "settings.region.locale.lang.desc": "Pour tout le système, pas seulement votre compte. Prend effet à la prochaine connexion.",
+    "settings.region.locale.lang.installing": "Installation de la saisie chinoise…",
+    "settings.region.locale.lang.failed": "Impossible d’appliquer",
     "settings.region.locale.regional": "Format régional",
     "settings.region.locale.regional.desc": "Dates, nombres, devises et unités. Votre compte uniquement, dès la prochaine connexion.",
     "settings.region.locale.regional.same": "Comme la langue",
