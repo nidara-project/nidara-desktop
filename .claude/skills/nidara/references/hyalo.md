@@ -190,8 +190,11 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   a pane reads as painted grey — and the shadow is EXACTLY what the glass is missing for the
   brightest point under the unit's light-ink shapes to reach `target`: ≈0.41 over white, 0.15
   over a light backdrop (0.45), none where the glass reaches it alone. It grows and shrinks
-  with the backdrop: no threshold, no hysteresis. `max_strength` is a safety cap; past it the
-  tint makes up the rest up to `alpha_max` — legibility first. A shape whose content has turned
+  with the backdrop: no threshold, no hysteresis. While there is a shadow the shell sends the
+  limit AS the glass's `alpha_max` (`CompositorGlass.ts`): nothing tints past it, not even for
+  legibility — a ceiling above it "makes the grey plastic again" (owner). Past `max_strength`
+  the text is less legible, not the glass greyer. The bar and the dock, which cast none for
+  now, are held to the same ceiling. A shape whose content has turned
   dark (an ink box of a dark group inside it) asks for none: it lies on the ink's light veil.
   Two rules came before and went the same day: "bring the brightest point to `target`" (the
   tint idle, the shadow doing everything), then "the least that evens the pane out", gated by

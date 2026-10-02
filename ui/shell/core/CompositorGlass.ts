@@ -53,8 +53,9 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * grey. "The limit has to be in the glass": the glass takes no more tint than `tintLimit`, and
  * Hyalo lays a soft shadow UNDER it, even across the pane, with exactly what the glass is
  * missing for the text to be legible at the brightest point — none where the glass reaches it
- * alone, none under a pane whose text has turned dark (the ink's veil), at most `scrimMax`
- * (past it, the tint makes up the rest up to `alphaMax`: legibility first). A pane's own
+ * alone, none under a pane whose text has turned dark (the ink's veil), at most `scrimMax`.
+ * The glass's ceiling IS `tintLimit` while there is a shadow: nothing makes up past
+ * `scrimMax`, because a tint above the limit is the grey plastic again. A pane's own
  * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's); the
  * Control Center and the Notification Center share one over the screen's whole right-hand
  * strip (`trackScrimRegion` in Bar.tsx), starting at their glass's left edge and fading over
@@ -79,8 +80,8 @@ const DEFAULTS = {
     inkDarkAbove: 0.80,
     // ≈ #d3d3d3: the gap is the hysteresis, so a backdrop on the line does not flicker.
     inkLightBelow: 0.65,
-    // The shadow's opacity at its core, at most: a safety, not a design value. Pure white
-    // needs ≈0.41 with the glass at `tintLimit`; past this the tint makes up the rest.
+    // The shadow's opacity at its core, at most. Pure white needs ≈0.41 with the glass at
+    // `tintLimit`; past this the text is less legible, not the glass greyer.
     scrimMax: 0.6,
     // A pane's own shadow fades over this fraction of its shorter side (a notification
     // ≈35 px; the app grid, the overview).
@@ -107,7 +108,11 @@ function params(): GlassParams | null {
         return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: SOLID_GLASS, alphaMax: SOLID_GLASS,
             target: p.target, refraction: 0, lensing: 0, rim: p.rim, saturation: 1 }
     }
-    return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: p.alphaMin, alphaMax: p.alphaMax, target: p.target,
+    // With the shadow under it, the glass never darkens past `tintLimit` — not even to keep the
+    // text legible, which is the shadow's job (owner, 2026-10-02: a ceiling above it "makes the
+    // grey plastic again"). Without the shadow (the A/B), `alphaMax` as before.
+    const alphaMax = tuning.scrimOff ? p.alphaMax : Math.min(p.alphaMax, p.tintLimit)
+    return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: p.alphaMin, alphaMax, target: p.target,
         refraction: p.refraction, lensing: p.lensing, rim: p.rim, saturation: p.saturation }
 }
 
