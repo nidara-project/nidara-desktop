@@ -43,7 +43,7 @@ phase_deps() {
         pipewire wireplumber libwireplumber \
         nodejs npm gjs \
         wayland-protocols hyprland-protocols wlr-protocols \
-        jq librsvg dconf file \
+        jq librsvg dconf file procps-ng \
         grim slurp wl-clipboard wf-recorder ffmpeg \
         ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji
     ldconfig
@@ -432,6 +432,28 @@ phase_run() {
     [ "$cur" = '{"theme":"Adwaita","size":32}' ] || { log "FAIL: a reload put the cursor back ($cur)"; exit 1; }
     nidara-hyalo msg settings '{"cursor":null,"input":{"keyboard":{"repeat_rate":null}}}' >/dev/null
     log "cursor OK (the shell's theme survives a reload)"
+    # Layer placement (#683): the bar and the dock both cover the monitor and each reserves its
+    # strip; Hyalo places each against the whole output, whatever order they were mapped in.
+    # The lock screen hides them and shows them again bar-first, and Smithay's own rule then put
+    # the dock under the bar's strip, hanging off the screen (owner-caught 2026-10-02).
+    /tmp/hyalo/nidara-ipc hideForLock >/dev/null
+    sleep 1
+    /tmp/hyalo/nidara-ipc showAfterLock >/dev/null
+    sleep 2
+    local placed
+    placed="$(nidara-hyalo msg layers | jq -c '[.ok.layers[] | select(.namespace == "nidara-bar" or .namespace == "nidara-dock") | {namespace, y}]')"
+    echo "$placed" | jq -e 'length == 2 and all(.y == 0)' >/dev/null \
+        || { log "FAIL: after hiding and showing them again, the bar or the dock is out of place ($placed)"; exit 1; }
+    log "layer placement OK (bar and dock back at the top of the output after a lock's hide and show)"
+    # Every process Hyalo starts is waited for (#683). Unwaited they stayed zombies, and
+    # nidara-lock, which will not start while a process of its name exists, refused every lock
+    # after the first (owner-caught 2026-10-02; 5 spawns left 5 zombies before the fix).
+    for _ in 1 2 3 4 5; do nidara-hyalo msg do spawn true >/dev/null; done
+    sleep 1
+    local zombies
+    zombies="$(ps -eo ppid=,stat= | awk -v p="$(pgrep -x nidara-hyalo | head -1)" '$1 == p && $2 ~ /^Z/' | wc -l)"
+    [ "$zombies" -eq 0 ] || { log "FAIL: $zombies of Hyalo's children are left as zombies"; exit 1; }
+    log "spawned processes OK (none left as a zombie)"
     # Night light (#683): Hyalo sets every CRTC's gamma ramps and READS THEM BACK, answering an
     # error unless the hardware holds them. Informational here: whether vkms has a gamma LUT
     # depends on the runner's kernel; the screens that matter are real ones.

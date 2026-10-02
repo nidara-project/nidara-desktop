@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde::{Deserialize, Serialize};
 use smithay::{
-    desktop::{Window, layer_map_for_output},
+    desktop::Window,
     output::Output,
     reexports::{
         wayland_protocols::xdg::shell::server::xdg_toplevel,
@@ -340,7 +340,7 @@ impl Hyalo {
     /// The usable area of an output: what the bar and dock leave, global coordinates.
     pub fn work_area(&self, output: &Output) -> Rect {
         let Some(og) = self.space.output_geometry(output) else { return Rect::default() };
-        let zone = layer_map_for_output(output).non_exclusive_zone();
+        let zone = crate::shell::layer::usable_zone(output);
         Rectangle::new(og.loc + zone.loc, zone.size)
     }
 
