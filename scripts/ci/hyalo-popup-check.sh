@@ -49,10 +49,15 @@ set -- $(read_size); W=$1; H=$2
 set -- $layer; LX=$1; LY=$2; LW=$3; LH=$4
 icon_x=$((LX + 50)); icon_y=$((LY + LH / 2))         # the icon: the layer's left 100 px
 glass_x=$((LX + LW - 30)); glass_y=$icon_y            # the empty glass beside it
-read field_x field_y <<EOF
-$($MSG windows | jq -r '.ok.windows[] | select(.title == "popup-field") | "\(.x + .width - 40) \(.y + .height - 40)"')
-EOF
-[ -n "$field_x" ] || fail "no popup-field window"
+# Listed once mapped with a size, which can come after the window has the keyboard (FIELD IN).
+field=""
+for _ in $(seq 1 40); do
+    field=$($MSG windows | jq -r '.ok.windows[] | select(.title == "popup-field" and .width > 0) | "\(.x + .width - 40) \(.y + .height - 40)"')
+    [ -n "$field" ] && break
+    sleep 0.25
+done
+[ -n "$field" ] || { $MSG windows | jq -c '.ok.windows[] | {title, workspace, x, y, width, height}'; fail "no popup-field window"; }
+set -- $field; field_x=$1; field_y=$2
 
 # 1. A menu closed by a click on the dock's own glass: the keyboard goes back to the field unasked.
 opened=$(count menu "MENU OPEN"); closed=$(count menu "MENU CLOSED")
