@@ -869,6 +869,11 @@ impl Hyalo {
         if keyboard.current_focus().is_some_and(|f| f.is_alive()) {
             return;
         }
+        self.focus_window_keyboard();
+    }
+
+    /// The keyboard to the focused window, if there is one.
+    pub fn focus_window_keyboard(&mut self) {
         let surface = self.wm.focused.and_then(|f| self.wm.get(f)).and_then(|m| m.window.wl_surface()).map(|s| s.into_owned());
         if surface.is_some() {
             self.set_keyboard_focus(surface, SERIAL_COUNTER.next_serial());

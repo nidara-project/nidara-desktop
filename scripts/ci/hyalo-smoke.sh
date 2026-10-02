@@ -423,6 +423,13 @@ phase_run() {
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \
         || { log "FAIL: input methods"; cat /tmp/hyalo/ime.log; exit 1; }
     log "input methods OK ($(grep -c '^ok' /tmp/hyalo/ime.log) of 2: a window, the shell's search)"
+    # Menus of the dock (#683): closed, they give the keyboard back to the window, and with an
+    # input method holding the keyboard a click in another app still closes them. Real clicks.
+    nidara-hyalo msg do workspace 1 >/dev/null
+    POPUP_LOG=/tmp/hyalo/popup "$REPO/scripts/ci/hyalo-popup-check.sh" >/tmp/hyalo/popup.log 2>&1 \
+        || { log "FAIL: menus"; cat /tmp/hyalo/popup.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "menus OK ($(grep -c '^ok' /tmp/hyalo/popup.log) of 2: the keyboard back, closed under an input method)"
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null

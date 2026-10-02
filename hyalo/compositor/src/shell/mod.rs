@@ -20,9 +20,10 @@ use smithay::{
             protocol::{wl_seat, wl_surface::WlSurface},
         },
     },
-    utils::Serial,
+    utils::{SERIAL_COUNTER, Serial},
     wayland::{
         compositor::{get_parent, with_states},
+        input_method::InputMethodKeyboardGrab,
         shell::xdg::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
             XdgToplevelSurfaceData,
@@ -65,7 +66,8 @@ impl XdgShellHandler for Hyalo {
         surface.send_repositioned(token);
     }
 
-    fn popup_destroyed(&mut self, _surface: PopupSurface) {
+    fn popup_destroyed(&mut self, surface: PopupSurface) {
+        self.popup_gave_keyboard_back(&surface);
         self.queue_redraw(None);
     }
 
@@ -149,12 +151,25 @@ impl XdgShellHandler for Hyalo {
         if self.lock.is_locked() && !self.belongs_to_lock(&root) {
             return;
         }
-        let Ok(mut grab) = self.popups.grab_popup(root, kind, &seat, serial) else { return };
+        let mut grab = match self.popups.grab_popup(root, kind, &seat, serial) {
+            Ok(grab) => grab,
+            Err(err) => {
+                tracing::debug!(?err, "popup grab refused");
+                return;
+            }
+        };
         if let Some(keyboard) = seat.get_keyboard() {
-            // A grab already held by something else (a window being dragged) is not taken over.
+            // An input method (fcitx5) holds the keyboard for as long as a text field has the
+            // focus. A menu opened then takes it over, as it takes the focus from the field: the
+            // field loses the focus and the input method lets go. Refused, the menu stayed open
+            // with no grab at all, and a click in another app no longer closed it.
+            let input_method_holds = keyboard.with_grab(|_, g| g.is::<InputMethodKeyboardGrab>()).unwrap_or(false);
+            // Any other grab (a window being dragged) is not taken over.
             if keyboard.is_grabbed()
+                && !input_method_holds
                 && !(keyboard.has_grab(serial) || keyboard.has_grab(grab.previous_serial().unwrap_or(serial)))
             {
+                tracing::debug!("popup dismissed: the keyboard is grabbed by something else");
                 grab.ungrab(PopupUngrabStrategy::All);
                 return;
             }
@@ -165,10 +180,45 @@ impl XdgShellHandler for Hyalo {
             if pointer.is_grabbed()
                 && !(pointer.has_grab(serial) || pointer.has_grab(grab.previous_serial().unwrap_or_else(|| grab.serial())))
             {
+                tracing::debug!("popup dismissed: the pointer is grabbed by something else");
                 grab.ungrab(PopupUngrabStrategy::All);
                 return;
             }
             pointer.set_grab(self, PopupPointerGrab::new(&grab), serial, Focus::Keep);
+        }
+    }
+}
+
+impl Hyalo {
+    /// The last menu of a chain closed: the keyboard leaves it for what the menu was opened
+    /// from — if that takes the keyboard. A menu of the dock or the bar gives it back to the
+    /// focused window instead: smithay's grab hands it to the menu's root, the dock, and what
+    /// was typed next went nowhere until the window was clicked. Also when the grab was unset
+    /// before the menu closed (smithay unsets any keyboard grab when an input method lets go of
+    /// its own, see `grab`), which left the keyboard on the menu itself.
+    fn popup_gave_keyboard_back(&mut self, surface: &PopupSurface) {
+        // A submenu closing under a menu still open: the grab goes on, and moves the keyboard
+        // to that menu itself.
+        if surface.get_parent_surface().is_some_and(|p| self.popups.find_popup(&p).is_some()) {
+            return;
+        }
+        let keyboard = self.seat.get_keyboard().unwrap();
+        let root = find_popup_root_surface(&PopupKind::Xdg(surface.clone())).ok();
+        let focus = keyboard.current_focus();
+        let on_menu = focus.as_ref() == Some(surface.wl_surface());
+        let on_root = focus.is_some() && focus == root;
+        if !(on_menu || on_root) {
+            return;
+        }
+        // The menu's grab ignores every focus change until it sees, on its next event, that its
+        // menus are gone: end it now. (The pointer's ends itself on the next motion.)
+        if keyboard.with_grab(|_, g| g.is::<PopupKeyboardGrab<Hyalo>>()).unwrap_or(false) {
+            keyboard.unset_grab(self);
+        }
+        match root.filter(|r| self.takes_keyboard(r)) {
+            Some(root) if on_menu => self.set_keyboard_focus(Some(root), SERIAL_COUNTER.next_serial()),
+            Some(_) => {}
+            None => self.focus_window_keyboard(),
         }
     }
 }

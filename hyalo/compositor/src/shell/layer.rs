@@ -169,6 +169,16 @@ impl Hyalo {
         layer.cached_state().keyboard_interactivity != KeyboardInteractivity::None
     }
 
+    /// Whether `surface` may hold the keyboard: a window always, a layer surface only if it
+    /// asked for it (the bar and the dock do not; a panel with a search field does).
+    pub fn takes_keyboard(&self, surface: &WlSurface) -> bool {
+        self.space.outputs().all(|o| {
+            layer_map_for_output(o)
+                .layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
+                .is_none_or(Self::layer_wants_keyboard)
+        })
+    }
+
     pub fn arrange_layers(&self) {
         for output in self.space.outputs() {
             layer_map_for_output(output).arrange();
