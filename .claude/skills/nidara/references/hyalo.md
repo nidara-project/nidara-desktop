@@ -471,6 +471,15 @@ What holds while locked, and where:
   keyboard global is HIDDEN from new clients (`LockState::locked_flag` in its global filter) —
   Smithay's virtual keyboard sends keys straight to the keyboard focus, which is the password
   field, and `wtype` connects anew for every run.
+- **A new lock comes in over the desktop** (`LockState::draws_locked`). From the request on
+  nothing of the session is reachable, but an output keeps SHOWING it until its lock surface has
+  a buffer — at most `HOLD_SESSION` (1 s), then the wallpaper alone — and cuts straight to the
+  lock screen. Cutting at the request showed the bare wallpaper for the frames `nidara-lock`
+  needed to draw: a flash lighter than both the desktop and the lock screen's veil (owner,
+  2026-10-02: "kitty lights up for an instant"). A RELOCK (a new client taking over a dead one's
+  lock) holds nothing: the session was hidden and stays so. So the shell no longer hides the bar,
+  the dock and the island before a lock on Hyalo (`lockScreen` in `ui/shell/app.ts`; it still does
+  on Hyprland, which draws the session until the lock surface commits).
 - **"Locked" only when true**: the client hears `locked` once every output that shows frames
   (`Backend::output_shows_frames`: powered, on the active VT) has SHOWN a locked frame — the tty
   backend's vblank, winit's submit. A frame counts only if rendered for THIS lock (a generation in
@@ -484,8 +493,10 @@ What holds while locked, and where:
   frame: invisible. Found nested, 2026-10-02.
 - IPC: `nidara-hyalo msg lock` (`locked`, the outputs with a lock surface); event `lock_changed`.
 
-Tested by `scripts/ci/hyalo-lock-check.sh` in the Hyalo smoke (six steps, the control last: after
-the unlock the window behind gets the keys). Hyalo must be started with `HYALO_LOCK_RELAUNCH`
+Tested by `scripts/ci/hyalo-lock-check.sh` in the Hyalo smoke (seven steps, the control last: after
+the unlock the window behind gets the keys). Step 0 times the hold from the probe's own clock: a
+client that draws 3 s late (`lock-slow`) hears `locked` at ~1000 ms, one that draws at once well
+under 800 ms; before the hold, the late one heard it at 11 ms. Hyalo must be started with `HYALO_LOCK_RELAUNCH`
 pointing at the check's probe, or its relaunch step fails.
 
 ## Idle: Hyalo does it, there is no hypridle (owner, 2026-10-02)
@@ -743,12 +754,32 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   show its bar and dock as a lock does, and requires both back at the top of the output; and
   `scripts/ci/hyalo-layers-check.sh` (+ `hyalo-layers-probe.js`) maps a bar and a dock at the
   bottom, left and right, in both orders, and requires both over the whole output.
+- **No overlay planes, on any driver** (`backend/tty.rs`, output setup): only the PRIMARY plane,
+  for a fullscreen window's direct scan-out, and the cursor plane. The display hardware blends
+  planes its own way — amdgpu in linear light — and a driver's TEST_ONLY commit only says whether
+  it CAN show a plane, never whether it will look like our composition. Measured on the owner's
+  amdgpu (2026-10-02): kitty at 50 % went visibly PALE on an overlay plane, and only while the bar
+  and the dock were gone — their surfaces cover the whole output, so with them mapped kitty lay
+  under our composition and could not have a plane — so the same window changed look under the
+  user's eyes on every UI reload. NVIDIA's overlay planes also break scan-out (anvil), and planes
+  passing between surfaces switched the scan-out feedback (below). Hyprland and Mutter use none
+  for windows either. If they ever come back: opaque surfaces only and no underlays — an opaque
+  pixel looks the same wherever it is blended, a translucent one does not.
+  `[render] direct_scanout` (default on, read every frame) lets an opaque window covering the
+  output go on the primary plane uncomposed — less latency for a game, and it looks the same;
+  off is the switch for hardware that shows such a window wrong (Hyprland's
+  `render:direct_scanout`, which Nidara never turned on there). 🔴 **A screenshot cannot see any
+  of this**: `msg screenshot` and screencopy draw the scene again with GL, so they show what we
+  would have drawn, not what the planes put on screen (both measured identical while the owner
+  saw kitty change). Read the planes instead: `modetest -M amdgpu -p` lists each plane with its
+  framebuffer — an `Overlay` plane must never hold one. CI cannot: vkms has no overlay planes.
 - **The scan-out feedback is sticky** (`pick_feedback` in `backend/mod.rs`). Smithay's
   `select_dmabuf_feedback` follows the frame, and each switch is a new modifier set. Mesa's
   Wayland WSI answers that with `VK_SUBOPTIMAL_KHR`, and GTK rebuilds its swapchain on it, so the
   shell logs a `Gdk-WARNING … VK_SUBOPTIMAL_KHR` for each rebuild. It counted 55 in its first
   25 s on an amdgpu (2026-10-01), while the one free overlay plane passed between its
-  monitor-sized layers. Once offered, the scan-out feedback stays. This is safe only while the
+  monitor-sized layers (overlay planes are gone since 2026-10-02, above; the primary plane's
+  scan-out still switches it). Once offered, the scan-out feedback stays. This is safe only while the
   scan-out tranche lists nothing we cannot render from (`surface_feedback` in tty.rs intersects
   it with the render formats). Drop that intersection and the sticky rule becomes a bug. Hyprland
   never shows this, because it uses no overlay planes. Its only direct scan-out is a fullscreen

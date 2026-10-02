@@ -45,6 +45,24 @@ pub struct Config {
     pub rules: BTreeMap<String, RuleConfig>,
     /// What happens when nobody touches the computer (idle.rs). Settings → Power writes it.
     pub idle: IdleConfig,
+    pub render: RenderConfig,
+}
+
+/// How frames reach the screen (backend/tty.rs).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct RenderConfig {
+    /// A fullscreen window that covers the output, opaque, is put on the display's primary
+    /// plane as it is, with no composition: less latency for a game. Off, every frame is
+    /// composed — the switch for hardware that shows such a window wrong (Hyprland's
+    /// `render:direct_scanout`). Overlay planes are never used, whatever this says.
+    pub direct_scanout: bool,
+}
+
+impl Default for RenderConfig {
+    fn default() -> Self {
+        Self { direct_scanout: true }
+    }
 }
 
 /// Seconds without input before each step; 0 = never. The steps are independent: with the

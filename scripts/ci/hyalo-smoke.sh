@@ -441,17 +441,24 @@ phase_run() {
     log "cursor OK (the shell's theme survives a reload)"
     # Layer placement (#683): the bar and the dock both cover the monitor and each reserves its
     # strip; Hyalo places each against the whole output, whatever order they were mapped in.
-    # The lock screen hides them and shows them again bar-first, and Smithay's own rule then put
-    # the dock under the bar's strip, hanging off the screen (owner-caught 2026-10-02).
+    # The lock screen used to hide them and show them again bar-first, and Smithay's own rule then
+    # put the dock under the bar's strip, hanging off the screen (owner-caught 2026-10-02); both
+    # mapping orders are hyalo-layers-check.sh's, below. On Hyalo the lock no longer hides them
+    # at all: Hyalo shows the session until the lock screen has drawn and then nothing of it
+    # (lock.rs), so hiding them first only made the desktop change ~1 s before the lock screen.
+    # Here: the lock's hide leaves both mapped, and they are where they were after its show.
     /tmp/hyalo/nidara-ipc hideForLock >/dev/null
     sleep 1
-    /tmp/hyalo/nidara-ipc showAfterLock >/dev/null
-    sleep 2
     local placed
     placed="$(nidara-hyalo msg layers | jq -c '[.ok.layers[] | select(.namespace == "nidara-bar" or .namespace == "nidara-dock") | {namespace, y}]')"
+    echo "$placed" | jq -e 'length == 2' >/dev/null \
+        || { log "FAIL: on Hyalo the lock's hide unmapped the bar or the dock ($placed)"; exit 1; }
+    /tmp/hyalo/nidara-ipc showAfterLock >/dev/null
+    sleep 1
+    placed="$(nidara-hyalo msg layers | jq -c '[.ok.layers[] | select(.namespace == "nidara-bar" or .namespace == "nidara-dock") | {namespace, y}]')"
     echo "$placed" | jq -e 'length == 2 and all(.y == 0)' >/dev/null \
-        || { log "FAIL: after hiding and showing them again, the bar or the dock is out of place ($placed)"; exit 1; }
-    log "layer placement OK (bar and dock back at the top of the output after a lock's hide and show)"
+        || { log "FAIL: after a lock's hide and show, the bar or the dock is out of place ($placed)"; exit 1; }
+    log "layer placement OK (a lock leaves the bar and the dock mapped, at the top of the output)"
     # The same rule for every dock position and mapping order: a side dock must not push the
     # bar in or cut it short (it did, by its 80 px, under Smithay's rule).
     LAYERS_LOG=/tmp/hyalo/layers-probe.log "$REPO/scripts/ci/hyalo-layers-check.sh" >/tmp/hyalo/layers.log 2>&1 \

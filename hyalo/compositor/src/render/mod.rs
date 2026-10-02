@@ -223,8 +223,9 @@ pub fn output_elements<R: HyaloRenderer>(
         crate::shell::layer::layer_geometry(&map, l).unwrap_or_default().loc.to_f64().to_physical_precise_round(scale)
     };
     // Locked (lock.rs): the lock surface over the wallpaper, and nothing of the session — its
-    // windows and the shell's layers are not drawn at all, not even under an opaque sheet.
-    if state.lock.is_locked() {
+    // windows and the shell's layers are not drawn at all, not even under an opaque sheet. A new
+    // lock shows the session until its lock surface here has drawn (`draws_locked`).
+    if state.lock.draws_locked(output) {
         state.lock.note_rendered(output);
         if let Some(surface) = state.lock.surface_for(output) {
             push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, None);

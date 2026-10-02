@@ -11,6 +11,15 @@
 //! refracting the real wallpaper. (On Hyprland the lock surface is drawn over an opaque
 //! sheet, so `nidara-lock` painted its own copy of the wallpaper and imitated the glass on it.)
 //!
+//! **A new lock comes in over the desktop, not over the bare wallpaper.** From the request on,
+//! the keyboard and the pointer reach the lock surfaces only; but an output goes on showing the
+//! session until ITS lock surface has a buffer (at most HOLD_SESSION), and then cuts straight to
+//! it. Cutting at the request showed the wallpaper alone for the frames the lock client needed
+//! to draw its first one: a flash, lighter than the desktop and than the lock screen's own
+//! veil (owner, 2026-10-02: "kitty lights up for an instant, then the lock screen appears"). A
+//! RELOCK — a new client taking over the lock of one that died — holds nothing: the session
+//! was hidden already and stays so.
+//!
 //! **"Locked" is said only when it is true.** The client is told the session is locked once
 //! every output that shows frames has shown one of the locked ones — on the tty backend, at the
 //! vblank that put it on screen — never when the request arrives.
@@ -29,6 +38,7 @@ use std::{
 };
 
 use smithay::{
+    backend::renderer::utils::with_renderer_surface_state,
     desktop::{PopupManager, WindowSurfaceType, utils::under_from_surface_tree},
     output::Output,
     reexports::{
@@ -64,6 +74,9 @@ const RELAUNCH_LIMIT: usize = 3;
 const RELAUNCH_WINDOW: Duration = Duration::from_secs(30);
 /// How often a held lock checks that its client is still there.
 const WATCH_EVERY: Duration = Duration::from_secs(1);
+/// The longest a new lock keeps showing the session while its client draws its first frame;
+/// past it, an output without a lock surface shows the wallpaper alone.
+const HOLD_SESSION: Duration = Duration::from_secs(1);
 
 /// The role Smithay gives a lock surface (not exported by it).
 const LOCK_SURFACE_ROLE: &str = "ext_session_lock_surface_v1";
@@ -72,9 +85,11 @@ const LOCK_SURFACE_ROLE: &str = "ext_session_lock_surface_v1";
 enum Mode {
     #[default]
     Unlocked,
-    /// A client asked: only locked frames are drawn from now on, and the client hears
-    /// `locked` once every output in `waiting` has shown one.
-    Pending { locker: SessionLocker, waiting: Vec<Output> },
+    /// A client asked: nothing of the session can be reached, and the client hears `locked`
+    /// once every output in `waiting` has shown a locked frame. Until `hold_until` (a new
+    /// lock; never a relock) an output whose lock surface has no buffer yet still shows the
+    /// session.
+    Pending { locker: SessionLocker, waiting: Vec<Output>, hold_until: Option<Instant> },
     /// Confirmed. `lock` is the client's object: when it is gone the client is gone.
     Locked { lock: ExtSessionLockV1 },
 }
@@ -118,9 +133,26 @@ impl LockState {
         self.flag.clone()
     }
 
-    /// Locked, or about to be: nothing of the session may be drawn or reached.
+    /// Locked, or about to be: nothing of the session may be reached (nor captured).
     pub fn is_locked(&self) -> bool {
         !matches!(self.mode, Mode::Unlocked)
+    }
+
+    /// Does `output` show a locked frame (the lock surface over the wallpaper) rather than the
+    /// session? Once locked, always; while a new lock waits for its client, once the lock
+    /// surface there has a buffer, or once the hold is over.
+    pub fn draws_locked(&self, output: &Output) -> bool {
+        match &self.mode {
+            Mode::Unlocked => false,
+            Mode::Locked { .. } => true,
+            Mode::Pending { hold_until: None, .. } => true,
+            Mode::Pending { hold_until: Some(until), .. } => {
+                Instant::now() >= *until
+                    || self.surface_for(output).is_some_and(|s| {
+                        with_renderer_surface_state(s, |state| state.buffer().is_some()).unwrap_or(false)
+                    })
+            }
+        }
     }
 
     /// The lock surface on `output`, if its client made one.
@@ -130,7 +162,7 @@ impl LockState {
 
     /// The frame being rendered on `output` is a locked one (render/mod.rs).
     pub fn note_rendered(&self, output: &Output) {
-        if !self.is_locked() {
+        if !self.draws_locked(output) {
             return;
         }
         let data = output.user_data();
@@ -282,7 +314,8 @@ impl SessionLockHandler for Hyalo {
         let waiting: Vec<Output> =
             self.space.outputs().filter(|o| self.backend.output_shows_frames(o)).cloned().collect();
         tracing::info!(relock, outputs = waiting.len(), "locking the session");
-        self.lock.mode = Mode::Pending { locker: confirmation, waiting };
+        let hold_until = (!relock).then(|| Instant::now() + HOLD_SESSION);
+        self.lock.mode = Mode::Pending { locker: confirmation, waiting, hold_until };
         self.lock.flag.store(true, Ordering::Release);
 
         if !relock {
@@ -303,6 +336,12 @@ impl SessionLockHandler for Hyalo {
                 TimeoutAction::ToDuration(WATCH_EVERY)
             });
             self.lock.watch = token.ok();
+            // The hold's end must draw a frame even if nothing else asks for one: a lock client
+            // that never draws still gets the session hidden, and `locked` said.
+            let _ = self.loop_handle.insert_source(Timer::from_duration(HOLD_SESSION), |_, _, state| {
+                state.queue_redraw(None);
+                TimeoutAction::Drop
+            });
         }
         if matches!(&self.lock.mode, Mode::Pending { waiting, .. } if waiting.is_empty()) {
             // No output shows frames (all off, or another VT is active): nothing to wait for.

@@ -3,7 +3,11 @@
 # keys through HYALO_CONTROL (the same path as a keyboard, bindings included). Run INSIDE a Hyalo
 # session started with HYALO_CONTROL (the Hyalo smoke; locally, a nested Hyalo).
 #
-#   1. locked: the client hears `locked`, and Hyalo says so (`msg lock`) with a lock surface;
+#   0. a new lock comes in over the desktop: a lock client that draws 3 s late hears `locked`
+#      only at the end of Hyalo's 1 s hold (the session shown meanwhile, and nothing reachable),
+#      not at the first frame after the request — which showed the bare wallpaper (lock.rs);
+#   1. locked: the client hears `locked` within the hold, as soon as its lock surface has drawn
+#      (the other side of 0), and Hyalo says so (`msg lock`) with a lock surface;
 #   2. keys go to the lock screen and not to the window that had the keyboard;
 #   3. the desktop's bindings do not run (Super+2 does not switch workspace);
 #   4. a second lock request is refused while the first client holds the lock;
@@ -27,6 +31,8 @@ locked() { $MSG lock | jq -r '.ok.locked'; }
 ws() { $MSG workspaces | jq -r '.ok.workspaces[] | select(.focused) | .id'; }
 focused() { $MSG windows | jq -r '.ok.windows[] | select(.focused) | .title'; }
 wait_for() { for _ in $(seq 1 40); do grep -q "$1" "$log/$2.log" && return 0; sleep 0.25; done; return 1; }
+# ms from the lock request to `locked`, as the probe timed them.
+gap() { echo $(( $(awk '$1 == "LOCKED" {print $2}' "$log/$1.log") - $(awk '$1 == "REQUESTED" {print $2}' "$log/$1.log") )); }
 fail() { echo "FAIL: $*"; tail -n 20 "$log"/*.log; exit 1; }
 # evdev codes: 24 o, 37 k, 30 a, 125 Super, 3 the "2" key. One write per sequence (see
 # hyalo-inhibit-check.sh: separate writes race the FIFO's reopen).
@@ -39,11 +45,24 @@ victim=$(probe victim victim); pids="$pids $victim"
 for _ in $(seq 1 40); do [ "$(focused)" = "lock-victim" ] && break; sleep 0.25; done
 [ "$(focused)" = "lock-victim" ] || fail "the victim window never had the keyboard (on '$(focused)')"
 
+slow=$(probe lock-slow lock0); pids="$pids $slow"
+wait_for "^LOCKED" lock0 || fail "the slow lock client never heard 'locked'"
+held=$(gap lock0)
+[ "$held" -ge 800 ] || fail "a lock client that had not drawn heard 'locked' after $held ms: Hyalo cut to the bare wallpaper instead of holding the session"
+[ "$held" -le 2500 ] || fail "a lock client that had not drawn heard 'locked' only after $held ms: the hold has no end"
+for _ in $(seq 1 20); do [ -n "$($MSG lock | jq -r '.ok.surfaces[0] // empty')" ] && break; sleep 0.25; done
+keys 'key 24\nkey 37\n'
+wait_for UNLOCKED lock0 || fail "the slow lock client could not unlock"
+for _ in $(seq 1 20); do [ "$(focused)" = "lock-victim" ] && break; sleep 0.25; done
+echo "ok    a new lock holds the session until its client draws: 'locked' after $held ms, at the hold's end"
+
 first=$(probe lock lock1); pids="$pids $first"
-wait_for LOCKED lock1 || fail "the lock client never heard 'locked'"
+wait_for "^LOCKED" lock1 || fail "the lock client never heard 'locked'"
+quick=$(gap lock1)
+[ "$quick" -lt 800 ] || fail "a lock client that drew at once heard 'locked' only after $quick ms: the hold did not end at its first frame"
 [ "$(locked)" = "true" ] || fail "Hyalo does not say the session is locked"
 [ -n "$($MSG lock | jq -r '.ok.surfaces[0] // empty')" ] || fail "no output has a lock surface"
-echo "ok    locked: the client heard it, Hyalo says it, an output has the lock surface"
+echo "ok    locked: the client heard it ($quick ms, at its first frame), Hyalo says it, an output has the lock surface"
 
 keys 'key 30\n'
 wait_for "TYPED a" lock1 || fail "a key typed while locked did not reach the lock screen"
