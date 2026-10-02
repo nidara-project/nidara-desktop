@@ -387,11 +387,12 @@ impl Hyalo {
                 self.wm.cursor_hidden = !on;
                 self.queue_redraw(None);
             }
+            // Persisted through the settings layer, like every other choice the shell makes: set
+            // only in memory, the next reload (any Settings change: a keyboard layout) put the
+            // file's cursor back (measured, 2026-10-02). The reload applies it.
             Action::SetCursor { theme, size } => {
-                self.config.cursor.theme = theme;
-                self.config.cursor.size = size;
-                let cfg = self.config.cursor.clone();
-                self.backend.reload_cursors(&cfg);
+                let patch = serde_json::json!({ "cursor": { "theme": theme, "size": size } });
+                crate::config::apply_settings(self, patch)?;
                 self.queue_redraw(None);
             }
             Action::RefocusPointer => {

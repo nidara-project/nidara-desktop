@@ -20,6 +20,7 @@ mod idle;
 mod ipc;
 mod lock;
 mod logind;
+mod night_light;
 mod outputs;
 mod protocols;
 mod render;

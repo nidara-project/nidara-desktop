@@ -1290,9 +1290,31 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     // ── Fullscreen detection ──────────────────────────────────────────────────
 
+    // Over a fullscreen window, called up with the bar (Super+B, app.ts toggleBarOverlay):
+    // the dock joins the OVERLAY layer, revealed. On Hyprland pointer input between two
+    // OVERLAY surfaces was unreliable, so only the bar came up (#679 #15); on Hyalo both do.
+    let overFullscreen = false
+    const setOverFullscreen = (active: boolean) => {
+        if (!layerShellReady || overFullscreen === active) return
+        overFullscreen = active
+        if (active) {
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+            isRevealed = true
+            slideTarget = 0
+            runUnifiedTick(true)
+        } else {
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+            if (fullscreenMode) setRevealed(false)
+        }
+        axis.buildInputRegion(win, smoothedBarMain, revealState())
+    }
+    ;(win as any).setOverFullscreen = setOverFullscreen
+
     const setFullscreenMode = (active: boolean) => {
         if (fullscreenMode === active) return
         fullscreenMode = active
+        // Leaving fullscreen ends the call-up, as it does for the bar.
+        if (!active) setOverFullscreen(false)
         if (active) {
             if (isRevealed) setRevealed(false)
             axis.buildInputRegion(win, smoothedBarMain, revealState())

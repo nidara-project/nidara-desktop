@@ -17,7 +17,7 @@
 
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { execAsync } from "../../lib/process"
+import { execAsync, spawn } from "../../lib/process"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import type { HyprlandStateClass } from "./HyprlandState"
 import {
@@ -214,6 +214,22 @@ const writeHypridle = (cfg: IdleConfig) => {
 }
 
 
+// Night light on Hyprland is hyprsunset, a process of its own (moved from NightLightSync.ts on
+// 2026-10-02, when Hyalo took the gamma over): restarted for a new temperature, killed for none.
+let hyprsunset: Gio.Subprocess | null = null
+const setNightLightHyprland = (kelvin: number | null) => {
+    if (hyprsunset) {
+        try { hyprsunset.force_exit() } catch (_) {}
+        hyprsunset = null
+    }
+    if (kelvin === null) return
+    try {
+        hyprsunset = spawn(["hyprsunset", "-t", String(kelvin)], Gio.SubprocessFlags.NONE)
+    } catch (e) {
+        console.error("[NightLight] Failed to start hyprsunset:", e)
+    }
+}
+
 export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettings {
     const input = INPUT.map(([key, name, kind, literal]) => ({ key, opt: option(hs, name, kind), literal }))
 
@@ -272,6 +288,7 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
     })
 
     return {
+        setNightLight: setNightLightHyprland,
         readIdle: parseHypridle,
         setIdle: writeHypridle,
         caps: { animations: true, sharedBlur: true, vrrFullscreenOnly: true },

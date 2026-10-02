@@ -531,6 +531,19 @@ from sandboxed clients.
   commits a fixed string when a field activates (fcitx5's Chinese engine would be ~540 MiB in the
   container). Its XML is not in wayland-protocols: it comes from the wayland-protocols-misc crate.
 
+## Night light: Hyalo's gamma ramps
+
+`night_light.rs`. On Hyprland it was hyprsunset (a Hyprland protocol); on Hyalo the shell's
+`NightLightSync.ts` (the schedule, the switch) asks `settings.setNightLight(kelvin | null)`, which is
+the `night_light` IPC request (`nidara-hyalo msg night-light 3400` / `off`). Hyalo warms every
+CRTC's legacy gamma ramps — on an atomic driver the kernel makes that the GAMMA_LUT property,
+which Smithay's commits never touch, so it holds across frames — and READS THEM BACK: the request
+answers an error unless the hardware holds them. A modeset, a VT switch or DPMS can reset them, so
+they are applied again when an output comes on, when the session resumes and when an output wakes.
+White point: Tanner Helland's blackbody fit (6500 K neutral; blue goes first, then green). A
+screenshot never shows it: the ramps act after composition, in the display pipeline. Not
+persisted: the shell sends it again when it starts.
+
 ## Window capture (thumbnails)
 
 `capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`
@@ -605,6 +618,11 @@ Two kinds of request:
   re-states settings on `config_reloaded`, and an unconditional reload there would loop.
   `config` answers with the configuration in force (the keyboard with the system layout filled
   in), which is what Settings shows.
+- ⚠️ **A runtime action must not write `state.config` directly.** The next reload replaces
+  `state.config` with the files' merge, so anything set only in memory is put back the moment
+  Settings changes anything else. `set-cursor` did exactly that until 2026-10-02 (the shell's
+  cursor theme reverted to `default` on a keyboard-layout change); it now goes through
+  `apply_settings`. Runtime-only state lives outside `config` (`mode_overrides`, `cursor_hidden`).
 - A reload Hyalo did itself updates `config_stamps`, so the file watcher does not reload the same
   write a second time a second later.
 - **`HYALO_CONFIG` replaces the layers** (tests, CI), and then there is a settings layer only if
@@ -612,6 +630,13 @@ Two kinds of request:
   nested test never writes the preview session's real `hyalo-settings.toml`.
 
 ## The shell on Hyalo
+
+- **Over a fullscreen window, Super+B brings the bar AND the dock** (`toggleBarOverlay` in app.ts →
+  the bar's `setBarOverlayMode` and the dock's `setOverFullscreen`: both join the OVERLAY layer,
+  the dock revealed; the dock follows the bar's state, and leaving fullscreen ends it for both).
+  On Hyprland only the bar came up: pointer input between two OVERLAY surfaces was unreliable
+  there (#679 #15). Verified nested: a click on the dock's app-grid button over a fullscreen
+  window opens the grid.
 
 The shell finds Hyalo by `$HYALO_SOCKET`, which `uwsm finalize HYALO_SOCKET` (Hyalo's first
 autostart line) exports to the session's services. `core/hyalo-ipc.ts` speaks the socket the way

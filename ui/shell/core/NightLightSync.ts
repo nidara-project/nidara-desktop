@@ -1,4 +1,5 @@
-// Runs night light: hyprsunset and the schedule (#571).
+// Runs night light: the schedule (#571), and the compositor's warmth through
+// `settings.setNightLight` — hyprsunset on Hyprland, Hyalo's own gamma ramps on Hyalo.
 //
 // ⚠️ SHELL ONLY — started from app.ts, like GameSession and AppearanceHooks. It reacts to
 // org.nidara.night-light, so a change from any writer applies exactly once: the Settings
@@ -8,34 +9,28 @@
 // It is also the ONE process that writes `enabled` on its own — when the schedule
 // crosses a boundary. A second process running a schedule timer would race it.
 
-import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import NightLight, { isInSchedule } from "./NightLightManager"
-import { spawn } from "../../lib/process"
+import { settings } from "./CompositorState"
 
 let started = false
-let proc: Gio.Subprocess | null = null
+let warm = false
 let respawnDebounce = 0
 let scheduleTimer = 0
 
-function startHyprsunset(): void {
-    kill()
-    try {
-        proc = spawn(["hyprsunset", "-t", String(NightLight.temperature)], Gio.SubprocessFlags.NONE)
-    } catch (e) {
-        console.error("[NightLight] Failed to start hyprsunset:", e)
-        proc = null
-    }
+function warmUp(): void {
+    settings.setNightLight(NightLight.temperature)
+    warm = true
 }
 
 function kill(): void {
-    if (!proc) return
-    try { proc.force_exit() } catch (_) {}
-    proc = null
+    if (!warm) return
+    settings.setNightLight(null)
+    warm = false
 }
 
 /** The schedule decides `enabled`. Writing it is enough: the `enabled` subscriber below
- *  starts or stops hyprsunset. */
+ *  warms the screens or puts them back. */
 function checkSchedule(): void {
     const inWindow = isInSchedule(NightLight.scheduleFrom, NightLight.scheduleTo)
     if (inWindow !== NightLight.enabled) NightLight.setEnabled(inWindow)
@@ -61,14 +56,14 @@ export function startNightLightSync(): void {
     if (started) return
     started = true
 
-    NightLight.subscribe("enabled", () => { if (NightLight.enabled) startHyprsunset(); else kill() })
-    // A slider drag writes many temperatures; restart hyprsunset once it settles.
+    NightLight.subscribe("enabled", () => { if (NightLight.enabled) warmUp(); else kill() })
+    // A slider drag writes many temperatures; apply once it settles (hyprsunset restarts).
     NightLight.subscribe("temperature", () => {
         if (!NightLight.enabled) return
         if (respawnDebounce > 0) GLib.source_remove(respawnDebounce)
         respawnDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
             respawnDebounce = 0
-            startHyprsunset()
+            warmUp()
             return GLib.SOURCE_REMOVE
         })
     })
@@ -79,5 +74,5 @@ export function startNightLightSync(): void {
     // Start: with a schedule, the clock decides — the saved `enabled` describes whichever
     // half of the schedule we were in when the shell last ran. Then run what it says.
     syncScheduleTimer()
-    if (NightLight.enabled && !proc) startHyprsunset()
+    if (NightLight.enabled && !warm) warmUp()
 }

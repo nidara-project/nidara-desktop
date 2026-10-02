@@ -144,6 +144,11 @@ pub enum Request {
     Lock,
     /// Seconds since the last input, whether something holds idle off, the steps (idle.rs).
     Idle,
+    /// Night light: the screens warmed to `temperature` kelvin, or neutral with none.
+    NightLight {
+        #[serde(default)]
+        temperature: Option<u32>,
+    },
     /// A window-manager command, written as in a binding: `workspace 3`, `focus-window 12`
     /// (wm/actions.rs).
     Do { command: String },

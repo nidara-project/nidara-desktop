@@ -1258,16 +1258,21 @@ app.start({
       status.toggleOverview()
     }
     const toggleBarOverlay = () => {
-      // Only promotes bar — dock and appgrid are unaffected.
-      // Activation requires a fullscreen window; deactivation is always allowed.
+      // Over a fullscreen window: the bar AND the dock come up together (#679 #15), and go
+      // together. Activation requires a fullscreen window; deactivation is always allowed.
+      // The dock follows the bar's state, so the two never end up one up and one down.
+      let next: boolean | null = null
       windows.forEach(w => {
         if (w.name === "nidara-bar") {
           const isActive = (w as any).isBarOverlayActive?.() ?? false
           const isFullscreen = (w as any).isBarFullscreenMode?.() ?? false
           if (!isActive && !isFullscreen) return
-          ;(w as any).setBarOverlayMode?.(!isActive)
+          next = !isActive
+          ;(w as any).setBarOverlayMode?.(next)
         }
       })
+      if (next === null) return
+      windows.forEach(w => { if (w.name === "nidara-dock") (w as any).setOverFullscreen?.(next) })
     }
     // About window — lazy, created only when first toggled, destroyed on close
     status.connect("notify::about-open", () => {

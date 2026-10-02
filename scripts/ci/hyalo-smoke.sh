@@ -423,6 +423,24 @@ phase_run() {
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \
         || { log "FAIL: input methods"; cat /tmp/hyalo/ime.log; exit 1; }
     log "input methods OK ($(grep -c '^ok' /tmp/hyalo/ime.log) of 2: a window, the shell's search)"
+    # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
+    # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
+    nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null
+    nidara-hyalo msg settings '{"input":{"keyboard":{"repeat_rate":26}}}' >/dev/null
+    sleep 0.5
+    cur="$(nidara-hyalo msg config | jq -c '.ok.config.cursor')"
+    [ "$cur" = '{"theme":"Adwaita","size":32}' ] || { log "FAIL: a reload put the cursor back ($cur)"; exit 1; }
+    nidara-hyalo msg settings '{"cursor":null,"input":{"keyboard":{"repeat_rate":null}}}' >/dev/null
+    log "cursor OK (the shell's theme survives a reload)"
+    # Night light (#683): Hyalo sets every CRTC's gamma ramps and READS THEM BACK, answering an
+    # error unless the hardware holds them. Informational here: whether vkms has a gamma LUT
+    # depends on the runner's kernel; the screens that matter are real ones.
+    if reply=$(nidara-hyalo msg night-light 3000 2>&1) && echo "$reply" | jq -e '.ok' >/dev/null 2>&1; then
+        nidara-hyalo msg night-light off >/dev/null
+        log "night light OK (3000 K set and read back on every output, then neutral)"
+    else
+        log "night light: not verifiable on this display ($(echo "$reply" | jq -r '.error // .' 2>/dev/null))"
+    fi
 
     # ── 3. Pictures for a person.
     sleep 4
