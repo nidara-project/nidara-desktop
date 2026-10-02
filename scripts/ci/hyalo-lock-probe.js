@@ -3,6 +3,9 @@
 //   gjs -m hyalo-lock-probe.js lock     locks the session (ext-session-lock-v1) with an entry on every
 //                                       output: prints LOCKED / FAILED / `TYPED <text>`, and unlocks
 //                                       once "ok" has been typed into it (then UNLOCKED, and exits)
+//   gjs -m hyalo-lock-probe.js lock-slow  the same, but its lock windows draw only 3 s after the
+//                                       request: a lock client slower than Hyalo's hold
+//   REQUESTED and LOCKED carry the monotonic clock in ms, so the check can time the gap.
 // Needs gtk4-layer-shell preloaded (it carries Gtk4SessionLock): LD_PRELOAD=…/libgtk4-layer-shell.so.
 
 import Gtk from "gi://Gtk?version=4.0"
@@ -10,7 +13,9 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 
-const mode = ARGV[0] === "lock" ? "lock" : "victim"
+const mode = ARGV[0] === "lock" || ARGV[0] === "lock-slow" ? "lock" : "victim"
+const slow = ARGV[0] === "lock-slow"
+const ms = () => Math.round(GLib.get_monotonic_time() / 1000)
 const say = (s) => { print(s); }
 // NON_UNIQUE: several lock clients run at once, and a second instance must be a second
 // client, not a message to the first.
@@ -28,7 +33,7 @@ app.connect("activate", () => {
     if (!Gtk4SessionLock.is_supported()) { say("UNSUPPORTED"); app.quit(); return }
     const lock = new Gtk4SessionLock.Instance()
     app.hold()
-    lock.connect("locked", () => say("LOCKED"))
+    lock.connect("locked", () => say(`LOCKED ${ms()}`))
     lock.connect("failed", () => { say("FAILED"); app.release(); app.quit() })
     lock.connect("unlocked", () => { say("UNLOCKED"); GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { app.release(); app.quit(); return GLib.SOURCE_REMOVE }) })
     lock.connect("monitor", (_l, monitor) => {
@@ -40,9 +45,11 @@ app.connect("activate", () => {
             if (text === "ok") lock.unlock()
         })
         win.set_child(entry)
-        lock.assign_window_to_monitor(win, monitor)
-        entry.grab_focus()
+        const assign = () => { lock.assign_window_to_monitor(win, monitor); entry.grab_focus() }
+        if (slow) GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => { assign(); return GLib.SOURCE_REMOVE })
+        else assign()
     })
+    say(`REQUESTED ${ms()}`)
     lock.lock()
 })
 app.run([])

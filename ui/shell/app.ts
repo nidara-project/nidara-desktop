@@ -29,7 +29,7 @@ import { initReduceMotion } from "./core/ReduceMotion"
 import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import { bindInterfaceIconRefresh } from "./common/IconThemeRefresh"
-import compositor, { settings as compositorSettings } from "./core/CompositorState"
+import compositor, { onHyalo, settings as compositorSettings } from "./core/CompositorState"
 import queryUI from "./core/UITree"
 import Wallpaper from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
@@ -1300,7 +1300,13 @@ app.start({
         //      lockscreen is just another OVERLAY layer competing with ours.
         // nidara-island must be named explicitly: it carries the compact CAPSULE
         // as well as the expanded modes, on its own surface since #53.
-        if (w.name === "nidara-bar" || w.name === "nidara-dock" || w.name === "nidara-island") {
+        //
+        // On Hyalo neither gap exists: from the lock request nothing of the session
+        // can be reached, and an output keeps showing the session, bar and dock
+        // included, until its lock surface has drawn — then cuts straight to it
+        // (hyalo/compositor/src/lock.rs). Hiding them first only made the desktop
+        // change under the user's eyes for the ~1 s the lockscreen takes to start.
+        if (!onHyalo() && (w.name === "nidara-bar" || w.name === "nidara-dock" || w.name === "nidara-island")) {
           try { w.hide() } catch (e) {}
         }
         // The agent pointer paints on OVERLAY (above the lockscreen fallback) —
@@ -1311,6 +1317,7 @@ app.start({
       })
     }
     const unlockScreen = () => {
+      if (onHyalo()) return // nothing was hidden (lockScreen)
       windows.forEach(w => {
         if (w.name === "nidara-bar" || w.name === "nidara-dock" || w.name === "nidara-island") {
           try { w.present() } catch (e) {}

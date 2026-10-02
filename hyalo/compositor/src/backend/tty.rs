@@ -646,6 +646,11 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
         && driver.name().to_string_lossy().to_lowercase().contains("nvidia") {
             planes.overlay.clear();
         }
+    // No underlays: on a plane below the primary an opaque surface would have our translucent
+    // composition blended over it by the hardware, which blends its own way (render/mod.rs,
+    // `scanout_if_opaque`). Only planes above the primary, for opaque surfaces.
+    let primary_zpos = planes.primary.iter().map(|p| p.zpos.unwrap_or_default()).max().unwrap_or_default();
+    planes.overlay.retain(|p| p.zpos.unwrap_or_default() > primary_zpos);
     let drm_output = match device
         .drm_output_manager
         .lock()
