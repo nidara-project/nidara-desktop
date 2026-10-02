@@ -105,8 +105,8 @@ export type ScrimParams = {
     /** A panel region's shadow (`trackScrimRegion`, `fade: "panel"`) fades over this many
      *  logical px outside it. */
     panelFalloff: number
-    /** A strip's (`fade: "strip"`) fades over this multiple of its thickness: the bar's is a
-     *  few dozen px, the dock's a little more, never half the screen. */
+    /** A strip's (`fade: "strip"`) fades over this multiple of its thickness, from where its
+     *  glass stops refracting: the band is the bar's or the dock's, not half the screen. */
     stripFalloff: number
 }
 
@@ -203,9 +203,10 @@ type ScrimRegion = { widget: Gtk.Widget, edges: ScrimEdges, fade: ScrimFade, are
 const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
 /** Far past any screen: the compositor cuts a region to its output. */
 const PAST_THE_EDGE = 100000
-/** A region's core reaches this far past its widget where it does not reach an edge: the
+/** A panel region's core reaches this far past its widget where it does not reach an edge: the
  *  glass reads its backdrop from beyond its own edge (the refraction), and that must lie on
- *  the even part of the shadow, not on its fade. */
+ *  the even part of the shadow, not on its fade. A strip's reaches exactly as far as its
+ *  glass refracts (`placeScrimRegions`): the band hugs the bar, it does not add a margin to it. */
 const SCRIM_MARGIN = 32
 
 /**
@@ -235,7 +236,7 @@ export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges,
 }
 
 /** The scrim regions shown on `native`, surface-local, each with its falloff. */
-function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams): (Rect & { falloff: number })[] {
+function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassParams): (Rect & { falloff: number })[] {
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
     const out: (Rect & { falloff: number })[] = []
@@ -246,14 +247,16 @@ function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams): (Rect & { fa
         const a = area ? area() : { x: 0, y: 0, w: b.get_width(), h: b.get_height() }
         if (!a || a.w <= 0 || a.h <= 0) continue
         const bx = b.get_x() + tx + a.x, by = b.get_y() + ty + a.y
-        const x0 = edges.left ? -PAST_THE_EDGE : bx - SCRIM_MARGIN
-        const y0 = edges.top ? -PAST_THE_EDGE : by - SCRIM_MARGIN
-        const x1 = edges.right ? PAST_THE_EDGE : bx + a.w + SCRIM_MARGIN
-        const y1 = edges.bottom ? PAST_THE_EDGE : by + a.h + SCRIM_MARGIN
         // A strip's thickness runs across the side it fades from: the bar's height, a side
-        // dock's width.
+        // dock's width. How far its glass refracts is the compositor's rule (refraction_of).
         const thickness = edges.top && edges.bottom ? a.w : a.h
-        const falloff = fade === "strip" ? scrim.stripFalloff * thickness : scrim.panelFalloff
+        const strip = fade === "strip"
+        const margin = strip ? Math.max(glass.refraction, glass.lensing * thickness) : SCRIM_MARGIN
+        const x0 = edges.left ? -PAST_THE_EDGE : bx - margin
+        const y0 = edges.top ? -PAST_THE_EDGE : by - margin
+        const x1 = edges.right ? PAST_THE_EDGE : bx + a.w + margin
+        const y1 = edges.bottom ? PAST_THE_EDGE : by + a.h + margin
+        const falloff = strip ? scrim.stripFalloff * thickness : scrim.panelFalloff
         out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff })
     }
     return out
@@ -606,7 +609,7 @@ function flush(native: Gtk.Native, st: NativeState) {
     }
     const ink = paints ? inkWanted : null
     const scrim = paints && shim.material_set_scrim ? source?.scrim?.(native) ?? null : null
-    const regions = scrim ? placeScrimRegions(native, scrim) : []
+    const regions = scrim && glass ? placeScrimRegions(native, scrim, glass) : []
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }

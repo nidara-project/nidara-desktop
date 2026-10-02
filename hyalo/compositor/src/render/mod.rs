@@ -113,9 +113,12 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.06, 0.06, 0.07, 1.0);
 
 /// A surface tree and its popups, front to back, each with its glass right below it, and the
-/// shadow under that glass (v5) below the glass — or into `floor` when given: the shell's
-/// chrome casts its shadows onto what lies under all of it (render/scrim.rs), so the Control
-/// Center's never falls on the dock, which sits in the same layer.
+/// shadow under that glass (v5) below the glass — unless `floor` is given: the shell's chrome
+/// casts ONE floor of shadows under all of it (`chrome_scrims`, drawn by the caller), so the
+/// Control Center's never falls on the dock, which sits in the same layer, and each glass
+/// measures its backdrop with the whole floor divided out — not only its own shadow, or the
+/// Control Center's would split the dock's backdrop and switch the dock's on (owner,
+/// 2026-10-02: "the dock's shadow only comes on when the Control Center opens").
 fn push_surface<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     renderer: &mut R,
@@ -123,17 +126,20 @@ fn push_surface<R: HyaloRenderer>(
     location: Point<i32, Physical>,
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
-    mut floor: Option<&mut Vec<OutputElement<R>>>,
+    floor: Option<&[scrim::ScrimPx]>,
 ) {
     let now = std::time::Instant::now();
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
         out.extend(render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind));
-        let scrims = scrim::scrims_for(s, loc, scale, now);
-        out.extend(GlassElement::for_surface(s, loc, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
-        if let Some(e) = ScrimElement::new(s, scrims, output_size) {
-            match floor.as_deref_mut() {
-                Some(f) => f.push(OutputElement::Scrim(e)),
-                None => out.push(OutputElement::Scrim(e)),
+        match floor {
+            Some(floor) => {
+                out.extend(GlassElement::for_surface(s, loc, scale, output_size, floor).into_iter().map(OutputElement::Glass));
+            }
+            None => {
+                let scrims = scrim::scrims_for(s, loc, scale, now);
+                out.extend(GlassElement::for_surface(s, loc, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
+                let e = with_states(s, |states| ScrimElement::new(&states.data_map, scrims, output_size));
+                out.extend(e.map(OutputElement::Scrim));
             }
         }
     };
@@ -142,6 +148,17 @@ fn push_surface<R: HyaloRenderer>(
         layer(out, popup.wl_surface(), location + offset, Kind::Unspecified);
     }
     layer(out, surface, location, Kind::ScanoutCandidate);
+}
+
+/// The shadows a surface tree and its popups cast (v5), for the chrome's floor.
+fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<scrim::ScrimPx> {
+    let mut out = Vec::new();
+    for (popup, offset) in PopupManager::popups_for_surface(surface) {
+        let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        out.extend(scrim::scrims_for(popup.wl_surface(), location + offset, scale, now));
+    }
+    out.extend(scrim::scrims_for(surface, location, scale, now));
+    out
 }
 
 /// What a frame is made from: the parts of the state rendering reads, borrowed apart from the
@@ -212,16 +229,23 @@ pub fn output_elements<R: HyaloRenderer>(
             push_surface(out, renderer, &surface, loc, scale, output_size, None);
         }
     };
-    // The shadows the shell's chrome (top and overlay layers) casts: under all of it.
-    let mut floor = Vec::new();
+    // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
+    // it, combined by their maximum like one surface's (two surfaces' shadows that overlap —
+    // the Control Center's strip and the dock's band — never darken the corner twice).
+    let now = std::time::Instant::now();
+    let floor: Vec<scrim::ScrimPx> = [Layer::Overlay, Layer::Top]
+        .into_iter()
+        .flat_map(|layer| map.layers_on(layer).map(|l| chrome_scrims(l.wl_surface(), layer_loc(l), scale, now)).collect::<Vec<_>>())
+        .flatten()
+        .collect();
     for l in map.layers_on(Layer::Overlay).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&mut floor));
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
     push_windows(&mut out, renderer, &above);
     for l in map.layers_on(Layer::Top).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&mut floor));
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
-    out.append(&mut floor);
+    out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
     push_windows(&mut out, renderer, &below);
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {

@@ -89,9 +89,10 @@ const DEFAULTS = {
     // panel is wide, so the step from shadow to wallpaper cannot be seen (owner: "as soft as
     // possible").
     scrimFalloff: 380,
-    // The bar's and the dock's band fades over this multiple of their thickness, past the
-    // margin the refraction reads: 72 px under the bar (36), 184 beside the dock (92).
-    scrimStrip: 2,
+    // The bar's and the dock's band fades over this multiple of their thickness, from where
+    // their glass stops refracting: 18 px under the bar (36, +10), 46 beside the dock (92,
+    // +14). The owner, 2026-10-02, at 2 (and a 32 px margin): "reaches far below the bar".
+    scrimStrip: 0.5,
     // A shadow only where the tint the darkest and the brightest point under the panes need
     // differ by more than this (of 0.05..0.60): a pane that would be visibly grey in one part
     // and clear in another. To be calibrated with the owner on screen.

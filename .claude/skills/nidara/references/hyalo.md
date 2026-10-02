@@ -197,12 +197,21 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
 - **Measured with the ink**, in the same pass: one probe per shadowed shape (its body, inset by
   0.29 of its radius), darkest and brightest in one texel. 🔴 The probe DIVIDES OUT the shadow
   drawn this frame (`unscale` = 1 / (1 − its opacity there)), or the shadow would measure itself
-  and chase its own tail. The ink boxes are NOT unscaled: their question is what the text sits on.
-- **Drawn** by `render/scrim.rs`: one element per surface, one pass, shadows combined by their
-  MAXIMUM (two panes side by side never make a darker band between them), smootherstep fade,
-  half-level dither against banding. 🔴 The shell's chrome (top and overlay layers) casts its
-  shadows onto the FLOOR under all of it, right above the windows (`render/mod.rs`): the bar and
-  the dock are both TOP, and a shadow placed right under the bar darkened the dock's icons.
+  and chase its own tail. 🔴 On the chrome it divides out the WHOLE floor, every chrome
+  surface's shadows — not only its own. Dividing out only its own, the Control Center's strip
+  (which reaches the bottom of the screen) darkened the right of the dock's backdrop, split it,
+  and switched the dock's band on; its hysteresis then held it on after the CC closed — and
+  the CC's strip did the same to the bar's right-hand capsule (owner, 2026-10-02: "the dock's
+  shadow only comes on when the CC opens"; measured: dock 0.462, bar 0.344, both 0 after a
+  reload). The ink boxes are NOT unscaled: their question is what the text sits on.
+- **Drawn** by `render/scrim.rs`: one pass, shadows combined by their MAXIMUM (two panes side
+  by side never make a darker band between them), smootherstep fade, half-level dither against
+  banding. 🔴 The shell's chrome (top and overlay layers) casts its shadows onto ONE FLOOR under
+  all of it, right above the windows (`render/mod.rs`, `chrome_scrims`): the bar and the dock
+  are both TOP, and a shadow placed right under the bar darkened the dock's icons. One element
+  for the whole floor (its memo on the output), so two surfaces' shadows that overlap — the
+  CC's strip and the dock's band — combine by their maximum too, never darkening the corner
+  twice. A window's glass keeps one element per surface.
 - **Eases** in 220 ms, out 600 ms (a video under a pane must not pump it); while one eases the
   backend queues the next frame (`scrim::take_easing`), and at rest nothing is redrawn.
 - **Two modes: a halo or a band.** A pane in no region gets a halo, its outline fading outward
@@ -216,8 +225,10 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
     `scrimFalloff` px to the left. Measured nested without it: each tile got its own strength
     (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
   - **The bar** (`barBox`, `{ top, left, right }`) and **the dock** (its pill, per position)
-    are `fade: "strip"`: they fade over `scrimStrip` × their thickness (72 px under the bar,
-    184 beside the dock), not 380 px — a band, not half the screen. `area` is the pill: a side
+    are `fade: "strip"`: the core reaches only as far as their glass refracts (max(refraction,
+    lensing × thickness): 10 px under the bar, 14 beside the dock — not the panels' 32) and
+    fades over `scrimStrip` × their thickness (0.5: 18 px under the bar, 46 beside the dock).
+    At 2 and a 32 px margin the owner found both "far below the bar, far into the screen". `area` is the pill: a side
     dock's `da` spans the surface. The whole bar decides as one: one capsule over sky and
     another over shadow shade the whole top band evenly.
   - 🔴 A shape joins the FIRST region its centre lies in, in declaration order. The bar's band

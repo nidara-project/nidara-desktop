@@ -10,8 +10,9 @@
 //!
 //! The strength is decided in protocols/material.rs from what the glass measured (the shadow
 //! divided out, so it does not chase itself); here it is only drawn. Every shadow of a surface
-//! is one element and one pass, and overlapping shadows combine by their MAXIMUM, not by
-//! laying one over the other: two panes side by side never make a darker band between them.
+//! — or of the whole shell chrome, its floor (render/mod.rs) — is one element and one pass,
+//! and overlapping shadows combine by their MAXIMUM, not by laying one over the other: two
+//! panes side by side never make a darker band between them.
 
 use std::cell::RefCell;
 
@@ -23,7 +24,6 @@ use smithay::{
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Buffer as BufferCoords, Physical, Point, Rectangle, Scale, Size, user_data::UserDataMap},
-    wayland::compositor::with_states,
 };
 
 use super::{HyaloRenderer, glass_gl};
@@ -152,18 +152,23 @@ struct ScrimMemo(RefCell<Option<(Id, CommitCounter, Vec<ScrimPx>)>>);
 
 impl ScrimElement {
     /// The element drawing `scrims` (from `scrims_for`) on an output of `output_size`; none
-    /// when there is nothing to draw.
-    pub fn new(surface: &WlSurface, scrims: Vec<ScrimPx>, output_size: Size<i32, Physical>) -> Option<Self> {
+    /// when there is nothing to draw. `memo` keeps its id and what it last drew: the surface's
+    /// data for one surface's shadows, the output's for the chrome's floor.
+    pub fn new(memo: &UserDataMap, mut scrims: Vec<ScrimPx>, output_size: Size<i32, Physical>) -> Option<Self> {
         if scrims.is_empty() {
             return None;
+        }
+        if scrims.len() > MAX_SCRIMS {
+            scrims.sort_by(|a, b| b.alpha.total_cmp(&a.alpha));
+            scrims.truncate(MAX_SCRIMS);
         }
         let mut reach = scrims[0].reach();
         for s in &scrims[1..] {
             reach = reach.merge(s.reach());
         }
         let geometry = reach.to_i32_up::<i32>().intersection(Rectangle::from_size(output_size))?;
-        let (id, commit) = with_states(surface, |states| {
-            let memo = states.data_map.get_or_insert(ScrimMemo::default);
+        let (id, commit) = {
+            let memo = memo.get_or_insert(ScrimMemo::default);
             let mut memo = memo.0.borrow_mut();
             let (id, mut commit, last) = memo.take().unwrap_or_else(|| (Id::new(), CommitCounter::default(), Vec::new()));
             if last != scrims {
@@ -171,7 +176,7 @@ impl ScrimElement {
             }
             *memo = Some((id.clone(), commit, scrims.clone()));
             (id, commit)
-        });
+        };
         Some(Self { id, commit, geometry, scrims })
     }
 
