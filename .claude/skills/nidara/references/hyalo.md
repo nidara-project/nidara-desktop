@@ -565,8 +565,12 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
   which speaks nothing else. `copy_with_damage` waits for the output's NEXT frame
   (`complete_screencopy` from post_repaint), so a still screen records nothing — never queue a
   redraw for it, or it records at full refresh. shm only, a CPU read-back per frame.
-  ⚠️ Orientation is MEASURED, not read off the spec: wf-recorder 0.6 records upright only with
-  top-first rows AND `Y_INVERT`; the two other combinations came out upside down.
+  The buffer is in the OUTPUT's orientation (`to_buffer`: flip, then rotate counter-clockwise),
+  top row first, no `Y_INVERT` — the client turns it upright with the output's transform
+  (wf-recorder: a `vflip`/`transpose` filter). ⚠️ Nested, the winit output is `flipped-180`: an
+  upright buffer WITH `Y_INVERT` looked right there (two flips cancelling) and recorded upside
+  down on a real output. Never settle an orientation on the nested output alone; CI's vkms is a
+  Normal one (wf-recorder's source, `frame-writer.cpp`, is what settled it).
 - **data-control**, both (`ext-` and `zwlr-`): `wl-paste --watch` → cliphist, the clipboard
   history, autostarted in `config/hyalo/hyalo.toml` (two watchers, one per type — why is there).
 - All four are privileged: hidden from sandboxed clients (the sandbox probe lists them), and

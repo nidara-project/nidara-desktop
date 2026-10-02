@@ -24,7 +24,7 @@ use smithay::{
             protocol::{wl_buffer::WlBuffer, wl_shm},
         },
     },
-    utils::{Logical, Rectangle},
+    utils::{Logical, Rectangle, Transform},
     wayland::{Dispatch2, GlobalDispatch2, shm::with_buffer_contents_mut},
 };
 
@@ -36,6 +36,8 @@ pub struct ScreencopyGlobal;
 pub struct ScreencopyFrame {
     /// None: the output was gone when the capture was asked for (the frame has failed).
     output: Option<Output>,
+    /// The output's transform when the frame was made: the buffer is in ITS orientation.
+    transform: Transform,
     /// Logical, relative to the output; None = all of it.
     region: Option<Rectangle<i32, Logical>>,
     size: Mutex<(i32, i32)>,
@@ -87,12 +89,13 @@ impl Dispatch2<ZwlrScreencopyManagerV1, Hyalo> for ScreencopyGlobal {
             _ => return,
         };
         let Some(output) = Output::from_resource(&output) else {
-            let frame = data_init.init(frame, ScreencopyFrame { output: None, region: None, size: Mutex::new((0, 0)) });
+            let frame = data_init.init(frame, ScreencopyFrame { output: None, transform: Transform::Normal, region: None, size: Mutex::new((0, 0)) });
             frame.failed();
             return;
         };
+        let transform = output.current_transform();
         let size = buffer_size(state, &output, region);
-        let frame = data_init.init(frame, ScreencopyFrame { output: Some(output), region, size: Mutex::new(size) });
+        let frame = data_init.init(frame, ScreencopyFrame { output: Some(output), transform, region, size: Mutex::new(size) });
         let Some((w, h)) = Some(size).filter(|(w, h)| *w > 0 && *h > 0) else {
             frame.failed();
             return;
@@ -125,13 +128,39 @@ impl Dispatch2<ZwlrScreencopyFrameV1, Hyalo> for ScreencopyFrame {
     }
 }
 
-/// The buffer a region (or the whole output) needs: physical pixels at the output's scale.
-fn buffer_size(state: &Hyalo, output: &Output, region: Option<Rectangle<i32, Logical>>) -> (i32, i32) {
+/// The region (or the whole output) as the user sees it: physical pixels at the output's scale.
+fn upright_size(state: &Hyalo, output: &Output, region: Option<Rectangle<i32, Logical>>) -> (i32, i32) {
     let Some(geo) = state.space.output_geometry(output) else { return (0, 0) };
     let scale = output.current_scale().fractional_scale();
     let area = region.unwrap_or(Rectangle::from_size(geo.size));
     let s = area.size.to_f64().to_physical_precise_round::<_, i32>(scale);
     (s.w, s.h)
+}
+
+/// The buffer it needs: the upright size, turned by the output's transform.
+fn buffer_size(state: &Hyalo, output: &Output, region: Option<Rectangle<i32, Logical>>) -> (i32, i32) {
+    let (w, h) = upright_size(state, output, region);
+    if quarter_turn(output.current_transform()) { (h, w) } else { (w, h) }
+}
+
+fn quarter_turn(t: Transform) -> bool {
+    matches!(t, Transform::_90 | Transform::_270 | Transform::Flipped90 | Transform::Flipped270)
+}
+
+/// Where the upright pixel (x, y) of a `w`×`h` image lands in the buffer of an output with
+/// transform `t` — the buffer is in the OUTPUT's orientation, as wlr-screencopy defines it, and
+/// the client turns it upright by applying the output's transform (wf-recorder: a `transpose` /
+/// `vflip` filter). A wl_output transform is: flip around the vertical axis if FLIPPED, then
+/// rotate counter-clockwise.
+pub fn to_buffer(t: Transform, x: usize, y: usize, w: usize, h: usize) -> (usize, usize) {
+    let flipped = matches!(t, Transform::Flipped | Transform::Flipped90 | Transform::Flipped180 | Transform::Flipped270);
+    let x = if flipped { w - 1 - x } else { x };
+    match t {
+        Transform::Normal | Transform::Flipped => (x, y),
+        Transform::_90 | Transform::Flipped90 => (y, w - 1 - x),
+        Transform::_180 | Transform::Flipped180 => (w - 1 - x, h - 1 - y),
+        Transform::_270 | Transform::Flipped270 => (h - 1 - y, x),
+    }
 }
 
 fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer, damage: bool) {
@@ -169,15 +198,16 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
         }
         // SAFETY: the pool's mapping, `len` bytes, valid for this closure; writes checked above.
         let dst = unsafe { std::slice::from_raw_parts_mut(ptr, len) };
-        // Top row first, AND Y_INVERT (below). Read as the protocol words it, that pair is upside
-        // down — but it is what wf-recorder (0.6) records upright. Measured nested, 2026-10-02:
-        // bottom-first with the flag, and top-first without it, both came out flipped in the
-        // file. Another client may read the flag the protocol's way; check before relying on it.
-        for row in 0..h as usize {
-            let sy = y0 + row;
-            for col in 0..w as usize {
-                let sx = x0 + col;
-                let o = offset + row * stride + col * 4;
+        // Top row first, no Y_INVERT, in the OUTPUT's orientation (`to_buffer`). Until this was
+        // understood the copy was upright with Y_INVERT, which looked right nested only because the
+        // winit output is Flipped180 and wf-recorder applies that as a second flip — on a real
+        // (Normal) output, CI's vkms, it recorded upside down (2026-10-02).
+        let (uw, uh) = if quarter_turn(data.transform) { (h as usize, w as usize) } else { (w as usize, h as usize) };
+        for uy in 0..uh {
+            for ux in 0..uw {
+                let (sx, sy) = (x0 + ux, y0 + uy);
+                let (bx, by) = to_buffer(data.transform, ux, uy, uw, uh);
+                let o = offset + by * stride + bx * 4;
                 if sx >= ow as usize || sy >= oh as usize {
                     dst[o..o + 4].copy_from_slice(&[0, 0, 0, 255]);
                     continue;
@@ -199,7 +229,7 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
     if damage {
         frame.damage(0, 0, w as u32, h as u32);
     }
-    frame.flags(zwlr_screencopy_frame_v1::Flags::YInvert);
+    frame.flags(zwlr_screencopy_frame_v1::Flags::empty());
     let now: std::time::Duration = state.clock.now().into();
     let secs = now.as_secs();
     frame.ready((secs >> 32) as u32, secs as u32, now.subsec_nanos());
@@ -219,5 +249,35 @@ impl Hyalo {
         for (frame, buffer) in ready {
             copy_now(self, &frame, &buffer, true);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normal_is_upright_and_flipped180_is_a_vertical_flip() {
+        assert_eq!(to_buffer(Transform::Normal, 3, 1, 10, 4), (3, 1));
+        // The winit output: what wf-recorder's `vflip` undoes.
+        assert_eq!(to_buffer(Transform::Flipped180, 3, 1, 10, 4), (3, 2));
+    }
+
+    #[test]
+    fn a_quarter_turn_swaps_and_lands_every_corner_once() {
+        let (w, h) = (4usize, 3usize);
+        for t in [Transform::_90, Transform::_270, Transform::Flipped90, Transform::Flipped270] {
+            let mut seen = std::collections::HashSet::new();
+            for y in 0..h {
+                for x in 0..w {
+                    let (bx, by) = to_buffer(t, x, y, w, h);
+                    assert!(bx < h && by < w, "{t:?} put ({x},{y}) outside the {h}x{w} buffer");
+                    seen.insert((bx, by));
+                }
+            }
+            assert_eq!(seen.len(), w * h, "{t:?} is not a permutation");
+        }
+        // 90 counter-clockwise: the upright top-right corner is the buffer's top-left.
+        assert_eq!(to_buffer(Transform::_90, w - 1, 0, w, h), (0, 0));
     }
 }
