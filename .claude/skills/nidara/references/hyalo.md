@@ -237,7 +237,7 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   "a shadow downward separating the top from the bottom").
   - **The Control Center and the Notification Center share ONE region** (`trackScrimRegion(widget)`
     in Bar.tsx): their CONTAINER, a little darker at its centre and sweeping out to `scrimEdge`
-    (0.7) of that at its edges, then fading over `scrimFalloff` (48) px. Tuned live. How it got
+    (0.7) of that at its edges, then fading to nothing over `scrimFalloff` (160) px — 48 read as a step ("there must be no jump between the shadow and the backdrop", owner). Tuned live. How it got
     there, all on 2026-10-02: first the screen's whole right-hand strip, down to the bottom,
     shading wallpaper far below a short panel — the owner, from a reference video: "the shadow
     occupies only the CC's area"; then the panel's block, even: "it looks like a translucent

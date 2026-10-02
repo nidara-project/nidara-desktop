@@ -89,9 +89,11 @@ const DEFAULTS = {
     // A pane's own shadow fades over this fraction of its shorter side (a notification
     // ≈35 px; the app grid, the overview).
     scrimSize: 0.5,
-    // The Control Center's shadow fades over this many px outside its glass. Was 380 (as wide as the panel): the owner, 2026-10-02, "totally
-    // exaggerated — the fade should start right where the CC ends".
-    scrimFalloff: 48,
+    // The Control Center's shadow fades to nothing over this many px outside its glass. 380
+    // with the shadow even across the panel was "totally exaggerated" and 48 a step you could
+    // see (owner, 2026-10-02: "it has to end with no jump between the shadow and the
+    // backdrop"); with the sweep from the centre a long fade reads as none.
+    scrimFalloff: 160,
     // The Control Center's shadow at its edges, as a fraction of its centre's (1: even). A
     // starting point, to tune on screen with the owner.
     scrimEdge: 0.7,
