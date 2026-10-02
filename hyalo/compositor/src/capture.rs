@@ -149,6 +149,11 @@ impl ImageCopyCaptureHandler for Hyalo {
     }
 
     fn frame(&mut self, session: &SessionRef, frame: Frame) {
+        // Nothing of the session leaves it while it is locked (lock.rs).
+        if self.lock.is_locked() {
+            frame.fail(CaptureFailureReason::Unknown);
+            return;
+        }
         let source = session.source();
         let Some(window) = self.source_window(&source).cloned() else {
             frame.fail(CaptureFailureReason::Stopped);

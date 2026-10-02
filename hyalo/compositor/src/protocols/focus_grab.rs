@@ -132,7 +132,7 @@ impl Hyalo {
             current.clone()
         };
         if !current.as_ref().is_some_and(|c| surfaces.contains(c)) {
-            keyboard.set_focus(self, Some(surfaces[0].clone()), SERIAL_COUNTER.next_serial());
+            self.set_keyboard_focus(Some(surfaces[0].clone()), SERIAL_COUNTER.next_serial());
         }
         self.focus_grab = Some(ActiveGrab { grab: grab.clone(), surfaces, previous_focus });
     }
@@ -146,7 +146,7 @@ impl Hyalo {
         let keyboard = self.seat.get_keyboard().unwrap();
         if keyboard.current_focus().is_some_and(|f| active.surfaces.contains(&f)) {
             let back = active.previous_focus.filter(|s| s.is_alive());
-            keyboard.set_focus(self, back, SERIAL_COUNTER.next_serial());
+            self.set_keyboard_focus(back, SERIAL_COUNTER.next_serial());
         }
     }
 

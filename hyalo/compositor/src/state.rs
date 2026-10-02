@@ -86,6 +86,8 @@ pub struct Hyalo {
     /// The window rules in force (wm/rules.rs).
     pub rules: Vec<crate::wm::rules::Rule>,
     pub keys: crate::input::KeyTracking,
+    /// The lock screen (lock.rs).
+    pub lock: crate::lock::LockState,
 }
 
 impl Hyalo {
@@ -97,6 +99,7 @@ impl Hyalo {
         config: Config,
     ) -> Self {
         let dh = display.handle();
+        let lock = crate::lock::LockState::new(&dh);
         let clock = Clock::new();
 
         let compositor_state = CompositorState::new_v6::<Self>(&dh);
@@ -128,7 +131,11 @@ impl Hyalo {
         focus_grab::init(&dh);
         // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).
         crate::protocols::virtual_pointer::init(&dh);
-        smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(&dh, unrestricted);
+        // ...and never while the session is locked (lock.rs: `locked_flag`).
+        let locked = lock.locked_flag();
+        smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(&dh, move |c| {
+            unrestricted(c) && !locked.load(std::sync::atomic::Ordering::Acquire)
+        });
         // Window capture for the shell's thumbnails (capture.rs).
         let foreign_toplevel_list =
             smithay::wayland::foreign_toplevel_list::ForeignToplevelListState::new_with_filter::<Self>(&dh, unrestricted);
@@ -214,6 +221,7 @@ impl Hyalo {
                 Vec::new()
             }),
             keys: Default::default(),
+            lock,
         }
     }
 
@@ -289,6 +297,10 @@ impl Hyalo {
     /// and background layers.
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
         use smithay::wayland::shell::wlr_layer::Layer;
+        // Locked: the lock screen is all the pointer can reach (lock.rs).
+        if self.lock.is_locked() {
+            return self.lock_surface_under(pos);
+        }
         if let Some((_, s, p)) = self.layer_under(&[Layer::Overlay], pos) {
             return Some((s, p));
         }

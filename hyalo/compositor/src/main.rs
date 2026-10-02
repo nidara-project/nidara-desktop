@@ -17,6 +17,7 @@ mod cursor;
 mod handlers;
 mod input;
 mod ipc;
+mod lock;
 mod outputs;
 mod protocols;
 mod render;

@@ -8,6 +8,7 @@ import cairo from "gi://cairo"
 import { GLASS_TINT, LOCK_GLASS } from "./tokens"
 import { glassRimGradient, drawShadowFromPath, GLASS_SHADOW } from "./glass-paint"
 import { kitAppearance } from "../appearance"
+import { compositorPaintsGlass, trackGlass } from "./material"
 
 // The glass capsule of the greeter and the lockscreen — painted, not CSS-drawn.
 //
@@ -42,6 +43,11 @@ import { kitAppearance } from "../appearance"
 //         is not the lock surface. Measured: zero keys. A password field there is
 //         dead.
 //     hyprlock, swaylock and gtklock all blur their own copy for this reason.
+//
+//   - On HYALO (our own compositor) neither applies: it draws the wallpaper under the lock
+//     surface and paints the glass itself. The capsule declares its pill (`trackGlass`) and,
+//     while `compositorPaintsGlass`, paints only the shadow and the focus ring
+//     (hyalo/compositor/src/lock.rs, references/hyalo.md → "The lock screen").
 //
 // So: ONE painter, one shape, and the only thing that differs is where the pixels
 // behind the glass come from. That asymmetry is a property of the compositor, not
@@ -342,6 +348,13 @@ export class GlassCapsule extends Gtk.Box {
     this.append(child)
 
     if (followFocus) child.connect("state-flags-changed", () => this.queue_draw())
+
+    // On a compositor of our own the pill's glass is the compositor's — the real wallpaper
+    // behind it, refracted, not a blurred copy (lock.rs in Hyalo, #683). A no-op elsewhere.
+    trackGlass(this, () => {
+      const w = this.get_width(), h = this.get_height()
+      return [{ x: 0, y: 0, w, h, radius: Math.min(w, h) / 2, exponent: 2 }]
+    })
   }
 
   isFocused(): boolean {
@@ -364,7 +377,10 @@ export class GlassCapsule extends Gtk.Box {
       // Reduce transparency (#674): the body is the tint, solid, and there is no backdrop
       // to blur under it — the lock skips its own blur pass entirely.
       const solid = kitAppearance().reduceTransparency?.() === true
-      const texture = ok && !solid ? backdropTexture(this, root.get_width(), root.get_height()) : null
+      // The compositor paints the body and the rim: what is left here is state (the focus
+      // ring) and the shadow — the shell's SquircleContainer does the same.
+      const compositors = compositorPaintsGlass(this)
+      const texture = ok && !solid && !compositors ? backdropTexture(this, root.get_width(), root.get_height()) : null
 
       if (ok) {
         // A TRUE pill: our own path, so the radius can be exactly half the
@@ -421,7 +437,7 @@ export class GlassCapsule extends Gtk.Box {
 
         // 1) The BODY, filling the whole pill: blurred wallpaper first when
         //    there is one, then the glass tint over it — the order the CSS had.
-        snapshot.push_rounded_clip(outer)
+        if (!compositors) snapshot.push_rounded_clip(outer)
         if (texture) {
           // Sampled in WINDOW coordinates: the child sits at `bounds`, so the
           // texture is offset by -bounds and the piece showing through is the
@@ -430,8 +446,10 @@ export class GlassCapsule extends Gtk.Box {
           src.init(-bounds.get_x(), -bounds.get_y(), texture.get_width(), texture.get_height())
           snapshot.append_texture(texture, src)
         }
-        snapshot.append_color(rgba(solid ? { ...glassFill, a: 1 } : glassFill), outerBox)
-        snapshot.pop()
+        if (!compositors) {
+          snapshot.append_color(rgba(solid ? { ...glassFill, a: 1 } : glassFill), outerBox)
+          snapshot.pop()
+        }
 
         // 2) The RIM, on top: a 1px ring, filled through an even-odd Cairo path
         //    (outer pill minus inner pill) rather than stroked or drawn as a
@@ -458,6 +476,8 @@ export class GlassCapsule extends Gtk.Box {
                  Math.max(0, radius - RIM_W))
         if (this.isFocused()) {
           cr.setSourceRGBA(accentRim.r, accentRim.g, accentRim.b, accentRim.a)
+        } else if (compositors) {
+          cr.setSourceRGBA(0, 0, 0, 0)
         } else {
           // The shell's ONE ramp, scaled to this capsule's weight — see RIM_SCALE. The
           // gradient is vertical, so its x only fixes the axis; any x on the shape does.

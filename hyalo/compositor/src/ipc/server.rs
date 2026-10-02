@@ -146,6 +146,10 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         Request::Windows => Reply::Ok(Response::Windows { windows: state.window_infos() }),
         Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
         Request::Layers => Reply::Ok(Response::Layers { layers: state.layer_infos() }),
+        Request::Lock => Reply::Ok(Response::Lock {
+            locked: state.lock.is_locked(),
+            surfaces: state.space.outputs().filter(|o| state.lock.surface_for(o).is_some()).map(|o| o.name()).collect(),
+        }),
         Request::CursorPosition => {
             let p = state.seat.get_pointer().unwrap().current_location();
             Reply::Ok(Response::CursorPosition { x: p.x, y: p.y })
@@ -335,5 +339,12 @@ impl Hyalo {
 impl IpcState {
     pub fn has_subscribers(&self) -> bool {
         !self.subscribers.is_empty()
+    }
+}
+
+impl Hyalo {
+    /// `lock_changed` to every subscriber.
+    pub fn ipc_broadcast_lock(&mut self, locked: bool) {
+        broadcast(self, &Event::LockChanged { locked });
     }
 }

@@ -99,6 +99,10 @@ impl Dispatch2<ZwlrVirtualPointerV1, Hyalo> for VirtualPointer {
         _data_init: &mut DataInit<'_, Hyalo>,
     ) {
         use zwlr_virtual_pointer_v1::Request;
+        // The Assistant's pointer does not reach the lock screen (lock.rs).
+        if state.lock.is_locked() && !matches!(request, Request::Destroy) {
+            return;
+        }
         let now = InputTime::now();
         match request {
             Request::Motion { dx, dy, .. } => {

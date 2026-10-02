@@ -788,10 +788,9 @@ impl Hyalo {
     /// a dialog that is waiting for an answer.
     pub fn focus_window(&mut self, id: Option<WindowId>) {
         let serial = SERIAL_COUNTER.next_serial();
-        let keyboard = self.seat.get_keyboard().unwrap();
         let Some(id) = id else {
             self.wm.focused = None;
-            keyboard.set_focus(self, Option::<WlSurface>::None, serial);
+            self.set_keyboard_focus(None, serial);
             self.sync_space();
             return;
         };
@@ -831,7 +830,7 @@ impl Hyalo {
         self.wm.windows.push(m);
         self.wm.focused = Some(id);
         self.wm.focused_output = self.wm.workspaces.get(&ws).map(|w| w.output.clone());
-        keyboard.set_focus(self, surface, serial);
+        self.set_keyboard_focus(surface, serial);
         self.arrange_workspace(ws);
         self.sync_space();
     }
@@ -861,13 +860,18 @@ impl Hyalo {
 
     /// The keyboard back to the focused window, after a layer surface that had it went away.
     pub fn restore_keyboard_focus(&mut self) {
+        // Locked: the keyboard belongs to the lock screen, never back to a window (lock.rs).
+        if self.lock.is_locked() {
+            self.focus_lock_surface();
+            return;
+        }
         let keyboard = self.seat.get_keyboard().unwrap();
         if keyboard.current_focus().is_some_and(|f| f.is_alive()) {
             return;
         }
         let surface = self.wm.focused.and_then(|f| self.wm.get(f)).and_then(|m| m.window.wl_surface()).map(|s| s.into_owned());
         if surface.is_some() {
-            keyboard.set_focus(self, surface, SERIAL_COUNTER.next_serial());
+            self.set_keyboard_focus(surface, SERIAL_COUNTER.next_serial());
         }
     }
 

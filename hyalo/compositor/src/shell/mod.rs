@@ -145,6 +145,10 @@ impl XdgShellHandler for Hyalo {
         let seat: Seat<Hyalo> = Seat::from_resource(&seat).unwrap();
         let kind = PopupKind::Xdg(surface);
         let Ok(root) = find_popup_root_surface(&kind) else { return };
+        // Locked: only the lock screen's own menus may take the input (lock.rs).
+        if self.lock.is_locked() && !self.belongs_to_lock(&root) {
+            return;
+        }
         let Ok(mut grab) = self.popups.grab_popup(root, kind, &seat, serial) else { return };
         if let Some(keyboard) = seat.get_keyboard() {
             // A grab already held by something else (a window being dragged) is not taken over.
@@ -154,7 +158,7 @@ impl XdgShellHandler for Hyalo {
                 grab.ungrab(PopupUngrabStrategy::All);
                 return;
             }
-            keyboard.set_focus(self, grab.current_grab(), serial);
+            self.set_keyboard_focus(grab.current_grab(), serial);
             keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
         }
         if let Some(pointer) = seat.get_pointer() {
