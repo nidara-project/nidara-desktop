@@ -122,7 +122,13 @@ and `lensing` × the shape's shorter side wins where it is more, so a large pane
 a capsule without a number per surface. The edge is a **convex bevel lying on the backdrop**
 (`glass_gl.rs`): a quarter circle W wide and W thick, refraction by Snell at glass's 1.5, so the
 backdrop is read from INSIDE the shape — bent hard against the edge, a little magnified further
-in, never anything from beyond the outline. `refraction` is the bevel's most displacement
+in, never anything from beyond the outline. Its contours are the OUTLINE moved inward with each
+corner keeping its own radius (`lens_depth`, a bisection near the corners), so what bends follows
+the corner's curve at every depth. Neither shortcut does: the outline's own distance field
+creases along the diagonal once the bevel is wider than the corner is round, and that field with
+corners max(r, W) round bent along an arc W round inside a tighter corner and left the corner
+flat (the app grid: a 108 px arc in a 32 px corner, owner-caught 2026-10-02). The price is a
+bevel up to √2 W deep along a corner's diagonal. `refraction` is the bevel's most displacement
 (0.231 W, so W ≈ 4.3 × it, up to half the shorter side), and the capture region is the blur's
 reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
 the peak displaces faster than 1 px per px and the backdrop folds back mirrored, and 1.5 W

@@ -140,11 +140,10 @@ uniform float ptr_base_r;
 varying vec2 v_out;
 varying vec2 v_fb;
 
-// The shape's signed distance with corners of radius `r`, output pixels: negative inside.
-float sdf_r(vec2 px, float r) {
-    vec2 p = px - rect.xy;
-    vec2 half_size = rect.zw * 0.5;
-    vec2 q = abs(p - half_size);
+// A box of half size `half_size` centred on the shape, corners of radius `r`: signed
+// distance in output pixels, negative inside.
+float sdf_box(vec2 px, vec2 half_size, float r) {
+    vec2 q = abs(px - rect.xy - rect.zw * 0.5);
     vec2 inner = half_size - vec2(r);
     if (q.x > inner.x && q.y > inner.y && r > 0.0) {
         vec2 k = (q - inner) / r;
@@ -152,7 +151,33 @@ float sdf_r(vec2 px, float r) {
     }
     return max(q.x - half_size.x, q.y - half_size.y);
 }
-float sdf(vec2 px) { return sdf_r(px, radius); }
+// The shape's signed distance.
+float sdf(vec2 px) { return sdf_box(px, rect.zw * 0.5, radius); }
+
+// The outline moved `t` inward with the corners keeping their own radius (until the shape is
+// too thin for it): the bevel's contour at depth t.
+float inset_sdf(vec2 px, float t) {
+    vec2 h = rect.zw * 0.5 - vec2(t);
+    return sdf_box(px, h, max(min(radius, min(h.x, h.y)), 0.0));
+}
+
+// How deep into the bevel a point is: the t whose contour passes through it, up to w.
+float lens_depth(vec2 px, float w) {
+    vec2 h = rect.zw * 0.5;
+    vec2 q = abs(px - rect.xy - h);
+    float r = min(radius, min(h.x, h.y));
+    // Clear of every corner at every depth up to w: the distance to the nearest side.
+    if (q.x <= h.x - w - r || q.y <= h.y - w - r) return clamp(min(h.x - q.x, h.y - q.y), 0.0, w);
+    if (inset_sdf(px, 0.0) >= 0.0) return 0.0;
+    if (inset_sdf(px, w) < 0.0) return w;
+    float lo = 0.0;
+    float hi = w;
+    for (int i = 0; i < 12; i++) {
+        float m = 0.5 * (lo + hi);
+        if (inset_sdf(px, m) < 0.0) lo = m; else hi = m;
+    }
+    return 0.5 * (lo + hi);
+}
 
 // WCAG relative luminance of an sRGB-encoded colour (glass-legibility.ts's `luminance`).
 float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
@@ -227,13 +252,18 @@ void main() {
     // height); past ≈1.7 W the far side of the peak displaces faster than 1 px per px and the
     // backdrop folds back on itself, mirrored.
     float lens_w = max(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), 1.0);
-    // The bevel follows corners at least W round, so it has no crease along their diagonal
-    // (the true outline's corners are tighter than W on a large pane).
-    float lens_r = min(max(radius, lens_w), min(rect.z, rect.w) * 0.5);
-    float lens_in = max(-sdf_r(v_out, lens_r), 0.0);
-    vec2 ln = vec2(sdf_r(v_out + vec2(1.0, 0.0), lens_r) - sdf_r(v_out - vec2(1.0, 0.0), lens_r),
-                   sdf_r(v_out + vec2(0.0, 1.0), lens_r) - sdf_r(v_out - vec2(0.0, 1.0), lens_r));
-    ln = length(ln) > 0.0001 ? normalize(ln) : vec2(0.0);
+    // The bevel's contours are the OUTLINE moved inward, each corner keeping its own radius
+    // (`lens_depth`), so what bends follows the corner's curve at every depth and the corner
+    // itself bends. Two ways it was wrong first: the outline's own distance field (contours
+    // at radius r − t, a crease along the diagonal once the bevel is wider than the corner is
+    // round), then that field with corners max(r, W) round (2026-10-02), which bent along an
+    // arc W round INSIDE the true corner and left the corner itself flat — on the app grid an
+    // arc 108 px round inside a 32 px corner (owner-caught: "it bends along a curve of its own,
+    // not the corner's"). The cost: along a corner's diagonal the bevel is up to √2 W deep.
+    float lens_in = lens_depth(v_out, lens_w);
+    vec2 ln = vec2(inset_sdf(v_out + vec2(1.0, 0.0), lens_in) - inset_sdf(v_out - vec2(1.0, 0.0), lens_in),
+                   inset_sdf(v_out + vec2(0.0, 1.0), lens_in) - inset_sdf(v_out - vec2(0.0, 1.0), lens_in));
+    ln = length(ln) > 0.0001 && lens_in < lens_w ? normalize(ln) : vec2(0.0);
     float v = 1.0 - clamp(lens_in / lens_w, 0.0, 1.0);
     float q = max(1.0 - v * v, 1e-4);
     float theta = atan(v / sqrt(q));
