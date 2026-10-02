@@ -1,0 +1,107 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-language — the system language, and the input engine that comes with it.
+#
+# A CJK language is not typable without an input engine: fonts render it, an
+# engine WRITES it. The fcitx5 FRAMEWORK is a dependency of nidara-desktop for
+# everybody (it is also what turns ~/.XCompose sequences into text on Wayland);
+# an ENGINE is installed only for the language that needs it (#703).
+#
+# Why not a dependency like the framework: `fcitx5-chinese-addons` pulls in
+# qt6-webengine, and measured against the rest of nidara-desktop's dependency
+# tree it adds ~540 MiB (webengine 282, declarative 121, libime 54, boost 51,
+# opencc 21…) that nobody who did not choose Chinese uses. `fcitx5-rime` was
+# measured too: ~150 MiB (boost, opencc and five rime data sets) — smaller, still
+# nowhere near cheap enough to hand everybody.
+#
+# This file is the ONE map from a language to its engine, and every path that
+# can make Chinese the system language goes through it:
+#   • the installer — archinstall writes /etc/locale.conf, then the plan's
+#     custom_commands run `nidara-setup` in the target, which runs `ensure-engine`;
+#   • Settings → Region → Language — `pkexec nidara-language set <LANG>`;
+#   • `nidara-update`, which ends in `nidara-setup` too, so an install that was
+#     already Chinese when the engine stopped being a dependency keeps it.
+#
+# Usage:
+#   nidara-language engine <LANG>       print the engine package LANG needs (nothing if none)
+#   nidara-language ensure-engine [LANG] (root) install that engine, or mark an installed
+#                                       one as wanted on its own; LANG defaults to
+#                                       /etc/locale.conf's
+#   nidara-language set <LANG>          (root) ensure LANG's engine, THEN make LANG the
+#                                       system language. If the engine cannot be installed
+#                                       the language is NOT changed: a desktop in Chinese
+#                                       with no way to type it is #500 again.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+
+engine_for() {
+    case "$1" in
+        zh_*|zh.*|zh) echo fcitx5-chinese-addons ;;
+        # Japanese is NOT here: fcitx5-anthy costs ~24 MiB with anthy, and stays a
+        # dependency of nidara-desktop (#703 measured it and left it).
+        *) ;;
+    esac
+}
+
+system_lang() {
+    sed -n 's/^LANG=//p' /etc/locale.conf 2>/dev/null | tr -d '"' | head -1
+}
+
+need_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "nidara-language: '$1' changes the system and must run as root" >&2
+        exit 1
+    fi
+}
+
+ensure_engine() {
+    local lang="$1" pkg
+    pkg="$(engine_for "$lang")"
+    [ -n "$pkg" ] || return 0
+    if pacman -Qq "$pkg" >/dev/null 2>&1; then
+        # Installed, but possibly only because nidara-desktop used to depend on it
+        # — then it is an orphan since #703, and `pacman -Rns $(pacman -Qdtq)`
+        # would take it. The system language wants it: say so in pacman's terms.
+        if pacman -Qqd "$pkg" >/dev/null 2>&1; then
+            echo "nidara-language: keeping $pkg — the system language ($lang) needs it"
+            pacman -D --asexplicit "$pkg" >/dev/null
+        fi
+        return 0
+    fi
+    echo "nidara-language: installing $pkg — the input engine for $lang"
+    # -S without -y, deliberately: refreshing the databases without upgrading is
+    # a partial upgrade, which Arch does not support. A stale database fails here
+    # with a download error, and the caller reports it.
+    pacman -S --noconfirm --asexplicit "$pkg"
+}
+
+case "${1:-}" in
+    engine)
+        [ $# -eq 2 ] || { echo "Usage: nidara-language engine <LANG>" >&2; exit 2; }
+        engine_for "$2"
+        ;;
+    ensure-engine)
+        need_root ensure-engine
+        lang="${2:-$(system_lang)}"
+        [ -n "$lang" ] || exit 0
+        ensure_engine "$lang"
+        ;;
+    set)
+        need_root set
+        [ $# -eq 2 ] || { echo "Usage: nidara-language set <LANG>" >&2; exit 2; }
+        lang="$2"
+        # Only a locale this system has GENERATED — the same closed set Settings
+        # offers. pkexec runs this as root for whoever asked, so the argument is
+        # checked here and not trusted from the caller.
+        if ! localectl list-locales | grep -qxF "$lang"; then
+            echo "nidara-language: '$lang' is not a generated locale on this system" >&2
+            exit 1
+        fi
+        ensure_engine "$lang"
+        localectl set-locale "LANG=$lang"
+        ;;
+    *)
+        echo "Usage: nidara-language engine <LANG> | ensure-engine [LANG] | set <LANG>" >&2
+        exit 2
+        ;;
+esac

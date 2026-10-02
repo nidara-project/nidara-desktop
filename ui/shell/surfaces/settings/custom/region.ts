@@ -1,7 +1,8 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { execAsync } from "../../../../lib/process"
+import Gio from "gi://Gio"
+import { execAsync, spawn } from "../../../../lib/process"
 import { createRow, staticLabel, bindWhileRealized } from "../SettingsHelpers"
 import regionConfig from "../../../core/RegionConfig"
 import { t } from "../../../core/i18n"
@@ -216,12 +217,45 @@ export const build = (ctx: PageCtx) => {
         })
     }).catch(console.error)
 
+    // Through `nidara-language set`, not `localectl` directly (#703): a language
+    // that needs an input engine — Chinese — gets it installed FIRST, under the
+    // same single password prompt, and if that fails the language is not changed.
+    // A desktop in Chinese with no way to type Chinese is #500 again. Installing
+    // the engine is a download of ~540 MiB, so the row says what it is doing.
+    const langStatus = new Gtk.Label({ valign: Gtk.Align.CENTER, visible: false, css_classes: ["dimmed"] })
+    langRow.prepend(langStatus)
+
+    // Which engine a language needs is asked of nidara-language too, so the map
+    // stays in one file; "" = none, or it is already installed.
+    const engineToInstall = (lang: string): Promise<string> =>
+        execAsync(["nidara-language", "engine", lang]).then(pkg => !pkg ? ""
+            : execAsync(["pacman", "-Qq", pkg]).then(() => "", () => pkg))
+
     const applyLang = () => {
         const lang = langValues[langDrp.selected]
         if (!lang) return
         applyLangBtn.sensitive = false
-        execAsync(["pkexec", "localectl", "set-locale", `LANG=${lang}`])
-            .finally(() => applyLangBtn.sensitive = true)
+        langDrp.sensitive = false
+        langStatus.visible = false
+        engineToInstall(lang).catch(() => "").then(pkg => {
+            if (pkg) {
+                langStatus.label = t("settings.region.locale.lang.installing")
+                langStatus.visible = true
+            }
+            const proc = spawn(["pkexec", "nidara-language", "set", lang], Gio.SubprocessFlags.STDERR_PIPE)
+            proc.communicate_utf8_async(null, null, (_: any, res: any) => {
+                let ok = false, err = ""
+                try { [, , err] = proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+                catch (e) { console.error("[region] nidara-language set:", e) }
+                // 126 = the password prompt was dismissed: nothing failed, nothing changed.
+                const cancelled = !ok && proc.get_if_exited() && proc.get_exit_status() === 126
+                if (!ok && !cancelled) console.error("[region] nidara-language set:", (err ?? "").trim())
+                langStatus.label = ok || cancelled ? "" : t("settings.region.locale.lang.failed")
+                langStatus.visible = !ok && !cancelled
+                applyLangBtn.sensitive = true
+                langDrp.sensitive = true
+            })
+        })
     }
 
     applyLangBtn.connect("clicked", applyLang)

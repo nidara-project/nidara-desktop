@@ -57,6 +57,8 @@ export default {
     "settings.region.locale.group": "Idioma e formatos",
     "settings.region.locale.lang": "Idioma (locale)",
     "settings.region.locale.lang.desc": "Para todo o sistema, não apenas sua conta. Aplicado no próximo login.",
+    "settings.region.locale.lang.installing": "Instalando a digitação em chinês…",
+    "settings.region.locale.lang.failed": "Não foi possível aplicar",
     "settings.region.locale.regional": "Formato regional",
     "settings.region.locale.regional.desc": "Datas, números, moeda e unidades. Apenas sua conta, a partir do próximo login.",
     "settings.region.locale.regional.same": "Igual ao idioma",

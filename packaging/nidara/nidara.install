@@ -20,4 +20,31 @@ post_upgrade() {
   config banner (nidara-update does both for you; greeter and lockscreen
   update on next use).
 EOF
+  chinese_engine_note "$2"
+}
+
+# Up to 0.13.0 nidara-desktop depended on fcitx5-chinese-addons for everybody
+# (#703). From the next release pacman keeps it as an orphan, and an orphan is
+# what `pacman -Rns $(pacman -Qdtq)` removes. Nothing here removes it: a
+# scriptlet runs inside pacman's transaction, so it cannot run pacman, and a
+# Chinese user must keep it anyway. Say which of the two this machine is.
+# (`nidara-update` does the keeping by itself, through nidara-setup.)
+chinese_engine_note() {
+  [ "$(vercmp "$1" 0.13.0)" -le 0 ] || return 0
+  [ -n "$(ls -d /var/lib/pacman/local/fcitx5-chinese-addons-[0-9]* 2>/dev/null)" ] || return 0
+  case "$(sed -n 's/^LANG=//p' /etc/locale.conf 2>/dev/null | tr -d '"')" in
+    zh*)
+      cat <<'EOF'
+  The Chinese input engine is no longer installed for everybody. Your system
+  language is Chinese, so keep it:  sudo nidara-language ensure-engine
+EOF
+      ;;
+    *)
+      cat <<'EOF'
+  The Chinese input engine (fcitx5-chinese-addons, ~540 MiB with what it
+  pulls in) is no longer installed for everybody. If you do not type Chinese:
+      sudo pacman -Rns fcitx5-chinese-addons
+EOF
+      ;;
+  esac
 }
