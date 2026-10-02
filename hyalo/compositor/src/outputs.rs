@@ -10,7 +10,6 @@
 
 use serde::Serialize;
 use smithay::{
-    desktop::layer_map_for_output,
     output::{Output, Scale},
     reexports::input as libinput,
     utils::{Logical, Rectangle},
@@ -48,7 +47,7 @@ pub fn arrange(state: &mut Hyalo) {
         x += state.space.output_geometry(o).map(|g| g.size.w).unwrap_or(0);
     }
     for o in &outputs {
-        layer_map_for_output(o).arrange();
+        crate::shell::layer::arrange_output(o);
     }
     state.outputs_changed();
     state.queue_redraw(None);

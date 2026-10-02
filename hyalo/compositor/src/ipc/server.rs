@@ -260,7 +260,7 @@ impl Hyalo {
             for (level, name) in [(Layer::Background, "background"), (Layer::Bottom, "bottom"), (Layer::Top, "top"), (Layer::Overlay, "overlay")] {
                 // `layers_on` is bottom first: the order they are drawn in.
                 for l in map.layers_on(level) {
-                    let g = map.layer_geometry(l).unwrap_or_default();
+                    let g = crate::shell::layer::layer_geometry(&map, l).unwrap_or_default();
                     out.push(super::LayerInfo {
                         output: output.name(),
                         layer: name,

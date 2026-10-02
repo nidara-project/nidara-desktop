@@ -220,7 +220,7 @@ pub fn output_elements<R: HyaloRenderer>(
 
     let map = layer_map_for_output(output);
     let layer_loc = |l: &smithay::desktop::LayerSurface| {
-        map.layer_geometry(l).unwrap_or_default().loc.to_f64().to_physical_precise_round(scale)
+        crate::shell::layer::layer_geometry(&map, l).unwrap_or_default().loc.to_f64().to_physical_precise_round(scale)
     };
     // Locked (lock.rs): the lock surface over the wallpaper, and nothing of the session — its
     // windows and the shell's layers are not drawn at all, not even under an opaque sheet.

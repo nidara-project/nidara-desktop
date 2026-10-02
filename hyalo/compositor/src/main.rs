@@ -165,8 +165,16 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
 
 pub fn spawn(cmd: &str) {
     tracing::info!(%cmd, "spawn");
-    if let Err(err) = std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
-        tracing::warn!(%cmd, ?err, "could not spawn");
+    match std::process::Command::new("sh").arg("-c").arg(cmd).spawn() {
+        // Waited for, off the event loop: a child nobody waits for stays a zombie once it
+        // exits. nidara-lock refuses to start while a process of its name exists (`pgrep -x`),
+        // and the first lock's zombie refused every lock after it (owner-caught 2026-10-02).
+        Ok(mut child) => {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+        Err(err) => tracing::warn!(%cmd, ?err, "could not spawn"),
     }
 }
 

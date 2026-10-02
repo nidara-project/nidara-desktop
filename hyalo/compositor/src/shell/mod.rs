@@ -295,7 +295,7 @@ impl Hyalo {
             let found = self.space.outputs().find_map(|o| {
                 let map = layer_map_for_output(o);
                 let layer = map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
-                let geo = map.layer_geometry(layer)?;
+                let geo = layer::layer_geometry(&map, layer)?;
                 Some((geo.loc + self.space.output_geometry(o)?.loc, o.clone()))
             });
             let Some((loc, output)) = found else { return };

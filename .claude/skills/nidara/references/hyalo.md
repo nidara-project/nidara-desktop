@@ -722,6 +722,27 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   adding it, re-read the primary node, which may now be the card node. `HYALO_DRM_DEVICE` names the
   ONE GPU to use and then only it.
 - **A refusal is said.** `vrr=on` on a monitor without VRR is an error, not a silent no-op.
+- **Every process Hyalo starts is waited for** (`spawn` in `main.rs`, a thread per child). Unwaited,
+  each one stayed a zombie once it exited, and `nidara-lock` — which will not start while a process
+  of its name exists (`pgrep -x`) — saw the first lock's zombie and refused every lock after it
+  (owner-caught 2026-10-02). CI: the smoke spawns five and requires no zombie left.
+- **Layer surfaces are placed by Hyprland's rule, not Smithay's** (`arrange_output` in
+  `shell/layer.rs`): a surface that reserves room is placed against the WHOLE output and its room
+  comes off the usable area; zone 0 goes in what is left; -1 ignores it all. Smithay's
+  `LayerMap::arrange` places each reserving surface inside what the ones mapped BEFORE it left,
+  and the bar and the dock both cover the monitor: mapped bar-first — as after an unlock, which
+  shows them again in that order — the dock sat under the bar's 36 px and hung off the bottom of
+  the screen (owner-caught 2026-10-02). Smithay keeps the location private, so Hyalo keeps its own:
+  draw, hit-test and place popups with `layer::layer_geometry` and read the usable area with
+  `layer::usable_zone`, never `LayerMap::layer_geometry`/`non_exclusive_zone`. ⚠️ Never call
+  `LayerMap::arrange` besides it: Smithay still runs it inside `map_layer`/`unmap_layer` (a
+  single configure each time, corrected right after), but called on every commit the two rules
+  would answer each other's configures forever. The same rule keeps a SIDE dock from pushing
+  the bar in or cutting it short by its 80 px, which Smithay's rule did when the dock was mapped
+  first (the owner asked, 2026-10-02; Hyprland never did it). CI: the smoke has the shell hide and
+  show its bar and dock as a lock does, and requires both back at the top of the output; and
+  `scripts/ci/hyalo-layers-check.sh` (+ `hyalo-layers-probe.js`) maps a bar and a dock at the
+  bottom, left and right, in both orders, and requires both over the whole output.
 - **The scan-out feedback is sticky** (`pick_feedback` in `backend/mod.rs`). Smithay's
   `select_dmabuf_feedback` follows the frame, and each switch is a new modifier set. Mesa's
   Wayland WSI answers that with `VK_SUBOPTIMAL_KHR`, and GTK rebuilds its swapchain on it, so the
