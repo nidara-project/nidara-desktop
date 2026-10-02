@@ -260,10 +260,13 @@ void main() {
 }
 "#;
 
-/// The darkest WCAG luminance under one ink box (`nidara-material-v1` v3), from the blurred
-/// backdrop as the glass treats it before its tint: blurred and saturated. A grid of samples
-/// is enough because the backdrop is blurred: nothing narrower than the blur survives it.
-/// Written as two bytes (high, low) so 8-bit readback keeps ~16 bits of it.
+/// The darkest and brightest WCAG luminance under one box (`nidara-material-v1` v3, v5), from
+/// the blurred backdrop as the glass treats it before its tint: blurred and saturated. A grid
+/// of samples is enough because the backdrop is blurred: nothing narrower than the blur
+/// survives it. `unscale` divides out the shadow under the box (v5: what the backdrop is
+/// without it; 1 for an ink box, whose question is what the content sits on now). Each is
+/// written as two bytes (high, low) so 8-bit readback keeps ~16 bits of it: the darkest in
+/// red and green, the brightest in blue and alpha.
 const FS_INK: &str = r#"#version 100
 precision highp float;
 uniform sampler2D tex;
@@ -271,6 +274,7 @@ uniform vec2 src_size;
 uniform vec2 src_used;
 uniform vec4 box_src;       // the box in the blurred texture's pixels: x0, y0, x1, y1
 uniform float saturation;
+uniform float unscale;
 varying vec2 v_px;
 float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
 float luminance(vec3 c) {
@@ -278,17 +282,20 @@ float luminance(vec3 c) {
 }
 void main() {
     float m = 1.0;
+    float n = 0.0;
     for (int j = 0; j < 12; j++) {
         for (int i = 0; i < 12; i++) {
             vec2 p = mix(box_src.xy, box_src.zw, (vec2(float(i), float(j)) + 0.5) / 12.0);
             vec3 c = texture2D(tex, clamp(p / src_size, 0.5 / src_size, (src_used - 0.5) / src_size)).rgb;
+            c = min(c * unscale, vec3(1.0));
             float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
             c = clamp(mix(vec3(l), c, saturation), 0.0, 1.0);
-            m = min(m, luminance(c));
+            float y = luminance(c);
+            m = min(m, y);
+            n = max(n, y);
         }
     }
-    float hi = floor(m * 255.0) / 255.0;
-    gl_FragColor = vec4(hi, fract(m * 255.0), 0.0, 1.0);
+    gl_FragColor = vec4(floor(m * 255.0) / 255.0, fract(m * 255.0), floor(n * 255.0) / 255.0, fract(n * 255.0));
 }
 "#;
 
@@ -299,12 +306,27 @@ pub struct InkBox {
     pub rect: Rectangle<f64, Physical>,
 }
 
-/// The most ink boxes measured in one glass at once: the width of the measurement's target.
+/// Where the backdrop under one shape is measured for its shadow (v5), output pixels: the
+/// shape's body, inset where a round corner leaves it, and how much of it the shadow already
+/// takes (1 / (1 − the shadow's opacity there)).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightProbe {
+    pub shape: usize,
+    pub rect: Rectangle<f64, Physical>,
+    pub unscale: f32,
+}
+
+/// The most ink boxes measured in one glass at once, and the most shapes: together, the width
+/// of the measurement's target.
 pub const MAX_INK_BOXES: usize = 64;
+pub const MAX_LIGHT_PROBES: usize = 64;
+const MEASURE_WIDTH: usize = MAX_INK_BOXES + MAX_LIGHT_PROBES;
 
 /// A shape in output pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Shape {
+    /// Its index in the material's shapes (the shadow's measurement is by shape, v5).
+    pub index: usize,
     pub rect: Rectangle<f64, Physical>,
     pub radius: f64,
     pub exponent: f64,
@@ -408,27 +430,29 @@ pub struct Glass {
     pub ink_tint: [f32; 3],
 }
 
-struct Program {
-    id: u32,
-    pos: u32,
+pub(super) struct Program {
+    pub(super) id: u32,
+    pub(super) pos: u32,
 }
 
 impl Program {
-    unsafe fn loc(&self, gl: &Gles2, name: &std::ffi::CStr) -> i32 {
+    pub(super) unsafe fn loc(&self, gl: &Gles2, name: &std::ffi::CStr) -> i32 {
         unsafe { gl.GetUniformLocation(self.id, name.as_ptr()) }
     }
 }
 
 /// GL objects that belong to one GL context: compiled once, shared by every glass drawn in
 /// it. Kept in the EGL context's user data.
-struct Programs {
+pub(super) struct Programs {
     down: Program,
     up: Program,
     last: Program,
     ink: Program,
-    /// The ink measurement's target: MAX_INK_BOXES × 1, one texel per box. Made on first use.
+    /// The shadow under the glass (v5, render/scrim.rs).
+    pub(super) scrim: Program,
+    /// The measurement's target: MEASURE_WIDTH × 1, one texel per box. Made on first use.
     ink_target: std::cell::Cell<(u32, u32)>,
-    vbo: u32,
+    pub(super) vbo: u32,
     /// Textures and framebuffers of glasses that went away, deleted on the next capture: a
     /// cache is dropped where no GL context is current.
     trash: Trash,
@@ -482,6 +506,7 @@ impl Programs {
                 up: compile(gl, VS_PASS, &up_fs),
                 last: compile(gl, VS_FINAL, &last_fs),
                 ink: compile(gl, VS_PASS, FS_INK),
+                scrim: compile(gl, VS_FINAL, super::scrim::FS_SCRIM),
                 ink_target: Default::default(),
                 vbo,
                 trash: Default::default(),
@@ -521,8 +546,8 @@ pub struct Cache {
     trash: Option<Trash>,
     /// Moves at every capture: a measurement is of one capture.
     generation: u64,
-    /// What the last ink measurement was of: the capture, the boxes, the saturation.
-    measured: Option<(u64, Vec<InkBox>, f32)>,
+    /// What the last measurement was of: the capture, the boxes, the probes, the saturation.
+    measured: Option<(u64, Vec<InkBox>, Vec<LightProbe>, f32)>,
 }
 
 impl Drop for Cache {
@@ -610,7 +635,7 @@ impl FrameMap {
     }
 }
 
-unsafe fn programs<'a>(gl: &Gles2, user_data: &'a smithay::utils::user_data::UserDataMap) -> &'a Programs {
+pub(super) unsafe fn programs<'a>(gl: &Gles2, user_data: &'a smithay::utils::user_data::UserDataMap) -> &'a Programs {
     user_data.insert_if_missing(|| unsafe { Programs::new(gl) });
     user_data.get::<Programs>().unwrap()
 }
@@ -812,7 +837,9 @@ pub unsafe fn draw(
 struct Readback {
     fence: ffi::types::GLsync,
     pbo: u32,
+    /// The ink group of each box, then the shape of each probe, in texel order.
     ids: Vec<u32>,
+    shapes: Vec<usize>,
     surface: Weak<WlSurface>,
 }
 
@@ -838,7 +865,8 @@ fn can_measure(gl: &Gles2) -> bool {
     gl.FenceSync.is_loaded() && gl.MapBufferRange.is_loaded() && gl.ClientWaitSync.is_loaded()
 }
 
-/// Measure the darkest point under each ink box, if the capture or the boxes changed since the
+/// Measure the darkest point under each ink box, and the darkest and brightest under each
+/// shape that casts a shadow (v5), if the capture, the boxes or the probes changed since the
 /// last measurement. Called from `draw`'s context, inside the frame; leaves the GL state as
 /// it found it.
 #[allow(clippy::too_many_arguments)]
@@ -848,17 +876,19 @@ pub unsafe fn measure_ink(
     map: FrameMap,
     cache: &mut Cache,
     boxes: &[InkBox],
+    probes: &[LightProbe],
     saturation: f32,
     surface: &Weak<WlSurface>,
 ) {
-    if !cache.valid || cache.passes == 0 || boxes.is_empty() || !can_measure(gl) {
+    if !cache.valid || cache.passes == 0 || (boxes.is_empty() && probes.is_empty()) || !can_measure(gl) {
         return;
     }
     let boxes = &boxes[..boxes.len().min(MAX_INK_BOXES)];
-    if cache.measured.as_ref().is_some_and(|(g, b, s)| *g == cache.generation && b == boxes && *s == saturation) {
+    let probes = &probes[..probes.len().min(MAX_LIGHT_PROBES)];
+    if cache.measured.as_ref().is_some_and(|(g, b, p, s)| *g == cache.generation && b == boxes && p == probes && *s == saturation) {
         return;
     }
-    cache.measured = Some((cache.generation, boxes.to_vec(), saturation));
+    cache.measured = Some((cache.generation, boxes.to_vec(), probes.to_vec(), saturation));
     unsafe {
         let progs = programs(gl, user_data);
         let (tex, fbo) = match progs.ink_target.get() {
@@ -867,7 +897,7 @@ pub unsafe fn measure_ink(
                 gl.GenTextures(1, &mut tex);
                 gl.BindTexture(ffi::TEXTURE_2D, tex);
                 gl.TexImage2D(
-                    ffi::TEXTURE_2D, 0, ffi::RGBA as i32, MAX_INK_BOXES as i32, 1, 0, ffi::RGBA,
+                    ffi::TEXTURE_2D, 0, ffi::RGBA as i32, MEASURE_WIDTH as i32, 1, 0, ffi::RGBA,
                     ffi::UNSIGNED_BYTE, std::ptr::null(),
                 );
                 gl.TexParameteri(ffi::TEXTURE_2D, ffi::TEXTURE_MIN_FILTER, ffi::NEAREST as i32);
@@ -893,7 +923,7 @@ pub unsafe fn measure_ink(
         gl.Disable(ffi::BLEND);
         gl.Disable(ffi::SCISSOR_TEST);
         gl.BindFramebuffer(ffi::FRAMEBUFFER, fbo);
-        gl.Viewport(0, 0, MAX_INK_BOXES as i32, 1);
+        gl.Viewport(0, 0, MEASURE_WIDTH as i32, 1);
         let p = &progs.ink;
         gl.UseProgram(p.id);
         gl.BindBuffer(ffi::ARRAY_BUFFER, progs.vbo);
@@ -907,12 +937,13 @@ pub unsafe fn measure_ink(
         gl.Uniform2f(p.loc(gl, c"src_size"), l1.w as f32, l1.h as f32);
         gl.Uniform2f(p.loc(gl, c"src_used"), used1.0 as f32, used1.1 as f32);
         gl.Uniform1f(p.loc(gl, c"saturation"), saturation);
-        gl.Uniform2f(p.loc(gl, c"target_size"), MAX_INK_BOXES as f32, 1.0);
+        gl.Uniform2f(p.loc(gl, c"target_size"), MEASURE_WIDTH as f32, 1.0);
         let r = cache.region_fb;
-        for (i, b) in boxes.iter().enumerate() {
+        let all = boxes.iter().map(|b| (b.rect, 1.0)).chain(probes.iter().map(|p| (p.rect, p.unscale)));
+        for (i, (q, unscale)) in all.enumerate() {
+            gl.Uniform1f(p.loc(gl, c"unscale"), unscale);
             // The box in framebuffer pixels (follows the output's transform), then in the
             // blurred copy's: relative to the captured region, at half size.
-            let q = b.rect;
             let (ax, ay) = map.map_point(q.loc.x, q.loc.y);
             let (bx, by) = map.map_point(q.loc.x + q.size.w, q.loc.y + q.size.h);
             let to_src = |x: f64, ox: i32| ((x - ox as f64) * 0.5) as f32;
@@ -928,8 +959,9 @@ pub unsafe fn measure_ink(
         let mut pbo = 0;
         gl.GenBuffers(1, &mut pbo);
         gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, pbo);
-        gl.BufferData(ffi::PIXEL_PACK_BUFFER, (boxes.len() * 4) as isize, std::ptr::null(), ffi::STREAM_READ);
-        gl.ReadPixels(0, 0, boxes.len() as i32, 1, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null_mut());
+        let texels = boxes.len() + probes.len();
+        gl.BufferData(ffi::PIXEL_PACK_BUFFER, (texels * 4) as isize, std::ptr::null(), ffi::STREAM_READ);
+        gl.ReadPixels(0, 0, texels as i32, 1, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null_mut());
         gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, 0);
         let fence = gl.FenceSync(ffi::SYNC_GPU_COMMANDS_COMPLETE, 0);
         user_data.insert_if_missing(Readbacks::default);
@@ -939,7 +971,13 @@ pub unsafe fn measure_ink(
             gl.DeleteSync(old.fence);
             gl.DeleteBuffers(1, &old.pbo);
         }
-        list.push(Readback { fence, pbo, ids: boxes.iter().map(|b| b.id).collect(), surface: surface.clone() });
+        list.push(Readback {
+            fence,
+            pbo,
+            ids: boxes.iter().map(|b| b.id).collect(),
+            shapes: probes.iter().map(|p| p.shape).collect(),
+            surface: surface.clone(),
+        });
         INK_ISSUED.with(|f| f.set(true));
 
         gl.BindFramebuffer(ffi::FRAMEBUFFER, prev_fbo as u32);
@@ -956,14 +994,17 @@ pub unsafe fn measure_ink(
     }
 }
 
-/// The measurements the GPU has finished, without waiting for any: per surface, the darkest
-/// luminance under each ink group (the least over its boxes). And whether any is still in
-/// flight. Needs the context current (`GlesRenderer::with_context`).
-#[allow(clippy::type_complexity)]
-pub unsafe fn poll_ink(
-    gl: &Gles2,
-    user_data: &smithay::utils::user_data::UserDataMap,
-) -> (Vec<(Weak<WlSurface>, Vec<(u32, f32)>)>, bool) {
+/// One finished measurement: per ink group the darkest luminance under it (the least over its
+/// boxes), and per shape the darkest and brightest under it, its shadow divided out (v5).
+pub struct Measured {
+    pub surface: Weak<WlSurface>,
+    pub ink: Vec<(u32, f32)>,
+    pub light: Vec<(usize, f32, f32)>,
+}
+
+/// The measurements the GPU has finished, without waiting for any, and whether any is still
+/// in flight. Needs the context current (`GlesRenderer::with_context`).
+pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDataMap) -> (Vec<Measured>, bool) {
     let Some(list) = user_data.get::<Readbacks>() else { return (Vec::new(), false) };
     let mut list = list.0.borrow_mut();
     let mut out = Vec::new();
@@ -975,19 +1016,25 @@ pub unsafe fn poll_ink(
             continue;
         }
         let mut darkest: Vec<(u32, f32)> = Vec::new();
+        let mut light: Vec<(usize, f32, f32)> = Vec::new();
         unsafe {
             if status != ffi::WAIT_FAILED {
                 gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, rb.pbo);
-                let len = rb.ids.len() * 4;
+                let len = (rb.ids.len() + rb.shapes.len()) * 4;
                 let ptr = gl.MapBufferRange(ffi::PIXEL_PACK_BUFFER, 0, len as isize, ffi::MAP_READ_BIT) as *const u8;
                 if !ptr.is_null() {
                     let bytes = std::slice::from_raw_parts(ptr, len);
+                    let two = |at: usize| (bytes[at] as f32 + bytes[at + 1] as f32 / 255.0) / 255.0;
                     for (i, &id) in rb.ids.iter().enumerate() {
-                        let l = (bytes[i * 4] as f32 + bytes[i * 4 + 1] as f32 / 255.0) / 255.0;
+                        let l = two(i * 4);
                         match darkest.iter_mut().find(|(g, _)| *g == id) {
                             Some((_, m)) => *m = m.min(l),
                             None => darkest.push((id, l)),
                         }
+                    }
+                    for (k, &shape) in rb.shapes.iter().enumerate() {
+                        let at = (rb.ids.len() + k) * 4;
+                        light.push((shape, two(at), two(at + 2)));
                     }
                     gl.UnmapBuffer(ffi::PIXEL_PACK_BUFFER);
                 }
@@ -996,8 +1043,8 @@ pub unsafe fn poll_ink(
             gl.DeleteSync(rb.fence);
             gl.DeleteBuffers(1, &rb.pbo);
         }
-        if !darkest.is_empty() {
-            out.push((rb.surface, darkest));
+        if !darkest.is_empty() || !light.is_empty() {
+            out.push(Measured { surface: rb.surface, ink: darkest, light });
         }
     }
     let pending = !keep.is_empty();

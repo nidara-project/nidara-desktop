@@ -81,8 +81,9 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
     {
       /* v2 adds a shape's own opacity and clip (add_shape_clipped); a v1
        * compositor gets plain shapes. v3 adds the ink (add_ink_box, set_ink,
-       * the ink event). v4 adds set_lensing. */
-      material_version = MIN (version, 4);
+       * the ink event). v4 adds set_lensing. v5 adds the shadow under the glass
+       * (set_scrim, add_scrim_region). */
+      material_version = MIN (version, 5);
       material_mgr = wl_registry_bind (registry, name,
                                        &nidara_material_manager_v1_interface,
                                        material_version);
@@ -475,6 +476,33 @@ nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
   struct nidara_material_v1 *m = material_get (surface);
   if (m && material_version >= 4)
     nidara_material_v1_set_lensing (m, wl_fixed_from_double (size_fraction));
+}
+
+void
+nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
+                              double min_spread)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m && material_version >= 5)
+    nidara_material_v1_set_scrim (m, wl_fixed_from_double (max_strength),
+                                  wl_fixed_from_double (size_fraction),
+                                  wl_fixed_from_double (min_spread));
+}
+
+void
+nidara_wl_material_add_scrim_region (GdkSurface *surface,
+                                     double x, double y, double width, double height,
+                                     double falloff)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || material_version < 5 || width <= 0 || height <= 0)
+    return;
+  nidara_material_v1_add_scrim_region (m,
+                                       wl_fixed_from_double (x), wl_fixed_from_double (y),
+                                       wl_fixed_from_double (width), wl_fixed_from_double (height),
+                                       wl_fixed_from_double (falloff));
 }
 
 void

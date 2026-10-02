@@ -12,7 +12,7 @@
     blurred because it is not in a shape.
   </description>
 
-  <interface name="nidara_material_manager_v1" version="4">
+  <interface name="nidara_material_manager_v1" version="5">
     <request name="destroy" type="destructor"/>
     <request name="get_material">
       <description summary="the material object of a surface">
@@ -23,7 +23,7 @@
     </request>
   </interface>
 
-  <interface name="nidara_material_v1" version="4">
+  <interface name="nidara_material_v1" version="5">
     <request name="destroy" type="destructor">
       <description summary="remove the material on the next commit"/>
     </request>
@@ -185,6 +185,52 @@
         Meaningful only while the compositor paints the glass (set_glass).
       </description>
       <arg name="size_fraction" type="fixed" summary="of the shape's shorter side, 0..1"/>
+    </request>
+    <!-- Version 5: the shadow under the glass. Appended, so earlier opcodes stay put. -->
+    <request name="set_scrim" since="5">
+      <description summary="pending: a shadow under the glass, only where the backdrop would split it">
+        While the compositor paints the glass (set_glass), its tint thickens
+        per pixel where the backdrop is too bright, so a shape over a backdrop
+        that is bright in one place and dark in another comes out grey in one
+        part and clear in the other. With a scrim, the compositor instead lays
+        a soft black shadow UNDER the glass (below the surface, inside what the
+        glass blurs), even across each shape, just strong enough that the
+        brightest point of the backdrop under the shape comes down to
+        set_glass's target_luminance: the tint then stays even, and the shape
+        reads as one pane of glass over a shadow.
+
+        Only where it is needed: the compositor measures the darkest and the
+        brightest point of the backdrop under the shapes it lies under, and
+        lays a shadow only while the tint those two need differs by more than
+        min_spread (an opacity, 0..1; it goes away again below half of it). A
+        backdrop that is evenly light gets an even tint and no shadow; one
+        white everywhere keeps set_ink's light veil. The strength is the one
+        that brings the brightest point down to target_luminance, at most
+        max_strength (0..1, the shadow's opacity at its core). It changes
+        smoothly, and fades with the shapes' opacity.
+
+        A shape inside no scrim region (add_scrim_region) gets a shadow of its
+        own: its outline as the core, fading over size_fraction of its shorter
+        side. 0 max_strength (the initial value): no shadow.
+      </description>
+      <arg name="max_strength" type="fixed"/>
+      <arg name="size_fraction" type="fixed"/>
+      <arg name="min_spread" type="fixed"/>
+    </request>
+    <request name="add_scrim_region" since="5">
+      <description summary="pending: one shadow shared by the shapes inside it">
+        Surface-local, logical coordinates; the region may reach past the
+        surface, and the compositor cuts it to the output. Every shape whose
+        centre lies inside it shares one shadow: this rectangle as the core, at
+        one strength, fading over falloff logical pixels outside it — so panes
+        side by side lie on one even shadow instead of one each. Cleared by
+        clear_shapes; meaningful only with set_scrim.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="falloff" type="fixed"/>
     </request>
   </interface>
 </protocol>

@@ -216,11 +216,19 @@ phase_run() {
     /tmp/hyalo/nidara-ipc toggleCC >/dev/null
     sleep 2
     bar_cc="$(glass_shapes nidara-bar)"
+    # The shadow under the glass (v5): the Control Center's panes share ONE, over the screen's
+    # right-hand strip (trackScrimRegion), rather than one each. Its strength depends on the
+    # wallpaper; what is checked is that the region reached Hyalo and holds the panes.
+    local cc_scrim
+    cc_scrim="$(nidara-hyalo msg layers | jq -r \
+        '[.ok.layers[] | select(.namespace == "nidara-bar") | .glass.scrims[]? | select(.kind == "region") | .shapes] | max // 0')"
     /tmp/hyalo/nidara-ipc toggleCC >/dev/null
     sleep 1
     [ "$bar_cc" -gt "$bar_rest" ] \
         || { log "FAIL: the Control Center's panes never reached Hyalo ($bar_rest shapes closed, $bar_cc open)"; exit 1; }
-    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open; the dock's, the island's)"
+    [ "$cc_scrim" -gt 1 ] \
+        || { log "FAIL: the Control Center's panes do not share one shadow under their glass ($cc_scrim in its region)"; nidara-hyalo msg layers; exit 1; }
+    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open, $cc_scrim of them on one shadow; the dock's, the island's)"
 
     # Settings reach Hyalo through the compositor interface (#682): the shell states its
     # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is

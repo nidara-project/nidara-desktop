@@ -72,6 +72,17 @@ pub struct GlassInfo {
     pub compositor_paints: bool,
     /// Each shape's edge displacement, logical px (`set_lensing`): empty when blur only.
     pub refraction: Vec<f64>,
+    /// The shadows under the glass (v5): one per region holding a shape, or per lone shape.
+    pub scrims: Vec<ScrimInfo>,
+}
+
+/// One shadow under the glass (v5): what it lies under, and the strength it is easing to.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScrimInfo {
+    /// "region" (shared, add_scrim_region) or "shape" (a lone shape's own).
+    pub kind: &'static str,
+    pub shapes: usize,
+    pub strength: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]

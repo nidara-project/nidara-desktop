@@ -100,8 +100,8 @@ What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
 `NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
-rim saturation inkDarkAbove inkLightBelow`, `blur`/`popoverBlur = SIZE:PASSES`, `glass = off` /
-`ink = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
+rim saturation inkDarkAbove inkLightBelow scrimMax scrimSize scrimFalloff scrimSpread`,
+`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
 (`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
@@ -173,6 +173,45 @@ text keeps it white.
   `NIDARA_MATERIAL_DEBUG=1` logs every ink decision.
 - To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
   backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
+
+### The shadow under the glass: even tint, only where the backdrop would split a pane (#684)
+
+Owner, 2026-10-02: "parts almost entirely grey and parts right, on the same element". The tint
+thickens PER PIXEL, so a pane over a backdrop bright in one place and dark in another came out
+grey in one part and clear in the other — on the owner's own wallpaper (light blue over dark
+purple) the CC's camera and volume tiles went grey while Focus stayed clear. The fix is the
+owner's idea: a soft black shadow UNDER the glass, even across the pane, only when needed.
+
+- **Protocol v5** (`set_scrim(max_strength, size_fraction, min_spread)`, `add_scrim_region(x, y,
+  w, h, falloff)`). A region is shared by every shape whose centre lies in it; a shape in none
+  gets its own (its outline as core, fading over `size_fraction` of its shorter side).
+- **The rule** (`material::scrim_target`, unit-tested with a control): a shadow only while the
+  tint the darkest and the brightest point under the unit's shapes need differs by more than
+  `min_spread` (and until it falls below half of it — hysteresis). Its strength brings the
+  brightest point down to the glass's `target`, so the tint stays at `alpha_min` everywhere.
+  Evenly light, all white (the ink's veil) or dark backdrops get NONE — measured nested on white,
+  #bcbcbc and #202028: every strength 0.
+- **Measured with the ink**, in the same pass: one probe per shadowed shape (its body, inset by
+  0.29 of its radius), darkest and brightest in one texel. 🔴 The probe DIVIDES OUT the shadow
+  drawn this frame (`unscale` = 1 / (1 − its opacity there)), or the shadow would measure itself
+  and chase its own tail. The ink boxes are NOT unscaled: their question is what the text sits on.
+- **Drawn** by `render/scrim.rs`: one element per surface, one pass, shadows combined by their
+  MAXIMUM (two panes side by side never make a darker band between them), smootherstep fade,
+  half-level dither against banding. 🔴 The shell's chrome (top and overlay layers) casts its
+  shadows onto the FLOOR under all of it, right above the windows (`render/mod.rs`): the bar and
+  the dock are both TOP, and a shadow placed right under the bar darkened the dock's icons.
+- **Eases** in 220 ms, out 600 ms (a video under a pane must not pump it); while one eases the
+  backend queues the next frame (`scrim::take_easing`), and at rest nothing is redrawn.
+- **The Control Center and the Notification Center share ONE region**, the screen's whole
+  right-hand strip (`trackScrimRegion(widget, { right, top, bottom })` in Bar.tsx), fading over
+  `scrimFalloff` px to the left. Measured nested without it: each tile got its own strength
+  (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
+- Tuned live in `glass-tuning.conf`: `scrimMax scrimSize scrimFalloff scrimSpread`, `scrim = off`
+  for the A/B. `nidara-hyalo msg layers` shows each surface's `glass.scrims` (kind, shapes,
+  strength); the smoke requires the CC's panes to share one region.
+- To see it nested, the backdrop must be a REAL full-screen layer: `gjs bg.js` without
+  `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` comes up as a window with a dark title bar and the
+  clear colour around it, and the bar and dock then sit on a mixed backdrop whatever you painted.
 
 ## The window manager
 

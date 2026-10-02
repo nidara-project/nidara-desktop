@@ -7,7 +7,7 @@ import { glassBlurInForce } from "./GlassBlur"
 import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
 import { SOLID_GLASS } from "../../lib/nidara-kit/platform/theme-tokens"
 import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "../../lib/nidara-kit/platform/glass-legibility"
-import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/nidara-kit/platform/material"
+import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "../../lib/nidara-kit/platform/material"
 
 /**
  * The glass a compositor of our own paints for the shell (#684): the source behind
@@ -29,6 +29,7 @@ import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/n
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
+ *   scrimMax scrimSize scrimFalloff scrimSpread          the shadow under the glass (below)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -36,6 +37,7 @@ import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/n
  *   glass = off                                          blur only: the shell paints its own
  *                                                        glass, as on Hyprland (A/B)
  *   ink = off                                            the text stays white everywhere
+ *   scrim = off                                          no shadow under the glass (A/B)
  *
  * The ink (owner, 2026-10-01, #684): the shell's text on Hyalo's glass is white and turns
  * dark only where even the DARKEST point under it is brighter than `inkDarkAbove` (WCAG
@@ -44,6 +46,16 @@ import { setMaterialSource, type GlassParams, type InkParams } from "../../lib/n
  * pane then wears the light skin's tokens (`INK_DARK_CLASS`) and Hyalo lays a light veil
  * under it instead of darkening. ⚠️ Both thresholds are a starting point, to be calibrated
  * with the owner on screen.
+ *
+ * The shadow under the glass (owner, 2026-10-02, #684): with the tint alone, a pane over a
+ * backdrop bright in one place and dark in another came out grey in one part and clear in the
+ * other — the tint thickens per pixel. Hyalo now lays a soft shadow UNDER the glass, even
+ * across the pane, just strong enough that the brightest point under it comes down to
+ * `target`, and only where the tint alone would split a pane — the tint its darkest and its
+ * brightest point need differing by more than `scrimSpread`: none over a dark backdrop, none
+ * over an evenly light one, none over an all-white one (the ink's light veil serves that). A pane's own shadow fades over `scrimSize` of its shorter side;
+ * the Control Center and the Notification Center share one over the screen's whole right-hand
+ * strip (`trackScrimRegion` in Bar.tsx), fading over `scrimFalloff` px to the left.
  */
 
 const DEFAULTS = {
@@ -62,10 +74,24 @@ const DEFAULTS = {
     inkDarkAbove: 0.80,
     // ≈ #d3d3d3: the gap is the hysteresis, so a backdrop on the line does not flicker.
     inkLightBelow: 0.65,
+    // The shadow's opacity at its core, at most. Pure white needs ≈0.54 to come down to
+    // `target`; past this the tint makes up the rest.
+    scrimMax: 0.6,
+    // A pane's own shadow fades over this fraction of its shorter side (the bar's capsules
+    // ≈16 px, a notification ≈35, the dock ≈46).
+    scrimSize: 0.5,
+    // The right-hand strip's shadow fades over this many px to the left: as long as the
+    // panel is wide, so the step from shadow to wallpaper cannot be seen (owner: "as soft as
+    // possible").
+    scrimFalloff: 380,
+    // A shadow only where the tint the darkest and the brightest point under the panes need
+    // differ by more than this (of 0.05..0.60): a pane that would be visibly grey in one part
+    // and clear in another. To be calibrated with the owner on screen.
+    scrimSpread: 0.12,
 }
 
 type Blur = { size: number, passes: number }
-type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean }
+type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, scrimOff?: boolean }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
 
@@ -88,6 +114,12 @@ function inkParams(): InkParams | null {
     return { darkAbove: p.inkDarkAbove, lightBelow: p.inkLightBelow, tint: { r: t.r, g: t.g, b: t.b } }
 }
 
+function scrimParams(): ScrimParams | null {
+    if (tuning.off || tuning.scrimOff || Theme.reduceTransparency) return null
+    const p = { ...DEFAULTS, ...tuning }
+    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, minSpread: p.scrimSpread }
+}
+
 function parse(text: string): Tuning {
     const out: Tuning = {}
     for (const line of text.split("\n")) {
@@ -101,6 +133,8 @@ function parse(text: string): Tuning {
             out.off = v === "off"
         } else if (k === "ink") {
             out.inkOff = v === "off"
+        } else if (k === "scrim") {
+            out.scrimOff = v === "off"
         } else if (k in DEFAULTS && Number.isFinite(Number(v))) {
             (out as Record<string, number>)[k] = Number(v)
         }
@@ -137,6 +171,7 @@ export function initCompositorGlass() {
     setMaterialSource({
         glass: (_native: Gtk.Native) => params(),
         ink: (_native: Gtk.Native) => inkParams(),
+        scrim: (_native: Gtk.Native) => scrimParams(),
         blur: (native: Gtk.Native) => {
             const panels = tuning.blur ?? glassBlurInForce()
             // A tooltip or a menu is a popover: a surface of its own, blurred more.

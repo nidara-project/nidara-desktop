@@ -501,6 +501,38 @@ void nidara_wl_material_set_glass (GdkSurface *surface,
 void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
 
 /**
+ * nidara_wl_material_set_scrim:
+ * @surface: the #GdkSurface
+ * @max_strength: the shadow's opacity at its core, at most, 0..1; 0 = no shadow
+ * @size_fraction: a shape inside no scrim region fades over this fraction of its shorter side
+ * @min_spread: the least difference between the tint the darkest and the brightest point under
+ *   the shapes need for there to be a shadow (an opacity, 0..1)
+ *
+ * A soft black shadow under the glass, laid only where the backdrop is bright in one place and
+ * dark in another, so a shape over it is not tinted grey in one part and clear in the other
+ * (nidara-material-v1 version 5, set_scrim). Nothing on an older compositor.
+ */
+void nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
+                                   double min_spread);
+
+/**
+ * nidara_wl_material_add_scrim_region:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: surface-local, logical; the region may reach past the surface
+ * @y: surface-local, logical
+ * @width: logical
+ * @height: logical
+ * @falloff: how far the shadow fades outside the region, logical pixels
+ *
+ * One shadow shared by every shape whose centre lies inside the region. Pending until
+ * nidara_wl_material_commit(); cleared by nidara_wl_material_begin(). Nothing on a compositor
+ * without nidara-material-v1 version 5.
+ */
+void nidara_wl_material_add_scrim_region (GdkSurface *surface,
+                                          double x, double y, double width, double height,
+                                          double falloff);
+
+/**
  * nidara_wl_material_clear_glass:
  * @surface: the #GdkSurface
  *

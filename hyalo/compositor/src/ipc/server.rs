@@ -265,6 +265,19 @@ impl Hyalo {
                             } else {
                                 Vec::new()
                             },
+                            scrims: m
+                                .state
+                                .scrim_units()
+                                .into_iter()
+                                .map(|u| {
+                                    let anim = m.scrims.get(&u.key);
+                                    super::ScrimInfo {
+                                        kind: if u.key >= crate::protocols::material::LONE_SCRIM { "shape" } else { "region" },
+                                        shapes: u.members.len(),
+                                        strength: anim.map_or(0.0, |a| (a.to * 1000.0).round() / 1000.0),
+                                    }
+                                })
+                                .collect(),
                         }),
                     });
                 }

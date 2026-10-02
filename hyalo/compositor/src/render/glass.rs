@@ -40,6 +40,8 @@ pub struct GlassElement {
     glass: Option<glass_gl::Glass>,
     /// The ink boxes that fall in this group (v3), measured when the capture or they change.
     ink_boxes: Vec<glass_gl::InkBox>,
+    /// Where the backdrop under this group's shadowed shapes is measured (v5).
+    probes: Vec<glass_gl::LightProbe>,
     surface: Weak<WlSurface>,
 }
 
@@ -49,15 +51,20 @@ struct GlassIds(RefCell<Vec<Id>>);
 
 impl GlassElement {
     /// The glass elements of `surface`, placed at `location` (its origin, output pixels):
-    /// one per group of shapes whose blurs would overlap.
+    /// one per group of shapes whose blurs would overlap. `scrims` is the shadow drawn under
+    /// it this frame (render/scrim.rs), which its measurement divides out.
     pub fn for_surface(
         surface: &WlSurface,
         location: Point<i32, Physical>,
         scale: Scale<f64>,
         output_size: smithay::utils::Size<i32, Physical>,
+        scrims: &[super::scrim::ScrimPx],
     ) -> Vec<GlassElement> {
         let Some(current) = material::current(surface) else { return Vec::new() };
         let m = &current.state;
+        // The shapes that lie under a shadow (v5): the backdrop under each is measured.
+        let shadowed: std::collections::BTreeSet<usize> =
+            m.scrim_units().into_iter().flat_map(|u| u.members).collect();
         let groups = groups(output_size, scale, location, m);
         let ids: Vec<Id> = with_states(surface, |states| {
             let ids = states.data_map.get_or_insert(GlassIds::default);
@@ -113,10 +120,16 @@ impl GlassElement {
                         s.ink_dark = true;
                     }
                 }
+                let probes = if glass.is_some() {
+                    shapes.iter().filter(|s| shadowed.contains(&s.index)).filter_map(|s| probe(s, scrims)).collect()
+                } else {
+                    Vec::new()
+                };
                 GlassElement {
                     id,
                     commit: current.commit,
                     region,
+                    probes,
                     shapes,
                     offset: (m.blur_size * scale.x) as f32,
                     passes: m.blur_passes as usize,
@@ -161,7 +174,7 @@ impl GlassElement {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
             if let Some(g) = &self.glass {
-                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, g.saturation, &self.surface);
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, &self.probes, g.saturation, &self.surface);
             }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref());
         })
@@ -218,6 +231,23 @@ impl<R: HyaloRenderer> RenderElement<R> for GlassElement {
     }
 }
 
+/// Where to measure the backdrop under one shape for its shadow: its body, inset by where a
+/// round corner leaves the rectangle (0.29 of the radius, the corner's 45° point), cut by its
+/// clip; and what of the backdrop there the shadow drawn this frame already takes.
+fn probe(s: &glass_gl::Shape, scrims: &[super::scrim::ScrimPx]) -> Option<glass_gl::LightProbe> {
+    let inset = s.radius * 0.29;
+    let mut r = Rectangle::<f64, Physical>::new(
+        s.rect.loc + Point::from((inset, inset)),
+        ((s.rect.size.w - 2.0 * inset).max(1.0), (s.rect.size.h - 2.0 * inset).max(1.0)).into(),
+    );
+    if let Some(c) = s.clip {
+        r = r.intersection(c)?;
+    }
+    let centre = Point::from((r.loc.x + r.size.w / 2.0, r.loc.y + r.size.h / 2.0));
+    let shadow = super::scrim::alpha_at(scrims, centre).min(0.95);
+    Some(glass_gl::LightProbe { shape: s.index, rect: r, unscale: (1.0 / (1.0 - shadow)) as f32 })
+}
+
 /// A material's shapes in output pixels, grouped where their blur reaches overlap, each group
 /// with the region it blurs: its bounds grown by how far the kawase chain reaches.
 fn groups(
@@ -238,7 +268,9 @@ fn groups(
     let shapes: Vec<glass_gl::Shape> = m
         .shapes
         .iter()
-        .map(|s| glass_gl::Shape {
+        .enumerate()
+        .map(|(index, s)| glass_gl::Shape {
+            index,
             rect: Rectangle::new(
                 location.to_f64() + Point::from((s.x * scale.x, s.y * scale.y)),
                 (s.w * scale.x, s.h * scale.y).into(),

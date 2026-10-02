@@ -37,6 +37,7 @@ import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import { ActivityIsland } from "../island/ActivityIsland"
 import { IslandWindow } from "../island/IslandWindow"
 import { execAsync } from "../../../lib/process"
+import { trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
 import { t } from "../../core/i18n"
 import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
@@ -148,6 +149,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right", unclipAtRest: true })
   const ncWidget = NotificationCenter()
   const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
+  // On Hyalo, the panes of both lie on ONE shadow under their glass, over the screen's whole
+  // right-hand strip, fading only toward the left (owner, 2026-10-02): one per tile would show
+  // as patches with and without shadow. Hyalo lays it only where the backdrop needs it.
+  trackScrimRegion(cc, { right: true, top: true, bottom: true })
+  trackScrimRegion(nc, { right: true, top: true, bottom: true })
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })

@@ -189,7 +189,7 @@ fn arm_ink_poll(state: &mut Hyalo) {
 }
 
 /// Collects the measurements the GPU has finished and applies them (the ink event, and a redraw
-/// where a shape's veil changed). Whether any is still in flight.
+/// where a shape's veil changed; the shadow under the glass, v5). Whether any is still in flight.
 fn poll_ink(state: &mut Hyalo) -> bool {
     let poll = |r: &mut smithay::backend::renderer::gles::GlesRenderer| {
         let user_data = r.egl_context().user_data() as *const smithay::utils::user_data::UserDataMap;
@@ -202,9 +202,15 @@ fn poll_ink(state: &mut Hyalo) -> bool {
     };
     let Some((results, pending)) = polled else { return false };
     let mut redraw = false;
-    for (surface, darkest) in results {
-        if let Ok(surface) = surface.upgrade() {
-            redraw |= crate::protocols::material::ink_measured(&surface, &darkest);
+    let now = std::time::Instant::now();
+    for m in results {
+        if let Ok(surface) = m.surface.upgrade() {
+            if !m.ink.is_empty() {
+                redraw |= crate::protocols::material::ink_measured(&surface, &m.ink);
+            }
+            if !m.light.is_empty() {
+                redraw |= crate::protocols::material::scrim_measured(&surface, &m.light, now);
+            }
         }
     }
     if redraw {
@@ -223,6 +229,10 @@ pub fn post_repaint(
 ) {
     if crate::render::glass_gl::take_ink_issued() {
         arm_ink_poll(state);
+    }
+    // A shadow under the glass is easing toward its strength (v5): the next frame too.
+    if crate::render::scrim::take_easing() {
+        state.queue_redraw(Some(output));
     }
     let time = state.start_time.elapsed();
     let throttle = Some(Duration::from_secs(1));
