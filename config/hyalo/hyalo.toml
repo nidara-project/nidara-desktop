@@ -158,6 +158,13 @@ screen_off = 300
 lock = 600
 suspend = 0
 
+# How frames reach the screen (backend/tty.rs). direct_scanout: an opaque fullscreen window (a
+# game) goes on the display as it is, with no composition — less latency. Set it to false if a
+# fullscreen window shows wrong on your hardware (Hyprland's render:direct_scanout). Overlay
+# planes are never used: the hardware blends them its own way.
+[render]
+direct_scanout = true
+
 # The keyboard follows the system's (localectl set-x11-keymap) unless set here.
 [input.keyboard]
 repeat_delay = 600

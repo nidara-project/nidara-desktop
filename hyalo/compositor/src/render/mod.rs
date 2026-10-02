@@ -19,9 +19,8 @@ use smithay::{
             element::{
                 Kind,
                 memory::MemoryRenderBufferRenderElement,
-                surface::{KindEvaluation, WaylandSurfaceRenderElement, render_elements_from_surface_tree},
+                surface::{WaylandSurfaceRenderElement, render_elements_from_surface_tree},
             },
-            utils::RendererSurfaceStateUserData,
             gles::{GlesError, GlesFrame, GlesRenderer},
             multigpu::{self, MultiRenderer, gbm::GbmGlesBackend},
         },
@@ -31,8 +30,8 @@ use smithay::{
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Physical, Point, Rectangle, Scale},
-    wayland::{compositor::{SurfaceData, with_states}, seat::WaylandFocus, shell::wlr_layer::Layer},
+    utils::{Logical, Physical, Point, Scale},
+    wayland::{compositor::with_states, seat::WaylandFocus, shell::wlr_layer::Layer},
 };
 
 pub use glass::GlassElement;
@@ -130,7 +129,7 @@ fn push_surface<R: HyaloRenderer>(
     floor: Option<&[scrim::ScrimPx]>,
 ) {
     let now = std::time::Instant::now();
-    let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: KindEvaluation| {
+    let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
         out.extend(render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind));
         match floor {
             Some(floor) => {
@@ -146,31 +145,9 @@ fn push_surface<R: HyaloRenderer>(
     };
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
-        layer(out, popup.wl_surface(), location + offset, Kind::Unspecified.into());
+        layer(out, popup.wl_surface(), location + offset, Kind::Unspecified);
     }
-    layer(out, surface, location, KindEvaluation::Dynamic(scanout_if_opaque));
-}
-
-/// Which surfaces the display hardware may show on a plane of their own: the OPAQUE ones only
-/// (each surface of a tree on its own — a video's opaque subsurface can, the translucent window
-/// around it cannot). The hardware blends planes its own way — amdgpu in linear light, measured:
-/// kitty at 50 % over a light wallpaper came out visibly paler on an overlay plane than drawn
-/// by us (owner, 2026-10-02: "kitty goes pale while the bar and the dock are gone") — and
-/// whether a window was put on one depended on what else was on screen, so the same window
-/// changed look under the user's eyes. An opaque surface looks the same either way. Underlay
-/// planes, where translucent content would be blended over an opaque one by the hardware just
-/// the same, are not used at all (backend/tty.rs).
-fn scanout_if_opaque(states: &SurfaceData) -> Kind {
-    let opaque = states.data_map.get::<RendererSurfaceStateUserData>().is_some_and(|data| {
-        let data = data.lock().unwrap();
-        match (data.view(), data.opaque_regions()) {
-            (Some(view), Some(regions)) => {
-                Rectangle::from_size(view.dst).subtract_rects(regions.iter().copied()).is_empty()
-            }
-            _ => false,
-        }
-    });
-    if opaque { Kind::ScanoutCandidate } else { Kind::Unspecified }
+    layer(out, surface, location, Kind::ScanoutCandidate);
 }
 
 /// The shadows a surface tree and its popups cast, for the chrome's floor.

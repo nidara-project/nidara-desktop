@@ -754,28 +754,32 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   show its bar and dock as a lock does, and requires both back at the top of the output; and
   `scripts/ci/hyalo-layers-check.sh` (+ `hyalo-layers-probe.js`) maps a bar and a dock at the
   bottom, left and right, in both orders, and requires both over the whole output.
-- **Only OPAQUE surfaces go on a hardware plane** (`scanout_if_opaque` in `render/mod.rs`, per
-  surface of a tree, through Smithay's `KindEvaluation`), and underlay planes are not used at all
-  (`backend/tty.rs`). The display hardware blends planes its own way — amdgpu in linear light — so
-  a translucent window on an overlay plane looked different from the same window drawn by us:
-  kitty at 50 % over a light wallpaper went visibly PALE whenever the bar and the dock were gone
-  (their surfaces cover the whole output, so with them mapped kitty lay under content of our
-  composition and could not have a plane), and dark again
-  when they came back (owner-caught 2026-10-02). An opaque surface looks the same either way, so
-  video and a fullscreen game keep their planes: the game's on the PRIMARY plane (Smithay puts the
-  lowest visible element there when it covers the output and is opaque — the direct scan-out
-  Hyprland's `render:direct_scanout` gave, which Nidara never turned on), a video's opaque
-  subsurface on an overlay. 🔴 **A screenshot cannot see this**: `msg screenshot` and screencopy
-  draw the scene again with GL, so they show what we would have drawn, not what the planes put on
-  screen (both measured identical while the owner saw the change). Read the planes instead:
-  `modetest -M amdgpu -p` lists each plane with its framebuffer (an `Overlay` plane holding one is
-  in use); CI cannot, vkms has no overlay planes.
+- **No overlay planes, on any driver** (`backend/tty.rs`, output setup): only the PRIMARY plane,
+  for a fullscreen window's direct scan-out, and the cursor plane. The display hardware blends
+  planes its own way — amdgpu in linear light — and a driver's TEST_ONLY commit only says whether
+  it CAN show a plane, never whether it will look like our composition. Measured on the owner's
+  amdgpu (2026-10-02): kitty at 50 % went visibly PALE on an overlay plane, and only while the bar
+  and the dock were gone — their surfaces cover the whole output, so with them mapped kitty lay
+  under our composition and could not have a plane — so the same window changed look under the
+  user's eyes on every UI reload. NVIDIA's overlay planes also break scan-out (anvil), and planes
+  passing between surfaces switched the scan-out feedback (below). Hyprland and Mutter use none
+  for windows either. If they ever come back: opaque surfaces only and no underlays — an opaque
+  pixel looks the same wherever it is blended, a translucent one does not.
+  `[render] direct_scanout` (default on, read every frame) lets an opaque window covering the
+  output go on the primary plane uncomposed — less latency for a game, and it looks the same;
+  off is the switch for hardware that shows such a window wrong (Hyprland's
+  `render:direct_scanout`, which Nidara never turned on there). 🔴 **A screenshot cannot see any
+  of this**: `msg screenshot` and screencopy draw the scene again with GL, so they show what we
+  would have drawn, not what the planes put on screen (both measured identical while the owner
+  saw kitty change). Read the planes instead: `modetest -M amdgpu -p` lists each plane with its
+  framebuffer — an `Overlay` plane must never hold one. CI cannot: vkms has no overlay planes.
 - **The scan-out feedback is sticky** (`pick_feedback` in `backend/mod.rs`). Smithay's
   `select_dmabuf_feedback` follows the frame, and each switch is a new modifier set. Mesa's
   Wayland WSI answers that with `VK_SUBOPTIMAL_KHR`, and GTK rebuilds its swapchain on it, so the
   shell logs a `Gdk-WARNING … VK_SUBOPTIMAL_KHR` for each rebuild. It counted 55 in its first
   25 s on an amdgpu (2026-10-01), while the one free overlay plane passed between its
-  monitor-sized layers. Once offered, the scan-out feedback stays. This is safe only while the
+  monitor-sized layers (overlay planes are gone since 2026-10-02, above; the primary plane's
+  scan-out still switches it). Once offered, the scan-out feedback stays. This is safe only while the
   scan-out tranche lists nothing we cannot render from (`surface_feedback` in tty.rs intersects
   it with the render formats). Drop that intersection and the sticky rule becomes a bug. Hyprland
   never shows this, because it uses no overlay planes. Its only direct scan-out is a fullscreen

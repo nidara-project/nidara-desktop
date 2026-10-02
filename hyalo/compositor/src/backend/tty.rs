@@ -45,10 +45,7 @@ use smithay::{
             RegistrationToken,
             timer::{TimeoutAction, Timer},
         },
-        drm::{
-            Device as _,
-            control::{ModeTypeFlags, connector, crtc},
-        },
+        drm::control::{ModeTypeFlags, connector, crtc},
         input::{self as libinput, DeviceCapability, Libinput},
         rustix::fs::OFlags,
         wayland_protocols::wp::{
@@ -641,16 +638,18 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
             return;
         }
     };
-    // Overlay planes on NVIDIA's driver break scanout (anvil's finding).
-    if let Ok(driver) = device.drm_output_manager.device().get_driver()
-        && driver.name().to_string_lossy().to_lowercase().contains("nvidia") {
-            planes.overlay.clear();
-        }
-    // No underlays: on a plane below the primary an opaque surface would have our translucent
-    // composition blended over it by the hardware, which blends its own way (render/mod.rs,
-    // `scanout_if_opaque`). Only planes above the primary, for opaque surfaces.
-    let primary_zpos = planes.primary.iter().map(|p| p.zpos.unwrap_or_default()).max().unwrap_or_default();
-    planes.overlay.retain(|p| p.zpos.unwrap_or_default() > primary_zpos);
+    // No overlay (or underlay) planes, on any driver: only the primary plane, for a fullscreen
+    // window's direct scan-out (`[render] direct_scanout`), and the cursor plane. The hardware
+    // blends planes its own way — amdgpu in linear light — and a driver's TEST_ONLY commit says
+    // whether it CAN show a plane, never whether it will look like our composition: kitty at 50 %
+    // went visibly pale on an overlay plane, and only while the bar and the dock were gone, since
+    // their monitor-sized surfaces kept it in our composition (owner-caught 2026-10-02; screenshots
+    // cannot see it, they compose again with GL). NVIDIA's overlay planes also break scan-out
+    // (anvil's finding), and the planes passing between surfaces made the scan-out feedback
+    // switch (`pick_feedback`). Hyprland and Mutter use no overlay planes for windows either. If
+    // they ever come back: opaque surfaces only, no underlays — an opaque pixel looks the same
+    // wherever it is blended, a translucent one does not.
+    planes.overlay.clear();
     let drm_output = match device
         .drm_output_manager
         .lock()
@@ -970,7 +969,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
-    let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config, .. } = state;
     let cursor_status = &*cursor_status;
     let Backend::Tty(tty) = backend else { return };
     if !tty.session.is_active() {
@@ -1003,9 +1002,17 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     }
     .expect("a renderer for this output");
     let elements = render::output_elements(&scene, &mut renderer, &output, pointer_here.then_some(&cursor));
+    // The cursor plane always; the primary plane for a fullscreen window's direct scan-out unless
+    // `[render] direct_scanout = false` (read every frame: a change applies at once). No overlay
+    // planes exist to allow (output setup, above).
+    let frame_flags = if config.render.direct_scanout {
+        FrameFlags::ALLOW_PRIMARY_PLANE_SCANOUT | FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT
+    } else {
+        FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT
+    };
     let result = surface
         .drm_output
-        .render_frame(&mut renderer, &elements, render::CLEAR_COLOR, FrameFlags::DEFAULT);
+        .render_frame(&mut renderer, &elements, render::CLEAR_COLOR, frame_flags);
     drop(renderer);
 
     let (rendered, states) = match result {
