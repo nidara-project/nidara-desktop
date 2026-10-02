@@ -144,6 +144,10 @@ impl Hyalo {
         focus_grab::init(&dh);
         // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).
         crate::protocols::virtual_pointer::init(&dh);
+        // Input methods (handlers.rs): apps speak text-input; the input method itself (fcitx5)
+        // reads every key, so a sandboxed client is not offered it.
+        smithay::wayland::text_input::TextInputManagerState::new::<Self>(&dh);
+        smithay::wayland::input_method::InputMethodManagerState::new::<Self, _>(&dh, unrestricted);
         // The screen recorder (wf-recorder) speaks wlr-screencopy only.
         crate::protocols::screencopy::init(&dh);
         // ...and never while the session is locked (lock.rs: `locked_flag`).

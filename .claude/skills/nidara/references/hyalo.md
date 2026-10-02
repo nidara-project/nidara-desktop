@@ -514,6 +514,23 @@ lock.
 - IPC: `nidara-hyalo msg idle` (`idle_secs`, `inhibited`, the config). Tested by
   `scripts/ci/hyalo-idle-check.sh` in the smoke (`hyalo-idle-inhibit-probe.c` is the inhibitor).
 
+## Input methods (text-input-v3 + input-method-v2)
+
+`handlers.rs` (`InputMethodHandler`) + both managers in `state.rs`. fcitx5 is an
+input-method-v2 client; GTK4 speaks text-input-v3 natively (still no `GTK_IM_MODULE`). Smithay
+moves the text-input focus WITH the keyboard focus (`wayland/seat/keyboard.rs`), and in Hyalo every
+keyboard focus change goes through `set_keyboard_focus` — so a layer surface that took the keyboard
+through a focus grab (the shell's search) gets the input method too. On Hyprland it never did (its
+grab path skipped the focus event the IME relay listens to: #679 #10, #503). The candidate window is
+a popup of the surface being typed into (`parent_geometry`: a window's geometry, or a layer
+surface's whole area), drawn with that surface's popups. input-method-v2 reads every key: hidden
+from sandboxed clients.
+- Verified nested with the real fcitx5 (private bus, throwaway config, `LANG=zh_CN.UTF-8`):
+  Ctrl+Space, `nihao`, space → 你好 in a GTK window AND in the shell's search.
+- CI: `scripts/ci/hyalo-ime-check.sh` with `hyalo-ime-probe.c`, a stand-in input method that
+  commits a fixed string when a field activates (fcitx5's Chinese engine would be ~540 MiB in the
+  container). Its XML is not in wayland-protocols: it comes from the wayland-protocols-misc crate.
+
 ## Window capture (thumbnails)
 
 `capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`

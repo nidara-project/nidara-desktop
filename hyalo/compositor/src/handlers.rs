@@ -207,3 +207,44 @@ impl DmabufHandler for Hyalo {
 }
 
 smithay::delegate_dispatch2!(Hyalo);
+
+// ── Input methods (text-input-v3 + input-method-v2) ──────────────────────────────────────────
+//
+// fcitx5 is an input-method-v2 client; applications speak text-input-v3 (GTK4 natively). Smithay
+// moves the text-input focus with the keyboard focus (`wayland/seat/keyboard.rs`), and every
+// keyboard focus change in Hyalo goes through `set_keyboard_focus` — so a layer surface that took
+// the keyboard through a focus grab (the shell's search) gets the input method too. On Hyprland
+// it did not: its grab path never emitted the focus event the IME relay listens to (#679 #10,
+// #503). The input method's candidate window is a popup of the surface being typed into, drawn
+// with that surface's popups (render/mod.rs).
+impl smithay::wayland::input_method::InputMethodHandler for Hyalo {
+    fn new_popup(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
+        if let Err(err) = self.popups.track_popup(smithay::desktop::PopupKind::from(surface)) {
+            tracing::warn!(?err, "input method popup not tracked");
+        }
+    }
+
+    fn popup_repositioned(&mut self, _surface: smithay::wayland::input_method::PopupSurface) {}
+
+    fn dismiss_popup(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
+        if let Some(parent) = surface.get_parent().map(|p| p.surface.clone()) {
+            let _ = smithay::desktop::PopupManager::dismiss_popup(&parent, &smithay::desktop::PopupKind::from(surface));
+        }
+    }
+
+    /// Where the text being typed sits: a window's geometry, or a layer surface's whole area.
+    fn parent_geometry(&self, parent: &WlSurface) -> smithay::utils::Rectangle<i32, Logical> {
+        if let Some(window) = self.window_for_surface(parent) {
+            return window.geometry();
+        }
+        self.space
+            .outputs()
+            .find_map(|o| {
+                let map = smithay::desktop::layer_map_for_output(o);
+                map.layers()
+                    .find(|l| l.wl_surface() == parent)
+                    .map(|l| smithay::utils::Rectangle::from_size(l.bbox().size))
+            })
+            .unwrap_or_default()
+    }
+}
