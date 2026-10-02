@@ -531,6 +531,36 @@ from sandboxed clients.
   commits a fixed string when a field activates (fcitx5's Chinese engine would be ~540 MiB in the
   container). Its XML is not in wayland-protocols: it comes from the wayland-protocols-misc crate.
 
+### Menus: their grab, and where the keyboard goes when they close
+
+`shell/mod.rs` `grab` and `popup_destroyed` (`popup_gave_keyboard_back`). A menu that closes on a
+click outside (a GTK popover with autohide: the dock's, the tray's, an app's) asks for an
+xdg_popup grab: the keyboard and the pointer until it is dismissed. Smithay's popup pointer grab
+dismisses it on a press over ANOTHER client (or over nothing); a press on the same client is
+passed through and GTK closes the popover itself.
+- **An input method's grab gives way to a menu's.** fcitx5 holds the keyboard
+  (`InputMethodKeyboardGrab`) for as long as a text field has the focus. `grab` refused a menu's
+  grab whenever the keyboard was grabbed, so a dock menu opened while kitty had the focus stayed
+  open with NO grab, and a click in another app no longer closed it (owner-caught 2026-10-02).
+  Now that one grab is taken over; any other (a window being dragged) still refuses the menu.
+- ⚠️ **Smithay unsets the keyboard's grab, WHATEVER it is, when an input method lets go of its
+  own** (`InputMethodKeyboardUserData::destroyed`). Taking the keyboard from the field makes
+  fcitx5 let go, which unsets the menu's grab and left the keyboard on the menu once it closed.
+- **Closed, the last menu of a chain gives the keyboard back** to what it was opened from if
+  that takes the keyboard (a window; a layer surface only with keyboard interactivity), else to
+  the focused window. Smithay's grab hands it to the menu's ROOT, and the dock and the bar have
+  no keyboard: what was typed after closing a dock menu went nowhere until the window was
+  clicked (found while fixing the above, on Hyalo before and after the input method change).
+  ⚠️ The menu's `PopupKeyboardGrab` IGNORES every focus change until it sees, on its own next
+  event, that its menus are gone — so `popup_gave_keyboard_back` unsets it first. A submenu
+  closing under a menu still open changes nothing: the grab moves the keyboard itself.
+- `surface missing from known popups` (smithay, ERROR) on every menu close is noise: GTK commits
+  the menu's surface once more after destroying its role. Nothing is wrong when it appears.
+- CI: `scripts/ci/hyalo-popup-check.sh` (+ `hyalo-popup-probe.js`, a dock-shaped layer with a
+  right-click menu, and `hyalo-ime-probe --hold`, a stand-in input method that grabs the
+  keyboard like fcitx5). Each step was seen to fail on its own: the keyboard's return against the
+  Hyalo before, the click in another app against a build with only the return fixed.
+
 ## Night light: Hyalo's gamma ramps
 
 `night_light.rs`. On Hyprland it was hyprsunset (a Hyprland protocol); on Hyalo the shell's
