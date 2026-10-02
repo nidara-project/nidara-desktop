@@ -531,6 +531,19 @@ from sandboxed clients.
   commits a fixed string when a field activates (fcitx5's Chinese engine would be ~540 MiB in the
   container). Its XML is not in wayland-protocols: it comes from the wayland-protocols-misc crate.
 
+## Night light: Hyalo's gamma ramps
+
+`night_light.rs`. On Hyprland it was hyprsunset (a Hyprland protocol); on Hyalo the shell's
+`NightLightSync.ts` (the schedule, the switch) asks `settings.setNightLight(kelvin | null)`, which is
+the `night_light` IPC request (`nidara-hyalo msg night-light 3400` / `off`). Hyalo warms every
+CRTC's legacy gamma ramps — on an atomic driver the kernel makes that the GAMMA_LUT property,
+which Smithay's commits never touch, so it holds across frames — and READS THEM BACK: the request
+answers an error unless the hardware holds them. A modeset, a VT switch or DPMS can reset them, so
+they are applied again when an output comes on, when the session resumes and when an output wakes.
+White point: Tanner Helland's blackbody fit (6500 K neutral; blue goes first, then green). A
+screenshot never shows it: the ramps act after composition, in the display pipeline. Not
+persisted: the shell sends it again when it starts.
+
 ## Window capture (thumbnails)
 
 `capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`

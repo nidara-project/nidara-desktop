@@ -423,6 +423,15 @@ phase_run() {
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \
         || { log "FAIL: input methods"; cat /tmp/hyalo/ime.log; exit 1; }
     log "input methods OK ($(grep -c '^ok' /tmp/hyalo/ime.log) of 2: a window, the shell's search)"
+    # Night light (#683): Hyalo sets every CRTC's gamma ramps and READS THEM BACK, answering an
+    # error unless the hardware holds them. Informational here: whether vkms has a gamma LUT
+    # depends on the runner's kernel; the screens that matter are real ones.
+    if reply=$(nidara-hyalo msg night-light 3000 2>&1) && echo "$reply" | jq -e '.ok' >/dev/null 2>&1; then
+        nidara-hyalo msg night-light off >/dev/null
+        log "night light OK (3000 K set and read back on every output, then neutral)"
+    else
+        log "night light: not verifiable on this display ($(echo "$reply" | jq -r '.error // .' 2>/dev/null))"
+    fi
 
     # ── 3. Pictures for a person.
     sleep 4

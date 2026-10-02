@@ -128,6 +128,13 @@ export function createHyaloSettings(): CompositorSettings {
             patch("workspace modes", { workspaces: { default_mode: defaultMode, modes } })
         },
 
+        // Hyalo warms the gamma ramps itself (hyalo/compositor/src/night_light.rs).
+        setNightLight(kelvin) {
+            const reply = hyalo.request({ request: "night_light", temperature: kelvin })
+            if (!reply) console.error("[HyaloSettings] night light: Hyalo could not be reached")
+            else if (reply.error) console.error(`[HyaloSettings] Hyalo refused the night light: ${reply.error}`)
+        },
+
         // Hyalo does idle itself (hyalo/compositor/src/idle.rs): no hypridle, no file of ours.
         readIdle(): IdleConfig {
             const i = config()?.idle

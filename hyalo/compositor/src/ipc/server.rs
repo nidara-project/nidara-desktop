@@ -146,6 +146,10 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         Request::Windows => Reply::Ok(Response::Windows { windows: state.window_infos() }),
         Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
         Request::Layers => Reply::Ok(Response::Layers { layers: state.layer_infos() }),
+        Request::NightLight { temperature } => match state.set_night_light(temperature) {
+            Ok(()) => Reply::Ok(Response::Handled),
+            Err(e) => Reply::Error(e),
+        },
         Request::Idle => {
             let (idle_secs, inhibited) = state.idle_info();
             Reply::Ok(Response::Idle { idle_secs, inhibited, config: state.config.idle.clone() })

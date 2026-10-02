@@ -109,6 +109,11 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "cursor" => Request::CursorPosition,
         "lock" => Request::Lock,
         "idle" => Request::Idle,
+        "night-light" => {
+            let arg = args.get(1).ok_or("night-light needs a temperature in kelvin, or `off`")?;
+            let temperature = if arg == "off" { None } else { Some(arg.parse::<u32>().map_err(|e| format!("night-light: {e}"))?) };
+            Request::NightLight { temperature }
+        }
         "do" => {
             let command = args[1..].join(" ");
             // Checked here too, so a typo is said before anything is sent.

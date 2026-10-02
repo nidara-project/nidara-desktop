@@ -279,6 +279,10 @@ export interface IdleConfig {
 export interface CompositorSettings {
     readonly caps: SettingsCaps
 
+    /** Night light: the screens warmed to `kelvin`, or neutral with null. Live, not persisted:
+     *  the schedule and the switch are the shell's (NightLightSync.ts). */
+    setNightLight(kelvin: number | null): void
+
     /** The idle steps in force (Hyprland: hypridle's file; Hyalo: its own `[idle]`). */
     readIdle(): IdleConfig
     /** Persists and applies them. */

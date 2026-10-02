@@ -140,6 +140,8 @@ pub struct TtyBackend {
     /// Every input device, to re-apply the `[input]` config when it changes.
     input_devices: Vec<libinput::Device>,
     cursors: Cursors,
+    /// The night light's colour temperature, or neutral (night_light.rs).
+    pub night_light: Option<u32>,
 }
 
 impl TtyBackend {
@@ -171,6 +173,7 @@ impl TtyBackend {
             keyboards: Vec::new(),
             input_devices: Vec::new(),
             cursors: Cursors::load("default", 24),
+            night_light: None,
         })
     }
 
@@ -266,6 +269,17 @@ impl TtyBackend {
             && self.devices.values().flat_map(|d| d.surfaces.values()).any(|s| &s.output == output && s.powered)
     }
 
+    /// Each GPU with the CRTCs that show a powered output (night_light.rs).
+    pub fn gamma_targets(&self) -> Vec<(&smithay::backend::drm::DrmDevice, Vec<crtc::Handle>)> {
+        self.devices
+            .values()
+            .map(|d| {
+                let crtcs = d.surfaces.iter().filter(|(_, s)| s.powered).map(|(c, _)| *c).collect();
+                (d.drm_output_manager.device(), crtcs)
+            })
+            .collect()
+    }
+
     /// Switches an output's power (DPMS). Off keeps everything in place; on redraws.
     pub fn set_power(&mut self, output: &Output, on: bool) {
         let Some(s) = self.surface_mut(output) else { return };
@@ -276,6 +290,8 @@ impl TtyBackend {
         if on {
             s.drm_output.reset_buffers();
             s.redraw = Redraw::Queued;
+            // Waking may have reset the ramps.
+            let _ = self.apply_gamma();
         } else {
             s.drm_output.with_compositor(|c| {
                 if let Err(err) = c.clear() {
@@ -369,6 +385,8 @@ pub fn init(state: &mut Hyalo) -> Result<(), Box<dyn std::error::Error>> {
                     s.redraw = Redraw::Idle;
                 }
             }
+            // Another session had the screens: the night light's ramps are ours to put back.
+            let _ = tty.apply_gamma();
             state.queue_redraw(None);
         }
     })?;
@@ -671,6 +689,10 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
             powered: true,
         },
     );
+    // A new output starts neutral: the night light reaches it too.
+    if let Backend::Tty(tty) = &mut state.backend {
+        let _ = tty.apply_gamma();
+    }
     // Placed by `outputs::arrange`, which runs after every scan.
     state.space.map_output(&output, (i32::MAX / 4, 0));
     state.queue_redraw(Some(&output));
