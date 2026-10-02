@@ -535,6 +535,30 @@ window on a hidden workspace captures, as on Hyprland. One draw per request, nev
 - CI: the Hyalo smoke parks a window of a known colour on a hidden workspace and requires the
   capture's centre to come back as that colour (`scripts/ci/hyalo-capture-probe.js`).
 
+### The screen, the recorder and the clipboard (2026-10-02)
+
+Until this date Hyalo captured windows only, and `grim` answered "compositor doesn't support
+the screen capture protocol": the screenshot tile and Print put nothing on the clipboard
+(owner-caught). Now:
+- **Whole outputs** through the same `ext-image-copy-capture` with an OUTPUT source
+  (`OutputCaptureSourceState`): drawn again offscreen like `msg screenshot`
+  (`backend::capture_output`, shared), glass included, no cursor. grim uses it; `slurp` worked
+  already (layer shell + pointer).
+- **`zwlr_screencopy_v1`** (`protocols/screencopy.rs`, ours: Smithay has none) for `wf-recorder`,
+  which speaks nothing else. `copy_with_damage` waits for the output's NEXT frame
+  (`complete_screencopy` from post_repaint), so a still screen records nothing — never queue a
+  redraw for it, or it records at full refresh. shm only, a CPU read-back per frame.
+  ⚠️ Orientation is MEASURED, not read off the spec: wf-recorder 0.6 records upright only with
+  top-first rows AND `Y_INVERT`; the two other combinations came out upside down.
+- **data-control**, both (`ext-` and `zwlr-`): `wl-paste --watch` → cliphist, the clipboard
+  history, autostarted in `config/hyalo/hyalo.toml` (two watchers, one per type — why is there).
+- All four are privileged: hidden from sandboxed clients (the sandbox probe lists them), and
+  every capture fails while the session is locked.
+- CI: `scripts/ci/hyalo-screen-capture-check.sh` — whole output, a region UPRIGHT (a red-over-
+  blue window), grim | wl-copy and back, `wl-paste --watch`, and a recording with frames,
+  upright. Pixels are read by GTK's PNG loader (`Gdk.Texture`), never GdkPixbuf: GdkPixbuf hands
+  PNGs to glycin, whose sandbox does not start in CI's container.
+
 ## Three config layers, and runtime changes over IPC
 
 Read in order, merged table by table, last wins: `/usr/share/nidara/hyalo/hyalo.toml` (shipped),

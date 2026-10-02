@@ -24,6 +24,15 @@ autostart = [
   # Completes the keyring PAM unlocked at login (see config/hypr/hyprland.lua for why this
   # line is not a formality).
   "uwsm app -s b -- gnome-keyring-daemon --start --components=secrets",
+  # The clipboard history (the Control Center's clipboard panel): wl-paste watches through
+  # data-control and hands every copy to cliphist. TWO watchers, one per type: with no --type
+  # wl-paste prefers any text flavour, so a browser's "Copy image" (image/png plus the URL as
+  # text) stored the URL every time and no image ever reached the history. A copy with both
+  # lands twice, one row each. 50 items, not cliphist's 750: our panel is a list with no
+  # search, and images are what costs (eighteen items over 1 MB were 50 of 60 MB measured).
+  # Trimmed on the next store, all at once.
+  "uwsm app -s b -- wl-paste --type text --watch cliphist -max-items 50 store",
+  "uwsm app -s b -- wl-paste --type image --watch cliphist -max-items 50 store",
 ]
 
 # How windows are laid out — the Hyprland session's numbers, so the bar's ends line up with

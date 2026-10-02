@@ -77,6 +77,13 @@ pub struct Hyalo {
     pub foreign_toplevel_list: smithay::wayland::foreign_toplevel_list::ForeignToplevelListState,
     pub toplevel_capture_source: smithay::wayland::image_capture_source::ToplevelCaptureSourceState,
     pub image_copy_capture: smithay::wayland::image_copy_capture::ImageCopyCaptureState,
+    /// Whole-output capture (capture.rs): screenshots (grim).
+    pub output_capture_source: smithay::wayland::image_capture_source::OutputCaptureSourceState,
+    /// Clipboard managers and `wl-paste --watch` (cliphist): both data-control protocols.
+    pub ext_data_control: smithay::wayland::selection::ext_data_control::DataControlState,
+    pub wlr_data_control: smithay::wayland::selection::wlr_data_control::DataControlState,
+    /// Screen recording (protocols/screencopy.rs): copies waiting for their output's next frame.
+    pub screencopy_pending: crate::protocols::screencopy::PendingCopies,
     /// Capture sessions a client holds open (capture.rs: dropping one stops it).
     pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
     /// xdg-activation (activation.rs).
@@ -137,6 +144,8 @@ impl Hyalo {
         focus_grab::init(&dh);
         // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).
         crate::protocols::virtual_pointer::init(&dh);
+        // The screen recorder (wf-recorder) speaks wlr-screencopy only.
+        crate::protocols::screencopy::init(&dh);
         // ...and never while the session is locked (lock.rs: `locked_flag`).
         let locked = lock.locked_flag();
         smithay::wayland::virtual_keyboard::VirtualKeyboardManagerState::new::<Self, _>(&dh, move |c| {
@@ -149,6 +158,19 @@ impl Hyalo {
             smithay::wayland::image_capture_source::ToplevelCaptureSourceState::new_with_filter::<Self, _>(&dh, unrestricted);
         let image_copy_capture =
             smithay::wayland::image_copy_capture::ImageCopyCaptureState::new_with_filter::<Self, _>(&dh, unrestricted);
+        let output_capture_source =
+            smithay::wayland::image_capture_source::OutputCaptureSourceState::new_with_filter::<Self, _>(&dh, unrestricted);
+        // Reading and setting the clipboard without a focused surface is a privilege too.
+        let ext_data_control = smithay::wayland::selection::ext_data_control::DataControlState::new::<Self, _>(
+            &dh,
+            Some(&primary_selection_state),
+            unrestricted,
+        );
+        let wlr_data_control = smithay::wayland::selection::wlr_data_control::DataControlState::new::<Self, _>(
+            &dh,
+            Some(&primary_selection_state),
+            unrestricted,
+        );
         material::init(&dh);
         // Flatpak's way to say "this client is sandboxed" — offered only to clients that are not.
         smithay::wayland::security_context::SecurityContextState::new::<Self, _>(&dh, unrestricted);
@@ -219,6 +241,10 @@ impl Hyalo {
             foreign_toplevel_list,
             toplevel_capture_source,
             image_copy_capture,
+            output_capture_source,
+            ext_data_control,
+            wlr_data_control,
+            screencopy_pending: Default::default(),
             capture_sessions: Vec::new(),
             activation_state,
             shortcuts_inhibit_state,

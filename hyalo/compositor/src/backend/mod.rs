@@ -137,16 +137,21 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .find(|o| output.is_none_or(|n| o.name() == n))
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
+    let (w, h, rgba) = capture_output(state, &output)?;
+    crate::screenshot::write_png(path, w, h, &rgba)
+}
+
+/// One output, drawn again offscreen, as RGBA rows (the screenshot request, capture.rs).
+pub fn capture_output(state: &mut Hyalo, output: &Output) -> Result<(u32, u32, Vec<u8>), String> {
     let Hyalo { backend, space, seat, cursor_status, wm, lock, .. } = state;
     let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock);
-    let (w, h, rgba) = match backend {
-        Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, &output)?,
+    match backend {
+        Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output),
         Backend::Tty(t) => {
             let mut renderer = t.primary_renderer()?;
-            crate::screenshot::capture(renderer.as_mut(), &scene, &output)?
+            crate::screenshot::capture(renderer.as_mut(), &scene, output)
         }
-    };
-    crate::screenshot::write_png(path, w, h, &rgba)
+    }
 }
 
 /// One window alone, as RGBA rows (capture.rs).
@@ -294,6 +299,8 @@ pub fn post_repaint(
         with_surfaces_surface_tree(surface, |surface, s| update(surface, s));
         smithay::desktop::utils::send_frames_surface_tree(surface, output, time, throttle, surface_primary_scanout_output);
     }
+    // A recorder waiting for this output's next frame gets it (protocols/screencopy.rs).
+    state.complete_screencopy(output);
 }
 
 /// Marks a surface that has been offered the scan-out feedback once.
