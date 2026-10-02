@@ -22,11 +22,12 @@ is the WHY and the traps.
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
+| `hyalo/compositor/src/lock.rs` | the lock screen (ext-session-lock-v1): what is drawn and reachable while locked |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
 | `ui/shell/core/hyalo-ipc.ts`, `ui/shell/core/Displays.ts` | the shell's side (below) |
-| `ui/lib/nidara-kit/platform/material.ts`, `ui/shell/core/CompositorGlass.ts` | the glass's client half: the shapes, and the numbers (below) |
+| `ui/lib/nidara-kit/platform/material.ts`, `ui/lib/nidara-kit/platform/glass-material.ts` | the glass's client half: the shapes, and THE material's numbers — one for every bundle; the shell's `core/CompositorGlass.ts` and the lock's `app.ts` only say Reduce transparency and the panels' blur (below) |
 
 ## Smithay is a library we never patch
 
@@ -69,7 +70,7 @@ Every pane of the shell's glass tells the compositor exactly where it is:
 sends them in the frame clock's LAYOUT phase — after GTK allocated, before it paints and
 commits, so they land with the buffer they describe. A paint-only frame (an animation that only
 queues draws) skips that phase, so every before-paint asks for it. The source of the glass's
-numbers is the bundle's (`ui/shell/core/CompositorGlass.ts`, registered from AppearanceSync);
+numbers is the material's (`ui/lib/nidara-kit/platform/glass-material.ts`, registered by each bundle — the shell from AppearanceSync through `core/CompositorGlass.ts`, the lock from its `app.ts`);
 on Hyprland nothing offers the protocol and all of it is a no-op.
 
 **A painter asks `compositorPaintsGlass(itsWidget)`** and, when true, paints only content and
@@ -109,7 +110,7 @@ What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
 rim saturation inkDarkAbove inkLightBelow tintLimit scrimMax scrimSize scrimFalloff`,
-`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
+`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
 (`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
@@ -194,7 +195,7 @@ text keeps it white.
   `darkInkFor` first, so Cairo painters follow; the subtree is redrawn.
 - A group no longer declared keeps its decision on both ends (a panel reopens as it closed);
   `clear_ink` makes every group light on both ends.
-- Thresholds: `CompositorGlass.ts` (0.80 / 0.65 to start), live in `glass-tuning.conf`
+- Thresholds: `glass-material.ts` (0.80 / 0.65 to start), live in `glass-tuning.conf`
   (`inkDarkAbove`, `inkLightBelow`, `ink = off`) — calibrated with the owner, not final.
   `NIDARA_MATERIAL_DEBUG=1` logs every ink decision.
 - To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
@@ -221,7 +222,7 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   brightest point under the unit's light-ink shapes to reach `target`: ≈0.41 over white, 0.15
   over a light backdrop (0.45), none where the glass reaches it alone. It grows and shrinks
   with the backdrop: no threshold, no hysteresis. While there is a shadow the shell sends the
-  limit AS the glass's `alpha_max` (`CompositorGlass.ts`): nothing tints past it, not even for
+  limit AS the glass's `alpha_max` (`glass-material.ts`): nothing tints past it, not even for
   legibility — a ceiling above it "makes the grey plastic again" (owner). Past `max_strength`
   the text is less legible, not the glass greyer. The bar and the dock, which cast none for
   now, are held to the same ceiling. A shape whose content has turned
@@ -442,6 +443,49 @@ workspace asks to come forward (refused — the user stays where they are). A Hy
 every token fails the second half (checked, 2026-10-01). ⚠️ The check CLICKS: run it only inside a
 nested Hyalo or the smoke, and with the freshly built `nidara-hyalo` first in `PATH` —
 `bin/nidara-wm` asks `nidara-hyalo msg`, and an older installed one does not know `workspaces`.
+
+## The lock screen (ext-session-lock-v1)
+
+`lock.rs`. **While the session is locked nothing of it is drawn or reachable**: an output shows
+its lock surface over the BACKGROUND layers (the wallpaper) and nothing else — windows and the
+shell's layers are not drawn at all, not covered by an opaque sheet. That is the difference
+from Hyprland, which draws the lock surface over black, so `nidara-lock` painted its own copy of
+the wallpaper and imitated the glass on it (`glass-capsule.ts`'s header). On Hyalo the lock's
+window is transparent (`Lock.ts`, on `HYALO_SOCKET`), the lock registers THE glass material
+(`registerGlassMaterial` in its `app.ts`) and every `GlassCapsule` declares its pill through
+`trackGlass`, so the card's glass is Hyalo's, refracting the real wallpaper.
+
+What holds while locked, and where:
+- **Keyboard focus only to a lock surface** (or a popup of one). Every focus change in Hyalo goes
+  through `Hyalo::set_keyboard_focus`, which refuses anything else while locked — a click, a new
+  window, xdg-activation, a focus grab, a popup grab. ⚠️ Do not call `keyboard.set_focus`
+  directly anywhere else: that is the hole. `restore_keyboard_focus` (run after every dispatch)
+  focuses the lock surface instead of the window, or the instant before the lock surface exists
+  would hand the keyboard back to the window behind it.
+- **Pointer**: `surface_under` returns lock surfaces only; a press focuses the lock surface it
+  lands on and runs no binding (no Super+drag, no wheel binding).
+- **Bindings**: only those marked `locked = true` in `[binds]` (volume, brightness), plus the two
+  built in (VT switch, Ctrl+Alt+Backspace).
+- **No capture**: window capture frames fail; the virtual pointer does nothing; the virtual
+  keyboard global is HIDDEN from new clients (`LockState::locked_flag` in its global filter) —
+  Smithay's virtual keyboard sends keys straight to the keyboard focus, which is the password
+  field, and `wtype` connects anew for every run.
+- **"Locked" only when true**: the client hears `locked` once every output that shows frames
+  (`Backend::output_shows_frames`: powered, on the active VT) has SHOWN a locked frame — the tty
+  backend's vblank, winit's submit. A frame counts only if rendered for THIS lock (a generation in
+  the output's user data).
+- **A lock client that dies leaves the session locked.** Once a second the lock checks its
+  client; a dead one is started again (`nidara-lock`, or `HYALO_LOCK_RELAUNCH`) at most 3 times
+  in 30 s, then a key press tries once more. A new client may take over a dead client's lock; a
+  second locker while a live one holds it is refused.
+- **The lock surface needs its frame callbacks** (`post_repaint`). Without them GTK's frame clock
+  never ticks there and everything the lock fades in (the clock, the card) stays at its first
+  frame: invisible. Found nested, 2026-10-02.
+- IPC: `nidara-hyalo msg lock` (`locked`, the outputs with a lock surface); event `lock_changed`.
+
+Tested by `scripts/ci/hyalo-lock-check.sh` in the Hyalo smoke (six steps, the control last: after
+the unlock the window behind gets the keys). Hyalo must be started with `HYALO_LOCK_RELAUNCH`
+pointing at the check's probe, or its relaunch step fails.
 
 ## Window capture (thumbnails)
 

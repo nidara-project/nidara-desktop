@@ -55,6 +55,14 @@ impl Backend {
         }
     }
 
+    /// Does `output` put frames on screen now (the lock waits for those only: lock.rs)?
+    pub fn output_shows_frames(&self, output: &Output) -> bool {
+        match self {
+            Backend::Tty(t) => t.shows_frames(output),
+            Backend::Winit(_) => true,
+        }
+    }
+
     pub fn early_import(&mut self, surface: &WlSurface) {
         if let Backend::Tty(t) = self {
             t.early_import(surface);
@@ -129,8 +137,8 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .find(|o| output.is_none_or(|n| o.name() == n))
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
-    let Hyalo { backend, space, seat, cursor_status, wm, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status);
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock);
     let (w, h, rgba) = match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, &output)?,
         Backend::Tty(t) => {
@@ -273,6 +281,15 @@ pub fn post_repaint(
         }
     }
     drop(map);
+    // The lock screen is a surface of its own (lock.rs): without its frame callbacks GTK's clock
+    // never ticks there, and everything it fades in stays at its first frame — invisible.
+    if let Some(surface) = state.lock.surface_for(output).cloned() {
+        with_surfaces_surface_tree(&surface, |surface, s| update(surface, s));
+        smithay::desktop::utils::send_frames_surface_tree(&surface, output, time, throttle, surface_primary_scanout_output);
+        for (popup, _) in smithay::desktop::PopupManager::popups_for_surface(&surface) {
+            smithay::desktop::utils::send_frames_surface_tree(popup.wl_surface(), output, time, throttle, surface_primary_scanout_output);
+        }
+    }
     if let CursorImageStatus::Surface(surface) = &state.cursor_status {
         with_surfaces_surface_tree(surface, |surface, s| update(surface, s));
         smithay::desktop::utils::send_frames_surface_tree(surface, output, time, throttle, surface_primary_scanout_output);

@@ -148,6 +148,10 @@ phase_run() {
     # Input for the checks below (keys, a pinch), through the same path as a device (control.rs).
     export HYALO_CONTROL=/tmp/hyalo/control
     rm -f "$HYALO_CONTROL"; mkfifo "$HYALO_CONTROL"
+    # The lock check (below) kills its lock client: Hyalo must start ITS probe again, not
+    # nidara-lock (lock.rs, HYALO_LOCK_RELAUNCH).
+    export HYALO_LOCK_RELAUNCH="LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so gjs -m $REPO/scripts/ci/hyalo-lock-probe.js lock >/tmp/hyalo/lock/relaunched.log 2>&1"
+    mkdir -p /tmp/hyalo/lock
     HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
@@ -373,6 +377,14 @@ phase_run() {
     INHIBIT_LOG=/tmp/hyalo/inhibit-client.log "$REPO/scripts/ci/hyalo-inhibit-check.sh" >/tmp/hyalo/inhibit.log 2>&1 \
         || { log "FAIL: keyboard-shortcuts-inhibit"; cat /tmp/hyalo/inhibit.log; exit 1; }
     log "keyboard-shortcuts-inhibit OK (held, given back with Super+Escape, then the desktop's again)"
+    # ext-session-lock (#683): locked only once said so, keys to the lock screen and not to the
+    # window behind it, no desktop bindings, a second locker refused, a dead lock client
+    # started again while the session stays locked — and after the unlock the window gets the
+    # keys (the control). Keys through HYALO_CONTROL.
+    LOCK_LOG=/tmp/hyalo/lock "$REPO/scripts/ci/hyalo-lock-check.sh" >/tmp/hyalo/lock.log 2>&1 \
+        || { log "FAIL: the session lock"; cat /tmp/hyalo/lock.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "session lock OK ($(grep -c '^ok' /tmp/hyalo/lock.log) steps: locked, input held, relaunched, unlocked)"
 
     # ── 3. Pictures for a person.
     sleep 4

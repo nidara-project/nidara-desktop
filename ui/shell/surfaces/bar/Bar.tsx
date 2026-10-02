@@ -153,7 +153,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // a little darker at its centre (owner, 2026-10-02): one per tile would show as patches
   // with and without shadow, a strip down to the bottom of the screen shaded what the panel
   // does not cover, and an even block looked like a dark panel. Hyalo lays it only where the
-  // backdrop needs it; the sweep is CompositorGlass's `scrimEdge`.
+  // backdrop needs it; the sweep is the glass material's `scrimEdge` (nidara-kit glass-material.ts).
   // The bar's capsules cast none (owner, 2026-10-02: a halo, or a band hugging the bar, ran
   // over the windows). Declared FIRST: a capsule on the right also lies in the Control
   // Center's strip, and must not join it.

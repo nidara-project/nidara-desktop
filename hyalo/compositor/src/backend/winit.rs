@@ -127,14 +127,14 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render(state: &mut Hyalo) {
-    let Hyalo { backend, space, seat, cursor_status, wm, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, .. } = state;
     let Backend::Winit(w) = backend else { return };
     if !w.queued {
         return;
     }
     w.queued = false;
     let output = w.output.clone();
-    let scene = render::Scene::new(space, wm, seat, cursor_status);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock);
     let age = w.graphics.buffer_age().unwrap_or(0);
     let result = {
         let (renderer, mut framebuffer) = match w.graphics.bind() {
@@ -155,6 +155,7 @@ fn render(state: &mut Hyalo) {
             if let Err(err) = w.graphics.submit(damage.as_deref()) {
                 tracing::warn!(?err, "winit: submit failed");
             }
+            state.lock_frame_shown(&output);
             super::post_repaint(state, &output, &states, None);
         }
         Err(err) => tracing::warn!(?err, "winit: render failed"),

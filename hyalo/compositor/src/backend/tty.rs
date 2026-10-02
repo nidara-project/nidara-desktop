@@ -260,6 +260,12 @@ impl TtyBackend {
         v
     }
 
+    /// Does `output` put frames on screen now: powered, and this session on the active VT?
+    pub fn shows_frames(&self, output: &Output) -> bool {
+        self.session.is_active()
+            && self.devices.values().flat_map(|d| d.surfaces.values()).any(|s| &s.output == output && s.powered)
+    }
+
     /// Switches an output's power (DPMS). Off keeps everything in place; on redraws.
     pub fn set_power(&mut self, output: &Output, on: bool) {
         let Some(s) = self.surface_mut(output) else { return };
@@ -937,7 +943,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
-    let Hyalo { backend, space, seat, cursor_status, start_time, wm, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, .. } = state;
     let cursor_status = &*cursor_status;
     let Backend::Tty(tty) = backend else { return };
     if !tty.session.is_active() {
@@ -952,7 +958,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
-    let scene = render::Scene::new(space, wm, seat, cursor_status);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,
@@ -997,7 +1003,10 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
             }
         }
     } else {
-        // Nothing new: no flip, but clients still get their frame callbacks — one refresh
+        // Nothing new: what is on screen is what this frame would have shown — a locked one,
+        // if the session is locked (lock.rs).
+        state.lock_frame_shown(&output);
+        // No flip, but clients still get their frame callbacks — one refresh
         // from now, when the vblank would have come.
         let refresh = output.current_mode().map(|m| m.refresh).unwrap_or(60_000).max(1);
         let delay = Duration::from_micros(1_000_000_000 / refresh as u64);
@@ -1061,6 +1070,8 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     }
     let redraw_needed = matches!(surface.redraw, Redraw::WaitingForVBlank { redraw_needed: true });
     surface.redraw = if redraw_needed { Redraw::Queued } else { Redraw::Idle };
+    // The frame that just went on screen may be the first locked one there (lock.rs).
+    state.lock_frame_shown(&output);
     if redraw_needed {
         render_surface(state, node, crtc);
     }

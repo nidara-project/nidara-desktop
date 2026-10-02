@@ -8,6 +8,9 @@ import { initAppearance } from "../lib/nidara-kit/platform/appearance-css"
 import { withKitSheet } from "../lib/nidara-kit/platform/kit-css"
 import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-rendering"
 import { useNoGtkTheme } from "../lib/nidara-kit/platform/gtk-theme"
+import { registerGlassMaterial } from "../lib/nidara-kit/platform/glass-material"
+import { GLASS_BLUR } from "../lib/nidara-kit/platform/theme-tokens"
+import { kitAppearance } from "../lib/nidara-kit/appearance"
 
 // No GTK theme at all — the greeter's sheet is the only CSS there is (commandment 11).
 useNoGtkTheme()
@@ -49,6 +52,12 @@ app.start({
     // portal there answers for exactly the person it is locking. See ui/lib/nidara-kit/platform/appearance.ts.
     // See the greeter's app.ts for why the login screens pin their ink (#612).
     initAppearance({ fixedDarkInk: true })
+    // The desktop's one glass material (#705): on Hyalo the card's capsules are Hyalo's glass.
+    registerGlassMaterial({
+      reduceTransparency: () => kitAppearance().reduceTransparency?.() === true,
+      panelBlur: () => GLASS_BLUR.regular,
+      onChange: (cb) => kitAppearance().onChange(cb),
+    })
 
     try {
       const supported = Gtk4SessionLock.is_supported()

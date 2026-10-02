@@ -8,6 +8,7 @@ import Clock from "./Clock"
 import { resolveWallpaper } from "../../lib/wallpaper"
 import { setCapsuleBackdrop } from "../../lib/nidara-kit/platform/glass-capsule"
 import { playExit } from "../../lib/entrance"
+import GLib from "gi://GLib"
 
 // Every monitor's fadeable UI, so the exit covers all of them at once.
 const exitTargets: Gtk.Widget[] = []
@@ -47,7 +48,11 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   // Same image the glass elements blur behind themselves — they must show the
   // wallpaper that is actually on screen, not a second one.
   setCapsuleBackdrop(wallpaperPath)
-  const fill: Gtk.Widget = wallpaperPath
+  // On Hyalo the compositor draws the wallpaper under the lock surface (and nothing else of
+  // the session), so the window stays transparent and the capsules' glass is Hyalo's, over
+  // the real wallpaper. On Hyprland nothing is drawn behind a lock surface: it paints its own.
+  const compositorDrawsWallpaper = !!GLib.getenv("HYALO_SOCKET")
+  const fill: Gtk.Widget = wallpaperPath && !compositorDrawsWallpaper
     ? (() => {
         const pic = new Gtk.Picture({ hexpand: true, vexpand: true, content_fit: Gtk.ContentFit.COVER })
         pic.set_filename(wallpaperPath)

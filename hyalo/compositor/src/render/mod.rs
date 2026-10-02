@@ -168,6 +168,7 @@ pub struct Scene<'a> {
     pub wm: &'a crate::wm::Wm,
     pub pointer: Point<f64, Logical>,
     pub cursor_status: &'a CursorImageStatus,
+    pub lock: &'a crate::lock::LockState,
 }
 
 impl<'a> Scene<'a> {
@@ -176,8 +177,9 @@ impl<'a> Scene<'a> {
         wm: &'a crate::wm::Wm,
         seat: &Seat<Hyalo>,
         cursor_status: &'a CursorImageStatus,
+        lock: &'a crate::lock::LockState,
     ) -> Self {
-        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status }
+        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status, lock }
     }
 }
 
@@ -220,6 +222,18 @@ pub fn output_elements<R: HyaloRenderer>(
     let layer_loc = |l: &smithay::desktop::LayerSurface| {
         map.layer_geometry(l).unwrap_or_default().loc.to_f64().to_physical_precise_round(scale)
     };
+    // Locked (lock.rs): the lock surface over the wallpaper, and nothing of the session — its
+    // windows and the shell's layers are not drawn at all, not even under an opaque sheet.
+    if state.lock.is_locked() {
+        state.lock.note_rendered(output);
+        if let Some(surface) = state.lock.surface_for(output) {
+            push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, None);
+        }
+        for l in map.layers_on(Layer::Background).rev() {
+            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);
+        }
+        return out;
+    }
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
     let push_windows = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, windows: &[Window]| {
         for window in windows {

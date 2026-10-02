@@ -140,6 +140,8 @@ pub enum Request {
     Layers,
     /// Where the pointer is, global logical pixels.
     CursorPosition,
+    /// Whether the session is locked, and the outputs a lock surface covers (lock.rs).
+    Lock,
     /// A window-manager command, written as in a binding: `workspace 3`, `focus-window 12`
     /// (wm/actions.rs).
     Do { command: String },
@@ -173,6 +175,7 @@ pub enum Response {
     Workspaces { workspaces: Vec<WorkspaceInfo> },
     Layers { layers: Vec<LayerInfo> },
     CursorPosition { x: f64, y: f64 },
+    Lock { locked: bool, surfaces: Vec<String> },
     Config { config: Box<crate::config::Config> },
     Settings { changed: bool },
 }
@@ -191,6 +194,8 @@ pub enum Event {
     WindowTitleChanged { id: WindowId, title: String },
     ConfigReloaded,
     ConfigError { message: String },
+    /// The session was locked (the lock client was told so) or unlocked.
+    LockChanged { locked: bool },
 }
 
 pub fn socket_path(wayland_display: &str) -> std::path::PathBuf {

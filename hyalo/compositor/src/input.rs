@@ -166,6 +166,12 @@ impl Hyalo {
         let keyboard = self.seat.get_keyboard().unwrap();
         let raw = code.raw();
         let inhibited = self.shortcuts_inhibited();
+        // Locked: only the bindings marked `locked` run (volume, brightness: lock.rs).
+        let locked = self.lock.is_locked();
+        if locked && state == KeyState::Pressed && self.lock_client_gone() {
+            // The automatic relaunches ran out: a key press brings the lock screen back.
+            self.relaunch_lock(true);
+        }
         let action = keyboard.input::<KeyAction, _>(self, code, state, serial, time, |data, mods, handle| {
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             if state == KeyState::Released {
@@ -177,7 +183,7 @@ impl Hyalo {
                     }
                 }
                 if data.keys.release_candidate.take() == Some(raw)
-                    && let Some(b) = binds::release_binding(&data.binds, sym).filter(|b| !inhibited || b.dont_inhibit)
+                    && let Some(b) = binds::release_binding(&data.binds, sym).filter(|b| (!inhibited || b.dont_inhibit) && (!locked || b.locked))
                 {
                     return FilterResult::Intercept(KeyAction::Run { action: b.action.clone(), repeat: false });
                 }
@@ -194,11 +200,11 @@ impl Hyalo {
                 return FilterResult::Intercept(a);
             }
             // The focused app holds the shortcuts (shortcuts.rs): only `dont_inhibit` bindings run.
-            if let Some(b) = binds::find_key(&data.binds, Mods::from(mods), sym).filter(|b| !inhibited || b.dont_inhibit) {
+            if let Some(b) = binds::find_key(&data.binds, Mods::from(mods), sym).filter(|b| (!inhibited || b.dont_inhibit) && (!locked || b.locked)) {
                 data.keys.swallowed.push(raw);
                 return FilterResult::Intercept(KeyAction::Run { action: b.action.clone(), repeat: b.repeat });
             }
-            if binds::release_binding(&data.binds, sym).is_some_and(|b| !inhibited || b.dont_inhibit) {
+            if binds::release_binding(&data.binds, sym).is_some_and(|b| (!inhibited || b.dont_inhibit) && (!locked || b.locked)) {
                 data.keys.release_candidate = Some(raw);
             }
             FilterResult::Forward
@@ -340,7 +346,7 @@ impl Hyalo {
         let source = event.source();
         // A wheel binding (Super+wheel switches workspace) takes the notch; a touchpad's
         // continuous scroll is never a binding.
-        if source == AxisSource::Wheel {
+        if source == AxisSource::Wheel && !self.lock.is_locked() {
             let v = event.amount_v120(Axis::Vertical).or_else(|| event.amount(Axis::Vertical)).unwrap_or(0.0);
             if v != 0.0 {
                 let mods = Mods::from(&self.seat.get_keyboard().unwrap().modifier_state());
@@ -396,6 +402,17 @@ impl Hyalo {
         let keyboard = self.seat.get_keyboard().unwrap();
         let serial = SERIAL_COUNTER.next_serial();
 
+        // Locked: a press focuses the lock screen it lands on, and goes to it; nothing else.
+        if self.lock.is_locked() {
+            if button_state == ButtonState::Pressed
+                && let Some((surface, _)) = self.lock_surface_under(pointer.current_location())
+            {
+                self.set_keyboard_focus(Some(surface), serial);
+            }
+            pointer.button(self, &ButtonEvent { button, state: button_state, serial, time });
+            pointer.frame(self);
+            return;
+        }
         if button_state == ButtonState::Pressed {
             // A click while Super is held is not "Super alone".
             self.keys.release_candidate = None;
@@ -422,19 +439,19 @@ impl Hyalo {
             }
             if let Some((layer, _, _)) = self.layer_under(&[Layer::Overlay], pos) {
                 if Self::layer_wants_keyboard(&layer) {
-                    keyboard.set_focus(self, Some(layer.wl_surface().clone()), serial);
+                    self.set_keyboard_focus(Some(layer.wl_surface().clone()), serial);
                 }
             } else if let Some(id) = self.window_under(pos).filter(|_| self.window_hit_before_top_layer(pos)) {
                 self.focus_window(Some(id));
             } else if let Some((layer, _, _)) = self.layer_under(&[Layer::Top], pos) {
                 if Self::layer_wants_keyboard(&layer) {
-                    keyboard.set_focus(self, Some(layer.wl_surface().clone()), serial);
+                    self.set_keyboard_focus(Some(layer.wl_surface().clone()), serial);
                 }
             } else if let Some(id) = self.window_under(pos) {
                 self.focus_window(Some(id));
             } else if let Some((layer, _, _)) = self.layer_under(&[Layer::Bottom, Layer::Background], pos) {
                 if Self::layer_wants_keyboard(&layer) {
-                    keyboard.set_focus(self, Some(layer.wl_surface().clone()), serial);
+                    self.set_keyboard_focus(Some(layer.wl_surface().clone()), serial);
                 }
             } else {
                 self.focus_window(None);
