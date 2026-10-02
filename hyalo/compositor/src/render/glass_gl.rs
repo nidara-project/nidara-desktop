@@ -140,18 +140,19 @@ uniform float ptr_base_r;
 varying vec2 v_out;
 varying vec2 v_fb;
 
-// The shape's signed distance, output pixels: negative inside.
-float sdf(vec2 px) {
+// The shape's signed distance with corners of radius `r`, output pixels: negative inside.
+float sdf_r(vec2 px, float r) {
     vec2 p = px - rect.xy;
     vec2 half_size = rect.zw * 0.5;
     vec2 q = abs(p - half_size);
-    vec2 inner = half_size - vec2(radius);
-    if (q.x > inner.x && q.y > inner.y && radius > 0.0) {
-        vec2 k = (q - inner) / radius;
-        return (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * radius;
+    vec2 inner = half_size - vec2(r);
+    if (q.x > inner.x && q.y > inner.y && r > 0.0) {
+        vec2 k = (q - inner) / r;
+        return (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * r;
     }
     return max(q.x - half_size.x, q.y - half_size.y);
 }
+float sdf(vec2 px) { return sdf_r(px, radius); }
 
 // WCAG relative luminance of an sRGB-encoded colour (glass-legibility.ts's `luminance`).
 float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
@@ -209,12 +210,35 @@ void main() {
                   shape_sdf(v_out + vec2(0.0, 1.0)) - shape_sdf(v_out - vec2(0.0, 1.0)));
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0);
     float inside = max(-d, 0.0);
-    // Refraction: within a band along the edge the backdrop is read from further OUT, more so
-    // the closer to the edge — the rim of a lens gathering what lies beyond it.
     float band = max(min(radius, min(rect.z, rect.w) * 0.5), 1.0);
-    float t = clamp(inside / band, 0.0, 1.0);
-    float bend = (1.0 - t) * (1.0 - t) * refraction;
-    vec2 off = n * bend;
+    // Refraction: the pane's edge is a convex bevel, a quarter circle W wide and W thick,
+    // lying ON the backdrop. Looking straight down, a ray meets the bevel's slope at θ, bends
+    // to asin(sin θ / 1.5) (glass's index, Snell) — INWARD — and crosses the glass's height h
+    // there, so it lands h·tan(θ − θr) further in. The backdrop is read from INSIDE the shape,
+    // never beyond it: hard against the edge the slope is steepest and lines bend; further in
+    // the bevel flattens and the backdrop is magnified a little, then nothing. Until
+    // 2026-10-02 the edge read from OUTSIDE, (1 − t)² × refraction over a band the corner's
+    // radius wide — and once refraction grew with the shape (125 px on the app grid, its
+    // band still 32), 157 px of backdrop were squeezed into 32: a window under the grid
+    // showed whole and shrunk, wallpaper round it (owner-caught: "an inverted magnifier").
+    // `refraction` is the most the bevel displaces: 0.231 W at W thick, so W follows from
+    // it — up to half the shape's shorter side, where the whole shape is lens. Thicker
+    // magnifies more (1.5 W: the dock's icons under the app grid's edge, four times their
+    // height); past ≈1.7 W the far side of the peak displaces faster than 1 px per px and the
+    // backdrop folds back on itself, mirrored.
+    float lens_w = max(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), 1.0);
+    // The bevel follows corners at least W round, so it has no crease along their diagonal
+    // (the true outline's corners are tighter than W on a large pane).
+    float lens_r = min(max(radius, lens_w), min(rect.z, rect.w) * 0.5);
+    float lens_in = max(-sdf_r(v_out, lens_r), 0.0);
+    vec2 ln = vec2(sdf_r(v_out + vec2(1.0, 0.0), lens_r) - sdf_r(v_out - vec2(1.0, 0.0), lens_r),
+                   sdf_r(v_out + vec2(0.0, 1.0), lens_r) - sdf_r(v_out - vec2(0.0, 1.0), lens_r));
+    ln = length(ln) > 0.0001 ? normalize(ln) : vec2(0.0);
+    float v = 1.0 - clamp(lens_in / lens_w, 0.0, 1.0);
+    float q = max(1.0 - v * v, 1e-4);
+    float theta = atan(v / sqrt(q));
+    float bend = lens_w * sqrt(q) * tan(theta - asin(sin(theta) / 1.5));
+    vec2 off = -ln * bend;
     // A little dispersion in the bend: red bends least, blue most.
     vec3 bg = vec3(backdrop(off * 0.92).r, backdrop(off).g, backdrop(off * 1.08).b);
     // Vibrancy: the backdrop's colour, a little stronger.

@@ -119,8 +119,20 @@ four times as far, and 2:2 blurred a step edge over 28 px against Hyprland's 12 
 over a black/white wallpaper (`HYALO_WALLPAPER`): 1:2 → 8 px, 2:2 → 12 px, 10–90 % of the edge.
 The refraction is PER SHAPE (`set_lensing`): `refraction` is every shape's least,
 and `lensing` × the shape's shorter side wins where it is more, so a large pane lenses more than
-a capsule without a number per surface. The capture region grows by each group's largest
-refraction, since the edge reads the backdrop from that far outside.
+a capsule without a number per surface. The edge is a **convex bevel lying on the backdrop**
+(`glass_gl.rs`): a quarter circle W wide and W thick, refraction by Snell at glass's 1.5, so the
+backdrop is read from INSIDE the shape — bent hard against the edge, a little magnified further
+in, never anything from beyond the outline. `refraction` is the bevel's most displacement
+(0.231 W, so W ≈ 4.3 × it, up to half the shorter side), and the capture region is the blur's
+reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
+the peak displaces faster than 1 px per px and the backdrop folds back mirrored, and 1.5 W
+already magnified the dock's icons under the app grid's edge four times their height (measured
+nested, 2026-10-02 — W thick is the one kept). Until that day the edge read from OUTSIDE,
+(1 − t)² × refraction over a band the corner radius wide: once `lensing` grew to 0.15 the app
+grid read 125 px out within 32, and a window under it showed whole, shrunk, wallpaper round it
+(owner-caught: "an inverted magnifier"). Compare numbers on the bevel in the harness, never on
+the live session: `HYALO_GLASS_TUNING=<file>` gives the sandboxed shell its own
+`glass-tuning.conf` (`hyalo/scripts/sandboxed-shell.sh`), over a grid as `HYALO_WALLPAPER`.
 ⚠️ `target` is a WCAG relative luminance — LINEAR light, the adaptive glass's own number (primary
 text at 4.5:1 → 0.183), and `alphaMax` is its ceiling (`GLASS_ADAPT_CEILING`). The shader mixes
 the tint into the ENCODED colour, so it searches for the least alpha that meets it (8 bisection

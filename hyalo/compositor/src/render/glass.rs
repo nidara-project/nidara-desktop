@@ -256,10 +256,9 @@ fn groups(
     location: Point<i32, Physical>,
     m: &material::MaterialState,
 ) -> Vec<(Rectangle<i32, Physical>, Vec<glass_gl::Shape>)> {
-    let blur_reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1);
-    // Plus how far the refractive glass's edge reads from outside the shape.
-    let grow = |r: &Rectangle<f64, Physical>, refraction: f64| {
-        let reach = blur_reach + refraction;
+    // The refractive edge reads the backdrop from INSIDE the shape (glass_gl.rs), so this is all.
+    let reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1);
+    let grow = |r: &Rectangle<f64, Physical>| {
         Rectangle::<f64, Physical>::new(
             r.loc - Point::from((reach, reach)),
             (r.size.w + 2.0 * reach, r.size.h + 2.0 * reach).into(),
@@ -307,7 +306,7 @@ fn groups(
     }
     for a in 0..shapes.len() {
         for b in a + 1..shapes.len() {
-            if grow(&shapes[a].bounds(), shapes[a].refraction).overlaps(grow(&shapes[b].bounds(), shapes[b].refraction)) {
+            if grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }
@@ -325,8 +324,7 @@ fn groups(
             for s in &shapes[1..] {
                 bounds = bounds.merge(s.bounds());
             }
-            let most = shapes.iter().map(|s| s.refraction).fold(0.0, f64::max);
-            let region = grow(&bounds, most).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
+            let region = grow(&bounds).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
             (region.size.w >= 2 && region.size.h >= 2).then_some((region, shapes))
         })
         .collect()

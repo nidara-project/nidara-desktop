@@ -72,11 +72,16 @@ const DEFAULTS = {
     alphaMax: GLASS_ADAPT_CEILING,   // the most, over the brightest
     // The backdrop's WCAG luminance (linear) after tint ≤ this: white text at 4.5:1.
     target: 1.05 / LEGIBILITY_TARGET.primary - 0.05,
-    refraction: 10,       // logical px of edge displacement: every shape's least
+    // Logical px: the most the edge's bevel displaces the backdrop, inward — every shape's
+    // least. The bevel is ≈4.3× as wide (hyalo's glass_gl.rs), up to half the shape's shorter
+    // side: a bar capsule (28 px) is lens all across and moves ≈3 px, the dock 10.
+    refraction: 10,
     // A fraction of the shape's shorter side, where that is more: a large pane lenses more
-    // than a small control (2026-10-02). 0.15, measured nested: the bar's capsules (28 px)
-    // keep 10, a CC tile (76) bends 11, the dock (92) 14, the media card (172) 26.
-    lensing: 0.15,
+    // than a small control. 0.03 (2026-10-02, measured nested over a grid): only the big panes
+    // pass the least — the app grid (834 px) 25, a bevel ≈108 px wide. 0.15 was set for the
+    // old edge that read from OUTSIDE the shape; on the bevel it turned the app grid into one
+    // magnifier, with the dock's icons under its edge smeared four times their height.
+    lensing: 0.03,
     rim: 0.7,
     saturation: 1.35,
     // ≈ #e7e7e7 at the darkest point under the text: only a white page or window turns it.
