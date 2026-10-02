@@ -57,6 +57,9 @@ pub struct KeyTracking {
 
 impl Hyalo {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        if !matches!(event, InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. }) {
+            self.note_activity();
+        }
         match event {
             InputEvent::Keyboard { event } => self.on_key(event.key_code(), event.state(), Event::time(&event)),
             InputEvent::PointerMotion { event } => self.on_relative_motion::<I>(&event),
@@ -162,6 +165,8 @@ impl Hyalo {
     }
 
     pub fn on_key(&mut self, code: smithay::backend::input::Keycode, state: KeyState, time: InputTime) {
+        // Also reached without a device (the control FIFO): activity either way (idle.rs).
+        self.note_activity();
         let serial = SERIAL_COUNTER.next_serial();
         let keyboard = self.seat.get_keyboard().unwrap();
         let raw = code.raw();
@@ -300,6 +305,7 @@ impl Hyalo {
 
     /// The pointer goes to `pos` (absolute devices, the control channel).
     pub fn pointer_moved_to(&mut self, pos: Point<f64, Logical>, time: InputTime) {
+        self.note_activity();
         let pos = self.clamp_to_outputs(pos);
         self.pointer_on_output(pos);
         let under = self.surface_under(pos);
@@ -398,6 +404,7 @@ impl Hyalo {
     }
 
     pub fn pointer_button(&mut self, button: u32, button_state: ButtonState, time: InputTime) {
+        self.note_activity();
         let pointer = self.seat.get_pointer().unwrap();
         let keyboard = self.seat.get_keyboard().unwrap();
         let serial = SERIAL_COUNTER.next_serial();

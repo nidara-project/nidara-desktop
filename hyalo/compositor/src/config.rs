@@ -43,6 +43,25 @@ pub struct Config {
     /// so a layer adds, overrides or switches off (`enabled = false`) one rule: the layers
     /// merge tables, and a list in the user's file would replace the shipped ones whole.
     pub rules: BTreeMap<String, RuleConfig>,
+    /// What happens when nobody touches the computer (idle.rs). Settings → Power writes it.
+    pub idle: IdleConfig,
+}
+
+/// Seconds without input before each step; 0 = never. The steps are independent: with the
+/// screen off at 300 and the lock at 600, the screen goes dark at five minutes and the session
+/// locks at ten. The defaults are the ones Settings showed on Hyprland with no hypridle.conf.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct IdleConfig {
+    pub screen_off: u32,
+    pub lock: u32,
+    pub suspend: u32,
+}
+
+impl Default for IdleConfig {
+    fn default() -> Self {
+        Self { screen_off: 300, lock: 600, suspend: 0 }
+    }
 }
 
 /// One window rule: what it matches and what it does.
@@ -521,6 +540,9 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
         // Validated by `load`. Applies to windows opened from now on, and to a window whose
         // app id or title changes: a rule never re-arranges what is already open.
         state.rules = crate::wm::rules::compile(&new.rules).unwrap_or_default();
+    }
+    if old.idle != new.idle {
+        state.idle_rearm();
     }
     if old.layout.tiling != new.layout.tiling {
         state.change_tiling_layout();

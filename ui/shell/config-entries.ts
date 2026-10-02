@@ -26,7 +26,7 @@ import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, onDockSettingChanged, type DockPosition } from "./surfaces/dock/state"
 import { barConfig } from "./surfaces/bar/barState"
 import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
-import { getIdleConfig, updateIdleConfig, onHypridleChanged } from "./core/PowerConfig"
+import { getIdleConfig, updateIdleConfig, onIdleChanged } from "./core/PowerConfig"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
 import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange, specIconThemes } from "./core/Icons"
@@ -126,7 +126,7 @@ const onAiCfg = (read: () => any) => (apply: (v: any) => void) => {
 
 const onPowerCfg = (read: () => any) => (apply: (v: any) => void) => {
     apply(read())
-    return onHypridleChanged(() => apply(read()))
+    return onIdleChanged(() => apply(read()))
 }
 
 export function registerConfigEntries() {

@@ -23,6 +23,9 @@ toml = "0.9"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 xcursor = "0.3.3"
+# D-Bus for the session (logind.rs): logind's sleep and lock signals, org.freedesktop.ScreenSaver.
+# Blocking connections on threads of their own; no async runtime of its own beyond async-io.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 # Window rules match app ids and titles by regex. The `regex` crate is a thin wrapper over
 # this one, which the tree already has (tracing-subscriber).
 regex-automata = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "nfa-pikevm", "nfa-backtrack", "hybrid", "unicode"] }

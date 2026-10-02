@@ -23,6 +23,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
 | `hyalo/compositor/src/lock.rs` | the lock screen (ext-session-lock-v1): what is drawn and reachable while locked |
+| `hyalo/compositor/src/idle.rs`, `hyalo/compositor/src/logind.rs` | idle (screens off, lock, suspend; inhibitors) and the session's D-Bus side (lock before sleep, `org.freedesktop.ScreenSaver`) |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
@@ -486,6 +487,32 @@ What holds while locked, and where:
 Tested by `scripts/ci/hyalo-lock-check.sh` in the Hyalo smoke (six steps, the control last: after
 the unlock the window behind gets the keys). Hyalo must be started with `HYALO_LOCK_RELAUNCH`
 pointing at the check's probe, or its relaunch step fails.
+
+## Idle: Hyalo does it, there is no hypridle (owner, 2026-10-02)
+
+`idle.rs` + `[idle]` in the config (`screen_off`, `lock`, `suspend`: seconds without input, 0 =
+never; Settings → Power writes them through `settings` — `CompositorSettings.readIdle/setIdle`,
+whose Hyprland side is still hypridle's file). Nothing else has to be alive for the session to
+lock.
+- **Activity** = any input (`note_activity` from input.rs: devices, the control FIFO, the virtual
+  pointer). It only moves a timestamp; ONE timer wakes at the next step's deadline, checks the
+  time that really passed and is armed again. Don't re-arm a timer per motion.
+- **Inhibitors** hold all steps off while they count: an `idle-inhibit` surface while it is
+  SHOWN (a window in the `Space` or a mapped layer), and apps holding
+  `org.freedesktop.ScreenSaver.Inhibit`. While the session is locked none counts.
+- Steps are independent and fire once per idle stretch; the first input powers the screens back
+  on, the lock stays. `ext-idle-notify-v1` is offered to other programs from the same state.
+- **`logind.rs` runs only with `--session`**: a sleep *delay* inhibitor (`PrepareForSleep(true)`
+  → lock, the inhibitor released once the lock is CONFIRMED, or after 3 s), the session's
+  `Lock` signal (`loginctl lock-session`) and the ScreenSaver service on the session bus — a
+  development Hyalo must not take the live session's. Suspend from idle also only with
+  `--session`: a nested Hyalo must never put the machine to sleep.
+- ⚠️ Testing the ScreenSaver path: a client that EXITS drops its inhibition (its bus name goes),
+  so `dbus-send`/`gdbus call` look like "inhibit does nothing". Hold the connection (a gjs script
+  that sleeps). Do it nested with `dbus-run-session -- nidara-hyalo --winit --session` and
+  `HYALO_CONFIG=/dev/null` (no autostart), never against the live session bus.
+- IPC: `nidara-hyalo msg idle` (`idle_secs`, `inhibited`, the config). Tested by
+  `scripts/ci/hyalo-idle-check.sh` in the smoke (`hyalo-idle-inhibit-probe.c` is the inhibitor).
 
 ## Window capture (thumbnails)
 

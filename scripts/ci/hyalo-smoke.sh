@@ -81,6 +81,16 @@ phase_build() {
     wayland-scanner private-code  "$sc_xml" "$sc/security-context-v1-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-sandbox-probe.c" "$sc/security-context-v1-protocol.c" \
         -I"$sc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-sandbox-probe
+    # The idle-inhibit probe (a shown window holding idle off, hyalo/compositor/src/idle.rs).
+    local ii="$REPO/build/ii" xs_xml=/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml \
+          ii_xml=/usr/share/wayland-protocols/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml
+    mkdir -p "$ii"
+    wayland-scanner client-header "$xs_xml" "$ii/xdg-shell-client-protocol.h"
+    wayland-scanner private-code  "$xs_xml" "$ii/xdg-shell-protocol.c"
+    wayland-scanner client-header "$ii_xml" "$ii/idle-inhibit-unstable-v1-client-protocol.h"
+    wayland-scanner private-code  "$ii_xml" "$ii/idle-inhibit-unstable-v1-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-idle-inhibit-probe.c" "$ii/xdg-shell-protocol.c" "$ii/idle-inhibit-unstable-v1-protocol.c" \
+        -I"$ii" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-idle-inhibit-probe
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
@@ -385,6 +395,13 @@ phase_run() {
         || { log "FAIL: the session lock"; cat /tmp/hyalo/lock.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "session lock OK ($(grep -c '^ok' /tmp/hyalo/lock.log) steps: locked, input held, relaunched, unlocked)"
+    # Idle (#683): with nobody at the keys the session locks and the screens go dark; the first
+    # key brings them back; a shown window holding idle off keeps it all away, and once it lets
+    # go the lock comes (the control). The idle lock starts the lock check's probe.
+    IDLE_LOG=/tmp/hyalo/idle "$REPO/scripts/ci/hyalo-idle-check.sh" >/tmp/hyalo/idle.log 2>&1 \
+        || { log "FAIL: idle"; cat /tmp/hyalo/idle.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "idle OK ($(grep -c '^ok' /tmp/hyalo/idle.log) steps: locked and dark, woken, held off, then locked)"
 
     # ── 3. Pictures for a person.
     sleep 4

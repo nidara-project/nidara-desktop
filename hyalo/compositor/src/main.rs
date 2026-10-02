@@ -16,8 +16,10 @@ mod crash;
 mod cursor;
 mod handlers;
 mod input;
+mod idle;
 mod ipc;
 mod lock;
+mod logind;
 mod outputs;
 mod protocols;
 mod render;
@@ -139,6 +141,13 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
     tracing::info!(socket = ?state.socket_name, "listening");
     ipc::server::start(state);
     config::watch(state);
+    // A real session listens to logind and serves org.freedesktop.ScreenSaver, and may suspend
+    // when idle; a development Hyalo does none of that (logind.rs, idle.rs).
+    if session {
+        state.idle.session = true;
+        logind::start(state);
+    }
+    state.idle_rearm();
     // Only a session runs the autostart: `uwsm finalize` from a development window would
     // export this compositor's socket into the live session's services.
     if session {
