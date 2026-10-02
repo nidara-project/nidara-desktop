@@ -480,14 +480,14 @@ nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
 
 void
 nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
-                              double min_spread)
+                              double tint_limit)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
   if (m && material_version >= 5)
     nidara_material_v1_set_scrim (m, wl_fixed_from_double (max_strength),
                                   wl_fixed_from_double (size_fraction),
-                                  wl_fixed_from_double (min_spread));
+                                  wl_fixed_from_double (tint_limit));
 }
 
 void

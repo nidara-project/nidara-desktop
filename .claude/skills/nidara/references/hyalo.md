@@ -100,7 +100,7 @@ What is sent is what the toolkit SHOWS (protocol v2, `add_shape_clipped`):
 `NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
-rim saturation inkDarkAbove inkLightBelow scrimMax scrimSize scrimFalloff scrimSpread`,
+rim saturation inkDarkAbove inkLightBelow tintLimit scrimMax scrimSize scrimFalloff`,
 `blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
@@ -174,7 +174,7 @@ text keeps it white.
 - To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
   backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
 
-### The shadow under the glass: even tint, only where the backdrop would split a pane (#684)
+### The shadow under the glass: what the glass is missing, within its limit (#684)
 
 Owner, 2026-10-02: "parts almost entirely grey and parts right, on the same element". The tint
 thickens PER PIXEL, so a pane over a backdrop bright in one place and dark in another came out
@@ -182,18 +182,21 @@ grey in one part and clear in the other — on the owner's own wallpaper (light 
 purple) the CC's camera and volume tiles went grey while Focus stayed clear. The fix is the
 owner's idea: a soft black shadow UNDER the glass, even across the pane, only when needed.
 
-- **Protocol v5** (`set_scrim(max_strength, size_fraction, min_spread)`, `add_scrim_region(x, y,
+- **Protocol v5** (`set_scrim(max_strength, size_fraction, tint_limit)`, `add_scrim_region(x, y,
   w, h, falloff)`). A region is shared by every shape whose centre lies in it; a shape in none
   gets its own (its outline as core, fading over `size_fraction` of its shorter side).
-- **The rule** (`material::scrim_target`, unit-tested with a control): a shadow only while the
-  tint the darkest and the brightest point under the unit's shapes need differs by more than
-  `min_spread` (and until it falls below half of it — hysteresis). Its strength is the LEAST
-  that evens the pane out (owner, 2026-10-02: "a last resort", there only so the glass does not
-  look painted grey over half of it): it brings the two points' tints within `min_spread / 2` of
-  each other — the difference the hysteresis already lets stand — and the tint does the rest.
-  The first rule brought the brightest point all the way to `target`, leaving the tint idle and
-  the shadow 15–35 % darker than needed (white over near-black: 0.535 → 0.451). Evenly light, all white (the ink's veil) or dark backdrops get NONE — measured nested on white,
-  #bcbcbc and #202028: every strength 0.
+- **The rule** (`material::scrim_target`, unit-tested with a control). Owner, 2026-10-02: "the
+  limit has to be in the glass". The glass takes no more tint than `tint_limit` (0.25) — past it
+  a pane reads as painted grey — and the shadow is EXACTLY what the glass is missing for the
+  brightest point under the unit's light-ink shapes to reach `target`: ≈0.41 over white, 0.15
+  over a light backdrop (0.45), none where the glass reaches it alone. It grows and shrinks
+  with the backdrop: no threshold, no hysteresis. `max_strength` is a safety cap; past it the
+  tint makes up the rest up to `alpha_max` — legibility first. A shape whose content has turned
+  dark (an ink box of a dark group inside it) asks for none: it lies on the ink's light veil.
+  Two rules came before and went the same day: "bring the brightest point to `target`" (the
+  tint idle, the shadow doing everything), then "the least that evens the pane out", gated by
+  a spread between the darkest and brightest point's tints (`min_spread`) — a threshold nobody
+  could explain, and a glass still allowed to turn grey up to `alpha_max`.
 - **Measured with the ink**, in the same pass: one probe per shadowed shape (its body, inset by
   0.29 of its radius), darkest and brightest in one texel. 🔴 The probe DIVIDES OUT the shadow
   drawn this frame (`unscale` = 1 / (1 − its opacity there)), or the shadow would measure itself
@@ -219,7 +222,10 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   "a shadow downward separating the top from the bottom").
   - **The Control Center and the Notification Center share ONE region**, the screen's whole
     right-hand strip (`trackScrimRegion(widget, { right, top, bottom })` in Bar.tsx), fading
-    over `scrimFalloff` px to the left. Measured nested without it: each tile got its own
+    over `scrimFalloff` px (48) to the left. Its core ends at its GLASS's left edge plus what
+    that glass refracts (`placeScrimRegions`), not at the widget's box, which holds margins:
+    "the fade should start right where the CC ends" (owner; it was 32 px of margin and 380 of
+    fade — 800 px of shadow for a 368 px panel). Measured nested without it: each tile got its own
     strength (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
   - **The bar and the dock cast NONE** (`trackNoScrim`: a region with a negative falloff,
     which claims its panes and casts nothing). Tried and dropped on 2026-10-02: a halo per
@@ -234,7 +240,7 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   - 🔴 A shape joins the FIRST region its centre lies in, in declaration order: the bar's
     no-shadow region is declared before the CC's strip, which reaches past the top and would
     otherwise take the bar's right-hand capsules.
-- Tuned live in `glass-tuning.conf`: `scrimMax scrimSize scrimFalloff scrimSpread`,
+- Tuned live in `glass-tuning.conf`: `tintLimit scrimMax scrimSize scrimFalloff`,
   `scrim = off` for the A/B. `nidara-hyalo msg layers` shows each surface's `glass.scrims` (kind, shapes,
   strength); the smoke requires the CC's panes to share one region and no bar or dock pane to
   cast a shadow of its own.

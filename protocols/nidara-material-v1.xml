@@ -188,26 +188,21 @@
     </request>
     <!-- Version 5: the shadow under the glass. Appended, so earlier opcodes stay put. -->
     <request name="set_scrim" since="5">
-      <description summary="pending: a shadow under the glass, only where the backdrop would split it">
+      <description summary="pending: a shadow under the glass, where the glass alone would turn grey">
         While the compositor paints the glass (set_glass), its tint thickens
-        per pixel where the backdrop is too bright, so a shape over a backdrop
-        that is bright in one place and dark in another comes out grey in one
-        part and clear in the other. With a scrim, the compositor instead lays
-        a soft black shadow UNDER the glass (below the surface, inside what the
-        glass blurs), even across each shape, just strong enough that the
-        brightest point of the backdrop under the shape comes down to
-        set_glass's target_luminance: the tint then stays even, and the shape
-        reads as one pane of glass over a shadow.
-
-        Only where it is needed: the compositor measures the darkest and the
-        brightest point of the backdrop under the shapes it lies under, and
-        lays a shadow only while the tint those two need differs by more than
-        min_spread (an opacity, 0..1; it goes away again below half of it). A
-        backdrop that is evenly light gets an even tint and no shadow; one
-        white everywhere keeps set_ink's light veil. The strength is the one
-        that brings the brightest point down to target_luminance, at most
-        max_strength (0..1, the shadow's opacity at its core). It changes
-        smoothly, and fades with the shapes' opacity.
+        per pixel where the backdrop is too bright for the content, and past a
+        point the pane looks painted grey rather than glass. With a scrim, the
+        glass takes no more than tint_limit (an opacity, 0..1) and the
+        compositor lays a soft black shadow UNDER it (below the surface, inside
+        what the glass blurs), even across each shape, with exactly the
+        strength the glass is missing: the brightest point of the backdrop
+        under the shapes comes down until tint_limit brings it to set_glass's
+        target_luminance. None where the glass reaches it alone; none for a
+        shape whose content is dark (set_ink), which lies on its light veil.
+        It grows and shrinks with the backdrop, smoothly, at most max_strength
+        (0..1, the shadow's opacity at its core) — past that, the tint makes up
+        the rest, up to set_glass's alpha_max — and fades with the shapes'
+        opacity.
 
         A shape inside no scrim region (add_scrim_region) gets a shadow of its
         own: its outline as the core, fading over size_fraction of its shorter
@@ -215,7 +210,7 @@
       </description>
       <arg name="max_strength" type="fixed"/>
       <arg name="size_fraction" type="fixed"/>
-      <arg name="min_spread" type="fixed"/>
+      <arg name="tint_limit" type="fixed"/>
     </request>
     <request name="add_scrim_region" since="5">
       <description summary="pending: one shadow shared by the shapes inside it">

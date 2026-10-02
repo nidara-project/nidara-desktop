@@ -505,15 +505,14 @@ void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
  * @surface: the #GdkSurface
  * @max_strength: the shadow's opacity at its core, at most, 0..1; 0 = no shadow
  * @size_fraction: a shape inside no scrim region fades over this fraction of its shorter side
- * @min_spread: the least difference between the tint the darkest and the brightest point under
- *   the shapes need for there to be a shadow (an opacity, 0..1)
+ * @tint_limit: the most tint the glass takes while the shadow makes up the rest (0..1)
  *
- * A soft black shadow under the glass, laid only where the backdrop is bright in one place and
- * dark in another, so a shape over it is not tinted grey in one part and clear in the other
- * (nidara-material-v1 version 5, set_scrim). Nothing on an older compositor.
+ * A soft black shadow under the glass with exactly the strength the glass is missing, within
+ * @tint_limit, to keep the content legible: the glass never looks painted grey (nidara-material-v1
+ * version 5, set_scrim). Nothing on an older compositor.
  */
 void nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
-                                   double min_spread);
+                                   double tint_limit);
 
 /**
  * nidara_wl_material_add_scrim_region:

@@ -86,9 +86,9 @@ pub struct Scrim {
     pub max_strength: f64,
     /// A shape inside no region fades over this fraction of its shorter side.
     pub size_fraction: f64,
-    /// The least difference between the tint the darkest and the brightest point under a
-    /// shadow's shapes need, for there to be a shadow at all (an opacity).
-    pub min_spread: f64,
+    /// The most tint the glass takes while a shadow can make up the rest (an opacity): the
+    /// glass's own limit — past it the pane looks painted grey. The shadow is what is missing.
+    pub tint_limit: f64,
 }
 
 /// One shadow shared by the shapes whose centre lies inside it (v5), surface-local logical
@@ -254,60 +254,36 @@ fn to_linear(v: f64) -> f64 {
     if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
 }
 
-/// The tint the glass lays over a backdrop of WCAG luminance `l` (render/glass_gl.rs, the last
-/// pass, for a grey of that luminance): the least that brings it to the target, within the
-/// glass's bounds.
-fn tint_needed(l: f64, glass: &Glass) -> f64 {
-    let c = encode(l);
-    let lum = |a: f64| {
-        let ch = |k: usize| to_linear(c * (1.0 - a) + glass.tint[k] * a);
-        0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
-    };
-    let mut a = 0.0;
-    if lum(0.0) > glass.target_luminance {
-        let (mut lo, mut hi) = (0.0, glass.alpha_max);
-        for _ in 0..12 {
-            let m = 0.5 * (lo + hi);
-            if lum(m) > glass.target_luminance { lo = m } else { hi = m }
-        }
-        a = hi;
-    }
-    a.clamp(glass.alpha_min.min(glass.alpha_max), glass.alpha_max)
+/// The WCAG luminance of a grey of encoded value `c` under the glass's tint at opacity `a`
+/// (render/glass_gl.rs, the last pass).
+fn tinted(c: f64, a: f64, glass: &Glass) -> f64 {
+    let ch = |k: usize| to_linear(c * (1.0 - a) + glass.tint[k] * a);
+    0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
 }
 
-/// The shadow one unit wants (v5), from the darkest and brightest WCAG luminance of the
-/// backdrop under its shapes without any shadow, and whether it has one now (`on`): a shadow
-/// only while the tint those two points need differs by more than `min_spread` — a pane grey
-/// in one part and clear in another — and until it falls below half of it.
-///
-/// Its strength is the LEAST that evens the pane out (owner, 2026-10-02: a last resort, there
-/// only so the glass does not look painted grey over half of it): it brings the tint the two
-/// points need to within half of `min_spread` of each other — the difference the hysteresis
-/// already lets stand — and the tint does the rest, evenly. Bringing the brightest point all
-/// the way down to the target (the first rule) made the tint idle and the shadow carry
-/// everything. Black laid over the encoded colour scales it, so the encoded value is what is
-/// solved for.
-fn scrim_target(on: bool, darkest: f64, brightest: f64, glass: &Glass, scrim: &Scrim) -> f64 {
-    let spread_under = |s: f64| {
-        let left = |l: f64| to_linear(encode(l) * (1.0 - s));
-        tint_needed(left(brightest), glass) - tint_needed(left(darkest), glass)
-    };
-    let spread = spread_under(0.0);
-    let wanted = if on { spread > scrim.min_spread * 0.5 } else { spread > scrim.min_spread };
-    if !wanted || brightest <= glass.target_luminance {
+/// The shadow one unit wants (v5), from the brightest WCAG luminance of the backdrop under its
+/// light-ink shapes without any shadow: exactly what the glass is missing at that point to make
+/// the text legible within its own limit (owner, 2026-10-02: "the limit has to be in the
+/// glass"). The glass takes up to `tint_limit` — past it a pane looks painted grey — and the
+/// shadow brings the brightest point down until that tint reaches the target; none where the
+/// glass reaches it alone. It grows and shrinks with the backdrop, never switching: no
+/// threshold, no hysteresis. Black laid over the encoded colour scales it, so the encoded value
+/// is what is solved for. At most `max_strength`; past that, the tint makes up the rest
+/// (set_glass's alpha_max is the legibility's own safety net).
+fn scrim_target(brightest: f64, glass: &Glass, scrim: &Scrim) -> f64 {
+    let limit = scrim.tint_limit.max(glass.alpha_min).min(glass.alpha_max);
+    let legible = |s: f64| tinted(encode(brightest) * (1.0 - s), limit, glass) <= glass.target_luminance;
+    if legible(0.0) {
         return 0.0;
     }
-    // At this strength the brightest point is at the target, and the spread is none.
-    let full = (1.0 - encode(glass.target_luminance) / encode(brightest).max(1e-6))
-        .clamp(0.0, scrim.max_strength.clamp(0.0, 1.0));
-    let tolerated = scrim.min_spread * 0.5;
-    if spread_under(full) > tolerated {
-        return full;
+    let max = scrim.max_strength.clamp(0.0, 1.0);
+    if !legible(max) {
+        return max;
     }
-    let (mut lo, mut hi) = (0.0, full);
+    let (mut lo, mut hi) = (0.0, max);
     for _ in 0..16 {
         let m = 0.5 * (lo + hi);
-        if spread_under(m) > tolerated { lo = m } else { hi = m }
+        if legible(m) { hi = m } else { lo = m }
     }
     hi
 }
@@ -388,21 +364,37 @@ pub fn scrim_measured(surface: &WlSurface, light: &[(usize, f32, f32)], now: std
         current.shape_light.retain(|&i, _| i < n);
         let (Some(scrim), Some(glass)) = (current.state.scrim, current.state.glass) else { return false };
         let mut changed = false;
-        for unit in current.state.scrim_units() {
-            let lights: Vec<(f32, f32)> =
-                unit.members.iter().filter_map(|i| current.shape_light.get(i).copied()).collect();
+        // A shape whose content is dark (the ink) sits on a light veil, not on a shadow: it asks
+        // for none.
+        let state = &current.state;
+        let dark_ink = |i: usize| {
+            let s = &state.shapes[i];
+            state.ink_boxes.iter().any(|b| {
+                let (cx, cy) = (b.x + b.w / 2.0, b.y + b.h / 2.0);
+                current.dark_ink.contains(&b.id) && cx >= s.x && cx < s.x + s.w && cy >= s.y && cy < s.y + s.h
+            })
+        };
+        let mut wanted = Vec::new();
+        for unit in state.scrim_units() {
+            let lights: Vec<f32> = unit.members.iter().filter_map(|i| current.shape_light.get(i).map(|l| l.1)).collect();
             if lights.is_empty() {
                 continue;
             }
-            let darkest = lights.iter().map(|l| l.0).fold(f32::MAX, f32::min) as f64;
-            let brightest = lights.iter().map(|l| l.1).fold(f32::MIN, f32::max) as f64;
-            let anim = current.scrims.get(&unit.key).copied();
+            let brightest = unit
+                .members
+                .iter()
+                .filter(|&&i| !dark_ink(i))
+                .filter_map(|i| current.shape_light.get(i).map(|l| l.1 as f64))
+                .fold(None, |m: Option<f64>, l| Some(m.map_or(l, |m| m.max(l))));
+            wanted.push((unit.key, brightest.map_or(0.0, |b| scrim_target(b, &glass, &scrim))));
+        }
+        for (key, strength) in wanted {
+            let anim = current.scrims.get(&key).copied();
             let to = anim.map_or(0.0, |a| a.to);
-            let strength = scrim_target(to > 0.0, darkest, brightest, &glass, &scrim);
             let now_value = anim.map_or(0.0, |a| a.value(now));
             let retarget = (strength - to).abs() > SCRIM_DEADBAND || (strength == 0.0 && to > 0.0) || (strength > 0.0 && to == 0.0);
             if retarget {
-                current.scrims.insert(unit.key, ScrimAnim {
+                current.scrims.insert(key, ScrimAnim {
                     from: now_value,
                     to: strength,
                     start: now,
@@ -609,13 +601,13 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             Request::ClearInk => {
                 self.pending(|m| m.ink = None);
             }
-            Request::SetScrim { max_strength, size_fraction, min_spread } => {
+            Request::SetScrim { max_strength, size_fraction, tint_limit } => {
                 let max_strength = max_strength.clamp(0.0, 1.0);
                 self.pending(|m| {
                     m.scrim = (max_strength > 0.0).then_some(Scrim {
                         max_strength,
                         size_fraction: size_fraction.clamp(0.0, 4.0),
-                        min_spread: min_spread.clamp(0.0, 1.0),
+                        tint_limit: tint_limit.clamp(0.0, 1.0),
                     })
                 });
             }
@@ -656,37 +648,29 @@ mod tests {
     }
 
     #[test]
-    fn a_shadow_only_where_the_tint_would_split_the_pane() {
+    fn the_shadow_is_what_the_glass_is_missing() {
         let g = glass();
-        let scrim = Scrim { max_strength: 0.7, size_fraction: 0.5, min_spread: 0.12 };
-        // The least that evens it out: black over the encoded colour scales it, and what the
-        // strength leaves of the two points needs tints within half of min_spread — no closer.
-        let s = scrim_target(false, 0.02, 1.0, &g, &scrim);
-        let spread_left = |s: f64| tint_needed(to_linear(1.0 - s), &g) - tint_needed(to_linear(encode(0.02) * (1.0 - s)), &g);
-        assert!((spread_left(s) - scrim.min_spread * 0.5).abs() < 0.005, "evened to the tolerated spread: {} for {s}", spread_left(s));
-        let full = 1.0 - encode(g.target_luminance);
-        assert!(s < full - 0.02, "less than bringing white to the target ({full}): {s}");
-        assert_eq!(scrim_target(false, 0.0, 0.15, &g, &scrim), 0.0, "dark enough everywhere: none");
-        assert_eq!(scrim_target(false, 0.55, 0.65, &g, &scrim), 0.0, "evenly light: an even tint, no shadow");
-        assert_eq!(scrim_target(false, 0.9, 1.0, &g, &scrim), 0.0, "white everywhere: no shadow (the ink's veil)");
-        // On the line: the spread that starts a shadow, and half of it that keeps one.
-        let (lo, hi) = (0.30, 0.40);   // tints ≈0.24 and ≈0.34
-        let spread = tint_needed(hi, &g) - tint_needed(lo, &g);
-        assert!(spread > 0.06 && spread < 0.12, "the case sits between the two thresholds: {spread}");
-        assert_eq!(scrim_target(false, lo, hi, &g, &scrim), 0.0, "not enough to start one");
-        assert!(scrim_target(true, lo, hi, &g, &scrim) > 0.0, "enough to keep one (hysteresis)");
-        let weak = Scrim { max_strength: 0.3, ..scrim };
-        assert_eq!(scrim_target(false, 0.0, 1.0, &g, &weak), 0.3, "never past max_strength");
-    }
-
-    #[test]
-    fn the_tint_needed_is_the_shaders() {
-        let g = glass();
-        assert_eq!(tint_needed(0.0, &g), g.alpha_min, "a dark backdrop: the least tint");
-        let a = tint_needed(1.0, &g);
-        let mixed = |k: usize| to_linear(1.0 * (1.0 - a) + g.tint[k] * a);
-        let l = 0.2126 * mixed(0) + 0.7152 * mixed(1) + 0.0722 * mixed(2);
-        assert!((l - g.target_luminance).abs() < 0.005, "white tinted by it comes to the target: {l}");
+        let scrim = Scrim { max_strength: 0.7, size_fraction: 0.5, tint_limit: 0.25 };
+        // The shader's last pass, written out: a grey under the tint at opacity a.
+        let lum = |c: f64, a: f64| {
+            let ch = |k: usize| to_linear(c * (1.0 - a) + g.tint[k] * a);
+            0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
+        };
+        // White: black over the encoded colour scales it, and what the strength leaves of it,
+        // under the glass at its limit, is the target — no darker.
+        let s = scrim_target(1.0, &g, &scrim);
+        let left = lum(1.0 - s, 0.25);
+        assert!((left - g.target_luminance).abs() < 0.003, "white under the shadow and the limit is the target: {left} for {s}");
+        assert!(s > 0.3 && s < 0.5, "the glass at 0.25 is missing about 0.4 over white: {s}");
+        // Less bright, less shadow; where the glass reaches it alone, none.
+        let light = scrim_target(0.45, &g, &scrim);
+        assert!(light > 0.0 && light < s, "a light backdrop wants less: {light}");
+        assert_eq!(scrim_target(0.15, &g, &scrim), 0.0, "the glass reaches it alone: none");
+        // The limit is what decides: with all of the glass's tint allowed, white needs none.
+        let all = Scrim { tint_limit: g.alpha_max, ..scrim };
+        assert_eq!(scrim_target(1.0, &g, &all), 0.0, "a glass allowed its whole tint is missing nothing");
+        let weak = Scrim { max_strength: 0.2, ..scrim };
+        assert_eq!(scrim_target(1.0, &g, &weak), 0.2, "never past max_strength");
     }
 
     #[test]
@@ -700,7 +684,7 @@ mod tests {
                 tint: [0.0; 3], alpha_min: 0.05, alpha_max: 0.6, target_luminance: 0.183, refraction: 10.0, rim: 0.7,
                 saturation: 1.0,
             }),
-            scrim: Some(Scrim { max_strength: 0.6, size_fraction: 0.5, min_spread: 0.12 }),
+            scrim: Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25 }),
             scrim_regions: vec![
                 ScrimRegion { x: 850.0, y: -1e5, w: 1e5, h: 2e5, falloff: 300.0 },
                 ScrimRegion { x: 0.0, y: 600.0, w: 10.0, h: 10.0, falloff: 50.0 },

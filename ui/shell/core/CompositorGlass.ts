@@ -29,7 +29,7 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
- *   scrimMax scrimSize scrimFalloff scrimSpread          the shadow under the glass (below)
+ *   tintLimit scrimMax scrimSize scrimFalloff            the shadow under the glass (below)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -49,19 +49,18 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  *
  * The shadow under the glass (owner, 2026-10-02, #684): with the tint alone, a pane over a
  * backdrop bright in one place and dark in another came out grey in one part and clear in the
- * other — the tint thickens per pixel. Hyalo now lays a soft shadow UNDER the glass, even
- * across the pane, just strong enough that the brightest point under it comes down to
- * `target`, and only where the tint alone would split a pane — the tint its darkest and its
- * brightest point need differing by more than `scrimSpread`: none over a dark backdrop, none
- * over an evenly light one, none over an all-white one (the ink's light veil serves that).
- * A last resort (owner, 2026-10-02): the least shadow that evens the pane out — the two
- * points' tints within half of `scrimSpread` of each other — and the tint does the rest.
- * A pane's own shadow fades over `scrimSize` of its shorter side (the app grid's, the
- * overview's); the Control Center and the Notification Center share one over the screen's
- * whole right-hand strip (`trackScrimRegion` in Bar.tsx), fading over `scrimFalloff` px to the
- * left. The bar and the dock cast none for now (`trackNoScrim`): a shadow that hugs them
- * cannot fade without running over the windows — an edge shadow drawn by Hyalo, under the
- * windows, is the next step.
+ * other — the tint thickens per pixel — and over a bright one the whole pane looked painted
+ * grey. "The limit has to be in the glass": the glass takes no more tint than `tintLimit`, and
+ * Hyalo lays a soft shadow UNDER it, even across the pane, with exactly what the glass is
+ * missing for the text to be legible at the brightest point — none where the glass reaches it
+ * alone, none under a pane whose text has turned dark (the ink's veil), at most `scrimMax`
+ * (past it, the tint makes up the rest up to `alphaMax`: legibility first). A pane's own
+ * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's); the
+ * Control Center and the Notification Center share one over the screen's whole right-hand
+ * strip (`trackScrimRegion` in Bar.tsx), starting at their glass's left edge and fading over
+ * `scrimFalloff` px. The bar and the dock cast none for now (`trackNoScrim`): a shadow that
+ * hugs them cannot fade without running over the windows — an edge shadow drawn by Hyalo,
+ * under the windows, is the next step.
  */
 
 const DEFAULTS = {
@@ -80,20 +79,19 @@ const DEFAULTS = {
     inkDarkAbove: 0.80,
     // ≈ #d3d3d3: the gap is the hysteresis, so a backdrop on the line does not flicker.
     inkLightBelow: 0.65,
-    // The shadow's opacity at its core, at most. Pure white needs ≈0.54 to come down to
-    // `target`; past this the tint makes up the rest.
+    // The shadow's opacity at its core, at most: a safety, not a design value. Pure white
+    // needs ≈0.41 with the glass at `tintLimit`; past this the tint makes up the rest.
     scrimMax: 0.6,
-    // A pane's own shadow fades over this fraction of its shorter side (the bar's capsules
-    // ≈16 px, a notification ≈35, the dock ≈46).
+    // A pane's own shadow fades over this fraction of its shorter side (a notification
+    // ≈35 px; the app grid, the overview).
     scrimSize: 0.5,
-    // The right-hand strip's shadow fades over this many px to the left: as long as the
-    // panel is wide, so the step from shadow to wallpaper cannot be seen (owner: "as soft as
-    // possible").
-    scrimFalloff: 380,
-    // A shadow only where the tint the darkest and the brightest point under the panes need
-    // differ by more than this (of 0.05..0.60): a pane that would be visibly grey in one part
-    // and clear in another. To be calibrated with the owner on screen.
-    scrimSpread: 0.12,
+    // The right-hand strip's shadow fades over this many px to the left, from the Control
+    // Center's glass. Was 380 (as wide as the panel): the owner, 2026-10-02, "totally
+    // exaggerated — the fade should start right where the CC ends".
+    scrimFalloff: 48,
+    // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
+    // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
+    tintLimit: 0.25,
 }
 
 type Blur = { size: number, passes: number }
@@ -123,7 +121,7 @@ function inkParams(): InkParams | null {
 function scrimParams(): ScrimParams | null {
     if (tuning.off || tuning.scrimOff || Theme.reduceTransparency) return null
     const p = { ...DEFAULTS, ...tuning }
-    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, minSpread: p.scrimSpread }
+    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, tintLimit: p.tintLimit }
 }
 
 function parse(text: string): Tuning {
