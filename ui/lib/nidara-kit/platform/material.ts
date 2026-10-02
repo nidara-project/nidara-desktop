@@ -42,7 +42,8 @@ import Gdk from "gi://Gdk?version=4.0"
  * whose tint is even anyway. A last resort: the least that evens the pane out, the tint doing
  * the rest. A pane gets one of its own; panes that sit together share one through
  * `trackScrimRegion` — the Control Center's is the whole right-hand strip of the screen, fading
- * to the left; the bar and the dock shade the whole band of the screen they sit on.
+ * to the left — and panes that must cast none say so through `trackNoScrim` (the bar's, the
+ * dock's, owner 2026-10-02: a halo around them ran over the windows).
  *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
  * reinstalling libnidara-wl must not take the shell down. `NIDARA_MATERIAL=0` turns the
@@ -102,12 +103,8 @@ export type ScrimParams = {
      *  differs by more than this (an opacity): a pane that would be grey in one part and
      *  clear in another. An evenly light backdrop gets an even tint and no shadow. */
     minSpread: number
-    /** A panel region's shadow (`trackScrimRegion`, `fade: "panel"`) fades over this many
-     *  logical px outside it. */
-    panelFalloff: number
-    /** A strip's (`fade: "strip"`) fades over this multiple of its thickness, from where its
-     *  glass stops refracting: the band is the bar's or the dock's, not half the screen. */
-    stripFalloff: number
+    /** A region's shadow fades over this many logical px outside it. */
+    regionFalloff: number
 }
 
 /** The class a pane of glass carries while its content is dark. */
@@ -196,34 +193,41 @@ let nextInkId = 1
 
 /** Which edges of the screen a scrim region reaches past. */
 export type ScrimEdges = { left?: boolean, right?: boolean, top?: boolean, bottom?: boolean }
-/** How a region's shadow fades where it does not reach an edge: over a panel's width
- *  (`panelFalloff` px), or over a multiple of a strip's thickness (`stripFalloff`). */
-export type ScrimFade = "panel" | "strip"
-type ScrimRegion = { widget: Gtk.Widget, edges: ScrimEdges, fade: ScrimFade, area?: () => Rect | null }
+/** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). */
+type ScrimRegion = { widget: Gtk.Widget, edges: ScrimEdges, casts: boolean }
 const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
 /** Far past any screen: the compositor cuts a region to its output. */
 const PAST_THE_EDGE = 100000
-/** A panel region's core reaches this far past its widget where it does not reach an edge: the
+/** A region's core reaches this far past its widget where it does not reach an edge: the
  *  glass reads its backdrop from beyond its own edge (the refraction), and that must lie on
- *  the even part of the shadow, not on its fade. A strip's reaches exactly as far as its
- *  glass refracts (`placeScrimRegions`): the band hugs the bar, it does not add a margin to it. */
+ *  the even part of the shadow, not on its fade. */
 const SCRIM_MARGIN = 32
 
 /**
  * One shadow under every pane of glass inside `widget`'s box (v5), instead of one each: panes
  * side by side lie on one even shadow, fading only outside it. `edges` says which edges of the
  * screen the region reaches past — the Control Center's is the screen's whole right-hand strip
- * (right, top and bottom), so its shadow fades only toward the left. Chrome that sits on an
- * edge — the bar, the dock — shades its whole band of the screen this way, not a halo around
- * its glass (owner, 2026-10-02: "the region, not the area right around the glass"), with
- * `fade: "strip"`. `area` narrows the box to part of the widget (widget-local), for a widget
- * wider than its glass. Declared while the widget is shown; it shares its surface's material
- * (`trackGlass`). Where two regions hold a pane, the one declared first wins.
+ * (right, top and bottom), so its shadow fades only toward the left. Declared while the
+ * widget is shown; it shares its surface's material (`trackGlass`). Where two regions hold a
+ * pane, the one declared first wins.
  */
-export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges,
-    opts: { fade?: ScrimFade, area?: () => Rect | null } = {}): void {
+export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges): void {
+    addScrimRegion({ widget, edges, casts: true })
+}
+
+/**
+ * The panes of glass inside `widget`'s box cast no shadow (v5) — not a shared one, not one of
+ * their own. The bar and the dock, for now (owner, 2026-10-02): a halo around their glass ran
+ * over the windows, and a band hugging them could not fade without reaching the windows
+ * either. Declare it BEFORE any region that could also hold those panes: the first one wins.
+ */
+export function trackNoScrim(widget: Gtk.Widget): void {
+    addScrimRegion({ widget, edges: {}, casts: false })
+}
+
+function addScrimRegion(r: ScrimRegion): void {
     load()
-    const r: ScrimRegion = { widget, edges, fade: opts.fade ?? "panel", area: opts.area }
+    const widget = r.widget
     scrimRegions.set(widget, r)
     const resend = () => {
         const native = widget.get_native()
@@ -235,29 +239,21 @@ export function trackScrimRegion(widget: Gtk.Widget, edges: ScrimEdges,
     widget.connect("destroy", () => scrimRegions.delete(widget))
 }
 
-/** The scrim regions shown on `native`, surface-local, each with its falloff. */
-function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassParams): (Rect & { falloff: number })[] {
+/** The scrim regions shown on `native`, surface-local, each with its falloff: negative for
+ *  one that casts nothing (nidara_material_v1.add_scrim_region). */
+function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams): (Rect & { falloff: number })[] {
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
     const out: (Rect & { falloff: number })[] = []
-    for (const { widget, edges, fade, area } of scrimRegions.values()) {
+    for (const { widget, edges, casts } of scrimRegions.values()) {
         if (widget.get_native() !== native || !widget.get_mapped() || !widget.is_drawable()) continue
         const [ok, b] = widget.compute_bounds(nw)
-        if (!ok) continue
-        const a = area ? area() : { x: 0, y: 0, w: b.get_width(), h: b.get_height() }
-        if (!a || a.w <= 0 || a.h <= 0) continue
-        const bx = b.get_x() + tx + a.x, by = b.get_y() + ty + a.y
-        // A strip's thickness runs across the side it fades from: the bar's height, a side
-        // dock's width. How far its glass refracts is the compositor's rule (refraction_of).
-        const thickness = edges.top && edges.bottom ? a.w : a.h
-        const strip = fade === "strip"
-        const margin = strip ? Math.max(glass.refraction, glass.lensing * thickness) : SCRIM_MARGIN
-        const x0 = edges.left ? -PAST_THE_EDGE : bx - margin
-        const y0 = edges.top ? -PAST_THE_EDGE : by - margin
-        const x1 = edges.right ? PAST_THE_EDGE : bx + a.w + margin
-        const y1 = edges.bottom ? PAST_THE_EDGE : by + a.h + margin
-        const falloff = strip ? scrim.stripFalloff * thickness : scrim.panelFalloff
-        out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff })
+        if (!ok || b.get_width() <= 0 || b.get_height() <= 0) continue
+        const x0 = edges.left ? -PAST_THE_EDGE : b.get_x() + tx - SCRIM_MARGIN
+        const y0 = edges.top ? -PAST_THE_EDGE : b.get_y() + ty - SCRIM_MARGIN
+        const x1 = edges.right ? PAST_THE_EDGE : b.get_x() + tx + b.get_width() + SCRIM_MARGIN
+        const y1 = edges.bottom ? PAST_THE_EDGE : b.get_y() + ty + b.get_height() + SCRIM_MARGIN
+        out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: casts ? scrim.regionFalloff : -1 })
     }
     return out
 }
@@ -609,7 +605,7 @@ function flush(native: Gtk.Native, st: NativeState) {
     }
     const ink = paints ? inkWanted : null
     const scrim = paints && shim.material_set_scrim ? source?.scrim?.(native) ?? null : null
-    const regions = scrim && glass ? placeScrimRegions(native, scrim, glass) : []
+    const regions = scrim ? placeScrimRegions(native, scrim) : []
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }

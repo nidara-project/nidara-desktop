@@ -24,7 +24,7 @@ import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { compositorPaintsGlass, trackGlass, trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
+import { compositorPaintsGlass, trackGlass, trackNoScrim } from "../../../lib/nidara-kit/platform/material"
 import { SlicedCairoArea } from "../../../lib/sliced-cairo"
 import { BAR_H } from "../bar/capsule"
 
@@ -239,15 +239,12 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                         drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
                 },
             })
-            const pill = () => ({ x: DOCK_SHADOW_PAD, y: DOCK_SHADOW_PAD,
-                w: gloss.get_width() - DOCK_SHADOW_PAD * 2, h: gloss.get_height() - DOCK_SHADOW_PAD * 2 })
             trackGlass(gloss, () => {
-                const { x, y, w, h } = pill()
-                return [{ x, y, w, h, radius: Math.min(w, h) / 2, exponent: 3.2 }]
+                const pw = gloss.get_width() - DOCK_SHADOW_PAD * 2, ph = gloss.get_height() - DOCK_SHADOW_PAD * 2
+                return [{ x: DOCK_SHADOW_PAD, y: DOCK_SHADOW_PAD, w: pw, h: ph, radius: Math.min(pw, ph) / 2, exponent: 3.2 }]
             })
-            // On Hyalo the shadow under its glass shades the screen's whole bottom band, fading
-            // upward, not a halo around the pill (owner, 2026-10-02).
-            trackScrimRegion(gloss, { bottom: true, left: true, right: true }, { fade: "strip", area: pill })
+            // On Hyalo its glass casts no shadow (owner, 2026-10-02: one ran over the windows).
+            trackNoScrim(gloss)
             da = gloss
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
@@ -654,19 +651,12 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                         dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
             }))
             const pillArea = da
-            const pill = () => {
-                const { x, y, width, height } = capsuleIn(pillArea.get_width(), pillArea.get_height())
-                return { x, y, w: width, h: height }
-            }
             trackGlass(pillArea, () => {
-                const { x, y, w, h } = pill()
-                return [{ x, y, w, h, radius: Math.min(w, h) / 2, exponent: 3.2 }]
+                const { x, y, width, height } = capsuleIn(pillArea.get_width(), pillArea.get_height())
+                return [{ x, y, w: width, h: height, radius: Math.min(width, height) / 2, exponent: 3.2 }]
             })
-            // On Hyalo the shadow under its glass shades the screen's whole band on the dock's
-            // side, fading inward, not a halo around the pill (owner, 2026-10-02). `da` spans
-            // the surface, so the band is measured from the pill.
-            trackScrimRegion(pillArea, { left: position === 'left', right: position === 'right', top: true, bottom: true },
-                { fade: "strip", area: pill })
+            // On Hyalo its glass casts no shadow (owner, 2026-10-02: one ran over the windows).
+            trackNoScrim(pillArea)
 
             // Shim: positioned by margin_top (set dynamically via updateSize → getGtkCenter).
             shim = new Gtk.Box({

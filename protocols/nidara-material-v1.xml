@@ -223,8 +223,10 @@
         surface, and the compositor cuts it to the output. Every shape whose
         centre lies inside it shares one shadow: this rectangle as the core, at
         one strength, fading over falloff logical pixels outside it — so panes
-        side by side lie on one even shadow instead of one each. Cleared by
-        clear_shapes; meaningful only with set_scrim.
+        side by side lie on one even shadow instead of one each. A negative
+        falloff claims the shapes inside it and casts nothing: they get no
+        shadow at all, not one of their own. Cleared by clear_shapes;
+        meaningful only with set_scrim.
       </description>
       <arg name="x" type="fixed"/>
       <arg name="y" type="fixed"/>

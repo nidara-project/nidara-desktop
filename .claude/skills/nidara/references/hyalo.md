@@ -214,33 +214,30 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
   twice. A window's glass keeps one element per surface.
 - **Eases** in 220 ms, out 600 ms (a video under a pane must not pump it); while one eases the
   backend queues the next frame (`scrim::take_easing`), and at rest nothing is redrawn.
-- **Two modes: a halo or a band.** A pane in no region gets a halo, its outline fading outward
-  over `scrimSize` of its shorter side — right for what floats mid-screen (the app grid, the
-  overview). Chrome that sits on an EDGE shades its whole band of the screen instead (owner,
-  2026-10-02: "the region, not the area right around the glass"): `trackScrimRegion(widget,
-  edges, { fade, area })`, the region reaching past the screen on `edges` and fading only
-  inward.
+- **Who casts what.** A pane in no region gets a halo, its outline fading outward over
+  `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
+  "a shadow downward separating the top from the bottom").
   - **The Control Center and the Notification Center share ONE region**, the screen's whole
-    right-hand strip (`{ right, top, bottom }` in Bar.tsx, `fade: "panel"`), fading over
-    `scrimFalloff` px to the left. Measured nested without it: each tile got its own strength
-    (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
-  - **The bar** (`barBox`, `{ top, left, right }`) and **the dock** (its pill, per position)
-    are `fade: "strip"`: the core reaches only as far as their glass refracts (max(refraction,
-    lensing × thickness): 10 px under the bar, 14 beside the dock — not the panels' 32) and
-    fades over `scrimStrip` × their thickness (0.5: 18 px under the bar, 46 beside the dock).
-    At 2 and a 32 px margin the owner found both "far below the bar, far into the screen". `area` is the pill: a side
-    dock's `da` spans the surface. The whole bar decides as one: one capsule over sky and
-    another over shadow shade the whole top band evenly.
-  - 🔴 A shape joins the FIRST region its centre lies in, in declaration order. The bar's band
-    is declared before the CC's: the bar's right-hand capsules also lie in the CC's strip
-    (which reaches past the top), and would otherwise move to it whenever the CC opened.
-  - The island's compact capsule is its own surface and keeps a halo; the bar's band is drawn
-    on the floor under it too, and its measurement sees that band (it divides out only its
-    own shadow), so it rarely asks for one.
-- Tuned live in `glass-tuning.conf`: `scrimMax scrimSize scrimFalloff scrimStrip scrimSpread`,
+    right-hand strip (`trackScrimRegion(widget, { right, top, bottom })` in Bar.tsx), fading
+    over `scrimFalloff` px to the left. Measured nested without it: each tile got its own
+    strength (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
+  - **The bar and the dock cast NONE** (`trackNoScrim`: a region with a negative falloff,
+    which claims its panes and casts nothing). Tried and dropped on 2026-10-02: a halo per
+    capsule, then a band hugging each (`fade: "strip"`). Measured on screen: the bar's band
+    covered 0–48 px and fell to nothing in ~10 px, the dock's 16 px above it and ~35 px of
+    fade — over the title bar and the bottom of a window that starts 4 px under the bar's
+    exclusive zone. A shadow ABOVE the windows cannot fade gently there without darkening
+    them, and two surfaces' bands made a crease where they met (the CC's and the bar's).
+    ▶️ The owner's direction: an EDGE shadow drawn by Hyalo itself — it already knows which
+    edge each layer sits on and what it reserves — UNDER the windows (only the wallpaper gets
+    it, so it can fade long), each edge at its own strength, no stacking where two meet.
+  - 🔴 A shape joins the FIRST region its centre lies in, in declaration order: the bar's
+    no-shadow region is declared before the CC's strip, which reaches past the top and would
+    otherwise take the bar's right-hand capsules.
+- Tuned live in `glass-tuning.conf`: `scrimMax scrimSize scrimFalloff scrimSpread`,
   `scrim = off` for the A/B. `nidara-hyalo msg layers` shows each surface's `glass.scrims` (kind, shapes,
   strength); the smoke requires the CC's panes to share one region and no bar or dock pane to
-  cast a halo of its own.
+  cast a shadow of its own.
 - To see it nested, the backdrop must be a REAL full-screen layer: `gjs bg.js` without
   `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` comes up as a window with a dark title bar and the
   clear colour around it, and the bar and dock then sit on a mixed backdrop whatever you painted.

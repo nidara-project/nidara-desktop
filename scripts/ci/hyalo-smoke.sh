@@ -213,25 +213,24 @@ phase_run() {
     done
     local bar_rest bar_cc
     bar_rest="$(glass_shapes nidara-bar)"
-    # The bar's and the dock's glass shade the whole band of the screen they sit on (one
-    # region each, `fade: "strip"`), never a halo per capsule: every pane in a region.
+    # The bar's and the dock's glass cast no shadow (`trackNoScrim`): not a halo per capsule.
     local ns lone
     for ns in nidara-bar nidara-dock; do
         lone="$(nidara-hyalo msg layers | jq -r --arg ns "$ns" \
             '[.ok.layers[] | select(.namespace == $ns) | .glass.scrims[]? | select(.kind == "shape")] | length')"
         [ "$lone" -eq 0 ] \
-            || { log "FAIL: $lone of $ns's panes cast a shadow of their own instead of their band's"; nidara-hyalo msg layers; exit 1; }
+            || { log "FAIL: $lone of $ns's panes cast a shadow of their own"; nidara-hyalo msg layers; exit 1; }
     done
     /tmp/hyalo/nidara-ipc toggleCC >/dev/null
     sleep 2
     bar_cc="$(glass_shapes nidara-bar)"
     # The shadow under the glass (v5): the Control Center's panes share ONE, over the screen's
     # right-hand strip (trackScrimRegion), rather than one each. Its strength depends on the
-    # wallpaper; what is checked is that the region reached Hyalo and holds the panes — the
-    # bar's own band is the other region on that surface, so the CC's is what the open CC adds.
+    # wallpaper; what is checked is that the region reached Hyalo and holds the panes (the
+    # bar's own region casts nothing, so Hyalo lists none for it).
     local cc_scrim
     cc_scrim="$(nidara-hyalo msg layers | jq -r \
-        '[.ok.layers[] | select(.namespace == "nidara-bar") | .glass.scrims[]? | select(.kind == "region") | .shapes] | if length > 1 then .[1] else 0 end')"
+        '[.ok.layers[] | select(.namespace == "nidara-bar") | .glass.scrims[]? | select(.kind == "region") | .shapes] | max // 0')"
     /tmp/hyalo/nidara-ipc toggleCC >/dev/null
     sleep 1
     [ "$bar_cc" -gt "$bar_rest" ] \

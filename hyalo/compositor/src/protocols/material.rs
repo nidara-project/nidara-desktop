@@ -144,8 +144,9 @@ pub const LONE_SCRIM: u32 = 0x1_0000;
 
 impl MaterialState {
     /// The shadows this material asks for (v5): one per region that holds a shape, and one
-    /// per shape inside no region. Nothing without set_scrim, or without the compositor's glass
-    /// (the shadow is there for its tint).
+    /// per shape inside no region — none for a region whose falloff is negative, which claims
+    /// its shapes and casts nothing. Nothing without set_scrim, or without the compositor's
+    /// glass (the shadow is there for its tint).
     pub fn scrim_units(&self) -> Vec<ScrimUnit> {
         let Some(scrim) = self.scrim.filter(|s| s.max_strength > 0.0 && self.glass.is_some()) else {
             return Vec::new();
@@ -158,7 +159,7 @@ impl MaterialState {
                 key: i as u32,
                 core: [r.x, r.y, r.w, r.h],
                 radius: 0.0,
-                falloff: r.falloff.max(0.0),
+                falloff: r.falloff,
                 members: Vec::new(),
             })
             .collect();
@@ -179,7 +180,7 @@ impl MaterialState {
                 }),
             }
         }
-        units.retain(|u| !u.members.is_empty());
+        units.retain(|u| !u.members.is_empty() && u.falloff >= 0.0);
         units.extend(lone);
         units
     }
@@ -620,7 +621,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::AddScrimRegion { x, y, width, height, falloff } => {
                 if width > 0.0 && height > 0.0 {
-                    self.pending(|m| m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff: falloff.max(0.0) }));
+                    self.pending(|m| m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff }));
                 }
             }
             Request::Destroy => {
@@ -711,6 +712,10 @@ mod tests {
         assert_eq!((units[0].key, units[0].members.clone()), (0, vec![1, 2]), "the two panes on the right share one");
         assert_eq!((units[1].key, units[1].members.clone()), (LONE_SCRIM, vec![0]), "the other gets its own");
         assert_eq!(units[1].falloff, 20.0, "fading over half its shorter side");
+        // A region that casts nothing claims the shape anyway: no shadow of its own either.
+        m.scrim_regions.insert(0, ScrimRegion { x: 0.0, y: 0.0, w: 200.0, h: 100.0, falloff: -1.0 });
+        let units = m.scrim_units();
+        assert_eq!(units.iter().map(|u| u.members.clone()).collect::<Vec<_>>(), vec![vec![1, 2]], "the first pane casts nothing");
         m.glass = None;
         assert!(m.scrim_units().is_empty(), "no shadow without the compositor's glass");
     }
