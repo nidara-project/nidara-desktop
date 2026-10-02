@@ -22,6 +22,7 @@ import { uiIcon } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { compositorPaintsGlass, trackGlass, type GlassShape } from "../../../lib/nidara-kit/platform/material"
 import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
 
 export function createIconWidget(n: Notification, size: number) {
@@ -397,6 +398,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func(cairoDraw((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
+        if (compositorPaintsGlass(da)) return   // the compositor paints these bands (#684)
         const color = glassTintFor(da)   // the shell's skin, in its surface's tint
         for (let i = layers - 1; i >= 0; i--) {
             // Inset >= the card's corner radius so each ghost's straight top edge sits under the
@@ -420,6 +422,20 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
             cr.restore()
         }
     }))
+    // The same bands as glass a compositor of our own paints (#684), back to front.
+    trackGlass(da, () => {
+        const w = da.get_width()
+        const out: GlassShape[] = []
+        for (let i = layers - 1; i >= 0; i--) {
+            const inset = CARD_R + i * 16
+            const bottomY = PEEK + i * STEP
+            const bandTop = i === 0 ? 0 : PEEK + (i - 1) * STEP - 2
+            const solid = glassAlphaFor(da, "overlay") >= 1
+            out.push({ x: inset, y: bottomY - CARD_H, w: w - inset * 2, h: CARD_H, radius: CARD_R, exponent: 3.2,
+                opacity: solid ? 1 : 1 - i * 0.12, clip: { x: 0, y: bandTop, w, h: bottomY - bandTop } })
+        }
+        return out
+    })
     const themeConn = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     da.connect("destroy", () => safeDisconnect(Theme, themeConn))
     wrapper.append(da)

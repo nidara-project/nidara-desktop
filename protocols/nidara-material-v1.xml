@@ -28,7 +28,10 @@
       <description summary="remove the material on the next commit"/>
     </request>
     <request name="clear_shapes">
-      <description summary="pending: no shapes (no material)"/>
+      <description summary="pending: no shapes (no material)">
+        The ink boxes (add_ink_box) and scrim regions (add_scrim_region) go
+        with them.
+      </description>
     </request>
     <request name="add_shape">
       <description summary="pending: add one glass shape">
@@ -65,13 +68,172 @@
       <arg name="tint_b" type="fixed"/>
       <arg name="alpha_min" type="fixed"/>
       <arg name="alpha_max" type="fixed"/>
-      <arg name="target_luminance" type="fixed" summary="the backdrop luminance, after tint, not to exceed"/>
+      <arg name="target_luminance" type="fixed" summary="the backdrop's WCAG relative (linear) luminance, after tint, not to exceed"/>
       <arg name="refraction" type="fixed" summary="edge displacement, logical px"/>
       <arg name="rim" type="fixed" summary="specular rim strength, 0..1"/>
       <arg name="saturation" type="fixed" summary="1 = unchanged"/>
     </request>
     <request name="clear_glass">
       <description summary="pending: back to blur only; the client paints its glass"/>
+    </request>
+    <request name="add_shape_clipped">
+      <description summary="pending: add one glass shape, faded and clipped">
+        As add_shape, plus what a toolkit does to the widget that paints
+        the glass. opacity is the whole glass's opacity in this shape over
+        the plain backdrop, 0..1: the blur, the compositor's glass and its
+        rim fade together, so a panel fading in or out sends it every frame
+        (add_shape is opacity 1). The clip rectangle, in the same
+        coordinates, is what of the shape may show: a card scrolled half out
+        of its list is cut straight where the list ends, not rounded. A clip
+        of zero width or height means no clip.
+
+        Shapes are drawn in the order they are added, a later one over an
+        earlier one.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="corner_radius" type="fixed"/>
+      <arg name="exponent" type="fixed"/>
+      <arg name="opacity" type="fixed"/>
+      <arg name="clip_x" type="fixed"/>
+      <arg name="clip_y" type="fixed"/>
+      <arg name="clip_width" type="fixed"/>
+      <arg name="clip_height" type="fixed"/>
+    </request>
+    <request name="add_ink_box">
+      <description summary="pending: where content of one ink group sits">
+        Surface-local, logical coordinates: a box where the client draws
+        content (text, symbolic icons) whose colour it can switch, belonging
+        to the ink group id (a number of the client's choosing, one per pane
+        of glass). A group may have several boxes. Cleared by clear_shapes.
+
+        While set_ink is in force, the compositor measures the darkest point
+        of the backdrop under each group's boxes, as the glass treats it
+        (blurred and saturated, before its tint), and tells the client with
+        the ink event when the group's content should turn dark: only when
+        even that darkest point is brighter than dark_above, and back only
+        when it falls below light_below. Never by an area's average.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+    </request>
+    <request name="set_ink">
+      <description summary="pending: measure the ink boxes, with these thresholds">
+        Thresholds are WCAG relative (linear) luminances, 0..1, with
+        light_below below dark_above (the gap is the hysteresis). Over a
+        shape that holds a group whose ink is dark, the compositor's glass
+        stops darkening the backdrop for white content: it lays the tint
+        given here at alpha_min instead.
+      </description>
+      <arg name="dark_above" type="fixed"/>
+      <arg name="light_below" type="fixed"/>
+      <arg name="tint_r" type="fixed"/>
+      <arg name="tint_g" type="fixed"/>
+      <arg name="tint_b" type="fixed"/>
+    </request>
+    <request name="clear_ink">
+      <description summary="pending: no ink measurement; every group is light again"/>
+    </request>
+    <request name="add_shape_pointed">
+      <description summary="pending: add one glass shape with a pointer">
+        As add_shape_clipped, plus a pointer spliced into one side: a
+        triangle from the shape's edge (its base centred on base_x, base_y,
+        pointer_width wide) to the tip at tip_x, tip_y, whose tip is a
+        circular arc of tip_radius and which meets the shape's edge in a
+        concave arc of base_radius. Body and pointer are one glass: one
+        refraction, one rim. The coordinates are the shape's.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="corner_radius" type="fixed"/>
+      <arg name="exponent" type="fixed"/>
+      <arg name="opacity" type="fixed"/>
+      <arg name="clip_x" type="fixed"/>
+      <arg name="clip_y" type="fixed"/>
+      <arg name="clip_width" type="fixed"/>
+      <arg name="clip_height" type="fixed"/>
+      <arg name="base_x" type="fixed"/>
+      <arg name="base_y" type="fixed"/>
+      <arg name="tip_x" type="fixed"/>
+      <arg name="tip_y" type="fixed"/>
+      <arg name="pointer_width" type="fixed"/>
+      <arg name="tip_radius" type="fixed"/>
+      <arg name="base_radius" type="fixed"/>
+    </request>
+    <event name="ink">
+      <description summary="the content of an ink group should be dark, or light">
+        Sent when a group's decision changes; a group starts light (white
+        content), so the first event for a group is always dark = 1. A group
+        no longer declared keeps its last decision, and so does the client.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="dark" type="uint" summary="1: dark content; 0: light"/>
+    </event>
+    <request name="set_lensing">
+      <description summary="pending: the refraction grows with the shape">
+        The edge displacement of each shape of the glass becomes the larger
+        of set_glass's refraction and size_fraction times the shape's shorter
+        side, so a large pane bends its backdrop more than a small control.
+        0 (the initial value) gives every shape set_glass's refraction.
+        Meaningful only while the compositor paints the glass (set_glass).
+      </description>
+      <arg name="size_fraction" type="fixed" summary="of the shape's shorter side, 0..1"/>
+    </request>
+    <request name="set_scrim">
+      <description summary="pending: a shadow under the glass, where the glass alone would turn grey">
+        While the compositor paints the glass (set_glass), its tint thickens
+        per pixel where the backdrop is too bright for the content, and past a
+        point the pane looks painted grey rather than glass. With a scrim, the
+        glass takes no more than tint_limit (an opacity, 0..1) and the
+        compositor lays a soft black shadow UNDER it (below the surface, inside
+        what the glass blurs), even across each shape, with exactly the
+        strength the glass is missing: the brightest point of the backdrop
+        under the shapes comes down until tint_limit brings it to set_glass's
+        target_luminance. None where the glass reaches it alone; none for a
+        shape whose content is dark (set_ink), which lies on its light veil.
+        It grows and shrinks with the backdrop, smoothly, at most max_strength
+        (0..1, the shadow's opacity at its core) — past that, the tint makes up
+        the rest, up to set_glass's alpha_max — and fades with the shapes'
+        opacity.
+
+        A shape inside no scrim region (add_scrim_region) gets a shadow of its
+        own: its outline as the core, fading over size_fraction of its shorter
+        side. 0 max_strength (the initial value): no shadow.
+
+        A region's shadow (add_scrim_region) is not even across it: it is
+        whole at the region's centre and sweeps out to region_edge of that at
+        the region's rim, following the region's shape, then fades over the
+        region's falloff outside it. 1: even across the region.
+      </description>
+      <arg name="max_strength" type="fixed"/>
+      <arg name="size_fraction" type="fixed"/>
+      <arg name="tint_limit" type="fixed"/>
+      <arg name="region_edge" type="fixed" summary="a region's shadow at its rim, as a fraction of its centre's (0..1)"/>
+    </request>
+    <request name="add_scrim_region">
+      <description summary="pending: one shadow shared by the shapes inside it">
+        Surface-local, logical coordinates; the region may reach past the
+        surface, and the compositor cuts it to the output. Every shape whose
+        centre lies inside it shares one shadow at one strength: this rectangle
+        as the core, swept from its centre as set_scrim's region_edge says, and
+        fading over falloff logical pixels outside it — so panes side by side
+        lie on one shadow instead of one each. A negative
+        falloff claims the shapes inside it and casts nothing: they get no
+        shadow at all, not one of their own. Cleared by clear_shapes;
+        meaningful only with set_scrim.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="falloff" type="fixed"/>
     </request>
   </interface>
 </protocol>

@@ -397,12 +397,72 @@ void nidara_wl_material_add_shape (GdkSurface *surface,
                                    double corner_radius, double exponent);
 
 /**
+ * nidara_wl_material_add_shape_clipped:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ * @corner_radius: each corner's radius
+ * @exponent: each corner is a superellipse quadrant with this exponent (2 = arc)
+ * @opacity: the whole glass in this shape over the plain backdrop, 0..1
+ * @clip_x: left of what of the shape may show, same coordinates
+ * @clip_y: its top
+ * @clip_width: its width; 0 = no clip
+ * @clip_height: its height; 0 = no clip
+ *
+ * Adds one glass shape as the toolkit shows it: faded (a panel fading in or out) and
+ * clipped (a card scrolled half out of its list). Shapes are drawn in the order they are
+ * added.
+ */
+void nidara_wl_material_add_shape_clipped (GdkSurface *surface,
+                                           double x, double y, double width, double height,
+                                           double corner_radius, double exponent, double opacity,
+                                           double clip_x, double clip_y,
+                                           double clip_width, double clip_height);
+
+/**
+ * nidara_wl_material_add_shape_pointed:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ * @corner_radius: each corner's radius
+ * @exponent: each corner is a superellipse quadrant with this exponent (2 = arc)
+ * @opacity: the whole glass in this shape over the plain backdrop, 0..1
+ * @clip_x: left of what of the shape may show, same coordinates
+ * @clip_y: its top
+ * @clip_width: its width; 0 = no clip
+ * @clip_height: its height; 0 = no clip
+ * @base_x: the pointer's base, centred on the shape's edge: x
+ * @base_y: y
+ * @tip_x: the pointer's tip: x
+ * @tip_y: y
+ * @pointer_width: the pointer's base width
+ * @tip_radius: the tip's arc
+ * @base_radius: the concave arc where the pointer meets the edge
+ *
+ * As nidara_wl_material_add_shape_clipped(), with a pointer (a tooltip's, a menu's): body
+ * and pointer are one glass.
+ */
+void nidara_wl_material_add_shape_pointed (GdkSurface *surface,
+                                           double x, double y, double width, double height,
+                                           double corner_radius, double exponent, double opacity,
+                                           double clip_x, double clip_y,
+                                           double clip_width, double clip_height,
+                                           double base_x, double base_y, double tip_x, double tip_y,
+                                           double pointer_width, double tip_radius, double base_radius);
+
+/**
  * nidara_wl_material_commit:
  * @surface: the #GdkSurface
  * @blur_size: the blur's kawase offset, logical pixels
  * @blur_passes: downsampling levels; 0 = no blur
  *
- * Sends the shapes and the blur; they take effect with @surface's next commit.
+ * Sends the shapes and the blur; they take effect with @surface's next commit, which
+ * is made at the end of the current frame if GTK draws nothing in it. Call it from a
+ * frame-clock phase before PAINT (the shell's material client calls it from LAYOUT).
  *
  * Returns: %FALSE if the compositor has no nidara-material-v1
  */
@@ -429,11 +489,124 @@ void nidara_wl_material_set_glass (GdkSurface *surface,
                                    double refraction, double rim, double saturation);
 
 /**
+ * nidara_wl_material_set_lensing:
+ * @surface: the #GdkSurface
+ * @size_fraction: of each shape's shorter side, 0..1; 0 = set_glass's refraction everywhere
+ *
+ * Each shape's edge displacement becomes the larger of set_glass's refraction and this
+ * fraction of its shorter side: a large pane bends more than a small control.
+ */
+void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
+
+/**
+ * nidara_wl_material_set_scrim:
+ * @surface: the #GdkSurface
+ * @max_strength: the shadow's opacity at its core, at most, 0..1; 0 = no shadow
+ * @size_fraction: a shape inside no scrim region fades over this fraction of its shorter side
+ * @tint_limit: the most tint the glass takes while the shadow makes up the rest (0..1)
+ * @region_edge: a region's shadow at its rim, as a fraction of its centre's (0..1): it sweeps
+ *   from the centre out, following the region's shape; 1 = even across it
+ *
+ * A soft black shadow under the glass with exactly the strength the glass is missing, within
+ * @tint_limit, to keep the content legible: the glass never looks painted grey
+ * (nidara-material-v1.set_scrim).
+ */
+void nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
+                                   double tint_limit, double region_edge);
+
+/**
+ * nidara_wl_material_add_scrim_region:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: surface-local, logical; the region may reach past the surface
+ * @y: surface-local, logical
+ * @width: logical
+ * @height: logical
+ * @falloff: how far the shadow fades outside the region, logical pixels
+ *
+ * One shadow shared by every shape whose centre lies inside the region. Pending until
+ * nidara_wl_material_commit(); cleared by nidara_wl_material_begin().
+ */
+void nidara_wl_material_add_scrim_region (GdkSurface *surface,
+                                          double x, double y, double width, double height,
+                                          double falloff);
+
+/**
  * nidara_wl_material_clear_glass:
  * @surface: the #GdkSurface
  *
  * Back to blur only: the client paints its own glass.
  */
 void nidara_wl_material_clear_glass (GdkSurface *surface);
+
+/**
+ * nidara_wl_material_has_ink:
+ *
+ * Returns: %TRUE if the compositor measures the ink (it offers nidara-material-v1)
+ */
+gboolean nidara_wl_material_has_ink (void);
+
+/**
+ * nidara_wl_material_add_ink_box:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @id: the ink group (one per pane of glass, of the caller's choosing)
+ * @x: left, surface-local logical pixels
+ * @y: top
+ * @width: width
+ * @height: height
+ *
+ * Declares where content of ink group @id sits (text, symbolic icons). Cleared by
+ * nidara_wl_material_begin().
+ */
+void nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
+                                     double x, double y, double width, double height);
+
+/**
+ * nidara_wl_material_set_ink:
+ * @surface: the #GdkSurface
+ * @dark_above: the content turns dark when even the darkest point under it is brighter
+ *   than this (WCAG relative luminance, 0..1)
+ * @light_below: and light again only below this
+ * @tint_r: the veil over a shape whose content is dark: red, 0..1
+ * @tint_g: green
+ * @tint_b: blue
+ *
+ * Asks the compositor to measure the ink boxes; the answer is the ink function's
+ * (nidara_wl_material_set_ink_func()).
+ */
+void nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below,
+                                 double tint_r, double tint_g, double tint_b);
+
+/**
+ * nidara_wl_material_clear_ink:
+ * @surface: the #GdkSurface
+ *
+ * No measurement: every group is light again (the caller resets its own content).
+ */
+void nidara_wl_material_clear_ink (GdkSurface *surface);
+
+/**
+ * NidaraWlMaterialInkFunc:
+ * @surface: the #GdkSurface the ink group belongs to
+ * @id: the ink group
+ * @dark: %TRUE: its content should be dark; %FALSE: light
+ * @user_data: data passed to nidara_wl_material_set_ink_func()
+ *
+ * The compositor's decision for one ink group changed.
+ */
+typedef void (*NidaraWlMaterialInkFunc) (GdkSurface *surface, guint id, gboolean dark,
+                                         gpointer user_data);
+
+/**
+ * nidara_wl_material_set_ink_func:
+ * @func: (nullable) (scope notified) (closure user_data) (destroy destroy): called on the
+ *   main loop when an ink group's decision changes
+ * @user_data: data for @func
+ * @destroy: (nullable): called when @user_data is no longer needed
+ *
+ * One function for the whole process; a second call replaces the first.
+ */
+void nidara_wl_material_set_ink_func (NidaraWlMaterialInkFunc func,
+                                      gpointer                user_data,
+                                      GDestroyNotify          destroy);
 
 G_END_DECLS

@@ -2,10 +2,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./glass-bubble"
+import { ARROW_H, BUF, sideFor, paintGlassBubble, trackBubbleGlass, type ArrowSide } from "./glass-bubble"
 import { kitAppearance } from "./appearance"
 import { cairoDraw } from "./platform/cairo-draw"
 import { TOOLTIP_GLASS_FLOOR } from "./platform/glass-legibility"
+import { compositorPaintsGlass, darkInkFor } from "./platform/material"
 
 export type NidaraTooltipText = string | (() => string)
 
@@ -85,17 +86,21 @@ export function attachTooltip(
     })
     // The skin: the widget's surface's (shell chrome) or the system mode (app windows).
     // ONE answer for the glass and the label's class, so the two cannot disagree.
-    const isDark = () => opts.chrome === false
+    // On Hyalo the bubble is a pane of glass of its own: white text, dark only where the
+    // compositor measured the backdrop under it white (the ink, `darkInkFor`).
+    const isDark = () => compositorPaintsGlass(da) ? !darkInkFor(da) : opts.chrome === false
         ? kitAppearance().surfaceIsDark(widget)
         : (kitAppearance().chromeIsDark?.(widget) ?? kitAppearance().surfaceIsDark(widget))
     da.set_draw_func(cairoDraw((_da, cr, w, h) => {
         const dark = isDark()
+        syncDarkClass()
         // The panel slider, but never under what its text needs over ANY backdrop
         // (TOOLTIP_GLASS_FLOOR): a tooltip is not measured.
         const alpha = Math.max(kitAppearance().overlayOpacity?.() ?? 0.55, TOOLTIP_GLASS_FLOOR[dark ? "dark" : "light"])
-        paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark, alpha, widget })
+        paintGlassBubble(cr, w, h, side, { chrome, arrowOffset, dark, alpha, widget, glassWidget: da })
     }))
     grid.attach(da, 0, 0, 1, 1)
+    trackBubbleGlass(da, () => side, () => 13, () => 2, { arrowOffset: () => arrowOffset, scope: grid })
 
     const label = new Gtk.Label({ css_classes: ["nidara-tooltip-label"] })
     const applyMargins = () => {
@@ -107,14 +112,11 @@ export function attachTooltip(
     applyMargins()
     grid.attach(label, 0, 0, 1, 1)
 
-    const syncDarkClass = () => {
-        if (isDark()) {
-            popover.remove_css_class("light")
-            popover.add_css_class("dark")
-        } else {
-            popover.remove_css_class("dark")
-            popover.add_css_class("light")
-        }
+    function syncDarkClass() {
+        const dark = isDark()
+        if (popover.has_css_class(dark ? "dark" : "light")) return
+        popover.remove_css_class(dark ? "light" : "dark")
+        popover.add_css_class(dark ? "dark" : "light")
     }
     syncDarkClass()
 

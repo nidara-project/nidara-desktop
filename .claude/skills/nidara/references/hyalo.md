@@ -26,6 +26,7 @@ is the WHY and the traps.
 | `config/hyalo/hyalo.toml` | the shipped defaults, autostart included |
 | `bin/nidara-hyalo-session`, `config/wayland-sessions/nidara-hyalo.desktop` | the preview session |
 | `ui/shell/core/hyalo-ipc.ts`, `ui/shell/core/Displays.ts` | the shell's side (below) |
+| `ui/lib/nidara-kit/platform/material.ts`, `ui/shell/core/CompositorGlass.ts` | the glass's client half: the shapes, and the numbers (below) |
 
 ## Smithay is a library we never patch
 
@@ -44,6 +45,14 @@ So a bar over a still wallpaper re-blurs nothing per frame, and the rest of the 
 damage tracking and direct scanout. The prototype drew every frame whole into a texture; do not
 go back to that.
 
+🔴 **`nidara-material-v1` stays at VERSION 1 until it is published** (owner, 2026-10-02: "stop
+raising the protocol's version, we'll be at 89 before publishing anything"). It is ours and
+nobody else speaks it, so a new request goes INTO version 1 — appended, no `since=` — never into
+a version 2. It went to v5 on the #684 branch and was collapsed back. The cost: the C library
+(`lib/nidara-wl`) and Hyalo have to be installed TOGETHER: a new library on an old Hyalo sends
+requests that compositor's v1 does not have, a protocol error that kills the shell. Only the KIT
+tolerates skew (an older library lacks a function → `shim.material_…?.()` falls back).
+
 - **The shader works in OUTPUT pixels and borrows Smithay's projection** (`GlesFrame::projection()`),
   so every rotation or flip of an output is handled once, there. The captured copy is in
   framebuffer orientation; the blur is isotropic, so the pyramid does not care.
@@ -52,6 +61,229 @@ go back to that.
 - GL objects that belong to a context live in the EGL context's user data; a glass's own pyramid
   lives in the damage tracker's per-element cache, and is deleted through a trash list on the next
   capture, because a cache is dropped where no context is current.
+
+## The shell's glass is declared, and on Hyalo the compositor paints it (#684)
+
+Every pane of the shell's glass tells the compositor exactly where it is:
+`ui/lib/nidara-kit/platform/material.ts` (`trackGlass`) collects the shapes of each surface and
+sends them in the frame clock's LAYOUT phase — after GTK allocated, before it paints and
+commits, so they land with the buffer they describe. A paint-only frame (an animation that only
+queues draws) skips that phase, so every before-paint asks for it. The source of the glass's
+numbers is the bundle's (`ui/shell/core/CompositorGlass.ts`, registered from AppearanceSync);
+on Hyprland nothing offers the protocol and all of it is a no-op.
+
+**A painter asks `compositorPaintsGlass(itsWidget)`** and, when true, paints only content and
+state — the accent fill, the hover/open veil, the shadow — never the body or the rim. The
+painters that do: `SquircleContainer` (every pane with `useShellOpacity` and no explicit
+`alpha`), the dock's pill on both axes (`DockAxis.ts`), the island's morph clone
+(`MorphRevealer.glassShape`), the Notification Center's stacked-card bands, and tooltips and kit
+menus (`trackBubbleGlass`, owner 2026-10-01: refractive too, and blurred MORE than panels). A
+bubble's pointer is part of its shape (`add_shape_pointed`: base, tip, width, tip
+radius, base radius — one geometry, `bubbleGeometry`, for the painter and the protocol); Hyalo
+unions an inset triangle grown back by the tip radius with the body through a round union of
+the base radius (`shape_sdf`), so body and pointer are one glass with one rim. A popover's blur
+is `popoverBlur` (default: one pass more than the panels'). On a compositor that cannot draw a
+pointer the bubble is `clientPaints` (asked every frame: `compositorDrawsPointers`), and a
+surface holding any such shape is blurred only, never given the compositor's glass under a
+client's. A new glass painter goes through the same two calls, or it is a pane Hyalo knows
+nothing about.
+
+🔴 Every shape and box of an entry needs its OWN clip object: `move` shifts each one, so a
+clip shared between two moved twice. `intersect` always returns a new rectangle — when it
+returned its argument, a notification's clip ended 4× off-screen once its three ink boxes
+shared it; Hyalo got no shape, the painter believed Hyalo painted it, and its white text sat on
+the bare white backdrop.
+
+What is sent is what the toolkit SHOWS (`add_shape_clipped`):
+- **snapshot-time transforms** of the ancestors — `ScaleRevealer.glassPaintTransform()`; GTK's own
+  geometry never sees a scale applied in `vfunc_snapshot`;
+- **the opacity** of the widget and every ancestor, per shape: a panel fading in or out fades its
+  blur, glass and rim with it;
+- **the clip** of every ancestor whose overflow is hidden, per shape: a card scrolled half out of
+  its list is cut straight, not rounded. The clip is pushed BEFORE that ancestor's own snapshot
+  transform, so it is its unscaled box.
+- Glass inside glass is not declared (`nested`): a control painted on a panel keeps painting
+  itself, or Hyalo would draw a rim inside the panel. Shapes are drawn in tree order.
+
+`NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
+`NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
+`~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
+rim saturation inkDarkAbove inkLightBelow tintLimit scrimMax scrimSize scrimFalloff`,
+`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `CompositorGlass.ts`'s header) is re-read as it is saved
+— it is how the numbers are tuned with the owner on screen.
+A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
+(`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
+at `size` source texels, the up-sample's at ¼ and ½ of that. Until 2026-10-02 the up-sample's sat
+four times as far, and 2:2 blurred a step edge over 28 px against Hyprland's 12 (owner-caught:
+"1:2 here blurs more than Hyprland's 2:2"). Measured since on the real GPU, nested, glass off,
+over a black/white wallpaper (`HYALO_WALLPAPER`): 1:2 → 8 px, 2:2 → 12 px, 10–90 % of the edge.
+The refraction is PER SHAPE (`set_lensing`): `refraction` is every shape's least,
+and `lensing` × the shape's shorter side wins where it is more, so a large pane lenses more than
+a capsule without a number per surface. The edge is a **convex bevel lying on the backdrop**
+(`glass_gl.rs`): a quarter circle W wide and W thick, refraction by Snell at glass's 1.5, so the
+backdrop is read from INSIDE the shape — bent hard against the edge, a little magnified further
+in, never anything from beyond the outline. `refraction` is the bevel's most displacement
+(0.231 W, so W ≈ 4.3 × it, up to half the shorter side), and the capture region is the blur's
+reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
+the peak displaces faster than 1 px per px and the backdrop folds back mirrored, and 1.5 W
+already magnified the dock's icons under the app grid's edge four times their height (measured
+nested, 2026-10-02 — W thick is the one kept). Until that day the edge read from OUTSIDE,
+(1 − t)² × refraction over a band the corner radius wide: once `lensing` grew to 0.15 the app
+grid read 125 px out within 32, and a window under it showed whole, shrunk, wallpaper round it
+(owner-caught: "an inverted magnifier"). Compare numbers on the bevel in the harness, never on
+the live session: `HYALO_GLASS_TUNING=<file>` gives the sandboxed shell its own
+`glass-tuning.conf` (`hyalo/scripts/sandboxed-shell.sh`), over a grid as `HYALO_WALLPAPER`.
+⚠️ `target` is a WCAG relative luminance — LINEAR light, the adaptive glass's own number (primary
+text at 4.5:1 → 0.183), and `alphaMax` is its ceiling (`GLASS_ADAPT_CEILING`). The shader mixes
+the tint into the ENCODED colour, so it searches for the least alpha that meets it (8 bisection
+steps) rather than solving in encoded luma: compared against encoded luma, a white backdrop came
+out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10-01). `nidara-hyalo msg layers` shows what each
+layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
+dock and the island to declare theirs.
+
+🔴 **The material rides on a commit GTK may never make.** It is double-buffered surface state,
+and GTK commits only a frame that DREW something (it diffs render nodes; no damage, no commit).
+A change that moves none of the client's pixels — every `glass-tuning.conf` value, the glass's
+parameters — therefore waited for the next unrelated redraw: the bar picked it up within a second
+(its clock), the dock, which repaints only when touched, never did (2026-10-02, seen in
+`WAYLAND_DEBUG=client`: no `wl_surface.commit` after the `set_glass`). `nidara_wl_material_commit`
+now marks the surface and commits it once more from the frame clock's `after-paint` — AFTER
+GTK's present, so where GTK drew that extra commit is empty, and never BEFORE it, which would show
+the new shapes over the old buffer for a frame.
+
+🔴 **Cargo does not see the protocol XML.** The scanner macros read `protocols/*.xml` at compile
+time without telling cargo, so an edited protocol left Hyalo built from the OLD file while
+`lib/nidara-wl` was built from the new one; the two ends numbered the requests differently, a
+message was read with the wrong arguments, and the shell hung on its first frame (2026-10-01).
+`protocols/mod.rs` now `include_bytes!`s every XML it generates from — a new protocol there
+needs its line too. And a new request goes at the END of its interface, with `since`: inserting
+one renumbers every request after it, and an older client then speaks a different protocol.
+
+### The ink: white text, dark only where the whole backdrop under it is white (#684)
+
+Owner's decision, 2026-10-01, Hyalo only (on Hyprland the shell's skin stays dark, 2026-09-30).
+There is no skin on Hyalo's glass: the text is white, and a pane's content turns dark only when
+even the DARKEST point of the backdrop under it — as the glass treats it: blurred, saturated,
+before its tint — is brighter than `inkDarkAbove`, and back only below `inkLightBelow`
+(hysteresis). Never by an area's average: a mostly-light wallpaper with one dark stroke under the
+text keeps it white.
+
+- **Groups and boxes (client).** Each `trackGlass` entry is an ink group (`inkId`); its boxes are
+  every LEAF widget its scope draws — labels with text, icons, Cairo areas, CSS-painted boxes like
+  the workspace dots — except the glass's own painter, through the same transforms and clips as
+  the shapes. More than 8 → their union (stricter, never looser). A type list (labels, images)
+  missed the CSS-painted dots: the island's capsule stayed dark while everything else turned.
+- **Measured by Hyalo (`add_ink_box`, `set_ink`, event `ink`).** In the glass's
+  draw, when the capture or the boxes changed: one small pass samples a 12×12 grid of the blurred
+  copy per box into a 64×1 target (one texel per box, the minimum as two bytes), read into a
+  pixel-pack buffer behind a fence. `backend::poll_ink` collects it from a 4 ms timer that
+  exists only while a readback is in flight — no frame waits, nothing ticks at rest. The
+  hysteresis (`material::next_ink`, unit-tested with a control) runs there; a change sends `ink`
+  and redraws.
+- **The glass follows.** A shape holding a dark group is not darkened for white content: it gets
+  the light veil (`set_ink`'s tint at `alpha_min`).
+- **The client follows.** `libnidara-wl` puts the material object on GDK's own event queue, so
+  GDK dispatches `ink` on the main loop as it arrives (no pump). The pane gets `INK_DARK_CLASS`,
+  which `generateSkinFlipScope` gives the light skin's tokens; `chromeIsDarkFor` answers
+  `darkInkFor` first, so Cairo painters follow; the subtree is redrawn.
+- A group no longer declared keeps its decision on both ends (a panel reopens as it closed);
+  `clear_ink` makes every group light on both ends.
+- Thresholds: `CompositorGlass.ts` (0.80 / 0.65 to start), live in `glass-tuning.conf`
+  (`inkDarkAbove`, `inkLightBelow`, `ink = off`) — calibrated with the owner, not final.
+  `NIDARA_MATERIAL_DEBUG=1` logs every ink decision.
+- To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
+  backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
+
+### The shadow under the glass: what the glass is missing, within its limit (#684)
+
+Owner, 2026-10-02: "parts almost entirely grey and parts right, on the same element". The tint
+thickens PER PIXEL, so a pane over a backdrop bright in one place and dark in another came out
+grey in one part and clear in the other — on the owner's own wallpaper (light blue over dark
+purple) the CC's camera and volume tiles went grey while Focus stayed clear. The fix is the
+owner's idea: a soft black shadow UNDER the glass, even across the pane, only when needed.
+
+- **The protocol** (`set_scrim(max_strength, size_fraction, tint_limit, region_edge)`,
+  `add_scrim_region(x, y, w, h, falloff)`). A region is shared by every shape whose centre lies
+  in it; a shape in none gets its own (its outline as core, fading over `size_fraction` of its
+  shorter side, even across it). A region's shadow is whole at its CENTRE and sweeps out to
+  `region_edge` of that at its rim — a superellipse norm (exponent 4) of the offset from the
+  centre over the half-size, so the sweep follows the container's shape, sides and ends alike —
+  then fades over its falloff (`render/scrim.rs`, unit-tested). `region_edge` 1: even.
+- **The rule** (`material::scrim_target`, unit-tested with a control). Owner, 2026-10-02: "the
+  limit has to be in the glass". The glass takes no more tint than `tint_limit` (0.25) — past it
+  a pane reads as painted grey — and the shadow is EXACTLY what the glass is missing for the
+  brightest point under the unit's light-ink shapes to reach `target`: ≈0.41 over white, 0.15
+  over a light backdrop (0.45), none where the glass reaches it alone. It grows and shrinks
+  with the backdrop: no threshold, no hysteresis. While there is a shadow the shell sends the
+  limit AS the glass's `alpha_max` (`CompositorGlass.ts`): nothing tints past it, not even for
+  legibility — a ceiling above it "makes the grey plastic again" (owner). Past `max_strength`
+  the text is less legible, not the glass greyer. The bar and the dock, which cast none for
+  now, are held to the same ceiling. A shape whose content has turned
+  dark (an ink box of a dark group inside it) asks for none: it lies on the ink's light veil.
+  Two rules came before and went the same day: "bring the brightest point to `target`" (the
+  tint idle, the shadow doing everything), then "the least that evens the pane out", gated by
+  a spread between the darkest and brightest point's tints (`min_spread`) — a threshold nobody
+  could explain, and a glass still allowed to turn grey up to `alpha_max`.
+- **Measured with the ink**, in the same pass: one probe per shadowed shape (its body, inset by
+  0.29 of its radius), darkest and brightest in one texel. 🔴 The probe DIVIDES OUT the shadow
+  drawn this frame (`unscale` = 1 / (1 − its opacity there)), or the shadow would measure itself
+  and chase its own tail. 🔴 On the chrome it divides out the WHOLE floor, every chrome
+  surface's shadows — not only its own. Dividing out only its own, the Control Center's strip
+  (which reaches the bottom of the screen) darkened the right of the dock's backdrop, split it,
+  and switched the dock's band on; its hysteresis then held it on after the CC closed — and
+  the CC's strip did the same to the bar's right-hand capsule (owner, 2026-10-02: "the dock's
+  shadow only comes on when the CC opens"; measured: dock 0.462, bar 0.344, both 0 after a
+  reload). The ink boxes are NOT unscaled: their question is what the text sits on.
+- **Drawn** by `render/scrim.rs`: one pass, shadows combined by their MAXIMUM (two panes side
+  by side never make a darker band between them), smootherstep fade, half-level dither against
+  banding. 🔴 The shell's chrome (top and overlay layers) casts its shadows onto ONE FLOOR under
+  all of it, right above the windows (`render/mod.rs`, `chrome_scrims`): the bar and the dock
+  are both TOP, and a shadow placed right under the bar darkened the dock's icons. One element
+  for the whole floor (its memo on the output), so two surfaces' shadows that overlap — the
+  CC's strip and the dock's band — combine by their maximum too, never darkening the corner
+  twice. A window's glass keeps one element per surface.
+- **Eases** in 220 ms, out 600 ms (a video under a pane must not pump it); while one eases the
+  backend queues the next frame (`scrim::take_easing`), and at rest nothing is redrawn.
+- **Who casts what.** A pane in no region gets a halo, its outline fading outward over
+  `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
+  "a shadow downward separating the top from the bottom").
+  - **The Control Center and the Notification Center share ONE region** (`trackScrimRegion(widget)`
+    in Bar.tsx): their CONTAINER, EVEN across it (`scrimEdge` 1 — the shadow is what the glass
+    lacks at the brightest point, so a sweep leaves the edge tiles short of it; 0.7 did not read
+    on screen either, owner 2026-10-02: settled, no more tuning rounds), then fading to nothing over `scrimFalloff` (160) px — 48 read as a step ("there must be no jump between the shadow and the backdrop", owner). Tuned live. How it got
+    there, all on 2026-10-02: first the screen's whole right-hand strip, down to the bottom,
+    shading wallpaper far below a short panel — the owner, from a reference video: "the shadow
+    occupies only the CC's area"; then the panel's block, even: "it looks like a translucent
+    dark panel with a gradient at its border"; an ELLIPSE darkest at the centre was written and
+    thrown away unseen — "I did not say an ellipse … very subtle, very slightly darker at the
+    centre, sweeping from the centre, over the container's area"; the sweep then went back to
+    even, above. The region
+    no longer reaches past the screen's edges: its centre has to be the panel's. Its core ends
+    at its GLASS's edges plus what
+    that glass refracts (`placeScrimRegions`), not at the widget's box, which holds margins:
+    "the fade should start right where the CC ends" (owner; it was 32 px of margin and 380 of
+    fade — 800 px of shadow for a 368 px panel). Measured nested without it: each tile got its own
+    strength (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
+  - **The bar and the dock cast NONE** (`trackNoScrim`: a region with a negative falloff,
+    which claims its panes and casts nothing). Tried and dropped on 2026-10-02: a halo per
+    capsule, then a band hugging each (`fade: "strip"`). Measured on screen: the bar's band
+    covered 0–48 px and fell to nothing in ~10 px, the dock's 16 px above it and ~35 px of
+    fade — over the title bar and the bottom of a window that starts 4 px under the bar's
+    exclusive zone. A shadow ABOVE the windows cannot fade gently there without darkening
+    them, and two surfaces' bands made a crease where they met (the CC's and the bar's).
+    ▶️ The owner's direction: an EDGE shadow drawn by Hyalo itself — it already knows which
+    edge each layer sits on and what it reserves — UNDER the windows (only the wallpaper gets
+    it, so it can fade long), each edge at its own strength, no stacking where two meet.
+  - 🔴 A shape joins the FIRST region its centre lies in, in declaration order: the bar's
+    no-shadow region is declared before the CC's strip, which reaches past the top and would
+    otherwise take the bar's right-hand capsules.
+- Tuned live in `glass-tuning.conf`: `tintLimit scrimMax scrimSize scrimFalloff`,
+  `scrim = off` for the A/B. `nidara-hyalo msg layers` shows each surface's `glass.scrims` (kind, shapes,
+  strength); the smoke requires the CC's panes to share one region and no bar or dock pane to
+  cast a shadow of its own.
+- To see it nested, the backdrop must be a REAL full-screen layer: `gjs bg.js` without
+  `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` comes up as a window with a dark title bar and the
+  clear colour around it, and the bar and dock then sit on a mixed backdrop whatever you painted.
 
 ## The window manager
 

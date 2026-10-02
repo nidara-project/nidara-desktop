@@ -13,6 +13,7 @@ import {
     type GlassDecision, type BackdropStats, type HyprlandBlurParams, type GlassContent, type Rgb,
 } from "../../lib/nidara-kit/platform/glass-legibility"
 import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
+import { darkInkFor } from "../../lib/nidara-kit/platform/material"
 
 /**
  * ADAPTIVE GLASS (#673) — each shell surface keeps its text legible over whatever is
@@ -221,8 +222,10 @@ function tintAlphaFor(widget: Gtk.Widget | null, role: GlassRole): number {
 }
 
 /** The skin a shell-chrome painter inside `widget` should paint: the shell's own
- *  (`Theme.chromeIsDark`), unless its surface has flipped. */
+ *  (`Theme.chromeIsDark`), unless its surface has flipped — or, on Hyalo, unless the
+ *  compositor said the content of its pane of glass is dark (the ink, #684). */
 export function chromeIsDarkFor(widget: Gtk.Widget | null): boolean {
+    if (darkInkFor(widget)) return false
     const s = surfaceOf(widget)
     return s?.decision ? s.decision.isDark : Theme.chromeIsDark
 }

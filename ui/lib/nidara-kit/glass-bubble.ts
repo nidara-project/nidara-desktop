@@ -5,6 +5,7 @@ import { GLASS_TINT, GLASS_SPECULAR } from "./platform/tokens"
 import { glassRimGradient, squircleCorner, drawShadowFromPath, GLASS_SHADOW } from "./platform/glass-paint"
 import { kitAppearance } from "./appearance"
 import { frostedFill } from "./platform/glass-legibility"
+import { compositorDrawsPointers, compositorPaintsGlass, trackGlass } from "./platform/material"
 
 // The Nidara glass bubble: a rounded body with a pointer spliced into one side,
 // painted in Cairo as a SINGLE continuous shape (one glass fill, one 1px inner
@@ -13,6 +14,9 @@ import { frostedFill } from "./platform/glass-legibility"
 // so both speak the same glass language. A GTK popover arrow can't do this on
 // translucent glass — its base seam shows through — which is the whole reason
 // this is Cairo. The popover is still its own surface, so it keeps Hyprland's blur.
+// On Hyalo the compositor paints the whole bubble, pointer included (nidara-material-v1
+// v3's `add_shape_pointed`), from the same geometry (`bubbleGeometry`); this then paints
+// only the shadow.
 
 export type ArrowSide = "top" | "bottom" | "left" | "right"
 
@@ -160,11 +164,66 @@ export interface GlassBubbleOpts {
     /** The widget being painted, so the shell can answer for the surface it sits in
      *  (a tooltip or menu inside a panel the adaptive glass flipped wears that skin). */
     widget?: Gtk.Widget | null
+    /** The DrawingArea `trackBubbleGlass` was given: while the compositor paints its glass,
+     *  only the shadow is painted here. */
+    glassWidget?: Gtk.Widget | null
 }
+
+/** The bubble's body, without its pointer: inset by BUF all round plus ARROW_H on the
+ *  pointer's side, with the near-pill radius clamped so the pointer's base fits in the
+ *  straight segment. Its corners are superellipse quadrants of the painter's `n`. */
+export const bubbleBody = (w: number, h: number, side: ArrowSide, radiusMax = 13):
+    { x: number, y: number, w: number, h: number, r: number } | null => {
+    const x = BUF + (side === "left" ? ARROW_H : 0)
+    const y = BUF + (side === "top" ? ARROW_H : 0)
+    const bw = w - 2 * BUF - ((side === "left" || side === "right") ? ARROW_H : 0)
+    const bh = h - 2 * BUF - ((side === "top" || side === "bottom") ? ARROW_H : 0)
+    if (bw <= 0 || bh <= 0) return null
+    const edgeLen = (side === "top" || side === "bottom") ? bw : bh
+    let r = Math.min(bh, bw) / 2
+    r = Math.min(r, radiusMax)
+    r = Math.min(r, (edgeLen - ARROW_W) / 2 - 2)
+    r = Math.max(r, 4)
+    return { x, y, w: bw, h: bh, r }
+}
+
+/** The whole bubble, as the painter draws it and the compositor is told: the body, and the
+ *  pointer — its base width fitted into the straight edge, slid by `arrowOffset` (clamped so
+ *  the base never eats the corner arcs), its base centred on the edge and its tip. */
+export const bubbleGeometry = (w: number, h: number, side: ArrowSide, radiusMax = 13, arrowOffset = 0) => {
+    const body = bubbleBody(w, h, side, radiusMax)
+    if (!body) return null
+    const { x, y, w: bw, h: bh, r } = body
+    const vertical = side === "top" || side === "bottom"
+    const edgeLen = vertical ? bw : bh
+    const aw = Math.min(ARROW_W, Math.max(edgeLen - 2 * r - 4, 6))
+    const maxOff = Math.max(0, (edgeLen - aw) / 2 - r - 2)
+    const off = Math.max(-maxOff, Math.min(maxOff, arrowOffset))
+    const cx = x + bw / 2 + off, cy = y + bh / 2 + off
+    const [baseX, baseY, tipX, tipY] =
+        side === "bottom" ? [cx, y + bh, cx, y + bh + ARROW_H]
+        : side === "top" ? [cx, y, cx, y - ARROW_H]
+        : side === "right" ? [x + bw, cy, x + bw + ARROW_H, cy]
+        : [x, cy, x - ARROW_H, cy]
+    return { body, aw, off, pointer: { baseX, baseY, tipX, tipY, width: aw, tipRadius: TIP_R, baseRadius: BASE_R } }
+}
+
+/** Tell a compositor of our own where a bubble painted by `da` is (nidara-material-v1):
+ *  body and pointer, which it paints as one glass. `scope` is what the bubble holds (its
+ *  label, its rows): the ink group. A compositor that cannot draw a pointer only blurs
+ *  behind the body, and the bubble paints its own glass. */
+export const trackBubbleGlass = (da: Gtk.Widget, side: () => ArrowSide, radiusMax: () => number, n: () => number,
+    opts: { arrowOffset?: () => number, scope?: Gtk.Widget } = {}) =>
+    trackGlass(da, () => {
+        const g = bubbleGeometry(da.get_width(), da.get_height(), side(), radiusMax(), opts.arrowOffset?.() ?? 0)
+        if (!g) return []
+        const b = g.body
+        return [{ x: b.x, y: b.y, w: b.w, h: b.h, radius: b.r, exponent: n(), pointer: g.pointer }]
+    }, { scope: opts.scope, clientPaints: () => !compositorDrawsPointers() })
 
 export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide, opts: GlassBubbleOpts = {}) => {
     const { chrome = true, radiusMax = 13, n = 2 } = opts
-    const arrowW = ARROW_W, arrowH = ARROW_H, tipR = TIP_R
+    const arrowH = ARROW_H, tipR = TIP_R
     if (w <= 0 || h <= 0) return
 
     const app = kitAppearance()
@@ -177,26 +236,10 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     // and the material's haze over it, folded into the one fill (`frostedFill`).
     const { tint, alpha } = frostedFill(baseTint, opts.alpha ?? Math.max(app.overlayOpacity?.() ?? 0.55, 0.38), app.glassFrost?.() ?? 0)
 
-    // Body rect: inset by BUF all round, plus arrowH on the arrow side.
-    const bx = BUF + (side === "left" ? arrowH : 0)
-    const by = BUF + (side === "top" ? arrowH : 0)
-    const bw = w - 2 * BUF - ((side === "left" || side === "right") ? arrowH : 0)
-    const bh = h - 2 * BUF - ((side === "top" || side === "bottom") ? arrowH : 0)
-    if (bw <= 0 || bh <= 0) return
-
-    // Near-pill radius, but clamped so the arrow base fits in the straight segment.
-    let r = Math.min(bh, bw) / 2
-    r = Math.min(r, radiusMax)
-    const edgeLen = (side === "top" || side === "bottom") ? bw : bh
-    r = Math.min(r, (edgeLen - arrowW) / 2 - 2)
-    r = Math.max(r, 4)
-
-    // Fit pointer's base inside the straight portion.
-    const aw = Math.min(arrowW, Math.max(edgeLen - 2 * r - 4, 6))
-
-    // Slide correction: clamp requested pointer shift.
-    const maxOff = Math.max(0, (edgeLen - aw) / 2 - r - 2)
-    const off = Math.max(-maxOff, Math.min(maxOff, opts.arrowOffset ?? 0))
+    const g = bubbleGeometry(w, h, side, radiusMax, opts.arrowOffset ?? 0)
+    if (!g) return
+    const { body, aw, off } = g
+    const { x: bx, y: by, w: bw, h: bh, r } = body
 
     cr.setOperator(2) // OVER
 
@@ -208,6 +251,9 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
         -shM, -shM, w + shM * 2, h + shM * 2,
         GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop,
     )
+
+    // On a compositor of our own the glass is the compositor's: the shadow was all.
+    if (opts.glassWidget && compositorPaintsGlass(opts.glassWidget)) return
 
     // 1) Glass fill — AA
     cr.save()

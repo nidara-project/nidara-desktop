@@ -24,6 +24,7 @@ import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
+import { compositorPaintsGlass, trackGlass, trackNoScrim } from "../../../lib/nidara-kit/platform/material"
 import { SlicedCairoArea } from "../../../lib/sliced-cairo"
 import { BAR_H } from "../bar/capsule"
 
@@ -217,7 +218,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 // The adaptive glass's answer for the dock, not the global mode and slider:
                 // it thickens the tint (or flips the skin) over a backdrop the running
                 // dot would vanish on (common/AdaptiveGlass.ts).
-                key: () => `${chromeIsDarkFor(gloss)}|${glassAlphaFor(gloss, "dock")}`,
+                key: () => `${chromeIsDarkFor(gloss)}|${glassAlphaFor(gloss, "dock")}|${compositorPaintsGlass(gloss)}`,
                 // The squircle's corner spans its radius (half the pill) from the inset edge;
                 // one more pixel keeps the rim's antialiasing inside the cap.
                 capLength: (h) => DOCK_SHADOW_PAD + (h - DOCK_SHADOW_PAD * 2) / 2 + 1,
@@ -233,9 +234,17 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                         w - DOCK_SHADOW_PAD * 2, _h - DOCK_SHADOW_PAD * 2,
                         (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
                         GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                    drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
+                    // On a compositor of our own the pill's glass is the compositor's (#684).
+                    if (!compositorPaintsGlass(gloss))
+                        drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
                 },
             })
+            trackGlass(gloss, () => {
+                const pw = gloss.get_width() - DOCK_SHADOW_PAD * 2, ph = gloss.get_height() - DOCK_SHADOW_PAD * 2
+                return [{ x: DOCK_SHADOW_PAD, y: DOCK_SHADOW_PAD, w: pw, h: ph, radius: Math.min(pw, ph) / 2, exponent: 3.2 }]
+            })
+            // On Hyalo its glass casts no shadow (owner, 2026-10-02: one ran over the windows).
+            trackNoScrim(gloss)
             da = gloss
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
@@ -636,9 +645,18 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 cr.translate(px - DOCK_SHADOW_PAD, py - DOCK_SHADOW_PAD)
                 drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD, pw, ph, pw / 2, 3.2, false,
                     GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
-                    dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
+                // On a compositor of our own the pill's glass is the compositor's (#684).
+                if (!compositorPaintsGlass(da))
+                    drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
+                        dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
             }))
+            const pillArea = da
+            trackGlass(pillArea, () => {
+                const { x, y, width, height } = capsuleIn(pillArea.get_width(), pillArea.get_height())
+                return [{ x, y, w: width, h: height, radius: Math.min(width, height) / 2, exponent: 3.2 }]
+            })
+            // On Hyalo its glass casts no shadow (owner, 2026-10-02: one ran over the windows).
+            trackNoScrim(pillArea)
 
             // Shim: positioned by margin_top (set dynamically via updateSize → getGtkCenter).
             shim = new Gtk.Box({

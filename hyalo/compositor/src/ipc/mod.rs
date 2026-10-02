@@ -59,6 +59,30 @@ pub struct LayerInfo {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    /// The glass this layer declared (nidara-material-v1), if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass: Option<GlassInfo>,
+}
+
+/// What a surface asked of its glass: how many shapes, and whether the compositor paints the
+/// glass itself (true) or only blurs behind the client's own paint (false).
+#[derive(Debug, Clone, Serialize)]
+pub struct GlassInfo {
+    pub shapes: usize,
+    pub compositor_paints: bool,
+    /// Each shape's edge displacement, logical px (`set_lensing`): empty when blur only.
+    pub refraction: Vec<f64>,
+    /// The shadows under the glass: one per region holding a shape, or per lone shape.
+    pub scrims: Vec<ScrimInfo>,
+}
+
+/// One shadow under the glass: what it lies under, and the strength it is easing to.
+#[derive(Debug, Clone, Serialize)]
+pub struct ScrimInfo {
+    /// "region" (shared, add_scrim_region) or "shape" (a lone shape's own).
+    pub kind: &'static str,
+    pub shapes: usize,
+    pub strength: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]

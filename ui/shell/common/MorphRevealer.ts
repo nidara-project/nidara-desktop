@@ -3,6 +3,7 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 import { drawSquircle } from "./DrawingUtils"
+import { compositorPaintsGlass, trackGlass, type GlassShape } from "../../lib/nidara-kit/platform/material"
 
 // MorphRevealer: Dynamic-Island-style show/hide — ONE shape that TRANSFORMS.
 // The bar's workspace capsule doesn't fade out while an island fades in over
@@ -204,6 +205,35 @@ export class MorphRevealer extends Gtk.Widget {
         for (const p of this.pairs) p.ghost.set_parent(this)
         for (const g of this.sourceGhosts) g.set_parent(this)
         this.set_visible(false)
+        // The clone is glass that contains nothing: the island's own panes inside it stay
+        // panes of their own (no scope).
+        trackGlass(this, () => this.glassShape(), { scope: null })
+    }
+
+    /** This frame's shape: the glass rect at rest `f`, the source's `s`, the one between
+     *  them now `R`, and how far the glass's recipe has gone from one end to the other. */
+    morphGeometry(w: number, h: number): { f: Rect, s: Rect, R: Rect, k: number } {
+        const p = this.progress
+        const f = this.rectOf(this.glassWidget) ?? { x: 0, y: 0, w, h }
+        const s = (this.fromSource ? this.rectOf(this.getSourceWidget?.() ?? null) : null)
+            ?? { x: f.x + f.w * 0.015, y: f.y + f.h * 0.015, w: f.w * 0.97, h: f.h * 0.97 }
+        // Param interpolation factor: fallback pop holds the island's own
+        // glass recipe for the whole (subtle) zoom.
+        return { f, s, R: lerpRect(s, f, p), k: this.fromSource ? p : 1 }
+    }
+
+    /** The clone's glass, for a compositor of our own: the shape `vfunc_snapshot` paints,
+     *  while it paints one (mid-morph); nothing at rest, where the real glass is back. */
+    glassShape(): GlassShape[] {
+        const w = this.get_width(), h = this.get_height()
+        if (this.progress >= 1 || w <= 0 || h <= 0) return []
+        const { f, s, R, k } = this.morphGeometry(w, h)
+        const gFrom = this.glassFrom(), gTo = this.glassTo()
+        const gw = R.w - GLASS_INSET * 2, gh = R.h - GLASS_INSET * 2
+        if (gw <= 0 || gh <= 0) return []
+        const radius = lerp(gFrom.radius ?? s.h / 2, gTo.radius ?? f.h / 2, k)
+        return [{ x: R.x + GLASS_INSET, y: R.y + GLASS_INSET, w: gw, h: gh,
+            radius: Math.min(radius, gw / 2, gh / 2), exponent: lerp(gFrom.n, gTo.n, k) }]
     }
 
     // Widget bounds in this widget's coordinates, or null when unusable.
@@ -328,27 +358,22 @@ export class MorphRevealer extends Gtk.Widget {
         const h = this.get_height()
         if (w <= 0 || h <= 0) return
 
-        const f = this.rectOf(this.glassWidget) ?? { x: 0, y: 0, w, h }
-        const s = (this.fromSource ? this.rectOf(this.getSourceWidget?.() ?? null) : null)
-            ?? { x: f.x + f.w * 0.015, y: f.y + f.h * 0.015, w: f.w * 0.97, h: f.h * 0.97 }
-        const R = lerpRect(s, f, p)
+        const { f, s, R, k } = this.morphGeometry(w, h)
         // Content mapping: glass rect f → current rect R(p). Shared by the
         // child paint (2.) and the ghost-dot targets (3.).
         const sx = f.w > 0 ? R.w / f.w : 1
         const sy = f.h > 0 ? R.h / f.h : 1
-        // Param interpolation factor: fallback pop holds the island's own
-        // glass recipe for the whole (subtle) zoom.
-        const k = this.fromSource ? p : 1
 
         // 1. THE SHAPE — real interpolated Cairo geometry, same painter and
-        // params as SquircleContainer so both endpoint swaps are invisible.
+        // params as SquircleContainer so both endpoint swaps are invisible. On a
+        // compositor of our own the compositor paints it, from `glassShape` (#684).
         const gFrom = this.glassFrom()
         const gTo = this.glassTo()
         const bounds = new Graphene.Rect()
         bounds.init(-8, -8, w + 16, h + 16)   // slack for sub-pixel source rects
         const cr = snapshot.append_cairo(bounds)
         cr.translate(R.x, R.y)
-        drawSquircle(
+        if (!compositorPaintsGlass(this)) drawSquircle(
             cr, R.w, R.h, undefined,
             lerp(gFrom.alpha, gTo.alpha, k), true,
             {

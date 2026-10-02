@@ -9,6 +9,7 @@
 
 pub mod glass;
 pub mod glass_gl;
+pub mod scrim;
 
 use smithay::{
     backend::{
@@ -34,6 +35,7 @@ use smithay::{
 };
 
 pub use glass::GlassElement;
+pub use scrim::ScrimElement;
 
 use crate::state::Hyalo;
 
@@ -91,6 +93,7 @@ smithay::backend::renderer::element::render_elements! {
     pub OutputElement<R> where R: HyaloRenderer;
     Surface=WaylandSurfaceRenderElement<R>,
     Glass=GlassElement,
+    Scrim=ScrimElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
 }
 
@@ -99,6 +102,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
         match self {
             Self::Surface(e) => f.debug_tuple("Surface").field(e).finish(),
             Self::Glass(e) => f.debug_tuple("Glass").field(e).finish(),
+            Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
@@ -108,7 +112,13 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
 /// Behind everything: shown only where nothing covers the output (no wallpaper yet).
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.06, 0.06, 0.07, 1.0);
 
-/// A surface tree and its popups, front to back, each with its glass right below it.
+/// A surface tree and its popups, front to back, each with its glass right below it, and the
+/// shadow under that glass below the glass — unless `floor` is given: the shell's chrome
+/// casts ONE floor of shadows under all of it (`chrome_scrims`, drawn by the caller), so the
+/// Control Center's never falls on the dock, which sits in the same layer, and each glass
+/// measures its backdrop with the whole floor divided out — not only its own shadow, or the
+/// Control Center's would split the dock's backdrop and switch the dock's on (owner,
+/// 2026-10-02: "the dock's shadow only comes on when the Control Center opens").
 fn push_surface<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     renderer: &mut R,
@@ -116,15 +126,39 @@ fn push_surface<R: HyaloRenderer>(
     location: Point<i32, Physical>,
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
+    floor: Option<&[scrim::ScrimPx]>,
 ) {
+    let now = std::time::Instant::now();
+    let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
+        out.extend(render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind));
+        match floor {
+            Some(floor) => {
+                out.extend(GlassElement::for_surface(s, loc, scale, output_size, floor).into_iter().map(OutputElement::Glass));
+            }
+            None => {
+                let scrims = scrim::scrims_for(s, loc, scale, now);
+                out.extend(GlassElement::for_surface(s, loc, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
+                let e = with_states(s, |states| ScrimElement::new(&states.data_map, scrims, output_size));
+                out.extend(e.map(OutputElement::Scrim));
+            }
+        }
+    };
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
-        let loc = location + offset;
-        out.extend(render_elements_from_surface_tree(renderer, popup.wl_surface(), loc, scale, 1.0, Kind::Unspecified));
-        out.extend(GlassElement::for_surface(popup.wl_surface(), loc, scale, output_size).into_iter().map(OutputElement::Glass));
+        layer(out, popup.wl_surface(), location + offset, Kind::Unspecified);
     }
-    out.extend(render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, Kind::ScanoutCandidate));
-    out.extend(GlassElement::for_surface(surface, location, scale, output_size).into_iter().map(OutputElement::Glass));
+    layer(out, surface, location, Kind::ScanoutCandidate);
+}
+
+/// The shadows a surface tree and its popups cast, for the chrome's floor.
+fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<scrim::ScrimPx> {
+    let mut out = Vec::new();
+    for (popup, offset) in PopupManager::popups_for_surface(surface) {
+        let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        out.extend(scrim::scrims_for(popup.wl_surface(), location + offset, scale, now));
+    }
+    out.extend(scrim::scrims_for(surface, location, scale, now));
+    out
 }
 
 /// What a frame is made from: the parts of the state rendering reads, borrowed apart from the
@@ -192,20 +226,30 @@ pub fn output_elements<R: HyaloRenderer>(
             let Some(loc) = state.space.element_location(window) else { continue };
             let Some(surface) = window.wl_surface() else { continue };
             let loc = (loc - window.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
-            push_surface(out, renderer, &surface, loc, scale, output_size);
+            push_surface(out, renderer, &surface, loc, scale, output_size, None);
         }
     };
+    // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
+    // it, combined by their maximum like one surface's (two surfaces' shadows that overlap —
+    // the Control Center's strip and the dock's band — never darken the corner twice).
+    let now = std::time::Instant::now();
+    let floor: Vec<scrim::ScrimPx> = [Layer::Overlay, Layer::Top]
+        .into_iter()
+        .flat_map(|layer| map.layers_on(layer).map(|l| chrome_scrims(l.wl_surface(), layer_loc(l), scale, now)).collect::<Vec<_>>())
+        .flatten()
+        .collect();
     for l in map.layers_on(Layer::Overlay).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
     push_windows(&mut out, renderer, &above);
     for l in map.layers_on(Layer::Top).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
+    out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
     push_windows(&mut out, renderer, &below);
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
-            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size);
+            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);
         }
     }
     out

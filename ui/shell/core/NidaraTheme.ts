@@ -11,6 +11,7 @@
 export * from "../../lib/nidara-kit/platform/theme-tokens"
 
 import { nidaraVars, type NidaraThemeConfig } from "../../lib/nidara-kit/platform/theme-tokens"
+import { INK_DARK_CLASS } from "../../lib/nidara-kit/platform/material"
 
 export const CHROME_SCOPE_WINDOWS = [
   "nidara-bar",
@@ -57,8 +58,10 @@ export function generateChromeTokenScope(
  */
 export function generateSkinFlipScope(config: NidaraThemeConfig): string {
   const block = (isDark: boolean) => {
-    const cls = isDark ? "nidara-skin-dark" : "nidara-skin-light"
-    const sel = CHROME_SCOPE_WINDOWS.map((w) => `window#${w} .${cls}, window#${w} .${cls} *`).join(", ")
+    // A pane of Hyalo's glass whose content the compositor said is dark (the ink, #684,
+    // `INK_DARK_CLASS`) wears the light skin's tokens: the same switch, per pane.
+    const classes = isDark ? ["nidara-skin-dark"] : ["nidara-skin-light", INK_DARK_CLASS]
+    const sel = CHROME_SCOPE_WINDOWS.flatMap((w) => classes.map((cls) => `window#${w} .${cls}, window#${w} .${cls} *`)).join(", ")
     return `${sel} {\n${nidaraVars(config, isDark).join("\n")}\n}`
   }
   return `${block(true)}\n${block(false)}`

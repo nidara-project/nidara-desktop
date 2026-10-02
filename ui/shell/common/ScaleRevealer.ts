@@ -5,6 +5,7 @@ import Graphene from "gi://Graphene"
 import { reduceMotion } from "../core/ReduceMotion"
 import Theme from "../core/ThemeManager"
 import { blurSafeOpacity } from "../core/NidaraTheme"
+import type { PaintTransform } from "../../lib/nidara-kit/platform/material"
 
 // ScaleRevealer: shows/hides its child with a grow/shrink + fade animation.
 // Two modes, one engine:
@@ -391,6 +392,20 @@ export class ScaleRevealer extends Gtk.Widget {
         // geometry. Our transform relative to the window was set before this vfunc
         // ran, so compute_bounds() is already answering about THIS pass.
         this.onAllocated?.()
+    }
+
+    /** What `vfunc_snapshot` does to the child, for the glass a compositor of our own
+     *  draws under it (`ui/lib/nidara-kit/platform/material.ts`): GTK's own geometry never
+     *  sees a snapshot-time transform. */
+    glassPaintTransform(): PaintTransform | null {
+        const s = this.currentScale()
+        const rise = this.riseFrom * (1 - this.progress)
+        if (s >= 1 && this.swipeX === 0 && rise === 0) return null
+        const w = this.get_width()
+        const h = this.get_height()
+        const pivotX = this.pivot === "top-left" ? 0 : this.pivot === "top-right" ? w : w / 2
+        const pivotY = this.pivot === "center" ? h / 2 : 0
+        return { scale: Math.min(1, s), pivotX, pivotY, dx: this.swipeX, dy: -rise }
     }
 
     vfunc_snapshot(snapshot: Gtk.Snapshot) {

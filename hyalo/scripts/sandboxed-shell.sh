@@ -15,6 +15,9 @@ mkdir -p "$box/.config" "$box/.local/share"
 # The user's Nidara config, without hooks (a hook is a user script: it could act on the live
 # session) and without its git history.
 cp -a "$real_home/.config/nidara" "$box/.config/" && rm -rf "$box/.config/nidara/hooks" "$box/.config/nidara/.git"
+# HYALO_GLASS_TUNING=file: the glass's numbers for this run instead of the user's
+# glass-tuning.conf, to compare values without touching the live session's.
+[ -n "${HYALO_GLASS_TUNING:-}" ] && cp "$HYALO_GLASS_TUNING" "$box/.config/nidara/glass-tuning.conf"
 [ -f "$real_home/.config/dconf/user" ] && mkdir -p "$box/.config/dconf" \
   && cp "$real_home/.config/dconf/user" "$box/.config/dconf/user"
 [ -d "$real_home/.config/gtk-4.0" ] && cp -r "$real_home/.config/gtk-4.0" "$box/.config/"

@@ -37,6 +37,7 @@ import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import { ActivityIsland } from "../island/ActivityIsland"
 import { IslandWindow } from "../island/IslandWindow"
 import { execAsync } from "../../../lib/process"
+import { trackNoScrim, trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
 import { t } from "../../core/i18n"
 import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
@@ -148,6 +149,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right", unclipAtRest: true })
   const ncWidget = NotificationCenter()
   const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
+  // On Hyalo, the panes of both lie on ONE shadow under their glass, the size of the panel,
+  // a little darker at its centre (owner, 2026-10-02): one per tile would show as patches
+  // with and without shadow, a strip down to the bottom of the screen shaded what the panel
+  // does not cover, and an even block looked like a dark panel. Hyalo lays it only where the
+  // backdrop needs it; the sweep is CompositorGlass's `scrimEdge`.
+  // The bar's capsules cast none (owner, 2026-10-02: a halo, or a band hugging the bar, ran
+  // over the windows). Declared FIRST: a capsule on the right also lies in the Control
+  // Center's strip, and must not join it.
+  trackNoScrim(barBox)
+  trackScrimRegion(cc)
+  trackScrimRegion(nc)
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })

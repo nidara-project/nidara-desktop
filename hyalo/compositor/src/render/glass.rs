@@ -19,7 +19,7 @@ use smithay::{
         gles::GlesError,
         utils::CommitCounter,
     },
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
+    reexports::wayland_server::{Resource, Weak, protocol::wl_surface::WlSurface},
     utils::{Buffer as BufferCoords, Physical, Point, Rectangle, Scale, user_data::UserDataMap},
     wayland::compositor::with_states,
 };
@@ -38,6 +38,11 @@ pub struct GlassElement {
     offset: f32,
     passes: usize,
     glass: Option<glass_gl::Glass>,
+    /// The ink boxes that fall in this group, measured when the capture or they change.
+    ink_boxes: Vec<glass_gl::InkBox>,
+    /// Where the backdrop under this group's shadowed shapes is measured.
+    probes: Vec<glass_gl::LightProbe>,
+    surface: Weak<WlSurface>,
 }
 
 /// One id per group of a surface's shapes, stable across frames.
@@ -46,15 +51,20 @@ struct GlassIds(RefCell<Vec<Id>>);
 
 impl GlassElement {
     /// The glass elements of `surface`, placed at `location` (its origin, output pixels):
-    /// one per group of shapes whose blurs would overlap.
+    /// one per group of shapes whose blurs would overlap. `scrims` is the shadow drawn under
+    /// it this frame (render/scrim.rs), which its measurement divides out.
     pub fn for_surface(
         surface: &WlSurface,
         location: Point<i32, Physical>,
         scale: Scale<f64>,
         output_size: smithay::utils::Size<i32, Physical>,
+        scrims: &[super::scrim::ScrimPx],
     ) -> Vec<GlassElement> {
         let Some(current) = material::current(surface) else { return Vec::new() };
         let m = &current.state;
+        // The shapes that lie under a shadow: the backdrop under each is measured.
+        let shadowed: std::collections::BTreeSet<usize> =
+            m.scrim_units().into_iter().flat_map(|u| u.members).collect();
         let groups = groups(output_size, scale, location, m);
         let ids: Vec<Id> = with_states(surface, |states| {
             let ids = states.data_map.get_or_insert(GlassIds::default);
@@ -64,26 +74,69 @@ impl GlassElement {
             }
             ids[..groups.len()].to_vec()
         });
+        let ink_tint = m.ink.map_or([1.0; 3], |i| [i.tint[0] as f32, i.tint[1] as f32, i.tint[2] as f32]);
         let glass = m.glass.map(|g| glass_gl::Glass {
             tint: [g.tint[0] as f32, g.tint[1] as f32, g.tint[2] as f32],
             alpha_min: g.alpha_min as f32,
             alpha_max: g.alpha_max as f32,
             target: g.target_luminance as f32,
-            refraction: (g.refraction * scale.x) as f32,
             rim: g.rim as f32,
             saturation: g.saturation as f32,
+            ink_tint,
         });
+        // The ink is measured only where the compositor paints the glass: it is that glass's
+        // tint the decision changes.
+        let ink_boxes: Vec<glass_gl::InkBox> = if m.ink.is_some() && glass.is_some() {
+            m.ink_boxes
+                .iter()
+                .map(|b| glass_gl::InkBox {
+                    id: b.id,
+                    rect: Rectangle::new(
+                        location.to_f64() + Point::from((b.x * scale.x, b.y * scale.y)),
+                        (b.w * scale.x, b.h * scale.y).into(),
+                    ),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let surface_weak = surface.downgrade();
         groups
             .into_iter()
             .zip(ids)
-            .map(|((region, shapes), id)| GlassElement {
-                id,
-                commit: current.commit,
-                region,
-                shapes,
-                offset: (m.blur_size * scale.x) as f32,
-                passes: m.blur_passes as usize,
-                glass,
+            .map(|((region, mut shapes), id)| {
+                let center = |b: &glass_gl::InkBox| {
+                    Point::<f64, Physical>::from((b.rect.loc.x + b.rect.size.w / 2.0, b.rect.loc.y + b.rect.size.h / 2.0))
+                };
+                let mine: Vec<glass_gl::InkBox> = ink_boxes
+                    .iter()
+                    .filter(|b| shapes.iter().any(|s| s.rect.contains(center(b))))
+                    .copied()
+                    .collect();
+                // A dark group darkens no shape: the topmost shape holding one of its boxes
+                // wears the light veil.
+                for b in mine.iter().filter(|b| current.dark_ink.contains(&b.id)) {
+                    if let Some(s) = shapes.iter_mut().rev().find(|s| s.rect.contains(center(b))) {
+                        s.ink_dark = true;
+                    }
+                }
+                let probes = if glass.is_some() {
+                    shapes.iter().filter(|s| shadowed.contains(&s.index)).filter_map(|s| probe(s, scrims)).collect()
+                } else {
+                    Vec::new()
+                };
+                GlassElement {
+                    id,
+                    commit: current.commit,
+                    region,
+                    probes,
+                    shapes,
+                    offset: (m.blur_size * scale.x) as f32,
+                    passes: m.blur_passes as usize,
+                    glass,
+                    ink_boxes: mine,
+                    surface: surface_weak.clone(),
+                }
             })
             .collect()
     }
@@ -109,7 +162,7 @@ impl GlassElement {
         cache: Option<&UserDataMap>,
     ) -> Result<(), GlesError> {
         let Some(c) = cache.and_then(|c| c.get::<RefCell<glass_gl::Cache>>()) else { return Ok(()) };
-        let c = c.borrow();
+        let mut c = c.borrow_mut();
         let projection = *frame.projection();
         let user_data = frame.egl_context().user_data() as *const UserDataMap;
         // Damage is relative to the element; the GL side works in output pixels.
@@ -120,6 +173,9 @@ impl GlassElement {
         frame.with_context(|gl| unsafe {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
+            if let Some(g) = &self.glass {
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, &self.probes, g.saturation, &self.surface);
+            }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref());
         })
     }
@@ -175,6 +231,23 @@ impl<R: HyaloRenderer> RenderElement<R> for GlassElement {
     }
 }
 
+/// Where to measure the backdrop under one shape for its shadow: its body, inset by where a
+/// round corner leaves the rectangle (0.29 of the radius, the corner's 45° point), cut by its
+/// clip; and what of the backdrop there the shadow drawn this frame already takes.
+fn probe(s: &glass_gl::Shape, scrims: &[super::scrim::ScrimPx]) -> Option<glass_gl::LightProbe> {
+    let inset = s.radius * 0.29;
+    let mut r = Rectangle::<f64, Physical>::new(
+        s.rect.loc + Point::from((inset, inset)),
+        ((s.rect.size.w - 2.0 * inset).max(1.0), (s.rect.size.h - 2.0 * inset).max(1.0)).into(),
+    );
+    if let Some(c) = s.clip {
+        r = r.intersection(c)?;
+    }
+    let centre = Point::from((r.loc.x + r.size.w / 2.0, r.loc.y + r.size.h / 2.0));
+    let shadow = super::scrim::alpha_at(scrims, centre).min(0.95);
+    Some(glass_gl::LightProbe { shape: s.index, rect: r, unscale: (1.0 / (1.0 - shadow)) as f32 })
+}
+
 /// A material's shapes in output pixels, grouped where their blur reaches overlap, each group
 /// with the region it blurs: its bounds grown by how far the kawase chain reaches.
 fn groups(
@@ -183,9 +256,8 @@ fn groups(
     location: Point<i32, Physical>,
     m: &material::MaterialState,
 ) -> Vec<(Rectangle<i32, Physical>, Vec<glass_gl::Shape>)> {
-    // Plus how far the refractive glass's edge reads from outside the shape.
-    let reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1)
-        + m.glass.map_or(0.0, |g| g.refraction * scale.x);
+    // The refractive edge reads the backdrop from INSIDE the shape (glass_gl.rs), so this is all.
+    let reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1);
     let grow = |r: &Rectangle<f64, Physical>| {
         Rectangle::<f64, Physical>::new(
             r.loc - Point::from((reach, reach)),
@@ -195,13 +267,33 @@ fn groups(
     let shapes: Vec<glass_gl::Shape> = m
         .shapes
         .iter()
-        .map(|s| glass_gl::Shape {
+        .enumerate()
+        .map(|(index, s)| glass_gl::Shape {
+            index,
             rect: Rectangle::new(
                 location.to_f64() + Point::from((s.x * scale.x, s.y * scale.y)),
                 (s.w * scale.x, s.h * scale.y).into(),
             ),
             radius: s.radius * scale.x,
             exponent: s.exponent,
+            opacity: s.opacity as f32,
+            clip: s.clip.map(|c| {
+                Rectangle::new(
+                    location.to_f64() + Point::from((c[0] * scale.x, c[1] * scale.y)),
+                    (c[2] * scale.x, c[3] * scale.y).into(),
+                )
+            }),
+            ink_dark: false,
+            refraction: m.refraction_of(s) * scale.x,
+            pointer: s.pointer.and_then(|p| {
+                let at = |q: [f64; 2]| {
+                    let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));
+                    [o.x, o.y]
+                };
+                glass_gl::PointerPx::new(
+                    at(p.base), at(p.tip), p.width * scale.x, p.tip_radius * scale.x, p.base_radius * scale.x,
+                )
+            }),
         })
         .collect();
     let mut root: Vec<usize> = (0..shapes.len()).collect();
@@ -214,7 +306,7 @@ fn groups(
     }
     for a in 0..shapes.len() {
         for b in a + 1..shapes.len() {
-            if grow(&shapes[a].rect).overlaps(grow(&shapes[b].rect)) {
+            if grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }
@@ -228,9 +320,9 @@ fn groups(
     by_root
         .into_values()
         .filter_map(|shapes| {
-            let mut bounds = shapes[0].rect;
+            let mut bounds = shapes[0].bounds();
             for s in &shapes[1..] {
-                bounds = bounds.merge(s.rect);
+                bounds = bounds.merge(s.bounds());
             }
             let region = grow(&bounds).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
             (region.size.w >= 2 && region.size.h >= 2).then_some((region, shapes))
