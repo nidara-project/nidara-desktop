@@ -631,6 +631,13 @@ Two kinds of request:
 
 ## The shell on Hyalo
 
+- **Over a fullscreen window, Super+B brings the bar AND the dock** (`toggleBarOverlay` in app.ts →
+  the bar's `setBarOverlayMode` and the dock's `setOverFullscreen`: both join the OVERLAY layer,
+  the dock revealed; the dock follows the bar's state, and leaving fullscreen ends it for both).
+  On Hyprland only the bar came up: pointer input between two OVERLAY surfaces was unreliable
+  there (#679 #15). Verified nested: a click on the dock's app-grid button over a fullscreen
+  window opens the grid.
+
 The shell finds Hyalo by `$HYALO_SOCKET`, which `uwsm finalize HYALO_SOCKET` (Hyalo's first
 autostart line) exports to the session's services. `core/hyalo-ipc.ts` speaks the socket the way
 `core/hypr-ipc.ts` speaks Hyprland's: sync requests, one held event stream that reconnects and
