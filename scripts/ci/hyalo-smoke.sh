@@ -9,8 +9,8 @@
 #      libseat (seatd) and udev, rendering in software (llvmpipe) on vkms.
 #   3. The REAL shell bundle boots on it, stays alive and answers its IPC; Hyalo's own IPC
 #      lists the output.
-#   4. A screenshot of the desktop is uploaded for a HUMAN to look at — through Hyalo's IPC,
-#      since Hyalo does not speak a capture protocol grim could use yet (#683).
+#   4. A screenshot of the desktop is uploaded for a HUMAN to look at — through Hyalo's IPC
+#      (grim works too since 2026-10-02: scripts/ci/hyalo-screen-capture-check.sh tests it).
 #   5. The shell log is held to the same bar as the Hyprland smoke: no JS errors and no
 #      toolkit CRITICAL (an absent accessibility bus excepted, that is the container).
 #
@@ -44,6 +44,7 @@ phase_deps() {
         nodejs npm gjs \
         wayland-protocols hyprland-protocols wlr-protocols \
         jq librsvg dconf file \
+        grim slurp wl-clipboard wf-recorder ffmpeg \
         ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji
     ldconfig
 }
@@ -402,6 +403,12 @@ phase_run() {
         || { log "FAIL: idle"; cat /tmp/hyalo/idle.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "idle OK ($(grep -c '^ok' /tmp/hyalo/idle.log) steps: locked and dark, woken, held off, then locked)"
+    # Capture and the clipboard (#683): grim (whole output, a region, UPRIGHT), grim | wl-copy
+    # and back through wl-paste, wl-paste --watch (data-control, the clipboard history), and
+    # wf-recorder (wlr-screencopy) with frames, upright too.
+    CAPTURE_LOG=/tmp/hyalo/screen-capture "$REPO/scripts/ci/hyalo-screen-capture-check.sh" >/tmp/hyalo/screen-capture.log 2>&1 \
+        || { log "FAIL: screen capture"; cat /tmp/hyalo/screen-capture.log; exit 1; }
+    log "screen capture OK ($(grep -c '^ok' /tmp/hyalo/screen-capture.log) steps: output, region, clipboard, watch, recording)"
 
     # ── 3. Pictures for a person.
     sleep 4

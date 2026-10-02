@@ -14,6 +14,12 @@
 //! A window on a hidden workspace is captured too, with its last committed content, as on
 //! Hyprland: drawing it from its surface tree does not need it on screen. Each capture is one
 //! draw, on request; nothing is captured continuously.
+//!
+//! - `ext-output-image-capture-source-v1`: a whole output, as the screen shows it (glass
+//!   included, no cursor) — what `grim` asks for, so the screenshot tile, Print and the
+//!   region picker work. Drawn again offscreen like `msg screenshot` (screenshot.rs). Until
+//!   2026-10-02 Hyalo offered windows only, and grim said "compositor doesn't support the screen
+//!   capture protocol": the screenshot never reached the clipboard (owner-caught).
 
 use std::time::Duration;
 
@@ -34,7 +40,8 @@ use smithay::{
     wayland::{
         foreign_toplevel_list::{ForeignToplevelHandle, ForeignToplevelListHandler, ForeignToplevelListState},
         image_capture_source::{
-            ImageCaptureSource, ImageCaptureSourceHandler, ToplevelCaptureSourceHandler, ToplevelCaptureSourceState,
+            ImageCaptureSource, ImageCaptureSourceHandler, OutputCaptureSourceHandler, OutputCaptureSourceState,
+            ToplevelCaptureSourceHandler, ToplevelCaptureSourceState,
         },
         image_copy_capture::{
             BufferConstraints, CaptureFailureReason, Frame, ImageCopyCaptureHandler, ImageCopyCaptureState, Session,
@@ -53,6 +60,8 @@ pub fn identifier(id: WindowId) -> String {
 
 /// What a capture source points at: the listed window.
 struct SourceWindow(WindowId);
+/// ...or an output, by name.
+struct SourceOutput(String);
 
 impl Hyalo {
     /// A window is shown for the first time: it enters the list.
@@ -82,6 +91,11 @@ impl Hyalo {
         }
     }
 
+    fn source_output(&self, source: &ImageCaptureSource) -> Option<smithay::output::Output> {
+        let name = &source.user_data().get::<SourceOutput>()?.0;
+        self.space.outputs().find(|o| &o.name() == name).cloned()
+    }
+
     fn source_window(&self, source: &ImageCaptureSource) -> Option<&Window> {
         let id = source.user_data().get::<SourceWindow>()?.0;
         self.wm.get(id).filter(|m| m.mapped).map(|m| &m.window)
@@ -106,6 +120,16 @@ impl ForeignToplevelListHandler for Hyalo {
 
 impl ImageCaptureSourceHandler for Hyalo {}
 
+impl OutputCaptureSourceHandler for Hyalo {
+    fn output_capture_source_state(&mut self) -> &mut OutputCaptureSourceState {
+        &mut self.output_capture_source
+    }
+
+    fn output_source_created(&mut self, source: ImageCaptureSource, output: &smithay::output::Output) {
+        source.user_data().insert_if_missing(|| SourceOutput(output.name()));
+    }
+}
+
 impl ToplevelCaptureSourceHandler for Hyalo {
     fn toplevel_capture_source_state(&mut self) -> &mut ToplevelCaptureSourceState {
         &mut self.toplevel_capture_source
@@ -125,8 +149,15 @@ impl ImageCopyCaptureHandler for Hyalo {
     }
 
     fn capture_constraints(&mut self, source: &ImageCaptureSource) -> Option<BufferConstraints> {
-        let window = self.source_window(source)?;
-        let size = window.geometry().size.to_f64().to_buffer(self.source_scale(source), Transform::Normal).to_i32_round();
+        let size = if let Some(output) = self.source_output(source) {
+            // What screenshot.rs draws: the logical area at the output's scale, upright.
+            let geo = self.space.output_geometry(&output)?;
+            let s = geo.size.to_f64().to_physical_precise_round::<_, i32>(output.current_scale().fractional_scale());
+            (s.w, s.h).into()
+        } else {
+            let window = self.source_window(source)?;
+            window.geometry().size.to_f64().to_buffer(self.source_scale(source), Transform::Normal).to_i32_round()
+        };
         if size.w <= 0 || size.h <= 0 {
             return None;
         }
@@ -155,15 +186,19 @@ impl ImageCopyCaptureHandler for Hyalo {
             return;
         }
         let source = session.source();
-        let Some(window) = self.source_window(&source).cloned() else {
+        let pixels = if let Some(output) = self.source_output(&source) {
+            crate::backend::capture_output(self, &output)
+        } else if let Some(window) = self.source_window(&source).cloned() {
+            let scale = self.source_scale(&source);
+            crate::backend::capture_window(self, &window, scale)
+        } else {
             frame.fail(CaptureFailureReason::Stopped);
             return;
         };
-        let scale = self.source_scale(&source);
-        let pixels = match crate::backend::capture_window(self, &window, scale) {
+        let pixels = match pixels {
             Ok(p) => p,
             Err(err) => {
-                tracing::warn!(%err, "window capture failed");
+                tracing::warn!(%err, "capture failed");
                 frame.fail(CaptureFailureReason::Unknown);
                 return;
             }

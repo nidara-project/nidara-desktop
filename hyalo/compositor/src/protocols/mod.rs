@@ -4,6 +4,7 @@
 
 pub mod focus_grab;
 pub mod material;
+pub mod screencopy;
 pub mod virtual_pointer;
 
 // The scanner macros read the XML at compile time, but nothing tells cargo: an edited protocol

@@ -155,6 +155,18 @@ impl WaylandDndGrabHandler for Hyalo {
 }
 
 impl OutputHandler for Hyalo {}
+
+impl smithay::wayland::selection::ext_data_control::DataControlHandler for Hyalo {
+    fn data_control_state(&mut self) -> &mut smithay::wayland::selection::ext_data_control::DataControlState {
+        &mut self.ext_data_control
+    }
+}
+
+impl smithay::wayland::selection::wlr_data_control::DataControlHandler for Hyalo {
+    fn data_control_state(&mut self) -> &mut smithay::wayland::selection::wlr_data_control::DataControlState {
+        &mut self.wlr_data_control
+    }
+}
 // The hint itself is all wm::focus_window reads; nothing to do when it changes.
 impl smithay::wayland::shell::xdg::dialog::XdgDialogHandler for Hyalo {}
 impl FractionalScaleHandler for Hyalo {}

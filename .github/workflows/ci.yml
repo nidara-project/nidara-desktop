@@ -489,7 +489,8 @@ jobs:
   # Hyalo, the compositor of our own (hyalo/, #681): build with the committed lock file,
   # clippy with warnings as errors, unit tests, and a boot on the SAME vkms the smoke uses —
   # through the tty backend a real session takes (libseat, udev, DRM/KMS), with the real
-  # shell on it. Screenshots come from Hyalo's own IPC (no capture protocol yet for grim).
+  # shell on it. Screenshots come from Hyalo's own IPC; grim, the clipboard and wf-recorder are
+  # tested by scripts/ci/hyalo-screen-capture-check.sh inside the smoke.
   # NOT a required check while Hyalo is a preview (#680): it must never hold the merge queue
   # for the desktop that ships. All logic in scripts/ci/hyalo-smoke.sh.
   hyalo:
