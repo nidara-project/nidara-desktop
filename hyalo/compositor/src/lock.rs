@@ -55,7 +55,7 @@ use crate::state::Hyalo;
 /// replaces it (the lock check points it at its own probe client: scripts/ci/hyalo-lock-check.sh).
 const RELAUNCH: &str = "nidara-lock";
 
-fn relaunch_command() -> String {
+pub fn lock_command() -> String {
     std::env::var("HYALO_LOCK_RELAUNCH").ok().filter(|c| !c.trim().is_empty()).unwrap_or_else(|| RELAUNCH.into())
 }
 /// At most this many relaunches in RELAUNCH_WINDOW: a lock client that crashes on start must
@@ -219,6 +219,7 @@ impl Hyalo {
         tracing::info!("session locked");
         self.lock.mode = Mode::Locked { lock };
         self.ipc_broadcast_lock(true);
+        self.lock_confirmed_for_sleep();
     }
 
     /// While locked, once a second: a lock whose client is gone gets a new one.
@@ -244,7 +245,7 @@ impl Hyalo {
         if self.lock.relaunches.last().is_some_and(|t| now.duration_since(*t) < Duration::from_secs(2)) {
             return; // the last one may still be starting
         }
-        let cmd = relaunch_command();
+        let cmd = lock_command();
         tracing::warn!(%cmd, "the lock client is gone; the session stays locked and it starts again");
         self.lock.relaunches.push(now);
         crate::spawn(&cmd);

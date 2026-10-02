@@ -108,6 +108,7 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "layers" => Request::Layers,
         "cursor" => Request::CursorPosition,
         "lock" => Request::Lock,
+        "idle" => Request::Idle,
         "do" => {
             let command = args[1..].join(" ");
             // Checked here too, so a typo is said before anything is sent.

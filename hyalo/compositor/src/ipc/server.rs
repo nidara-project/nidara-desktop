@@ -146,6 +146,10 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         Request::Windows => Reply::Ok(Response::Windows { windows: state.window_infos() }),
         Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
         Request::Layers => Reply::Ok(Response::Layers { layers: state.layer_infos() }),
+        Request::Idle => {
+            let (idle_secs, inhibited) = state.idle_info();
+            Reply::Ok(Response::Idle { idle_secs, inhibited, config: state.config.idle.clone() })
+        }
         Request::Lock => Reply::Ok(Response::Lock {
             locked: state.lock.is_locked(),
             surfaces: state.space.outputs().filter(|o| state.lock.surface_for(o).is_some()).map(|o| o.name()).collect(),

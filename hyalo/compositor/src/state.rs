@@ -88,6 +88,10 @@ pub struct Hyalo {
     pub keys: crate::input::KeyTracking,
     /// The lock screen (lock.rs).
     pub lock: crate::lock::LockState,
+    /// When nobody touches the computer (idle.rs).
+    pub idle: crate::idle::IdleState,
+    /// logind and the ScreenSaver API, in a real session (logind.rs).
+    pub login: Option<crate::logind::Login>,
 }
 
 impl Hyalo {
@@ -100,6 +104,8 @@ impl Hyalo {
     ) -> Self {
         let dh = display.handle();
         let lock = crate::lock::LockState::new(&dh);
+        let dh_for_idle = dh.clone();
+        let loop_handle_for_idle = loop_handle.clone();
         let clock = Clock::new();
 
         let compositor_state = CompositorState::new_v6::<Self>(&dh);
@@ -222,6 +228,8 @@ impl Hyalo {
             }),
             keys: Default::default(),
             lock,
+            idle: crate::idle::IdleState::new(&dh_for_idle, loop_handle_for_idle),
+            login: None,
         }
     }
 

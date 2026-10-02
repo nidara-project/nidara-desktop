@@ -142,6 +142,13 @@ workspace = "name:gamespace"
 "XF86AudioNext" = { action = "spawn playerctl next", locked = true }
 "XF86AudioPrev" = { action = "spawn playerctl previous", locked = true }
 
+# When nobody touches the computer: seconds before each step, 0 = never (idle.rs). Settings →
+# Power writes the user's choice in hyalo-settings.toml; these are the defaults.
+[idle]
+screen_off = 300
+lock = 600
+suspend = 0
+
 # The keyboard follows the system's (localectl set-x11-keymap) unless set here.
 [input.keyboard]
 repeat_delay = 600

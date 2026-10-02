@@ -269,8 +269,20 @@ export interface SettingsCaps {
     vrrFullscreenOnly: boolean
 }
 
+/** Settings → Power: seconds without input before each step; 0 = never. */
+export interface IdleConfig {
+    screenOff: number
+    lock: number
+    suspend: number
+}
+
 export interface CompositorSettings {
     readonly caps: SettingsCaps
+
+    /** The idle steps in force (Hyprland: hypridle's file; Hyalo: its own `[idle]`). */
+    readIdle(): IdleConfig
+    /** Persists and applies them. */
+    setIdle(cfg: IdleConfig): void
 
     /** The options in force (the user's own file included), `current` where one cannot be read. */
     readInput(current: InputSettings): Promise<InputSettings>

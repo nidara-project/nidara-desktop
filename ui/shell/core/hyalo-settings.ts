@@ -18,7 +18,7 @@
 import * as hyalo from "./hyalo-ipc"
 import { GLASS_BLUR } from "./NidaraTheme"
 import {
-    TRANSFORM_NAMES, type CompositorSettings, type InputKey, type InputSettings, type MonitorSetting,
+    TRANSFORM_NAMES, type CompositorSettings, type IdleConfig, type InputKey, type InputSettings, type MonitorSetting,
 } from "./compositor-types"
 
 /** The config in force, or null when Hyalo cannot be asked. */
@@ -126,6 +126,15 @@ export function createHyaloSettings(): CompositorSettings {
             for (let ws = 1; ws <= 5; ws++) modes[String(ws)] = null
             Object.assign(modes, overrides)
             patch("workspace modes", { workspaces: { default_mode: defaultMode, modes } })
+        },
+
+        // Hyalo does idle itself (hyalo/compositor/src/idle.rs): no hypridle, no file of ours.
+        readIdle(): IdleConfig {
+            const i = config()?.idle
+            return { screenOff: i?.screen_off ?? 300, lock: i?.lock ?? 600, suspend: i?.suspend ?? 0 }
+        },
+        setIdle(cfg) {
+            patch("idle", { idle: { screen_off: cfg.screenOff, lock: cfg.lock, suspend: cfg.suspend } })
         },
 
         setReduceMotion() { /* caps.animations: Hyalo draws no animation yet */ },

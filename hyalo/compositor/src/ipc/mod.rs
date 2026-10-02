@@ -142,6 +142,8 @@ pub enum Request {
     CursorPosition,
     /// Whether the session is locked, and the outputs a lock surface covers (lock.rs).
     Lock,
+    /// Seconds since the last input, whether something holds idle off, the steps (idle.rs).
+    Idle,
     /// A window-manager command, written as in a binding: `workspace 3`, `focus-window 12`
     /// (wm/actions.rs).
     Do { command: String },
@@ -176,6 +178,7 @@ pub enum Response {
     Layers { layers: Vec<LayerInfo> },
     CursorPosition { x: f64, y: f64 },
     Lock { locked: bool, surfaces: Vec<String> },
+    Idle { idle_secs: u64, inhibited: bool, config: crate::config::IdleConfig },
     Config { config: Box<crate::config::Config> },
     Settings { changed: bool },
 }
