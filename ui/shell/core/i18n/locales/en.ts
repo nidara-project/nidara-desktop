@@ -223,6 +223,8 @@ export default {
     "settings.appearance.glass.frosted": "Frosted",
     "settings.appearance.window-transparency": "Transparent windows",
     "settings.appearance.window-transparency.desc": "Nidara's windows let the background show through, with the same blur as the rest of the desktop. Off, they are opaque.",
+    "settings.appearance.window-blur": "Blur behind windows",
+    "settings.appearance.window-blur.desc": "Windows that let the background through blur what is behind them. Apart from the interface's glass.",
     "settings.appearance.dialog.wallpaper": "Select wallpaper",
     "settings.appearance.filter.images": "Images",
     "settings.appearance.interface-font": "Interface font",

@@ -987,7 +987,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,

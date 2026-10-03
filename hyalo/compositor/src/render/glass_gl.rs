@@ -44,14 +44,95 @@ void main() {
 }
 "#;
 
+// The down-sample, with Hyprland's finishing for a window's backdrop (`Finish`; neutral for the
+// shell's glass): its contrast and brightness on what is read from the frame (`prepare`, the
+// first pass only — Hyprland's blurprepare), its vibrancy on each pass's result (blur1.glsl,
+// the same formulas and constants).
 const FS_DOWN: &str = r#"#version 100
 precision highp float;
 uniform sampler2D tex;
 uniform vec2 src_size;   // the sampled texture's full size
 uniform vec2 src_used;   // the part of it this capture wrote
 uniform float offset;
+uniform float prepare;   // 1 on the first pass: contrast and brightness on each tap
+uniform float contrast;
+uniform float brightness;
+uniform float vibrancy;
+uniform float vibrancy_darkness;
+uniform float passes;
 varying vec2 v_px;
-vec4 tap(vec2 uv) { return texture2D(tex, clamp(uv, 0.5 / src_size, (src_used - 0.5) / src_size)); }
+
+vec3 gain(vec3 src, float k) {
+    vec3 x = clamp(src, 0.0, 1.0);
+    vec3 t = step(0.5, x);
+    vec3 y = mix(x, 1.0 - x, t);
+    vec3 a = 0.5 * pow(2.0 * y, vec3(k));
+    return mix(a, 1.0 - a, t);
+}
+vec4 tap(vec2 uv) {
+    vec4 c = texture2D(tex, clamp(uv, 0.5 / src_size, (src_used - 0.5) / src_size));
+    if (prepare > 0.5) {
+        if (contrast != 1.0) c.rgb = gain(c.rgb, contrast);
+        c.rgb *= max(1.0, brightness);
+    }
+    return c;
+}
+
+float double_circle_sigmoid(float x, float a) {
+    a = clamp(a, 0.0, 1.0);
+    if (x <= a) return a - sqrt(a * a - x * x);
+    return a + sqrt(pow(1.0 - a, 2.0) - pow(x - 1.0, 2.0));
+}
+vec3 rgb2hsl(vec3 col) {
+    float minc = min(col.r, min(col.g, col.b));
+    float maxc = max(col.r, max(col.g, col.b));
+    float delta = maxc - minc;
+    float lum = (minc + maxc) * 0.5;
+    float sat = 0.0;
+    float hue = 0.0;
+    if (lum > 0.0 && lum < 1.0) {
+        float mul = (lum < 0.5) ? lum : (1.0 - lum);
+        sat = delta / (mul * 2.0);
+    }
+    if (delta > 0.0) {
+        vec3 maxv = vec3(maxc);
+        vec3 masks = vec3(equal(maxv, col)) * vec3(notEqual(maxv, vec3(col.g, col.b, col.r)));
+        vec3 adds = vec3(0.0, 2.0, 4.0) + vec3(col.g - col.b, col.b - col.r, col.r - col.g) / delta;
+        hue = dot(adds, masks) / 6.0;
+        if (hue < 0.0) hue += 1.0;
+    }
+    return vec3(hue, sat, lum);
+}
+vec3 hsl2rgb(vec3 col) {
+    float third = 1.0 / 3.0;
+    float hue = col.x;
+    float sat = col.y;
+    float lum = col.z;
+    vec3 xt = vec3(0.0);
+    if (hue < third) {
+        xt = vec3(6.0 * (third - hue), 6.0 * hue, 0.0);
+    } else if (hue < 2.0 * third) {
+        xt = vec3(0.0, 6.0 * (2.0 * third - hue), 6.0 * (hue - third));
+    } else {
+        xt = vec3(6.0 * (hue - 2.0 * third), 0.0, 6.0 * (1.0 - hue));
+    }
+    xt = min(xt, 1.0);
+    vec3 ct = 2.0 * sat * xt + (1.0 - sat);
+    if (lum >= 0.5) return (1.0 - lum) * ct + (2.0 * lum - 1.0);
+    return lum * ct;
+}
+vec3 vibrant(vec3 c) {
+    float darkness = 1.0 - vibrancy_darkness;
+    vec3 hsl = rgb2hsl(c);
+    float perceived = double_circle_sigmoid(sqrt(c.r * c.r * 0.299 + c.g * c.g * 0.587 + c.b * c.b * 0.114), 0.8 * darkness);
+    float b1 = 0.11 * darkness;
+    float boost = hsl.y > 0.0
+        ? smoothstep(b1 - 0.33, b1 + 0.33, 1.0 - (pow(1.0 - hsl.y * cos(0.93), 2.0) + pow(1.0 - perceived * sin(0.93), 2.0)))
+        : 0.0;
+    float sat = clamp(hsl.y + boost * vibrancy / passes, 0.0, 1.0);
+    return hsl2rgb(vec3(hsl.x, sat, hsl.z));
+}
+
 void main() {
     vec2 uv = v_px * 2.0 / src_size;
     vec2 o = offset / src_size;
@@ -60,7 +141,9 @@ void main() {
     sum += tap(uv + o);
     sum += tap(uv + vec2(o.x, -o.y));
     sum += tap(uv - vec2(o.x, -o.y));
-    gl_FragColor = sum / 8.0;
+    vec4 c = sum / 8.0;
+    if (vibrancy != 0.0) c.rgb = vibrant(c.rgb);
+    gl_FragColor = c;
 }
 "#;
 
@@ -212,6 +295,14 @@ float shape_sdf(vec2 px) {
     return d;
 }
 
+uniform float noise;
+uniform float brightness;
+float noise_hash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 1689.1984);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 // Framebuffer pixels → the blurred copy (level 1, half size).
 vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
 vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
@@ -225,6 +316,10 @@ void main() {
     if (cov <= 0.0) discard;
     if (glass < 0.5) {
         vec4 c = backdrop(vec2(0.0));
+        // Hyprland's blurFinish: noise, then its brightness (a window's backdrop; 0 and 1 for
+        // the shell's blur-only surfaces).
+        c.rgb += (noise_hash(v_out) - 0.5) * noise;
+        c.rgb *= min(1.0, brightness);
         gl_FragColor = vec4(c.rgb * cov, cov);
         return;
     }
@@ -484,6 +579,21 @@ pub struct Glass {
     pub ink_tint: [f32; 3],
 }
 
+/// Hyprland's `decoration:blur` finishing, for a window's backdrop (config `[windows.backdrop]`).
+/// `NEUTRAL` changes nothing: the shell's glass has its own saturation and tint instead.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Finish {
+    pub contrast: f32,
+    pub brightness: f32,
+    pub vibrancy: f32,
+    pub vibrancy_darkness: f32,
+    pub noise: f32,
+}
+
+impl Finish {
+    pub const NEUTRAL: Finish = Finish { contrast: 1.0, brightness: 1.0, vibrancy: 0.0, vibrancy_darkness: 0.0, noise: 0.0 };
+}
+
 pub(super) struct Program {
     pub(super) id: u32,
     pub(super) pos: u32,
@@ -702,6 +812,7 @@ pub unsafe fn fb_size(gl: &Gles2) -> (i32, i32) {
 }
 
 /// Copy `region` (output pixels) out of the frame being drawn and blur it into `cache`.
+#[allow(clippy::too_many_arguments)]
 pub unsafe fn capture(
     gl: &Gles2,
     user_data: &smithay::utils::user_data::UserDataMap,
@@ -709,6 +820,7 @@ pub unsafe fn capture(
     region: Rectangle<i32, Physical>,
     offset: f32,
     passes: usize,
+    finish: &Finish,
     cache: &mut Cache,
 ) {
     unsafe {
@@ -764,7 +876,14 @@ pub unsafe fn capture(
 
         // 2. Down: level 0 → … → level n.
         set_quad(&progs.down);
+        let d = &progs.down;
+        gl.Uniform1f(d.loc(gl, c"contrast"), finish.contrast);
+        gl.Uniform1f(d.loc(gl, c"brightness"), finish.brightness);
+        gl.Uniform1f(d.loc(gl, c"vibrancy"), finish.vibrancy);
+        gl.Uniform1f(d.loc(gl, c"vibrancy_darkness"), finish.vibrancy_darkness);
+        gl.Uniform1f(d.loc(gl, c"passes"), passes as f32);
         for k in 1..=passes {
+            gl.Uniform1f(d.loc(gl, c"prepare"), (k == 1) as i32 as f32);
             pass(&progs.down, &levels[k - 1], used(k - 1), &levels[k], used(k));
         }
         gl.DisableVertexAttribArray(progs.down.pos);
@@ -799,6 +918,7 @@ pub unsafe fn draw(
     shapes: &[Shape],
     clip: &[Rectangle<i32, Physical>],
     glass: Option<&Glass>,
+    finish: &Finish,
 ) {
     if !cache.valid || cache.passes == 0 {
         return;
@@ -826,6 +946,8 @@ pub unsafe fn draw(
         gl.Uniform4f(p.loc(gl, c"region_fb"), r.loc.x as f32, r.loc.y as f32, r.size.w as f32, r.size.h as f32);
         gl.UniformMatrix2fv(p.loc(gl, c"out_to_fb"), 1, ffi::FALSE, map.linear().as_ptr());
         gl.Uniform1f(p.loc(gl, c"glass"), glass.is_some() as i32 as f32);
+        gl.Uniform1f(p.loc(gl, c"noise"), finish.noise);
+        gl.Uniform1f(p.loc(gl, c"brightness"), finish.brightness);
         if let Some(g) = glass {
             gl.Uniform3f(p.loc(gl, c"tint"), g.tint[0], g.tint[1], g.tint[2]);
             gl.Uniform1f(p.loc(gl, c"alpha_min"), g.alpha_min);

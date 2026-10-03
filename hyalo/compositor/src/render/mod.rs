@@ -10,6 +10,7 @@
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
+pub mod window;
 
 use smithay::{
     backend::{
@@ -30,8 +31,8 @@ use smithay::{
     input::pointer::{CursorImageAttributes, CursorImageStatus},
     output::Output,
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Logical, Physical, Point, Scale},
-    wayland::{compositor::with_states, seat::WaylandFocus, shell::wlr_layer::Layer},
+    utils::{Logical, Physical, Point, Rectangle, Scale},
+    wayland::{compositor::with_states, shell::wlr_layer::Layer},
 };
 
 pub use glass::GlassElement;
@@ -56,6 +57,9 @@ pub trait HyaloRenderer: Renderer<TextureId = Self::HyaloTexture> + ImportAll + 
         Self: 'frame;
 
     fn from_gles_error(err: GlesError) -> Self::Error;
+
+    /// The GL renderer underneath (the one that renders, on a multi-GPU setup).
+    fn gles(&mut self) -> &mut GlesRenderer;
 }
 
 impl HyaloRenderer for GlesRenderer {
@@ -69,6 +73,10 @@ impl HyaloRenderer for GlesRenderer {
 
     fn from_gles_error(err: GlesError) -> GlesError {
         err
+    }
+
+    fn gles(&mut self) -> &mut GlesRenderer {
+        self
     }
 }
 
@@ -87,11 +95,16 @@ impl<'r> HyaloRenderer for UdevRenderer<'r> {
     fn from_gles_error(err: GlesError) -> Self::Error {
         multigpu::Error::Render(err)
     }
+
+    fn gles(&mut self) -> &mut GlesRenderer {
+        self.as_mut()
+    }
 }
 
 smithay::backend::renderer::element::render_elements! {
     pub OutputElement<R> where R: HyaloRenderer;
     Surface=WaylandSurfaceRenderElement<R>,
+    Rounded=window::RoundedElement<R>,
     Glass=GlassElement,
     Scrim=ScrimElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
@@ -101,6 +114,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Surface(e) => f.debug_tuple("Surface").field(e).finish(),
+            Self::Rounded(e) => f.debug_tuple("Rounded").field(e).finish(),
             Self::Glass(e) => f.debug_tuple("Glass").field(e).finish(),
             Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
@@ -150,6 +164,35 @@ fn push_surface<R: HyaloRenderer>(
     layer(out, surface, location, Kind::ScanoutCandidate);
 }
 
+/// One surface tree with its glass right below it and that glass's shadow below the glass —
+/// push_surface's own step, without the popups (render/window.rs handles a window's).
+pub(super) fn push_tree<R: HyaloRenderer>(
+    out: &mut Vec<OutputElement<R>>,
+    renderer: &mut R,
+    surface: &WlSurface,
+    location: Point<i32, Physical>,
+    scale: Scale<f64>,
+    output_size: smithay::utils::Size<i32, Physical>,
+    kind: Kind,
+) {
+    out.extend(render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind));
+    push_material(out, surface, location, scale, output_size);
+}
+
+/// A surface's declared glass (`nidara-material-v1`) and the shadow under it.
+pub(super) fn push_material<R: HyaloRenderer>(
+    out: &mut Vec<OutputElement<R>>,
+    surface: &WlSurface,
+    location: Point<i32, Physical>,
+    scale: Scale<f64>,
+    output_size: smithay::utils::Size<i32, Physical>,
+) {
+    let scrims = scrim::scrims_for(surface, location, scale, std::time::Instant::now());
+    out.extend(GlassElement::for_surface(surface, location, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
+    let e = with_states(surface, |states| ScrimElement::new(&states.data_map, scrims, output_size));
+    out.extend(e.map(OutputElement::Scrim));
+}
+
 /// The shadows a surface tree and its popups cast, for the chrome's floor.
 fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<scrim::ScrimPx> {
     let mut out = Vec::new();
@@ -169,6 +212,8 @@ pub struct Scene<'a> {
     pub pointer: Point<f64, Logical>,
     pub cursor_status: &'a CursorImageStatus,
     pub lock: &'a crate::lock::LockState,
+    /// How windows are drawn: corners, the blur behind them (render/window.rs).
+    pub windows: &'a crate::config::WindowsConfig,
 }
 
 impl<'a> Scene<'a> {
@@ -178,8 +223,9 @@ impl<'a> Scene<'a> {
         seat: &Seat<Hyalo>,
         cursor_status: &'a CursorImageStatus,
         lock: &'a crate::lock::LockState,
+        windows: &'a crate::config::WindowsConfig,
     ) -> Self {
-        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status, lock }
+        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status, lock, windows }
     }
 }
 
@@ -237,11 +283,20 @@ pub fn output_elements<R: HyaloRenderer>(
     }
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
     let push_windows = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, windows: &[Window]| {
-        for window in windows {
-            let Some(loc) = state.space.element_location(window) else { continue };
-            let Some(surface) = window.wl_surface() else { continue };
-            let loc = (loc - window.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
-            push_surface(out, renderer, &surface, loc, scale, output_size, None);
+        for w in windows {
+            let Some(at) = state.space.element_location(w) else { continue };
+            let loc = (at - w.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
+            let geo = Rectangle::new(at - output_geo.loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
+            let managed = state.wm.by_window(w);
+            let fullscreen = managed.is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen);
+            let look = window::look(
+                w,
+                fullscreen,
+                managed.is_none_or(|m| m.rounded),
+                managed.is_none_or(|m| m.backdrop),
+                state.windows,
+            );
+            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows);
         }
     };
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of

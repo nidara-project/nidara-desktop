@@ -246,6 +246,13 @@ impl Hyalo {
                     y: m.rect.loc.y,
                     width: m.rect.size.w,
                     height: m.rect.size.h,
+                    look: crate::render::window::look(
+                        &m.window,
+                        m.fullscreen == crate::wm::Fullscreen::Fullscreen,
+                        m.rounded,
+                        m.backdrop,
+                        &self.config.windows,
+                    ),
                 }
             })
             .collect()

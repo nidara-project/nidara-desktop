@@ -143,8 +143,8 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
 
 /// One output, drawn again offscreen, as RGBA rows (the screenshot request, capture.rs).
 pub fn capture_output(state: &mut Hyalo, output: &Output) -> Result<(u32, u32, Vec<u8>), String> {
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock);
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
     match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output),
         Backend::Tty(t) => {
@@ -162,8 +162,8 @@ pub fn draw_output_into(
     size: smithay::utils::Size<i32, smithay::utils::Physical>,
     dmabuf: &mut Dmabuf,
 ) -> Result<(), String> {
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock);
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf),
         Backend::Tty(t) => {

@@ -46,6 +46,9 @@ pub struct Config {
     /// What happens when nobody touches the computer (idle.rs). Settings → Power writes it.
     pub idle: IdleConfig,
     pub render: RenderConfig,
+    /// How windows are drawn: their corners, and the blur behind a translucent one
+    /// (render/window.rs). Settings → Appearance → Windows writes `backdrop.enabled`.
+    pub windows: WindowsConfig,
 }
 
 /// How frames reach the screen (backend/tty.rs).
@@ -62,6 +65,58 @@ pub struct RenderConfig {
 impl Default for RenderConfig {
     fn default() -> Self {
         Self { direct_scanout: true }
+    }
+}
+
+/// How windows are drawn (render/window.rs). The defaults are what Hyprland drew for Nidara
+/// (config/hypr/hyprland.lua: `rounding`, `rounding_power`, `decoration:blur`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WindowsConfig {
+    /// Corner radius, logical pixels; 0 = square. A fullscreen window is never rounded.
+    pub rounding: f64,
+    /// The corner's curve: 2 is a circle, higher is a squircle (Hyprland's `rounding_power`).
+    pub rounding_power: f64,
+    pub backdrop: BackdropConfig,
+}
+
+impl Default for WindowsConfig {
+    fn default() -> Self {
+        Self { rounding: 24.0, rounding_power: 3.2, backdrop: BackdropConfig::default() }
+    }
+}
+
+/// The blur behind every translucent window: the WINDOW material (#708 point 1), apart from the
+/// shell's refractive glass — blur and Hyprland's finishing, no refraction, no tint of its own
+/// (a window's own translucent background is its tint). A rule turns it off for one app.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct BackdropConfig {
+    pub enabled: bool,
+    /// The kawase blur, as `GLASS_BLUR`'s numbers: each pass's offset (logical px) and passes.
+    pub size: f64,
+    pub passes: u32,
+    /// Hyprland's `decoration:blur` finishing, its numbers and its formulas: contrast before
+    /// the blur, vibrancy in each down-sample, noise and brightness after.
+    pub contrast: f64,
+    pub brightness: f64,
+    pub vibrancy: f64,
+    pub vibrancy_darkness: f64,
+    pub noise: f64,
+}
+
+impl Default for BackdropConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            size: 2.0,
+            passes: 2,
+            contrast: 1.2,
+            brightness: 1.0,
+            vibrancy: 0.4,
+            vibrancy_darkness: 0.1,
+            noise: 0.01,
+        }
     }
 }
 
@@ -97,11 +152,24 @@ pub struct RuleConfig {
     pub workspace: Option<String>,
     /// With `workspace`: the window goes there without taking the user with it.
     pub silent: bool,
+    /// `false`: square corners (Hyprland's `rounding = 0`).
+    pub rounding: Option<bool>,
+    /// `false`: no blur behind it, translucent or not.
+    pub backdrop: Option<bool>,
 }
 
 impl Default for RuleConfig {
     fn default() -> Self {
-        Self { enabled: true, matching: RuleMatch::default(), float: None, center: false, workspace: None, silent: false }
+        Self {
+            enabled: true,
+            matching: RuleMatch::default(),
+            float: None,
+            center: false,
+            workspace: None,
+            silent: false,
+            rounding: None,
+            backdrop: None,
+        }
     }
 }
 

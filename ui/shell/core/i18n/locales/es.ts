@@ -221,6 +221,8 @@ export default {
     "settings.appearance.glass.frosted": "Escarchado",
     "settings.appearance.window-transparency": "Transparencia en las ventanas",
     "settings.appearance.window-transparency.desc": "Las ventanas de Nidara dejan ver el fondo, con el mismo desenfoque que el resto del escritorio. Desactivada, son opacas.",
+    "settings.appearance.window-blur": "Desenfoque tras las ventanas",
+    "settings.appearance.window-blur.desc": "Las ventanas que dejan ver el fondo desenfocan lo que hay detrás. Aparte del cristal de la interfaz.",
     "settings.appearance.dialog.wallpaper": "Seleccionar fondo de pantalla",
     "settings.appearance.filter.images": "Imágenes",
     "settings.appearance.interface-font": "Fuente de interfaz",

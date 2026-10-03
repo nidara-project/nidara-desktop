@@ -37,6 +37,9 @@ export interface ConfigEntry {
     max?: number
     /** false → setConfig refuses even when writes are allowed (e.g. the ai.* gate itself) */
     writable?: boolean
+    /** false → the setting does not exist here (the compositor in use has nothing behind it):
+     *  no row in Settings, not in `describeConfig`, refused by `setConfig`. Absent = always. */
+    available?: () => boolean
     get(): ConfigValue
     set?(v: ConfigValue): void | Promise<void>
     /** Suscripción del servicio dueño: aplica el valor y devuelve el desuscriptor.
@@ -79,8 +82,15 @@ export function getConfigEntry(key: string): ConfigEntry | undefined {
     return entries[key]
 }
 
+/** The entry, unless it is unavailable here (`available`): what the agent's surface sees. */
+function live(key: string): ConfigEntry | undefined {
+    const e = entries[key]
+    return e && e.available?.() !== false ? e : undefined
+}
+
+/** The keys that exist here — an unavailable one is left out. */
 export function configKeys(): string[] {
-    return Object.keys(entries).sort()
+    return Object.keys(entries).filter(k => live(k)).sort()
 }
 
 /**
@@ -130,7 +140,7 @@ export interface ConfigResult {
 }
 
 export function getConfigValue(key: string): ConfigResult {
-    const e = entries[key]
+    const e = live(key)
     if (!e) return { ok: false, error: `unknown key: ${key} — try \`describeConfig\`` }
     return { ok: true, value: e.get() }
 }
@@ -179,7 +189,7 @@ function parseValue(e: ConfigEntry, raw: string): ConfigResult {
  * app.ts — this function is the trusted path Settings/internal code may use.
  */
 export async function setConfigValue(key: string, raw: string): Promise<string> {
-    const e = entries[key]
+    const e = live(key)
     if (!e) return `unknown key: ${key} — try \`describeConfig\``
     if (e.writable === false || !e.set)
         return `read-only key: ${key} (changeable only from the Settings window)`

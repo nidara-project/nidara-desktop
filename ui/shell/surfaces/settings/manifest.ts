@@ -110,6 +110,10 @@ export const manifest = [
                         note: "Windows are NOT part of the glass material (owner, 2026-09-30): the material above is for the interface's surfaces; Nidara's windows are only translucent or solid. Named transparency, not 'tinting': the blur behind them is Hyprland's one blur, which the material sets, so a tint of our own cannot be promised. On = WINDOW_GLASS_OPACITY, off = solid.",
                         sensitiveWhen: { key: "accessibility.reduceTransparency", in: ["false"] },
                     },
+                    {
+                        key: "appearance.windowBlur",
+                        note: "The blur behind EVERY translucent window, ours and other apps' (#708 point 1, 'A, automatic'): the window material, on a switch of its own, apart from the glass material (owner's condition: windows and layers independent). Only where the compositor has the switch (Hyalo, `caps.windowBackdrop`): its entry's `available` hides the row elsewhere.",
+                    },
                 ],
             },
             {

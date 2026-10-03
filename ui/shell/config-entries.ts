@@ -9,7 +9,7 @@
 // subset; grow it opportunistically as services gain setters.
 
 import Gtk from "gi://Gtk?version=4.0"
-import { registerConfig } from "./core/ConfigRegistry"
+import { registerConfig, type ConfigValue } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
 import { ACCENT_PALETTE, GLASS_MATERIALS, type AccentKey, type GlassMaterial } from "./core/NidaraTheme"
@@ -27,6 +27,7 @@ import { dockSettings, updateDockSettings, onDockSettingChanged, type DockPositi
 import { barConfig } from "./surfaces/bar/barState"
 import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onIdleChanged } from "./core/PowerConfig"
+import { settings as compositorSettings } from "./core/CompositorState"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
 import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange, specIconThemes } from "./core/Icons"
@@ -172,6 +173,26 @@ export function registerConfigEntries() {
         ui: {
             i18n: "settings.appearance.window-transparency",
         },
+    })
+    // The blur behind translucent windows: the WINDOW material, apart from the interface's glass
+    // (#708 point 1). Only where the compositor has a switch for it (Hyalo); Hyprland's blur is
+    // one for windows and layers, so the entry is unavailable there and has no row.
+    const backdropListeners = new Set<(v: ConfigValue) => void>()
+    registerConfig("appearance.windowBlur", {
+        desc: "Whether windows that let the background through (a translucent terminal, Nidara's own windows) blur what is behind them. Separate from the glass material, which is for the interface's surfaces, and from appearance.windowTransparency, which decides whether Nidara's windows are translucent at all. A per-app rule in hyalo.toml (`backdrop = false`) turns it off for one app.",
+        type: "boolean",
+        available: () => compositorSettings.caps.windowBackdrop,
+        get: () => compositorSettings.readWindowBackdrop(),
+        set: v => {
+            compositorSettings.setWindowBackdrop(v as boolean)
+            backdropListeners.forEach(fn => fn(v))
+        },
+        subscribe: (apply) => {
+            apply(compositorSettings.readWindowBackdrop())
+            backdropListeners.add(apply)
+            return () => { backdropListeners.delete(apply) }
+        },
+        ui: { i18n: "settings.appearance.window-blur" },
     })
     registerConfig("appearance.gtkTheme", {
         desc: "GTK theme for THIRD-PARTY apps only — Nidara's own processes load no GTK theme (tech-debt #107).",

@@ -418,6 +418,13 @@ phase_run() {
     CAPTURE_LOG=/tmp/hyalo/screen-capture "$REPO/scripts/ci/hyalo-screen-capture-check.sh" >/tmp/hyalo/screen-capture.log 2>&1 \
         || { log "FAIL: screen capture"; cat /tmp/hyalo/screen-capture.log; exit 1; }
     log "screen capture OK ($(grep -c '^ok' /tmp/hyalo/screen-capture.log) steps: output, region, clipboard, watch, recording)"
+    # How a window is drawn (#708 point 1): rounded corners, and the blur behind a translucent
+    # one — the corner's pixel shows what is behind, the stripes under the glass are blurred,
+    # and Settings' switch takes the blur away and gives it back.
+    LOOK_LOG=/tmp/hyalo/window-look "$REPO/scripts/ci/hyalo-window-look-check.sh" >/tmp/hyalo/window-look.log 2>&1 \
+        || { log "FAIL: window look"; cat /tmp/hyalo/window-look.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "window look OK ($(grep -c '^ok' /tmp/hyalo/window-look.log) steps: look, corners, backdrop, the switch)"
     # Input methods (#683, #503): a stand-in input method's text reaches a focused window's
     # field (empty before it ran: the control) and the shell's search under its focus grab.
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \

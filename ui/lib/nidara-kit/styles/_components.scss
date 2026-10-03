@@ -598,9 +598,10 @@ switch,
 }
 
 /* ── Window shell (NidaraWindow) ──────────────────────────────────────────────
-   Chrome for any Nidara application window. The compositor (Hyprland) owns
-   the window border (border_size = 1), rounding (squircle 3.2), shadows, and
-   tiling. The GTK toplevel stays transparent, and .nidara-window-glass fills
+   Chrome for any Nidara application window. The compositor owns the window
+   border (border_size = 1), rounding (squircle 3.2), shadows, the blur behind
+   it, and tiling — Hyprland's config, and Hyalo's render/window.rs (corners and
+   blur; border and shadow still owed there, #680 wave 2). The GTK toplevel stays transparent, and .nidara-window-glass fills
    the window area with the translucent glass background without inner borders
    or inner radii that would conflict with Hyprland. */
 window.nidara-app-window {

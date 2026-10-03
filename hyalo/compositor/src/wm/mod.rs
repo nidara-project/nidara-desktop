@@ -110,6 +110,9 @@ pub struct Managed {
     pub steam_app: Option<u32>,
     /// Its entry in ext-foreign-toplevel-list, once shown (capture.rs).
     pub listed: Option<smithay::wayland::foreign_toplevel_list::ForeignToplevelHandle>,
+    /// Rounded corners and the blur behind it, unless a rule said no (render/window.rs).
+    pub rounded: bool,
+    pub backdrop: bool,
 }
 
 pub struct Workspace {
@@ -474,6 +477,8 @@ impl Hyalo {
             rules_applied: Vec::new(),
             steam_app,
             listed: None,
+            rounded: true,
+            backdrop: true,
         });
     }
 
@@ -530,6 +535,7 @@ impl Hyalo {
         let Some(m) = self.wm.by_window(window) else { return };
         let (id, mut ws) = (m.id, m.workspace);
         let fx = self.new_rule_effects(id, true);
+        self.apply_look(id, &fx);
         if let Some(w) = &fx.workspace {
             let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
             ws = self.rule_workspace(w, &output);

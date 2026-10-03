@@ -43,6 +43,9 @@ pub struct GlassElement {
     /// Where the backdrop under this group's shadowed shapes is measured.
     probes: Vec<glass_gl::LightProbe>,
     surface: Weak<WlSurface>,
+    /// Hyprland's blur finishing: a window's backdrop has it (render/window.rs), the shell's
+    /// glass does not.
+    finish: glass_gl::Finish,
 }
 
 /// One id per group of a surface's shapes, stable across frames.
@@ -136,9 +139,53 @@ impl GlassElement {
                     glass,
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
+                    finish: glass_gl::Finish::NEUTRAL,
                 }
             })
             .collect()
+    }
+
+    /// A window's backdrop (render/window.rs): one shape, the window's rounded box, blurred
+    /// and finished like Hyprland's window blur — no refraction, no tint, no ink.
+    #[allow(clippy::too_many_arguments)]
+    pub fn backdrop(
+        id: Id,
+        commit: CommitCounter,
+        rect: Rectangle<f64, Physical>,
+        radius: f64,
+        exponent: f64,
+        offset: f64,
+        passes: u32,
+        finish: glass_gl::Finish,
+        output_size: smithay::utils::Size<i32, Physical>,
+        surface: &WlSurface,
+    ) -> Option<GlassElement> {
+        let reach = offset * 2f64.powi(passes as i32 + 1);
+        let grown = Rectangle::<f64, Physical>::new(rect.loc - Point::from((reach, reach)), (rect.size.w + 2.0 * reach, rect.size.h + 2.0 * reach).into());
+        let region = grown.to_i32_round::<i32>().intersection(Rectangle::from_size(output_size))?;
+        (region.size.w >= 2 && region.size.h >= 2 && passes > 0).then(|| GlassElement {
+            id,
+            commit,
+            region,
+            shapes: vec![glass_gl::Shape {
+                index: 0,
+                rect,
+                radius,
+                exponent,
+                opacity: 1.0,
+                clip: None,
+                ink_dark: false,
+                pointer: None,
+                refraction: 0.0,
+            }],
+            offset: offset as f32,
+            passes: passes as usize,
+            glass: None,
+            ink_boxes: Vec::new(),
+            probes: Vec::new(),
+            surface: surface.downgrade(),
+            finish,
+        })
     }
 
     fn capture_gles(&self, frame: &mut smithay::backend::renderer::gles::GlesFrame<'_, '_>, cache: &UserDataMap) -> Result<(), GlesError> {
@@ -150,7 +197,7 @@ impl GlassElement {
             // Safety: the EGL context outlives this frame, and its user data with it.
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
-            glass_gl::capture(gl, user_data, map, self.region, self.offset, self.passes, &mut c);
+            glass_gl::capture(gl, user_data, map, self.region, self.offset, self.passes, &self.finish, &mut c);
         })
     }
 
@@ -176,7 +223,7 @@ impl GlassElement {
             if let Some(g) = &self.glass {
                 glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, &self.probes, g.saturation, &self.surface);
             }
-            glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref());
+            glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish);
         })
     }
 }

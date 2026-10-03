@@ -53,10 +53,9 @@ default_mode = "floating"
 # item 13; config/hypr/hyprland.lua matches About by its title for that reason). `match` is
 # regexes searched in app_id / title / initial_app_id / initial_title, and `game = true`
 # for a game (wm/games.rs); effects: float, center, workspace ("3", "special:NAME" or
-# "name:NAME") with silent. Your hyalo.toml can add a rule, replace one by its name, or
-# switch one off with `enabled = false`.
-# (The other rules of hyprland.lua have nothing to act on yet: no XWayland, no rounding or
-# animations (#684).)
+# "name:NAME") with silent; rounding = false (square corners) and backdrop = false (no blur
+# behind it). Your hyalo.toml can add a rule, replace one by its name, or switch one off with
+# `enabled = false`. (The rest of hyprland.lua's rules wait for XWayland and animations, #684.)
 [rules.about]
 match = { app_id = "^nidara-about$" }
 float = true
@@ -72,6 +71,34 @@ center = true
 [rules.games]
 match = { game = true }
 workspace = "name:gamespace"
+rounding = false
+
+# A window with no app id — a client's popup made a toplevel — stays square, as Hyprland's
+# `general-popups` kept it.
+[rules.no-app-id]
+match = { app_id = "^$" }
+rounding = false
+
+# How windows are drawn (hyalo/compositor/src/render/window.rs): what Hyprland drew for Nidara.
+# Corners: `rounding` px, `rounding_power` the curve (2 a circle, higher a squircle); never on a
+# fullscreen window, nor on one that draws its own decoration with a shadow. The backdrop: the
+# blur behind every translucent window — the WINDOW material, apart from the shell's glass:
+# Hyprland's `decoration:blur`, its numbers (size, passes, contrast, brightness, vibrancy,
+# noise). Settings → Appearance → Windows switches it (`backdrop.enabled`); a rule with
+# `backdrop = false` takes it from one app.
+[windows]
+rounding = 24
+rounding_power = 3.2
+
+[windows.backdrop]
+enabled = true
+size = 2
+passes = 2
+contrast = 1.2
+brightness = 1.0
+vibrancy = 0.4
+vibrancy_darkness = 0.1
+noise = 0.01
 
 # Key and pointer bindings: modifiers + key = a command (hyalo/compositor/src/binds.rs for
 # the syntax, wm/actions.rs for the commands). The same set as the Hyprland session
