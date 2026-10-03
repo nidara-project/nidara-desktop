@@ -3,9 +3,15 @@
  * (hyalo/compositor/src/render/title_bar.rs). Its top rows are light, the rest dark: the bar
  * must take the light colour, and dark ink on it. For scripts/ci/hyalo-title-bar-check.sh.
  *
- *   wayland-scanner client-header/private-code for xdg-shell and xdg-decoration-unstable-v1, then
+ *   wayland-scanner client-header/private-code for xdg-shell, xdg-decoration-unstable-v1 and
+ *   viewporter, then
  *   cc hyalo-title-bar-probe.c xdg-shell-protocol.c xdg-decoration-unstable-v1-protocol.c \
- *      -I<gen> $(pkg-config --cflags --libs wayland-client) -o hyalo-title-bar-probe
+ *      viewporter-protocol.c -I<gen> $(pkg-config --cflags --libs wayland-client) \
+ *      -o hyalo-title-bar-probe
+ *
+ * Server-side, it draws into a buffer TWICE as wide as its window, the right half black, and
+ * crops it with a viewport — as Chrome does after a resize (measured, 2026-10-03): the bar
+ * takes the colour of the window's top row, not of the buffer's.
  *
  * SIGUSR1: it switches to its own frame while it runs — asks for client-side and draws a
  * shadow margin around itself, as Chrome does when "Use system title bar and borders" is
@@ -30,6 +36,7 @@
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
 #include "xdg-decoration-unstable-v1-client-protocol.h"
+#include "viewporter-client-protocol.h"
 
 #define W 400
 #define H 250
@@ -37,12 +44,17 @@
 #define MARGIN 12       /* its shadow margin, when it draws its own frame */
 #define LIGHT 0xffe6e6e6
 #define DARK 0xff303030
+/* Its shadow margin: translucent red (premultiplied), so a margin drawn where Hyalo's ring
+ * hides it shows (frame.rs). Used only when it draws its own frame. */
+#define SHADOW 0x60600000
 
 static struct wl_compositor *compositor;
 static struct wl_shm *shm;
 static struct xdg_wm_base *wm_base;
 static struct wl_seat *seat;
 static struct zxdg_decoration_manager_v1 *deco_mgr;
+static struct wp_viewporter *viewporter;
+static struct wp_viewport *viewport;
 static struct wl_surface *surface;
 static struct xdg_surface *xs;
 static struct zxdg_toplevel_decoration_v1 *deco;
@@ -50,7 +62,9 @@ static int configured, closed;
 static volatile sig_atomic_t want_switch;   /* 1 client-side, 2 server-side */
 
 static void global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t version) {
-    if (strcmp(iface, wl_compositor_interface.name) == 0)
+    if (strcmp(iface, wp_viewporter_interface.name) == 0)
+        viewporter = wl_registry_bind(reg, name, &wp_viewporter_interface, 1);
+    else if (strcmp(iface, wl_compositor_interface.name) == 0)
         compositor = wl_registry_bind(reg, name, &wl_compositor_interface, 4);
     else if (strcmp(iface, wl_shm_interface.name) == 0)
         shm = wl_registry_bind(reg, name, &wl_shm_interface, 1);
@@ -104,17 +118,17 @@ static void p_button(void *d, struct wl_pointer *p, uint32_t serial, uint32_t t,
 static void p_axis(void *d, struct wl_pointer *p, uint32_t t, uint32_t a, wl_fixed_t v) {}
 static const struct wl_pointer_listener pointer_listener = { p_enter, p_leave, p_motion, p_button, p_axis };
 
-/* Its content at W×H — light top rows, dark below — with `margin` px of transparent shadow
- * room around it (0: its buffer is its box). */
-static struct wl_buffer *content(int margin) {
-    int w = W + 2 * margin, h = H + 2 * margin, stride = w * 4, size = stride * h;
+/* Its content at W×H — light top rows, dark below — with `margin` px of shadow room around
+ * it (0: its buffer is its box), and `extra` px of black on the right that the viewport crops. */
+static struct wl_buffer *content(int margin, int extra) {
+    int w = W + 2 * margin + extra, h = H + 2 * margin, stride = w * 4, size = stride * h;
     int fd = memfd_create("probe", 0);
     if (fd < 0 || ftruncate(fd, size) < 0) return NULL;
     uint32_t *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             int in = x >= margin && x < margin + W && y >= margin && y < margin + H;
-            px[y * w + x] = !in ? 0x00000000 : (y - margin < TOP ? LIGHT : DARK);
+            px[y * w + x] = x >= W + 2 * margin ? 0xff000000 : !in ? SHADOW : (y - margin < TOP ? LIGHT : DARK);
         }
     munmap(px, size);
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
@@ -125,9 +139,16 @@ static struct wl_buffer *content(int margin) {
 }
 
 static void draw(int own_frame) {
-    int m = own_frame ? MARGIN : 0;
+    int m = own_frame ? MARGIN : 0, extra = own_frame ? 0 : W;
     xdg_surface_set_window_geometry(xs, m, m, W, H);
-    wl_surface_attach(surface, content(m), 0, 0);
+    if (extra) {
+        wp_viewport_set_source(viewport, 0, 0, wl_fixed_from_int(W + 2 * m), wl_fixed_from_int(H + 2 * m));
+        wp_viewport_set_destination(viewport, W + 2 * m, H + 2 * m);
+    } else {
+        wp_viewport_set_source(viewport, wl_fixed_from_int(-1), wl_fixed_from_int(-1), wl_fixed_from_int(-1), wl_fixed_from_int(-1));
+        wp_viewport_set_destination(viewport, -1, -1);
+    }
+    wl_surface_attach(surface, content(m, extra), 0, 0);
     wl_surface_damage(surface, 0, 0, W + 2 * m, H + 2 * m);
     /* Opaque where its content is: a client that drops its frame says so (wm/mod.rs). */
     struct wl_region *r = wl_compositor_create_region(compositor);
@@ -145,7 +166,7 @@ int main(void) {
     struct wl_registry *reg = wl_display_get_registry(d);
     wl_registry_add_listener(reg, &registry_listener, NULL);
     wl_display_roundtrip(d);
-    if (!compositor || !shm || !wm_base || !seat) { fprintf(stderr, "missing a core global\n"); return 1; }
+    if (!compositor || !shm || !wm_base || !seat || !viewporter) { fprintf(stderr, "missing a core global\n"); return 1; }
     if (!deco_mgr) { printf("NO_DECORATIONS\n"); fflush(stdout); return 1; }
     xdg_wm_base_add_listener(wm_base, &wm_base_listener, NULL);
     wl_pointer_add_listener(wl_seat_get_pointer(seat), &pointer_listener, NULL);
@@ -153,6 +174,7 @@ int main(void) {
     signal(SIGUSR2, on_signal);
 
     surface = wl_compositor_create_surface(compositor);
+    viewport = wp_viewporter_get_viewport(viewporter, surface);
     xs = xdg_wm_base_get_xdg_surface(wm_base, surface);
     xdg_surface_add_listener(xs, &xdg_surface_listener, NULL);
     struct xdg_toplevel *top = xdg_surface_get_toplevel(xs);

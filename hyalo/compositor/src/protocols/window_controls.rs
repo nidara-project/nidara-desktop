@@ -32,9 +32,11 @@ use crate::{
     },
 };
 
-/// One button's box, logical px: the back/forward pair's (Settings' header).
-pub const BUTTON_W: f64 = 34.0;
-pub const BUTTON_H: f64 = 30.0;
+/// One button's box, logical px — the same over an app's header and in Hyalo's title bar: one
+/// size of controls in every window, whatever the height of the header around them (owner,
+/// 2026-10-03; the window controls are the system's, not the app's).
+pub const BUTTON_W: f64 = 30.0;
+pub const BUTTON_H: f64 = 24.0;
 /// The capsule: three buttons side by side.
 pub const CAPSULE_W: f64 = BUTTON_W * 3.0;
 
@@ -115,11 +117,10 @@ pub fn window_rect(window: &Window) -> Option<Rectangle<f64, Logical>> {
     rect(window.toplevel()?.wl_surface())
 }
 
-/// The capsule in Hyalo's own title bar (render/title_bar.rs): the kitty mockup's, three
-/// 30×24 buttons, 8 px in from the side the user chose, centred in the bar's height.
-pub const BAR_BUTTON_W: f64 = 30.0;
-pub const BAR_BUTTON_H: f64 = 24.0;
-pub const BAR_MARGIN: f64 = 8.0;
+/// The capsule's gap in Hyalo's own title bar (render/title_bar.rs), logical px: the same on
+/// the side the user chose as above and below it — the bar is the capsule's height and twice
+/// this (`wm::TITLE_BAR_H`), on the interface's 4 px scale.
+pub const BAR_MARGIN: f64 = 4.0;
 
 /// Where a window's controls are, surface-local logical px: in Hyalo's title bar when it has
 /// one (above the surface, so `y` is negative), else where the app placed them.
@@ -127,13 +128,13 @@ pub fn managed_rect(m: &crate::wm::Managed, side: ControlsSide) -> Option<Rectan
     let bar = m.bar() as f64;
     if bar > 0.0 {
         let geo = m.window.geometry().to_f64();
-        let w = BAR_BUTTON_W * 3.0;
+        let w = CAPSULE_W;
         let x = match side {
             ControlsSide::Right => geo.loc.x + geo.size.w - BAR_MARGIN - w,
             ControlsSide::Left => geo.loc.x + BAR_MARGIN,
         };
-        let y = geo.loc.y - bar + (bar - BAR_BUTTON_H) / 2.0;
-        return Some(Rectangle::new((x, y).into(), (w, BAR_BUTTON_H).into()));
+        let y = geo.loc.y - bar + (bar - BUTTON_H) / 2.0;
+        return Some(Rectangle::new((x, y).into(), (w, BUTTON_H).into()));
     }
     window_rect(&m.window)
 }
@@ -245,13 +246,13 @@ mod tests {
     fn close_is_last_on_the_right_and_first_on_the_left() {
         assert_eq!(order(ControlsSide::Right)[2], Button::Close);
         assert_eq!(order(ControlsSide::Left)[0], Button::Close);
-        assert_eq!(CAPSULE_W, 102.0);
+        assert_eq!(CAPSULE_W, 90.0);
     }
 
     #[test]
     fn a_button_is_a_third_of_whichever_capsule() {
-        // The title bar's capsule (90 wide), above the surface.
-        let r = Rectangle::new((302.0, -30.0).into(), (BAR_BUTTON_W * 3.0, BAR_BUTTON_H).into());
+        // The capsule (90 wide), in the title bar above the surface.
+        let r = Rectangle::new((302.0, -30.0).into(), (CAPSULE_W, BUTTON_H).into());
         let at = |x: f64| button_at(r, Point::from((x, -18.0)), ControlsSide::Right);
         assert_eq!(at(305.0), Some(Button::Minimize));
         assert_eq!(at(340.0), Some(Button::Maximize));

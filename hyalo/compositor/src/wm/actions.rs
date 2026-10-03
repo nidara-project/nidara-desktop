@@ -410,12 +410,12 @@ impl Hyalo {
         if !m.floating {
             return Err("only a floating window can be centred".into());
         }
-        let (ws, bar) = (m.workspace, m.bar());
+        let (ws, insets) = (m.workspace, m.floating_insets());
         // Centred by its whole box, title bar included.
-        let size = m.frame().size;
+        let size = super::with_insets(m.rect, insets).size;
         let output = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)).ok_or("no output")?;
         let og = self.space.output_geometry(&output).unwrap_or_default();
-        let r = super::without_bar(super::centered(size, self.floating_area(&output)), bar);
+        let r = super::without_insets(super::centered(size, self.floating_area(&output)), insets);
         self.wm.get_mut(id).unwrap().float_rect = Some(smithay::utils::Rectangle::new(r.loc - og.loc, r.size));
         self.wm.dirty_windows = true;
         self.arrange_workspace(ws);
@@ -434,7 +434,7 @@ impl Hyalo {
             let og = self.space.output_geometry(&output).unwrap_or_default();
             let r = m.rect;
             let size = smithay::utils::Size::from(((r.size.w + dx).max(1), (r.size.h + dy).max(1)));
-            let r = super::clamp_floating_with_bar(smithay::utils::Rectangle::new(r.loc, size), area, m.bar());
+            let r = super::clamp_floating_with_insets(smithay::utils::Rectangle::new(r.loc, size), area, m.floating_insets());
             self.wm.get_mut(id).unwrap().float_rect = Some(smithay::utils::Rectangle::new(r.loc - og.loc, r.size));
         } else {
             let area = super::inset(self.work_area(&output), self.config.layout.gaps_out);

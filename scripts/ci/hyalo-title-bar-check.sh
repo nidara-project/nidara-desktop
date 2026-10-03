@@ -4,16 +4,20 @@
 # Chrome with "Use system title bar and borders"). Run INSIDE a Hyalo session started with
 # HYALO_CONTROL, with `hyalo-title-bar-probe` in PATH, on a floating workspace.
 #
-#   1. the probe asks for server-side: it gets a 36 px bar on top of its box, and the capsule
-#      in it (90×24, 8 px from the right, centred in the bar's height);
+#   1. the probe asks for server-side: it gets a 32 px bar on top of its box, and the capsule
+#      in it (90×24, the same 4 px from the right as above and below it);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
 #      dark on it (the title's darkest pixel);
 #   3. the pointer over the bar is Hyalo's: the app gets a leave, and no click;
 #   4. dragged by its bar, the window moves; a double click maximizes it, another restores it;
 #   5. the app switches to its own frame while it runs (client-side, a shadow margin): the bar
-#      goes; back to server-side, it comes back;
+#      goes; maximized like that, Hyalo lays it out in its ring (render/frame.rs) — the ring
+#      continues the app's edges (light on top, dark on the sides), its outer corner is cut,
+#      and the shadow margin under it is not drawn (the probe's is translucent red); back to
+#      server-side, the bar comes back;
 #   6. close in the bar's capsule closes it.
-# The control: the same probe against a Hyalo without the title bar has `title_bar` 0 (step 1).
+# The controls: the same probe against a Hyalo without the title bar has `title_bar` 0 (step 1);
+# against one without the ring, `frame` is not 4 (step 5).
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -43,11 +47,11 @@ wait_line '^SHOWN' || fail "the probe never showed its window"
 sleep 0.8
 
 # 1. The bar and its capsule.
-[ "$(field title_bar)" = 36 ] || fail "no title bar: title_bar = $(field title_bar) (36 expected)"
-want=$(win | jq -r '"\(.x + .width - 8 - 90) \(.y - 36 + 6) 90 24"')
+[ "$(field title_bar)" = 32 ] || fail "no title bar: title_bar = $(field title_bar) (32 expected)"
+want=$(win | jq -r '"\(.x + .width - 4 - 90) \(.y - 32 + 4) 90 24"')
 got=$(win | jq -r '.controls | map(floor) | join(" ")')
-[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (8 px in from the right, centred in the bar)"
-echo "ok    a 36 px bar on top of the window, the capsule in it"
+[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (4 px in from the right, above and below)"
+echo "ok    a 32 px bar on top of the window, the capsule in it"
 
 # 2. One piece, and dark ink on a light bar.
 $MSG screenshot "$log/bar.png" >/dev/null || fail "no screenshot"
@@ -81,7 +85,7 @@ grep -q '^BUTTON' "$out" && fail "the app got the press on its title bar"
 p=$(in_bar 60)
 echo "click $p" >"$C"; sleep 0.1; echo "click $p" >"$C"
 wait_field fullscreen maximized || fail "a double click on the bar did not maximize: $(field fullscreen)"
-[ "$(field title_bar)" = 36 ] || fail "maximized, the bar went"
+[ "$(field title_bar)" = 32 ] || fail "maximized, the bar went"
 p=$(in_bar 60)
 echo "click $p" >"$C"; sleep 0.1; echo "click $p" >"$C"
 wait_field fullscreen none || fail "a second double click did not restore: $(field fullscreen)"
@@ -92,9 +96,35 @@ kill -USR1 "$pid"
 wait_line '^SWITCHED client' || fail "the probe did not switch"
 wait_field title_bar 0 || fail "the app draws its own frame, and the bar is still there"
 [ "$(field controls)" = null ] || fail "no bar, yet controls at $(field controls)"
+[ "$(field frame)" = 0 ] || fail "floating, its own frame drawn, yet a ring of $(field frame)"
+# Maximized with its own frame: Hyalo's ring. The probe draws 400×250 whatever it is told, so
+# its box is at the area's corner and what is right of it is the workspace's background.
+$MSG do maximize "$(field id)" >/dev/null
+wait_field fullscreen maximized || fail "the window did not maximize: $(field fullscreen)"
+wait_field frame 4 || fail "maximized with its own frame, no ring: frame = $(field frame) (4 expected)"
+[ "$(field look.rounded)" = true ] || fail "in its ring, the window is not rounded"
+sleep 0.6
+$MSG screenshot "$log/ring.png" >/dev/null || fail "no screenshot"
+at() { win | jq -r --argjson s "$scale" --argjson dx "$1" --argjson dy "$2" '"\((.x + $dx) * $s | floor) \((.y + $dy) * $s | floor)"'; }
+near() { # near "R G B" V: every channel within 3 of V
+    for v in $1; do [ "$v" -ge $(($2 - 3)) ] && [ "$v" -le $(($2 + 3)) ] || return 1; done
+}
+left=$(pixels pixel "$log/ring.png" $(at -2 150)); top=$(pixels pixel "$log/ring.png" $(at 200 -2))
+right=$(pixels pixel "$log/ring.png" $(at 401 150))
+near "$left" 48 || fail "the ring left of the dark side is $left, not the app's 48 48 48"
+near "$right" 48 || fail "the ring right of the dark side is $right, not the app's 48 48 48"
+near "$top" 230 || fail "the ring above the light top is $top, not the app's 230 230 230"
+corner=$(pixels pixel "$log/ring.png" $(at -4 -4))
+near "$corner" 230 && fail "the ring's outer corner is the app's colour ($corner): not rounded"
+margin=$(pixels pixel "$log/ring.png" $(at 408 150)); beyond=$(pixels pixel "$log/ring.png" $(at 440 150))
+[ "$margin" = "$beyond" ] || fail "the shadow margin shows beside the ring ($margin, the background is $beyond)"
+echo "ok    maximized with its own frame, it sits in Hyalo's ring: edges continued ($left / $top), corner cut, margin hidden"
+$MSG do maximize "$(field id)" >/dev/null
+wait_field fullscreen none || fail "the window did not restore: $(field fullscreen)"
 kill -USR2 "$pid"
 wait_line '^SWITCHED server' || fail "the probe did not switch back"
-wait_field title_bar 36 || fail "back to server-side, and no bar"
+wait_field title_bar 32 || fail "back to server-side, and no bar"
+wait_field frame 0 || fail "back to server-side, and still a ring"
 echo "ok    the app switched to its own frame and the bar went; back, and it came back"
 
 # 6. Close.

@@ -31,10 +31,10 @@ use smithay::{
     backend::renderer::{
         element::{Element, Id, Kind, RenderElement},
         gles::{GlesError, GlesFrame, GlesTexture, ffi},
-        utils::{CommitCounter, RendererSurfaceStateUserData},
+        utils::CommitCounter,
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
-    utils::{Buffer as BufferCoords, Physical, Rectangle, Scale, Size, Transform, user_data::UserDataMap},
+    utils::{Buffer as BufferCoords, Logical, Physical, Rectangle, Scale, Size, Transform, user_data::UserDataMap},
     wayland::compositor::with_states,
 };
 
@@ -238,6 +238,7 @@ impl TitleBarElement {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         surface: &WlSurface,
+        window_geometry: Rectangle<i32, Logical>,
         geo: Rectangle<f64, Physical>,
         bar: TitleBar,
         client: Option<GlesTexture>,
@@ -250,29 +251,22 @@ impl TitleBarElement {
         let h = bar.height * s;
         let bar_rect = Rectangle::new((geo.loc.x, geo.loc.y - h).into(), (geo.size.w, h).into());
         let frame = Rectangle::new(bar_rect.loc, (geo.size.w, geo.size.h + h).into());
-        // The row a little under the top edge (one buffer scale's worth): a client's very first
-        // row is sometimes an edge of its own.
-        let (strip, client_commit) = with_states(surface, |states| {
-            states.data_map.get::<RendererSurfaceStateUserData>().map_or((None, CommitCounter::default()), |d| {
-                let d = d.lock().unwrap();
-                let strip = d.buffer_size().map(|_| (d.buffer_scale(), d.buffer_transform()));
-                (strip, d.current_commit())
-            })
-        });
-        let client = client.zip(strip).and_then(|(tex, (bscale, transform))| {
-            use smithay::backend::renderer::Texture;
-            let size = tex.size();
-            if size.w <= 0 || size.h <= 0 {
+        // The row one buffer pixel under the top edge (a client's very first row is sometimes an
+        // edge of its own), across the client's box only — not the whole buffer: a client may
+        // draw into a buffer larger than its window, or crop one with a viewport (measured,
+        // 2026-10-03: Chrome tiled beside kitty gave a bar of half its colour).
+        let sampled = super::frame::ClientBox::of(surface, window_geometry);
+        let client_commit = sampled.as_ref().map_or(CommitCounter::default(), |c| c.commit);
+        let client = client.zip(sampled).and_then(|(tex, cb)| {
+            if cb.b.size.w <= 0.0 || cb.b.size.h < 2.0 * cb.px {
                 return None;
             }
-            let y = (bscale.max(1) as f64).min(size.h as f64 - 1.0);
-            Some((tex, Rectangle::new((0.0, y).into(), (size.w as f64, 1.0).into()), transform))
+            let strip = cb.to_buffer(cb.b.loc.x, cb.b.loc.y + cb.px, cb.b.size.w, cb.px);
+            Some((tex, strip, cb.transform))
         });
         // The title, centred in the bar, never under the capsule: as wide as what the capsule
         // leaves on BOTH sides, so centred it stays clear of it.
-        let reserve = (crate::protocols::window_controls::BAR_BUTTON_W * 3.0
-            + 2.0 * crate::protocols::window_controls::BAR_MARGIN)
-            * s;
+        let reserve = (crate::protocols::window_controls::CAPSULE_W + 2.0 * crate::protocols::window_controls::BAR_MARGIN) * s;
         let max_w = (geo.size.w - 2.0 * reserve).floor() as i32;
         let title = title_raster(surface, &bar.title, &bar.family, (TITLE_PX * s).round(), max_w).map(|r| {
             let x = (bar_rect.loc.x + (bar_rect.size.w - r.w as f64) / 2.0).round() as i32;

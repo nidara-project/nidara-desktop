@@ -309,9 +309,10 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   its opaque regions drop those squares, so what is behind a corner is still drawn, and it is
   never a scan-out candidate. The shader gets output pixels from `gl_FragCoord` through the
   inverse of Smithay's projection (`fb_to_out`), so every output transform is handled there. Not
-  rounded: a fullscreen window, a window whose surface reaches past its geometry (a client-side
-  decoration with a shadow margin draws its own corners), popups, and a rule's `rounding = false`
-  (games; a window with no app id, Hyprland's `general-popups`).
+  rounded: a fullscreen window, a FLOATING window whose surface reaches past its geometry (a
+  client-side decoration with a shadow margin draws its own corners; tiled or maximized it gets
+  Hyalo's ring instead, below), popups, and a rule's `rounding = false` (games; a window with no
+  app id, Hyprland's `general-popups`).
 - **The backdrop** — "A, automatic", the owner's decision: the WINDOW material, independent of the
   layers' refractive glass (#705), each with its own settings. A `GlassElement::backdrop` (the same
   framebuffer effect, one shape: the window's box with its corners, never the CSD shadow margin)
@@ -337,6 +338,27 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   GTK apps speak neither and keep their own decorations. What the client ASKED is kept on its
   surface (`decoration::asked`): it decides who gets Hyalo's title bar — below ("Hyalo's title
   bar"), with the window controls before it ("The window controls are Hyalo's").
+- **The ring around a client-side frame** (`render/frame.rs`, owner 2026-10-03: "round the web
+  apps without hiding any of their corners"). A web app of Chrome's draws its own frame with a
+  shadow margin and, told it is tiled, square corners: cutting them would hide 4.7 px along the
+  diagonal (`rounding` 24, power 3.2). So such a window (`Managed::has_frame` = it does not `fits`,
+  a rule lets it be rounded) is laid out, while tiled or maximized (`Managed::ring`; floating it
+  rounds itself), inside a ring of `wm::FRAME_W` = 4 on every side — `Managed::insets()`, the
+  same mechanism as the title bar's (`with_insets`/`without_insets`; a floating window's
+  placement uses `floating_insets()`, the bar only). The client is drawn inside its own box only
+  (the rounded shader's `clip`: its margin lies under the ring and is never drawn), with the
+  window's corners on the ring's outer edge — a 4 px ring leaves only the outermost half pixel of
+  the client's own corner under the curve. The ring CONTINUES the client's edges, row by row:
+  each side is the client's column (row) one buffer pixel in, stretched across the ring; each
+  corner square, the client's pixel there — eight draws of the client's texture through
+  Smithay's texture path, with the rounded shader. Not an average: a sidebar, a header and a body
+  each continue in their own colour. The cost: content that TOUCHES the edge (a glyph, a
+  full-bleed image) streaks across the 4 px. Its damage is the ring only (`damage_since`): the
+  element's box is the whole window. `msg windows` → `frame` (the ring's width, 0 without).
+- **Sampling a client** (the ring and the title bar, `frame::ClientBox`): always through the
+  surface's VIEW — the viewport's crop and scaling — and only across the client's box. Measured
+  2026-10-03: Chrome tiled beside kitty keeps its 1262 px buffer and crops it to 628 with
+  wp_viewport, and the bar, which averaged the whole buffer row, came out half its colour.
 - Still owed in wave 2: the 1 px border (active/inactive) and the shadow.
 - CI: `scripts/ci/hyalo-window-look-check.sh` in the smoke — an opaque window of red/green
   stripes and a translucent one over it: `look`; the corner's pixel shows what is behind and
@@ -350,15 +372,16 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
 
 The owner's design, chosen on a mockup: Hyalo draws a window's close, minimize and maximize
 OVER the app's own header, in the same row — no bar of its own for our apps — as **one capsule of
-three buttons** (the shape of the back/forward pair in Settings' header; ours, never three
-coloured circles). Close turns red on hover. Minimize is drawn **disabled** until #724 decides
+three buttons** (ours, never three coloured circles). **One size in every window** (owner,
+2026-10-03): 90×24 over Settings' taller header as in Hyalo's thin bar — the controls are the
+system's, so they do not take their size from each app's header (`window_controls::BUTTON_W/H`). Close turns red on hover. Minimize is drawn **disabled** until #724 decides
 what minimizing means here; maximize is disabled for a window whose minimum = maximum. Right by
 default (close last), left as a setting (close first).
 
 - **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
   (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
   on a toplevel's surface; the compositor sends `layout(side, width, height)` — the box to reserve
-  (102×30: three 34×30 buttons) and the side — at once and again whenever the side changes; the
+  (90×24: three 30×24 buttons) and the side — at once and again whenever the side changes; the
   app sends `set_position(x, y)`/`unset_position`, surface-local, **double-buffered on
   wl_surface.commit** so the controls move with the frame that left room for them. Not offered to
   sandboxed clients (like the glass).
@@ -409,15 +432,17 @@ headers, the title centred. `render/title_bar.rs`.
   first frame is already its size under the bar. Recomputed at every commit
   (`update_title_bar`): an app that switches its frame while it runs gains or loses the bar,
   with the layout following. A rule's `title_bar = false` takes it from one app.
-- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (36, 0 in
-  fullscreen), `frame()` = the box with the bar. A tiled or maximized window's tile is the frame
+- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (32, 0 in
+  fullscreen), `frame()` = the box with the bar. 32 = the capsule's 24 and the same 4 px above,
+  below and beside it (`window_controls::BAR_MARGIN`; owner 2026-10-03: equal gaps, on the
+  interface's 4 px scale). A tiled or maximized window's tile is the frame
   and the client gets the rest; a floating window keeps the size it asked for and the bar sits
   above it, clamped by the frame (`clamp_floating_with_bar`: the bar, not the client, may never
   leave by the top). Placement, cascading, centring, dropping after a drag all use the frame.
   `m.rect` stays the CLIENT's box (what the IPC's x/y/width/height say); `title_bar` in
   `msg windows` is the bar's height above it.
 - **Drawn** in ONE element, three steps inside its `draw`: (1) the client's top row (one buffer
-  scale under the edge) drawn through **Smithay's own texture path** (`render_texture_from_to`,
+  pixel under the edge, across its box through its viewport: "Sampling a client" above) drawn through **Smithay's own texture path** (`render_texture_from_to`,
   which knows the format, the transform, an external image) into a 16×16 target bound in place
   of the frame's — 16×16 so that whatever the output's rotation, 16 samples lie along the row;
   (2) those averaged into one texel; (3) the bar in one pass over the frame: that colour, alpha
@@ -453,12 +478,17 @@ headers, the title centred. `render/title_bar.rs`.
   counts from then on as having asked for server-side (`decoration::note_dropped_frame`), so it
   gets the bar. Turning it OFF, Chrome does ask for client-side, and the bar goes.
 - CI: `scripts/ci/hyalo-title-bar-check.sh` in the smoke (C probe `hyalo-title-bar-probe.c`,
-  light top rows on a dark body): the bar and the capsule's place; the bar's pixel on screen is
-  the app's top colour and its darkest title pixel dark; the pointer Hyalo's over it; dragged by
-  it the window moves, a double click maximizes and restores; the probe switching to its own frame
-  (SIGUSR1) loses the bar and back (SIGUSR2) gets it; close in the capsule. Controls, both seen
-  failing: the installed Hyalo without the bar (`title_bar` null at step 1), and a bar of a fixed
-  colour (step 2: "not one piece").
+  light top rows on a dark body, server-side in a buffer twice its width cropped by a viewport,
+  the extra half black): the bar and the capsule's place; the bar's pixel on screen is the app's
+  top colour and its darkest title pixel dark; the pointer Hyalo's over it; dragged by it the
+  window moves, a double click maximizes and restores; the probe switching to its own frame
+  (SIGUSR1, a translucent red shadow margin) loses the bar, and maximized like that gets the ring
+  — sides and top continue its edges, the outer corner is cut, the margin beside the ring is not
+  drawn — and back (SIGUSR2) gets the bar; close in the capsule. Controls, all seen failing: the
+  installed Hyalo without the bar (`title_bar` null at step 1); a bar of a fixed colour, and one
+  that averages the whole buffer row (step 2: "the bar is 115 115 115… not one piece"); no clip
+  ("the shadow margin shows beside the ring"); no ring element ("the ring left of the dark side
+  is 15 15 18").
 
 ## The window manager
 

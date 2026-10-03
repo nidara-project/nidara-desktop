@@ -67,6 +67,7 @@ uniform mat3 fb_to_out;   // framebuffer pixels → output pixels (the inverse o
 uniform vec4 geo;         // the window's box, output pixels
 uniform float radius;
 uniform float exponent;
+uniform vec4 clip;        // nothing is drawn outside it, output pixels: a client's shadow margin
 
 void main() {
     vec4 color = texture2D(tex, v_coords);
@@ -79,6 +80,7 @@ void main() {
     // Only inside the corner squares: the superellipse of the glass (glass_gl.rs `sdf_box`),
     // anti-aliased over one pixel.
     vec2 p = (fb_to_out * vec3(gl_FragCoord.xy, 1.0)).xy;
+    if (p.x < clip.x || p.y < clip.y || p.x >= clip.x + clip.z || p.y >= clip.y + clip.w) discard;
     vec2 h = geo.zw * 0.5;
     vec2 q = abs(p - geo.xy - h);
     vec2 inner = h - vec2(radius);
@@ -100,7 +102,7 @@ void main() {
 /// The compiled shader, once per GL context (its user data).
 struct RoundedProgram(Option<GlesTexProgram>);
 
-fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram> {
+pub(super) fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram> {
     let gles = renderer.gles();
     if let Some(p) = gles.egl_context().user_data().get::<RoundedProgram>() {
         return p.0.clone();
@@ -113,6 +115,7 @@ fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram>
                 UniformName::new("geo", UniformType::_4f),
                 UniformName::new("radius", UniformType::_1f),
                 UniformName::new("exponent", UniformType::_1f),
+                UniformName::new("clip", UniformType::_4f),
             ],
         )
         .map_err(|err| tracing::error!(?err, "the rounded-corner shader did not compile: windows stay square"))
@@ -129,6 +132,31 @@ pub struct RoundedElement<R: smithay::backend::renderer::Renderer> {
     geo: Rectangle<f64, Physical>,
     radius: f64,
     exponent: f64,
+    /// Where the surface may draw, output pixels: the client's box when Hyalo draws a ring
+    /// around it (render/frame.rs) — its shadow margin is under the ring — else anywhere.
+    clip: Option<Rectangle<f64, Physical>>,
+}
+
+/// The rounded shader's uniforms for a box `geo` with its corners, drawing only inside `clip`.
+pub(super) fn rounded_uniforms(
+    projection: &[f32; 9],
+    fb: (i32, i32),
+    geo: Rectangle<f64, Physical>,
+    radius: f64,
+    exponent: f64,
+    clip: Option<Rectangle<f64, Physical>>,
+) -> Vec<Uniform<'static>> {
+    let c = clip.map_or((-1e7, -1e7, 2e7, 2e7), |c| (c.loc.x as f32, c.loc.y as f32, c.size.w as f32, c.size.h as f32));
+    vec![
+        Uniform::new(
+            "fb_to_out",
+            smithay::backend::renderer::gles::UniformValue::Matrix3x3 { matrices: vec![fb_to_out(projection, fb)], transpose: false },
+        ),
+        Uniform::new("geo", (geo.loc.x as f32, geo.loc.y as f32, geo.size.w as f32, geo.size.h as f32)),
+        Uniform::new("radius", radius as f32),
+        Uniform::new("exponent", exponent as f32),
+        Uniform::new("clip", c),
+    ]
 }
 
 impl<R: smithay::backend::renderer::Renderer> std::fmt::Debug for RoundedElement<R> {
@@ -170,11 +198,24 @@ impl<R: HyaloRenderer> Element for RoundedElement<R> {
     fn damage_since(&self, scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
         self.inner.damage_since(scale, commit)
     }
-    /// The surface's own, without the cut corners: what lies behind them must still be drawn.
+    /// The surface's own, without the cut corners and inside the clip: what lies behind them
+    /// must still be drawn.
     fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
         let at = self.inner.geometry(scale).loc;
         let corners = self.corners().map(|c| Rectangle::new(c.loc - at, c.size));
-        let regions: Vec<Rectangle<i32, Physical>> = self.inner.opaque_regions(scale).iter().copied().collect();
+        let clip = self.clip.map(|c| {
+            let c = c.to_i32_up::<i32>();
+            Rectangle::new(c.loc - at, c.size)
+        });
+        let regions: Vec<Rectangle<i32, Physical>> = self
+            .inner
+            .opaque_regions(scale)
+            .iter()
+            .filter_map(|r| match clip {
+                Some(c) => r.intersection(c),
+                None => Some(*r),
+            })
+            .collect();
         Rectangle::subtract_rects_many(regions, corners).into_iter().collect()
     }
     fn alpha(&self) -> f32 {
@@ -201,21 +242,9 @@ impl<R: HyaloRenderer> RenderElement<R> for RoundedElement<R> {
             let projection = *gles.projection();
             // Safety: only reads the viewport Smithay set for this frame.
             let fb = gles.with_context(|gl| unsafe { glass_gl::fb_size(gl) }).map_err(R::from_gles_error)?;
-            let g = self.geo;
             gles.override_default_tex_program(
                 self.program.clone(),
-                vec![
-                    Uniform::new(
-                        "fb_to_out",
-                        smithay::backend::renderer::gles::UniformValue::Matrix3x3 {
-                            matrices: vec![fb_to_out(&projection, fb)],
-                            transpose: false,
-                        },
-                    ),
-                    Uniform::new("geo", (g.loc.x as f32, g.loc.y as f32, g.size.w as f32, g.size.h as f32)),
-                    Uniform::new("radius", self.radius as f32),
-                    Uniform::new("exponent", self.exponent as f32),
-                ],
+                rounded_uniforms(&projection, fb, self.geo, self.radius, self.exponent, self.clip),
             );
         }
         let drawn = self.inner.draw(frame, src, dst, damage, opaque_regions, cache);
@@ -318,12 +347,14 @@ pub fn fits(window: &Window) -> bool {
     geo.loc == Point::from((0, 0)) && surface_size(&surface).is_some_and(|s| s == geo.size)
 }
 
-/// What `cfg` and the window's rules make of it.
-pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, cfg: &WindowsConfig) -> Look {
+/// What `cfg` and the window's rules make of it. `ringed`: Hyalo lays it out in a ring of its
+/// own (wm `Managed::ring`, render/frame.rs).
+pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, ringed: bool, cfg: &WindowsConfig) -> Look {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return Look::default() };
     let geo = window.geometry();
-    // Client-side decorations with a shadow margin draw their own corners.
-    let fits = fits(window);
+    // Client-side decorations with a shadow margin draw their own corners — unless Hyalo
+    // draws a ring around them, whose corners it rounds.
+    let fits = fits(window) || ringed;
     let rounded = rule_rounded && !fullscreen && fits && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
     let backdrop = rule_backdrop && cfg.backdrop.enabled && cfg.backdrop.passes > 0 && translucent(&surface, geo, radius);
@@ -345,6 +376,7 @@ pub fn push<R: HyaloRenderer>(
     cfg: &WindowsConfig,
     controls: Option<(Rectangle<f64, Physical>, super::controls::Controls)>,
     title_bar: Option<super::title_bar::TitleBar>,
+    ring: f64,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
@@ -357,29 +389,69 @@ pub fn push<R: HyaloRenderer>(
         out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
     }
     let radius = cfg.rounding * scale.x;
-    // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the
-    // bar and the client together: the client's top corners are inside, not cut.
-    let bar_px = title_bar.as_ref().map_or(0.0, |t| t.height * scale.x);
-    let frame = Rectangle::new((geo.loc.x, geo.loc.y - bar_px).into(), (geo.size.w, geo.size.h + bar_px).into());
+    // With Hyalo's title bar on top — or its ring all round — the window's box (its corners,
+    // its backdrop) is that and the client together: the client's corners are inside, not cut.
+    let ring_px = (ring * scale.x).round();
+    let bar_px = title_bar.as_ref().map_or(ring_px, |t| t.height * scale.x);
+    let frame = Rectangle::new(
+        (geo.loc.x - ring_px, geo.loc.y - bar_px).into(),
+        (geo.size.w + 2.0 * ring_px, geo.size.h + bar_px + ring_px).into(),
+    );
+    let clip = (ring_px > 0.0).then_some(geo);
     let program = look.rounded.then(|| rounded_program(renderer)).flatten();
     let at = out.len();
-    match program {
+    match &program {
         Some(program) => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> =
                 render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified);
             out.extend(elements.into_iter().map(|inner| {
-                OutputElement::Rounded(RoundedElement { inner, program: program.clone(), geo: frame, radius, exponent: cfg.rounding_power })
+                OutputElement::Rounded(RoundedElement {
+                    inner,
+                    program: program.clone(),
+                    geo: frame,
+                    radius,
+                    exponent: cfg.rounding_power,
+                    clip,
+                })
             }));
             super::push_material(out, &surface, location, scale, output_size);
         }
         None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate),
+    }
+    // The ring, made after the surfaces like the title bar below (it draws the client's edges)
+    // and with the same corners.
+    if ring_px > 0.0
+        && let Some(program) = &program
+        && let Some(element) = super::frame::FrameElement::new(
+            &surface,
+            window.geometry(),
+            geo,
+            ring_px,
+            renderer.surface_texture(&surface),
+            program.clone(),
+            frame,
+            radius,
+            cfg.rounding_power,
+        )
+    {
+        out.insert(at, OutputElement::Frame(element));
     }
     // The title bar, made after the surfaces (their buffers are imported by now, and it samples
     // the client's), placed before them: under its popups like the controls.
     if let Some(tb) = title_bar {
         let client = renderer.surface_texture(&surface);
         let r = if look.rounded { radius } else { 0.0 };
-        let element = super::title_bar::TitleBarElement::new(&surface, geo, tb, client, r, cfg.rounding_power, scale, output_size);
+        let element = super::title_bar::TitleBarElement::new(
+            &surface,
+            window.geometry(),
+            geo,
+            tb,
+            client,
+            r,
+            cfg.rounding_power,
+            scale,
+            output_size,
+        );
         out.insert(at, OutputElement::TitleBar(element));
     }
     let geo = frame;
