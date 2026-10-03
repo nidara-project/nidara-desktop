@@ -124,8 +124,11 @@ phase_build() {
     wayland-scanner private-code  "$xs_xml" "$tb/xdg-shell-protocol.c"
     wayland-scanner client-header "$dc_xml" "$tb/xdg-decoration-unstable-v1-client-protocol.h"
     wayland-scanner private-code  "$dc_xml" "$tb/xdg-decoration-unstable-v1-protocol.c"
+    local vp_xml=/usr/share/wayland-protocols/stable/viewporter/viewporter.xml
+    wayland-scanner client-header "$vp_xml" "$tb/viewporter-client-protocol.h"
+    wayland-scanner private-code  "$vp_xml" "$tb/viewporter-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-title-bar-probe.c" "$tb/xdg-shell-protocol.c" \
-        "$tb/xdg-decoration-unstable-v1-protocol.c" \
+        "$tb/xdg-decoration-unstable-v1-protocol.c" "$tb/viewporter-protocol.c" \
         -I"$tb" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-title-bar-probe
     # The stand-in input method (hyalo-ime-check.sh). input-method-v2 is not in wayland-protocols:
     # its XML comes with the wayland-protocols-misc crate Hyalo was just built with.
@@ -480,7 +483,7 @@ phase_run() {
     TITLE_BAR_LOG=/tmp/hyalo/title-bar "$REPO/scripts/ci/hyalo-title-bar-check.sh" >/tmp/hyalo/title-bar.log 2>&1 \
         || { log "FAIL: title bar"; cat /tmp/hyalo/title-bar.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
-    log "title bar OK ($(grep -c '^ok' /tmp/hyalo/title-bar.log) steps: bar, one piece, pointer, drag/maximize, switch, close)"
+    log "title bar OK ($(grep -c '^ok' /tmp/hyalo/title-bar.log) steps: bar, one piece, pointer, drag/maximize, switch + ring, close)"
     # Input methods (#683, #503): a stand-in input method's text reaches a focused window's
     # field (empty before it ran: the control) and the shell's search under its focus grab.
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \

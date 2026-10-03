@@ -4,7 +4,7 @@
 # them there and takes their clicks. Run INSIDE a Hyalo session started with HYALO_CONTROL, with
 # `hyalo-window-controls-probe` in PATH.
 #
-#   1. the probe is told the box (102×30) and the side (right), and Hyalo reports the controls
+#   1. the probe is told the box (90×24) and the side (right), and Hyalo reports the controls
 #      where the probe placed them;
 #   2. the pointer over the window reaches the app, over its controls it does not (the app
 #      gets a leave);
@@ -36,13 +36,13 @@ wait_line '^PLACED' || fail "the probe never placed its box"
 sleep 0.5
 
 # 1. The box and the side; the controls where the probe put them.
-grep -q '^LAYOUT right 102 30$' "$out" || fail "the first layout is not 'right 102 30'"
+grep -q '^LAYOUT right 90 24$' "$out" || fail "the first layout is not 'right 90 24'"
 w=$(win)
 [ -n "$w" ] || fail "the probe's window is not listed"
-want=$(echo "$w" | jq -r '"\(.x + 400 - 12 - 102) \(.y + 12) 102 30"')
+want=$(echo "$w" | jq -r '"\(.x + 400 - 12 - 90) \(.y + 12) 90 24"')
 got=$(echo "$w" | jq -r '.controls | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "controls at '$got', the probe placed them at '$want'"
-echo "ok    the box (102×30, right) is told, and the controls are where the app placed them"
+echo "ok    the box (90×24, right) is told, and the controls are where the app placed them"
 
 # 2. The pointer: the app's over its body, Hyalo's over the controls.
 echo "$w" | jq -r '"move \(.x + 40) \(.y + 150)"' >"$C"; sleep 0.4
@@ -64,7 +64,7 @@ echo "ok    maximize maximizes and restores; minimize does nothing yet (#724); t
 # 4. The left side, live, and back.
 $MSG settings '{"windows":{"controls":{"side":"left"}}}' >/dev/null
 for _ in $(seq 1 20); do grep -q '^LAYOUT left' "$out" && break; sleep 0.25; done
-grep -q '^LAYOUT left 102 30$' "$out" || fail "the side changed and the app was not told"
+grep -q '^LAYOUT left 90 24$' "$out" || fail "the side changed and the app was not told"
 sleep 0.5
 w=$(win)
 want=$(echo "$w" | jq -r '"\(.x + 12) \(.y + 12)"')

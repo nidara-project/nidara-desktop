@@ -8,6 +8,7 @@
 //! in the prototype), and a surface's glass has to go right below that surface.
 
 pub mod controls;
+pub mod frame;
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
@@ -135,6 +136,7 @@ smithay::backend::renderer::element::render_elements! {
     Scrim=ScrimElement,
     Controls=controls::ControlsElement,
     TitleBar=title_bar::TitleBarElement,
+    Frame=frame::FrameElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
 }
 
@@ -147,6 +149,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
             Self::Controls(e) => f.debug_tuple("Controls").field(e).finish(),
             Self::TitleBar(e) => f.debug_tuple("TitleBar").field(e).finish(),
+            Self::Frame(e) => f.debug_tuple("Frame").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
@@ -319,11 +322,14 @@ pub fn output_elements<R: HyaloRenderer>(
             let geo = Rectangle::new(at - output_geo.loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
             let managed = state.wm.by_window(w);
             let fullscreen = managed.is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen);
+            // Hyalo's ring around a client-side frame (frame.rs), logical px: tiled or maximized.
+            let ring = managed.map_or(0, |m| m.ring());
             let look = window::look(
                 w,
                 fullscreen,
                 managed.is_none_or(|m| m.rounded),
                 managed.is_none_or(|m| m.backdrop),
+                ring > 0,
                 state.windows,
             );
             // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
@@ -354,7 +360,7 @@ pub fn output_elements<R: HyaloRenderer>(
                 })),
                 None => (controls, None),
             };
-            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls, title_bar);
+            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls, title_bar, ring as f64);
         }
     };
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
