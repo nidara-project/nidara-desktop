@@ -1,20 +1,26 @@
-//! The ring Hyalo lays a client-side frame out in (owner, 2026-10-03: "round the web apps
-//! without hiding any of their corners"). A web app of Chrome's draws its own frame with a
-//! shadow margin and — tiled — square corners: cutting them to the window's curve would hide
-//! what is in them (4.7 px along the diagonal at `rounding` 24, `rounding_power` 3.2). Instead
-//! the layout gives the client its tile less a ring of `wm::FRAME_W` on every side, the client
-//! is drawn inside its own box only (its shadow margin lies under the ring), and the ring —
-//! whose outer edge carries the window's corners — continues the client's edges outward:
+//! The ring Hyalo lays a client-side frame out in (owner, 2026-10-03: "no window keeps square
+//! corners by default — Hyalo's title bar where the app takes it, a ring where it insists on its
+//! own frame"). A web app of Chrome's draws its own frame with a shadow margin and square
+//! corners — tiled, and at the bottom even floating — and cutting them to the window's curve
+//! would hide what is in them (4.7 px along the diagonal at `rounding` 24, `rounding_power`
+//! 3.2). Instead the window is laid out as the client inside a ring of `wm::FRAME_W` on every
+//! side, tiled or floating; the client is drawn inside its own box only (its shadow margin lies
+//! under the ring), and the ring — whose outer edge carries the window's corners — continues the
+//! client's edges outward:
 //!
 //! - each side is the client's column (or row) one buffer pixel in from that edge, stretched
 //!   across the ring — the edge as it is, row by row, not an average: a sidebar, a header and a
 //!   body each continue in their own colour. One pixel in, as the title bar samples (a client's
 //!   outermost row is sometimes an edge of its own, a highlight line: it stays where it is);
-//! - each corner square is the client's pixel at that corner, one pixel in both ways.
+//! - each corner is one colour, the client's pixel `CORNER_SAMPLE` in along the diagonal, over a
+//!   square that reaches into the client by the window's inner radius: drawn BEHIND the client,
+//!   it shows only where the client is transparent — the rounded corners a floating GTK dialog
+//!   cuts itself — so no notch is left between its curve and the ring's.
 //!
 //! Eight draws of the client's own texture through Smithay's texture path (which knows its
 //! format, transform, crop and whether it is an external image), with the window's rounded
-//! shader (render/window.rs) cutting the outer corners. Nothing is drawn under the client.
+//! shader (render/window.rs) cutting the outer corners. The cost of drawing behind: a client
+//! translucent in its corners shows the corner colour through them.
 
 use std::cell::RefCell;
 
@@ -30,6 +36,11 @@ use smithay::{
 };
 
 use super::{HyaloRenderer, glass_gl, window::rounded_uniforms};
+
+/// How far in along the diagonal a corner's colour is taken, logical px: past the curve a
+/// client may cut its own corners to (a libadwaita window's 15 px radius leaves 4.4 px of its
+/// corner transparent along the diagonal).
+const CORNER_SAMPLE: f64 = 6.0;
 
 /// A ring piece: what of the client's buffer it shows, and where, output px.
 type Piece = (Rectangle<f64, BufferCoords>, Rectangle<i32, Physical>);
@@ -95,7 +106,8 @@ struct FrameMemo(RefCell<Option<(Id, CommitCounter, String)>>);
 
 impl FrameElement {
     /// The ring of `ring` output px around the client whose box is `geo` (output px) and `g`
-    /// (surface-local logical: `Window::geometry`). None while the client has nothing drawn.
+    /// (surface-local logical: `Window::geometry`), its corners reaching `radius - ring` into
+    /// the client. None while the client has nothing drawn.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         surface: &WlSurface,
@@ -111,28 +123,39 @@ impl FrameElement {
         let texture = texture?;
         let cb = ClientBox::of(surface, g)?;
         let (b, px, transform, client_commit) = (cb.b, cb.px, cb.transform, cb.commit);
-        // One buffer pixel in: its centre, and a sliver around it so every sample is that pixel.
+        let f = ring.round() as i32;
+        let gi = geo.to_i32_round::<i32>();
+        let (gx, gy, gw, gh) = (gi.loc.x, gi.loc.y, gi.size.w, gi.size.h);
+        // Output px → the buffer's logical space, along each axis.
+        let (kx, ky) = (b.size.w / gw.max(1) as f64, b.size.h / gh.max(1) as f64);
+        // How far a corner reaches into the client: the window's inner radius, at most half of it.
+        let c = ((radius - ring).round() as i32).clamp(0, gw.min(gh) / 2);
+        let corner = CORNER_SAMPLE * (geo.size.w / g.size.w.max(1) as f64);
+        // One buffer pixel in (a corner: `CORNER_SAMPLE`): its centre, and a sliver around it so
+        // every sample is that pixel.
         let (inset, eps) = (1.5 * px, 0.001 * px);
-        if b.size.w < 3.0 * px || b.size.h < 3.0 * px {
+        if b.size.w < 2.0 * corner * kx + px || b.size.h < 2.0 * corner * ky + px {
             return None;
         }
         let (x0, x1) = (b.loc.x + inset - eps / 2.0, b.loc.x + b.size.w - inset - eps / 2.0);
         let (y0, y1) = (b.loc.y + inset - eps / 2.0, b.loc.y + b.size.h - inset - eps / 2.0);
+        let (cx0, cx1) = (b.loc.x + corner * kx + 0.5 * px - eps / 2.0, b.loc.x + b.size.w - corner * kx - 0.5 * px - eps / 2.0);
+        let (cy0, cy1) = (b.loc.y + corner * ky + 0.5 * px - eps / 2.0, b.loc.y + b.size.h - corner * ky - 0.5 * px - eps / 2.0);
         let src = |x: f64, y: f64, w: f64, h: f64| cb.to_buffer(x, y, w, h);
-        let f = ring.round() as i32;
-        let gi = geo.to_i32_round::<i32>();
-        let (gx, gy, gw, gh) = (gi.loc.x, gi.loc.y, gi.size.w, gi.size.h);
         let dst = |x: i32, y: i32, w: i32, h: i32| Rectangle::<i32, Physical>::new((x, y).into(), (w, h).into());
-        let (bx, by, bw, bh) = (b.loc.x, b.loc.y, b.size.w, b.size.h);
+        // The sides between the corners: their rows (columns) mapped one to one.
+        let (sy, sh) = (b.loc.y + c as f64 * ky, b.size.h - 2.0 * c as f64 * ky);
+        let (sx, sw) = (b.loc.x + c as f64 * kx, b.size.w - 2.0 * c as f64 * kx);
+        let (n, side_h, side_w) = (f + c, gh - 2 * c, gw - 2 * c);
         let pieces = vec![
-            (src(x0, by, eps, bh), dst(gx - f, gy, f, gh)),
-            (src(x1, by, eps, bh), dst(gx + gw, gy, f, gh)),
-            (src(bx, y0, bw, eps), dst(gx, gy - f, gw, f)),
-            (src(bx, y1, bw, eps), dst(gx, gy + gh, gw, f)),
-            (src(x0, y0, eps, eps), dst(gx - f, gy - f, f, f)),
-            (src(x1, y0, eps, eps), dst(gx + gw, gy - f, f, f)),
-            (src(x0, y1, eps, eps), dst(gx - f, gy + gh, f, f)),
-            (src(x1, y1, eps, eps), dst(gx + gw, gy + gh, f, f)),
+            (src(x0, sy, eps, sh), dst(gx - f, gy + c, f, side_h)),
+            (src(x1, sy, eps, sh), dst(gx + gw, gy + c, f, side_h)),
+            (src(sx, y0, sw, eps), dst(gx + c, gy - f, side_w, f)),
+            (src(sx, y1, sw, eps), dst(gx + c, gy + gh, side_w, f)),
+            (src(cx0, cy0, eps, eps), dst(gx - f, gy - f, n, n)),
+            (src(cx1, cy0, eps, eps), dst(gx + gw - c, gy - f, n, n)),
+            (src(cx0, cy1, eps, eps), dst(gx - f, gy + gh - c, n, n)),
+            (src(cx1, cy1, eps, eps), dst(gx + gw - c, gy + gh - c, n, n)),
         ];
         let key = format!("{outer:?} {radius} {exponent} {pieces:?} {client_commit:?}");
         let (id, commit) = with_states(surface, |states| {

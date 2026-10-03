@@ -15,7 +15,8 @@
  *
  * SIGUSR1: it switches to its own frame while it runs — asks for client-side and draws a
  * shadow margin around itself, as Chrome does when "Use system title bar and borders" is
- * turned off. SIGUSR2: back to server-side, its buffer its box again.
+ * turned off, and cuts its own corners round (CORNER px, transparent) as a GTK dialog does.
+ * SIGUSR2: back to server-side, its buffer its box again.
  *
  * What it prints (the check reads these lines):
  *   SHOWN                      its first buffer is up
@@ -42,6 +43,7 @@
 #define H 250
 #define TOP 40          /* rows of the light colour at the top */
 #define MARGIN 12       /* its shadow margin, when it draws its own frame */
+#define CORNER 8        /* the radius it cuts its own corners to, with its own frame */
 #define LIGHT 0xffe6e6e6
 #define DARK 0xff303030
 /* Its shadow margin: translucent red (premultiplied), so a margin drawn where Hyalo's ring
@@ -120,6 +122,13 @@ static const struct wl_pointer_listener pointer_listener = { p_enter, p_leave, p
 
 /* Its content at W×H — light top rows, dark below — with `margin` px of shadow room around
  * it (0: its buffer is its box), and `extra` px of black on the right that the viewport crops. */
+/* Whether (x, y) of the W×H box is outside its own rounded corner. */
+static int cut(int x, int y) {
+    double dx = x < CORNER ? CORNER - x - 0.5 : x >= W - CORNER ? x - (W - CORNER) + 0.5 : 0;
+    double dy = y < CORNER ? CORNER - y - 0.5 : y >= H - CORNER ? y - (H - CORNER) + 0.5 : 0;
+    return dx > 0 && dy > 0 && dx * dx + dy * dy > CORNER * CORNER;
+}
+
 static struct wl_buffer *content(int margin, int extra) {
     int w = W + 2 * margin + extra, h = H + 2 * margin, stride = w * 4, size = stride * h;
     int fd = memfd_create("probe", 0);
@@ -128,7 +137,10 @@ static struct wl_buffer *content(int margin, int extra) {
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             int in = x >= margin && x < margin + W && y >= margin && y < margin + H;
-            px[y * w + x] = x >= W + 2 * margin ? 0xff000000 : !in ? SHADOW : (y - margin < TOP ? LIGHT : DARK);
+            px[y * w + x] = x >= W + 2 * margin ? 0xff000000
+                          : !in ? SHADOW
+                          : margin && cut(x - margin, y - margin) ? 0x00000000
+                          : (y - margin < TOP ? LIGHT : DARK);
         }
     munmap(px, size);
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
@@ -152,7 +164,9 @@ static void draw(int own_frame) {
     wl_surface_damage(surface, 0, 0, W + 2 * m, H + 2 * m);
     /* Opaque where its content is: a client that drops its frame says so (wm/mod.rs). */
     struct wl_region *r = wl_compositor_create_region(compositor);
-    wl_region_add(r, m, m, W, H);
+    int k = own_frame ? CORNER : 0;
+    wl_region_add(r, m + k, m, W - 2 * k, H);
+    wl_region_add(r, m, m + k, W, H - 2 * k);
     wl_surface_set_opaque_region(surface, r);
     wl_region_destroy(r);
     wl_surface_commit(surface);

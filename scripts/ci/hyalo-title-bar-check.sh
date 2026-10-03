@@ -10,11 +10,11 @@
 #      dark on it (the title's darkest pixel);
 #   3. the pointer over the bar is Hyalo's: the app gets a leave, and no click;
 #   4. dragged by its bar, the window moves; a double click maximizes it, another restores it;
-#   5. the app switches to its own frame while it runs (client-side, a shadow margin): the bar
-#      goes; maximized like that, Hyalo lays it out in its ring (render/frame.rs) — the ring
-#      continues the app's edges (light on top, dark on the sides), its outer corner is cut,
-#      and the shadow margin under it is not drawn (the probe's is translucent red); back to
-#      server-side, the bar comes back;
+#   5. the app switches to its own frame while it runs (client-side, a shadow margin, its own
+#      corners cut round): the bar goes and Hyalo's ring comes (render/frame.rs), floating as
+#      maximized — it continues the app's edges (light on top, dark on the sides), its outer
+#      corner is cut, the corners the app cut itself are filled, and the shadow margin under it
+#      is not drawn (the probe's is translucent red); back to server-side, the bar comes back;
 #   6. close in the bar's capsule closes it.
 # The controls: the same probe against a Hyalo without the title bar has `title_bar` 0 (step 1);
 # against one without the ring, `frame` is not 4 (step 5).
@@ -92,33 +92,46 @@ wait_field fullscreen none || fail "a second double click did not restore: $(fie
 echo "ok    dragged by its bar the window moves, a double click maximizes and restores"
 
 # 5. The app switches its decorations while it runs.
+at() { win | jq -r --argjson s "$scale" --argjson dx "$1" --argjson dy "$2" '"\((.x + $dx) * $s | floor) \((.y + $dy) * $s | floor)"'; }
+# What is beside the window before it draws a margin there: the reference for step 5's margin
+# (the workspace may show anything — another check's window — behind it).
+$MSG screenshot "$log/before-ring.png" >/dev/null || fail "no screenshot"
+beside=$(at 408 150); before=$(pixels pixel "$log/before-ring.png" $beside)
 kill -USR1 "$pid"
 wait_line '^SWITCHED client' || fail "the probe did not switch"
 wait_field title_bar 0 || fail "the app draws its own frame, and the bar is still there"
 [ "$(field controls)" = null ] || fail "no bar, yet controls at $(field controls)"
-[ "$(field frame)" = 0 ] || fail "floating, its own frame drawn, yet a ring of $(field frame)"
-# Maximized with its own frame: Hyalo's ring. The probe draws 400×250 whatever it is told, so
-# its box is at the area's corner and what is right of it is the workspace's background.
-$MSG do maximize "$(field id)" >/dev/null
-wait_field fullscreen maximized || fail "the window did not maximize: $(field fullscreen)"
-wait_field frame 4 || fail "maximized with its own frame, no ring: frame = $(field frame) (4 expected)"
+# Its own frame: Hyalo's ring, floating (the probe draws 400×250 whatever it is told).
+wait_field frame 4 || fail "its own frame drawn, and no ring: frame = $(field frame) (4 expected)"
 [ "$(field look.rounded)" = true ] || fail "in its ring, the window is not rounded"
-sleep 0.6
-$MSG screenshot "$log/ring.png" >/dev/null || fail "no screenshot"
-at() { win | jq -r --argjson s "$scale" --argjson dx "$1" --argjson dy "$2" '"\((.x + $dx) * $s | floor) \((.y + $dy) * $s | floor)"'; }
 near() { # near "R G B" V: every channel within 3 of V
     for v in $1; do [ "$v" -ge $(($2 - 3)) ] && [ "$v" -le $(($2 + 3)) ] || return 1; done
 }
-left=$(pixels pixel "$log/ring.png" $(at -2 150)); top=$(pixels pixel "$log/ring.png" $(at 200 -2))
-right=$(pixels pixel "$log/ring.png" $(at 401 150))
-near "$left" 48 || fail "the ring left of the dark side is $left, not the app's 48 48 48"
-near "$right" 48 || fail "the ring right of the dark side is $right, not the app's 48 48 48"
-near "$top" 230 || fail "the ring above the light top is $top, not the app's 230 230 230"
-corner=$(pixels pixel "$log/ring.png" $(at -4 -4))
-near "$corner" 230 && fail "the ring's outer corner is the app's colour ($corner): not rounded"
-margin=$(pixels pixel "$log/ring.png" $(at 408 150)); beyond=$(pixels pixel "$log/ring.png" $(at 440 150))
-[ "$margin" = "$beyond" ] || fail "the shadow margin shows beside the ring ($margin, the background is $beyond)"
-echo "ok    maximized with its own frame, it sits in Hyalo's ring: edges continued ($left / $top), corner cut, margin hidden"
+ring() { # ring PNG WHAT: the ring read on screen
+    left=$(pixels pixel "$1" $(at -2 150)); top=$(pixels pixel "$1" $(at 200 -2)); right=$(pixels pixel "$1" $(at 401 150))
+    near "$left" 48 || fail "$2: the ring left of the dark side is $left, not the app's 48 48 48"
+    near "$right" 48 || fail "$2: the ring right of the dark side is $right, not the app's 48 48 48"
+    near "$top" 230 || fail "$2: the ring above the light top is $top, not the app's 230 230 230"
+    corner=$(pixels pixel "$1" $(at -4 -4))
+    near "$corner" 230 && fail "$2: the ring's outer corner is the app's colour ($corner): not rounded"
+    own_top=$(pixels pixel "$1" $(at 1 1)); own_bottom=$(pixels pixel "$1" $(at 1 248))
+    near "$own_top" 230 || fail "$2: the corner the app cut itself is $own_top, not filled with its top colour"
+    near "$own_bottom" 48 || fail "$2: the corner the app cut itself is $own_bottom, not filled with its colour"
+}
+sleep 0.6
+$MSG screenshot "$log/ring.png" >/dev/null || fail "no screenshot"
+ring "$log/ring.png" floating
+[ "$(at 408 150)" = "$beside" ] || fail "the window moved when it took its own frame: the margin cannot be compared"
+margin=$(pixels pixel "$log/ring.png" $beside)
+[ "$margin" = "$before" ] || fail "the shadow margin shows beside the ring ($margin, $before before it was drawn)"
+echo "ok    with its own frame it sits in Hyalo's ring: edges continued ($left / $top), corners cut and filled, margin hidden"
+$MSG do maximize "$(field id)" >/dev/null
+wait_field fullscreen maximized || fail "the window did not maximize: $(field fullscreen)"
+[ "$(field frame)" = 4 ] || fail "maximized, the ring went: frame = $(field frame)"
+sleep 0.6
+$MSG screenshot "$log/ring-max.png" >/dev/null || fail "no screenshot"
+ring "$log/ring-max.png" maximized
+echo "ok    maximized, the same ring"
 $MSG do maximize "$(field id)" >/dev/null
 wait_field fullscreen none || fail "the window did not restore: $(field fullscreen)"
 kill -USR2 "$pid"

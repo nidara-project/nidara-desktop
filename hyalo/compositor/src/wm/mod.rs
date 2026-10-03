@@ -119,9 +119,8 @@ pub struct Managed {
     /// its box (`wants_title_bar`). The bar sits on top of `rect`, inside the window's box.
     pub has_title_bar: bool,
     /// It draws its own frame — a client-side decoration with a shadow margin — so Hyalo cannot
-    /// cut its corners without hiding what is in them: tiled or maximized, Hyalo lays it out
-    /// inside a ring of its own instead (`FRAME_W`, render/frame.rs). Set at map and at every
-    /// commit (`wants_frame`).
+    /// cut its corners without hiding what is in them: Hyalo lays it out inside a ring of its own
+    /// instead (`FRAME_W`, render/frame.rs). Set at map and at every commit (`wants_frame`).
     pub has_frame: bool,
     /// The geometry a client was last sent a configure for, because it declared it stale
     /// (`poke_stale_geometry`): sent once per geometry, never in a loop.
@@ -135,16 +134,10 @@ impl Managed {
         if self.has_title_bar && self.fullscreen != Fullscreen::Fullscreen { TITLE_BAR_H } else { 0 }
     }
 
-    /// The width of Hyalo's ring around it, logical px: only while it is tiled or maximized —
-    /// floating, a client-side frame draws its own corners — and never in fullscreen.
+    /// The width of Hyalo's ring around it, logical px: tiled or floating — a client-side frame
+    /// draws its corners square, at the bottom even floating (Chrome) — never in fullscreen.
     pub fn ring(&self) -> i32 {
-        let laid_out = !self.floating || self.fullscreen == Fullscreen::Maximized;
-        if self.has_frame && laid_out && self.fullscreen != Fullscreen::Fullscreen { FRAME_W } else { 0 }
-    }
-
-    /// What Hyalo draws around it once floating: its title bar, never its ring.
-    pub fn floating_insets(&self) -> Insets {
-        Insets { top: self.bar(), side: 0 }
+        if self.has_frame && self.fullscreen != Fullscreen::Fullscreen { FRAME_W } else { 0 }
     }
 
     /// What Hyalo draws around the client's box: its title bar on top, or its ring all round.
@@ -682,9 +675,9 @@ impl Hyalo {
         let m = self.wm.get_mut(id).unwrap();
         m.has_title_bar = wants;
         m.has_frame = frame;
-        // Placed floating by its whole box, its title bar included (a floating window has no
-        // ring: `Managed::ring`).
-        let insets = Insets { top: if wants { TITLE_BAR_H } else { 0 }, side: 0 };
+        // Placed floating by its whole box, its title bar or its ring included.
+        let ring = if frame { FRAME_W } else { 0 };
+        let insets = Insets { top: if wants { TITLE_BAR_H } else { ring }, side: ring };
         if let Some(w) = &fx.workspace {
             let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
             ws = self.rule_workspace(w, &output);
@@ -708,7 +701,7 @@ impl Hyalo {
             .filter(|o| o.id != id && o.fullscreen == Fullscreen::None)
             .map(|o| o.frame())
             .collect();
-        let framed = Size::from((size.w, size.h + insets.top));
+        let framed = Size::from((size.w + 2 * insets.side, size.h + insets.top + insets.side));
         let float = if fx.center {
             // A rule's `center`: the middle of the usable area, nothing else considered.
             clamp_floating(centered(framed, area), area)
@@ -781,7 +774,7 @@ impl Hyalo {
         if !m.mapped || !m.floating || m.fullscreen != Fullscreen::None {
             return;
         }
-        let (id, ws, insets) = (m.id, m.workspace, m.floating_insets());
+        let (id, ws, insets) = (m.id, m.workspace, m.insets());
         let size = window.geometry().size;
         let Some(fr) = m.float_rect else { return };
         if fr.size == size {
@@ -1151,7 +1144,7 @@ impl Hyalo {
                 let og = self.space.output_geometry(o).unwrap_or_default();
                 let area = self.floating_area(o);
                 let m = self.wm.get_mut(id).unwrap();
-                let insets = m.floating_insets();
+                let insets = m.insets();
                 let fr = m.float_rect.unwrap_or(Rectangle::new(m.rect.loc - og.loc, m.rect.size));
                 let fr = clamp_floating_with_insets(Rectangle::new(fr.loc + og.loc, fr.size), area, insets);
                 m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
@@ -1241,7 +1234,7 @@ impl Hyalo {
             }
             let area = self.floating_area(&output);
             let m = self.wm.get_mut(id).unwrap();
-            let insets = m.floating_insets();
+            let insets = m.insets();
             // Back to its last floating box, else where it was tiled.
             let fr = m.float_rect.map(|r| Rectangle::new(r.loc + og.loc, r.size)).unwrap_or(rect);
             let fr = clamp_floating_with_insets(fr, area, insets);
@@ -1333,7 +1326,7 @@ impl Hyalo {
         for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped && m.floating) {
             let Some(fr) = m.float_rect else { continue };
             let global = Rectangle::new(fr.loc + og.loc, fr.size);
-            let inside = clamp_floating_with_insets(global, area, m.floating_insets());
+            let inside = clamp_floating_with_insets(global, area, m.insets());
             // Moved only: a window larger than the area keeps its size until it asks again.
             let r = Rectangle::new(inside.loc, fr.size);
             if r.loc != global.loc {

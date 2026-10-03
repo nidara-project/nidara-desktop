@@ -400,6 +400,8 @@ pub fn push<R: HyaloRenderer>(
     let clip = (ring_px > 0.0).then_some(geo);
     let program = look.rounded.then(|| rounded_program(renderer)).flatten();
     let at = out.len();
+    // Right behind the window's own surfaces: where Hyalo's ring goes (frame.rs).
+    let mut behind = at;
     match &program {
         Some(program) => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> =
@@ -414,12 +416,14 @@ pub fn push<R: HyaloRenderer>(
                     clip,
                 })
             }));
+            behind = out.len();
             super::push_material(out, &surface, location, scale, output_size);
         }
         None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate),
     }
-    // The ring, made after the surfaces like the title bar below (it draws the client's edges)
-    // and with the same corners.
+    // The ring, made after the surfaces like the title bar below (it draws the client's edges),
+    // with the same corners, and placed behind them: its corners fill what the client cuts of
+    // its own.
     if ring_px > 0.0
         && let Some(program) = &program
         && let Some(element) = super::frame::FrameElement::new(
@@ -434,7 +438,7 @@ pub fn push<R: HyaloRenderer>(
             cfg.rounding_power,
         )
     {
-        out.insert(at, OutputElement::Frame(element));
+        out.insert(behind, OutputElement::Frame(element));
     }
     // The title bar, made after the surfaces (their buffers are imported by now, and it samples
     // the client's), placed before them: under its popups like the controls.

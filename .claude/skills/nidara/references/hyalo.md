@@ -309,10 +309,9 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   its opaque regions drop those squares, so what is behind a corner is still drawn, and it is
   never a scan-out candidate. The shader gets output pixels from `gl_FragCoord` through the
   inverse of Smithay's projection (`fb_to_out`), so every output transform is handled there. Not
-  rounded: a fullscreen window, a FLOATING window whose surface reaches past its geometry (a
-  client-side decoration with a shadow margin draws its own corners; tiled or maximized it gets
-  Hyalo's ring instead, below), popups, and a rule's `rounding = false` (games; a window with no
-  app id, Hyprland's `general-popups`).
+  rounded: a fullscreen window, popups, and a rule's `rounding = false` (games; a window with no
+  app id, Hyprland's `general-popups`). A window whose surface reaches past its geometry (a
+  client-side decoration with a shadow margin) is not cut: it gets Hyalo's ring (below).
 - **The backdrop** — "A, automatic", the owner's decision: the WINDOW material, independent of the
   layers' refractive glass (#705), each with its own settings. A `GlassElement::backdrop` (the same
   framebuffer effect, one shape: the window's box with its corners, never the CSD shadow margin)
@@ -338,23 +337,34 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   GTK apps speak neither and keep their own decorations. What the client ASKED is kept on its
   surface (`decoration::asked`): it decides who gets Hyalo's title bar — below ("Hyalo's title
   bar"), with the window controls before it ("The window controls are Hyalo's").
-- **The ring around a client-side frame** (`render/frame.rs`, owner 2026-10-03: "round the web
-  apps without hiding any of their corners"). A web app of Chrome's draws its own frame with a
-  shadow margin and, told it is tiled, square corners: cutting them would hide 4.7 px along the
-  diagonal (`rounding` 24, power 3.2). So such a window (`Managed::has_frame` = it does not `fits`,
-  a rule lets it be rounded) is laid out, while tiled or maximized (`Managed::ring`; floating it
-  rounds itself), inside a ring of `wm::FRAME_W` = 4 on every side — `Managed::insets()`, the
-  same mechanism as the title bar's (`with_insets`/`without_insets`; a floating window's
-  placement uses `floating_insets()`, the bar only). The client is drawn inside its own box only
-  (the rounded shader's `clip`: its margin lies under the ring and is never drawn), with the
-  window's corners on the ring's outer edge — a 4 px ring leaves only the outermost half pixel of
-  the client's own corner under the curve. The ring CONTINUES the client's edges, row by row:
-  each side is the client's column (row) one buffer pixel in, stretched across the ring; each
-  corner square, the client's pixel there — eight draws of the client's texture through
-  Smithay's texture path, with the rounded shader. Not an average: a sidebar, a header and a body
-  each continue in their own colour. The cost: content that TOUCHES the edge (a glyph, a
-  full-bleed image) streaks across the 4 px. Its damage is the ring only (`damage_since`): the
-  element's box is the whole window. `msg windows` → `frame` (the ring's width, 0 without).
+- **Who frames a window — the policy** (owner, 2026-10-03: "no window keeps square corners by
+  default"): our own apps → Hyalo's controls over their header (below); an app that takes
+  server-side decorations → Hyalo's title bar; an app that insists on its own frame (Chrome's web
+  apps, Chrome without "Use system title bar", GTK dialogs, Firefox) → Hyalo's RING. Hyalo's bar
+  never goes over a forced client-side frame: its title bar and buttons are pixels in the
+  client's buffer — a bar above it would be a second bar, one over it would cover its tabs.
+- **The ring around a client-side frame** (`render/frame.rs`). A web app of Chrome's draws its
+  own frame with a shadow margin and square corners — tiled, and at the BOTTOM even floating
+  (measured: ~2 px at the top) — and cutting them would hide 4.7 px along the diagonal
+  (`rounding` 24, power 3.2). So such a window (`Managed::has_frame` = it does not `fits`, a rule
+  lets it be rounded) is laid out, tiled or floating (`Managed::ring`; not in fullscreen), inside
+  a ring of `wm::FRAME_W` = 4 on every side — `Managed::insets()`, the same mechanism as the
+  title bar's (`with_insets`/`without_insets`, placement and clamping by the whole box). The
+  client is drawn inside its own box only (the rounded shader's `clip`: its margin — its own
+  shadow too, until Hyalo draws one in wave 2 — is never drawn), with the window's corners on
+  the ring's outer edge: a 4 px ring leaves only the outermost half pixel of the client's own
+  corner under the curve. The ring CONTINUES the client's edges, row by row: each side is the
+  client's column (row) one buffer pixel in, stretched across the ring. Not an average: a
+  sidebar, a header and a body each continue in their own colour. Each corner is ONE colour, the
+  client's pixel 6 px in along the diagonal (`CORNER_SAMPLE`, past a libadwaita 15 px radius),
+  over a square reaching into the client by the inner radius (24 − 4): the whole element is
+  drawn BEHIND the client, so that square shows only where the client cut its own corners round
+  (a floating GTK dialog) — no notch between its curve and the ring's. Eight draws of the
+  client's texture through Smithay's texture path, with the rounded shader. Costs: content that
+  TOUCHES the edge (a glyph, a full-bleed image) streaks across the 4 px; a client translucent in
+  its corners shows the corner colour through them. Its damage is the ring and its corners only
+  (`damage_since`): the element's box is the whole window. `msg windows` → `frame` (the ring's
+  width, 0 without).
 - **Sampling a client** (the ring and the title bar, `frame::ClientBox`): always through the
   surface's VIEW — the viewport's crop and scaling — and only across the client's box. Measured
   2026-10-03: Chrome tiled beside kitty keeps its 1262 px buffer and crops it to 628 with
@@ -482,13 +492,15 @@ headers, the title centred. `render/title_bar.rs`.
   the extra half black): the bar and the capsule's place; the bar's pixel on screen is the app's
   top colour and its darkest title pixel dark; the pointer Hyalo's over it; dragged by it the
   window moves, a double click maximizes and restores; the probe switching to its own frame
-  (SIGUSR1, a translucent red shadow margin) loses the bar, and maximized like that gets the ring
-  — sides and top continue its edges, the outer corner is cut, the margin beside the ring is not
-  drawn — and back (SIGUSR2) gets the bar; close in the capsule. Controls, all seen failing: the
+  (SIGUSR1, a translucent red shadow margin, its own corners cut round) loses the bar and gets
+  the ring, floating and maximized — sides and top continue its edges, the outer corner is cut,
+  the corners it cut itself are filled, the margin beside the ring shows what was there before
+  it — and back (SIGUSR2) gets the bar; close in the capsule. Controls, all seen failing: the
   installed Hyalo without the bar (`title_bar` null at step 1); a bar of a fixed colour, and one
   that averages the whole buffer row (step 2: "the bar is 115 115 115… not one piece"); no clip
-  ("the shadow margin shows beside the ring"); no ring element ("the ring left of the dark side
-  is 15 15 18").
+  (the red margin over the ring: "the ring left of the dark side is 126 30 30"); no ring element
+  ("… is 15 15 18"); corners that do not reach into the client ("the corner the app cut itself
+  is 255 0 0").
 
 ## The window manager
 
