@@ -121,6 +121,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     // Declared early so revealState() never hits a TDZ; assigned in its section.
     let fullscreenMode = false
+    // Called up over that fullscreen window (Super+B, "Fullscreen detection" below): then the
+    // dock is a dock again — magnification and the keyboard walk with it.
+    let overFullscreen = false
+    const hiddenByFullscreen = () => fullscreenMode && !overFullscreen
     // The adaptive glass (see its section near the end). Early for the same reason:
     // the tick tells it when the dock comes to rest.
     let glass: GlassSurfaceHandle | null = null
@@ -494,7 +498,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
     })
     motion.connect("motion", (_controller, x, y) => {
-        if (fullscreenMode) return
+        // Not `fullscreenMode` alone: that left a dock called up with Super+B without its
+        // magnification (owner-caught 2026-10-03).
+        if (hiddenByFullscreen()) return
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
             axis.buildInputRegion(win, smoothedBarMain, revealState())
@@ -1293,7 +1299,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // Over a fullscreen window, called up with the bar (Super+B, app.ts toggleBarOverlay):
     // the dock joins the OVERLAY layer, revealed. On Hyprland pointer input between two
     // OVERLAY surfaces was unreliable, so only the bar came up (#679 #15); on Hyalo both do.
-    let overFullscreen = false
     const setOverFullscreen = (active: boolean) => {
         if (!layerShellReady || overFullscreen === active) return
         overFullscreen = active
@@ -1352,7 +1357,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
     }
     const startWalk = () => {
-        if (walking || fullscreenMode) { if (fullscreenMode) status.dock_keyboard = false; return }
+        if (walking || hiddenByFullscreen()) { if (hiddenByFullscreen()) status.dock_keyboard = false; return }
         const mon = compositor.focusedMonitor?.name
         if (mon && mon !== gdkmonitor.get_connector()) return   // another monitor's dock
         walking = true
