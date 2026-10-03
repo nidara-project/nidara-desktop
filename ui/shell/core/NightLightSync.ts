@@ -15,7 +15,6 @@ import { settings } from "./CompositorState"
 
 let started = false
 let warm = false
-let respawnDebounce = 0
 let scheduleTimer = 0
 
 function warmUp(): void {
@@ -57,16 +56,9 @@ export function startNightLightSync(): void {
     started = true
 
     NightLight.subscribe("enabled", () => { if (NightLight.enabled) warmUp(); else kill() })
-    // A slider drag writes many temperatures; apply once it settles (hyprsunset restarts).
-    NightLight.subscribe("temperature", () => {
-        if (!NightLight.enabled) return
-        if (respawnDebounce > 0) GLib.source_remove(respawnDebounce)
-        respawnDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-            respawnDebounce = 0
-            warmUp()
-            return GLib.SOURCE_REMOVE
-        })
-    })
+    // Every temperature of a slider drag goes through: the compositor decides what it can take
+    // (Hyalo coalesces them to one ramp per tick; hyprland-settings.ts waits for hyprsunset).
+    NightLight.subscribe("temperature", () => { if (NightLight.enabled) warmUp() })
     NightLight.subscribe("scheduleEnabled", syncScheduleTimer)
     NightLight.subscribe("scheduleFrom", () => { if (NightLight.scheduleEnabled) checkSchedule() })
     NightLight.subscribe("scheduleTo", () => { if (NightLight.scheduleEnabled) checkSchedule() })

@@ -139,6 +139,8 @@ pub struct TtyBackend {
     cursors: Cursors,
     /// The night light's colour temperature, or neutral (night_light.rs).
     pub night_light: Option<u32>,
+    /// What the ramps show now, on the way there (night_light.rs).
+    pub night_light_fade: crate::night_light::Fade,
 }
 
 impl TtyBackend {
@@ -171,6 +173,7 @@ impl TtyBackend {
             input_devices: Vec::new(),
             cursors: Cursors::load("default", 24),
             night_light: None,
+            night_light_fade: Default::default(),
         })
     }
 

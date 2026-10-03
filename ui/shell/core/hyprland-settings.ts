@@ -216,8 +216,24 @@ const writeHypridle = (cfg: IdleConfig) => {
 
 // Night light on Hyprland is hyprsunset, a process of its own (moved from NightLightSync.ts on
 // 2026-10-02, when Hyalo took the gamma over): restarted for a new temperature, killed for none.
+// A slider drag sends many temperatures; each would be a restart, so one is started once they
+// settle (moved here from NightLightSync.ts on 2026-10-03: Hyalo takes every one).
 let hyprsunset: Gio.Subprocess | null = null
+let hyprsunsetDebounce = 0
 const setNightLightHyprland = (kelvin: number | null) => {
+    if (hyprsunsetDebounce > 0) GLib.source_remove(hyprsunsetDebounce)
+    hyprsunsetDebounce = 0
+    if (kelvin !== null && hyprsunset) {
+        hyprsunsetDebounce = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+            hyprsunsetDebounce = 0
+            restartHyprsunset(kelvin)
+            return GLib.SOURCE_REMOVE
+        })
+        return
+    }
+    restartHyprsunset(kelvin)
+}
+const restartHyprsunset = (kelvin: number | null) => {
     if (hyprsunset) {
         try { hyprsunset.force_exit() } catch (_) {}
         hyprsunset = null

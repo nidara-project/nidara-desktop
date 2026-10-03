@@ -69,7 +69,9 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
             const id = nightLight.connect("changed", () => cb(nightLight.temperature))
             return () => safeDisconnect(nightLight, id)
         },
-        debounce: 24,
+        // Live: the screen warms with the thumb. A trailing 24 ms debounce fired only when the
+        // thumb rested, so a steady drag changed nothing until it stopped (owner-caught 2026-10-03).
+        debounce: 0,
     })
     const tempRow = new Gtk.Box({ spacing: 8, margin_top: 8, margin_bottom: 8 })
     tempRow.append(new Gtk.Image({ gicon: uiIcon("nd-value-decrease"), pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))

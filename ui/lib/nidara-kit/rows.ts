@@ -205,6 +205,9 @@ export interface NidaraSliderRowOpts {
     pct?: boolean
     decimals?: number
     commitOnRelease?: boolean
+    /** The slider's `debounce` (default 32 ms: a commit once the thumb rests). 0 commits
+     *  every change while dragging, one per idle — for a setting the screen shows live. */
+    debounce?: number
     step?: number
     onExtChange?: (cb: (v: number) => void) => (() => void)
 }
@@ -227,7 +230,7 @@ export function NidaraSliderRow(
     opts: NidaraSliderRowOpts = {},
     mkRow: NidaraRowBuilder = plainRow,
 ): Gtk.ListBoxRow {
-    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false, step, onExtChange } = opts
+    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false, debounce = 32, step, onExtChange } = opts
 
     const quantize = (decimals === undefined && !pct) ? (v: number) => Math.round(v) : (v: number) => v
     const onCommit = (v: number) => cb(quantize(v))
@@ -257,7 +260,7 @@ export function NidaraSliderRow(
         onChange: onCommit,
         onValueChanged: (v) => { valueLabel.label = formatVal(v) },
         onExtChange,
-        debounce: 32,
+        debounce,
         commitOnRelease,
         // `step` opts the row into DETENTS (see SliderOpts.snapToStep): pass it when
         // the setting is coarser than the thumb's travel, so no position of the thumb
