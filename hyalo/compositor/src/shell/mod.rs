@@ -1,6 +1,7 @@
 //! Windows (xdg-shell) and their popups. Layer surfaces — the shell's bar, dock and panels —
-//! are in `layer.rs`.
+//! are in `layer.rs`; who draws a window's title bar, in `decoration.rs`.
 
+pub mod decoration;
 pub mod layer;
 
 use smithay::{

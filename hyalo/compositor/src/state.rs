@@ -88,6 +88,8 @@ pub struct Hyalo {
     pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
     /// xdg-activation (activation.rs).
     pub activation_state: smithay::wayland::xdg_activation::XdgActivationState,
+    /// KDE's server-decoration, for Qt apps (shell/decoration.rs).
+    pub kde_decoration_state: smithay::wayland::shell::kde::decoration::KdeDecorationState,
     /// keyboard-shortcuts-inhibit (shortcuts.rs).
     pub shortcuts_inhibit_state: smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState,
     /// The window rules in force (wm/rules.rs).
@@ -138,6 +140,12 @@ impl Hyalo {
         smithay::wayland::pointer_gestures::PointerGesturesState::new::<Self>(&dh);
         // Which dialogs are modal: their parent gives way to them (wm::focus_window).
         smithay::wayland::shell::xdg::dialog::XdgDialogState::new::<Self>(&dh);
+        // The title bar is ours, as on Hyprland: apps that ask drop theirs (shell/decoration.rs).
+        smithay::wayland::shell::xdg::decoration::XdgDecorationState::new::<Self>(&dh);
+        let kde_decoration_state = smithay::wayland::shell::kde::decoration::KdeDecorationState::new::<Self>(
+            &dh,
+            smithay::reexports::wayland_protocols_misc::server_decoration::server::org_kde_kwin_server_decoration_manager::Mode::Server,
+        );
         // A surface may say its content is a game: one of game mode's signs (wm/games.rs).
         smithay::wayland::content_type::ContentTypeState::new::<Self>(&dh);
         // Ours (protocols/ at the repo root).
@@ -251,6 +259,7 @@ impl Hyalo {
             screencopy_pending: Default::default(),
             capture_sessions: Vec::new(),
             activation_state,
+            kde_decoration_state,
             shortcuts_inhibit_state,
             rules: crate::wm::rules::compile(&rules_config).unwrap_or_else(|err| {
                 tracing::error!("window rules not loaded: {err}");

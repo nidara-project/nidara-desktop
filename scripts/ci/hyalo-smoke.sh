@@ -92,6 +92,21 @@ phase_build() {
     wayland-scanner private-code  "$ii_xml" "$ii/idle-inhibit-unstable-v1-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-idle-inhibit-probe.c" "$ii/xdg-shell-protocol.c" "$ii/idle-inhibit-unstable-v1-protocol.c" \
         -I"$ii" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-idle-inhibit-probe
+    # The decoration probe (who draws a title bar, hyalo/compositor/src/shell/decoration.rs).
+    # KDE's server-decoration is not in wayland-protocols: its XML, like input-method-v2's
+    # below, comes with the wayland-protocols-misc crate.
+    local dc="$REPO/build/dc" dc_xml=/usr/share/wayland-protocols/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml kd_xml
+    kd_xml=$(find "${CARGO_HOME:-$HOME/.cargo}/registry/src" -path '*wayland-protocols-misc*' -name server-decoration.xml | head -1)
+    mkdir -p "$dc"
+    wayland-scanner client-header "$xs_xml" "$dc/xdg-shell-client-protocol.h"
+    wayland-scanner private-code  "$xs_xml" "$dc/xdg-shell-protocol.c"
+    wayland-scanner client-header "$dc_xml" "$dc/xdg-decoration-unstable-v1-client-protocol.h"
+    wayland-scanner private-code  "$dc_xml" "$dc/xdg-decoration-unstable-v1-protocol.c"
+    wayland-scanner client-header "$kd_xml" "$dc/server-decoration-client-protocol.h"
+    wayland-scanner private-code  "$kd_xml" "$dc/server-decoration-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-decoration-probe.c" "$dc/xdg-shell-protocol.c" \
+        "$dc/xdg-decoration-unstable-v1-protocol.c" "$dc/server-decoration-protocol.c" \
+        -I"$dc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-decoration-probe
     # The stand-in input method (hyalo-ime-check.sh). input-method-v2 is not in wayland-protocols:
     # its XML comes with the wayland-protocols-misc crate Hyalo was just built with.
     local im="$REPO/build/im" im_xml
@@ -425,6 +440,13 @@ phase_run() {
         || { log "FAIL: window look"; cat /tmp/hyalo/window-look.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "window look OK ($(grep -c '^ok' /tmp/hyalo/window-look.log) steps: look, corners, backdrop, the switch)"
+    # Who draws a title bar: Hyalo, as Hyprland did, by xdg-decoration and KDE's
+    # server-decoration — whatever the client asked — so a window that asks draws no margin
+    # of its own and is rounded.
+    DECORATION_LOG=/tmp/hyalo/decoration "$REPO/scripts/ci/hyalo-decoration-check.sh" >/tmp/hyalo/decoration.log 2>&1 \
+        || { log "FAIL: decorations"; cat /tmp/hyalo/decoration.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "decorations OK ($(grep -c '^ok' /tmp/hyalo/decoration.log) steps: xdg, KDE, rounded)"
     # Input methods (#683, #503): a stand-in input method's text reaches a focused window's
     # field (empty before it ran: the control) and the shell's search under its focus grab.
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \
