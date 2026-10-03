@@ -1,4 +1,5 @@
-//! A window as it is drawn: its corners rounded, and — when it is translucent — a blur behind it.
+//! A window as it is drawn: its corners rounded, and — when it is translucent — a blur behind it;
+//! its controls over its header (render/controls.rs).
 //! What Hyprland did for Nidara (`rounding`, `rounding_power`, `decoration:blur`), which the
 //! desktop was built around: our own windows draw square, transparent toplevels and leave the
 //! corners and the backdrop to the compositor (`window.nidara-app-window`, the kit's
@@ -334,11 +335,17 @@ pub fn push<R: HyaloRenderer>(
     scale: Scale<f64>,
     output_size: Size<i32, Physical>,
     cfg: &WindowsConfig,
+    controls: Option<(Rectangle<f64, Physical>, super::controls::Controls)>,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
         super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified);
+    }
+    // Its controls: over its own surfaces, under its popups (a menu opened from the header
+    // covers them).
+    if let Some((rect, controls)) = controls {
+        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
     }
     let radius = cfg.rounding * scale.x;
     let program = look.rounded.then(|| rounded_program(renderer)).flatten();

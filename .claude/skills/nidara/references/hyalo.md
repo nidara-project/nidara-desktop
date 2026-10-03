@@ -22,6 +22,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
+| `hyalo/compositor/src/protocols/window_controls.rs`, `render/controls.rs` | a window's controls, Hyalo's: the protocol, and the capsule drawn over the app's header |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
 | `hyalo/compositor/src/lock.rs` | the lock screen (ext-session-lock-v1): what is drawn and reachable while locked |
 | `hyalo/compositor/src/idle.rs`, `hyalo/compositor/src/logind.rs` | idle (screens off, lock, suspend; inhibitors) and the session's D-Bus side (lock before sleep, `org.freedesktop.ScreenSaver`) |
@@ -333,7 +334,7 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   on Hyalo"). Smithay sends `zxdg_toplevel_decoration_v1.configure` only when the mode CHANGES —
   a `set_mode` that changes nothing gets the `xdg_surface.configure` alone, as the protocol asks.
   GTK apps speak neither and keep their own decorations. Nidara's own title bars, drawn here, are
-  #708 point 5 (a design with the owner first).
+  #708 point 5 — its first half is below ("The window controls are Hyalo's").
 - Still owed in wave 2: the 1 px border (active/inactive) and the shadow.
 - CI: `scripts/ci/hyalo-window-look-check.sh` in the smoke — an opaque window of red/green
   stripes and a translucent one over it: `look`; the corner's pixel shows what is behind and
@@ -342,6 +343,54 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   `hyalo-decoration-probe.c`, drawing itself as kitty does with the answer): both protocols say
   server-side to a client that asks for client-side, and both probe windows are rounded — the
   control, the same probe on a Hyalo without the protocols, fails at once.
+
+## The window controls are Hyalo's (#708 point 5, 2026-10-03)
+
+The owner's design, chosen on a mockup: Hyalo draws a window's close, minimize and maximize
+OVER the app's own header, in the same row — no bar of its own for our apps — as **one capsule of
+three buttons** (the shape of the back/forward pair in Settings' header; ours, never three
+coloured circles). Close turns red on hover. Minimize is drawn **disabled** until #724 decides
+what minimizing means here; maximize is disabled for a window whose minimum = maximum. Right by
+default (close last), left as a setting (close first).
+
+- **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
+  (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
+  on a toplevel's surface; the compositor sends `layout(side, width, height)` — the box to reserve
+  (102×30: three 34×30 buttons) and the side — at once and again whenever the side changes; the
+  app sends `set_position(x, y)`/`unset_position`, surface-local, **double-buffered on
+  wl_surface.commit** so the controls move with the frame that left room for them. Not offered to
+  sandboxed clients (like the glass).
+- **Drawn** by `render/controls.rs`: one shader pass in output pixels (the capsule, its inset
+  edge, the hovered button's fill, the three glyphs as distance fields, all anti-aliased at the
+  output's scale), pushed over the window's own surfaces and under its popups; never on a
+  fullscreen window. Hover and press live in `wm.controls_hover`.
+- **Input**: `Hyalo::controls_under(pos)` walks the windows in drawing order (a layer or a window
+  over the controls covers them); `surface_under` returns NONE there, so the app gets a leave and
+  never the pointer over its controls; `update_controls_hover` runs after every pointer motion and
+  sets the arrow. A left press over a button holds it and focuses the window; the release over the
+  same button carries it out (`Action::CloseWindow`, `Action::Maximize`). The app sees neither.
+- **The side** is `[windows.controls] side` (`config/hyalo/hyalo.toml`); Settings → Appearance →
+  Windows → "Window buttons" (`appearance.windowControls`, available where `caps.windowControls`:
+  Hyalo) writes it to the settings layer, and the reload sends every app a new `layout`.
+- **The kit's half** (`ui/lib/nidara-kit/platform/window-controls.ts`): a window has SLOTS — empty
+  boxes that can hold the room, each with a `when(side)` — and the caller's own close button is
+  the FALLBACK. With a layout, the fallbacks hide, the first slot that applies gets the box's size,
+  and its position (`compute_point` to the window + the surface transform) is sent in the frame
+  clock's LAYOUT phase whenever it moved; the library commits once more after a frame that drew
+  nothing (as the glass does). Where the compositor draws none (Hyprland), nothing changes: slots
+  hidden, the close button shown. `NidaraWindow` sets the slots up itself — right: the header's
+  end, where the close button was; left: the header's start, or, with a sidebar shown DOCKED, the
+  sidebar's top (`onSidebarPresented` re-picks the slot) — so a window built on it gets the
+  controls by passing its close button as `header.end`, as before. About, which has no header,
+  places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
+- `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
+- CI: `scripts/ci/hyalo-window-controls-check.sh` (C probe `hyalo-window-controls-probe.c`,
+  leaving room as the kit does): the layout told, the controls where the app placed them, the
+  pointer the app's over its body and not over its controls, maximize and restore, minimize
+  nothing, the side switched live and followed, close asks the window to close. The control: the
+  same probe on a Hyalo without the protocol prints NO_CONTROLS.
+- Owed (#708 point 5, second half): the thin bar for apps that ask for server-side decorations
+  (kitty, Qt) — one piece with the window, the same capsule, the title, dragged to move.
 
 ## The window manager
 

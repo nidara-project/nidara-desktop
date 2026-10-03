@@ -270,6 +270,9 @@ export interface SettingsCaps {
     /** The blur behind translucent windows has a switch of its own, apart from the interface's
      *  glass (Hyalo, #708 point 1). Hyprland's is one blur for windows and layers alike. */
     windowBackdrop: boolean
+    /** The compositor draws the window controls over an app's header, on the side the user
+     *  chose (Hyalo, #708 point 5). Hyprland draws none: our windows keep their close button. */
+    windowControls: boolean
 }
 
 /** Settings → Power: seconds without input before each step; 0 = never. */
@@ -290,6 +293,11 @@ export interface CompositorSettings {
      *  `[windows.backdrop] enabled`). Persists and applies. */
     readWindowBackdrop(): boolean
     setWindowBackdrop(on: boolean): void
+
+    /** `caps.windowControls` only: the side the window controls go on (Hyalo's
+     *  `[windows.controls] side`). Persists and applies. */
+    readWindowControlsSide(): "right" | "left"
+    setWindowControlsSide(side: "right" | "left"): void
 
     /** The idle steps in force (Hyprland: hypridle's file; Hyalo: its own `[idle]`). */
     readIdle(): IdleConfig

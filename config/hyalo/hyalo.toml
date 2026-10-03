@@ -90,6 +90,11 @@ rounding = false
 rounding = 24
 rounding_power = 3.2
 
+# The window controls (close, minimize, maximize) Hyalo draws over an app's header, where the
+# app reserved room for them: `side` "right" or "left". Settings → Appearance → Windows.
+[windows.controls]
+side = "right"
+
 [windows.backdrop]
 enabled = true
 size = 2

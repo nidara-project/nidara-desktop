@@ -609,4 +609,74 @@ void nidara_wl_material_set_ink_func (NidaraWlMaterialInkFunc func,
                                       gpointer                user_data,
                                       GDestroyNotify          destroy);
 
+/* ------------------------------------------------------------ window controls */
+
+/**
+ * nidara_wl_has_window_controls:
+ *
+ * Returns: %TRUE if the compositor draws window controls over an app's header
+ *   (nidara-window-controls-v1: Hyalo — #708 point 5; Hyprland does not).
+ */
+gboolean nidara_wl_has_window_controls (void);
+
+/**
+ * NidaraWlWindowControlsLayoutFunc:
+ * @surface: the toplevel's #GdkSurface
+ * @side: 0 right (close last), 1 left (close first)
+ * @width: the box to reserve, logical pixels
+ * @height: the box to reserve, logical pixels
+ * @user_data: data passed to nidara_wl_window_controls_set_layout_func()
+ *
+ * The box a window must leave for its controls, and the side it goes on: sent once the
+ * controls are requested, and again when the user changes the side.
+ */
+typedef void (*NidaraWlWindowControlsLayoutFunc) (GdkSurface *surface, guint side, double width,
+                                                  double height, gpointer user_data);
+
+/**
+ * nidara_wl_window_controls_set_layout_func:
+ * @func: (nullable) (scope notified) (closure user_data) (destroy destroy): called on the
+ *   main loop with each window's layout
+ * @user_data: data for @func
+ * @destroy: (nullable): called when @user_data is no longer needed
+ *
+ * One function for the whole process; a second call replaces the first.
+ */
+void nidara_wl_window_controls_set_layout_func (NidaraWlWindowControlsLayoutFunc func,
+                                                gpointer                         user_data,
+                                                GDestroyNotify                   destroy);
+
+/**
+ * nidara_wl_window_controls_request:
+ * @surface: a toplevel's #GdkSurface (realized)
+ *
+ * Asks the compositor for this window's controls; its layout comes back through the
+ * function set with nidara_wl_window_controls_set_layout_func(). No controls are drawn
+ * until a position is set.
+ *
+ * Returns: %FALSE if the compositor draws none (then the app keeps its own close button)
+ */
+gboolean nidara_wl_window_controls_request (GdkSurface *surface);
+
+/**
+ * nidara_wl_window_controls_set_position:
+ * @surface: the #GdkSurface passed to nidara_wl_window_controls_request()
+ * @x: the reserved box's left edge, surface-local logical pixels
+ * @y: its top edge
+ *
+ * Where the controls go; lands with the surface's next commit (one is made after the next
+ * frame if GTK draws nothing).
+ *
+ * Returns: %FALSE if the compositor draws no controls
+ */
+gboolean nidara_wl_window_controls_set_position (GdkSurface *surface, double x, double y);
+
+/**
+ * nidara_wl_window_controls_unset_position:
+ * @surface: the #GdkSurface passed to nidara_wl_window_controls_request()
+ *
+ * No controls on this window until a position is set again.
+ */
+void nidara_wl_window_controls_unset_position (GdkSurface *surface);
+
 G_END_DECLS

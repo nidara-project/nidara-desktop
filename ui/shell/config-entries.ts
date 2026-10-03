@@ -194,6 +194,30 @@ export function registerConfigEntries() {
         },
         ui: { i18n: "settings.appearance.window-blur" },
     })
+    // Where the window controls go (#708 point 5): the compositor draws them over the app's
+    // header, on this side. Only where it draws them (Hyalo); Hyprland draws none.
+    const controlsListeners = new Set<(v: ConfigValue) => void>()
+    registerConfig("appearance.windowControls", {
+        desc: "Which side of a window its controls (close, minimize, maximize) go on: right, the Linux and Windows convention (close last), or left (close first; in a window with a sidebar shown, inside it). The compositor draws them over the app's own header, for Nidara's windows.",
+        type: "enum",
+        enum: ["right", "left"],
+        available: () => compositorSettings.caps.windowControls,
+        get: () => compositorSettings.readWindowControlsSide(),
+        set: v => {
+            compositorSettings.setWindowControlsSide(v as "right" | "left")
+            controlsListeners.forEach(fn => fn(v))
+        },
+        subscribe: (apply) => {
+            apply(compositorSettings.readWindowControlsSide())
+            controlsListeners.add(apply)
+            return () => { controlsListeners.delete(apply) }
+        },
+        ui: {
+            i18n: "settings.appearance.window-controls",
+            control: "segmented",
+            optI18n: (v: string) => t(`settings.appearance.window-controls.${v}` as any),
+        },
+    })
     registerConfig("appearance.gtkTheme", {
         desc: "GTK theme for THIRD-PARTY apps only — Nidara's own processes load no GTK theme (tech-debt #107).",
         type: "enum",

@@ -148,6 +148,14 @@ impl Workspace {
     }
 }
 
+/// The window control under the pointer (protocols/window_controls.rs), and whether it is held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ControlsHover {
+    pub window: WindowId,
+    pub button: crate::protocols::window_controls::Button,
+    pub pressed: bool,
+}
+
 #[derive(Debug, Default)]
 pub struct Wm {
     /// Every window, in stacking order, bottom first.
@@ -158,6 +166,8 @@ pub struct Wm {
     /// A special workspace shown over an output.
     pub special_shown: HashMap<String, i32>,
     pub focused: Option<WindowId>,
+    /// The window control under the pointer, drawn hovered (render/controls.rs).
+    pub controls_hover: Option<ControlsHover>,
     /// The output the user is on: the focused window's, or the pointer's.
     pub focused_output: Option<String>,
     /// Where `workspace previous` goes back to.

@@ -299,6 +299,7 @@ impl Hyalo {
         let under = self.surface_under(pos);
         pointer.motion(self, under, &MotionEvent { location: pos, serial, time: Event::time(event) });
         pointer.frame(self);
+        self.update_controls_hover(pos);
         self.activate_constraint_under_pointer();
         self.queue_redraw(None);
     }
@@ -312,6 +313,7 @@ impl Hyalo {
         let pointer = self.seat.get_pointer().unwrap();
         pointer.motion(self, under, &MotionEvent { location: pos, serial: SERIAL_COUNTER.next_serial(), time });
         pointer.frame(self);
+        self.update_controls_hover(pos);
         self.activate_constraint_under_pointer();
         self.queue_redraw(None);
     }
@@ -427,6 +429,13 @@ impl Hyalo {
             let under = self.surface_under(pos).map(|(s, _)| s);
             self.focus_grab_press(under.as_ref());
         }
+        // A window's controls (protocols/window_controls.rs): the press holds the button and
+        // focuses its window; the release over the same button carries it out. The app under
+        // them sees neither.
+        if button == crate::binds::BTN_LEFT && !pointer.is_grabbed() && self.controls_button(button_state, pointer.current_location()) {
+            pointer.frame(self);
+            return;
+        }
         if button_state == ButtonState::Pressed && !pointer.is_grabbed() {
             let pos = pointer.current_location();
             // Super+drag: carry or resize the window under the pointer.
@@ -467,6 +476,40 @@ impl Hyalo {
 
         pointer.button(self, &ButtonEvent { button, state: button_state, serial, time });
         pointer.frame(self);
+    }
+
+    /// A left press or release at `pos` that belongs to a window's controls; `true` when it did.
+    fn controls_button(&mut self, button_state: ButtonState, pos: Point<f64, Logical>) -> bool {
+        use crate::protocols::window_controls::Button;
+        let under = self.controls_under(pos);
+        match button_state {
+            ButtonState::Pressed => {
+                let Some((window, button)) = under else { return false };
+                self.focus_window(Some(window));
+                self.wm.controls_hover = Some(crate::wm::ControlsHover { window, button, pressed: true });
+                self.queue_redraw(None);
+                true
+            }
+            ButtonState::Released => {
+                let Some(held) = self.wm.controls_hover.filter(|h| h.pressed) else { return false };
+                self.wm.controls_hover = under.map(|(window, button)| crate::wm::ControlsHover { window, button, pressed: false });
+                self.queue_redraw(None);
+                if under == Some((held.window, held.button)) {
+                    let enabled = self.wm.get(held.window).is_some_and(|m| crate::protocols::window_controls::enabled(&m.window, held.button));
+                    let action = match held.button {
+                        Button::Close => Some(Action::CloseWindow(Some(held.window))),
+                        Button::Maximize => Some(Action::Maximize(Some(held.window))),
+                        Button::Minimize => None,
+                    };
+                    if let Some(action) = action.filter(|_| enabled)
+                        && let Err(err) = self.run_action(action)
+                    {
+                        tracing::warn!(%err, "window control");
+                    }
+                }
+                true
+            }
+        }
     }
 
     /// Is the window under `pos` one drawn over the top layers (a fullscreen window)?

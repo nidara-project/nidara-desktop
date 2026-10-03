@@ -88,6 +88,9 @@ pub struct Hyalo {
     pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
     /// xdg-activation (activation.rs).
     pub activation_state: smithay::wayland::xdg_activation::XdgActivationState,
+    /// Every app's window controls (protocols/window_controls.rs): told the side again when
+    /// it changes.
+    pub window_controls: Vec<crate::protocols::gen_window_controls::nidara_window_controls_v1::NidaraWindowControlsV1>,
     /// KDE's server-decoration, for Qt apps (shell/decoration.rs).
     pub kde_decoration_state: smithay::wayland::shell::kde::decoration::KdeDecorationState,
     /// keyboard-shortcuts-inhibit (shortcuts.rs).
@@ -150,6 +153,7 @@ impl Hyalo {
         smithay::wayland::content_type::ContentTypeState::new::<Self>(&dh);
         // Ours (protocols/ at the repo root).
         focus_grab::init(&dh);
+        crate::protocols::window_controls::init(&dh);
         // The Assistant's computer use: synthetic pointer (nidara-input) and keyboard (wtype).
         crate::protocols::virtual_pointer::init(&dh);
         // Input methods (handlers.rs): apps speak text-input; the input method itself (fcitx5)
@@ -260,6 +264,7 @@ impl Hyalo {
             capture_sessions: Vec::new(),
             activation_state,
             kde_decoration_state,
+            window_controls: Vec::new(),
             shortcuts_inhibit_state,
             rules: crate::wm::rules::compile(&rules_config).unwrap_or_else(|err| {
                 tracing::error!("window rules not loaded: {err}");
@@ -348,6 +353,10 @@ impl Hyalo {
         if self.lock.is_locked() {
             return self.lock_surface_under(pos);
         }
+        // A window's controls are Hyalo's: the app under them gets no pointer there.
+        if self.controls_under(pos).is_some() {
+            return None;
+        }
         if let Some((_, s, p)) = self.layer_under(&[Layer::Overlay], pos) {
             return Some((s, p));
         }
@@ -376,6 +385,62 @@ impl Hyalo {
         }
         self.layer_under(&[Layer::Bottom, Layer::Background], pos)
             .map(|(_, s, p)| (s, p))
+    }
+}
+
+impl Hyalo {
+    /// The window control at `pos` (protocols/window_controls.rs): the controls of the first
+    /// window there, in the order things are drawn — a layer or another window over them
+    /// covers them.
+    pub fn controls_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, crate::protocols::window_controls::Button)> {
+        use smithay::wayland::shell::wlr_layer::Layer;
+        if self.lock.is_locked() || self.layer_under(&[Layer::Overlay], pos).is_some() {
+            return None;
+        }
+        let output = self.space.output_under(pos).next().cloned()?;
+        let (above, below) = crate::render::windows_front_to_back(&self.space, &self.wm, &output);
+        let side = self.config.windows.controls.side;
+        // The first window that has the point decides: its controls, or none.
+        let first = |windows: &[Window]| {
+            windows.iter().find_map(|window| {
+                let origin = self.space.element_location(window)? - window.geometry().loc;
+                let local = pos - origin.to_f64();
+                let managed = self.wm.by_window(window)?;
+                if managed.fullscreen != crate::wm::Fullscreen::Fullscreen
+                    && let Some(b) = crate::protocols::window_controls::button_at(window, local, side)
+                {
+                    return Some(Some((managed.id, b)));
+                }
+                window.surface_under(local, WindowSurfaceType::ALL).map(|_| None)
+            })
+        };
+        if let Some(hit) = first(&above) {
+            return hit;
+        }
+        if self.layer_under(&[Layer::Top], pos).is_some() {
+            return None;
+        }
+        first(&below).flatten()
+    }
+
+    /// The pointer moved (or what is under it did): which control it is over, drawn hovered,
+    /// with the arrow — the app under the controls set its own cursor last.
+    pub fn update_controls_hover(&mut self, pos: Point<f64, Logical>) {
+        let under = self.controls_under(pos);
+        let was = self.wm.controls_hover;
+        let now = under.map(|(window, button)| crate::wm::ControlsHover {
+            window,
+            button,
+            // Held only while still over the button it was pressed on.
+            pressed: was.is_some_and(|h| h.pressed && h.window == window && h.button == button),
+        });
+        if now.is_some() && was.is_none() {
+            self.cursor_status = CursorImageStatus::default_named();
+        }
+        if now != was {
+            self.wm.controls_hover = now;
+            self.queue_redraw(None);
+        }
     }
 }
 

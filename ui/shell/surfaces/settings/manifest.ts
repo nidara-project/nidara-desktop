@@ -114,6 +114,10 @@ export const manifest = [
                         key: "appearance.windowBlur",
                         note: "The blur behind EVERY translucent window, ours and other apps' (#708 point 1, 'A, automatic'): the window material, on a switch of its own, apart from the glass material (owner's condition: windows and layers independent). Only where the compositor has the switch (Hyalo, `caps.windowBackdrop`): its entry's `available` hides the row elsewhere.",
                     },
+                    {
+                        key: "appearance.windowControls",
+                        note: "The side of the window controls the compositor draws over our windows' headers (#708 point 5, owner 2026-10-03): right by default (the Linux/Windows convention), left as an option. Only where the compositor draws them (Hyalo, `caps.windowControls`).",
+                    },
                 ],
             },
             {

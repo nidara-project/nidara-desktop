@@ -2,7 +2,7 @@ import app from "../../../lib/nidara-kit/platform/host"
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import Gio from "gi://Gio"
-import { NidaraButton, NidaraClamp, NidaraWindow, type NidaraWindowResult } from "../../../lib/nidara-kit"
+import { NidaraButton, NidaraClamp, NidaraWindow, type NidaraWindowResult, attachWindowControls, controlsSlotWidget } from "../../../lib/nidara-kit"
 import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
@@ -207,11 +207,22 @@ export default function AboutWindow(): Gtk.Window | null {
         // NidaraAppWindow call below. A thunk because the window is built after.
         onClick: () => shell.close(),
     })
-    closeBtn.margin_top = 12
+
+    // On a compositor that draws the window controls (Hyalo, #708 point 5), the same corner
+    // leaves them room — the top-left one when the user put them on the left — and the
+    // button above is the fallback where it draws none.
+    const leftSlot = controlsSlotWidget(Gtk.Align.START)
+    const rightSlot = controlsSlotWidget(Gtk.Align.END)
+    const controlsRow = new Gtk.CenterBox({ margin_top: 12 })
+    controlsRow.set_start_widget(leftSlot)
+    const controlsEnd = new Gtk.Box({ halign: Gtk.Align.END })
+    controlsEnd.append(rightSlot)
+    controlsEnd.append(closeBtn)
+    controlsRow.set_end_widget(controlsEnd)
 
     // ── Card ──────────────────────────────────────────────────────────────────
     const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 12, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: CARD_WIDTH })
-    card.append(closeBtn)
+    card.append(controlsRow)
     card.append(headerBox)
     card.append(specsBox)
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
@@ -280,6 +291,10 @@ export default function AboutWindow(): Gtk.Window | null {
     })
     const win = shell.window
     _instance = win
+    attachWindowControls(win, [
+        { widget: leftSlot, when: side => side === "left" },
+        { widget: rightSlot, when: side => side === "right" },
+    ], [closeBtn])
 
     // Closed from elsewhere (the Settings row, an IPC action) — same path.
     sigId = status.connect("notify::about-open", () => {
