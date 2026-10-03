@@ -30,6 +30,7 @@ export { NidaraDropDown, attachScrollBar, adoptGtkScrolled } from "./scrolled"
 // NidaraSplitView — sidebar+content with auto-collapse (replaces Adw.OverlaySplitView + Adw.Breakpoint)
 export type { NidaraSplitViewResult } from "./split-view"
 export { NidaraSplitView } from "./split-view"
+export { attachWindowControls, controlsSlotWidget, type ControlsSlot, type ControlsSide } from "./platform/window-controls"
 
 // NidaraButton — unified button component (replaces suggested-action / destructive-action / pill)
 export type { NidaraButtonVariant, NidaraButtonOpts } from "./button"

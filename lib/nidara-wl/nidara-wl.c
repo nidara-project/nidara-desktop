@@ -22,6 +22,7 @@
 #include "hyprland-toplevel-mapping-v1-client-protocol.h"
 #include "wlr-screencopy-unstable-v1-client-protocol.h"
 #include "nidara-material-v1-client-protocol.h"
+#include "nidara-window-controls-v1-client-protocol.h"
 
 /* A capture that has not answered in this long is not coming. Generous on
  * purpose: the compositor schedules the copy on its own frame clock, and a
@@ -54,6 +55,7 @@ static struct hyprland_surface_manager_v1 *surface_mgr = NULL;
 static struct hyprland_focus_grab_manager_v1 *focus_grab_mgr = NULL;
 static gboolean                        capture_supported = FALSE;
 static struct nidara_material_manager_v1 *material_mgr = NULL;
+static struct nidara_window_controls_manager_v1 *controls_mgr = NULL;
 
 static void
 init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
@@ -84,6 +86,9 @@ init_registry_global (void *data, struct wl_registry *registry, uint32_t name,
       material_mgr = wl_registry_bind (registry, name,
                                        &nidara_material_manager_v1_interface, 1);
     }
+  else if (g_strcmp0 (interface, nidara_window_controls_manager_v1_interface.name) == 0)
+    controls_mgr = wl_registry_bind (registry, name,
+                                     &nidara_window_controls_manager_v1_interface, 1);
 }
 
 static void
@@ -579,6 +584,139 @@ nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint blur_pas
       g_object_set_data (G_OBJECT (surface), "nidara-wl-material-dirty", GINT_TO_POINTER (1));
     }
   return TRUE;
+}
+
+/* ======================================================================
+ * Window controls (nidara-window-controls-v1 — protocols/ at the repository root)
+ *
+ * The compositor draws a window's close/minimize/maximize over the app's own header, where the
+ * app reserved room for them (#708 point 5). Here: the object per toplevel surface, the box's
+ * position (double-buffered: it lands with the commit of the frame that left room for it), and
+ * the `layout` event — the box to reserve and the side — handed to one process-wide function.
+ * ====================================================================== */
+
+gboolean
+nidara_wl_has_window_controls (void)
+{
+  return wl_ok && controls_mgr != NULL;
+}
+
+static NidaraWlWindowControlsLayoutFunc controls_cb = NULL;
+static gpointer                         controls_cb_data = NULL;
+static GDestroyNotify                   controls_cb_destroy = NULL;
+
+static void
+controls_handle_layout (void *data, struct nidara_window_controls_v1 *c, uint32_t side,
+                        wl_fixed_t width, wl_fixed_t height)
+{
+  (void) c;
+  if (controls_cb)
+    controls_cb (GDK_SURFACE (data), side, wl_fixed_to_double (width), wl_fixed_to_double (height),
+                 controls_cb_data);
+}
+
+static const struct nidara_window_controls_v1_listener controls_listener = {
+  .layout = controls_handle_layout,
+};
+
+void
+nidara_wl_window_controls_set_layout_func (NidaraWlWindowControlsLayoutFunc func,
+                                           gpointer                         user_data,
+                                           GDestroyNotify                   destroy)
+{
+  if (controls_cb_destroy)
+    controls_cb_destroy (controls_cb_data);
+  controls_cb = func;
+  controls_cb_data = user_data;
+  controls_cb_destroy = destroy;
+}
+
+static struct nidara_window_controls_v1 *
+controls_get (GdkSurface *surface)
+{
+  if (!nidara_wl_has_window_controls () || !GDK_IS_WAYLAND_SURFACE (surface))
+    return NULL;
+
+  struct nidara_window_controls_v1 *c = g_object_get_data (G_OBJECT (surface), "nidara-wl-controls");
+  if (c)
+    return c;
+
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (!wls)
+    return NULL;
+
+  c = nidara_window_controls_manager_v1_get_window_controls (controls_mgr, wls);
+  /* GDK's queue, as the material's: `layout` is dispatched on the main loop as it arrives. */
+  wl_proxy_set_queue ((struct wl_proxy *) c, NULL);
+  nidara_window_controls_v1_add_listener (c, &controls_listener, surface);
+  g_object_set_data_full (G_OBJECT (surface), "nidara-wl-controls", c,
+                          (GDestroyNotify) nidara_window_controls_v1_destroy);
+  wl_display_flush (gdk_wl_display);
+  return c;
+}
+
+gboolean
+nidara_wl_window_controls_request (GdkSurface *surface)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+  return controls_get (surface) != NULL;
+}
+
+/* Like the material: a position that moves no pixel of the app's would wait for its next
+ * unrelated redraw, so the frame after it is committed once more (see material_after_paint). */
+static void
+controls_after_paint (GdkFrameClock *clock, GdkSurface *surface)
+{
+  (void) clock;
+  if (!g_object_get_data (G_OBJECT (surface), "nidara-wl-controls-dirty"))
+    return;
+  g_object_set_data (G_OBJECT (surface), "nidara-wl-controls-dirty", NULL);
+  struct wl_surface *wls = gdk_wayland_surface_get_wl_surface (surface);
+  if (wls && gdk_surface_get_mapped (surface))
+    {
+      wl_surface_commit (wls);
+      wl_display_flush (gdk_wl_display);
+    }
+}
+
+static void
+controls_mark_dirty (GdkSurface *surface)
+{
+  wl_display_flush (gdk_wl_display);
+  GdkFrameClock *clock = gdk_surface_get_frame_clock (surface);
+  if (!clock)
+    return;
+  if (!g_object_get_data (G_OBJECT (surface), "nidara-wl-controls-hooked"))
+    {
+      g_signal_connect_object (clock, "after-paint", G_CALLBACK (controls_after_paint),
+                               surface, G_CONNECT_AFTER);
+      g_object_set_data (G_OBJECT (surface), "nidara-wl-controls-hooked", GINT_TO_POINTER (1));
+    }
+  g_object_set_data (G_OBJECT (surface), "nidara-wl-controls-dirty", GINT_TO_POINTER (1));
+  gdk_surface_queue_render (surface);
+}
+
+gboolean
+nidara_wl_window_controls_set_position (GdkSurface *surface, double x, double y)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+  struct nidara_window_controls_v1 *c = controls_get (surface);
+  if (!c)
+    return FALSE;
+  nidara_window_controls_v1_set_position (c, wl_fixed_from_double (x), wl_fixed_from_double (y));
+  controls_mark_dirty (surface);
+  return TRUE;
+}
+
+void
+nidara_wl_window_controls_unset_position (GdkSurface *surface)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_window_controls_v1 *c = controls_get (surface);
+  if (!c)
+    return;
+  nidara_window_controls_v1_unset_position (c);
+  controls_mark_dirty (surface);
 }
 
 /* ======================================================================

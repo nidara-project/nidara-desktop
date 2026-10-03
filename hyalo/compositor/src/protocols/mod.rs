@@ -6,6 +6,7 @@ pub mod focus_grab;
 pub mod material;
 pub mod screencopy;
 pub mod virtual_pointer;
+pub mod window_controls;
 
 // The scanner macros read the XML at compile time, but nothing tells cargo: an edited protocol
 // left the server built from the OLD file while lib/nidara-wl was built from the new one, and
@@ -13,6 +14,7 @@ pub mod virtual_pointer;
 // (2026-10-01). `include_bytes!` makes each file a dependency of this crate.
 const _: &[u8] = include_bytes!("../../../../protocols/hyprland-focus-grab-v1.xml");
 const _: &[u8] = include_bytes!("../../../../protocols/nidara-material-v1.xml");
+const _: &[u8] = include_bytes!("../../../../protocols/nidara-window-controls-v1.xml");
 
 pub mod gen_focus_grab {
     use wayland_server;
@@ -34,4 +36,15 @@ pub mod gen_material {
     }
     use self::__interfaces::*;
     wayland_scanner::generate_server_code!("../../protocols/nidara-material-v1.xml");
+}
+
+pub mod gen_window_controls {
+    use wayland_server;
+    use wayland_server::protocol::*;
+    pub mod __interfaces {
+        use wayland_server::protocol::__interfaces::*;
+        wayland_scanner::generate_interfaces!("../../protocols/nidara-window-controls-v1.xml");
+    }
+    use self::__interfaces::*;
+    wayland_scanner::generate_server_code!("../../protocols/nidara-window-controls-v1.xml");
 }

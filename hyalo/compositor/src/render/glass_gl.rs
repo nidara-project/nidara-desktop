@@ -614,6 +614,8 @@ pub(super) struct Programs {
     ink: Program,
     /// The shadow under the glass (render/scrim.rs).
     pub(super) scrim: Program,
+    /// A window's controls (render/controls.rs).
+    pub(super) controls: Program,
     /// The measurement's target: MEASURE_WIDTH × 1, one texel per box. Made on first use.
     ink_target: std::cell::Cell<(u32, u32)>,
     pub(super) vbo: u32,
@@ -671,6 +673,7 @@ impl Programs {
                 last: compile(gl, VS_FINAL, &last_fs),
                 ink: compile(gl, VS_PASS, FS_INK),
                 scrim: compile(gl, VS_FINAL, super::scrim::FS_SCRIM),
+                controls: compile(gl, VS_FINAL, super::controls::FS_CONTROLS),
                 ink_target: Default::default(),
                 vbo,
                 trash: Default::default(),

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="nidara_window_controls_v1">
+  <copyright>
+    SPDX-License-Identifier: GPL-3.0-or-later
+  </copyright>
+  <description summary="window controls drawn by the compositor over an app's header">
+    A window's controls — close, minimize, maximize — are the compositor's:
+    it draws them, the same in every window, and takes their clicks. The app
+    keeps its own header and its content, and says where in it the controls
+    go: it reserves a box of the size the compositor gives, at the place its
+    layout wants (in the header, or inside a sidebar), and the compositor
+    draws the controls there, over the app's own pixels. The place can move
+    with the layout; the side (left or right) is the user's, and the
+    compositor tells it.
+  </description>
+
+  <interface name="nidara_window_controls_manager_v1" version="1">
+    <request name="destroy" type="destructor"/>
+    <request name="get_window_controls">
+      <description summary="the controls of a toplevel's surface">
+        One per wl_surface, which must have the xdg_toplevel role (or get it
+        before its first commit with a position). The state is
+        double-buffered on wl_surface.commit, so the controls move with the
+        buffer that leaves room for them.
+      </description>
+      <arg name="id" type="new_id" interface="nidara_window_controls_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+
+  <interface name="nidara_window_controls_v1" version="1">
+    <enum name="side">
+      <entry name="right" value="0"/>
+      <entry name="left" value="1"/>
+    </enum>
+
+    <event name="layout">
+      <description summary="the box to reserve, and the side it belongs on">
+        Sent once right after get_window_controls, and again whenever the user
+        changes the side or the compositor changes the controls' size. width
+        and height are the box the controls take, logical pixels; the client
+        lays out a box of that size on that side and sends its position. On
+        the left side the close button comes first; on the right, last.
+      </description>
+      <arg name="side" type="uint" enum="side"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+    </event>
+
+    <request name="destroy" type="destructor">
+      <description summary="the compositor draws no controls on this surface any more"/>
+    </request>
+
+    <request name="set_position">
+      <description summary="pending: where the controls go">
+        The top-left corner of the reserved box, surface-local logical
+        coordinates. Until the first set_position, and after unset_position,
+        no controls are drawn.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+    </request>
+
+    <request name="unset_position">
+      <description summary="pending: no controls"/>
+    </request>
+  </interface>
+</protocol>

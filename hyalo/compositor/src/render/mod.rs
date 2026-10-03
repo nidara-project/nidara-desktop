@@ -7,6 +7,7 @@
 //! surfaces by insertion, not by layer (an Overlay mapped before a Top drew below it — found
 //! in the prototype), and a surface's glass has to go right below that surface.
 
+pub mod controls;
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
@@ -107,6 +108,7 @@ smithay::backend::renderer::element::render_elements! {
     Rounded=window::RoundedElement<R>,
     Glass=GlassElement,
     Scrim=ScrimElement,
+    Controls=controls::ControlsElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
 }
 
@@ -117,6 +119,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Rounded(e) => f.debug_tuple("Rounded").field(e).finish(),
             Self::Glass(e) => f.debug_tuple("Glass").field(e).finish(),
             Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
+            Self::Controls(e) => f.debug_tuple("Controls").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
@@ -296,7 +299,24 @@ pub fn output_elements<R: HyaloRenderer>(
                 managed.is_none_or(|m| m.backdrop),
                 state.windows,
             );
-            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows);
+            // The controls over its header (protocols/window_controls.rs): never on a
+            // fullscreen window.
+            let controls = managed.filter(|_| !fullscreen).and_then(|m| {
+                let r = crate::protocols::window_controls::window_rect(w)?;
+                let origin = (at - w.geometry().loc - output_geo.loc).to_f64();
+                let rect = Rectangle::new(origin + r.loc, r.size).to_physical(scale);
+                let buttons = crate::protocols::window_controls::order(state.windows.controls.side);
+                let hover = state.wm.controls_hover.filter(|h| h.window == m.id);
+                let controls = controls::Controls {
+                    buttons,
+                    enabled: buttons.map(|b| crate::protocols::window_controls::enabled(w, b)),
+                    hover: hover.and_then(|h| buttons.iter().position(|b| *b == h.button)),
+                    pressed: hover.is_some_and(|h| h.pressed),
+                    active: state.wm.focused == Some(m.id),
+                };
+                Some((rect, controls))
+            });
+            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls);
         }
     };
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of

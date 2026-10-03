@@ -62,7 +62,7 @@ function put(obj: any, path: string, value: unknown) {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true },
+        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -141,6 +141,13 @@ export function createHyaloSettings(): CompositorSettings {
         },
         setWindowBackdrop(on) {
             patch("window backdrop", { windows: { backdrop: { enabled: on } } })
+        },
+
+        readWindowControlsSide() {
+            return config()?.windows?.controls?.side === "left" ? "left" : "right"
+        },
+        setWindowControlsSide(side) {
+            patch("window controls", { windows: { controls: { side } } })
         },
 
         // Hyalo does idle itself (hyalo/compositor/src/idle.rs): no hypridle, no file of ours.

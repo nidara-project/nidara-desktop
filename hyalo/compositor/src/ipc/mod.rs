@@ -48,6 +48,9 @@ pub struct WindowInfo {
     pub height: i32,
     /// How it is drawn: rounded corners, the blur behind it (render/window.rs).
     pub look: crate::render::window::Look,
+    /// Where Hyalo draws its controls (protocols/window_controls.rs): x, y, width, height,
+    /// global logical px; none when the app reserved no room for them.
+    pub controls: Option<[f64; 4]>,
 }
 
 #[derive(Debug, Clone, Serialize)]

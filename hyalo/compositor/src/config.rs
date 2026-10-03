@@ -78,12 +78,31 @@ pub struct WindowsConfig {
     /// The corner's curve: 2 is a circle, higher is a squircle (Hyprland's `rounding_power`).
     pub rounding_power: f64,
     pub backdrop: BackdropConfig,
+    pub controls: ControlsConfig,
 }
 
 impl Default for WindowsConfig {
     fn default() -> Self {
-        Self { rounding: 24.0, rounding_power: 3.2, backdrop: BackdropConfig::default() }
+        Self { rounding: 24.0, rounding_power: 3.2, backdrop: BackdropConfig::default(), controls: ControlsConfig::default() }
     }
+}
+
+/// The window controls Hyalo draws over an app's header (protocols/window_controls.rs, #708
+/// point 5): which side of the window they go on. Settings → Appearance → Windows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct ControlsConfig {
+    pub side: ControlsSide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ControlsSide {
+    /// The Linux and Windows convention: close last, at the window's right.
+    #[default]
+    Right,
+    /// Close first, at the window's left.
+    Left,
 }
 
 /// The blur behind every translucent window: the WINDOW material (#708 point 1), apart from the
@@ -629,6 +648,9 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
     }
     if old.idle != new.idle {
         state.idle_rearm();
+    }
+    if old.windows.controls != new.windows.controls {
+        crate::protocols::window_controls::send_layouts(state);
     }
     if old.layout.tiling != new.layout.tiling {
         state.change_tiling_layout();

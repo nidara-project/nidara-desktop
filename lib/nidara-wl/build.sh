@@ -40,6 +40,7 @@ PROTOCOLS=(
   # Ours, from the repository's protocols/: the compositor (hyalo/) builds its server half
   # from the same file. Hyprland does not offer it; the functions then report so and do nothing.
   "$SRC_DIR/../../protocols/nidara-material-v1.xml"
+  "$SRC_DIR/../../protocols/nidara-window-controls-v1.xml"
 )
 
 rm -rf "$OUT_DIR"

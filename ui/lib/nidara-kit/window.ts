@@ -5,6 +5,7 @@ import { NidaraAppWindow, type NidaraCloseMode } from "./app-window"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
 import { RADIUS, WINDOW_LAYOUT, collapseAtFor, minWindowWidthFor } from "./platform/tokens"
+import { attachWindowControls, controlsSlotWidget } from "./platform/window-controls"
 
 /**
  * Chrome radii, named for what they dress: the window is `glass(floating)` =
@@ -173,13 +174,25 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         return st ? (Array.isArray(st) ? st : [st]) : []
     }
 
+    // ── The window controls (#708 point 5) ───────────────────────────────────
+    // On a compositor that draws them (Hyalo) the header leaves them room: on the right, the
+    // header's end, where the window's own close button is otherwise; on the left, its start
+    // — or, with a sidebar shown docked, the sidebar's top. The caller's `end` (the close
+    // button) is the FALLBACK, shown where the compositor draws none. platform/window-controls.ts.
+    const leftSlot = controlsSlotWidget()
+    const rightSlot = controlsSlotWidget()
+    const headerEnd = (): Gtk.Widget => {
+        const row = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+        row.append(rightSlot)
+        if (header?.end) row.append(header.end)
+        return row
+    }
+
     // ── No sidebar: the header crosses the card, and the base is the whole thing ──
     if (!sidebar) {
-        const start = headerStartWidgets()
+        const start = header ? [leftSlot, ...headerStartWidgets()] : []
         let startWidget: Gtk.Widget | undefined
-        if (start.length === 1) {
-            startWidget = start[0]
-        } else if (start.length > 1) {
+        if (start.length > 0) {
             const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, css_classes: ["nidara-window-tools"] })
             for (const w of start) row.append(w)
             startWidget = row
@@ -187,13 +200,19 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         const base = NidaraAppWindow({
             app, title, content, footer,
             header: header && {
-                start: startWidget, center: header.center, end: header.end,
+                start: startWidget, center: header.center, end: headerEnd(),
                 cssClasses: header.cssClasses,
             },
             closeMode, onClose, closeOnEscape, resizable,
             defaultWidth, defaultHeight, minWidth, minHeight,
             cssClasses, glassClasses, name, appId,
         })
+        if (header) {
+            attachWindowControls(base.window, [
+                { widget: leftSlot, when: side => side === "left" },
+                { widget: rightSlot, when: side => side === "right" },
+            ], header.end ? [header.end] : [])
+        }
         return { window: base.window, glass: base.glass, toggle: base.toggle, close: base.close }
     }
 
@@ -264,6 +283,14 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         sidebarColumn.append(topSlot)
     }
     sidebarColumn.append(sidebarScrollWidget)
+    // The controls' room at the sidebar's top, when they are on the left and the sidebar is
+    // shown docked: in the header they would sit after the sidebar, far from the corner.
+    const sidebarSlot = controlsSlotWidget(Gtk.Align.START)
+    const sidebarSlotRow = new Gtk.Box({ margin_start: 4, margin_top: 4, margin_bottom: 8 })
+    sidebarSlotRow.append(sidebarSlot)
+    sidebarColumn.prepend(sidebarSlotRow)
+    sidebarSlot.connect("notify::visible", () => { sidebarSlotRow.visible = sidebarSlot.visible })
+    sidebarSlotRow.visible = false
 
     // ── Sidebar toggle ────────────────────────────────────────────────────────
     const sidebarToggle = new Gtk.Button({
@@ -285,6 +312,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         halign: Gtk.Align.START,
         css_classes: ["nidara-window-tools"],
     })
+    headerStart.append(leftSlot)
     headerStart.append(sidebarToggle)
     for (const w of headerStartWidgets()) headerStart.append(w)
 
@@ -293,7 +321,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     })
     contentHeader.set_start_widget(headerStart)
     if (header?.center) contentHeader.set_center_widget(header.center)
-    if (header?.end) contentHeader.set_end_widget(header.end)
+    contentHeader.set_end_widget(headerEnd())
 
     const headerHandle = new Gtk.WindowHandle()
     headerHandle.set_child(contentHeader)
@@ -306,6 +334,8 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     contentColumn.append(headerHandle)
     contentColumn.append(content)
 
+    let controls: { refresh: () => void } | null = null
+
     // ── Split view (fixed breakpoint; popover in collapsed mode) ──────────────
     // The breakpoint is exactly "sidebar + the content pane", so the sidebar docks
     // precisely while there is room for it AND the pane at full width, and leaving
@@ -317,6 +347,8 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         collapseAt: collapseAtFor(sidebarWidth, contentWidth),
         cssClasses: ["nidara-split-view"],
         name: "nidara-window-splitview",
+        // Shown, hidden, docked or floating: the controls may change slot.
+        onSidebarPresented: () => controls?.refresh(),
     })
 
     sidebarToggle.connect("clicked", () => {
@@ -339,6 +371,11 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         cssClasses, glassClasses, name, appId,
     })
     base.glass.set_name("nidara-window-glass")
+    controls = attachWindowControls(base.window, [
+        { widget: sidebarSlot, when: side => side === "left" && !splitView.collapsed && splitView.showSidebar },
+        { widget: leftSlot, when: side => side === "left" },
+        { widget: rightSlot, when: side => side === "right" },
+    ], header?.end ? [header.end] : [])
 
     return {
         window: base.window,
