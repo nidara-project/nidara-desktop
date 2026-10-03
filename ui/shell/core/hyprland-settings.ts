@@ -314,6 +314,7 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         setWindowBackdrop() {},
         readWindowControlsSide: () => "right",
         setWindowControlsSide() {},
+        setWindowTitleFont() {},
 
         async readInput(current) {
             const next = { ...current }

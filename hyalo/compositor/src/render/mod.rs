@@ -11,6 +11,7 @@ pub mod controls;
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
+pub mod title_bar;
 pub mod window;
 
 use smithay::{
@@ -61,6 +62,17 @@ pub trait HyaloRenderer: Renderer<TextureId = Self::HyaloTexture> + ImportAll + 
 
     /// The GL renderer underneath (the one that renders, on a multi-GPU setup).
     fn gles(&mut self) -> &mut GlesRenderer;
+
+    /// The GL texture `surface`'s buffer was imported as for this renderer (the GPU that
+    /// renders), if it has been: what Hyalo's title bar samples (title_bar.rs).
+    fn surface_texture(&mut self, surface: &WlSurface) -> Option<smithay::backend::renderer::gles::GlesTexture>;
+}
+
+fn surface_state<T>(surface: &WlSurface, f: impl FnOnce(&smithay::backend::renderer::utils::RendererSurfaceState) -> Option<T>) -> Option<T> {
+    smithay::wayland::compositor::with_states(surface, |states| {
+        let data = states.data_map.get::<smithay::backend::renderer::utils::RendererSurfaceStateUserData>()?;
+        f(&data.lock().unwrap())
+    })
 }
 
 impl HyaloRenderer for GlesRenderer {
@@ -78,6 +90,11 @@ impl HyaloRenderer for GlesRenderer {
 
     fn gles(&mut self) -> &mut GlesRenderer {
         self
+    }
+
+    fn surface_texture(&mut self, surface: &WlSurface) -> Option<smithay::backend::renderer::gles::GlesTexture> {
+        let id = self.context_id();
+        surface_state(surface, |s| s.texture::<smithay::backend::renderer::gles::GlesTexture>(id).cloned())
     }
 }
 
@@ -100,6 +117,14 @@ impl<'r> HyaloRenderer for UdevRenderer<'r> {
     fn gles(&mut self) -> &mut GlesRenderer {
         self.as_mut()
     }
+
+    fn surface_texture(&mut self, surface: &WlSurface) -> Option<smithay::backend::renderer::gles::GlesTexture> {
+        let multi = self.context_id();
+        let gles = self.as_mut().context_id();
+        surface_state(surface, |s| {
+            s.texture::<multigpu::MultiTexture>(multi)?.get::<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>(&gles)
+        })
+    }
 }
 
 smithay::backend::renderer::element::render_elements! {
@@ -109,6 +134,7 @@ smithay::backend::renderer::element::render_elements! {
     Glass=GlassElement,
     Scrim=ScrimElement,
     Controls=controls::ControlsElement,
+    TitleBar=title_bar::TitleBarElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
 }
 
@@ -120,6 +146,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Glass(e) => f.debug_tuple("Glass").field(e).finish(),
             Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
             Self::Controls(e) => f.debug_tuple("Controls").field(e).finish(),
+            Self::TitleBar(e) => f.debug_tuple("TitleBar").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
@@ -299,10 +326,10 @@ pub fn output_elements<R: HyaloRenderer>(
                 managed.is_none_or(|m| m.backdrop),
                 state.windows,
             );
-            // The controls over its header (protocols/window_controls.rs): never on a
-            // fullscreen window.
+            // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
+            // bar (title_bar.rs): never on a fullscreen window.
             let controls = managed.filter(|_| !fullscreen).and_then(|m| {
-                let r = crate::protocols::window_controls::window_rect(w)?;
+                let r = crate::protocols::window_controls::managed_rect(m, state.windows.controls.side)?;
                 let origin = (at - w.geometry().loc - output_geo.loc).to_f64();
                 let rect = Rectangle::new(origin + r.loc, r.size).to_physical(scale);
                 let buttons = crate::protocols::window_controls::order(state.windows.controls.side);
@@ -316,7 +343,18 @@ pub fn output_elements<R: HyaloRenderer>(
                 };
                 Some((rect, controls))
             });
-            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls);
+            let bar = managed.filter(|_| !fullscreen).map_or(0, |m| m.bar());
+            let (controls, title_bar) = match managed.filter(|_| bar > 0) {
+                Some(m) => (None, Some(title_bar::TitleBar {
+                    height: bar as f64,
+                    title: crate::wm::title(w),
+                    family: state.windows.title_bar.font.clone(),
+                    active: state.wm.focused == Some(m.id),
+                    controls,
+                })),
+                None => (controls, None),
+            };
+            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls, title_bar);
         }
     };
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of

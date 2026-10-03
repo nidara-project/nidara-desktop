@@ -20,7 +20,8 @@ what is drawn and how, the glass, the layers, the rules.
 
     cd hyalo && cargo build --release
 
-Needs `rust`, `seatd` (libseat), `libinput`, `libdisplay-info`, `mesa`, `libxkbcommon`.
+Needs `rust`, `seatd` (libseat), `libinput`, `libdisplay-info`, `mesa`, `libxkbcommon`, and `pango` +
+`cairo` (the title bar's text).
 `cargo test` runs the unit tests; CI also runs `cargo clippy --all-targets -- -D warnings`.
 
 ## Run

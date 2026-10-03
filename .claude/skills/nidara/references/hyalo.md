@@ -23,6 +23,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
 | `hyalo/compositor/src/protocols/window_controls.rs`, `render/controls.rs` | a window's controls, Hyalo's: the protocol, and the capsule drawn over the app's header |
+| `hyalo/compositor/src/render/title_bar.rs` | Hyalo's title bar, for apps that leave their decorations to the compositor (kitty, Qt, Chrome's "system title bar") |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
 | `hyalo/compositor/src/lock.rs` | the lock screen (ext-session-lock-v1): what is drawn and reachable while locked |
 | `hyalo/compositor/src/idle.rs`, `hyalo/compositor/src/logind.rs` | idle (screens off, lock, suspend; inhibitors) and the session's D-Bus side (lock before sleep, `org.freedesktop.ScreenSaver`) |
@@ -333,8 +334,9 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   their own, and its shadow margin left them SQUARE (`look.rounded` false, "kitty has a title bar
   on Hyalo"). Smithay sends `zxdg_toplevel_decoration_v1.configure` only when the mode CHANGES —
   a `set_mode` that changes nothing gets the `xdg_surface.configure` alone, as the protocol asks.
-  GTK apps speak neither and keep their own decorations. Nidara's own title bars, drawn here, are
-  #708 point 5 — its first half is below ("The window controls are Hyalo's").
+  GTK apps speak neither and keep their own decorations. What the client ASKED is kept on its
+  surface (`decoration::asked`): it decides who gets Hyalo's title bar — below ("Hyalo's title
+  bar"), with the window controls before it ("The window controls are Hyalo's").
 - Still owed in wave 2: the 1 px border (active/inactive) and the shadow.
 - CI: `scripts/ci/hyalo-window-look-check.sh` in the smoke — an opaque window of red/green
   stripes and a translucent one over it: `look`; the corner's pixel shows what is behind and
@@ -389,8 +391,74 @@ default (close last), left as a setting (close first).
   pointer the app's over its body and not over its controls, maximize and restore, minimize
   nothing, the side switched live and followed, close asks the window to close. The control: the
   same probe on a Hyalo without the protocol prints NO_CONTROLS.
-- Owed (#708 point 5, second half): the thin bar for apps that ask for server-side decorations
-  (kitty, Qt) — one piece with the window, the same capsule, the title, dragged to move.
+
+## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
+
+For an app that leaves its decorations to the compositor — kitty, Qt apps, Chrome with "Use
+system title bar and borders" — Hyalo draws a thin bar, the owner's choice on the mockup: **one
+piece with the window** (no line, no colour of its own), **the same capsule** as over our apps'
+headers, the title centred. `render/title_bar.rs`.
+
+- **Who gets it** (`wm/mod.rs` `wants_title_bar`): the client ASKED for server-side (or unset —
+  the compositor's choice; `shell/decoration.rs` keeps what it asked), it is not one of our apps
+  (those carry the controls in their own header), and — once it has drawn — its surface IS its
+  box (`render/window.rs` `fits`). Both halves are needed: a GTK 3 app asks for client-side and,
+  TILED, drops its shadow margin, so `fits` alone would put a second bar over its header bar;
+  Chrome without the setting asks for client-side, is told server-side, ignores it and keeps its
+  margin. Before the first buffer it is predicted from what was asked, so a tiled window's
+  first frame is already its size under the bar. Recomputed at every commit
+  (`update_title_bar`): an app that switches its frame while it runs gains or loses the bar,
+  with the layout following. A rule's `title_bar = false` takes it from one app.
+- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (36, 0 in
+  fullscreen), `frame()` = the box with the bar. A tiled or maximized window's tile is the frame
+  and the client gets the rest; a floating window keeps the size it asked for and the bar sits
+  above it, clamped by the frame (`clamp_floating_with_bar`: the bar, not the client, may never
+  leave by the top). Placement, cascading, centring, dropping after a drag all use the frame.
+  `m.rect` stays the CLIENT's box (what the IPC's x/y/width/height say); `title_bar` in
+  `msg windows` is the bar's height above it.
+- **Drawn** in ONE element, three steps inside its `draw`: (1) the client's top row (one buffer
+  scale under the edge) drawn through **Smithay's own texture path** (`render_texture_from_to`,
+  which knows the format, the transform, an external image) into a 16×16 target bound in place
+  of the frame's — 16×16 so that whatever the output's rotation, 16 samples lie along the row;
+  (2) those averaged into one texel; (3) the bar in one pass over the frame: that colour, alpha
+  included (a translucent kitty gets a translucent bar with the window's blur under it — the
+  backdrop's shape is the frame), the title, the capsule (`controls_glsl!`, the SAME GLSL as
+  `render/controls.rs`), and the window's top corners (the client's own top corners are inside
+  the frame, not cut — `RoundedElement` gets the frame). The client's GL texture comes from
+  `HyaloRenderer::surface_texture` (on the tty backend, the MultiTexture's copy for the GPU that
+  renders).
+- **Ink**: white on a dark bar, black on a light one, decided on the GPU from the same texel —
+  black where it has the better contrast (linear luminance above 0.179, the WCAG crossover), and
+  only when the bar is mostly opaque. Over close's red the glyph is white either way.
+- **The title**: Pango + Cairo (`pangocairo`, the libraries GTK draws the shell's text with) into
+  an A8 raster at the output's scale, medium weight, the chrome's fixed 13 px, ellipsized to what
+  the capsule leaves on BOTH sides (so centred it never reaches it); kept on the surface while
+  nothing it depends on changes, uploaded once per raster (`GL_ALPHA`, at most 32 kept). The
+  family is `[windows.title_bar] font`, which the shell keeps equal to the interface font's
+  (`core/AppearanceSync.ts`, effect `titleFont`, `settings.setWindowTitleFont`). A title change
+  redraws (`title_changed`): it can come without a buffer.
+- **Input** (`state.rs` `chrome_under`, which `controls_under` is now a view of): the capsule is
+  `window_controls::managed_rect` — in the bar when there is one, above the surface (negative y),
+  so hover, clicks, the IPC's `controls` and the drawing all come from one place; the rest of the
+  bar is `Chrome::Bar`. Over either, no client gets the pointer (`surface_under`) and the arrow is
+  shown. A left press on the bar focuses and starts a move grab; two within 400 ms (GTK's
+  double-click time) maximize or restore (`input.rs` `title_bar_press`); other buttons focus only.
+  `window_under` counts the bar as the window's.
+- **Chrome switching its frame while it runs** (measured, 2026-10-03): turning "Use system title
+  bar and borders" ON makes Chrome paint its whole surface opaque at once and keep its old window
+  geometry — the 10 px shadow margin it no longer draws — until a configure comes, and it asks
+  nothing over xdg-decoration (it asked for client-side when it started). It overflowed its tile
+  by 10 px on every side. `poke_stale_geometry`: an opaque region outside the geometry means the
+  geometry is stale — one configure (once per geometry) makes Chrome restate it, and the client
+  counts from then on as having asked for server-side (`decoration::note_dropped_frame`), so it
+  gets the bar. Turning it OFF, Chrome does ask for client-side, and the bar goes.
+- CI: `scripts/ci/hyalo-title-bar-check.sh` in the smoke (C probe `hyalo-title-bar-probe.c`,
+  light top rows on a dark body): the bar and the capsule's place; the bar's pixel on screen is
+  the app's top colour and its darkest title pixel dark; the pointer Hyalo's over it; dragged by
+  it the window moves, a double click maximizes and restores; the probe switching to its own frame
+  (SIGUSR1) loses the bar and back (SIGUSR2) gets it; close in the capsule. Controls, both seen
+  failing: the installed Hyalo without the bar (`title_bar` null at step 1), and a bar of a fixed
+  colour (step 2: "not one piece").
 
 ## The window manager
 

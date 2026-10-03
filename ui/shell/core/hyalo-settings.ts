@@ -150,6 +150,11 @@ export function createHyaloSettings(): CompositorSettings {
             patch("window controls", { windows: { controls: { side } } })
         },
 
+        // Hyalo's title bar (hyalo/compositor/src/render/title_bar.rs).
+        setWindowTitleFont(family) {
+            patch("window title font", { windows: { title_bar: { font: family } } })
+        },
+
         // Hyalo does idle itself (hyalo/compositor/src/idle.rs): no hypridle, no file of ours.
         readIdle(): IdleConfig {
             const i = config()?.idle

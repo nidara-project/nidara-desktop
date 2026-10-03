@@ -29,6 +29,10 @@ zbus = { version = "5", default-features = false, features = ["blocking-api", "a
 # Window rules match app ids and titles by regex. The `regex` crate is a thin wrapper over
 # this one, which the tree already has (tracing-subscriber).
 regex-automata = { version = "0.4", default-features = false, features = ["std", "syntax", "meta", "nfa-pikevm", "nfa-backtrack", "hybrid", "unicode"] }
+# A window's title in the title bar Hyalo draws for apps that ask for one (render/title_bar.rs):
+# Pango shapes and lays it out in the desktop's interface font, Cairo rasterises it. The same
+# libraries GTK draws the shell's text with, so the title reads like the rest of the desktop.
+pangocairo = "0.22"
 # Protocols Smithay does not ship are generated from their XML in ../../protocols.
 wayland-server = "0.31"
 wayland-backend = "0.3"

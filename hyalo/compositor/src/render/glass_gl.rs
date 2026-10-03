@@ -31,7 +31,7 @@ use smithay::{
     utils::{Physical, Rectangle},
 };
 
-const VS_PASS: &str = r#"#version 100
+pub(super) const VS_PASS: &str = r#"#version 100
 precision highp float;
 attribute vec2 pos;          // unit quad
 uniform vec4 dst_rect;       // target pixels: x, y, w, h
@@ -179,7 +179,7 @@ varying vec2 v_px;
 void main() { gl_FragColor = up(v_px * 0.5); }
 "#;
 
-const VS_FINAL: &str = r#"#version 100
+pub(super) const VS_FINAL: &str = r#"#version 100
 precision highp float;
 attribute vec2 pos;
 uniform vec4 dst_rect;       // output pixels
@@ -626,7 +626,7 @@ pub(super) struct Programs {
 
 type Trash = Rc<RefCell<Vec<(u32, u32)>>>;
 
-unsafe fn compile(gl: &Gles2, vs: &str, fs: &str) -> Program {
+pub(super) unsafe fn compile(gl: &Gles2, vs: &str, fs: &str) -> Program {
     unsafe {
         let shader = |kind, src: &str| {
             let s = gl.CreateShader(kind);

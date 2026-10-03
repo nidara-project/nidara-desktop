@@ -310,12 +310,20 @@ fn surface_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
     })
 }
 
+/// Whether a window's surface is its box: no client-side shadow margin around it — the
+/// decorations it may draw are inside its geometry, or it draws none.
+pub fn fits(window: &Window) -> bool {
+    let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return false };
+    let geo = window.geometry();
+    geo.loc == Point::from((0, 0)) && surface_size(&surface).is_some_and(|s| s == geo.size)
+}
+
 /// What `cfg` and the window's rules make of it.
 pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, cfg: &WindowsConfig) -> Look {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return Look::default() };
     let geo = window.geometry();
     // Client-side decorations with a shadow margin draw their own corners.
-    let fits = geo.loc == Point::from((0, 0)) && surface_size(&surface).is_some_and(|s| s == geo.size);
+    let fits = fits(window);
     let rounded = rule_rounded && !fullscreen && fits && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
     let backdrop = rule_backdrop && cfg.backdrop.enabled && cfg.backdrop.passes > 0 && translucent(&surface, geo, radius);
@@ -336,6 +344,7 @@ pub fn push<R: HyaloRenderer>(
     output_size: Size<i32, Physical>,
     cfg: &WindowsConfig,
     controls: Option<(Rectangle<f64, Physical>, super::controls::Controls)>,
+    title_bar: Option<super::title_bar::TitleBar>,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
@@ -348,18 +357,32 @@ pub fn push<R: HyaloRenderer>(
         out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
     }
     let radius = cfg.rounding * scale.x;
+    // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the
+    // bar and the client together: the client's top corners are inside, not cut.
+    let bar_px = title_bar.as_ref().map_or(0.0, |t| t.height * scale.x);
+    let frame = Rectangle::new((geo.loc.x, geo.loc.y - bar_px).into(), (geo.size.w, geo.size.h + bar_px).into());
     let program = look.rounded.then(|| rounded_program(renderer)).flatten();
+    let at = out.len();
     match program {
         Some(program) => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> =
                 render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified);
             out.extend(elements.into_iter().map(|inner| {
-                OutputElement::Rounded(RoundedElement { inner, program: program.clone(), geo, radius, exponent: cfg.rounding_power })
+                OutputElement::Rounded(RoundedElement { inner, program: program.clone(), geo: frame, radius, exponent: cfg.rounding_power })
             }));
             super::push_material(out, &surface, location, scale, output_size);
         }
         None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate),
     }
+    // The title bar, made after the surfaces (their buffers are imported by now, and it samples
+    // the client's), placed before them: under its popups like the controls.
+    if let Some(tb) = title_bar {
+        let client = renderer.surface_texture(&surface);
+        let r = if look.rounded { radius } else { 0.0 };
+        let element = super::title_bar::TitleBarElement::new(&surface, geo, tb, client, r, cfg.rounding_power, scale, output_size);
+        out.insert(at, OutputElement::TitleBar(element));
+    }
+    let geo = frame;
     if look.backdrop {
         let b = &cfg.backdrop;
         let radius = if look.rounded { radius } else { 0.0 };

@@ -26,8 +26,8 @@ log() { echo "[hyalo] $*"; }
 
 phase_deps() {
     log "pacman deps…"
-    # The shell's runtime (as in headless-smoke.sh) plus Hyalo's build: rust and the
-    # libraries Smithay links against.
+    # The shell's runtime (as in headless-smoke.sh) plus Hyalo's build: rust, the libraries
+    # Smithay links against, and Pango/Cairo for the title bar's text (here with gtk4).
     #
     # `hyprland` although Hyprland never runs here: the shell still calls `hyprctl` at start,
     # some of it synchronously (its Hyprland dependency is #682's to remove). On every real
@@ -117,6 +117,16 @@ phase_build() {
     cc -O2 "$REPO/scripts/ci/hyalo-window-controls-probe.c" "$wc/xdg-shell-protocol.c" \
         "$wc/nidara-window-controls-v1-protocol.c" \
         -I"$wc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-window-controls-probe
+    # The title-bar probe (an app that leaves its decorations to Hyalo, render/title_bar.rs).
+    local tb="$REPO/build/tb"
+    mkdir -p "$tb"
+    wayland-scanner client-header "$xs_xml" "$tb/xdg-shell-client-protocol.h"
+    wayland-scanner private-code  "$xs_xml" "$tb/xdg-shell-protocol.c"
+    wayland-scanner client-header "$dc_xml" "$tb/xdg-decoration-unstable-v1-client-protocol.h"
+    wayland-scanner private-code  "$dc_xml" "$tb/xdg-decoration-unstable-v1-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-title-bar-probe.c" "$tb/xdg-shell-protocol.c" \
+        "$tb/xdg-decoration-unstable-v1-protocol.c" \
+        -I"$tb" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-title-bar-probe
     # The stand-in input method (hyalo-ime-check.sh). input-method-v2 is not in wayland-protocols:
     # its XML comes with the wayland-protocols-misc crate Hyalo was just built with.
     local im="$REPO/build/im" im_xml
@@ -464,6 +474,13 @@ phase_run() {
         || { log "FAIL: window controls"; cat /tmp/hyalo/window-controls.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize/minimize, side, close)"
+    # Hyalo's title bar (#708 point 5): an app that asks gets it, one piece with its top row
+    # (the colour measured on screen, dark ink on light), the pointer Hyalo's, dragged to move,
+    # a double click to maximize, gone and back as the app switches its frame, close in it.
+    TITLE_BAR_LOG=/tmp/hyalo/title-bar "$REPO/scripts/ci/hyalo-title-bar-check.sh" >/tmp/hyalo/title-bar.log 2>&1 \
+        || { log "FAIL: title bar"; cat /tmp/hyalo/title-bar.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "title bar OK ($(grep -c '^ok' /tmp/hyalo/title-bar.log) steps: bar, one piece, pointer, drag/maximize, switch, close)"
     # Input methods (#683, #503): a stand-in input method's text reaches a focused window's
     # field (empty before it ran: the control) and the shell's search under its focus grab.
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \

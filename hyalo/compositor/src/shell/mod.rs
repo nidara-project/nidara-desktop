@@ -138,6 +138,11 @@ impl XdgShellHandler for Hyalo {
             crate::ipc::server::broadcast(self, &event);
             self.relist_window(id);
             self.apply_late_rules(id);
+            // Hyalo's title bar shows it (render/title_bar.rs): a title can change without a
+            // new buffer.
+            if self.wm.get(id).is_some_and(|m| m.has_title_bar) {
+                self.queue_redraw(None);
+            }
         }
     }
 

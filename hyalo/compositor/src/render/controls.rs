@@ -21,8 +21,13 @@ use smithay::{
 use super::{HyaloRenderer, glass_gl};
 use crate::protocols::window_controls::Button;
 
-pub const FS_CONTROLS: &str = r#"#version 100
-precision highp float;
+/// The capsule's GLSL, shared with Hyalo's title bar (render/title_bar.rs), which draws the
+/// same capsule in its own pass: its uniforms, and `controls(p, dark)` — the capsule's colour at
+/// output pixel `p`, premultiplied, transparent outside it; `dark` 1 draws it with dark ink, for
+/// a light title bar.
+macro_rules! controls_glsl {
+    () => {
+        r#"
 uniform vec4 rect;      // the capsule, output px
 uniform float px;       // output px per logical px
 uniform vec3 glyphs;    // per slot, left to right: 0 minimize, 1 maximize, 2 close
@@ -30,8 +35,6 @@ uniform vec3 enabled;   // per slot: 1 does something
 uniform float hover;    // the slot under the pointer, -1 none
 uniform float pressed;  // 1 while that button is held
 uniform float active;   // 1: the window has the focus
-varying vec2 v_out;
-varying vec2 v_fb;
 float box(vec2 p, vec2 h, float r) {
     vec2 q = abs(p) - h + vec2(r);
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
@@ -47,32 +50,50 @@ float glyph(float g, vec2 p) {
     return min(seg(p, vec2(-3.0, -3.0), vec2(3.0, 3.0)), seg(p, vec2(3.0, -3.0), vec2(-3.0, 3.0))) - 0.8;
 }
 vec4 over(vec4 top, vec4 under) { return top + under * (1.0 - top.a); }
-void main() {
+vec4 controls(vec2 p_out, float dark) {
     vec2 size = rect.zw / px;
-    vec2 p = (v_out - rect.xy) / px;
+    vec2 p = (p_out - rect.xy) / px;
     float d = box(p - size * 0.5, size * 0.5, size.y * 0.5);
     float inside = clamp(0.5 - d * px, 0.0, 1.0);
-    if (inside <= 0.0) discard;
+    if (inside <= 0.0) return vec4(0.0);
+    vec4 ink = dark > 0.5 ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(1.0);
     float bw = size.x / 3.0;
     float slot = clamp(floor(p.x / bw), 0.0, 2.0);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
     float en = slot < 0.5 ? enabled.x : (slot < 1.5 ? enabled.y : enabled.z);
     bool on = active > 0.5;
-    vec4 c = vec4(1.0) * (on ? 0.08 : 0.04);
+    vec4 c = ink * (on ? 0.08 : 0.04);
     // The inset edge: one physical pixel inside the rim.
-    c = over(vec4(1.0) * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
+    c = over(ink * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
     bool hov = abs(slot - hover) < 0.5 && en > 0.5;
+    bool red = hov && g > 1.5;
     if (hov) {
-        vec4 fill = vec4(1.0) * (pressed > 0.5 ? 0.20 : 0.14);
-        if (g > 1.5) fill = pressed > 0.5 ? vec4(0.69, 0.16, 0.18, 1.0) : vec4(0.82, 0.20, 0.22, 1.0);
+        vec4 fill = ink * (pressed > 0.5 ? 0.20 : 0.14);
+        if (red) fill = pressed > 0.5 ? vec4(0.69, 0.16, 0.18, 1.0) : vec4(0.82, 0.20, 0.22, 1.0);
         c = over(fill, c);
     }
     float ga = clamp(0.5 - glyph(g, p - vec2((slot + 0.5) * bw, size.y * 0.5)) * px, 0.0, 1.0);
-    float ink = en < 0.5 ? 0.30 : (hov ? 1.0 : (on ? 0.80 : 0.36));
-    c = over(vec4(1.0) * ink * ga, c);
-    gl_FragColor = c * inside;
+    float k = en < 0.5 ? 0.30 : (hov ? 1.0 : (on ? 0.80 : 0.36));
+    // Over close's red the glyph is white, whatever the ink.
+    c = over((red ? vec4(1.0) : ink) * k * ga, c);
+    return c * inside;
 }
-"#;
+"#
+    };
+}
+pub(crate) use controls_glsl;
+
+pub const FS_CONTROLS: &str = concat!(
+    "#version 100\nprecision highp float;\nvarying vec2 v_out;\nvarying vec2 v_fb;\n",
+    controls_glsl!(),
+    r#"
+void main() {
+    vec4 c = controls(v_out, 0.0);
+    if (c.a <= 0.0) discard;
+    gl_FragColor = c;
+}
+"#
+);
 
 /// What the capsule shows: its buttons left to right, which do anything, the one under the
 /// pointer and whether it is held, and whether its window has the focus.
