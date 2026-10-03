@@ -154,6 +154,25 @@ pub fn capture_output(state: &mut Hyalo, output: &Output) -> Result<(u32, u32, V
     }
 }
 
+/// One output (or `area` of it) drawn into a client's dmabuf of `size` (screencopy.rs).
+pub fn draw_output_into(
+    state: &mut Hyalo,
+    output: &Output,
+    area: Option<smithay::utils::Rectangle<i32, smithay::utils::Physical>>,
+    size: smithay::utils::Size<i32, smithay::utils::Physical>,
+    dmabuf: &mut Dmabuf,
+) -> Result<(), String> {
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock);
+    match backend {
+        Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf),
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            crate::screenshot::draw_into(renderer.as_mut(), &scene, output, area, size, dmabuf)
+        }
+    }
+}
+
 /// One window alone, as RGBA rows (capture.rs).
 pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
     match &mut state.backend {

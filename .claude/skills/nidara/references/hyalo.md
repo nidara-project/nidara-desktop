@@ -618,7 +618,16 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
 - **`zwlr_screencopy_v1`** (`protocols/screencopy.rs`, ours: Smithay has none) for `wf-recorder`,
   which speaks nothing else. `copy_with_damage` waits for the output's NEXT frame
   (`complete_screencopy` from post_repaint), so a still screen records nothing — never queue a
-  redraw for it, or it records at full refresh. shm only, a CPU read-back per frame.
+  redraw for it, or it records at full refresh. Two kinds of buffer: **shm** (a CPU read-back
+  per frame) and **dmabuf** (`linux_dmabuf`, v3: the scene drawn straight into the client's
+  buffer, `screenshot::draw_into`). 🔴 The dmabuf offer is NOT optional: wf-recorder with a
+  GPU encoder (VA-API — the shell's default, Settings → "Hardware encoding") waits for it and,
+  without it, never gets a frame — no file, and SIGINT ignored, so the Stop button did nothing
+  (owner-caught 2026-10-03). The shell's second Stop now kills a recorder that did not answer
+  the first (`stopRecording`), and a recording that left no file says so instead of "saved".
+  ⚠️ ffmpeg's `vflip` does nothing to a VA-API frame (measured), so wf-recorder cannot turn a
+  GPU recording upright on a flipped output: nested (`flipped-180`) it comes out upside down —
+  wf-recorder's, not ours; the buffer is in the output's orientation like the shm one.
   The buffer is in the OUTPUT's orientation (`to_buffer`: flip, then rotate counter-clockwise),
   top row first, no `Y_INVERT` — the client turns it upright with the output's transform
   (wf-recorder: a `vflip`/`transpose` filter). ⚠️ Nested, the winit output is `flipped-180`: an
@@ -630,8 +639,9 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
 - All four are privileged: hidden from sandboxed clients (the sandbox probe lists them), and
   every capture fails while the session is locked.
 - CI: `scripts/ci/hyalo-screen-capture-check.sh` — whole output, a region UPRIGHT (a red-over-
-  blue window), grim | wl-copy and back, `wl-paste --watch`, and a recording with frames,
-  upright. Pixels are read by GTK's PNG loader (`Gdk.Texture`), never GdkPixbuf: GdkPixbuf hands
+  blue window), grim | wl-copy and back, `wl-paste --watch`, a recording with frames,
+  upright, and the frame's dmabuf offer on the wire; where VA-API exists (locally, not CI's
+  vkms) also a GPU recording that gets frames and stops on SIGINT. Pixels are read by GTK's PNG loader (`Gdk.Texture`), never GdkPixbuf: GdkPixbuf hands
   PNGs to glycin, whose sandbox does not start in CI's container.
 
 ## Three config layers, and runtime changes over IPC
