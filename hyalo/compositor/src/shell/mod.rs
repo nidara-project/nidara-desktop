@@ -95,11 +95,29 @@ impl XdgShellHandler for Hyalo {
     }
 
     fn maximize_request(&mut self, surface: ToplevelSurface) {
-        // Refused, as on the Hyprland session (`suppress_event = "maximize"`): a double click
-        // on a header would otherwise maximize behind the user's back; Super+M maximizes. The
-        // client still gets its configure, as the protocol asks.
-        if surface.is_initial_configure_sent() {
-            surface.send_configure();
+        // Granted, as Hyalo's title bar and the capsule grant it: the maximize button an app
+        // draws itself, or a double click on its own header (Chrome's web apps, Telegram), does
+        // what the same click does on Hyalo's. Refused, the client laid itself out maximized,
+        // got its old size back and jumped (owner, 2026-10-04). Not before it is mapped — an
+        // app restoring its last state opens at the size it is given — nor from fullscreen.
+        match self.wm.by_surface(surface.wl_surface()).map(|m| (m.id, m.mapped, m.fullscreen)) {
+            Some((id, true, Fullscreen::None)) => self.set_fullscreen(id, Fullscreen::Maximized),
+            _ => {
+                if surface.is_initial_configure_sent() {
+                    surface.send_configure();
+                }
+            }
+        }
+    }
+
+    fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        match self.wm.by_surface(surface.wl_surface()).map(|m| (m.id, m.fullscreen)) {
+            Some((id, Fullscreen::Maximized)) => self.set_fullscreen(id, Fullscreen::None),
+            _ => {
+                if surface.is_initial_configure_sent() {
+                    surface.send_configure();
+                }
+            }
         }
     }
 

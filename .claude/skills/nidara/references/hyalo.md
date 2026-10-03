@@ -311,7 +311,7 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   inverse of Smithay's projection (`fb_to_out`), so every output transform is handled there. Not
   rounded: a fullscreen window, popups, and a rule's `rounding = false` (games; a window with no
   app id, Hyprland's `general-popups`). A window whose surface reaches past its geometry (a
-  client-side decoration with a shadow margin) is not cut: it gets Hyalo's ring (below).
+  client-side decoration with a shadow margin) is cut to its box first (below).
 - **The backdrop** — "A, automatic", the owner's decision: the WINDOW material, independent of the
   layers' refractive glass (#705), each with its own settings. A `GlassElement::backdrop` (the same
   framebuffer effect, one shape: the window's box with its corners, never the CSD shadow margin)
@@ -340,32 +340,22 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
 - **Who frames a window — the policy** (owner, 2026-10-03: "no window keeps square corners by
   default"): our own apps → Hyalo's controls over their header (below); an app that takes
   server-side decorations → Hyalo's title bar; an app that insists on its own frame (Chrome's web
-  apps, Chrome without "Use system title bar", GTK dialogs, Firefox) → Hyalo's RING. Hyalo's bar
+  apps, Chrome without "Use system title bar", Telegram, GTK dialogs, Firefox) → CUT to its box
+  and rounded. Hyalo's bar
   never goes over a forced client-side frame: its title bar and buttons are pixels in the
   client's buffer — a bar above it would be a second bar, one over it would cover its tabs.
-- **The ring around a client-side frame** (`render/frame.rs`). A web app of Chrome's draws its
-  own frame with a shadow margin and square corners — tiled, and at the BOTTOM even floating
-  (measured: ~2 px at the top) — and cutting them would hide 4.7 px along the diagonal
-  (`rounding` 24, power 3.2). So such a window (`Managed::has_frame` = it does not `fits`, a rule
-  lets it be rounded) is laid out, tiled or floating (`Managed::ring`; not in fullscreen), inside
-  a ring of `wm::FRAME_W` = 4 on every side — `Managed::insets()`, the same mechanism as the
-  title bar's (`with_insets`/`without_insets`, placement and clamping by the whole box). The
-  client is drawn inside its own box only (the rounded shader's `clip`: its margin — its own
-  shadow too, until Hyalo draws one in wave 2 — is never drawn), with the window's corners on
-  the ring's outer edge: a 4 px ring leaves only the outermost half pixel of the client's own
-  corner under the curve. The ring CONTINUES the client's edges, row by row: each side is the
-  client's column (row) one buffer pixel in, stretched across the ring. Not an average: a
-  sidebar, a header and a body each continue in their own colour. Each corner is ONE colour, the
-  client's pixel 6 px in along the diagonal (`CORNER_SAMPLE`, past a libadwaita 15 px radius),
-  over a square reaching into the client by the inner radius (24 − 4): the whole element is
-  drawn BEHIND the client, so that square shows only where the client cut its own corners round
-  (a floating GTK dialog) — no notch between its curve and the ring's. Eight draws of the
-  client's texture through Smithay's texture path, with the rounded shader. Costs: content that
-  TOUCHES the edge (a glyph, a full-bleed image) streaks across the 4 px; a client translucent in
-  its corners shows the corner colour through them. Its damage is the ring and its corners only
-  (`damage_since`): the element's box is the whole window. `msg windows` → `frame` (the ring's
-  width, 0 without).
-- **Sampling a client** (the ring and the title bar, `frame::ClientBox`): always through the
+- **A client-side frame is cut to its box** (`render/window.rs` `push`, owner 2026-10-04). A web
+  app of Chrome's draws its own frame with a shadow margin and square corners — tiled, and at the
+  BOTTOM even floating. Such a window (it does not `fits`) is drawn inside its own box only (the
+  rounded shader's `clip`: its margin — its own shadow too, until Hyalo draws one in wave 2 — is
+  never drawn), with the window's corners cut into it, as every desktop rounds a web page. What
+  lies in a corner's outer 4.7 px along the diagonal (`rounding` 24, power 3.2) is not shown.
+  ⛔ **Not a ring around it.** #727 laid such a window out inside a 4 px ring of Hyalo's that
+  continued the client's edges, row by row, so nothing was hidden; seen live (2026-10-04) every
+  image touching an edge streaked across it — "YouTube looks like glass on its left" — and the
+  owner chose the cut. A ring of one colour per side was the other option, and turned down: it
+  shows as a 4 px band wherever the app's edge is not that colour.
+- **Sampling a client** (the title bar, `title_bar::ClientBox`): always through the
   surface's VIEW — the viewport's crop and scaling — and only across the client's box. Measured
   2026-10-03: Chrome tiled beside kitty keeps its 1262 px buffer and crops it to 628 with
   wp_viewport, and the bar, which averaged the whole buffer row, came out half its colour.
@@ -492,15 +482,15 @@ headers, the title centred. `render/title_bar.rs`.
   the extra half black): the bar and the capsule's place; the bar's pixel on screen is the app's
   top colour and its darkest title pixel dark; the pointer Hyalo's over it; dragged by it the
   window moves, a double click maximizes and restores; the probe switching to its own frame
-  (SIGUSR1, a translucent red shadow margin, its own corners cut round) loses the bar and gets
-  the ring, floating and maximized — sides and top continue its edges, the outer corner is cut,
-  the corners it cut itself are filled, the margin beside the ring shows what was there before
-  it — and back (SIGUSR2) gets the bar; close in the capsule. Controls, all seen failing: the
-  installed Hyalo without the bar (`title_bar` null at step 1); a bar of a fixed colour, and one
-  that averages the whole buffer row (step 2: "the bar is 115 115 115… not one piece"); no clip
-  (the red margin over the ring: "the ring left of the dark side is 126 30 30"); no ring element
-  ("… is 15 15 18"); corners that do not reach into the client ("the corner the app cut itself
-  is 255 0 0").
+  (SIGUSR1, a translucent red shadow margin, its own corners cut round at 8 px) loses the bar and
+  is cut to its box — its edge pixels are its own, beside them is what was there before it, and
+  3 px in along the diagonal (inside its own corner, outside the window's) is not its colour; its
+  own maximize request (SIGHUP) maximizes and restores it — and back (SIGUSR2) gets the bar;
+  close in the capsule. Controls, all seen failing: the installed Hyalo without the bar
+  (`title_bar` null at step 1); a bar of a fixed colour, and one that averages the whole buffer
+  row (step 2: "the bar is 115 115 115… not one piece"); no clip ("the shadow margin shows left
+  of the window (105 9 11…)"); a client-side frame left square ("not rounded"); client maximize
+  requests refused ("did not maximize: none").
 
 ## The window manager
 
@@ -534,8 +524,13 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   (`modal_target`, down a chain of modals). CI: `scripts/ci/hyalo-dialog-check.sh` (modal: the
   parent gives way; a plain dialog: it does not — the control). Without the redirect the first
   half fails (checked, 2026-10-01).
-- **Client maximize requests are refused** (the Hyprland session's `suppress_event = "maximize"`):
-  Super+M maximizes. Fullscreen requests are granted.
+- **Client maximize requests are granted** (`shell/mod.rs`, owner 2026-10-04) — the maximize
+  button an app draws itself, or a double click on its own header (Chrome's web apps, Telegram),
+  does what Hyalo's title bar and capsule do; unmaximize restores. Until then they were refused,
+  as on the Hyprland session (`suppress_event = "maximize"`): the client laid itself out
+  maximized, got its old size back and jumped. Not before the window is mapped (an app restoring
+  its last state opens at the size it is given) nor from fullscreen. Fullscreen requests are
+  granted.
 - **One command language** for bindings and IPC (`wm/actions.rs`): `workspace 3`,
   `move-to-workspace-silent 2 ID`, `toggle-floating`, `set-workspace-mode 3 tiling`,
   `focus-output DP-2`… A command without a window id acts on the focused window. The shell
