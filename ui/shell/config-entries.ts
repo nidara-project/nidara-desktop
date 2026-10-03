@@ -554,7 +554,8 @@ export function registerConfigEntries() {
         },
         ui: {
             i18n: "settings.appearance.night-light-temp",
-            slider: { unit: "K", icons: [uiIcon("nd-value-decrease"), uiIcon("nd-value-increase")] },
+            // Live: the screen warms with the thumb (Hyalo coalesces the flood to one ramp per tick).
+            slider: { unit: "K", icons: [uiIcon("nd-value-decrease"), uiIcon("nd-value-increase")], debounce: 0 },
         },
     })
     registerConfig("nightlight.scheduleEnabled", {

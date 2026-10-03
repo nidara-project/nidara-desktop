@@ -585,6 +585,18 @@ White point: Tanner Helland's blackbody fit (6500 K neutral; blue goes first, th
 screenshot never shows it: the ramps act after composition, in the display pipeline. Not
 persisted: the shell sends it again when it starts.
 
+**Switching on or off FADES; a temperature while on does not** (owner-caught 2026-10-03: the
+switch was instant, where Hyprland's was gradual, and the slider changed nothing until the thumb
+rested). The fade is Hyprland's own — `__internal_fadeCTM`, speed 5 = 500 ms, linear over the
+RGB multipliers (`FADE`); a temperature arriving mid-fade keeps the fade's pace. The ramps are
+moved by a tick (`TICK`, 16 ms) that exists only while they are changing, and every request
+after the first of a burst only leaves its target: a gamma set is a BLOCKING commit (measured
+2–8 ms on the RX 5700 XT at 144 Hz), so a slider's flood is coalesced, never queued. The first
+request is still applied at once, so a refusal is still answered. Re-application after a modeset
+uses what is SHOWN (`Fade::shown`), not the target. Shell side, both night-light sliders commit
+live (`debounce: 0`; a trailing debounce fires only once the thumb rests) and `NightLightSync`
+sends every temperature — the 300 ms wait is hyprsunset's, inside `hyprland-settings.ts`.
+
 ## Window capture (thumbnails)
 
 `capture.rs`: the standard protocols, all three from Smithay — `ext-foreign-toplevel-list-v1`
