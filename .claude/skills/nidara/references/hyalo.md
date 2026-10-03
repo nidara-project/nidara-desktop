@@ -21,6 +21,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
+| `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
 | `hyalo/compositor/src/lock.rs` | the lock screen (ext-session-lock-v1): what is drawn and reachable while locked |
 | `hyalo/compositor/src/idle.rs`, `hyalo/compositor/src/logind.rs` | idle (screens off, lock, suspend; inhibitors) and the session's D-Bus side (lock before sleep, `org.freedesktop.ScreenSaver`) |
@@ -324,11 +325,23 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   switch there would do nothing — `available: false` hides the row, `describeConfig` and
   `setConfig` (ConfigRegistry).
 - What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`).
+- **Who draws the title bar** (`shell/decoration.rs`, 2026-10-03): Hyalo, as Hyprland did —
+  `xdg-decoration` and KDE's `server-decoration` both answer server-side, by default, on request
+  and on unset, whatever the client asked (Hyprland's `XDGDecoration.cpp`/`ServerDecorationKDE.cpp`),
+  and Hyalo draws none. Until then Hyalo spoke neither: kitty, Chrome and Qt apps drew a bar of
+  their own, and its shadow margin left them SQUARE (`look.rounded` false, "kitty has a title bar
+  on Hyalo"). Smithay sends `zxdg_toplevel_decoration_v1.configure` only when the mode CHANGES —
+  a `set_mode` that changes nothing gets the `xdg_surface.configure` alone, as the protocol asks.
+  GTK apps speak neither and keep their own decorations. Nidara's own title bars, drawn here, are
+  #708 point 5 (a design with the owner first).
 - Still owed in wave 2: the 1 px border (active/inactive) and the shadow.
 - CI: `scripts/ci/hyalo-window-look-check.sh` in the smoke — an opaque window of red/green
   stripes and a translucent one over it: `look`; the corner's pixel shows what is behind and
   30,30 the window; the stripes' spread under the glass (2.7 nested, beside it 127.5); and the
-  switch off → sharp again (89.5), then back on.
+  switch off → sharp again (89.5), then back on. `scripts/ci/hyalo-decoration-check.sh` (C probe
+  `hyalo-decoration-probe.c`, drawing itself as kitty does with the answer): both protocols say
+  server-side to a client that asks for client-side, and both probe windows are rounded — the
+  control, the same probe on a Hyalo without the protocols, fails at once.
 
 ## The window manager
 
