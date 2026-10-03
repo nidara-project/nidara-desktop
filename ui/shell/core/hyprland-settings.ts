@@ -307,7 +307,11 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         setNightLight: setNightLightHyprland,
         readIdle: parseHypridle,
         setIdle: writeHypridle,
-        caps: { animations: true, sharedBlur: true, vrrFullscreenOnly: true },
+        caps: { animations: true, sharedBlur: true, vrrFullscreenOnly: true, windowBackdrop: false },
+
+        // One blur for windows and layers (`decoration:blur`): no switch of its own here.
+        readWindowBackdrop: () => true,
+        setWindowBackdrop() {},
 
         async readInput(current) {
             const next = { ...current }

@@ -13,7 +13,7 @@ is the WHY and the traps.
 |---|---|
 | `hyalo/compositor/src/backend/tty.rs` | the session: DRM/KMS + GBM, libinput, libseat, udev hotplug, frames paced by vblank |
 | `hyalo/compositor/src/backend/winit.rs` | a window in another compositor — development only |
-| `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`) |
+| `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`); how a window is drawn — corners and the blur behind it (`window.rs`) |
 | `hyalo/compositor/src/outputs.rs` | outputs as configured: arrange, apply, power, the windows' way home (#594) |
 | `hyalo/compositor/src/config.rs` | the TOML layers and the watcher |
 | `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`) |
@@ -292,6 +292,43 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
 - To see it nested, the backdrop must be a REAL full-screen layer: `gjs bg.js` without
   `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` comes up as a window with a dark title bar and the
   clear colour around it, and the bar and dock then sit on a mixed backdrop whatever you painted.
+
+## Windows: rounded corners and the blur behind them (#708 point 1)
+
+`render/window.rs`. Our own windows are square, transparent GTK toplevels that leave the corners,
+the border and the shadow to the compositor (`window.nidara-app-window` in the kit's
+`_components.scss`) — Hyprland drew them. On Hyalo, until 2026-10-03, nothing did: Settings was a
+square box, and kitty at `background_opacity 0.5` showed the desktop SHARP behind it ("kitty
+looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/hyalo.toml`):
+- **Corners**: `rounding` 24, `rounding_power` 3.2 — the glass's superellipse. Drawn by a texture
+  shader of ours on the window's surfaces (`RoundedElement`, through Smithay's
+  `override_default_tex_program` — public API, no patch), only inside the box's corner squares;
+  its opaque regions drop those squares, so what is behind a corner is still drawn, and it is
+  never a scan-out candidate. The shader gets output pixels from `gl_FragCoord` through the
+  inverse of Smithay's projection (`fb_to_out`), so every output transform is handled there. Not
+  rounded: a fullscreen window, a window whose surface reaches past its geometry (a client-side
+  decoration with a shadow margin draws its own corners), popups, and a rule's `rounding = false`
+  (games; a window with no app id, Hyprland's `general-popups`).
+- **The backdrop** — "A, automatic", the owner's decision: the WINDOW material, independent of the
+  layers' refractive glass (#705), each with its own settings. A `GlassElement::backdrop` (the same
+  framebuffer effect, one shape: the window's box with its corners, never the CSD shadow margin)
+  under every window that is translucent — its opaque region leaves part of the box uncovered
+  beyond the corner squares (`translucent`; a buffer without alpha is opaque whole). Blur only,
+  finished as Hyprland's `decoration:blur`, ITS formulas: contrast and brightness on what is
+  read from the frame (first down-sample), vibrancy on each down-sample, noise and brightness
+  after (`glass_gl::Finish`; `NEUTRAL` for the shell's glass, which has its own saturation and
+  tint). No tint of its own: a window's translucent background is its tint. Settings →
+  Appearance → Windows switches it (`appearance.windowBlur` → `[windows.backdrop] enabled` in the
+  settings layer); a rule's `backdrop = false` takes it from one app. The entry is `available`
+  only where `caps.windowBackdrop` (Hyalo): Hyprland's blur is one for windows and layers, and a
+  switch there would do nothing — `available: false` hides the row, `describeConfig` and
+  `setConfig` (ConfigRegistry).
+- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`).
+- Still owed in wave 2: the 1 px border (active/inactive) and the shadow.
+- CI: `scripts/ci/hyalo-window-look-check.sh` in the smoke — an opaque window of red/green
+  stripes and a translucent one over it: `look`; the corner's pixel shows what is behind and
+  30,30 the window; the stripes' spread under the glass (2.7 nested, beside it 127.5); and the
+  switch off → sharp again (89.5), then back on.
 
 ## The window manager
 

@@ -267,6 +267,9 @@ export interface SettingsCaps {
     sharedBlur: boolean
     /** VRR "fullscreen only" (Hyprland's `misc:vrr = 2`); Hyalo has on and off, per output. */
     vrrFullscreenOnly: boolean
+    /** The blur behind translucent windows has a switch of its own, apart from the interface's
+     *  glass (Hyalo, #708 point 1). Hyprland's is one blur for windows and layers alike. */
+    windowBackdrop: boolean
 }
 
 /** Settings → Power: seconds without input before each step; 0 = never. */
@@ -282,6 +285,11 @@ export interface CompositorSettings {
     /** Night light: the screens warmed to `kelvin`, or neutral with null. Live, not persisted:
      *  the schedule and the switch are the shell's (NightLightSync.ts). */
     setNightLight(kelvin: number | null): void
+
+    /** `caps.windowBackdrop` only: whether translucent windows are blurred behind (Hyalo's
+     *  `[windows.backdrop] enabled`). Persists and applies. */
+    readWindowBackdrop(): boolean
+    setWindowBackdrop(on: boolean): void
 
     /** The idle steps in force (Hyprland: hypridle's file; Hyalo: its own `[idle]`). */
     readIdle(): IdleConfig

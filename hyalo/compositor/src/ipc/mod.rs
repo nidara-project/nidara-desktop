@@ -46,6 +46,8 @@ pub struct WindowInfo {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    /// How it is drawn: rounded corners, the blur behind it (render/window.rs).
+    pub look: crate::render::window::Look,
 }
 
 #[derive(Debug, Clone, Serialize)]

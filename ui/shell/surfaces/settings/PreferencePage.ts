@@ -172,6 +172,7 @@ export function buildPreferencePage(pageId: string, nav?: SettingsNav): Gtk.Widg
 
             const appendItem = (item: ItemDecl, container: { append(w: Gtk.Widget): void }) => {
                 if (typeof item === "string") {
+                    if (getConfigEntry(item)?.available?.() === false) return
                     const row = settingRow(item)
                     container.append(row)
                 } else if ("custom" in item) {
@@ -222,6 +223,8 @@ export function buildPreferencePage(pageId: string, nav?: SettingsNav): Gtk.Widg
                         advChevron.gicon = open ? uiIcon("nd-pan-down") : uiIcon("nd-pan-end")
                     })
                 } else if ("key" in item) {
+                    // A setting the compositor in use has nothing behind: no row (`available`).
+                    if (getConfigEntry(item.key)?.available?.() === false) return
                     const row = settingRow(item.key)
                     if (item.visibleWhen) {
                         bindVisibility(row, page, item.visibleWhen)

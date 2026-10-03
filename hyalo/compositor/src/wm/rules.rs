@@ -1,5 +1,5 @@
 //! Window rules (`[rules.NAME]` in hyalo.toml): match a window by app id and title, float it,
-//! centre it, send it to a workspace.
+//! centre it, send it to a workspace, square its corners, take the blur from behind it.
 //!
 //! 🔑 **A rule applies once to a window, the first time it matches** — before the window's
 //! first configure, when it is first shown, or later when its app id or title changes. That
@@ -37,6 +37,8 @@ pub struct Effects {
     pub center: bool,
     pub workspace: Option<RuleWorkspace>,
     pub silent: bool,
+    pub rounding: Option<bool>,
+    pub backdrop: Option<bool>,
 }
 
 impl Effects {
@@ -53,6 +55,12 @@ impl Effects {
         if later.workspace.is_some() {
             self.workspace = later.workspace.clone();
             self.silent = later.silent;
+        }
+        if later.rounding.is_some() {
+            self.rounding = later.rounding;
+        }
+        if later.backdrop.is_some() {
+            self.backdrop = later.backdrop;
         }
     }
 }
@@ -113,6 +121,8 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
                 center: r.center,
                 workspace: r.workspace.as_deref().map(|w| parse_workspace(name, w)).transpose()?,
                 silent: r.silent,
+                rounding: r.rounding,
+                backdrop: r.backdrop,
             },
         };
         if rule.app_id.is_none()
@@ -124,7 +134,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
             return Err(format!("rules.{name}: matches nothing (give match.app_id, title, initial_app_id, initial_title or game)"));
         }
         if rule.effects.is_empty() {
-            return Err(format!("rules.{name}: does nothing (give float, center or workspace)"));
+            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding or backdrop)"));
         }
         if r.silent && r.workspace.is_none() {
             return Err(format!("rules.{name}: silent without a workspace"));
@@ -182,6 +192,20 @@ impl Hyalo {
         fx
     }
 
+    /// What the rules say of how the window is drawn: kept on it (render/window.rs reads it).
+    pub(super) fn apply_look(&mut self, id: WindowId, fx: &Effects) {
+        let Some(m) = self.wm.get_mut(id) else { return };
+        if let Some(r) = fx.rounding {
+            m.rounded = r;
+        }
+        if let Some(b) = fx.backdrop {
+            m.backdrop = b;
+        }
+        if fx.rounding.is_some() || fx.backdrop.is_some() {
+            self.queue_redraw(None);
+        }
+    }
+
     /// The workspace a rule names, created on `output` if it does not exist yet.
     pub(super) fn rule_workspace(&mut self, w: &RuleWorkspace, output: &str) -> i32 {
         match w {
@@ -209,6 +233,7 @@ impl Hyalo {
             let ws = self.rule_workspace(w, &output);
             self.move_to_workspace(id, ws, !fx.silent);
         }
+        self.apply_look(id, &fx);
         if let Some(f) = fx.float {
             self.set_floating(id, f);
         }
@@ -288,7 +313,15 @@ mod tests {
         for rule in &r {
             fx.add(&rule.effects);
         }
-        assert_eq!(fx, Effects { float: Some(false), center: true, workspace: Some(RuleWorkspace::Number(2)), silent: false });
+        assert_eq!(fx, Effects { float: Some(false), center: true, workspace: Some(RuleWorkspace::Number(2)), ..Default::default() });
+    }
+
+    #[test]
+    fn a_rule_can_square_a_window_and_take_its_blur() {
+        let r = rules("[rules.a]\nmatch = { app_id = \"^$\" }\nrounding = false\nbackdrop = false\n").unwrap();
+        assert_eq!(r[0].effects.rounding, Some(false));
+        assert_eq!(r[0].effects.backdrop, Some(false));
+        assert!(r[0].matches(&subject("", "")) && !r[0].matches(&subject("kitty", "")));
     }
 
     #[test]

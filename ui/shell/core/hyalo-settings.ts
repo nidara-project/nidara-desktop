@@ -62,7 +62,7 @@ function put(obj: any, path: string, value: unknown) {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false },
+        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -133,6 +133,14 @@ export function createHyaloSettings(): CompositorSettings {
             const reply = hyalo.request({ request: "night_light", temperature: kelvin })
             if (!reply) console.error("[HyaloSettings] night light: Hyalo could not be reached")
             else if (reply.error) console.error(`[HyaloSettings] Hyalo refused the night light: ${reply.error}`)
+        },
+
+        // The window material (hyalo/compositor/src/render/window.rs): on its own switch.
+        readWindowBackdrop() {
+            return config()?.windows?.backdrop?.enabled ?? true
+        },
+        setWindowBackdrop(on) {
+            patch("window backdrop", { windows: { backdrop: { enabled: on } } })
         },
 
         // Hyalo does idle itself (hyalo/compositor/src/idle.rs): no hypridle, no file of ours.

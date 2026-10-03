@@ -89,7 +89,7 @@ export const indexPreferencePage = (page: PageDecl, pageLabel: string) => {
     const indexItem = (item: ItemDecl) => {
         if (typeof item === "string") {
             const entry = getConfigEntry(item)
-            if (entry?.ui) {
+            if (entry?.ui && entry.available?.() !== false) {
                 _searchIndex.push({
                     pageId: page.id,
                     pageLabel,
@@ -118,7 +118,7 @@ export const indexPreferencePage = (page: PageDecl, pageLabel: string) => {
             }
         } else if ("key" in item) {
             const entry = getConfigEntry(item.key)
-            if (entry?.ui) {
+            if (entry?.ui && entry.available?.() !== false) {
                 _searchIndex.push({
                     pageId: page.id,
                     pageLabel,
