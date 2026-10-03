@@ -137,6 +137,8 @@ static struct wl_surface *toplevel(const char *title, int *configured, struct xd
     struct xdg_toplevel *top = xdg_surface_get_toplevel(xs);
     xdg_toplevel_add_listener(top, &toplevel_listener, NULL);
     xdg_toplevel_set_title(top, title);
+    /* An app id: hyalo.toml leaves a window without one square (`rules.no-app-id`). */
+    xdg_toplevel_set_app_id(top, "hyalo-decoration-probe");
     *xs_out = xs;
     *top_out = top;
     return surface;

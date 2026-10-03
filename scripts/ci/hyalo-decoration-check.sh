@@ -38,6 +38,6 @@ echo "ok    KDE server-decoration: server-side by default, and it stays so"
 
 for t in decoration-probe-xdg decoration-probe-kde; do
     l=$(look "$t")
-    [ "$(echo "$l" | jq -r .rounded)" = true ] || fail "$t is not rounded ($l): it drew a margin of its own"
+    [ "$(echo "$l" | jq -r .rounded)" = true ] || fail "$t is not rounded ($l): a margin of its own, or a rule (no app id)"
 done
 echo "ok    both windows drew no margin of their own, and are rounded"
