@@ -48,8 +48,11 @@ pub struct WindowInfo {
     pub height: i32,
     /// How it is drawn: rounded corners, the blur behind it (render/window.rs).
     pub look: crate::render::window::Look,
+    /// The height of Hyalo's title bar on top of the box above (render/title_bar.rs), logical
+    /// px; 0 when it has none. The window's whole box starts that much higher.
+    pub title_bar: i32,
     /// Where Hyalo draws its controls (protocols/window_controls.rs): x, y, width, height,
-    /// global logical px; none when the app reserved no room for them.
+    /// global logical px; none when the app reserved no room for them and has no title bar.
     pub controls: Option<[f64; 4]>,
 }
 

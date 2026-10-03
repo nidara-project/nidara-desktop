@@ -15,7 +15,7 @@ use smithay::{
             protocol::wl_surface::WlSurface,
         },
     },
-    utils::{Clock, Logical, Monotonic, Point},
+    utils::{Clock, Logical, Monotonic, Point, Rectangle},
     wayland::{
         compositor::{CompositorClientState, CompositorState},
         cursor_shape::CursorShapeManagerState,
@@ -353,8 +353,8 @@ impl Hyalo {
         if self.lock.is_locked() {
             return self.lock_surface_under(pos);
         }
-        // A window's controls are Hyalo's: the app under them gets no pointer there.
-        if self.controls_under(pos).is_some() {
+        // A window's controls and its title bar are Hyalo's: no app gets the pointer there.
+        if self.chrome_under(pos).is_some() {
             return None;
         }
         if let Some((_, s, p)) = self.layer_under(&[Layer::Overlay], pos) {
@@ -388,11 +388,20 @@ impl Hyalo {
     }
 }
 
+/// What of a window Hyalo itself draws, under the pointer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Chrome {
+    /// One of its controls (protocols/window_controls.rs).
+    Button(crate::protocols::window_controls::Button),
+    /// The rest of its title bar (render/title_bar.rs): dragged, it moves the window.
+    Bar,
+}
+
 impl Hyalo {
-    /// The window control at `pos` (protocols/window_controls.rs): the controls of the first
-    /// window there, in the order things are drawn — a layer or another window over them
-    /// covers them.
-    pub fn controls_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, crate::protocols::window_controls::Button)> {
+    /// What Hyalo draws of a window at `pos` — its controls, its title bar — of the first
+    /// window there, in the order things are drawn: a layer or another window over them covers
+    /// them.
+    pub fn chrome_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, Chrome)> {
         use smithay::wayland::shell::wlr_layer::Layer;
         if self.lock.is_locked() || self.layer_under(&[Layer::Overlay], pos).is_some() {
             return None;
@@ -400,16 +409,25 @@ impl Hyalo {
         let output = self.space.output_under(pos).next().cloned()?;
         let (above, below) = crate::render::windows_front_to_back(&self.space, &self.wm, &output);
         let side = self.config.windows.controls.side;
-        // The first window that has the point decides: its controls, or none.
+        // The first window that has the point decides: its chrome, or none.
         let first = |windows: &[Window]| {
             windows.iter().find_map(|window| {
                 let origin = self.space.element_location(window)? - window.geometry().loc;
                 let local = pos - origin.to_f64();
                 let managed = self.wm.by_window(window)?;
                 if managed.fullscreen != crate::wm::Fullscreen::Fullscreen
-                    && let Some(b) = crate::protocols::window_controls::button_at(window, local, side)
+                    && let Some(r) = crate::protocols::window_controls::managed_rect(managed, side)
+                    && let Some(b) = crate::protocols::window_controls::button_at(r, local, side)
                 {
-                    return Some(Some((managed.id, b)));
+                    return Some(Some((managed.id, Chrome::Button(b))));
+                }
+                let bar = managed.bar();
+                if bar > 0 {
+                    let geo = window.geometry();
+                    let r = Rectangle::new((geo.loc.x, geo.loc.y - bar).into(), (geo.size.w, bar).into()).to_f64();
+                    if r.contains(local) {
+                        return Some(Some((managed.id, Chrome::Bar)));
+                    }
                 }
                 window.surface_under(local, WindowSurfaceType::ALL).map(|_| None)
             })
@@ -423,10 +441,22 @@ impl Hyalo {
         first(&below).flatten()
     }
 
+    /// The window control at `pos` (protocols/window_controls.rs).
+    pub fn controls_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, crate::protocols::window_controls::Button)> {
+        match self.chrome_under(pos)? {
+            (id, Chrome::Button(b)) => Some((id, b)),
+            (_, Chrome::Bar) => None,
+        }
+    }
+
     /// The pointer moved (or what is under it did): which control it is over, drawn hovered,
-    /// with the arrow — the app under the controls set its own cursor last.
+    /// with the arrow over Hyalo's chrome — the app under it set its own cursor last.
     pub fn update_controls_hover(&mut self, pos: Point<f64, Logical>) {
-        let under = self.controls_under(pos);
+        let chrome = self.chrome_under(pos);
+        let under = match chrome {
+            Some((window, Chrome::Button(button))) => Some((window, button)),
+            _ => None,
+        };
         let was = self.wm.controls_hover;
         let now = under.map(|(window, button)| crate::wm::ControlsHover {
             window,
@@ -434,9 +464,10 @@ impl Hyalo {
             // Held only while still over the button it was pressed on.
             pressed: was.is_some_and(|h| h.pressed && h.window == window && h.button == button),
         });
-        if now.is_some() && was.is_none() {
+        if chrome.is_some() && !self.wm.over_chrome {
             self.cursor_status = CursorImageStatus::default_named();
         }
+        self.wm.over_chrome = chrome.is_some();
         if now != was {
             self.wm.controls_hover = now;
             self.queue_redraw(None);

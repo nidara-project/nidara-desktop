@@ -193,8 +193,9 @@ impl Hyalo {
                     // Held inside, but only as far as its header: a window may hang off the
                     // sides and the bottom while dragged, never off the top of the area.
                     let area = self.floating_area(&o);
+                    let bar = self.wm.get(g.id).map_or(0, |m| m.bar());
                     let mut r = dropped;
-                    r.loc.y = r.loc.y.max(area.loc.y);
+                    r.loc.y = r.loc.y.max(area.loc.y + bar);
                     if to_ws != from_ws {
                         self.move_to_workspace(g.id, to_ws, false);
                     }
@@ -213,8 +214,8 @@ impl Hyalo {
                     .elements()
                     .rev()
                     .filter(|w| **w != window)
-                    .find(|w| self.space.element_geometry(w).is_some_and(|r| r.to_f64().contains(location)))
-                    .and_then(|w| self.wm.by_window(w))
+                    .filter_map(|w| self.wm.by_window(w))
+                    .find(|m| m.frame().to_f64().contains(location))
                     .filter(|t| !t.floating && t.fullscreen == Fullscreen::None)
                     .map(|t| (t.id, t.workspace));
                 match target {

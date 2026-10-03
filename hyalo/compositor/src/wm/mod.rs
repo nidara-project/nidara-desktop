@@ -113,6 +113,47 @@ pub struct Managed {
     /// Rounded corners and the blur behind it, unless a rule said no (render/window.rs).
     pub rounded: bool,
     pub backdrop: bool,
+    /// Hyalo's title bar for it, unless a rule said no (render/title_bar.rs).
+    pub title_bar: bool,
+    /// It has Hyalo's title bar now: it asked for server-side decorations and its surface is
+    /// its box (`wants_title_bar`). The bar sits on top of `rect`, inside the window's box.
+    pub has_title_bar: bool,
+    /// The geometry a client was last sent a configure for, because it declared it stale
+    /// (`poke_stale_geometry`): sent once per geometry, never in a loop.
+    pub poked_geometry: Option<Rectangle<i32, Logical>>,
+}
+
+impl Managed {
+    /// The height of Hyalo's title bar over it, logical px: 0 when it has none, and in
+    /// fullscreen, where nothing is drawn over a window.
+    pub fn bar(&self) -> i32 {
+        if self.has_title_bar && self.fullscreen != Fullscreen::Fullscreen { TITLE_BAR_H } else { 0 }
+    }
+
+    /// The window's whole box, its title bar included: what the user sees as the window.
+    pub fn frame(&self) -> Rect {
+        with_bar(self.rect, self.bar())
+    }
+}
+
+/// The height of the title bar Hyalo draws for an app that asks for one (render/title_bar.rs),
+/// logical px: the mockup's thin bar (#708 point 5, owner 2026-10-03).
+pub const TITLE_BAR_H: i32 = 36;
+
+/// The client's box `r` with a bar of `bar` px on top of it: the window's whole box.
+pub fn with_bar(r: Rect, bar: i32) -> Rect {
+    Rectangle::new((r.loc.x, r.loc.y - bar).into(), (r.size.w, r.size.h + bar).into())
+}
+
+/// The client's part of a whole box `r` whose top `bar` px are the title bar.
+pub fn without_bar(r: Rect, bar: i32) -> Rect {
+    Rectangle::new((r.loc.x, r.loc.y + bar).into(), (r.size.w, (r.size.h - bar).max(1)).into())
+}
+
+/// A client's box held inside `area` with its title bar: the bar, not the client, is what may
+/// never leave by the top (`clamp_floating`).
+pub fn clamp_floating_with_bar(r: Rect, area: Rect, bar: i32) -> Rect {
+    without_bar(clamp_floating(with_bar(r, bar), area), bar)
 }
 
 pub struct Workspace {
@@ -168,6 +209,10 @@ pub struct Wm {
     pub focused: Option<WindowId>,
     /// The window control under the pointer, drawn hovered (render/controls.rs).
     pub controls_hover: Option<ControlsHover>,
+    /// The pointer is over Hyalo's chrome of a window (a control, a title bar).
+    pub over_chrome: bool,
+    /// The last left press on a title bar, for a double click (input.rs).
+    pub last_bar_press: Option<(WindowId, u32)>,
     /// The output the user is on: the focused window's, or the pointer's.
     pub focused_output: Option<String>,
     /// Where `workspace previous` goes back to.
@@ -314,6 +359,31 @@ pub fn app_id(window: &Window) -> String {
 
 pub fn title(window: &Window) -> String {
     toplevel_data(window, |d| d.title.clone()).flatten().unwrap_or_default()
+}
+
+/// Whether `window` gets Hyalo's title bar: it asked for server-side decorations (or left the
+/// choice to us), it is not one of our own apps (those carry Hyalo's controls in their own
+/// header, protocols/window_controls.rs) — and, once it has drawn (`predict` false), its surface
+/// is its box, so it took the answer and dropped its own frame. A client told server-side that
+/// draws its own frame anyway keeps a shadow margin, and gets no second bar over it.
+fn wants_title_bar(window: &Window, predict: bool) -> bool {
+    let Some(t) = window.toplevel() else { return false };
+    let surface = t.wl_surface();
+    if crate::shell::decoration::asked(surface) != Some(true) || crate::protocols::window_controls::rect(surface).is_some() {
+        return false;
+    }
+    predict || crate::render::window::fits(window)
+}
+
+/// Whether `surface`'s opaque region reaches outside `geo` (surface-local): pixels it calls
+/// opaque cannot be a shadow margin.
+fn opaque_outside(surface: &WlSurface, geo: Rectangle<i32, Logical>) -> bool {
+    use smithay::backend::renderer::utils::RendererSurfaceStateUserData;
+    with_states(surface, |states| {
+        let Some(s) = states.data_map.get::<RendererSurfaceStateUserData>() else { return false };
+        let s = s.lock().unwrap();
+        s.opaque_regions().is_some_and(|rs| rs.iter().any(|r| r.intersection(geo) != Some(*r)))
+    })
 }
 
 /// A dialog, or a window that cannot be resized: these float wherever they open, as on
@@ -489,6 +559,9 @@ impl Hyalo {
             listed: None,
             rounded: true,
             backdrop: true,
+            title_bar: true,
+            has_title_bar: false,
+            poked_geometry: None,
         });
     }
 
@@ -506,6 +579,10 @@ impl Hyalo {
             self.wm.get_mut(id).unwrap().workspace = ws;
         }
         let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
+        // Whether it will have Hyalo's title bar, before it has drawn anything: it asked for
+        // server-side decorations — corrected at map, when its surface can be measured.
+        let bar = fx.title_bar.unwrap_or(true) && wants_title_bar(window, true);
+        self.wm.get_mut(id).unwrap().has_title_bar = bar;
         if tiled
             && let Some(rect) = self.predicted_tile(ws, id)
         {
@@ -537,7 +614,8 @@ impl Hyalo {
         let near = self.wm.last_focused_on(ws).filter(|n| w.layout.contains(*n));
         probe.insert(id, area, near, None);
         let b = probe.arrange(area, self.config.layout.gaps_in).into_iter().find(|(w, _)| *w == id)?.1;
-        Some(inset(b, self.config.layout.border))
+        let bar = self.wm.get(id).map_or(0, |m| m.bar());
+        Some(without_bar(inset(b, self.config.layout.border), bar))
     }
 
     /// The window's first buffer: it is placed — tiled or floating — and takes the focus.
@@ -546,6 +624,10 @@ impl Hyalo {
         let (id, mut ws) = (m.id, m.workspace);
         let fx = self.new_rule_effects(id, true);
         self.apply_look(id, &fx);
+        // Its first buffer: now its surface says whether it took the server-side decorations.
+        let wants = self.wm.get(id).is_some_and(|m| m.title_bar) && wants_title_bar(window, false);
+        self.wm.get_mut(id).unwrap().has_title_bar = wants;
+        let bar = if wants { TITLE_BAR_H } else { 0 };
         if let Some(w) = &fx.workspace {
             let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
             ws = self.rule_workspace(w, &output);
@@ -561,21 +643,24 @@ impl Hyalo {
             .and_then(|t| t.parent())
             .and_then(|p| self.wm.by_surface(&p))
             .filter(|p| p.mapped)
-            .map(|p| p.rect);
+            .map(|p| p.frame());
         let area = self.floating_area(&output);
         let others: Vec<Rect> = self
             .wm
             .on_workspace(ws)
             .filter(|o| o.id != id && o.fullscreen == Fullscreen::None)
-            .map(|o| o.rect)
+            .map(|o| o.frame())
             .collect();
+        // Placed by its whole box, its title bar included.
+        let framed = Size::from((size.w, size.h + bar));
         let float = if fx.center {
             // A rule's `center`: the middle of the usable area, nothing else considered.
-            clamp_floating(centered(size, area), area)
+            clamp_floating(centered(framed, area), area)
         } else {
-            let float = clamp_floating(centered(size, parent_rect.unwrap_or(area)), area);
+            let float = clamp_floating(centered(framed, parent_rect.unwrap_or(area)), area);
             cascade(float, &others, area, self.config.layout.gaps_out)
         };
+        let float = without_bar(float, bar);
         let near = self.wm.focused.filter(|f| self.wm.get(*f).is_some_and(|m| m.workspace == ws));
         let cursor = self.seat.get_pointer().map(|p| p.current_location());
         let tiled_area = inset(self.work_area(&output), self.config.layout.gaps_out);
@@ -627,8 +712,10 @@ impl Hyalo {
         self.sync_space();
     }
 
-    /// A commit of a mapped window: a floating one's box follows the client's own size.
+    /// A commit of a mapped window: whether it has Hyalo's title bar, and a floating one's
+    /// box follows the client's own size.
     pub fn window_committed(&mut self, window: &Window) {
+        self.update_title_bar(window);
         let Some(m) = self.wm.by_window(window) else { return };
         if self.wm.grab.is_some_and(|g| g.id == m.id) {
             let id = m.id;
@@ -638,7 +725,7 @@ impl Hyalo {
         if !m.mapped || !m.floating || m.fullscreen != Fullscreen::None {
             return;
         }
-        let (id, ws) = (m.id, m.workspace);
+        let (id, ws, bar) = (m.id, m.workspace, m.bar());
         let size = window.geometry().size;
         let Some(fr) = m.float_rect else { return };
         if fr.size == size {
@@ -648,7 +735,7 @@ impl Hyalo {
         let og = self.space.output_geometry(&output).unwrap_or_default();
         let area = self.floating_area(&output);
         let global = Rectangle::new(fr.loc + og.loc, size);
-        let clamped = clamp_floating(global, area);
+        let clamped = clamp_floating_with_bar(global, area, bar);
         let ask = m.clamp_ask;
         let m = self.wm.get_mut(id).unwrap();
         m.float_rect = Some(Rectangle::new(clamped.loc - og.loc, size));
@@ -677,11 +764,16 @@ impl Hyalo {
         for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped) {
             let Some(t) = m.window.toplevel() else { continue };
             let tiled = boxes.get(&m.id).copied();
+            // Hyalo's title bar takes the top of the box it is given; the client gets the rest.
+            let bar = m.bar();
             let (rect, size): (Rect, Option<Size<i32, Logical>>) = match (m.fullscreen, tiled) {
                 (Fullscreen::Fullscreen, _) => (og, Some(og.size)),
-                (Fullscreen::Maximized, _) => (float_area, Some(float_area.size)),
+                (Fullscreen::Maximized, _) => {
+                    let r = without_bar(float_area, bar);
+                    (r, Some(r.size))
+                }
                 (Fullscreen::None, Some(b)) => {
-                    let b = inset(b, l.border);
+                    let b = without_bar(inset(b, l.border), bar);
                     if m.pseudo {
                         // Its own size, centred in its tile and no larger than it.
                         let want = m.float_rect.map(|r| r.size).unwrap_or(b.size);
@@ -1002,8 +1094,9 @@ impl Hyalo {
                 let og = self.space.output_geometry(o).unwrap_or_default();
                 let area = self.floating_area(o);
                 let m = self.wm.get_mut(id).unwrap();
+                let bar = m.bar();
                 let fr = m.float_rect.unwrap_or(Rectangle::new(m.rect.loc - og.loc, m.rect.size));
-                let fr = clamp_floating(Rectangle::new(fr.loc + og.loc, fr.size), area);
+                let fr = clamp_floating_with_bar(Rectangle::new(fr.loc + og.loc, fr.size), area, bar);
                 m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
             }
         }
@@ -1091,9 +1184,10 @@ impl Hyalo {
             }
             let area = self.floating_area(&output);
             let m = self.wm.get_mut(id).unwrap();
+            let bar = m.bar();
             // Back to its last floating box, else where it was tiled.
             let fr = m.float_rect.map(|r| Rectangle::new(r.loc + og.loc, r.size)).unwrap_or(rect);
-            let fr = clamp_floating(fr, area);
+            let fr = clamp_floating_with_bar(fr, area, bar);
             m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
             m.floating = true;
         } else {
@@ -1182,7 +1276,7 @@ impl Hyalo {
         for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped && m.floating) {
             let Some(fr) = m.float_rect else { continue };
             let global = Rectangle::new(fr.loc + og.loc, fr.size);
-            let inside = clamp_floating(global, area);
+            let inside = clamp_floating_with_bar(global, area, m.bar());
             // Moved only: a window larger than the area keeps its size until it asks again.
             let r = Rectangle::new(inside.loc, fr.size);
             if r.loc != global.loc {
@@ -1212,10 +1306,61 @@ impl Hyalo {
         self.arrange_all();
     }
 
-    /// The window under a point among those shown.
+    /// The window under a point among those shown, its title bar included.
     pub fn window_under(&self, pos: Point<f64, Logical>) -> Option<WindowId> {
+        if let Some((id, _)) = self.chrome_under(pos) {
+            return Some(id);
+        }
         let (w, _) = self.space.element_under(pos)?;
         self.wm.by_window(w).map(|m| m.id)
+    }
+
+    // ── Hyalo's title bar ─────────────────────────────────────────────────────────────
+
+    /// Whether a mapped window has Hyalo's title bar, after a commit: given, taken away — a
+    /// client may switch its decorations while it runs — with the layout following.
+    fn update_title_bar(&mut self, window: &Window) {
+        let Some(m) = self.wm.by_window(window) else { return };
+        if !m.mapped {
+            return;
+        }
+        let (id, ws, had) = (m.id, m.workspace, m.has_title_bar);
+        let now = m.title_bar && wants_title_bar(window, false);
+        if !now {
+            self.poke_stale_geometry(id);
+        }
+        if now == had {
+            return;
+        }
+        self.wm.get_mut(id).unwrap().has_title_bar = now;
+        self.wm.dirty_windows = true;
+        self.reclamp_floating(ws);
+        self.arrange_workspace(ws);
+        self.sync_space();
+    }
+
+    /// A client that asked for server-side decorations but still declares the shadow margin of
+    /// the frame it no longer draws: Chrome, when "Use system title bar and borders" is turned
+    /// on while it runs, paints its whole surface opaque at once and keeps its old window
+    /// geometry until a configure comes (measured, 2026-10-03: it overflowed its tile by 10 px
+    /// on every side). An opaque region that reaches outside the geometry says so; one
+    /// configure, once per geometry, makes it state the new one.
+    fn poke_stale_geometry(&mut self, id: WindowId) {
+        let Some(m) = self.wm.get(id) else { return };
+        let Some(t) = m.window.toplevel().cloned() else { return };
+        // Any client that speaks a decoration protocol: Chrome asked for client-side when it
+        // started, and says nothing when the setting changes.
+        if crate::shell::decoration::asked(t.wl_surface()).is_none() {
+            return;
+        }
+        let geo = m.window.geometry();
+        if m.poked_geometry == Some(geo) || !opaque_outside(t.wl_surface(), geo) {
+            return;
+        }
+        self.wm.get_mut(id).unwrap().poked_geometry = Some(geo);
+        tracing::debug!(id, ?geo, "a stale window geometry: a configure to restate it");
+        crate::shell::decoration::note_dropped_frame(t.wl_surface());
+        t.send_configure();
     }
 }
 
@@ -1245,6 +1390,20 @@ mod tests {
         assert_eq!(clamp_floating(r(0, -101, 2560, 1440), area), r(5, 45, 2550, 1290));
         // Above the top: brought down.
         assert_eq!(clamp_floating(r(100, -50, 400, 300), area), r(100, 45, 400, 300));
+    }
+
+    #[test]
+    fn a_title_bar_sits_on_top_and_never_leaves_by_the_top() {
+        let area = r(5, 45, 2550, 1290);
+        // The client's box and the window's whole box, one from the other.
+        assert_eq!(with_bar(r(100, 200, 500, 300), 36), r(100, 164, 500, 336));
+        assert_eq!(without_bar(r(100, 164, 500, 336), 36), r(100, 200, 500, 300));
+        // A client at the top of the area: its bar would be above it, so it comes down.
+        assert_eq!(clamp_floating_with_bar(r(100, 45, 500, 300), area, 36), r(100, 81, 500, 300));
+        // A client as tall as the area: the bar fits, the client hangs off the bottom.
+        assert_eq!(clamp_floating_with_bar(r(100, 45, 500, 1290), area, 36), r(100, 81, 500, 1254));
+        // No bar: the old law.
+        assert_eq!(clamp_floating_with_bar(r(100, -50, 400, 300), area, 0), clamp_floating(r(100, -50, 400, 300), area));
     }
 
     #[test]

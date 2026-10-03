@@ -115,13 +115,35 @@ pub fn window_rect(window: &Window) -> Option<Rectangle<f64, Logical>> {
     rect(window.toplevel()?.wl_surface())
 }
 
-/// The button at `local` (surface-local logical px), if the controls are there.
-pub fn button_at(window: &Window, local: Point<f64, Logical>, side: ControlsSide) -> Option<Button> {
-    let r = window_rect(window)?;
+/// The capsule in Hyalo's own title bar (render/title_bar.rs): the kitty mockup's, three
+/// 30×24 buttons, 8 px in from the side the user chose, centred in the bar's height.
+pub const BAR_BUTTON_W: f64 = 30.0;
+pub const BAR_BUTTON_H: f64 = 24.0;
+pub const BAR_MARGIN: f64 = 8.0;
+
+/// Where a window's controls are, surface-local logical px: in Hyalo's title bar when it has
+/// one (above the surface, so `y` is negative), else where the app placed them.
+pub fn managed_rect(m: &crate::wm::Managed, side: ControlsSide) -> Option<Rectangle<f64, Logical>> {
+    let bar = m.bar() as f64;
+    if bar > 0.0 {
+        let geo = m.window.geometry().to_f64();
+        let w = BAR_BUTTON_W * 3.0;
+        let x = match side {
+            ControlsSide::Right => geo.loc.x + geo.size.w - BAR_MARGIN - w,
+            ControlsSide::Left => geo.loc.x + BAR_MARGIN,
+        };
+        let y = geo.loc.y - bar + (bar - BAR_BUTTON_H) / 2.0;
+        return Some(Rectangle::new((x, y).into(), (w, BAR_BUTTON_H).into()));
+    }
+    window_rect(&m.window)
+}
+
+/// The button at `local` in controls at `r` (both surface-local logical px), if any.
+pub fn button_at(r: Rectangle<f64, Logical>, local: Point<f64, Logical>, side: ControlsSide) -> Option<Button> {
     if !r.contains(local) {
         return None;
     }
-    let i = (((local.x - r.loc.x) / BUTTON_W).floor() as usize).min(2);
+    let i = (((local.x - r.loc.x) / (r.size.w / 3.0)).floor().max(0.0) as usize).min(2);
     Some(order(side)[i])
 }
 
@@ -224,5 +246,17 @@ mod tests {
         assert_eq!(order(ControlsSide::Right)[2], Button::Close);
         assert_eq!(order(ControlsSide::Left)[0], Button::Close);
         assert_eq!(CAPSULE_W, 102.0);
+    }
+
+    #[test]
+    fn a_button_is_a_third_of_whichever_capsule() {
+        // The title bar's capsule (90 wide), above the surface.
+        let r = Rectangle::new((302.0, -30.0).into(), (BAR_BUTTON_W * 3.0, BAR_BUTTON_H).into());
+        let at = |x: f64| button_at(r, Point::from((x, -18.0)), ControlsSide::Right);
+        assert_eq!(at(305.0), Some(Button::Minimize));
+        assert_eq!(at(340.0), Some(Button::Maximize));
+        assert_eq!(at(391.0), Some(Button::Close));
+        assert_eq!(at(393.0), None);
+        assert_eq!(button_at(r, Point::from((340.0, 0.0)), ControlsSide::Right), None, "below it: the app");
     }
 }

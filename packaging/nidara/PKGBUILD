@@ -196,7 +196,7 @@ depends=(
 # makedepends block ALONE, where the splice expands to nothing — deliberately: a dev install
 # runs the shell on Hyprland and never compiles Hyalo (hyalo/README.md builds it by hand).
 _hyalo_makedepends=(
-  rust libinput seatd libdisplay-info libxkbcommon mesa systemd-libs
+  rust libinput seatd libdisplay-info libxkbcommon mesa systemd-libs pango cairo
 )
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
@@ -566,8 +566,9 @@ package_nidara-hyalo() {
   # Ours, plus what Smithay's examples brought (MIT) and Hyprland's focus-grab protocol
   # (BSD-3-Clause, in protocols/hyprland-focus-grab-v1.xml).
   license=(GPL-3.0-or-later MIT BSD-3-Clause)
+  # pango + cairo: the title bar's text (render/title_bar.rs).
   depends=("nidara-desktop=$pkgver-$pkgrel" uwsm libinput seatd libdisplay-info libxkbcommon mesa
-           systemd-libs awww)
+           systemd-libs awww pango cairo)
 
   cd "$srcdir/nidara-desktop-$pkgver"
   install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"

@@ -6,6 +6,8 @@
 //   gjs -m hyalo-window-look-probe.js pixel FILE X Y      the pixel's "R G B"
 //   gjs -m hyalo-window-look-probe.js spread FILE X Y W H how far the green channel varies across a
 //                                                        row of the box: its standard deviation
+//   gjs -m hyalo-window-look-probe.js darkest FILE X Y W H the darkest pixel's mean of R, G and B in
+//                                                        the box (hyalo-title-bar-check.sh: the ink)
 //
 // No decoration (decorated: false), so a window's surface IS its box: Hyalo rounds it.
 // PNGs are read by GTK's own loader (Gdk.Texture), never GdkPixbuf (glycin's sandbox does not
@@ -35,6 +37,16 @@ if (mode === "pixel") {
     const mean = values.reduce((a, b) => a + b, 0) / values.length
     const sd = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
     print(sd.toFixed(1))
+} else if (mode === "darkest") {
+    const { px, stride } = pixels(ARGV[1])
+    const [x, y, w, h] = ARGV.slice(2, 6).map(Number)
+    let least = 255
+    for (let j = y; j < y + h; j++)
+        for (let i = x; i < x + w; i++) {
+            const o = j * stride + i * 4
+            least = Math.min(least, Math.round((px[o] + px[o + 1] + px[o + 2]) / 3))
+        }
+    print(least)
 } else {
     const glass = mode === "glass"
     const app = new Gtk.Application({ application_id: glass ? "org.nidara.lookglass" : "org.nidara.lookstripes" })

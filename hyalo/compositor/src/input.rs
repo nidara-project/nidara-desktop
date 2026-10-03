@@ -436,6 +436,17 @@ impl Hyalo {
             pointer.frame(self);
             return;
         }
+        // Hyalo's title bar (render/title_bar.rs): a press focuses its window; the left button
+        // drags it, and a double click maximizes it or gives it back its size. The app sees
+        // none of it.
+        if button_state == ButtonState::Pressed
+            && !pointer.is_grabbed()
+            && let Some((id, crate::state::Chrome::Bar)) = self.chrome_under(pointer.current_location())
+        {
+            self.title_bar_press(id, button, time);
+            pointer.frame(self);
+            return;
+        }
         if button_state == ButtonState::Pressed && !pointer.is_grabbed() {
             let pos = pointer.current_location();
             // Super+drag: carry or resize the window under the pointer.
@@ -512,6 +523,27 @@ impl Hyalo {
         }
     }
 
+    /// A press on window `id`'s title bar.
+    fn title_bar_press(&mut self, id: crate::wm::WindowId, button: u32, time: InputTime) {
+        let ms = time.millis();
+        let double = button == crate::binds::BTN_LEFT
+            && self.wm.last_bar_press.is_some_and(|(w, t)| w == id && ms.wrapping_sub(t) <= DOUBLE_CLICK_MS);
+        self.wm.last_bar_press = (button == crate::binds::BTN_LEFT && !double).then_some((id, ms));
+        self.focus_window(Some(id));
+        if button != crate::binds::BTN_LEFT {
+            return;
+        }
+        if double {
+            if let Err(err) = self.run_action(Action::Maximize(Some(id))) {
+                tracing::warn!(%err, "title bar double click");
+            }
+            return;
+        }
+        let location = self.seat.get_pointer().unwrap().current_location();
+        let start = PointerGrabStartData { focus: None, button, location };
+        self.start_window_grab(id, Kind::Move, start, button);
+    }
+
     /// Is the window under `pos` one drawn over the top layers (a fullscreen window)?
     fn window_hit_before_top_layer(&self, pos: Point<f64, Logical>) -> bool {
         let Some(output) = self.space.output_under(pos).next() else { return false };
@@ -519,6 +551,10 @@ impl Hyalo {
         above.iter().any(|w| self.space.element_geometry(w).is_some_and(|g| g.to_f64().contains(pos)))
     }
 }
+
+/// Two presses on the same title bar within this many milliseconds are a double click — GTK's
+/// default `gtk-double-click-time`.
+const DOUBLE_CLICK_MS: u32 = 400;
 
 /// The two bindings no configuration can take away.
 fn builtin(mods: &ModifiersState, sym: Keysym) -> Option<KeyAction> {

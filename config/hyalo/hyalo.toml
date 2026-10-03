@@ -95,6 +95,14 @@ rounding_power = 3.2
 [windows.controls]
 side = "right"
 
+# The title bar Hyalo draws for an app that leaves its decorations to the compositor (kitty, Qt
+# apps, Chrome with "Use system title bar and borders"): one piece with the window — the colour
+# of the app's top row — with the controls above and the title (hyalo/compositor/src/render/
+# title_bar.rs). `font` is the title's family; the shell keeps it in step with the interface
+# font (Settings → Appearance). A rule with `title_bar = false` takes the bar from one app.
+[windows.title_bar]
+font = "Inter"
+
 [windows.backdrop]
 enabled = true
 size = 2

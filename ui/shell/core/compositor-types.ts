@@ -299,6 +299,11 @@ export interface CompositorSettings {
     readWindowControlsSide(): "right" | "left"
     setWindowControlsSide(side: "right" | "left"): void
 
+    /** The family of the title the compositor writes in the title bar it draws for apps that
+     *  leave their decorations to it (Hyalo's `[windows.title_bar] font`): the interface
+     *  font's, kept in step by AppearanceSync. A no-op where the compositor draws none. */
+    setWindowTitleFont(family: string): void
+
     /** The idle steps in force (Hyprland: hypridle's file; Hyalo: its own `[idle]`). */
     readIdle(): IdleConfig
     /** Persists and applies them. */

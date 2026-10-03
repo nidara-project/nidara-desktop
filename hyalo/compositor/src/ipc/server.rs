@@ -253,7 +253,8 @@ impl Hyalo {
                         m.backdrop,
                         &self.config.windows,
                     ),
-                    controls: crate::protocols::window_controls::window_rect(&m.window).map(|r| {
+                    title_bar: m.bar(),
+                    controls: crate::protocols::window_controls::managed_rect(m, self.config.windows.controls.side).map(|r| {
                         let origin = m.rect.loc.to_f64() - m.window.geometry().loc.to_f64();
                         [origin.x + r.loc.x, origin.y + r.loc.y, r.size.w, r.size.h]
                     }),

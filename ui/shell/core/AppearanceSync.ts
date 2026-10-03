@@ -14,6 +14,8 @@
 //     color-scheme, cursor-theme/-size
 //   cursor-theme, cursor-size                Hyprland's cursor + the Xcursor default
 //   accent-color                             Hyprland's groupbar accent
+//   font-name                                the family of the title Hyalo draws in its
+//                                              title bar (`windows.title_bar.font`)
 //   color-scheme, accent-color, gtk/icon/    the greeter's appearance mirror
 //     cursor theme, org.nidara.appearance
 //
@@ -28,6 +30,7 @@
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import Pango from "gi://Pango"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import compositor, { settings } from "./CompositorState"
@@ -36,7 +39,7 @@ import { initCompositorGlass } from "./CompositorGlass"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
 
-type Effect = "ini" | "cursor" | "groupbar" | "mirror"
+type Effect = "ini" | "cursor" | "groupbar" | "mirror" | "titleFont"
 
 let started = false
 const keep: InstanceType<typeof Gio.Settings>[] = []
@@ -64,6 +67,18 @@ const EFFECTS: Record<Effect, () => void> = {
     cursor: applyCursor,
     groupbar: syncGroupbarAccent,
     mirror: writeGreeterMirror,
+    titleFont: syncTitleFont,
+}
+
+/**
+ * The compositor's title bar writes the window's title in the interface font's family (at the
+ * chrome's fixed size): Hyalo's `windows.title_bar.font`, a no-op on Hyprland, which draws no
+ * title bar. Parsed with Pango, like ThemeManager.syncFont — `font-name` is a Pango string.
+ * A patch that changes nothing writes nothing, so stating it at every start is free.
+ */
+function syncTitleFont(): void {
+    const family = Pango.FontDescription.from_string(keep[0].get_string("font-name")).get_family()
+    if (family) settings.setWindowTitleFont(family)
 }
 
 /**
@@ -254,7 +269,7 @@ export function startAppearanceSync(): void {
 
     iface.connect("changed::gtk-theme", () => schedule("ini", "mirror"))
     iface.connect("changed::icon-theme", () => schedule("ini", "mirror"))
-    iface.connect("changed::font-name", () => schedule("ini"))
+    iface.connect("changed::font-name", () => schedule("ini", "titleFont"))
     iface.connect("changed::cursor-theme", () => schedule("ini", "cursor", "mirror"))
     iface.connect("changed::cursor-size", () => schedule("ini", "cursor"))
     iface.connect("changed::accent-color", () => schedule("groupbar", "mirror"))
@@ -272,7 +287,7 @@ export function startAppearanceSync(): void {
     // `cursor` at start is what makes apps launched later (Steam…) inherit the cursor
     // instead of a stale default. No push INTO gsettings: the values are read from there
     // since #536 — pushing a copy over them at start is what reverted a theme set elsewhere.
-    schedule("ini", "cursor", "groupbar", "mirror")
+    schedule("ini", "cursor", "groupbar", "mirror", "titleFont")
 
     // The glass material's compositor half: Hyprland's blur (#674) — and on a compositor
     // of our own, the whole glass (#684).

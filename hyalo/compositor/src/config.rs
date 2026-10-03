@@ -79,11 +79,34 @@ pub struct WindowsConfig {
     pub rounding_power: f64,
     pub backdrop: BackdropConfig,
     pub controls: ControlsConfig,
+    pub title_bar: TitleBarConfig,
 }
 
 impl Default for WindowsConfig {
     fn default() -> Self {
-        Self { rounding: 24.0, rounding_power: 3.2, backdrop: BackdropConfig::default(), controls: ControlsConfig::default() }
+        Self {
+            rounding: 24.0,
+            rounding_power: 3.2,
+            backdrop: BackdropConfig::default(),
+            controls: ControlsConfig::default(),
+            title_bar: TitleBarConfig::default(),
+        }
+    }
+}
+
+/// The title bar Hyalo draws for an app that leaves its decorations to the compositor (kitty,
+/// Qt apps, Chrome with "Use system title bar and borders"): render/title_bar.rs, #708 point 5.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TitleBarConfig {
+    /// The title's font family: the desktop's interface font, which the shell keeps here in
+    /// step with Settings → Appearance (the size is the shell chrome's fixed 13 px).
+    pub font: String,
+}
+
+impl Default for TitleBarConfig {
+    fn default() -> Self {
+        Self { font: "Inter".into() }
     }
 }
 
@@ -175,6 +198,8 @@ pub struct RuleConfig {
     pub rounding: Option<bool>,
     /// `false`: no blur behind it, translucent or not.
     pub backdrop: Option<bool>,
+    /// `false`: no title bar from Hyalo, for an app that asks for one (render/title_bar.rs).
+    pub title_bar: Option<bool>,
 }
 
 impl Default for RuleConfig {
@@ -188,6 +213,7 @@ impl Default for RuleConfig {
             silent: false,
             rounding: None,
             backdrop: None,
+            title_bar: None,
         }
     }
 }
