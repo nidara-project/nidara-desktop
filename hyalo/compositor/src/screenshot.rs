@@ -10,15 +10,16 @@ use std::path::Path;
 
 use smithay::{
     backend::{
-        allocator::Fourcc,
+        allocator::{Fourcc, dmabuf::Dmabuf},
         renderer::{
             Bind, ExportMem, Offscreen, Texture as _, TextureMapping as _,
             damage::OutputDamageTracker,
+            element::utils::{Relocate, RelocateRenderElement},
             gles::{GlesRenderer, GlesTexture},
         },
     },
     output::Output,
-    utils::{Rectangle, Transform},
+    utils::{Physical, Rectangle, Size, Transform},
 };
 
 use crate::render;
@@ -60,6 +61,32 @@ pub fn capture(
         rgba.extend_from_slice(&data[r * stride..(r + 1) * stride]);
     }
     Ok((w, h, rgba))
+}
+
+/// `area` of one output (physical, upright; the whole output if None) drawn straight into a
+/// client's dmabuf of `size`, in the OUTPUT's orientation — what a recorder on the GPU asks
+/// screencopy for (screencopy.rs): no read-back, the frame never touches the CPU.
+pub fn draw_into(
+    renderer: &mut GlesRenderer,
+    scene: &render::Scene<'_>,
+    output: &Output,
+    area: Option<Rectangle<i32, Physical>>,
+    size: Size<i32, Physical>,
+    dmabuf: &mut Dmabuf,
+) -> Result<(), String> {
+    let scale = output.current_scale().fractional_scale();
+    let offset = area.map(|a| a.loc).unwrap_or_default();
+    let elements: Vec<_> = render::output_elements(scene, renderer, output, None)
+        .into_iter()
+        .map(|e| RelocateRenderElement::from_element(e, (-offset.x, -offset.y), Relocate::Relative))
+        .collect();
+    let mut tracker = OutputDamageTracker::new(size, scale, output.current_transform());
+    let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
+    let result = tracker
+        .render_output(renderer, &mut fb, 0, &elements, render::CLEAR_COLOR)
+        .map_err(|e| format!("{e:?}"))?;
+    // The client reads the buffer as soon as `ready` is sent.
+    result.sync.wait().map_err(|e| format!("{e:?}"))
 }
 
 pub fn write_png(path: &Path, w: u32, h: u32, rgba: &[u8]) -> Result<(), String> {

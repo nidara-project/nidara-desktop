@@ -810,6 +810,7 @@ export default {
     "widget.screenrecord.stop": "Detener grabación",
     "widget.screenrecord.recording": "Grabando…",
     "widget.screenrecord.saved": "Grabación guardada",
+    "widget.screenrecord.failed": "No se pudo terminar la grabación",
     "widget.screenrecord.no-audio": "No había ninguna fuente de audio disponible, así que la grabación es muda.",
     "widget.screenrecord.settings.audio-group": "Audio",
     "widget.screenrecord.settings.source": "Fuente",

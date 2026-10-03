@@ -9,7 +9,12 @@
 #   3. grim | wl-copy puts a PNG on the clipboard, and wl-paste gives it back (the screenshot
 #      tile, Print: what was broken until 2026-10-02 — grim found no capture protocol);
 #   4. wl-paste --watch sees a copy (data-control: the clipboard history);
-#   5. wf-recorder records the region (wlr-screencopy), with frames, and upright too.
+#   5. wf-recorder records the region (wlr-screencopy), with frames, and upright too;
+#   6. the frame offers a GPU buffer (`linux_dmabuf`) — and where a VA-API driver exists, a
+#      hardware-encoded recording (the shell's default) gets frames, upright, and STOPS on
+#      SIGINT. Without the offer it waited forever for its first frame, wrote nothing and
+#      ignored the Stop button (owner-caught, 2026-10-03). CI's vkms has no VA-API: there only
+#      the offer is checked.
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -72,3 +77,31 @@ ffmpeg -v error -y -ss 1 -i "$log/rec.mp4" -frames:v 1 "$log/frame.png"
 top=$(colour "$(pixel "$log/frame.png" $((w / 2)) $((h / 4)))"); bottom=$(colour "$(pixel "$log/frame.png" $((w / 2)) $((h * 3 / 4)))")
 [ "$top/$bottom" = "red/blue" ] || fail "the recording is not upright: top $top, bottom $bottom"
 echo "ok    recording: $frames frames, upright"
+
+# shm recorders ignore the offer, so any wf-recorder shows it on the wire.
+WAYLAND_DEBUG=1 timeout -s INT 1 wf-recorder -y -g "$geo" -f "$log/offer.mp4" >"$log/offer.log" 2>&1 || true
+grep -q 'zwlr_screencopy_frame_v1#[0-9]*\.linux_dmabuf(' "$log/offer.log" || fail "the screencopy frame offers no dmabuf (wf-recorder with VA-API waits for one forever)"
+echo "ok    screencopy offers a dmabuf"
+render=$(ls /dev/dri/renderD* 2>/dev/null | head -n 1 || true)
+# Can this machine encode H.264 on the GPU at all? ffmpeg answers without a compositor.
+if [ -n "$render" ] && ffmpeg -v error -init_hw_device vaapi=va:"$render" -f lavfi -i nullsrc=s=256x256 \
+        -vf format=nv12,hwupload -c:v h264_vaapi -frames:v 1 -f null - >/dev/null 2>&1; then
+    st=0
+    timeout -s KILL 10 timeout -s INT 3 wf-recorder -y -g "$geo" -c h264_vaapi -d "$render" -f "$log/rec-va.mp4" >"$log/wf-va.log" 2>&1 || st=$?
+    # 124: stopped by the INT; 137: still there 7 s after it, killed — the hang.
+    [ "$st" -ne 137 ] || fail "wf-recorder (VA-API) did not stop on SIGINT ($(tail -n 3 "$log/wf-va.log"))"
+    frames=$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 "$log/rec-va.mp4" 2>/dev/null || echo 0)
+    [ "${frames:-0}" -gt 5 ] || fail "wf-recorder (VA-API) recorded ${frames:-0} frames ($(tail -n 3 "$log/wf-va.log"))"
+    ffmpeg -v error -y -ss 1 -i "$log/rec-va.mp4" -frames:v 1 "$log/frame-va.png"
+    top=$(colour "$(pixel "$log/frame-va.png" $((w / 2)) $((h / 4)))"); bottom=$(colour "$(pixel "$log/frame-va.png" $((w / 2)) $((h * 3 / 4)))")
+    # The buffer is in the OUTPUT's orientation, like the shm one. wf-recorder turns it upright
+    # with ffmpeg's vflip, which does NOTHING to a VA-API frame (measured: a red-over-blue frame
+    # through hwupload,vflip encodes red over blue) — so on a flipped-180 output (a nested Hyalo)
+    # the GPU recording comes out upside down, and that is wf-recorder's, not ours.
+    want=red/blue
+    [ "$($MSG outputs | jq -r '.ok.outputs[0].transform')" = flipped-180 ] && want=blue/red
+    [ "$top/$bottom" = "$want" ] || fail "the VA-API recording is not in the output's orientation: top $top, bottom $bottom ($want expected)"
+    echo "ok    recording on the GPU (VA-API, dmabuf): $frames frames, $want, stopped on SIGINT"
+else
+    echo "skip  recording on the GPU: no VA-API encoder here"
+fi

@@ -844,6 +844,7 @@ export default {
     "widget.screenrecord.recording": "Recording…",
     "widget.screenrecord.stop": "Stop recording",
     "widget.screenrecord.saved": "Recording saved",
+    "widget.screenrecord.failed": "The recording could not be finished",
     "widget.screenrecord.no-audio": "No audio source was available, so the recording is silent.",
     "widget.screenrecord.settings.audio-group": "Audio",
     "widget.screenrecord.settings.source": "Source",

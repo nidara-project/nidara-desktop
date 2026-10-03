@@ -46,12 +46,21 @@ async function startRecording(mode: RecordMode, withAudio: boolean, onClose: () 
     const { argv, outFile, audioDevice } = await buildCaptureCommand({ region, audio: withAudio })
 
     status.recording = true
+    stopsAsked = 0
     try {
         await execAsync(argv)
     } catch {
         // wf-recorder exits with non-zero on SIGINT — that's normal
     } finally {
         status.recording = false
+        const forced = stopsAsked > 1
+        stopsAsked = 0
+        // A recorder ended by force, or one that never got a frame, wrote no usable
+        // file: "saved" would point at nothing.
+        if (forced || !GLib.file_test(outFile, GLib.FileTest.EXISTS)) {
+            execAsync(["notify-send", t("widget.screenrecord.failed")]).catch(() => {})
+            return
+        }
         // Say so when audio was asked for and no source could be resolved:
         // wf-recorder would otherwise write a perfectly normal-looking file that
         // is simply silent, which is exactly the failure this feature had.
@@ -62,8 +71,16 @@ async function startRecording(mode: RecordMode, withAudio: boolean, onClose: () 
     }
 }
 
+// Stop asks wf-recorder to finish (SIGINT: it writes the file's end and exits). A recorder
+// that does not answer — waiting for a frame that never comes, as every GPU recording did on
+// Hyalo before its screencopy offered a dmabuf (2026-10-03) — is ended by the SECOND Stop:
+// the button must always stop.
+let stopsAsked = 0
+
 export async function stopRecording() {
-    await execAsync(["pkill", "-SIGINT", "wf-recorder"]).catch(() => {})
+    stopsAsked++
+    const signal = stopsAsked > 1 ? "-SIGKILL" : "-SIGINT"
+    await execAsync(["pkill", signal, "wf-recorder"]).catch(() => {})
 }
 
 // ── Recording elapsed timer ────────────────────────────────────────────────────

@@ -756,6 +756,7 @@
     "widget.screenrecord.recording": "72f9eb46",
     "widget.screenrecord.stop": "ee0d9dc8",
     "widget.screenrecord.saved": "064ba77d",
+    "widget.screenrecord.failed": "3270db27",
     "widget.screenrecord.no-audio": "612647d3",
     "widget.screenrecord.settings.audio-group": "acdac205",
     "widget.screenrecord.settings.source": "6da13add",
@@ -835,7 +836,7 @@
   "locales": {
     "de": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -942,20 +943,21 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
       "stale": []
     },
     "es": {
-      "translated": 830,
-      "of": 830,
+      "translated": 831,
+      "of": 831,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1062,6 +1064,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1069,7 +1072,7 @@
     },
     "it": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1176,6 +1179,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1183,7 +1187,7 @@
     },
     "ja": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1290,6 +1294,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1297,7 +1302,7 @@
     },
     "nl": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1404,6 +1409,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1411,7 +1417,7 @@
     },
     "pl": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1518,6 +1524,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1525,7 +1532,7 @@
     },
     "pt-BR": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1632,6 +1639,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1639,7 +1647,7 @@
     },
     "pt-PT": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1746,6 +1754,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1753,7 +1762,7 @@
     },
     "ru": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1860,6 +1869,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],
@@ -1867,7 +1877,7 @@
     },
     "zh-CN": {
       "translated": 723,
-      "of": 830,
+      "of": 831,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1974,6 +1984,7 @@
         "settings.network.ip.router.desc",
         "settings.network.ip.search",
         "settings.network.ip.search.desc",
+        "widget.screenrecord.failed",
         "workspace.mode.floating",
         "workspace.mode.tiling"
       ],

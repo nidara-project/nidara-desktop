@@ -6,13 +6,18 @@
 //!   screenshot (screenshot.rs) and written into the client's shm buffer.
 //! - `copy_with_damage` — a recorder's request — waits for the next frame Hyalo draws on that
 //!   output (`complete_screencopy` from post_repaint), so a still screen sends nothing.
-//! - No cursor (`overlay_cursor` is not honoured), shm only (no dmabuf): every frame is a
-//!   draw and a read-back on the CPU side, as wlroots does for shm.
+//! - Two kinds of buffer. shm: every frame is a draw and a read-back on the CPU side, as
+//!   wlroots does for shm. dmabuf (`linux_dmabuf`, v3): the frame is drawn straight into the
+//!   client's buffer on the GPU — what wf-recorder uses with a hardware encoder (VA-API, the
+//!   recorder's default here), and it waits for that event: without it the recording never got
+//!   its first frame, wrote no file and could not be stopped (2026-10-03).
+//! - No cursor (`overlay_cursor` is not honoured).
 //! - Locked: every frame fails (lock.rs). Not offered to sandboxed clients (sandbox.rs).
 
 use std::sync::Mutex;
 
 use smithay::{
+    backend::allocator::{Buffer as _, Fourcc},
     output::Output,
     reexports::{
         wayland_protocols_wlr::screencopy::v1::server::{
@@ -25,7 +30,7 @@ use smithay::{
         },
     },
     utils::{Logical, Rectangle, Transform},
-    wayland::{Dispatch2, GlobalDispatch2, shm::with_buffer_contents_mut},
+    wayland::{Dispatch2, GlobalDispatch2, dmabuf::get_dmabuf, shm::with_buffer_contents_mut},
 };
 
 use crate::Hyalo;
@@ -102,6 +107,7 @@ impl Dispatch2<ZwlrScreencopyManagerV1, Hyalo> for ScreencopyGlobal {
         };
         frame.buffer(wl_shm::Format::Xrgb8888, w as u32, h as u32, w as u32 * 4);
         if frame.version() >= 3 {
+            frame.linux_dmabuf(Fourcc::Xrgb8888 as u32, w as u32, h as u32);
             frame.buffer_done();
         }
     }
@@ -174,19 +180,34 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
         return;
     };
     let (w, h) = *data.size.lock().unwrap();
+    // The region's origin in the drawn output's pixels.
+    let scale = output.current_scale().fractional_scale();
+    let origin = data.region.map(|r| {
+        let p = r.loc.to_f64().to_physical_precise_round::<_, i32>(scale);
+        (p.x.max(0), p.y.max(0))
+    });
+    if let Ok(dmabuf) = get_dmabuf(buffer) {
+        let mut dmabuf = dmabuf.clone();
+        let size = dmabuf.size();
+        if (size.w, size.h) != (w, h) || dmabuf.format().code != Fourcc::Xrgb8888 && dmabuf.format().code != Fourcc::Argb8888 {
+            frame.failed();
+            return;
+        }
+        let (uw, uh) = upright_size(state, &output, data.region);
+        let area = origin.map(|(x, y)| Rectangle::new((x, y).into(), (uw, uh).into()));
+        if let Err(err) = crate::backend::draw_output_into(state, &output, area, (w, h).into(), &mut dmabuf) {
+            tracing::warn!(%err, "screencopy into a dmabuf failed");
+            frame.failed();
+            return;
+        }
+        send_ready(state, frame, damage, w, h);
+        return;
+    }
     let Ok((ow, oh, rgba)) = crate::backend::capture_output(state, &output) else {
         frame.failed();
         return;
     };
-    // The region's origin in the drawn output's pixels.
-    let scale = output.current_scale().fractional_scale();
-    let (x0, y0) = data
-        .region
-        .map(|r| {
-            let p = r.loc.to_f64().to_physical_precise_round::<_, i32>(scale);
-            (p.x.max(0) as usize, p.y.max(0) as usize)
-        })
-        .unwrap_or((0, 0));
+    let (x0, y0) = origin.map(|(x, y)| (x as usize, y as usize)).unwrap_or((0, 0));
     let written = with_buffer_contents_mut(buffer, |ptr, len, info| {
         if info.width != w || info.height != h || info.format != wl_shm::Format::Xrgb8888 && info.format != wl_shm::Format::Argb8888 {
             return false;
@@ -226,6 +247,10 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
         frame.failed();
         return;
     }
+    send_ready(state, frame, damage, w, h);
+}
+
+fn send_ready(state: &Hyalo, frame: &ZwlrScreencopyFrameV1, damage: bool, w: i32, h: i32) {
     if damage {
         frame.damage(0, 0, w as u32, h as u32);
     }
