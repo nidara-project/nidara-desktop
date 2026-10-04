@@ -54,9 +54,10 @@ default_mode = "floating"
 # regexes searched in app_id / title / initial_app_id / initial_title, and `game = true`
 # for a game (wm/games.rs); effects: float, center, workspace ("3", "special:NAME" or
 # "name:NAME") with silent; rounding = false (square corners), backdrop = false (no blur
-# behind it), title_bar = false (no Hyalo title bar) and controls = ["close"] (the only buttons
-# its window controls may show). Your hyalo.toml can add a rule, replace one by its name, or switch one off with
-# `enabled = false`. (The rest of hyprland.lua's rules wait for XWayland and animations, #684.)
+# behind it), title_bar = false (no Hyalo title bar), controls = ["close"] (the only buttons
+# its window controls may show) and animate = false (it opens and closes at once). Your
+# hyalo.toml can add a rule, replace one by its name, or switch one off with `enabled = false`.
+# (The rest of hyprland.lua's rules wait for XWayland, #683.)
 [rules.about]
 match = { app_id = "^nidara-about$" }
 float = true
@@ -73,12 +74,14 @@ center = true
 match = { game = true }
 workspace = "name:gamespace"
 rounding = false
+animate = false
 
-# A window with no app id — a client's popup made a toplevel — stays square, as Hyprland's
-# `general-popups` kept it.
+# A window with no app id — a client's popup made a toplevel — stays square and appears at
+# once, as Hyprland's `general-popups` kept it.
 [rules.no-app-id]
 match = { app_id = "^$" }
 rounding = false
+animate = false
 
 # How windows are drawn (hyalo/compositor/src/render/window.rs): what Hyprland drew for Nidara.
 # Corners: `rounding` px, `rounding_power` the curve (2 a circle, higher a squircle); never on a
@@ -223,13 +226,19 @@ screen_off = 300
 lock = 600
 suspend = 0
 
-# What Hyalo animates (hyalo/compositor/src/wm/minimize.rs): a minimized window shrinking into
-# its place in the dock and growing back out of it, `minimize` milliseconds — the Hyprland
-# session's window animation (`windowsOut`, 400 ms). Settings → Accessibility → Reduce motion
-# switches `enabled` off: then a window goes and comes back at once.
+# What Hyalo animates, in milliseconds — the Hyprland session's animations, so nothing changes at
+# the switch. A minimized window shrinks into its place in the dock and grows back out of it,
+# `minimize` (wm/minimize.rs; `windowsOut`, 400). A window opening grows out of its middle,
+# `open`, overshooting a little (`windows`, 700, myBezier); closing, it shrinks to 80 %,
+# `close` (`windowsOut` popin 80%, 400); it fades in and out over `fade` (`fade`, 400)
+# (wm/motion.rs). Settings → Accessibility → Reduce motion switches `enabled` off: then nothing
+# moves. A rule's `animate = false` takes opening and closing from one app.
 [animations]
 enabled = true
 minimize = 400
+open = 700
+close = 400
+fade = 400
 
 # How frames reach the screen (backend/tty.rs). direct_scanout: an opaque fullscreen window (a
 # game) goes on the display as it is, with no composition — less latency. Set it to false if a

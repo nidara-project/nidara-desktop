@@ -12,6 +12,10 @@
  *          button does.
  * HYALO_PROBE_DIALOG=1: it also opens a dialog of its window (xdg_toplevel.set_parent), which
  *          leaves room for its controls the same way.
+ * HYALO_PROBE_TIDY=1: asked to close, it destroys its window before it exits — toplevel, xdg
+ *          surface, surface, in that order, as a toolkit closing a window does. Without it, it
+ *          just exits, and its objects go in the order it made them (the surface first), as an
+ *          app that is killed. For scripts/ci/hyalo-motion-check.sh.
  *
  *   wayland-scanner client-header/private-code for xdg-shell and nidara-window-controls-v1
  *   (protocols/ at the repository root), then
@@ -53,6 +57,7 @@ struct win {
     int w, h;
     uint32_t colour;
     struct wl_surface *surface;
+    struct xdg_surface *xs;
     struct xdg_toplevel *top;
     struct nidara_window_controls_v1 *controls;
     int configured, have_layout, pending_place;
@@ -155,7 +160,7 @@ static void place(struct win *win) {
 
 static void open_window(struct wl_display *d, struct win *win, const char *title, struct xdg_toplevel *parent) {
     win->surface = wl_compositor_create_surface(compositor);
-    struct xdg_surface *xs = xdg_wm_base_get_xdg_surface(wm_base, win->surface);
+    struct xdg_surface *xs = win->xs = xdg_wm_base_get_xdg_surface(wm_base, win->surface);
     xdg_surface_add_listener(xs, &xdg_surface_listener, win);
     win->top = xdg_surface_get_toplevel(xs);
     xdg_toplevel_add_listener(win->top, &toplevel_listener, win);
@@ -218,5 +223,17 @@ int main(void) {
     }
     printf("CLOSED\n");
     fflush(stdout);
+    const char *tidy = getenv("HYALO_PROBE_TIDY");
+    if (tidy && strcmp(tidy, "1") == 0) {
+        struct win *wins[] = { &child_win, &main_win };
+        for (int i = 0; i < 2; i++) {
+            if (!wins[i]->surface) continue;
+            if (wins[i]->controls) nidara_window_controls_v1_destroy(wins[i]->controls);
+            xdg_toplevel_destroy(wins[i]->top);
+            xdg_surface_destroy(wins[i]->xs);
+            wl_surface_destroy(wins[i]->surface);
+        }
+        wl_display_roundtrip(d);
+    }
     return 0;
 }

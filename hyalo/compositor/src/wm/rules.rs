@@ -1,5 +1,6 @@
 //! Window rules (`[rules.NAME]` in hyalo.toml): match a window by app id and title, float it,
-//! centre it, send it to a workspace, square its corners, take the blur from behind it.
+//! centre it, send it to a workspace, square its corners, take the blur from behind it, open
+//! and close it without an animation.
 //!
 //! 🔑 **A rule applies once to a window, the first time it matches** — before the window's
 //! first configure, when it is first shown, or later when its app id or title changes. That
@@ -42,6 +43,8 @@ pub struct Effects {
     pub title_bar: Option<bool>,
     /// The bits of the buttons its controls may show (protocols/window_controls.rs).
     pub controls: Option<u32>,
+    /// Opens and closes animated (wm/motion.rs).
+    pub animate: Option<bool>,
 }
 
 impl Effects {
@@ -70,6 +73,9 @@ impl Effects {
         }
         if later.controls.is_some() {
             self.controls = later.controls;
+        }
+        if later.animate.is_some() {
+            self.animate = later.animate;
         }
     }
 }
@@ -134,6 +140,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
                 backdrop: r.backdrop,
                 title_bar: r.title_bar,
                 controls: r.controls.as_deref().map(crate::protocols::window_controls::mask),
+                animate: r.animate,
             },
         };
         if rule.app_id.is_none()
@@ -145,7 +152,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
             return Err(format!("rules.{name}: matches nothing (give match.app_id, title, initial_app_id, initial_title or game)"));
         }
         if rule.effects.is_empty() {
-            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding, backdrop, title_bar or controls)"));
+            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding, backdrop, title_bar, controls or animate)"));
         }
         if r.silent && r.workspace.is_none() {
             return Err(format!("rules.{name}: silent without a workspace"));
@@ -217,6 +224,9 @@ impl Hyalo {
         }
         if let Some(c) = fx.controls {
             m.controls = Some(c);
+        }
+        if let Some(a) = fx.animate {
+            m.animate = a;
         }
         if fx.controls.is_some() {
             // Its app reserves a box of the new size.
@@ -340,6 +350,15 @@ mod tests {
             fx.add(&rule.effects);
         }
         assert_eq!(fx, Effects { float: Some(false), center: true, workspace: Some(RuleWorkspace::Number(2)), ..Default::default() });
+    }
+
+    #[test]
+    fn a_rule_can_take_the_animations_and_that_alone_is_enough() {
+        let r = rules("[rules.a]\nmatch = { app_id = \"^$\" }\nanimate = false\n").unwrap();
+        assert_eq!(r[0].effects.animate, Some(false));
+        let mut fx = Effects { animate: Some(true), ..Default::default() };
+        fx.add(&r[0].effects);
+        assert_eq!(fx.animate, Some(false), "a later rule wins");
     }
 
     #[test]

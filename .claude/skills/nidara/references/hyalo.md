@@ -13,10 +13,10 @@ is the WHY and the traps.
 |---|---|
 | `hyalo/compositor/src/backend/tty.rs` | the session: DRM/KMS + GBM, libinput, libseat, udev hotplug, frames paced by vblank |
 | `hyalo/compositor/src/backend/winit.rs` | a window in another compositor — development only |
-| `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`); how a window is drawn — corners and the blur behind it (`window.rs`) |
+| `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`); how a window is drawn — corners and the blur behind it (`window.rs`); a window drawn alone into a picture of it (`snapshot.rs`) |
 | `hyalo/compositor/src/outputs.rs` | outputs as configured: arrange, apply, power, the windows' way home (#594) |
 | `hyalo/compositor/src/config.rs` | the TOML layers and the watcher |
-| `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`) |
+| `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`), minimizing (`minimize.rs`), opening and closing (`motion.rs`) |
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
 | `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
@@ -564,6 +564,52 @@ that picture and grows back out of it. `wm/minimize.rs`.
   `drawn` says, not where it was, and beside the small window what is there once it has gone).
   Controls seen failing nested: the installed Hyalo before #724; one without `AtScale` ("its
   full-size box is drawn too"); one whose focus does not restore.
+
+## Opening and closing (#684, 2026-10-04)
+
+`wm/motion.rs`, `render/snapshot.rs`. What the Hyprland session did, so nothing changes for the
+user at the switch (config/hypr/hyprland.lua, "Animations"; the owner chose to go on with it,
+2026-10-04): opening, the window grows out of its middle on `myBezier` over `[animations] open`
+(700 = `windows`) — Hyprland's `popin` from nothing; closing, it shrinks to 80 % on `default`
+over `close` (400 = `windowsOut`, `popin 80%`); both fade over `fade` (400, `easeOut`). The
+curves are `motion::curve`, one Bézier solver for them and minimize's. `myBezier`'s control
+point is at 1.05, but the CURVE peaks at 1.0085: the overshoot is under 1 % (a test that
+expected 1.01 was wrong, not the curve).
+
+- **One picture, scaled and faded** (`SnapshotElement`): the window drawn ALONE into a texture of
+  ours by the GL renderer underneath (`HyaloRenderer::gles`, `import_surface_tree` first, as a
+  capture), with room around its box for its line and shadow — the same elements the screen gets
+  (`render::push_window`, the per-window body of `output_elements`), minus the `Glass`/`Scrim`
+  ones, which sample what is behind them and offscreen nothing is. So none of the custom shaders
+  needed an alpha. Opening, the picture is taken again EVERY frame, so the window is live;
+  closing, it is taken once — the blur behind a translucent window is not in it (it comes in
+  when the window has opened).
+- 🔴 **A window opening must still get frame callbacks.** Its surfaces are in no frame (the
+  picture is), so `surface_primary_scanout_output` has nothing to say, and a client that waits
+  for a callback to draw its next frame stayed at its first one. `post_repaint` sends an opening
+  window this output's frames regardless. Checked nested with a GTK frame counter: 23 → 61 → 99
+  during a 3 s opening.
+- 🔴 **The closing picture is taken while the surface still holds its last frame — and that is
+  not always `toplevel_destroyed`.** A toolkit destroys toplevel, xdg_surface, surface, in that
+  order; an app that exits without that, or is killed, has its objects destroyed in the order it
+  made them: the SURFACE FIRST. `CompositorHandler::destroyed` (handlers.rs) takes it then;
+  `Wm::closing_taken` keeps the second hook from taking another. Without the hook a killed app
+  closed with no animation (control below).
+- Drawn: an opening window in its place in the stack; a closing one over the windows still
+  there (a fullscreen one over the chrome, where it was). None with reduce motion, for a window a
+  rule takes them from (`animate = false`, shipped for `games` and `no-app-id` — Hyprland's
+  `no_anim` on gamespace and `general-popups`), for one that opens on a workspace nobody sees, or
+  one that closes hidden (minimized, another workspace).
+- Not here: windows moving when the layout changes (Hyprland's `windowsMove`), the workspace
+  switch, layer surfaces appearing, a window opening from the dock icon that launched it (#6):
+  each its own change.
+- CI: `scripts/ci/hyalo-motion-check.sh` in the smoke, pixels against a screenshot from before
+  the window (`was`): a second into a 30 s opening its middle is neither its grey nor what was
+  there and near its edge nothing yet; closing (`HYALO_PROBE_TIDY=1`, the probe destroys its
+  window as a toolkit does) still drawn, shrunk, then gone; killed (`kill -9`) the same; reduce
+  motion and `animate = false` at once. Controls seen failing nested: a Hyalo that never opens
+  animated (step 1, "'64 64 64': it opened at once"), one that never closes animated (step 2,
+  "no picture of it"), one without the `destroyed` hook (step 3, killed: "no picture of it").
 
 ## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
 

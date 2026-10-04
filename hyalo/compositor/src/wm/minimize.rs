@@ -84,16 +84,8 @@ pub enum Shown {
 /// The Hyprland session's `default` curve, `bezier(0, 0.75, 0.15, 1)` (Hyprland's own
 /// `AnimationManager`): fast out, settling in. `x` in 0..1 → the progress, 0..1.
 pub fn ease(x: f64) -> f64 {
-    let x = x.clamp(0.0, 1.0);
-    let (x1, y1, x2, y2) = (0.0, 0.75, 0.15, 1.0);
-    let bez = |t: f64, a: f64, b: f64| 3.0 * (1.0 - t) * (1.0 - t) * t * a + 3.0 * (1.0 - t) * t * t * b + t * t * t;
-    // Solve bez_x(t) = x by bisection: monotonic in t for these control points.
-    let (mut lo, mut hi) = (0.0, 1.0);
-    for _ in 0..32 {
-        let mid = (lo + hi) / 2.0;
-        if bez(mid, x1, x2) < x { lo = mid } else { hi = mid }
-    }
-    bez((lo + hi) / 2.0, y1, y2)
+    let (p1, p2) = super::motion::curve::DEFAULT;
+    super::motion::bezier(p1, p2, x)
 }
 
 /// `frame` fitted inside `target`, its proportions kept, centred: where the window lands.

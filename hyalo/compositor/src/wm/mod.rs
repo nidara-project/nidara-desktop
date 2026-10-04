@@ -20,6 +20,7 @@ pub mod games;
 pub mod grabs;
 pub mod layout;
 pub mod minimize;
+pub mod motion;
 pub mod rules;
 
 use std::collections::{BTreeMap, HashMap};
@@ -116,6 +117,8 @@ pub struct Managed {
     pub backdrop: bool,
     /// Hyalo's title bar for it, unless a rule said no (render/title_bar.rs).
     pub title_bar: bool,
+    /// It opens and closes animated, unless a rule said no (wm/motion.rs).
+    pub animate: bool,
     /// It has Hyalo's title bar now: it asked for server-side decorations and its surface is
     /// its box (`wants_title_bar`). The bar sits on top of `rect`, inside the window's box.
     pub has_title_bar: bool,
@@ -245,6 +248,12 @@ pub struct Wm {
     pub animations: Vec<minimize::Anim>,
     /// Where each output's dock shows its minimized windows, by output name.
     pub minimize_targets: HashMap<String, minimize::Targets>,
+    /// Windows opening, and pictures of windows closing (wm/motion.rs).
+    pub openings: Vec<motion::Opening>,
+    pub closing: Vec<motion::Closing>,
+    /// Windows whose closing picture is taken: their app destroyed the toplevel or the
+    /// surface, whichever came first, and the other one follows.
+    pub closing_taken: Vec<WindowId>,
 }
 
 impl Wm {
@@ -584,6 +593,7 @@ impl Hyalo {
             rounded: true,
             backdrop: true,
             title_bar: true,
+            animate: true,
             has_title_bar: false,
             controls: None,
             poked_geometry: None,
@@ -715,11 +725,14 @@ impl Hyalo {
         }
         self.arrange_workspace(ws);
         self.sync_space();
+        self.start_opening(id);
     }
 
     pub fn window_destroyed(&mut self, window: &Window) {
         let Some(m) = self.wm.by_window(window) else { return };
         let (id, ws) = (m.id, m.workspace);
+        self.start_closing(id);
+        self.wm.closing_taken.retain(|t| *t != id);
         if let Some(w) = self.wm.workspaces.get_mut(&ws) {
             w.layout.remove(id);
         }

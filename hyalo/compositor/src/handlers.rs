@@ -70,6 +70,15 @@ impl CompositorHandler for Hyalo {
             self.queue_redraw(Some(o));
         }
     }
+
+    fn destroyed(&mut self, surface: &WlSurface) {
+        // A client that quits without destroying its window first (or is killed) has its
+        // objects destroyed in the order it made them: the surface before its toplevel. The
+        // closing picture is taken while the surface still holds its last frame (wm/motion.rs).
+        if let Some(id) = self.wm.by_surface(surface).map(|m| m.id) {
+            self.start_closing(id);
+        }
+    }
 }
 
 impl BufferHandler for Hyalo {

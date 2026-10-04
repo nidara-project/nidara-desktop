@@ -209,6 +209,19 @@ pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scal
     }
 }
 
+/// A picture of `window` as it is now, at `scale`, to draw after it is gone (render/snapshot.rs).
+pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<crate::render::snapshot::Snapshot, String> {
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
+    match backend {
+        Backend::Winit(w) => crate::render::snapshot::take(w.renderer(), &scene, window, scale),
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            crate::render::snapshot::take(renderer.as_mut(), &scene, window, scale)
+        }
+    }
+}
+
 /// Draws every output with a redraw queued (`Hyalo::queue_redraw`).
 pub fn redraw_queued(state: &mut Hyalo) {
     match &state.backend {
@@ -293,7 +306,7 @@ pub fn post_repaint(
     }
     // A window shrinking into the dock or growing out of it (wm/minimize.rs): every output,
     // since it may cross from one to another. At rest nothing ticks.
-    if state.step_animations() {
+    if state.step_animations() | state.step_motions() {
         state.queue_redraw(None);
     }
     let time = state.start_time.elapsed();
@@ -317,7 +330,15 @@ pub fn post_repaint(
             continue;
         }
         window.with_surfaces(|surface, s| update(surface, s));
-        window.send_frame(output, time, throttle, surface_primary_scanout_output);
+        // A window opening is drawn as a picture of itself (wm/motion.rs), so its surfaces are
+        // in no frame: it is told of this output's frames anyway, or it would wait for one to
+        // draw its next — its first content stuck until it has opened.
+        let opening = state.wm.by_window(window).is_some_and(|m| state.wm.openings.iter().any(|o| o.id == m.id));
+        if opening {
+            window.send_frame(output, time, throttle, |_, _| Some(output.clone()));
+        } else {
+            window.send_frame(output, time, throttle, surface_primary_scanout_output);
+        }
         if let Some(fb) = feedback {
             window.send_dmabuf_feedback(output, surface_primary_scanout_output, |surface, s| {
                 pick_feedback(surface, s, states, fb)
