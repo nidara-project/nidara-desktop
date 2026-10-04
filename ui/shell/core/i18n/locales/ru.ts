@@ -809,6 +809,8 @@ export default {
     "widget.screenrecord.settings.framerate.auto": "Автоматически",
     "widget.screenrecord.settings.hardware": "Аппаратное кодирование",
     "widget.screenrecord.settings.hardware.desc": "Кодирование на GPU. Применяется к MP4 и MKV; WebM всегда кодируется программно.",
+    "widget.screenrecord.settings.pointer": "Показывать указатель",
+    "widget.screenrecord.settings.pointer.desc": "Показывать указатель мыши в записях.",
     "widget.screenrecord.settings.file-group": "Файл",
     "widget.screenrecord.settings.format": "Формат",
     "widget.screenrecord.settings.format.desc": "MKV сохраняет запись при аварийном завершении; MP4 воспроизводится везде.",

@@ -868,6 +868,8 @@ export default {
     "widget.screenrecord.settings.framerate.auto": "Automatic",
     "widget.screenrecord.settings.hardware": "Hardware encoding",
     "widget.screenrecord.settings.hardware.desc": "Encode on the GPU. Applies to MP4 and MKV; WebM always encodes in software.",
+    "widget.screenrecord.settings.pointer": "Show the pointer",
+    "widget.screenrecord.settings.pointer.desc": "Draw the mouse pointer in recordings.",
     "widget.screenrecord.settings.file-group": "File",
     "widget.screenrecord.settings.format": "Format",
     "widget.screenrecord.settings.format.desc": "MKV survives a crash mid-recording; MP4 plays anywhere.",

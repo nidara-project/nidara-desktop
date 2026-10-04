@@ -187,7 +187,7 @@ impl ImageCopyCaptureHandler for Hyalo {
         }
         let source = session.source();
         let pixels = if let Some(output) = self.source_output(&source) {
-            crate::backend::capture_output(self, &output)
+            crate::backend::capture_output(self, &output, false)
         } else if let Some(window) = self.source_window(&source).cloned() {
             let scale = self.source_scale(&source);
             crate::backend::capture_window(self, &window, scale)

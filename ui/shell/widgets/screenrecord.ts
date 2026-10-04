@@ -10,6 +10,7 @@ import { execAsync } from "../../lib/process"
 import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
+import { settings as compositorSettings } from "../core/CompositorState"
 import status, { recordingElapsed } from "../core/Status"
 import recordingConfig, {
     AUDIO_MIC, AUDIO_SYSTEM, FORMATS, FRAMERATES, QUALITIES,
@@ -421,6 +422,16 @@ function buildSettings(): Gtk.Widget {
             t("widget.screenrecord.settings.hardware.desc"),
             recordingConfig.hardware,
             v => recordingConfig.setHardware(v),
+        ))
+    }
+    // The compositor's switch, not the recorder's (wf-recorder always asks for the pointer):
+    // absent where the compositor has none.
+    if (compositorSettings.caps.recordedPointer) {
+        video.listBox.append(NidaraToggleRow(
+            t("widget.screenrecord.settings.pointer"),
+            t("widget.screenrecord.settings.pointer.desc"),
+            compositorSettings.readRecordedPointer(),
+            v => compositorSettings.setRecordedPointer(v),
         ))
     }
     page.append(video.box)

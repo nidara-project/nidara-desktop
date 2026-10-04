@@ -11,7 +11,9 @@
 //!   client's buffer on the GPU — what wf-recorder uses with a hardware encoder (VA-API, the
 //!   recorder's default here), and it waits for that event: without it the recording never got
 //!   its first frame, wrote no file and could not be stopped (2026-10-03).
-//! - No cursor (`overlay_cursor` is not honoured).
+//! - The pointer is drawn into the frame when the client asks (`overlay_cursor` — wf-recorder
+//!   always does) and `[cursor] recorded` lets it: the recording widget's "Show the pointer".
+//!   Until 2026-10-04 it was never drawn, and a tutorial recorded on Hyalo had no pointer.
 //! - Locked: every frame fails (lock.rs). Not offered to sandboxed clients (sandbox.rs).
 
 use std::sync::Mutex;
@@ -46,6 +48,8 @@ pub struct ScreencopyFrame {
     /// Logical, relative to the output; None = all of it.
     region: Option<Rectangle<i32, Logical>>,
     size: Mutex<(i32, i32)>,
+    /// The client asked for the pointer in the frame.
+    overlay_cursor: bool,
 }
 
 /// `copy_with_damage` requests waiting for their output's next frame.
@@ -85,22 +89,25 @@ impl Dispatch2<ZwlrScreencopyManagerV1, Hyalo> for ScreencopyGlobal {
         data_init: &mut DataInit<'_, Hyalo>,
     ) {
         use zwlr_screencopy_manager_v1::Request;
-        let (frame, output, region) = match request {
-            Request::CaptureOutput { frame, output, .. } => (frame, output, None),
-            Request::CaptureOutputRegion { frame, output, x, y, width, height, .. } => {
-                (frame, output, Some(Rectangle::new((x, y).into(), (width, height).into())))
+        let (frame, output, region, overlay_cursor) = match request {
+            Request::CaptureOutput { frame, output, overlay_cursor } => (frame, output, None, overlay_cursor != 0),
+            Request::CaptureOutputRegion { frame, output, x, y, width, height, overlay_cursor } => {
+                (frame, output, Some(Rectangle::new((x, y).into(), (width, height).into())), overlay_cursor != 0)
             }
             Request::Destroy => return,
             _ => return,
         };
         let Some(output) = Output::from_resource(&output) else {
-            let frame = data_init.init(frame, ScreencopyFrame { output: None, transform: Transform::Normal, region: None, size: Mutex::new((0, 0)) });
+            let frame = data_init.init(
+                frame,
+                ScreencopyFrame { output: None, transform: Transform::Normal, region: None, size: Mutex::new((0, 0)), overlay_cursor },
+            );
             frame.failed();
             return;
         };
         let transform = output.current_transform();
         let size = buffer_size(state, &output, region);
-        let frame = data_init.init(frame, ScreencopyFrame { output: Some(output), transform, region, size: Mutex::new(size) });
+        let frame = data_init.init(frame, ScreencopyFrame { output: Some(output), transform, region, size: Mutex::new(size), overlay_cursor });
         let Some((w, h)) = Some(size).filter(|(w, h)| *w > 0 && *h > 0) else {
             frame.failed();
             return;
@@ -180,6 +187,7 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
         return;
     };
     let (w, h) = *data.size.lock().unwrap();
+    let pointer = data.overlay_cursor && state.config.cursor.recorded;
     // The region's origin in the drawn output's pixels.
     let scale = output.current_scale().fractional_scale();
     let origin = data.region.map(|r| {
@@ -195,7 +203,7 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
         }
         let (uw, uh) = upright_size(state, &output, data.region);
         let area = origin.map(|(x, y)| Rectangle::new((x, y).into(), (uw, uh).into()));
-        if let Err(err) = crate::backend::draw_output_into(state, &output, area, (w, h).into(), &mut dmabuf) {
+        if let Err(err) = crate::backend::draw_output_into(state, &output, area, (w, h).into(), &mut dmabuf, pointer) {
             tracing::warn!(%err, "screencopy into a dmabuf failed");
             frame.failed();
             return;
@@ -203,7 +211,7 @@ fn copy_now(state: &mut Hyalo, frame: &ZwlrScreencopyFrameV1, buffer: &WlBuffer,
         send_ready(state, frame, damage, w, h);
         return;
     }
-    let Ok((ow, oh, rgba)) = crate::backend::capture_output(state, &output) else {
+    let Ok((ow, oh, rgba)) = crate::backend::capture_output(state, &output, pointer) else {
         frame.failed();
         return;
     };

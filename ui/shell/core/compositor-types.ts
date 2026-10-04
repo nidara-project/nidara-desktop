@@ -273,6 +273,9 @@ export interface SettingsCaps {
     /** The compositor draws the window controls over an app's header, on the side the user
      *  chose (Hyalo, #708 point 5). Hyprland draws none: our windows keep their close button. */
     windowControls: boolean
+    /** Whether the pointer is drawn into a screen recording has a switch (Hyalo's `[cursor]
+     *  recorded`). Hyprland always draws it: wf-recorder asks for it, and it has no setting. */
+    recordedPointer: boolean
 }
 
 /** Settings → Power: seconds without input before each step; 0 = never. */
@@ -303,6 +306,11 @@ export interface CompositorSettings {
      *  leave their decorations to it (Hyalo's `[windows.title_bar] font`): the interface
      *  font's, kept in step by AppearanceSync. A no-op where the compositor draws none. */
     setWindowTitleFont(family: string): void
+
+    /** `caps.recordedPointer` only: whether the pointer is in screen recordings. Persists and
+     *  applies (the next frame of a recording in progress). */
+    readRecordedPointer(): boolean
+    setRecordedPointer(on: boolean): void
 
     /** The idle steps in force (Hyprland: hypridle's file; Hyalo: its own `[idle]`). */
     readIdle(): IdleConfig

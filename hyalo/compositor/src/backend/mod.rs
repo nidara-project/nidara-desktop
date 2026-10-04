@@ -104,7 +104,7 @@ impl Backend {
     pub fn reload_cursors(&mut self, cursor: &crate::config::CursorConfig) {
         match self {
             Backend::Tty(t) => t.reload_cursors(cursor),
-            Backend::Winit(_) => {}
+            Backend::Winit(w) => w.cursors = crate::cursor::Cursors::load(&cursor.theme, cursor.size),
         }
     }
 
@@ -137,38 +137,63 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .find(|o| output.is_none_or(|n| o.name() == n))
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
-    let (w, h, rgba) = capture_output(state, &output)?;
+    let (w, h, rgba) = capture_output(state, &output, false)?;
     crate::screenshot::write_png(path, w, h, &rgba)
 }
 
-/// One output, drawn again offscreen, as RGBA rows (the screenshot request, capture.rs).
-pub fn capture_output(state: &mut Hyalo, output: &Output) -> Result<(u32, u32, Vec<u8>), String> {
+/// The pointer as the screen shows it on `output`, for a capture that includes it: None when
+/// it is on another output. Its image, the backend's themed one — a client's own cursor
+/// surface is drawn from the scene (render/mod.rs `push_cursor`).
+fn pointer_for(state: &Hyalo, output: &Output) -> Option<crate::cursor::CursorImage> {
+    let here = state.space.output_geometry(output)?.to_f64().contains(state.seat.get_pointer()?.current_location());
+    if !here {
+        return None;
+    }
+    let icon = match &state.cursor_status {
+        smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
+        _ => smithay::input::pointer::CursorIcon::Default,
+    };
+    let scale = output.current_scale().fractional_scale();
+    let millis = std::time::Duration::from(state.clock.now()).as_millis() as u32;
+    Some(match &state.backend {
+        Backend::Tty(t) => t.cursors.image(icon, scale, millis),
+        Backend::Winit(w) => w.cursors.image(icon, scale, millis),
+    })
+}
+
+/// One output, drawn again offscreen, as RGBA rows (the screenshot request, capture.rs; a
+/// recording on the CPU, protocols/screencopy.rs) — with the pointer when `pointer`.
+pub fn capture_output(state: &mut Hyalo, output: &Output, pointer: bool) -> Result<(u32, u32, Vec<u8>), String> {
+    let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
     let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
     match backend {
-        Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output),
+        Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output, cursor.as_ref()),
         Backend::Tty(t) => {
             let mut renderer = t.primary_renderer()?;
-            crate::screenshot::capture(renderer.as_mut(), &scene, output)
+            crate::screenshot::capture(renderer.as_mut(), &scene, output, cursor.as_ref())
         }
     }
 }
 
-/// One output (or `area` of it) drawn into a client's dmabuf of `size` (screencopy.rs).
+/// One output (or `area` of it) drawn into a client's dmabuf of `size` (screencopy.rs), with the
+/// pointer when `pointer`.
 pub fn draw_output_into(
     state: &mut Hyalo,
     output: &Output,
     area: Option<smithay::utils::Rectangle<i32, smithay::utils::Physical>>,
     size: smithay::utils::Size<i32, smithay::utils::Physical>,
     dmabuf: &mut Dmabuf,
+    pointer: bool,
 ) -> Result<(), String> {
+    let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
     let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
     match backend {
-        Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf),
+        Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
             let mut renderer = t.primary_renderer()?;
-            crate::screenshot::draw_into(renderer.as_mut(), &scene, output, area, size, dmabuf)
+            crate::screenshot::draw_into(renderer.as_mut(), &scene, output, area, size, dmabuf, cursor.as_ref())
         }
     }
 }

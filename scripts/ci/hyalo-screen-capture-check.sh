@@ -14,7 +14,12 @@
 #      hardware-encoded recording (the shell's default) gets frames, upright, and STOPS on
 #      SIGINT. Without the offer it waited forever for its first frame, wrote nothing and
 #      ignored the Stop button (owner-caught, 2026-10-03). CI's vkms has no VA-API: there only
-#      the offer is checked.
+#      the offer is checked;
+#   7. the pointer is in the recording (wf-recorder asks for it, `overlay_cursor`), over the
+#      probe's red — and not once `[cursor] recorded` is off (the recording widget's "Show the
+#      pointer"). Until 2026-10-04 Hyalo never drew it.
+# The control: a Hyalo that ignores `overlay_cursor` fails step 7 (no pointer in the frame);
+# one that ignores the setting, its second half.
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -105,3 +110,26 @@ if [ -n "$render" ] && ffmpeg -v error -init_hw_device vaapi=va:"$render" -f lav
 else
     echo "skip  recording on the GPU: no VA-API encoder here"
 fi
+
+# 7. The pointer in a recording, over the red half; and not once the setting is off.
+C=${HYALO_CONTROL:?HYALO_CONTROL is not set — the pointer cannot be moved}
+set -- $(echo "$geo" | tr ',x' '  ')
+gx=$1; gy=$2
+echo "move $((gx + w / 2)) $((gy + h / 4))" >"$C"
+sleep 0.5
+scale=$($MSG outputs | jq '.ok.outputs[0].scale')
+# The pointer's tip is its hotspot: whatever the theme, it draws right of it and below.
+box="$(awk -v s="$scale" -v x=$((w / 2)) -v y=$((h / 4)) 'BEGIN { printf "%d %d %d %d", x * s, y * s, 16 * s, 16 * s }')"
+record_unred() { # record_unred NAME → the non-red pixels of the box in a frame of the recording
+    timeout -s INT 3 wf-recorder -y -g "$geo" -f "$log/$1.mp4" >"$log/$1.log" 2>&1 || true
+    ffmpeg -v error -y -ss 1 -i "$log/$1.mp4" -frames:v 1 "$log/$1.png" || { echo 0; return; }
+    gjs -m "$here/hyalo-screen-capture-probe.js" unred "$log/$1.png" $box
+}
+with=$(record_unred pointer)
+[ "$with" -gt 10 ] || fail "no pointer in the recording: $with pixels of the box under it are not red (frame: $log/pointer.png)"
+$MSG settings '{"cursor":{"recorded":false}}' >/dev/null || fail "the setting could not be written"
+sleep 0.3
+without=$(record_unred no-pointer)
+$MSG settings '{"cursor":{"recorded":null}}' >/dev/null
+[ "$without" -le 2 ] || fail "with the pointer switched off, $without pixels under it are not red: it is still recorded"
+echo "ok    the pointer is in a recording ($with pixels over the red), and not when it is switched off ($without)"

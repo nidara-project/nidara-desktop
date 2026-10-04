@@ -24,6 +24,9 @@ pub struct WinitBackend {
     dmabuf_state: DmabufState,
     /// A redraw was asked for and the window has not drawn it yet.
     queued: bool,
+    /// The pointer's images: the host draws the pointer over the window, but a recording of
+    /// the output includes it (protocols/screencopy.rs) — and that is how it is tested nested.
+    pub cursors: crate::cursor::Cursors,
 }
 
 impl WinitBackend {
@@ -51,6 +54,7 @@ impl WinitBackend {
             damage_tracker,
             dmabuf_state: DmabufState::new(),
             queued: true,
+            cursors: crate::cursor::Cursors::load("default", 24),
         };
         Ok((backend, source))
     }
@@ -82,6 +86,7 @@ pub fn init(
     source: winit::WinitEventLoop,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let Backend::Winit(w) = &mut state.backend else { unreachable!() };
+    w.cursors = crate::cursor::Cursors::load(&state.config.cursor.theme, state.config.cursor.size);
     let _global = w.output.create_global::<Hyalo>(&state.display_handle);
     state.space.map_output(&w.output, (0, 0));
 

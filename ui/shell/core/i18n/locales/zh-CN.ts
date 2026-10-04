@@ -802,6 +802,8 @@ export default {
     "widget.screenrecord.settings.framerate.auto": "自动",
     "widget.screenrecord.settings.hardware": "硬件编码",
     "widget.screenrecord.settings.hardware.desc": "使用 GPU 编码。适用于 MP4 和 MKV；WebM 始终使用软件编码。",
+    "widget.screenrecord.settings.pointer": "显示指针",
+    "widget.screenrecord.settings.pointer.desc": "在录制中显示鼠标指针。",
     "widget.screenrecord.settings.file-group": "文件",
     "widget.screenrecord.settings.format": "格式",
     "widget.screenrecord.settings.format.desc": "MKV 即使录制中途崩溃也能保留文件；MP4 具有最好的通用播放兼容性。",

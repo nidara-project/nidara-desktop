@@ -455,7 +455,7 @@ phase_run() {
     # wf-recorder (wlr-screencopy) with frames, upright too.
     CAPTURE_LOG=/tmp/hyalo/screen-capture "$REPO/scripts/ci/hyalo-screen-capture-check.sh" >/tmp/hyalo/screen-capture.log 2>&1 \
         || { log "FAIL: screen capture"; cat /tmp/hyalo/screen-capture.log; exit 1; }
-    log "screen capture OK ($(grep -c '^ok' /tmp/hyalo/screen-capture.log) steps: output, region, clipboard, watch, recording)"
+    log "screen capture OK ($(grep -c '^ok' /tmp/hyalo/screen-capture.log) steps: output, region, clipboard, watch, recording, pointer)"
     # How a window is drawn (#708 point 1): rounded corners, and the blur behind a translucent
     # one — the corner's pixel shows what is behind, the stripes under the glass are blurred,
     # and Settings' switch takes the blur away and gives it back.
