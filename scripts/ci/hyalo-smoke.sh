@@ -179,6 +179,11 @@ phase_run() {
         [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
         [ -n "$hyalo_pid" ] && kill "$hyalo_pid" 2>/dev/null || true
         cp -f /tmp/hyalo/*.png /tmp/hyalo/*.log /tmp/hyalo/*.json "$OUT"/ 2>/dev/null || true
+        # A check's own screenshots (its *_LOG directory), named after it: what a pixel check
+        # saw is the first thing to look at when it fails.
+        for f in /tmp/hyalo/*/*.png; do
+            [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
+        done
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
             echo "─── hyalo.log (tail) ───"; tail -n 60 "$hyalo_log" 2>/dev/null || true
