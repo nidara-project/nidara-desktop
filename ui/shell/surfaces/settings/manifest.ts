@@ -118,10 +118,6 @@ export const manifest = [
                         key: "appearance.windowControls",
                         note: "The side of the window controls the compositor draws over our windows' headers (#708 point 5, owner 2026-10-03): right by default (the Linux/Windows convention), left as an option. Only where the compositor draws them (Hyalo, `caps.windowControls`).",
                     },
-                    {
-                        key: "appearance.windowMinimize",
-                        note: "The minimize button (#724, owner 2026-10-04): in the default button-layout, removable here — the same key, so apps that draw their own title bar lose theirs too. Only where the compositor minimizes (Hyalo, `caps.minimize`).",
-                    },
                 ],
             },
             {

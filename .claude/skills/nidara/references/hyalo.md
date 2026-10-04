@@ -453,15 +453,16 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   system dconf default, `appmenu:maximize,close` (`scripts/gen-dconf-defaults.sh`; GNOME's own is
   `appmenu:close`, close alone), and `migrations/2026-10-04-button-layout-from-gnome-default.sh`
   resets an account that holds GNOME's factory string as its own (measured on the owner's
-  machine). Since #724 the default is `appmenu:minimize,maximize,close`. Settings → Appearance →
-  Windows → "Minimize button" (`appearance.windowMinimize`, `settingsCaps.minimize`) puts it in
-  the key or takes it out (`setWindowButton`), so the apps' own minimize goes with the
-  compositor's. No migration gives minimize to an account that already holds a value of its own
-  (Settings' side switch writes one): nothing of Hyalo has been published yet (owner,
-  2026-10-04), and such an account switches it on there. Nothing is carried on Hyprland (no
-  controls; it refuses a client's maximize too). The key is system-wide, so on the Hyprland
-  session an app's own minimize button does nothing — accepted by the owner (2026-10-04): the
-  next release is meant to be Hyalo only.
+  machine). Since #724 the default is `appmenu:minimize,maximize,close`, and there is NO switch
+  for minimize (owner, 2026-10-04: no use case — the dock gives a minimized window its place,
+  and tiled, minimizing takes a window out of the layout for a while); Settings offers the
+  side alone. The key can still be changed by hand, and everything follows it. No migration
+  gives minimize to an account that already holds a value of its own (Settings' side switch
+  writes one): nothing of Hyalo has been published yet (owner) — `gsettings reset
+  org.gnome.desktop.wm.preferences button-layout` brings the default back. Nothing is carried
+  on Hyprland (no controls; it refuses a client's maximize too). The key is system-wide, so on
+  the Hyprland session an app's own minimize button does nothing — accepted by the owner
+  (2026-10-04): the next release is meant to be Hyalo only.
 - **The kit's half** (`ui/lib/nidara-kit/platform/window-controls.ts`): a window has SLOTS — empty
   boxes that can hold the room, each with a `when(side)` — and the caller's own close button is
   the FALLBACK. With a layout, the fallbacks hide, the first slot that applies gets the box's size,
@@ -546,7 +547,7 @@ that picture and grows back out of it. `wm/minimize.rs`.
 - 🔴 **A tagged IPC request cannot have integer map keys**: `#[serde(tag = "request")]` reads
   through serde's buffered content, which will not turn `"12"` into a `u64` ("invalid type:
   string"). `minimize_targets` takes string keys and parses them.
-- **The shell**: `caps.minimize` (CompositorCaps) and `settingsCaps.minimize`; `minimizeWindow`.
+- **The shell**: `caps.minimize` (CompositorCaps); `minimizeWindow`.
   The dock (`DockCore`): a `minimized:<address>` item per window with `minimizedOrder > 0`,
   oldest first, between the trash's separator and the trash — a `DockItem` with `window`: a
   picture captured once when it is created (`captureWindow`; a minimized window draws nothing,

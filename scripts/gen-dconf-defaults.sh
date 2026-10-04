@@ -50,7 +50,7 @@ color-scheme='$scheme'
 
 # The window buttons, for apps that draw their own title bar AND for Hyalo's controls, which
 # follow this key (ui/shell/core/WindowButtons.ts). GNOME's own default is close alone.
-# Minimize, maximize and close (#724): Settings → Appearance → Windows can take minimize away.
+# Minimize, maximize and close (#724). Settings offers the side alone; minimize is always there.
 [org/gnome/desktop/wm/preferences]
 button-layout='appmenu:minimize,maximize,close'
 KEYFILE

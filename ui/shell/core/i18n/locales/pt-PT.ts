@@ -229,8 +229,6 @@ export default {
     "settings.appearance.interface-font.desc": "Tipo de letra utilizado na shell e nas aplicações GTK",
     "settings.appearance.mono-font": "Tipo de letra monoespaçado",
     "settings.appearance.mono-font.desc": "Tipo de letra para terminais e editores de código",
-    "settings.appearance.window-minimize": "Botão de minimizar",
-    "settings.appearance.window-minimize.desc": "Em todas as janelas, exceto diálogos. Uma janela minimizada fica à espera na Dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Aleatória",

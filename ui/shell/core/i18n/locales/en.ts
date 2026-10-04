@@ -235,8 +235,6 @@ export default {
     "settings.appearance.interface-font.desc": "Font used in the shell and GTK apps",
     "settings.appearance.mono-font": "Monospace font",
     "settings.appearance.mono-font.desc": "Font for terminals and code editors",
-    "settings.appearance.window-minimize": "Minimize button",
-    "settings.appearance.window-minimize.desc": "On every window except dialogs. A minimized window waits in the dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Random",

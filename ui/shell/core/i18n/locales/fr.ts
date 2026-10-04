@@ -229,8 +229,6 @@ export default {
     "settings.appearance.interface-font.desc": "Police utilisée dans le shell et les applications GTK",
     "settings.appearance.mono-font": "Police à chasse fixe",
     "settings.appearance.mono-font.desc": "Police pour les terminaux et éditeurs de code",
-    "settings.appearance.window-minimize": "Bouton Réduire",
-    "settings.appearance.window-minimize.desc": "Sur chaque fenêtre sauf les dialogues. Une fenêtre réduite attend dans le Dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Aléatoire",

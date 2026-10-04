@@ -28,7 +28,7 @@ import { barConfig } from "./surfaces/bar/barState"
 import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onIdleChanged } from "./core/PowerConfig"
 import { settings as compositorSettings } from "./core/CompositorState"
-import { readWindowButtons, setWindowButtonsSide, setWindowButton, onWindowButtonsChanged } from "./core/WindowButtons"
+import { readWindowButtons, setWindowButtonsSide, onWindowButtonsChanged } from "./core/WindowButtons"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
 import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange, specIconThemes } from "./core/Icons"
@@ -215,21 +215,6 @@ export function registerConfigEntries() {
             control: "segmented",
             optI18n: (v: string) => t(`settings.appearance.window-controls.${v}` as any),
         },
-    })
-    // The minimize button (#724, owner 2026-10-04): in the default, removable here. Written into
-    // the same `button-layout`, so an app's own minimize button goes with the compositor's. Only
-    // where the compositor minimizes (Hyalo): Hyprland has no minimize.
-    registerConfig("appearance.windowMinimize", {
-        desc: "Whether windows show a minimize button (every window but dialogs). A minimized window stays on its workspace, hidden, and comes back from the dock: its app's icon brings back the most recently minimized one, and each minimized window has its own picture at the end of the dock. Writes org.gnome.desktop.wm.preferences button-layout, which the compositor's controls and the apps that draw their own title bar both follow.",
-        type: "boolean",
-        available: () => compositorSettings.caps.minimize,
-        get: () => readWindowButtons().buttons.includes("minimize"),
-        set: v => setWindowButton("minimize", v as boolean),
-        subscribe: (apply) => {
-            apply(readWindowButtons().buttons.includes("minimize"))
-            return onWindowButtonsChanged(() => apply(readWindowButtons().buttons.includes("minimize")))
-        },
-        ui: { i18n: "settings.appearance.window-minimize" },
     })
     registerConfig("appearance.gtkTheme", {
         desc: "GTK theme for THIRD-PARTY apps only — Nidara's own processes load no GTK theme (tech-debt #107).",

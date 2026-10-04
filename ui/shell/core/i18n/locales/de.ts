@@ -229,8 +229,6 @@ export default {
     "settings.appearance.interface-font.desc": "Schriftart für Shell und GTK-Apps",
     "settings.appearance.mono-font": "Monospace-Schrift",
     "settings.appearance.mono-font.desc": "Schriftart für Terminals und Code-Editoren",
-    "settings.appearance.window-minimize": "Minimieren-Schaltfläche",
-    "settings.appearance.window-minimize.desc": "In jedem Fenster außer Dialogen. Ein minimiertes Fenster wartet im Dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Zufällig",

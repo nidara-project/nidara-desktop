@@ -62,7 +62,7 @@ function put(obj: any, path: string, value: unknown) {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: true, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true, recordedPointer: true, minimize: true },
+        caps: { animations: true, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true, recordedPointer: true },
 
         async readInput(current) {
             const input = config()?.input

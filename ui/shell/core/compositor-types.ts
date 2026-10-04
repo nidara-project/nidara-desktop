@@ -291,8 +291,6 @@ export interface SettingsCaps {
     /** Whether the pointer is drawn into a screen recording has a switch (Hyalo's `[cursor]
      *  recorded`). Hyprland always draws it: wf-recorder asks for it, and it has no setting. */
     recordedPointer: boolean
-    /** The compositor minimizes windows, so the minimize button can be offered (Hyalo, #724). */
-    minimize: boolean
 }
 
 /** Settings → Power: seconds without input before each step; 0 = never. */

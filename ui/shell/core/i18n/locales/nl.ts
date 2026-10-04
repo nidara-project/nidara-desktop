@@ -229,8 +229,6 @@ export default {
     "settings.appearance.interface-font.desc": "Lettertype gebruikt in de shell en GTK-apps",
     "settings.appearance.mono-font": "Monospace-lettertype",
     "settings.appearance.mono-font.desc": "Lettertype voor terminals en code-editors",
-    "settings.appearance.window-minimize": "Minimaliseerknop",
-    "settings.appearance.window-minimize.desc": "In elk venster behalve dialoogvensters. Een geminimaliseerd venster wacht in het dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Willekeurig",

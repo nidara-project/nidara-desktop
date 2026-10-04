@@ -236,8 +236,6 @@ export default {
     "settings.appearance.interface-font.desc": "Шрифт, используемый в оболочке и приложениях GTK",
     "settings.appearance.mono-font": "Моноширинный шрифт",
     "settings.appearance.mono-font.desc": "Шрифт для терминалов и редакторов кода",
-    "settings.appearance.window-minimize": "Кнопка «Свернуть»",
-    "settings.appearance.window-minimize.desc": "В каждом окне, кроме диалогов. Свёрнутое окно ждёт в доке.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Случайный",
