@@ -1,9 +1,11 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Pango from "gi://Pango"
 import GLib from "gi://GLib"
-import { getWordmark } from "../../utils"
-import { barItem, barOpen, barTooltip, isBarCustomAnchor, setBarItemKey } from "./capsule"
-import compositor from "../../core/CompositorState"
+import { barItem, barOpen, isBarCustomAnchor, setBarItemKey } from "./capsule"
+import compositor, { type CompositorWindow, type CompositorWorkspace } from "../../core/CompositorState"
+import appService from "../../core/AppService"
+import { t } from "../../core/i18n"
+import { GAME_WORKSPACE } from "../../core/game-session-logic"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
@@ -13,9 +15,9 @@ import { BAR_ITEM_PAD } from "../../common/widget-kit"
 // anchored under the given widget. Injected by Bar (same pattern as Tray).
 type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
 
-// Bar-left item (the left group, beside the system menu) showing the focused window's app name (wordmark), kept in
-// sync with Hyprland's focused client and its title changes. Clicking it (any
-// button) opens the window-options menu (WindowMenu.ts).
+// Bar-left item (the left group, beside the system menu) naming the focused window's APP, as
+// the app grid names it — never the window's title, which every window carries in its own
+// title bar. Clicking it (any button) opens the window-options menu (WindowMenu.ts).
 export interface AppTitleHandle {
   widget: Gtk.Widget
   /** Re-derive the label's cap after a resolution change. */
@@ -27,6 +29,17 @@ export interface AppTitleHandle {
 }
 
 const PAD_PX = 2 * BAR_ITEM_PAD // margin_start + margin_end
+
+/**
+ * What the capsule says. A window: its app's name (`appNameForWindow`). No window: the
+ * desktop you are on, by number — the one place on the bar that spells it out (the dots
+ * only show it). Game mode's workspace has a name, not a number.
+ */
+export function appTitleText(client: CompositorWindow | null, ws: CompositorWorkspace | null): string {
+  if (client) return appService.appNameForWindow(client)
+  if (ws?.name === GAME_WORKSPACE) return t("settings.gaming.title")
+  return ws && ws.id > 0 ? `${t("overview.workspace")} ${ws.id}` : t("overview.workspace")
+}
 
 /**
  * Uses Pango layout to measure the exact rendered width in pixels of the text,
@@ -81,10 +94,9 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   // Open while the window menu it anchors is down (the item IS the anchor).
   const capsule: Gtk.Widget = barItem({ child: appName, ...barOpen(() => isBarCustomAnchor(capsule)) })
 
-  // Tooltip: the window's WHOLE title — the label is a wordmark (an app name, or a
-  // title cut to fit the flank), so this is the one place the full title can be read.
-  // No window focused: the workspace name the label already shows.
-  barTooltip(capsule, () => compositor.focusedClient?.title || rawTitle)
+  // No tooltip: it used to carry the window's whole title, because the label showed a
+  // title cut to fit. The label is now the app's name and the title is in the window's
+  // own title bar, so a tooltip would only repeat one or the other.
 
   const startBudgetAnimation = (targetPx: number) => {
     targetBudgetPx = targetPx
@@ -123,23 +135,19 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
 
   GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
     const sync = () => {
-      const label = getWordmark(compositor.focusedClient, compositor.focusedWorkspace) || "—"
+      const label = appTitleText(compositor.focusedClient, compositor.focusedWorkspace) || "—"
       if (label !== rawTitle) {
         rawTitle = label
         updateLabel()
       }
     }
 
-    // TWO signals, because a rename is not a structural change. "changed" fires
-    // when the focused window/workspace actually changes; HyprlandState's
-    // signature deliberately ignores titles, so a window that merely renames
-    // itself — a terminal running a command, a YouTube tab — arrives on
-    // "title-changed" instead. That used to be a per-client `notify::title`
-    // handler on the AstalHyprland GObject, rewired on every focus change; the
-    // compositor announces it as `windowtitlev2` and HyprlandState forwards it,
-    // so there is nothing to rewire and nothing to disconnect.
+    // "changed" alone: it fires when focus, the workspace or a window's class moves.
+    // A window's TITLE is not what this says any more, so "title-changed" (a terminal
+    // running a command, a browser tab) is no reason to look again. The registry is:
+    // an app installed while its window is up gets its entry's name when it lands.
     compositor.connect("changed", sync)
-    compositor.connect("title-changed", sync)
+    appService.connect(sync)
     sync()
     return GLib.SOURCE_REMOVE
   })
@@ -149,6 +157,9 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
     // The open path, shared by the click gesture and the IPC hook.
     const openWindowMenu = () => {
       if (status.cc_edit_mode) return   // same guard as the other bar capsules
+      // Every row acts on a window; with none, there is no menu to open. (The desktop's
+      // mode is in the overview the dots open — #513 — not here.)
+      if (!compositor.focusedClient) return
       menuOpen = true
       // Left-align the menu with the capsule's left edge: it sits near the left
       // screen edge, so a centered panel would spill off the left.

@@ -130,7 +130,7 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSearch`, `toggleAppGrid`,
-`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAgent` (the built-in Assistant island; `Super+A`), `agentNewConversation` (ends the Assistant's conversation and starts an empty one — hidden from the Assistant itself, refuses mid-turn), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
+`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `settingsApp <desktop-id>` (one app's own page, Apps › Installed apps › <app> — what the window menu's "App settings…" does; an app with no page leaves Settings on the list and says so), `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAgent` (the built-in Assistant island; `Super+A`), `agentNewConversation` (ends the Assistant's conversation and starts an empty one — hidden from the Assistant itself, refuses mid-turn), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
@@ -174,7 +174,7 @@ GType), `Type` (substring, case-insensitive), optionally scoped `selector@window
 Two gotchas learned building it: (1) **overlays live under the `nidara-bar` window**
 (commandment 5), so scope the CC/NC/menus with `@bar`, *not* `@control`; (2) `pageBox(id)`
 sets the id as a **CSS class**, so a Settings page is `.display-page`, not `#display-page`.
-Examples: `nidara-ipc queryUI .bar-app-name` (assert the focused-app wordmark text),
+Examples: `nidara-ipc queryUI .bar-app-name` (assert the focused window's app name),
 `queryUI .nidara-list-title@settings` (assert a Display monitor section rendered),
 `queryUI .nidara-menu-row` (a flat menu's rows). It pairs with the deterministic show
 actions (`settingsPage X`, `toggleCC`) — open, then `queryUI` to assert — and avoids
@@ -381,7 +381,7 @@ still open, **and still on the focused workspace**. Two consequences worth keepi
 - Reconciling *before* `_stateSignature()` means a grab release is not a structural change at all, so
   nothing repaints and the capsule never even blinks.
 
-The rule this encodes, and the one to preserve if you touch `getWordmark`: **the workspace name is the
+The rule this encodes, and the one to preserve if you touch `appTitleText` (AppTitle.tsx): **the workspace name is the
 fallback for an empty workspace, not for "the compositor went quiet".**
 
 #### The compositor's LIVE answer needs the same validation — it can be confidently wrong

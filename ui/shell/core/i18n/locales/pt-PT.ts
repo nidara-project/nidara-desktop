@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "Reduzir transparência",
     "settings.accessibility.reduce-transparency.desc": "A barra, o dock, os painéis e as janelas ficam opacos, seja qual for o vidro escolhido.",
     "settings.accessibility.reduce-motion":        "Reduzir movimento",
-    "settings.accessibility.reduce-motion.desc":        "Os painéis aparecem sem efeito, e as animações de janelas e áreas de trabalho são desativadas.",
+    "settings.accessibility.reduce-motion.desc":        "Os painéis aparecem sem efeito, e as animações de janelas e ambientes de trabalho são desativadas.",
 
     // Users
     "settings.users.title": "Utilizadores",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "Ficheiros recentes",
 
     // Workspace Overview
-    "overview.workspace": "Espaço de trabalho",
+    "overview.workspace": "Ambiente de trabalho",
     "overview.empty": "Vazio",
     "overview.window": "janela",
     "overview.windows": "janelas",
@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "Flutuante",
-    "bar.window-menu.pseudo": "Pseudo-mosaico",
     "bar.window-menu.fullscreen": "Ecrã inteiro",
     "bar.window-menu.center": "Centrar no ecrã",
-    "bar.window-menu.pin": "Fixar em todos os espaços de trabalho",
-    "bar.window-menu.move-to": "Mover para espaço de trabalho",
-    "bar.window-menu.workspace": "Espaço de trabalho",
-    "bar.window-menu.float-all": "Tornar todas as janelas flutuantes",
-    "bar.window-menu.no-window": "Nenhuma janela em foco",
+    "bar.window-menu.pin": "Fixar em todos os ambientes de trabalho",
+    "bar.window-menu.move-to": "Mover para outro ambiente de trabalho",
     "bar.window-menu.group": "Grupo",
     "bar.window-menu.group.create": "Criar grupo",
     "bar.window-menu.group.move-out": "Retirar do grupo",

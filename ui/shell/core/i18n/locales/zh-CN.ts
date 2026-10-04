@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "降低透明度",
     "settings.accessibility.reduce-transparency.desc": "无论玻璃质感如何设置，顶栏、程序坞、面板与窗口都将变为不透明。",
     "settings.accessibility.reduce-motion": "减弱动态效果",
-    "settings.accessibility.reduce-motion.desc": "面板直接显示，窗口与工作区动画关闭。",
+    "settings.accessibility.reduce-motion.desc": "面板直接显示，窗口与桌面动画关闭。",
 
     // Users
     "settings.users.title": "用户",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "最近的文件",
 
     // Workspace Overview
-    "overview.workspace": "工作区",
+    "overview.workspace": "桌面",
     "overview.empty": "空",
     "overview.window": "个窗口",
     "overview.windows": "个窗口",
@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "浮动",
-    "bar.window-menu.pseudo": "伪平铺",
     "bar.window-menu.fullscreen": "全屏",
     "bar.window-menu.center": "在屏幕上居中",
-    "bar.window-menu.pin": "固定到所有工作区",
-    "bar.window-menu.move-to": "移动到工作区",
-    "bar.window-menu.workspace": "工作区",
-    "bar.window-menu.float-all": "使所有窗口浮动",
-    "bar.window-menu.no-window": "没有活动窗口",
+    "bar.window-menu.pin": "固定到所有桌面",
+    "bar.window-menu.move-to": "移动到其他桌面",
     "bar.window-menu.group": "分组",
     "bar.window-menu.group.create": "创建分组",
     "bar.window-menu.group.move-out": "移出分组",

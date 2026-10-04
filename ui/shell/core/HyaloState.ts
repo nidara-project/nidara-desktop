@@ -390,6 +390,7 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
     togglePseudo(address: string) { return onWindow("pseudo", address) }
     togglePin(address: string) { return onWindow("pin", address) }
     toggleFullscreen(address: string) { return onWindow("fullscreen", address) }
+    toggleMaximize(address: string) { return onWindow("maximize", address) }
     centerWindow(address: string) { return onWindow("center", address) }
     floatAllInWorkspace(wsId: number) { return run(`float-all ${wsId}`) }
     tileAllInWorkspace(wsId: number) { return run(`tile-all ${wsId}`) }

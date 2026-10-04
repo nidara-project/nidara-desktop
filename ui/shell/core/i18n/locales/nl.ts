@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "Transparantie verminderen",
     "settings.accessibility.reduce-transparency.desc": "Balk, dock, panelen en vensters worden ondoorzichtig, ongeacht de glasinstelling.",
     "settings.accessibility.reduce-motion": "Beweging beperken",
-    "settings.accessibility.reduce-motion.desc": "Panelen verschijnen zonder effect en venster- en werkbladanimaties worden uitgeschakeld.",
+    "settings.accessibility.reduce-motion.desc": "Panelen verschijnen zonder effect en venster- en bureaubladanimaties worden uitgeschakeld.",
 
     // Users
     "settings.users.title": "Gebruikers",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "Recente bestanden",
 
     // Workspace Overview
-    "overview.workspace": "Werkblad",
+    "overview.workspace": "Bureaublad",
     "overview.empty": "Leeg",
     "overview.window": "venster",
     "overview.windows": "vensters",
@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "Zwevend",
-    "bar.window-menu.pseudo": "Pseudo-mozaïek",
     "bar.window-menu.fullscreen": "Volledig scherm",
     "bar.window-menu.center": "Centreren op scherm",
-    "bar.window-menu.pin": "Vastmaken aan alle werkbladen",
-    "bar.window-menu.move-to": "Verplaatsen naar werkblad",
-    "bar.window-menu.workspace": "Werkblad",
-    "bar.window-menu.float-all": "Alle vensters zwevend maken",
-    "bar.window-menu.no-window": "Geen actief venster",
+    "bar.window-menu.pin": "Vastmaken aan alle bureaubladen",
+    "bar.window-menu.move-to": "Verplaatsen naar ander bureaublad",
     "bar.window-menu.group": "Groep",
     "bar.window-menu.group.create": "Groep maken",
     "bar.window-menu.group.move-out": "Uit groep verwijderen",

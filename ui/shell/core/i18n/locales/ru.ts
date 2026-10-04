@@ -606,14 +606,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "Плавающее",
-    "bar.window-menu.pseudo": "Псевдомозаика",
     "bar.window-menu.fullscreen": "Полноэкранный режим",
     "bar.window-menu.center": "Центрировать на экране",
     "bar.window-menu.pin": "Закрепить на всех рабочих столах",
-    "bar.window-menu.move-to": "Переместить на рабочий стол",
-    "bar.window-menu.workspace": "Рабочий стол",
-    "bar.window-menu.float-all": "Сделать все окна плавающими",
-    "bar.window-menu.no-window": "Нет активного окна",
+    "bar.window-menu.move-to": "Переместить на другой рабочий стол",
     "bar.window-menu.group": "Группа",
     "bar.window-menu.group.create": "Создать группу",
     "bar.window-menu.group.move-out": "Убрать из группы",

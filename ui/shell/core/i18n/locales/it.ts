@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "Riduci la trasparenza",
     "settings.accessibility.reduce-transparency.desc": "Barra, dock, pannelli e finestre diventano opachi, qualunque sia il vetro scelto.",
     "settings.accessibility.reduce-motion": "Riduci il movimento",
-    "settings.accessibility.reduce-motion.desc": "I pannelli compaiono senza effetto e le animazioni di finestre e spazi di lavoro vengono disattivate.",
+    "settings.accessibility.reduce-motion.desc": "I pannelli compaiono senza effetto e le animazioni di finestre e desktop vengono disattivate.",
 
     // Users
     "settings.users.title": "Utenti",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "File recenti",
 
     // Workspace Overview
-    "overview.workspace": "Spazio di lavoro",
+    "overview.workspace": "Desktop",
     "overview.empty": "Vuoto",
     "overview.window": "finestra",
     "overview.windows": "finestre",
@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "Fluttuante",
-    "bar.window-menu.pseudo": "Pseudo-mosaico",
     "bar.window-menu.fullscreen": "Schermo intero",
     "bar.window-menu.center": "Centra sullo schermo",
-    "bar.window-menu.pin": "Blocca su tutti gli spazi di lavoro",
-    "bar.window-menu.move-to": "Sposta nello spazio di lavoro",
-    "bar.window-menu.workspace": "Spazio di lavoro",
-    "bar.window-menu.float-all": "Rendi fluttuanti tutte le finestre",
-    "bar.window-menu.no-window": "Nessuna finestra in primo piano",
+    "bar.window-menu.pin": "Blocca su tutti i desktop",
+    "bar.window-menu.move-to": "Sposta su un altro desktop",
     "bar.window-menu.group": "Gruppo",
     "bar.window-menu.group.create": "Crea gruppo",
     "bar.window-menu.group.move-out": "Rimuovi dal gruppo",

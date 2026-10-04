@@ -518,6 +518,35 @@ class AppService {
     }
 
     /**
+     * The NAME a window's app goes by: its desktop entry's `Name=`, in the user's
+     * language — exactly what the app grid labels it. The bar's app title says this and
+     * nothing else (the window's own title lives in its title bar).
+     *
+     * The class first, then the class it was born with: an app that renames its window
+     * class after mapping still has the entry it launched from. Same lookup as the dock
+     * (`getAppInfo`: id, then `StartupWMClass`, then variants), so the two never name one
+     * window differently. A window no entry claims shows its class, capitalised.
+     */
+    appNameForWindow(win: { class?: string; initialClass?: string }): string {
+        const id = this.appIdForWindow(win)
+        const name = id ? this.getAppInfo(id)?.get_name() : null
+        if (name) return name
+        const cls = win.class || win.initialClass || ""
+        return cls.charAt(0).toUpperCase() + cls.slice(1)
+    }
+
+    /** The desktop id (no `.desktop`) of the entry a window belongs to, or null when no
+     *  entry claims it — the lookup behind `appNameForWindow`. */
+    appIdForWindow(win: { class?: string; initialClass?: string }): string | null {
+        for (const cls of [win.class, win.initialClass]) {
+            const info = this.getAppInfo(this.resolveWindowApp(cls || "") || "")
+            const id = info?.get_id()
+            if (id) return id.replace(/\.desktop$/, "")
+        }
+        return null
+    }
+
+    /**
      * Which DOCK SLOT a Hyprland window belongs to = `resolveWindowApp` plus the
      * dock's own groupings. Deliberately NOT the same question as identity: the
      * dock collapses every file manager into its single Home/Finder shortcut, so

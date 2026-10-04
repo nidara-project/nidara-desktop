@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "透明度を下げる",
     "settings.accessibility.reduce-transparency.desc": "ガラス質感の設定にかかわらず、バー、ドック、パネル、ウィンドウが不透明になります。",
     "settings.accessibility.reduce-motion": "視差効果を減らす",
-    "settings.accessibility.reduce-motion.desc": "パネルは効果なしで表示され、ウィンドウとワークスペースのアニメーションが無効になります。",
+    "settings.accessibility.reduce-motion.desc": "パネルは効果なしで表示され、ウィンドウとデスクトップのアニメーションが無効になります。",
 
     // Users
     "settings.users.title": "ユーザー",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "最近使ったファイル",
 
     // Workspace Overview
-    "overview.workspace": "ワークスペース",
+    "overview.workspace": "デスクトップ",
     "overview.empty": "空",
     "overview.window": "個のウィンドウ",
     "overview.windows": "個のウィンドウ",
@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "フロート",
-    "bar.window-menu.pseudo": "疑似タイル",
     "bar.window-menu.fullscreen": "フルスクリーン",
     "bar.window-menu.center": "画面中央に配置",
-    "bar.window-menu.pin": "すべてのワークスペースに固定",
-    "bar.window-menu.move-to": "ワークスペースへ移動",
-    "bar.window-menu.workspace": "ワークスペース",
-    "bar.window-menu.float-all": "すべてのウィンドウをフロートにする",
-    "bar.window-menu.no-window": "フォーカス中のウィンドウがありません",
+    "bar.window-menu.pin": "すべてのデスクトップに固定",
+    "bar.window-menu.move-to": "別のデスクトップへ移動",
     "bar.window-menu.group": "グループ",
     "bar.window-menu.group.create": "グループを作成",
     "bar.window-menu.group.move-out": "グループから出す",

@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "Ostatnie pliki",
 
     // Workspace Overview
-    "overview.workspace": "Obszar roboczy",
+    "overview.workspace": "Pulpit",
     "overview.empty": "Pusty",
     "overview.window": "okno",
     "overview.windows": "okna",
@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "Pływające",
-    "bar.window-menu.pseudo": "Pseudo-mozaika",
     "bar.window-menu.fullscreen": "Pełny ekran",
     "bar.window-menu.center": "Wyśrodkuj na ekranie",
-    "bar.window-menu.pin": "Przypnij do wszystkich obszarów roboczych",
-    "bar.window-menu.move-to": "Przenieś do obszaru roboczego",
-    "bar.window-menu.workspace": "Obszar roboczy",
-    "bar.window-menu.float-all": "Ustaw wszystkie okna jako pływające",
-    "bar.window-menu.no-window": "Brak aktywnego okna",
+    "bar.window-menu.pin": "Przypnij do wszystkich pulpitów",
+    "bar.window-menu.move-to": "Przenieś na inny pulpit",
     "bar.window-menu.group": "Grupa",
     "bar.window-menu.group.create": "Utwórz grupę",
     "bar.window-menu.group.move-out": "Usuń z grupy",

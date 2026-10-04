@@ -599,14 +599,10 @@ export default {
 
     // Window menu (AppTitle)
     "bar.window-menu.float": "Flutuante",
-    "bar.window-menu.pseudo": "Pseudo-encaixe",
     "bar.window-menu.fullscreen": "Tela cheia",
     "bar.window-menu.center": "Centralizar na tela",
     "bar.window-menu.pin": "Fixar em todas as áreas de trabalho",
-    "bar.window-menu.move-to": "Mover para área de trabalho",
-    "bar.window-menu.workspace": "Área de trabalho",
-    "bar.window-menu.float-all": "Tornar todas as janelas flutuantes",
-    "bar.window-menu.no-window": "Nenhuma janela em foco",
+    "bar.window-menu.move-to": "Mover para outra área de trabalho",
     "bar.window-menu.group": "Grupo",
     "bar.window-menu.group.create": "Criar grupo",
     "bar.window-menu.group.move-out": "Remover do grupo",
