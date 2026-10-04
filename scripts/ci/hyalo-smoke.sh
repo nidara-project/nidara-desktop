@@ -462,7 +462,7 @@ phase_run() {
     LOOK_LOG=/tmp/hyalo/window-look "$REPO/scripts/ci/hyalo-window-look-check.sh" >/tmp/hyalo/window-look.log 2>&1 \
         || { log "FAIL: window look"; cat /tmp/hyalo/window-look.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
-    log "window look OK ($(grep -c '^ok' /tmp/hyalo/window-look.log) steps: look, corners, backdrop, the switch)"
+    log "window look OK ($(grep -c '^ok' /tmp/hyalo/window-look.log) steps: look, corners, backdrop, the switch, line and shadow)"
     # Who draws a title bar: Hyalo, as Hyprland did, by xdg-decoration and KDE's
     # server-decoration — whatever the client asked — so a window that asks draws no margin
     # of its own and is rounded.

@@ -374,6 +374,7 @@ pub fn push<R: HyaloRenderer>(
     cfg: &WindowsConfig,
     controls: Option<(Rectangle<f64, Physical>, super::controls::Controls)>,
     title_bar: Option<super::title_bar::TitleBar>,
+    decor: Option<bool>,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
@@ -435,6 +436,13 @@ pub fn push<R: HyaloRenderer>(
         out.insert(at, OutputElement::TitleBar(element));
     }
     let geo = frame;
+    // Its line and its shadow: outside its box, so under its popups where they reach past it —
+    // and IN FRONT of its backdrop, which then does not see them: behind it, the blur took the
+    // window's own shadow in at its edges and darkened its inside (measured: 103 → 96).
+    let decor = decor.and_then(|active| {
+        super::decor::DecorElement::new(&surface, geo, if look.rounded { radius } else { 0.0 }, active, cfg, scale)
+    });
+    out.extend(decor.map(OutputElement::Decor));
     if look.backdrop {
         let b = &cfg.backdrop;
         let radius = if look.rounded { radius } else { 0.0 };

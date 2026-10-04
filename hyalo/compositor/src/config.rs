@@ -80,6 +80,8 @@ pub struct WindowsConfig {
     pub backdrop: BackdropConfig,
     pub controls: ControlsConfig,
     pub title_bar: TitleBarConfig,
+    pub border: BorderConfig,
+    pub shadow: ShadowConfig,
 }
 
 impl Default for WindowsConfig {
@@ -90,8 +92,84 @@ impl Default for WindowsConfig {
             backdrop: BackdropConfig::default(),
             controls: ControlsConfig::default(),
             title_bar: TitleBarConfig::default(),
+            border: BorderConfig::default(),
+            shadow: ShadowConfig::default(),
         }
     }
+}
+
+/// The line around every window (render/decor.rs), outside its box and following its corners:
+/// Hyprland's for Nidara (config/hypr/hyprland.lua `col.active_border`/`inactive_border`). Its
+/// room is `[layout] border`, which tiles leave between them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct BorderConfig {
+    /// Logical px; 0 = none.
+    pub width: f64,
+    /// The focused window's: a gradient from the first colour to the second, at `angle`
+    /// degrees (0 left to right, 90 top to bottom). `#rrggbb` or `#rrggbbaa`.
+    pub active: [String; 2],
+    pub angle: f64,
+    /// Every other window's.
+    pub inactive: String,
+}
+
+impl Default for BorderConfig {
+    fn default() -> Self {
+        Self { width: 1.0, active: ["#ffffff4d".into(), "#ffffff1a".into()], angle: 45.0, inactive: "#59595933".into() }
+    }
+}
+
+/// The shadow under every window (render/decor.rs): what lifts a window off the one beneath —
+/// and what an app that draws its own frame lost when Hyalo cut that frame to its box.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ShadowConfig {
+    pub enabled: bool,
+    /// How it fades: (1 − t)^power over its range — Hyprland's `render_power`.
+    pub power: f64,
+    /// The focused window's, deeper; every other window's.
+    pub active: ShadowLook,
+    pub inactive: ShadowLook,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ShadowLook {
+    /// How far it reaches past the window's edge, logical px.
+    pub range: f64,
+    /// How far it falls below the window, logical px.
+    pub offset: f64,
+    /// `#rrggbbaa`: its colour where it is strongest, at the window's edge.
+    pub color: String,
+}
+
+impl Default for ShadowLook {
+    fn default() -> Self {
+        Self { range: 20.0, offset: 4.0, color: "#00000059".into() }
+    }
+}
+
+impl Default for ShadowConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            power: 2.0,
+            active: ShadowLook::default(),
+            inactive: ShadowLook { range: 12.0, offset: 2.0, color: "#00000033".into() },
+        }
+    }
+}
+
+/// `#rrggbb` or `#rrggbbaa` as premultiplied RGBA, 0..1; None when it is neither.
+pub fn parse_color(s: &str) -> Option<[f32; 4]> {
+    let h = s.strip_prefix('#')?;
+    if !matches!(h.len(), 6 | 8) || !h.is_ascii() {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok().map(|b| b as f32 / 255.0);
+    let a = if h.len() == 8 { byte(6)? } else { 1.0 };
+    Some([byte(0)? * a, byte(2)? * a, byte(4)? * a, a])
 }
 
 /// The title bar Hyalo draws for an app that leaves its decorations to the compositor (kitty,

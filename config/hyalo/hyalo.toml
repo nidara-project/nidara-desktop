@@ -118,6 +118,25 @@ vibrancy = 0.4
 vibrancy_darkness = 0.1
 noise = 0.01
 
+# The line around every window, outside its box and following its corners — Hyprland's for
+# Nidara: a light gradient (`active`, from the first colour to the second at `angle` degrees)
+# on the focused window, a faint grey on the others. `#rrggbb` or `#rrggbbaa`; width 0 = none.
+# Its room is `[layout] border` (hyalo/compositor/src/render/decor.rs).
+[windows.border]
+width = 1
+active = ["#ffffff4d", "#ffffff1a"]
+angle = 45
+inactive = "#59595933"
+
+# The shadow under every window: deeper under the focused one. `range` how far it reaches past
+# the edge and `offset` how far it falls, logical px; it fades as (1 - t)^power. Not on a
+# fullscreen window, nor where a rule took the corners (games).
+[windows.shadow]
+enabled = true
+power = 2
+active = { range = 20, offset = 4, color = "#00000059" }
+inactive = { range = 12, offset = 2, color = "#00000033" }
+
 # Key and pointer bindings: modifiers + key = a command (hyalo/compositor/src/binds.rs for
 # the syntax, wm/actions.rs for the commands). The same set as the Hyprland session
 # (config/hypr/hyprland.lua). No binding ends the session on purpose — one stray chord must
