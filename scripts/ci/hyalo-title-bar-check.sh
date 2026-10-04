@@ -8,7 +8,8 @@
 #      in it (60×32 — maximize and close, no minimize until #724 — the same 8 px from the right
 #      as above and below it);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
-#      dark on it (the title's darkest pixel);
+#      dark on it (the title's darkest pixel) — also for an app that draws into a subsurface
+#      over a transparent toplevel, as Firefox does;
 #   3. the pointer over the bar is Hyalo's: the app gets a leave, and no click;
 #   4. dragged by its bar, the window moves; a double click maximizes it, another restores it;
 #   5. the app switches to its own frame while it runs (client-side, a shadow margin, its own
@@ -18,14 +19,18 @@
 #      window's, past the app's own; its own maximize button (the probe's SIGHUP) maximizes it —
 #      with no bar of Hyalo's over its own frame — and restores it to the box it had, though it
 #      commits a frame for the other state before it acks each change, as Chrome's web apps and
-#      Telegram do; back to server-side, the bar comes back;
+#      Telegram do; its menu (an xdg_popup, placed against its window geometry, which starts
+#      inside its surface as Firefox's does) is drawn where a click reaches it; back to
+#      server-side, the bar comes back;
 #   6. close in the bar's capsule closes it.
 # The controls: the same probe against a Hyalo without the title bar has `title_bar` 0 (step 1);
 # against one that does not cut a client-side frame to its box, the red margin shows beside it,
 # and its corner is the app's colour (step 5); against one that refuses a client's maximize
 # request, `fullscreen` stays none (step 5); against one that reads a frame committed before the
 # client's ack, the maximized window gets the bar and the restored one keeps the maximized size
-# (step 5).
+# (step 5); against one that places a window's popups against its surface, the click on the
+# drawn menu reaches nothing (step 5); against one that samples only the toplevel, the bar over
+# the subsurface probe is clear (step 2).
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -72,6 +77,24 @@ done
 ink=$(pixels darkest "$log/bar.png" "$4" "$5" "$6" "$7")
 [ "$ink" -lt 120 ] || fail "the title's darkest pixel is $ink on a light bar: no dark ink"
 echo "ok    the bar takes the app's top colour ($bg), and its title is dark on it ($ink)"
+
+# 2b. An app that draws everything into a subsurface over a transparent toplevel (Firefox): the
+# bar takes the subsurface's colour, not the toplevel's nothing.
+HYALO_PROBE_SUBSURFACE=1 hyalo-title-bar-probe >"$log/sub.log" 2>&1 &
+sub=$!
+for _ in $(seq 1 40); do grep -q '^SHOWN' "$log/sub.log" && break; sleep 0.25; done
+sleep 0.8
+sw=$($MSG windows | jq -c '.ok.windows[] | select(.app_id == "hyalo-title-bar-probe-sub")')
+[ "$(echo "$sw" | jq '.title_bar')" = 48 ] || { kill $sub; fail "the subsurface probe has no bar: $sw"; }
+$MSG screenshot "$log/sub.png" >/dev/null || { kill $sub; fail "no screenshot"; }
+set -- $(echo "$sw" | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 18) * $s | floor)"')
+subbar=$(pixels pixel "$log/sub.png" "$1" "$2")
+kill $sub
+set -- $subbar
+[ "$1" -ge 40 ] && [ "$1" -le 56 ] && [ "$2" -ge 120 ] && [ "$2" -le 136 ] && [ "$3" -ge 184 ] && [ "$3" -le 200 ] \
+    || fail "over a transparent toplevel with its content in a subsurface, the bar is $subbar, not the content's blue 48 128 192"
+echo "ok    content in a subsurface (Firefox): the bar takes its colour ($subbar)"
+sleep 0.4
 
 # 3. The pointer over the bar is Hyalo's.
 win | jq -r '"move \(.x + 60) \(.y + 150)"' >"$C"; sleep 0.4
@@ -128,6 +151,21 @@ corner_t=$(pixels pixel "$log/own.png" $(at 3 3)); corner_b=$(pixels pixel "$log
 near "$corner_t" 230 && fail "the window's top corner is the app's colour ($corner_t): not cut to the window's"
 near "$corner_b" 48 && fail "the window's bottom corner is the app's colour ($corner_b): not cut to the window's"
 echo "ok    with its own frame it is cut to its box: its edges ($edge_l / $edge_t), no margin, the window's corners"
+# Its menu, placed against its window geometry — which starts inside its surface: clicked 4 px
+# inside the red's DRAWN top-left corner, it gets the press. (Its centre would not tell: the
+# margin, 12, is half the menu's 24 — drawn that far off, its centre is still on the menu.)
+kill -URG "$pid"
+wait_line '^POPUP' || fail "the probe's menu never came up"
+sleep 0.5
+$MSG screenshot "$log/popup.png" >/dev/null || fail "no screenshot"
+# Only within the probe's window: the smoke leaves other checks' windows about, red ones too.
+red=$(pixels red "$log/popup.png" $(win | jq -r --argjson s "$scale" '"\(.x * $s | floor) \(.y * $s | floor) \(.width * $s | floor) \(.height * $s | floor)"'))
+[ "$red" != none ] || fail "the menu is not drawn"
+set -- $red
+px=$(awk -v v="$1" -v s="$scale" 'BEGIN { printf "%d", v / s + 4 }'); py=$(awk -v v="$2" -v s="$scale" 'BEGIN { printf "%d", v / s + 4 }')
+echo "click $px $py" >"$C"
+wait_line '^BUTTON popup' || fail "clicked where its menu is drawn ($px,$py), and the menu got nothing: it is drawn away from where the pointer reaches it"
+echo "ok    its menu is drawn where the pointer reaches it, though its geometry starts inside its surface"
 box=$(win | jq -c '[.x, .y, .width, .height]')
 kill -HUP "$pid"
 wait_field fullscreen maximized || fail "the app's own maximize button did not maximize: $(field fullscreen)"
