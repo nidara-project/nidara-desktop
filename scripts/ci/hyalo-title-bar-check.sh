@@ -158,7 +158,8 @@ kill -URG "$pid"
 wait_line '^POPUP' || fail "the probe's menu never came up"
 sleep 0.5
 $MSG screenshot "$log/popup.png" >/dev/null || fail "no screenshot"
-red=$(pixels red "$log/popup.png")
+# Only within the probe's window: the smoke leaves other checks' windows about, red ones too.
+red=$(pixels red "$log/popup.png" $(win | jq -r --argjson s "$scale" '"\(.x * $s | floor) \(.y * $s | floor) \(.width * $s | floor) \(.height * $s | floor)"'))
 [ "$red" != none ] || fail "the menu is not drawn"
 set -- $red
 px=$(awk -v v="$1" -v s="$scale" 'BEGIN { printf "%d", v / s + 4 }'); py=$(awk -v v="$2" -v s="$scale" 'BEGIN { printf "%d", v / s + 4 }')
