@@ -6,6 +6,8 @@
 //   gjs -m hyalo-window-look-probe.js pixel FILE X Y      the pixel's "R G B"
 //   gjs -m hyalo-window-look-probe.js spread FILE X Y W H how far the green channel varies across a
 //                                                        row of the box: its standard deviation
+//   gjs -m hyalo-window-look-probe.js red FILE             the top-left corner of the pure red pixels,
+//                                                        "X Y" (hyalo-title-bar-check.sh: a menu), or "none"
 //   gjs -m hyalo-window-look-probe.js darkest FILE X Y W H the darkest pixel's mean of R, G and B in
 //                                                        the box (hyalo-title-bar-check.sh: the ink)
 //
@@ -37,6 +39,12 @@ if (mode === "pixel") {
     const mean = values.reduce((a, b) => a + b, 0) / values.length
     const sd = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length)
     print(sd.toFixed(1))
+} else if (mode === "red") {
+    const { px, stride } = pixels(ARGV[1])
+    let x0 = Infinity, y0 = Infinity
+    for (let o = 0; o < px.length; o += 4)
+        if (px[o] > 220 && px[o + 1] < 40 && px[o + 2] < 40) { x0 = Math.min(x0, (o % stride) / 4); y0 = Math.min(y0, Math.floor(o / stride)) }
+    print(x0 < Infinity ? `${x0} ${y0}` : "none")
 } else if (mode === "darkest") {
     const { px, stride } = pixels(ARGV[1])
     const [x, y, w, h] = ARGV.slice(2, 6).map(Number)

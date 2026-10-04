@@ -356,7 +356,17 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   owner chose the cut. A ring of one colour per side was the other option, and turned down: it
   shows as a 4 px band wherever the app's edge is not that colour.
 - **Sampling a client** (the title bar, `title_bar::ClientBox`): always through the
-  surface's VIEW — the viewport's crop and scaling — and only across the client's box. Measured
+  surface's VIEW — the viewport's crop and scaling — and only across the client's box; and from
+  the TOPMOST surface of its tree over the box's top row (`title_bar::sampled_surfaces`), not the
+  toplevel: Firefox draws everything into a subsurface over an empty, transparent toplevel, and
+  the bar sampled from the toplevel came out clear, the desktop through it (owner, 2026-10-04).
+- 🔴 **A window's popups are placed against its WINDOW GEOMETRY** (xdg-shell), so drawing one
+  is `geometry().loc + offset − popup.geometry().loc` from the surface's origin — what Smithay's
+  own `Window::render_elements` does. Until 2026-10-04 `window::push` left `geometry().loc` out:
+  a window whose geometry starts inside its surface (Firefox drawing its own frame, 26,23) had
+  its menus drawn that much up and left while the pointer met them where they really are —
+  "the hover lights with the pointer below the item". Layer and lock surfaces have no geometry
+  offset; the shell's menus were never affected. Measured
   2026-10-03: Chrome tiled beside kitty keeps its 1262 px buffer and crops it to 628 with
   wp_viewport, and the bar, which averaged the whole buffer row, came out half its colour.
 - **The line and the shadow** (`render/decor.rs`, `DecorElement`, 2026-10-04): one pass of a
@@ -566,7 +576,11 @@ headers, the title centred. `render/title_bar.rs`.
   (`title_bar` null at step 1); a bar of a fixed colour, and one that averages the whole buffer
   row (step 2: "the bar is 115 115 115… not one piece"); no clip ("the shadow margin shows left
   of the window (105 9 11…)"); a client-side frame left square ("not rounded"); client maximize
-  requests refused ("did not maximize: none"); a frame read before the ack, each guard removed
+  requests refused ("did not maximize: none"); the subsurface probe (`HYALO_PROBE_SUBSURFACE=1`,
+  blue top rows in a subsurface over a transparent toplevel) under a bar sampled from the
+  toplevel ("the bar is 237 237 237, not the content's blue"); a 24 px menu (SIGURG) clicked 4 px
+  inside its DRAWN corner, under popups placed against the surface ("the menu got nothing" — its
+  centre would not tell: the 12 px margin is half the menu); a frame read before the ack, each guard removed
   in turn ("maximized with its own frame, it got Hyalo's bar too"; "restored at [5,5,1262,678],
   it was [536,303,400,250]").
 

@@ -237,6 +237,37 @@ impl ClientBox {
     }
 }
 
+/// The surfaces of a window's tree that could give the bar its colour, topmost first, each with
+/// the window's box `g` in its own coordinates: those whose view covers the box's top row. Not
+/// only the toplevel: Firefox draws everything into a subsurface and leaves its toplevel an
+/// empty, transparent buffer — sampled, the bar came out clear, the desktop showing through
+/// (owner, 2026-10-04; measured nested with WAYLAND_DEBUG).
+pub fn sampled_surfaces(root: &WlSurface, g: Rectangle<i32, Logical>) -> Vec<(WlSurface, Rectangle<i32, Logical>)> {
+    use smithay::wayland::compositor::{TraversalAction, with_surface_tree_downward};
+    let row = Rectangle::<i32, Logical>::new((g.loc.x, g.loc.y + 1).into(), (g.size.w, 1).into());
+    let found = RefCell::new(Vec::new());
+    let view = |states: &smithay::wayland::compositor::SurfaceData| {
+        states.data_map.get::<RendererSurfaceStateUserData>().and_then(|d| d.lock().unwrap().view())
+    };
+    with_surface_tree_downward(
+        root,
+        smithay::utils::Point::<i32, Logical>::from((0, 0)),
+        |_, states, loc| match view(states) {
+            Some(v) => TraversalAction::DoChildren(*loc + v.offset),
+            None => TraversalAction::SkipChildren,
+        },
+        |surface, states, loc| {
+            let Some(v) = view(states) else { return };
+            let at = *loc + v.offset;
+            if Rectangle::new(at, v.dst).contains_rect(row) {
+                found.borrow_mut().push((surface.clone(), Rectangle::new(g.loc - at, g.size)));
+            }
+        },
+        |_, _, _| true,
+    );
+    found.into_inner()
+}
+
 /// What `render/mod.rs` knows of a window's title bar: the rest comes from the window.
 pub struct TitleBar {
     /// Its height, logical px.
@@ -277,7 +308,7 @@ impl TitleBarElement {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         surface: &WlSurface,
-        window_geometry: Rectangle<i32, Logical>,
+        sampled: Option<(&WlSurface, Rectangle<i32, Logical>)>,
         geo: Rectangle<f64, Physical>,
         bar: TitleBar,
         client: Option<GlesTexture>,
@@ -294,7 +325,7 @@ impl TitleBarElement {
         // edge of its own), across the client's box only — not the whole buffer: a client may
         // draw into a buffer larger than its window, or crop one with a viewport (measured,
         // 2026-10-03: Chrome tiled beside kitty gave a bar of half its colour).
-        let sampled = ClientBox::of(surface, window_geometry);
+        let sampled = sampled.and_then(|(s, g)| ClientBox::of(s, g));
         let client_commit = sampled.as_ref().map_or(CommitCounter::default(), |c| c.commit);
         let client = client.zip(sampled).and_then(|(tex, cb)| {
             if cb.b.size.w <= 0.0 || cb.b.size.h < 2.0 * cb.px {

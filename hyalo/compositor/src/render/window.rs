@@ -377,8 +377,14 @@ pub fn push<R: HyaloRenderer>(
     decor: Option<bool>,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
+    // A popup's position is relative to its parent's WINDOW GEOMETRY, not its surface (xdg-shell;
+    // Smithay's own `Window::render_elements` adds `geometry().loc`). Left out, the menus of a
+    // window whose geometry starts inside its surface — Firefox drawing its own frame, a 21,19 px
+    // shadow margin — were drawn that much up and left of where the pointer reached them
+    // (owner, 2026-10-04: "the hover lights with the pointer below the item").
+    let geometry_loc = window.geometry().loc;
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
-        let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
+        let offset = (geometry_loc + offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
         super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified);
     }
     // Its controls: over its own surfaces, under its popups (a menu opened from the header
@@ -420,11 +426,16 @@ pub fn push<R: HyaloRenderer>(
     // The title bar, made after the surfaces (their buffers are imported by now, and it samples
     // the client's), placed before them: under its popups like the controls.
     if let Some(tb) = title_bar {
-        let client = renderer.surface_texture(&surface);
+        // The topmost surface of its tree over its top row that has drawn (Firefox's is a
+        // subsurface).
+        let (sampled, client) = super::title_bar::sampled_surfaces(&surface, window.geometry())
+            .into_iter()
+            .find_map(|(s, g)| renderer.surface_texture(&s).map(|t| ((s, g), t)))
+            .unzip();
         let r = if look.rounded { radius } else { 0.0 };
         let element = super::title_bar::TitleBarElement::new(
             &surface,
-            window.geometry(),
+            sampled.as_ref().map(|(s, g)| (s, *g)),
             geo,
             tb,
             client,
