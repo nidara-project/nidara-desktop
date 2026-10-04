@@ -5,8 +5,8 @@
 # HYALO_CONTROL, with `hyalo-title-bar-probe` in PATH, on a floating workspace.
 #
 #   1. the probe asks for server-side: it gets a 48 px bar on top of its box, and the capsule
-#      in it (60×32 — maximize and close, no minimize until #724 — the same 8 px from the right
-#      as above and below it);
+#      in it (90×32 — minimize, maximize and close — the same 8 px from the right as above and
+#      below it);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
 #      dark on it (the title's darkest pixel) — also for an app that draws into a subsurface
 #      over a transparent toplevel, as Firefox does;
@@ -61,7 +61,7 @@ sleep 0.8
 
 # 1. The bar and its capsule.
 [ "$(field title_bar)" = 48 ] || fail "no title bar: title_bar = $(field title_bar) (48 expected)"
-want=$(win | jq -r '"\(.x + .width - 8 - 60) \(.y - 48 + 8) 60 32"')
+want=$(win | jq -r '"\(.x + .width - 8 - 90) \(.y - 48 + 8) 90 32"')
 got=$(win | jq -r '.controls | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (8 px in from the right, above and below)"
 echo "ok    a 48 px bar on top of the window, the capsule in it"
