@@ -36,18 +36,22 @@ window.nidara-settings-window {
     // button.nidara-icon-btn in _components.scss). Only settings-specific chrome below.
 
     // ── Navigation capsule (back / forward) ───────────────────────────────────────
+    // 32 high, as the sidebar toggle beside it (the kit's header row is 48: 8 above and below):
+    // two 26 px buttons (14 px glyph + 6 + 6) in a 2 px inset and a 1 px border.
     .navigation-capsule {
         background: var(--nidara-surface);
         border: 1px solid var(--nidara-border);
         border-radius: $nidara-radius-pill;
         padding: 2px;
-        min-height: 28px;
+        min-height: 26px;
+
+        > button.nav-btn { padding: 6px; }
 
         > separator.nav-separator {
             background-color: var(--nidara-border);
             min-width: 1px;
             min-height: 1px;
-            // 4px inset inside the 24px inner height leaves a 16px rule — both on scale.
+            // 4px inset inside the 26px inner height leaves an 18px rule.
             margin: $space-1 1px;
         }
     }

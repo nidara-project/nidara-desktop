@@ -614,18 +614,21 @@ window.nidara-app-window {
 .nidara-window-glass {
     @include glass(floating);
 }
+// The window's top, on the 4 px scale (owner, 2026-10-04 — it was 50, from a layout long gone):
+// the header row is 48, 8 below the window's top edge (window.ts `contentColumn`), so its
+// 32 px buttons sit 8 from its edges and the window controls' 24 px capsule 12 — its top 20 from
+// the window's edge, and padding-right 20 puts its right 20 from the side: the same gap on both
+// edges of the corner, on either side (the left one: `.nidara-sidebar-controls`, or window.ts
+// `leftSlot` when the sidebar is not docked). The divider under it is 64 from the window's top.
 .nidara-window-header {
     background: transparent;
     border-bottom: 1px solid var(--nidara-border);
-    // padding-right 22 makes the headerEnd close button's gap to the window's
-    // right edge equal its gap to the top edge (24px measured, incl. glass
-    // chrome): the 22px circle ends up centred on the corner diagonal.
-    padding: 0 22px 8px 8px;
-    min-height: 50px;
+    padding: 0 20px 8px 8px;
+    min-height: 48px;
 }
 .nidara-window-tools {
     // Header start group: sidebar toggle + nav capsule + title/breadcrumb.
-    min-height: 50px;
+    min-height: 48px;
     padding: 0 6px;
 }
 
@@ -644,6 +647,16 @@ window.nidara-app-window {
 
 .nidara-sidebar-top {
     padding: $space-2 $space-2 $space-1;
+}
+
+// The window controls' row at the top of a docked sidebar (window.ts `sidebarSlotRow`): the
+// header's row, so the capsule is centred where the toggle and the navigation are. The header's
+// content box starts with the card (both 8 px from the window's top) and is 48 high; the card's
+// inside starts 1 px lower, under its border — so a row 2 px shorter has the same centre. And
+// 20 from the window's left edge, as from its top: the card's 8 margin and 1 border, then this.
+.nidara-sidebar-controls {
+    min-height: 48px - 2px;
+    margin-left: 20px - 8px - 1px;
 }
 
 popover.nidara-sidebar-popup {
@@ -696,7 +709,8 @@ button.nidara-icon-btn {
 }
 
 button.nidara-icon-btn.sidebar-toggle {
-    padding: 8px;
+    // 16 px glyph + 7 + 7 + the 1 px border = 32: 8 from the header row's edges.
+    padding: 7px;
     background: var(--nidara-surface);
     border: 1px solid var(--nidara-border);
     &:hover { background: var(--nidara-surface-hover); }

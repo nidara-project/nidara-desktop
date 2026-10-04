@@ -180,6 +180,11 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // — or, with a sidebar shown docked, the sidebar's top. The caller's `end` (the close
     // button) is the FALLBACK, shown where the compositor draws none. platform/window-controls.ts.
     const leftSlot = controlsSlotWidget()
+    // Leading the header, 20 from the window's left edge as from its top
+    // (`.nidara-window-header`): the header's 8 and the tools row's 6 make 14. A widget margin,
+    // not a CSS one — a CSS margin is taken out of the size the slot requests, and the capsule
+    // the compositor draws in it ran 6 px into the toggle beside it (measured, 2026-10-04).
+    leftSlot.margin_start = 20 - 8 - 6
     const rightSlot = controlsSlotWidget()
     const headerEnd = (): Gtk.Widget => {
         const row = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
@@ -284,9 +289,12 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     }
     sidebarColumn.append(sidebarScrollWidget)
     // The controls' room at the sidebar's top, when they are on the left and the sidebar is
-    // shown docked: in the header they would sit after the sidebar, far from the corner.
+    // shown docked: in the header they would sit after the sidebar, far from the corner. Its row
+    // is the header's row (`.nidara-sidebar-controls`), so the capsule shares a centre with the
+    // toggle and the navigation beside it (measured 8 px high with a 4 px margin instead), and
+    // sits as far from the window's left edge as from its top.
     const sidebarSlot = controlsSlotWidget(Gtk.Align.START)
-    const sidebarSlotRow = new Gtk.Box({ margin_start: 4, margin_top: 4, margin_bottom: 8 })
+    const sidebarSlotRow = new Gtk.Box({ css_classes: ["nidara-sidebar-controls"] })
     sidebarSlotRow.append(sidebarSlot)
     sidebarColumn.prepend(sidebarSlotRow)
     sidebarSlot.connect("notify::visible", () => { sidebarSlotRow.visible = sidebarSlot.visible })

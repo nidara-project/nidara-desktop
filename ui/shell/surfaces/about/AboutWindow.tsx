@@ -192,9 +192,8 @@ export default function AboutWindow(): Gtk.Window | null {
     moreBtn.connect("clicked", () => { shellActions.openSettingsPage?.("about") })
 
     // ── Close button ──────────────────────────────────────────────────────────
-    // Same kit IconButton as the Settings header close. margin_top 12 + the
-    // card's margin_top 12 = 24px top gap, equal to the card's 24px end margin
-    // (the corner-diagonal rule the Settings close follows too).
+    // Same kit IconButton as the Settings header close, in the controls row below: 20px from
+    // the top and from the side — the corner-diagonal rule every kit window's header follows.
     const closeBtn = IconButton({
         icon: uiIcon("nd-window-close"),
         iconSize: 14,
@@ -213,7 +212,9 @@ export default function AboutWindow(): Gtk.Window | null {
     // button above is the fallback where it draws none.
     const leftSlot = controlsSlotWidget(Gtk.Align.START)
     const rightSlot = controlsSlotWidget(Gtk.Align.END)
-    const controlsRow = new Gtk.CenterBox({ margin_top: 12 })
+    // 20 from the window's top and sides, as in every window built on the kit (its header,
+    // `.nidara-window-header`): outside the card, whose content keeps its 24.
+    const controlsRow = new Gtk.CenterBox({ margin_top: 20, margin_start: 20, margin_end: 20 })
     controlsRow.set_start_widget(leftSlot)
     const controlsEnd = new Gtk.Box({ halign: Gtk.Align.END })
     controlsEnd.append(rightSlot)
@@ -221,13 +222,16 @@ export default function AboutWindow(): Gtk.Window | null {
     controlsRow.set_end_widget(controlsEnd)
 
     // ── Card ──────────────────────────────────────────────────────────────────
-    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 12, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: CARD_WIDTH })
-    card.append(controlsRow)
+    // margin_top 4: the content starts where it did, 48 from the top (the row's 20 + 24 + this).
+    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 4, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: CARD_WIDTH })
     card.append(headerBox)
     card.append(specsBox)
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
     card.append(verBox)
     card.append(moreBtn)
+    const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    body.append(controlsRow)
+    body.append(card)
 
     // Window chrome = the SAME CSS glass as Settings (.nidara-window-glass →
     // glass(floating)), NOT a Cairo SquircleContainer. A real window already gets
@@ -276,7 +280,7 @@ export default function AboutWindow(): Gtk.Window | null {
         glassClasses: ["about-window-card"],
         // min = max = CARD_WIDTH: the clamp is the ceiling the card's own
         // `width_request` cannot be (see the note on the constant).
-        content: NidaraClamp(card, CARD_WIDTH + 48, false, CARD_WIDTH + 48),
+        content: NidaraClamp(body, CARD_WIDTH + 48, false, CARD_WIDTH + 48),
         resizable: false,
         closeOnEscape: true,
         // DESTROY, not hide: a hidden window keeps the application alive.
