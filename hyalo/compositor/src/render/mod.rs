@@ -327,18 +327,28 @@ pub fn output_elements<R: HyaloRenderer>(
     // A window shrinking into the dock or growing back out of it (wm/minimize.rs): where its
     // whole box is drawn now, scaled. `None` = where it is, as it is.
     let placement = |m: &crate::wm::Managed| state.wm.placement(m, now);
+    // Going to another workspace (wm/motion.rs `Slide`): its windows and the ones left behind
+    // drawn moved sideways by a share of the output's width — not a pinned one.
+    let slide = state.wm.slide(&output.name(), now);
+    let slid = |m: &crate::wm::Managed| -> Option<crate::wm::minimize::Placement> {
+        let (s, p) = slide?;
+        let shift = s.shift(m.workspace, p).filter(|_| !m.pinned)?;
+        let dx = shift * output_geo.size.w as f64;
+        Some(crate::wm::minimize::Placement { origin: m.frame().loc.to_f64() + Point::from((dx, 0.0)), scale: 1.0 })
+    };
     let push_windows = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, windows: &[Window]| {
         for w in windows {
             let managed = state.wm.by_window(w);
-            let place = managed.and_then(placement);
+            let place = managed.and_then(placement).or_else(|| managed.and_then(slid));
             // Opening (wm/motion.rs): a picture of it as it is now, scaled about its middle
             // and faded. If the picture cannot be taken, the window as it is.
-            if let Some(m) = managed.filter(|_| place.is_none())
+            if let Some(m) = managed.filter(|m| placement(m).is_none())
                 && let Some(look) = state.wm.opening(m.id, now)
             {
                 match snapshot::take(renderer.gles(), state, w, scale.x) {
                     Ok(picture) => {
-                        let frame = Rectangle::new(m.frame().loc - output_geo.loc, m.frame().size).to_f64().to_physical(scale);
+                        let at = place.map_or(m.frame().loc.to_f64(), |p| p.origin);
+                        let frame = Rectangle::new(at - output_geo.loc.to_f64(), m.frame().size.to_f64()).to_physical(scale);
                         out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
                         continue;
                     }
@@ -413,6 +423,12 @@ pub fn output_elements<R: HyaloRenderer>(
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
     push_closing(&mut out, false);
     push_windows(&mut out, renderer, &below);
+    // The workspace left behind, sliding out: hidden, so out of the space — drawn from the
+    // model, front to back, behind the one coming in.
+    if let Some((s, _)) = slide {
+        let left: Vec<Window> = state.wm.on_workspace(s.from).filter(|m| !m.pinned).map(|m| m.window.clone()).collect();
+        push_windows(&mut out, renderer, &left.into_iter().rev().collect::<Vec<_>>());
+    }
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);

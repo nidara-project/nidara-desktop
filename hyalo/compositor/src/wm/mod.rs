@@ -254,6 +254,8 @@ pub struct Wm {
     /// Windows whose closing picture is taken: their app destroyed the toplevel or the
     /// surface, whichever came first, and the other one follows.
     pub closing_taken: Vec<WindowId>,
+    /// Outputs going from one workspace to another (wm/motion.rs).
+    pub slides: Vec<motion::Slide>,
 }
 
 impl Wm {
@@ -1083,6 +1085,9 @@ impl Hyalo {
         }
         self.wm.dirty_workspaces = true;
         self.wm.dirty_windows = true;
+        if let Some(c) = current {
+            self.start_slide(&output, c, id);
+        }
         self.arrange_workspace(id);
         self.prune_workspaces();
         // The keyboard follows: the workspace's last focused window, or nothing.
