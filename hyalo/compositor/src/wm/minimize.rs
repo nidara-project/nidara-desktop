@@ -152,6 +152,22 @@ impl super::Wm {
         self.minimized_root(m).is_some()
     }
 
+    /// Whether `m` is window `root` or a dialog of it, however deep.
+    pub fn within(&self, m: &Managed, root: WindowId) -> bool {
+        let mut cur = m;
+        // Bounded: a client could make a cycle of parents.
+        for _ in 0..8 {
+            if cur.id == root {
+                return true;
+            }
+            let Some(parent) = cur.window.toplevel().and_then(|t| t.parent()).and_then(|p| self.by_surface(&p)) else {
+                return false;
+            };
+            cur = parent;
+        }
+        false
+    }
+
     /// The minimized window that hides `m`: itself, or a window it is a dialog of.
     pub fn minimized_root(&self, m: &Managed) -> Option<WindowId> {
         let mut cur = m;

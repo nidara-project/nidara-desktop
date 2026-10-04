@@ -11,11 +11,14 @@
 #      neither focused; the app saw no click;
 #   4. the dock gives it a place, inside the dock's layer;
 #   5. it is DRAWN shrinking: a second in (the animation made 6 s long), the pixel at the centre
-#      of where Hyalo says it is drawn is the probe's grey, and the one where it was is not —
+#      of where Hyalo says it is drawn is the probe's grey, its dialog's grey in front of it, and
+#      the one where it was is not —
 #      which also proves the place came within Hyalo's wait (wm/minimize.rs `WAIT`): a window
 #      whose place comes later goes without an animation, and is drawn nowhere; beside it,
-#      inside the box it had at full size, the pixel is what is there once it has gone;
-#   6. a click on its place in the dock brings it back, with its dialog, focused;
+#      inside the box it had at full size, the pixel is what is there once it has gone; crossing
+#      the dock's glass beside its place, it is OVER the dock (`over_dock`);
+#   6. a click on its place in the dock brings it back, over the dock too, with its dialog,
+#      focused;
 #   7. the app's own minimize (xdg_toplevel.set_minimized) minimizes it; `unminimize` brings it
 #      back without the focus;
 #   8. on a tiling workspace a minimized window leaves the layout — the other takes its room —
@@ -25,7 +28,10 @@
 #      button-layout): a 60 px box.
 # Controls seen failing nested: the installed Hyalo before #724 (step 1: "LAYOUT right 60 32");
 # one whose window surfaces are not sized at the animation's scale (step 5: its full-size box
-# drawn around the small window); one whose focus does not restore (step 6).
+# drawn around the small window); one whose focus does not restore (step 6); the Hyalo of #736,
+# which drew it under the dock (step 5: "just inside its edge, is '76 72 77'", the blurred edge;
+# and with step 5's crossing skipped, step 6: "'255 255 255'"); one that drew its dialog behind
+# it (step 5: "'64 64 64', not the dialog's grey").
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -49,6 +55,39 @@ at() { win | jq -r --argjson f "$1" '.controls | "\(.[0] + .[2] * $f) \(.[1] + .
 wait_line() { for _ in $(seq 1 40); do grep -q "$1" "$2" && return 0; sleep 0.25; done; return 1; }
 # The probe's greys: its window 64, its dialog 96 (drawn in front of it, moving with it).
 grey() { set -- $1; [ "$1" -ge 56 ] && [ "$1" -le 104 ] && [ $(($1 - $2)) -le 4 ] && [ $(($2 - $1)) -le 4 ] && [ $(($1 - $3)) -le 4 ] && [ $(($3 - $1)) -le 4 ]; }
+# Over the dock, not under it (render/mod.rs draws a moving window in front of the dock's
+# layer). Where the dock is glass — the height of its place's top, with the window's left edge
+# inside the dock — a pixel just inside that edge is the window's own grey when the window is
+# over the glass; under it, the glass's blur smears the edge with what is beside it. (Not a
+# pixel deep inside the window: blurred, a uniform grey is still that grey.) The edge moves, so
+# the point is taken from where the window is drawn before AND after the screenshot. $1 names
+# the screenshot, $2 is its place (read before a click: the dock drops a restored window's place).
+over_dock() {
+    shot=$1
+    y=$(echo "$2" | jq '.[1] + 8')
+    dx=$(echo "$dock" | jq '.[0]')
+    inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60)'
+    for _ in $(seq 1 400); do
+        before=$(win | jq -c --argjson y "$y" --argjson dx "$dx" ".drawn | $inside")
+        [ -n "$before" ] || { sleep 0.02; continue; }
+        $MSG screenshot "$log/$shot-crossing.png" >/dev/null || fail "no screenshot"
+        after=$(win | jq -c --argjson y "$y" --argjson dx "$dx" ".drawn | $inside")
+        [ -n "$after" ] && break
+    done
+    [ -n "$before" ] && [ -n "$after" ] || fail "($shot) it never crossed the dock's glass (at y $y)"
+    px=$(jq -rn --argjson a "$before" --argjson b "$after" --argjson y "$y" --argjson s "$scale" \
+        '"\(([$a[0], $b[0]] | max) + 6 | . * $s | ceil) \($y * $s | floor)"')
+    got=$(probe_pixel "$log/$shot-crossing.png" $px)
+    # The window's grey or its dialog's (the edge moves while the screenshot is taken), each
+    # channel within 2: the glass's blur gives greys too, not neutral ones (measured '76 72 77').
+    set -- $got
+    for g in 64 96; do
+        ok=1
+        for c in "$1" "$2" "$3"; do [ $((c - g)) -le 2 ] && [ $((g - c)) -le 2 ] || ok=0; done
+        [ $ok = 1 ] && return 0
+    done
+    fail "($shot) crossing the dock ($before → $after) the pixel at $px, just inside its edge, is '$got', not its own grey: the dock's glass is drawn over it"
+}
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
 
 # From the shipped buttons, whatever the shell carried from button-layout before.
@@ -104,6 +143,7 @@ echo "ok    the dock gives it a place, inside the dock (listed after ${ms} ms, t
 # 5. Drawn shrinking toward it.
 sleep 0.85
 drawn=$(win | jq -c .drawn)
+ddrawn=$(dialog | jq -c .drawn)
 $MSG screenshot "$log/shrinking.png" >/dev/null || fail "no screenshot"
 [ "$drawn" != null ] || fail "a second in, it is not drawn moving"
 mid=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
@@ -111,9 +151,15 @@ k=$(echo "$drawn" | jq -r '.[2] / 400 * 100 | floor')
 [ "$k" -lt 90 ] || fail "a second in, it is still ${k}% of its size"
 grey "$(probe_pixel "$log/shrinking.png" $mid)" || fail "where it is drawn ($drawn) the pixel is $(probe_pixel "$log/shrinking.png" $mid), not its grey"
 grey "$(probe_pixel "$log/shrinking.png" $centre)" && fail "where it was, the pixel is still its grey"
+# Its dialog moves with it, in front of it: the dialog's own grey at its middle.
+[ "$ddrawn" != null ] || fail "a second in, its dialog is not drawn moving"
+dmid=$(echo "$ddrawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
+set -- $(probe_pixel "$log/shrinking.png" $dmid)
+[ "$1" -ge 92 ] && [ "$1" -le 100 ] && grey "$1 $2 $3" || fail "where its dialog is drawn ($ddrawn) the pixel is '$*', not the dialog's grey (96): the dialog is not in front"
 # Beside the small window, inside the box it had at full size: what is there once it has gone.
 # A window whose surfaces kept their full size from the scaled origin drew that box too.
 beside=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] + 24) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
+over_dock shrinking "$target"
 for _ in $(seq 1 40); do [ "$(win | jq -c .drawn)" = null ] && break; sleep 0.25; done
 sleep 0.3
 $MSG screenshot "$log/gone.png" >/dev/null || fail "no screenshot"
@@ -121,19 +167,25 @@ now=$(probe_pixel "$log/shrinking.png" $beside); then=$(probe_pixel "$log/gone.p
 set -- $now $then
 [ $(($1 - $4)) -le 6 ] && [ $(($4 - $1)) -le 6 ] && [ $(($2 - $5)) -le 6 ] && [ $(($5 - $2)) -le 6 ] \
     || fail "beside the small window ($beside) the pixel is '$now' while it shrinks and '$then' once it has gone: its full-size box is drawn too"
-echo "ok    it is drawn shrinking toward its place (${k}% of its size a second in), and nothing else of it"
+echo "ok    it is drawn shrinking toward its place (${k}% of its size a second in), over the dock, and nothing else of it"
 
 # 6. Back from the dock: a click on its place.
 sleep 0.3
-place=$(win | jq -r '.minimize_target | "\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"')
-$MSG settings '{"animations":null}' >/dev/null
+target=$(win | jq -c .minimize_target)
+place=$(echo "$target" | jq -r '"\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"')
+# Coming back, the curve is fast out: it leaves the dock in the first 1% of its time (15 ms of
+# 6 s, missed in CI). Ten minutes give that part a second; step 7 minimizes it again, which
+# replaces the animation.
+$MSG settings '{"animations":{"minimize":600000}}' >/dev/null
 echo "click $place" >"$C"
-sleep 1
+over_dock back "$target"
+$MSG settings '{"animations":null}' >/dev/null
+sleep 0.3
 w=$(win); d=$(dialog)
 [ "$(field "$w" minimized)$(field "$d" minimized)" = falsefalse ] || fail "a click on its place in the dock did not bring it back: $w"
 [ "$(field "$w" visible)$(field "$d" visible)" = truetrue ] || fail "back from the dock, it is not visible"
 [ "$(field "$w" focused)" = true ] || fail "back from the dock, it does not have the focus"
-echo "ok    a click on its place in the dock brings it back, with its dialog, focused"
+echo "ok    a click on its place in the dock brings it back over the dock, with its dialog, focused"
 
 # 7. The app's own minimize; back without the focus.
 kill -URG "$pid"
