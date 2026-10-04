@@ -1,8 +1,8 @@
 //! A window's controls, drawn by Hyalo over the app's header where the app reserved room for
-//! them (protocols/window_controls.rs, #708 point 5): one capsule of three buttons — the shape
-//! of the back/forward pair in Settings' header. Painted in one pass by a shader of ours, in
-//! output pixels: the capsule, its inset edge, the hovered button's fill (close's red), and the
-//! three glyphs, all anti-aliased at the output's scale. The colours are the mockup's, the
+//! them (protocols/window_controls.rs, #708 point 5): one capsule of one to three buttons — the
+//! shape of the back/forward pair in Settings' header. Painted in one pass by a shader of ours,
+//! in output pixels: the capsule, its inset edge, the hovered button's fill (close's red), and
+//! the glyphs, all anti-aliased at the output's scale. The colours are the mockup's, the
 //! owner's choice (2026-10-03): white over whatever the header is, like the pair beside it.
 
 use std::cell::RefCell;
@@ -19,7 +19,7 @@ use smithay::{
 };
 
 use super::{HyaloRenderer, glass_gl};
-use crate::protocols::window_controls::Button;
+use crate::protocols::window_controls::Buttons;
 
 /// The capsule's GLSL, shared with Hyalo's title bar (render/title_bar.rs), which draws the
 /// same capsule in its own pass: its uniforms, and `controls(p, dark)` — the capsule's colour at
@@ -31,7 +31,7 @@ macro_rules! controls_glsl {
 uniform vec4 rect;      // the capsule, output px
 uniform float px;       // output px per logical px
 uniform vec3 glyphs;    // per slot, left to right: 0 minimize, 1 maximize, 2 close
-uniform vec3 enabled;   // per slot: 1 does something
+uniform float count;    // how many slots: 1 to 3
 uniform float hover;    // the slot under the pointer, -1 none
 uniform float pressed;  // 1 while that button is held
 uniform float active;   // 1: the window has the focus
@@ -57,15 +57,14 @@ vec4 controls(vec2 p_out, float dark) {
     float inside = clamp(0.5 - d * px, 0.0, 1.0);
     if (inside <= 0.0) return vec4(0.0);
     vec4 ink = dark > 0.5 ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(1.0);
-    float bw = size.x / 3.0;
-    float slot = clamp(floor(p.x / bw), 0.0, 2.0);
+    float bw = size.x / count;
+    float slot = clamp(floor(p.x / bw), 0.0, count - 1.0);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
-    float en = slot < 0.5 ? enabled.x : (slot < 1.5 ? enabled.y : enabled.z);
     bool on = active > 0.5;
     vec4 c = ink * (on ? 0.08 : 0.04);
     // The inset edge: one physical pixel inside the rim.
     c = over(ink * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
-    bool hov = abs(slot - hover) < 0.5 && en > 0.5;
+    bool hov = abs(slot - hover) < 0.5;
     bool red = hov && g > 1.5;
     if (hov) {
         vec4 fill = ink * (pressed > 0.5 ? 0.20 : 0.14);
@@ -73,7 +72,7 @@ vec4 controls(vec2 p_out, float dark) {
         c = over(fill, c);
     }
     float ga = clamp(0.5 - glyph(g, p - vec2((slot + 0.5) * bw, size.y * 0.5)) * px, 0.0, 1.0);
-    float k = en < 0.5 ? 0.30 : (hov ? 1.0 : (on ? 0.80 : 0.36));
+    float k = hov ? 1.0 : (on ? 0.80 : 0.36);
     // Over close's red the glyph is white, whatever the ink.
     c = over((red ? vec4(1.0) : ink) * k * ga, c);
     return c * inside;
@@ -95,12 +94,11 @@ void main() {
 "#
 );
 
-/// What the capsule shows: its buttons left to right, which do anything, the one under the
-/// pointer and whether it is held, and whether its window has the focus.
+/// What the capsule shows: its buttons left to right (only those that do something), the one
+/// under the pointer and whether it is held, and whether its window has the focus.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Controls {
-    pub buttons: [Button; 3],
-    pub enabled: [bool; 3],
+    pub buttons: Buttons,
     pub hover: Option<usize>,
     pub pressed: bool,
     pub active: bool,
@@ -147,8 +145,7 @@ impl ControlsElement {
         let projection = *frame.projection();
         let user_data = frame.egl_context().user_data() as *const UserDataMap;
         let c = self.controls;
-        let glyphs = c.buttons.map(Button::glyph);
-        let enabled = c.enabled.map(|e| if e { 1.0f32 } else { 0.0 });
+        let (glyphs, count) = c.buttons.glyphs();
         // `dst` is where the element's geometry lands: the capsule keeps its offset in it.
         let off = (self.rect.loc.x - self.geometry.loc.x as f64, self.rect.loc.y - self.geometry.loc.y as f64);
         let rect = [
@@ -173,7 +170,7 @@ impl ControlsElement {
             gl.Uniform4f(p.loc(gl, c"rect"), rect[0], rect[1], rect[2], rect[3]);
             gl.Uniform1f(p.loc(gl, c"px"), self.scale as f32);
             gl.Uniform3f(p.loc(gl, c"glyphs"), glyphs[0], glyphs[1], glyphs[2]);
-            gl.Uniform3f(p.loc(gl, c"enabled"), enabled[0], enabled[1], enabled[2]);
+            gl.Uniform1f(p.loc(gl, c"count"), count);
             gl.Uniform1f(p.loc(gl, c"hover"), c.hover.map_or(-1.0, |h| h as f32));
             gl.Uniform1f(p.loc(gl, c"pressed"), if c.pressed { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"active"), if c.active { 1.0 } else { 0.0 });

@@ -10,8 +10,8 @@
     go: it reserves a box of the size the compositor gives, at the place its
     layout wants (in the header, or inside a sidebar), and the compositor
     draws the controls there, over the app's own pixels. The place can move
-    with the layout; the side (left or right) is the user's, and the
-    compositor tells it.
+    with the layout; the side (left or right) and the buttons are the
+    user's, and the compositor tells them as the box's size.
   </description>
 
   <interface name="nidara_window_controls_manager_v1" version="1">
@@ -34,13 +34,21 @@
       <entry name="left" value="1"/>
     </enum>
 
+    <enum name="button" bitfield="true">
+      <entry name="close" value="1"/>
+      <entry name="minimize" value="2"/>
+      <entry name="maximize" value="4"/>
+    </enum>
+
     <event name="layout">
       <description summary="the box to reserve, and the side it belongs on">
-        Sent once right after get_window_controls, and again whenever the user
-        changes the side or the compositor changes the controls' size. width
-        and height are the box the controls take, logical pixels; the client
-        lays out a box of that size on that side and sends its position. On
-        the left side the close button comes first; on the right, last.
+        Sent once right after get_window_controls, and again whenever the box
+        changes: the user changes the side or the buttons, the window's
+        buttons change (set_buttons, or what it can do — a window that cannot
+        change size has no maximize). width and height are the box the
+        controls take, logical pixels; the client lays out a box of that size
+        on that side and sends its position. On the left side the close button
+        comes first; on the right, last.
       </description>
       <arg name="side" type="uint" enum="side"/>
       <arg name="width" type="fixed"/>
@@ -63,6 +71,17 @@
 
     <request name="unset_position">
       <description summary="pending: no controls"/>
+    </request>
+
+    <request name="set_buttons">
+      <description summary="pending: the buttons this window has">
+        Which buttons this window wants, double-buffered on wl_surface.commit
+        (an About window: close alone). Close is always kept. Until it is sent,
+        every button. The compositor shows those that are asked for AND that
+        the user chose AND that the window can do, and the box in layout
+        follows.
+      </description>
+      <arg name="buttons" type="uint" enum="button"/>
     </request>
   </interface>
 </protocol>

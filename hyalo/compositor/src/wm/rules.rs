@@ -40,6 +40,8 @@ pub struct Effects {
     pub rounding: Option<bool>,
     pub backdrop: Option<bool>,
     pub title_bar: Option<bool>,
+    /// The bits of the buttons its controls may show (protocols/window_controls.rs).
+    pub controls: Option<u32>,
 }
 
 impl Effects {
@@ -65,6 +67,9 @@ impl Effects {
         }
         if later.title_bar.is_some() {
             self.title_bar = later.title_bar;
+        }
+        if later.controls.is_some() {
+            self.controls = later.controls;
         }
     }
 }
@@ -128,6 +133,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
                 rounding: r.rounding,
                 backdrop: r.backdrop,
                 title_bar: r.title_bar,
+                controls: r.controls.as_deref().map(crate::protocols::window_controls::mask),
             },
         };
         if rule.app_id.is_none()
@@ -139,7 +145,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
             return Err(format!("rules.{name}: matches nothing (give match.app_id, title, initial_app_id, initial_title or game)"));
         }
         if rule.effects.is_empty() {
-            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding, backdrop or title_bar)"));
+            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding, backdrop, title_bar or controls)"));
         }
         if r.silent && r.workspace.is_none() {
             return Err(format!("rules.{name}: silent without a workspace"));
@@ -209,7 +215,14 @@ impl Hyalo {
         if let Some(t) = fx.title_bar {
             m.title_bar = t;
         }
-        if fx.rounding.is_some() || fx.backdrop.is_some() || fx.title_bar.is_some() {
+        if let Some(c) = fx.controls {
+            m.controls = Some(c);
+        }
+        if fx.controls.is_some() {
+            // Its app reserves a box of the new size.
+            crate::protocols::window_controls::send_layouts(self);
+        }
+        if fx.rounding.is_some() || fx.backdrop.is_some() || fx.title_bar.is_some() || fx.controls.is_some() {
             self.queue_redraw(None);
         }
     }

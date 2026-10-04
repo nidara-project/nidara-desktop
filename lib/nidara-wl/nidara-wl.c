@@ -719,6 +719,18 @@ nidara_wl_window_controls_unset_position (GdkSurface *surface)
   controls_mark_dirty (surface);
 }
 
+gboolean
+nidara_wl_window_controls_set_buttons (GdkSurface *surface, guint buttons)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+  struct nidara_window_controls_v1 *c = controls_get (surface);
+  if (!c)
+    return FALSE;
+  nidara_window_controls_v1_set_buttons (c, (uint32_t) buttons);
+  controls_mark_dirty (surface);
+  return TRUE;
+}
+
 /* ======================================================================
  * Focus grab
  *

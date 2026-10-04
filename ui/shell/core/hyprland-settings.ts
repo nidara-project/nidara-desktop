@@ -312,8 +312,7 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         // One blur for windows and layers (`decoration:blur`): no switch of its own here.
         readWindowBackdrop: () => true,
         setWindowBackdrop() {},
-        readWindowControlsSide: () => "right",
-        setWindowControlsSide() {},
+        setWindowControls() {},
         setWindowTitleFont() {},
 
         async readInput(current) {

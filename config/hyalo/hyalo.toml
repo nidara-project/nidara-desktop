@@ -53,8 +53,9 @@ default_mode = "floating"
 # item 13; config/hypr/hyprland.lua matches About by its title for that reason). `match` is
 # regexes searched in app_id / title / initial_app_id / initial_title, and `game = true`
 # for a game (wm/games.rs); effects: float, center, workspace ("3", "special:NAME" or
-# "name:NAME") with silent; rounding = false (square corners) and backdrop = false (no blur
-# behind it). Your hyalo.toml can add a rule, replace one by its name, or switch one off with
+# "name:NAME") with silent; rounding = false (square corners), backdrop = false (no blur
+# behind it), title_bar = false (no Hyalo title bar) and controls = ["close"] (the only buttons
+# its window controls may show). Your hyalo.toml can add a rule, replace one by its name, or switch one off with
 # `enabled = false`. (The rest of hyprland.lua's rules wait for XWayland and animations, #684.)
 [rules.about]
 match = { app_id = "^nidara-about$" }
@@ -91,9 +92,13 @@ rounding = 24
 rounding_power = 3.2
 
 # The window controls (close, minimize, maximize) Hyalo draws over an app's header, where the
-# app reserved room for them: `side` "right" or "left". Settings → Appearance → Windows.
+# app reserved room for them: `side` "right" or "left", and the `buttons` the user wants (close
+# is always shown; a window that cannot do one does not show it — no minimize until #724). The
+# shell keeps both equal to org.gnome.desktop.wm.preferences button-layout, which Settings →
+# Appearance → Windows writes and the apps that draw their own title bar read.
 [windows.controls]
 side = "right"
+buttons = ["minimize", "maximize", "close"]
 
 # The title bar Hyalo draws for an app that leaves its decorations to the compositor (kitty, Qt
 # apps, Chrome with "Use system title bar and borders"): one piece with the window — the colour

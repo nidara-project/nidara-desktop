@@ -371,22 +371,39 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
 ## The window controls are Hyalo's (#708 point 5, 2026-10-03)
 
 The owner's design, chosen on a mockup: Hyalo draws a window's close, minimize and maximize
-OVER the app's own header, in the same row — no bar of its own for our apps — as **one capsule of
-three buttons** (ours, never three coloured circles). **One size in every window** (owner,
-2026-10-03): 90×24 over Settings' taller header as in Hyalo's thin bar — the controls are the
-system's, so they do not take their size from each app's header (`window_controls::BUTTON_W/H`). Close turns red on hover. Minimize is drawn **disabled** until #724 decides
-what minimizing means here; maximize is disabled for a window whose minimum = maximum. Right by
-default (close last), left as a setting (close first).
+OVER the app's own header, in the same row — no bar of its own for our apps — as **one capsule**
+(ours, never three coloured circles). **One button size in every window** (owner, 2026-10-03):
+30×24 a button, over Settings' taller header as in Hyalo's thin bar — the controls are the
+system's, so they do not take their size from each app's header (`window_controls::BUTTON_W/H`).
+Close turns red on hover. Right by default (close last), left as a setting (close first).
+
+**Which buttons** (owner, 2026-10-04, `window_controls::shown`). A button that does nothing for
+a window is NOT drawn — hidden, not disabled, as GNOME and Windows do and as an app's own title
+bar must (it cannot disable one) — and the capsule shrinks by 30 px. A window shows a button
+when ALL of these say yes, close always:
+- **the user chose it** — `[windows.controls] buttons`, which the shell keeps equal to
+  `org.gnome.desktop.wm.preferences button-layout` (below);
+- **the window asked for it** — `set_buttons` (the kit's `attachWindowControls(…, buttons)`;
+  About asks for `["close"]`); every button until it asks;
+- **no rule took it away** — a rule's `controls = ["close"]` (`Managed::controls`, the bits);
+- **it can do it** — maximize only while the window can change size (minimum ≠ maximum);
+  minimize NOWHERE until Hyalo minimizes (#724; with it, not for a dialog either).
+So today a resizable window has maximize and close (60×24), About and any fixed-size window close
+alone (30×24).
 
 - **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
   (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
   on a toplevel's surface; the compositor sends `layout(side, width, height)` — the box to reserve
-  (90×24: three 30×24 buttons) and the side — at once and again whenever the side changes; the
-  app sends `set_position(x, y)`/`unset_position`, surface-local, **double-buffered on
-  wl_surface.commit** so the controls move with the frame that left room for them. Not offered to
-  sandboxed clients (like the glass).
+  (30 px a button shown, 24 high) and the side — at once and again whenever it CHANGES
+  (`tell`, which keeps what each app was last told: after a settings reload, a rule applied,
+  and every commit of that surface — its `set_buttons` or its size limits may have changed it);
+  the app sends `set_position(x, y)`/`unset_position` and `set_buttons(bits)` (close 1, minimize
+  2, maximize 4), surface-local, **double-buffered on wl_surface.commit** so the controls move
+  with the frame that left room for them. `set_buttons` was added INSIDE v1 (2026-10-04): the
+  library and Hyalo are installed together — a new library on an older Hyalo is a protocol error
+  that takes the shell down. Not offered to sandboxed clients (like the glass).
 - **Drawn** by `render/controls.rs`: one shader pass in output pixels (the capsule, its inset
-  edge, the hovered button's fill, the three glyphs as distance fields, all anti-aliased at the
+  edge, the hovered button's fill, one glyph a button (`count`, 1 to 3) as distance fields, all anti-aliased at the
   output's scale), pushed over the window's own surfaces and under its popups; never on a
   fullscreen window. Hover and press live in `wm.controls_hover`.
 - **Input**: `Hyalo::controls_under(pos)` walks the windows in drawing order (a layer or a window
@@ -394,26 +411,41 @@ default (close last), left as a setting (close first).
   never the pointer over its controls; `update_controls_hover` runs after every pointer motion and
   sets the arrow. A left press over a button holds it and focuses the window; the release over the
   same button carries it out (`Action::CloseWindow`, `Action::Maximize`). The app sees neither.
-- **The side** is `[windows.controls] side` (`config/hyalo/hyalo.toml`); Settings → Appearance →
-  Windows → "Window buttons" (`appearance.windowControls`, available where `caps.windowControls`:
-  Hyalo) writes it to the settings layer, and the reload sends every app a new `layout`.
+- **One source for side and buttons: `button-layout`** (`ui/shell/core/WindowButtons.ts`, owner
+  2026-10-04). GTK's client-side decorations, Chrome's web apps and Telegram place their own
+  buttons by `org.gnome.desktop.wm.preferences button-layout` (directly or through the Settings
+  portal). Settings → Appearance → Windows → "Window buttons" (`appearance.windowControls`,
+  available where `caps.windowControls`: Hyalo) WRITES that key — the same buttons, moved — and
+  the shell carries every change of it, from Settings or from anywhere else (GNOME Tweaks), to
+  Hyalo's `[windows.controls] side` and `buttons` in the settings layer: close alone there
+  shrinks Hyalo's capsule too, as mutter follows the key on GNOME. The side is the half close is
+  in; the ORDER within it is Hyalo's (close outermost), not the key's. Nidara's default is a
+  system dconf default, `appmenu:maximize,close` (`scripts/gen-dconf-defaults.sh`; GNOME's own is
+  `appmenu:close`, close alone), and `migrations/2026-10-04-button-layout-from-gnome-default.sh`
+  resets an account that holds GNOME's factory string as its own (measured on the owner's
+  machine). ⚠️ No `minimize` in the default until #724: an app's own button cannot be shown
+  disabled. Nothing is carried on Hyprland (no controls; it refuses a client's maximize too).
 - **The kit's half** (`ui/lib/nidara-kit/platform/window-controls.ts`): a window has SLOTS — empty
   boxes that can hold the room, each with a `when(side)` — and the caller's own close button is
   the FALLBACK. With a layout, the fallbacks hide, the first slot that applies gets the box's size,
   and its position (`compute_point` to the window + the surface transform) is sent in the frame
   clock's LAYOUT phase whenever it moved; the library commits once more after a frame that drew
   nothing (as the glass does). Where the compositor draws none (Hyprland), nothing changes: slots
-  hidden, the close button shown. `NidaraWindow` sets the slots up itself — right: the header's
+  hidden, the close button shown. The slot takes the box's WIDTH from each layout, so a capsule
+  that shrinks (fewer buttons) gives the header its room back. `NidaraWindow` sets the slots up itself — right: the header's
   end, where the close button was; left: the header's start, or, with a sidebar shown DOCKED, the
   sidebar's top (`onSidebarPresented` re-picks the slot) — so a window built on it gets the
   controls by passing its close button as `header.end`, as before. About, which has no header,
   places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
 - `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
 - CI: `scripts/ci/hyalo-window-controls-check.sh` (C probe `hyalo-window-controls-probe.c`,
-  leaving room as the kit does): the layout told, the controls where the app placed them, the
-  pointer the app's over its body and not over its controls, maximize and restore, minimize
-  nothing, the side switched live and followed, close asks the window to close. The control: the
-  same probe on a Hyalo without the protocol prints NO_CONTROLS.
+  leaving room as the kit does): the layout told (60×24), the controls where the app placed them,
+  the pointer the app's over its body and not over its controls, maximize and restore, the side
+  switched live and followed; close alone from the user's buttons, from the app's `set_buttons`
+  (SIGUSR1), and while it cannot change size even asking for all (SIGUSR2; SIGHUP undoes it); a
+  rule's `controls = ["close"]` on a new window of the app; close asks the window to close.
+  Controls, each seen failing nested: a Hyalo without the protocol prints NO_CONTROLS; one that
+  draws every button tells 90 at once; one that ignores `set_buttons` still tells 60.
 
 ## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
 
@@ -556,7 +588,8 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   (the shell dies of SIGPIPE, exit 141).
 - **Window rules** (`wm/rules.rs`, `[rules.NAME]` in hyalo.toml): regexes searched in
   `app_id` / `title` / `initial_app_id` / `initial_title`, effects `float`, `center`,
-  `workspace` (`"3"`, `"special:NAME"`) and `silent`. 🔑 **A rule applies to a window ONCE, the
+  `workspace` (`"3"`, `"special:NAME"`), `silent`, and the look's `rounding`, `backdrop`,
+  `title_bar` and `controls` (the only buttons its controls may show). 🔑 **A rule applies to a window ONCE, the
   first time it matches** — at the first configure (so a floated window's first frame is
   already its own size), when it is shown, or later when its app id or title changes. That is
   #679 item 13 solved rather than worked around: on Hyprland a static effect is matched once

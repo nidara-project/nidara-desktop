@@ -329,15 +329,13 @@ pub fn output_elements<R: HyaloRenderer>(
             // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
             // bar (title_bar.rs): never on a fullscreen window.
             let controls = managed.filter(|_| !fullscreen).and_then(|m| {
-                let r = crate::protocols::window_controls::managed_rect(m, state.windows.controls.side)?;
+                let (r, buttons) = crate::protocols::window_controls::managed_rect(m, &state.windows.controls)?;
                 let origin = (at - w.geometry().loc - output_geo.loc).to_f64();
                 let rect = Rectangle::new(origin + r.loc, r.size).to_physical(scale);
-                let buttons = crate::protocols::window_controls::order(state.windows.controls.side);
                 let hover = state.wm.controls_hover.filter(|h| h.window == m.id);
                 let controls = controls::Controls {
                     buttons,
-                    enabled: buttons.map(|b| crate::protocols::window_controls::enabled(w, b)),
-                    hover: hover.and_then(|h| buttons.iter().position(|b| *b == h.button)),
+                    hover: hover.and_then(|h| buttons.as_slice().iter().position(|b| *b == h.button)),
                     pressed: hover.is_some_and(|h| h.pressed),
                     active: state.wm.focused == Some(m.id),
                 };

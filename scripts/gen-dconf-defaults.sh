@@ -47,4 +47,10 @@ gtk-theme='$gtk_theme'
 cursor-theme='$cursor_theme'
 accent-color='$accent'
 color-scheme='$scheme'
+
+# The window buttons, for apps that draw their own title bar AND for Hyalo's controls, which
+# follow this key (ui/shell/core/WindowButtons.ts). GNOME's own default is close alone.
+# No minimize until Hyalo minimizes (#724): an app's own button cannot be shown disabled.
+[org/gnome/desktop/wm/preferences]
+button-layout='appmenu:maximize,close'
 KEYFILE

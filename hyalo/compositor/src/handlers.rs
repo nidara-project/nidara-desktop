@@ -57,6 +57,7 @@ impl CompositorHandler for Hyalo {
             }
         }
         material::on_commit(surface);
+        crate::protocols::window_controls::on_commit(self, surface);
         self.xdg_commit(surface);
         self.layer_commit(surface);
 

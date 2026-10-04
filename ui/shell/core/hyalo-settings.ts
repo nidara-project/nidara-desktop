@@ -143,11 +143,8 @@ export function createHyaloSettings(): CompositorSettings {
             patch("window backdrop", { windows: { backdrop: { enabled: on } } })
         },
 
-        readWindowControlsSide() {
-            return config()?.windows?.controls?.side === "left" ? "left" : "right"
-        },
-        setWindowControlsSide(side) {
-            patch("window controls", { windows: { controls: { side } } })
+        setWindowControls(side, buttons) {
+            patch("window controls", { windows: { controls: { side, buttons } } })
         },
 
         // Hyalo's title bar (hyalo/compositor/src/render/title_bar.rs).

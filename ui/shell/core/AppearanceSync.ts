@@ -36,6 +36,7 @@ import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import compositor, { settings } from "./CompositorState"
 import { initGlassBlur } from "./GlassBlur"
 import { initCompositorGlass } from "./CompositorGlass"
+import { startWindowButtonsSync } from "./WindowButtons"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
 
@@ -293,4 +294,6 @@ export function startAppearanceSync(): void {
     // of our own, the whole glass (#684).
     initGlassBlur()
     initCompositorGlass()
+    // The compositor's window controls follow the apps' `button-layout` (WindowButtons.ts).
+    startWindowButtonsSync()
 }

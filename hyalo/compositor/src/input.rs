@@ -505,14 +505,14 @@ impl Hyalo {
                 let Some(held) = self.wm.controls_hover.filter(|h| h.pressed) else { return false };
                 self.wm.controls_hover = under.map(|(window, button)| crate::wm::ControlsHover { window, button, pressed: false });
                 self.queue_redraw(None);
+                // Only buttons that do something are shown (window_controls.rs `shown`).
                 if under == Some((held.window, held.button)) {
-                    let enabled = self.wm.get(held.window).is_some_and(|m| crate::protocols::window_controls::enabled(&m.window, held.button));
                     let action = match held.button {
                         Button::Close => Some(Action::CloseWindow(Some(held.window))),
                         Button::Maximize => Some(Action::Maximize(Some(held.window))),
                         Button::Minimize => None,
                     };
-                    if let Some(action) = action.filter(|_| enabled)
+                    if let Some(action) = action
                         && let Err(err) = self.run_action(action)
                     {
                         tracing::warn!(%err, "window control");

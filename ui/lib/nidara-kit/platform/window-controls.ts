@@ -24,6 +24,13 @@ import Gdk from "gi://Gdk?version=4.0"
 
 export type ControlsSide = "right" | "left"
 
+/** A window's buttons. Close is always there; the compositor also leaves out what the user did
+ *  not choose and what the window cannot do (no maximize when it cannot change size). */
+export type WindowButton = "close" | "minimize" | "maximize"
+
+/** The protocol's `button` bits. */
+const BUTTON_BIT: Record<WindowButton, number> = { close: 1, minimize: 2, maximize: 4 }
+
 export type ControlsSlot = {
     widget: Gtk.Widget
     /** Whether this slot holds the controls now, for the user's side. */
@@ -37,6 +44,7 @@ type Shim = {
     window_controls_request?(surface: Gdk.Surface): boolean
     window_controls_set_position?(surface: Gdk.Surface, x: number, y: number): boolean
     window_controls_unset_position?(surface: Gdk.Surface): void
+    window_controls_set_buttons?(surface: Gdk.Surface, buttons: number): boolean
 }
 
 const SHIM_MODULE = "gi://NidaraWl"   // in a variable on purpose: see VisibleRegion.ts
@@ -54,6 +62,7 @@ class Controller {
         readonly win: Gtk.Window,
         readonly slots: ControlsSlot[],
         readonly fallbacks: Gtk.Widget[],
+        readonly buttons: WindowButton[] | null,
     ) {}
 
     /** The compositor's layout (or none): which widgets show. Out of the frame clock. */
@@ -97,6 +106,9 @@ class Controller {
         if (!surface || !shim?.window_controls_request?.(surface)) return
         this.surface = surface
         controllers.set(surface, this)
+        // Before its first position: the box the compositor answers with is already this one's.
+        if (this.buttons)
+            shim.window_controls_set_buttons?.(surface, this.buttons.reduce((m, b) => m | BUTTON_BIT[b], 0))
         const clock = surface.get_frame_clock()
         if (clock && !this.tick) this.tick = clock.connect_after("layout", () => this.place())
     }
@@ -141,10 +153,16 @@ function load() {
  * Lets the compositor draw `win`'s controls in one of `slots` — or, where it draws none,
  * leaves `fallbacks` (the window's own close button) as they are. The slots start hidden.
  * Call `refresh` when the layout a slot's `when` reads changes (a sidebar shown or hidden).
+ * `buttons`: the only ones this window has (an About window: `["close"]`); every one if left out.
  */
-export function attachWindowControls(win: Gtk.Window, slots: ControlsSlot[], fallbacks: Gtk.Widget[]): { refresh: () => void } {
+export function attachWindowControls(
+    win: Gtk.Window,
+    slots: ControlsSlot[],
+    fallbacks: Gtk.Widget[],
+    buttons?: WindowButton[],
+): { refresh: () => void } {
     for (const s of slots) s.widget.visible = false
-    const c = new Controller(win, slots, fallbacks)
+    const c = new Controller(win, slots, fallbacks, buttons ?? null)
     if (GLib.getenv("NIDARA_WINDOW_CONTROLS") === "0") return { refresh: () => {} }
     win.connect("realize", () => { if (shim) c.attach(); else pending.push(c) })
     win.connect("unrealize", () => { c.detach(); c.layout = null; c.refresh() })
