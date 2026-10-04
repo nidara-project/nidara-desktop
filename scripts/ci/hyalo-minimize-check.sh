@@ -29,8 +29,9 @@
 # Controls seen failing nested: the installed Hyalo before #724 (step 1: "LAYOUT right 60 32");
 # one whose window surfaces are not sized at the animation's scale (step 5: its full-size box
 # drawn around the small window); one whose focus does not restore (step 6); the Hyalo of #736,
-# which drew it under the dock (step 5: "the pixel at 1245 614 is '65 52 203'", the glass); one
-# that drew its dialog behind it (step 5: "'64 64 64', not the dialog's grey").
+# which drew it under the dock (step 5: "just inside its edge, is '76 72 77'", the blurred edge;
+# and with step 5's crossing skipped, step 6: "'255 255 255'"); one that drew its dialog behind
+# it (step 5: "'64 64 64', not the dialog's grey").
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -55,28 +56,37 @@ wait_line() { for _ in $(seq 1 40); do grep -q "$1" "$2" && return 0; sleep 0.25
 # The probe's greys: its window 64, its dialog 96 (drawn in front of it, moving with it).
 grey() { set -- $1; [ "$1" -ge 56 ] && [ "$1" -le 104 ] && [ $(($1 - $2)) -le 4 ] && [ $(($2 - $1)) -le 4 ] && [ $(($1 - $3)) -le 4 ] && [ $(($3 - $1)) -le 4 ]; }
 # Over the dock, not under it (render/mod.rs draws a moving window in front of the dock's
-# layer): just left of its place, near its top — glass, between the trash's separator and the
-# thumbnail — the pixel the window covers while it crosses (from the screen's middle, so from
-# above and to the left) is its own grey — with the glass over it, the glass's. $1 names the screenshot, $2 is
-# its place (read before a click: the dock drops a restored window's place).
+# layer). Where the dock is glass — the height of its place's top, with the window's left edge
+# inside the dock — a pixel just inside that edge is the window's own grey when the window is
+# over the glass; under it, the glass's blur smears the edge with what is beside it. (Not a
+# pixel deep inside the window: blurred, a uniform grey is still that grey.) The edge moves, so
+# the point is taken from where the window is drawn before AND after the screenshot. $1 names
+# the screenshot, $2 is its place (read before a click: the dock drops a restored window's place).
 over_dock() {
     shot=$1
-    over=$(echo "$2" | jq -c '[.[0] - 8, .[1] + 8]')
-    crossing=""
+    y=$(echo "$2" | jq '.[1] + 8')
+    dx=$(echo "$dock" | jq '.[0]')
+    inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60)'
     for _ in $(seq 1 400); do
-        crossing=$(win | jq -c --argjson p "$over" '.drawn | select(. != null and .[0] < $p[0] - 4 and .[0] + .[2] > $p[0] + 4 and .[1] < $p[1] - 4 and .[1] + .[3] > $p[1] + 4)')
-        [ -n "$crossing" ] && break
-        sleep 0.02
+        before=$(win | jq -c --argjson y "$y" --argjson dx "$dx" ".drawn | $inside")
+        [ -n "$before" ] || { sleep 0.02; continue; }
+        $MSG screenshot "$log/$shot-crossing.png" >/dev/null || fail "no screenshot"
+        after=$(win | jq -c --argjson y "$y" --argjson dx "$dx" ".drawn | $inside")
+        [ -n "$after" ] && break
     done
-    [ -n "$crossing" ] || fail "($shot) it never crossed the dock beside its place $over"
-    $MSG screenshot "$log/$shot-crossing.png" >/dev/null || fail "no screenshot"
-    px=$(echo "$over" | jq -r --argjson s "$scale" '"\(.[0] * $s | floor) \(.[1] * $s | floor)"')
+    [ -n "$before" ] && [ -n "$after" ] || fail "($shot) it never crossed the dock's glass (at y $y)"
+    px=$(jq -rn --argjson a "$before" --argjson b "$after" --argjson y "$y" --argjson s "$scale" \
+        '"\(([$a[0], $b[0]] | max) + 6 | . * $s | ceil) \($y * $s | floor)"')
     got=$(probe_pixel "$log/$shot-crossing.png" $px)
+    # The window's grey or its dialog's (the edge moves while the screenshot is taken), each
+    # channel within 2: the glass's blur gives greys too, not neutral ones (measured '76 72 77').
+    set -- $got
     for g in 64 96; do
-        set -- $got
-        [ $(($1 - g)) -le 3 ] && [ $((g - $1)) -le 3 ] && grey "$got" && return 0
+        ok=1
+        for c in "$1" "$2" "$3"; do [ $((c - g)) -le 2 ] && [ $((g - c)) -le 2 ] || ok=0; done
+        [ $ok = 1 ] && return 0
     done
-    fail "($shot) crossing the dock ($crossing) the pixel at $px is '$got', not its own grey: the dock is drawn over it"
+    fail "($shot) crossing the dock ($before → $after) the pixel at $px, just inside its edge, is '$got', not its own grey: the dock's glass is drawn over it"
 }
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
 
@@ -163,9 +173,12 @@ echo "ok    it is drawn shrinking toward its place (${k}% of its size a second i
 sleep 0.3
 target=$(win | jq -c .minimize_target)
 place=$(echo "$target" | jq -r '"\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"')
+# Coming back, the curve is fast out: it leaves the dock in the first 1% of its time (15 ms of
+# 6 s, missed in CI). Ten minutes give that part a second; step 7 minimizes it again, which
+# replaces the animation.
+$MSG settings '{"animations":{"minimize":600000}}' >/dev/null
 echo "click $place" >"$C"
 over_dock back "$target"
-for _ in $(seq 1 40); do [ "$(win | jq -c .drawn)" = null ] && break; sleep 0.25; done
 $MSG settings '{"animations":null}' >/dev/null
 sleep 0.3
 w=$(win); d=$(dialog)
