@@ -50,6 +50,10 @@ open_probe() {
 }
 gone() { for _ in $(seq 1 100); do [ -z "$(win)" ] && return 0; sleep 0.05; done; fail "its window is still listed"; }
 
+# What was there — once a window the check before closed has finished fading away (`close` and
+# `fade` are 400 ms by default): in CI the minimize check kills its probe right before this one,
+# and a first run compared against its closing picture.
+sleep 1
 $MSG screenshot "$log/was.png" >/dev/null || fail "no screenshot"
 
 # 1. Opening.
