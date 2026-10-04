@@ -525,6 +525,16 @@ headers, the title centred. `render/title_bar.rs`.
   geometry is stale — one configure (once per geometry) makes Chrome restate it, and the client
   counts from then on as having asked for server-side (`decoration::note_dropped_frame`), so it
   gets the bar. Turning it OFF, Chrome does ask for client-side, and the bar goes.
+- 🔴 **A frame committed before the client acks its last configure is NOT its choice**
+  (`awaits_configure`, measured nested 2026-10-04 with WAYLAND_DEBUG on a real Chrome web app
+  and Telegram). Told maximized, Chrome commits its maximized frame — opaque to the edges, no
+  margin — over its OLD geometry, then acks; that is the very picture of the setting above, so
+  `poke_stale_geometry` marked it server-side and the maximized web app got Hyalo's bar over its
+  own. Asking to be restored, Telegram (and Chrome) commit the maximized size again before any
+  configure reaches them, and `window_committed` took it as the floating window's own size: the
+  "restored" window stayed screen-sized. Both now wait while the toplevel has pending configures
+  (Smithay's `pending_configures()`); the setting turned on while Chrome runs answers no
+  configure at all, so it is still caught.
 - CI: `scripts/ci/hyalo-title-bar-check.sh` in the smoke (C probe `hyalo-title-bar-probe.c`,
   light top rows on a dark body, server-side in a buffer twice its width cropped by a viewport,
   the extra half black): the bar and the capsule's place; the bar's pixel on screen is the app's
@@ -533,12 +543,16 @@ headers, the title centred. `render/title_bar.rs`.
   (SIGUSR1, a translucent red shadow margin, its own corners cut round at 8 px) loses the bar and
   is cut to its box — its edge pixels are its own, beside them is what was there before it, and
   3 px in along the diagonal (inside its own corner, outside the window's) is not its colour; its
-  own maximize request (SIGHUP) maximizes and restores it — and back (SIGUSR2) gets the bar;
+  own maximize request (SIGHUP) maximizes it with no bar and restores it to its box although,
+  with its own frame, it commits a frame for the other state before each ack (Chrome's and
+  Telegram's order, above) — and back (SIGUSR2) gets the bar;
   close in the capsule. Controls, all seen failing: the installed Hyalo without the bar
   (`title_bar` null at step 1); a bar of a fixed colour, and one that averages the whole buffer
   row (step 2: "the bar is 115 115 115… not one piece"); no clip ("the shadow margin shows left
   of the window (105 9 11…)"); a client-side frame left square ("not rounded"); client maximize
-  requests refused ("did not maximize: none").
+  requests refused ("did not maximize: none"); a frame read before the ack, each guard removed
+  in turn ("maximized with its own frame, it got Hyalo's bar too"; "restored at [5,5,1262,678],
+  it was [536,303,400,250]").
 
 ## The window manager
 

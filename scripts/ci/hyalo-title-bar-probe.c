@@ -19,6 +19,13 @@
  * SIGUSR2: back to server-side, its buffer its box again.
  * SIGHUP: its own maximize button — asks to be maximized, or restored when it is.
  *
+ * With its own frame it takes the size each configure gives it, as an app does, and it answers
+ * a change of state the way real apps do (measured nested, 2026-10-04): before it acks the
+ * configure that maximizes it, it commits a frame drawn for the new state over the OLD
+ * geometry — opaque to its edges, no margin, as Chrome's web apps do; and right after it asks
+ * to be restored, before any configure, it commits its maximized size again with its margin
+ * back, as Telegram does. Neither frame is the size it chose.
+ *
  * What it prints (the check reads these lines):
  *   SHOWN                      its first buffer is up
  *   POINTER enter|leave        the pointer on its surface
@@ -64,6 +71,9 @@ static struct xdg_surface *xs;
 static struct zxdg_toplevel_decoration_v1 *deco;
 static struct xdg_toplevel *top;
 static int configured, closed, maximized;
+static int own;            /* it draws its own frame */
+static int cfg_w, cfg_h;   /* the size the last configure gave it (0: its own, W×H) */
+static int was_maximized;  /* the state it last drew */
 static volatile sig_atomic_t want_switch;   /* 1 client-side, 2 server-side */
 static volatile sig_atomic_t want_maximize; /* SIGHUP: its own maximize button */
 
@@ -87,8 +97,15 @@ static const struct wl_registry_listener registry_listener = { global, global_re
 static void ping(void *data, struct xdg_wm_base *b, uint32_t serial) { xdg_wm_base_pong(b, serial); }
 static const struct xdg_wm_base_listener wm_base_listener = { ping };
 
+static void draw(int own_frame);
+static void draw_frame(int margin, int w, int h, int gx, int gy, int gw, int gh, int opaque_all);
+
 static void surface_configure(void *data, struct xdg_surface *s, uint32_t serial) {
+    /* Maximized with its own frame: first a frame for the new state, over the old geometry. */
+    if (own && configured && maximized && !was_maximized && cfg_w > 0)
+        draw_frame(0, cfg_w, cfg_h, MARGIN, MARGIN, W, H, 1);
     xdg_surface_ack_configure(s, serial);
+    if (own && configured) draw(1);
     configured = 1;
 }
 static const struct xdg_surface_listener xdg_surface_listener = { surface_configure };
@@ -97,6 +114,8 @@ static void top_configure(void *d, struct xdg_toplevel *t, int32_t w, int32_t h,
     uint32_t *s;
     maximized = 0;
     wl_array_for_each(s, states) if (*s == XDG_TOPLEVEL_STATE_MAXIMIZED) maximized = 1;
+    cfg_w = w;
+    cfg_h = h;
     printf("STATE %s\n", maximized ? "maximized" : "normal");
     fflush(stdout);
 }
@@ -126,24 +145,24 @@ static const struct wl_pointer_listener pointer_listener = { p_enter, p_leave, p
 
 /* Its content at W×H — light top rows, dark below — with `margin` px of shadow room around
  * it (0: its buffer is its box), and `extra` px of black on the right that the viewport crops. */
-/* Whether (x, y) of the W×H box is outside its own rounded corner. */
-static int cut(int x, int y) {
-    double dx = x < CORNER ? CORNER - x - 0.5 : x >= W - CORNER ? x - (W - CORNER) + 0.5 : 0;
-    double dy = y < CORNER ? CORNER - y - 0.5 : y >= H - CORNER ? y - (H - CORNER) + 0.5 : 0;
+/* Whether (x, y) of a bw×bh box is outside its own rounded corner. */
+static int cut(int x, int y, int bw, int bh) {
+    double dx = x < CORNER ? CORNER - x - 0.5 : x >= bw - CORNER ? x - (bw - CORNER) + 0.5 : 0;
+    double dy = y < CORNER ? CORNER - y - 0.5 : y >= bh - CORNER ? y - (bh - CORNER) + 0.5 : 0;
     return dx > 0 && dy > 0 && dx * dx + dy * dy > CORNER * CORNER;
 }
 
-static struct wl_buffer *content(int margin, int extra) {
-    int w = W + 2 * margin + extra, h = H + 2 * margin, stride = w * 4, size = stride * h;
+static struct wl_buffer *content(int margin, int extra, int bw, int bh) {
+    int w = bw + 2 * margin + extra, h = bh + 2 * margin, stride = w * 4, size = stride * h;
     int fd = memfd_create("probe", 0);
     if (fd < 0 || ftruncate(fd, size) < 0) return NULL;
     uint32_t *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
-            int in = x >= margin && x < margin + W && y >= margin && y < margin + H;
-            px[y * w + x] = x >= W + 2 * margin ? 0xff000000
+            int in = x >= margin && x < margin + bw && y >= margin && y < margin + bh;
+            px[y * w + x] = x >= bw + 2 * margin ? 0xff000000
                           : !in ? SHADOW
-                          : margin && cut(x - margin, y - margin) ? 0x00000000
+                          : margin && cut(x - margin, y - margin, bw, bh) ? 0x00000000
                           : (y - margin < TOP ? LIGHT : DARK);
         }
     munmap(px, size);
@@ -154,23 +173,44 @@ static struct wl_buffer *content(int margin, int extra) {
     return b;
 }
 
-static void draw(int own_frame) {
-    int m = own_frame ? MARGIN : 0, extra = own_frame ? 0 : W;
-    xdg_surface_set_window_geometry(xs, m, m, W, H);
-    if (extra) {
-        wp_viewport_set_source(viewport, 0, 0, wl_fixed_from_int(W + 2 * m), wl_fixed_from_int(H + 2 * m));
-        wp_viewport_set_destination(viewport, W + 2 * m, H + 2 * m);
+/* A frame drawn for one state, declared with a geometry that may be another's: a w×h box with
+ * `margin` px of shadow around it, the window geometry (gx, gy, gw, gh), opaque over its whole
+ * buffer when `opaque_all`. Own frame only. */
+static void draw_frame(int margin, int w, int h, int gx, int gy, int gw, int gh, int opaque_all) {
+    xdg_surface_set_window_geometry(xs, gx, gy, gw, gh);
+    wp_viewport_set_source(viewport, wl_fixed_from_int(-1), wl_fixed_from_int(-1), wl_fixed_from_int(-1), wl_fixed_from_int(-1));
+    wp_viewport_set_destination(viewport, -1, -1);
+    wl_surface_attach(surface, content(margin, 0, w, h), 0, 0);
+    wl_surface_damage(surface, 0, 0, w + 2 * margin, h + 2 * margin);
+    struct wl_region *r = wl_compositor_create_region(compositor);
+    if (opaque_all) {
+        wl_region_add(r, 0, 0, w + 2 * margin, h + 2 * margin);
     } else {
-        wp_viewport_set_source(viewport, wl_fixed_from_int(-1), wl_fixed_from_int(-1), wl_fixed_from_int(-1), wl_fixed_from_int(-1));
-        wp_viewport_set_destination(viewport, -1, -1);
+        wl_region_add(r, margin + CORNER, margin, w - 2 * CORNER, h);
+        wl_region_add(r, margin, margin + CORNER, w, h - 2 * CORNER);
     }
-    wl_surface_attach(surface, content(m, extra), 0, 0);
-    wl_surface_damage(surface, 0, 0, W + 2 * m, H + 2 * m);
+    wl_surface_set_opaque_region(surface, r);
+    wl_region_destroy(r);
+    wl_surface_commit(surface);
+}
+
+static void draw(int own_frame) {
+    own = own_frame;
+    if (own_frame) {
+        /* Its own frame: the size it was given, no margin maximized. */
+        int w = cfg_w > 0 ? cfg_w : W, h = cfg_h > 0 ? cfg_h : H, m = maximized ? 0 : MARGIN;
+        was_maximized = maximized;
+        draw_frame(m, w, h, m, m, w, h, 0);
+        return;
+    }
+    xdg_surface_set_window_geometry(xs, 0, 0, W, H);
+    wp_viewport_set_source(viewport, 0, 0, wl_fixed_from_int(W), wl_fixed_from_int(H));
+    wp_viewport_set_destination(viewport, W, H);
+    wl_surface_attach(surface, content(0, W, W, H), 0, 0);
+    wl_surface_damage(surface, 0, 0, W, H);
     /* Opaque where its content is: a client that drops its frame says so (wm/mod.rs). */
     struct wl_region *r = wl_compositor_create_region(compositor);
-    int k = own_frame ? CORNER : 0;
-    wl_region_add(r, m + k, m, W - 2 * k, H);
-    wl_region_add(r, m, m + k, W, H - 2 * k);
+    wl_region_add(r, 0, 0, W, H);
     wl_surface_set_opaque_region(surface, r);
     wl_region_destroy(r);
     wl_surface_commit(surface);
@@ -227,8 +267,14 @@ int main(void) {
         }
         if (want_maximize) {
             want_maximize = 0;
-            if (maximized) xdg_toplevel_unset_maximized(top);
-            else xdg_toplevel_set_maximized(top);
+            if (maximized) {
+                xdg_toplevel_unset_maximized(top);
+                /* Restoring with its own frame: its maximized size again, margin back, before
+                 * any configure tells it its size. */
+                if (own && cfg_w > 0) draw_frame(MARGIN, cfg_w, cfg_h, MARGIN, MARGIN, cfg_w, cfg_h, 0);
+            } else {
+                xdg_toplevel_set_maximized(top);
+            }
         }
     }
     printf("CLOSED\n");

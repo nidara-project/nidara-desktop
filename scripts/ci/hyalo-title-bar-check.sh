@@ -15,13 +15,17 @@
 #      corners cut round, smaller than the window's): the bar goes, and Hyalo cuts it to its box
 #      (render/window.rs `push`) — its edges are the app's to the last pixel, nothing is drawn
 #      beside them (the probe's shadow margin is translucent red), and its corners are cut to the
-#      window's, past the app's own; its own maximize button (the probe's SIGHUP) maximizes and
-#      restores it; back to server-side, the bar comes back;
+#      window's, past the app's own; its own maximize button (the probe's SIGHUP) maximizes it —
+#      with no bar of Hyalo's over its own frame — and restores it to the box it had, though it
+#      commits a frame for the other state before it acks each change, as Chrome's web apps and
+#      Telegram do; back to server-side, the bar comes back;
 #   6. close in the bar's capsule closes it.
 # The controls: the same probe against a Hyalo without the title bar has `title_bar` 0 (step 1);
 # against one that does not cut a client-side frame to its box, the red margin shows beside it,
 # and its corner is the app's colour (step 5); against one that refuses a client's maximize
-# request, `fullscreen` stays none (step 5).
+# request, `fullscreen` stays none (step 5); against one that reads a frame committed before the
+# client's ack, the maximized window gets the bar and the restored one keeps the maximized size
+# (step 5).
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -124,13 +128,19 @@ corner_t=$(pixels pixel "$log/own.png" $(at 3 3)); corner_b=$(pixels pixel "$log
 near "$corner_t" 230 && fail "the window's top corner is the app's colour ($corner_t): not cut to the window's"
 near "$corner_b" 48 && fail "the window's bottom corner is the app's colour ($corner_b): not cut to the window's"
 echo "ok    with its own frame it is cut to its box: its edges ($edge_l / $edge_t), no margin, the window's corners"
+box=$(win | jq -c '[.x, .y, .width, .height]')
 kill -HUP "$pid"
 wait_field fullscreen maximized || fail "the app's own maximize button did not maximize: $(field fullscreen)"
 wait_line '^STATE maximized' || fail "maximized, and the app was not told"
 [ "$(field look.rounded)" = true ] || fail "maximized, the window is not rounded"
+sleep 0.6
+[ "$(field title_bar)" = 0 ] || fail "maximized with its own frame, it got Hyalo's bar too: the frame it committed before its ack counted as a dropped frame"
 kill -HUP "$pid"
 wait_field fullscreen none || fail "the app's own button did not restore: $(field fullscreen)"
-echo "ok    its own maximize button maximizes it and restores it"
+sleep 0.6
+[ "$(win | jq -c '[.x, .y, .width, .height]')" = "$box" ] \
+    || fail "restored at $(win | jq -c '[.x, .y, .width, .height]'), it was $box: the maximized frame it committed before its ack became its size"
+echo "ok    its own maximize button maximizes it, with no bar over its frame, and restores it to its box"
 kill -USR2 "$pid"
 wait_line '^SWITCHED server' || fail "the probe did not switch back"
 wait_field title_bar 48 || fail "back to server-side, and no bar"
