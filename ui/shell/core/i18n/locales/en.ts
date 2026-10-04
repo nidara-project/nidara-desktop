@@ -734,6 +734,7 @@ export default {
     "dock.special.trash.name": "Trash",
     "dock.special.home.label": "Files",
     "dock.menu.open": "Open",
+    "dock.menu.close-window": "Close window",
     "dock.menu.window-of": "Window of",
 
     // System menu

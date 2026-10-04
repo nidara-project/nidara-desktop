@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "Cestino",
     "dock.special.home.label": "File",
     "dock.menu.open": "Apri",
+    "dock.menu.close-window": "Chiudi finestra",
     "dock.menu.window-of": "Finestra di",
 
     // System menu

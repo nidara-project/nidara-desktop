@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "ゴミ箱",
     "dock.special.home.label": "ファイル",
     "dock.menu.open": "開く",
+    "dock.menu.close-window": "ウィンドウを閉じる",
     "dock.menu.window-of": "ウィンドウ:",
 
     // System menu

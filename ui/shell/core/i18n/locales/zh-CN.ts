@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "废纸篓",
     "dock.special.home.label": "文件",
     "dock.menu.open": "打开",
+    "dock.menu.close-window": "关闭窗口",
     "dock.menu.window-of": "窗口:",
 
     // System menu

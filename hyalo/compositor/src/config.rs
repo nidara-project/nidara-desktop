@@ -49,6 +49,26 @@ pub struct Config {
     /// How windows are drawn: their corners, and the blur behind a translucent one
     /// (render/window.rs). Settings → Appearance → Windows writes `backdrop.enabled`.
     pub windows: WindowsConfig,
+    /// What Hyalo animates (wm/minimize.rs). Settings → Accessibility → Reduce motion writes
+    /// `enabled`.
+    pub animations: AnimationsConfig,
+}
+
+/// What Hyalo animates, and how long it takes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AnimationsConfig {
+    /// Off, nothing moves: a minimized window goes at once (reduce motion).
+    pub enabled: bool,
+    /// A window shrinking into the dock, and back, in milliseconds. 400 = the Hyprland
+    /// session's `windowsOut` (speed 4, in tenths of a second), on its `default` curve.
+    pub minimize: u32,
+}
+
+impl Default for AnimationsConfig {
+    fn default() -> Self {
+        Self { enabled: true, minimize: 400 }
+    }
 }
 
 /// How frames reach the screen (backend/tty.rs).

@@ -471,12 +471,19 @@ phase_run() {
     nidara-hyalo msg do workspace 1 >/dev/null
     log "decorations OK ($(grep -c '^ok' /tmp/hyalo/decoration.log) steps: xdg, KDE, rounded)"
     # A window's controls are Hyalo's (#708 point 5): told to the app, drawn where it placed
-    # them, the pointer theirs and not the app's, maximize and close carried out, minimize
-    # nothing yet (#724), the side switched live. Clicks through HYALO_CONTROL.
+    # them, the pointer theirs and not the app's, maximize and close carried out, the side
+    # switched live. Clicks through HYALO_CONTROL.
     CONTROLS_LOG=/tmp/hyalo/window-controls "$REPO/scripts/ci/hyalo-window-controls-check.sh" >/tmp/hyalo/window-controls.log 2>&1 \
         || { log "FAIL: window controls"; cat /tmp/hyalo/window-controls.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize, side, buttons, rule, close)"
+    # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
+    # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
+    # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
+    MINIMIZE_LOG=/tmp/hyalo/minimize "$REPO/scripts/ci/hyalo-minimize-check.sh" >/tmp/hyalo/minimize.log 2>&1 \
+        || { log "FAIL: minimize"; cat /tmp/hyalo/minimize.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
     # Hyalo's title bar (#708 point 5): an app that asks gets it, one piece with its top row
     # (the colour measured on screen, dark ink on light), the pointer Hyalo's, dragged to move,
     # a double click to maximize, gone and back as the app switches its frame, close in it.

@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "Lixo",
     "dock.special.home.label": "Ficheiros",
     "dock.menu.open": "Abrir",
+    "dock.menu.close-window": "Fechar janela",
     "dock.menu.window-of": "Janela de",
 
     // System menu

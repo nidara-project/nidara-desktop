@@ -13,7 +13,7 @@
 //!   the capsule shrinks by a button. A window shows a button when the user chose it, the window
 //!   asked for it (`set_buttons`; every button until it asks), a rule did not take it away
 //!   (`controls`), and it can do it — no maximize for a window that cannot change size, no
-//!   minimize at all until Hyalo minimizes (#724; then: not for a dialog either). Close always.
+//!   minimize for a dialog, which goes with its window (wm/minimize.rs). Close always.
 
 use smithay::{
     reexports::wayland_server::{
@@ -121,6 +121,17 @@ fn fixed_size(surface: &WlSurface) -> bool {
     })
 }
 
+/// Whether the window is a dialog of another (xdg_toplevel.set_parent): it is minimized with
+/// that one, never by itself.
+fn is_dialog(surface: &WlSurface) -> bool {
+    with_states(surface, |states| {
+        states
+            .data_map
+            .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
+            .is_some_and(|d| d.lock().unwrap().parent.is_some())
+    })
+}
+
 /// The buttons the window with this main surface shows: those the user chose (`cfg`), it asked
 /// for (`set_buttons`) and a rule left it (`rule`, the bits of its `controls`), that it can do.
 pub fn shown(surface: &WlSurface, rule: Option<u32>, cfg: &ControlsConfig) -> Buttons {
@@ -139,8 +150,7 @@ pub fn shown(surface: &WlSurface, rule: Option<u32>, cfg: &ControlsConfig) -> Bu
     for b in order {
         let show = match b {
             Button::Close => true,
-            // #724: what minimizing means here is not decided yet. With it, not for a dialog.
-            Button::Minimize => false,
+            Button::Minimize => want & b.bit() != 0 && !is_dialog(surface),
             Button::Maximize => want & b.bit() != 0 && !fixed_size(surface),
         };
         if show {

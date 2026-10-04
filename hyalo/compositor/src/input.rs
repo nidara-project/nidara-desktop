@@ -510,7 +510,7 @@ impl Hyalo {
                     let action = match held.button {
                         Button::Close => Some(Action::CloseWindow(Some(held.window))),
                         Button::Maximize => Some(Action::Maximize(Some(held.window))),
-                        Button::Minimize => None,
+                        Button::Minimize => Some(Action::Minimize(Some(held.window))),
                     };
                     if let Some(action) = action
                         && let Err(err) = self.run_action(action)

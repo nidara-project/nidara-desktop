@@ -24,6 +24,7 @@ import { renderMenuModel } from "../../common/NidaraMenu"
 import { INK } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { DockIcon } from "./DockIcon"
+import { captureWindow } from "../../core/WindowCapture"
 import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 
 /** A `*-symbolic` icon is a mask meant to take the text colour (see DockIcon). */
@@ -121,6 +122,12 @@ interface DockItemProps {
     onReorder: (sourceId: string, targetId: string) => void;
     isPinned: boolean;
     cleanId?: string;
+    /** A minimized window's item (#724): the window's address. It shows a picture of the
+     *  window with its app's icon (`appItem`) as a badge, and a click brings the window back. */
+    window?: string;
+    /** Where the item's icon is now, in its window's coordinates: what the window grows back
+     *  out of when this item restores it (`DockCore`'s minimize targets). */
+    aimFrom?: (address: string, icon: Gtk.Widget) => void;
 }
 
 /**
@@ -148,12 +155,14 @@ export function DockItem(
     referenceWidget?: Gtk.Widget
 ) {
     let { appId, appItem, updateDock, register, addresses = [], clientTitle, onPin, onUnpin, onReorder, isPinned, cleanId } = props
+    const { window: windowAddr, aimFrom } = props
     // The dock's own items (app grid, home, trash) are NOT apps, and must never be
     // looked up as one: `appService.getAppInfo` falls back to a SUBSTRING match, so
     // "launcher" resolved to `fcitx5-wayland-launcher.desktop`. Every grid click
     // launched that input-method helper and only toggled the grid in the `.catch`
     // once it died — which is what made the grid slow to open AND to close (#550).
     const isSpecialItem = appId.startsWith("special:") || appId === "launcher" || appId === "home-shortcut" || appId === "trash"
+        || !!windowAddr
     const isVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
     let rawId = "void"
     if (appItem.get_id) {
@@ -332,6 +341,13 @@ export function DockItem(
         icon.restSize = () => DOCK_CONSTANTS.ICON_SIZE
         icon.setPixbuf(pixbuf, isSymbolicFile(resolvedPath), resolvedPath)
         child = icon
+        // A minimized window: its picture, captured once — the window draws nothing while it
+        // is minimized, so its last frame is what it looks like. The app's icon until it comes.
+        if (windowAddr) {
+            captureWindow(windowAddr, sourceSize, sourceSize).then(tex => {
+                if (tex && icon.get_root()) icon.setThumbnail(tex)
+            }).catch(() => {})
+        }
     } else {
         // Fallback for system icons
         const iconProps: any = {
@@ -490,6 +506,7 @@ export function DockItem(
         let title = appItem.name || "App"
         if (appId === "home-shortcut" || appId === "special:home") title = t("dock.special.home.label")
         if (appId === "trash" || appId === "special:trash") title = t("dock.special.trash.name")
+        if (windowAddr) return hypr.clients.find(c => c.address === windowAddr)?.title || title
         if (focused && addresses.includes(focused.address)) {
             title = focused.title
         } else if (addresses.length > 0) {
@@ -558,6 +575,7 @@ export function DockItem(
         let mainTitle = appItem.name || "App"
         if (appId === "home-shortcut" || appId === "special:home") mainTitle = t("dock.special.home.label")
         if (appId === "trash" || appId === "special:trash") mainTitle = t("dock.special.trash.name")
+        if (windowAddr) mainTitle = hypr.clients.find(c => c.address === windowAddr)?.title || mainTitle
         const mainSection = addSection(mainTitle)
 
         let desktopActions: string[] = []
@@ -573,6 +591,9 @@ export function DockItem(
         } else if (appId === "trash" || appId === "special:trash") {
             mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
             mainSection.append(t("settings.dock.dockitem.empty-trash"), addAction(() => execAsync("gio trash --empty").catch(print)))
+        } else if (windowAddr) {
+            mainSection.append(t("dock.menu.open"), addAction(() => restoreWindow()))
+            mainSection.append(t("dock.menu.close-window"), addAction(() => compositor.closeWindow(windowAddr)))
         }
 
         if (desktopActions.length > 0) {
@@ -656,6 +677,8 @@ export function DockItem(
     const dragGesture = new Gtk.GestureDrag()
     dragGesture.connect("drag-begin", () => {
         if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
+        // A minimized window's item is not an app: nothing to pin or reorder.
+        if (windowAddr) return
         longPressTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LONG_PRESS_MS, () => {
             longPressTimer = null
             if (dragBus.draggingId) return GLib.SOURCE_REMOVE  // another icon owns drag
@@ -683,14 +706,33 @@ export function DockItem(
     })
     iconBox.add_controller(dragGesture)
 
+    // A minimized window's item brings it back, growing out of where the item is now (the
+    // pointer is on it, so it may be magnified): focusing a minimized window restores it.
+    const restoreWindow = () => {
+        if (!windowAddr) return
+        aimFrom?.(windowAddr, iconToDisplay)
+        compositor.focusWindow(windowAddr)
+    }
+
     // CLICK (Focus/Launch)
     let bounceTimerId: number | null = null
     const primaryAction = () => {
-        if (addresses.length > 0) {
+        if (windowAddr) {
+            restoreWindow()
+        } else if (addresses.length > 0) {
+            // The app's windows that are SHOWN take turns; with none shown, its most recently
+            // minimized one comes back (#724). A dialog hidden with its window is neither.
+            const clients = addresses.map(a => hypr.clients.find(c => c.address === a)).filter(c => !!c)
+            const shown = clients.length ? clients.filter(c => !c!.minimized).map(c => c!.address) : addresses
+            if (shown.length === 0) {
+                const last = clients.filter(c => c!.minimizedOrder > 0).sort((a, b) => b!.minimizedOrder - a!.minimizedOrder)[0]
+                compositor.focusWindow((last ?? clients[0])!.address)
+                return
+            }
             const focusedAddr = hypr.focusedClient?.address
-            const idx = addresses.indexOf(focusedAddr || "")
-            const nextIdx = (idx + 1) % addresses.length
-            const target = addresses[nextIdx]
+            const idx = shown.indexOf(focusedAddr || "")
+            const nextIdx = (idx + 1) % shown.length
+            const target = shown[nextIdx]
             if (target) {
                 compositor.focusWindow(target)
             }

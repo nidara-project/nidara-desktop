@@ -37,8 +37,19 @@ pub struct WindowInfo {
     pub pinned: bool,
     pub pseudo: bool,
     pub focused: bool,
-    /// Whether it is on screen now (its workspace is shown).
+    /// Whether it is on screen now (its workspace is shown, and it is not minimized).
     pub visible: bool,
+    /// Hidden by a minimize (wm/minimize.rs): its own, or the window's it is a dialog of.
+    pub minimized: bool,
+    /// The order it was minimized in, most recent highest; 0 when it was not minimized itself
+    /// (shown, or hidden with the window it is a dialog of). The dock restores the highest.
+    pub minimized_order: u64,
+    /// Its place in a dock (`minimize_targets`), global logical px: where it shrinks to and
+    /// grows back from. None when no dock gave it one.
+    pub minimize_target: Option<[f64; 4]>,
+    /// Where its whole box (title bar included) is drawn NOW while it shrinks into the dock or
+    /// grows back, global logical px; none when it is not moving (wm/minimize.rs).
+    pub drawn: Option<[f64; 4]>,
     /// Higher = focused more recently; 0 = never focused.
     pub focus_order: u64,
     /// The window's own box (no border), global logical pixels.
@@ -156,6 +167,17 @@ pub enum Request {
     NightLight {
         #[serde(default)]
         temperature: Option<u32>,
+    },
+    /// Where a dock shows each minimized window, for the window to shrink into it and grow back
+    /// out of it (wm/minimize.rs): rectangles `[x, y, width, height]`, logical px, in the dock's
+    /// layer surface — the one named `namespace` on `output` — by window id. Replaces what that
+    /// output was told before.
+    MinimizeTargets {
+        output: String,
+        namespace: String,
+        /// By window id, as a string: JSON keys are strings, and a tagged request is read
+        /// through serde's buffered content, which will not turn `"12"` into a number.
+        targets: std::collections::BTreeMap<String, [f64; 4]>,
     },
     /// A window-manager command, written as in a binding: `workspace 3`, `focus-window 12`
     /// (wm/actions.rs).

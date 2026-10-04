@@ -99,6 +99,70 @@ void main() {
 }
 "#;
 
+/// An element whose geometry is computed at a scale of its own, not the output's: a window
+/// shrinking into the dock is drawn at `scale × k` (wm/minimize.rs), and Smithay's surface
+/// elements size themselves from the scale the damage tracker passes — the output's. Without
+/// this, a shrinking window's surfaces kept their full size from a scaled origin: the box
+/// around the small window was drawn too, stale or blank (seen nested, 2026-10-04). At the
+/// output's own scale it changes nothing.
+#[derive(Debug)]
+pub struct AtScale<E> {
+    pub inner: E,
+    pub scale: Scale<f64>,
+}
+
+impl<E: Element> Element for AtScale<E> {
+    fn id(&self) -> &Id {
+        self.inner.id()
+    }
+    fn current_commit(&self) -> CommitCounter {
+        self.inner.current_commit()
+    }
+    fn location(&self, _scale: Scale<f64>) -> Point<i32, Physical> {
+        self.inner.location(self.scale)
+    }
+    fn src(&self) -> Rectangle<f64, BufferCoords> {
+        self.inner.src()
+    }
+    fn transform(&self) -> Transform {
+        self.inner.transform()
+    }
+    fn geometry(&self, _scale: Scale<f64>) -> Rectangle<i32, Physical> {
+        self.inner.geometry(self.scale)
+    }
+    fn damage_since(&self, _scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
+        self.inner.damage_since(self.scale, commit)
+    }
+    fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+        self.inner.opaque_regions(self.scale)
+    }
+    fn alpha(&self) -> f32 {
+        self.inner.alpha()
+    }
+    fn kind(&self) -> Kind {
+        self.inner.kind()
+    }
+}
+
+impl<R: smithay::backend::renderer::Renderer, E: RenderElement<R>> RenderElement<R> for AtScale<E> {
+    fn draw(
+        &self,
+        frame: &mut R::Frame<'_, '_>,
+        src: Rectangle<f64, BufferCoords>,
+        dst: Rectangle<i32, Physical>,
+        damage: &[Rectangle<i32, Physical>],
+        opaque_regions: &[Rectangle<i32, Physical>],
+        cache: Option<&UserDataMap>,
+    ) -> Result<(), R::Error> {
+        self.inner.draw(frame, src, dst, damage, opaque_regions, cache)
+    }
+
+    /// Passed on: a fullscreen window still goes straight to the display (direct scan-out).
+    fn underlying_storage(&self, renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
+        self.inner.underlying_storage(renderer)
+    }
+}
+
 /// The compiled shader, once per GL context (its user data).
 struct RoundedProgram(Option<GlesTexProgram>);
 
@@ -126,7 +190,7 @@ fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram>
 
 /// A surface of a window, its corners cut to the window's box.
 pub struct RoundedElement<R: smithay::backend::renderer::Renderer> {
-    inner: WaylandSurfaceRenderElement<R>,
+    inner: AtScale<WaylandSurfaceRenderElement<R>>,
     program: GlesTexProgram,
     /// The window's box, output pixels.
     geo: Rectangle<f64, Physical>,
@@ -411,7 +475,7 @@ pub fn push<R: HyaloRenderer>(
                 render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified);
             out.extend(elements.into_iter().map(|inner| {
                 OutputElement::Rounded(RoundedElement {
-                    inner,
+                    inner: AtScale { inner, scale },
                     program: program.clone(),
                     geo: frame,
                     radius,

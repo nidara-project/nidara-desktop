@@ -19,6 +19,7 @@ pub mod actions;
 pub mod games;
 pub mod grabs;
 pub mod layout;
+pub mod minimize;
 pub mod rules;
 
 use std::collections::{BTreeMap, HashMap};
@@ -124,6 +125,9 @@ pub struct Managed {
     /// The geometry a client was last sent a configure for, because it declared it stale
     /// (`poke_stale_geometry`): sent once per geometry, never in a loop.
     pub poked_geometry: Option<Rectangle<i32, Logical>>,
+    /// Minimized (wm/minimize.rs): the order it was minimized in, most recent highest — what
+    /// the dock's icon restores first. Its dialogs are hidden with it (`Wm::is_hidden`).
+    pub minimized: Option<u64>,
 }
 
 impl Managed {
@@ -235,6 +239,12 @@ pub struct Wm {
     /// The real pointer is not drawn (input is unaffected): the shell's agent pointer draws
     /// its own, and a hardware cursor plane would always be on top of it.
     pub cursor_hidden: bool,
+    /// The last minimize's order (`Managed::minimized`).
+    pub minimize_counter: u64,
+    /// Windows shrinking into the dock or growing back out of it (wm/minimize.rs).
+    pub animations: Vec<minimize::Anim>,
+    /// Where each output's dock shows its minimized windows, by output name.
+    pub minimize_targets: HashMap<String, minimize::Targets>,
 }
 
 impl Wm {
@@ -256,8 +266,9 @@ impl Wm {
             .find(|m| m.window.toplevel().is_some_and(|t| t.wl_surface() == surface))
     }
 
+    /// The windows shown on a workspace — not a minimized one, nor its dialogs.
     pub fn on_workspace(&self, ws: i32) -> impl Iterator<Item = &Managed> {
-        self.windows.iter().filter(move |m| m.workspace == ws && m.mapped)
+        self.windows.iter().filter(move |m| m.workspace == ws && m.mapped && !self.is_hidden(m))
     }
 
     /// The workspaces on screen: each output's active one, and any special one shown.
@@ -576,6 +587,7 @@ impl Hyalo {
             has_title_bar: false,
             controls: None,
             poked_geometry: None,
+            minimized: None,
         });
     }
 
@@ -714,6 +726,7 @@ impl Hyalo {
         let listed = self.wm.get_mut(id).and_then(|m| m.listed.take());
         self.unlist_window(listed);
         self.wm.windows.retain(|m| m.id != id);
+        self.wm.animations.retain(|a| a.id != id);
         self.wm.dirty_windows = true;
         if self.wm.focused == Some(id) {
             self.wm.focused = None;
@@ -778,7 +791,10 @@ impl Hyalo {
         let tiled_area = inset(work, l.gaps_out);
         let boxes: HashMap<WindowId, Rect> = w.layout.arrange(tiled_area, l.gaps_in).into_iter().collect();
         let float_area = self.floating_area(&output);
-        for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped) {
+        // A minimized window keeps the size it was last told: it is told again when it comes
+        // back (wm/minimize.rs).
+        let hidden: Vec<WindowId> = self.wm.windows.iter().filter(|m| self.wm.is_hidden(m)).map(|m| m.id).collect();
+        for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped && !hidden.contains(&m.id)) {
             let Some(t) = m.window.toplevel() else { continue };
             let tiled = boxes.get(&m.id).copied();
             // Hyalo's title bar takes the top of the box it is given; the client gets the rest.
@@ -881,6 +897,14 @@ impl Hyalo {
             .collect();
         for w in hidden {
             self.space.unmap_elem(&w);
+            // Not shown is not active: a window minimized, or left on a workspace the user
+            // went away from, is told so (its title bar greys, a terminal's cursor goes hollow).
+            if w.set_activated(false)
+                && let Some(t) = w.toplevel()
+                && t.is_initial_configure_sent()
+            {
+                t.send_pending_configure();
+            }
         }
         let focused = self.wm.focused;
         for id in order {
@@ -919,6 +943,11 @@ impl Hyalo {
             self.sync_space();
             return;
         };
+        // A minimized window — or a dialog of one — comes back (wm/minimize.rs): every route to
+        // a window's focus is a way to restore it, the dock's icon included.
+        if self.wm.get(id).is_some_and(|m| self.wm.is_hidden(m)) {
+            self.unminimize(id);
+        }
         let id = self.modal_target(id);
         let Some(m) = self.wm.get(id) else { return };
         let ws = m.workspace;
@@ -1182,6 +1211,21 @@ impl Hyalo {
             .collect();
         for id in ids {
             self.set_floating(id, floating);
+        }
+        // A minimized window is in no layout: it only changes its mind, and comes back tiled or
+        // floating as its workspace now is (wm/minimize.rs `unminimize`).
+        let hidden: Vec<WindowId> = self
+            .wm
+            .windows
+            .iter()
+            .filter(|m| m.workspace == ws && m.mapped && m.minimized.is_some() && !(!floating && wants_floating(&m.window)))
+            .map(|m| m.id)
+            .collect();
+        for id in hidden {
+            if let Some(m) = self.wm.get_mut(id) {
+                m.floating = floating;
+                self.wm.dirty_windows = true;
+            }
         }
         self.arrange_workspace(ws);
         self.sync_space();

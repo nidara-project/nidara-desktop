@@ -585,6 +585,7 @@ export default {
     "dock.special.trash.name": "Корзина",
     "dock.special.home.label": "Файлы",
     "dock.menu.open": "Открыть",
+    "dock.menu.close-window": "Закрыть окно",
     "dock.menu.window-of": "Окно приложения",
 
     // System menu

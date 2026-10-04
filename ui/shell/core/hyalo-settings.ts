@@ -12,8 +12,8 @@
 // Reads ask `config`: the three layers merged, the keyboard with the system's layout filled
 // in — what is in force, not what Settings last said.
 //
-// What Hyalo does not have yet is a no-op here and false in `caps`: its own animations, its
-// per-surface blur (both #684).
+// What Hyalo does not have yet is a no-op here and false in `caps`: its per-surface blur
+// (#684).
 
 import * as hyalo from "./hyalo-ipc"
 import { GLASS_BLUR } from "./NidaraTheme"
@@ -62,7 +62,7 @@ function put(obj: any, path: string, value: unknown) {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true, recordedPointer: true },
+        caps: { animations: true, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true, recordedPointer: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -169,7 +169,10 @@ export function createHyaloSettings(): CompositorSettings {
             patch("idle", { idle: { screen_off: cfg.screenOff, lock: cfg.lock, suspend: cfg.suspend } })
         },
 
-        setReduceMotion() { /* caps.animations: Hyalo draws no animation yet */ },
+        // Hyalo's animations (a minimized window into the dock and back): `[animations]
+        // enabled` off while reducing; not reducing REMOVES the key, so the layers below — the
+        // user's own hyalo.toml included — say again what they said, never a hard-coded "on".
+        setReduceMotion(reduce) { patch("reduce motion", { animations: { enabled: reduce ? false : null } }) },
         setBlur() { /* caps.sharedBlur: Hyalo's blur is per surface (#684) */ },
         blurBaseline: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
         // The shell's surfaces declare no material yet (#684), so Hyalo does nothing to the

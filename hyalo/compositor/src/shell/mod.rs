@@ -110,6 +110,17 @@ impl XdgShellHandler for Hyalo {
         }
     }
 
+    fn minimize_request(&mut self, surface: ToplevelSurface) {
+        // An app's own minimize button (Chrome's web apps, Telegram, a GTK header bar) does what
+        // the capsule's does (wm/minimize.rs). The protocol sends no answer: the window simply
+        // stops being shown. Not before it is mapped; a dialog goes with its window.
+        if let Some(id) = self.wm.by_surface(surface.wl_surface()).filter(|m| m.mapped).map(|m| m.id)
+            && let Err(err) = self.minimize(id)
+        {
+            tracing::debug!(%err, "minimize request");
+        }
+    }
+
     fn unmaximize_request(&mut self, surface: ToplevelSurface) {
         match self.wm.by_surface(surface.wl_surface()).map(|m| (m.id, m.fullscreen)) {
             Some((id, Fullscreen::Maximized)) => self.set_fullscreen(id, Fullscreen::None),

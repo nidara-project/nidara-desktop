@@ -35,6 +35,11 @@ import { appendScaledTextureDevice, surfaceScale } from "../../../lib/device-tex
  * dark grey in dark mode (measured live, 2026-09-15). With `symbolic` set, the icon keeps its
  * alpha and takes this widget's CSS `color` — `.cd-icon` in _dock.scss — and re-tints when the
  * colour changes (dark/light), like a Gtk.Image would.
+ *
+ * A MINIMIZED WINDOW's item (#724, `setThumbnail`) draws a picture of the window instead —
+ * captured once when the window went (core/WindowCapture.ts), its proportions kept — with the
+ * app's icon small at its bottom-right corner, so three windows of one app tell which app and
+ * which window. The window shrank into this square (Hyalo's animation lands on it).
  */
 export const DockIcon = GObject.registerClass({
     GTypeName: "NidaraDockIcon",
@@ -47,6 +52,7 @@ export const DockIcon = GObject.registerClass({
     private _full: Gdk.Texture | null = null
     private _rest: Gdk.Texture | null = null
     private _restKey = ""
+    private _thumb: Gdk.Texture | null = null
     /** The size the icon has when nothing is magnifying it, in logical px — a getter, because
      *  the icon-size setting changes it live without rebuilding the dock. */
     restSize: () => number = () => 0
@@ -61,6 +67,13 @@ export const DockIcon = GObject.registerClass({
         this._tint = ""
         this._useSource(symbolic ? this._tinted(pixbuf, this.get_color()) : pixbuf)
         if (symbolic) this._tint = this._colorKey()
+    }
+
+    /** A picture of the window this item stands for: drawn over the icon, which shrinks to a
+     *  badge at its corner. */
+    setThumbnail(texture: Gdk.Texture): void {
+        this._thumb = texture
+        this.queue_draw()
     }
 
     private _useSource(pixbuf: GdkPixbuf.Pixbuf): void {
@@ -149,6 +162,10 @@ export const DockIcon = GObject.registerClass({
         // at any scale but 1 goes through a scale-1 offscreen in GTK, which is what made
         // the whole dock soft on a scale-2 screen (see ui/lib/device-texture.ts).
         const scale = surfaceScale(this)
+        if (this._thumb) {
+            this._snapshotThumbnail(snapshot, w, h, scale)
+            return
+        }
         if (rest > 0 && w === rest && h === rest) {
             const tex = this._restTexture(w, h, scale)
             if (tex) {
@@ -158,6 +175,26 @@ export const DockIcon = GObject.registerClass({
         }
         appendScaledTextureDevice(snapshot, scale, this._full, Gsk.ScalingFilter.TRILINEAR, fit)
     }
+
+    /** The window's picture in the w×h square, its proportions kept and centred, and the app's
+     *  icon at the bottom-right corner, at the badge's share of the square. */
+    private _snapshotThumbnail(snapshot: Gtk.Snapshot, w: number, h: number, scale: number): void {
+        const tex = this._thumb!
+        const tw = tex.get_width(), th = tex.get_height()
+        const k = Math.min(w / tw, h / th)
+        const box = new Graphene.Rect()
+        box.init((w - tw * k) / 2, (h - th * k) / 2, tw * k, th * k)
+        // Mipmapped: the picture is captured at the magnified size and drawn smaller at rest.
+        appendScaledTextureDevice(snapshot, scale, tex, Gsk.ScalingFilter.TRILINEAR, box)
+        const b = Math.min(w, h) * BADGE
+        const badge = this._fit(b, b)
+        badge.offset(w - b, h - b)
+        appendScaledTextureDevice(snapshot, scale, this._full!, Gsk.ScalingFilter.TRILINEAR, badge)
+    }
 })
+
+/** The app's icon on a minimized window's picture, as a share of the item's square: large
+ *  enough to tell the app at rest size, small enough to leave the window readable. */
+const BADGE = 0.45
 
 export type DockIcon = InstanceType<typeof DockIcon>

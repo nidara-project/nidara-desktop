@@ -267,6 +267,71 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         runUnifiedTick(true)
     }
 
+    // ── Where minimized windows go (#724) ──────────────────────────────────────
+    // Hyalo shrinks a minimized window into its item here and grows it back out of it, but
+    // the layout is ours: the dock tells it each minimized window's place, in this surface's
+    // coordinates (`setMinimizeTargets`). A window just minimized has an item that has not
+    // slid in yet, and Hyalo waits for its place, so the place is PREDICTED from the layout:
+    // the item's rest centre on the main axis (`staticCenter`), and the cross axis and size an
+    // icon has at rest — measured whenever the dock comes to rest (`calibrateMinimizeTargets`),
+    // together with how far a rest centre lies from its `staticCenter`.
+    const iconOf = (id: string): Gtk.Widget | null => {
+        const item = (widgetCache.get(id) as any)?.get_child?.()
+        const iconBox = item?._cdIconBox ?? item?.get_first_child?.()
+        return iconBox?.get_first_child?.() ?? null
+    }
+    const boundsIn = (w: Gtk.Widget): [number, number, number, number] | null => {
+        const [ok, b] = w.compute_bounds(win)
+        return ok && b.get_width() > 0 ? [b.get_x(), b.get_y(), b.get_width(), b.get_height()] : null
+    }
+    let restIcon: { dMain: number, cross: number, size: number } | null = null
+    const calibrateMinimizeTargets = () => {
+        if (!compositor.caps.minimize) return
+        // The trash: always there, never moving between the same neighbours.
+        const icon = iconOf("special:trash"), state = animRegistry.get("special:trash")
+        const b = icon && boundsIn(icon)
+        // Only with every item at REST size: the dock also comes to rest magnified, under a
+        // still pointer, and then the trash is bigger, or pushed along by its neighbours.
+        const flat = orderedIds.every(id => Math.abs((animRegistry.get(id)?.currentScale ?? 1) - 1) < 0.01)
+        if (!b || !state || !flat) return
+        const [x, y, w, h] = b
+        restIcon = axis.vertical
+            ? { dMain: y + h / 2 - state.staticCenter, cross: x, size: w }
+            : { dMain: x + w / 2 - state.staticCenter, cross: y, size: h }
+    }
+    const minimizeTargets = new Map<string, [number, number, number, number]>()
+    let lastTargets = ""
+    const sendMinimizeTargets = () => {
+        const json = JSON.stringify([...minimizeTargets.entries()])
+        if (json === lastTargets) return
+        lastTargets = json
+        compositor.setMinimizeTargets(gdkmonitor.get_connector() ?? "", "nidara-dock", Object.fromEntries(minimizeTargets))
+    }
+    const publishMinimizeTargets = () => {
+        if (!compositor.caps.minimize) return
+        if (!restIcon) calibrateMinimizeTargets()
+        minimizeTargets.clear()
+        for (const id of orderedIds) {
+            if (!id.startsWith("minimized:")) continue
+            const state = animRegistry.get(id)
+            if (!state || !restIcon) continue
+            const { dMain, cross, size } = restIcon
+            const centre = state.staticCenter + dMain
+            minimizeTargets.set(id.slice("minimized:".length), axis.vertical
+                ? [cross, centre - size / 2, size, size]
+                : [centre - size / 2, cross, size, size])
+        }
+        sendMinimizeTargets()
+    }
+    // A minimized window's item clicked: the window grows back out of the item as it is NOW —
+    // magnified, under the pointer — not out of its rest place.
+    const aimFrom = (address: string, icon: Gtk.Widget) => {
+        const b = boundsIn(icon)
+        if (!b) return
+        minimizeTargets.set(address, b)
+        sendMinimizeTargets()
+    }
+
     // Scratch spring channel, reused for every icon/channel every frame. The tick
     // used to allocate 3–5 fresh channel objects per icon per frame (~4k objects/s
     // while animating) purely as a calling convention for springStep — same math,
@@ -430,6 +495,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             if (!active) {
                 tickId = null
                 glass?.settle()
+                // At rest: every item where it will stay — measure the places exactly.
+                calibrateMinimizeTargets()
+                publishMinimizeTargets()
                 return false
             }
             return true
@@ -883,6 +951,35 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                 }
             })
 
+            // Each minimized window (#724), between the separator and the trash, oldest first: a
+            // picture of the window with its app's icon, which brings that window back. The
+            // app's own icon brings back its most recently minimized one; this picks a given
+            // one (three windows of one app, two minimized: the icon cannot know which).
+            const minimizedWins = compositor.caps.minimize
+                ? compositor.clients.filter(c => c.minimizedOrder > 0).sort((a, b) => a.minimizedOrder - b.minimizedOrder)
+                : []
+            minimizedWins.forEach(c => {
+                const id = `minimized:${c.address}`
+                const key = appService.resolveHyprlandClass(c.class || "")
+                const appItem = findApp(key || c.class) || findApp(c.class)
+                    || { name: c.title || c.class, icon_name: c.class || "application-x-executable", launch: () => {} } as any
+                configs.push({
+                    id, width: DOCK_CONSTANTS.APP_SLOT,
+                    syncData: { addrs: [], clientTitle: c.title, appItem },
+                    isPinned: true,
+                    factory: (vc) => {
+                        const w = DockItem({
+                            appId: id, appItem, updateDock: update,
+                            register: (rid, s) => animRegistry.set(rid, s), addresses: [],
+                            clientTitle: c.title, onPin: () => {}, onUnpin: () => {}, onReorder: () => {},
+                            isPinned: true, cleanId: id, window: c.address, aimFrom,
+                        }, bar)
+                        if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                        return w
+                    }
+                })
+            })
+
             const trash = {
                 name: t("dock.special.trash.name"),
                 // Initial chain only — once created, DockItem keeps the icon in sync
@@ -1023,6 +1120,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             if (!tickId) runUnifiedTick()
             if (!skipTargets) updateAllTargets(lastMousePos, false)
             axis.updateSize(smoothedBarMain)
+            // A window just minimized waits for its place here (Hyalo, `minimize_targets`):
+            // say it now, from the layout this update made, not once the item has slid in.
+            publishMinimizeTargets()
             if (layerShellReady && !dockSettings.autoHide) {
                 axis.setExclusiveZone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE)
             }

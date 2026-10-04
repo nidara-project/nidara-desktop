@@ -481,6 +481,7 @@ export default {
     "dock.special.trash.name": "Papelera",
     "dock.special.home.label": "Archivos",
     "dock.menu.open": "Abrir",
+    "dock.menu.close-window": "Cerrar ventana",
     "dock.menu.window-of": "Ventana de",
 
     "settings.network.group.ethernet": "Cableada (Ethernet)",

@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "Prullenbak",
     "dock.special.home.label": "Bestanden",
     "dock.menu.open": "Openen",
+    "dock.menu.close-window": "Venster sluiten",
     "dock.menu.window-of": "Venster van",
 
     // System menu

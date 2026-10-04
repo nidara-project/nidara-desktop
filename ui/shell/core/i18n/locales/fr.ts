@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "Corbeille",
     "dock.special.home.label": "Fichiers",
     "dock.menu.open": "Ouvrir",
+    "dock.menu.close-window": "Fermer la fenêtre",
     "dock.menu.window-of": "Fenêtre de",
 
     // System menu

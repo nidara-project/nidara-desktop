@@ -45,6 +45,10 @@ pub enum Action {
     Tile(Option<WindowId>),
     Fullscreen(Option<WindowId>),
     Maximize(Option<WindowId>),
+    /// Hidden on its workspace until something brings it back (wm/minimize.rs).
+    Minimize(Option<WindowId>),
+    /// Back where it was, without the focus (`focus-window` restores and focuses).
+    Unminimize(WindowId),
     Pseudo(Option<WindowId>),
     Pin(Option<WindowId>),
     Center(Option<WindowId>),
@@ -123,6 +127,14 @@ impl std::str::FromStr for Action {
             "focus-window" => {
                 none_after(1)?;
                 Action::FocusWindow(window_arg(a(0))?.ok_or("focus-window: which window?")?)
+            }
+            "minimize" => {
+                none_after(1)?;
+                Action::Minimize(window_arg(a(0))?)
+            }
+            "unminimize" => {
+                none_after(1)?;
+                Action::Unminimize(window_arg(a(0))?.ok_or("unminimize: which window?")?)
             }
             "focus" => {
                 none_after(1)?;
@@ -238,12 +250,22 @@ impl std::str::FromStr for Action {
 }
 
 impl Hyalo {
-    /// The window a command acts on: the one named, else the focused one.
-    fn target(&self, w: Option<WindowId>) -> Result<WindowId, String> {
+    /// The window a command acts on: the one named, else the focused one — minimized or not.
+    fn any_target(&self, w: Option<WindowId>) -> Result<WindowId, String> {
         match w {
             Some(id) if self.wm.get(id).is_some_and(|m| m.mapped) => Ok(id),
             Some(id) => Err(format!("no window {id}")),
             None => self.wm.focused.ok_or_else(|| "no window has the focus".into()),
+        }
+    }
+
+    /// The window a command acts on, which must be shown: a minimized window is in no layout
+    /// and on no screen, so moving, tiling or sizing it is refused, not done blind.
+    fn target(&self, w: Option<WindowId>) -> Result<WindowId, String> {
+        let id = self.any_target(w)?;
+        match self.wm.get(id) {
+            Some(m) if self.wm.is_hidden(m) => Err(format!("window {id} is minimized")),
+            _ => Ok(id),
         }
     }
 
@@ -269,14 +291,22 @@ impl Hyalo {
         match action {
             Action::Spawn(cmd) => crate::spawn(&cmd),
             Action::CloseWindow(w) => {
-                let id = self.target(w)?;
+                let id = self.any_target(w)?;
                 if let Some(t) = self.wm.get(id).and_then(|m| m.window.toplevel()) {
                     t.send_close();
                 }
             }
             Action::FocusWindow(id) => {
-                self.target(Some(id))?;
+                self.any_target(Some(id))?;
                 self.focus_window(Some(id));
+            }
+            Action::Minimize(w) => {
+                let id = self.any_target(w)?;
+                self.minimize(id)?;
+            }
+            Action::Unminimize(id) => {
+                self.any_target(Some(id))?;
+                self.unminimize(id);
             }
             Action::Focus(dir) => self.focus_direction(dir),
             Action::FocusOutput(name) => {
@@ -532,11 +562,14 @@ mod tests {
         assert_eq!(p("focus-output DP-2"), Ok(Action::FocusOutput("DP-2".into())));
         assert_eq!(p("cursor-visible off"), Ok(Action::CursorVisible(false)));
         assert_eq!(p("set-cursor Adwaita 32"), Ok(Action::SetCursor { theme: "Adwaita".into(), size: 32 }));
+        assert_eq!(p("minimize"), Ok(Action::Minimize(None)));
+        assert_eq!(p("minimize 12"), Ok(Action::Minimize(Some(12))));
+        assert_eq!(p("unminimize 12"), Ok(Action::Unminimize(12)));
     }
 
     #[test]
     fn mistakes_are_refused_with_a_reason() {
-        for bad in ["", "frobnicate", "workspace 0", "workspace name:", "workspace", "focus sideways", "close-window abc", "spawn", "resize 10", "fullscreen 1 2", "set-workspace-mode 3 stacked", "cursor-visible maybe", "set-cursor X 2"] {
+        for bad in ["", "frobnicate", "workspace 0", "workspace name:", "workspace", "focus sideways", "close-window abc", "spawn", "resize 10", "fullscreen 1 2", "set-workspace-mode 3 stacked", "cursor-visible maybe", "set-cursor X 2", "unminimize", "minimize 1 2"] {
             assert!(p(bad).is_err(), "{bad:?} should be refused");
         }
     }

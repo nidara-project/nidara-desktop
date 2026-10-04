@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "Kosz",
     "dock.special.home.label": "Pliki",
     "dock.menu.open": "Otwórz",
+    "dock.menu.close-window": "Zamknij okno",
     "dock.menu.window-of": "Okno programu",
 
     // System menu

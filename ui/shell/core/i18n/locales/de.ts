@@ -578,6 +578,7 @@ export default {
     "dock.special.trash.name": "Papierkorb",
     "dock.special.home.label": "Dateien",
     "dock.menu.open": "Öffnen",
+    "dock.menu.close-window": "Fenster schließen",
     "dock.menu.window-of": "Fenster von",
 
     // System menu

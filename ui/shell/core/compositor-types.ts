@@ -23,6 +23,12 @@ export interface CompositorWindow {
     pinned: boolean
     mapped: boolean
     hidden: boolean
+    /** Minimized (Hyalo, #724): hidden on its workspace until something brings it back — by
+     *  its own minimize, or with the window it is a dialog of. Never on Hyprland. */
+    minimized: boolean
+    /** The order it was minimized in, most recent highest; 0 when it was not minimized itself.
+     *  The dock gives each such window a thumbnail and its app icon restores the highest. */
+    minimizedOrder: number
     xwayland: boolean
     /** 0 none, 1 maximized, 2 fullscreen — NOT a boolean (`isRealFullscreen`). */
     fullscreen: number
@@ -105,6 +111,9 @@ export interface CompositorCaps {
      *  (common/BackdropProbe.ts). Not on Hyalo: there the compositor measures under the glass
      *  itself, while drawing it (#684), and has no screencopy for the shell to poll. */
     backdropCapture: boolean
+    /** A window can be minimized: hidden on its workspace, back through the dock (Hyalo, #724).
+     *  Hyprland has no minimize — an app's minimize button does nothing there. */
+    minimize: boolean
 }
 
 export type CompositorKind = "hyprland" | "hyalo"
@@ -162,6 +171,12 @@ export interface Compositor {
     /** Focus AND raise. The one door every route to a window goes through. */
     focusWindow(address: string): Promise<unknown>
     closeWindow(address: string): Promise<unknown>
+    /** `caps.minimize` only. `focusWindow` restores a minimized window (and focuses it). */
+    minimizeWindow(address: string): Promise<unknown>
+    /** `caps.minimize` only: where one output's dock shows each minimized window, for the window
+     *  to shrink into it and grow back out of it — `[x, y, width, height]` in the dock's layer
+     *  surface (`namespace`), logical px, by window address. Replaces what that output said. */
+    setMinimizeTargets(output: string, namespace: string, targets: Record<string, [number, number, number, number]>): void
     sendToWorkspace(address: string, wsId: number): Promise<unknown>
     /** Toggle. */
     floatWindow(address: string): Promise<unknown>
@@ -261,7 +276,7 @@ export interface BlurColour { contrast: number; brightness: number; vibrancy: nu
  *  need to ask before calling — a setting the compositor lacks is a no-op there — but a page
  *  that OFFERS one should. */
 export interface SettingsCaps {
-    /** Animations the compositor draws, which reduce motion turns off. Hyalo draws none yet (#684). */
+    /** Animations the compositor draws, which reduce motion turns off (Hyalo's: minimize, #724). */
     animations: boolean
     /** One blur for every surface, set by the glass material. Hyalo's is per surface (#684). */
     sharedBlur: boolean

@@ -100,6 +100,8 @@ export function getClients(): HyprClient[] {
         pinned: !!c.pinned,
         mapped: !!c.mapped,
         hidden: !!c.hidden,
+        minimized: false,
+        minimizedOrder: 0,
         xwayland: !!c.xwayland,
         fullscreen: typeof c.fullscreen === "number" ? c.fullscreen : 0,
     }))
