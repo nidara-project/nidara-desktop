@@ -616,14 +616,15 @@ window.nidara-app-window {
 }
 // The window's top, on the 4 px scale (owner, 2026-10-04 — it was 50, from a layout long gone):
 // the header row is 48, 8 below the window's top edge (window.ts `contentColumn`), so its
-// 32 px buttons sit 8 from its edges and the window controls' 24 px capsule 12 — its top 20 from
-// the window's edge, and padding-right 20 puts its right 20 from the side: the same gap on both
+// 32 px buttons sit 8 from its edges, and so does the window controls' capsule, as tall as they
+// are (owner, 2026-10-04) — its top 16 from the window's edge, and padding-right 16 puts its
+// right 16 from the side: the same gap on both
 // edges of the corner, on either side (the left one: `.nidara-sidebar-controls`, or window.ts
 // `leftSlot` when the sidebar is not docked). The divider under it is 64 from the window's top.
 .nidara-window-header {
     background: transparent;
     border-bottom: 1px solid var(--nidara-border);
-    padding: 0 20px 8px 8px;
+    padding: 0 16px 8px 8px;
     min-height: 48px;
 }
 .nidara-window-tools {
@@ -653,10 +654,10 @@ window.nidara-app-window {
 // header's row, so the capsule is centred where the toggle and the navigation are. The header's
 // content box starts with the card (both 8 px from the window's top) and is 48 high; the card's
 // inside starts 1 px lower, under its border — so a row 2 px shorter has the same centre. And
-// 20 from the window's left edge, as from its top: the card's 8 margin and 1 border, then this.
+// 16 from the window's left edge, as from its top: the card's 8 margin and 1 border, then this.
 .nidara-sidebar-controls {
     min-height: 48px - 2px;
-    margin-left: 20px - 8px - 1px;
+    margin-left: 16px - 8px - 1px;
 }
 
 popover.nidara-sidebar-popup {

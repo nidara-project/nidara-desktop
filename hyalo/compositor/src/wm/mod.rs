@@ -141,8 +141,9 @@ impl Managed {
 
 /// The height of the title bar Hyalo draws for an app that asks for one (render/title_bar.rs),
 /// logical px: the capsule and the same gap above, below and beside it (owner, 2026-10-03:
-/// equal gaps, on the interface's 4 px scale) — `window_controls::BAR_MARGIN`.
-pub const TITLE_BAR_H: i32 = 32;
+/// equal gaps) — `window_controls::BAR_MARGIN`. 48 (owner, 2026-10-04): the kit's header row,
+/// with the header's 32 px buttons 8 from its edges — the same row in every window.
+pub const TITLE_BAR_H: i32 = 48;
 
 /// The client's box `r` with a bar of `bar` px on top of it: the window's whole box.
 pub fn with_bar(r: Rect, bar: i32) -> Rect {
@@ -1401,12 +1402,12 @@ mod tests {
     fn a_title_bar_sits_on_top_and_never_leaves_by_the_top() {
         let area = r(5, 45, 2550, 1290);
         // The client's box and the window's whole box, one from the other.
-        assert_eq!(with_bar(r(100, 200, 500, 300), 32), r(100, 168, 500, 332));
-        assert_eq!(without_bar(r(100, 168, 500, 332), 32), r(100, 200, 500, 300));
+        assert_eq!(with_bar(r(100, 200, 500, 300), 48), r(100, 152, 500, 348));
+        assert_eq!(without_bar(r(100, 152, 500, 348), 48), r(100, 200, 500, 300));
         // A client at the top of the area: its bar would be above it, so it comes down.
-        assert_eq!(clamp_floating_with_bar(r(100, 45, 500, 300), area, 32), r(100, 77, 500, 300));
+        assert_eq!(clamp_floating_with_bar(r(100, 45, 500, 300), area, 48), r(100, 93, 500, 300));
         // A client as tall as the area: the bar fits, the client hangs off the bottom.
-        assert_eq!(clamp_floating_with_bar(r(100, 45, 500, 1290), area, 32), r(100, 77, 500, 1258));
+        assert_eq!(clamp_floating_with_bar(r(100, 45, 500, 1290), area, 48), r(100, 93, 500, 1242));
         // No bar: the old law.
         assert_eq!(clamp_floating_with_bar(r(100, -50, 400, 300), area, 0), clamp_floating(r(100, -50, 400, 300), area));
     }

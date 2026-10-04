@@ -37,10 +37,13 @@ use crate::{
 };
 
 /// One button's box, logical px — the same over an app's header and in Hyalo's title bar: one
-/// size of controls in every window, whatever the height of the header around them (owner,
-/// 2026-10-03; the window controls are the system's, not the app's).
+/// size of controls in every window (owner, 2026-10-03; the window controls are the system's,
+/// not the app's). The size of a header button beside it (owner, 2026-10-04): the capsule is a
+/// group of header buttons, so it is as tall as they are — 30 × 32, a button of the kit's
+/// back/forward pair, so two buttons make that pair's 60 × 32. It was 24 high, to keep the
+/// title bar thin.
 pub const BUTTON_W: f64 = 30.0;
-pub const BUTTON_H: f64 = 24.0;
+pub const BUTTON_H: f64 = 32.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -177,8 +180,8 @@ pub fn placed(surface: &WlSurface) -> Option<Point<f64, Logical>> {
 
 /// The capsule's gap in Hyalo's own title bar (render/title_bar.rs), logical px: the same on
 /// the side the user chose as above and below it — the bar is the capsule's height and twice
-/// this (`wm::TITLE_BAR_H`), on the interface's 4 px scale.
-pub const BAR_MARGIN: f64 = 4.0;
+/// this (`wm::TITLE_BAR_H`): 8, as a header button sits in the kit's 48 px header row.
+pub const BAR_MARGIN: f64 = 8.0;
 
 /// Where a window's controls are, surface-local logical px, and its buttons: in Hyalo's title
 /// bar when it has one (above the surface, so `y` is negative), else where the app placed them.
@@ -349,8 +352,8 @@ mod tests {
     fn a_button_is_one_slot_of_whichever_capsule() {
         // Two buttons (60 wide), in the title bar above the surface.
         let two = of(&[Button::Maximize, Button::Close]);
-        let r = Rectangle::new((332.0, -30.0).into(), (two.width(), BUTTON_H).into());
-        let at = |x: f64| button_at(r, Point::from((x, -18.0)), &two);
+        let r = Rectangle::new((332.0, -40.0).into(), (two.width(), BUTTON_H).into());
+        let at = |x: f64| button_at(r, Point::from((x, -24.0)), &two);
         assert_eq!(two.width(), 60.0);
         assert_eq!(at(335.0), Some(Button::Maximize));
         assert_eq!(at(363.0), Some(Button::Close));
@@ -358,8 +361,8 @@ mod tests {
         assert_eq!(button_at(r, Point::from((340.0, 0.0)), &two), None, "below it: the app");
         // Close alone: one slot, the whole capsule.
         let one = of(&[Button::Close]);
-        let r = Rectangle::new((362.0, -30.0).into(), (one.width(), BUTTON_H).into());
-        assert_eq!(button_at(r, Point::from((363.0, -18.0)), &one), Some(Button::Close));
+        let r = Rectangle::new((362.0, -40.0).into(), (one.width(), BUTTON_H).into());
+        assert_eq!(button_at(r, Point::from((363.0, -24.0)), &one), Some(Button::Close));
     }
 
     #[test]
