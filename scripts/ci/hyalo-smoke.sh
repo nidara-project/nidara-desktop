@@ -501,7 +501,8 @@ phase_run() {
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null
     nidara-hyalo msg settings '{"input":{"keyboard":{"repeat_rate":26}}}' >/dev/null
     sleep 0.5
-    cur="$(nidara-hyalo msg config | jq -c '.ok.config.cursor')"
+    # Theme and size only: `[cursor]` holds more than the shell's theme (`recorded`, #733).
+    cur="$(nidara-hyalo msg config | jq -c '.ok.config.cursor | {theme, size}')"
     [ "$cur" = '{"theme":"Adwaita","size":32}' ] || { log "FAIL: a reload put the cursor back ($cur)"; exit 1; }
     nidara-hyalo msg settings '{"cursor":null,"input":{"keyboard":{"repeat_rate":null}}}' >/dev/null
     log "cursor OK (the shell's theme survives a reload)"
