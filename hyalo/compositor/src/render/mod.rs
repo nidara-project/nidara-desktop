@@ -8,6 +8,7 @@
 //! in the prototype), and a surface's glass has to go right below that surface.
 
 pub mod controls;
+pub mod decor;
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
@@ -135,6 +136,7 @@ smithay::backend::renderer::element::render_elements! {
     Scrim=ScrimElement,
     Controls=controls::ControlsElement,
     TitleBar=title_bar::TitleBarElement,
+    Decor=decor::DecorElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
 }
 
@@ -147,6 +149,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
             Self::Controls(e) => f.debug_tuple("Controls").field(e).finish(),
             Self::TitleBar(e) => f.debug_tuple("TitleBar").field(e).finish(),
+            Self::Decor(e) => f.debug_tuple("Decor").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
@@ -352,7 +355,10 @@ pub fn output_elements<R: HyaloRenderer>(
                 })),
                 None => (controls, None),
             };
-            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls, title_bar);
+            // Its line and its shadow (decor.rs), focused or not: not on a fullscreen window, nor
+            // where a rule took its corners (games).
+            let decor = managed.filter(|m| !fullscreen && m.rounded).map(|m| state.wm.focused == Some(m.id));
+            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls, title_bar, decor);
         }
     };
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of

@@ -347,7 +347,7 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
 - **A client-side frame is cut to its box** (`render/window.rs` `push`, owner 2026-10-04). A web
   app of Chrome's draws its own frame with a shadow margin and square corners — tiled, and at the
   BOTTOM even floating. Such a window (it does not `fits`) is drawn inside its own box only (the
-  rounded shader's `clip`: its margin — its own shadow too, until Hyalo draws one in wave 2 — is
+  rounded shader's `clip`: its margin — its own shadow too; Hyalo's stands in for it, below — is
   never drawn), with the window's corners cut into it, as every desktop rounds a web page. What
   lies in a corner's outer 4.7 px along the diagonal (`rounding` 24, power 3.2) is not shown.
   ⛔ **Not a ring around it.** #727 laid such a window out inside a 4 px ring of Hyalo's that
@@ -359,11 +359,27 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   surface's VIEW — the viewport's crop and scaling — and only across the client's box. Measured
   2026-10-03: Chrome tiled beside kitty keeps its 1262 px buffer and crops it to 628 with
   wp_viewport, and the bar, which averaged the whole buffer row, came out half its colour.
-- Still owed in wave 2: the 1 px border (active/inactive) and the shadow.
+- **The line and the shadow** (`render/decor.rs`, `DecorElement`, 2026-10-04): one pass of a
+  shader of ours, behind everything of the window but IN FRONT of its backdrop, drawing only
+  OUTSIDE the box (the corner shader's distance field, so it follows the superellipse). The line:
+  `[windows.border]`, Hyprland's for Nidara — 1 px, `#ffffff4d`→`#ffffff1a` at 45° on the focused
+  window, `#59595933` on the others; its room is `[layout] border`. The shadow: `[windows.shadow]`,
+  `(1 − t)^power` over `range` (Hyprland's `render_power`), `offset` down; deeper on the focused
+  window (20 px, 4 down, `#00000059`) than the others (12, 2, `#00000033`) — not Hyprland's 4 px:
+  it also stands in for the shadow an app that draws its own frame lost when it was CUT (above).
+  Not on a fullscreen window, nor where a rule took the corners (games). Colours are `#rrggbb[aa]`
+  (`config::parse_color`, premultiplied). All live through the settings layer.
+  🔴 **In front of the backdrop, not behind it**: drawn behind, a translucent window's blur read
+  its own shadow at its edges and darkened its inside (measured 103 → 96 at its bottom edge).
+  The quad never covers the box's inside (`subtract_rect`): a video playing in the window
+  damages it every frame and every pixel there would be discarded.
 - CI: `scripts/ci/hyalo-window-look-check.sh` in the smoke — an opaque window of red/green
   stripes and a translucent one over it: `look`; the corner's pixel shows what is behind and
   30,30 the window; the stripes' spread under the glass (2.7 nested, beside it 127.5); and the
-  switch off → sharp again (89.5), then back on. `scripts/ci/hyalo-decoration-check.sh` (C probe
+  switch off → sharp again (89.5), then back on; the line and the shadow against both switched
+  off — the pixel right of the window is the line's, below it darker, and inside the translucent
+  window at its bottom edge unchanged (controls seen failing: a Hyalo without them; one drawing
+  them behind the backdrop). `scripts/ci/hyalo-decoration-check.sh` (C probe
   `hyalo-decoration-probe.c`, drawing itself as kitty does with the answer): both protocols say
   server-side to a client that asks for client-side, and both probe windows are rounded — the
   control, the same probe on a Hyalo without the protocols, fails at once.

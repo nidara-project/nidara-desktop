@@ -9,7 +9,13 @@
 #   3. under the translucent window the stripes behind it are blurred: their spread falls to a
 #      fraction of the stripes' own;
 #   4. Settings' switch (`windows.backdrop.enabled = false`, the settings layer) takes the blur
-#      away: the stripes under the glass are sharp again; and back on.
+#      away: the stripes under the glass are sharp again; and back on;
+#   5. the line and the shadow (render/decor.rs), against the same scene with both switched off:
+#      the pixel just right of the glass window is the line's, the one below it darker (the
+#      shadow), and one inside it, at its bottom edge, unchanged — a translucent window shows
+#      its backdrop, never a shadow under itself.
+# Controls seen failing: a Hyalo without them (the settings layer refuses `border`), and one that
+# draws them BEHIND the backdrop ("the shadow reaches inside the translucent window").
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
 set -eu
@@ -83,3 +89,19 @@ $MSG settings '{"windows":null}' >/dev/null
 sleep 0.5
 [ "$(look look-glass)" = '{"rounded":true,"backdrop":true}' ] || fail "switched back on, the translucent window says $(look look-glass)"
 echo "ok    the switch: off, the stripes under the glass are sharp again (spread $sharp); back on"
+
+# 5. The line and the shadow, against both off.
+rgb_sum() { set -- $1; echo $(($1 + $2 + $3)); }
+$MSG screenshot "$log/decor-on.png" >/dev/null
+$MSG settings '{"windows":{"border":{"width":0},"shadow":{"enabled":false}}}' >/dev/null || fail "the settings layer refused the line and the shadow"
+sleep 0.5
+$MSG screenshot "$log/decor-off.png" >/dev/null
+$MSG settings '{"windows":null}' >/dev/null
+line_on=$(probe pixel "$log/decor-on.png" $((gx + gw)) $((gy + gh / 2))); line_off=$(probe pixel "$log/decor-off.png" $((gx + gw)) $((gy + gh / 2)))
+[ "$line_on" != "$line_off" ] || fail "no line: the pixel right of the window is $line_on with it and without"
+below_on=$(rgb_sum "$(probe pixel "$log/decor-on.png" $((gx + gw / 2)) $((gy + gh + 6)))")
+below_off=$(rgb_sum "$(probe pixel "$log/decor-off.png" $((gx + gw / 2)) $((gy + gh + 6)))")
+[ "$below_on" -lt $((below_off - 6)) ] || fail "no shadow: 6 px below the window the pixel sums $below_on with it, $below_off without"
+in_on=$(probe pixel "$log/decor-on.png" $((gx + gw / 2)) $((gy + gh - 3))); in_off=$(probe pixel "$log/decor-off.png" $((gx + gw / 2)) $((gy + gh - 3)))
+[ "$in_on" = "$in_off" ] || fail "the shadow reaches inside the translucent window: $in_on with it, $in_off without"
+echo "ok    the line ($line_on, $line_off without) and the shadow ($below_on below, $below_off without), nothing inside"
