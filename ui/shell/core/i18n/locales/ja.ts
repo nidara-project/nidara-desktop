@@ -229,6 +229,8 @@ export default {
     "settings.appearance.interface-font.desc": "シェルと GTK アプリで使用するフォント",
     "settings.appearance.mono-font": "等幅フォント",
     "settings.appearance.mono-font.desc": "ターミナルとコードエディター用のフォント",
+    "settings.appearance.window-minimize": "最小化ボタン",
+    "settings.appearance.window-minimize.desc": "ダイアログ以外のすべてのウィンドウに表示されます。最小化したウィンドウは Dock で待機します。",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "ランダム",
@@ -578,6 +580,7 @@ export default {
     "dock.special.trash.name": "ゴミ箱",
     "dock.special.home.label": "ファイル",
     "dock.menu.open": "開く",
+    "dock.menu.close-window": "ウィンドウを閉じる",
     "dock.menu.window-of": "ウィンドウ:",
 
     // System menu

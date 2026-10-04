@@ -229,6 +229,8 @@ export default {
     "settings.appearance.interface-font.desc": "Czcionka używana w powłoce i aplikacjach GTK",
     "settings.appearance.mono-font": "Czcionka o stałej szerokości",
     "settings.appearance.mono-font.desc": "Czcionka dla terminali i edytorów kodu",
+    "settings.appearance.window-minimize": "Przycisk minimalizacji",
+    "settings.appearance.window-minimize.desc": "W każdym oknie oprócz okien dialogowych. Zminimalizowane okno czeka w doku.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Losowy",
@@ -578,6 +580,7 @@ export default {
     "dock.special.trash.name": "Kosz",
     "dock.special.home.label": "Pliki",
     "dock.menu.open": "Otwórz",
+    "dock.menu.close-window": "Zamknij okno",
     "dock.menu.window-of": "Okno programu",
 
     // System menu

@@ -291,6 +291,11 @@ pub fn post_repaint(
     if crate::render::scrim::take_easing() {
         state.queue_redraw(Some(output));
     }
+    // A window shrinking into the dock or growing out of it (wm/minimize.rs): every output,
+    // since it may cross from one to another. At rest nothing ticks.
+    if state.step_animations() {
+        state.queue_redraw(None);
+    }
     let time = state.start_time.elapsed();
     let throttle = Some(Duration::from_secs(1));
     let update = |surface: &WlSurface, s: &smithay::wayland::compositor::SurfaceData| {

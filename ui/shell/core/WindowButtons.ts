@@ -13,8 +13,9 @@ import { settings } from "./CompositorState"
  * The key is `left:right`, comma-separated names (`appmenu:minimize,maximize,close`). The side
  * is the half close is in; the order within it is the compositor's (close outermost), not the
  * key's. Nidara's default is a system dconf default (`scripts/gen-dconf-defaults.sh`):
- * maximize and close — no minimize until Hyalo minimizes (#724), since an app's own button
- * cannot be shown disabled.
+ * minimize, maximize and close (#724, owner 2026-10-04). Settings can take minimize away
+ * (`setWindowButton`), which writes the same key — so an app's own minimize button goes with
+ * the compositor's.
  */
 
 export type Side = "right" | "left"
@@ -57,6 +58,14 @@ export function readWindowButtons(): { side: Side, buttons: WindowButton[] } {
 /** Settings' choice of side: the same buttons, moved. */
 export function setWindowButtonsSide(side: Side): void {
     const layout = formatButtonLayout(side, readWindowButtons().buttons)
+    if (wm().get_string("button-layout") !== layout) wm().set_string("button-layout", layout)
+}
+
+/** Settings' choice of one button: shown or not, on the same side. Close is always there. */
+export function setWindowButton(button: Exclude<WindowButton, "close">, shown: boolean): void {
+    const { side, buttons } = readWindowButtons()
+    const next = buttons.filter(b => b !== button).concat(shown ? [button] : [])
+    const layout = formatButtonLayout(side, next.includes("close") ? next : next.concat("close"))
     if (wm().get_string("button-layout") !== layout) wm().set_string("button-layout", layout)
 }
 

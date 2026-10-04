@@ -162,6 +162,17 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             let p = state.seat.get_pointer().unwrap().current_location();
             Reply::Ok(Response::CursorPosition { x: p.x, y: p.y })
         }
+        Request::MinimizeTargets { output, namespace, targets } => {
+            let mut rects = std::collections::HashMap::new();
+            for (id, [x, y, w, h]) in targets {
+                let Ok(id) = id.parse::<crate::wm::WindowId>() else {
+                    return Reply::Error(format!("{id:?} is not a window id"));
+                };
+                rects.insert(id, smithay::utils::Rectangle::new((x, y).into(), (w, h).into()));
+            }
+            state.set_minimize_targets(output, namespace, rects);
+            Reply::Ok(Response::Handled)
+        }
         Request::Do { command } => match command.parse::<crate::wm::actions::Action>() {
             Ok(action) => match state.run_action(action) {
                 Ok(()) => Reply::Ok(Response::Handled),
@@ -240,7 +251,14 @@ impl Hyalo {
                     pinned: m.pinned,
                     pseudo: m.pseudo,
                     focused: self.wm.focused == Some(m.id),
-                    visible: self.wm.is_visible(m.workspace),
+                    visible: self.wm.is_visible(m.workspace) && !self.wm.is_hidden(m),
+                    minimized: self.wm.is_hidden(m),
+                    minimized_order: m.minimized.unwrap_or(0),
+                    minimize_target: self.minimize_target(m.id).map(|r| [r.loc.x, r.loc.y, r.size.w, r.size.h]),
+                    drawn: self.wm.placement(m, std::time::Instant::now()).map(|p| {
+                        let frame = m.frame().to_f64();
+                        [p.origin.x, p.origin.y, frame.size.w * p.scale, frame.size.h * p.scale]
+                    }),
                     focus_order: m.focus_serial,
                     x: m.rect.loc.x,
                     y: m.rect.loc.y,
@@ -321,7 +339,8 @@ impl Hyalo {
                 output: w.output.clone(),
                 special: w.is_special(),
                 mode: self.workspace_mode(w.id),
-                windows: self.wm.on_workspace(w.id).count(),
+                // Minimized windows count: they are still on it.
+                windows: self.wm.windows.iter().filter(|m| m.workspace == w.id && m.mapped).count(),
                 active: self.wm.is_visible(w.id),
                 focused: focused_output.as_deref() == Some(&w.output) && self.wm.active.get(&w.output) == Some(&w.id),
                 last_window: self.wm.last_focused_on(w.id),

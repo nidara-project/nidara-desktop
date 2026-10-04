@@ -72,7 +72,8 @@ export function onReduceMotionChange(fn: (v: boolean) => void): () => void {
  * shell cannot reach by editing its own widgets. Turning reduce motion OFF restores what the
  * compositor's OWN config asks for, never a hard-coded "on", and a config reload that
  * forgets the shell's choice gets it back: both are the backend's
- * (`settings.setReduceMotion`, core/hyprland-settings.ts). Hyalo draws no animation yet.
+ * (`settings.setReduceMotion`, core/hyprland-settings.ts, core/hyalo-settings.ts — Hyalo's
+ * one animation is a minimized window going into the dock and back, #724).
  */
 export function initReduceMotion() {
     settings.setReduceMotion(_reduce)

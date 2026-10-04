@@ -229,6 +229,8 @@ export default {
     "settings.appearance.interface-font.desc": "Font usato nella shell e nelle app GTK",
     "settings.appearance.mono-font": "Font monospazio",
     "settings.appearance.mono-font.desc": "Font per terminali ed editor di codice",
+    "settings.appearance.window-minimize": "Pulsante Riduci a icona",
+    "settings.appearance.window-minimize.desc": "In ogni finestra tranne le finestre di dialogo. Una finestra ridotta a icona resta nel Dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Casuale",
@@ -578,6 +580,7 @@ export default {
     "dock.special.trash.name": "Cestino",
     "dock.special.home.label": "File",
     "dock.menu.open": "Apri",
+    "dock.menu.close-window": "Chiudi finestra",
     "dock.menu.window-of": "Finestra di",
 
     // System menu

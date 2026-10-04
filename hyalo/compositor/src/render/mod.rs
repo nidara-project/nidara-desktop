@@ -131,6 +131,7 @@ impl<'r> HyaloRenderer for UdevRenderer<'r> {
 smithay::backend::renderer::element::render_elements! {
     pub OutputElement<R> where R: HyaloRenderer;
     Surface=WaylandSurfaceRenderElement<R>,
+    Scaled=window::AtScale<WaylandSurfaceRenderElement<R>>,
     Rounded=window::RoundedElement<R>,
     Glass=GlassElement,
     Scrim=ScrimElement,
@@ -144,6 +145,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Surface(e) => f.debug_tuple("Surface").field(e).finish(),
+            Self::Scaled(e) => f.debug_tuple("Scaled").field(e).finish(),
             Self::Rounded(e) => f.debug_tuple("Rounded").field(e).finish(),
             Self::Glass(e) => f.debug_tuple("Glass").field(e).finish(),
             Self::Scrim(e) => f.debug_tuple("Scrim").field(e).finish(),
@@ -198,7 +200,9 @@ fn push_surface<R: HyaloRenderer>(
 }
 
 /// One surface tree with its glass right below it and that glass's shadow below the glass —
-/// push_surface's own step, without the popups (render/window.rs handles a window's).
+/// push_surface's own step, without the popups (render/window.rs handles a window's). Its
+/// surfaces are sized at `scale`, which is not the output's while a window shrinks into the
+/// dock (`window::AtScale`).
 pub(super) fn push_tree<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     renderer: &mut R,
@@ -208,7 +212,8 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     output_size: smithay::utils::Size<i32, Physical>,
     kind: Kind,
 ) {
-    out.extend(render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind));
+    let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
+    out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));
     push_material(out, surface, location, scale, output_size);
 }
 
@@ -315,13 +320,39 @@ pub fn output_elements<R: HyaloRenderer>(
         return out;
     }
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
+    let now = std::time::Instant::now();
+    // A window shrinking into the dock or growing back out of it (wm/minimize.rs): where its
+    // whole box is drawn now, scaled. `None` = where it is, as it is.
+    let placement = |m: &crate::wm::Managed| state.wm.placement(m, now);
     let push_windows = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, windows: &[Window]| {
         for w in windows {
-            let Some(at) = state.space.element_location(w) else { continue };
-            let loc = (at - w.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
-            let geo = Rectangle::new(at - output_geo.loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
             let managed = state.wm.by_window(w);
+            // A minimized window is out of the space: drawn where the model has it.
+            let Some(at) = state.space.element_location(w).or_else(|| managed.map(|m| m.rect.loc)) else { continue };
             let fullscreen = managed.is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen);
+            let bar = managed.filter(|_| !fullscreen).map_or(0, |m| m.bar());
+            let place = managed.and_then(placement);
+            // Everything of the window is drawn from its surface's origin, its box and the
+            // scale: moved and scaled together, its corners, line and shadow follow (decor.rs,
+            // window.rs). A point `q` of the window's whole box, from its top-left, lands at
+            // `origin + q × k`.
+            let (loc, geo, wscale, origin_of) = match place {
+                None => {
+                    let loc = (at - w.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
+                    let geo = Rectangle::new(at - output_geo.loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
+                    let origin = (at - w.geometry().loc - output_geo.loc).to_f64();
+                    (loc, geo, scale, (origin, 1.0))
+                }
+                Some(p) => {
+                    let k = p.scale;
+                    let base = p.origin - output_geo.loc.to_f64();
+                    let gl = w.geometry().loc.to_f64();
+                    let surface = base + Point::<f64, Logical>::from((-gl.x, bar as f64 - gl.y)).upscale(k);
+                    let client = base + Point::<f64, Logical>::from((0.0, bar as f64)).upscale(k);
+                    let geo = Rectangle::new(client.to_physical(scale), w.geometry().size.to_f64().upscale(k).to_physical(scale));
+                    (surface.to_physical(scale).to_i32_round(), geo, Scale::from(scale.x * k), (surface, k))
+                }
+            };
             let look = window::look(
                 w,
                 fullscreen,
@@ -333,8 +364,8 @@ pub fn output_elements<R: HyaloRenderer>(
             // bar (title_bar.rs): never on a fullscreen window.
             let controls = managed.filter(|_| !fullscreen).and_then(|m| {
                 let (r, buttons) = crate::protocols::window_controls::managed_rect(m, &state.windows.controls)?;
-                let origin = (at - w.geometry().loc - output_geo.loc).to_f64();
-                let rect = Rectangle::new(origin + r.loc, r.size).to_physical(scale);
+                let (origin, k) = origin_of;
+                let rect = Rectangle::new(origin + r.loc.upscale(k), r.size.upscale(k)).to_physical(scale);
                 let hover = state.wm.controls_hover.filter(|h| h.window == m.id);
                 let controls = controls::Controls {
                     buttons,
@@ -344,7 +375,6 @@ pub fn output_elements<R: HyaloRenderer>(
                 };
                 Some((rect, controls))
             });
-            let bar = managed.filter(|_| !fullscreen).map_or(0, |m| m.bar());
             let (controls, title_bar) = match managed.filter(|_| bar > 0) {
                 Some(m) => (None, Some(title_bar::TitleBar {
                     height: bar as f64,
@@ -358,9 +388,24 @@ pub fn output_elements<R: HyaloRenderer>(
             // Its line and its shadow (decor.rs), focused or not: not on a fullscreen window, nor
             // where a rule took its corners (games).
             let decor = managed.filter(|m| !fullscreen && m.rounded).map(|m| state.wm.focused == Some(m.id));
-            window::push(out, renderer, w, look, loc, geo, scale, output_size, state.windows, controls, title_bar, decor);
+            window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor);
         }
     };
+    // Windows on their way into the dock: out of the space, over the windows still shown and
+    // under the shell's chrome, so each one sinks into the dock's glass.
+    // Its dialogs go with it, in front of it.
+    let going: Vec<Window> = state
+        .wm
+        .animations
+        .iter()
+        .filter(|a| a.out)
+        .filter_map(|a| state.wm.get(a.id))
+        .filter(|m| placement(m).is_some())
+        .flat_map(|m| {
+            let dialogs = state.wm.windows.iter().rev().filter(|d| d.id != m.id && state.wm.minimized_root(d) == Some(m.id));
+            dialogs.chain(std::iter::once(m)).map(|d| d.window.clone()).collect::<Vec<_>>()
+        })
+        .collect();
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
     // it, combined by their maximum like one surface's (two surfaces' shadows that overlap —
     // the Control Center's strip and the dock's band — never darken the corner twice).
@@ -378,6 +423,7 @@ pub fn output_elements<R: HyaloRenderer>(
         push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
+    push_windows(&mut out, renderer, &going);
     push_windows(&mut out, renderer, &below);
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {

@@ -39,6 +39,8 @@ interface HyaloWindow {
     pseudo: boolean
     focused: boolean
     visible: boolean
+    minimized: boolean
+    minimized_order: number
     focus_order: number
     x: number
     y: number
@@ -109,7 +111,7 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
 
     readonly kind = "hyalo" as const
     // No tab groups and dwindle only (owner, 2026-10-01); the glow comes with #684.
-    readonly caps: CompositorCaps = { groups: false, layouts: false, glow: false, backdropCapture: false }
+    readonly caps: CompositorCaps = { groups: false, layouts: false, glow: false, backdropCapture: false, minimize: true }
 
     clients: CompositorWindow[] = []
     workspaces: CompositorWorkspace[] = []
@@ -194,6 +196,8 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
             pinned: w.pinned,
             mapped: true,
             hidden: !w.visible,
+            minimized: !!w.minimized,
+            minimizedOrder: w.minimized_order ?? 0,
             xwayland: false,
             fullscreen: FS_MODE[w.fullscreen] ?? 0,
         }))
@@ -256,7 +260,7 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
 
         let sig = `${this.focusedWorkspaceId}|${this._focusedId ?? ""}`
         for (const c of this.clients)
-            sig += `;${c.address},${c.class},${c.x},${c.y},${c.width},${c.height},${c.fullscreen},${c.floating},${c.workspace.id},${c.hidden}`
+            sig += `;${c.address},${c.class},${c.x},${c.y},${c.width},${c.height},${c.fullscreen},${c.floating},${c.workspace.id},${c.hidden},${c.minimizedOrder}`
         sig += "#"
         for (const w of this.workspaces) sig += `${w.id}:${w.monitor},`
         sig += "#"
@@ -368,6 +372,17 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
     focusDirection(dir: "left" | "right" | "up" | "down") { return run(`focus ${dir}`) }
     focusWindow(address: string) { return onWindow("focus-window", address) }
     closeWindow(address: string) { return onWindow("close-window", address) }
+    minimizeWindow(address: string) { return onWindow("minimize", address) }
+
+    setMinimizeTargets(output: string, namespace: string, targets: Record<string, [number, number, number, number]>) {
+        const byId: Record<string, [number, number, number, number]> = {}
+        for (const [address, rect] of Object.entries(targets)) {
+            const id = idOf(address)
+            if (id !== null) byId[String(id)] = rect
+        }
+        const reply = hyalo.request({ request: "minimize_targets", output, namespace, targets: byId })
+        if (reply?.error) console.error(`[HyaloState] minimize_targets: ${reply.error}`)
+    }
     sendToWorkspace(address: string, wsId: number) { return onWindow("move-to-workspace-silent", address, wsId) }
     floatWindow(address: string) { return onWindow("toggle-floating", address) }
     enableFloatWindow(address: string) { return onWindow("float", address) }

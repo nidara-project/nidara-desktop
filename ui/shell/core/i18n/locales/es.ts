@@ -233,6 +233,8 @@ export default {
     "settings.appearance.interface-font.desc": "Fuente usada en el shell y apps GTK",
     "settings.appearance.mono-font": "Fuente monoespaciada",
     "settings.appearance.mono-font.desc": "Fuente para terminales y editores de código",
+    "settings.appearance.window-minimize": "Botón de minimizar",
+    "settings.appearance.window-minimize.desc": "En todas las ventanas salvo los diálogos. Una ventana minimizada espera en el dock.",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Aleatoria",
@@ -481,6 +483,7 @@ export default {
     "dock.special.trash.name": "Papelera",
     "dock.special.home.label": "Archivos",
     "dock.menu.open": "Abrir",
+    "dock.menu.close-window": "Cerrar ventana",
     "dock.menu.window-of": "Ventana de",
 
     "settings.network.group.ethernet": "Cableada (Ethernet)",

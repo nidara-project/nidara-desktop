@@ -229,6 +229,8 @@ export default {
     "settings.appearance.interface-font.desc": "外壳和 GTK 应用使用的字体",
     "settings.appearance.mono-font": "等宽字体",
     "settings.appearance.mono-font.desc": "终端和代码编辑器使用的字体",
+    "settings.appearance.window-minimize": "最小化按钮",
+    "settings.appearance.window-minimize.desc": "显示在除对话框外的所有窗口上。最小化的窗口会留在程序坞中。",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "随机",
@@ -578,6 +580,7 @@ export default {
     "dock.special.trash.name": "废纸篓",
     "dock.special.home.label": "文件",
     "dock.menu.open": "打开",
+    "dock.menu.close-window": "关闭窗口",
     "dock.menu.window-of": "窗口:",
 
     // System menu

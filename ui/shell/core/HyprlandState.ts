@@ -58,7 +58,7 @@ export class HyprlandStateClass extends GObject.Object implements Compositor {
     }
 
     readonly kind = "hyprland" as const
-    readonly caps: CompositorCaps = { groups: true, layouts: true, glow: true, backdropCapture: true }
+    readonly caps: CompositorCaps = { groups: true, layouts: true, glow: true, backdropCapture: true, minimize: false }
 
     private _refreshPending = false
     private _lastRefreshUs = 0
@@ -907,6 +907,13 @@ export class HyprlandStateClass extends GObject.Object implements Compositor {
     closeWindow(address: string) {
         return this._dispatch(`hl.dsp.window.close({ ${this._winSel(address)} })`)
     }
+
+    // Hyprland has no minimize (`caps.minimize`): a caller that did not ask first is told.
+    minimizeWindow(_address: string) {
+        console.warn("[HyprlandState] minimizeWindow: Hyprland has no minimize (caps.minimize)")
+        return Promise.resolve()
+    }
+    setMinimizeTargets() { /* caps.minimize: nothing to aim at */ }
 
     sendToWorkspace(address: string, wsId: number) {
         return this._dispatch(`hl.dsp.window.move({ workspace = ${wsId}, ${this._winSel(address)} })`)

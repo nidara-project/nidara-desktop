@@ -417,9 +417,9 @@ when ALL of these say yes, close always:
   About asks for `["close"]`); every button until it asks;
 - **no rule took it away** — a rule's `controls = ["close"]` (`Managed::controls`, the bits);
 - **it can do it** — maximize only while the window can change size (minimum ≠ maximum);
-  minimize NOWHERE until Hyalo minimizes (#724; with it, not for a dialog either).
-So today a resizable window has maximize and close (60×32), About and any fixed-size window close
-alone (30×32).
+  minimize never on a dialog (a window with a parent: it goes with that one — "Minimizing").
+So by default a resizable window has minimize, maximize and close (90×32), a fixed-size window
+minimize and close (60×32), a dialog maximize and close or close alone, About close alone (30×32).
 
 - **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
   (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
@@ -453,8 +453,15 @@ alone (30×32).
   system dconf default, `appmenu:maximize,close` (`scripts/gen-dconf-defaults.sh`; GNOME's own is
   `appmenu:close`, close alone), and `migrations/2026-10-04-button-layout-from-gnome-default.sh`
   resets an account that holds GNOME's factory string as its own (measured on the owner's
-  machine). ⚠️ No `minimize` in the default until #724: an app's own button cannot be shown
-  disabled. Nothing is carried on Hyprland (no controls; it refuses a client's maximize too).
+  machine). Since #724 the default is `appmenu:minimize,maximize,close`, and
+  `migrations/2026-10-04b-button-layout-minimize.sh` gives minimize to the two values Settings'
+  side switch wrote before it existed (`appmenu:maximize,close` → reset; `close,maximize:appmenu`
+  → `close,minimize,maximize:appmenu`), nothing else. Settings → Appearance → Windows →
+  "Minimize button" (`appearance.windowMinimize`, `settingsCaps.minimize`) takes it out of the
+  key (`setWindowButton`), so the apps' own minimize goes with the compositor's. Nothing is
+  carried on Hyprland (no controls; it refuses a client's maximize too). ⚠️ The key is
+  SYSTEM-wide: on the Hyprland session, which has no minimize, an app's own minimize button is
+  there and does nothing.
 - **The kit's half** (`ui/lib/nidara-kit/platform/window-controls.ts`): a window has SLOTS — empty
   boxes that can hold the room, each with a `when(side)` — and the caller's own close button is
   the FALLBACK. With a layout, the fallbacks hide, the first slot that applies gets the box's size,
@@ -477,13 +484,82 @@ alone (30×32).
   places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
 - `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
 - CI: `scripts/ci/hyalo-window-controls-check.sh` (C probe `hyalo-window-controls-probe.c`,
-  leaving room as the kit does): the layout told (60×32), the controls where the app placed them,
+  leaving room as the kit does): the layout told (90×32), the controls where the app placed them,
   the pointer the app's over its body and not over its controls, maximize and restore, the side
-  switched live and followed; close alone from the user's buttons, from the app's `set_buttons`
-  (SIGUSR1), and while it cannot change size even asking for all (SIGUSR2; SIGHUP undoes it); a
-  rule's `controls = ["close"]` on a new window of the app; close asks the window to close.
-  Controls, each seen failing nested: a Hyalo without the protocol prints NO_CONTROLS; one that
-  draws every button tells 90 at once; one that ignores `set_buttons` still tells 60.
+  switched live and followed; close alone from the user's buttons and from the app's
+  `set_buttons` (SIGUSR1), minimize and close while it cannot change size even asking for all
+  (SIGUSR2; SIGHUP undoes it); a rule's `controls = ["close"]` on a new window of the app; close
+  asks the window to close. Controls, each seen failing nested: a Hyalo without the protocol
+  prints NO_CONTROLS; the one before #724 (no minimize) tells 60 at once; one that ignores
+  `set_buttons` still tells 90. Minimizing itself: "Minimizing" above.
+
+## Minimizing (#724, 2026-10-04)
+
+The owner's decisions (issue #724): a minimized window stays on its workspace, HIDDEN — a state
+of the window (`Managed::minimized`, the order it was minimized in), not a special workspace;
+it comes back through the dock — its app's icon (the most recently minimized window of an app
+with none shown) and a picture of each minimized window at the end of the dock; it shrinks into
+that picture and grows back out of it. `wm/minimize.rs`.
+
+- **Hidden** = itself or a window it is a dialog of minimized (`Wm::is_hidden`, `minimized_root`).
+  `on_workspace` skips hidden windows, so the space, the focus order, cycling, cascading and
+  tiling all do; `arrange_workspace` does not reconfigure them (a window is told its size again
+  when it comes back). A tiled window leaves its layout and goes back in on restore; a workspace
+  switched floating/tiling meanwhile only flips its `floating` (`set_all_floating`). A window
+  out of the space is told it is not active (`sync_space`), minimized or on a hidden workspace.
+  The IPC's workspace `windows` still counts it; `last_window` does not.
+- **What asks for it**: the capsule's minimize (`Action::Minimize`), an app's own button
+  (`xdg_toplevel.set_minimized`, `minimize_request`), `do minimize [ID]`. A dialog by itself is
+  refused. **What brings it back**: `focus_window` — the one door to the focus (the dock's
+  clicks, `focus-window`, xdg-activation, the overview) restores a hidden window first; `do
+  unminimize ID` restores without the focus. Commands that move, tile or size a window refuse a
+  minimized one (`target` vs `any_target` in actions.rs): it is in no layout.
+- **Where it shrinks to is the dock's to say** (`minimize_targets` over IPC: per output, the
+  layer surface's namespace and a rectangle per window id, in that surface's coordinates;
+  `CompositorState.setMinimizeTargets`). The dock's thumbnail is not laid out until the dock
+  hears of the minimized window, so a window going in WAITS, drawn where it was, at most `WAIT`
+  (250 ms) — nested, with the real shell, its place came about 45 ms after the click — and goes
+  without an animation if nothing comes (no dock). The dock PREDICTS the place from its layout
+  (`publishMinimizeTargets` in DockCore: the item's `staticCenter`, plus the cross axis, size
+  and centre offset of the trash's icon measured when the dock comes to rest with every item at
+  rest size — the dock also comes to rest magnified, under a still pointer; measured 0.5 px from
+  the item's real place) and sends exact bounds at rest; a click on a thumbnail sends where that
+  thumbnail is NOW, magnified (`aimFrom`). IPC `windows`: `minimized`, `minimized_order`,
+  `minimize_target` (global) and `drawn` (where its whole box is drawn while it moves).
+- **The animation** (`Anim`, `Placement`): the whole box fitted into the place, moved and
+  scaled by `ease` — the Hyprland session's `default` curve — over `[animations] minimize` ms
+  (400 = its `windowsOut`); `[animations] enabled = false` is reduce motion (the shell's
+  `setReduceMotion` writes it, and REMOVES it when not reducing). Everything of the window is
+  drawn from one origin and one scale (`render/mod.rs`): its surfaces, corners, line, shadow,
+  controls, title bar and popups shrink together; its dialogs move with it
+  (`Wm::placement`). Going in, it is drawn over the windows and under the shell's chrome
+  (`going`), so it sinks into the dock's glass; coming back it is drawn in its place in the
+  stack. `post_repaint` keeps frames coming while one moves (`step_animations`).
+- 🔴 **A window drawn at a scale that is not the output's needs `window::AtScale`.** Smithay's
+  surface elements size themselves from the scale the DAMAGE TRACKER passes — the output's — not
+  the one they were made with: a shrinking window's surfaces kept their full size from the
+  scaled origin, and the box around the small window came out stale, black or white (seen
+  nested, 2026-10-04; the custom shaders were right, they carry their own geometry). `AtScale`
+  pins the scale for every window surface (`RoundedElement`'s inner, `push_tree`'s `Scaled`);
+  at the output's scale it changes nothing, and it passes `underlying_storage` on, so a
+  fullscreen window still scans out.
+- 🔴 **A tagged IPC request cannot have integer map keys**: `#[serde(tag = "request")]` reads
+  through serde's buffered content, which will not turn `"12"` into a `u64` ("invalid type:
+  string"). `minimize_targets` takes string keys and parses them.
+- **The shell**: `caps.minimize` (CompositorCaps) and `settingsCaps.minimize`; `minimizeWindow`.
+  The dock (`DockCore`): a `minimized:<address>` item per window with `minimizedOrder > 0`,
+  oldest first, between the trash's separator and the trash — a `DockItem` with `window`: a
+  picture captured once when it is created (`captureWindow`; a minimized window draws nothing,
+  its last frame is what it looks like) with the app's icon at its corner (`DockIcon.
+  setThumbnail`, `BADGE`), a click or "Open" restores it, "Close window" closes it, no pin or
+  drag. An app's icon cycles its SHOWN windows; with none shown it restores the highest
+  `minimizedOrder`. Alt+Tab and the overview are #669.
+- CI: `scripts/ci/hyalo-minimize-check.sh` in the smoke (the window-controls probe, now with
+  `HYALO_PROBE_DIALOG=1` and SIGURG = `set_minimized`), ten steps with the REAL dock giving the
+  place — the drawing checked by pixels a second into a 6 s animation (the probe's grey where
+  `drawn` says, not where it was, and beside the small window what is there once it has gone).
+  Controls seen failing nested: the installed Hyalo before #724; one without `AtScale` ("its
+  full-size box is drawn too"); one whose focus does not restore.
 
 ## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
 

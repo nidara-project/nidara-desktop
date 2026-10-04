@@ -93,7 +93,8 @@ rounding_power = 3.2
 
 # The window controls (close, minimize, maximize) Hyalo draws over an app's header, where the
 # app reserved room for them: `side` "right" or "left", and the `buttons` the user wants (close
-# is always shown; a window that cannot do one does not show it — no minimize until #724). The
+# is always shown; a window that cannot do one does not show it — no minimize on a dialog, no
+# maximize on a window that cannot change size). The
 # shell keeps both equal to org.gnome.desktop.wm.preferences button-layout, which Settings →
 # Appearance → Windows writes and the apps that draw their own title bar read.
 [windows.controls]
@@ -221,6 +222,14 @@ inactive = { range = 12, offset = 2, color = "#00000033" }
 screen_off = 300
 lock = 600
 suspend = 0
+
+# What Hyalo animates (hyalo/compositor/src/wm/minimize.rs): a minimized window shrinking into
+# its place in the dock and growing back out of it, `minimize` milliseconds — the Hyprland
+# session's window animation (`windowsOut`, 400 ms). Settings → Accessibility → Reduce motion
+# switches `enabled` off: then a window goes and comes back at once.
+[animations]
+enabled = true
+minimize = 400
 
 # How frames reach the screen (backend/tty.rs). direct_scanout: an opaque fullscreen window (a
 # game) goes on the display as it is, with no composition — less latency. Set it to false if a
