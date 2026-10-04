@@ -15,7 +15,11 @@
 #   3. the same when its app is killed — its surface goes before its window, and the picture is
 #      taken then (handlers.rs `destroyed`); and reduce motion (`[animations] enabled = false`):
 #      it opened at once;
-#   4. a rule's `animate = false`: it opens at once, and closes at once.
+#   4. a rule's `animate = false`: it opens at once, and closes at once;
+#   5. going to another workspace: the one left slides out — to workspace 2, to the left (the
+#      animation made 120 s long, so it is 15 to 41 % of the way, a few seconds in: a point just
+#      left of where the window was is its grey, one just inside its right edge is not) — and
+#      with reduce motion, back at once.
 # Controls seen failing nested: listed in hyalo.md → "Opening and closing".
 #
 # Exits 1 on failure. MSG overrides `nidara-hyalo msg`.
@@ -27,7 +31,7 @@ mkdir -p "$log"
 out="$log/probe.log"
 pid=""
 fail() { echo "FAIL: $*"; cat "$out" 2>/dev/null; exit 1; }
-trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; $MSG settings "{\"animations\":null,\"rules\":{\"motion-check\":null}}" >/dev/null 2>&1 || true' EXIT
+trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; $MSG settings "{\"animations\":null,\"rules\":{\"motion-check\":null}}" >/dev/null 2>&1 || true; $MSG do workspace 1 >/dev/null 2>&1 || true' EXIT
 probe_pixel() { gjs -m "$here/hyalo-window-look-probe.js" pixel "$@"; }
 win() { $MSG windows | jq -c '.ok.windows[] | select(.title == "window-controls-probe")' | head -n 1; }
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
@@ -124,3 +128,36 @@ now=$(probe_pixel "$log/rule-closed.png" $mid)
 near "$now" "$was_mid" 6 || fail "with animate = false, closed, its middle is '$now', not what was there"
 wait "$pid" 2>/dev/null || true; pid=""
 echo "ok    a rule's animate = false: it opens and closes at once"
+
+# 5. Another workspace: the one shown slides out sideways.
+$MSG settings '{"animations":{"open":null,"workspace":120000},"rules":{"motion-check":null}}' >/dev/null \
+    || fail "Hyalo refused [animations] workspace (a Hyalo that does not slide workspaces)"
+open_probe HYALO_PROBE_TIDY=1
+sleep 1
+ws=$($MSG workspaces | jq -r '.ok.workspaces[] | select(.active and .focused and (.special | not)) | .id' | head -n 1)
+other=$((ws + 1))
+row=$(echo "$w" | jq -r --argjson s "$scale" '(.y + .height / 2) * $s | floor')
+left=$(echo "$w" | jq -r --argjson s "$scale" '(.x - 20) * $s | floor')
+right=$(echo "$w" | jq -r --argjson s "$scale" '(.x + .width - 20) * $s | floor')
+was_left=$(probe_pixel "$log/was.png" $left $row)
+$MSG do workspace "$other" >/dev/null || fail "workspace $other refused"
+sleep 0.6
+$MSG screenshot "$log/sliding.png" >/dev/null || fail "no screenshot"
+now=$(probe_pixel "$log/sliding.png" $left $row)
+near "$now" "$GREY" 3 || fail "going to workspace $other, just left of where the window was ($left $row) is '$now' (was '$was_left'), not its grey: workspace $ws did not slide out to the left"
+now=$(probe_pixel "$log/sliding.png" $right $row)
+near "$now" "$GREY" 3 && fail "going to workspace $other, just inside its right edge ($right $row) it is still its grey: it did not move"
+echo "ok    another workspace: the one left slides out sideways"
+$MSG settings '{"animations":{"workspace":null,"enabled":false}}' >/dev/null
+$MSG do workspace "$ws" >/dev/null
+sleep 0.3
+$MSG screenshot "$log/back.png" >/dev/null || fail "no screenshot"
+now=$(probe_pixel "$log/back.png" $mid)
+near "$now" "$GREY" 3 || fail "with reduce motion, back on workspace $ws its middle is '$now', not its grey: it did not come back at once"
+now=$(probe_pixel "$log/back.png" $left $row)
+near "$now" "$GREY" 3 && fail "with reduce motion, left of the window ($left $row) is still its grey"
+$MSG settings '{"animations":{"enabled":null}}' >/dev/null
+$MSG do close-window "$(echo "$w" | jq -r .id)" >/dev/null
+gone
+wait "$pid" 2>/dev/null || true; pid=""
+echo "ok    with reduce motion, a workspace comes back at once"

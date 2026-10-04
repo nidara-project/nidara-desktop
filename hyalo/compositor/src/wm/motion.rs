@@ -15,6 +15,12 @@
 //! None with reduce motion (`[animations] enabled = false`), for a window a rule takes them
 //! from (`animate = false`: games, a window with no app id), for one that opens on a workspace
 //! nobody sees, or one that closes hidden.
+//!
+//! - **Going to another workspace** (`Slide`): the one shown slides out sideways and the other
+//!   in, on `default` over `[animations] workspace` ms (600 = `workspaces`, Hyprland's `slide`)
+//!   — to a higher number from the right, to a lower one from the left. The windows of the
+//!   workspace left behind are hidden, not gone: they are drawn where they are, moved, from their
+//!   last frame. Pinned windows stay put; the shell's bar and dock, and the wallpaper, too.
 
 use std::time::{Duration, Instant};
 
@@ -118,7 +124,48 @@ pub struct Closing {
     pub motion: Motion,
 }
 
+/// An output going from one workspace to another.
+#[derive(Debug, Clone)]
+pub struct Slide {
+    pub output: String,
+    pub from: i32,
+    pub to: i32,
+    pub start: Instant,
+    pub duration: Duration,
+}
+
+impl Slide {
+    /// How far it has gone at `now`, 0..1 on `default`; `None` once it is over.
+    pub fn progress(&self, now: Instant) -> Option<f64> {
+        let t = now.duration_since(self.start);
+        if t >= self.duration {
+            return None;
+        }
+        Some(on(curve::DEFAULT, t.as_secs_f64() / self.duration.as_secs_f64()))
+    }
+
+    /// Where workspace `ws`'s windows are drawn at progress `p`, as a share of the output's
+    /// width: the one arriving from one side, the one left behind toward the other. `None` for a
+    /// workspace that is neither.
+    pub fn shift(&self, ws: i32, p: f64) -> Option<f64> {
+        // To a higher number, the new one comes from the right.
+        let dir = if self.to > self.from { 1.0 } else { -1.0 };
+        if ws == self.to {
+            Some(dir * (1.0 - p))
+        } else if ws == self.from {
+            Some(-dir * p)
+        } else {
+            None
+        }
+    }
+}
+
 impl super::Wm {
+    /// The workspace change going on on `output`, and how far it has gone.
+    pub fn slide(&self, output: &str, now: Instant) -> Option<(&Slide, f64)> {
+        self.slides.iter().find(|s| s.output == output).and_then(|s| Some((s, s.progress(now)?)))
+    }
+
     /// How window `id` looks while it opens, if it is opening.
     pub fn opening(&self, id: WindowId, now: Instant) -> Option<Look> {
         self.openings.iter().find(|o| o.id == id).and_then(|o| o.motion.look(now))
@@ -176,12 +223,25 @@ impl Hyalo {
         self.queue_redraw(None);
     }
 
-    /// Drops the openings and closings that are over; whether any is left.
+    /// `output` goes from workspace `from` to `to`: they slide.
+    pub fn start_slide(&mut self, output: &str, from: i32, to: i32) {
+        self.wm.slides.retain(|s| s.output != output);
+        let cfg = &self.config.animations;
+        if !cfg.enabled || cfg.workspace == 0 || from == to {
+            return;
+        }
+        let duration = Duration::from_millis(cfg.workspace as u64);
+        self.wm.slides.push(Slide { output: output.into(), from, to, start: Instant::now(), duration });
+        self.queue_redraw(None);
+    }
+
+    /// Drops the openings, closings and workspace changes that are over; whether any is left.
     pub fn step_motions(&mut self) -> bool {
         let now = Instant::now();
         self.wm.openings.retain(|o| !o.motion.done(now));
         self.wm.closing.retain(|c| !c.motion.done(now));
-        !self.wm.openings.is_empty() || !self.wm.closing.is_empty()
+        self.wm.slides.retain(|s| s.progress(now).is_some());
+        !self.wm.openings.is_empty() || !self.wm.closing.is_empty() || !self.wm.slides.is_empty()
     }
 }
 
@@ -224,6 +284,19 @@ mod tests {
             last = l;
         }
         assert!(m.look(t0 + Duration::from_millis(400)).is_none());
+    }
+
+    #[test]
+    fn a_workspace_slides_in_from_the_side_of_its_number() {
+        let s = Slide { output: "o".into(), from: 1, to: 2, start: Instant::now(), duration: Duration::from_millis(600) };
+        assert_eq!(s.shift(2, 0.0), Some(1.0), "a higher number comes from the right");
+        assert_eq!(s.shift(1, 0.0), Some(-0.0));
+        assert_eq!(s.shift(1, 1.0), Some(-1.0), "the one left behind goes left");
+        assert_eq!(s.shift(2, 1.0), Some(0.0));
+        assert_eq!(s.shift(3, 0.5), None);
+        let back = Slide { from: 2, to: 1, ..s.clone() };
+        assert_eq!(back.shift(1, 0.0), Some(-1.0), "a lower number comes from the left");
+        assert!(s.progress(s.start + Duration::from_millis(600)).is_none());
     }
 
     #[test]

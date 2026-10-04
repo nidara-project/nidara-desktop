@@ -565,7 +565,7 @@ that picture and grows back out of it. `wm/minimize.rs`.
   Controls seen failing nested: the installed Hyalo before #724; one without `AtScale` ("its
   full-size box is drawn too"); one whose focus does not restore.
 
-## Opening and closing (#684, 2026-10-04)
+## Opening, closing and going to another workspace (#684, 2026-10-04)
 
 `wm/motion.rs`, `render/snapshot.rs`. What the Hyprland session did, so nothing changes for the
 user at the switch (config/hypr/hyprland.lua, "Animations"; the owner chose to go on with it,
@@ -600,16 +600,27 @@ expected 1.01 was wrong, not the curve).
   rule takes them from (`animate = false`, shipped for `games` and `no-app-id` — Hyprland's
   `no_anim` on gamespace and `general-popups`), for one that opens on a workspace nobody sees, or
   one that closes hidden (minimized, another workspace).
-- Not here: windows moving when the layout changes (Hyprland's `windowsMove`), the workspace
-  switch, layer surfaces appearing, a window opening from the dock icon that launched it (#6):
-  each its own change.
+- **Going to another workspace** (`Slide`, `show_workspace`): the one shown slides out sideways
+  and the other in, on `default` over `[animations] workspace` (600 = `workspaces`, `slide`) — to
+  a higher number from the right. No picture needed: the windows left behind are hidden, not
+  gone, and are drawn from the model where they are (`Wm::on_workspace(from)`, behind the ones
+  coming in), moved by a share of the output's width (`Slide::shift`) through the same
+  `Placement` minimize uses. Pinned windows, the shell's layers and the wallpaper stay put. A
+  special workspace shown or hidden does not slide.
+- Not here: windows moving when the layout changes (Hyprland's `windowsMove`), layer surfaces
+  appearing, a window opening from the dock icon that launched it (#6): each its own change.
 - CI: `scripts/ci/hyalo-motion-check.sh` in the smoke, pixels against a screenshot from before
   the window (`was`): a second into a 30 s opening its middle is neither its grey nor what was
   there and near its edge nothing yet; closing (`HYALO_PROBE_TIDY=1`, the probe destroys its
   window as a toolkit does) still drawn, shrunk, then gone; killed (`kill -9`) the same; reduce
-  motion and `animate = false` at once. Controls seen failing nested: a Hyalo that never opens
-  animated (step 1, "'64 64 64': it opened at once"), one that never closes animated (step 2,
-  "no picture of it"), one without the `destroyed` hook (step 3, killed: "no picture of it").
+  motion and `animate = false` at once; going to workspace 2 (120 s long), just left of where the
+  window was is its grey. Controls seen failing nested: a Hyalo that never opens animated (step
+  1, "'64 64 64': it opened at once"), one that never closes animated (step 2, "no picture of
+  it"), one without the `destroyed` hook (step 3, killed: "no picture of it"), one that never
+  slides (step 5, "workspace 1 did not slide out to the left").
+- 🔴 A check that compares against "what was there" waits for the windows the check before it
+  closed to finish fading: CI's first run of this one compared against the minimize check's
+  killed probe, still closing.
 
 ## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
 

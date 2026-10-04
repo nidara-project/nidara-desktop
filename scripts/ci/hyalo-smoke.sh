@@ -491,11 +491,12 @@ phase_run() {
     log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
     # Opening and closing (#684): a window grows out of its middle and fades in; closing — its
     # window destroyed by its app, or the app killed — a picture of it shrinks and fades where
-    # it was; reduce motion and a rule's animate = false take both away. Pixels.
+    # it was; reduce motion and a rule's animate = false take both away; another workspace
+    # slides in sideways. Pixels.
     MOTION_LOG=/tmp/hyalo/motion "$REPO/scripts/ci/hyalo-motion-check.sh" >/tmp/hyalo/motion.log 2>&1 \
         || { log "FAIL: motion"; cat /tmp/hyalo/motion.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
-    log "motion OK ($(grep -c '^ok' /tmp/hyalo/motion.log) steps: opens, closes, killed + reduce motion, rule)"
+    log "motion OK ($(grep -c '^ok' /tmp/hyalo/motion.log) steps: opens, closes, killed + reduce motion, rule, workspace slide, back at once)"
     # Hyalo's title bar (#708 point 5): an app that asks gets it, one piece with its top row
     # (the colour measured on screen, dark ink on light), the pointer Hyalo's, dragged to move,
     # a double click to maximize, gone and back as the app switches its frame, close in it.

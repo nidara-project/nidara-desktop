@@ -230,15 +230,18 @@ suspend = 0
 # the switch. A minimized window shrinks into its place in the dock and grows back out of it,
 # `minimize` (wm/minimize.rs; `windowsOut`, 400). A window opening grows out of its middle,
 # `open`, overshooting a little (`windows`, 700, myBezier); closing, it shrinks to 80 %,
-# `close` (`windowsOut` popin 80%, 400); it fades in and out over `fade` (`fade`, 400)
-# (wm/motion.rs). Settings → Accessibility → Reduce motion switches `enabled` off: then nothing
-# moves. A rule's `animate = false` takes opening and closing from one app.
+# `close` (`windowsOut` popin 80%, 400); it fades in and out over `fade` (`fade`, 400). Going to
+# another workspace, the one shown slides out sideways and the other in, `workspace`
+# (`workspaces`, 600, slide) (wm/motion.rs). Settings → Accessibility → Reduce motion switches
+# `enabled` off: then nothing moves. A rule's `animate = false` takes opening and closing from
+# one app.
 [animations]
 enabled = true
 minimize = 400
 open = 700
 close = 400
 fade = 400
+workspace = 600
 
 # How frames reach the screen (backend/tty.rs). direct_scanout: an opaque fullscreen window (a
 # game) goes on the display as it is, with no composition — less latency. Set it to false if a

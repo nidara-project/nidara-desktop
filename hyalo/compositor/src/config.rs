@@ -71,11 +71,14 @@ pub struct AnimationsConfig {
     /// How long a window takes to appear and to fade away as it opens and closes, ms. 400 =
     /// `fade` (speed 4, `easeOut`).
     pub fade: u32,
+    /// Going to another workspace: the one shown slides out and the other in, sideways, ms.
+    /// 600 = `workspaces` (speed 6, `default`, Hyprland's `slide`).
+    pub workspace: u32,
 }
 
 impl Default for AnimationsConfig {
     fn default() -> Self {
-        Self { enabled: true, minimize: 400, open: 700, close: 400, fade: 400 }
+        Self { enabled: true, minimize: 400, open: 700, close: 400, fade: 400, workspace: 600 }
     }
 }
 
