@@ -118,6 +118,9 @@ pub struct Managed {
     /// It has Hyalo's title bar now: it asked for server-side decorations and its surface is
     /// its box (`wants_title_bar`). The bar sits on top of `rect`, inside the window's box.
     pub has_title_bar: bool,
+    /// The bits of the buttons a rule lets its controls show (`controls`); none = every one
+    /// (protocols/window_controls.rs `shown`).
+    pub controls: Option<u32>,
     /// The geometry a client was last sent a configure for, because it declared it stale
     /// (`poke_stale_geometry`): sent once per geometry, never in a loop.
     pub poked_geometry: Option<Rectangle<i32, Logical>>,
@@ -370,7 +373,7 @@ pub fn title(window: &Window) -> String {
 fn wants_title_bar(window: &Window, predict: bool) -> bool {
     let Some(t) = window.toplevel() else { return false };
     let surface = t.wl_surface();
-    if crate::shell::decoration::asked(surface) != Some(true) || crate::protocols::window_controls::rect(surface).is_some() {
+    if crate::shell::decoration::asked(surface) != Some(true) || crate::protocols::window_controls::placed(surface).is_some() {
         return false;
     }
     predict || crate::render::window::fits(window)
@@ -562,6 +565,7 @@ impl Hyalo {
             backdrop: true,
             title_bar: true,
             has_title_bar: false,
+            controls: None,
             poked_geometry: None,
         });
     }

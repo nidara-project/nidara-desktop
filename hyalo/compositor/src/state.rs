@@ -408,7 +408,7 @@ impl Hyalo {
         }
         let output = self.space.output_under(pos).next().cloned()?;
         let (above, below) = crate::render::windows_front_to_back(&self.space, &self.wm, &output);
-        let side = self.config.windows.controls.side;
+        let cfg = &self.config.windows.controls;
         // The first window that has the point decides: its chrome, or none.
         let first = |windows: &[Window]| {
             windows.iter().find_map(|window| {
@@ -416,8 +416,8 @@ impl Hyalo {
                 let local = pos - origin.to_f64();
                 let managed = self.wm.by_window(window)?;
                 if managed.fullscreen != crate::wm::Fullscreen::Fullscreen
-                    && let Some(r) = crate::protocols::window_controls::managed_rect(managed, side)
-                    && let Some(b) = crate::protocols::window_controls::button_at(r, local, side)
+                    && let Some((r, buttons)) = crate::protocols::window_controls::managed_rect(managed, cfg)
+                    && let Some(b) = crate::protocols::window_controls::button_at(r, local, &buttons)
                 {
                     return Some(Some((managed.id, Chrome::Button(b))));
                 }

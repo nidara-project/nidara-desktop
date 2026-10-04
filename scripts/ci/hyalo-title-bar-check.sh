@@ -5,7 +5,8 @@
 # HYALO_CONTROL, with `hyalo-title-bar-probe` in PATH, on a floating workspace.
 #
 #   1. the probe asks for server-side: it gets a 32 px bar on top of its box, and the capsule
-#      in it (90×24, the same 4 px from the right as above and below it);
+#      in it (60×24 — maximize and close, no minimize until #724 — the same 4 px from the right
+#      as above and below it);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
 #      dark on it (the title's darkest pixel);
 #   3. the pointer over the bar is Hyalo's: the app gets a leave, and no click;
@@ -40,7 +41,7 @@ wait_line() { for _ in $(seq 1 40); do grep -q "$1" "$out" && return 0; sleep 0.
 wait_field() { for _ in $(seq 1 20); do [ "$(field "$1")" = "$2" ] && return 0; sleep 0.25; done; return 1; }
 # A point in the bar, "x y": `$1` px from the window's left edge, the bar's middle.
 in_bar() { win | jq -r --argjson dx "$1" '"\(.x + $dx) \(.y - .title_bar / 2)"'; }
-# A point in the capsule: the n-th sixth of its width, its middle.
+# A point in the capsule: a fraction of its width, its middle.
 in_capsule() { win | jq -r --argjson f "$1" '.controls | "\(.[0] + .[2] * $f) \(.[1] + .[3] / 2)"'; }
 
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
@@ -51,7 +52,7 @@ sleep 0.8
 
 # 1. The bar and its capsule.
 [ "$(field title_bar)" = 32 ] || fail "no title bar: title_bar = $(field title_bar) (32 expected)"
-want=$(win | jq -r '"\(.x + .width - 4 - 90) \(.y - 32 + 4) 90 24"')
+want=$(win | jq -r '"\(.x + .width - 4 - 60) \(.y - 32 + 4) 60 24"')
 got=$(win | jq -r '.controls | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (4 px in from the right, above and below)"
 echo "ok    a 32 px bar on top of the window, the capsule in it"
@@ -137,6 +138,6 @@ echo "ok    the app switched to its own frame and the bar went; back, and it cam
 
 # 6. Close.
 sleep 0.4
-echo "click $(in_capsule 0.8333)" >"$C"
+echo "click $(in_capsule 0.75)" >"$C"
 wait_line '^CLOSED' || fail "close in the bar did not ask the window to close"
 echo "ok    close in the bar asks the window to close"

@@ -476,7 +476,7 @@ phase_run() {
     CONTROLS_LOG=/tmp/hyalo/window-controls "$REPO/scripts/ci/hyalo-window-controls-check.sh" >/tmp/hyalo/window-controls.log 2>&1 \
         || { log "FAIL: window controls"; cat /tmp/hyalo/window-controls.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
-    log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize/minimize, side, close)"
+    log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize, side, buttons, rule, close)"
     # Hyalo's title bar (#708 point 5): an app that asks gets it, one piece with its top row
     # (the colour measured on screen, dark ink on light), the pointer Hyalo's, dragged to move,
     # a double click to maximize, gone and back as the app switches its frame, close in it.

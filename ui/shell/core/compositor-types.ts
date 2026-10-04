@@ -294,10 +294,10 @@ export interface CompositorSettings {
     readWindowBackdrop(): boolean
     setWindowBackdrop(on: boolean): void
 
-    /** `caps.windowControls` only: the side the window controls go on (Hyalo's
-     *  `[windows.controls] side`). Persists and applies. */
-    readWindowControlsSide(): "right" | "left"
-    setWindowControlsSide(side: "right" | "left"): void
+    /** `caps.windowControls` only: the side the window controls go on and the buttons they may
+     *  show (Hyalo's `[windows.controls]`). Kept equal to `button-layout` by WindowButtons.ts —
+     *  set it there, not here. Persists and applies. */
+    setWindowControls(side: "right" | "left", buttons: ("close" | "minimize" | "maximize")[]): void
 
     /** The family of the title the compositor writes in the title bar it draws for apps that
      *  leave their decorations to it (Hyalo's `[windows.title_bar] font`): the interface

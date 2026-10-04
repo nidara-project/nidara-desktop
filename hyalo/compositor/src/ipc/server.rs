@@ -254,7 +254,7 @@ impl Hyalo {
                         &self.config.windows,
                     ),
                     title_bar: m.bar(),
-                    controls: crate::protocols::window_controls::managed_rect(m, self.config.windows.controls.side).map(|r| {
+                    controls: crate::protocols::window_controls::managed_rect(m, &self.config.windows.controls).map(|(r, _)| {
                         let origin = m.rect.loc.to_f64() - m.window.geometry().loc.to_f64();
                         [origin.x + r.loc.x, origin.y + r.loc.y, r.size.w, r.size.h]
                     }),

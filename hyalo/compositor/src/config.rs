@@ -111,11 +111,23 @@ impl Default for TitleBarConfig {
 }
 
 /// The window controls Hyalo draws over an app's header (protocols/window_controls.rs, #708
-/// point 5): which side of the window they go on. Settings → Appearance → Windows.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+/// point 5): which side of the window they go on, and which buttons. Settings → Appearance →
+/// Windows writes `org.gnome.desktop.wm.preferences button-layout`, and the shell keeps these
+/// equal to it (core/AppearanceSync.ts).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ControlsConfig {
     pub side: ControlsSide,
+    /// The buttons the user wants; close is always shown. A window shows fewer when it cannot
+    /// do one (window_controls.rs `shown`).
+    pub buttons: Vec<crate::protocols::window_controls::Button>,
+}
+
+impl Default for ControlsConfig {
+    fn default() -> Self {
+        use crate::protocols::window_controls::Button;
+        Self { side: ControlsSide::default(), buttons: vec![Button::Minimize, Button::Maximize, Button::Close] }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -200,6 +212,9 @@ pub struct RuleConfig {
     pub backdrop: Option<bool>,
     /// `false`: no title bar from Hyalo, for an app that asks for one (render/title_bar.rs).
     pub title_bar: Option<bool>,
+    /// The only buttons its controls may show (`["close"]`); close is always kept
+    /// (protocols/window_controls.rs).
+    pub controls: Option<Vec<crate::protocols::window_controls::Button>>,
 }
 
 impl Default for RuleConfig {
@@ -214,6 +229,7 @@ impl Default for RuleConfig {
             rounding: None,
             backdrop: None,
             title_bar: None,
+            controls: None,
         }
     }
 }

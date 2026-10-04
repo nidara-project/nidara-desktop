@@ -2,16 +2,20 @@
 //! are Hyalo's. The app keeps its own header and says where in it they go (`set_position`,
 //! double-buffered on wl_surface.commit, so they move with the buffer that leaves room for
 //! them); Hyalo draws them there over the app's pixels (render/controls.rs) and takes their
-//! clicks (input.rs). The side is the user's (`[windows.controls] side`), sent to the app as
-//! `layout` with the box to reserve.
+//! clicks (input.rs). The side and the buttons are the user's (`[windows.controls]`, which the
+//! shell keeps equal to `org.gnome.desktop.wm.preferences button-layout` — the key the apps
+//! that draw their own title bar read), sent to the app as `layout` with the box to reserve.
 //!
-//! - One capsule of three buttons, the owner's choice: the shape of the back/forward pair in
-//!   Settings' header, not three coloured circles.
-//! - Minimize is drawn disabled: what minimizing means here is #724.
-//! - Maximize is disabled for a window that cannot change size (its minimum = its maximum).
+//! - One capsule, the owner's choice: the shape of the back/forward pair in Settings' header,
+//!   not three coloured circles.
+//! - A button that does nothing for a window is NOT drawn (owner, 2026-10-04: hidden, not
+//!   disabled — as GNOME and Windows, and as an app's own title bar, which cannot disable one):
+//!   the capsule shrinks by a button. A window shows a button when the user chose it, the window
+//!   asked for it (`set_buttons`; every button until it asks), a rule did not take it away
+//!   (`controls`), and it can do it — no maximize for a window that cannot change size, no
+//!   minimize at all until Hyalo minimizes (#724; then: not for a dialog either). Close always.
 
 use smithay::{
-    desktop::Window,
     reexports::wayland_server::{
         Client, DataInit, DisplayHandle, New, Resource, Weak, protocol::wl_surface::WlSurface,
     },
@@ -25,7 +29,7 @@ use smithay::{
 
 use crate::{
     Hyalo,
-    config::ControlsSide,
+    config::{ControlsConfig, ControlsSide},
     protocols::gen_window_controls::{
         nidara_window_controls_manager_v1::{self, NidaraWindowControlsManagerV1},
         nidara_window_controls_v1::{self, NidaraWindowControlsV1, Side},
@@ -37,14 +41,9 @@ use crate::{
 /// 2026-10-03; the window controls are the system's, not the app's).
 pub const BUTTON_W: f64 = 30.0;
 pub const BUTTON_H: f64 = 24.0;
-/// The capsule: three buttons side by side.
-pub const CAPSULE_W: f64 = BUTTON_W * 3.0;
 
-fn capsule() -> Size<f64, Logical> {
-    Size::from((CAPSULE_W, BUTTON_H))
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Button {
     Close,
     Minimize,
@@ -52,6 +51,15 @@ pub enum Button {
 }
 
 impl Button {
+    /// Its bit in the protocol's `button` bitfield.
+    pub fn bit(self) -> u32 {
+        match self {
+            Self::Close => 1,
+            Self::Minimize => 2,
+            Self::Maximize => 4,
+        }
+    }
+
     /// The shader's glyph for it (render/controls.rs).
     pub fn glyph(self) -> f32 {
         match self {
@@ -62,34 +70,90 @@ impl Button {
     }
 }
 
-/// The buttons from left to right: close last on the right, first on the left.
-pub fn order(side: ControlsSide) -> [Button; 3] {
-    match side {
-        ControlsSide::Right => [Button::Minimize, Button::Maximize, Button::Close],
-        ControlsSide::Left => [Button::Close, Button::Minimize, Button::Maximize],
+/// Every button, as the protocol's bitfield.
+pub const ALL: u32 = 7;
+
+/// The bits of `buttons`.
+pub fn mask(buttons: &[Button]) -> u32 {
+    buttons.iter().fold(0, |m, b| m | b.bit())
+}
+
+/// The buttons a window shows, left to right: close last on the right, first on the left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Buttons {
+    slots: [Button; 3],
+    len: usize,
+}
+
+impl Buttons {
+    pub fn as_slice(&self) -> &[Button] {
+        &self.slots[..self.len]
+    }
+
+    /// The capsule's width, logical px: one `BUTTON_W` per button.
+    pub fn width(&self) -> f64 {
+        BUTTON_W * self.len as f64
+    }
+
+    /// The shader's glyph per slot (render/controls.rs), and how many slots.
+    pub fn glyphs(&self) -> ([f32; 3], f32) {
+        let mut g = [0.0; 3];
+        for (i, b) in self.as_slice().iter().enumerate() {
+            g[i] = b.glyph();
+        }
+        (g, self.len as f32)
+    }
+
+    fn size(&self) -> Size<f64, Logical> {
+        Size::from((self.width(), BUTTON_H))
     }
 }
 
-/// Whether a button does anything for `window`: minimize never yet (#724); maximize unless
-/// the window cannot change size.
-pub fn enabled(window: &Window, button: Button) -> bool {
-    match button {
-        Button::Close => true,
-        Button::Minimize => false,
-        Button::Maximize => window.toplevel().is_some_and(|t| {
-            with_states(t.wl_surface(), |states| {
-                let mut cached = states.cached_state.get::<SurfaceCachedState>();
-                let s = cached.current();
-                !(s.max_size.w > 0 && s.max_size.h > 0 && s.min_size == s.max_size)
-            })
-        }),
+/// Whether the window cannot change size (its minimum = its maximum): nothing to maximize.
+fn fixed_size(surface: &WlSurface) -> bool {
+    with_states(surface, |states| {
+        let mut cached = states.cached_state.get::<SurfaceCachedState>();
+        let s = cached.current();
+        s.max_size.w > 0 && s.max_size.h > 0 && s.min_size == s.max_size
+    })
+}
+
+/// The buttons the window with this main surface shows: those the user chose (`cfg`), it asked
+/// for (`set_buttons`) and a rule left it (`rule`, the bits of its `controls`), that it can do.
+pub fn shown(surface: &WlSurface, rule: Option<u32>, cfg: &ControlsConfig) -> Buttons {
+    let asked = with_states(surface, |states| {
+        if !states.cached_state.has::<ControlsState>() {
+            return None;
+        }
+        states.cached_state.get::<ControlsState>().current().buttons
+    });
+    let want = mask(&cfg.buttons) & asked.unwrap_or(ALL) & rule.unwrap_or(ALL);
+    let order = match cfg.side {
+        ControlsSide::Right => [Button::Minimize, Button::Maximize, Button::Close],
+        ControlsSide::Left => [Button::Close, Button::Minimize, Button::Maximize],
+    };
+    let mut out = Buttons { slots: [Button::Close; 3], len: 0 };
+    for b in order {
+        let show = match b {
+            Button::Close => true,
+            // #724: what minimizing means here is not decided yet. With it, not for a dialog.
+            Button::Minimize => false,
+            Button::Maximize => want & b.bit() != 0 && !fixed_size(surface),
+        };
+        if show {
+            out.slots[out.len] = b;
+            out.len += 1;
+        }
     }
+    out
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ControlsState {
     /// The reserved box's top-left corner, surface-local logical px; none = no controls.
     pub position: Option<Point<f64, Logical>>,
+    /// The buttons the window asked for (`set_buttons`), the protocol's bits; none = every one.
+    pub buttons: Option<u32>,
 }
 
 impl Cacheable for ControlsState {
@@ -101,20 +165,14 @@ impl Cacheable for ControlsState {
     }
 }
 
-/// Where the controls of the window with this main surface are, surface-local logical px.
-pub fn rect(surface: &WlSurface) -> Option<Rectangle<f64, Logical>> {
+/// Where the app placed its controls box, surface-local logical px, if it did.
+pub fn placed(surface: &WlSurface) -> Option<Point<f64, Logical>> {
     with_states(surface, |states| {
         if !states.cached_state.has::<ControlsState>() {
             return None;
         }
-        let at = states.cached_state.get::<ControlsState>().current().position?;
-        Some(Rectangle::new(at, capsule()))
+        states.cached_state.get::<ControlsState>().current().position
     })
-}
-
-/// The window's controls box, surface-local logical px, if it has one.
-pub fn window_rect(window: &Window) -> Option<Rectangle<f64, Logical>> {
-    rect(window.toplevel()?.wl_surface())
 }
 
 /// The capsule's gap in Hyalo's own title bar (render/title_bar.rs), logical px: the same on
@@ -122,30 +180,32 @@ pub fn window_rect(window: &Window) -> Option<Rectangle<f64, Logical>> {
 /// this (`wm::TITLE_BAR_H`), on the interface's 4 px scale.
 pub const BAR_MARGIN: f64 = 4.0;
 
-/// Where a window's controls are, surface-local logical px: in Hyalo's title bar when it has
-/// one (above the surface, so `y` is negative), else where the app placed them.
-pub fn managed_rect(m: &crate::wm::Managed, side: ControlsSide) -> Option<Rectangle<f64, Logical>> {
+/// Where a window's controls are, surface-local logical px, and its buttons: in Hyalo's title
+/// bar when it has one (above the surface, so `y` is negative), else where the app placed them.
+pub fn managed_rect(m: &crate::wm::Managed, cfg: &ControlsConfig) -> Option<(Rectangle<f64, Logical>, Buttons)> {
+    let surface = m.window.toplevel()?.wl_surface().clone();
+    let buttons = shown(&surface, m.controls, cfg);
     let bar = m.bar() as f64;
     if bar > 0.0 {
         let geo = m.window.geometry().to_f64();
-        let w = CAPSULE_W;
-        let x = match side {
+        let w = buttons.width();
+        let x = match cfg.side {
             ControlsSide::Right => geo.loc.x + geo.size.w - BAR_MARGIN - w,
             ControlsSide::Left => geo.loc.x + BAR_MARGIN,
         };
         let y = geo.loc.y - bar + (bar - BUTTON_H) / 2.0;
-        return Some(Rectangle::new((x, y).into(), (w, BUTTON_H).into()));
+        return Some((Rectangle::new((x, y).into(), (w, BUTTON_H).into()), buttons));
     }
-    window_rect(&m.window)
+    Some((Rectangle::new(placed(&surface)?, buttons.size()), buttons))
 }
 
-/// The button at `local` in controls at `r` (both surface-local logical px), if any.
-pub fn button_at(r: Rectangle<f64, Logical>, local: Point<f64, Logical>, side: ControlsSide) -> Option<Button> {
-    if !r.contains(local) {
+/// The button at `local` in controls at `r` showing `buttons` (both surface-local logical px).
+pub fn button_at(r: Rectangle<f64, Logical>, local: Point<f64, Logical>, buttons: &Buttons) -> Option<Button> {
+    if !r.contains(local) || buttons.len == 0 {
         return None;
     }
-    let i = (((local.x - r.loc.x) / (r.size.w / 3.0)).floor().max(0.0) as usize).min(2);
-    Some(order(side)[i])
+    let i = (((local.x - r.loc.x) / BUTTON_W).floor().max(0.0) as usize).min(buttons.len - 1);
+    Some(buttons.as_slice()[i])
 }
 
 fn side_of(side: ControlsSide) -> Side {
@@ -155,21 +215,47 @@ fn side_of(side: ControlsSide) -> Side {
     }
 }
 
-fn send_layout(res: &NidaraWindowControlsV1, side: ControlsSide) {
-    res.layout(side_of(side), CAPSULE_W, BUTTON_H);
+/// Tells the app the box to reserve, if it changed since it was last told: the side, or how
+/// many buttons it shows.
+fn tell(state: &Hyalo, res: &NidaraWindowControlsV1) {
+    let Some(data) = res.data::<ControlsData>() else { return };
+    let Ok(surface) = data.surface.upgrade() else { return };
+    let cfg = &state.config.windows.controls;
+    let rule = state.wm.by_surface(&surface).and_then(|m| m.controls);
+    let buttons = shown(&surface, rule, cfg);
+    let now = (cfg.side, buttons.len);
+    let mut told = data.told.lock().unwrap();
+    if *told != Some(now) {
+        *told = Some(now);
+        res.layout(side_of(cfg.side), buttons.width(), BUTTON_H);
+    }
 }
 
-/// After the side changed: every app lays its box out again.
+/// After the user's side or buttons, or a window's rules, changed: every app whose box changed
+/// lays it out again.
 pub fn send_layouts(state: &mut Hyalo) {
-    let side = state.config.windows.controls.side;
     state.window_controls.retain(|r| r.is_alive());
     for r in &state.window_controls {
-        send_layout(r, side);
+        tell(state, r);
+    }
+}
+
+/// After `surface` committed: what it asked for, or whether it can change size, may have
+/// changed its buttons.
+pub fn on_commit(state: &Hyalo, surface: &WlSurface) {
+    for r in &state.window_controls {
+        if r.data::<ControlsData>().is_some_and(|d| d.surface.upgrade().is_ok_and(|s| &s == surface)) {
+            tell(state, r);
+        }
     }
 }
 
 pub struct ControlsGlobal;
-pub struct ControlsData(Weak<WlSurface>);
+pub struct ControlsData {
+    surface: Weak<WlSurface>,
+    /// The side and the number of buttons the app was last told.
+    told: std::sync::Mutex<Option<(ControlsSide, usize)>>,
+}
 
 pub fn init(dh: &DisplayHandle) {
     dh.create_global::<Hyalo, NidaraWindowControlsManagerV1, _>(1, ControlsGlobal);
@@ -204,8 +290,8 @@ impl Dispatch2<NidaraWindowControlsManagerV1, Hyalo> for ControlsGlobal {
         data_init: &mut DataInit<'_, Hyalo>,
     ) {
         if let nidara_window_controls_manager_v1::Request::GetWindowControls { id, surface } = request {
-            let res = data_init.init(id, ControlsData(surface.downgrade()));
-            send_layout(&res, state.config.windows.controls.side);
+            let res = data_init.init(id, ControlsData { surface: surface.downgrade(), told: Default::default() });
+            tell(state, &res);
             state.window_controls.retain(|r| r.is_alive());
             state.window_controls.push(res);
         }
@@ -214,7 +300,7 @@ impl Dispatch2<NidaraWindowControlsManagerV1, Hyalo> for ControlsGlobal {
 
 impl ControlsData {
     fn pending(&self, f: impl FnOnce(&mut ControlsState)) {
-        if let Ok(surface) = self.0.upgrade() {
+        if let Ok(surface) = self.surface.upgrade() {
             with_states(&surface, |states| f(states.cached_state.get::<ControlsState>().pending()));
         }
     }
@@ -234,6 +320,14 @@ impl Dispatch2<NidaraWindowControlsV1, Hyalo> for ControlsData {
         match request {
             Request::SetPosition { x, y } => self.pending(|c| c.position = Some(Point::from((x, y)))),
             Request::UnsetPosition | Request::Destroy => self.pending(|c| c.position = None),
+            // Close is always kept; an unknown bit is ignored.
+            Request::SetButtons { buttons } => {
+                let bits = match buttons {
+                    smithay::reexports::wayland_server::WEnum::Value(b) => b.bits(),
+                    smithay::reexports::wayland_server::WEnum::Unknown(u) => u,
+                };
+                self.pending(|c| c.buttons = Some(bits & ALL))
+            }
         }
     }
 }
@@ -242,22 +336,35 @@ impl Dispatch2<NidaraWindowControlsV1, Hyalo> for ControlsData {
 mod tests {
     use super::*;
 
-    #[test]
-    fn close_is_last_on_the_right_and_first_on_the_left() {
-        assert_eq!(order(ControlsSide::Right)[2], Button::Close);
-        assert_eq!(order(ControlsSide::Left)[0], Button::Close);
-        assert_eq!(CAPSULE_W, 90.0);
+    fn of(list: &[Button]) -> Buttons {
+        let mut out = Buttons { slots: [Button::Close; 3], len: 0 };
+        for b in list {
+            out.slots[out.len] = *b;
+            out.len += 1;
+        }
+        out
     }
 
     #[test]
-    fn a_button_is_a_third_of_whichever_capsule() {
-        // The capsule (90 wide), in the title bar above the surface.
-        let r = Rectangle::new((302.0, -30.0).into(), (CAPSULE_W, BUTTON_H).into());
-        let at = |x: f64| button_at(r, Point::from((x, -18.0)), ControlsSide::Right);
-        assert_eq!(at(305.0), Some(Button::Minimize));
-        assert_eq!(at(340.0), Some(Button::Maximize));
-        assert_eq!(at(391.0), Some(Button::Close));
+    fn a_button_is_one_slot_of_whichever_capsule() {
+        // Two buttons (60 wide), in the title bar above the surface.
+        let two = of(&[Button::Maximize, Button::Close]);
+        let r = Rectangle::new((332.0, -30.0).into(), (two.width(), BUTTON_H).into());
+        let at = |x: f64| button_at(r, Point::from((x, -18.0)), &two);
+        assert_eq!(two.width(), 60.0);
+        assert_eq!(at(335.0), Some(Button::Maximize));
+        assert_eq!(at(363.0), Some(Button::Close));
         assert_eq!(at(393.0), None);
-        assert_eq!(button_at(r, Point::from((340.0, 0.0)), ControlsSide::Right), None, "below it: the app");
+        assert_eq!(button_at(r, Point::from((340.0, 0.0)), &two), None, "below it: the app");
+        // Close alone: one slot, the whole capsule.
+        let one = of(&[Button::Close]);
+        let r = Rectangle::new((362.0, -30.0).into(), (one.width(), BUTTON_H).into());
+        assert_eq!(button_at(r, Point::from((363.0, -18.0)), &one), Some(Button::Close));
+    }
+
+    #[test]
+    fn the_bits_are_the_protocols() {
+        assert_eq!(mask(&[Button::Close, Button::Minimize, Button::Maximize]), ALL);
+        assert_eq!(mask(&[Button::Maximize]), 4);
     }
 }

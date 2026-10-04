@@ -291,10 +291,11 @@ export default function AboutWindow(): Gtk.Window | null {
     })
     const win = shell.window
     _instance = win
+    // Close alone: nothing to minimize or maximize in an About window.
     attachWindowControls(win, [
         { widget: leftSlot, when: side => side === "left" },
         { widget: rightSlot, when: side => side === "right" },
-    ], [closeBtn])
+    ], [closeBtn], ["close"])
 
     // Closed from elsewhere (the Settings row, an IPC action) — same path.
     sigId = status.connect("notify::about-open", () => {

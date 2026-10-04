@@ -28,6 +28,7 @@ import { barConfig } from "./surfaces/bar/barState"
 import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onIdleChanged } from "./core/PowerConfig"
 import { settings as compositorSettings } from "./core/CompositorState"
+import { readWindowButtons, setWindowButtonsSide, onWindowButtonsChanged } from "./core/WindowButtons"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
 import { uiIcon, interfaceIconTheme, setInterfaceIconTheme, onInterfaceIconThemeChange, specIconThemes } from "./core/Icons"
@@ -195,22 +196,19 @@ export function registerConfigEntries() {
         ui: { i18n: "settings.appearance.window-blur" },
     })
     // Where the window controls go (#708 point 5): the compositor draws them over the app's
-    // header, on this side. Only where it draws them (Hyalo); Hyprland draws none.
-    const controlsListeners = new Set<(v: ConfigValue) => void>()
+    // header, on this side; the apps that draw their own title bar put theirs there too. The
+    // side lives in `button-layout`, which the compositor follows (core/WindowButtons.ts). Only
+    // where the compositor draws controls (Hyalo); Hyprland draws none.
     registerConfig("appearance.windowControls", {
-        desc: "Which side of a window its controls (close, minimize, maximize) go on: right, the Linux and Windows convention (close last), or left (close first; in a window with a sidebar shown, inside it). The compositor draws them over the app's own header, for Nidara's windows.",
+        desc: "Which side of a window its controls (close, maximize; minimize where the compositor minimizes) go on: right, the Linux and Windows convention (close last), or left (close first; in a window with a sidebar shown, inside it). For every window: the compositor's controls over Nidara's windows and its title bar, and the buttons of apps that draw their own title bar (GTK, Chrome's web apps, Telegram) — all read org.gnome.desktop.wm.preferences button-layout, which this writes.",
         type: "enum",
         enum: ["right", "left"],
         available: () => compositorSettings.caps.windowControls,
-        get: () => compositorSettings.readWindowControlsSide(),
-        set: v => {
-            compositorSettings.setWindowControlsSide(v as "right" | "left")
-            controlsListeners.forEach(fn => fn(v))
-        },
+        get: () => readWindowButtons().side,
+        set: v => setWindowButtonsSide(v as "right" | "left"),
         subscribe: (apply) => {
-            apply(compositorSettings.readWindowControlsSide())
-            controlsListeners.add(apply)
-            return () => { controlsListeners.delete(apply) }
+            apply(readWindowButtons().side)
+            return onWindowButtonsChanged(() => apply(readWindowButtons().side))
         },
         ui: {
             i18n: "settings.appearance.window-controls",

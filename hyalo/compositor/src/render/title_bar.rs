@@ -305,7 +305,8 @@ impl TitleBarElement {
         });
         // The title, centred in the bar, never under the capsule: as wide as what the capsule
         // leaves on BOTH sides, so centred it stays clear of it.
-        let reserve = (crate::protocols::window_controls::CAPSULE_W + 2.0 * crate::protocols::window_controls::BAR_MARGIN) * s;
+        let capsule = bar.controls.as_ref().map_or(0.0, |(r, _)| r.size.w);
+        let reserve = capsule + 2.0 * crate::protocols::window_controls::BAR_MARGIN * s;
         let max_w = (geo.size.w - 2.0 * reserve).floor() as i32;
         let title = title_raster(surface, &bar.title, &bar.family, (TITLE_PX * s).round(), max_w).map(|r| {
             let x = (bar_rect.loc.x + (bar_rect.size.w - r.w as f64) / 2.0).round() as i32;
@@ -426,12 +427,11 @@ impl TitleBarElement {
             match &self.controls {
                 Some((r, c)) => {
                     let r = shift(*r);
-                    let glyphs = c.buttons.map(crate::protocols::window_controls::Button::glyph);
-                    let enabled = c.enabled.map(|e| if e { 1.0f32 } else { 0.0 });
+                    let (glyphs, count) = c.buttons.glyphs();
                     gl.Uniform1f(p.loc(gl, c"has_controls"), 1.0);
                     gl.Uniform4f(p.loc(gl, c"rect"), r[0], r[1], r[2], r[3]);
                     gl.Uniform3f(p.loc(gl, c"glyphs"), glyphs[0], glyphs[1], glyphs[2]);
-                    gl.Uniform3f(p.loc(gl, c"enabled"), enabled[0], enabled[1], enabled[2]);
+                    gl.Uniform1f(p.loc(gl, c"count"), count);
                     gl.Uniform1f(p.loc(gl, c"hover"), c.hover.map_or(-1.0, |h| h as f32));
                     gl.Uniform1f(p.loc(gl, c"pressed"), if c.pressed { 1.0 } else { 0.0 });
                 }

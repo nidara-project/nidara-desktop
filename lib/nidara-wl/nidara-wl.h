@@ -679,4 +679,18 @@ gboolean nidara_wl_window_controls_set_position (GdkSurface *surface, double x, 
  */
 void nidara_wl_window_controls_unset_position (GdkSurface *surface);
 
+/**
+ * nidara_wl_window_controls_set_buttons:
+ * @surface: the #GdkSurface passed to nidara_wl_window_controls_request()
+ * @buttons: the buttons this window has, the protocol's bits: close 1, minimize 2, maximize 4
+ *   (an About window: 1, close alone)
+ *
+ * Which buttons the window wants; close is always kept. Lands with the surface's next commit,
+ * and the compositor answers with a new layout when the box changes. The compositor shows only
+ * those the user chose and the window can do.
+ *
+ * Returns: %FALSE if the compositor draws no controls
+ */
+gboolean nidara_wl_window_controls_set_buttons (GdkSurface *surface, guint buttons);
+
 G_END_DECLS

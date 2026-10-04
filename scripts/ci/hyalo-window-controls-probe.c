@@ -4,6 +4,11 @@
  * gives, 12 px from its top corner on the side the compositor says, and moves it when the side
  * changes. For scripts/ci/hyalo-window-controls-check.sh.
  *
+ * SIGUSR1: it asks for close alone (set_buttons), as an About window does.
+ * SIGUSR2: it asks for every button again, but stops changing size (min = max), as a window
+ *          that is not resizable does: nothing to maximize.
+ * SIGHUP:  it can change size again.
+ *
  *   wayland-scanner client-header/private-code for xdg-shell and nidara-window-controls-v1
  *   (protocols/ at the repository root), then
  *   cc hyalo-window-controls-probe.c xdg-shell-protocol.c nidara-window-controls-v1-protocol.c \
@@ -17,6 +22,7 @@
  *   CLOSED                                 xdg_toplevel.close, then it exits
  */
 #define _GNU_SOURCE
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +47,9 @@ static struct nidara_window_controls_v1 *controls;
 static int configured, closed, have_layout, pending_place;
 static unsigned side;
 static double box_w, box_h;
+static struct xdg_toplevel *top;
+static volatile sig_atomic_t want;   /* the last signal, 0 none */
+static void on_signal(int sig) { want = sig; }
 
 static void global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t version) {
     if (strcmp(iface, wl_compositor_interface.name) == 0)
@@ -145,12 +154,15 @@ int main(void) {
     surface = wl_compositor_create_surface(compositor);
     struct xdg_surface *xs = xdg_wm_base_get_xdg_surface(wm_base, surface);
     xdg_surface_add_listener(xs, &xdg_surface_listener, NULL);
-    struct xdg_toplevel *top = xdg_surface_get_toplevel(xs);
+    top = xdg_surface_get_toplevel(xs);
     xdg_toplevel_add_listener(top, &toplevel_listener, NULL);
     xdg_toplevel_set_title(top, "window-controls-probe");
     xdg_toplevel_set_app_id(top, "hyalo-window-controls-probe");
     controls = nidara_window_controls_manager_v1_get_window_controls(controls_mgr, surface);
     nidara_window_controls_v1_add_listener(controls, &controls_listener, NULL);
+    signal(SIGUSR1, on_signal);
+    signal(SIGUSR2, on_signal);
+    signal(SIGHUP, on_signal);
     wl_surface_commit(surface);
     while ((!configured || !have_layout) && wl_display_dispatch(d) != -1) {}
     place();
@@ -160,6 +172,24 @@ int main(void) {
         struct pollfd p = { wl_display_get_fd(d), POLLIN, 0 };
         if (poll(&p, 1, 100) > 0) wl_display_dispatch(d);
         else wl_display_dispatch_pending(d);
+        if (want) {
+            int sig = want;
+            want = 0;
+            if (sig == SIGUSR1) {
+                nidara_window_controls_v1_set_buttons(controls, NIDARA_WINDOW_CONTROLS_V1_BUTTON_CLOSE);
+            } else if (sig == SIGUSR2) {
+                nidara_window_controls_v1_set_buttons(controls, NIDARA_WINDOW_CONTROLS_V1_BUTTON_CLOSE
+                    | NIDARA_WINDOW_CONTROLS_V1_BUTTON_MINIMIZE | NIDARA_WINDOW_CONTROLS_V1_BUTTON_MAXIMIZE);
+                xdg_toplevel_set_min_size(top, W, H);
+                xdg_toplevel_set_max_size(top, W, H);
+            } else {
+                xdg_toplevel_set_min_size(top, 0, 0);
+                xdg_toplevel_set_max_size(top, 0, 0);
+            }
+            printf("ASKED %d\n", sig);
+            fflush(stdout);
+            pending_place = 1;   /* committed with its buffer, as the kit commits */
+        }
         if (pending_place) place();
     }
     printf("CLOSED\n");
