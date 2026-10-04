@@ -434,7 +434,15 @@ alone (30×24).
   hidden, the close button shown. The slot takes the box's WIDTH from each layout, so a capsule
   that shrinks (fewer buttons) gives the header its room back. `NidaraWindow` sets the slots up itself — right: the header's
   end, where the close button was; left: the header's start, or, with a sidebar shown DOCKED, the
-  sidebar's top (`onSidebarPresented` re-picks the slot) — so a window built on it gets the
+  sidebar's top (`onSidebarPresented` re-picks the slot), in a row of the header's height
+  (`.nidara-sidebar-controls`) so the capsule shares a centre with the toggle and the navigation
+  beside it (measured 2026-10-04: with a 4 px margin it sat 8 px higher). **The geometry, on the
+  4 px scale** (owner, 2026-10-04; the header was 50, from a layout long gone): header row 48, 8
+  below the window's top; its buttons 32 (8 from the row's edges); the capsule 12 from them, so
+  **20 from both edges of its corner, on either side** — header `padding-right: 20`, the sidebar
+  row's left margin, `leftSlot.margin_start` when the sidebar is not docked, About's controls
+  row; the divider 64 from the top. ⚠️ A slot's margin is a WIDGET margin: a CSS margin is taken
+  out of the size the slot requests, and the capsule drawn in it overlapped the toggle — so a window built on it gets the
   controls by passing its close button as `header.end`, as before. About, which has no header,
   places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
 - `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
