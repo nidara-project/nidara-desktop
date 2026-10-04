@@ -358,6 +358,14 @@ fn toplevel_data<T>(
     }))
 }
 
+/// Whether the client still owes an answer to a configure Hyalo sent it: until it acks the
+/// last one, what it commits was drawn for a state it has not been told about yet — the
+/// maximized frame a web app commits after it asked to be restored, the old geometry it keeps
+/// while it lays itself out maximized (measured nested, 2026-10-04, Chrome and Telegram).
+fn awaits_configure(window: &Window) -> bool {
+    toplevel_data(window, |d| !d.pending_configures().is_empty()).unwrap_or(false)
+}
+
 pub fn app_id(window: &Window) -> String {
     toplevel_data(window, |d| d.app_id.clone()).flatten().unwrap_or_default()
 }
@@ -728,7 +736,10 @@ impl Hyalo {
             self.grab_commit(id);
             return;
         }
-        if !m.mapped || !m.floating || m.fullscreen != Fullscreen::None {
+        // A frame drawn before the client read its last configure is not the size it chose:
+        // adopted, the size it had maximized became its floating size, and restoring it
+        // restored nothing (Telegram, Chrome's web apps — owner, 2026-10-04).
+        if !m.mapped || !m.floating || m.fullscreen != Fullscreen::None || awaits_configure(window) {
             return;
         }
         let (id, ws, bar) = (m.id, m.workspace, m.bar());
@@ -1357,6 +1368,13 @@ impl Hyalo {
         // Any client that speaks a decoration protocol: Chrome asked for client-side when it
         // started, and says nothing when the setting changes.
         if crate::shell::decoration::asked(t.wl_surface()).is_none() {
+            return;
+        }
+        // Nor a client still answering a configure: Chrome's web apps, told maximized, commit
+        // their maximized frame — opaque to the edge — over the old geometry, and counted as
+        // having dropped their frame they got Hyalo's bar over their own (owner, 2026-10-04).
+        // The setting turned on while it runs answers no configure at all.
+        if awaits_configure(&m.window) {
             return;
         }
         let geo = m.window.geometry();
