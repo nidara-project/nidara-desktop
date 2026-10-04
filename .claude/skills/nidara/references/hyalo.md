@@ -373,8 +373,12 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
 The owner's design, chosen on a mockup: Hyalo draws a window's close, minimize and maximize
 OVER the app's own header, in the same row — no bar of its own for our apps — as **one capsule**
 (ours, never three coloured circles). **One button size in every window** (owner, 2026-10-03):
-30×24 a button, over Settings' taller header as in Hyalo's thin bar — the controls are the
-system's, so they do not take their size from each app's header (`window_controls::BUTTON_W/H`).
+the controls are the system's, so they do not take their size from each app's header
+(`window_controls::BUTTON_W/H`). **That size is a header button's** (owner, 2026-10-04): the
+capsule is a group of header buttons, as a toolbar group is on macOS 26, so it is as tall as
+its neighbours — 30×32 a button, a button of the kit's back/forward pair, so the two-button
+capsule IS that pair's 60×32. It was 30×24, to keep Hyalo's title bar thin; next to 32 px
+header buttons it read as a different part. Hyalo's title bar grew with it (below).
 Close turns red on hover. Right by default (close last), left as a setting (close first).
 
 **Which buttons** (owner, 2026-10-04, `window_controls::shown`). A button that does nothing for
@@ -388,13 +392,13 @@ when ALL of these say yes, close always:
 - **no rule took it away** — a rule's `controls = ["close"]` (`Managed::controls`, the bits);
 - **it can do it** — maximize only while the window can change size (minimum ≠ maximum);
   minimize NOWHERE until Hyalo minimizes (#724; with it, not for a dialog either).
-So today a resizable window has maximize and close (60×24), About and any fixed-size window close
-alone (30×24).
+So today a resizable window has maximize and close (60×32), About and any fixed-size window close
+alone (30×32).
 
 - **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
   (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
   on a toplevel's surface; the compositor sends `layout(side, width, height)` — the box to reserve
-  (30 px a button shown, 24 high) and the side — at once and again whenever it CHANGES
+  (30 px a button shown, 32 high) and the side — at once and again whenever it CHANGES
   (`tell`, which keeps what each app was last told: after a settings reload, a rule applied,
   and every commit of that surface — its `set_buttons` or its size limits may have changed it);
   the app sends `set_position(x, y)`/`unset_position` and `set_buttons(bits)` (close 1, minimize
@@ -438,8 +442,8 @@ alone (30×24).
   (`.nidara-sidebar-controls`) so the capsule shares a centre with the toggle and the navigation
   beside it (measured 2026-10-04: with a 4 px margin it sat 8 px higher). **The geometry, on the
   4 px scale** (owner, 2026-10-04; the header was 50, from a layout long gone): header row 48, 8
-  below the window's top; its buttons 32 (8 from the row's edges); the capsule 12 from them, so
-  **20 from both edges of its corner, on either side** — header `padding-right: 20`, the sidebar
+  below the window's top; its buttons 32, 8 from the row's edges, and the capsule with them, so
+  **16 from both edges of its corner, on either side** — header `padding-right: 16`, the sidebar
   row's left margin, `leftSlot.margin_start` when the sidebar is not docked, About's controls
   row; the divider 64 from the top. ⚠️ A slot's margin is a WIDGET margin: a CSS margin is taken
   out of the size the slot requests, and the capsule drawn in it overlapped the toggle — so a window built on it gets the
@@ -447,7 +451,7 @@ alone (30×24).
   places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
 - `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
 - CI: `scripts/ci/hyalo-window-controls-check.sh` (C probe `hyalo-window-controls-probe.c`,
-  leaving room as the kit does): the layout told (60×24), the controls where the app placed them,
+  leaving room as the kit does): the layout told (60×32), the controls where the app placed them,
   the pointer the app's over its body and not over its controls, maximize and restore, the side
   switched live and followed; close alone from the user's buttons, from the app's `set_buttons`
   (SIGUSR1), and while it cannot change size even asking for all (SIGUSR2; SIGHUP undoes it); a
@@ -472,10 +476,14 @@ headers, the title centred. `render/title_bar.rs`.
   first frame is already its size under the bar. Recomputed at every commit
   (`update_title_bar`): an app that switches its frame while it runs gains or loses the bar,
   with the layout following. A rule's `title_bar = false` takes it from one app.
-- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (32, 0 in
-  fullscreen), `frame()` = the box with the bar. 32 = the capsule's 24 and the same 4 px above,
-  below and beside it (`window_controls::BAR_MARGIN`; owner 2026-10-03: equal gaps, on the
-  interface's 4 px scale). A tiled or maximized window's tile is the frame
+- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (48, 0 in
+  fullscreen), `frame()` = the box with the bar. 48 = the capsule's 32 and the same 8 px above,
+  below and beside it (`window_controls::BAR_MARGIN`; owner 2026-10-03: equal gaps). Owner,
+  2026-10-04: the kit's header row, 48 with its 32 px buttons 8 from its edges — the same row in
+  every window. Not the same total: a kit window's header starts 8 below the window's edge (its
+  floating sidebar card's margin), Hyalo's bar at the edge, so the capsule is 16/16 from the
+  corner in ours and 8/8 in the bar — centred in its row in both, as macOS centres its window
+  buttons in whatever bar they are in. It was 32 with a 24 px capsule. A tiled or maximized window's tile is the frame
   and the client gets the rest; a floating window keeps the size it asked for and the bar sits
   above it, clamped by the frame (`clamp_floating_with_bar`: the bar, not the client, may never
   leave by the top). Placement, cascading, centring, dropping after a drag all use the frame.

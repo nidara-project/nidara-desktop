@@ -4,8 +4,8 @@
 # Chrome with "Use system title bar and borders"). Run INSIDE a Hyalo session started with
 # HYALO_CONTROL, with `hyalo-title-bar-probe` in PATH, on a floating workspace.
 #
-#   1. the probe asks for server-side: it gets a 32 px bar on top of its box, and the capsule
-#      in it (60×24 — maximize and close, no minimize until #724 — the same 4 px from the right
+#   1. the probe asks for server-side: it gets a 48 px bar on top of its box, and the capsule
+#      in it (60×32 — maximize and close, no minimize until #724 — the same 8 px from the right
 #      as above and below it);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
 #      dark on it (the title's darkest pixel);
@@ -51,15 +51,15 @@ wait_line '^SHOWN' || fail "the probe never showed its window"
 sleep 0.8
 
 # 1. The bar and its capsule.
-[ "$(field title_bar)" = 32 ] || fail "no title bar: title_bar = $(field title_bar) (32 expected)"
-want=$(win | jq -r '"\(.x + .width - 4 - 60) \(.y - 32 + 4) 60 24"')
+[ "$(field title_bar)" = 48 ] || fail "no title bar: title_bar = $(field title_bar) (48 expected)"
+want=$(win | jq -r '"\(.x + .width - 8 - 60) \(.y - 48 + 8) 60 32"')
 got=$(win | jq -r '.controls | map(floor) | join(" ")')
-[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (4 px in from the right, above and below)"
-echo "ok    a 32 px bar on top of the window, the capsule in it"
+[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (8 px in from the right, above and below)"
+echo "ok    a 48 px bar on top of the window, the capsule in it"
 
 # 2. One piece, and dark ink on a light bar.
 $MSG screenshot "$log/bar.png" >/dev/null || fail "no screenshot"
-set -- $(win | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 18) * $s | floor) \((.x + .width / 2 - 70) * $s | floor) \((.y - 30) * $s | floor) \(140 * $s | floor) \(24 * $s | floor)"')
+set -- $(win | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 18) * $s | floor) \((.x + .width / 2 - 70) * $s | floor) \((.y - 36) * $s | floor) \(140 * $s | floor) \(24 * $s | floor)"')
 bg=$(pixels pixel "$log/bar.png" "$1" "$2")
 set -- $bg $3 $4 $5 $6
 for v in "$1" "$2" "$3"; do
@@ -89,7 +89,7 @@ grep -q '^BUTTON' "$out" && fail "the app got the press on its title bar"
 p=$(in_bar 60)
 echo "click $p" >"$C"; sleep 0.1; echo "click $p" >"$C"
 wait_field fullscreen maximized || fail "a double click on the bar did not maximize: $(field fullscreen)"
-[ "$(field title_bar)" = 32 ] || fail "maximized, the bar went"
+[ "$(field title_bar)" = 48 ] || fail "maximized, the bar went"
 p=$(in_bar 60)
 echo "click $p" >"$C"; sleep 0.1; echo "click $p" >"$C"
 wait_field fullscreen none || fail "a second double click did not restore: $(field fullscreen)"
@@ -133,7 +133,7 @@ wait_field fullscreen none || fail "the app's own button did not restore: $(fiel
 echo "ok    its own maximize button maximizes it and restores it"
 kill -USR2 "$pid"
 wait_line '^SWITCHED server' || fail "the probe did not switch back"
-wait_field title_bar 32 || fail "back to server-side, and no bar"
+wait_field title_bar 48 || fail "back to server-side, and no bar"
 echo "ok    the app switched to its own frame and the bar went; back, and it came back"
 
 # 6. Close.

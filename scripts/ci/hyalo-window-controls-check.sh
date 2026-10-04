@@ -4,7 +4,7 @@
 # them there and takes their clicks; only the buttons that do something are drawn. Run INSIDE a
 # Hyalo session started with HYALO_CONTROL, with `hyalo-window-controls-probe` in PATH.
 #
-#   1. the probe is told the box (60×24: maximize and close — no minimize until #724) and the
+#   1. the probe is told the box (60×32: maximize and close — no minimize until #724) and the
 #      side (right), and Hyalo reports the controls where the probe placed them;
 #   2. the pointer over the window reaches the app, over its controls it does not (the app
 #      gets a leave);
@@ -43,14 +43,14 @@ sleep 0.5
 # 1. The box and the side; the controls where the probe put them.
 last_layout() { grep '^LAYOUT' "$out" | tail -n 1; }
 wait_layout() { for _ in $(seq 1 20); do [ "$(last_layout)" = "LAYOUT $1" ] && return 0; sleep 0.25; done; return 1; }
-wait_layout 'right 60 24' || fail "the first layout is '$(last_layout)', not 'LAYOUT right 60 24'"
+wait_layout 'right 60 32' || fail "the first layout is '$(last_layout)', not 'LAYOUT right 60 32'"
 sleep 0.4
 w=$(win)
 [ -n "$w" ] || fail "the probe's window is not listed"
-want=$(echo "$w" | jq -r '"\(.x + 400 - 12 - 60) \(.y + 12) 60 24"')
+want=$(echo "$w" | jq -r '"\(.x + 400 - 12 - 60) \(.y + 12) 60 32"')
 got=$(echo "$w" | jq -r '.controls | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "controls at '$got', the probe placed them at '$want'"
-echo "ok    the box (60×24, right: maximize and close) is told, and the controls are where the app placed them"
+echo "ok    the box (60×32, right: maximize and close) is told, and the controls are where the app placed them"
 
 # 2. The pointer: the app's over its body, Hyalo's over the controls.
 echo "$w" | jq -r '"move \(.x + 40) \(.y + 150)"' >"$C"; sleep 0.4
@@ -69,33 +69,33 @@ echo "ok    maximize maximizes and restores; the app saw no click"
 
 # 4. The left side, live, and back.
 $MSG settings '{"windows":{"controls":{"side":"left"}}}' >/dev/null
-wait_layout 'left 60 24' || fail "the side changed and the app was not told: '$(last_layout)'"
+wait_layout 'left 60 32' || fail "the side changed and the app was not told: '$(last_layout)'"
 sleep 0.5
 w=$(win)
 want=$(echo "$w" | jq -r '"\(.x + 12) \(.y + 12)"')
 got=$(echo "$w" | jq -r '.controls[0:2] | map(floor) | join(" ")')
 [ "$got" = "$want" ] || fail "on the left, controls at '$got', placed at '$want'"
 $MSG settings '{"windows":null}' >/dev/null
-wait_layout 'right 60 24' || fail "back to the right, the app was not told: '$(last_layout)'"
+wait_layout 'right 60 32' || fail "back to the right, the app was not told: '$(last_layout)'"
 sleep 0.5
 echo "ok    the side switched live: the app is told, and the controls follow"
 
 # 5. Which buttons: the user's, the app's, what the window can do.
 width() { win | jq -r '.controls[2] | floor'; }
 $MSG settings '{"windows":{"controls":{"buttons":["close"]}}}' >/dev/null
-wait_layout 'right 30 24' || fail "the user chose close alone, and the app was told '$(last_layout)'"
+wait_layout 'right 30 32' || fail "the user chose close alone, and the app was told '$(last_layout)'"
 sleep 0.4; [ "$(width)" = 30 ] || fail "the user chose close alone, and the controls are $(width) wide"
 $MSG settings '{"windows":null}' >/dev/null
-wait_layout 'right 60 24' || fail "the user's buttons back, and the app was told '$(last_layout)'"
+wait_layout 'right 60 32' || fail "the user's buttons back, and the app was told '$(last_layout)'"
 kill -USR1 "$pid"
-wait_layout 'right 30 24' || fail "the app asked for close alone, and was told '$(last_layout)'"
+wait_layout 'right 30 32' || fail "the app asked for close alone, and was told '$(last_layout)'"
 sleep 0.4; [ "$(width)" = 30 ] || fail "the app asked for close alone, and the controls are $(width) wide"
 kill -USR2 "$pid"
 wait_line '^ASKED 12' || fail "the probe did not ask again"
 sleep 0.6
-[ "$(last_layout)" = "LAYOUT right 30 24" ] || fail "every button asked, but it cannot change size: told '$(last_layout)'"
+[ "$(last_layout)" = "LAYOUT right 30 32" ] || fail "every button asked, but it cannot change size: told '$(last_layout)'"
 kill -HUP "$pid"
-wait_layout 'right 60 24' || fail "it can change size again, and was told '$(last_layout)'"
+wait_layout 'right 60 32' || fail "it can change size again, and was told '$(last_layout)'"
 echo "ok    close alone when the user chooses it, when the app asks for it, and maximize only while it can change size"
 
 # 6. A rule: a new window of the app gets close alone.
@@ -105,7 +105,7 @@ $MSG settings '{"rules":{"probe-close-only":{"match":{"app_id":"^hyalo-window-co
 hyalo-window-controls-probe >"$out" 2>&1 &
 pid=$!; pids="$pids $pid"
 wait_line '^PLACED' || fail "the second probe never placed its box"
-wait_layout 'right 30 24' || fail "a rule's controls = [\"close\"], and the app was told '$(last_layout)'"
+wait_layout 'right 30 32' || fail "a rule's controls = [\"close\"], and the app was told '$(last_layout)'"
 $MSG settings '{"rules":null}' >/dev/null
 echo "ok    a rule's controls = [\"close\"] gives the app's window close alone"
 

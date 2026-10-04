@@ -180,11 +180,11 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // — or, with a sidebar shown docked, the sidebar's top. The caller's `end` (the close
     // button) is the FALLBACK, shown where the compositor draws none. platform/window-controls.ts.
     const leftSlot = controlsSlotWidget()
-    // Leading the header, 20 from the window's left edge as from its top
+    // Leading the header, 16 from the window's left edge as from its top
     // (`.nidara-window-header`): the header's 8 and the tools row's 6 make 14. A widget margin,
     // not a CSS one — a CSS margin is taken out of the size the slot requests, and the capsule
     // the compositor draws in it ran 6 px into the toggle beside it (measured, 2026-10-04).
-    leftSlot.margin_start = 20 - 8 - 6
+    leftSlot.margin_start = 16 - 8 - 6
     const rightSlot = controlsSlotWidget()
     const headerEnd = (): Gtk.Widget => {
         const row = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
