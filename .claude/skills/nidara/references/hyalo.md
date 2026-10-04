@@ -913,6 +913,19 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
   upright buffer WITH `Y_INVERT` looked right there (two flips cancelling) and recorded upside
   down on a real output. Never settle an orientation on the nested output alone; CI's vkms is a
   Normal one (wf-recorder's source, `frame-writer.cpp`, is what settled it).
+  🔴 **A REGION on the GPU is the whole output drawn, then the region blitted** (`draw_into`:
+  an offscreen texture of the output, `Blit` into the client's dmabuf). Never draw the scene
+  shifted (`RelocateRenderElement`): the windows' corner shader and the glass place
+  themselves in OUTPUT pixels (`geo`, `clip`, `fb_to_out`), so a shifted scene cut every
+  window away and a region recorded on the GPU was BLACK from #722 to 2026-10-04 — CI never
+  saw it (vkms has no VA-API); a nested bisection did (#718's build recorded it, #722's did
+  not). The shm path never had it: it draws the whole output and crops on the CPU.
+  **The pointer** goes into a frame when the client asks (`overlay_cursor`; wf-recorder always
+  does) and `[cursor] recorded` lets it (default on; the recording widget's "Show the pointer",
+  `recording.showPointer`, `caps.recordedPointer` — Hyprland has no such switch). Its image is
+  the backend's themed one (`backend::pointer_for`; winit keeps a `Cursors` too, only so a
+  recording nested has one), and only on the output the pointer is on. Screenshots
+  (ext-image-copy-capture, `msg screenshot`) still never carry it.
 - **data-control**, both (`ext-` and `zwlr-`): `wl-paste --watch` → cliphist, the clipboard
   history, autostarted in `config/hyalo/hyalo.toml` (two watchers, one per type — why is there).
 - All four are privileged: hidden from sandboxed clients (the sandbox probe lists them), and
@@ -920,7 +933,10 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
 - CI: `scripts/ci/hyalo-screen-capture-check.sh` — whole output, a region UPRIGHT (a red-over-
   blue window), grim | wl-copy and back, `wl-paste --watch`, a recording with frames,
   upright, and the frame's dmabuf offer on the wire; where VA-API exists (locally, not CI's
-  vkms) also a GPU recording that gets frames and stops on SIGINT. Pixels are read by GTK's PNG loader (`Gdk.Texture`), never GdkPixbuf: GdkPixbuf hands
+  vkms) also a GPU recording that gets frames and stops on SIGINT; and the pointer in a
+  recording, over the probe's red, gone with `[cursor] recorded = false` (HYALO_CONTROL moves
+  it). Controls seen failing nested: #718's Hyalo (no pointer), one ignoring the setting (107
+  pixels still under it), #722's and the installed one (the GPU region black). Pixels are read by GTK's PNG loader (`Gdk.Texture`), never GdkPixbuf: GdkPixbuf hands
   PNGs to glycin, whose sandbox does not start in CI's container.
 
 ## Three config layers, and runtime changes over IPC

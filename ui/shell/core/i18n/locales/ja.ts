@@ -802,6 +802,8 @@ export default {
     "widget.screenrecord.settings.framerate.auto": "自動",
     "widget.screenrecord.settings.hardware": "ハードウェアエンコード",
     "widget.screenrecord.settings.hardware.desc": "GPUでエンコードします。MP4およびMKVに適用されます。WebMは常にソフトウェアでエンコードされます。",
+    "widget.screenrecord.settings.pointer": "ポインターを表示",
+    "widget.screenrecord.settings.pointer.desc": "録画にマウスポインターを表示します。",
     "widget.screenrecord.settings.file-group": "ファイル",
     "widget.screenrecord.settings.format": "形式",
     "widget.screenrecord.settings.format.desc": "MKVは録画中のクラッシュでも破損しません。MP4はどこでも再生可能です。",

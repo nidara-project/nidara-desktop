@@ -802,6 +802,8 @@ export default {
     "widget.screenrecord.settings.framerate.auto": "Automatisch",
     "widget.screenrecord.settings.hardware": "Hardware-codering",
     "widget.screenrecord.settings.hardware.desc": "Coderen op de GPU. Geldt voor MP4 en MKV; WebM wordt altijd via software gecodeerd.",
+    "widget.screenrecord.settings.pointer": "Aanwijzer tonen",
+    "widget.screenrecord.settings.pointer.desc": "De muisaanwijzer in opnames tonen.",
     "widget.screenrecord.settings.file-group": "Bestand",
     "widget.screenrecord.settings.format": "Formaat",
     "widget.screenrecord.settings.format.desc": "MKV overleeft een crash tijdens de opname; MP4 kan overal worden afgespeeld.",

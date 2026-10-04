@@ -374,11 +374,15 @@ impl Default for Touchpad {
 pub struct CursorConfig {
     pub theme: String,
     pub size: u32,
+    /// The pointer is in a screen recording that asks for it (wlr-screencopy's
+    /// `overlay_cursor` — wf-recorder always does): Settings → the recording widget's "Show the
+    /// pointer" writes it (protocols/screencopy.rs).
+    pub recorded: bool,
 }
 
 impl Default for CursorConfig {
     fn default() -> Self {
-        Self { theme: "default".into(), size: 24 }
+        Self { theme: "default".into(), size: 24, recorded: true }
     }
 }
 

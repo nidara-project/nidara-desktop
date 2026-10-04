@@ -136,7 +136,7 @@ pub struct TtyBackend {
     keyboards: Vec<libinput::Device>,
     /// Every input device, to re-apply the `[input]` config when it changes.
     input_devices: Vec<libinput::Device>,
-    cursors: Cursors,
+    pub cursors: Cursors,
     /// The night light's colour temperature, or neutral (night_light.rs).
     pub night_light: Option<u32>,
     /// What the ramps show now, on the way there (night_light.rs).

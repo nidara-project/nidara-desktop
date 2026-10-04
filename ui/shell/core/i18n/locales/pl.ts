@@ -802,6 +802,8 @@ export default {
     "widget.screenrecord.settings.framerate.auto": "Automatycznie",
     "widget.screenrecord.settings.hardware": "Kodowanie sprzętowe",
     "widget.screenrecord.settings.hardware.desc": "Koduj na GPU. Dotyczy MP4 i MKV; WebM zawsze jest kodowany programowo.",
+    "widget.screenrecord.settings.pointer": "Pokaż wskaźnik",
+    "widget.screenrecord.settings.pointer.desc": "Pokazuj wskaźnik myszy w nagraniach.",
     "widget.screenrecord.settings.file-group": "Plik",
     "widget.screenrecord.settings.format": "Format",
     "widget.screenrecord.settings.format.desc": "MKV jest odporny na awarie w trakcie nagrywania; MP4 można odtworzyć wszędzie.",

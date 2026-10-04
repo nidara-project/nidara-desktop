@@ -823,6 +823,14 @@ export function registerConfigEntries() {
         get: () => recordingConfig.hardware,
         set: v => recordingConfig.setHardware(v as boolean),
     })
+    // Hyalo's (`[cursor] recorded`), not the recorder's: wf-recorder always asks for the pointer.
+    registerConfig("recording.showPointer", {
+        desc: "Whether the mouse pointer is drawn into screen recordings. Applies from the next frame, also to a recording in progress. Only where the compositor has the switch (Hyalo); on Hyprland the pointer is always recorded.",
+        type: "boolean",
+        available: () => compositorSettings.caps.recordedPointer,
+        get: () => compositorSettings.readRecordedPointer(),
+        set: v => compositorSettings.setRecordedPointer(v as boolean),
+    })
     registerConfig("recording.format", {
         desc: "Container for screen recordings. mp4/mkv record H.264, webm records VP9.",
         type: "enum",

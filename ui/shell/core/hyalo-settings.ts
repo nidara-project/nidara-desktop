@@ -62,7 +62,7 @@ function put(obj: any, path: string, value: unknown) {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true },
+        caps: { animations: false, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true, recordedPointer: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -150,6 +150,14 @@ export function createHyaloSettings(): CompositorSettings {
         // Hyalo's title bar (hyalo/compositor/src/render/title_bar.rs).
         setWindowTitleFont(family) {
             patch("window title font", { windows: { title_bar: { font: family } } })
+        },
+
+        // The pointer in a recording (hyalo/compositor/src/protocols/screencopy.rs).
+        readRecordedPointer() {
+            return config()?.cursor?.recorded ?? true
+        },
+        setRecordedPointer(on) {
+            patch("recorded pointer", { cursor: { recorded: on } })
         },
 
         // Hyalo does idle itself (hyalo/compositor/src/idle.rs): no hypridle, no file of ours.
