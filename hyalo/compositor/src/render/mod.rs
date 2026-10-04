@@ -12,6 +12,7 @@ pub mod decor;
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
+pub mod snapshot;
 pub mod title_bar;
 pub mod window;
 
@@ -138,6 +139,7 @@ smithay::backend::renderer::element::render_elements! {
     Controls=controls::ControlsElement,
     TitleBar=title_bar::TitleBarElement,
     Decor=decor::DecorElement,
+    Snapshot=snapshot::SnapshotElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
 }
 
@@ -152,6 +154,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Controls(e) => f.debug_tuple("Controls").field(e).finish(),
             Self::TitleBar(e) => f.debug_tuple("TitleBar").field(e).finish(),
             Self::Decor(e) => f.debug_tuple("Decor").field(e).finish(),
+            Self::Snapshot(e) => f.debug_tuple("Snapshot").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
@@ -327,68 +330,31 @@ pub fn output_elements<R: HyaloRenderer>(
     let push_windows = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, windows: &[Window]| {
         for w in windows {
             let managed = state.wm.by_window(w);
-            // A minimized window is out of the space: drawn where the model has it.
-            let Some(at) = state.space.element_location(w).or_else(|| managed.map(|m| m.rect.loc)) else { continue };
-            let fullscreen = managed.is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen);
-            let bar = managed.filter(|_| !fullscreen).map_or(0, |m| m.bar());
             let place = managed.and_then(placement);
-            // Everything of the window is drawn from its surface's origin, its box and the
-            // scale: moved and scaled together, its corners, line and shadow follow (decor.rs,
-            // window.rs). A point `q` of the window's whole box, from its top-left, lands at
-            // `origin + q × k`.
-            let (loc, geo, wscale, origin_of) = match place {
-                None => {
-                    let loc = (at - w.geometry().loc - output_geo.loc).to_f64().to_physical_precise_round(scale);
-                    let geo = Rectangle::new(at - output_geo.loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
-                    let origin = (at - w.geometry().loc - output_geo.loc).to_f64();
-                    (loc, geo, scale, (origin, 1.0))
+            // Opening (wm/motion.rs): a picture of it as it is now, scaled about its middle
+            // and faded. If the picture cannot be taken, the window as it is.
+            if let Some(m) = managed.filter(|_| place.is_none())
+                && let Some(look) = state.wm.opening(m.id, now)
+            {
+                match snapshot::take(renderer.gles(), state, w, scale.x) {
+                    Ok(picture) => {
+                        let frame = Rectangle::new(m.frame().loc - output_geo.loc, m.frame().size).to_f64().to_physical(scale);
+                        out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
+                        continue;
+                    }
+                    Err(err) => tracing::debug!(%err, id = m.id, "no picture of an opening window"),
                 }
-                Some(p) => {
-                    let k = p.scale;
-                    let base = p.origin - output_geo.loc.to_f64();
-                    let gl = w.geometry().loc.to_f64();
-                    let surface = base + Point::<f64, Logical>::from((-gl.x, bar as f64 - gl.y)).upscale(k);
-                    let client = base + Point::<f64, Logical>::from((0.0, bar as f64)).upscale(k);
-                    let geo = Rectangle::new(client.to_physical(scale), w.geometry().size.to_f64().upscale(k).to_physical(scale));
-                    (surface.to_physical(scale).to_i32_round(), geo, Scale::from(scale.x * k), (surface, k))
-                }
-            };
-            let look = window::look(
-                w,
-                fullscreen,
-                managed.is_none_or(|m| m.rounded),
-                managed.is_none_or(|m| m.backdrop),
-                state.windows,
-            );
-            // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
-            // bar (title_bar.rs): never on a fullscreen window.
-            let controls = managed.filter(|_| !fullscreen).and_then(|m| {
-                let (r, buttons) = crate::protocols::window_controls::managed_rect(m, &state.windows.controls)?;
-                let (origin, k) = origin_of;
-                let rect = Rectangle::new(origin + r.loc.upscale(k), r.size.upscale(k)).to_physical(scale);
-                let hover = state.wm.controls_hover.filter(|h| h.window == m.id);
-                let controls = controls::Controls {
-                    buttons,
-                    hover: hover.and_then(|h| buttons.as_slice().iter().position(|b| *b == h.button)),
-                    pressed: hover.is_some_and(|h| h.pressed),
-                    active: state.wm.focused == Some(m.id),
-                };
-                Some((rect, controls))
-            });
-            let (controls, title_bar) = match managed.filter(|_| bar > 0) {
-                Some(m) => (None, Some(title_bar::TitleBar {
-                    height: bar as f64,
-                    title: crate::wm::title(w),
-                    family: state.windows.title_bar.font.clone(),
-                    active: state.wm.focused == Some(m.id),
-                    controls,
-                })),
-                None => (controls, None),
-            };
-            // Its line and its shadow (decor.rs), focused or not: not on a fullscreen window, nor
-            // where a rule took its corners (games).
-            let decor = managed.filter(|m| !fullscreen && m.rounded).map(|m| state.wm.focused == Some(m.id));
-            window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor);
+            }
+            push_window(out, renderer, state, w, place, output_geo.loc, scale, output_size);
+        }
+    };
+    // Windows closing: pictures of them, fading where they were — over the windows still there,
+    // and a fullscreen one over the shell's chrome, as it was.
+    let push_closing = |out: &mut Vec<OutputElement<R>>, fullscreen: bool| {
+        for c in state.wm.closing.iter().rev().filter(|c| c.fullscreen == fullscreen) {
+            let Some(look) = c.motion.look(now) else { continue };
+            let frame = Rectangle::new(c.frame.loc - output_geo.loc.to_f64(), c.frame.size).to_physical(scale);
+            out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&c.picture, frame, look.scale, look.alpha)));
         }
     };
     // Windows going into the dock or coming back out of it, their dialogs in front of them:
@@ -436,6 +402,7 @@ pub fn output_elements<R: HyaloRenderer>(
     for l in map.layers_on(Layer::Overlay).rev() {
         push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
+    push_closing(&mut out, true);
     push_windows(&mut out, renderer, &above);
     if !dock_on_overlay {
         push_windows(&mut out, renderer, &moving);
@@ -444,6 +411,7 @@ pub fn output_elements<R: HyaloRenderer>(
         push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
+    push_closing(&mut out, false);
     push_windows(&mut out, renderer, &below);
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
@@ -451,6 +419,85 @@ pub fn output_elements<R: HyaloRenderer>(
         }
     }
     out
+}
+
+/// Everything of window `w` on an output at `output_loc` — its surfaces, popups, corners,
+/// controls or title bar, line, shadow and backdrop — where the space has it, or at `place`
+/// (scaled: wm/minimize.rs). Also how a window is drawn alone into a picture of it
+/// (render/snapshot.rs).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_window<R: HyaloRenderer>(
+    out: &mut Vec<OutputElement<R>>,
+    renderer: &mut R,
+    state: &Scene<'_>,
+    w: &Window,
+    place: Option<crate::wm::minimize::Placement>,
+    output_loc: Point<i32, Logical>,
+    scale: Scale<f64>,
+    output_size: smithay::utils::Size<i32, Physical>,
+) {
+    let managed = state.wm.by_window(w);
+    // A minimized window is out of the space: drawn where the model has it.
+    let Some(at) = state.space.element_location(w).or_else(|| managed.map(|m| m.rect.loc)) else { return };
+    let fullscreen = managed.is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen);
+    let bar = managed.filter(|_| !fullscreen).map_or(0, |m| m.bar());
+    // Everything of the window is drawn from its surface's origin, its box and the
+    // scale: moved and scaled together, its corners, line and shadow follow (decor.rs,
+    // window.rs). A point `q` of the window's whole box, from its top-left, lands at
+    // `origin + q × k`.
+    let (loc, geo, wscale, origin_of) = match place {
+        None => {
+            let loc = (at - w.geometry().loc - output_loc).to_f64().to_physical_precise_round(scale);
+            let geo = Rectangle::new(at - output_loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
+            let origin = (at - w.geometry().loc - output_loc).to_f64();
+            (loc, geo, scale, (origin, 1.0))
+        }
+        Some(p) => {
+            let k = p.scale;
+            let base = p.origin - output_loc.to_f64();
+            let gl = w.geometry().loc.to_f64();
+            let surface = base + Point::<f64, Logical>::from((-gl.x, bar as f64 - gl.y)).upscale(k);
+            let client = base + Point::<f64, Logical>::from((0.0, bar as f64)).upscale(k);
+            let geo = Rectangle::new(client.to_physical(scale), w.geometry().size.to_f64().upscale(k).to_physical(scale));
+            (surface.to_physical(scale).to_i32_round(), geo, Scale::from(scale.x * k), (surface, k))
+        }
+    };
+    let look = window::look(
+        w,
+        fullscreen,
+        managed.is_none_or(|m| m.rounded),
+        managed.is_none_or(|m| m.backdrop),
+        state.windows,
+    );
+    // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
+    // bar (title_bar.rs): never on a fullscreen window.
+    let controls = managed.filter(|_| !fullscreen).and_then(|m| {
+        let (r, buttons) = crate::protocols::window_controls::managed_rect(m, &state.windows.controls)?;
+        let (origin, k) = origin_of;
+        let rect = Rectangle::new(origin + r.loc.upscale(k), r.size.upscale(k)).to_physical(scale);
+        let hover = state.wm.controls_hover.filter(|h| h.window == m.id);
+        let controls = controls::Controls {
+            buttons,
+            hover: hover.and_then(|h| buttons.as_slice().iter().position(|b| *b == h.button)),
+            pressed: hover.is_some_and(|h| h.pressed),
+            active: state.wm.focused == Some(m.id),
+        };
+        Some((rect, controls))
+    });
+    let (controls, title_bar) = match managed.filter(|_| bar > 0) {
+        Some(m) => (None, Some(title_bar::TitleBar {
+            height: bar as f64,
+            title: crate::wm::title(w),
+            family: state.windows.title_bar.font.clone(),
+            active: state.wm.focused == Some(m.id),
+            controls,
+        })),
+        None => (controls, None),
+    };
+    // Its line and its shadow (decor.rs), focused or not: not on a fullscreen window, nor
+    // where a rule took its corners (games).
+    let decor = managed.filter(|m| !fullscreen && m.rounded).map(|m| state.wm.focused == Some(m.id));
+    window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor);
 }
 
 /// The pointer: the client's own cursor surface, or our themed one.

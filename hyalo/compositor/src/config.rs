@@ -49,8 +49,8 @@ pub struct Config {
     /// How windows are drawn: their corners, and the blur behind a translucent one
     /// (render/window.rs). Settings → Appearance → Windows writes `backdrop.enabled`.
     pub windows: WindowsConfig,
-    /// What Hyalo animates (wm/minimize.rs). Settings → Accessibility → Reduce motion writes
-    /// `enabled`.
+    /// What Hyalo animates (wm/minimize.rs, wm/motion.rs). Settings → Accessibility → Reduce
+    /// motion writes `enabled`.
     pub animations: AnimationsConfig,
 }
 
@@ -58,16 +58,24 @@ pub struct Config {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AnimationsConfig {
-    /// Off, nothing moves: a minimized window goes at once (reduce motion).
+    /// Off, nothing moves: a window opens, closes and is minimized at once (reduce motion).
     pub enabled: bool,
     /// A window shrinking into the dock, and back, in milliseconds. 400 = the Hyprland
     /// session's `windowsOut` (speed 4, in tenths of a second), on its `default` curve.
     pub minimize: u32,
+    /// A window opening: it grows out of its own middle, ms. 700 = the Hyprland session's
+    /// `windows` (speed 7, `myBezier`, which overshoots a little).
+    pub open: u32,
+    /// A window closing: it shrinks to 80 % of its size, ms. 400 = `windowsOut` (`default`).
+    pub close: u32,
+    /// How long a window takes to appear and to fade away as it opens and closes, ms. 400 =
+    /// `fade` (speed 4, `easeOut`).
+    pub fade: u32,
 }
 
 impl Default for AnimationsConfig {
     fn default() -> Self {
-        Self { enabled: true, minimize: 400 }
+        Self { enabled: true, minimize: 400, open: 700, close: 400, fade: 400 }
     }
 }
 
@@ -313,6 +321,8 @@ pub struct RuleConfig {
     /// The only buttons its controls may show (`["close"]`); close is always kept
     /// (protocols/window_controls.rs).
     pub controls: Option<Vec<crate::protocols::window_controls::Button>>,
+    /// `false`: it opens and closes at once, no animation (Hyprland's `no_anim`).
+    pub animate: Option<bool>,
 }
 
 impl Default for RuleConfig {
@@ -328,6 +338,7 @@ impl Default for RuleConfig {
             backdrop: None,
             title_bar: None,
             controls: None,
+            animate: None,
         }
     }
 }
@@ -998,6 +1009,11 @@ mod tests {
         assert_eq!(c.workspaces.default_mode, crate::wm::WorkspaceMode::Floating);
         let rules = crate::wm::rules::compile(&c.rules).unwrap();
         assert!(rules.iter().any(|r| r.name == "about"), "the shipped rules load");
+        // The Hyprland session's animations, and its `no_anim` for games and app-id-less windows.
+        assert_eq!(c.animations, AnimationsConfig::default());
+        for name in ["games", "no-app-id"] {
+            assert!(rules.iter().any(|r| r.name == name && r.effects.animate == Some(false)), "{name} opens at once");
+        }
     }
 
     #[test]

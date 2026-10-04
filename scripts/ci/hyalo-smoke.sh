@@ -179,6 +179,11 @@ phase_run() {
         [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
         [ -n "$hyalo_pid" ] && kill "$hyalo_pid" 2>/dev/null || true
         cp -f /tmp/hyalo/*.png /tmp/hyalo/*.log /tmp/hyalo/*.json "$OUT"/ 2>/dev/null || true
+        # A check's own screenshots (its *_LOG directory), named after it: what a pixel check
+        # saw is the first thing to look at when it fails.
+        for f in /tmp/hyalo/*/*.png; do
+            [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
+        done
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
             echo "─── hyalo.log (tail) ───"; tail -n 60 "$hyalo_log" 2>/dev/null || true
@@ -484,6 +489,13 @@ phase_run() {
         || { log "FAIL: minimize"; cat /tmp/hyalo/minimize.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
+    # Opening and closing (#684): a window grows out of its middle and fades in; closing — its
+    # window destroyed by its app, or the app killed — a picture of it shrinks and fades where
+    # it was; reduce motion and a rule's animate = false take both away. Pixels.
+    MOTION_LOG=/tmp/hyalo/motion "$REPO/scripts/ci/hyalo-motion-check.sh" >/tmp/hyalo/motion.log 2>&1 \
+        || { log "FAIL: motion"; cat /tmp/hyalo/motion.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "motion OK ($(grep -c '^ok' /tmp/hyalo/motion.log) steps: opens, closes, killed + reduce motion, rule)"
     # Hyalo's title bar (#708 point 5): an app that asks gets it, one piece with its top row
     # (the colour measured on screen, dark ink on light), the pointer Hyalo's, dragged to move,
     # a double click to maximize, gone and back as the app switches its frame, close in it.
