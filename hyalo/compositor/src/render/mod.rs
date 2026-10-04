@@ -391,21 +391,36 @@ pub fn output_elements<R: HyaloRenderer>(
             window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor);
         }
     };
-    // Windows on their way into the dock: out of the space, over the windows still shown and
-    // under the shell's chrome, so each one sinks into the dock's glass.
-    // Its dialogs go with it, in front of it.
-    let going: Vec<Window> = state
+    // Windows going into the dock or coming back out of it, their dialogs in front of them:
+    // drawn right in front of the dock's layer — a window lands where its thumbnail is, and
+    // that is over the dock's glass, not under it — and out of the stack while they move. A
+    // window going in is out of the space already; one coming back is in it, and goes back to
+    // its place in the stack when it gets there.
+    let moving: Vec<Window> = state
         .wm
         .animations
         .iter()
-        .filter(|a| a.out)
         .filter_map(|a| state.wm.get(a.id))
         .filter(|m| placement(m).is_some())
         .flat_map(|m| {
-            let dialogs = state.wm.windows.iter().rev().filter(|d| d.id != m.id && state.wm.minimized_root(d) == Some(m.id));
+            let dialogs = state.wm.windows.iter().rev().filter(|d| d.id != m.id && state.wm.within(d, m.id));
             dialogs.chain(std::iter::once(m)).map(|d| d.window.clone()).collect::<Vec<_>>()
         })
         .collect();
+    let still = |windows: Vec<Window>| -> Vec<Window> {
+        if moving.is_empty() {
+            return windows;
+        }
+        windows.into_iter().filter(|w| !moving.contains(w)).collect()
+    };
+    let (above, below) = (still(above), still(below));
+    // The dock's layer here: Top, or Overlay over a fullscreen window and with the app grid.
+    let dock_on_overlay = state
+        .wm
+        .minimize_targets
+        .get(&output.name())
+        .and_then(|t| map.layers().find(|l| l.namespace() == t.namespace))
+        .is_some_and(|l| l.layer() == Layer::Overlay);
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
     // it, combined by their maximum like one surface's (two surfaces' shadows that overlap —
     // the Control Center's strip and the dock's band — never darken the corner twice).
@@ -415,15 +430,20 @@ pub fn output_elements<R: HyaloRenderer>(
         .flat_map(|layer| map.layers_on(layer).map(|l| chrome_scrims(l.wl_surface(), layer_loc(l), scale, now)).collect::<Vec<_>>())
         .flatten()
         .collect();
+    if dock_on_overlay {
+        push_windows(&mut out, renderer, &moving);
+    }
     for l in map.layers_on(Layer::Overlay).rev() {
         push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
     push_windows(&mut out, renderer, &above);
+    if !dock_on_overlay {
+        push_windows(&mut out, renderer, &moving);
+    }
     for l in map.layers_on(Layer::Top).rev() {
         push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
-    push_windows(&mut out, renderer, &going);
     push_windows(&mut out, renderer, &below);
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
