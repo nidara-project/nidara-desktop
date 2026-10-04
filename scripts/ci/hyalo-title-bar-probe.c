@@ -17,6 +17,7 @@
  * shadow margin around itself, as Chrome does when "Use system title bar and borders" is
  * turned off, and cuts its own corners round (CORNER px, transparent) as a GTK dialog does.
  * SIGUSR2: back to server-side, its buffer its box again.
+ * SIGHUP: its own maximize button — asks to be maximized, or restored when it is.
  *
  * What it prints (the check reads these lines):
  *   SHOWN                      its first buffer is up
@@ -46,8 +47,9 @@
 #define CORNER 8        /* the radius it cuts its own corners to, with its own frame */
 #define LIGHT 0xffe6e6e6
 #define DARK 0xff303030
-/* Its shadow margin: translucent red (premultiplied), so a margin drawn where Hyalo's ring
- * hides it shows (frame.rs). Used only when it draws its own frame. */
+/* Its shadow margin: translucent red (premultiplied), so a margin Hyalo should not draw shows
+ * (render/window.rs `push`: it cuts a client-side frame to its box). Used only when it draws
+ * its own frame. */
 #define SHADOW 0x60600000
 
 static struct wl_compositor *compositor;
@@ -60,8 +62,10 @@ static struct wp_viewport *viewport;
 static struct wl_surface *surface;
 static struct xdg_surface *xs;
 static struct zxdg_toplevel_decoration_v1 *deco;
-static int configured, closed;
+static struct xdg_toplevel *top;
+static int configured, closed, maximized;
 static volatile sig_atomic_t want_switch;   /* 1 client-side, 2 server-side */
+static volatile sig_atomic_t want_maximize; /* SIGHUP: its own maximize button */
 
 static void global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t version) {
     if (strcmp(iface, wp_viewporter_interface.name) == 0)
@@ -90,8 +94,8 @@ static void surface_configure(void *data, struct xdg_surface *s, uint32_t serial
 static const struct xdg_surface_listener xdg_surface_listener = { surface_configure };
 
 static void top_configure(void *d, struct xdg_toplevel *t, int32_t w, int32_t h, struct wl_array *states) {
-    int maximized = 0;
     uint32_t *s;
+    maximized = 0;
     wl_array_for_each(s, states) if (*s == XDG_TOPLEVEL_STATE_MAXIMIZED) maximized = 1;
     printf("STATE %s\n", maximized ? "maximized" : "normal");
     fflush(stdout);
@@ -173,6 +177,7 @@ static void draw(int own_frame) {
 }
 
 static void on_signal(int sig) { want_switch = sig == SIGUSR1 ? 1 : 2; }
+static void on_maximize(int sig) { want_maximize = 1; }
 
 int main(void) {
     struct wl_display *d = wl_display_connect(NULL);
@@ -186,12 +191,13 @@ int main(void) {
     wl_pointer_add_listener(wl_seat_get_pointer(seat), &pointer_listener, NULL);
     signal(SIGUSR1, on_signal);
     signal(SIGUSR2, on_signal);
+    signal(SIGHUP, on_maximize);
 
     surface = wl_compositor_create_surface(compositor);
     viewport = wp_viewporter_get_viewport(viewporter, surface);
     xs = xdg_wm_base_get_xdg_surface(wm_base, surface);
     xdg_surface_add_listener(xs, &xdg_surface_listener, NULL);
-    struct xdg_toplevel *top = xdg_surface_get_toplevel(xs);
+    top = xdg_surface_get_toplevel(xs);
     xdg_toplevel_add_listener(top, &toplevel_listener, NULL);
     xdg_toplevel_set_title(top, "Title bar probe");
     xdg_toplevel_set_app_id(top, "hyalo-title-bar-probe");
@@ -218,6 +224,11 @@ int main(void) {
             draw(own);
             printf("SWITCHED %s\n", own ? "client" : "server");
             fflush(stdout);
+        }
+        if (want_maximize) {
+            want_maximize = 0;
+            if (maximized) xdg_toplevel_unset_maximized(top);
+            else xdg_toplevel_set_maximized(top);
         }
     }
     printf("CLOSED\n");

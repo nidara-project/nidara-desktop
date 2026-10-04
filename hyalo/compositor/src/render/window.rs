@@ -102,7 +102,7 @@ void main() {
 /// The compiled shader, once per GL context (its user data).
 struct RoundedProgram(Option<GlesTexProgram>);
 
-pub(super) fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram> {
+fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram> {
     let gles = renderer.gles();
     if let Some(p) = gles.egl_context().user_data().get::<RoundedProgram>() {
         return p.0.clone();
@@ -132,13 +132,13 @@ pub struct RoundedElement<R: smithay::backend::renderer::Renderer> {
     geo: Rectangle<f64, Physical>,
     radius: f64,
     exponent: f64,
-    /// Where the surface may draw, output pixels: the client's box when Hyalo draws a ring
-    /// around it (render/frame.rs) — its shadow margin is under the ring — else anywhere.
+    /// Where the surface may draw, output pixels: the client's box when it draws a frame with a
+    /// shadow margin (`push`), else anywhere.
     clip: Option<Rectangle<f64, Physical>>,
 }
 
 /// The rounded shader's uniforms for a box `geo` with its corners, drawing only inside `clip`.
-pub(super) fn rounded_uniforms(
+fn rounded_uniforms(
     projection: &[f32; 9],
     fb: (i32, i32),
     geo: Rectangle<f64, Physical>,
@@ -347,15 +347,13 @@ pub fn fits(window: &Window) -> bool {
     geo.loc == Point::from((0, 0)) && surface_size(&surface).is_some_and(|s| s == geo.size)
 }
 
-/// What `cfg` and the window's rules make of it. `ringed`: Hyalo lays it out in a ring of its
-/// own (wm `Managed::ring`, render/frame.rs).
-pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, ringed: bool, cfg: &WindowsConfig) -> Look {
+/// What `cfg` and the window's rules make of it.
+pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, cfg: &WindowsConfig) -> Look {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return Look::default() };
     let geo = window.geometry();
-    // Client-side decorations with a shadow margin draw their own corners — unless Hyalo
-    // draws a ring around them, whose corners it rounds.
-    let fits = fits(window) || ringed;
-    let rounded = rule_rounded && !fullscreen && fits && cfg.rounding > 0.0;
+    // Every window, its own frame drawn or not (owner, 2026-10-04: "no window keeps square
+    // corners"): one that draws a frame with a shadow margin is cut to its box (`push`).
+    let rounded = rule_rounded && !fullscreen && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
     let backdrop = rule_backdrop && cfg.backdrop.enabled && cfg.backdrop.passes > 0 && translucent(&surface, geo, radius);
     Look { rounded, backdrop }
@@ -376,7 +374,6 @@ pub fn push<R: HyaloRenderer>(
     cfg: &WindowsConfig,
     controls: Option<(Rectangle<f64, Physical>, super::controls::Controls)>,
     title_bar: Option<super::title_bar::TitleBar>,
-    ring: f64,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
@@ -389,19 +386,18 @@ pub fn push<R: HyaloRenderer>(
         out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
     }
     let radius = cfg.rounding * scale.x;
-    // With Hyalo's title bar on top — or its ring all round — the window's box (its corners,
-    // its backdrop) is that and the client together: the client's corners are inside, not cut.
-    let ring_px = (ring * scale.x).round();
-    let bar_px = title_bar.as_ref().map_or(ring_px, |t| t.height * scale.x);
-    let frame = Rectangle::new(
-        (geo.loc.x - ring_px, geo.loc.y - bar_px).into(),
-        (geo.size.w + 2.0 * ring_px, geo.size.h + bar_px + ring_px).into(),
-    );
-    let clip = (ring_px > 0.0).then_some(geo);
+    // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the
+    // bar and the client together: the client's top corners are inside, not cut.
+    let bar_px = title_bar.as_ref().map_or(0.0, |t| t.height * scale.x);
+    let frame = Rectangle::new((geo.loc.x, geo.loc.y - bar_px).into(), (geo.size.w, geo.size.h + bar_px).into());
+    // A client-side frame with a shadow margin (Chrome's web apps, Telegram) is cut to its box,
+    // the margin dropped, and its corners to the window's — as every desktop rounds a web page
+    // (owner, 2026-10-04, over a ring of Hyalo's own: it stretched the client's edges, and what
+    // touched them streaked). What lies in the corners' outer 4.7 px along the diagonal
+    // (`rounding` 24, `rounding_power` 3.2) is not shown.
+    let clip = (!fits(window)).then_some(geo);
     let program = look.rounded.then(|| rounded_program(renderer)).flatten();
     let at = out.len();
-    // Right behind the window's own surfaces: where Hyalo's ring goes (frame.rs).
-    let mut behind = at;
     match &program {
         Some(program) => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> =
@@ -416,29 +412,9 @@ pub fn push<R: HyaloRenderer>(
                     clip,
                 })
             }));
-            behind = out.len();
             super::push_material(out, &surface, location, scale, output_size);
         }
         None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate),
-    }
-    // The ring, made after the surfaces like the title bar below (it draws the client's edges),
-    // with the same corners, and placed behind them: its corners fill what the client cuts of
-    // its own.
-    if ring_px > 0.0
-        && let Some(program) = &program
-        && let Some(element) = super::frame::FrameElement::new(
-            &surface,
-            window.geometry(),
-            geo,
-            ring_px,
-            renderer.surface_texture(&surface),
-            program.clone(),
-            frame,
-            radius,
-            cfg.rounding_power,
-        )
-    {
-        out.insert(behind, OutputElement::Frame(element));
     }
     // The title bar, made after the surfaces (their buffers are imported by now, and it samples
     // the client's), placed before them: under its popups like the controls.

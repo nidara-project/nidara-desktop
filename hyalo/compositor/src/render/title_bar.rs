@@ -31,7 +31,7 @@ use smithay::{
     backend::renderer::{
         element::{Element, Id, Kind, RenderElement},
         gles::{GlesError, GlesFrame, GlesTexture, ffi},
-        utils::CommitCounter,
+        utils::{CommitCounter, RendererSurfaceStateUserData},
     },
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{Buffer as BufferCoords, Logical, Physical, Rectangle, Scale, Size, Transform, user_data::UserDataMap},
@@ -198,6 +198,45 @@ fn title_raster(surface: &WlSurface, title: &str, family: &str, px: f64, max_w: 
 
 // ── The element ────────────────────────────────────────────────────────────────────────
 
+/// Where a client's box is in its buffer — what it has drawn as its window, whatever else the
+/// buffer holds (a viewport's crop, a buffer larger than the surface) — for sampling it.
+struct ClientBox {
+    /// The box, in the buffer's logical space: `to_buffer` takes a part of it to buffer px.
+    pub b: Rectangle<f64, Logical>,
+    /// One buffer pixel, in that space.
+    pub px: f64,
+    scale: f64,
+    pub transform: Transform,
+    size: smithay::utils::Size<f64, Logical>,
+    pub commit: CommitCounter,
+}
+
+impl ClientBox {
+    /// `surface`'s box `g` (surface-local logical: `Window::geometry`), if it has drawn.
+    fn of(surface: &WlSurface, g: Rectangle<i32, Logical>) -> Option<Self> {
+        let (view, scale, transform, size, commit) = with_states(surface, |states| {
+            let d = states.data_map.get::<RendererSurfaceStateUserData>()?;
+            let d = d.lock().unwrap();
+            Some((d.view()?, d.buffer_scale().max(1) as f64, d.buffer_transform(), d.buffer_size()?, d.current_commit()))
+        })?;
+        if view.dst.w <= 0 || view.dst.h <= 0 {
+            return None;
+        }
+        // Surface-local → the buffer's logical space, through the viewport's crop and scaling.
+        let (sx, sy) = (view.src.size.w / view.dst.w as f64, view.src.size.h / view.dst.h as f64);
+        let b = Rectangle::new(
+            (view.src.loc.x + g.loc.x as f64 * sx, view.src.loc.y + g.loc.y as f64 * sy).into(),
+            (g.size.w as f64 * sx, g.size.h as f64 * sy).into(),
+        );
+        Some(Self { b, px: 1.0 / scale, scale, transform, size: size.to_f64(), commit })
+    }
+
+    /// A rectangle of the buffer's logical space, in buffer px.
+    fn to_buffer(&self, x: f64, y: f64, w: f64, h: f64) -> Rectangle<f64, BufferCoords> {
+        Rectangle::<f64, Logical>::new((x, y).into(), (w, h).into()).to_buffer(self.scale, self.transform, &self.size)
+    }
+}
+
 /// What `render/mod.rs` knows of a window's title bar: the rest comes from the window.
 pub struct TitleBar {
     /// Its height, logical px.
@@ -255,7 +294,7 @@ impl TitleBarElement {
         // edge of its own), across the client's box only — not the whole buffer: a client may
         // draw into a buffer larger than its window, or crop one with a viewport (measured,
         // 2026-10-03: Chrome tiled beside kitty gave a bar of half its colour).
-        let sampled = super::frame::ClientBox::of(surface, window_geometry);
+        let sampled = ClientBox::of(surface, window_geometry);
         let client_commit = sampled.as_ref().map_or(CommitCounter::default(), |c| c.commit);
         let client = client.zip(sampled).and_then(|(tex, cb)| {
             if cb.b.size.w <= 0.0 || cb.b.size.h < 2.0 * cb.px {

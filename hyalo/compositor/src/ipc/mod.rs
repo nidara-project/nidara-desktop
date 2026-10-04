@@ -51,9 +51,6 @@ pub struct WindowInfo {
     /// The height of Hyalo's title bar on top of the box above (render/title_bar.rs), logical
     /// px; 0 when it has none. The window's whole box starts that much higher.
     pub title_bar: i32,
-    /// The width of the ring Hyalo lays a client-side frame out in (render/frame.rs), logical
-    /// px, on every side of the box above; 0 when it has none.
-    pub frame: i32,
     /// Where Hyalo draws its controls (protocols/window_controls.rs): x, y, width, height,
     /// global logical px; none when the app reserved no room for them and has no title bar.
     pub controls: Option<[f64; 4]>,

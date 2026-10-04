@@ -483,7 +483,7 @@ phase_run() {
     TITLE_BAR_LOG=/tmp/hyalo/title-bar "$REPO/scripts/ci/hyalo-title-bar-check.sh" >/tmp/hyalo/title-bar.log 2>&1 \
         || { log "FAIL: title bar"; cat /tmp/hyalo/title-bar.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
-    log "title bar OK ($(grep -c '^ok' /tmp/hyalo/title-bar.log) steps: bar, one piece, pointer, drag/maximize, switch + ring, close)"
+    log "title bar OK ($(grep -c '^ok' /tmp/hyalo/title-bar.log) steps: bar, one piece, pointer, drag/maximize, switch + cut + own maximize, close)"
     # Input methods (#683, #503): a stand-in input method's text reaches a focused window's
     # field (empty before it ran: the control) and the shell's search under its focus grab.
     PATH="/tmp/hyalo:$PATH" IME_LOG=/tmp/hyalo/ime "$REPO/scripts/ci/hyalo-ime-check.sh" >/tmp/hyalo/ime.log 2>&1 \
