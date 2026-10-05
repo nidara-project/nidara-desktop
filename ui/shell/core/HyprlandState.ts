@@ -946,6 +946,11 @@ export class HyprlandStateClass extends GObject.Object implements Compositor {
         return this._dispatch(`hl.dsp.window.fullscreen({ ${this._winSel(address)} })`)
     }
 
+    /** What SUPER+M does in hyprland.lua, on a window by address. */
+    toggleMaximize(address: string) {
+        return this._dispatch(`hl.dsp.window.fullscreen({ mode = "maximized", ${this._winSel(address)} })`)
+    }
+
     /** Center on screen (floating windows only). */
     centerWindow(address: string) {
         return this._dispatch(`hl.dsp.window.center({ ${this._winSel(address)} })`)

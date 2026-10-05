@@ -185,6 +185,8 @@ export interface Compositor {
     togglePseudo(address: string): Promise<unknown>
     togglePin(address: string): Promise<unknown>
     toggleFullscreen(address: string): Promise<unknown>
+    /** Fill the workspace, bar and dock still in view (fullscreen mode 1); again to undo. */
+    toggleMaximize(address: string): Promise<unknown>
     centerWindow(address: string): Promise<unknown>
     floatAllInWorkspace(wsId: number): Promise<unknown>
     tileAllInWorkspace(wsId: number): Promise<unknown>

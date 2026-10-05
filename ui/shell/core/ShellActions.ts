@@ -21,6 +21,9 @@ export interface ShellActionsMap {
   openSettings?: () => void
   /** Open the Settings window directly on a page id (e.g. "bluetooth"). */
   openSettingsPage?: (id: string) => string
+  /** Open the Settings window on one app's own page, by desktop id. False when the app
+   *  has no page there (Settings then shows the list of apps). */
+  openAppSettings?: (appId: string) => boolean
   toggleOverview?: () => void
   /** Promote the bar to the OVERLAY layer above a fullscreen window (toggle). */
   toggleBarOverlay?: () => void

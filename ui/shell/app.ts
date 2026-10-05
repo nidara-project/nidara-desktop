@@ -286,6 +286,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "Open the Settings window on a specific page (e.g. `settingsPage bluetooth`)",
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
   },
+  settingsApp: {
+    desc: "Open the Settings window on one app's own page, by desktop id (e.g. `settingsApp firefox`) — what the window menu's \"App Settings…\" does",
+    run: args => ipc.openAppSettings?.(args[0] ?? ""),
+  },
   toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
   setWallpaper: {
     desc: "Set the desktop wallpaper (`setWallpaper <path> [transition]`). Transition defaults to random if omitted.",
@@ -1254,6 +1258,15 @@ app.start({
       })
       return found ? "ok" : `unknown page: ${id} — valid: ${validPages()}`
     }
+    const openAppSettings = (appId: string): boolean => {
+      if (settingsWindows.length === 0) openSettings()   // lazy-create + raise
+      else raiseSettings()
+      let found = false
+      settingsWindows.forEach(s => {
+        if ((s as any).navigateToApp?.(appId)) found = true
+      })
+      return found
+    }
     const toggleOverview = () => {
       status.toggleOverview()
     }
@@ -1371,6 +1384,8 @@ app.start({
     ipc.toggleAppGrid = toggleAppGrid
     ipc.agentPointer = agentPointer
     ipc.openSettings = openSettings
+    ipc.openAppSettings = (id: string) =>
+      !id ? "usage: settingsApp <desktop-id>" : openAppSettings(id) ? "ok" : `no page for app: ${id} — Settings shows the list of apps`
     ipc.openSettingsPage = openSettingsPage as (...args: string[]) => string
     ipc.toggleOverview = toggleOverview
     ipc.toggleBarOverlay = toggleBarOverlay
@@ -1381,6 +1396,7 @@ app.start({
     shellActions.toggleAppGrid = toggleAppGrid
     shellActions.openSettings = openSettings
     shellActions.openSettingsPage = openSettingsPage
+    shellActions.openAppSettings = openAppSettings
     shellActions.toggleOverview = toggleOverview
     shellActions.toggleBarOverlay = toggleBarOverlay
     shellActions.lockScreen = lockScreen

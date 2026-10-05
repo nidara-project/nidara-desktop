@@ -1,18 +1,17 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { uiIcon } from "../core/Icons"
-import { menuRow } from "./MenuRow"
 import { t } from "../core/i18n"
-import workspaceModes, { WORKSPACE_MODES, type WorkspaceMode } from "../core/WorkspaceModes"
+import workspaceModes, { type WorkspaceMode } from "../core/WorkspaceModes"
 
 /**
- * The workspace mode (#513), as one control with two faces.
+ * The workspace mode (#513): its vocabulary, and the overview's badge.
  *
- * 🔑 It is ONE module on purpose. The mode lives in two surfaces because they
- * answer different questions — the overview is the only place you see the five
- * workspaces at once, so that is where the mode is READ; the window menu acts on
- * the one you are standing in without leaving it — and two surfaces drawing the
- * same state from two copies of the vocabulary is how they come to disagree about
- * what "tiling" looks like.
+ * 🔑 The mode belongs to the DESKTOP, so it lives where the desktops are: the overview
+ * the dots open, one badge per desktop, and Settings. It used to be in the bar's window
+ * menu too, and left it when that menu became the app's (2026-10-05): a menu that hangs
+ * from an app's name is no place to re-tile a whole desktop. This module stays the one
+ * copy of the words and icons, so Settings and the overview cannot disagree about what
+ * "tiling" looks like.
  *
  * The pairing: `grid` for tiling (windows share the space), `app-window` for
  * floating (one window, free). Both are already in our icon set; neither is an
@@ -48,7 +47,7 @@ export function makeWorkspaceModeBadge(wsId: number): Gtk.Widget {
         image.gicon = modeIcon(mode)
         badge.set_css_classes(["wo-mode-badge", mode])
         // The words live here rather than on the badge: the icon is the glance,
-        // the tooltip is the answer, and the window menu spells it out in full.
+        // the tooltip is the answer, and Settings spells it out in full.
         badge.tooltip_text = modeLabel(mode)
     }
 
@@ -63,29 +62,4 @@ export function makeWorkspaceModeBadge(wsId: number): Gtk.Widget {
     workspaceModes.connect("changed", update)
     update()
     return badge
-}
-
-/**
- * The window menu's rows for the workspace you are on: one per mode, with the
- * current one checked. A pair of checked rows rather than a single toggle,
- * because a menu that says "Tiling" cannot tell you what it is going to do — set
- * it, or say it already is.
- */
-export function workspaceModeRows(wsId: number, onDone: () => void): Gtk.Widget[] {
-    const current = workspaceModes.getEffectiveMode(wsId)
-    return WORKSPACE_MODES.map((mode) =>
-        menuRow({
-            label: modeLabel(mode),
-            icon: modeIcon(mode),
-            checked: mode === current,
-            ellipsize: true,
-            onClick: () => {
-                // Setting the mode a workspace already has is a no-op in the
-                // service, so the checked row stays a statement rather than
-                // becoming a second way to re-tile everything by accident.
-                void workspaceModes.setWorkspaceMode(wsId, mode)
-                onDone()
-            },
-        }),
-    )
 }

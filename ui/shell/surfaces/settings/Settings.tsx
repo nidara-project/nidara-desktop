@@ -20,6 +20,7 @@ import { manifest, type PageDecl } from "./manifest"
 import { buildPreferencePage } from "./PreferencePage"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex, indexPage, indexPreferencePage, pageBox, runPageRefreshers, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
+import { SUBPAGE_BUILDERS, subpagesOf } from "./subpages"
 import { uiIcon, currentUiIcon } from "../../core/Icons"
 import IconButton from "../../common/IconButton"
 import { attachTooltip } from "../../../lib/nidara-kit"
@@ -551,6 +552,20 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (!pageCache.has(key)) return false
         navigateTo(key)
         return true
+    }
+    // One app's own page (Apps › Installed apps › <app>), by desktop id — the window
+    // menu's "App Settings…". Walked the way a person clicks it, so the breadcrumb
+    // holds the whole trail and the list's row stays in step with the page.
+    ;(win as any).navigateToApp = (appId: string): boolean => {
+        const decl = subpagesOf("apps").find(p => p.builder === "appIcons")
+        if (!decl || !pageCache.has("apps")) return false
+        navigateTo("apps")
+        let list: Gtk.Widget | null = null
+        nav.pushSubpage({
+            id: decl.id, title: t(decl.label as any), parentId: "apps",
+            build: () => (list = SUBPAGE_BUILDERS.appIcons(nav)),
+        })
+        return (list as any)?.openApp?.(appId) ?? false
     }
 
     // Default page — seeds history. Appearance is the chosen landing (not the

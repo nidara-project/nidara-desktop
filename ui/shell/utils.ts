@@ -1,5 +1,4 @@
 import GLib from "gi://GLib"
-import type { CompositorWindow, CompositorWorkspace } from "./core/CompositorState"
 
 /**
  * Robust Service Fetcher with Exponential Backoff 🛡️
@@ -47,64 +46,4 @@ export function calculateIconSize(
     const size = baseSize + (baseSize * (maxScale - 1) * factor);
 
     return size;
-}
-
-/**
- * Wordmark Engine 🍎
- * Pretty names and sanitization for a premium look.
- */
-export function getWordmark(client: CompositorWindow | null, focusedWorkspace: CompositorWorkspace | null): string {
-    if (!client) {
-        const ws = focusedWorkspace
-        if (!ws) return "Workspace"
-        const wsName: Record<string, string> = { gamespace: "Gaming" }
-        return wsName[ws.name] ?? `Workspace ${ws.id}`
-    }
-
-    const classMap: Record<string, string> = {
-        "google-chrome": "Google Chrome",
-        "chrome-google.com": "Google Chrome",
-        "firefox": "Firefox",
-        "code-url-handler": "Visual Studio Code",
-        "code": "Visual Studio Code",
-        "antigravity": "Antigravity",
-        "thunar": "Archivos",
-        "foot": "Terminal",
-        "kitty": "Terminal",
-        "nautilus": "Archivos",
-        "pavucontrol": "Ajustes de Sonido",
-        "nm-connection-editor": "Red",
-        "org.gnome.Settings": "Ajustes",
-        "vlc": "VLC Player",
-        "spotify": "Spotify",
-        "discord": "Discord",
-        "telegram-desktop": "Telegram",
-        "org.gnome.Calendar": "Calendario"
-    }
-
-    // 1. Prioritize Title for specific dynamic context (like Browser tabs or Folders)
-    let title = client.title || ""
-
-    // 2. Clear known suffixes to keep it clean
-    const suffixes = [
-        " — Mozilla Firefox",
-        " - Google Chrome",
-        " - Visual Studio Code",
-        " - VSCodium",
-        " - Antigravity",
-        " - Terminal",
-        " - File Manager"
-    ]
-    suffixes.forEach(s => { if (title.endsWith(s)) title = title.replace(s, "") })
-
-    // 3. If title is too generic or empty, use class mapping
-    const genericTitles = ["New Tab", "Google Chrome", "Mozilla Firefox", "Untitled", "index.html", "Enter name of file", ""]
-    if (genericTitles.includes(title) || title.length < 2) {
-        const cls = client.class || ""
-        if (!cls) return ""
-        return classMap[cls.toLowerCase()] ||
-            cls.charAt(0).toUpperCase() + cls.slice(1)
-    }
-
-    return title
 }

@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "Transparenz reduzieren",
     "settings.accessibility.reduce-transparency.desc": "Leiste, Dock, Panels und Fenster werden undurchsichtig, unabhängig von der Glaseinstellung.",
     "settings.accessibility.reduce-motion": "Bewegung reduzieren",
-    "settings.accessibility.reduce-motion.desc": "Overlays erscheinen ohne Effekt, und Fenster- und Arbeitsflächenanimationen werden abgeschaltet.",
+    "settings.accessibility.reduce-motion.desc": "Overlays erscheinen ohne Effekt, und Fenster- und Desktop-Animationen werden abgeschaltet.",
 
     // Users
     "settings.users.title": "Benutzer",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "Zuletzt verwendete Dateien",
 
     // Workspace Overview
-    "overview.workspace": "Arbeitsfläche",
+    "overview.workspace": "Desktop",
     "overview.empty": "Leer",
     "overview.window": "Fenster",
     "overview.windows": "Fenster",
@@ -598,15 +598,10 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Herunterfahren",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Schwebend",
-    "bar.window-menu.pseudo": "Pseudo-Kacheln",
     "bar.window-menu.fullscreen": "Vollbild",
     "bar.window-menu.center": "Auf dem Bildschirm zentrieren",
-    "bar.window-menu.pin": "An alle Arbeitsflächen anheften",
-    "bar.window-menu.move-to": "Zur Arbeitsfläche verschieben",
-    "bar.window-menu.workspace": "Arbeitsfläche",
-    "bar.window-menu.float-all": "Alle Fenster schwebend machen",
-    "bar.window-menu.no-window": "Kein fokussiertes Fenster",
+    "bar.window-menu.pin": "An alle Desktops anheften",
+    "bar.window-menu.move-to": "Auf anderen Desktop verschieben",
     "bar.window-menu.group": "Gruppe",
     "bar.window-menu.group.create": "Gruppe erstellen",
     "bar.window-menu.group.move-out": "Aus Gruppe entfernen",

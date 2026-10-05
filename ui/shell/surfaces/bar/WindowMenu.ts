@@ -1,18 +1,20 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import compositor, { bareAddr } from "../../core/CompositorState"
+import compositor, { bareAddr, FULLSCREEN } from "../../core/CompositorState"
+import appService from "../../core/AppService"
+import shellActions from "../../core/ShellActions"
 import { t } from "../../core/i18n"
-import { getWordmark } from "../../utils"
 import { safeDisconnect } from "../../core/signals"
-import { workspaceModeRows } from "../../common/WorkspaceModeControl"
-import { menuRow, menuHeader, menuSeparator } from "../../common/MenuRow"
+import { WS_COUNT } from "../../common/WorkspaceDot"
+import { modeLabel } from "../../common/WorkspaceModeControl"
+import { WORKSPACE_MODES } from "../../core/WorkspaceModes"
+import { menuRow, menuHeader, menuSeparator, menuDisclosure } from "../../common/MenuRow"
 
-// Window-options menu for the AppTitle capsule — the visual gateway to Hyprland's
-// window management for people who'd never learn the keybinds. Opens in the bar's
-// shared expansion capsule (openCustomExpansion). Sections: window actions,
-// move-to-workspace strip, group/tabs (v2), workspace actions.
-
-const WORKSPACE_COUNT = 5   // matches Workspaces.tsx
+// The AppTitle capsule's menu: the APP the capsule names and the window of it you are
+// on — the visual gateway to window management for people who'd never learn the
+// keybinds. Opens in the bar's shared expansion capsule (openCustomExpansion).
+// Sections, top to bottom: the window's size and placement, where it goes (Move to
+// Desktop), the app's Settings page, and closing — the window or the whole app.
 
 export function buildWindowMenu(onClose: () => void): Gtk.Widget {
     const root = new Gtk.Box({
@@ -68,8 +70,10 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
 
     if (client) {
         const addr = client.address
+        const appName = appService.appNameForWindow(client)
+        const appId = appService.appIdForWindow(client)
 
-        root.append(menuHeader(getWordmark(client, compositor.focusedWorkspace) || client.title || "", true))
+        // No header: the capsule this menu hangs from already names the app, one line up.
 
         // The window section fills when the authoritative state read lands (~ms).
         // NEVER build checks from AstalHyprland.Client props: floating/fullscreen
@@ -77,39 +81,63 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         // wrong checks + skipped windows, 2026-06-11).
         const windowSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
         root.append(windowSection)
-        // Group section (v2) — appended into the slot after the move-to strip,
-        // filled by the SAME authoritative read (`grouped` lives in clients -j).
+        // Group section (Hyprland's tabs) — filled by the SAME authoritative read
+        // (`grouped` lives in clients -j).
         const groupSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+        root.append(groupSection)
         const norm = (a: string) => (a.startsWith("0x") ? a : "0x" + a)
-        // Astal client lookup is for IDENTITY only (title/class for the tab
-        // label) — never for window state. Read from HyprlandState's cache.
+        // A tab is one window of a group, so it goes by its TITLE, which is what tells
+        // two windows of one app apart.
         const labelFor = (memberAddr: string) => {
             const c = compositor.clients.find(c => norm(c.address) === memberAddr)
-            return c ? (getWordmark(c, compositor.focusedWorkspace) || c.title || c.class) : memberAddr
+            return c ? (c.title || appService.appNameForWindow(c)) : memberAddr
         }
         compositor.readWindow(addr).then(json => {
             const floating = json ? !!json.floating : !!client.floating
             // `fullscreen` in clients -j is the FSMODE int (0 none / 1 maximized /
-            // 2 fullscreen); the row's toggle acts on REAL fullscreen, so only
-            // mode 2 checks it — maximize (Super+M) must not read as fullscreen.
-            const fullscreen = json ? json.fullscreen === 2 : compositor.isRealFullscreen(client)
+            // 2 fullscreen): each row checks its own mode, so a maximized window does
+            // not read as fullscreen nor the other way round.
+            const fsMode = json ? json.fullscreen : client.fullscreen
+            const fullscreen = json ? json.fullscreen === FULLSCREEN : compositor.isRealFullscreen(client)
 
+            // Size first — Minimize, Maximize, Full Screen: the order the title bar's own
+            // buttons and every desktop's window menu put them in, smallest to largest.
+            if (compositor.caps.minimize) {
+                windowSection.append(menuRow({
+                    label: t("bar.window-menu.minimize"),
+                    onClick: () => { compositor.minimizeWindow(addr); onClose() },
+                }))
+            }
             windowSection.append(menuRow({
-                label: t("bar.window-menu.float"),
-                checked: floating,
-                onClick: () => { compositor.floatWindow(addr); onClose() },
-            }))
-            // Pseudo state isn't readable (no `pseudo` in clients -j nor
-            // HL.Window), so this row is a plain toggle with no check.
-            windowSection.append(menuRow({
-                label: t("bar.window-menu.pseudo"),
-                onClick: () => { compositor.togglePseudo(addr); onClose() },
+                label: t("bar.window-menu.maximize"),
+                checked: fsMode === 1,
+                onClick: () => { compositor.toggleMaximize(addr); onClose() },
             }))
             windowSection.append(menuRow({
                 label: t("bar.window-menu.fullscreen"),
                 checked: fullscreen,
                 onClick: () => { compositor.toggleFullscreen(addr); onClose() },
             }))
+            // Placement, its own question: floating or in the mosaic — two rows, the check
+            // on the one it is (#513's rule: a lone "Floating" row is checked on every
+            // window of a floating desktop and, pressed, does what it does not say). Either
+            // way round on either kind of desktop: a floating desktop takes a window into
+            // its mosaic and leaves the rest free. The words are the desktop mode's own.
+            windowSection.append(menuSeparator())
+            for (const mode of WORKSPACE_MODES) {
+                const here = (mode === "floating") === floating
+                windowSection.append(menuRow({
+                    label: modeLabel(mode),
+                    checked: here,
+                    onClick: () => {
+                        if (!here) {
+                            if (mode === "floating") compositor.enableFloatWindow(addr)
+                            else compositor.tileWindow(addr)
+                        }
+                        onClose()
+                    },
+                }))
+            }
             if (floating) {
                 windowSection.append(menuRow({
                     label: t("bar.window-menu.center"),
@@ -134,6 +162,7 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
             if (!compositor.caps.groups) {
                 // Nothing to offer: the section stays empty.
             } else if (grouped.length > 0) {
+                groupSection.append(menuSeparator())
                 groupSection.append(menuHeader(`${t("bar.window-menu.group")} — ${grouped.length}`))
                 for (const member of grouped) {
                     groupSection.append(menuRow({
@@ -155,53 +184,72 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
                     label: t("bar.window-menu.group.ungroup"),
                     onClick: () => { compositor.toggleGroup(addr); onClose() },
                 }))
-                groupSection.append(menuSeparator())
             } else {
+                groupSection.append(menuSeparator())
                 groupSection.append(menuRow({
                     label: t("bar.window-menu.group.create"),
                     onClick: () => { compositor.toggleGroup(addr); onClose() },
                 }))
-                groupSection.append(menuSeparator())
             }
         })
 
         root.append(menuSeparator())
 
-        // Move-to-workspace: inline 1..5 strip (one tap, current one disabled) —
-        // the expansion capsule has no nested-submenu machinery, and at 5 fixed
-        // workspaces a strip beats a submenu anyway.
-        root.append(menuHeader(t("bar.window-menu.move-to")))
-        const wsRow = new Gtk.Box({ spacing: 8, css_classes: ["window-menu-ws-row"], margin_start: 8, margin_end: 8 })
-        for (let i = 1; i <= WORKSPACE_COUNT; i++) {
-            const btn = new Gtk.Button({
-                label: String(i),
-                css_classes: ["window-menu-ws-btn", ...(i === wsId ? ["current"] : [])],
-                sensitive: i !== wsId,
-                hexpand: true,
-            })
-            btn.connect("clicked", () => { compositor.sendToWorkspace(addr, i); onClose() })
-            wsRow.append(btn)
-        }
-        root.append(wsRow)
+        // Move to Desktop: opens in place onto the desktops the window can go to — every
+        // one but its own. A disclosure rather than a strip of numbers, so the row reads
+        // as words like the rest, and the list is free to change length (#740, dynamic
+        // desktops) without the menu changing shape.
+        root.append(menuDisclosure({
+            label: t("bar.window-menu.move-to"),
+            build: () => {
+                const rows: Gtk.Widget[] = []
+                for (let i = 1; i <= WS_COUNT; i++) {
+                    if (i === wsId) continue
+                    rows.push(menuRow({
+                        label: `${t("overview.workspace")} ${i}`,
+                        onClick: () => { compositor.sendToWorkspace(addr, i); onClose() },
+                    }))
+                }
+                return rows
+            },
+        }))
 
+        // The app's own page in Settings — only for an app that has one (an entry the
+        // app grid lists). Ellipsis: it opens a window rather than acting.
+        if (appId && appService.getAppData(appId)?.visible) {
+            root.append(menuSeparator())
+            root.append(menuRow({
+                label: t("bar.window-menu.app-settings"),
+                onClick: () => { onClose(); shellActions.openAppSettings?.(appId) },
+            }))
+        }
+
+        // Last, where a slip of the pointer costs the least to reach for by mistake.
+        // Quit closes EVERY window of the app, exactly what the dock's Quit does — an
+        // app that keeps running in the tray keeps running, as it would with its own
+        // close buttons.
         root.append(menuSeparator())
-        root.append(groupSection)
-    } else {
-        root.append(menuHeader(t("bar.window-menu.no-window")))
-        root.append(menuSeparator())
+        root.append(menuRow({
+            label: t("bar.window-menu.close"),
+            onClick: () => { compositor.closeWindow(addr); onClose() },
+        }))
+        root.append(menuRow({
+            label: t("bar.window-menu.quit").replace("%s", appName),
+            ellipsize: true,
+            onClick: () => {
+                const app = appService.resolveWindowApp(client.class || "")
+                for (const c of compositor.clients) {
+                    if (appService.resolveWindowApp(c.class || "") === app) compositor.closeWindow(c.address)
+                }
+                onClose()
+            },
+        }))
     }
 
-    // Workspace section — always shown. Its rows are the workspace's MODE (#513),
-    // and they replace the old "Float all windows": with modes, floating the
-    // workspace is what floating all its windows means, and two commands for one
-    // outcome is how a menu starts lying about which one is in effect.
-    // ⚠️ The header says MODE, not just the workspace number, because the menu
-    // already has a "Floating" row up top that means "float THIS WINDOW". Two rows
-    // with the same word and a check each, one section apart, read as a duplicate
-    // — seen in the bench before the wording changed. The header is what tells you
-    // which of the two you are about to move.
-    root.append(menuHeader(`${t("bar.window-menu.workspace-mode")} ${wsId}`))
-    for (const row of workspaceModeRows(wsId, onClose)) root.append(row)
+    // No "else": with no window focused the capsule names the desktop and opens no menu
+    // (AppTitle). The desktop's MODE (#513) is not here either: it belongs to the
+    // desktop, not to an app, and lives where the desktops are — the overview the dots
+    // open, one badge per desktop — and in Settings.
 
     return root
 }

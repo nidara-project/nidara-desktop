@@ -3878,11 +3878,13 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
   `_components.scss` only resets the popover chrome to transparent (the bubble is Cairo) + sets the
   label colour/size.
 - **In the bar, EVERY capsule has one** (owner, 2026-09-26) — "name, optional state": widgets
-  (`barTooltipState`), tray items (their own SNI text), the system menu, the window title (the
-  WHOLE title: the label is a wordmark cut to fit the flank), the `»` (show / hide again), search,
+  (`barTooltipState`), tray items (their own SNI text), the system menu, the `»` (show / hide again), search,
   the CC (just "Control Center" — owner's words), and the clock (the FULL date with the year,
   `formatFullDate` in `ui/lib/date-names.ts`, whatever the clock's own date format, plus the
-  pending-notification count when there is one). All go through `barTooltip`
+  pending-notification count when there is one). **One exception: the app name (AppTitle) has none**
+  (owner, 2026-10-05) — its tooltip was the window's whole title, there because the label showed a
+  title cut to fit; the label is now the app's name and the title is in the window's own title bar,
+  so a tooltip could only repeat one of the two. All go through `barTooltip`
   (`surfaces/bar/capsule.ts`), never `attachTooltip` directly: that is where the panel rule lives
   and where the dwell is set. The island's compact capsule has none yet.
 - **The bar's dwell is `BAR_TOOLTIP_DELAY` = 1000 ms counted from REST, the kit's default is 500

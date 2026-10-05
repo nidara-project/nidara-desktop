@@ -105,3 +105,41 @@ export function menuHeader(label: string, ellipsize = false): Gtk.Label {
         ...(ellipsize ? { hexpand: true, xalign: 0, margin_end: 12, ellipsize: 3, max_width_chars: 1 } : {}),
     })
 }
+
+/**
+ * A row that opens IN PLACE onto the rows under it — "Move to Desktop ›" in the bar's
+ * window menu. Our menus open in the bar's shared expansion capsule, which has no
+ * nested-submenu machinery and no room beside it for one; the rows slide down inside the
+ * same panel instead, and the panel grows with them (it re-stamps its regions on every
+ * allocation). The chevron turns from end to down while open.
+ *
+ * `build` runs on every opening, so the rows say what is true when you look, and the
+ * GTK default slide is the Settings "Advanced" disclosure's: one motion for one gesture.
+ */
+export function menuDisclosure(opts: { label: string; build: () => Gtk.Widget[] }): Gtk.Widget {
+    const chevron = new Gtk.Image({ gicon: uiIcon("nd-pan-end"), pixel_size: 15, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
+    const inner = new Gtk.Box({ spacing: 12, hexpand: true })
+    inner.append(new Gtk.Label({ label: opts.label, halign: Gtk.Align.FILL, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 1, css_classes: ["nidara-menu-label"] }))
+    inner.append(chevron)
+    const head = new Gtk.Button({ child: inner, css_classes: ["nidara-menu-row"], hexpand: true })
+
+    // Indented: the rows belong to the one above them, and nothing else on the panel says so.
+    const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_start: 12 })
+    const revealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: false, child: body })
+
+    head.connect("clicked", () => {
+        const open = !revealer.reveal_child
+        if (open) {
+            let c = body.get_first_child()
+            while (c) { const n = c.get_next_sibling(); body.remove(c); c = n }
+            for (const row of opts.build()) body.append(row)
+        }
+        chevron.gicon = uiIcon(open ? "nd-pan-down" : "nd-pan-end")
+        revealer.reveal_child = open
+    })
+
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+    box.append(head)
+    box.append(revealer)
+    return box
+}

@@ -257,16 +257,18 @@ function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
     const row = NidaraRow(app.name, app.id, trailing, [], undefined, rowIcon)
     row.set_cursor_from_name("pointer")
 
-    const click = new Gtk.GestureClick()
-    click.connect("released", () => {
-        nav.pushSubpage({
-            id: `apps/icons/${app.id}`,
-            title: app.name,
-            parentId: "apps/icons",
-            build: () => buildAppIconDetailPage(app, syncRow),
-        })
+    const open = () => nav.pushSubpage({
+        id: `apps/icons/${app.id}`,
+        title: app.name,
+        parentId: "apps/icons",
+        build: () => buildAppIconDetailPage(app, syncRow),
     })
+    const click = new Gtk.GestureClick()
+    click.connect("released", open)
     row.add_controller(click)
+    // The same door from outside the list (`openApp` below): the page has to get the
+    // row's own `syncRow`, or an icon changed there leaves this row showing the old one.
+    ;(row as any)._open = open
 
     // Tag for filter
     ;(row as any)._appName = app.name.toLowerCase()
@@ -333,7 +335,17 @@ export default function AppIconsPage(nav: SettingsNav) {
     // "the apps on this machine" listing them read as clutter (#535). Same call GNOME
     // Settings makes.
     const apps = appService.listApps()
-    apps.forEach(app => appList.append(buildAppRow(app, nav)))
+    const rows = apps.map(app => buildAppRow(app, nav))
+    rows.forEach(row => appList.append(row))
+    // Open one app's page as a click on its row would — the window menu's "App
+    // Settings…" lands here (Settings' `navigateToApp`). False when the app is not
+    // in the list (no entry, or one nobody opens), and the list is where you stay.
+    ;(page as any).openApp = (appId: string): boolean => {
+        const row = rows.find(r => (r as any)._appId === appId.toLowerCase())
+        if (!row) return false
+        ;(row as any)._open()
+        return true
+    }
 
     // Filter
     appList.set_filter_func((row: Gtk.ListBoxRow) => {

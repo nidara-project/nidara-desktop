@@ -102,7 +102,7 @@ export default {
     "settings.accessibility.reduce-transparency": "Réduire la transparence",
     "settings.accessibility.reduce-transparency.desc": "La barre, le dock, les panneaux et les fenêtres deviennent opaques, quel que soit le verre choisi.",
     "settings.accessibility.reduce-motion": "Réduire les animations",
-    "settings.accessibility.reduce-motion.desc": "Les panneaux apparaissent sans effet, et les animations de fenêtres et d'espaces de travail sont désactivées.",
+    "settings.accessibility.reduce-motion.desc": "Les panneaux apparaissent sans effet, et les animations de fenêtres et de bureaux sont désactivées.",
 
     // Users
     "settings.users.title": "Utilisateurs",
@@ -553,7 +553,7 @@ export default {
     "prism.section.files": "Fichiers récents",
 
     // Workspace Overview
-    "overview.workspace": "Espace de travail",
+    "overview.workspace": "Bureau",
     "overview.empty": "Vide",
     "overview.window": "fenêtre",
     "overview.windows": "fenêtres",
@@ -598,15 +598,10 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Éteindre",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Flottant",
-    "bar.window-menu.pseudo": "Pseudo-mosaïque",
     "bar.window-menu.fullscreen": "Plein écran",
     "bar.window-menu.center": "Centrer à l'écran",
-    "bar.window-menu.pin": "Épingler à tous les espaces",
-    "bar.window-menu.move-to": "Déplacer vers l'espace",
-    "bar.window-menu.workspace": "Espace de travail",
-    "bar.window-menu.float-all": "Rendre toutes les fenêtres flottantes",
-    "bar.window-menu.no-window": "Aucune fenêtre active",
+    "bar.window-menu.pin": "Épingler sur tous les bureaux",
+    "bar.window-menu.move-to": "Déplacer vers un autre bureau",
     "bar.window-menu.group": "Groupe",
     "bar.window-menu.group.create": "Créer un groupe",
     "bar.window-menu.group.move-out": "Sortir du groupe",

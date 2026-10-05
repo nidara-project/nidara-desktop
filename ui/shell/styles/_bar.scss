@@ -177,29 +177,13 @@ window#nidara-bar-zone {
         font-variant-numeric: tabular-nums;
     }
 
-    /* --- Window menu (AppTitle expansion) --- */
-    // Inline move-to-workspace strip: flat numbered buttons, current one accented
-    // and disabled. Rows/headers/separators come from the shared nidara-menu-*
-    // classes (MenuRow.ts) — only the strip needs its own style.
-    .window-menu-ws-btn {
-        @include nidara-reset;
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        min-width: 28px;
-        min-height: 28px;
-        padding: 0;
-        border-radius: $nidara-radius-sm;
-        font-size: $fs-small;
-        font-weight: $fw-medium;
-        @include nidara-row-states;
-
-        &.current {
-            // Current workspace: a faint accent-tinted pill marks the state — the
-            // number stays theme-coloured (never accent on text). Button is disabled.
-            background: var(--nidara-accent-10);
-            color: var(--nidara-text);
-        }
+    /* --- App name (AppTitle) --- */
+    // Bold, the weight of a CC tile's title (`.nidara-atomic-label-bold`; owner, 2026-10-05):
+    // it names the app in front, so it reads as a name and not as one more status beside the
+    // clock. The SIZE stays the bar's, the clock's own, so the two sit on one line. The
+    // menu it opens is all shared `nidara-menu-*` rows (MenuRow.ts) and has no rules here.
+    .bar-app-name {
+        font-weight: $fw-bold;
     }
 
     /* --- Bar inline expansion panel --- */
