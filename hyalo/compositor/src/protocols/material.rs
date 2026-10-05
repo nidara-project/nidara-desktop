@@ -344,9 +344,11 @@ pub fn ink_measured(surface: &WlSurface, darkest: &[(u32, f32)]) -> bool {
         }
         current.commit.increment();
         drop(current);
+        // The protocol is v1 and stays v1 (additions go inside it): the event is in v1, so no
+        // version test. A `>= 3` left from before that rule sent it to nobody, while the glass
+        // still wore the light veil — white text on a white veil.
         if let Some(res) = states.data_map.get::<MaterialResource>()
             && let Some(res) = res.0.lock().unwrap().as_ref()
-            && res.version() >= 3
         {
             for (id, dark) in changed {
                 res.ink(id, dark as u32);
