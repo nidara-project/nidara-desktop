@@ -1,4 +1,5 @@
-//! A picture of one output, as a PNG — what `nidara-hyalo msg screenshot` asks for, and what
+//! A picture of one output, as a PNG (or a raw PPM, for a caller capturing frame after frame) —
+//! what `nidara-hyalo msg screenshot` asks for, and what
 //! CI's headless boot uploads for a person to look at (the same role grim has in the
 //! Hyprland smoke; Hyalo does not speak a capture protocol yet, #683).
 //!
@@ -113,6 +114,19 @@ pub fn draw_into(
     sync.wait().map_err(|e| format!("{e:?}"))
 }
 
+/// The same picture UNCOMPRESSED, as a binary PPM (P6, RGB): what a caller that captures frame
+/// after frame asks for — the glass lab's videos. Measured 2026-10-05 at 1080×1920: the PNG cost
+/// 541 ms a frame, almost all of it compression, and the reader then spent more decompressing it.
+pub fn write_ppm(path: &Path, w: u32, h: u32, rgba: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let mut out = Vec::with_capacity(32 + (w * h * 3) as usize);
+    write!(out, "P6\n{w} {h}\n255\n").map_err(|e| e.to_string())?;
+    for px in rgba.as_chunks::<4>().0 {
+        out.extend_from_slice(&px[..3]);
+    }
+    std::fs::write(path, out).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 pub fn write_png(path: &Path, w: u32, h: u32, rgba: &[u8]) -> Result<(), String> {
     let file = std::fs::File::create(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), w, h);
@@ -120,4 +134,16 @@ pub fn write_png(path: &Path, w: u32, h: u32, rgba: &[u8]) -> Result<(), String>
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
     writer.write_image_data(rgba).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ppm_is_header_then_rgb_without_alpha() {
+        let path = std::env::temp_dir().join(format!("hyalo-ppm-test-{}.ppm", std::process::id()));
+        super::write_ppm(&path, 2, 1, &[1, 2, 3, 255, 4, 5, 6, 0]).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(bytes, b"P6\n2 1\n255\n\x01\x02\x03\x04\x05\x06");
+    }
 }

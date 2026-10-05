@@ -213,10 +213,28 @@ function paintBackdrop(cr: any, w: number, h: number) {
     }
 }
 const rect = (x: number, y: number, w: number, h: number) => { const r = new Graphene.Rect(); r.init(x, y, w, h); return r }
+const BLACK = new Gdk.RGBA({ red: 0.05, green: 0.05, blue: 0.06, alpha: 1 })
 const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget {
     vfunc_snapshot(snap: Gtk.Snapshot): void {
-        const w = this.get_width(), h = this.get_height()
-        if (w <= 0 || h <= 0) return
+        const W = this.get_width(), H = this.get_height()
+        if (W <= 0 || H <= 0) return
+        // The promotional frame is the backdrop's whole world: drawn inside it as the export draws
+        // it over its whole output, so what the frame shows is what the file shows.
+        let x = 0, y = 0, w = W, h = H
+        if (state.show === "promo: logo") {
+            const r = stageRect()
+            if (r.w > 0 && r.h > 0) {
+                snap.append_color(BLACK, rect(0, 0, W, H))
+                x = r.x; y = r.y; w = r.w; h = r.h
+            }
+        }
+        snap.save()
+        const at = new Graphene.Point(); at.init(x, y)
+        snap.translate(at)
+        this.paintIn(snap, w, h)
+        snap.restore()
+    }
+    paintIn(snap: Gtk.Snapshot, w: number, h: number): void {
         const path = wallpapers[state.backdrop]
         if (!path) {
             const cr = snap.append_cairo(rect(0, 0, w, h))
@@ -431,13 +449,27 @@ function bigPanel(): Gtk.Widget {
  *  centred — the material and nothing else. The mark is the bar's (symbolic, so it takes the
  *  pane's ink: white, dark where the backdrop under it turns bright). Default: the app grid's
  *  icon size. */
+let promoDisc: { disc: Gtk.Widget, mark: Gtk.Image } | null = null
+/** The disc's size on screen: `promoSize` is px of the EXPORTED file, and the frame on screen is
+ *  that file at a scale (the format's height over the frame's). */
+function promoScreenSize(): number {
+    const r = stageRect()
+    const k = r.h > 0 ? r.h / FORMATS[state.promoFormat][1] : 1
+    return Math.max(8, Math.round(state.promoSize * k))
+}
+function sizePromo() {
+    if (!promoDisc) return
+    const size = promoScreenSize()
+    promoDisc.disc.set_size_request(size, size)
+    promoDisc.mark.pixel_size = Math.round(size * 0.5)
+}
 function promoPiece(): Gtk.Widget {
-    const size = Math.round(state.promoSize)
-    const mark = new Gtk.Image({ pixel_size: Math.round(size * 0.5), css_classes: ["glass-lab-mark"],
+    const mark = new Gtk.Image({ css_classes: ["glass-lab-mark"],
         gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${REPO}/ui/shell/assets/nidara/assets/nidara-symbolic.svg`)) })
     const disc = SquircleContainer({ child: mark, shape: Shape.CIRCLE, useShellOpacity: true, gloss: true,
         chrome: true, shadow: GLASS_SHADOW })
-    disc.set_size_request(size, size)
+    promoDisc = { disc, mark }
+    sizePromo()
     specimens.push({ name: "logo", contents: [mark] })
     return disc
 }
@@ -512,7 +544,8 @@ const setSceneContent = (w: Gtk.Widget) => stageHolder.set_child(w)
  *  centred in the scene's area), or the whole area beside the controls. */
 function stageRect(): Box4 {
     const w = stageHolder.get_width(), h = stageHolder.get_height()
-    if (state.show !== "promo: logo") return { x: 0, y: 0, w, h }
+    // Headless, the output IS the format (glass-lab.sh --size): the frame is all of it.
+    if (state.show !== "promo: logo" || SHOT) return { x: 0, y: 0, w, h }
     const [fw, fh] = FORMATS[state.promoFormat], m = 24
     const k = Math.min(Math.max(1, w - 2 * m) / fw, Math.max(1, h - 2 * m) / fh)
     const sw = Math.floor(fw * k), sh = Math.floor(fh * k)
@@ -521,8 +554,15 @@ function stageRect(): Box4 {
 // The frame on screen: everything outside it dimmed, a hairline just outside its edge — both
 // outside what an export takes.
 const frameGuide = new Gtk.DrawingArea({ can_target: false, hexpand: true, vexpand: true })
+let lastFrame = ""
 frameGuide.set_draw_func((_a, cr, w, h) => {
     if (state.show !== "promo: logo") return
+    // The window was resized or the format changed: the disc and the backdrop follow the frame.
+    const key = JSON.stringify(stageRect())
+    if (key !== lastFrame) {
+        lastFrame = key
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { sizePromo(); backdropArea?.queue_draw(); return GLib.SOURCE_REMOVE })
+    }
     const r = stageRect()
     cr.setFillRule(1 /* EVEN_ODD */)
     cr.rectangle(0, 0, w, h); cr.rectangle(r.x, r.y, r.w, r.h)
@@ -541,6 +581,7 @@ stageHolder.add_overlay(frameGuide)
 }
 function buildScene() {
     specimens.length = 0
+    promoDisc = null
     const show = state.show
     // The app grid's CSS is scoped to its window; the scene wears it while that panel is up.
     if (show === "panel grande") scene.add_css_class("nidara-app-grid-window")
@@ -692,6 +733,56 @@ function cut(captureWidth: number): { x: number, y: number, w: number, h: number
     return { x, y, w, h, outW: even(fw * f), outH: even(fh * f) }
 }
 
+/** `cb` once the backdrop's next frame is painted (its frame clock's after-paint), or after 50 ms
+ *  if it has no clock — never stalled by a frame that does not come. */
+function afterPaint(cb: () => void) {
+    let fired = false
+    const go = () => { if (fired) return; fired = true; GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { cb(); return GLib.SOURCE_REMOVE }) }
+    const clock = backdropArea?.get_frame_clock()
+    if (clock) {
+        const id = clock.connect("after-paint", () => { clock.disconnect(id); go() })
+        backdropArea!.queue_draw()
+    }
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { go(); return GLib.SOURCE_REMOVE })
+}
+
+/**
+ * A promotional export at the format's own size: the window's frame is a preview, at whatever
+ * scale the screen allows (a 9:16 frame is 1390 px tall on a 1440 px screen), so the file is made
+ * by a second lab, headless, whose output IS the format (glass-lab.sh --size 1080x1920) — drawn
+ * natively, never enlarged. The window goes on working meanwhile; this reports its progress.
+ */
+let exporting: Gio.Subprocess | null = null
+function exportNative(kind: "image" | "video", report: (s: string) => void) {
+    if (exporting) { report("ya hay una exportación en marcha"); return }
+    const [fw, fh] = FORMATS[state.promoFormat]
+    const base = `${GLib.get_tmp_dir()}/glass-lab-export-${GLib.get_monotonic_time()}`
+    writeFile(`${base}.json`, JSON.stringify({ ...state, drift: false }))
+    const argv = [`${REPO}/scripts/dev/glass-lab/glass-lab.sh`, "--headless", `${base}.png`, "--export", kind,
+        "--preset", `${base}.json`, "--size", `${fw}x${fh}`, "--bin", HYALO]
+    const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE })
+    // The lab runs in a sandbox HOME: the presets dir is said outright, not re-derived from it.
+    launcher.setenv("GLASS_LAB_PRESETS", PRESETS, true)
+    try { exporting = launcher.spawnv(argv) } catch (e) { report(`no se pudo lanzar la exportación: ${e}`); return }
+    report(`exportando a ${fw}×${fh}…`)
+    const poll = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+        try {
+            const [ok, bytes] = GLib.file_get_contents(`${base}.progress`)
+            if (ok) report(new TextDecoder().decode(bytes))
+        } catch { /* not yet */ }
+        return GLib.SOURCE_CONTINUE
+    })
+    exporting.wait_async(null, (p, res) => {
+        GLib.source_remove(poll)
+        exporting = null
+        let text = ""
+        try { text = new TextDecoder().decode(GLib.file_get_contents(`${base}.txt`)[1]).split("\n").slice(1).join("\n").trim() }
+        catch { /* no result */ }
+        report(text || `la exportación falló (registro: ${GLib.get_tmp_dir()}/glass-lab.*/hyalo.log)`)
+        for (const ext of ["json", "txt", "progress"]) try { Gio.File.new_for_path(`${base}.${ext}`).delete(null) } catch { /* gone */ }
+    })
+}
+
 /** One image of what is inside the frame, and the values beside it (.json). */
 function exportImage(report: (s: string) => void) {
     const path = `${PRESETS}/captura-${stamp()}.png`
@@ -721,7 +812,10 @@ function exportVideo(report: (s: string) => void) {
     if (recording) return
     const FPS = 60, frames = Math.max(1, Math.round(state.videoSeconds * FPS))
     const out = `${PRESETS}/video-${stamp()}.mp4`
-    const frame = `${GLib.get_tmp_dir()}/glass-lab-frame-${GLib.get_monotonic_time()}.png`
+    // Raw (Hyalo writes a binary PPM for a .ppm path): a PNG cost 541 ms a frame to compress at
+    // 1080×1920 and ffmpeg more to undo it. An older Hyalo writes a PNG under that name, which
+    // ffmpeg and GdkPixbuf still read by its content — slower, not wrong.
+    const frame = `${GLib.get_tmp_dir()}/glass-lab-frame-${GLib.get_monotonic_time()}.ppm`
     let ff: Gio.Subprocess | null = null
     let pipe: Gio.OutputStream | null = null
     let size = ""
@@ -745,7 +839,7 @@ function exportVideo(report: (s: string) => void) {
         try {
             ff = Gio.Subprocess.new(["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", `${FPS}`,
                 "-i", "-", "-vf", `crop=${c.w}:${c.h}:${c.x}:${c.y},scale=${c.outW}:${c.outH}:flags=lanczos`,
-                "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
                 Gio.SubprocessFlags.STDIN_PIPE)
             pipe = ff.get_stdin_pipe()
             return true
@@ -754,8 +848,9 @@ function exportVideo(report: (s: string) => void) {
     const step = (i: number) => {
         if (i >= frames) { done(`vídeo: ${frames} fotogramas, ${state.videoSeconds} s`); return }
         driftTo(i / FPS)
-        // Two frames: GTK paints the backdrop, the compositor composes the glass over it.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60, () => {
+        // Once GTK has painted (and committed) the backdrop at this time: the capture draws the
+        // scene again from the surfaces as they are, glass included. Not a fixed wait.
+        afterPaint(() => {
             screenshot(frame, ok => {
                 if (!ok) { done(`captura fallida en el fotograma ${i}`); return }
                 try {
@@ -767,7 +862,6 @@ function exportVideo(report: (s: string) => void) {
                 if (i % 30 === 0) report(`grabando… ${i}/${frames} (${size})`)
                 step(i + 1)
             })
-            return GLib.SOURCE_REMOVE
         })
     }
     step(0)
@@ -867,8 +961,15 @@ function fillControls() {
         measure(`${GLib.get_tmp_dir()}/glass-lab-${GLib.get_monotonic_time()}`, r =>
             readout.set_label(r.length ? r.map(fmt).join("\n") : "no se pudo capturar (¿Hyalo sin `msg`?)"))
     })
-    exportBtn.connect("clicked", () => { readout.set_label("capturando…"); exportImage(m => readout.set_label(m)) })
-    videoBtn.connect("clicked", () => { readout.set_label("preparando el vídeo…"); exportVideo(m => readout.set_label(m)) })
+    const promo = () => state.show === "promo: logo"
+    exportBtn.connect("clicked", () => {
+        readout.set_label("capturando…")
+        if (promo()) exportNative("image", m => readout.set_label(m)); else exportImage(m => readout.set_label(m))
+    })
+    videoBtn.connect("clicked", () => {
+        readout.set_label("preparando el vídeo…")
+        if (promo()) exportNative("video", m => readout.set_label(m)); else exportVideo(m => readout.set_label(m))
+    })
     const quit = NidaraButton({ label: "Salir" })
     quit.connect("clicked", () => loop.quit())
     const mrow = new Gtk.Box({ spacing: 8 }); mrow.append(measureBtn); mrow.append(exportBtn); mrow.append(quit)
@@ -881,17 +982,17 @@ function fillControls() {
             v => { state.offset = v / 100; apply() }, { debounce: 0 }),
         NidaraToggleRow("Movimiento automático", "el fondo pasa despacio por debajo del cristal", state.drift,
             v => { state.drift = v }),
-        NidaraSliderRow("Velocidad del movimiento", "×; también la del vídeo", state.driftSpeed, 0.25, 4,
+        NidaraSliderRow("Velocidad", "× del movimiento; también la del vídeo", state.driftSpeed, 0.25, 4,
             v => { state.driftSpeed = v }, { decimals: 2, debounce: 0 }),
     ])
     section("Promoción", [
         NidaraDropDownRow("Formato", "16:9 1920×1080 · 1:1 1080×1080 · 4:5 1080×1350 · 9:16 1080×1920",
-            state.promoFormat, Object.keys(FORMATS), v => { state.promoFormat = v as PromoFormat; frameGuide.queue_draw() }),
-        NidaraSliderRow("Tamaño del círculo", "px en pantalla; 72 = un icono de la cuadrícula de apps", state.promoSize, 32, 512,
-            v => { state.promoSize = v; if (state.show === "promo: logo") buildScene() }, { decimals: 0, debounce: 150 }),
+            state.promoFormat, Object.keys(FORMATS), v => { state.promoFormat = v as PromoFormat; frameGuide.queue_draw(); backdropArea?.queue_draw() }),
+        NidaraSliderRow("Tamaño del círculo", "px del archivo exportado; 72 = un icono de la cuadrícula de apps",
+            state.promoSize, 32, 1024, v => { state.promoSize = v; sizePromo() }, { decimals: 0, debounce: 0 }),
         NidaraSliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
-    ], "«En el banco: promo: logo» deja solo el círculo, centrado en un marco del formato elegido; se exporta lo de dentro del marco, al tamaño del formato (más pequeño si el marco en pantalla lo es: maximiza la ventana). Fuera de «promo», se exporta la escena sin los controles.")
+    ], "«En el banco: promo: logo» deja solo el círculo, centrado en un marco del formato elegido: una vista previa a escala. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), sin ampliar nada; la ventana sigue funcionando mientras. Fuera de «promo», se exporta la escena sin los controles.")
     section("Piezas", [NidaraDropDownRow("En el banco", "una a una, la sombra de una no cae sobre otra",
         state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
     section("Sistema", [NidaraToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,
@@ -948,17 +1049,22 @@ buildScene()
 bgWin.present()
 scene.present()
 const loop = GLib.MainLoop.new(null, false)
-if (SHOT && env("GLASS_LAB_VIDEO")) {
-    // Headless video (glass-lab.sh --headless OUT.png --video): the export, then quit; OUT.txt
-    // holds what it reported, which is also what the script waits for.
+if (SHOT && env("GLASS_LAB_EXPORT")) {
+    // Headless export (glass-lab.sh --headless OUT.png --export image|video [--size WxH]): the
+    // export, then quit. OUT.progress holds its progress (the window's «Exportar» reads it);
+    // OUT.txt its result, which is also what the script waits for.
+    const kind = env("GLASS_LAB_EXPORT")
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => {
-        exportVideo(m => {
+        const report = (m: string) => {
             print(m)
-            if (!m.startsWith("grabando") && !m.startsWith("preparando")) {
-                writeFile(SHOT.replace(/\.png$/, ".txt"), `${JSON.stringify(state)}\n${m}\n`)
-                loop.quit()
+            if (m.startsWith("grabando") || m.startsWith("preparando") || m.startsWith("capturando")) {
+                writeFile(SHOT.replace(/\.png$/, ".progress"), m)
+                return
             }
-        })
+            writeFile(SHOT.replace(/\.png$/, ".txt"), `${JSON.stringify(state)}\n${m}\n`)
+            loop.quit()
+        }
+        if (kind === "image") exportImage(report); else exportVideo(report)
         return GLib.SOURCE_REMOVE
     })
 } else if (SHOT) {
@@ -981,6 +1087,13 @@ if (SHOT && env("GLASS_LAB_VIDEO")) {
     // (Not the layer's margin or exclusive zone: Hyalo lays a layer anchored to both sides over
     // the whole output either way, seen nested 2026-10-05.)
     stageHolder.margin_end = CONTROLS_W
+    // A test of the window's «Exportar» without a pointer (GLASS_LAB_TEST_EXPORT=image|video): the
+    // native export as the button starts it, its result printed, then quit.
+    const test = env("GLASS_LAB_TEST_EXPORT")
+    if (test === "image" || test === "video") GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => {
+        exportNative(test, m => { print(`[export] ${m}`); if (!exporting && !m.startsWith("exportando")) loop.quit() })
+        return GLib.SOURCE_REMOVE
+    })
     fillControls()
     controlsWin.present()
 }

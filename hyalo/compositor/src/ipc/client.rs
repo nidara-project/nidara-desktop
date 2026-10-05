@@ -14,7 +14,7 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   outputs
   output <NAME> [enabled=on|off] [mode=WxH[@HZ]] [scale=S] [transform=T] [position=X,Y] [vrr=on|off]
   power on|off [NAME]             switch outputs on or off (DPMS); no NAME = all
-  screenshot PATH [NAME]          a PNG of one output (no NAME = the first)
+  screenshot PATH [NAME]          a PNG of one output (no NAME = the first); PATH.ppm: raw
   windows                         every window: id, app id, title, workspace, state, box
   workspaces                      every workspace: id, output, mode, shown
   layers                          the layer surfaces (bar, dock, panels), bottom first
