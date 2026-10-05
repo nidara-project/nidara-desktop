@@ -7,7 +7,7 @@
 #   options:  --preset FILE   start from a preset (what the window's «Guardar» writes)
 #             --bg NAME       the backdrop (blanco, negro, gris, "mitad blanco/negro", …)
 #             --show NAME     which pieces (todas, barra, "centro de control", avisos, …)
-#             --export KIND   with --headless: «image» or «video» of the promotional frame into the
+#             --export KIND   with --headless: «image» or «video» of whatever is on the bench into the
 #                             presets dir instead of the readings (the video: the drift, frame by
 #                             frame, «Duración del vídeo» from the preset)
 #             --size WxH      with --headless: the output's exact size (default 1280x720) — what

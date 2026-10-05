@@ -174,12 +174,15 @@ and a contrast reading taken in PIXELS (two captures: as drawn, and with the con
 `glass-lab.sh` opens it as a window; `--headless OUT.png` gives one capture and the readings
 without showing anything (`--bin`, `--preset`, `--bg`, `--show`; `GLASS_LAB_SHOT_DELAY` to wait
 longer; `--video` for a video instead). Presets live in `~/.local/share/nidara/glass-lab/`.
-**Promotional images and videos** (owner, 2026-10-05): «promo: logo» leaves one round pane with the
-Nidara mark alone, centred in a FRAME of the chosen format (16:9, 1:1, 4:5, 9:16 — everything
-outside it dark on screen). The frame is a PREVIEW at whatever scale the screen allows (a 9:16
-frame is 1390 px tall on a 1440 px screen): the backdrop is drawn inside it as the file draws it
-over its whole output, and the disc's size is px of the FILE, shown scaled. «Exportar» makes the
-file in a second lab, headless, whose output IS the format (`glass-lab.sh --headless … --export
+**Images and videos** (owner, 2026-10-05/06): EVERY export — whatever is on the bench — is cut to
+a FRAME of the chosen format (16:9, 1:1, 4:5, 9:16 — everything outside it dark on screen), and is
+never the window's size (until 2026-10-06 only «promo: logo» was; a scene exported from «todas»
+came out at the window's 2110×1250). The frame is a PREVIEW at whatever scale the screen allows (a
+9:16 frame is 1390 px tall on a 1440 px screen): the backdrop is drawn inside it as the file draws
+it over its whole output, and the pieces are laid out in a box the frame's size (`fitToFrame`) —
+at their own px, so in a preview smaller than the file they look larger than they will in it.
+«promo: logo» leaves one round pane with the Nidara mark alone; its size is px of the FILE, shown
+scaled. «Exportar» makes the file in a second lab, headless, whose output IS the format (`glass-lab.sh --headless … --export
 image|video --size 1080x1920`) — drawn natively, never enlarged — while the window goes on
 working; it reads the export's progress from a file beside it. The headless cage's output is
 1280×720 with no way to ask for another, so `--size` builds `output-mode.c` (a

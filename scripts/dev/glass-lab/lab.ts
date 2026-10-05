@@ -101,6 +101,7 @@ registerGlassMaterial({
         .glass-lab-tag { color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.55); border-radius: 4px;
                          padding: 1px 6px; font-size: 11px; }
         window.glass-lab-controls, window.glass-lab-controls scrolledwindow { background: #ececf0; color: #1d1d22; }
+        window.glass-lab-controls.dark, window.glass-lab-controls.dark scrolledwindow { background: #1f1f24; color: #ececf0; }
         .glass-lab-mark { color: var(--nidara-text); }
         .glass-lab-readout { font-family: monospace; font-size: 12px; }`)
     Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default()!, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
@@ -114,8 +115,8 @@ type Ink = "pieza" | "grupo" | "panel"
 const SHOWS = ["todas", "barra", "centro de control", "avisos", "botones y menú", "isla y dock", "panel grande",
     "promo: logo"] as const
 type Show = typeof SHOWS[number]
-// What a promotional export is cut to, and the size it is written at (never larger than the
-// frame on screen: a small lab window gives a smaller file, never an enlarged one).
+// What every export is cut to, and the size it is written at: drawn natively at that size, never
+// the window's.
 const FORMATS = { "16:9": [1920, 1080], "1:1": [1080, 1080], "4:5": [1080, 1350], "9:16": [1080, 1920] } as const
 type PromoFormat = keyof typeof FORMATS
 interface LabState {
@@ -126,7 +127,7 @@ interface LabState {
     driftSpeed: number             // × the drift's pace
     promoSize: number              // the promotional disc's diameter, px
     videoSeconds: number           // how long an exported video runs
-    promoFormat: PromoFormat       // the frame a promotional export is cut to
+    promoFormat: PromoFormat       // the frame every export is cut to (the name predates the scene's)
     ink: Ink
     show: Show
     tuning: Record<string, number> // glass-tuning.conf keys, only those off the factory value
@@ -142,10 +143,14 @@ function writeFile(path: string, text: string) {
     GLib.file_set_contents(path, text)
 }
 // The system's light/dark mode, which the kit's own controls follow (GSettings are in memory here).
+// The controls' window follows it too: the kit's text turns white in dark mode, and a light
+// window under it left that text unreadable.
 const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
+let controlsWinRef: Gtk.Window | null = null
 function apply() {
     const scheme = state.flags.dark === false ? "default" : "prefer-dark"
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
+    if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
     const lines = ["# written by glass-lab"]
     for (const [k, v] of Object.entries(state.tuning)) lines.push(`${k} = ${v}`)
     if (!state.flags.ink) lines.push("ink = off")
@@ -218,15 +223,13 @@ const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget
     vfunc_snapshot(snap: Gtk.Snapshot): void {
         const W = this.get_width(), H = this.get_height()
         if (W <= 0 || H <= 0) return
-        // The promotional frame is the backdrop's whole world: drawn inside it as the export draws
+        // The export's frame is the backdrop's whole world: drawn inside it as the export draws
         // it over its whole output, so what the frame shows is what the file shows.
         let x = 0, y = 0, w = W, h = H
-        if (state.show === "promo: logo") {
-            const r = stageRect()
-            if (r.w > 0 && r.h > 0) {
-                snap.append_color(BLACK, rect(0, 0, W, H))
-                x = r.x; y = r.y; w = r.w; h = r.h
-            }
+        const r = stageRect()
+        if (r.w > 0 && r.h > 0 && (r.w !== W || r.h !== H)) {
+            snap.append_color(BLACK, rect(0, 0, W, H))
+            x = r.x; y = r.y; w = r.w; h = r.h
         }
         snap.save()
         const at = new Graphene.Point(); at.init(x, y)
@@ -538,30 +541,51 @@ scene.set_name("nidara-bar")
 // it is resized — a size given once went stale the moment the window was maximised.
 const stageHolder = new Gtk.Overlay({ hexpand: true, vexpand: true })
 scene.set_child(stageHolder)
-const setSceneContent = (w: Gtk.Widget) => stageHolder.set_child(w)
+// The pieces sit in a box the frame's size (fitToFrame): their own margins stay theirs. An
+// OVERLAY, which the holder does not measure, and clipped: pieces wider than a narrow frame
+// (the whole scene in a 9:16 one) widened the holder, so the frame, so the margins — a loop
+// that grew until GSK could not allocate the drawing.
+const frameBox = new Gtk.Box({ hexpand: true, vexpand: true, overflow: Gtk.Overflow.HIDDEN })
+stageHolder.set_child(new Gtk.Box({ hexpand: true, vexpand: true }))
+stageHolder.add_overlay(frameBox)
+const setSceneContent = (w: Gtk.Widget) => {
+    const old = frameBox.get_first_child()
+    if (old) frameBox.remove(old)
+    w.hexpand = true; w.vexpand = true
+    frameBox.append(w)
+}
 
-/** What an export takes, in the scene's px: the promotional frame (the chosen format, fitted and
- *  centred in the scene's area), or the whole area beside the controls. */
+/** What an export takes, in the scene's px: the chosen format, fitted and centred in the area
+ *  beside the controls — whatever is on the bench. */
 function stageRect(): Box4 {
     const w = stageHolder.get_width(), h = stageHolder.get_height()
     // Headless, the output IS the format (glass-lab.sh --size): the frame is all of it.
-    if (state.show !== "promo: logo" || SHOT) return { x: 0, y: 0, w, h }
+    if (SHOT) return { x: 0, y: 0, w, h }
     const [fw, fh] = FORMATS[state.promoFormat], m = 24
     const k = Math.min(Math.max(1, w - 2 * m) / fw, Math.max(1, h - 2 * m) / fh)
     const sw = Math.floor(fw * k), sh = Math.floor(fh * k)
     return { x: Math.round((w - sw) / 2), y: Math.round((h - sh) / 2), w: sw, h: sh }
+}
+/** The pieces laid out inside the frame, as the export lays them out over its whole output: the
+ *  frame's shape, at the pieces' own px (a preview frame smaller than the file shows them larger
+ *  in it than the file will). */
+function fitToFrame() {
+    const r = stageRect(), w = stageHolder.get_width(), h = stageHolder.get_height()
+    if (r.w <= 0 || r.h <= 0) return
+    frameBox.margin_start = r.x; frameBox.margin_top = r.y
+    frameBox.margin_end = Math.max(0, w - r.x - r.w); frameBox.margin_bottom = Math.max(0, h - r.y - r.h)
 }
 // The frame on screen: everything outside it dimmed, a hairline just outside its edge — both
 // outside what an export takes.
 const frameGuide = new Gtk.DrawingArea({ can_target: false, hexpand: true, vexpand: true })
 let lastFrame = ""
 frameGuide.set_draw_func((_a, cr, w, h) => {
-    if (state.show !== "promo: logo") return
-    // The window was resized or the format changed: the disc and the backdrop follow the frame.
+    if (SHOT) return
+    // The window was resized or the format changed: the pieces and the backdrop follow the frame.
     const key = JSON.stringify(stageRect())
     if (key !== lastFrame) {
         lastFrame = key
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { sizePromo(); backdropArea?.queue_draw(); return GLib.SOURCE_REMOVE })
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { fitToFrame(); sizePromo(); backdropArea?.queue_draw(); return GLib.SOURCE_REMOVE })
     }
     const r = stageRect()
     cr.setFillRule(1 /* EVEN_ODD */)
@@ -720,17 +744,14 @@ const fmt = (r: Reading) =>
 const stamp = () => GLib.DateTime.new_now_local().format("%Y%m%d-%H%M%S")
 const even = (v: number) => Math.max(2, Math.floor(v / 2) * 2)
 
-/** The frame in a capture's pixels, and the size it is written at: a promotional format's
- *  standard size, smaller only when the frame on screen is (never enlarged); the plain scene's
- *  own size otherwise. Even sides, for H.264. */
+/** The frame in a capture's pixels, written at that size, never scaled: exports run headless on
+ *  an output that IS the format (exportNative), so the frame is the whole capture. Even sides,
+ *  for H.264. */
 function cut(captureWidth: number): { x: number, y: number, w: number, h: number, outW: number, outH: number } {
     const k = captureWidth / Math.max(1, scene.get_width())
     const r = stageRect()
     const x = Math.round(r.x * k), y = Math.round(r.y * k), w = even(r.w * k), h = even(r.h * k)
-    if (state.show !== "promo: logo") return { x, y, w, h, outW: w, outH: h }
-    const [fw, fh] = FORMATS[state.promoFormat]
-    const f = Math.min(1, w / fw)
-    return { x, y, w, h, outW: even(fw * f), outH: even(fh * f) }
+    return { x, y, w, h, outW: w, outH: h }
 }
 
 /** `cb` once the backdrop's next frame is painted (its frame clock's after-paint), or after 50 ms
@@ -747,7 +768,7 @@ function afterPaint(cb: () => void) {
 }
 
 /**
- * A promotional export at the format's own size: the window's frame is a preview, at whatever
+ * Every export at the format's own size, whatever is on the bench: the window's frame is a preview, at whatever
  * scale the screen allows (a 9:16 frame is 1390 px tall on a 1440 px screen), so the file is made
  * by a second lab, headless, whose output IS the format (glass-lab.sh --size 1080x1920) — drawn
  * natively, never enlarged. The window goes on working meanwhile; this reports its progress.
@@ -896,6 +917,7 @@ const D = GLASS_MATERIAL_DEFAULTS as Record<string, number>
 // A column on the right of the nested desktop, reserving its width so the scene never sits under it.
 const CONTROLS_W = 440
 const controlsWin = new Gtk.Window({ title: "Laboratorio de cristal", css_classes: ["glass-lab-controls"] })
+controlsWinRef = controlsWin
 Gtk4LayerShell.init_for_window(controlsWin)
 Gtk4LayerShell.set_namespace(controlsWin, "glass-lab-controls")
 Gtk4LayerShell.set_layer(controlsWin, Gtk4LayerShell.Layer.TOP)
@@ -961,15 +983,8 @@ function fillControls() {
         measure(`${GLib.get_tmp_dir()}/glass-lab-${GLib.get_monotonic_time()}`, r =>
             readout.set_label(r.length ? r.map(fmt).join("\n") : "no se pudo capturar (¿Hyalo sin `msg`?)"))
     })
-    const promo = () => state.show === "promo: logo"
-    exportBtn.connect("clicked", () => {
-        readout.set_label("capturando…")
-        if (promo()) exportNative("image", m => readout.set_label(m)); else exportImage(m => readout.set_label(m))
-    })
-    videoBtn.connect("clicked", () => {
-        readout.set_label("preparando el vídeo…")
-        if (promo()) exportNative("video", m => readout.set_label(m)); else exportVideo(m => readout.set_label(m))
-    })
+    exportBtn.connect("clicked", () => { readout.set_label("capturando…"); exportNative("image", m => readout.set_label(m)) })
+    videoBtn.connect("clicked", () => { readout.set_label("preparando el vídeo…"); exportNative("video", m => readout.set_label(m)) })
     const quit = NidaraButton({ label: "Salir" })
     quit.connect("clicked", () => loop.quit())
     const mrow = new Gtk.Box({ spacing: 8 }); mrow.append(measureBtn); mrow.append(exportBtn); mrow.append(quit)
@@ -985,14 +1000,14 @@ function fillControls() {
         NidaraSliderRow("Velocidad", "× del movimiento; también la del vídeo", state.driftSpeed, 0.25, 4,
             v => { state.driftSpeed = v }, { decimals: 2, debounce: 0 }),
     ])
-    section("Promoción", [
+    section("Exportar", [
         NidaraDropDownRow("Formato", "16:9 1920×1080 · 1:1 1080×1080 · 4:5 1080×1350 · 9:16 1080×1920",
             state.promoFormat, Object.keys(FORMATS), v => { state.promoFormat = v as PromoFormat; frameGuide.queue_draw(); backdropArea?.queue_draw() }),
         NidaraSliderRow("Tamaño del círculo", "px del archivo exportado; 72 = un icono de la cuadrícula de apps",
             state.promoSize, 32, 1024, v => { state.promoSize = v; sizePromo() }, { decimals: 0, debounce: 0 }),
         NidaraSliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
-    ], "«En el banco: promo: logo» deja solo el círculo, centrado en un marco del formato elegido: una vista previa a escala. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), sin ampliar nada; la ventana sigue funcionando mientras. Fuera de «promo», se exporta la escena sin los controles.")
+    ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El marco es una vista previa a escala: las piezas se ven en él a su tamaño real, así que en el archivo ocupan proporcionalmente menos. «promo: logo» deja solo el círculo, y su tamaño sí está a escala.")
     section("Piezas", [NidaraDropDownRow("En el banco", "una a una, la sombra de una no cae sobre otra",
         state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
     section("Sistema", [NidaraToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,
