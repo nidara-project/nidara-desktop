@@ -192,8 +192,29 @@ let sourceOff: (() => void) | null = null
 const entries = new Map<Gtk.Widget, Entry>()
 const scopes = new WeakMap<Gtk.Widget, Entry>()
 const natives = new Map<Gtk.Native, NativeState>()
-const byInkId = new Map<number, Entry>()
 let nextInkId = 1
+/** Containers whose panes of glass turn their ink together (`trackInkGroup`): their id. */
+const inkGroups = new WeakMap<Gtk.Widget, number>()
+
+/**
+ * Every pane of glass inside `widget` turns its ink together: ONE ink group for all of them,
+ * measured over all their content, instead of one per pane. Read when the surface sends its
+ * glass, so it holds for panes added later and needs nothing from the components inside.
+ * ⚠️ One surface: the compositor measures each surface on its own, so panes of one group on two
+ * surfaces could be told opposite things.
+ */
+export function trackInkGroup(widget: Gtk.Widget): void {
+    if (!inkGroups.has(widget)) inkGroups.set(widget, nextInkId++)
+}
+
+/** A pane's ink group: its nearest `trackInkGroup` container's, or its own. */
+function inkIdOf(e: Entry): number {
+    for (let w = e.widget.get_parent(); w; w = w.get_parent()) {
+        const id = inkGroups.get(w)
+        if (id !== undefined) return id
+    }
+    return e.inkId
+}
 
 /** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). */
 type ScrimRegion = { widget: Gtk.Widget, casts: boolean }
@@ -345,11 +366,10 @@ export function trackGlass(widget: Gtk.Widget, shapes: () => GlassShape[],
     const entry: Entry = { widget, scope, shapes, clientPaints: typeof cp === "function" ? cp : () => cp ?? false, native: null,
         inkId: nextInkId++, darkInk: false }
     entries.set(widget, entry)
-    byInkId.set(entry.inkId, entry)
     if (scope) scopes.set(scope, entry)
     widget.connect("map", () => attach(entry))
     widget.connect("unmap", () => detach(entry))
-    widget.connect("destroy", () => { detach(entry); entries.delete(widget); byInkId.delete(entry.inkId) })
+    widget.connect("destroy", () => { detach(entry); entries.delete(widget) })
     if (widget.get_mapped()) attach(entry)
 }
 
@@ -361,9 +381,10 @@ function load() {
             const wl = (mod.default ?? mod) as unknown as Shim
             if (!wl.init() || !wl.has_material?.()) return
             shim = wl
+            // Ids are the process's, never reused: every pane whose group it names turns.
             wl.material_set_ink_func?.((_surface, id, dark) => {
-                const e = byInkId.get(id)
-                if (e) setDarkInk(e, dark)
+                if (DEBUG) console.log(`[Material] ink event ${id} → ${dark ? "dark" : "light"}`)
+                for (const e of entries.values()) if (inkIdOf(e) === id) setDarkInk(e, dark)
             })
             const ink = wl.material_has_ink?.() ? ", ink" : wl.material_add_ink_box ? "" : " (old libnidara-wl: no ink)"
             console.log(`[Material] nidara-material-v1 ready${wl.material_add_shape_clipped ? "" : " (old libnidara-wl: no fades or clips)"}${ink}`)
@@ -616,7 +637,7 @@ function flush(native: Gtk.Native, st: NativeState) {
         const p = place(e, native, inkWanted !== null && !e.clientPaints())
         if (p.shapes.length && e.clientPaints()) anyClient = true
         placed.push(...p.shapes)
-        for (const box of p.boxes) inkBoxes.push({ id: e.inkId, box })
+        for (const box of p.boxes) inkBoxes.push({ id: inkIdOf(e), box })
     }
     // A surface whose glass is partly the client's own is blurred only: the compositor's
     // glass under a client's paint would be two panes in one.
