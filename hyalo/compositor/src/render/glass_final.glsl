@@ -18,7 +18,7 @@
 //           −1 = every contour keeps the corner's own radius (the fold, until 2026-10-05) MUL
 //   lab[12] bevel width cap: + to its 80 px                                           ADD
 //   lab[13] rim, the side opposite the light: × (1 + it) on its echo (0.70)           MUL
-//   lab[14] rim, the line all round: × (1 + it) on its floor (0.017)                  MUL
+//   lab[14] rim, the line all round: + to its floor (0; 0.18 until 2026-10-05)           ADD
 uniform vec4 region_fb;     // the captured region, framebuffer pixels
 uniform mat2 out_to_fb;     // output-pixel offsets → framebuffer-pixel offsets
 uniform vec4 rect;          // the shape, output pixels
@@ -253,11 +253,11 @@ void main() {
         a = clamp(a, alpha_min, alpha_max);
         c = mix(bg, tint, a);
     }
-    // Specular rim: a thin line of light along the edge, brightest where the edge faces the
-    // light (top-left) and again on the opposite side, almost nothing between — two highlights
-    // across a diagonal, as the reference material's (the lab, 2026-10-05: the echo 0.35 → 0.70,
-    // the line all round 0.18 → 0.017). No inner glow at rest: in the reference the light
-    // inside a pane is feedback to a press (#744); a glow along the edge was ours until then.
+    // Specular rim: a band of light along the edge where it faces the light (top-left) and again
+    // on the opposite side, nothing between — two highlights across a diagonal, as the reference
+    // material's (the lab, 2026-10-05: the echo 0.35 → 0.70, the line all round 0.18 → 0). No
+    // inner glow (owner, 2026-10-05: "the material has to be defined — without inner glow, then
+    // without inner glow"); in the reference the light inside a pane is feedback to a press (#744).
     vec2 light = normalize(vec2(-0.55, -0.85));
 #ifdef GLASS_LAB
     if (lab(8) != 0.0) {
@@ -265,10 +265,12 @@ void main() {
         light = vec2(cos(an) * light.x - sin(an) * light.y, sin(an) * light.x + cos(an) * light.y);
     }
 #endif
-    float edge = 1.0 - smoothstep(0.0, LAB_MUL(10, 1.6), inside);
+    // 6.4 px of fade inward (the owner's "OK 4", 2026-10-05; 1.6 until then): a band of light with
+    // thickness, not a hairline.
+    float edge = 1.0 - smoothstep(0.0, LAB_MUL(10, 6.4), inside);
     float facing = max(dot(n, light), 0.0);
     float back = max(dot(n, -light), 0.0);
-    float spec = edge * (LAB_MUL(14, 0.017) + 0.82 * facing * facing + LAB_MUL(13, 0.70) * back) * rim;
+    float spec = edge * (LAB_ADD(14, 0.0) + 0.82 * facing * facing + LAB_MUL(13, 0.70) * back) * rim;
 #ifdef GLASS_LAB
     // The inner glow there was until 2026-10-05: wider than the rim, brighter facing the light.
     if (lab(9) != 0.0) {

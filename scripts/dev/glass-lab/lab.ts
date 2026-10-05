@@ -1031,9 +1031,9 @@ function fillControls() {
         labSlider(5, "Refracción ×", "sobre la de fábrica (1)", 0, 3, 1),
         labSlider(6, "Dispersión de color", "0 = fábrica (ninguna); 1 = la de antes", 0, 4, 0),
         tuningSlider("rim", "Canto de luz", "", 0, 1.5),
-        labSlider(10, "Grosor del canto ×", "", 0.2, 4, 1),
+        labSlider(10, "Grosor del canto ×", "sobre el de fábrica (1 = 6,4 px)", 0.1, 3, 1),
         labSlider(13, "Canto: lado opuesto a la luz ×", "sobre el de fábrica (1)", 0, 3, 1),
-        labSlider(14, "Canto: línea en todo el contorno ×", "sobre la de fábrica (1); ≈10 = la de antes", 0, 12, 1),
+        labSlider(14, "Canto: línea en todo el contorno", "0 = fábrica (ninguna); 0,18 = la de antes", 0, 0.4, 0),
         labSlider(9, "Brillo interior", "0 = fábrica (ninguno); 1 = el de antes", 0, 3, 0),
         labSlider(8, "Ángulo de la luz", "grados, 0 = fábrica", -180, 180, 0, 0),
     ], "La escarcha (desenfoque) es la de los paneles del shell; tooltips y menús llevan un pase más.")
