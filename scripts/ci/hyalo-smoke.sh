@@ -604,5 +604,7 @@ phase_run() {
 case "${1:-all}" in
     run) phase_run ;;
     all) phase_deps; phase_build; phase_boot ;;
-    *)   echo "usage: $0 [all|run]" >&2; exit 2 ;;
+    # The build alone, exactly as `all` does it: what hyalo-cache.yml runs to warm main's cache.
+    build) phase_deps; phase_build ;;
+    *)   echo "usage: $0 [all|run|build]" >&2; exit 2 ;;
 esac
