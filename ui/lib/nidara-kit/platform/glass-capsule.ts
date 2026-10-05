@@ -46,7 +46,8 @@ import { compositorPaintsGlass, trackGlass } from "./material"
 //
 //   - On HYALO (our own compositor) neither applies: it draws the wallpaper under the lock
 //     surface and paints the glass itself. The capsule declares its pill (`trackGlass`) and,
-//     while `compositorPaintsGlass`, paints only the shadow and the focus ring
+//     while `compositorPaintsGlass`, paints only the focus ring — the edge is the compositor's,
+//     drop shadow included (owner, 2026-10-06)
 //     (hyalo/compositor/src/lock.rs, references/hyalo.md → "The lock screen").
 //
 // So: ONE painter, one shape, and the only thing that differs is where the pixels
@@ -378,7 +379,7 @@ export class GlassCapsule extends Gtk.Box {
       // to blur under it — the lock skips its own blur pass entirely.
       const solid = kitAppearance().reduceTransparency?.() === true
       // The compositor paints the body and the rim: what is left here is state (the focus
-      // ring) and the shadow — the shell's SquircleContainer does the same.
+      // ring) — no shadow, the shell's SquircleContainer says why.
       const compositors = compositorPaintsGlass(this)
       const texture = ok && !solid && !compositors ? backdropTexture(this, root.get_width(), root.get_height()) : null
 
@@ -418,7 +419,8 @@ export class GlassCapsule extends Gtk.Box {
         // the widget and GTK4 does not clip a widget to its allocation, so the falloff
         // costs the capsule no painted glass — unlike the shell, where `GLASS_INSET`
         // has to buy it.
-        {
+        // Not on the compositor's glass (SquircleContainer says why).
+        if (!compositors) {
           const m = GLASS_SHADOW.spread + 2
           const shadowBox = new Graphene.Rect()
           shadowBox.init(-m, -m, w + m * 2, h + m * 2)

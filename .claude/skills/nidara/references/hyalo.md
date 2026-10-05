@@ -78,7 +78,9 @@ numbers is the material's (`ui/lib/nidara-kit/platform/glass-material.ts`, regis
 on Hyprland nothing offers the protocol and all of it is a no-op.
 
 **A painter asks `compositorPaintsGlass(itsWidget)`** and, when true, paints only content and
-state — the accent fill, the hover/open veil, the shadow — never the body or the rim. The
+state — the accent fill, the hover/open veil — never the body, the rim, nor the 2 px drop shadow
+the same painters draw on Hyprland (`GLASS_SHADOW`: against the rim's band it read as a frame,
+owner 2026-10-06; design-system.md → "One recipe"). The
 painters that do: `SquircleContainer` (every pane with `useShellOpacity` and no explicit
 `alpha`), the dock's pill on both axes (`DockAxis.ts`), the island's morph clone
 (`MorphRevealer.glassShape`), the Notification Center's stacked-card bands, and tooltips and kit
