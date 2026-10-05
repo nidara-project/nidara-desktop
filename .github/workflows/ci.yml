@@ -504,10 +504,28 @@ jobs:
           scripts/ci/apt.sh install "linux-modules-extra-$(uname -r)"
           sudo modprobe vkms
           ls -l /dev/dri
+      # The Rust build is most of this job (≈ 6 of its 9 minutes on 2026-10-05: release 3m43s,
+      # clippy 52s, tests 1m15s) and it was cold every time. Cargo's registry and target dir
+      # live under hyalo/target (git-ignored) and are cached between runs. A PR can only
+      # restore a cache of its own branch or of main, and this workflow has no push trigger
+      # (see `on:`), so main's is warmed by hyalo-cache.yml. A stale cache is still correct:
+      # cargo rebuilds whatever its fingerprints say changed (a new Arch rustc: all of it).
+      - name: Restore the Rust build cache
+        uses: actions/cache@v4
+        with:
+          path: hyalo/target
+          key: hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-
+            hyalo-build-${{ runner.os }}-
       - name: Build + boot (Arch container on vkms)
         run: |
+          # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
+          # dev/test profiles (CI never debugs them): a cache several times smaller.
           docker run --rm --privileged \
             -v "$PWD:/repo" \
+            -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
+            -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
             archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
       - name: Upload screenshots + logs
         if: always()

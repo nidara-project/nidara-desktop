@@ -1,0 +1,44 @@
+# Warms the Rust build cache of CI's `hyalo` job on main — and does nothing else.
+#
+# A PR's workflow can restore a cache saved on its own branch or on main, never one saved by
+# another PR or by the merge queue (its refs are gh-readonly-queue/…). ci.yml deliberately runs
+# on no push to main (its `on:` says why), so without this every PR's Hyalo build started cold:
+# ≈ 6 minutes of compiling the same dependencies. This builds what that job builds, with the
+# same environment, in the same container, and saves hyalo/target under the same key family.
+# It tests nothing and gates nothing: the result is ci.yml's to prove.
+name: Hyalo build cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hyalo/**"
+      - "scripts/ci/hyalo-smoke.sh"
+      - ".github/workflows/hyalo-cache.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: hyalo-cache
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    name: Warm the Hyalo build cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: hyalo/target
+          key: hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-
+            hyalo-build-${{ runner.os }}-
+      - name: Build as ci.yml's hyalo job does (same container, same script, same environment)
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
+            -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
+            archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh build
