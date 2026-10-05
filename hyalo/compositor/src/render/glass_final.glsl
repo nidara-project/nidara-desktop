@@ -265,9 +265,10 @@ void main() {
         light = vec2(cos(an) * light.x - sin(an) * light.y, sin(an) * light.x + cos(an) * light.y);
     }
 #endif
-    // 6.4 px of fade inward (the owner's "OK 4", 2026-10-05; 1.6 until then): a band of light with
-    // thickness, not a hairline.
-    float edge = 1.0 - smoothstep(0.0, LAB_MUL(10, 6.4), inside);
+    // 3.2 px of fade inward: a band of light with thickness, not a hairline (1.6 until the owner's
+    // "OK 4", 2026-10-05), and not a frame either — 6.4 on the desktop read "too intense or wide",
+    // and the lab's side by side settled it (owner, 2026-10-06: "3.2 without the halo looks best").
+    float edge = 1.0 - smoothstep(0.0, LAB_MUL(10, 3.2), inside);
     float facing = max(dot(n, light), 0.0);
     float back = max(dot(n, -light), 0.0);
     float spec = edge * (LAB_ADD(14, 0.0) + 0.82 * facing * facing + LAB_MUL(13, 0.70) * back) * rim;

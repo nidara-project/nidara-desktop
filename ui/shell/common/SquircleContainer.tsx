@@ -272,12 +272,15 @@ export default function SquircleContainer({
         const { radius: drawRadius, n: drawN, perfect: drawPerfect } = resolveDrawParams(shape, radius, n, perfect, w, h)
 
         // On a compositor of our own the glass itself is the compositor's (#684): what is
-        // left here is state — the accent fill, the hover/open veil — and the shadow.
+        // left here is state — the accent fill, the hover/open veil.
         const glassIsCompositors = isGlass && compositorPaintsGlass(da)
 
         // The shadow goes down FIRST, outside the silhouette, in the room `techInset`
         // reserved for it above. Same geometry as the glass, so it tracks the shape.
-        if (shadow) {
+        // Not on the compositor's glass: there its 2 px dark ring sat against the rim's band of
+        // light and read as a drawn frame (owner, 2026-10-06, in the glass lab: "3.2 without the
+        // halo looks best"). The room stays reserved, so nothing moves.
+        if (shadow && !glassIsCompositors) {
             drawGlassShadow(
                 cr, techInset, techInset, w - techInset * 2, h - techInset * 2,
                 drawRadius, drawN, drawPerfect,

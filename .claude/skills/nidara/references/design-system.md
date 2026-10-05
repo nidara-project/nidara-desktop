@@ -2148,6 +2148,13 @@ on the bar, none inside another panel), and since 2026-08-24 **every greeter/loc
 exclusion inside those two surfaces is a notification banner's ACTION buttons: those genuinely sit
 inside a card.
 
+⚠️ **None of it is drawn on the compositor's glass (Hyalo).** There the edge belongs to Hyalo — its
+rim, a 3.2 px band of light — and the 2 px dark ring right outside it read as a drawn frame; the
+owner compared both in the glass lab and dropped it (2026-10-06: "3.2 without the halo looks best").
+Every painter skips the shadow while `compositorPaintsGlass` is true: `SquircleContainer`, the
+dock on both axes (`DockAxis.ts`), `GlassCapsule` and `paintGlassBubble`. The room `GLASS_INSET`
+reserves for it stays, so nothing moves. On Hyprland (frozen) it is drawn as before.
+
 🔑 **The pills were missed for six days because the rollout enumerated SURFACES and the pills are
 CONTROLS.** #244's list reads "the NC's notification cards and calendar island, Prism's wrapper,
 …" — nobody writing it thought of the `Editar` button as glass that floats, and it does: it hangs

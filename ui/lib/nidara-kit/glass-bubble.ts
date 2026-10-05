@@ -243,6 +243,10 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
 
     cr.setOperator(2) // OVER
 
+    // On a compositor of our own the glass is the compositor's, and so is its edge: no shadow
+    // either (owner, 2026-10-06 — the shell's SquircleContainer says why).
+    if (opts.glassWidget && compositorPaintsGlass(opts.glassWidget)) return
+
     // 0) DROP SHADOW
     const shM = GLASS_SHADOW.spread * 2 + 2
     drawShadowFromPath(
@@ -251,9 +255,6 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
         -shM, -shM, w + shM * 2, h + shM * 2,
         GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop,
     )
-
-    // On a compositor of our own the glass is the compositor's: the shadow was all.
-    if (opts.glassWidget && compositorPaintsGlass(opts.glassWidget)) return
 
     // 1) Glass fill — AA
     cr.save()

@@ -228,15 +228,16 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                     const dockAlpha = glassAlphaFor(gloss, "dock")
                     const dockColor = glassTintFor(gloss)
                     const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
+                    // On a compositor of our own the pill's glass is the compositor's (#684), and
+                    // so is its edge: no shadow either (SquircleContainer says why).
+                    if (compositorPaintsGlass(gloss)) return
                     // The pad is the `inset`, so the capsule lands where it always did; the
                     // shadow gets the ring the widget grew to hold it.
                     drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD,
                         w - DOCK_SHADOW_PAD * 2, _h - DOCK_SHADOW_PAD * 2,
                         (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
                         GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                    // On a compositor of our own the pill's glass is the compositor's (#684).
-                    if (!compositorPaintsGlass(gloss))
-                        drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
+                    drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
                 },
             })
             trackGlass(gloss, () => {
@@ -642,13 +643,14 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 // No layout change on this axis: `da` spans the surface and the capsule is
                 // placed by this translate, so the pad is absorbed here. Cairo clips a shadow
                 // that runs past the screen wall, which is where it would be invisible anyway.
+                // On a compositor of our own the pill's glass is the compositor's (#684), and so
+                // is its edge: no shadow either (SquircleContainer says why).
+                if (compositorPaintsGlass(da)) return
                 cr.translate(px - DOCK_SHADOW_PAD, py - DOCK_SHADOW_PAD)
                 drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD, pw, ph, pw / 2, 3.2, false,
                     GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                // On a compositor of our own the pill's glass is the compositor's (#684).
-                if (!compositorPaintsGlass(da))
-                    drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
-                        dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
+                drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
+                    dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
             }))
             const pillArea = da
             trackGlass(pillArea, () => {
