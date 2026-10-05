@@ -237,19 +237,20 @@ float sdf_box(vec2 px, vec2 half_size, float r) {
 // The shape's signed distance.
 float sdf(vec2 px) { return sdf_box(px, rect.zw * 0.5, radius); }
 
-// The outline moved `t` inward with the corners keeping their own radius (until the shape is
-// too thin for it): the bevel's contour at depth t.
+// The outline moved `t` inward, its corners rounder by as much (radius r + t, until the shape
+// is too thin for it): the bevel's contour at depth t. At t = 0 it is the corner itself.
 float inset_sdf(vec2 px, float t) {
     vec2 h = rect.zw * 0.5 - vec2(t);
-    return sdf_box(px, h, max(min(radius, min(h.x, h.y)), 0.0));
+    return sdf_box(px, h, max(min(radius + t, min(h.x, h.y)), 0.0));
 }
 
 // How deep into the bevel a point is: the t whose contour passes through it, up to w.
 float lens_depth(vec2 px, float w) {
     vec2 h = rect.zw * 0.5;
     vec2 q = abs(px - rect.xy - h);
-    float r = min(radius, min(h.x, h.y));
-    // Clear of every corner at every depth up to w: the distance to the nearest side.
+    float r = min(radius + w, min(h.x, h.y));
+    // Clear of every corner at every depth up to w (the deepest contour's is the roundest):
+    // the distance to the nearest side.
     if (q.x <= h.x - w - r || q.y <= h.y - w - r) return clamp(min(h.x - q.x, h.y - q.y), 0.0, w);
     if (inset_sdf(px, 0.0) >= 0.0) return 0.0;
     if (inset_sdf(px, w) < 0.0) return w;
@@ -330,7 +331,6 @@ void main() {
                   shape_sdf(v_out + vec2(0.0, 1.0)) - shape_sdf(v_out - vec2(0.0, 1.0)));
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0);
     float inside = max(-d, 0.0);
-    float band = max(min(radius, min(rect.z, rect.w) * 0.5), 1.0);
     // Refraction: the pane's edge is a convex bevel, a quarter circle W wide and W thick,
     // lying ON the backdrop. Looking straight down, a ray meets the bevel's slope at θ, bends
     // to asin(sin θ / 1.5) (glass's index, Snell) — INWARD — and crosses the glass's height h
@@ -346,26 +346,36 @@ void main() {
     // magnifies more (1.5 W: the dock's icons under the app grid's edge, four times their
     // height); past ≈1.7 W the far side of the peak displaces faster than 1 px per px and the
     // backdrop folds back on itself, mirrored.
-    float lens_w = max(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), 1.0);
-    // The bevel's contours are the OUTLINE moved inward, each corner keeping its own radius
-    // (`lens_depth`), so what bends follows the corner's curve at every depth and the corner
-    // itself bends. Two ways it was wrong first: the outline's own distance field (contours
-    // at radius r − t, a crease along the diagonal once the bevel is wider than the corner is
-    // round), then that field with corners max(r, W) round (2026-10-02), which bent along an
-    // arc W round INSIDE the true corner and left the corner itself flat — on the app grid an
-    // arc 108 px round inside a 32 px corner (owner-caught: "it bends along a curve of its own,
-    // not the corner's"). The cost: along a corner's diagonal the bevel is up to √2 W deep.
+    // And never wider than BEVEL_MAX: past it a pane is flat glass inside, as a slab is — the
+    // centre of a large pane frosts, only its edge bends (owner, the glass lab, 2026-10-05:
+    // with the bevel half the app grid's height the whole panel was one roof of four faces).
+    const float BEVEL_MAX = 80.0;
+    float lens_w = max(min(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), BEVEL_MAX), 1.0);
+    // The bevel's contours are the OUTLINE moved inward, each corner rounder by the depth
+    // (`inset_sdf`, `lens_depth`), so what bends follows the corner's curve at the edge and
+    // turns smoothly round it further in. Three ways it was wrong first: the outline's own
+    // distance field (contours at radius r − t, a crease along the diagonal once the bevel is
+    // wider than the corner is round); that field with corners max(r, W) round (2026-10-02),
+    // which bent along an arc W round INSIDE the true corner and left the corner itself flat —
+    // on the app grid an arc 108 px round inside a 32 px corner (owner-caught: "it bends along
+    // a curve of its own, not the corner's"); then every contour keeping the corner's own
+    // radius, whose normal still turned at once along the diagonal — a fold from each corner,
+    // "like a flap" (owner, 2026-10-05).
     float lens_in = lens_depth(v_out, lens_w);
     vec2 ln = vec2(inset_sdf(v_out + vec2(1.0, 0.0), lens_in) - inset_sdf(v_out - vec2(1.0, 0.0), lens_in),
                    inset_sdf(v_out + vec2(0.0, 1.0), lens_in) - inset_sdf(v_out - vec2(0.0, 1.0), lens_in));
     ln = length(ln) > 0.0001 && lens_in < lens_w ? normalize(ln) : vec2(0.0);
-    float v = 1.0 - clamp(lens_in / lens_w, 0.0, 1.0);
+    // The profile, then the strength, as the owner set them in the glass lab (2026-10-05,
+    // preset "OK 2"): the quarter circle's height to the 5th power — the bend gathers at the
+    // edge and the inside stays nearly flat — and three times Snell's displacement.
+    float v = pow(1.0 - clamp(lens_in / lens_w, 0.0, 1.0), 5.0);
     float q = max(1.0 - v * v, 1e-4);
     float theta = atan(v / sqrt(q));
     float bend = lens_w * sqrt(q) * tan(theta - asin(sin(theta) / 1.5));
-    vec2 off = -ln * bend;
-    // A little dispersion in the bend: red bends least, blue most.
-    vec3 bg = vec3(backdrop(off * 0.92).r, backdrop(off).g, backdrop(off * 1.08).b);
+    vec2 off = -ln * bend * 3.0;
+    // No dispersion: the colours bend together (the lab's preset; a red/blue fringe was the
+    // default until then).
+    vec3 bg = backdrop(off).rgb;
     // Vibrancy: the backdrop's colour, a little stronger.
     float l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
     bg = clamp(mix(vec3(l), bg, saturation), 0.0, 1.0);
@@ -396,15 +406,16 @@ void main() {
         c = mix(bg, tint, a);
     }
     // Specular rim: a thin line of light along the edge, brightest where the edge faces the
-    // light (top-left), a softer echo on the opposite side.
+    // light (top-left) and again on the opposite side, almost nothing between — two highlights
+    // across a diagonal, as the reference material's (the lab, 2026-10-05: the echo 0.35 → 0.70,
+    // the line all round 0.18 → 0.017). No inner glow at rest: in the reference the light
+    // inside a pane is feedback to a press (#744); a glow along the edge was ours until then.
     vec2 light = normalize(vec2(-0.55, -0.85));
     float edge = 1.0 - smoothstep(0.0, 1.6, inside);
     float facing = max(dot(n, light), 0.0);
     float back = max(dot(n, -light), 0.0);
-    float spec = edge * (0.18 + 0.82 * facing * facing + 0.35 * back) * rim;
-    // And a faint inner glow, wider, so the edge reads as thickness, not as a stroke.
-    float glow = (1.0 - smoothstep(0.0, band * 0.6, inside)) * (0.10 + 0.25 * facing) * rim;
-    c = c + (spec + glow) * (1.0 - c);
+    float spec = edge * (0.017 + 0.82 * facing * facing + 0.70 * back) * rim;
+    c = c + spec * (1.0 - c);
     gl_FragColor = vec4(c * cov, cov);
 }
 "#;

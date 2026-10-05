@@ -127,15 +127,21 @@ and `lensing` × the shape's shorter side wins where it is more, so a large pane
 a capsule without a number per surface. The edge is a **convex bevel lying on the backdrop**
 (`glass_gl.rs`): a quarter circle W wide and W thick, refraction by Snell at glass's 1.5, so the
 backdrop is read from INSIDE the shape — bent hard against the edge, a little magnified further
-in, never anything from beyond the outline. Its contours are the OUTLINE moved inward with each
-corner keeping its own radius (`lens_depth`, a bisection near the corners), so what bends follows
-the corner's curve at every depth. Neither shortcut does: the outline's own distance field
-creases along the diagonal once the bevel is wider than the corner is round, and that field with
-corners max(r, W) round bent along an arc W round inside a tighter corner and left the corner
-flat (the app grid: a 108 px arc in a 32 px corner, owner-caught 2026-10-02). The price is a
-bevel up to √2 W deep along a corner's diagonal. `refraction` is the bevel's most displacement
-(0.231 W, so W ≈ 4.3 × it, up to half the shorter side), and the capture region is the blur's
-reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
+in, never anything from beyond the outline. Its contours are the OUTLINE moved inward, each
+corner rounder by the depth (radius r + t: `inset_sdf`, `lens_depth` — a bisection near the
+corners), so what bends follows the corner's curve at the edge and turns smoothly round it further
+in. Three shortcuts did not: the outline's own distance field creases along the diagonal once the
+bevel is wider than the corner is round; that field with corners max(r, W) round bent along an
+arc W round inside a tighter corner and left the corner flat (the app grid: a 108 px arc in a
+32 px corner, owner-caught 2026-10-02); and every contour keeping the corner's own radius still
+turned its normal at once along the diagonal — a fold from each corner, "like a flap" on a wide
+bevel (owner, 2026-10-05). The price is a bevel up to √2 W deep along a corner's diagonal.
+W ≈ 4.3 × `refraction` (Snell's most displacement is 0.231 W), up to half the shorter side and
+never past `BEVEL_MAX` (80 px): beyond it a pane is flat glass inside, frosted, and only its
+edge bends — as in the reference material, where a large pane frosts more, not bends across.
+The profile and strength are the owner's from the glass lab (2026-10-05, preset "OK 2", #705):
+the quarter circle's height to the 5th power (the bend gathers at the edge) and three times
+Snell's displacement, no colour dispersion; the capture region is the blur's reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
 the peak displaces faster than 1 px per px and the backdrop folds back mirrored, and 1.5 W
 already magnified the dock's icons under the app grid's edge four times their height (measured
 nested, 2026-10-02 — W thick is the one kept). Until that day the edge read from OUTSIDE,
@@ -204,8 +210,9 @@ text keeps it white.
   `darkInkFor` first, so Cairo painters follow; the subtree is redrawn.
 - A group no longer declared keeps its decision on both ends (a panel reopens as it closed);
   `clear_ink` makes every group light on both ends.
-- Thresholds: `glass-material.ts` (0.80 / 0.65 to start), live in `glass-tuning.conf`
-  (`inkDarkAbove`, `inkLightBelow`, `ink = off`) — calibrated with the owner, not final.
+- Thresholds: `glass-material.ts` (0.35 / 0.25, the owner's in the glass lab, 2026-10-05 — 0.80
+  never turned a page of text: its black letters are always the darkest point under the text),
+  live in `glass-tuning.conf` (`inkDarkAbove`, `inkLightBelow`, `ink = off`).
   `NIDARA_MATERIAL_DEBUG=1` logs every ink decision.
 - To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
   backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.

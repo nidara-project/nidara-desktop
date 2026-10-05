@@ -24,8 +24,10 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  * The tint's rule is the adaptive glass's on Hyprland, held by the same two numbers: primary
  * text at 4.5:1, and no thicker than its ceiling. Over pure white that is the tint at ≈0.59.
  *
- * ⚠️ The other numbers are the prototype's (#679), not calibrated: #684 tunes them with the owner
- * on screen. For that, a dev install (`~/.config/nidara/.dev`) reads
+ * The glass's own numbers — refraction, lensing, rim, saturation, the least tint, the ink's
+ * thresholds — are the owner's, tuned in the glass lab (`scripts/dev/glass-lab/`, 2026-10-05,
+ * preset "OK 2", #705) together with the shader's (hyalo's `glass_gl.rs`). The shadow's are
+ * still those of 2026-10-02: how the shadow applies is undecided (#705). To tune live, a dev install (`~/.config/nidara/.dev`) reads
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
@@ -68,26 +70,32 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  */
 
 const DEFAULTS = {
-    alphaMin: 0.12,       // the least tint, over a dark backdrop
+    // The least tint, over a dark backdrop: none — the glass darkens only where the backdrop is
+    // too bright for white text (the lab, 2026-10-05; 0.12 before).
+    alphaMin: 0,
     alphaMax: GLASS_ADAPT_CEILING,   // the most, over the brightest
     // The backdrop's WCAG luminance (linear) after tint ≤ this: white text at 4.5:1.
     target: 1.05 / LEGIBILITY_TARGET.primary - 0.05,
-    // Logical px: the most the edge's bevel displaces the backdrop, inward — every shape's
-    // least. The bevel is ≈4.3× as wide (hyalo's glass_gl.rs), up to half the shape's shorter
-    // side: a bar capsule (28 px) is lens all across and moves ≈3 px, the dock 10.
-    refraction: 10,
-    // A fraction of the shape's shorter side, where that is more: a large pane lenses more
-    // than a small control. 0.03 (2026-10-02, measured nested over a grid): only the big panes
-    // pass the least — the app grid (834 px) 25, a bevel ≈108 px wide. 0.15 was set for the
-    // old edge that read from OUTSIDE the shape; on the bevel it turned the app grid into one
-    // magnifier, with the dock's icons under its edge smeared four times their height.
-    lensing: 0.03,
-    rim: 0.7,
-    saturation: 1.35,
-    // ≈ #e7e7e7 at the darkest point under the text: only a white page or window turns it.
-    inkDarkAbove: 0.80,
-    // ≈ #d3d3d3: the gap is the hysteresis, so a backdrop on the line does not flicker.
-    inkLightBelow: 0.65,
+    // Logical px, every shape's least: what sets the bevel's width (≈4.3× this, hyalo's
+    // glass_gl.rs), held to half the shape's shorter side and to 80 px (`BEVEL_MAX`). At 40 the
+    // bevel is as wide as it may be on every shape: a bar capsule is lens all across, a large
+    // pane bends over its outer 80 px and is flat inside. The shader's profile (5th power) and
+    // strength (×3) do the rest.
+    refraction: 40,
+    // A fraction of the shape's shorter side, where that is more than `refraction`: a large
+    // pane lenses more than a small control — up to `BEVEL_MAX`. 0.15 turned the app grid into
+    // one magnifier on 2026-10-02 and was dropped to 0.03; the cap made it safe again (the lab,
+    // 2026-10-05).
+    lensing: 0.15,
+    rim: 0.5,
+    saturation: 1.25,
+    // The darkest point under the text, as the glass treats the backdrop: past this the text
+    // turns dark. 0.35 (the lab, 2026-10-05; 0.80 before): a page of text behind the glass —
+    // always black letters under it — turns it too, and the pane reads as clear glass with
+    // dark text over the blurred page instead of a grey slab with white text on it.
+    inkDarkAbove: 0.35,
+    // The gap is the hysteresis, so a backdrop on the line does not flicker.
+    inkLightBelow: 0.25,
     // The shadow's opacity at its core, at most. Pure white needs ≈0.41 with the glass at
     // `tintLimit`; past this the text is less legible, not the glass greyer.
     scrimMax: 0.6,
