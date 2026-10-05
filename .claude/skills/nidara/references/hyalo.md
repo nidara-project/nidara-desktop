@@ -184,6 +184,11 @@ text keeps it white.
   the workspace dots — except the glass's own painter, through the same transforms and clips as
   the shapes. More than 8 → their union (stricter, never looser). A type list (labels, images)
   missed the CSS-painted dots: the island's capsule stayed dark while everything else turned.
+- 🔴 **The `ink` event is v1, like the whole protocol.** Until 2026-10-05 Hyalo sent it only to a
+  client bound at version ≥ 3 — a leftover from before the protocol was folded back into v1 — so it
+  reached NOBODY, while the glass still wore the light veil: with the factory ink on, white text on
+  a white veil, invisible over a white backdrop (hidden on the dev machine by `ink = off`). A version
+  test on a v1 global is dead code that still decides.
 - **Measured by Hyalo (`add_ink_box`, `set_ink`, event `ink`).** In the glass's
   draw, when the capture or the boxes changed: one small pass samples a 12×12 grid of the blurred
   copy per box into a 64×1 target (one texel per box, the minimum as two bytes), read into a
