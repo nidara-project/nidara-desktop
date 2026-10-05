@@ -184,8 +184,10 @@ working; it reads the export's progress from a file beside it. The headless cage
 wlr-output-management client, in the sandbox) and sets it; `cage -d`, or a client-side frame
 round Hyalo's window takes 8×32 px off it. A video is made FRAME BY FRAME — the drift is a
 function of time (`driftTo`), set to each frame's, captured through `msg screenshot` and piped to
-ffmpeg (H.264, 60 fps) — so it is smooth however slowly the frames come (a 1 s 1080×1920 video
-takes ≈ 40 s). The lab's nested Hyalo has no idle: with the defaults it went dark at five minutes
+ffmpeg (H.264, 60 fps) — so it is smooth however slowly the frames come. Each frame is asked as
+a raw `.ppm` (`msg screenshot` writes a binary PPM for that extension) once the backdrop's frame
+clock has painted it: a PNG cost 541 ms a frame at 1080×1920, almost all compression, and a
+fixed 60 ms wait more. Measured on a 3 s 9:16 video: 106 s → 14 s, ≈ 171 → 34 core-seconds. The lab's nested Hyalo has no idle: with the defaults it went dark at five minutes
 and would have started the lock screen inside itself at ten. It never reaches the session it runs
 in: Hyalo nested with `HYALO_CONFIG=/dev/null`, a HOME of its own (the material reads
 `~/.config/nidara/glass-tuning.conf`, so a lab with the real HOME shows the owner's tuning, not

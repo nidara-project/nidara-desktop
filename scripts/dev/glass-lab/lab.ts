@@ -733,6 +733,19 @@ function cut(captureWidth: number): { x: number, y: number, w: number, h: number
     return { x, y, w, h, outW: even(fw * f), outH: even(fh * f) }
 }
 
+/** `cb` once the backdrop's next frame is painted (its frame clock's after-paint), or after 50 ms
+ *  if it has no clock — never stalled by a frame that does not come. */
+function afterPaint(cb: () => void) {
+    let fired = false
+    const go = () => { if (fired) return; fired = true; GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { cb(); return GLib.SOURCE_REMOVE }) }
+    const clock = backdropArea?.get_frame_clock()
+    if (clock) {
+        const id = clock.connect("after-paint", () => { clock.disconnect(id); go() })
+        backdropArea!.queue_draw()
+    }
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { go(); return GLib.SOURCE_REMOVE })
+}
+
 /**
  * A promotional export at the format's own size: the window's frame is a preview, at whatever
  * scale the screen allows (a 9:16 frame is 1390 px tall on a 1440 px screen), so the file is made
@@ -799,7 +812,10 @@ function exportVideo(report: (s: string) => void) {
     if (recording) return
     const FPS = 60, frames = Math.max(1, Math.round(state.videoSeconds * FPS))
     const out = `${PRESETS}/video-${stamp()}.mp4`
-    const frame = `${GLib.get_tmp_dir()}/glass-lab-frame-${GLib.get_monotonic_time()}.png`
+    // Raw (Hyalo writes a binary PPM for a .ppm path): a PNG cost 541 ms a frame to compress at
+    // 1080×1920 and ffmpeg more to undo it. An older Hyalo writes a PNG under that name, which
+    // ffmpeg and GdkPixbuf still read by its content — slower, not wrong.
+    const frame = `${GLib.get_tmp_dir()}/glass-lab-frame-${GLib.get_monotonic_time()}.ppm`
     let ff: Gio.Subprocess | null = null
     let pipe: Gio.OutputStream | null = null
     let size = ""
@@ -823,7 +839,7 @@ function exportVideo(report: (s: string) => void) {
         try {
             ff = Gio.Subprocess.new(["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", `${FPS}`,
                 "-i", "-", "-vf", `crop=${c.w}:${c.h}:${c.x}:${c.y},scale=${c.outW}:${c.outH}:flags=lanczos`,
-                "-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
+                "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
                 Gio.SubprocessFlags.STDIN_PIPE)
             pipe = ff.get_stdin_pipe()
             return true
@@ -832,8 +848,9 @@ function exportVideo(report: (s: string) => void) {
     const step = (i: number) => {
         if (i >= frames) { done(`vídeo: ${frames} fotogramas, ${state.videoSeconds} s`); return }
         driftTo(i / FPS)
-        // Two frames: GTK paints the backdrop, the compositor composes the glass over it.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 60, () => {
+        // Once GTK has painted (and committed) the backdrop at this time: the capture draws the
+        // scene again from the surfaces as they are, glass included. Not a fixed wait.
+        afterPaint(() => {
             screenshot(frame, ok => {
                 if (!ok) { done(`captura fallida en el fotograma ${i}`); return }
                 try {
@@ -845,7 +862,6 @@ function exportVideo(report: (s: string) => void) {
                 if (i % 30 === 0) report(`grabando… ${i}/${frames} (${size})`)
                 step(i + 1)
             })
-            return GLib.SOURCE_REMOVE
         })
     }
     step(0)

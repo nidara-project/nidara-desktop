@@ -129,7 +129,8 @@ pub fn tty_rescan_all(state: &mut Hyalo) {
     }
 }
 
-/// A PNG of one output (`None` = the first), drawn again offscreen.
+/// A picture of one output (`None` = the first), drawn again offscreen: a PNG, or a binary PPM
+/// when the path ends in `.ppm` (screenshot.rs, `write_ppm`).
 pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Path) -> Result<(), String> {
     let output = state
         .space
@@ -138,7 +139,11 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
     let (w, h, rgba) = capture_output(state, &output, false)?;
-    crate::screenshot::write_png(path, w, h, &rgba)
+    if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ppm")) {
+        crate::screenshot::write_ppm(path, w, h, &rgba)
+    } else {
+        crate::screenshot::write_png(path, w, h, &rgba)
+    }
 }
 
 /// The pointer as the screen shows it on `output`, for a capture that includes it: None when
