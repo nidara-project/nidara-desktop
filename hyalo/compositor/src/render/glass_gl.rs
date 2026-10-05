@@ -23,7 +23,11 @@
 //! without alpha) can feed. A 10-bit framebuffer would need a 10-bit texture; the DRM backend
 //! asks for 8-bit formats only for that reason.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+    rc::Rc,
+};
 
 use smithay::{
     backend::renderer::gles::ffi::{self, Gles2},
@@ -196,228 +200,26 @@ void main() {
 }
 "#;
 
-const FS_FINAL_MAIN: &str = r#"
-uniform vec4 region_fb;     // the captured region, framebuffer pixels
-uniform mat2 out_to_fb;     // output-pixel offsets → framebuffer-pixel offsets
-uniform vec4 rect;          // the shape, output pixels
-uniform float radius;
-uniform float exponent;
-uniform float opacity;      // the whole glass in this shape, over the plain backdrop
-uniform vec4 clip;          // what of the shape may show, output px: x, y, w, h
-uniform float glass;        // 1: refractive glass — the compositor paints the whole glass
-uniform vec3 tint;
-uniform float alpha_min;
-uniform float alpha_max;
-uniform float target;
-uniform float refraction;   // output px
-uniform float rim;
-uniform float saturation;
-uniform float ink_dark;     // 1: this shape holds dark content (the ink event)
-uniform vec3 ink_tint;
-uniform float has_pointer;  // 1: a pointer is spliced into the shape (a tooltip, a menu)
-uniform vec2 ptr_a;         // the pointer's triangle, inset by its tip radius, output px
-uniform vec2 ptr_b;
-uniform vec2 ptr_t;
-uniform float ptr_tip_r;
-uniform float ptr_base_r;
-varying vec2 v_out;
-varying vec2 v_fb;
+const FS_FINAL_MAIN: &str = include_str!("glass_final.glsl");
 
-// A box of half size `half_size` centred on the shape, corners of radius `r`: signed
-// distance in output pixels, negative inside.
-float sdf_box(vec2 px, vec2 half_size, float r) {
-    vec2 q = abs(px - rect.xy - rect.zw * 0.5);
-    vec2 inner = half_size - vec2(r);
-    if (q.x > inner.x && q.y > inner.y && r > 0.0) {
-        vec2 k = (q - inner) / r;
-        return (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * r;
-    }
-    return max(q.x - half_size.x, q.y - half_size.y);
+/// The glass shader's LAB hooks (glass_final.glsl), as Hyalo ships them: every hook is its
+/// value and every `#ifdef GLASS_LAB` block is compiled out — the arithmetic is the shader's
+/// alone. The glass lab (scripts/dev/glass-lab) runs the SAME file with `LAB_ON` instead
+/// (HYALO_SHADER_DIR), so what it shows at its neutral values is the factory glass, and a
+/// change to the glass is a change the lab sees with no copy to keep in step.
+const LAB_OFF: &str = "#define LAB_ADD(i, x) (x)\n#define LAB_MUL(i, x) (x)\n";
+/// The lab's: 16 values from lab_params.conf, each 0 where it changes nothing. `LAB_ADD`
+/// adds the value; `LAB_MUL` scales by 1 + it; a block runs only where its value is not 0.
+const LAB_ON: &str = r#"#define GLASS_LAB 1
+uniform vec4 lab_params[4];
+float lab(int i) {
+    int r = i / 4;
+    int c = i - r * 4;
+    vec4 v = r == 0 ? lab_params[0] : r == 1 ? lab_params[1] : r == 2 ? lab_params[2] : lab_params[3];
+    return c == 0 ? v.x : c == 1 ? v.y : c == 2 ? v.z : v.w;
 }
-// The shape's signed distance.
-float sdf(vec2 px) { return sdf_box(px, rect.zw * 0.5, radius); }
-
-// The outline moved `t` inward, its corners rounder by as much (radius r + t, until the shape
-// is too thin for it): the bevel's contour at depth t. At t = 0 it is the corner itself.
-float inset_sdf(vec2 px, float t) {
-    vec2 h = rect.zw * 0.5 - vec2(t);
-    return sdf_box(px, h, max(min(radius + t, min(h.x, h.y)), 0.0));
-}
-
-// How deep into the bevel a point is: the t whose contour passes through it, up to w.
-float lens_depth(vec2 px, float w) {
-    vec2 h = rect.zw * 0.5;
-    vec2 q = abs(px - rect.xy - h);
-    float r = min(radius + w, min(h.x, h.y));
-    // Clear of every corner at every depth up to w (the deepest contour's is the roundest):
-    // the distance to the nearest side.
-    if (q.x <= h.x - w - r || q.y <= h.y - w - r) return clamp(min(h.x - q.x, h.y - q.y), 0.0, w);
-    if (inset_sdf(px, 0.0) >= 0.0) return 0.0;
-    if (inset_sdf(px, w) < 0.0) return w;
-    float lo = 0.0;
-    float hi = w;
-    for (int i = 0; i < 12; i++) {
-        float m = 0.5 * (lo + hi);
-        if (inset_sdf(px, m) < 0.0) lo = m; else hi = m;
-    }
-    return 0.5 * (lo + hi);
-}
-
-// WCAG relative luminance of an sRGB-encoded colour (glass-legibility.ts's `luminance`).
-float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
-float luminance(vec3 c) {
-    return 0.2126 * to_linear(c.r) + 0.7152 * to_linear(c.g) + 0.0722 * to_linear(c.b);
-}
-
-// A triangle's signed distance (Inigo Quilez's, exact): negative inside, either winding.
-float sd_triangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
-    vec2 e0 = p1 - p0, e1 = p2 - p1, e2 = p0 - p2;
-    vec2 v0 = p - p0, v1 = p - p1, v2 = p - p2;
-    vec2 pq0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.0, 1.0);
-    vec2 pq1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.0, 1.0);
-    vec2 pq2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.0, 1.0);
-    float s = sign(e0.x * e2.y - e0.y * e2.x);
-    vec2 d = min(min(vec2(dot(pq0, pq0), s * (v0.x * e0.y - v0.y * e0.x)),
-                     vec2(dot(pq1, pq1), s * (v1.x * e1.y - v1.y * e1.x))),
-                     vec2(dot(pq2, pq2), s * (v2.x * e2.y - v2.y * e2.x)));
-    return -sqrt(d.x) * sign(d.y);
-}
-
-// The whole silhouette: the shape, and its pointer if it has one — the inset triangle grown
-// back by the tip radius (a round tip, straight sides where they were), joined to the body
-// by a concave arc of the base radius (hg_sdf's round union).
-float shape_sdf(vec2 px) {
-    float d = sdf(px);
-    if (has_pointer > 0.5) {
-        float p = sd_triangle(px, ptr_a, ptr_b, ptr_t) - ptr_tip_r;
-        vec2 u = max(vec2(ptr_base_r - d, ptr_base_r - p), vec2(0.0));
-        d = max(ptr_base_r, min(d, p)) - length(u);
-    }
-    return d;
-}
-
-uniform float noise;
-uniform float brightness;
-float noise_hash(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 1689.1984);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
-
-// Framebuffer pixels → the blurred copy (level 1, half size).
-vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
-vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
-
-void main() {
-    float d = shape_sdf(v_out);
-    // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased.
-    vec2 cin = min(v_out - clip.xy, clip.xy + clip.zw - v_out);
-    float clipped = clamp(min(cin.x, cin.y) + 0.5, 0.0, 1.0);
-    float cov = clamp(0.5 - d, 0.0, 1.0) * clipped * opacity;
-    if (cov <= 0.0) discard;
-    if (glass < 0.5) {
-        vec4 c = backdrop(vec2(0.0));
-        // Hyprland's blurFinish: noise, then its brightness (a window's backdrop; 0 and 1 for
-        // the shell's blur-only surfaces).
-        c.rgb += (noise_hash(v_out) - 0.5) * noise;
-        c.rgb *= min(1.0, brightness);
-        gl_FragColor = vec4(c.rgb * cov, cov);
-        return;
-    }
-
-    // ── Refractive glass ──────────────────────────────────────────────────
-    // The outward normal, from the distance field.
-    vec2 n = vec2(shape_sdf(v_out + vec2(1.0, 0.0)) - shape_sdf(v_out - vec2(1.0, 0.0)),
-                  shape_sdf(v_out + vec2(0.0, 1.0)) - shape_sdf(v_out - vec2(0.0, 1.0)));
-    n = length(n) > 0.0001 ? normalize(n) : vec2(0.0);
-    float inside = max(-d, 0.0);
-    // Refraction: the pane's edge is a convex bevel, a quarter circle W wide and W thick,
-    // lying ON the backdrop. Looking straight down, a ray meets the bevel's slope at θ, bends
-    // to asin(sin θ / 1.5) (glass's index, Snell) — INWARD — and crosses the glass's height h
-    // there, so it lands h·tan(θ − θr) further in. The backdrop is read from INSIDE the shape,
-    // never beyond it: hard against the edge the slope is steepest and lines bend; further in
-    // the bevel flattens and the backdrop is magnified a little, then nothing. Until
-    // 2026-10-02 the edge read from OUTSIDE, (1 − t)² × refraction over a band the corner's
-    // radius wide — and once refraction grew with the shape (125 px on the app grid, its
-    // band still 32), 157 px of backdrop were squeezed into 32: a window under the grid
-    // showed whole and shrunk, wallpaper round it (owner-caught: "an inverted magnifier").
-    // `refraction` is the most the bevel displaces: 0.231 W at W thick, so W follows from
-    // it — up to half the shape's shorter side, where the whole shape is lens. Thicker
-    // magnifies more (1.5 W: the dock's icons under the app grid's edge, four times their
-    // height); past ≈1.7 W the far side of the peak displaces faster than 1 px per px and the
-    // backdrop folds back on itself, mirrored.
-    // And never wider than BEVEL_MAX: past it a pane is flat glass inside, as a slab is — the
-    // centre of a large pane frosts, only its edge bends (owner, the glass lab, 2026-10-05:
-    // with the bevel half the app grid's height the whole panel was one roof of four faces).
-    const float BEVEL_MAX = 80.0;
-    float lens_w = max(min(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), BEVEL_MAX), 1.0);
-    // The bevel's contours are the OUTLINE moved inward, each corner rounder by the depth
-    // (`inset_sdf`, `lens_depth`), so what bends follows the corner's curve at the edge and
-    // turns smoothly round it further in. Three ways it was wrong first: the outline's own
-    // distance field (contours at radius r − t, a crease along the diagonal once the bevel is
-    // wider than the corner is round); that field with corners max(r, W) round (2026-10-02),
-    // which bent along an arc W round INSIDE the true corner and left the corner itself flat —
-    // on the app grid an arc 108 px round inside a 32 px corner (owner-caught: "it bends along
-    // a curve of its own, not the corner's"); then every contour keeping the corner's own
-    // radius, whose normal still turned at once along the diagonal — a fold from each corner,
-    // "like a flap" (owner, 2026-10-05).
-    float lens_in = lens_depth(v_out, lens_w);
-    vec2 ln = vec2(inset_sdf(v_out + vec2(1.0, 0.0), lens_in) - inset_sdf(v_out - vec2(1.0, 0.0), lens_in),
-                   inset_sdf(v_out + vec2(0.0, 1.0), lens_in) - inset_sdf(v_out - vec2(0.0, 1.0), lens_in));
-    ln = length(ln) > 0.0001 && lens_in < lens_w ? normalize(ln) : vec2(0.0);
-    // The profile, then the strength, as the owner set them in the glass lab (2026-10-05,
-    // preset "OK 2"): the quarter circle's height to the 5th power — the bend gathers at the
-    // edge and the inside stays nearly flat — and three times Snell's displacement.
-    float v = pow(1.0 - clamp(lens_in / lens_w, 0.0, 1.0), 5.0);
-    float q = max(1.0 - v * v, 1e-4);
-    float theta = atan(v / sqrt(q));
-    float bend = lens_w * sqrt(q) * tan(theta - asin(sin(theta) / 1.5));
-    vec2 off = -ln * bend * 3.0;
-    // No dispersion: the colours bend together (the lab's preset; a red/blue fringe was the
-    // default until then).
-    vec3 bg = backdrop(off).rgb;
-    // Vibrancy: the backdrop's colour, a little stronger.
-    float l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
-    bg = clamp(mix(vec3(l), bg, saturation), 0.0, 1.0);
-    l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
-    // The tint thickens exactly where the backdrop is too bright for white content:
-    // after tinting, the luminance does not exceed target (per pixel; #673's rule, on the GPU).
-    // target is a WCAG relative luminance — LINEAR light — while the tint is mixed into the
-    // encoded colour, so the least alpha is searched for, not solved for. Comparing the
-    // ENCODED luma with it darkened a white backdrop to 10:1 where 4.5:1 was asked (owner-
-    // caught 2026-10-01: "with a white background everything looks dark").
-    vec3 c;
-    if (ink_dark > 0.5) {
-        // Dark content (the ink event): the backdrop under it is bright everywhere, so the
-        // glass stops darkening it for white content — a light veil instead.
-        c = mix(bg, ink_tint, alpha_min);
-    } else {
-        float a = 0.0;
-        if (luminance(bg) > target) {
-            float lo = 0.0;
-            float hi = alpha_max;
-            for (int i = 0; i < 8; i++) {
-                float m = 0.5 * (lo + hi);
-                if (luminance(mix(bg, tint, m)) > target) lo = m; else hi = m;
-            }
-            a = hi;
-        }
-        a = clamp(a, alpha_min, alpha_max);
-        c = mix(bg, tint, a);
-    }
-    // Specular rim: a thin line of light along the edge, brightest where the edge faces the
-    // light (top-left) and again on the opposite side, almost nothing between — two highlights
-    // across a diagonal, as the reference material's (the lab, 2026-10-05: the echo 0.35 → 0.70,
-    // the line all round 0.18 → 0.017). No inner glow at rest: in the reference the light
-    // inside a pane is feedback to a press (#744); a glow along the edge was ours until then.
-    vec2 light = normalize(vec2(-0.55, -0.85));
-    float edge = 1.0 - smoothstep(0.0, 1.6, inside);
-    float facing = max(dot(n, light), 0.0);
-    float back = max(dot(n, -light), 0.0);
-    float spec = edge * (0.017 + 0.82 * facing * facing + 0.70 * back) * rim;
-    c = c + spec * (1.0 - c);
-    gl_FragColor = vec4(c * cov, cov);
-}
+#define LAB_ADD(i, x) ((x) + lab(i))
+#define LAB_MUL(i, x) ((x) * (1.0 + lab(i)))
 "#;
 
 /// The darkest and brightest WCAG luminance under one box (`nidara-material-v1`), from
@@ -605,6 +407,7 @@ impl Finish {
     pub const NEUTRAL: Finish = Finish { contrast: 1.0, brightness: 1.0, vibrancy: 0.0, vibrancy_darkness: 0.0, noise: 0.0 };
 }
 
+#[derive(Clone, Copy)]
 pub(super) struct Program {
     pub(super) id: u32,
     pub(super) pos: u32,
@@ -616,12 +419,38 @@ impl Program {
     }
 }
 
+struct DevShaderState {
+    dir: PathBuf,
+    shader_mtime: Cell<Option<std::time::SystemTime>>,
+    params_mtime: Cell<Option<std::time::SystemTime>>,
+    params: Cell<[f32; 16]>,
+}
+
+/// `lab_params.conf` (development only, beside the shader HYALO_SHADER_DIR names): lines
+/// `lab[i] = value`, i in 0..16, to `LAB_ON`'s `uniform vec4 lab_params[4]`. What each index
+/// means is glass_final.glsl's own header; unknown lines
+/// are skipped, so a half-written file applies what it can.
+fn parse_lab_params(src: &str) -> [f32; 16] {
+    let mut params = [0.0f32; 16];
+    for line in src.lines() {
+        let line = line.split('#').next().unwrap_or("").trim();
+        let Some((key, val)) = line.split_once('=') else { continue };
+        let Some(idx) = key.trim().strip_prefix("lab[").and_then(|k| k.strip_suffix(']')) else { continue };
+        if let (Ok(i), Ok(v)) = (idx.trim().parse::<usize>(), val.trim().parse::<f32>())
+            && i < 16
+        {
+            params[i] = v;
+        }
+    }
+    params
+}
+
 /// GL objects that belong to one GL context: compiled once, shared by every glass drawn in
 /// it. Kept in the EGL context's user data.
 pub(super) struct Programs {
     down: Program,
     up: Program,
-    last: Program,
+    last: Cell<Program>,
     ink: Program,
     /// The shadow under the glass (render/scrim.rs).
     pub(super) scrim: Program,
@@ -635,15 +464,16 @@ pub(super) struct Programs {
     /// Textures and framebuffers of glasses that went away, deleted on the next capture: a
     /// cache is dropped where no GL context is current.
     trash: Trash,
+    dev: Option<DevShaderState>,
 }
 
 type Trash = Rc<RefCell<Vec<(u32, u32)>>>;
 
-pub(super) unsafe fn compile(gl: &Gles2, vs: &str, fs: &str) -> Program {
+pub(super) unsafe fn try_compile(gl: &Gles2, vs: &str, fs: &str) -> Result<Program, String> {
     unsafe {
-        let shader = |kind, src: &str| {
+        let shader = |kind, src: &str| -> Result<u32, String> {
             let s = gl.CreateShader(kind);
-            let c = std::ffi::CString::new(src).unwrap();
+            let c = std::ffi::CString::new(src).map_err(|e| e.to_string())?;
             gl.ShaderSource(s, 1, &c.as_ptr(), std::ptr::null());
             gl.CompileShader(s);
             let mut ok = 0;
@@ -652,38 +482,108 @@ pub(super) unsafe fn compile(gl: &Gles2, vs: &str, fs: &str) -> Program {
                 let mut buf = vec![0u8; 4096];
                 let mut len = 0;
                 gl.GetShaderInfoLog(s, 4096, &mut len, buf.as_mut_ptr() as *mut _);
-                panic!("glass shader: {}", String::from_utf8_lossy(&buf[..len as usize]));
+                let err = String::from_utf8_lossy(&buf[..len as usize]).into_owned();
+                gl.DeleteShader(s);
+                return Err(err);
             }
-            s
+            Ok(s)
+        };
+        let v = shader(ffi::VERTEX_SHADER, vs)?;
+        let f = match shader(ffi::FRAGMENT_SHADER, fs) {
+            Ok(f) => f,
+            Err(e) => {
+                gl.DeleteShader(v);
+                return Err(e);
+            }
         };
         let id = gl.CreateProgram();
-        let (v, f) = (shader(ffi::VERTEX_SHADER, vs), shader(ffi::FRAGMENT_SHADER, fs));
         gl.AttachShader(id, v);
         gl.AttachShader(id, f);
         gl.LinkProgram(id);
         gl.DeleteShader(v);
         gl.DeleteShader(f);
+        let mut linked = 0;
+        gl.GetProgramiv(id, ffi::LINK_STATUS, &mut linked);
+        if linked == 0 {
+            let mut buf = vec![0u8; 4096];
+            let mut len = 0;
+            gl.GetProgramInfoLog(id, 4096, &mut len, buf.as_mut_ptr() as *mut _);
+            let err = String::from_utf8_lossy(&buf[..len as usize]).into_owned();
+            gl.DeleteProgram(id);
+            return Err(err);
+        }
         let pos = gl.GetAttribLocation(id, c"pos".as_ptr()) as u32;
-        Program { id, pos }
+        Ok(Program { id, pos })
+    }
+}
+
+pub(super) unsafe fn compile(gl: &Gles2, vs: &str, fs: &str) -> Program {
+    unsafe {
+        match try_compile(gl, vs, fs) {
+            Ok(p) => p,
+            Err(e) => panic!("glass shader: {e}"),
+        }
     }
 }
 
 impl Programs {
+    /// Development only (HYALO_SHADER_DIR): the file's modification time, when it changed.
+    fn changed(path: &std::path::Path, seen: &Cell<Option<std::time::SystemTime>>) -> bool {
+        let Ok(mtime) = std::fs::metadata(path).and_then(|m| m.modified()) else { return false };
+        if seen.get() == Some(mtime) {
+            return false;
+        }
+        seen.set(Some(mtime));
+        true
+    }
+
+    /// Development only: recompiles the dev shader when its file changes — keeping the last
+    /// program that compiled when the new one does not — and re-reads lab_params.conf.
+    unsafe fn poll_dev_reload(&self, gl: &Gles2, dev: &DevShaderState) {
+        let shader_path = dev.dir.join("glass_final.glsl");
+        if Self::changed(&shader_path, &dev.shader_mtime)
+            && let Ok(src) = std::fs::read_to_string(&shader_path)
+        {
+            let fs_src = format!("#version 100\nprecision highp float;\n{LAB_ON}{UP_COMMON}{src}");
+            match unsafe { try_compile(gl, VS_FINAL, &fs_src) } {
+                Ok(program) => {
+                    unsafe { gl.DeleteProgram(self.last.get().id) };
+                    self.last.set(program);
+                    eprintln!("glass dev shader reloaded: {}", shader_path.display());
+                }
+                Err(err) => eprintln!("glass dev shader compile error: {err}"),
+            }
+        }
+        let params_path = dev.dir.join("lab_params.conf");
+        if Self::changed(&params_path, &dev.params_mtime)
+            && let Ok(src) = std::fs::read_to_string(&params_path)
+        {
+            dev.params.set(parse_lab_params(&src));
+            eprintln!("glass dev lab_params reloaded: {}", params_path.display());
+        }
+    }
+
     unsafe fn new(gl: &Gles2) -> Self {
         unsafe {
             let header = "#version 100\nprecision highp float;\n";
             let up_fs = format!("{header}{UP_COMMON}{FS_UP_MAIN}");
-            let last_fs = format!("{header}{UP_COMMON}{FS_FINAL_MAIN}");
+            let last_fs = format!("{header}{LAB_OFF}{UP_COMMON}{FS_FINAL_MAIN}");
             let mut vbo = 0;
             gl.GenBuffers(1, &mut vbo);
             gl.BindBuffer(ffi::ARRAY_BUFFER, vbo);
             let quad: [f32; 8] = [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0];
             gl.BufferData(ffi::ARRAY_BUFFER, 32, quad.as_ptr() as *const _, ffi::STATIC_DRAW);
             gl.BindBuffer(ffi::ARRAY_BUFFER, 0);
-            Self {
+            let dev = std::env::var_os("HYALO_SHADER_DIR").map(|d| DevShaderState {
+                dir: PathBuf::from(d),
+                shader_mtime: Cell::new(None),
+                params_mtime: Cell::new(None),
+                params: Cell::new([0.0f32; 16]),
+            });
+            let progs = Self {
                 down: compile(gl, VS_PASS, FS_DOWN),
                 up: compile(gl, VS_PASS, &up_fs),
-                last: compile(gl, VS_FINAL, &last_fs),
+                last: Cell::new(compile(gl, VS_FINAL, &last_fs)),
                 ink: compile(gl, VS_PASS, FS_INK),
                 scrim: compile(gl, VS_FINAL, super::scrim::FS_SCRIM),
                 controls: compile(gl, VS_FINAL, super::controls::FS_CONTROLS),
@@ -691,7 +591,12 @@ impl Programs {
                 ink_target: Default::default(),
                 vbo,
                 trash: Default::default(),
+                dev,
+            };
+            if let Some(dev_state) = &progs.dev {
+                progs.poll_dev_reload(gl, dev_state);
             }
+            progs
         }
     }
 
@@ -942,7 +847,10 @@ pub unsafe fn draw(
     }
     unsafe {
         let progs = programs(gl, user_data);
-        let p = &progs.last;
+        if let Some(dev) = &progs.dev {
+            progs.poll_dev_reload(gl, dev);
+        }
+        let p = progs.last.get();
         gl.Enable(ffi::BLEND);
         gl.BlendFunc(ffi::ONE, ffi::ONE_MINUS_SRC_ALPHA);
         gl.BindBuffer(ffi::ARRAY_BUFFER, progs.vbo);
@@ -973,6 +881,13 @@ pub unsafe fn draw(
             gl.Uniform1f(p.loc(gl, c"rim"), g.rim);
             gl.Uniform1f(p.loc(gl, c"saturation"), g.saturation);
             gl.Uniform3f(p.loc(gl, c"ink_tint"), g.ink_tint[0], g.ink_tint[1], g.ink_tint[2]);
+        }
+        if let Some(dev) = &progs.dev {
+            let loc = p.loc(gl, c"lab_params");
+            if loc >= 0 {
+                let params = dev.params.get();
+                gl.Uniform4fv(loc, 4, params.as_ptr());
+            }
         }
         for s in shapes {
             let sr = s.bounds();

@@ -158,6 +158,50 @@ out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10
 layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
 dock and the island to declare theirs.
 
+### The glass lab (`scripts/dev/glass-lab/`)
+
+Where the material is tuned with the owner, and where it EVOLVES (owner, 2026-10-05: "it has to
+be kept, to go on evolving it"). The factory glass of #745 came out of it: the owner set it there,
+and it went to the code the same day, measured equal. It is the shell's own pieces — bar groups,
+`BaseIsland` tiles with the widget kit's content, `makeGroupStack` cards, kit round buttons, the
+kit tooltip and menu, a pane the app grid's size; the island and the dock are shape-only
+stand-ins, labelled on screen — over chosen backdrops (flat, split, grid, a page of text, the
+factory wallpapers; dragged with the mouse or drifting on their own), on a nested Hyalo, with
+every `glass-tuning.conf` key and every LAB hook on a slider, presets, an A/B against the factory,
+and a contrast reading taken in PIXELS (two captures: as drawn, and with the content lifted off).
+`glass-lab.sh` opens it as a window; `--headless OUT.png` gives one capture and the readings
+without showing anything (`--bin`, `--preset`, `--bg`, `--show`; `GLASS_LAB_SHOT_DELAY` to wait
+longer). Presets live in `~/.local/share/nidara/glass-lab/`. It never reaches the session it runs
+in: Hyalo nested with `HYALO_CONFIG=/dev/null`, a HOME of its own (the material reads
+`~/.config/nidara/glass-tuning.conf`, so a lab with the real HOME shows the owner's tuning, not
+the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-mirror dir.
+
+- **ONE shader, hooks compiled out.** `glass_final.glsl` is the shader Hyalo ships
+  (`include_str!`), and it carries the lab's hooks: `LAB_ADD(i, x)` / `LAB_MUL(i, x)` around a
+  number, `#ifdef GLASS_LAB` around a whole layer. Hyalo prepends `LAB_OFF` (each hook is its
+  value, every block gone: the shader's arithmetic alone); with `HYALO_SHADER_DIR` set it reads the
+  file from there instead, recompiled when it changes (the last program that compiled is kept on
+  an error), with `LAB_ON` — 16 values from `lab_params.conf` (`lab[i] = v`), 0 = the factory. The
+  lab LINKS the repo's file there, so an edit to the glass shows in the lab as it is saved.
+  Measured 2026-10-05: at the lab's neutral values and with `--no-dev-shader`, the same pixels.
+  Until that day the lab ran a COPY of the shader with its layers, which had to be kept in step by
+  hand and whose values were relative to the factory it was copied from.
+- **A recipe goes to the factory** by changing the number a hook wraps (and the lab's neutral in
+  `lab.ts`) and the client's defaults in `glass-material.ts`; then the parity check: the preset
+  in the lab before, the factory after, the same scenes, ≤ 2/255 apart — and a control that
+  shows the comparison can fail (the shader before the change differs).
+- ⚠️ **Presets are relative to the factory they were saved against.** `lab[]` holds offsets from
+  the factory's numbers and the tuning only the keys off its defaults, so a factory change moves
+  every preset. When the factory changes, convert them (the 2026-10-05 conversion, to these hooks,
+  rendered the same pixels).
+- What it has shown so far (2026-10-05): with the per-pixel adaptive tint, any treatment of the
+  backdrop's whites (compression, a dark veil) ends at the same `target` — it changes how much of
+  the backdrop shows, not the contrast; the ink at 0.80 never turns over a page of text; with
+  `lensing` 0.15 and no cap, the app grid's pane became one roof of four faces.
+- ⚠️ Hyalo ignores the right margin of a layer anchored to both sides (and a 0 exclusive zone):
+  the lab sizes its scene explicitly beside the controls instead. A photo backdrop is a GPU
+  texture: through Cairo, drifting cost ~2.8 cores and grew to ~8 GB in seconds.
+
 🔴 **The material rides on a commit GTK may never make.** It is double-buffered surface state,
 and GTK commits only a frame that DREW something (it diffs render nodes; no damage, no commit).
 A change that moves none of the client's pixels — every `glass-tuning.conf` value, the glass's
@@ -185,7 +229,10 @@ before its tint — is brighter than `inkDarkAbove`, and back only below `inkLig
 (hysteresis). Never by an area's average: a mostly-light wallpaper with one dark stroke under the
 text keeps it white.
 
-- **Groups and boxes (client).** Each `trackGlass` entry is an ink group (`inkId`); its boxes are
+- **Groups and boxes (client).** Each `trackGlass` entry is an ink group (`inkId`) — unless a
+  container round it called `trackInkGroup(widget)`: then every pane inside turns TOGETHER, one
+  group measured over all their boxes (read when the surface sends its glass, so nothing in the
+  components changes). One surface only: Hyalo measures each surface on its own. Its boxes are
   every LEAF widget its scope draws — labels with text, icons, Cairo areas, CSS-painted boxes like
   the workspace dots — except the glass's own painter, through the same transforms and clips as
   the shapes. More than 8 → their union (stricter, never looser). A type list (labels, images)

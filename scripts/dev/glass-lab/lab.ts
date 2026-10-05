@@ -1,0 +1,807 @@
+// glass-lab — the glass material on the bench: the shell's own pieces, over chosen backdrops,
+// on a Hyalo of their own, with every number and every layer on a slider.
+//
+//   scripts/dev/glass-lab/glass-lab.sh              a window on your desktop (a nested Hyalo)
+//   scripts/dev/glass-lab/glass-lab.sh --headless   one capture + measurements, nothing on screen
+//
+// Run it through glass-lab.sh, never by hand: the script gives it a sandbox (its own
+// glass-tuning.conf, the glass shader through HYALO_SHADER_DIR, settings in memory) and the Hyalo it
+// draws on. What this file needs from that environment:
+//
+//   GLASS_LAB_TUNING    the glass-tuning.conf the material reads (under $XDG_CONFIG_HOME/nidara)
+//   HYALO_SHADER_DIR    where Hyalo reads the glass shader (hyalo's glass_final.glsl, linked)
+//                       and lab_params.conf, which this writes
+//   GLASS_LAB_HYALO     the Hyalo binary, for `msg screenshot` against the nested compositor
+//   GLASS_LAB_PRESETS   where presets and captures are kept (outside the sandbox)
+//   GLASS_LAB_WALLPAPERS  the factory wallpapers, offered as backdrops
+//   GLASS_LAB_SHOT      headless: capture here, print the measurements, quit
+//   GLASS_LAB_PRESET    a preset file to start from
+//
+// What it is FOR (the study in #705): the same panes the shell draws — bar groups, Control
+// Center tiles, a notification stack, round buttons, a tooltip, a menu — so a number tried
+// here is the number the desktop will show. Two pieces are stand-ins, marked as such on
+// screen, because their real component cannot live outside the shell: the dock (DockAxis needs
+// the app service) and the island (MorphRevealer needs the shell's state).
+//
+// The ink (which pieces turn their text dark together) is the study's open question, so it is
+// a control: per piece (today), per group, per panel — `trackInkGroup` on the containers.
+import "../gtk-init"
+import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
+import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+import GdkPixbuf from "gi://GdkPixbuf"
+import GObject from "gi://GObject"
+import Gsk from "gi://Gsk?version=4.0"
+import Graphene from "gi://Graphene"
+import Pango from "gi://Pango"
+import PangoCairo from "gi://PangoCairo"
+import System from "system"
+import Gtk4LayerShell from "gi://Gtk4LayerShell"
+import { useNoGtkTheme } from "../../../ui/lib/nidara-kit/platform/gtk-theme"
+import { initAppearance } from "../../../ui/lib/nidara-kit/platform/appearance-css"
+import { withKitSheet } from "../../../ui/lib/nidara-kit/platform/kit-css"
+import { setKitAppearance, NidaraCircleButton, NidaraButton, NidaraList, NidaraSliderRow,
+    NidaraToggleRow, NidaraDropDownRow, attachTooltip, GlassBubbleMenu } from "../../../ui/lib/nidara-kit"
+import { registerGlassMaterial, GLASS_MATERIAL_DEFAULTS } from "../../../ui/lib/nidara-kit/platform/glass-material"
+import { trackScrimRegion, trackNoScrim, trackInkGroup, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
+import { RADIUS } from "../../../ui/lib/nidara-kit/platform/tokens"
+import Theme from "../../../ui/shell/core/ThemeManager"
+import { safeDisconnect } from "../../../ui/shell/core/signals"
+import { GLASS_BLUR } from "../../../ui/shell/core/NidaraTheme"
+import { chromeIsDarkFor } from "../../../ui/shell/common/AdaptiveGlass"
+import SquircleContainer, { Shape, GLASS_SHADOW } from "../../../ui/shell/common/SquircleContainer"
+import BaseIsland from "../../../ui/shell/surfaces/control-center/BaseIsland"
+import { WidgetSize } from "../../../ui/shell/common/widget-kit"
+import { makeCapsuleInner, makeIconTile } from "../../../ui/shell/common/widget-kit/tile"
+import { makeGroupStack } from "../../../ui/shell/surfaces/control-center/NotificationCenter"
+import { barGroup, barItem, BAR_H, BAR_MARGIN } from "../../../ui/shell/surfaces/bar/capsule"
+import { uiIcon } from "../../../ui/shell/core/Icons"
+
+const env = (k: string) => GLib.getenv(k) ?? ""
+const TUNING = env("GLASS_LAB_TUNING")
+const SHADERS = env("HYALO_SHADER_DIR")
+const HYALO = env("GLASS_LAB_HYALO") || "nidara-hyalo"
+const PRESETS = env("GLASS_LAB_PRESETS") || `${GLib.get_user_data_dir()}/nidara/glass-lab`
+const WALLPAPERS = env("GLASS_LAB_WALLPAPERS")
+const SHOT = env("GLASS_LAB_SHOT")
+const REPO = env("GLASS_LAB_REPO")
+if (!TUNING || !SHADERS) {
+    printerr("glass-lab: run it through scripts/dev/glass-lab/glass-lab.sh (GLASS_LAB_TUNING / HYALO_SHADER_DIR unset)")
+    System.exit(2)
+}
+
+// ── The shell's substrate, as app.ts sets it up ─────────────────────────────
+useNoGtkTheme()
+initAppearance()
+setKitAppearance({
+    accent: () => Theme.accentPalette[Theme.accentColor].color,
+    surfaceIsDark: (widget) => Theme.isChromeSurface(widget) ? chromeIsDarkFor(widget) : Theme.isDark,
+    onChange: (cb) => { const id = Theme.connect("changed", cb); return () => safeDisconnect(Theme, id) },
+    overlayOpacity: () => Theme.overlayOpacity,
+    reduceTransparency: () => Theme.reduceTransparency,
+    glassFrost: () => Theme.glassFrost,
+    chromeIsDark: (widget) => widget ? chromeIsDarkFor(widget) : Theme.chromeIsDark,
+})
+// The token sheet the shell's windows wear — the chrome skin, and the light skin a pane takes when
+// its ink turns dark (`generateSkinFlipScope`). The shell applies it from its own start-up path
+// (syncGtkTheme), which also writes gsettings; the lab wants only the CSS.
+;(Theme as unknown as { applyTokens(): void }).applyTokens()
+// The shell's glass on Hyalo (core/CompositorGlass.ts, with hyalo-settings' blur baseline).
+registerGlassMaterial({
+    reduceTransparency: () => Theme.reduceTransparency,
+    panelBlur: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
+    onChange: (cb) => { const id = Theme.connect("changed", cb); return () => safeDisconnect(Theme, id) },
+})
+{
+    const css = `${REPO}/ui/shell/style.css`
+    const provider = new Gtk.CssProvider()
+    provider.load_from_string((GLib.file_test(css, GLib.FileTest.EXISTS) ? withKitSheet(css) : "") + `
+        window.glass-lab-scene, window.glass-lab-scene > * { background: none; }
+        .glass-lab-tag { color: rgba(255,255,255,0.9); background: rgba(0,0,0,0.55); border-radius: 4px;
+                         padding: 1px 6px; font-size: 11px; }
+        window.glass-lab-controls, window.glass-lab-controls scrolledwindow { background: #ececf0; color: #1d1d22; }
+        .glass-lab-readout { font-family: monospace; font-size: 12px; }`)
+    Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default()!, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+    if (!GLib.file_test(css, GLib.FileTest.EXISTS)) printerr(`glass-lab: ${css} missing — compile the shell's SCSS first`)
+}
+
+// ── State: everything a preset holds ────────────────────────────────────────
+type Ink = "pieza" | "grupo" | "panel"
+// Which pieces are on the bench. One at a time keeps a neighbour's shadow (the Control Center's
+// fades over 160 px) off the reading; «todas» is the overview.
+const SHOWS = ["todas", "barra", "centro de control", "avisos", "botones y menú", "isla y dock", "panel grande"] as const
+type Show = typeof SHOWS[number]
+interface LabState {
+    backdrop: string
+    offset: number                 // the backdrop's split/pan, 0..1 of the width
+    offsetY: number                // its vertical pan, 0..1
+    drift: boolean                 // the backdrop moves on its own, under the glass
+    ink: Ink
+    show: Show
+    tuning: Record<string, number> // glass-tuning.conf keys, only those off the factory value
+    flags: { ink: boolean, scrim: boolean, glass: boolean, dark: boolean }
+    lab: number[]                  // lab_params.conf, 16 values: the shader's LAB hooks, 0 = factory
+}
+const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, ink: "pieza", show: "todas", tuning: {},
+    flags: { ink: true, scrim: true, glass: true, dark: true }, lab: new Array(16).fill(0) })
+let state = factory()
+
+function writeFile(path: string, text: string) {
+    GLib.file_set_contents(path, text)
+}
+// The system's light/dark mode, which the kit's own controls follow (GSettings are in memory here).
+const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
+function apply() {
+    const scheme = state.flags.dark === false ? "default" : "prefer-dark"
+    if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
+    const lines = ["# written by glass-lab"]
+    for (const [k, v] of Object.entries(state.tuning)) lines.push(`${k} = ${v}`)
+    if (!state.flags.ink) lines.push("ink = off")
+    if (!state.flags.scrim) lines.push("scrim = off")
+    if (!state.flags.glass) lines.push("glass = off")
+    writeFile(TUNING, lines.join("\n") + "\n")
+    writeFile(`${SHADERS}/lab_params.conf`,
+        state.lab.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
+    backdropArea?.queue_draw()
+}
+
+// ── Backdrops ───────────────────────────────────────────────────────────────
+const wallpapers: Record<string, string> = {}
+if (WALLPAPERS) {
+    const dir = Gio.File.new_for_path(WALLPAPERS)
+    try {
+        const it = dir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null)
+        for (let info = it.next_file(null); info; info = it.next_file(null)) {
+            const n = info.get_name()
+            if (/\.(jpe?g|png)$/i.test(n)) wallpapers[`foto: ${n.replace(/\.[^.]+$/, "")}`] = `${WALLPAPERS}/${n}`
+        }
+    } catch { /* no wallpapers: the synthetic backdrops still work */ }
+}
+const BACKDROPS = ["blanco", "negro", "gris", "mitad blanco/negro", "degradado", "rejilla", "página de texto",
+    ...Object.keys(wallpapers).sort()]
+// A photo is a texture, uploaded once and only moved (scaled on the GPU): drawn through Cairo it
+// was converted and rescaled on the CPU every frame — two cores and 6 GB within minutes of
+// letting it drift (2026-10-05).
+const textures = new Map<string, Gdk.Texture>()
+let backdropArea: Gtk.Widget | null = null
+
+// A photo is drawn this much larger than it needs to cover the output, so it always has room
+// to move under the glass whatever the window's proportions (cover alone left none: a photo as
+// wide as the window cannot pan sideways).
+const PHOTO_ZOOM = 1.6
+let photoSlack = { x: 1, y: 1 }    // how far, in px, the photo can move: what a drag divides by
+function paintBackdrop(cr: any, w: number, h: number) {
+    const b = state.backdrop, x0 = state.offset * w, y0 = state.offsetY * h
+    const fill = (r: number, g: number, bl: number, x = 0, y = 0, ww = w, hh = h) => {
+        cr.setSourceRGB(r, g, bl); cr.rectangle(x, y, ww, hh); cr.fill()
+    }
+    if (b === "blanco") fill(1, 1, 1)
+    else if (b === "negro") fill(0, 0, 0)
+    else if (b === "gris") fill(0.5, 0.5, 0.5)
+    else if (b === "mitad blanco/negro") { fill(1, 1, 1); fill(0, 0, 0, x0, 0, w - x0, h) }
+    else if (b === "degradado") {
+        for (let x = 0; x < w; x += 2) { const v = ((x - x0) / w + 1) % 1; fill(v, v, v, x, 0, 2, h) }
+    } else if (b === "rejilla") {
+        fill(0.92, 0.92, 0.92)
+        cr.setSourceRGB(0.1, 0.1, 0.1)
+        for (let x = (x0 % 40); x < w; x += 40) { cr.rectangle(x, 0, 2, h) }
+        for (let y = (y0 % 40); y < h; y += 40) { cr.rectangle(0, y, w, 2) }
+        cr.fill()
+    } else if (b === "página de texto") {
+        fill(0.97, 0.97, 0.96)
+        const layout = PangoCairo.create_layout(cr)
+        layout.set_font_description(Pango.FontDescription.from_string("Sans 15"))
+        const line = "El material de cristal deja ver lo que hay detrás y aun así se tiene que leer lo que lleva encima. "
+        cr.setSourceRGB(0.08, 0.08, 0.1)
+        for (let y = 8 + (y0 % 26) - 26, i = Math.floor(-y0 / 26); y < h; y += 26, i++) {
+            cr.moveTo(-((x0 + i * 37) % 400), y)
+            layout.set_text(line.repeat(4), -1)
+            PangoCairo.show_layout(cr, layout)
+        }
+    }
+}
+const rect = (x: number, y: number, w: number, h: number) => { const r = new Graphene.Rect(); r.init(x, y, w, h); return r }
+const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget {
+    vfunc_snapshot(snap: Gtk.Snapshot): void {
+        const w = this.get_width(), h = this.get_height()
+        if (w <= 0 || h <= 0) return
+        const path = wallpapers[state.backdrop]
+        if (!path) {
+            const cr = snap.append_cairo(rect(0, 0, w, h))
+            try { paintBackdrop(cr, w, h) } finally { cr.$dispose() }
+            return
+        }
+        let tex = textures.get(path)
+        if (!tex) { tex = Gdk.Texture.new_from_filename(path); textures.set(path, tex) }
+        const s = Math.max(w / tex.get_width(), h / tex.get_height()) * PHOTO_ZOOM
+        const dw = tex.get_width() * s, dh = tex.get_height() * s
+        photoSlack = { x: dw - w, y: dh - h }
+        snap.push_clip(rect(0, 0, w, h))
+        snap.append_scaled_texture(tex, Gsk.ScalingFilter.LINEAR,
+            rect(-photoSlack.x * state.offset, -photoSlack.y * state.offsetY, dw, dh))
+        snap.pop()
+    }
+})
+
+// ── The specimens ───────────────────────────────────────────────────────────
+// Each records the content it lays over its glass, so a measurement can lift it off and read
+// the glass alone under the text.
+interface Specimen { name: string, contents: Gtk.Widget[] }
+const specimens: Specimen[] = []
+
+const UNIT = 80, GAP = 16          // surfaces/control-center/CCLayoutManager.ts (not imported: it
+                                   // pulls the whole widget registry in)
+const label = (text: string, classes: string[] = []) =>
+    new Gtk.Label({ label: text, halign: Gtk.Align.START, css_classes: classes, ellipsize: Pango.EllipsizeMode.END })
+const icon = (name: string, size = 18) => new Gtk.Image({ gicon: uiIcon(name as any), pixel_size: size, css_classes: ["nd-icon"] })
+const tag = (text: string) => new Gtk.Label({ label: text, css_classes: ["glass-lab-tag"], halign: Gtk.Align.START })
+
+/** The bar: two groups of the real bar glass (surfaces/bar/capsule.ts) in the bar's own row
+ *  (Bar.tsx's `barBox`: its height and its CSS are what make a group 32 tall), no shadow. */
+function barRow(): Gtk.Widget {
+    const row = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START,
+        hexpand: true, margin_start: BAR_MARGIN, margin_end: BAR_MARGIN })
+    const left = barGroup()
+    const title = label("Laboratorio", ["bar-widget-label"])
+    left.box.append(barItem({ child: title }))
+    const right = barGroup()
+    const items = ["nd-network-wireless", "nd-audio-volume-high", "nd-battery", "nd-control-center"].map(n => icon(n, 18))
+    for (const i of items) right.box.append(barItem({ child: i }))
+    const clock = label("12:34", ["bar-widget-label"])
+    right.box.append(barItem({ child: clock }))
+    row.set_start_widget(left.widget); row.set_end_widget(right.widget)
+    trackNoScrim(row)
+    specimens.push({ name: "barra", contents: [title, ...items, clock] })
+    if (state.ink === "grupo") { trackInkGroup(left.widget); trackInkGroup(right.widget) }
+    if (state.ink === "panel") trackInkGroup(row)
+    return row
+}
+
+function tile(size: WidgetSize, w: number, h: number, child: Gtk.Widget, getFill?: () => number) {
+    return BaseIsland({ name: "glass-lab", child, width: w, height: h, size, getFill })
+}
+/** The Control Center: BaseIsland tiles on the CC grid, one shadow region for the panel. */
+function controlCenter(): Gtk.Widget {
+    const grid = new Gtk.Grid({ column_spacing: GAP, row_spacing: GAP })
+    // The tiles' content is the widget kit's own (common/widget-kit/tile.ts), as the CC's widgets build it.
+    const wide = (ic: string, t: string, s: string) => {
+        const inner = makeCapsuleInner(() => uiIcon(ic as any), () => t, () => s)
+        specimens.push({ name: `cc ${t}`, contents: [inner.box] })
+        return tile(WidgetSize.WIDE, UNIT * 2 + GAP, UNIT, inner.box)
+    }
+    const single = (ic: string) => {
+        const t = makeIconTile(() => uiIcon(ic as any))
+        specimens.push({ name: `cc ${ic}`, contents: [t] })
+        return tile(WidgetSize.SINGLE, UNIT, UNIT, t)
+    }
+    const fill = makeCapsuleInner(() => uiIcon("nd-display-brightness"), () => "Brillo", () => "60 %")
+    const fillBox = fill.box
+    specimens.push({ name: "cc Brillo", contents: [fillBox] })
+    const rows = [
+        [wide("nd-network-wireless", "Wi-Fi", "Casa"), wide("nd-bluetooth-active", "Bluetooth", "Activado")],
+        [single("nd-notifications"), single("nd-night-light"),
+            tile(WidgetSize.WIDE, UNIT * 2 + GAP, UNIT, fillBox, () => 0.6)],
+    ]
+    const rowBoxes: Gtk.Box[] = []
+    rows.forEach((r, y) => {
+        const rb = new Gtk.Box({ spacing: GAP }); r.forEach(t => rb.append(t)); rowBoxes.push(rb)
+        grid.attach(rb, 0, y, 1, 1)
+    })
+    const panel = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_start: 16, margin_end: 16,
+        margin_top: 16, margin_bottom: 16 })
+    panel.append(grid)
+    trackScrimRegion(panel)
+    if (state.ink === "grupo") rowBoxes.forEach(b => trackInkGroup(b))
+    if (state.ink === "panel") trackInkGroup(panel)
+    return panel
+}
+
+/** A notification stack: the card as NotificationCenter builds it, stacked by makeGroupStack. */
+function notifications(): Gtk.Widget {
+    const card = (app: string, body: string) => {
+        const box = new Gtk.Box({ spacing: 12, margin_start: 14, margin_end: 14, margin_top: 12, margin_bottom: 12 })
+        const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
+        const a = label(app, ["nidara-atomic-label-bold"]), b = label(body, ["nc-notif-body"])
+        col.append(a); col.append(b)
+        const i = icon("nd-notifications", 24)
+        box.append(i); box.append(col)
+        const c = SquircleContainer({ child: box, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true,
+            borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], shadow: GLASS_SHADOW })
+        c.set_size_request(UNIT * 4 + GAP * 3, -1)
+        specimens.push({ name: `aviso ${app}`, contents: [box] })
+        return c
+    }
+    const column = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_start: 16, margin_end: 16,
+        margin_top: 16, margin_bottom: 16 })
+    const stack = makeGroupStack(card("Mensajes", "¿Has visto el cristal nuevo?"), 3)
+    column.append(stack)
+    column.append(card("Calendario", "Revisión del material, 17:00"))
+    trackScrimRegion(column)
+    if (state.ink === "grupo") trackInkGroup(stack)
+    if (state.ink === "panel") trackInkGroup(column)
+    return column
+}
+
+/** Round buttons, a tooltip and a menu — the kit's own. */
+function controls(): Gtk.Widget {
+    const box = new Gtk.Box({ spacing: 14 })
+    const names = ["nd-window-close", "nd-media-playback-start", "nd-preferences-system"]
+    const buttons = names.map(n => NidaraCircleButton({ icon: uiIcon(n as any), iconSize: 16, variant: "neutral" }))
+    buttons.forEach(b => box.append(b))
+    specimens.push({ name: "botones", contents: buttons.map(b => b.get_child()!) })
+    // The tooltip and the menu open on their own once the scene is up, and stay.
+    const tip = attachTooltip(buttons[1], "Reproducir", { position: Gtk.PositionType.BOTTOM })
+    const menu = new GlassBubbleMenu({ parent: buttons[2], position: Gtk.PositionType.BOTTOM })
+    menu.popover.autohide = false
+    for (const t of ["Ajustes del cristal", "Guardar preset", "Comparar A/B"]) {
+        const row = new Gtk.Button({ child: label(t), css_classes: ["nidara-menu-item"] })
+        menu.rows.append(row)
+    }
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => { tip.popover.popup(); menu.popup(); return GLib.SOURCE_REMOVE })
+    // The tooltip and the menu are popovers — surfaces of their own — and are not measured.
+    trackScrimRegion(box)
+    return box
+}
+
+/** Stand-ins, marked: the island's capsule and the dock's pill, by shape only. */
+function islandPiece(): Gtk.Widget {
+    const islandRow = new Gtk.Box({ spacing: 8 })
+    const islandText = new Gtk.Box({ spacing: 8, margin_start: 14, margin_end: 14 })
+    const t = label("Grabando 00:42", ["bar-widget-label"]); islandText.append(icon("nd-media-record", 16)); islandText.append(t)
+    const island = SquircleContainer({ child: islandText, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true,
+        chrome: true, shadow: GLASS_SHADOW })
+    island.set_size_request(-1, 32)
+    const stop = NidaraCircleButton({ icon: uiIcon("nd-media-playback-stop"), iconSize: 14, variant: "neutral" })
+    islandRow.append(island); islandRow.append(stop)
+    trackNoScrim(islandRow)
+    specimens.push({ name: "isla (sustituto)", contents: [islandText] })
+    if (state.ink === "panel") trackInkGroup(islandRow)
+    const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+    col.append(islandRow); col.append(tag("isla: sustituto, solo la forma"))
+    return col
+}
+function dockPiece(): Gtk.Widget {
+    const dockIcons = new Gtk.Box({ spacing: 14, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
+    for (const n of ["nd-utilities-terminal", "nd-globe", "nd-preferences-system", "nd-view-grid", "nd-user-trash"])
+        dockIcons.append(icon(n, 40))
+    const dock = SquircleContainer({ child: dockIcons, shape: Shape.DOCK_PILL, useShellOpacity: true, gloss: true,
+        chrome: true, shadow: GLASS_SHADOW })
+    const dockWrap = new Gtk.Box(); dockWrap.append(dock)
+    trackNoScrim(dockWrap)
+    specimens.push({ name: "dock (sustituto)", contents: [dockIcons] })
+    const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+    col.append(tag("dock: sustituto, solo la forma")); col.append(dockWrap)
+    return col
+}
+/** The app grid's panel: its glass as AppGrid.tsx builds it (radius xl, inset 2, the loose
+ *  shadow — the grid declares no region) at its size (6 × 3 tiles of 163 px, 920 wide). The panel
+ *  is what is on the bench — its lensing, its rim, its shadow at full size; the apps are a sample
+ *  from the icon theme, and the search field and workspace strip are left out. */
+function bigPanel(): Gtk.Widget {
+    const COLS = 6, ROWS = 3, ROW_H = 163
+    const apps: [string, string][] = [["utilities-terminal", "Terminal"], ["system-file-manager", "Archivos"],
+        ["web-browser", "Navegador"], ["accessories-text-editor", "Editor de texto"], ["preferences-system", "Ajustes"],
+        ["applications-graphics", "Gráficos"], ["accessories-calculator", "Calculadora"], ["x-office-calendar", "Calendario"],
+        ["multimedia-video-player", "Vídeos"], ["audio-x-generic", "Música"], ["image-x-generic", "Fotos"],
+        ["system-software-install", "Software"], ["help-browser", "Ayuda"], ["mail-unread", "Correo"],
+        ["accessories-screenshot", "Captura de pantalla"], ["system-monitor", "Monitor del sistema"],
+        ["applications-games", "Juegos"], ["user-trash", "Papelera"]]
+    const grid = new Gtk.Grid({ column_spacing: 8, row_spacing: 8, halign: Gtk.Align.CENTER, margin_top: 8,
+        margin_bottom: 8, column_homogeneous: true })
+    const labels: Gtk.Widget[] = []
+    apps.slice(0, COLS * ROWS).forEach(([ic, name], i) => {
+        const img = new Gtk.Image({ icon_name: ic, pixel_size: 72, hexpand: true, vexpand: true })
+        const plate = new Gtk.Box({ css_classes: ["app-grid-plate"], width_request: 96, height_request: 96,
+            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER })
+        plate.append(img)
+        const l = new Gtk.Label({ label: name, css_classes: ["app-grid-label"], justify: Gtk.Justification.CENTER,
+            max_width_chars: 13, wrap: true, wrap_mode: Pango.WrapMode.WORD, lines: 2, ellipsize: Pango.EllipsizeMode.END })
+        labels.push(l)
+        const item = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["app-grid-item"],
+            halign: Gtk.Align.CENTER, valign: Gtk.Align.START })
+        item.append(plate); item.append(l)
+        const button = new Gtk.Box({ css_classes: ["app-grid-button"] }); button.append(item)
+        grid.attach(button, i % COLS, Math.floor(i / COLS), 1, 1)
+    })
+    const area = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 920,
+        height_request: ROWS * ROW_H + (ROWS - 1) * 8 + 16, margin_top: 28, margin_start: 32, margin_end: 32, margin_bottom: 4 })
+    area.append(grid)
+    const panel = SquircleContainer({ child: area, radius: RADIUS.xl, gloss: true, useShellOpacity: true, inset: 2.0,
+        hexpand: false, vexpand: false, shadow: GLASS_SHADOW })
+    specimens.push({ name: "panel grande", contents: labels })
+    if (state.ink === "panel" || state.ink === "grupo") trackInkGroup(panel)
+    const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+    col.append(panel); col.append(tag("panel grande: el cristal y el tamaño de la cuadrícula de apps; apps de muestra"))
+    return col
+}
+
+function standIns(): Gtk.Widget {
+    const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 40 })
+    col.append(islandPiece()); col.append(dockPiece())
+    return col
+}
+
+// ── Windows ─────────────────────────────────────────────────────────────────
+function layerWindow(layer: Gtk4LayerShell.Layer, ns: string, classes: string[], exclusive = -1): Gtk.Window {
+    const win = new Gtk.Window({ css_classes: classes })
+    Gtk4LayerShell.init_for_window(win)
+    Gtk4LayerShell.set_namespace(win, ns)
+    Gtk4LayerShell.set_layer(win, layer)
+    for (const e of [Gtk4LayerShell.Edge.TOP, Gtk4LayerShell.Edge.BOTTOM, Gtk4LayerShell.Edge.LEFT, Gtk4LayerShell.Edge.RIGHT])
+        Gtk4LayerShell.set_anchor(win, e, true)
+    Gtk4LayerShell.set_exclusive_zone(win, exclusive)
+    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
+    return win
+}
+
+const bgWin = layerWindow(Gtk4LayerShell.Layer.BACKGROUND, "glass-lab-backdrop", [])
+backdropArea = new BackdropView({ hexpand: true, vexpand: true })
+bgWin.set_child(backdropArea)
+
+// Moving the backdrop under the glass: drag it, or let it drift. The drag is on the scene (the
+// layer above, where the pointer is); the backdrop follows the pointer, a photo 1:1.
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+function panBy(dx: number, dy: number, from: { x: number, y: number }) {
+    const w = backdropArea!.get_width() || 1, h = backdropArea!.get_height() || 1
+    if (wallpapers[state.backdrop]) {
+        state.offset = clamp01(from.x - dx / Math.max(photoSlack.x, 1))
+        state.offsetY = clamp01(from.y - dy / Math.max(photoSlack.y, 1))
+    } else {
+        state.offset = clamp01(from.x + dx / w)
+        state.offsetY = clamp01(from.y + dy / h)
+    }
+    backdropArea!.queue_draw()
+}
+let driftStart = 0
+backdropArea.add_tick_callback((_w, clock) => {
+    if (!state.drift) { driftStart = 0; return GLib.SOURCE_CONTINUE }
+    const t = clock.get_frame_time() / 1e6
+    if (!driftStart) driftStart = t
+    // A slow loop (≈ 24 s across, 17 s down): content passing under the glass, not a shake.
+    const k = t - driftStart
+    state.offset = 0.5 - 0.5 * Math.cos(k * 2 * Math.PI / 24)
+    state.offsetY = 0.5 - 0.5 * Math.cos(k * 2 * Math.PI / 17)
+    backdropArea!.queue_draw()
+    return GLib.SOURCE_CONTINUE
+})
+
+// The scene wears the bar window's name: the shell's CSS for these pieces is scoped to it.
+const scene = layerWindow(Gtk4LayerShell.Layer.TOP, "glass-lab-scene", ["glass-lab-scene", "nidara-bar-window"])
+scene.set_name("nidara-bar")
+{
+    const drag = new Gtk.GestureDrag()
+    let from = { x: 0.5, y: 0.5 }
+    // While it drifts the drift has the backdrop: switch it off to drag.
+    drag.connect("drag-begin", () => { from = { x: state.offset, y: state.offsetY } })
+    drag.connect("drag-update", (_g, dx: number, dy: number) => { if (!state.drift) panBy(dx, dy, from) })
+    scene.add_controller(drag)
+}
+function buildScene() {
+    specimens.length = 0
+    const show = state.show
+    // The app grid's CSS is scoped to its window; the scene wears it while that panel is up.
+    if (show === "panel grande") scene.add_css_class("nidara-app-grid-window")
+    else scene.remove_css_class("nidara-app-grid-window")
+    if (show === "barra") {
+        const root = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+        root.append(barRow())
+        scene.set_child(root)
+        return
+    }
+    if (show !== "todas") {
+        const one = show === "centro de control" ? controlCenter() : show === "avisos" ? notifications()
+            : show === "botones y menú" ? controls() : show === "panel grande" ? bigPanel() : standIns()
+        one.halign = Gtk.Align.CENTER; one.valign = Gtk.Align.CENTER
+        scene.set_child(one)
+        return
+    }
+    // Where the desktop has them: the island in the bar's row, the dock at the bottom.
+    const root = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 18, margin_bottom: 8 })
+    const top = new Gtk.Overlay()
+    top.set_child(barRow())
+    const island = islandPiece(); island.halign = Gtk.Align.CENTER; island.valign = Gtk.Align.START
+    island.margin_top = (BAR_H - 32) / 2
+    top.add_overlay(island)
+    root.append(top)
+    // A flow, so a narrow output wraps the panels instead of pushing the scene off its edge.
+    const cols = new Gtk.FlowBox({ selection_mode: Gtk.SelectionMode.NONE, homogeneous: false, column_spacing: 24,
+        row_spacing: 8, min_children_per_line: 1, max_children_per_line: 3, vexpand: true, valign: Gtk.Align.START,
+        halign: Gtk.Align.CENTER })
+    for (const w of [controlCenter(), controls(), notifications()]) { w.valign = Gtk.Align.START; cols.append(w) }
+    root.append(cols)
+    const dock = dockPiece(); dock.halign = Gtk.Align.CENTER
+    root.append(dock)
+    scene.set_child(root)
+}
+
+// ── Measuring: the text against the glass under it ──────────────────────────
+const debugLines: string[] = []
+interface Reading { name: string, text: number, glass: number, ratio: number, dark: boolean }
+const lum8 = (v: number) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+function screenshot(path: string, done: (ok: boolean) => void) {
+    try {
+        const p = Gio.Subprocess.new([HYALO, "msg", "screenshot", path], Gio.SubprocessFlags.STDOUT_SILENCE)
+        p.wait_check_async(null, (_p, res) => { try { done(p.wait_check_finish(res)) } catch { done(false) } })
+    } catch { done(false) }
+}
+function leaves(w: Gtk.Widget, out: Gtk.Widget[] = []): Gtk.Widget[] {
+    if (w instanceof Gtk.Label || w instanceof Gtk.Image) { if (w.get_mapped()) out.push(w); return out }
+    for (let c = w.get_first_child(); c; c = c.get_next_sibling()) leaves(c, out)
+    return out
+}
+type Box4 = { x: number, y: number, w: number, h: number }
+function boundsIn(w: Gtk.Widget, root: Gtk.Widget): Box4 | null {
+    const [ok, r] = w.compute_bounds(root)
+    if (!ok) return null
+    return { x: Math.round(r.get_x()), y: Math.round(r.get_y()), w: Math.round(r.get_width()), h: Math.round(r.get_height()) }
+}
+/** Where the ink actually is: an image's glyph (pixel_size, centred), a label's text (its natural
+ *  size at its xalign) — not the allocation, which can reach the glass's bright rim. */
+function inkBox(w: Gtk.Widget): Box4 | null {
+    const r = boundsIn(w, scene)
+    if (!r) return null
+    let nw = r.w, nh = r.h, xf = 0.5
+    if (w instanceof Gtk.Image) { nw = nh = Math.min(w.pixel_size > 0 ? w.pixel_size : 16, r.w, r.h) }
+    else if (w instanceof Gtk.Label) {
+        nw = Math.min(r.w, w.measure(Gtk.Orientation.HORIZONTAL, -1)[1])
+        nh = Math.min(r.h, w.measure(Gtk.Orientation.VERTICAL, nw)[1])
+        xf = w.xalign
+    }
+    return { x: Math.round(r.x + (r.w - nw) * xf), y: Math.round(r.y + (r.h - nh) / 2), w: nw, h: nh }
+}
+/** The p-th percentile (0..1) — the worst glass pixel without one antialiased edge pixel deciding. */
+function pct(v: number[], p: number): number {
+    const s = [...v].sort((a, b) => a - b)
+    return s[Math.min(s.length - 1, Math.max(0, Math.round(p * (s.length - 1))))]
+}
+/** Luminances inside a box of a screenshot. */
+function sample(pb: GdkPixbuf.Pixbuf, b: Box4): number[] {
+    const px = pb.get_pixels(), rs = pb.get_rowstride(), n = pb.get_n_channels(), out: number[] = []
+    for (let y = Math.max(0, b.y); y < Math.min(pb.get_height(), b.y + b.h); y++)
+        for (let x = Math.max(0, b.x); x < Math.min(pb.get_width(), b.x + b.w); x++) {
+            const i = y * rs + x * n
+            out.push(0.2126 * lum8(px[i]) + 0.7152 * lum8(px[i + 1]) + 0.0722 * lum8(px[i + 2]))
+        }
+    return out
+}
+/**
+ * Two captures: as it is, and with the content lifted off (opacity 0 — the glass stays). Under
+ * each text the glass's WORST pixel (the one closest to the ink) against the ink (the
+ * text's own extreme pixel in the first capture): the contrast the reader actually gets there.
+ */
+function measure(tmp: string, done: (r: Reading[]) => void) {
+    const a = `${tmp}-a.png`, b = `${tmp}-b.png`
+    screenshot(a, ok => {
+        if (!ok) { done([]); return }
+        specimens.forEach(s => s.contents.forEach(c => c.set_opacity(0)))
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+            screenshot(b, ok2 => {
+                specimens.forEach(s => s.contents.forEach(c => c.set_opacity(1)))
+                if (!ok2) { done([]); return }
+                const pa = GdkPixbuf.Pixbuf.new_from_file(a), pbb = GdkPixbuf.Pixbuf.new_from_file(b)
+                const sx = pa.get_width() / scene.get_width()
+                const out: Reading[] = []
+                for (const s of specimens) {
+                    let worst: Reading | null = null
+                    for (const c of s.contents) for (const leaf of leaves(c)) {
+                        const r = inkBox(leaf)
+                        if (!r || r.w < 2 || r.h < 2) continue
+                        const box = { x: Math.round(r.x * sx), y: Math.round(r.y * sx), w: Math.round(r.w * sx), h: Math.round(r.h * sx) }
+                        const glass = sample(pbb, box), withText = sample(pa, box)
+                        if (env("GLASS_LAB_DEBUG")) debugLines.push(`${s.name} ${leaf.constructor.name} ${JSON.stringify(box)} glass max ${Math.max(...glass).toFixed(3)}`)
+                        if (!glass.length) continue
+                        let pane: Gtk.Widget | null = leaf
+                        let dark = false
+                        for (; pane; pane = pane.get_parent()) if (pane.has_css_class(INK_DARK_CLASS)) { dark = true; break }
+                        const ink = dark ? Math.min(...withText) : Math.max(...withText)
+                        const g = dark ? pct(glass, 0.02) : pct(glass, 0.98)
+                        const ratio = (Math.max(ink, g) + 0.05) / (Math.min(ink, g) + 0.05)
+                        if (!worst || ratio < worst.ratio) worst = { name: s.name, text: ink, glass: g, ratio, dark }
+                    }
+                    if (worst) out.push(worst)
+                }
+                done(out)
+            })
+            return GLib.SOURCE_REMOVE
+        })
+    })
+}
+const fmt = (r: Reading) =>
+    `${r.ratio.toFixed(2).padStart(6)}:1  ${r.ratio >= 4.5 ? "AA " : r.ratio >= 3 ? "3:1" : "✗  "}  ${r.dark ? "oscuro" : "blanco"}  vidrio L=${r.glass.toFixed(3)}  ${r.name}`
+
+// ── Presets ─────────────────────────────────────────────────────────────────
+GLib.mkdir_with_parents(PRESETS, 0o755)
+function savePreset(name: string): string {
+    const path = `${PRESETS}/${name}.json`
+    writeFile(path, JSON.stringify(state, null, 2))
+    return path
+}
+function loadPreset(path: string): boolean {
+    try {
+        const [, bytes] = GLib.file_get_contents(path)
+        const loaded = JSON.parse(new TextDecoder().decode(bytes))
+        state = { ...factory(), ...loaded, flags: { ...factory().flags, ...loaded.flags } }
+        return true
+    } catch (e) { printerr(`glass-lab: preset ${path}: ${e}`); return false }
+}
+function presetNames(): string[] {
+    const out: string[] = []
+    try {
+        const it = Gio.File.new_for_path(PRESETS).enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null)
+        for (let i = it.next_file(null); i; i = it.next_file(null)) if (i.get_name().endsWith(".json")) out.push(i.get_name().slice(0, -5))
+    } catch { /* none yet */ }
+    return out.sort()
+}
+
+// ── The controls window ─────────────────────────────────────────────────────
+const D = GLASS_MATERIAL_DEFAULTS as Record<string, number>
+// A column on the right of the nested desktop, reserving its width so the scene never sits under it.
+const CONTROLS_W = 440
+const controlsWin = new Gtk.Window({ title: "Laboratorio de cristal", css_classes: ["glass-lab-controls"] })
+Gtk4LayerShell.init_for_window(controlsWin)
+Gtk4LayerShell.set_namespace(controlsWin, "glass-lab-controls")
+Gtk4LayerShell.set_layer(controlsWin, Gtk4LayerShell.Layer.TOP)
+for (const e of [Gtk4LayerShell.Edge.TOP, Gtk4LayerShell.Edge.BOTTOM, Gtk4LayerShell.Edge.RIGHT])
+    Gtk4LayerShell.set_anchor(controlsWin, e, true)
+Gtk4LayerShell.set_exclusive_zone(controlsWin, CONTROLS_W)
+Gtk4LayerShell.set_keyboard_mode(controlsWin, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+controlsWin.set_size_request(CONTROLS_W, -1)
+const scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER })
+controlsWin.set_child(scroller)
+let stash: LabState | null = null   // A/B: the recipe, while the factory values are shown
+/** (Re)builds the controls from `state` — after a preset or a reset every slider moves. */
+function fillControls() {
+    const page = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 18, margin_start: 16, margin_end: 16,
+        margin_top: 16, margin_bottom: 16 })
+    scroller.set_child(page)
+    const rebuild = () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { fillControls(); return GLib.SOURCE_REMOVE })
+
+    const section = (title: string, rows: Gtk.Widget[], footer = "") => {
+        const l = NidaraList(title, [], footer)
+        rows.forEach(r => l.listBox.append(r))
+        page.append(l.box)
+    }
+    const tuningSlider = (key: string, title: string, sub: string, min: number, max: number, decimals = 2) =>
+        NidaraSliderRow(title, sub, state.tuning[key] ?? D[key], min, max, v => {
+            if (Math.abs(v - D[key]) < 1e-6) delete state.tuning[key]; else state.tuning[key] = v
+            apply()
+        }, { decimals, debounce: 0 })
+    const labSlider = (i: number, title: string, sub: string, min: number, max: number, neutral: number, decimals = 2) =>
+        NidaraSliderRow(title, sub, state.lab[i] + neutral, min, max, v => {
+            state.lab[i] = Math.abs(v - neutral) < 1e-6 ? 0 : v - neutral
+            apply()
+        }, { decimals, debounce: 0 })
+
+    // Presets, A/B, capture.
+    const bar = new Gtk.Box({ spacing: 8 })
+    const name = new Gtk.Entry({ placeholder_text: "nombre del preset", hexpand: true })
+    const save = NidaraButton({ label: "Guardar" })
+    save.connect("clicked", () => { const n = name.get_text().trim(); if (n) { savePreset(n); rebuild() } })
+    bar.append(name); bar.append(save)
+    page.append(bar)
+    const names = presetNames()
+    if (names.length) section("Presets", [NidaraDropDownRow("Cargar", "", "—", ["—", ...names], v => {
+        if (v !== "—" && loadPreset(`${PRESETS}/${v}.json`)) { apply(); buildScene(); rebuild() }
+    })])
+    const ab = NidaraButton({ label: stash ? "A/B: volver a la receta" : "A/B: ver los valores de fábrica" })
+    ab.connect("clicked", () => {
+        if (stash) { state = stash; stash = null; ab.set_label("A/B: ver los valores de fábrica") }
+        else { stash = state; state = { ...factory(), backdrop: stash.backdrop, offset: stash.offset, offsetY: stash.offsetY, drift: stash.drift, ink: stash.ink }; ab.set_label("A/B: volver a la receta") }
+        apply()
+    })
+    const reset = NidaraButton({ label: "Volver a fábrica" })
+    reset.connect("clicked", () => { const b = state.backdrop; state = factory(); state.backdrop = b; apply(); buildScene(); rebuild() })
+    const actions = new Gtk.Box({ spacing: 8 }); actions.append(ab); actions.append(reset)
+    page.append(actions)
+
+    const readout = new Gtk.Label({ label: "Pulsa «Medir» para leer el contraste en píxeles.", xalign: 0, wrap: true,
+        css_classes: ["glass-lab-readout"], selectable: true })
+    const measureBtn = NidaraButton({ label: "Medir" }), exportBtn = NidaraButton({ label: "Exportar captura" })
+    measureBtn.connect("clicked", () => {
+        readout.set_label("midiendo…")
+        measure(`${GLib.get_tmp_dir()}/glass-lab-${GLib.get_monotonic_time()}`, r =>
+            readout.set_label(r.length ? r.map(fmt).join("\n") : "no se pudo capturar (¿Hyalo sin `msg`?)"))
+    })
+    exportBtn.connect("clicked", () => {
+        const stamp = GLib.DateTime.new_now_local().format("%Y%m%d-%H%M%S")
+        const path = `${PRESETS}/captura-${stamp}.png`
+        screenshot(path, ok => {
+            if (ok) writeFile(path.replace(/\.png$/, ".json"), JSON.stringify(state, null, 2))
+            readout.set_label(ok ? `guardada: ${path}\n(los valores, al lado en .json)` : "no se pudo capturar")
+        })
+    })
+    const quit = NidaraButton({ label: "Salir" })
+    quit.connect("clicked", () => loop.quit())
+    const mrow = new Gtk.Box({ spacing: 8 }); mrow.append(measureBtn); mrow.append(exportBtn); mrow.append(quit)
+    page.append(mrow); page.append(readout)
+
+    section("Fondo", [
+        NidaraDropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
+        NidaraSliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
+            v => { state.offset = v / 100; apply() }, { debounce: 0 }),
+        NidaraToggleRow("Movimiento automático", "el fondo pasa despacio por debajo del cristal", state.drift,
+            v => { state.drift = v }),
+    ])
+    section("Piezas", [NidaraDropDownRow("En el banco", "una a una, la sombra de una no cae sobre otra",
+        state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
+    section("Sistema", [NidaraToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,
+        v => { state.flags.dark = v; apply() })])
+    section("Color del texto", [
+        NidaraToggleRow("Texto que cambia a oscuro", "apagado: siempre blanco (ink = off)", state.flags.ink,
+            v => { state.flags.ink = v; apply() }),
+        NidaraDropDownRow("Deciden juntas", "qué piezas cambian a la vez", state.ink, ["pieza", "grupo", "panel"],
+            v => { state.ink = v as Ink; apply(); buildScene() }),
+        tuningSlider("inkDarkAbove", "Umbral a oscuro", "luminancia del punto más oscuro bajo el texto", 0.5, 1),
+        tuningSlider("inkLightBelow", "Umbral de vuelta a blanco", "", 0.3, 0.95),
+    ])
+    section("Tinte y sombra (legibilidad)", [
+        tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
+        tuningSlider("tintLimit", "Tinte máximo del cristal", "lo demás lo pone la sombra", 0.05, 0.7),
+        tuningSlider("target", "Objetivo de legibilidad", "0,183 = 4,5:1; más bajo = más oscuro", 0.05, 0.4, 3),
+        NidaraToggleRow("Sombra bajo el cristal", "", state.flags.scrim, v => { state.flags.scrim = v; apply() }),
+        tuningSlider("scrimMax", "Sombra máxima", "", 0, 1),
+        tuningSlider("scrimFalloff", "Fundido de la sombra del panel", "px", 0, 400, 0),
+        tuningSlider("scrimEdge", "Sombra en el borde / centro", "1 = uniforme", 0, 1),
+        tuningSlider("scrimSize", "Alcance de la sombra suelta", "fracción del lado corto", 0, 1.5),
+    ])
+    section("Fondo bajo el cristal (capas nuevas)", [
+        labSlider(0, "Comprimir blancos: techo", "0 = apagado; luminancia a la que llega el blanco", 0, 1, 0),
+        labSlider(1, "Comprimir blancos: rodilla", "por debajo no cambia nada (0 = 0,15)", 0, 0.6, 0),
+        labSlider(2, "Velo oscuro uniforme", "como la capa del 35 % de la variante transparente", 0, 0.7, 0),
+        tuningSlider("saturation", "Saturación", "1 = sin cambio", 0.5, 2),
+    ])
+    section("Refracción, escarcha y luz", [
+        NidaraToggleRow("Cristal refractivo", "apagado: solo desenfoque", state.flags.glass, v => { state.flags.glass = v; apply() }),
+        tuningSlider("refraction", "Refracción mínima", "px", 0, 40, 0),
+        tuningSlider("lensing", "Refracción según tamaño", "fracción del lado corto", 0, 0.15, 3),
+        labSlider(4, "Perfil del bisel", "5 = fábrica; más = se dobla más en el borde y menos dentro", 1, 9, 5),
+        labSlider(12, "Ancho máximo del bisel", "px; 80 = fábrica. Por dentro, cristal plano", 20, 600, 80, 0),
+        labSlider(11, "Esquinas del bisel ×", "1 = fábrica (sin pliegue); 0 = el pliegue en diagonal", 0, 2, 1),
+        labSlider(5, "Refracción ×", "sobre la de fábrica (1)", 0, 3, 1),
+        labSlider(6, "Dispersión de color", "0 = fábrica (ninguna); 1 = la de antes", 0, 4, 0),
+        tuningSlider("rim", "Canto de luz", "", 0, 1.5),
+        labSlider(10, "Grosor del canto ×", "", 0.2, 4, 1),
+        labSlider(13, "Canto: lado opuesto a la luz ×", "sobre el de fábrica (1)", 0, 3, 1),
+        labSlider(14, "Canto: línea en todo el contorno ×", "sobre la de fábrica (1); ≈10 = la de antes", 0, 12, 1),
+        labSlider(9, "Brillo interior", "0 = fábrica (ninguno); 1 = el de antes", 0, 3, 0),
+        labSlider(8, "Ángulo de la luz", "grados, 0 = fábrica", -180, 180, 0, 0),
+    ], "La escarcha (desenfoque) es la de los paneles del shell; tooltips y menús llevan un pase más.")
+}
+
+// ── Start ───────────────────────────────────────────────────────────────────
+const preset = env("GLASS_LAB_PRESET")
+if (preset) loadPreset(preset)
+if (env("GLASS_LAB_BG")) state.backdrop = env("GLASS_LAB_BG")
+if (env("GLASS_LAB_SHOW")) state.show = env("GLASS_LAB_SHOW") as Show
+apply()
+buildScene()
+bgWin.present()
+scene.present()
+const loop = GLib.MainLoop.new(null, false)
+if (SHOT) {
+    // Headless: let the glass, the ink and the shadow settle, then one capture and the readings.
+    // GLASS_LAB_SHOT_DELAY (ms): wait longer, e.g. to measure the lab's own cost while it drifts.
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, Number(env("GLASS_LAB_SHOT_DELAY")) || 3000, () => {
+        screenshot(SHOT, ok => {
+            if (!ok) { printerr("glass-lab: screenshot failed"); loop.quit(); return }
+            measure(SHOT.replace(/\.png$/, ""), r => {
+                const text = r.map(fmt).join("\n")
+                print(text)
+                writeFile(SHOT.replace(/\.png$/, ".txt"), `${JSON.stringify(state)}\n${text}\n${debugLines.join("\n")}\n`)
+                loop.quit()
+            })
+        })
+        return GLib.SOURCE_REMOVE
+    })
+} else {
+    // Beside the controls' column, not under it. Not by margin or exclusive zone: Hyalo lays a
+    // layer anchored to both sides over the whole output either way (seen nested, 2026-10-05).
+    Gtk4LayerShell.set_anchor(scene, Gtk4LayerShell.Edge.RIGHT, false)
+    const mons = Gdk.Display.get_default()!.get_monitors()
+    const mon = mons.get_n_items() > 0 ? (mons.get_item(0) as Gdk.Monitor) : null
+    if (mon) scene.set_default_size(Math.max(320, mon.get_geometry().width - CONTROLS_W), mon.get_geometry().height)
+    fillControls()
+    controlsWin.present()
+}
+loop.run()

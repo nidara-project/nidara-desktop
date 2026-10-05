@@ -377,7 +377,7 @@ function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widge
     attachGhostSwipeDismiss(target, sr, { onDismiss })
     return sr
 }
-function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
+export function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     if (groupCount <= 1) return card
 
     const CARD_H = 80

@@ -117,6 +117,10 @@ const DEFAULTS = {
     tintLimit: 0.25,
 }
 
+/** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
+ *  instrument shows them; nothing else should need them). */
+export const GLASS_MATERIAL_DEFAULTS: Readonly<typeof DEFAULTS> = DEFAULTS
+
 type Blur = { size: number, passes: number }
 type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, scrimOff?: boolean }
 let tuning: Tuning = {}
