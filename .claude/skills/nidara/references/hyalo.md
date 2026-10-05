@@ -174,14 +174,19 @@ without showing anything (`--bin`, `--preset`, `--bg`, `--show`; `GLASS_LAB_SHOT
 longer; `--video` for a video instead). Presets live in `~/.local/share/nidara/glass-lab/`.
 **Promotional images and videos** (owner, 2026-10-05): «promo: logo» leaves one round pane with the
 Nidara mark alone, centred in a FRAME of the chosen format (16:9, 1:1, 4:5, 9:16 — everything
-outside it dimmed on screen); an export takes what is inside the frame and writes it at the
-format's size (1920×1080, 1080×1080, 1080×1350, 1080×1920), smaller only when the frame on
-screen is — never enlarged, so maximise the lab window. What you see in the frame is the file.
-The scene spans the output and keeps out of the controls' column with a margin, so it follows
-the window as it is resized. A video is made FRAME BY FRAME — the drift is a function of time
-(`driftTo`), set to each frame's, captured through `msg screenshot` and piped to ffmpeg, which
-cuts the frame out and scales it (H.264, 60 fps) — so it is smooth however slowly the frames come
-(≈ 3 a second at 1272×688). It never reaches the session it runs
+outside it dark on screen). The frame is a PREVIEW at whatever scale the screen allows (a 9:16
+frame is 1390 px tall on a 1440 px screen): the backdrop is drawn inside it as the file draws it
+over its whole output, and the disc's size is px of the FILE, shown scaled. «Exportar» makes the
+file in a second lab, headless, whose output IS the format (`glass-lab.sh --headless … --export
+image|video --size 1080x1920`) — drawn natively, never enlarged — while the window goes on
+working; it reads the export's progress from a file beside it. The headless cage's output is
+1280×720 with no way to ask for another, so `--size` builds `output-mode.c` (a
+wlr-output-management client, in the sandbox) and sets it; `cage -d`, or a client-side frame
+round Hyalo's window takes 8×32 px off it. A video is made FRAME BY FRAME — the drift is a
+function of time (`driftTo`), set to each frame's, captured through `msg screenshot` and piped to
+ffmpeg (H.264, 60 fps) — so it is smooth however slowly the frames come (a 1 s 1080×1920 video
+takes ≈ 40 s). The lab's nested Hyalo has no idle: with the defaults it went dark at five minutes
+and would have started the lock screen inside itself at ten. It never reaches the session it runs
 in: Hyalo nested with `HYALO_CONFIG=/dev/null`, a HOME of its own (the material reads
 `~/.config/nidara/glass-tuning.conf`, so a lab with the real HOME shows the owner's tuning, not
 the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-mirror dir.

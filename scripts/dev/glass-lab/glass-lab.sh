@@ -7,8 +7,11 @@
 #   options:  --preset FILE   start from a preset (what the window's «Guardar» writes)
 #             --bg NAME       the backdrop (blanco, negro, gris, "mitad blanco/negro", …)
 #             --show NAME     which pieces (todas, barra, "centro de control", avisos, …)
-#             --video         with --headless: a video instead of one capture (the drift, frame by
-#                             frame, «Duración del vídeo» from the preset) into the presets dir
+#             --export KIND   with --headless: «image» or «video» of the promotional frame into the
+#                             presets dir instead of the readings (the video: the drift, frame by
+#                             frame, «Duración del vídeo» from the preset)
+#             --size WxH      with --headless: the output's exact size (default 1280x720) — what
+#                             the window's «Exportar» uses, so a 9:16 file is 1080×1920 natively
 #             --bin PATH      the Hyalo to draw on (default: the lab build, else the installed one)
 #             --no-dev-shader the shader compiled into Hyalo, no LAB hooks (the parity check: at
 #                             the lab's neutral values both must draw the same pixels)
@@ -22,7 +25,7 @@ set -euo pipefail
 here=$(dirname "$(realpath "$0")")
 repo=$(realpath "$here/../../..")
 
-headless="" out="" preset="" bg="" show="" bin="" devshader=1 video=""
+headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --headless) headless=1; out=$(realpath -m "$2"); shift ;;
@@ -31,7 +34,8 @@ while [ $# -gt 0 ]; do
         --show) show="$2"; shift ;;
         --bin) bin=$(realpath "$2"); shift ;;
         --no-dev-shader) devshader="" ;;
-        --video) video=1 ;;
+        --export) export="$2"; shift ;;
+        --size) size="$2"; shift ;;
         *) echo "glass-lab: unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -53,16 +57,19 @@ touch "$sb/home/.config/nidara/.dev" "$sb/home/.config/nidara/glass-tuning.conf"
 ln -s "$repo/hyalo/compositor/src/render/glass_final.glsl" "$sb/shaders/glass_final.glsl"
 "$repo/scripts/bundle.sh" --js "$here/lab.ts" "$sb/lab.js" >/dev/null
 
-export HYALO_CONFIG=/dev/null HYALO_SETTINGS="$sb/hyalo-settings.toml"
+# No config of yours — and no idle: with the defaults a lab left alone went dark at five minutes
+# and would have started the lock screen INSIDE itself at ten.
+printf '[idle]\nscreen_off = 0\nlock = 0\nsuspend = 0\n' > "$sb/hyalo.toml"
+export HYALO_CONFIG="$sb/hyalo.toml" HYALO_SETTINGS="$sb/hyalo-settings.toml"
 if [ -n "$devshader" ]; then export HYALO_SHADER_DIR="$sb/shaders"; else unset HYALO_SHADER_DIR; fi
 lab_env=(
     HOME="$sb/home" XDG_CONFIG_HOME="$sb/home/.config" GSETTINGS_BACKEND=memory NIDARA_GREETER_MIRROR_DIR="$sb/mirror"
     NIDARA_SHELL_ROOT="$repo/ui/shell" LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
     GLASS_LAB_REPO="$repo" GLASS_LAB_TUNING="$sb/home/.config/nidara/glass-tuning.conf"
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
-    GLASS_LAB_PRESETS="${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab"
+    GLASS_LAB_PRESETS="${GLASS_LAB_PRESETS:-${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab}"
     GLASS_LAB_WALLPAPERS="$repo/defaults/wallpaper" GLASS_LAB_PRESET="$preset" GLASS_LAB_BG="$bg" GLASS_LAB_SHOW="$show"
-    GLASS_LAB_SHOT="$out" GLASS_LAB_VIDEO="$video" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
+    GLASS_LAB_SHOT="$out" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
 )
 lab="env $(printf '%q ' "${lab_env[@]}") gjs -m $sb/lab.js"
 
@@ -73,15 +80,28 @@ if [ -z "$headless" ]; then
 fi
 
 # Headless: a cage with no output of its own, Hyalo in a window inside it, the lab inside that.
+# `-d`: no client-side frame round Hyalo's window, so its output is the cage's, to the pixel.
 rm -f "${out%.png}.txt"
+mode=""
+if [ -n "$size" ]; then
+    # The cage's output at the asked size (output-mode.c, built here: a few hundred ms).
+    xml=/usr/share/wlr-protocols/unstable/wlr-output-management-unstable-v1.xml
+    [ -f "$xml" ] || { echo "glass-lab: --size needs wlr-protocols ($xml)" >&2; exit 2; }
+    wayland-scanner client-header "$xml" "$sb/wlr-output-management-unstable-v1-client-protocol.h"
+    wayland-scanner private-code "$xml" "$sb/wlr-output-management-unstable-v1-protocol.c"
+    cc -O2 -I"$sb" -o "$sb/output-mode" "$here/output-mode.c" "$sb/wlr-output-management-unstable-v1-protocol.c" \
+        $(pkg-config --cflags --libs wayland-client) || { echo "glass-lab: could not build output-mode" >&2; exit 2; }
+    mode="\"$sb/output-mode\" $size || exit 1"
+fi
 inner="$sb/inner.sh"
 cat > "$inner" <<INNER
 #!/bin/sh
+$mode
 "$bin" --winit -c "$lab" >"$sb/hyalo.log" 2>&1 &
 pid=\$!
-for _ in \$(seq 1 $([ -n "$video" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
+for _ in \$(seq 1 $([ -n "$export" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
 kill \$pid
 INNER
 chmod +x "$inner"
-env -u DISPLAY WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 cage -- "$inner" 2>&1 | grep -v -E 'EGL|GLES|extensions' || true
+env -u DISPLAY WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 cage -d -- "$inner" 2>&1 | grep -v -E 'EGL|GLES|extensions' || true
 if [ -f "${out%.png}.txt" ]; then tail -n +2 "${out%.png}.txt"; else echo "glass-lab: no capture (Hyalo log: $sb/hyalo.log)" >&2; cat "$sb/hyalo.log" >&2; exit 1; fi
