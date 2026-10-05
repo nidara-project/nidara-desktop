@@ -7,6 +7,8 @@
 #   options:  --preset FILE   start from a preset (what the window's «Guardar» writes)
 #             --bg NAME       the backdrop (blanco, negro, gris, "mitad blanco/negro", …)
 #             --show NAME     which pieces (todas, barra, "centro de control", avisos, …)
+#             --video         with --headless: a video instead of one capture (the drift, frame by
+#                             frame, «Duración del vídeo» from the preset) into the presets dir
 #             --bin PATH      the Hyalo to draw on (default: the lab build, else the installed one)
 #             --no-dev-shader the shader compiled into Hyalo, no LAB hooks (the parity check: at
 #                             the lab's neutral values both must draw the same pixels)
@@ -20,7 +22,7 @@ set -euo pipefail
 here=$(dirname "$(realpath "$0")")
 repo=$(realpath "$here/../../..")
 
-headless="" out="" preset="" bg="" show="" bin="" devshader=1
+headless="" out="" preset="" bg="" show="" bin="" devshader=1 video=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --headless) headless=1; out=$(realpath -m "$2"); shift ;;
@@ -29,6 +31,7 @@ while [ $# -gt 0 ]; do
         --show) show="$2"; shift ;;
         --bin) bin=$(realpath "$2"); shift ;;
         --no-dev-shader) devshader="" ;;
+        --video) video=1 ;;
         *) echo "glass-lab: unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -59,7 +62,7 @@ lab_env=(
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
     GLASS_LAB_PRESETS="${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab"
     GLASS_LAB_WALLPAPERS="$repo/defaults/wallpaper" GLASS_LAB_PRESET="$preset" GLASS_LAB_BG="$bg" GLASS_LAB_SHOW="$show"
-    GLASS_LAB_SHOT="$out" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
+    GLASS_LAB_SHOT="$out" GLASS_LAB_VIDEO="$video" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
 )
 lab="env $(printf '%q ' "${lab_env[@]}") gjs -m $sb/lab.js"
 
@@ -76,7 +79,7 @@ cat > "$inner" <<INNER
 #!/bin/sh
 "$bin" --winit -c "$lab" >"$sb/hyalo.log" 2>&1 &
 pid=\$!
-for _ in \$(seq 1 120); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
+for _ in \$(seq 1 $([ -n "$video" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
 kill \$pid
 INNER
 chmod +x "$inner"

@@ -171,7 +171,13 @@ every `glass-tuning.conf` key and every LAB hook on a slider, presets, an A/B ag
 and a contrast reading taken in PIXELS (two captures: as drawn, and with the content lifted off).
 `glass-lab.sh` opens it as a window; `--headless OUT.png` gives one capture and the readings
 without showing anything (`--bin`, `--preset`, `--bg`, `--show`; `GLASS_LAB_SHOT_DELAY` to wait
-longer). Presets live in `~/.local/share/nidara/glass-lab/`. It never reaches the session it runs
+longer; `--video` for a video instead). Presets live in `~/.local/share/nidara/glass-lab/`.
+**Promotional images and videos** (owner, 2026-10-05): «promo: logo» leaves one round pane with the
+Nidara mark alone in the middle (its size a slider, the app grid's icon by default); «Exportar
+imagen» / «Exportar vídeo» take the controls out of the picture first. A video is made FRAME BY
+FRAME — the drift is a function of time (`driftTo`), set to each frame's, captured through
+`msg screenshot` and piped to ffmpeg (H.264, 60 fps) — so it is smooth however slowly the frames
+come (≈ 3 frames a second at 1272×688); its size is the lab window's. It never reaches the session it runs
 in: Hyalo nested with `HYALO_CONFIG=/dev/null`, a HOME of its own (the material reads
 `~/.config/nidara/glass-tuning.conf`, so a lab with the real HOME shows the owner's tuning, not
 the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-mirror dir.
