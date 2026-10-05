@@ -965,8 +965,14 @@ function fillControls() {
     })])
     const ab = NidaraButton({ label: stash ? "A/B: volver a la receta" : "A/B: ver los valores de fábrica" })
     ab.connect("clicked", () => {
-        if (stash) { state = stash; stash = null; ab.set_label("A/B: ver los valores de fábrica") }
-        else { stash = state; state = { ...factory(), backdrop: stash.backdrop, offset: stash.offset, offsetY: stash.offsetY, drift: stash.drift, ink: stash.ink }; ab.set_label("A/B: volver a la receta") }
+        // Only the RECIPE swaps (tuning, glass/scrim/ink switches, LAB hooks): the bench, the
+        // backdrop, the system's mode and the export's settings stay as they are. A/B used to
+        // swap the whole state without rebuilding the scene, so after «A/B, pick promo, A/B» the
+        // screen showed the disc while the state said «todas» — and the export drew «todas».
+        const recipe = (from: LabState) => ({ tuning: from.tuning, lab: from.lab,
+            flags: { ...from.flags, dark: state.flags.dark } })
+        if (stash) { state = { ...state, ...recipe(stash) }; stash = null; ab.set_label("A/B: ver los valores de fábrica") }
+        else { stash = state; state = { ...state, ...recipe(factory()) }; ab.set_label("A/B: volver a la receta") }
         apply()
     })
     const reset = NidaraButton({ label: "Volver a fábrica" })
