@@ -566,9 +566,8 @@ function stageRect(): Box4 {
     const sw = Math.floor(fw * k), sh = Math.floor(fh * k)
     return { x: Math.round((w - sw) / 2), y: Math.round((h - sh) / 2), w: sw, h: sh }
 }
-/** The pieces laid out inside the frame, as the export lays them out over its whole output: the
- *  frame's shape, at the pieces' own px (a preview frame smaller than the file shows them larger
- *  in it than the file will). */
+/** The pieces laid out inside the frame, as the export lays them out over its whole output (at
+ *  the scale that makes that output, in logical px, this frame: exportNative). */
 function fitToFrame() {
     const r = stageRect(), w = stageHolder.get_width(), h = stageHolder.get_height()
     if (r.w <= 0 || r.h <= 0) return
@@ -580,7 +579,6 @@ function fitToFrame() {
 const frameGuide = new Gtk.DrawingArea({ can_target: false, hexpand: true, vexpand: true })
 let lastFrame = ""
 frameGuide.set_draw_func((_a, cr, w, h) => {
-    if (SHOT) return
     // The window was resized or the format changed: the pieces and the backdrop follow the frame.
     const key = JSON.stringify(stageRect())
     if (key !== lastFrame) {
@@ -744,14 +742,16 @@ const fmt = (r: Reading) =>
 const stamp = () => GLib.DateTime.new_now_local().format("%Y%m%d-%H%M%S")
 const even = (v: number) => Math.max(2, Math.floor(v / 2) * 2)
 
-/** The frame in a capture's pixels, written at that size, never scaled: exports run headless on
- *  an output that IS the format (exportNative), so the frame is the whole capture. Even sides,
- *  for H.264. */
-function cut(captureWidth: number): { x: number, y: number, w: number, h: number, outW: number, outH: number } {
-    const k = captureWidth / Math.max(1, scene.get_width())
-    const r = stageRect()
-    const x = Math.round(r.x * k), y = Math.round(r.y * k), w = even(r.w * k), h = even(r.h * k)
-    return { x, y, w, h, outW: w, outH: h }
+/** What a capture is written as: all of it, never scaled — exports run headless on an output
+ *  that IS the format (exportNative), so the frame is the whole capture. Even sides, for H.264.
+ *  (In capture px, which at the export's scale are not the scene's px.) */
+function cut(captureWidth: number, captureHeight: number): { x: number, y: number, w: number, h: number, outW: number, outH: number } {
+    // At a fractional scale the output's logical size rounds up, and a capture of it comes out a
+    // few px larger than the output itself (1083×1923 for 1080×1920 at ×2.85): the format's size,
+    // from the top-left, is what the output shows.
+    const [sw, sh] = (env("GLASS_LAB_SIZE") || "").split("x").map(Number)
+    const w = even(Math.min(captureWidth, sw || captureWidth)), h = even(Math.min(captureHeight, sh || captureHeight))
+    return { x: 0, y: 0, w, h, outW: w, outH: h }
 }
 
 /** `cb` once the backdrop's next frame is painted (its frame clock's after-paint), or after 50 ms
@@ -779,8 +779,14 @@ function exportNative(kind: "image" | "video", report: (s: string) => void) {
     const [fw, fh] = FORMATS[state.promoFormat]
     const base = `${GLib.get_tmp_dir()}/glass-lab-export-${GLib.get_monotonic_time()}`
     writeFile(`${base}.json`, JSON.stringify({ ...state, drift: false }))
+    // The export's Hyalo at the scale that makes its output, in logical px, the frame on screen:
+    // the same scene as the preview — the same layout, the glass's widths and the backdrop's
+    // framing in the same proportion — drawn at the format's px. At scale 1 the file showed the
+    // pieces and the glass's px-sized effects (bevel, rim, refraction) smaller than the preview.
+    // In 120ths: what fractional-scale-v1 carries, so GTK draws at exactly the output's scale.
+    const scale = Math.round(Math.min(4, Math.max(0.25, fw / Math.max(1, stageRect().w))) * 120) / 120
     const argv = [`${REPO}/scripts/dev/glass-lab/glass-lab.sh`, "--headless", `${base}.png`, "--export", kind,
-        "--preset", `${base}.json`, "--size", `${fw}x${fh}`, "--bin", HYALO]
+        "--preset", `${base}.json`, "--size", `${fw}x${fh}`, "--scale", scale.toFixed(4), "--bin", HYALO]
     const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE })
     // The lab runs in a sandbox HOME: the presets dir is said outright, not re-derived from it.
     launcher.setenv("GLASS_LAB_PRESETS", PRESETS, true)
@@ -812,7 +818,7 @@ function exportImage(report: (s: string) => void) {
         if (!ok) { report("no se pudo capturar"); return }
         try {
             const pb = GdkPixbuf.Pixbuf.new_from_file(raw)
-            const c = cut(pb.get_width())
+            const c = cut(pb.get_width(), pb.get_height())
             const sub = pb.new_subpixbuf(c.x, c.y, Math.min(c.w, pb.get_width() - c.x), Math.min(c.h, pb.get_height() - c.y))
             const img = c.outW === sub.get_width() ? sub : sub.scale_simple(c.outW, c.outH, GdkPixbuf.InterpType.HYPER)!
             img.savev(path, "png", [], [])
@@ -854,8 +860,8 @@ function exportVideo(report: (s: string) => void) {
         })
     }
     // ffmpeg starts with the first capture: the cut is in its pixels.
-    const start = (captureWidth: number): boolean => {
-        const c = cut(captureWidth)
+    const start = (captureWidth: number, captureHeight: number): boolean => {
+        const c = cut(captureWidth, captureHeight)
         size = `${c.outW}×${c.outH}`
         try {
             ff = Gio.Subprocess.new(["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", `${FPS}`,
@@ -875,7 +881,10 @@ function exportVideo(report: (s: string) => void) {
             screenshot(frame, ok => {
                 if (!ok) { done(`captura fallida en el fotograma ${i}`); return }
                 try {
-                    if (!ff && !start(GdkPixbuf.Pixbuf.get_file_info(frame)[1])) return
+                    if (!ff) {
+                        const [, cw, ch] = GdkPixbuf.Pixbuf.get_file_info(frame)
+                        if (!start(cw, ch)) return
+                    }
                     const [, bytes] = GLib.file_get_contents(frame)
                     pipe!.write_all(bytes, null)
                     Gio.File.new_for_path(frame).delete(null)
@@ -1013,7 +1022,7 @@ function fillControls() {
             state.promoSize, 32, 1024, v => { state.promoSize = v; sizePromo() }, { decimals: 0, debounce: 0 }),
         NidaraSliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
-    ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El marco es una vista previa a escala: las piezas se ven en él a su tamaño real, así que en el archivo ocupan proporcionalmente menos. «promo: logo» deja solo el círculo, y su tamaño sí está a escala.")
+    ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El archivo es la misma escena que el marco, dibujada a más resolución: lo que ves es lo que sale. «promo: logo» deja solo el círculo; su tamaño, en px del archivo.")
     section("Piezas", [NidaraDropDownRow("En el banco", "una a una, la sombra de una no cae sobre otra",
         state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
     section("Sistema", [NidaraToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,

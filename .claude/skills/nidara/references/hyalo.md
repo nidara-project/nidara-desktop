@@ -179,10 +179,19 @@ a FRAME of the chosen format (16:9, 1:1, 4:5, 9:16 — everything outside it dar
 never the window's size (until 2026-10-06 only «promo: logo» was; a scene exported from «todas»
 came out at the window's 2110×1250). The frame is a PREVIEW at whatever scale the screen allows (a
 9:16 frame is 1390 px tall on a 1440 px screen): the backdrop is drawn inside it as the file draws
-it over its whole output, and the pieces are laid out in a box the frame's size (`fitToFrame`) —
-at their own px, so in a preview smaller than the file they look larger than they will in it.
-«promo: logo» leaves one round pane with the Nidara mark alone; its size is px of the FILE, shown
-scaled. «Exportar» makes the file in a second lab, headless, whose output IS the format (`glass-lab.sh --headless … --export
+it over its whole output, and the pieces are laid out in a box the frame's size (`fitToFrame`).
+The export's Hyalo runs at the OUTPUT SCALE format ÷ frame (`--scale`, set with `msg output winit
+scale=…` before the lab connects, in 120ths as fractional-scale-v1 carries it): its output in
+logical px IS the preview's frame, so the file is the preview's scene — same layout, same glass —
+drawn at the format's px. Measured (2026-10-06, a 378 px frame → 1080×1920 at ×2.858): the
+file shrunk to the frame vs the preview, RMSE 0.9 % (promo) / 2.6 % (todas); at scale 1, as
+before, 3.0 % — the owner: "what I see in the lab is not what gets recorded, the size is
+different, so the effect looks different". For that the shader's own px widths (bevel cap 80,
+rim band 3.2) are LOGICAL: `px_scale` (the output's scale) multiplies them, as the client's
+radius and refraction already were; at scale 1, 0 px change. At a fractional scale the output's
+logical size rounds up and a capture comes out a few px larger (1083×1923): `cut` crops to
+`GLASS_LAB_SIZE` from the top-left. «promo: logo» leaves one round pane with the Nidara mark
+alone; its size is px of the FILE, shown scaled. «Exportar» makes the file in a second lab, headless, whose output IS the format (`glass-lab.sh --headless … --export
 image|video --size 1080x1920`) — drawn natively, never enlarged — while the window goes on
 working; it reads the export's progress from a file beside it. The headless cage's output is
 1280×720 with no way to ask for another, so `--size` builds `output-mode.c` (a

@@ -303,6 +303,9 @@ pub struct Shape {
     /// How far its edge reads the backdrop from outside it, output pixels: the glass's
     /// refraction, or more on a large shape (`set_lensing`). 0 where there is no glass.
     pub refraction: f64,
+    /// Output px per logical px (the output's scale): the shader's own widths in px — the rim's
+    /// band, the bevel's cap — are logical, so a pane looks the same at any scale.
+    pub px_scale: f64,
 }
 
 impl Shape {
@@ -925,6 +928,7 @@ pub unsafe fn draw(
             gl.Uniform1f(p.loc(gl, c"opacity"), s.opacity);
             gl.Uniform1f(p.loc(gl, c"ink_dark"), s.ink_dark as i32 as f32);
             gl.Uniform1f(p.loc(gl, c"refraction"), s.refraction as f32);
+            gl.Uniform1f(p.loc(gl, c"px_scale"), s.px_scale as f32);
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);

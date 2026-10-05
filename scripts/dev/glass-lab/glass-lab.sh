@@ -12,6 +12,9 @@
 #                             frame, «Duración del vídeo» from the preset)
 #             --size WxH      with --headless: the output's exact size (default 1280x720) — what
 #                             the window's «Exportar» uses, so a 9:16 file is 1080×1920 natively
+#             --scale K       with --headless: Hyalo's output scale (0.25..4) — the window's
+#                             «Exportar» passes format ÷ frame on screen, so the file is the
+#                             preview's scene, drawn at the format's px
 #             --bin PATH      the Hyalo to draw on (default: the lab build, else the installed one)
 #             --no-dev-shader the shader compiled into Hyalo, no LAB hooks (the parity check: at
 #                             the lab's neutral values both must draw the same pixels)
@@ -25,7 +28,7 @@ set -euo pipefail
 here=$(dirname "$(realpath "$0")")
 repo=$(realpath "$here/../../..")
 
-headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size=""
+headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size="" scale=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --headless) headless=1; out=$(realpath -m "$2"); shift ;;
@@ -36,6 +39,7 @@ while [ $# -gt 0 ]; do
         --no-dev-shader) devshader="" ;;
         --export) export="$2"; shift ;;
         --size) size="$2"; shift ;;
+        --scale) scale="$2"; shift ;;
         *) echo "glass-lab: unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -69,9 +73,11 @@ lab_env=(
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
     GLASS_LAB_PRESETS="${GLASS_LAB_PRESETS:-${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab}"
     GLASS_LAB_WALLPAPERS="$repo/defaults/wallpaper" GLASS_LAB_PRESET="$preset" GLASS_LAB_BG="$bg" GLASS_LAB_SHOW="$show"
-    GLASS_LAB_SHOT="$out" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
+    GLASS_LAB_SHOT="$out" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
 )
 lab="env $(printf '%q ' "${lab_env[@]}") gjs -m $sb/lab.js"
+# The output's scale, set before the lab connects (`msg` answers once it is applied).
+[ -n "$scale" ] && lab="$(printf %q "$bin") msg output winit scale=$scale >/dev/null; $lab"
 
 if [ -z "$headless" ]; then
     echo "glass-lab: $bin $( [ -n "$devshader" ] && echo "(shader with LAB hooks: $sb/shaders)" )"
