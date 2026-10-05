@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Desligar",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Flutuante",
     "bar.window-menu.fullscreen": "Tela cheia",
     "bar.window-menu.center": "Centralizar na tela",
     "bar.window-menu.pin": "Fixar em todas as áreas de trabalho",

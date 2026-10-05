@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Uitschakelen",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Zwevend",
     "bar.window-menu.fullscreen": "Volledig scherm",
     "bar.window-menu.center": "Centreren op scherm",
     "bar.window-menu.pin": "Vastmaken aan alle bureaubladen",

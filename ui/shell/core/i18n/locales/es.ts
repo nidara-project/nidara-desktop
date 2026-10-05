@@ -732,7 +732,6 @@ export default {
     "bar.tooltip.notifications.other": "%d notificaciones",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Flotante",
     "bar.window-menu.fullscreen": "Pantalla completa",
     "bar.window-menu.minimize": "Minimizar",
     "bar.window-menu.maximize": "Maximizar",

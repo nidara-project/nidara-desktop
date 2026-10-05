@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "シャットダウン",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "フロート",
     "bar.window-menu.fullscreen": "フルスクリーン",
     "bar.window-menu.center": "画面中央に配置",
     "bar.window-menu.pin": "すべてのデスクトップに固定",

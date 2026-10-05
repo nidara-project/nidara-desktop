@@ -6,6 +6,8 @@ import shellActions from "../../core/ShellActions"
 import { t } from "../../core/i18n"
 import { safeDisconnect } from "../../core/signals"
 import { WS_COUNT } from "../../common/WorkspaceDot"
+import { modeLabel } from "../../common/WorkspaceModeControl"
+import { WORKSPACE_MODES } from "../../core/WorkspaceModes"
 import { menuRow, menuHeader, menuSeparator, menuDisclosure } from "../../common/MenuRow"
 
 // The AppTitle capsule's menu: the APP the capsule names and the window of it you are
@@ -98,8 +100,8 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
             const fsMode = json ? json.fullscreen : client.fullscreen
             const fullscreen = json ? json.fullscreen === FULLSCREEN : compositor.isRealFullscreen(client)
 
-            // Minimize, Maximize, Full Screen: the order the title bar's own buttons
-            // and every desktop's window menu put them in, smallest to largest.
+            // Size first — Minimize, Maximize, Full Screen: the order the title bar's own
+            // buttons and every desktop's window menu put them in, smallest to largest.
             if (compositor.caps.minimize) {
                 windowSection.append(menuRow({
                     label: t("bar.window-menu.minimize"),
@@ -116,11 +118,26 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
                 checked: fullscreen,
                 onClick: () => { compositor.toggleFullscreen(addr); onClose() },
             }))
-            windowSection.append(menuRow({
-                label: t("bar.window-menu.float"),
-                checked: floating,
-                onClick: () => { compositor.floatWindow(addr); onClose() },
-            }))
+            // Placement, its own question: floating or in the mosaic — two rows, the check
+            // on the one it is (#513's rule: a lone "Floating" row is checked on every
+            // window of a floating desktop and, pressed, does what it does not say). Either
+            // way round on either kind of desktop: a floating desktop takes a window into
+            // its mosaic and leaves the rest free. The words are the desktop mode's own.
+            windowSection.append(menuSeparator())
+            for (const mode of WORKSPACE_MODES) {
+                const here = (mode === "floating") === floating
+                windowSection.append(menuRow({
+                    label: modeLabel(mode),
+                    checked: here,
+                    onClick: () => {
+                        if (!here) {
+                            if (mode === "floating") compositor.enableFloatWindow(addr)
+                            else compositor.tileWindow(addr)
+                        }
+                        onClose()
+                    },
+                }))
+            }
             if (floating) {
                 windowSection.append(menuRow({
                     label: t("bar.window-menu.center"),

@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Éteindre",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Flottant",
     "bar.window-menu.fullscreen": "Plein écran",
     "bar.window-menu.center": "Centrer à l'écran",
     "bar.window-menu.pin": "Épingler sur tous les bureaux",

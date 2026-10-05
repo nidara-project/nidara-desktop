@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Arresta",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Fluttuante",
     "bar.window-menu.fullscreen": "Schermo intero",
     "bar.window-menu.center": "Centra sullo schermo",
     "bar.window-menu.pin": "Blocca su tutti i desktop",

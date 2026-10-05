@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Wyłącz",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Pływające",
     "bar.window-menu.fullscreen": "Pełny ekran",
     "bar.window-menu.center": "Wyśrodkuj na ekranie",
     "bar.window-menu.pin": "Przypnij do wszystkich pulpitów",

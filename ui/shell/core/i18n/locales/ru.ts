@@ -605,7 +605,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Выключить",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Плавающее",
     "bar.window-menu.fullscreen": "Полноэкранный режим",
     "bar.window-menu.center": "Центрировать на экране",
     "bar.window-menu.pin": "Закрепить на всех рабочих столах",

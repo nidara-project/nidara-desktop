@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "Herunterfahren",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "Schwebend",
     "bar.window-menu.fullscreen": "Vollbild",
     "bar.window-menu.center": "Auf dem Bildschirm zentrieren",
     "bar.window-menu.pin": "An alle Desktops anheften",

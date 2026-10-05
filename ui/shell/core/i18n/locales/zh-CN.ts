@@ -598,7 +598,6 @@ export default {
     "bar.system-menu.confirm.action.shutdown": "关机",
 
     // Window menu (AppTitle)
-    "bar.window-menu.float": "浮动",
     "bar.window-menu.fullscreen": "全屏",
     "bar.window-menu.center": "在屏幕上居中",
     "bar.window-menu.pin": "固定到所有桌面",
