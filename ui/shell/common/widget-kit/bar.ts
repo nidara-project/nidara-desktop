@@ -32,23 +32,30 @@ export const barKeyAction = (w: Gtk.Widget): (() => void) | undefined => keyActi
  *  4px scale with the rest of the bar's geometry (surfaces/bar/capsule.ts). */
 export const BAR_PILL_PAD = 16
 
-/** The air on each side of a bar ITEM's content — an icon-only item is
- *  8 + 18 + 8 = 34 wide, and its hover/open pill is exactly that wide. Every widget's
- *  bar content carries it (and so do search, the CC, the `»`, the clock, the window
- *  title, the tray), because the item draws its pill round whatever the content
- *  measures: the widget owns its air, the group owns none. The bar's groups:
- *  surfaces/bar/capsule.ts (barGroup / barItem). */
-export const BAR_ITEM_PAD = 8
+/** The air on each side of an ICON in a bar item — an icon-only item is
+ *  7 + 18 + 7 = 32 wide (on the 4px scale; owner, 2026-10-06), and its hover/open
+ *  pill is exactly that wide, 24 tall. Every widget's bar content carries it (and so
+ *  do search, the CC, the `»`, the tray), because the item draws its pill round
+ *  whatever the content measures: the widget owns its air, the group owns none. The
+ *  bar's groups: surfaces/bar/capsule.ts (barGroup / barItem). */
+export const BAR_ITEM_PAD = 7
+
+/** The air on each side of TEXT in a bar item (the window title, the clock, a
+ *  widget's revealed label). More than an icon's: the pill's ends are half-circles of
+ *  radius 12, so text with less air than that runs its first and last letter into
+ *  the curve — the window title did, at 8 (owner, 2026-10-06). */
+export const BAR_TEXT_PAD = 12
 
 /** The size of every icon IN THE BAR — the widgets' bar content, search, the CC,
  *  the `»`, the tray. 18, not the 16 it was until 2026-09-27: the owner found them
  *  slightly small, and the reference agreed on is a 24 pt menu bar with 16 pt
  *  icons, with our CAPSULE as its whole bar (the air above the capsule is ours
- *  alone): our visible glass is 28 px (BAR_CAPSULE_H 32 minus the
- *  2 px edge each side), and 16 × 28/24 ≈ 18.7. Against the hover pill it comes
- *  out the same: 16 in a ~22 highlight is 73 %, and 73 % of our 24 px pill is 17.5.
- *  The bar's HEIGHT does not move with this — an 18 px icon sits in the 24 px pill
- *  with 3 px above and below; each icon item gets 2 px wider (PAD + 18 + PAD). */
+ *  alone): the visible glass was 28 px then (32 since 2026-10-06), and
+ *  16 × 28/24 ≈ 18.7. Against the hover pill it comes out the same: 16 in a ~22
+ *  highlight is 73 %, and 73 % of our 24 px pill is 17.5. An 18 px icon sits in the
+ *  24 px pill with 3 px above and below. Every icon in the bar is this size — the
+ *  system menu's mark and the island's chips too (they were 20 and 16 until
+ *  2026-10-06). */
 export const BAR_ICON_SIZE = 18
 
 /**
@@ -87,8 +94,11 @@ export function makeBarExpandable(opts: {
     box.append(icon)
     box.append(revealer)
 
-    // Right margin lives on the box so it adjusts with the revealer
+    // Right margin lives on the box so it adjusts with the revealer: collapsed the item
+    // is an icon (BAR_ITEM_PAD at both ends), revealed it ends in text, which wants
+    // BAR_TEXT_PAD — the difference rides on the label, inside the revealer.
     box.margin_end = BAR_ITEM_PAD
+    label.margin_end = BAR_TEXT_PAD - BAR_ITEM_PAD
 
     let hideTimer: number | null = null
     let expanded = false

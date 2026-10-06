@@ -13,7 +13,7 @@ import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
-import { BAR_GROUP_PAD, BAR_H, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
+import { BAR_GROUP_PAD, BAR_H, BAR_ITEM_GAP, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
@@ -46,11 +46,13 @@ import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import compositor from "../../core/CompositorState"
 import { safeDisconnect } from "../../core/signals"
-import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_ITEM_PAD, BAR_TEXT_PAD } from "../../common/widget-kit"
 import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
 
 function SystemMenuIcon(): Gtk.Widget {
-  const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE + 2, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD - 1, margin_end: BAR_ITEM_PAD - 1 })   // the mark 2px larger than the other icons: 1px less air a side keeps the item as wide as theirs
+  // The same size and air as every other bar icon (it was 2px larger, with 1px less
+  // air a side, until 2026-10-06: one icon size across the bar and the island).
+  const img = new Gtk.Image({ pixel_size: BAR_ICON_SIZE, css_classes: ["bar-distro-icon"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
 
   const applyIcon = () => {
     // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
@@ -1333,7 +1335,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const rightGroup = barGroup()
   right.append(rightGroup.widget)
 
-  const timeContent = new Gtk.Box({ margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD })
+  const timeContent = new Gtk.Box({ margin_start: BAR_TEXT_PAD, margin_end: BAR_TEXT_PAD })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
   const updateClock = () => {
     const next = regionConfig.formatClock()
@@ -1350,7 +1352,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Everything in the right group that has a place in the ORDER (core/BarOrder.ts): the
   // widgets, the apps' tray icons and search, in one row the person arranges. Only the
   // `»` before it and the CC and clock after it stay put.
-  const orderedItems = new Gtk.Box({ css_classes: ["bar-optional-widgets"] })
+  const orderedItems = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: BAR_ITEM_GAP })
 
   // The overflow capsule: shown only while some item does not fit. It is not a
   // menu — it unfolds the hidden items IN LINE, in the same bar (the `»`):
@@ -1430,7 +1432,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // "Done", in the `»`'s place while the bar is being edited.
   const doneItem = barItem({
-      child: new Gtk.Label({ label: t("bar.edit.done"), css_classes: ["bar-app-name"], margin_start: BAR_ITEM_PAD, margin_end: BAR_ITEM_PAD }),
+      child: new Gtk.Label({ label: t("bar.edit.done"), css_classes: ["bar-app-name"], margin_start: BAR_TEXT_PAD, margin_end: BAR_TEXT_PAD }),
   })
   doneItem.set_visible(false)
   { const g = new Gtk.GestureClick(); g.connect("released", () => { status.bar_edit_mode = false }); doneItem.add_controller(g) }
@@ -1519,6 +1521,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       item.set_opacity(inactive ? 0.5 : 1)
       orderedItems.append(item)
     }
+    // An empty row is still a child of the group, and a visible one gets a gap on each
+    // side of nothing: hidden while it holds no item.
+    orderedItems.set_visible(orderedItems.get_first_child() !== null)
     reselect()
   }
 
@@ -1707,8 +1712,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const syncLeftBudget = (immediate = false) => {
     const sysMenuW = sysMenuWidget.measure(Gtk.Orientation.HORIZONTAL, -1)[1] || 32
     // The title shares the left group's glass with the system menu: what it costs
-    // besides the menu item is the group's own padding at both ends.
-    const groupPad = 2 * BAR_GROUP_PAD
+    // besides the menu item is the group's own padding at both ends and the gap
+    // between the two items.
+    const groupPad = 2 * BAR_GROUP_PAD + BAR_ITEM_GAP
     let appTitleBudget: number
     if (status.bar_overflow_open) {
       // No island in the middle: the title gets whatever the unfolded right group
@@ -1746,18 +1752,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
     if (iconWidths.length === 0) return
 
-    // Items touch inside the group: an item costs its own width and nothing else, and
-    // the group's glass costs its padding once, charged with the fixed items.
+    // Every item costs its own width plus the gap before it (BAR_ITEM_GAP), and the
+    // group's glass costs its padding once, charged with the fixed items — whose first
+    // one has no gap before it.
     const fixedItems: Gtk.Widget[] = [ccItem, clockItem]
-    const fixedW = 2 * BAR_GROUP_PAD + fixedItems.reduce((s, w) => s + (w.get_visible() ? natW(w) : 0), 0)
+    const fixedW = 2 * BAR_GROUP_PAD - BAR_ITEM_GAP
+        + fixedItems.reduce((s, w) => s + (w.get_visible() ? natW(w) + BAR_ITEM_GAP : 0), 0)
     overflowItem.set_visible(true)
-    const overflowW = natW(overflowItem)
+    const overflowW = natW(overflowItem) + BAR_ITEM_GAP
     overflowItem.set_visible(false)
 
     const fitFromClock = (budget: number) => {
       let total = 0, n = 0
       for (let i = iconWidths.length - 1; i >= 0; i--) {
-        const cost = iconWidths[i]
+        const cost = iconWidths[i] + BAR_ITEM_GAP
         if (total + cost > budget) break
         total += cost
         n++

@@ -14,7 +14,7 @@ import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/Batt
 import { makeWorkspaceDot, makeActiveDotGlyph, WS_COUNT } from "../../common/WorkspaceDot"
 import { uiIcon } from "../../core/Icons"
 import type { IslandActivity } from "./ActivityIsland"
-import { BAR_PILL_PAD } from "../../common/widget-kit"
+import { BAR_ICON_SIZE, BAR_PILL_PAD } from "../../common/widget-kit"
 
 // ── Browser and Foreground Player Matching ──────────────────────────────────
 const BROWSER_CLASSES = new Set([
@@ -166,7 +166,7 @@ function mediaActivity(): IslandActivity {
             makeGhost: makeArtGhost,
             getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
         },
-        indicator: () => new Gtk.Image({ gicon: uiIcon("nd-audio-x-generic"), pixel_size: 16, css_classes: ["nd-icon"] }),
+        indicator: () => new Gtk.Image({ gicon: uiIcon("nd-audio-x-generic"), pixel_size: BAR_ICON_SIZE, css_classes: ["nd-icon"] }),
         watch: (cb) => {
             changed = cb
             media.subscribe(rewire)
@@ -289,7 +289,7 @@ function batteryActivity(): IslandActivity {
         const box = opts.ghost
             ? new Gtk.Box({ spacing: 8 })
             : new Gtk.Box({ spacing: 8, margin_start: BAR_PILL_PAD, margin_end: BAR_PILL_PAD, halign: Gtk.Align.CENTER })
-        const glyph = makeBatteryGlyph(16)   // icon box, same as the bar's battery pill
+        const glyph = makeBatteryGlyph(BAR_ICON_SIZE)   // icon box, same as the bar's battery item
         glyph.valign = Gtk.Align.CENTER
         if (opts.hideArt) glyph.opacity = 0
         const pct = new Gtk.Label({ css_classes: ["island-battery-pct"], valign: Gtk.Align.CENTER })
@@ -321,7 +321,7 @@ function batteryActivity(): IslandActivity {
         // reads batteryFrac on DRAW and has no cadence of its own). Nothing
         // outranks 30 today, so a live battery always fronts and this chip never
         // actually shows — it exists so that stops being true silently.
-        indicator: () => { const g = makeBatteryGlyph(16); glyphs.push(g); return g },
+        indicator: () => { const g = makeBatteryGlyph(BAR_ICON_SIZE); glyphs.push(g); return g },
         watch: (changed) => {
             Battery.watch(() => { evalCritical(); syncForms(); changed() })
             evalCritical(); syncForms()
@@ -355,7 +355,7 @@ function agentActivity(): IslandActivity {
         // before you open it.
         indicator: () => {
             const wrap = new Gtk.Overlay()
-            wrap.set_child(new Gtk.Image({ gicon: uiIcon("nd-ai"), pixel_size: 16, css_classes: ["nd-icon"] }))
+            wrap.set_child(new Gtk.Image({ gicon: uiIcon("nd-ai"), pixel_size: BAR_ICON_SIZE, css_classes: ["nd-icon"] }))
             const badge = new Gtk.Box({
                 css_classes: ["island-chip-badge"],
                 width_request: 7, height_request: 7,
