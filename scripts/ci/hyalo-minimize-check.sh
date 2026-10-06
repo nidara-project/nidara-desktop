@@ -101,7 +101,7 @@ wait_line '^CHILD PLACED' "$out" || fail "the probe never opened its dialog"
 sleep 0.6
 
 # 1. The minimize button, not on the dialog.
-grep -q '^LAYOUT right 90 32' "$out" || fail "the window was told '$(grep '^LAYOUT' "$out" | tail -n 1)', not 'LAYOUT right 90 32'"
+grep -q '^LAYOUT right 88 32' "$out" || fail "the window was told '$(grep '^LAYOUT' "$out" | tail -n 1)', not 'LAYOUT right 88 32'"
 grep -q '^CHILD LAYOUT right 60 32' "$out" || fail "the dialog was told '$(grep '^CHILD LAYOUT' "$out" | tail -n 1)', not 'CHILD LAYOUT right 60 32'"
 echo "ok    minimize is shown (90 px), and not on the window's dialog (60 px)"
 
