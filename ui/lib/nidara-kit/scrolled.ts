@@ -3,6 +3,7 @@ import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import { RADIUS } from "./platform/tokens"
 import { cairoDraw } from "./platform/cairo-draw"
+import { NidaraSelectionCheck } from "./check"
 
 /**
  * NidaraScrolled — the shell's scroll view. One component for overlay surfaces AND
@@ -516,21 +517,45 @@ export function NidaraDropDown(props: any = {}): Gtk.DropDown {
     // Offscreen, with GTK's factory and with ours, the item is exactly the ListView's
     // content rect: `FACTORY=gtk|nidara scripts/dev/gtk-probe.js`. Keep the swap for the
     // checkmark and for owning the fill, not for a phantom inset.
+    //
+    // The CURRENT value carries a check at the end of its row (owner, 2026-10-06): the
+    // button names it, but an open list did not say which of its rows that was. Ours, not
+    // GTK's — the same `NidaraSelectionCheck` as every single-select row, drawn in the
+    // row's ink, so it turns the accent's ink with the row under the pointer.
+    // ⚠️ Not the list item's `selected`: GTK's popup list hover-SELECTS, so that flag
+    // follows the pointer (the CSS below says the same about `row:selected`). What is
+    // chosen is `drop.selected`, and a bound row is not re-bound when it changes — hence
+    // the set of bound items, re-marked on `notify::selected`. Compared by ITEM, never by
+    // position: a searchable dropdown's popup shows a FILTERED model, whose positions are
+    // not the dropdown's (GTK's own factory compares items for the same reason).
+    const bound = new Set<any>()
+    const markCurrent = (item: any) => {
+        const check: any = item.get_child()?.get_last_child()
+        if (check) check.opacity = item.get_item() === drop.get_selected_item() ? 1 : 0
+    }
     const factory = new Gtk.SignalListItemFactory()
     factory.connect("setup", (_f: any, item: any) => {
         const label = new Gtk.Label({ xalign: 0, hexpand: true, halign: Gtk.Align.FILL })
         const row = new Gtk.Box({
             css_classes: ["nidara-dropdown-item"],
             hexpand: true, halign: Gtk.Align.FILL,
+            spacing: 8,
         })
         row.append(label)
+        // Always in the row, hidden by opacity: a check that came and went would change
+        // the rows' width and the popover's with it.
+        row.append(NidaraSelectionCheck(14))
         item.set_child(row)
     })
     factory.connect("bind", (_f: any, item: any) => {
         const obj: any = item.get_item()
         const label: any = item.get_child()?.get_first_child()
         if (label) label.label = obj?.string ?? obj?.get_string?.() ?? String(obj ?? "")
+        bound.add(item)
+        markCurrent(item)
     })
+    factory.connect("unbind", (_f: any, item: any) => { bound.delete(item) })
+    drop.connect("notify::selected", () => { for (const item of bound) markCurrent(item) })
     drop.list_factory = factory
 
     const sw = dropDownScroller(drop)

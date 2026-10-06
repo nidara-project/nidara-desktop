@@ -4177,6 +4177,21 @@ re-packed whenever its members change (`CCLayoutManager` "Two modes", 2026-09-28
 for holes — a tile removed from a personalised grid leaves its cells empty; the default grid closes
 them.
 
+### 113. ⚠️ OPEN — white on the accent does not read on yellow, green or orange (2026-10-06)
+
+`--nidara-accent-fg` is `#ffffff` for all nine accents (`theme-tokens.ts`), and it is the ink of
+every accent FILL: the menus' row under the pointer, every dropdown's list, the selected segment,
+the primary button, the Settings sidebar's chosen row. Measured (WCAG ratio, white on the fill):
+blue 3.5, teal 3.8, green **2.4**, yellow **1.8**, orange **2.6**, red 3.3, pink 3.3, purple 4.9,
+slate 3.9. Only purple reaches 4.5:1; the reference platform lives at ~3.5 with its blue, and
+medium-weight text there reads. Below 3:1 it does not. Three ways out, laid out for the owner on
+2026-10-06 (mockup "Acento en Ajustes"): **black ink on the three** that fall below 3:1; **a
+deeper accent under text** (darkened until white reaches 4.5 — blue only 13 %, but yellow turns
+ochre, 39 %), switches and sliders keeping the bright one; or leave it. The owner has not chosen —
+"ni la referencia garantiza el contraste mínimo". Do not pick one silently: it changes the colour
+of every menu on the desktop. Either fix is one token (`--nidara-accent-fg`, or a new
+`--nidara-accent-under-text`) emitted by the token engine per accent.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
