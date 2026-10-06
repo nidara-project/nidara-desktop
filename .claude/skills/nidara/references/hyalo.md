@@ -492,14 +492,20 @@ OVER the app's own header, in the same row — no bar of its own for our apps �
 the controls are the system's, so they do not take their size from each app's header
 (`window_controls::BUTTON_W/H`). **That size is a header button's** (owner, 2026-10-04): the
 capsule is a group of header buttons, as a toolbar group is on macOS 26, so it is as tall as
-its neighbours — 30×32 a button, a button of the kit's back/forward pair, so the two-button
-capsule IS that pair's 60×32. It was 30×24, to keep Hyalo's title bar thin; next to 32 px
-header buttons it read as a different part. Hyalo's title bar grew with it (below).
-Close turns red on hover. Right by default (close last), left as a setting (close first).
+its neighbours — 32 high. It was 24, to keep Hyalo's title bar thin; next to 32 px header
+buttons it read as a different part. Hyalo's title bar grew with it (below). **Each button's
+hover is a 24 px circle, 4 from the capsule's edge and 4 from the next** (owner, 2026-10-06 —
+the bar's rule, design-system.md → "Capsules of icon buttons"): a button takes 28
+(`window_controls::PITCH`) and the capsule `28 × n + 4` — 32, 60, 88 — so the two-button capsule
+IS the kit's back/forward pair, 60×32, which follows the same rule. Until then a button was a
+30 px slot whose hover FILLED it, cut by the capsule: straight on one side, or on both for the
+middle one. The shader repeats `HOVER_D`/`EDGE`/`PITCH`, and the hover and press alphas are the
+kit's `GLASS_STATE_MIX` (one hover across the desktop). A press between two circles goes to the
+nearer one (the boundary is halfway, `button_at`). Close turns red on hover — a red circle. Right by default (close last), left as a setting (close first).
 
 **Which buttons** (owner, 2026-10-04, `window_controls::shown`). A button that does nothing for
 a window is NOT drawn — hidden, not disabled, as GNOME and Windows do and as an app's own title
-bar must (it cannot disable one) — and the capsule shrinks by 30 px. A window shows a button
+bar must (it cannot disable one) — and the capsule shrinks by 28 px. A window shows a button
 when ALL of these say yes, close always:
 - **the user chose it** — `[windows.controls] buttons`, which the shell keeps equal to
   `org.gnome.desktop.wm.preferences button-layout` (below);
@@ -508,13 +514,13 @@ when ALL of these say yes, close always:
 - **no rule took it away** — a rule's `controls = ["close"]` (`Managed::controls`, the bits);
 - **it can do it** — maximize only while the window can change size (minimum ≠ maximum);
   minimize never on a dialog (a window with a parent: it goes with that one — "Minimizing").
-So by default a resizable window has minimize, maximize and close (90×32), a fixed-size window
-minimize and close (60×32), a dialog maximize and close or close alone, About close alone (30×32).
+So by default a resizable window has minimize, maximize and close (88×32), a fixed-size window
+minimize and close (60×32), a dialog maximize and close or close alone, About close alone (32×32).
 
 - **The protocol is ours**, `protocols/nidara-window-controls-v1.xml`, both ends in this repo
   (server `protocols/window_controls.rs`, client `lib/nidara-wl`): `get_window_controls(wl_surface)`
   on a toplevel's surface; the compositor sends `layout(side, width, height)` — the box to reserve
-  (30 px a button shown, 32 high) and the side — at once and again whenever it CHANGES
+  (28 px a button shown and 4 more, 32 high) and the side — at once and again whenever it CHANGES
   (`tell`, which keeps what each app was last told: after a settings reload, a rule applied,
   and every commit of that surface — its `set_buttons` or its size limits may have changed it);
   the app sends `set_position(x, y)`/`unset_position` and `set_buttons(bits)` (close 1, minimize
@@ -575,14 +581,14 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   places its own two slots beside its close button. `NIDARA_WINDOW_CONTROLS=0` turns it off.
 - `nidara-hyalo msg windows` → each window's `controls`: `[x, y, w, h]`, global logical, or null.
 - CI: `scripts/ci/hyalo-window-controls-check.sh` (C probe `hyalo-window-controls-probe.c`,
-  leaving room as the kit does): the layout told (90×32), the controls where the app placed them,
+  leaving room as the kit does): the layout told (88×32), the controls where the app placed them,
   the pointer the app's over its body and not over its controls, maximize and restore, the side
   switched live and followed; close alone from the user's buttons and from the app's
   `set_buttons` (SIGUSR1), minimize and close while it cannot change size even asking for all
   (SIGUSR2; SIGHUP undoes it); a rule's `controls = ["close"]` on a new window of the app; close
   asks the window to close. Controls, each seen failing nested: a Hyalo without the protocol
   prints NO_CONTROLS; the one before #724 (no minimize) tells 60 at once; one that ignores
-  `set_buttons` still tells 90. Minimizing itself: "Minimizing" above.
+  `set_buttons` still tells 88. Minimizing itself: "Minimizing" above.
 
 ## Minimizing (#724, 2026-10-04)
 

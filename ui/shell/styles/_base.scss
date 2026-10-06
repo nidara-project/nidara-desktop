@@ -36,6 +36,9 @@
     --nidara-surface-hover: rgba(255, 255, 255, 0.12);
     --nidara-surface-active: rgba(255, 255, 255, 0.16);
     --nidara-surface-raised: rgba(255, 255, 255, 0.20); /* workspace dots, more visible elements */
+    /* An icon button's hover and press (GLASS_STATE_MIX; NidaraTheme emits the real ones). */
+    --nidara-state-hover: rgba(255, 255, 255, 0.08);
+    --nidara-state-pressed: rgba(255, 255, 255, 0.20);
     /* Accent-tinted persistent selection (NidaraTheme overrides per mode). */
     --nidara-state-selected: rgba(0, 136, 255, 0.22);
 

@@ -36,24 +36,19 @@ window.nidara-settings-window {
     // button.nidara-icon-btn in _components.scss). Only settings-specific chrome below.
 
     // ── Navigation capsule (back / forward) ───────────────────────────────────────
-    // 32 high, as the sidebar toggle beside it (the kit's header row is 48: 8 above and below):
-    // two 26 px buttons (14 px glyph + 6 + 6) in a 2 px inset and a 1 px border.
+    // The rule of every capsule of icon buttons (owner, 2026-10-06 — the window controls
+    // Hyalo draws follow it too, protocols/window_controls.rs): each button's hover a 24 px
+    // circle, 4 from the capsule's edge and 4 from the next, no rule between them. 60 × 32,
+    // as the sidebar toggle is 32 beside it: a 1 px border, 3 px inside it, two 24 px
+    // buttons (14 px glyph + 5 + 5) 4 apart (the box's spacing, Settings.tsx).
     .navigation-capsule {
         background: var(--nidara-surface);
         border: 1px solid var(--nidara-border);
         border-radius: $nidara-radius-pill;
-        padding: 2px;
-        min-height: 26px;
+        padding: 3px;
+        min-height: 24px;
 
-        > button.nav-btn { padding: 6px; }
-
-        > separator.nav-separator {
-            background-color: var(--nidara-border);
-            min-width: 1px;
-            min-height: 1px;
-            // 4px inset inside the 26px inner height leaves an 18px rule.
-            margin: $space-1 1px;
-        }
+        > button.nav-btn { padding: 5px; }
     }
 
     // ── Header title / breadcrumb ─────────────────────────────────────────────────
