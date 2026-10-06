@@ -32,6 +32,7 @@ uniform float alpha_min;
 uniform float alpha_max;
 uniform float target;
 uniform float refraction;   // output px
+uniform float px_scale;     // output px per logical px: the widths below are logical
 uniform float rim;
 uniform float saturation;
 uniform float ink_dark;     // 1: this shape holds dark content (the ink event)
@@ -174,7 +175,7 @@ void main() {
     // And never wider than BEVEL_MAX: past it a pane is flat glass inside, as a slab is — the
     // centre of a large pane frosts, only its edge bends (owner, the glass lab, 2026-10-05:
     // with the bevel half the app grid's height the whole panel was one roof of four faces).
-    float bevel_max = LAB_ADD(12, 80.0);
+    float bevel_max = LAB_ADD(12, 80.0) * px_scale;
     float lens_w = max(min(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), bevel_max), 1.0);
     // The bevel's contours are the OUTLINE moved inward, each corner rounder by the depth
     // (`inset_sdf`, `lens_depth`), so what bends follows the corner's curve at the edge and
@@ -268,7 +269,7 @@ void main() {
     // 3.2 px of fade inward: a band of light with thickness, not a hairline (1.6 until the owner's
     // "OK 4", 2026-10-05), and not a frame either — 6.4 on the desktop read "too intense or wide",
     // and the lab's side by side settled it (owner, 2026-10-06: "3.2 without the halo looks best").
-    float edge = 1.0 - smoothstep(0.0, LAB_MUL(10, 3.2), inside);
+    float edge = 1.0 - smoothstep(0.0, LAB_MUL(10, 3.2) * px_scale, inside);
     float facing = max(dot(n, light), 0.0);
     float back = max(dot(n, -light), 0.0);
     float spec = edge * (LAB_ADD(14, 0.0) + 0.82 * facing * facing + LAB_MUL(13, 0.70) * back) * rim;

@@ -177,6 +177,7 @@ impl GlassElement {
                 ink_dark: false,
                 pointer: None,
                 refraction: 0.0,
+                px_scale: 1.0,
             }],
             offset: offset as f32,
             passes: passes as usize,
@@ -332,6 +333,7 @@ fn groups(
             }),
             ink_dark: false,
             refraction: m.refraction_of(s) * scale.x,
+            px_scale: scale.x,
             pointer: s.pointer.and_then(|p| {
                 let at = |q: [f64; 2]| {
                     let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));
