@@ -1277,10 +1277,11 @@ file outside the compositor modules may import a backend or spawn `hyprctl`.
 
 Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell relies on:
 - **A layer surface that changes level goes to the TOP of its new level** (`layer_commit`).
-  Layer-shell has no "raise", so the island gets above the bar by leaving OVERLAY and coming
-  back (`IslandWindow.raise`), and asks the compositor whether it worked (`isLayerAbove`,
-  answered from the `layers` request). Smithay keeps surfaces in the order they were mapped,
-  so Hyalo re-maps a surface whose level changed.
+  Layer-shell has no "raise", so leaving a level and coming back is how a surface gets above a
+  sibling — the bar and the dock joining OVERLAY over a fullscreen window (Super+B), the bar
+  lifted for the app grid. (The island used it to get above the bar until #708 point 3 made it
+  a panel of the bar.) Smithay keeps surfaces in the order they were mapped, so Hyalo re-maps a
+  surface whose level changed.
 - **When the bar or the dock takes room, floating windows under it move out** (`reclamp_floating`):
   a window opened before the shell started would otherwise sit under the bar.
 

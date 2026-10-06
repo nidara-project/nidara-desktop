@@ -61,16 +61,6 @@ interface HyaloWorkspace {
     last_window: number | null
 }
 
-interface HyaloLayer {
-    output: string
-    layer: string
-    namespace: string
-    x: number
-    y: number
-    width: number
-    height: number
-}
-
 const FS_MODE = { none: 0, maximized: 1, fullscreen: FULLSCREEN } as const
 
 const addrOf = (id: number) => id.toString(16)
@@ -326,27 +316,6 @@ export class HyaloStateClass extends GObject.Object implements Compositor {
 
     async version(): Promise<string> {
         return hyalo.request({ request: "version" })?.ok?.version ?? ""
-    }
-
-    private _layers(): HyaloLayer[] {
-        return hyalo.request({ request: "layers" })?.ok?.layers ?? []
-    }
-
-    async layerTop(namespace: string, monitor?: string): Promise<number | null> {
-        const l = this._layers().find(l => l.namespace === namespace && (!monitor || l.output === monitor))
-        return l ? l.y : null
-    }
-
-    async isLayerAbove(a: string, b: string): Promise<boolean | null> {
-        const layers = this._layers()
-        // Listed bottom first within each output and level: later = above.
-        for (const out of new Set(layers.map(l => `${l.output}/${l.layer}`))) {
-            const list = layers.filter(l => `${l.output}/${l.layer}` === out)
-            const ia = list.findIndex(l => l.namespace === a)
-            const ib = list.findIndex(l => l.namespace === b)
-            if (ia >= 0 && ib >= 0) return ia > ib
-        }
-        return null
     }
 
     // ── Window management.

@@ -26,12 +26,8 @@
    reaches. What stays is what is ours to say. */
 #nidara-dock,
 #nidara-bar,
-#nidara-island,
-#nidara-app-grid,
 .nidara-dock-window,
-.nidara-bar-window,
-.nidara-island-window,
-.nidara-app-grid-window {
+.nidara-bar-window {
     /* Deterministic type base: 14px body. The whole ramp ($fs-*)
        is anchored to this so em-less elements default to body, independent of
        the GNOME font size (which only governs family via ThemeManager). */
@@ -49,12 +45,8 @@
    one out still looks like the rest. Prefer NidaraScrolled over adding rules here. */
 #nidara-dock,
 #nidara-bar,
-#nidara-island,
-#nidara-app-grid,
 .nidara-dock-window,
 .nidara-bar-window,
-.nidara-island-window,
-.nidara-app-grid-window,
 .nidara-settings-window {
     & scrollbar {
         background: transparent;

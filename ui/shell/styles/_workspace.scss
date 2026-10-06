@@ -4,24 +4,17 @@
    WORKSPACE COCKPIT
    ==========================================================================
 
-   ⚠️ THIS FILE HAS TWO SCOPES, and the split is not cosmetic. The schematic is
-   drawn by `common/WorkspaceSchematic.ts`, which has TWO callers in TWO
-   different windows: the overview (an island mode → `#nidara-island`) and the
-   app grid's workspace strip (→ `#nidara-app-grid`). Everything else here is the
-   overview's own furniture and belongs to the island alone.
+   The schematic is drawn by `common/WorkspaceSchematic.ts`, which has TWO
+   callers: the overview (an island mode) and the app grid's workspace strip.
+   Both live in the bar's window since #708 point 3, so this file has one scope.
 
-   So: put a `.wo-schematic-*` rule in the SHARED block, anything else in the
-   overview block. A schematic rule left in the island block silently stops
-   painting in the app grid — nothing errors, the strip just goes flat.
+   ⚠️ It had two until then — and before that the grid's was `#nidara-dock`. Each
+   time a caller changed window, a schematic rule left in the old scope would
+   have stopped painting in silence: nothing errors, the strip just goes flat.
+   If a caller ever leaves the bar's window, split the scope again. */
 
-   ⚠️ The second scope was `#nidara-dock` until 2026-08-09, when the grid moved
-   out of the dock's window into its own surface (`AppGridWindow.ts`). That rename
-   is exactly the failure this header warns about: had it been missed, the strip
-   would have gone flat with nothing in the log. */
-
-/* --- Shared: the schematic itself (island overview + app grid strip) ------ */
-#nidara-island, .nidara-island-window,
-#nidara-app-grid, window.nidara-app-grid-window {
+/* --- The schematic itself (island overview + app grid strip) -------------- */
+#nidara-bar, .nidara-bar-window {
     /* Cairo canvas reads 'color' to get the tile fill color */
     .wo-schematic-canvas {
         color: var(--nidara-surface);
@@ -47,8 +40,8 @@
     }
 }
 
-/* --- Overview only: the panel and its cards (island window) -------------- */
-#nidara-island, .nidara-island-window {
+/* --- Overview only: the panel and its cards ------------------------------- */
+#nidara-bar, .nidara-bar-window {
     .cockpit-window-content {
         background: transparent;
         // Show/hide animation comes from the bar's ScaleRevealer wrapper (GTK-side

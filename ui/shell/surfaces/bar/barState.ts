@@ -25,8 +25,8 @@ const DEFAULTS: BarSettings = {
 //    and the `screenrecord` widget is not `defaultInBar`), so the setting let
 //    you screen-record with nothing on screen saying so. It also never hid the
 //    island it was named after — the expanded modes are separate overlay
-//    children of the island surface (`IslandWindow.mount`), so Super+A, Super+W
-//    and the battery-critical alert opened regardless.
+//    children (the island's own surface then; the bar's since #708 point 3), so
+//    Super+A, Super+W and the battery-critical alert opened regardless.
 //
 // Filtering here rather than spreading `raw` means those dead keys are dropped
 // from the file on the next write instead of being re-persisted forever.

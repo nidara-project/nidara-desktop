@@ -68,8 +68,7 @@ const SHEET = join(SHELL, "style.css")
  * (_base, _components, _reset, keyframes) and reaches everywhere. */
 const ALL_SCOPES = [
     "#nidara-", "window#",
-    ".nidara-bar-window", ".nidara-island-window", ".nidara-dock-window",
-    ".nidara-app-grid-window", ".nidara-settings-window",
+    ".nidara-bar-window", ".nidara-dock-window", ".nidara-settings-window",
     "window.nidara-settings-window", ".about-floating-window",
     // ⚠️ A missing entry here does NOT fail — it reads as "unscoped", i.e.
     // reachable from everywhere, which is the most permissive answer the tool
@@ -78,32 +77,20 @@ const ALL_SCOPES = [
 ]
 
 /* dirs = the code that renders INTO this window, which is not the same as the
- * directory named after it. Bar.tsx builds the capsule row and hands it to the
- * island; PlayerIsland shows a panel built in widgets/. Follow the mount site. */
+ * directory named after it. The bar's window holds the Activity Island (its
+ * overview, its dots) and the app grid too since #708 point 3. Follow the mount site. */
 const WINDOWS = [
     {
         name: "bar",
-        dirs: ["surfaces/bar", "surfaces/control-center", "surfaces/prism", "widgets"],
+        dirs: ["surfaces/bar", "surfaces/control-center", "surfaces/prism", "widgets",
+               "surfaces/island", "surfaces/overview", "surfaces/app-grid"],
+        files: ["common/WorkspaceDot.ts", "common/widget-kit.ts"],
         own: ["#nidara-bar", ".nidara-bar-window", "window.nidara-bar-window"],
-    },
-    {
-        name: "island",
-        // widgets/media.ts: PlayerIsland mounts buildMediaDetailPanel.
-        // surfaces/overview: ActivityIsland mounts the workspace overview.
-        // common/WorkspaceDot.ts: the dots, island-only.
-        dirs: ["surfaces/island", "surfaces/overview"],
-        files: ["widgets/media.ts", "common/WorkspaceDot.ts", "common/widget-kit.ts"],
-        own: ["#nidara-island", ".nidara-island-window", "window.nidara-island-window"],
     },
     {
         name: "dock",
         dirs: ["surfaces/dock"],
         own: ["#nidara-dock", ".nidara-dock-window", "window.nidara-dock-window"],
-    },
-    {
-        name: "appgrid",
-        dirs: ["surfaces/app-grid"],
-        own: ["#nidara-app-grid", ".nidara-app-grid-window", "window.nidara-app-grid-window"],
     },
     {
         name: "settings",

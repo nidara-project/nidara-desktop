@@ -263,23 +263,33 @@ phase_run() {
     log "shell IPC OK"
 
     # The glass (#684): every shell surface tells Hyalo where its glass is (nidara-material-v1)
-    # and Hyalo paints it. The bar, the dock and the island each declare theirs; opening the
-    # Control Center adds its panes to the bar's, so the shapes follow what is on screen.
+    # and Hyalo paints it. The bar and the dock each declare theirs; opening the Control
+    # Center adds its panes to the bar's, so the shapes follow what is on screen.
+    #
+    # The bar is the ONE surface every panel hangs from (#708 point 3): the Activity Island
+    # and the app grid are panels of it, not layers of their own. Its resting glass is
+    # therefore three pieces — the left group, the island's capsule, the right group.
     glass_shapes() {
         nidara-hyalo msg layers | jq -r --arg ns "$1" \
             '[.ok.layers[] | select(.namespace == $ns) | .glass | select(. != null and .compositor_paints) | .shapes] | max // 0'
     }
     for i in $(seq 1 20); do
-        [ "$(glass_shapes nidara-bar)" -gt 0 ] && [ "$(glass_shapes nidara-dock)" -gt 0 ] \
-            && [ "$(glass_shapes nidara-island)" -gt 0 ] && break
+        [ "$(glass_shapes nidara-bar)" -ge 3 ] && [ "$(glass_shapes nidara-dock)" -gt 0 ] && break
         sleep 0.5
     done
-    for ns in nidara-bar nidara-dock nidara-island; do
+    for ns in nidara-bar nidara-dock; do
         [ "$(glass_shapes "$ns")" -gt 0 ] \
             || { log "FAIL: $ns declared no glass for Hyalo to paint"; nidara-hyalo msg layers; exit 1; }
     done
-    local bar_rest bar_cc
+    local strays
+    strays="$(nidara-hyalo msg layers | jq -r \
+        '[.ok.layers[] | select(.namespace | test("^nidara-(island|app-grid)$")) | .namespace] | unique | join(" ")')"
+    [ -z "$strays" ] \
+        || { log "FAIL: a panel has a layer of its own again ($strays) — it belongs on the bar's surface"; nidara-hyalo msg layers; exit 1; }
+    local bar_rest bar_cc bar_grid
     bar_rest="$(glass_shapes nidara-bar)"
+    [ "$bar_rest" -ge 3 ] \
+        || { log "FAIL: the bar declares $bar_rest glass shapes at rest — the island's capsule is not among them"; nidara-hyalo msg layers; exit 1; }
     # The bar's and the dock's glass cast no shadow (`trackNoScrim`): not a halo per capsule.
     local ns lone
     for ns in nidara-bar nidara-dock; do
@@ -304,7 +314,15 @@ phase_run() {
         || { log "FAIL: the Control Center's panes never reached Hyalo ($bar_rest shapes closed, $bar_cc open)"; exit 1; }
     [ "$cc_scrim" -gt 1 ] \
         || { log "FAIL: the Control Center's panes do not share one shadow under their glass ($cc_scrim in its region)"; nidara-hyalo msg layers; exit 1; }
-    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open, $cc_scrim of them on one shadow; the dock's, the island's)"
+    # The app grid's glass lands on the bar's surface too.
+    /tmp/hyalo/nidara-ipc toggleAppGrid >/dev/null
+    sleep 2
+    bar_grid="$(glass_shapes nidara-bar)"
+    /tmp/hyalo/nidara-ipc toggleAppGrid >/dev/null
+    sleep 1
+    [ "$bar_grid" -gt "$bar_rest" ] \
+        || { log "FAIL: the app grid's glass never reached the bar's surface ($bar_rest shapes closed, $bar_grid open)"; nidara-hyalo msg layers; exit 1; }
+    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open, $cc_scrim of them on one shadow, $bar_grid with the app grid open; the dock's)"
 
     # Settings reach Hyalo through the compositor interface (#682): the shell states its
     # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is

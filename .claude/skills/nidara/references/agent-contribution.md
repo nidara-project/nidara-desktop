@@ -79,8 +79,8 @@ Examples (real):
 **Renaming a mislabelled toggle is not automatically the fix.** The first attempt at the one
 above was `showWorkspaces` → `showIsland` with honest copy, and it was still wrong twice over:
 the recording hole survived the rename, and the new name over-promised in the other direction
-— the island's expanded modes are separate overlay children of the island surface
-(`IslandWindow.mount`), so Super+A, Super+W and the battery alert opened regardless of the
+— the island's expanded modes are separate overlay children (of the island's own surface then,
+of the bar's since #708 point 3), so Super+A, Super+W and the battery alert opened regardless of the
 setting. When a label is wrong, **first ask what the honest setting would do, then ask whether
 anyone should want it.** A truthful name on a setting nobody should have just documents the
 footgun.

@@ -10,7 +10,7 @@
 #   # the floor: nothing open
 #   scripts/dev/blur-arm.sh "floor"
 #   # arm A — the OLD code, checked out from a ref, as the only variable
-#   REF=origin/main FILES=ui/shell/surfaces/island/IslandWindow.ts \
+#   REF=origin/main FILES=ui/shell/surfaces/bar/Bar.tsx \
 #     scripts/dev/blur-arm.sh "old: full surface" setIsland agent
 #   # arm B — the working tree
 #   scripts/dev/blur-arm.sh "new: declared rect" setIsland agent

@@ -1153,11 +1153,6 @@ hl.window_rule({
 -- the same thing as a seen one. Keep the number; do not re-derive it from the
 -- formula and "fix" it back.
 --
--- nidara-island is at 0.23 for the same reason, with one difference worth watching:
--- its morph ramps opacity over 300 ms in / 220 ms out, so its close is HALF AGAIN as
--- long as the bar's 150 ms — the crossing is the same, the eye has more time to catch
--- it. Judged on the bar first and carried here deliberately. If a pop ever shows up
--- anywhere, this is the surface it shows up on.
 -- nidara-bar at 0.01 (was 0.05): during the overlays' close animation the glass
 -- alpha drops below the threshold and the backdrop blur pops off; at 0.01 that
 -- happens when the panel is already near-invisible. Verified no AA-edge halos
@@ -1168,32 +1163,11 @@ hl.window_rule({
 -- blurred by this rule — NOT by `decoration:blur:popups`, which only covers
 -- popups of WINDOWS. Their content must clear `popups_ignorealpha` (0.30); the
 -- tooltip floors its glass at 0.38 for exactly that. See tech-debt #26.
--- nidara-island: the Activity Island's expanded modes live in their OWN surface
--- on the OVERLAY level, one above the bar's TOP. That is the whole point: a
--- surface's blur samples what was composited BEFORE it, so this rule is what
--- finally difumina the bar's capsules under the island. Inside one window it
--- was impossible — Cairo has no backdrop-filter, so at the default 0.05 glass
--- the capsules read through sharp (see ui/shell/surfaces/island/IslandWindow.ts).
--- 0.01 like the bar, NOT the 0.30 a popup would need: `ignore_alpha` and
--- `popups_ignorealpha` are different knobs, which is why the island keeps its
--- 0.05 glass and stays tied to the user's opacity setting.
--- It needs `blur_popups` for the same reason the bar does, and shipped without
--- it: while the island lived inside the bar's window its popups were the BAR's
--- popups and this rule covered them. Moving it to its own surface moved them
--- too, and the player panel's source menu came out unblurred (user-caught
--- 2026-08-03). Any layer that can open a Gtk.Popover needs the flag.
--- nidara-app-grid: the app grid got its OWN surface on 2026-08-09 (it used to be a
--- child of the dock's window, which had to hand its whole blur region back for as
--- long as the grid was up — see AppGridWindow.ts). It went 0.04 → 0.23 on 2026-08-24,
--- the last of the four to move, so that its panel could carry the drop shadow: the
--- band is `alpha 0.18` and at 0.04 Hyprland blurred BEHIND it, smearing a halo along
--- the silhouette. Two things made it safe, and neither is "the others did it":
---   1. Its close is `OVERLAY_POP.durationOut` = 150 ms — the BAR's number, the one
---      #244 actually watched, not the island's 220 ms that was flagged as the surface
---      a pop would show up on first.
---   2. Its surface carries NOTHING but the panel (the rect is the panel's plus
---      BLUR_PAD; there is no scrim), so raising the threshold takes blur away from
---      nothing except the shadow band — which is the entire point.
+-- The Activity Island and the app grid had layers of their own (`nidara-island`,
+-- 2026-07-26; `nidara-app-grid`, 2026-08-09), both at 0.23 with blur_popups, and both
+-- are panels of the bar's surface again since #708 point 3 — this rule covers them.
+-- The island's move OUT once cost its popups their blur (its player's source menu,
+-- user-caught 2026-08-03): any layer that can open a Gtk.Popover needs the flag.
 --
 -- ── The dock is at 0.23, and it is the only surface that can be (2026-08-23) ──
 -- The threshold decides WHERE the compositor blurs: a pixel whose alpha is below it
@@ -1214,8 +1188,8 @@ hl.window_rule({
 -- because NOTHING between the two ends modifies the alpha, which was verified rather
 -- than assumed — `dockAlpha` is `Theme.dockOpacity` straight into `drawSquircle` with
 -- no multiplier, `clampOpacity` floors it at GLASS_RANGE.min, the dock never touches
--- its own opacity anywhere (it auto-hides by SLIDING), and the app grid has had its
--- own surface since 2026-08-09 so its fade cannot reach this one.
+-- its own opacity anywhere (it auto-hides by SLIDING), and the app grid has not lived
+-- in the dock's window since 2026-08-09, so its fade cannot reach this one.
 --
 -- ⚠️ The real hazard is not headroom, it is that these two numbers live in different
 -- files in different languages and nothing used to compare them. Lower
@@ -1223,28 +1197,26 @@ hl.window_rule({
 -- degraded, gone — while the config still parses, the shell still boots and the
 -- smoke still passes. `scripts/ci/blur-threshold-check.mjs` is now that comparison.
 --
--- ⚠️ THIS PARAGRAPH USED TO SAY "NO OTHER LAYER CAN TAKE THIS VALUE". All four do
--- now (bar and island in #244, the app grid on 2026-08-24), so the claim is kept here
--- only as the ARGUMENT, which is still the right one to make — it was the CONCLUSION
--- that was drawn too early, from arithmetic instead of from a screen.
--- `nidara-bar` hosts CC, NC, Prism, the system menu and the overview, and
--- `nidara-app-grid` is itself one of those panels — every one wrapped in a
--- `ScaleRevealer`, which animates OPACITY on open/close. The surface alpha during a
+-- ⚠️ THIS PARAGRAPH USED TO SAY "NO OTHER LAYER CAN TAKE THIS VALUE". Both do now
+-- (the bar in #244), so the claim is kept here only as the ARGUMENT, which is still
+-- the right one to make — it was the CONCLUSION that was drawn too early, from
+-- arithmetic instead of from a screen.
+-- `nidara-bar` hosts CC, NC, Prism, the system menu, the island's modes and the app
+-- grid — every one wrapped in a `ScaleRevealer` or a `MorphRevealer`, which animate
+-- OPACITY on open/close. The surface alpha during a
 -- close is `glass × widget-opacity`, so the blur pops off at `threshold / glass`:
 -- at 0.01 that is 4% opacity (invisible), at 0.23 it is 96%, i.e. in the first frames
--- of every close. The dock is the only one of the four that never animates its
--- opacity at all — it auto-hides by sliding, so for IT the crossing never happens.
--- For the other three it happens on every close and is NOT PERCEPTIBLE, which is a
+-- of every close. The dock never animates its opacity at all — it auto-hides by
+-- sliding, so for IT the crossing never happens. For the bar it happens on every
+-- close and is NOT PERCEPTIBLE, which is a
 -- fact about a 150 ms fade under a moving eye and not something the formula can tell
 -- you. Keep the burden of proof where #244 put it: a new layer joins this value by
 -- being WATCHED closing over detailed content, not by citing this line.
 --
--- It opens context menus, hence blur_popups — the exact flag the island shipped
+-- Both open context menus, hence blur_popups — the exact flag the island shipped
 -- without when IT moved out of the bar.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.23  })
-hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.23 })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.23 })
-hl.layer_rule({ match = { namespace = "nidara-app-grid" }, blur = true, blur_popups = true, ignore_alpha = 0.23 })
 -- ⚠️ There is deliberately NO rule for `nidara-lock`, and do not add one back. The
 -- lockscreen is an ext-session-lock-v1 surface (`Gtk4SessionLock`, ui/lockscreen/
 -- app.ts) — not a layer surface, so no layer_rule can reach it — and Hyprland paints

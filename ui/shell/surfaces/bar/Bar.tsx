@@ -35,7 +35,7 @@ import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import { ActivityIsland } from "../island/ActivityIsland"
-import { IslandWindow } from "../island/IslandWindow"
+import AppGridPanel from "../app-grid/AppGrid"
 import { execAsync } from "../../../lib/process"
 import { trackNoScrim, trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
 import { t } from "../../core/i18n"
@@ -70,7 +70,12 @@ function SystemMenuIcon(): Gtk.Widget {
   return item
 }
 
-export default function Bar(gdkmonitor: Gdk.Monitor) {
+/**
+ * @param gridPeers windows that must stay clickable THROUGH the grab while the app
+ *   grid is open — this monitor's dock, so its icons still launch with the grid up.
+ *   A GETTER because the dock window is rebuilt on a position or auto-hide change.
+ */
+export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window[] = () => []) {
   // The monitor's geometry is NOT captured here — it belongs to the stamper,
   // which re-reads it on `notify::geometry`. This surface was one of the two that
   // cached it and came out cut off on a live resolution change; the header of
@@ -168,19 +173,66 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // The Activity Island: the bar-center workspace capsule as a multi-purpose
   // morphing surface — capsule = compact state, expanded modes morph out of
   // it Dynamic-Island-style, one MorphRevealer per mode, all driven by
-  // status.island_mode (see surfaces/island/ActivityIsland.tsx). Phase 1
-  // ships one mode: the workspace overview.
+  // status.island_mode (see surfaces/island/ActivityIsland.tsx).
   //
-  // The WHOLE island — compact capsule included — lives in its own OVERLAY
-  // layer surface (IslandWindow.ts), the one deliberate exception to "overlays
-  // live inside the Bar's window": a surface cannot blur its own siblings, and
-  // the island must blur the bar capsules it covers. The capsule goes with it so
-  // the morph stays ONE object transforming on ONE surface; splitting them meant
-  // two surfaces painting glass over the same pixels mid-morph, and their blurs
-  // stacked into a visible seam. The bar still owns the capsule's geometry (the
-  // row below) — it just hands the widget over.
-  const islandWin = IslandWindow(gdkmonitor)
+  // The WHOLE island — the capsule, its chips and every mode — lives on THIS
+  // surface, like every other panel (#708 point 3, owner 2026-10-06: the bar is
+  // the one surface every panel hangs from). It had a layer of its own until then,
+  // so that its modes could blur the bar's capsules under them; that is glass on
+  // glass, which the reference material itself avoids. A mode that grows over the
+  // bar's row takes the groups it covers out of the way instead (`rowNeighbours`
+  // below, MorphRevealer's companions). One surface is also what lets the capsule
+  // and a mode melt into one silhouette on Hyalo, which draws each surface's glass
+  // on its own.
   const island = ActivityIsland(gdkmonitor)
+  // The capsule's row. `center` holds the capsule and the indicator chips; the GROUP
+  // centres on the monitor. It reuses `.bar-centerbox`, so the 4px top margin and the
+  // BAR_H row height come from the same CSS rule as the bar's own row, and the capsule
+  // lands exactly where the CenterBox would have put it.
+  //
+  // ⚠️ Centred, NOT a full-width row with the group centred inside it. This row sits
+  // ABOVE barBox in masterOverlay, and GTK picks a Gtk.Box wherever its allocation is:
+  // a full-width row would take every press meant for the left and right groups.
+  //
+  // NO spacing — the gap lives on each chip's own margin (see ActivityIsland). A
+  // Gtk.Box reserves its spacing between every VISIBLE child, and a collapsed
+  // Gtk.Revealer is still visible (it just measures 0), so spacing here would hold a
+  // permanent 8px to the right of the capsule and leave it off-centre in an idle
+  // session — the one state that must look exactly as it always has. A chip appearing
+  // shifts the capsule off the monitor's axis, the cost of splitting the activities,
+  // paid only while something is actually running.
+  const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
+  center.append(island.capsule)      // the island's compact state
+  center.append(island.indicatorRow) // live activities that are NOT fronting it
+  const islandRow = new Gtk.Box({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START })
+  islandRow.append(center)
+  // The row RISES off the top of the screen while the bar's overflow is unfolded in
+  // line (Status.bar_overflow_open), and comes back down when it folds. Paint-only:
+  // the rise ends above the bar strip, which is always in both regions.
+  const islandHost = new ScaleRevealer(islandRow, {
+    durationIn: 220, durationOut: 150, scaleFrom: 1, animateLayout: false, pivot: "top-center",
+    riseFrom: BAR_H + 8,
+    opacityFloor: () => blurSafeOpacity(Theme.barOpacity),
+  })
+  // ScaleRevealer clips to its box; the capsule's shadow spills below the row.
+  islandHost.set_overflow(Gtk.Overflow.VISIBLE)
+  islandHost.valign = Gtk.Align.START
+  islandHost.halign = Gtk.Align.CENTER
+  islandHost.showInstant()
+
+  // The app grid — on this surface too since #708 point 3. It had a layer of its own
+  // only because Hyprland charged a layer's blur by its BOX, and a grid inside a
+  // monitor-sized host handed the whole box back while it was up. Hyalo charges per
+  // declared shape. It opens centred on the monitor, never over the dock (the dock is
+  // a surface of its own and stays clickable through the grab: `gridPeers`).
+  //
+  // Through CompositorState's `focusWorkspaceFromShell`, never `focusWorkspace`
+  // directly — the switch has to happen with the grab already handed over.
+  const grid = AppGridPanel(gdkmonitor, () => { status.app_grid_open = false },
+                            (id) => compositor.focusWorkspaceFromShell(id))
+  grid.widget.visible = false
+  grid.widget.halign = Gtk.Align.CENTER
+  grid.widget.valign = Gtk.Align.CENTER
   // Invisible below-bar button — dismisses any open overlay on outside click.
   // It deliberately does NOT cover the bar strip (margin_top set with the panel
   // geometry below): capsule clicks must reach the capsules so switching
@@ -192,10 +244,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
     status.island_mode = ""; status.bar_expanded_id = ""; status.bar_overflow_open = false
-    // The app grid too, and it is NOT decoration: this surface is a peer in the
-    // grid's focus grab (so its capsules stay hoverable while the grid is open), and
-    // a peer is precisely a surface the compositor will NOT dismiss on. Without this
-    // line the empty strip would be the one press on screen that does nothing.
+    // The app grid too, and it is NOT decoration: it lives on this surface, so a
+    // press on the empty strip is INSIDE its grab, and the compositor will not
+    // dismiss on it. Without this line the empty strip would be the one press on
+    // screen that does nothing.
     status.app_grid_open = false
   }
   // An EMPTY stretch of the bar strip dismisses too, and only GTK can do it. The
@@ -260,6 +312,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     if (!okBar || y >= barRect.get_y() + barRect.get_height()) return
     const hit = masterOverlay.pick(x, y, Gtk.PickFlags.DEFAULT)
     if (!hit) return
+    // The island's chips while a mode is open: faded to nothing (MorphRevealer's
+    // companions), but still laid out where they were. Nothing is there to press.
+    if (island.indicatorRow.opacity === 0 && (hit === island.indicatorRow || hit.is_ancestor(island.indicatorRow))) {
+      dismissOverlays(); return
+    }
     // `owner` ends as the masterOverlay child the press belongs to, or null when it
     // landed on the overlay's own background (the bands around barBox).
     let owner: Gtk.Widget | null = null
@@ -267,15 +324,19 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (handlesPresses(w)) return    // a control owns this press
       owner = w
     }
-    if (owner === null || owner === barBox) dismissOverlays()
+    if (owner === null || owner === barBox || owner === islandHost) dismissOverlays()
   })
   masterOverlay.add_controller(barStripClick)
 
   masterOverlay.set_child(barBox)
+  // Stacking is insertion order. The capsule's row is part of the bar, so it goes
+  // first; the island's modes and the app grid last, above every other panel (they
+  // were layers above this one until #708 point 3).
+  masterOverlay.add_overlay(islandHost)
   masterOverlay.add_overlay(expansionCapsule)  // below the major overlays
   masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
-  // (The island — capsule row + mode revealers — is mounted on its own surface
-  // further down, once `center` has been built. NOT on masterOverlay.)
+  for (const r of island.revealers) masterOverlay.add_overlay(r)
+  masterOverlay.add_overlay(grid.widget)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
@@ -361,6 +422,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // to notice that press is exactly the work the protocol deleted.
   let barGrabToken = 0
   let layerShellReady = false
+  // The bar's row is out of sight while the app grid is up over a fullscreen window
+  // (`liftForGrid`): the surface is on screen for the grid alone.
+  let rowHidden = false
 
   const updateInputRegion = () => {
       const surface = win.get_native()?.get_surface()
@@ -381,9 +445,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
 
 
-      // Bar strip (40px)
+      // Bar strip (40px). It holds the island's capsule and chips too, which is why
+      // they need no rects of their own: a constant cannot fail to measure. (On a
+      // surface of their own they did, and a capsule that measured nothing for one
+      // stamp took no input until something re-stamped — 33 minutes once.)
+      // Not while the row is hidden for the app grid over a fullscreen window
+      // (`liftForGrid`): the strip would take the top of that window's clicks.
       // @ts-ignore
-      region.unionRectangle({ x: 0, y: 0, width: Math.round(geo().width), height: BAR_H })
+      if (!rowHidden) region.unionRectangle({ x: 0, y: 0, width: Math.round(geo().width), height: BAR_H })
 
       // ⚠️ NOTHING below the bar strip goes into this region, and that is the
       // dismissal mechanism working, not a gap in it. While an overlay was open
@@ -403,10 +472,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(alloc.height) })
       }
       addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu)
-      // The island's revealers are NOT in this window any more — its surface
-      // stamps its own region (islandWin.updateInputRegion), and everything
-      // outside the island stays click-through there.
       addWidgetToRegion(expansionCapsule)
+      // An island mode, from the layout pass that gives it an allocation (its
+      // `onAllocated`, wired with every other panel's below). A closing one is still
+      // visible until its last tick, like the panels above.
+      for (const r of island.revealers) addWidgetToRegion(r)
+      // The grid only while it is OPEN, not for the 150ms it takes to shrink away:
+      // the click that closed it is the last one it takes.
+      if (status.app_grid_open) addWidgetToRegion(grid.widget)
 
       // Every region here must match its panel EXACTLY: nothing backs it up, so a
       // rect that is short eats nothing and a rect that is long steals the press
@@ -463,11 +536,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // island's rule borrowed wholesale — and it meant the saving evaporated in
   // exactly the states that cost the most: five panels live here (CC, NC, Prism,
   // system menu, the expansion capsule) plus the banners, so "something is open"
-  // is most of any interaction. The island genuinely cannot do better (its modes
-  // arrive through a MorphRevealer, which has no final allocation until the
-  // morph lands); these panels are `ScaleRevealer` + OVERLAY_POP with
-  // `animateLayout: false`, so the allocation is the FINAL one from the first
-  // laid-out frame and the 0.97→1.0 pop paints INSIDE it.
+  // is most of any interaction. These panels are `ScaleRevealer` + OVERLAY_POP
+  // with `animateLayout: false`, so the allocation is the FINAL one from the first
+  // laid-out frame and the 0.97→1.0 pop paints INSIDE it. The island's modes are
+  // the same: the morph is snapshot-time only (opacity and a queued draw, never a
+  // relayout), and the shape it paints travels between the capsule — inside the
+  // strip — and the mode's own box, whose top is the capsule's. Every frame of it
+  // lies inside the two rects already declared.
   //
   // 🔑 The audit that mattered was not "what paints below the strip" but "can
   // the stamp arrive LATE". An input region that lags by a frame costs a late
@@ -499,6 +574,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // paying for pixels that are already the surface's own width buys immunity to
   // every capsule that changes size on its own (window title, clock, tray).
   const BLUR_PAD_Y = 16
+  // The app grid's squircle has its soft edge and its drop shadow outside its
+  // allocation — the pad it declared on its own surface, kept.
+  const GRID_PAD = 48
 
   // The banner stack is settled (its box's allocation describes every banner in
   // it). False between a banner being appended and the deferred stamp that
@@ -525,10 +603,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //  · barBox — the strip itself, i.e. the thing the first rect describes.
   //  · popups — a container, so it is `visible` whether or not it holds a
   //    banner. Its CHILDREN are the content, hence the emptiness test.
-  // An open ISLAND mode does not count either, and no longer needs excluding by
-  // hand: the island paints on its own surface, so nothing of it is a child here
-  // and this window still declares only the strip — and a long activity (media,
-  // the assistant) is exactly when that saving matters.
+  // The island's row (`islandHost`) is a child like any other, and its rect lies
+  // inside the strip's.
   // Everything else answers with `tickId` as well as `get_visible()`: a panel
   // closing is still visible until its final tick, and dropping its rect one
   // tick early would scissor away the tail of its own close animation.
@@ -579,10 +655,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, Math.round(b.get_width()))
               height = Math.max(height, natH)
           }
+          const pad = c === grid.widget ? GRID_PAD : PANEL_PAD
           rects.push(fullWidth
-              ? { x: 0, y: Math.round(b.get_y()) - PANEL_PAD, width: box.width, height: Math.round(height) + PANEL_PAD * 2 }
-              : { x: Math.round(b.get_x()) - PANEL_PAD, y: Math.round(b.get_y()) - PANEL_PAD,
-                  width: Math.round(b.get_width()) + PANEL_PAD * 2, height: Math.round(height) + PANEL_PAD * 2 })
+              ? { x: 0, y: Math.round(b.get_y()) - pad, width: box.width, height: Math.round(height) + pad * 2 }
+              : { x: Math.round(b.get_x()) - pad, y: Math.round(b.get_y()) - pad,
+                  width: Math.round(b.get_width()) + pad * 2, height: Math.round(height) + pad * 2 })
       }
       return rects
   }
@@ -809,17 +886,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     updateInputRegion()
   }
 
-  // The island's own surface: same reveal contract, only the region it refreshes
-  // belongs to that window. The surface stays MAPPED — the capsule lives on it,
-  // so there is no "closed" state to unmap into.
+  // The island's modes: the same reveal contract as the panels above. A closing mode
+  // hands the capsule back, and the bar row re-decides its glass with it.
   const syncIslandModes = () => {
     island.sync((r, open) => r.reveal(open, () => {
-      if (!open) islandWin.updateInputRegion()
-      // The mode that just landed is measured on its own; a closing mode hands the
-      // capsule back, and the bar row re-decides with it.
+      if (!open) updateInputRegion()
       glassHandles.get(open ? r : islandHost)?.remeasure()
     }))
-    islandWin.updateInputRegion()
+    updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
   // Toggling edit mode RESIZES the CC (content-height grid ↔ full 8-row board
@@ -834,64 +908,46 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   })
 
-  // Modality for this window is a compositor focus grab, and nothing else. Reached
-  // through syncOverlays(), which calls it FIRST because the input region is
-  // computed from its result; it guards on `layerShellReady` so the
-  // construction-time syncOverlays() cannot touch layer-shell before
-  // init_for_window. The island grabs on ITS OWN surface — there is exactly one
-  // grab slot compositor-wide, so the two must never want it at the same time.
+  // Modality for this window is a compositor focus grab, and nothing else — ONE for
+  // every panel on it, the island's modes and the app grid included. Reached through
+  // syncOverlays(), which calls it FIRST because the input region is computed from
+  // its result; it guards on `layerShellReady` so the construction-time
+  // syncOverlays() cannot touch layer-shell before init_for_window.
   //
-  // Both grabs are suspended while `inputYield` is active: a grab clamps pointer
-  // focus to the grabbed surface, so computer-use cannot reach the app it was asked
-  // to drive until we let go (core/InputYield).
+  // The grab is suspended while `inputYield` is active: a grab clamps pointer focus
+  // to the grabbed surface, so computer-use cannot reach the app it was asked to
+  // drive until we let go (core/InputYield).
+  //
   // Which states want THIS window to own input. Note what it is not:
   //
-  //  · NOT `isAnyOverlayOpen` — that includes `island_mode`, which lives on the
-  //    island's own surface. There is exactly ONE grab slot in the compositor, so
-  //    letting both windows want it at the same time makes them evict each other,
-  //    and the loser's `cleared` would close what the winner just opened.
-  //  · NOT just Prism any more. Prism is the only overlay here that needs the
-  //    KEYBOARD, but every one of them wants MODALITY — "clicking outside closes
-  //    me" — which was the catcher's whole job.
+  //  · NOT just Prism and the keyboard modes. They need the KEYBOARD, but every
+  //    panel wants MODALITY — "clicking outside closes me" — and an ambient island
+  //    mode (media, a running activity) as much as any.
   //  · NOT `cc_edit_mode`: it is the one open state that deliberately leaves the
   //    desktop interactive, and a grab would take that away — UNLESS it was entered
   //    from the keyboard (Status.ccEditFromKeyboard), when releasing the grab would
   //    take the keyboard away from the person using it.
   const barModal = () =>
     (status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
+      || status.island_mode !== "" || status.app_grid_open
       || status.bar_expanded_id !== "" || status.bar_overflow_open || status.bar_edit_mode || status.bar_keyboard)
       && (!status.cc_edit_mode || status.ccEditFromKeyboard)
   const barGrabbing = () => barModal()
-  // ⚠️ ANY open island mode, not just the keyboard-driven ones. Under layer-shell
-  // only an EXCLUSIVE mode took input, so this used to read `island.needsKeyboard()`
-  // — but a focus grab clamps POINTER focus too, and syncIslandGrab takes one for
-  // every mode. Left narrow, an ambient mode (media, a running activity) would hold
-  // the pointer while inputYield reported nobody holding anything, and computer-use
-  // clicks would land on the island instead of the app they were aimed at.
-  const islandGrabbing = () => !!status.island_mode
 
   // The compositor took the grab away. Three causes, indistinguishable from here
   // (see common/FocusGrab.ts): an outside press — the dismissal we asked for — a
   // popup grab stealing the single slot, or a layer surface mapping with keyboard
   // interactivity. This window's answer is the same for all three: whatever is open
-  // is no longer modal, so it closes.
-  //
-  // Nothing in THIS window opens a popover, which is what makes one grab safe for
-  // all of its overlays. The app grid does, and is migrated anyway: FocusGrab
-  // suspends the lease for the life of a popup rather than reading the eviction as
-  // a dismissal (see common/FocusGrab.ts and DockCore).
+  // is no longer modal, so it closes. (A popup of ours never reaches here: the grid's
+  // context menus are popovers, and FocusGrab suspends the lease for the life of one.)
   const onBarGrabCleared = () => {
     barGrabToken = 0
     // The keyboard walk had the keys through this grab; without it keys go elsewhere.
     status.bar_keyboard = false
-    // Close ONLY what this window owns — deliberately NOT dismissOverlays(), which
-    // also clears island_mode. An eviction can come from the ISLAND taking the
-    // single slot for a mode the user just opened, and reaching that far would close
-    // it again. The wider behaviour belongs to `dismissOverlays`, which runs off a
-    // REAL click on the bar strip rather than off an eviction.
     if (!status.cc_edit_mode) {
       status.cc_open = false; status.nc_open = false
       status.prism_open = false; status.system_menu_open = false
+      status.island_mode = ""; status.app_grid_open = false
       status.bar_expanded_id = ""; status.bar_overflow_open = false
       status.bar_edit_mode = false   // a click outside is "Done"
     }
@@ -901,6 +957,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     updateInputRegion()
   }
 
+  // The windows that stay clickable THROUGH the grab, besides ours. A press on a
+  // window left out of the set is the press that dismisses: it never reaches what
+  // was clicked (see common/FocusGrab.ts). With the app grid open that is the dock,
+  // so its icons still launch in one click; for every other panel, nothing — a press
+  // on the dock closes the CC as a press anywhere else does.
+  const grabWindows = (): Gtk.Window[] => status.app_grid_open ? [win, ...gridPeers()] : [win]
+  let grabbedWith: Gtk.Window[] = []
+  const sameWindows = (a: Gtk.Window[], b: Gtk.Window[]) => a.length === b.length && a.every((w, i) => w === b[i])
+
   // Named for what it used to switch. It no longer touches layer-shell keyboard
   // interactivity at all: this surface is set to NONE once at init and stays there,
   // because EXCLUSIVE is what puts us in m_exclusiveLSes and makes Hyprland refuse
@@ -909,23 +974,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const syncKeyboardMode = () => {
     if (!layerShellReady) return
     const want = barGrabbing() && !inputYield.active
+    const wins = grabWindows()
 
-    if (want && !barGrabToken) {
-      // The ISLAND's surface is whitelisted alongside ours, symmetrically to what
-      // syncIslandGrab does for us. Not a nicety: the island's capsule MOVED to its
-      // own surface (the documented exception to commandment #5), so leaving it out
-      // clamps pointer focus to the bar and a click on the capsule is swallowed by
-      // the dismissal instead of reaching it — the island stops responding for as
-      // long as a bar panel is open.
-      barGrabToken = acquireFocusGrab([win, islandWin.win], onBarGrabCleared)
+    // Taken again when the peer set changes under a held grab (a panel switching to
+    // the app grid, or back). The same owner re-acquiring is not an eviction:
+    // FocusGrab does not call `onBarGrabCleared` for it.
+    if (want && (!barGrabToken || !sameWindows(grabbedWith, wins))) {
+      barGrabToken = acquireFocusGrab(wins, onBarGrabCleared)
+      grabbedWith = barGrabToken ? wins : []
       // A refusal is not a degrade — there is no second mechanism left. Say what is
       // broken and what it costs, once per open, so a session in that state can be
       // diagnosed from the log alone instead of from the symptoms.
       if (!barGrabToken)
-        console.error("[Bar] focus grab REFUSED — no modality: nothing dismisses these panels and Prism cannot be typed into.")
+        console.error("[Bar] focus grab REFUSED — no modality: nothing dismisses these panels, and Prism, the app grid and the island's keyboard modes cannot be typed into.")
     } else if (!want && barGrabToken) {
       releaseFocusGrab(barGrabToken)
       barGrabToken = 0
+      grabbedWith = []
       // A closing panel hands GTK's focus to the next focusable widget in the window,
       // which is the bar: measured on a tray icon after Esc closed the CC. With the
       // window still focus-visible that icon would be left wearing the ring, on a bar
@@ -933,77 +998,77 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       win.set_focus(null)
     }
   }
-  // The island is modal for ANY open mode, not just the keyboard-driven ones —
-  // an ambient player wants "click outside closes" exactly as much. It grabs the
-  // BAR's surface alongside its own so a click on another bar capsule still
-  // switches in one go; without that peer the press would be swallowed by the
-  // dismissal (see common/FocusGrab.ts). There is no fallback for when that fails —
-  // the compositor grab IS the mechanism (see FocusGrab's header), so a false here
-  // is a broken desktop and says so rather than degrading in silence.
-  const syncIslandGrab = () => {
-    const open = !!status.island_mode
-    // The `!inputYield.active` term is the same one syncKeyboardMode carries, and it
-    // is here for the same reason — `setModal` applies it internally, so without it
-    // this call reads a DELIBERATE release as a broken desktop. It fired on every
-    // computer-use action taken from the Assistant (which is an open island by
-    // definition): five CRITICALs in one 2026-08-12 log, under two shell PIDs,
-    // describing a grab nobody had asked for. An alarm that cries during the one
-    // situation it cannot distinguish is worse than no alarm — it was sitting next to
-    // a real bug (the yield eating the caller's focus, see core/InputYield) and made
-    // it look like the same thing.
-    if (!islandWin.setModal(open, [win]) && open && !inputYield.active)
-      console.error("[Bar] island modality: NO compositor focus grab — nothing will dismiss it")
-  }
 
   inputYield.registerHolder(barGrabbing)
-  inputYield.registerHolder(islandGrabbing)
   inputYield.connect("notify::active", () => {
     // Yielding drops the grab, so for as long as the truce lasts an overlay left
     // open is NOT dismissable by clicking outside — the agent owns the pointer, and
     // the grab (with its dismissal) comes back when it hands it over.
     syncKeyboardMode()
-    syncIslandGrab()
     updateInputRegion()
-    islandWin.updateInputRegion()
   })
 
   status.connect("notify::island-mode", () => {
-    // Immediately: our own grab and whatever Status's mutual exclusion just
-    // closed. The island itself waits for its surface (below).
+    // Our grab and whatever Status's mutual exclusion just closed, first.
     syncOverlays()   // runs syncKeyboardMode first — see its body
-    if (status.island_mode) {
-      // Re-assert our layer level in case the bar is currently in overlay mode
-      // (it moves to OVERLAY too, which would otherwise stack it above us).
-      islandWin.raise()
-      // Pin the island's top to the capsule's top before the reveal (the capsule
-      // ref is the truth — survives layout changes). Same surface, so this is an
-      // ordinary measurement; no deferred frame needed.
-      island.syncAnchor(islandWin.root(), PANEL_TOP)
-    }
-    // The island's own surface owns its region: a grab clamps pointer focus to the
-    // grabbed surface, so while a mode is open every press is delivered THERE first
-    // and the bar never sees it. (Under the old catcher this is why the overview and
-    // the assistant stopped closing while the ambient player kept working: only the
-    // keyboard modes took the grab back then.) The bar strip stays reachable because
-    // the island whitelists it as a peer, which is what keeps capsule-to-capsule
-    // switching ONE click.
+    // Pin the island's top to the capsule's top before the reveal (the capsule
+    // ref is the truth — survives layout changes).
+    if (status.island_mode) island.syncAnchor(masterOverlay, PANEL_TOP)
     syncIslandModes()
-    syncIslandGrab()
     if (status.island_mode) island.onOpened()   // seed the mode's keyboard nav
   })
 
   // Route keys to the open island mode (overview: ←/→ move the cursor, Enter
-  // switches + closes, Esc closes). CAPTURE phase so it fires before any focused
-  // child — mirrors the app grid's key controller on the dock window. Lives on
-  // the ISLAND's window: that's the surface holding the keyboard grab, so it is
-  // where the key events actually arrive.
-  const islandKeyCtrl = new Gtk.EventControllerKey()
-  islandKeyCtrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-  islandKeyCtrl.connect("key-pressed", (_c: any, keyval: number) => {
-    if (!status.island_mode) return false
-    return island.handleKey(keyval)
+  // switches + closes, Esc closes) and to the app grid (its search, its cursor).
+  // CAPTURE phase so they fire before any focused child.
+  const modeKeys = new Gtk.EventControllerKey()
+  modeKeys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+  modeKeys.connect("key-pressed", (_c: any, keyval: number) => {
+    if (status.island_mode) return island.handleKey(keyval)
+    if (status.app_grid_open) return grid.handleKey(keyval)
+    return false
   })
-  islandWin.win.add_controller(islandKeyCtrl)
+  win.add_controller(modeKeys)
+
+  // ── The app grid: open / close ─────────────────────────────────────────────
+  // Over a fullscreen window the bar is hidden (`setBarFullscreenMode`) — and the
+  // grid opens over it all the same, as it did on a layer of its own (owner,
+  // 2026-10-06): the surface rises to OVERLAY for as long as the grid is up, with the
+  // bar's row out of sight. Super+B's overlay mode already has the surface there.
+  const liftForGrid = (lift: boolean) => {
+    if (lift === rowHidden) return
+    rowHidden = lift
+    for (const w of [barBox, islandHost, popups] as Gtk.Widget[]) {
+      w.set_opacity(lift ? 0 : 1)
+      w.set_can_target(!lift)
+    }
+    try {
+      Gtk4LayerShell.set_layer(win, lift ? Gtk4LayerShell.Layer.OVERLAY : Gtk4LayerShell.Layer.TOP)
+      win.set_opacity(lift ? 1 : 0)
+    } catch (e) { console.error("[Bar] app grid over fullscreen:", e) }
+  }
+  const openGrid = () => {
+    if (barFullscreenMode && !barOverlayActive) liftForGrid(true)
+    grid.onShow()
+    grid.setVisible(true)
+    updateInputRegion()
+  }
+  const closeGrid = () => {
+    grid.setActive(false)
+    win.set_focus(null)
+    grid.setVisible(false, () => {
+      updateInputRegion()
+      // Back under the fullscreen window once the grid has shrunk away — unless it
+      // opened again in the meantime.
+      if (!status.app_grid_open) liftForGrid(false)
+    })
+  }
+  status.connect("notify::app-grid-open", () => {
+    // Grab first (and its peers), then the panel: syncOverlays orders it.
+    syncOverlays()
+    if (status.app_grid_open) openGrid()
+    else closeGrid()
+  })
 
   // ── Bar expansion show/hide ────────────────────────────────────────────────
   // Centers the panel horizontally under the clicked bar capsule (hidden widgets
@@ -1126,51 +1191,43 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   appTitleWidget.set_visible(barSettings.showAppTitle)
   leftGroup.box.append(sysMenuWidget)
   leftGroup.box.append(appTitleWidget)
-  // NO spacing — the gap lives on each chip's own margin (see ActivityIsland).
-  // A Gtk.Box reserves its spacing between every VISIBLE child, and a collapsed
-  // Gtk.Revealer is still visible (it just measures 0), so spacing here would
-  // hold a permanent 8px to the right of the capsule and leave it off-centre in
-  // an idle session — the one state that must look exactly as it always has.
-  // The GROUP is what centres: a chip appearing shifts the capsule off the
-  // monitor's axis, which is the cost of splitting the activities and is only ever paid
-  // while something is actually running.
-  const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
-  center.append(island.capsule)      // the island's compact state
-  center.append(island.indicatorRow) // live activities that are NOT fronting it
-  // `center` is NOT put in the bar's CenterBox: the capsule paints on the
-  // island's surface (see islandWin above). It goes into a row that reuses the
-  // SAME `.bar-centerbox` class the bar's own row does, so the 4px top margin
-  // and the BAR_H row height come from one CSS rule instead of a constant
-  // duplicated across two windows — the capsule lands pixel-identically where
-  // the bar would have drawn it. `center` still exists and still holds the live
-  // capsule, so `measureOverflow` can keep measuring its natural width.
-  const islandRow = new Gtk.Box({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START })
-  islandRow.append(center)
-  center.hexpand = true           // halign CENTER inside a full-width row
-  // The row RISES off the top of the screen while the bar's overflow is unfolded in
-  // line (Status.bar_overflow_open), and the surface is unmapped once it is out of
-  // sight (IslandWindow.setYielded). Paint-only, so the input and blur regions never
-  // chase it: the rise ends above the rect already stamped for the capsule.
-  const islandHost = new ScaleRevealer(islandRow, {
-    durationIn: 220, durationOut: 150, scaleFrom: 1, animateLayout: false, pivot: "top-center",
-    riseFrom: BAR_H + 8,
-    opacityFloor: () => blurSafeOpacity(Theme.barOpacity),
-  })
-  // ScaleRevealer clips to its box; the capsule's shadow spills below the row.
-  islandHost.set_overflow(Gtk.Overflow.VISIBLE)
-  islandHost.valign = Gtk.Align.START
-  islandHost.showInstant()
-  islandWin.mount(islandHost, island.hitTargets, island.revealers)
 
   // ── Adaptive glass (#673) ─────────────────────────────────────────────────
   // Each surface keeps its text legible over whatever is behind it: thicker glass,
   // or the other skin (common/AdaptiveGlass.ts). One registration per SURFACE — the
   // bar strip is one decision, each panel another — never per capsule.
   const atRest = (r: ScaleRevealer | MorphRevealer) => () => r.tickId === null && r.progress >= 1
-  // The island is a layer ABOVE this window: where it paints, the screen is not our
-  // paint over a backdrop. (Its own measurement is of itself, so it takes no such rect.)
+  // What the island covers on this window: its row (capsule + chips) and whichever
+  // mode is open or still morphing, as one rect, or null when nothing of it is
+  // measurable. masterOverlay is the window's child at 0,0 and the surface starts
+  // at the monitor's corner, so these are monitor-relative too.
+  //
+  // Two readers. The adaptive glass, for whom the island is paint of OURS over the
+  // backdrop of another registration (each measures only itself). And the Assistant,
+  // which lives in this island and must not click controls UNDER it: the click lands
+  // (the yield makes the surface click-through), but where the user cannot see it,
+  // which reads as the assistant acting behind their back (app.ts → islandRect).
+  const islandBounds = (): { x: number, y: number, w: number, h: number } | null => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+    const hitTargets = island.hitTargets()
+    for (const w of [...hitTargets, ...island.revealers] as Gtk.Widget[]) {
+      if (!w.get_visible() || !w.get_mapped()) continue
+      const [ok, b] = w.compute_bounds(masterOverlay)
+      if (!ok || b.get_width() <= 1 || b.get_height() <= 1) continue
+      x0 = Math.min(x0, b.get_x()); y0 = Math.min(y0, b.get_y())
+      x1 = Math.max(x1, b.get_x() + b.get_width()); y1 = Math.max(y1, b.get_y() + b.get_height())
+    }
+    if (!isFinite(x0)) return null
+    return { x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) }
+  }
+  ;(win as any).occupiedRect = () => {
+    const r = islandBounds()
+    // The connector name (DP-1, …) so a consumer on a multi-monitor setup can tell
+    // whether this rect is even on the output it is clicking.
+    return r ? { ...r, monitor: gdkmonitor.get_connector() ?? "" } : null
+  }
   const underIsland = () => {
-    const r = (islandWin.win as any).occupiedRect?.()
+    const r = islandBounds()
     return r ? [{ x: r.x, y: r.y, width: r.w, height: r.h }] : []
   }
   for (const [id, pop] of [
@@ -1197,13 +1254,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // right; the morph travels from the capsule's glass to the mode's. (One decision for
   // the whole island, switching between the two, could not be measured in advance: a
   // mode's rect is only known while it is open.)
-  const islandOrigin = () => ({ x: 0, y: islandWin.topOffset() })
   glassHandles.set(islandHost, registerGlassSurface({
     id: "island",
     root: islandHost,
     role: "bar",
     probe: () => island.capsule,
-    windowOrigin: islandOrigin,
     // While a mode is open the capsule is switched off (opacity 0): nothing to measure.
     settled: () => !status.island_mode && islandHost.tickId === null,
     group: () => "bar-row",
@@ -1213,10 +1268,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       id: `island-${id}`,
       root: revealer,
       role: "overlay",
-      windowOrigin: islandOrigin,
       settled: atRest(revealer),
     }))
   }
+  // The grid's labels over whatever is behind it — only once the pop has landed:
+  // mid-pop the capture and the render are different frames.
+  glassHandles.set(grid.widget, registerGlassSurface({
+    id: "app-grid", root: grid.widget, role: "overlay",
+    settled: atRest(grid.widget as unknown as ScaleRevealer),
+  }))
   win.connect("destroy", () => { for (const h of glassHandles.values()) h.dispose(); glassHandles.clear() })
 
   const ISLAND_GAP = 16
@@ -1224,105 +1284,26 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Forward declaration for layout sync across the left/right flanks and Activity Island
   let scheduleBarLayoutSync: (delayMs?: number) => void = () => {}
 
-  // Keep the island level with the bar. Both surfaces are full-rect at y=0 in the
-  // normal case, so this is a no-op — it only matters when something reserves
-  // space ABOVE the bar (Hyprland's config-error bar), which slides the bar down
-  // while the island's `exclusive_zone = -1` keeps it put, leaving the capsule
-  // floating over the row it belongs to (user-caught 2026-08-02, reproduced with
-  // a reserving layer created before the shell).
-  //
-  // `configreloaded` is when that bar APPEARS, but it is NOT when it goes away,
-  // and reading the bar's position once on that event turned the fix into its own
-  // bug: fix the config and the island stayed down forever (user-caught
-  // 2026-08-04). Hyprland's own source says why (src/errorOverlay/Overlay.cpp,
-  // v0.56.0): creating the overlay reserves and re-arranges layers on the spot,
-  // but `destroy()` only sets `m_queuedDestroy` — the reservation is released, and
-  // the layers re-arranged, inside `draw()` and only once the fadeOut animation has
-  // ENDED. So the release lands an animation later than the event that caused it,
-  // on no event of its own, at a delay the user's animation config decides.
-  //
-  // Nothing client-side can see it either: a layer surface is only told about its
-  // SIZE, and the bar's never changes (top/left/right anchors, no bottom anchor →
-  // client-chosen height), so a pure vertical move produces no configure we could
-  // hook. Polling is the only instrument, so poll where it costs nothing: measure
-  // on the event, and then keep watching ONLY while displaced. A healthy session
-  // polls zero times; a broken-config session — already degraded, and being fixed
-  // right now — pays one `hyprctl layers` every 400 ms until the bar comes home.
-  const monName = gdkmonitor.get_connector() ?? undefined
-  let islandWatch = 0
-  const syncIslandToBar = () =>
-    compositor.layerTop("nidara-bar", monName).then(y => {
-      if (y === null) return
-      // layerTop is global; the island's margin is monitor-local
-      const offset = Math.max(0, y - geo().y)
-      islandWin.setTopOffset(offset)
-      if (offset > 0 && !islandWatch) {
-        islandWatch = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-          syncIslandToBar(); return GLib.SOURCE_CONTINUE
-        })
-      } else if (offset === 0 && islandWatch) {
-        GLib.source_remove(islandWatch); islandWatch = 0
-      }
-    })
-  // The deferred first call waits for our own surface to exist to be measured; it
-  // also covers a session that STARTS with a broken config (the error bar is up
-  // before the shell is, and no `configreloaded` will ever announce it).
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => { syncIslandToBar(); return GLib.SOURCE_REMOVE })
-  // Two reads per reload, not one: the overlay is created from `draw()`, i.e. a
-  // frame AFTER the event, so the immediate read can legitimately still see the
-  // old position. The second one starts the watch, and from there the watch owns it.
-  compositor.connect("config-reloaded", () => {
-    syncIslandToBar()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { syncIslandToBar(); return GLib.SOURCE_REMOVE })
-  })
-  // The capsule is a CLICK TARGET living on a mostly click-through surface, so
-  // its rect in the input region has to track its real size — and that size
-  // moves on its own: the compact stack interpolates width when the fronting
-  // activity changes, and a media title of a different length reshapes the pill
-  // with no page change at all. The glass DrawingArea's `resize` fires on
-  // exactly those, and only those.
+  // The capsule changes size on its own — the compact stack interpolates its width
+  // when the fronting activity changes, and a media title of a different length
+  // reshapes the pill — and the row around it lays out against the room it leaves.
+  // The glass DrawingArea's `resize` fires on exactly those. (No input region to
+  // re-cut for it: the capsule is inside the bar strip.)
   ;(island.capsule as any).glassArea?.connect("resize", () => {
-    islandWin.updateInputRegion()
     syncLeftBudget()
     scheduleBarLayoutSync()
   })
-  // A chip appearing or leaving moves the capsule sideways WITHOUT resizing it,
-  // so the resize hook above never fires for it and both the chip's rect and the
-  // capsule's displaced one would stay unstamped. Re-stamped after the reveal
-  // lands (the slide takes COMPACT_SWAP_MS; the capsule may still be settling,
-  // and while it is, the resize hook keeps stamping anyway).
+  // A chip appearing or leaving moves the capsule sideways WITHOUT resizing it.
   island.onBackgroundChanged(() => {
     syncLeftBudget()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-      islandWin.updateInputRegion(); return GLib.SOURCE_REMOVE
-    })
     scheduleBarLayoutSync()
   })
-  // …and again when the slide actually ENDS, which is the frame the row's final
-  // rects exist. The 400ms above is a guess at that moment and it only has to be
-  // wrong once: nothing else re-cuts the region for a chip, so a stamp taken while
-  // the row was still moving leaves that chip painted where the compositor sends
-  // nothing, for as long as the layout holds. Both are kept — the timer covers a
-  // reveal that never animates, this covers one that outlasts it.
+  // …and again when the slide actually ENDS, the frame the row's final width exists.
   island.onChipsSettled(() => {
-    islandWin.updateInputRegion()
     syncLeftBudget()
     scheduleBarLayoutSync()
   })
-  // …and the moment the chips re-ENTER the hit set at all. `hitTargets()` returns
-  // the capsule alone while the row is faded to nothing, so every stamp taken with
-  // a mode open drops the chips' rects deliberately — and that becomes the reported
-  // symptom the instant nothing re-stamps once they ramp back. The re-stamp is
-  // supposed to come from `MorphRevealer.reveal`'s `onDone`, which does not run if
-  // the morph is interrupted (a mode switched mid-close). The trap caught exactly
-  // that once, 2026-08-13 04:38: *"stamped 1 target(s), 6 are live now and nothing
-  // re-stamped"*. Opacity does not affect `compute_bounds`, so the crossing back off
-  // zero is already a measurable layout — one stamp, at the only moment that matters.
-  let chipsWereHidden = island.indicatorRow.opacity === 0
   island.indicatorRow.connect("notify::opacity", () => {
-    const hidden = island.indicatorRow.opacity === 0
-    if (chipsWereHidden && !hidden) islandWin.updateInputRegion()
-    chipsWereHidden = hidden
     syncLeftBudget()
     scheduleBarLayoutSync()
   })
@@ -1334,6 +1315,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // the CC and the clock, in that order (barGroup, capsule.ts; owner, 2026-09-26).
   const rightGroup = barGroup()
   right.append(rightGroup.widget)
+  // An island mode wide enough to cover a group fades it out instead of laying its
+  // glass over it (ActivityIsland → coveredBy).
+  island.setRowNeighbours(() => [leftGroup.widget, rightGroup.widget])
 
   const timeContent = new Gtk.Box({ margin_start: BAR_TEXT_PAD, margin_end: BAR_TEXT_PAD })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })
@@ -1885,23 +1869,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       applyPanelHeights()
       appTitle.setMonitorWidth(geo().width)
       scheduleBarLayoutSync(0)
-      // The island's own numbers: its top margin is measured against the
-      // monitor's Y (which moves when outputs are re-arranged), and its overview
-      // solves the card size from the monitor's width.
-      syncIslandToBar()
+      // The island's overview solves its card size from the monitor's width.
       island.onMonitorResized()
       // measureOverflow may have rebuilt the row and appTitle may have changed
       // width, so the strip's capsules are in new places. Both regions again.
       updateInputRegion()
-      // And the island's, from HERE rather than only from its own geometry
-      // handler. That one fires the instant the monitor changes, which is before
-      // GTK has re-allocated anything: its 50 ms verify would then compare a stale
-      // measurement against a stale stamp, agree, and stop. This one runs after
-      // the debounce and after the row rebuild above, i.e. on the layout that is
-      // going to persist — and the capsule is CENTRED, so it moves on a width
-      // change without ever resizing, which is exactly the case its own
-      // `glassArea "resize"` trigger cannot see.
-      islandWin.updateInputRegion()
       return GLib.SOURCE_REMOVE
     })
   })
@@ -1930,16 +1902,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       try {
           if (active && !barOverlayActive) {
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
-              win.set_opacity(0)
-              // The island is its own surface, and the CAPSULE lives on it — so
-              // hiding the bar no longer hides it. Close any open mode and unmap
-              // the surface, or the capsule floats alone over the fullscreen
-              // window (and keeps costing a blur pass). An unfolded overflow folds
-              // with the bar it lives in.
+              // The app grid open over the window that just went fullscreen keeps
+              // the surface on screen for itself (`liftForGrid`).
+              if (status.app_grid_open) liftForGrid(true)
+              else win.set_opacity(0)
+              // An open island mode and an unfolded overflow go with the bar they
+              // live in.
               status.island_mode = ""
               status.bar_overflow_open = false
-              islandWin.setShown(false)
           } else if (!active) {
+              liftForGrid(false)
               if (barOverlayActive) {
                   // Exit overlay mode when fullscreen ends
                   barOverlayActive = false
@@ -1948,11 +1920,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               win.set_opacity(1)
               glassHandles.get(barBox)?.settle()
-              // Bring the capsule back with the bar, and re-assert our level:
-              // present() re-adds the surface to Hyprland's overlay list, and the
-              // bar may have moved layers in between.
-              islandWin.setShown(true)
-              islandWin.raise()
           }
       } catch (e) {}
   }
@@ -1971,25 +1938,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       try {
           barOverlayActive = active
           if (active) {
+              // The row comes back if it was hidden for the app grid: the overlay
+              // mode shows the bar, and the surface is already where the grid needs it.
+              liftForGrid(false)
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(1)
               win.present()
               glassHandles.get(barBox)?.settle()
-              // The capsule comes back with the bar (fullscreen may have unmapped
-              // it). Then re-assert our level: the bar just joined OVERLAY, which
-              // appends it AFTER the island in Hyprland's list for that level, so
-              // without this the bar would cover the island instead of being
-              // blurred by it.
-              islandWin.setShown(true)
-              islandWin.raise()
           } else {
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               if (barFullscreenMode) {
                   Gtk4LayerShell.set_exclusive_zone(win, 0)
-                  win.set_opacity(0)
                   status.island_mode = ""
-                  islandWin.setShown(false)   // back to hidden-for-fullscreen
+                  // Back to hidden-for-fullscreen — the grid, if open, keeps the
+                  // surface up for itself.
+                  if (status.app_grid_open) liftForGrid(true)
+                  else win.set_opacity(0)
               } else {
                   Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               }
@@ -1998,10 +1963,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   // ── The overflow, unfolded in line ────────────────────────────────────────
   // Order matters on the way OUT: the row grows first and the title gives way in
-  // the same frame, then the island rises and only THEN leaves the compositor — so
-  // for the 150ms of the rise the new pills slide in under a capsule that is still
-  // on its way up. On the way back the surface is mapped first, or there would be
-  // nothing to slide down on.
+  // the same frame, then the island's capsule rises out of the row — so for the
+  // 150ms of the rise the new pills slide in under a capsule that is still on its
+  // way up. Once it is out of sight it takes no presses (a hidden revealer is not
+  // picked), so the unfolded pills under it are reachable.
   //
   // Folding is Status's job, not this handler's: any other surface opening closes
   // it (closeExclusive), and a press outside clears the bar's focus grab, which
@@ -2014,21 +1979,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       syncLeftBudget(open)
       syncOverlays()
       if (open) {
-          islandHost.reveal(false, () => { if (status.bar_overflow_open) islandWin.setYielded(true) })
+          islandHost.reveal(false, () => updateInputRegion())
       } else {
-          islandWin.setYielded(false)
-          // Mapping again re-appends the surface to its layer; if the bar sits on
-          // OVERLAY too (bar overlay mode) it has to be bounced back above it.
-          if (barOverlayActive) islandWin.raise()
-          islandHost.reveal(true, () => islandWin.updateInputRegion())
+          islandHost.reveal(true, () => updateInputRegion())
       }
   })
 
   ;(win as any).isBarOverlayActive = () => barOverlayActive
   ;(win as any).isBarFullscreenMode = () => barFullscreenMode
-  // The island's surface is created here but is a sibling toplevel — app.ts
-  // tracks it alongside the bar so it takes part in teardown.
-  ;(win as any).islandWindow = islandWin.win
 
   return win
 }
