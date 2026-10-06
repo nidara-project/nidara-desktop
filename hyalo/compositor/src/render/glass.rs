@@ -179,6 +179,7 @@ impl GlassElement {
                 refraction: 0.0,
                 px_scale: 1.0,
                 fusion: None,
+                fusion_merge: 0.0,
             }],
             offset: offset as f32,
             passes: passes as usize,
@@ -336,6 +337,7 @@ fn groups(
             refraction: m.refraction_of(s) * scale.x,
             px_scale: scale.x,
             fusion: s.fusion.map(|f| (f.group, 2.0 * f.spacing * scale.x)),
+            fusion_merge: s.fusion.map_or(0.0, |f| f.merge),
             pointer: s.pointer.and_then(|p| {
                 let at = |q: [f64; 2]| {
                     let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));

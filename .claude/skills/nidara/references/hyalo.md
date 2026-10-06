@@ -189,19 +189,29 @@ with nothing (its join is its own union). ⚠️ GLSL ES 1.00 lets a fragment sh
 array only with a LOOP index: the member loops read `f_rect[i]` inline, never through a helper
 taking `int i` (Mesa accepts the helper, a stricter driver does not).
 
-**The pulse** (`pulseFusion(group, widget, ms)`, owner 2026-10-07): at rest the spacing is the
-material's `fusion` = 2, so the island's pieces are each their own pane — at 8 they were joined
-by a thin neck whose rims nearly met ("as if they tend to touch"). While the group CHANGES, its
-spacing rises to `fusionPulse` = 20, HOLDS, and falls back (`pulseCurve`: up over 30 % of `ms`,
-held 40 %, down 30 %) — a sine touched its peak for an instant, and the owner saw "capsule and
-button half fused", never one capsule. 20 is MEASURED, not derived: holding `fusion` at each value
-on screen, 18 leaves a waist at the join, 22 and 24 bulge past the edges, 20 runs straight (the
-polynomial `smin` cannot be exactly flat). ⚠️ The arithmetic first gave 18 from the BOXES (36 px,
-4 px apart); the GLASS is what fuses, and `SquircleContainer` insets it 2 px a side (32 px, 8 px
-apart). Measure a shape's numbers on the glass, not on the widget. The spacing travels per group
-on the wire (`set_fusion` already carried it), so a pulse is client-side only. The island pulses
-on a front change and on a chip born, gone or changed. To judge a pulse value, hold it: set
-`fusion` to it in `glass-tuning.conf` and look at rest.
+**Merging into one shape** (`set_fusion_merge`, inside v1, 2026-10-07). A group can be drawn
+`merge` (0..1) of the way from its smooth union towards its **envelope**: one shape spanning its
+members — the bounds of those at least half opaque, each cut by its clip, with the smallest of
+their corner radii (`glass_gl::fused_envelope`). The shader blends the two distance fields
+(`mix(union, envelope, merge)` inside `fused_sdf`, at every bevel depth), so the silhouette always
+lies BETWEEN the union and the envelope: the space between the members fills from their middle
+outwards, nothing ever bulges past the envelope or dents a member, and at 1 the group IS the
+envelope, with one lens and one rim. Why not a wider smooth union: the owner asked for the
+island's pieces to become "one single capsule" for an instant, and a polynomial `smin` cannot —
+held on screen at spacing 18 the join kept a waist, at 20 to 24 it raised a mound where the
+capsule's straight edge meets the bridge (owner: "like a mound between the capsule's straight
+edge and the bridge"). Its width only moves the defect.
+
+**The pulse** (`pulseFusion(group, widget, ms)`): the island calls it on a front change and on a
+chip born, gone or changed; the group's merge goes up over 30 % of `ms`, HOLDS at 1 for 40 %,
+and comes down over 30 % (`pulseCurve`; a sine touched 1 for an instant and was seen as "half
+fused"). At rest the spacing is the material's `fusion` = 2, each piece its own pane — at 8 the
+pieces were joined by a thin neck whose rims nearly met ("as if they tend to touch"). ⚠️ The
+island's numbers are the GLASS's, not the widgets': `SquircleContainer` insets the glass 2 px a
+side, so the pieces are 32 px tall and 8 px apart (their boxes, 36 and 4). To judge the shape a
+pulse passes through, hold it: `fusionHold = 0.5` in `glass-tuning.conf` (an instrument, 0 in the
+product). Nested, with media in the island: a fake MPRIS player on the sandbox's bus as
+`HYALO_DRIVER` (any `org.mpris.MediaPlayer2.*` name that says `Playing`).
 
 `nidara-hyalo msg layers` reports each surface's groups (`glass.fusion`: the shapes each one
 joins); the smoke requires the bar to declare one.

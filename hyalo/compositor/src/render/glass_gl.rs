@@ -309,6 +309,8 @@ pub struct Shape {
     /// Its fusion group (`set_fusion`) and the smooth union's width, output px: twice the
     /// group's spacing, so two shapes closer than the spacing are joined.
     pub fusion: Option<(u32, f64)>,
+    /// How far its fusion group is drawn towards its envelope (`set_fusion_merge`), 0..1.
+    pub fusion_merge: f64,
 }
 
 impl Shape {
@@ -324,6 +326,31 @@ impl Shape {
 /// The most shapes one fusion group draws as one silhouette (the shader's arrays); past it the
 /// rest of the group is drawn shape by shape.
 pub const FUSE_MAX: usize = 8;
+
+/// A fusion group's envelope (`set_fusion_merge`): ONE shape spanning the members whose opacity
+/// is at least a half (all of them if none is), each cut by its clip, with the smallest of their
+/// corner radii — held to half the envelope's shorter side — and the first one's exponent. What
+/// the group becomes at merge 1: the island's capsule and chips, one capsule.
+pub fn fused_envelope(members: &[&Shape]) -> Option<(Rectangle<f64, Physical>, f64, f64)> {
+    let solid: Vec<&&Shape> = members.iter().filter(|m| m.opacity >= 0.5).collect();
+    let pick: Vec<&&Shape> = if solid.is_empty() { members.iter().collect() } else { solid };
+    let mut env: Option<Rectangle<f64, Physical>> = None;
+    let mut radius = f64::INFINITY;
+    for m in &pick {
+        let r = match m.clip {
+            Some(c) => match m.rect.intersection(c) {
+                Some(r) => r,
+                None => continue,
+            },
+            None => m.rect,
+        };
+        env = Some(env.map_or(r, |e| e.merge(r)));
+        radius = radius.min(m.radius);
+    }
+    let env = env?;
+    let radius = radius.min(env.size.w.min(env.size.h) * 0.5);
+    Some((env, radius, pick[0].exponent))
+}
 
 /// How `draw` paints `shapes`, in their order: each shape on its own, or a fusion group as ONE
 /// draw at the place of its first member. Indices into `shapes`.
@@ -982,6 +1009,15 @@ pub unsafe fn draw(
                 gl.Uniform4fv(p.loc(gl, c"f_par"), FUSE_MAX as i32, pars.as_ptr());
                 gl.Uniform4fv(p.loc(gl, c"f_clip"), FUSE_MAX as i32, clips.as_ptr());
                 gl.Uniform1fv(p.loc(gl, c"f_refr"), FUSE_MAX as i32, refr.as_ptr());
+                let picked: Vec<&Shape> = members.iter().map(|&j| &shapes[j]).collect();
+                match fused_envelope(&picked).filter(|_| s.fusion_merge > 0.0) {
+                    Some((e, radius, exponent)) => {
+                        gl.Uniform4f(p.loc(gl, c"f_env"), e.loc.x as f32, e.loc.y as f32, e.size.w as f32, e.size.h as f32);
+                        gl.Uniform4f(p.loc(gl, c"f_env_par"), radius as f32, exponent as f32, s.fusion_merge as f32,
+                            s.refraction as f32);
+                    }
+                    None => gl.Uniform4f(p.loc(gl, c"f_env_par"), 0.0, 2.0, 0.0, 0.0),
+                }
             } else {
                 gl.Uniform1f(p.loc(gl, c"fused"), 0.0);
             }
@@ -1287,6 +1323,7 @@ mod tests {
     #[test]
     fn a_fusion_group_is_one_draw_where_its_first_member_was() {
         let shape = |fusion: Option<(u32, f64)>| Shape {
+            fusion_merge: 0.0,
             index: 0,
             rect: Rectangle::new((0.0, 0.0).into(), (10.0, 10.0).into()),
             radius: 5.0,
@@ -1307,5 +1344,38 @@ mod tests {
         let plan = draw_plan(&many);
         assert_eq!(plan[0].len(), FUSE_MAX);
         assert_eq!(plan.iter().map(Vec::len).sum::<usize>(), FUSE_MAX + 2);
+    }
+
+    #[test]
+    fn a_fusion_group_merges_into_the_shape_that_spans_its_solid_members() {
+        let shape = |x: f64, w: f64, opacity: f32, clip: Option<Rectangle<f64, Physical>>| Shape {
+            index: 0,
+            rect: Rectangle::new((x, 0.0).into(), (w, 32.0).into()),
+            radius: 16.0,
+            exponent: 2.0,
+            opacity,
+            clip,
+            ink_dark: false,
+            pointer: None,
+            refraction: 0.0,
+            px_scale: 1.0,
+            fusion: Some((1, 4.0)),
+            fusion_merge: 1.0,
+        };
+        // The island at rest: a capsule and a chip 8 px apart → one capsule over both.
+        let capsule = shape(0.0, 100.0, 1.0, None);
+        let chip = shape(108.0, 32.0, 1.0, None);
+        let (env, radius, _) = fused_envelope(&[&capsule, &chip]).unwrap();
+        assert_eq!(env, Rectangle::new((0.0, 0.0).into(), (140.0, 32.0).into()));
+        assert_eq!(radius, 16.0);
+        // A chip fading out does not stretch the envelope to where it is leaving from.
+        let fading = shape(108.0, 32.0, 0.2, None);
+        let (env, _, _) = fused_envelope(&[&capsule, &fading]).unwrap();
+        assert_eq!(env.size.w, 100.0);
+        // A chip half revealed counts as much of it as shows.
+        let half = shape(108.0, 32.0, 1.0, Some(Rectangle::new((108.0, 0.0).into(), (16.0, 32.0).into())));
+        let (env, radius, _) = fused_envelope(&[&capsule, &half]).unwrap();
+        assert_eq!(env.size.w, 124.0);
+        assert_eq!(radius, 16.0);
     }
 }

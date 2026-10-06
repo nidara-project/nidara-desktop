@@ -543,6 +543,18 @@ void nidara_wl_material_add_scrim_region (GdkSurface *surface,
 void nidara_wl_material_set_fusion (GdkSurface *surface, guint group, double spacing);
 
 /**
+ * nidara_wl_material_set_fusion_merge:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @merge: 0..1: the group's smooth union (0) to its envelope, one shape spanning it (1)
+ *
+ * How far the group of the last nidara_wl_material_set_fusion() is drawn towards its
+ * envelope: one shape over its members — the island's capsule and chips as one capsule. Call
+ * it after set_fusion, before the group's shapes. Pending until nidara_wl_material_commit();
+ * back to 0 with set_fusion and nidara_wl_material_begin().
+ */
+void nidara_wl_material_set_fusion_merge (GdkSurface *surface, double merge);
+
+/**
  * nidara_wl_material_clear_glass:
  * @surface: the #GdkSurface
  *
