@@ -1,7 +1,7 @@
 //! A window's controls, drawn by Hyalo over the app's header where the app reserved room for
 //! them (protocols/window_controls.rs, #708 point 5): one capsule of one to three buttons — the
 //! shape of the back/forward pair in Settings' header. Painted in one pass by a shader of ours,
-//! in output pixels: the capsule, its inset edge, the hovered button's fill (close's red), and
+//! in output pixels: the capsule, its inset edge, the hovered button's circle (close's red), and
 //! the glyphs, all anti-aliased at the output's scale. The colours are the mockup's, the
 //! owner's choice (2026-10-03): white over whatever the header is, like the pair beside it.
 
@@ -50,6 +50,15 @@ float glyph(float g, vec2 p) {
     return min(seg(p, vec2(-3.0, -3.0), vec2(3.0, 3.0)), seg(p, vec2(3.0, -3.0), vec2(-3.0, 3.0))) - 0.8;
 }
 vec4 over(vec4 top, vec4 under) { return top + under * (1.0 - top.a); }
+// window_controls::{HOVER_D, EDGE, PITCH}: each button a circle HOVER_D across, EDGE from the
+// capsule's edge and from the next one.
+const float HOVER_R = 12.0;
+const float EDGE = 4.0;
+const float PITCH = 28.0;
+// The hover and the press, as the bar's pills (GLASS_STATE_MIX in the kit's tokens.ts: the
+// same numbers there, white ink and dark): one hover across the desktop (owner, 2026-10-06).
+const vec2 HOVER_A = vec2(0.08, 0.06);
+const vec2 PRESS_A = vec2(0.20, 0.14);
 vec4 controls(vec2 p_out, float dark) {
     vec2 size = rect.zw / px;
     vec2 p = (p_out - rect.xy) / px;
@@ -57,8 +66,8 @@ vec4 controls(vec2 p_out, float dark) {
     float inside = clamp(0.5 - d * px, 0.0, 1.0);
     if (inside <= 0.0) return vec4(0.0);
     vec4 ink = dark > 0.5 ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(1.0);
-    float bw = size.x / count;
-    float slot = clamp(floor(p.x / bw), 0.0, count - 1.0);
+    float slot = clamp(floor((p.x - EDGE * 0.5) / PITCH), 0.0, count - 1.0);
+    vec2 centre = vec2(EDGE + HOVER_R + slot * PITCH, size.y * 0.5);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
     bool on = active > 0.5;
     vec4 c = ink * (on ? 0.08 : 0.04);
@@ -67,11 +76,14 @@ vec4 controls(vec2 p_out, float dark) {
     bool hov = abs(slot - hover) < 0.5;
     bool red = hov && g > 1.5;
     if (hov) {
-        vec4 fill = ink * (pressed > 0.5 ? 0.20 : 0.14);
+        float a = pressed > 0.5 ? (dark > 0.5 ? PRESS_A.y : PRESS_A.x) : (dark > 0.5 ? HOVER_A.y : HOVER_A.x);
+        vec4 fill = ink * a;
         if (red) fill = pressed > 0.5 ? vec4(0.69, 0.16, 0.18, 1.0) : vec4(0.82, 0.20, 0.22, 1.0);
-        c = over(fill, c);
+        // A circle round the button's glyph, never the slot cut by the capsule.
+        float disc = clamp(0.5 - (length(p - centre) - HOVER_R) * px, 0.0, 1.0);
+        c = over(fill * disc, c);
     }
-    float ga = clamp(0.5 - glyph(g, p - vec2((slot + 0.5) * bw, size.y * 0.5)) * px, 0.0, 1.0);
+    float ga = clamp(0.5 - glyph(g, p - centre) * px, 0.0, 1.0);
     float k = hov ? 1.0 : (on ? 0.80 : 0.36);
     // Over close's red the glyph is white, whatever the ink.
     c = over((red ? vec4(1.0) : ink) * k * ga, c);

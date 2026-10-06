@@ -4286,6 +4286,29 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
   (and every window) 4px higher. ⚠️ Not measured live when written; the 4px gap between glass
   capsules was the owner's call to try, the worry being neighbouring `GLASS_SHADOW`s fusing.
 
+### Capsules of icon buttons: a circle each, 4 from everything (2026-10-06)
+
+The bar's rhythm, for a capsule of icon-only buttons (owner, 2026-10-06, chosen on the bar
+mockup): each button's hover is a **24 px circle — the bar pill's height and radius — 4 px
+from the capsule's edge and 4 px from the next circle**, with no rule between buttons (the gap
+does that). So a button takes 28 and a 32-high capsule is `28 × n + 4` wide: **32, 60, 88**, the
+circle concentric with the capsule's ends (radius 12 in 16). Before, the window controls filled
+a 30 px slot cut by the capsule (a straight side or two), and the back/forward pair had 26 px
+circles 3 from the edge with a hairline between.
+
+| capsule | where | how |
+|---|---|---|
+| window controls (1–3) | Hyalo, `render/controls.rs` + `protocols/window_controls.rs` | `HOVER_D`/`EDGE`/`PITCH`; the shader repeats them |
+| Settings back/forward | `_settings.scss` `.navigation-capsule` + `Settings.tsx` | 1 border + 3 padding, buttons 24 (14 glyph + 5 + 5), `spacing: 4` |
+| CC detail back | `_control-center.scss` `.cc-detail-back-capsule` + `IslandGrid.tsx` | the same, one button |
+
+**One hover across the desktop** (owner, same day): an icon button's hover and press are
+`GLASS_STATE_MIX` (`tokens.ts`) — the bar's pills paint it in Cairo, Hyalo's shader repeats the
+numbers, and CSS reads `--nidara-state-hover` / `--nidara-state-pressed`, which the token engine
+emits from it (white ink on dark, the glass's dark tint on light). `button.nidara-icon-btn`
+uses them. Until then the controls used 14 %, the kit's icon buttons 12 % and the bar 8 %.
+A button with a resting fill of its own (the sidebar toggle) keeps its own hover.
+
 ### Bar capsule states: rest, hover, open (2026-09-25)
 
 A bar capsule has three states and **none of them uses the accent** — the accent marks

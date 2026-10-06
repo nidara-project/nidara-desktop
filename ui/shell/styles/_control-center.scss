@@ -456,14 +456,16 @@
 
     /* --- CC Detail Strip --- */
     // The detail's back button: the Settings window's back chevron (kit
-    // `button.nidara-icon-btn`), given the navigation capsule's own fill and hairline
-    // so it reads as that capsule reduced to one circle.
-    button.nidara-icon-btn.cc-detail-back-btn {
+    // `button.nidara-icon-btn`) in a capsule of one with the navigation capsule's fill and
+    // hairline — that capsule reduced to one button, by the same rule (owner, 2026-10-06):
+    // the hover a 24 px circle 4 from the capsule's edge, so 1 + 3 + 24 + 3 + 1 = 32.
+    .cc-detail-back-capsule {
         background: var(--nidara-surface);
         border: 1px solid var(--nidara-border);
-        &:hover  { background: var(--nidara-surface-hover); }
-        &:active { background: var(--nidara-surface-active); }
+        border-radius: $nidara-radius-pill;
+        padding: 3px;
     }
+    button.nidara-icon-btn.cc-detail-back-btn { padding: 5px; }
 
     .cc-detail-sep {
         background: var(--nidara-border);

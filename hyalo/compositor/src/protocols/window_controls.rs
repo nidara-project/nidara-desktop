@@ -36,14 +36,22 @@ use crate::{
     },
 };
 
-/// One button's box, logical px — the same over an app's header and in Hyalo's title bar: one
-/// size of controls in every window (owner, 2026-10-03; the window controls are the system's,
-/// not the app's). The size of a header button beside it (owner, 2026-10-04): the capsule is a
-/// group of header buttons, so it is as tall as they are — 30 × 32, a button of the kit's
-/// back/forward pair, so two buttons make that pair's 60 × 32. It was 24 high, to keep the
+/// The capsule's height, logical px — the same over an app's header and in Hyalo's title bar:
+/// one size of controls in every window (owner, 2026-10-03; the window controls are the
+/// system's, not the app's). The height of a header button beside it (owner, 2026-10-04): the
+/// capsule is a group of header buttons, so it is as tall as they are. It was 24, to keep the
 /// title bar thin.
-pub const BUTTON_W: f64 = 30.0;
 pub const BUTTON_H: f64 = 32.0;
+
+/// The bar's rule for a capsule of icon buttons (owner, 2026-10-06): each button's hover is a
+/// circle `HOVER_D` across, `EDGE` from the capsule's edge and `EDGE` from the next circle — so
+/// a button takes `PITCH` and the capsule `PITCH × n + EDGE`: 32, 60, 88. Two make the kit's
+/// back/forward pair (60 × 32), which follows the same rule. Until 2026-10-06 a button was a
+/// 30 px slot whose hover filled it, cut by the capsule: straight on one side or on both. The
+/// shader repeats these three numbers (render/controls.rs).
+pub const HOVER_D: f64 = 24.0;
+pub const EDGE: f64 = 4.0;
+pub const PITCH: f64 = HOVER_D + EDGE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -93,9 +101,9 @@ impl Buttons {
         &self.slots[..self.len]
     }
 
-    /// The capsule's width, logical px: one `BUTTON_W` per button.
+    /// The capsule's width, logical px: one `PITCH` per button, and `EDGE` once more.
     pub fn width(&self) -> f64 {
-        BUTTON_W * self.len as f64
+        PITCH * self.len as f64 + EDGE
     }
 
     /// The shader's glyph per slot (render/controls.rs), and how many slots.
@@ -217,7 +225,9 @@ pub fn button_at(r: Rectangle<f64, Logical>, local: Point<f64, Logical>, buttons
     if !r.contains(local) || buttons.len == 0 {
         return None;
     }
-    let i = (((local.x - r.loc.x) / BUTTON_W).floor().max(0.0) as usize).min(buttons.len - 1);
+    // The boundary between two buttons is halfway between their circles, half an EDGE into
+    // the gap: the end buttons reach the capsule's ends.
+    let i = (((local.x - r.loc.x - EDGE / 2.0) / PITCH).floor().max(0.0) as usize).min(buttons.len - 1);
     Some(buttons.as_slice()[i])
 }
 
@@ -369,10 +379,22 @@ mod tests {
         assert_eq!(at(363.0), Some(Button::Close));
         assert_eq!(at(393.0), None);
         assert_eq!(button_at(r, Point::from((340.0, 0.0)), &two), None, "below it: the app");
-        // Close alone: one slot, the whole capsule.
+        // Close alone: one slot, the whole capsule — a circle, 32 × 32.
         let one = of(&[Button::Close]);
+        assert_eq!(one.width(), 32.0);
         let r = Rectangle::new((362.0, -40.0).into(), (one.width(), BUTTON_H).into());
         assert_eq!(button_at(r, Point::from((363.0, -24.0)), &one), Some(Button::Close));
+        assert_eq!(button_at(r, Point::from((393.0, -24.0)), &one), Some(Button::Close));
+        // Three: 88 wide, the boundaries at 30 and 58, halfway between the circles.
+        let three = of(&[Button::Minimize, Button::Maximize, Button::Close]);
+        assert_eq!(three.width(), 88.0);
+        let r = Rectangle::new((0.0, 0.0).into(), (three.width(), BUTTON_H).into());
+        let at = |x: f64| button_at(r, Point::from((x, 16.0)), &three);
+        assert_eq!(at(29.9), Some(Button::Minimize));
+        assert_eq!(at(30.0), Some(Button::Maximize));
+        assert_eq!(at(57.9), Some(Button::Maximize));
+        assert_eq!(at(58.0), Some(Button::Close));
+        assert_eq!(at(87.9), Some(Button::Close));
     }
 
     #[test]

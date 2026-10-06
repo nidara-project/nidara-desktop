@@ -694,14 +694,16 @@ button.nidara-icon-btn {
     border-radius: $nidara-radius-pill;
     color: var(--nidara-text-dim);
 
+    // The desktop's one hover and press of an icon button (owner, 2026-10-06): the bar's
+    // pills and the window controls Hyalo draws beside these show the same.
     &:hover {
-        background: var(--nidara-surface-hover);
+        background: var(--nidara-state-hover);
         background-image: none;
         box-shadow: none;
         color: var(--nidara-text);
     }
     &:active {
-        background: var(--nidara-surface-active);
+        background: var(--nidara-state-pressed);
         background-image: none;
         box-shadow: none;
     }

@@ -86,14 +86,15 @@ export default function Settings(monitor: Gdk.Monitor) {
     attachTooltip(backBtn, t("settings.nav.back"), { chrome: false })
     attachTooltip(forwardBtn, t("settings.nav.forward"), { chrome: false })
 
-    // Navigation capsule (pill shape via CSS)
+    // Navigation capsule (pill shape via CSS): two circles 4 apart, no rule between them
+    // (_settings.scss → "Navigation capsule").
     const navCapsule = new Gtk.Box({
         css_classes: ["navigation-capsule"],
+        spacing: 4,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
     navCapsule.append(backBtn)
-    navCapsule.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nav-separator"] }))
     navCapsule.append(forwardBtn)
 
     // The glass window itself is assembled by NidaraWindow at the end (so its

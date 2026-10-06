@@ -440,7 +440,12 @@ export default function IslandGrid() {
             margin_top: headerGap,
             margin_bottom: 10,
         })
-        header.append(backBtn)
+        // The button in a capsule of one: the rule of every capsule of icon buttons (the
+        // Settings back/forward pair, the window controls) — a 24 px hover circle 4 from
+        // the capsule's edge, so the capsule is 32 (_control-center.scss).
+        const backCapsule = new Gtk.Box({ css_classes: ["cc-detail-back-capsule"], valign: Gtk.Align.CENTER })
+        backCapsule.append(backBtn)
+        header.append(backCapsule)
         header.append(new Gtk.Label({
             label: w.name, css_classes: ["cc-detail-title"],
             // No ellipsis: a widget name has to fit, not be cut ("Multime…" had room).

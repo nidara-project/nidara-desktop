@@ -32,7 +32,7 @@ import GLib from "gi://GLib"
 import { readFile, writeFile } from "./file"
 import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "./accent"
 import { DANGER_HEX, WARNING_HEX } from "./status-colors"
-import { GLASS_TINT } from "./tokens"
+import { GLASS_SPECULAR, GLASS_STATE_MIX, GLASS_TINT } from "./tokens"
 import { TEXT_INK } from "./glass-legibility"
 
 // -- COLOR PALETTES ---------------------------------------------------
@@ -302,6 +302,14 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
   // — and #600 correctly took that away by giving window chrome back to Hyprland.
   // A token nothing reads is a value that drifts from the one on screen.
 
+  // The one hover and press of an icon button on glass or in window chrome — the bar's
+  // pills (GLASS_STATE_MIX, painted in Cairo), the window controls Hyalo draws (the same
+  // numbers in render/controls.rs) and the kit's icon buttons all show these (owner,
+  // 2026-10-06: one hover). White ink on dark, the glass's own dark tint on light.
+  const stateInk = isDark ? GLASS_SPECULAR : GLASS_TINT.dark
+  const stateRgb = [stateInk.r, stateInk.g, stateInk.b].map((v) => Math.round(v * 255)).join(", ")
+  const stateMix = (m: { dark: number, light: number }) => (isDark ? m.dark : m.light)
+
   return [
     `  --nidara-accent: ${accent};`,
     `  --nidara-accent-rgb: ${r}, ${g}, ${b};`,
@@ -320,6 +328,8 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     // panel over a dark wallpaper, where a fixed dark "deepen" overlay vanished.
     // Selection is the ONLY place accent enters.
     `  --nidara-state-selected: rgba(${r}, ${g}, ${b}, ${isDark ? "0.22" : "0.16"});`,
+    `  --nidara-state-hover: rgba(${stateRgb}, ${stateMix(GLASS_STATE_MIX.hover)});`,
+    `  --nidara-state-pressed: rgba(${stateRgb}, ${stateMix(GLASS_STATE_MIX.open)});`,
     `  --nidara-surface-raised: rgba(${fg}, 0.20);`,
     `  --nidara-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills
     `  --nidara-text: ${whiteOrBlack};`,
