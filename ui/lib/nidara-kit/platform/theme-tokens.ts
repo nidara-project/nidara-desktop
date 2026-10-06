@@ -96,8 +96,8 @@ export interface NidaraThemeConfig {
 export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
 
 /**
- * The `ignore_alpha` every shell layer runs under (`nidara-bar`, `nidara-island`,
- * `nidara-dock`, `nidara-app-grid` in `config/hypr/hyprland.lua`). A pixel whose alpha
+ * The `ignore_alpha` every shell layer runs under (`nidara-bar` and `nidara-dock` in
+ * `config/hypr/hyprland.lua`). A pixel whose alpha
  * is at or below it gets NO backdrop blur. `scripts/ci/blur-threshold-check.mjs`
  * holds every one of those rules to this number — it is one decision in two languages.
  */

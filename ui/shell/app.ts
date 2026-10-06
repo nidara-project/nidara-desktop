@@ -66,7 +66,6 @@ import Dock from "./surfaces/dock/Dock"
 import { syncConstants } from "./surfaces/dock/DockPhysics"
 import { onDockSettingsChanged, dockSettings } from "./surfaces/dock/state"
 import Bar from "./surfaces/bar/Bar"
-import { AppGridWindow } from "./surfaces/app-grid/AppGridWindow"
 import AgentPointer, { isAgentPointerActive } from "./surfaces/agent-pointer/AgentPointer"
 import Settings from "./surfaces/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
@@ -1089,41 +1088,25 @@ app.start({
 
     const createUI = (monitor: Gdk.Monitor, idx: number) => {
       try {
-        const barWin = Bar(monitor)
-        const dockWin = Dock(monitor)
-        // The app grid's own OVERLAY layer surface (see AppGridWindow.ts) — also
-        // created UNMAPPED, and for the same reason as the pointer: an unmapped
-        // surface has no blur pass, so a closed grid costs nothing at all.
-        //
-        // Its focus-grab PEERS are this monitor's other shell chrome: the bar, the
-        // island and the dock. A grab clamps pointer focus to the surfaces in its
-        // whitelist, so anything left out stops receiving even MOTION — the bar's
-        // capsules went inert (no hover) with the grid open, user-caught 2026-08-09.
-        // The bar and the island already whitelist each other for exactly this; the
-        // grid is simply joining the same set. It is resolved LAZILY: the DOCK window
-        // is rebuilt on a position or auto-hide change (scheduleDockRebuild below), so
-        // a captured reference would point at a closed surface, and the island is
-        // reachable only once Bar() has finished building.
-        const gridWin = AppGridWindow(monitor, () => {
-          const peers: Gtk.Window[] = [barWin as any]
-          const isl = (barWin as any).islandWindow
-          if (isl) peers.push(isl)
+        // The dock stays clickable through the bar's grab while the app grid is
+        // open (the grid lives on the bar's surface, #708 point 3). Resolved LAZILY:
+        // the dock window is rebuilt on a position or auto-hide change
+        // (scheduleDockRebuild below), so a captured reference would point at a
+        // closed surface.
+        const barWin = Bar(monitor, () => {
+          const docks: Gtk.Window[] = []
           windows.forEach(w => {
-            if (w.name === "nidara-dock" && (w as any).gdkmonitor === monitor) peers.push(w as any)
+            if (w.name === "nidara-dock" && (w as any).gdkmonitor === monitor) docks.push(w as any)
           })
-          return peers
+          return docks
         })
+        const dockWin = Dock(monitor)
         // Fake AI cursor (created UNMAPPED — zero cost until an action plays)
         const pointerWin = AgentPointer(monitor)
 
         windows.add(barWin);
         windows.add(dockWin);
-        windows.add(gridWin as any);
         windows.add(pointerWin as any);
-        // The Activity Island's own OVERLAY layer surface (see IslandWindow.ts):
-        // a sibling toplevel the bar creates, tracked here so teardown reaches it.
-        const islandWin = (barWin as any).islandWindow
-        if (islandWin) windows.add(islandWin)
 
         // Dock rebuild on settings or pinned list change
         let rebuildTimer: number | null = null
@@ -1198,9 +1181,7 @@ app.start({
     } catch (e) { console.error(`[UI] Error:`, e) }
 
     //  Toggles Logic
-    // Plain Status now, like every other overlay — the app grid stopped being a
-    // closure flag inside the dock window when it got a surface of its own
-    // (surfaces/app-grid/AppGridWindow.ts). dumpState reads the same property.
+    // Plain Status, like every other overlay; dumpState reads the same property.
     const toggleAppGrid = () => { status.app_grid_open = !status.app_grid_open }
     // Adaptive glass (#673): every surface is registered by now (Bar.tsx), so the
     // events that can change what is behind them start counting from here.
@@ -1209,7 +1190,7 @@ app.start({
     islandRect = () => {
       let r: Rect | null = null
       windows.forEach(w => {
-        if (r || w.name !== "nidara-island") return
+        if (r || w.name !== "nidara-bar") return
         try { r = (w as any).occupiedRect?.() ?? null } catch (e) { console.error(e) }
       })
       return r
@@ -1311,15 +1292,12 @@ app.start({
         //      still renders whole — bar, dock and island included.
         //   2. The OVERLAY fallback (Gtk4SessionLock unsupported), where the
         //      lockscreen is just another OVERLAY layer competing with ours.
-        // nidara-island must be named explicitly: it carries the compact CAPSULE
-        // as well as the expanded modes, on its own surface since #53.
-        //
         // On Hyalo neither gap exists: from the lock request nothing of the session
         // can be reached, and an output keeps showing the session, bar and dock
         // included, until its lock surface has drawn — then cuts straight to it
         // (hyalo/compositor/src/lock.rs). Hiding them first only made the desktop
         // change under the user's eyes for the ~1 s the lockscreen takes to start.
-        if (!onHyalo() && (w.name === "nidara-bar" || w.name === "nidara-dock" || w.name === "nidara-island")) {
+        if (!onHyalo() && (w.name === "nidara-bar" || w.name === "nidara-dock")) {
           try { w.hide() } catch (e) {}
         }
         // The agent pointer paints on OVERLAY (above the lockscreen fallback) —
@@ -1332,7 +1310,7 @@ app.start({
     const unlockScreen = () => {
       if (onHyalo()) return // nothing was hidden (lockScreen)
       windows.forEach(w => {
-        if (w.name === "nidara-bar" || w.name === "nidara-dock" || w.name === "nidara-island") {
+        if (w.name === "nidara-bar" || w.name === "nidara-dock") {
           try { w.present() } catch (e) {}
         }
       })

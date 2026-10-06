@@ -105,8 +105,9 @@ impl Hyalo {
         let mut map = layer_map_for_output(&output);
         // A surface that moved to another level goes to the TOP of it, as on Hyprland: a
         // client has no "raise" in layer-shell, so leaving the level and coming back is how
-        // it gets above a sibling (the shell's island over the bar, IslandWindow.raise).
-        // Smithay keeps the order surfaces were mapped in, so it is re-mapped at the end.
+        // it gets above a sibling (the shell's bar and dock joining OVERLAY over a
+        // fullscreen window, Super+B). Smithay keeps the order surfaces were mapped in, so
+        // it is re-mapped at the end.
         if let Some(layer) = map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL).cloned() {
             let now = layer.layer();
             let moved = with_states(surface, |states| {
@@ -157,9 +158,9 @@ impl Hyalo {
         let output_loc = self.space.output_geometry(output)?.loc;
         let map = layer_map_for_output(output);
         // Every layer surface of a kind, topmost first, asked through its INPUT region.
-        // `LayerMap::layer_under` stops at the first bounding box, and the shell's bar, dock
-        // and island are all monitor-sized: the bar would swallow every click meant for the
-        // dock beneath it.
+        // `LayerMap::layer_under` stops at the first bounding box, and the shell's bar and
+        // dock are both monitor-sized: the bar would swallow every click meant for the dock
+        // beneath it.
         for layer in layers {
             for l in map.layers_on(*layer).rev() {
                 let Some(geo) = layer_geometry(&map, l) else { continue };

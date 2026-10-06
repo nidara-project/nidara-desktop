@@ -184,10 +184,6 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         else front?.onExpand?.()
     }
     const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, perfect: true, onClick: () => openFront() })
-    // See the chips' equivalent below — the capsule is permanent furniture, so it
-    // is always "revealed" and its rect is the one that has never gone missing.
-    ;(capsule as any).islandTargetId = "capsule"
-    ;(capsule as any).islandRevealed = () => true
     // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
     // compact shows another activity the dots are unmapped and MorphRevealer
     // lets the overview's landing dots ride the content fade instead.)
@@ -337,7 +333,6 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         })
         chip.width_request = CHIP_W
         chip.margin_start = CHIP_GAP
-        ;(chip as any).islandTargetId = `chip-${i}`
 
         const revealer = new Gtk.Revealer({
             transition_type: Gtk.RevealerTransitionType.SLIDE_RIGHT,
@@ -345,7 +340,6 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
             reveal_child: false,
         })
         revealer.set_child(chip)
-        ;(chip as any).islandRevealed = () => revealer.reveal_child
 
         revealer.connect("notify::child-revealed", () => {
             for (const cb of chipSettledSubs) cb()
@@ -386,8 +380,8 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
     // tint from the island's skin, alpha from the bar/overlay opacity axes.
-    // Asked through the capsule: it is inside the island's surface, so these follow
-    // the adaptive glass (#673) when it thickens or flips the island.
+    // Asked through the capsule, so these follow the adaptive glass (#673) when it
+    // thickens or flips the island.
     const chromeGlassColor = () => glassTintFor(capsule)
     // Pill of the compact capsule (perfect pill ≡ n=2, radius null = h/2).
     const compactGlass = (): MorphGlass => ({ alpha: glassAlphaFor(capsule, "bar"), color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
@@ -403,6 +397,28 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
 
     // ── Mode registry ────────────────────────────────────────────────────────
     const modes = new Map<string, { mode: IslandMode, revealer: MorphRevealer }>()
+
+    // The bar's glass groups beside the island (the bar hands them over:
+    // `setRowNeighbours`). A mode grows from the capsule's top edge, i.e. over the
+    // bar's own row, and one wide enough to reach a group would put glass on glass —
+    // the group's capsule sharp under the mode's pane, since one surface's glass is
+    // drawn under ALL of its content. The reference material avoids exactly that
+    // (owner, #708 point 3): the groups it covers get out of the way, fading with
+    // the capsule's content. Today only the overview is that wide.
+    let rowNeighbours: () => Gtk.Widget[] = () => []
+    const coveredBy = (revealer: MorphRevealer): Gtk.Widget[] => {
+        const parent = revealer.get_parent()
+        if (!parent) return []
+        // The mode is not laid out yet when it opens; centred, its natural width is
+        // where it will land.
+        const [, natW] = revealer.measure(Gtk.Orientation.HORIZONTAL, -1)
+        const x0 = (parent.get_width() - natW) / 2, x1 = x0 + natW
+        return rowNeighbours().filter(n => {
+            if (!n.get_mapped()) return false
+            const [ok, b] = n.compute_bounds(parent)
+            return ok && b.get_x() < x1 && b.get_x() + b.get_width() > x0
+        })
+    }
 
     const registerMode = (mode: IslandMode) => {
         const w = mode.widget as any
@@ -450,17 +466,17 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
             getSourceContent: () => front?.compact ?? null,
             glassFrom: compactGlass,
             glassTo: mode.glass,
-            // The chips leave with the capsule's content. Every mode gets the
-            // same row (only one revealer animates at a time, so they cannot
-            // fight over its opacity).
-            companions: [indicatorRow],
+            // The chips leave with the capsule's content, and so do the bar's
+            // groups this mode covers (`coveredBy`). Only one revealer animates at a
+            // time, so they cannot fight over an opacity.
+            companions: () => [indicatorRow, ...coveredBy(revealer)],
         })
         // The island is the capsule GROWN, not a separate panel: top-anchored
         // (top edge pinned to the capsule by syncAnchor), centered like the
-        // capsule — the morph only inflates down/sideways. Both the capsule and
-        // this revealer live in the ISLAND's surface (IslandWindow.ts), which is
-        // exactly the monitor rect, so CENTER here and the capsule's own CENTER
-        // land on the same axis with no correction.
+        // capsule — the morph only inflates down/sideways. Both the capsule's row
+        // and this revealer are children of the bar's overlay, which is exactly
+        // the monitor rect, so CENTER here and the row's own CENTER land on the
+        // same axis with no correction.
         revealer.valign = Gtk.Align.START
         revealer.halign = Gtk.Align.CENTER
         modes.set(mode.id, { mode, revealer })
@@ -513,17 +529,17 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     return {
         /** Compact state — the bar appends this to its center box. */
         capsule,
+        /** The bar's glass groups beside the island, which a wide mode fades out
+         *  rather than lay its glass over (see `coveredBy`). */
+        setRowNeighbours: (get: () => Gtk.Widget[]) => { rowNeighbours = get },
         /** The indicator chips — appended to the same centre box, right of the
          *  capsule, so the GROUP is what centres on the monitor. */
         indicatorRow,
-        /** Everything on this surface the user can hit, RE-READ on every input
-         *  region stamp. The capsule is always in: it keeps its geometry while a
-         *  mode is open (it is switched off by opacity alone, and clicking it
-         *  closes the mode). The chips are not: while a mode is open they are
-         *  faded to nothing, and leaving their rects stamped would put an
-         *  invisible dead patch in the bar: the compositor would read a press
-         *  there as INSIDE the grab and neither dismiss nor pass it on. Collapsed
-         *  chips fall out on the caller's zero-size guard. */
+        /** What of the island's row is on screen to be hit: the capsule always (it
+         *  keeps its geometry while a mode is open, switched off by opacity alone),
+         *  the chips only while they are not faded to nothing. The bar reads it for
+         *  what the island covers (`occupiedRect`); collapsed chips fall out on its
+         *  zero-size guard. */
         hitTargets: () => indicatorRow.opacity === 0
             ? [capsule as Gtk.Widget]
             : [capsule as Gtk.Widget, ...slots.map(s => s.chip)],
@@ -534,15 +550,8 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         background: () => background,
         /** Fire when that list changes (membership or order). */
         onBackgroundChanged: (cb: () => void) => { backgroundSubs.push(cb) },
-        /** Fire when a chip has FINISHED sliding in or out. The chips are hit
-         *  targets on a surface whose input region is stamped from measurement,
-         *  and until now they were the only ones with no trigger of their own:
-         *  the capsule re-stamps from its glass `resize`, a mode from its
-         *  revealer's `onAllocated`, and the chips from a fixed 400ms guess in
-         *  Bar.tsx — which fires while the slide is still moving whenever the
-         *  transition and that timer disagree, stamping rects the row has already
-         *  left behind. A chip whose rect is stale is a control that is painted
-         *  where the compositor sends nothing. */
+        /** Fire when a chip has FINISHED sliding in or out — the frame the row's
+         *  final width exists, which the bar lays its flanks out against. */
         onChipsSettled: (cb: () => void) => { chipSettledSubs.push(cb) },
         /** All mode revealers — the bar mounts each on its master overlay and
          *  includes them in its input-region pass (visibility-gated there). */
@@ -581,9 +590,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
          *  hidden or not yet mapped (matches the morph's centered-pop
          *  fallback). Call per-open, before the reveal.
          *
-         *  `relativeTo` is the ISLAND surface's root: the capsule was moved onto
-         *  that surface with the revealers, so this is an ordinary same-window
-         *  measurement again (it used to cross into the bar's window). */
+         *  `relativeTo` is the bar's overlay, the revealers' parent. */
         syncAnchor: (relativeTo: Gtk.Widget, fallbackTop: number) => {
             let top = fallbackTop
             if (capsule.get_mapped()) {

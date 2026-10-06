@@ -136,7 +136,10 @@ export class MorphRevealer extends Gtk.Widget {
     sourceGhosts: Gtk.Widget[]
     getSourceGhost: (() => Gtk.Widget | null) | null
     getSourceContent: (() => Gtk.Widget | null) | null
-    companions: Gtk.Widget[]
+    /** What `companions` gave on the last OPEN — latched, so the close brings back
+     *  exactly what the open took away. */
+    companions: Gtk.Widget[] = []
+    companionsOf: () => Gtk.Widget[]
     glassFrom: () => MorphGlass
     glassTo: () => MorphGlass
     durationIn: number
@@ -182,8 +185,12 @@ export class MorphRevealer extends Gtk.Widget {
          *  blink them out while the island is still capsule-sized and nowhere
          *  near covering them). Without this they simply stay lit and read
          *  straight through the island's 5% glass — both live in ONE surface,
-         *  so nothing composited there blurs or hides anything else. */
-        companions?: Gtk.Widget[],
+         *  so nothing composited there blurs or hides anything else.
+         *
+         *  A getter, asked on every OPEN: the bar's groups are companions only of
+         *  a mode wide enough to cover them (glass on glass, #708 point 3), and
+         *  whether it is depends on the mode's width and the row's layout then. */
+        companions?: () => Gtk.Widget[],
         durationIn?: number, durationOut?: number,
     }) {
         super({})
@@ -198,7 +205,7 @@ export class MorphRevealer extends Gtk.Widget {
         this.sourceGhosts = opts.sourceGhosts ?? []
         this.getSourceGhost = opts.getSourceGhost ?? null
         this.getSourceContent = opts.getSourceContent ?? null
-        this.companions = opts.companions ?? []
+        this.companionsOf = opts.companions ?? (() => [])
         this.durationIn = opts.durationIn ?? 300
         this.durationOut = opts.durationOut ?? 220
         this.child.set_parent(this)
@@ -299,6 +306,13 @@ export class MorphRevealer extends Gtk.Widget {
             // Sync visuals before the first frame so the island never flashes
             // at full size/opacity between set_visible and the first tick.
             this.set_visible(true)
+            // Asked once VISIBLE: a hidden widget measures 0, and the companions can
+            // depend on this one's width. A companion of the last open that is not one
+            // now (a reopen that caught the close mid-way, over a row laid out
+            // differently) gets its opacity back.
+            const next = this.companionsOf()
+            for (const c of this.companions) if (!next.includes(c)) c.opacity = 1
+            this.companions = next
             this.applyProgress()
         }
         const from = this.progress

@@ -633,17 +633,17 @@
 
    `widgets/media.ts` builds ONE panel (`buildMediaDetailPanel`: artwork,
    title/artist, transport row, source selector) and three surfaces show it: the
-   bar pill expansion, the Control Center detail page — both inside the bar's
-   window — and the Activity Island's PLAYER mode (`PlayerIsland.tsx:42`), which
-   has been its own window since 2026-07-26. These rules sat inside this file's
-   `#nidara-bar` block, so in the island the transport buttons and the source
-   selector rendered with raw GTK defaults. User-caught 2026-08-10; the scope had
-   moved out from under the sheet months earlier, in silence.
+   bar pill expansion, the Control Center detail page and the Activity Island's
+   PLAYER mode (`PlayerIsland.tsx`) — all three inside the bar's window again since
+   #708 point 3. Between 2026-07-26 and then the island was a window of its own,
+   and while these rules sat inside this file's `#nidara-bar` block the island's
+   transport buttons and source selector rendered with raw GTK defaults
+   (user-caught 2026-08-10; the scope had moved out from under the sheet months
+   earlier, in silence). That is the trap to remember whenever a panel changes
+   window.
 
-   Kept at the same specificity as before (window-scoped, not global) on purpose:
-   whatever wins against these rules in the bar must win identically in the
-   island, and dropping to a bare `.nidara-media-*` would have changed that balance
-   in one window only.
+   Kept window-scoped, not global: whatever wins against these rules must win in
+   every surface that shows the panel.
 
    ⚠️ A `nidara-*` name in a SURFACE sheet is deliberate here, and the only place
    in the shell where the two do not coincide. `nidara-*` says who OWNS the class
@@ -654,9 +654,7 @@
    for months.
    ========================================================================== */
 #nidara-bar,
-.nidara-bar-window,
-#nidara-island,
-.nidara-island-window {
+.nidara-bar-window {
     // The track's title: 14 bold, like every tile's title (`.nidara-atomic-label-bold`;
     // owner, 2026-09-30 — it was 13, the one title left behind).
     .nidara-media-title {

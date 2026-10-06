@@ -5,25 +5,14 @@
    ========================================================================== */
 
 /* ── Window ──
-   The app grid HAS a window of its own since 2026-08-09 — `AppGridWindow.ts`, its
-   own OVERLAY layer surface, so the dock stops handing over its blur region every
-   time the grid opens (tech-debt §46/§18). Before that the panel was a child of
-   the DOCK's window, which is why this file used to be unscoped and why §56 listed
-   `#nidara-dock` as its eventual scope.
+   The app grid is a panel of the BAR's window since #708 point 3, like every
+   other panel. It was a child of the dock's window until 2026-08-09, then a layer
+   surface of its own (`#nidara-app-grid`) — two moves, each of which had to carry
+   this file's scope with it, or every rule here would have stopped matching in
+   silence. The window's own transparency is `_bar.scss`'s. */
 
-   Everything below is now inside that window — the second half of tech-debt §56
-   for this file, closed by the move rather than by a rename. */
-
-#nidara-app-grid,
-window.nidara-app-grid-window {
-    /* The toplevel itself is TRANSPARENT — the panel paints its own glass. Nothing
-       said so while a GTK theme sat underneath (its window fill never reached a
-       layer surface of ours), and on 2026-09-23 the base layer's `window` rule
-       (#107 step 5) filled the whole monitor-sized window with the floating-surface
-       tint, clipped by the input/blur region into a translucent box around the panel.
-       Owner-caught the same day. */
-    background: transparent;
-
+#nidara-bar,
+.nidara-bar-window {
     /* ── Search bar ── */
     .app-grid-search-box {
         background: var(--nidara-surface-raised);

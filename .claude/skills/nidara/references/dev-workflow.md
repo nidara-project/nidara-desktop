@@ -2398,7 +2398,7 @@ color node), puts the shell in the state you name via `nidara-ipc`, samples `gpu
 
 ```bash
 # arm A — the OLD code, checked out from a ref, as the ONLY variable
-REF=origin/main FILES=ui/shell/surfaces/island/IslandWindow.ts \
+REF=origin/main FILES=ui/shell/surfaces/bar/Bar.tsx \
   scripts/dev/blur-arm.sh "old: full surface" setIsland agent
 # arm B — the working tree, same scenario
 scripts/dev/blur-arm.sh "new: declared rect" setIsland agent
@@ -3563,8 +3563,8 @@ nidara-ipc queryUI .agent-entry     # its `text` must be your question
 
 **Driving the island needs `wtype` directly.** No keyboard verb points at it: `nidara-type` demands an
 `<app>` and verifies focus via `hyprctl activewindow`, where a layer surface never appears. In agent
-mode the island holds a **compositor focus grab** (`IslandWindow.ts`, via `common/FocusGrab.ts` — it
-takes one for every open mode), so synthetic keys reach it — which is also
+mode the bar holds a **compositor focus grab** for the island (`barModal` in `Bar.tsx`, via
+`common/FocusGrab.ts` — it takes one for every open mode), so synthetic keys reach it — which is also
 why hop 2 is mandatory: if the grab wasn't there, you just typed your question into the operator's own
 prompt. Clean up with the island **closed first**, then `ctrl+u` — an open island eats the clear.
 

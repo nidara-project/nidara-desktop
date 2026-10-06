@@ -247,15 +247,19 @@ owns three decisions:
   draws nothing. Nobody wants that as the answer to "I could not measure anything", so the wrapper
   will not produce it — say `null` to mean "I don't know" and get the whole surface.
 
-**Every blurred layer declares a region today** — `DockAxis.ts` (both axes), `IslandWindow.ts`,
-`Bar.tsx` and `AppGridWindow.ts` — and they split into **four rules**, one per shape of the
-question "do I know what I paint before I paint it?".
+**Every blurred layer declares a region today** — `DockAxis.ts` (both axes) and `Bar.tsx`. Until
+#708 point 3 the island (`IslandWindow.ts`) and the app grid (`AppGridWindow.ts`) were layers of
+their own and declared too; both are panels of the bar now, and their rules below are the ones the
+bar's walk applies to them. They split into **four rules**, one per shape of the question "do I
+know what I paint before I paint it?".
 
 - **The dock knows its silhouette before it paints**, so it declares in every state, hidden
   included. Since 2026-08-09 that is literally every state: the two branches that used to hand the
   whole surface back — an open app grid, and a yield — are gone, the first because the grid moved
   out and the second because it was only ever justified by the grid.
-- **The island declares `capsule + whatever mode is live`** (2026-08-10). It used to declare only at
+- **The island declares `capsule + whatever mode is live`** (2026-08-10; on its own layer then —
+  in the bar since #708 point 3, where the capsule is inside the strip's rect and each mode is a
+  `masterOverlay` child the walk covers, with the same `onAllocated`). It used to declare only at
   rest — "its modes arrive through a `MorphRevealer`, which has no allocation until the morph lands"
   — and that was true for exactly ONE frame, written as if it held for as long as a mode stayed
   open. `MorphRevealer` fires `onAllocated` from inside `size_allocate` just like `ScaleRevealer`,
@@ -269,8 +273,8 @@ question "do I know what I paint before I paint it?".
   the travelling shape is `lerp(capsule, glass)`, both ends inside the rect already declared. The
   only clear left is the frame in which a just-revealed mode has no allocation yet (`pending` →
   whole surface). ⚠️ `get_visible()` is not enough on the way out; `tickId` is what says "still
-  moving". ⚠️ The indicator chips leave `hitTargets()` when they fade at 35 % of the morph, so they
-  live inside `BLUR_PAD_X = 200`, not inside a rect of their own — tighten that pad and they blink.
+  moving". (The chips needed a 200px pad on the island's own layer; inside the bar's full-width
+  strip they need nothing.)
 - **The bar declares `strip + one rect per open panel`** (2026-08-09). It used to follow the
   island's rule, and that was the island's answer to a question the bar does not have: its five
   panels are `ScaleRevealer` + `OVERLAY_POP` with `animateLayout: false`, so — exactly like the app
@@ -287,7 +291,10 @@ question "do I know what I paint before I paint it?".
   flings the card clear off screen: it is the one thing in that window that paints outside its own
   box, everywhere else GTK's `overflow: HIDDEN` on the revealer clips for us before the compositor
   sees anything.
-- **The app grid is the third case: it declares only while OPEN, and does not exist otherwise.** It
+- **The app grid is the third case: it declares only while OPEN.** (Written for its own layer,
+  2026-08-09 to #708 point 3, which was also UNMAPPED while closed. In the bar it is a
+  `masterOverlay` child: the walk gives it `onAllocated` — which also covers the no-results shrink
+  below — and pads its rect by `GRID_PAD` = 48 for the shadow outside its allocation.) It
   has the same no-allocation-yet problem, and two properties that let it stop watching for the
   answer. Its revealer is `OVERLAY_POP` with `animateLayout: false`, so the allocation is the FINAL
   one from the first laid-out frame and the 0.97→1.0 pop paints strictly inside it; and the panel is
@@ -603,8 +610,9 @@ Enter that does nothing.
 
 `focus_grab_*()` speaks `hyprland-focus-grab-v1`. From the shell go through
 **`common/FocusGrab.ts`** (same lazy-import contract as `VisibleRegion.ts`; the kill switch is
-`NIDARA_FOCUS_GRAB=0`). **Every modal surface is on it: the bar's overlays, the island, and the app
-grid.**
+`NIDARA_FOCUS_GRAB=0`). **Every modal surface is on it: the bar — ONE grab for all of its panels,
+the island's modes and the app grid included (`barModal`, since #708 point 3) — and the dock's
+keyboard walk.**
 
 🔴 **It is a HARD REQUIREMENT, not an enhancement (2026-08-05).** The full-screen `overlay-catcher`
 buttons that used to fake "click outside closes" are deleted, and so is the layer-shell
@@ -617,15 +625,16 @@ adding a modal surface: acquire, and treat a 0 as broken — do not invent a fal
 🔑 **A grab whitelists a SET of surfaces, and you must pass every surface of yours that has to stay
 clickable — not just the modal one.** On an outside press the compositor delivers the button to
 whatever holds pointer focus, the grab CLAMPS pointer focus to itself, and only then clears. So a
-press outside the set dismisses and *does nothing else* — it never reaches what you clicked. **The
-bar and the island each whitelist the other**, symmetrically: the island's capsule lives on the
-island's surface (commandment #5's exception), so a bar panel grabbing only itself makes the whole
-island unclickable, and vice versa. Capsule-to-capsule switching has to stay one click, and nothing
-else is arranging it.
+press outside the set dismisses and *does nothing else* — it never reaches what you clicked. While the
+island was a surface of its own, **the bar and the island had to whitelist each other** or a bar panel
+made the whole island unclickable; one surface removed that. What is left: **with the app grid open
+the bar's grab carries the DOCK** (`gridPeers`), so its icons still launch in one click, and only
+then — a press on the dock closes the CC like a press anywhere else. The set changing under a held
+grab (CC → grid) re-acquires: the same owner re-acquiring is not an eviction.
 
-🔑 **One grab, two owners → `acquireFocusGrab` returns an ownership TOKEN and `releaseFocusGrab(token)`
+🔑 **One grab, several owners → `acquireFocusGrab` returns an ownership TOKEN and `releaseFocusGrab(token)`
 no-ops for anyone else.** The shim holds a single grab (the compositor has a single slot) but the bar
-and the island ask for it independently, so a bare `release()` destroys *whatever grab exists*: island
+and the dock ask for it independently (and, until #708 point 3, the island and the grid did too), so a bare `release()` destroys *whatever grab exists*: island
 mode open → bar panel opens and legitimately evicts it → the island's own close handler then runs and
 takes down the BAR's fresh grab, leaving the bar convinced it is modal while holding nothing.
 Acquiring while someone holds also **invokes the previous owner's `cleared`** — an eviction is
@@ -700,9 +709,9 @@ focus with the opposite policy; the reading of `setGrab(nullptr)` that settles w
 `follow_mouse` value takes is in `state-and-ipc.md`. Two callers of one mechanism, deliberately
 different policies — do not "unify" them.
 
-⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes only its overlays,
-the island only `island_mode`; a handler reaching further would shut whatever the other surface just
-opened. The wider "close everything" belongs to `dismissOverlays()`, which runs off a REAL click on
+⚠️ **Scope each `cleared` handler to what its own surface owns.** The bar closes its panels (the
+island's modes and the grid among them), the dock its walk; a handler reaching further would shut
+whatever the other surface just opened. The wider "close everything" belongs to `dismissOverlays()`, which runs off a REAL click on
 the bar strip rather than off an eviction.
 
 ⚠️ **An input region stamped in the same turn as `reveal(true)` describes the panel as ABSENT** — a
@@ -726,7 +735,7 @@ input at all until the UI was reloaded (`tech-debt.md` #68, stamp #422).
 region, unmeasurable → hand the whole surface back; a region that is too big only costs performance.
 For the INPUT region the same answer would swallow every click on screen, and the empty one takes
 them all away — so its safe state is neither, it is **the region already on the surface**. Hold it and
-re-stamp (`IslandWindow.holdRegion`). The one moment holding is wrong is before the first successful
+re-stamp (the island did, `holdRegion`, while it had a surface of its own). The one moment holding is wrong is before the first successful
 stamp, when there is nothing to hold: a Wayland surface with no region takes input across its whole
 buffer, so a monitor-sized surface must stamp empty until it has measured something once.
 
@@ -734,7 +743,8 @@ buffer, so a monitor-sized surface must stamp empty until it has measured someth
 just its transient parts.** The island's revealers had `onAllocated` and its morph had `onDone`; the
 always-present capsule had nothing, which is exactly why its failure lasted the whole session. Note
 the bar does not have this problem for a structural reason worth copying where you can: it unions an
-unconditional `{0,0,monGeo.width,BAR_H}` strip, a constant that cannot fail to measure.
+unconditional `{0,0,monGeo.width,BAR_H}` strip, a constant that cannot fail to measure — and since
+#708 point 3 the island's capsule and chips are inside it, which is what ended this family of bugs.
 
 What a grab replaces, all three verified in Hyprland 0.56's source:
 
@@ -958,198 +968,47 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
   - `_reset.scss` neutralizes Adwaita residue.
   - Per-component modules are scoped with `window#id { … }`.
 - **`surfaces/`** — whole TSX surfaces that consume `core/` state. Each surface is a function that takes a `Gdk.Monitor` and returns a `Gtk.Widget`:
-  - `bar/`, `dock/`, `control-center/`, `app-grid/`, `island/` (the Activity Island: the bar-center capsule as a multi-purpose morphing surface. COMPACT state = a `Gtk.Stack` (crossfade + `interpolate_size`, so the pill's width animates) whose pages MUTATE by activity: one page per registered activity, **including the workspace dots** (which absorbed the old `bar/Workspaces.tsx`). **Activities are DATA** (`IslandActivity` in `ActivityIsland.tsx`; the concrete ones in `IslandActivities.tsx`): each declares `{compact form, priority, watch/isLive liveness, expandMode?, autoExpand?, makeGhost?/artSource? morph continuity}` and OWNS its liveness policy; the engine only arbitrates — highest-priority live activity fronts the compact. Current activities: **dots** 0 (`isLive: () => true` — the FLOOR, so "nothing running" is not a special case but the dots winning, and there is no `else` branch. They used to BE that else branch, and it was a bug: with any activity live the capsule's click opened THAT mode and the workspace overview became unreachable by mouse. `expandMode: overview`, no `makeGhost` — their morph continuity is the traveling `MorphPair` set, not a dissolving twin) < **media** 10 (`PlayerCompact`: mini art + title + 10fps Cairo EQ; pause holds a 12s grace, the open player panel holds liveness, player leaving the bus drops it instantly) < **recording** 20 (STEADY danger dot + elapsed, mirrors `status.recording`; the shell's ONE live-capture display since the CC banner row was dropped — the elapsed text comes from `recordingElapsed()` in `core/Status.ts`, off the single `recordingStartedAt` stamp, so no two surfaces can disagree and one built mid-capture never restarts at 0:00. `expandMode: ISLAND_RECORDING` → `RecordingIsland.tsx`, a statement card of clock + Stop, so the island answers for the capture end to end and stopping never depends on where the user put a widget. Its two earlier destinations were both wrong and both user-caught: the workspace overview (leftover from when the overview was the capsule's default identity, 2026-08-01) and then `onExpand → toggleCC` (fine only while the CC banner held the only Stop — with that row gone and the screenrecord widget placeable in the BAR ONLY, the click could open a Control Center with nothing about the recording in it, 2026-08-02). The FAST Stop is the bar pill, one click, see the `barClick` contract below) < **battery-critical** 30 (`≤5%` discharging, clears `>7%` or charging — hysteresis because UPower ticks are coarse; **the auto-expand prototype**: takes the front AND opens its alert once per takeover; the agent's "needs confirmation" will ride the same `autoExpand` flag) — and **agent** 25 (the built-in Assistant, between recording and battery: live while a turn runs (`agentService.busy`, the "working pill") or its panel is open; does NOT use the engine `autoExpand` — `AgentService` opens the island itself when a BACKGROUND turn finishes, since the flag fires on taking the front, not on finishing; closing the island mid-turn does not cancel). EXPANDED modes morph out of the capsule via one MorphRevealer per mode, driven by `status.island_mode` — `overview` (keyboard nav), `player` (the shared media detail panel from `widgets/media.ts`, no keyboard grab), `battery` (`BatteryIsland.tsx`, a plain statement card), `agent` (`AgentIsland.tsx`, the Assistant chat: header + streaming transcript + text entry; `needsKeyboard:true`, its `handleKey` claims only Escape so the entry types — the island's first TEXT mode). Cross-activity rules live in the engine's `arbitrate()`: a DEAD activity's open surface closes (player left the bus, battery recovered); auto-expand fires only when the activity TAKES the front (closing the island while the condition persists must not re-open it). **A chip click PROMOTES, and promotion is NOT expansion: it pins its activity to the front (`pinned`) and stops there** — the chip swaps into the capsule so the thing you picked is the thing the bar is showing, and a SECOND click, on the capsule, expands it. It used to do both in one click; `promote()` dropped its `openAfterSwap` call on 2026-08-22 (#226). A chip is a "show me this" control, not a "take me there" one — the same separation `onExpand` already had, now applied to the mode too. Priority is a guess about what matters and a click is not, so the pin outlives every ordinary change and ends only when the user picks something else or the pinned activity dies. ONE exception: an `autoExpand` activity (a critical battery) takes the front anyway because interrupting is its whole purpose — and it does NOT clear the pin, so what the user chose comes back when the interruption passes. Auto-expand opens through `openAfterSwap` and is its ONLY caller since #226, never in arbitration's own tick (see the phantom-% gotcha above); a chip click does not open anything. An activity with no `expandMode` opens its `onExpand` instead — the destination where it can actually be acted on (recording used to point here before it got a mode of its own) — and nothing at all if it has neither. **`onExpand` fires only from an EXPAND click (the capsule), never from promotion**: `openAfterSwap` handles island modes only, because switching the capsule to an activity is not the same act as asking to be taken to another surface, and one click must not do both (user call 2026-08-01). Promoting a capture puts the timer in the capsule and stops; its second click makes the jump. **There is no fall-back to the workspace overview**: that existed only while the overview was the capsule's default identity, and once the dots became an activity with a mode of their own it just meant an unrelated surface answering the click (user-caught 2026-08-01, on the recording pill). **Only a LIVE activity can be pinned**: a merely-indicated chip (the idle assistant) has nothing to hold the capsule with, so clicking it just opens its mode — which is what makes it live — exactly as Super+A does; pinning it would either be cleared on the spot by the liveness check or park an idle activity in the capsule forever. The LOSERS are no longer discarded — `arbitrate()` publishes every live-but-not-fronting activity as `background()` (+ `onBackgroundChanged()`) on the island handle, **ordered by priority, never by arrival** (an arrival-ordered row would swap icons under the cursor). Note the front can hold steady while the background changes, so the background is computed BEFORE `arbitrate()`'s no-front-change early-out. That list is painted by the **INDICATOR ROW** (`indicatorRow` on the handle, appended to the bar's centre box right of the capsule — the iOS split: a pill for the current thing, circles for the rest, and **the GROUP centres**, so the capsule leaves the monitor axis while anything else runs). A chip is shown for everything INDICATED that isn't fronting, which is WIDER than "live": the optional `isIndicated()` (default = `isLive`) lets an activity earn a chip without competing for the capsule. Only the Assistant uses it — a configured provider is always one click away — and it MUST stay out of `isLive`, or the agent (25) would outrank the music (10) and hold the capsule for a session that never used it. Each activity supplies its own glyph via the REQUIRED `indicator()` (dots → a frozen `.workspace-dot.active` pill, `makeActiveDotGlyph`; media → a music glyph; rec → the steady danger dot; battery → the Cairo glyph; agent → `sparkles`), max `INDICATOR_MAX` = 3 chips. **A chip's usable interior is ~20px, and a chip glyph is 16px:** the chip is a 28px circle (`CHIP_W` = 32 = the bar row height, less `SquircleContainer`'s 2px technical inset per side; `perfect` → radius h/2) and the largest square that fits INSIDE a 28px circle is 28/√2 ≈ 19.8. ⚠️ Since 2026-09-25 `CHIP_W` is `BAR_CAPSULE_H` (still 32, `surfaces/bar/capsule.ts`) and `CHIP_GAP` is `BAR_GAP` = 4 (not 8 as measured below) — **not re-measured with `queryUI` yet**. **Measured, not derived** (2026-08-23, `nidara-ipc queryUI` on a live shell): `bar-centerbox` is h=32, and the indicator row is 80×32 with two chips up — `CHIP_W` 32 + `CHIP_GAP` 8, twice. ⚠️ This paragraph said 24px/28px/≈17 until then, arithmetic from a 28px bar row that had since grown; if the row height moves again, re-measure with `queryUI` rather than trusting the numbers written here. Media used to stack the compact's 20px cover art over its music glyph and the square poked out of the glass on all four sides (user-caught 2026-08-03); shrinking it to the inscribed square would have filled the circle edge to edge and eaten the glass ring that makes a chip read as a chip. **Cover art is not chip material** — it lives where it is legible (the compact's 20px slot beside the title, the panel's 96px). Nor is the compact's EQ: an animated chip damages the island's OWN layer at its frame rate, and Hyprland charges blur by the layer BOX, so a 24px flourish costs a full-screen re-blur per frame for as long as the music plays (the compact's EQ is 10fps AND `map`-gated for exactly this reason). Chips are static monochrome glyphs on glass. Three traps this cost: (1) the row is `INDICATOR_MAX` FIXED SLOTS, not one revealer per activity — slot `i` shows `background[i]`, and each slot is a `Gtk.Revealer` (SLIDE_RIGHT) wrapping a `Gtk.Stack` (CROSSFADE, `COMPACT_SWAP_MS`) holding one named glyph per activity, crossfading between them IN PLACE. One revealer per activity was the first design and two of them cross-slid over each other whenever activities swapped rank (fixed 2026-08-22, #226); with slots the geometry is positional and constant — every rect stays put and only the glyph inside it changes, so priority order still falls out for free from the order `arbitrate()` publishes; (2) the gap is each chip's `margin_start`, NOT box spacing — a collapsed `Gtk.Revealer` still counts as a visible child, so spacing would reserve its 8px forever and leave the capsule off-centre in an idle session; (3) the chips use `Gtk.Revealer`+`SLIDE_RIGHT` (the bar's existing idiom, `common/widget-kit/bar.ts`), NOT `ScaleRevealer`, which animates the measured HEIGHT only and passes width straight through. `IslandWindow.mount` therefore takes `hitTargets: Gtk.Widget[]` (capsule + every chip; hidden ones fall out on the visible/mapped guard), and Bar.tsx re-stamps the input region on `onBackgroundChanged` — a chip appearing MOVES the capsule without resizing it, so the `glassArea` resize hook never fires for it. Capsule click expands whatever fronts the compact; Super+W always reaches the overview. Battery E2E on a desktop: `scripts/dev/fake-battery.sh` (sudo, dev-workflow.md)), `overview/`, `prism/`
-  - `island/IslandWindow.ts` — the **whole** Activity Island (compact capsule
-    included) is the **second deliberate exception to commandment 5** (the agent
-    pointer is the first): its own layer-shell window per monitor, namespace
-    `nidara-island`, on the **OVERLAY** level (one above the bar's TOP).
-    **Why it has to be a separate surface:** Hyprland's layer blur samples
-    what was composited BEHIND a surface, once. Everything drawn inside one GTK
-    window is one buffer, and Cairo has no backdrop-filter, so the island could
-    never blur the bar capsules it grows over — at the default `overlayOpacity`
-    of 0.05 they read through it sharp, which is exactly what it looked like.
-    A higher layer level is composited after the bar, so the blur pass sees it.
-
-    🔑 **"One level above the bar" stops being true in the game overlay, and there is
-    no call that fixes it.** Super+B under a fullscreen window moves the BAR to
-    OVERLAY too — the bar's own level, TOP, renders below a fullscreen window — and
-    inside a level Hyprland stacks by COMMIT ORDER: last to commit is on top. The
-    bar's layer change reaches the compositor after the island's `present()` in the
-    same turn, so the bar lands above. Two things break at once: the island stops
-    blurring the bar (the reason it is a separate surface at all), and it goes
-    **completely dead to the pointer while looking perfectly fine** — `Bar.tsx`
-    unconditionally claims `{0,0,width,BAR_H}` of input and the capsule is painted
-    at y=8..40, inside that strip, so the bar eats every click meant for it. The
-    input region is correctly stamped the whole time, which is what makes it such a
-    bad one to chase (owner-caught 2026-08-24).
-
-    ⚠️ **There is no raise in layer-shell, and `set_layer` to the value you already
-    have is a NO-OP** — which is what `IslandWindow.raise()` was. Measured with
-    `scripts/dev/layer-order-probe.ts`, two throwaway surfaces on one level:
-    baseline (B mapped last) → B on top; `set_layer(OVERLAY)` again → **B still on
-    top**; bounce TOP → OVERLAY across separate commits → A on top; unmap + remap →
-    A on top. The only lever is to leave the level and come back, and it needs TWO
-    commits: both requests inside one commit collapse to a final value equal to the
-    current one, i.e. the no-op again.
-    ⚠️ The half-done state is worse than the bug — a surface parked on TOP is under
-    the fullscreen window, i.e. gone — so the return leg is armed twice (frame clock
-    AND timeout) and never made conditional on a signal arriving. And because this is
-    ordering we do not control, `raise()` asks the compositor whether it worked
-    (`HyprlandState.isLayerAbove`) and logs when it did not.
-    Verified live before building (2026-07-25, Hyprland 0.55.4). A `Gtk.Popover`
-    would also be blurred, but under `popups_ignorealpha = 0.30` — a different
-    knob from a layer's `ignore_alpha`, and unlowerable without haloing the
-    popup's own shadow — so it would have forced the glass to ≈0.38 and broken
-    the user's opacity setting. The layer keeps 0.05.
-    **The COMPACT CAPSULE moved here too, and that is the design, not a detail.**
-    The island is meant to be ONE object changing shape. A first cut left the
-    capsule on the bar's surface and only moved the expanded modes; it cost a
-    cross-window coordinate bridge in `MorphRevealer`, and — worse — mid-morph
-    BOTH surfaces painted glass over the same pixels, so their blurs stacked and
-    the transition showed a visible seam (user-caught 2026-07-26). One surface
-    owning the shape end to end removes both. `Bar.tsx` still owns the capsule's
-    GEOMETRY: it builds the row and hands it over, reusing the very same
-    `.bar-centerbox`/`.bar-center` classes so the 4px top margin and `BAR_H` row
-    height come from one CSS rule instead of a constant duplicated per window.
-    Geometry: anchored on all four edges with `exclusive_zone = -1`, so the
-    surface is EXACTLY the monitor rect regardless of what the bar and dock
-    reserve (with zone 0 the bar's own 40px reservation would push the surface —
-    and therefore the capsule — off the bar row).
-    **The island FOLLOWS the bar's top edge** (`setTopOffset`, fed by
-    `HyprlandState.layerTop("nidara-bar", connector)` on startup, on
-    `config-reloaded`, and then on a 400ms watch that runs ONLY while displaced).
-    The two surfaces answer to different rules on purpose — the bar's `zone = 40`
-    both reserves space AND respects everyone else's reservations, the island's
-    `-1` does neither — and that is right for each alone and wrong together: let
-    anything reserve space ABOVE the bar (Hyprland's own config-error bar is the
-    case in the wild) and the bar slides down while the island stays, leaving the
-    capsule floating over the row it belongs to. Reproduced with a 60px reserving
-    layer created before the shell; `zone = 0` is NOT the fix (it would respect the
-    full 100px and land 40px BELOW the bar instead of 60px above). Mirroring where
-    the bar actually is needs no model of who reserves what. **Anything converting
-    root-relative bounds to monitor-relative must add the offset** —
-    `occupiedRect` does, and it is what stops the agent clicking under the island.
-
-    **Why it POLLS while displaced, and why that is not laziness** (2026-08-04, the
-    first version of this fix became its own bug: fix the config and the island
-    stayed down forever). Reading the position once per `configreloaded` is wrong
-    because the reservation is not released on that event. Hyprland's
-    `src/errorOverlay/Overlay.cpp` (v0.56.0): creating the error overlay calls
-    `updateReservedArea(true)` → `arrangeLayersForMonitor` immediately, but
-    `destroy()` only sets `m_queuedDestroy`; the release runs inside `draw()` and
-    only once the **fadeOut animation has ENDED** — an unknown number of frames
-    later, announced by no event, at a delay the user's animation config decides.
-    Nor is there anything client-side to hook: a layer surface is told about its
-    SIZE only, and the bar's never changes (anchored top/left/right with no bottom
-    anchor → client-chosen height), so a pure vertical move produces no `configure`.
-    Hence: measure on the event (twice — the overlay is CREATED from `draw()`, a
-    frame after the event, so the immediate read can legitimately still be stale),
-    then watch every 400ms **only while offset > 0**, stopping the moment the bar
-    comes home. A healthy session polls zero times; a broken-config session — by
-    definition degraded and being fixed right now — pays one `hyprctl layers` per
-    400ms. Verified end to end with a BOTTOM-layer surface reserving 60px:
-    bar 60 / island 0 → `hyprctl reload` → island 60 → kill the surface (no event
-    at all) → island back at 0 within 300ms.
-
-    **"Why not just share the bar's exclusive zone?" — TESTED AND REJECTED, with
-    numbers (2026-08-04, owner's question).** Two variants, both tried:
-    (a) *the same zone as the bar* (40) does not share anything — two surfaces
-    asking for 40 reserve 80 between them, and the island, arranged after the bar,
-    is positioned against a usable area the bar's own 40 has already been applied
-    to, so it lands 40px BELOW the bar rather than level with it.
-    (b) *`zone = 0` + `margin_top = -40`* (respect everyone, reserve nothing, then
-    cancel the bar's own reservation) is genuinely elegant on the vertical axis and
-    **works**: measured with a 60px reserving surface, the island tracked the bar to
-    y=60 and back to 0 with **no event, no polling and no shell code at all** — the
-    compositor did it. It dies on the HORIZONTAL axis. `zone = 0` means "respect ALL
-    reservations", and there is no way to say "respect only foreign ones" — so our
-    OWN dock counts. Measured with `dock.position = left`: `nidara-bar` at x=0
-    w=2560 (zone > 0, arranged before the dock, unaffected), `nidara-island` at
-    **x=100 w=2460**, capsule centre at 1053 instead of 1103 — **50px off the bar's
-    centre, permanently, for every side-dock user**. That is the same bug being
-    fixed here, moved to the other axis and from a rare state into the normal one.
-    Compensating with a negative left margin would mean tracking the dock's own
-    reservation (which changes with position, size and auto-hide) — more coupling
-    than the watch, and it fails in the NORMAL state when it drifts. A secondary
-    cost: with `zone = 0` the compositor never tells the client where it put the
-    surface, so `occupiedRect` would lose the truth it exists to report.
-    **Don't re-propose either variant.**
-
-    **Which layer can displace the bar** (cost an hour on 2026-08-04 — a probe on
-    OVERLAY, then on TOP, moved nothing). `arrangeLayersForMonitor` iterates the
-    four layer vectors in index order — BACKGROUND, BOTTOM, TOP, OVERLAY — running
-    the exclusive pass over each in turn, and each surface is positioned against
-    the `usableArea` **as it stands when its own vector's turn comes**. So only a
-    surface on a LOWER level (or an earlier entry within the same one) can push the
-    bar (TOP) down; a reserving OVERLAY surface reserves for windows but arrives
-    too late to move it. Hyprland's error bar is not a layer surface at all — it is
-    a monitor `RESERVED_DYNAMIC_TYPE_ERROR_BAR`, subtracted in
-    `logicalBoxMinusReserved()` before any layer is arranged, which is why it moves
-    the bar when a same-level layer surface would not.
-
-    **Do not "optimise" this into a surface that resizes.** It was tried and
-    reverted on 2026-08-02: shrinking it to a capsule-height strip when collapsed
-    is worth a measured −6.1 pts of GPU, but every grow produced a visible
-    artefact (workspace dots rising and stretching, indicator chips narrowing
-    upward) that could not be tuned away. See `tech-debt.md` §46 for the full
-    attribution and what was ruled out — the short version is that GTK is provably
-    innocent and the cost is compositor-side, so it is not a scheduling bug you
-    can fix from here.
-    **The layer-shell rule worth memorising, because a wrong guess about it cost
-    real time:** a surface requesting `exclusive_zone > 0` is arranged against
-    the FULL output area; only surfaces asking for **zone 0** get pushed into the
-    remaining usable area; `-1` ignores everything. So the bar (zone 40) and the
-    island (zone -1) are BOTH the full monitor rect, always, whatever the dock
-    reserves — a side dock covers the bar, it never displaces it. Verify with
-    `hyprctl layers -j` against `hyprctl monitors -j`'s `reserved` rather than
-    reasoning from the anchors: on DP-1 that reads `reserved [0,40,0,100]` with
-    `nidara-bar` still at `0 0 2560 1440`. This is also why `syncPanelMargins`
-    dodges a side dock by hand. Always mapped: the
-    capsule is permanent furniture, so there is no "closed" state to unmap into.
-    It follows the bar out of sight instead — fullscreen hide and lock BOTH have
-    to name `nidara-island` explicitly (`lockScreen`/`unlockScreen` in `app.ts`
-    filter by window name; forget it and the capsule stays up through the
-    fullscreen hide, and through the window BEFORE the lockscreen confirms the
-    lock — not over the lockscreen itself, which no layer of ours can reach; see
-    the lockscreen note below).
-    Consequences you inherit when touching it (two input regions, keyboard-grab
-    collision, CSS scoped to BOTH windows, layer-order re-assertion) are listed
-    in `state-and-ipc.md` under "Overlay placement".
-  - `app-grid/AppGridWindow.ts` — the **third exception to commandment 5**
-    (2026-08-09), and the only one whose reason is a BILL rather than a visual
-    impossibility. Its own layer-shell window per monitor, namespace
-    `nidara-app-grid`, OVERLAY level, anchored on four edges with
-    `exclusive_zone = -1` (so the panel centres on the SCREEN, not on what is left
-    after the bar and dock reserve theirs) and `KeyboardMode.NONE` like everything
-    else — the compositor focus grab carries the keyboard.
-    **Why it moved.** The panel used to be a `Gtk.Overlay` child of the DOCK's
-    window. Hyprland charges layer blur by the surface's BOX, and the dock's
-    surface is the whole monitor while it only PAINTS a pill — which is the entire
-    reason it declares a region (§46). A guest that can paint anywhere made that
-    impossible: every open handed the full 2560×1440 box back, so the saving
-    evaporated exactly when the screen was busiest. Split apart, the dock keeps its
-    pill rect in **every** state and this surface declares the panel's
-    (**measured on the real shell: 1110×834 of 2560×1440**, ~25%).
-    **What was traded away, deliberately** (owner, 2026-08-09): opening the grid no
-    longer REVEALS the dock. That coupling was the whole justification for the
-    old placement (`tech-debt.md` §18). Two things soften it and both are
-    verified: this monitor's other shell chrome (**bar, island and dock**) goes into the
-    grid's focus grab as **peers**, so the dock's icons still launch with the grid
-    open, and with auto-hide on, an edge hover still slides it in **while the grid
-    stays open**.
-    ⚠️ **The peer list is not a nicety — a grab CLAMPS pointer focus, so a surface
-    left out of it stops receiving even MOTION.** Shipping with only the dock as a
-    peer left the bar's capsules inert: no hover, no click (user-caught 2026-08-09,
-    same day). The bar and the island already whitelist each other for exactly this;
-    the grid simply joins the set. Whitelisting the bar then obliges
-    `dismissOverlays()` to close the grid, because a peer is by definition a surface
-    the compositor will NOT dismiss on — otherwise the empty bar strip becomes the
-    one press on screen that does nothing.
-    **What that unlocked**: with the dock coupling gone there was nothing keeping
-    the grid out of `Status.ts`, so it is now `status.app_grid_open` — a normal
-    mutually-exclusive overlay, and `dumpState` reads the property instead of
-    scanning windows for the dock's `isAppGridPanelOpen()`.
-    Its region rules are the third case in the visible-region section above.
+  - `bar/`, `dock/`, `control-center/`, `app-grid/`, `island/` (the Activity Island: the bar-center capsule as a multi-purpose morphing surface. COMPACT state = a `Gtk.Stack` (crossfade + `interpolate_size`, so the pill's width animates) whose pages MUTATE by activity: one page per registered activity, **including the workspace dots** (which absorbed the old `bar/Workspaces.tsx`). **Activities are DATA** (`IslandActivity` in `ActivityIsland.tsx`; the concrete ones in `IslandActivities.tsx`): each declares `{compact form, priority, watch/isLive liveness, expandMode?, autoExpand?, makeGhost?/artSource? morph continuity}` and OWNS its liveness policy; the engine only arbitrates — highest-priority live activity fronts the compact. Current activities: **dots** 0 (`isLive: () => true` — the FLOOR, so "nothing running" is not a special case but the dots winning, and there is no `else` branch. They used to BE that else branch, and it was a bug: with any activity live the capsule's click opened THAT mode and the workspace overview became unreachable by mouse. `expandMode: overview`, no `makeGhost` — their morph continuity is the traveling `MorphPair` set, not a dissolving twin) < **media** 10 (`PlayerCompact`: mini art + title + 10fps Cairo EQ; pause holds a 12s grace, the open player panel holds liveness, player leaving the bus drops it instantly) < **recording** 20 (STEADY danger dot + elapsed, mirrors `status.recording`; the shell's ONE live-capture display since the CC banner row was dropped — the elapsed text comes from `recordingElapsed()` in `core/Status.ts`, off the single `recordingStartedAt` stamp, so no two surfaces can disagree and one built mid-capture never restarts at 0:00. `expandMode: ISLAND_RECORDING` → `RecordingIsland.tsx`, a statement card of clock + Stop, so the island answers for the capture end to end and stopping never depends on where the user put a widget. Its two earlier destinations were both wrong and both user-caught: the workspace overview (leftover from when the overview was the capsule's default identity, 2026-08-01) and then `onExpand → toggleCC` (fine only while the CC banner held the only Stop — with that row gone and the screenrecord widget placeable in the BAR ONLY, the click could open a Control Center with nothing about the recording in it, 2026-08-02). The FAST Stop is the bar pill, one click, see the `barClick` contract below) < **battery-critical** 30 (`≤5%` discharging, clears `>7%` or charging — hysteresis because UPower ticks are coarse; **the auto-expand prototype**: takes the front AND opens its alert once per takeover; the agent's "needs confirmation" will ride the same `autoExpand` flag) — and **agent** 25 (the built-in Assistant, between recording and battery: live while a turn runs (`agentService.busy`, the "working pill") or its panel is open; does NOT use the engine `autoExpand` — `AgentService` opens the island itself when a BACKGROUND turn finishes, since the flag fires on taking the front, not on finishing; closing the island mid-turn does not cancel). EXPANDED modes morph out of the capsule via one MorphRevealer per mode, driven by `status.island_mode` — `overview` (keyboard nav), `player` (the shared media detail panel from `widgets/media.ts`, no keyboard grab), `battery` (`BatteryIsland.tsx`, a plain statement card), `agent` (`AgentIsland.tsx`, the Assistant chat: header + streaming transcript + text entry; `needsKeyboard:true`, its `handleKey` claims only Escape so the entry types — the island's first TEXT mode). Cross-activity rules live in the engine's `arbitrate()`: a DEAD activity's open surface closes (player left the bus, battery recovered); auto-expand fires only when the activity TAKES the front (closing the island while the condition persists must not re-open it). **A chip click PROMOTES, and promotion is NOT expansion: it pins its activity to the front (`pinned`) and stops there** — the chip swaps into the capsule so the thing you picked is the thing the bar is showing, and a SECOND click, on the capsule, expands it. It used to do both in one click; `promote()` dropped its `openAfterSwap` call on 2026-08-22 (#226). A chip is a "show me this" control, not a "take me there" one — the same separation `onExpand` already had, now applied to the mode too. Priority is a guess about what matters and a click is not, so the pin outlives every ordinary change and ends only when the user picks something else or the pinned activity dies. ONE exception: an `autoExpand` activity (a critical battery) takes the front anyway because interrupting is its whole purpose — and it does NOT clear the pin, so what the user chose comes back when the interruption passes. Auto-expand opens through `openAfterSwap` and is its ONLY caller since #226, never in arbitration's own tick (see the phantom-% gotcha above); a chip click does not open anything. An activity with no `expandMode` opens its `onExpand` instead — the destination where it can actually be acted on (recording used to point here before it got a mode of its own) — and nothing at all if it has neither. **`onExpand` fires only from an EXPAND click (the capsule), never from promotion**: `openAfterSwap` handles island modes only, because switching the capsule to an activity is not the same act as asking to be taken to another surface, and one click must not do both (user call 2026-08-01). Promoting a capture puts the timer in the capsule and stops; its second click makes the jump. **There is no fall-back to the workspace overview**: that existed only while the overview was the capsule's default identity, and once the dots became an activity with a mode of their own it just meant an unrelated surface answering the click (user-caught 2026-08-01, on the recording pill). **Only a LIVE activity can be pinned**: a merely-indicated chip (the idle assistant) has nothing to hold the capsule with, so clicking it just opens its mode — which is what makes it live — exactly as Super+A does; pinning it would either be cleared on the spot by the liveness check or park an idle activity in the capsule forever. The LOSERS are no longer discarded — `arbitrate()` publishes every live-but-not-fronting activity as `background()` (+ `onBackgroundChanged()`) on the island handle, **ordered by priority, never by arrival** (an arrival-ordered row would swap icons under the cursor). Note the front can hold steady while the background changes, so the background is computed BEFORE `arbitrate()`'s no-front-change early-out. That list is painted by the **INDICATOR ROW** (`indicatorRow` on the handle, appended to the bar's centre box right of the capsule — the iOS split: a pill for the current thing, circles for the rest, and **the GROUP centres**, so the capsule leaves the monitor axis while anything else runs). A chip is shown for everything INDICATED that isn't fronting, which is WIDER than "live": the optional `isIndicated()` (default = `isLive`) lets an activity earn a chip without competing for the capsule. Only the Assistant uses it — a configured provider is always one click away — and it MUST stay out of `isLive`, or the agent (25) would outrank the music (10) and hold the capsule for a session that never used it. Each activity supplies its own glyph via the REQUIRED `indicator()` (dots → a frozen `.workspace-dot.active` pill, `makeActiveDotGlyph`; media → a music glyph; rec → the steady danger dot; battery → the Cairo glyph; agent → `sparkles`), max `INDICATOR_MAX` = 3 chips. **A chip's usable interior is ~20px, and a chip glyph is 16px:** the chip is a 28px circle (`CHIP_W` = 32 = the bar row height, less `SquircleContainer`'s 2px technical inset per side; `perfect` → radius h/2) and the largest square that fits INSIDE a 28px circle is 28/√2 ≈ 19.8. ⚠️ Since 2026-09-25 `CHIP_W` is `BAR_CAPSULE_H` (still 32, `surfaces/bar/capsule.ts`) and `CHIP_GAP` is `BAR_GAP` = 4 (not 8 as measured below) — **not re-measured with `queryUI` yet**. **Measured, not derived** (2026-08-23, `nidara-ipc queryUI` on a live shell): `bar-centerbox` is h=32, and the indicator row is 80×32 with two chips up — `CHIP_W` 32 + `CHIP_GAP` 8, twice. ⚠️ This paragraph said 24px/28px/≈17 until then, arithmetic from a 28px bar row that had since grown; if the row height moves again, re-measure with `queryUI` rather than trusting the numbers written here. Media used to stack the compact's 20px cover art over its music glyph and the square poked out of the glass on all four sides (user-caught 2026-08-03); shrinking it to the inscribed square would have filled the circle edge to edge and eaten the glass ring that makes a chip read as a chip. **Cover art is not chip material** — it lives where it is legible (the compact's 20px slot beside the title, the panel's 96px). Nor is the compact's EQ: an animated chip damages its layer at its frame rate, and Hyprland charges blur by the layer BOX, so a 24px flourish costs a full-screen re-blur per frame for as long as the music plays (the compact's EQ is 10fps AND `map`-gated for exactly this reason). Chips are static monochrome glyphs on glass. Three traps this cost: (1) the row is `INDICATOR_MAX` FIXED SLOTS, not one revealer per activity — slot `i` shows `background[i]`, and each slot is a `Gtk.Revealer` (SLIDE_RIGHT) wrapping a `Gtk.Stack` (CROSSFADE, `COMPACT_SWAP_MS`) holding one named glyph per activity, crossfading between them IN PLACE. One revealer per activity was the first design and two of them cross-slid over each other whenever activities swapped rank (fixed 2026-08-22, #226); with slots the geometry is positional and constant — every rect stays put and only the glyph inside it changes, so priority order still falls out for free from the order `arbitrate()` publishes; (2) the gap is each chip's `margin_start`, NOT box spacing — a collapsed `Gtk.Revealer` still counts as a visible child, so spacing would reserve its 8px forever and leave the capsule off-centre in an idle session; (3) the chips use `Gtk.Revealer`+`SLIDE_RIGHT` (the bar's existing idiom, `common/widget-kit/bar.ts`), NOT `ScaleRevealer`, which animates the measured HEIGHT only and passes width straight through. A chip appearing MOVES the capsule without resizing it, so Bar.tsx re-lays the flanks out on `onBackgroundChanged`/`onChipsSettled` as well as on the capsule's `glassArea` resize. (No input region to re-cut: the row is inside the bar strip.) Capsule click expands whatever fronts the compact; Super+W always reaches the overview. Battery E2E on a desktop: `scripts/dev/fake-battery.sh` (sudo, dev-workflow.md)), `overview/`, `prism/`
+  - **Where the island and the app grid live: in the BAR's window** (`Bar.tsx`),
+    like every other panel — #708 point 3, owner's decision 2026-10-06 (commandment
+    5, no exceptions). Both had layer surfaces of their own until then
+    (`nidara-island`, 2026-07-26; `nidara-app-grid`, 2026-08-09), deleted whole with
+    `IslandWindow.ts` and `AppGridWindow.ts`; their reasons were Hyprland's (a layer
+    blurs only what was composited before it; layer blur is charged by the BOX) and
+    neither holds on Hyalo, which paints each surface's glass from its declared
+    shapes. What it bought:
+    - **The capsule and the chips are inside the bar strip**, which is always in the
+      input region as a constant rect. The whole family of "the island stops taking
+      clicks" bugs (a stamp that measured nothing, a torn stamp, chips missing from
+      a stamp — tech-debt #68) had no cause left, and the machinery against it
+      (`holdRegion`, `scheduleVerify`, the region trap) went with the file.
+    - **One focus grab for every panel** (`barModal` in `Bar.tsx`): no second owner
+      to evict, no peer windows to whitelist except the DOCK while the app grid is up
+      (`gridPeers`, from `app.ts`, re-acquired when the set changes).
+    - No raise above the bar, no mirroring of the bar's top edge, no yielding to the
+      overflow by unmapping: the row (`islandHost`) simply rises out of the way.
+    **What replaced the island's reason — no glass on glass.** A surface's glass is
+    drawn under ALL of its content, so a mode growing over the bar's row would show
+    the row's groups sharp through its pane. A mode wide enough to reach a group
+    fades it out with the capsule's content: `MorphRevealer`'s `companions` is a
+    getter asked on every open (AFTER `set_visible(true)` — a hidden widget measures
+    0, which is how the first cut faded nothing), and `ActivityIsland.coveredBy`
+    returns the groups (`setRowNeighbours`) the mode's centred natural width
+    reaches. Only the overview is that wide today.
+    **The row is centred, never full-width**: it sits ABOVE barBox in the overlay,
+    and GTK picks a `Gtk.Box` anywhere in its allocation — a full-width row would
+    take every press meant for the left and right groups.
+    **The app grid over a fullscreen window** still opens (owner, 2026-10-06): the
+    bar's surface rises to OVERLAY while it is up, with the row, the island and the
+    banners at opacity 0 and untargetable, and the strip left out of the input
+    region (`liftForGrid`). It goes back under the window once the grid has shrunk
+    away. Super+B's overlay mode already has the surface there and shows the row.
+    **The layer-shell rule worth memorising, because a wrong guess about it cost real
+    time:** a surface requesting `exclusive_zone > 0` is arranged against the FULL
+    output area; only surfaces asking for **zone 0** get pushed into the remaining
+    usable area; `-1` ignores everything. So the bar (zone 40) is the full monitor
+    rect, always, whatever the dock reserves — a side dock covers the bar, it never
+    displaces it. That is why `syncPanelMargins` dodges a side dock by hand.
   - `settings/` (+ `settings/pages/`, 18 pages), `about/`
   - `agent-pointer/` — the fake AI cursor that visualizes computer-use pointer
     actions (accent arrow + "AI" badge, Cairo-painted, click-through). A

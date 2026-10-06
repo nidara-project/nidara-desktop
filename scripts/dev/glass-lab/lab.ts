@@ -605,9 +605,6 @@ function buildScene() {
     specimens.length = 0
     promoDisc = null
     const show = state.show
-    // The app grid's CSS is scoped to its window; the scene wears it while that panel is up.
-    if (show === "panel grande") scene.add_css_class("nidara-app-grid-window")
-    else scene.remove_css_class("nidara-app-grid-window")
     if (show === "barra") {
         const root = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
         root.append(barRow())

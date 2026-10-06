@@ -1279,9 +1279,9 @@ What the pin's machinery taught, and what still uses it:
   (factored into `nidaraVars()`) under a scoped selector — per SKIN now, keyed by a class the
   adaptive glass puts on a flipped surface's root. (`generateChromeTokenScope` — the pin's, back since 2026-09-30 for the fixed dark skin — does the same per WINDOW; the lessons below were learnt on it.)
   - **Scope = every toplevel in `CHROME_SCOPE_WINDOWS`** (each window + its descendants):
-    `nidara-bar`, `nidara-dock`, `nidara-island`, `nidara-app-grid`. The bar window's
-    `Gtk.Overlay` still hosts CC/NC/Prism/system menu/overview, so scoping that window covers
-    them; the island and the app grid are their own toplevels and must be listed by name.
+    `nidara-bar`, `nidara-dock`. The bar window's `Gtk.Overlay` hosts every panel — CC, NC,
+    Prism, the system menu, the island and the app grid (#708 point 3) — so scoping that window
+    covers them all. A panel ever given a toplevel of its own must be listed by name.
     Settings/About are separate toplevels too, and are excluded on purpose.
   - 🔑 **THAT LIST IS A COUPLING TO WHICH SURFACES EXIST, AND IT WAS WRONG FOR A MONTH.** It
     said "bar and dock" from the days when the island and the app grid were children of the
@@ -1902,10 +1902,13 @@ same window composite in Cairo, which has no backdrop filter. Symptom when you h
 it: a translucent panel sits visibly on top of another widget, and that widget
 shows through **sharp**, which reads as "the blur isn't applied" or "that widget is
 on top". Neither is true. This is what forced the Activity Island onto its own
-layer surface (`IslandWindow.ts`) — it is the only overlay that covers the bar row,
-and at the default `overlayOpacity` (0.05 then, `GLASS_RANGE.min` now) the bar capsules read straight through
-it. A surface on a HIGHER layer level is composited after, so its blur samples the
-one below. **Verified live, 2026-07-25** (Hyprland 0.55.4): an OVERLAY-level layer
+layer surface from 2026-07-26 to #708 point 3 — it is the only overlay that covers the bar
+row, and at the default `overlayOpacity` (0.05 then, `GLASS_RANGE.min` now) the bar capsules read
+straight through it. A surface on a HIGHER layer level is composited after, so its blur samples
+the one below. ⚠️ **On Hyalo the answer is the opposite one** (owner, 2026-10-06): glass on glass
+is the reference material's own anti-pattern, so the island is a panel of the bar again and a
+mode wide enough to cover the row's groups FADES them (`ActivityIsland.coveredBy`) instead of
+blurring them. **Verified live, 2026-07-25** (Hyprland 0.55.4): an OVERLAY-level layer
 with `ignore_alpha = 0.01` blurred the TOP-level bar underneath at glass alphas
 0.05 / 0.20 / 0.38 alike — `new_optimizations` does not restrict sampling to the
 background, and `xray` is off.
@@ -1914,7 +1917,7 @@ background, and `xray` is off.
 
 | Surface kind | Knob | Value here | Practical floor for the glass |
 |---|---|---|---|
-| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | **0.23** on all five (bar, island, dock, app-grid, greeter) | gated by `blur-threshold-check` from BOTH sides; there is deliberately no lock rule |
+| Layer (bar, dock) | `ignore_alpha` per `layer_rule` | **0.23** on all three (bar, dock, greeter) | gated by `blur-threshold-check` from BOTH sides; there is deliberately no lock rule |
 | Popup of a layer (tooltip, dock menu) | `popups_ignorealpha` (global) | 0.30 | ≈0.38 (`NidaraTheme.popoverAlpha`) |
 | Popup of a window (Settings dropdown) | `decoration:blur:popups` + same 0.30 | 0.30 | ≈0.38 |
 
@@ -2165,7 +2168,8 @@ of each one "what is behind this?", instead of listing the surfaces you can name
 no shadow — a notification banner's action buttons, and that one is correct: they sit inside a card.
 
 🔑 **The app grid was the last one in, and the blocker was its LAYER, not its widget tree.**
-`nidara-app-grid` is its own surface (unmapped when closed — see `architecture.md`) and it ran at
+`nidara-app-grid` was its own surface then (unmapped when closed; a panel of the bar since #708
+point 3) and it ran at
 `ignore_alpha 0.04`, under the shadow's `alpha 0.18` = 45.9/255 — so Hyprland blurred *behind* the
 shadow band and would have smeared a halo along the silhouette. **A shadow is a band of low alpha
 outside the glass, so adding one to a surface is a decision about that surface's threshold, and you
@@ -2263,8 +2267,7 @@ reserved comes out of the painted glass.
 | surface | layer | `ignore_alpha` | what it can take |
 |---|---|---|---|
 | dock capsule | its own `nidara-dock` | **0.23** | an outer shadow, with room to spare |
-| CC / NC / Prism / system menu / overview | guests on `nidara-bar` | **0.23** | an outer shadow — the bar was raised from 0.01 for it (#243) |
-| the Activity Island | its own `nidara-island` | **0.23** | same, raised in #246 |
+| CC / NC / Prism / system menu / the Activity Island / the app grid | guests on `nidara-bar` | **0.23** | an outer shadow — the bar was raised from 0.01 for it (#243); the island and the grid had layers of their own at 0.23 until #708 point 3 |
 | the tooltip / dock menu bubble | a POPUP, not a layer | `popups_ignorealpha` **0.30** | an outer shadow; 0.18 is under it and the 0.38 glass floor is over it |
 
 ⚠️ **Raising a threshold has a cost that is temporal, so no screenshot shows it — and it turned out
@@ -4141,15 +4144,14 @@ the source dissolve (a hard cut blinks it out while the island is still capsule-
 nowhere near covering it). **This is not optional polish: source and island live in ONE
 surface, so the island's 5% glass does not hide — or blur — anything painted beside it.
 Anything left lit next to the capsule reads straight through the open island** (found the
-moment the chips shipped, 2026-08-01). Whatever is faded this way must also drop out of
-`IslandWindow`'s input-region stamp, or it leaves an invisible dead patch: the compositor
-reads a press there as INSIDE the grab and neither dismisses nor passes it on — which is
-why `mount` takes a hitTargets GETTER. ⚠️ Since 2026-08-10 that same getter also feeds the
-BLUR region, and the two want opposite things: a chip must leave the input stamp the moment
-it is invisible, but on the way back OUT it ramps up again with no relayout to re-measure,
-so nothing re-declares a rect for it. It is drawn because it falls inside
-`IslandWindow`'s `BLUR_PAD_X = 200` (three chips ≈ 150px) — the pad is load-bearing, not
-slack.
+moment the chips shipped, 2026-08-01). A press on a chip faded this way is a press on nothing: `Bar.tsx`'s strip
+gesture treats it as the empty strip and dismisses. (On the island's own surface, until #708
+point 3, the chips had to leave its input-region stamp and live inside a 200px blur pad
+instead; inside the bar's constant strip neither is needed.) **Since #708 point 3 the
+companions are a GETTER asked on every open, and the bar's glass groups join them when the
+mode is wide enough to cover them** (`ActivityIsland.coveredBy`): one surface's glass is
+drawn under all of its content, so a group left lit under the overview would read sharp
+through its pane — glass on glass. Asked AFTER `set_visible(true)`: a hidden widget measures 0.
 All bounds are
 `compute_bounds`-re-read every frame so bar relayouts can't leave a stale origin. Same `reveal(open, onDone?)` contract as
 `ScaleRevealer` (self-managed visibility, close-then-`onDone` for the input-region
@@ -4446,12 +4448,10 @@ leftwards over the room the island left; the capsule flips to `nd-pan-start`. It
   and `fitUnfolded` (from the system menu plus `ISLAND_GAP` to the tray). The window title yields
   with `setMaxWidth(px, immediate = true)` in the frame the row grows, and steps aside entirely
   below `TITLE_MIN_W` rather than showing an ellipsis.
-- **The island rises with a paint-only transform, and the surface is then UNMAPPED**
-  (`IslandWindow.setYielded`, ANDed with `setShown`). The rise is `ScaleRevealer`'s `riseFrom`
-  on a host around the island row; it ends above the blur rect already stamped for the capsule,
-  so neither region is re-stamped per frame and the layer-shell margin never moves. Unmapped
-  rather than transparent: a surface with nothing measurable hands the compositor the WHOLE
-  monitor to blur (`VisibleRegion` — `null` means "I don't know").
+- **The island rises with a paint-only transform, and is then hidden.** The rise is
+  `ScaleRevealer`'s `riseFrom` on `islandHost`, the row around the capsule; it ends above the
+  bar strip, which is in both regions anyway, so neither is re-stamped per frame. Hidden at the
+  end of the rise, it is no longer picked, so the unfolded pills under it take their presses.
 - **Folding is Status's.** Any other surface folds it; a press outside folds it through the bar's
   focus grab; a panel of an unfolded widget does NOT (it hangs from that pill). Fullscreen folds
   it with the bar. A `bar_expanded_id` for a widget still hidden (IPC) anchors on the `»`
@@ -4514,22 +4514,18 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
 
    | Window | Scope selector |
    |---|---|
-   | Bar (+ CC, NC, Prism, system menu — commandment 5) | `#nidara-bar, .nidara-bar-window` |
-   | Activity Island (+ workspace overview) | `#nidara-island, .nidara-island-window` |
+   | Bar (+ every panel: CC, NC, Prism, system menu, the Activity Island and its overview, the app grid — commandment 5) | `#nidara-bar, .nidara-bar-window` |
    | Dock | `#nidara-dock, .nidara-dock-window` |
-   | App grid | `#nidara-app-grid, .nidara-app-grid-window` |
    | Settings | `window.nidara-settings-window` |
    | About | `window#nidara-about, .about-floating-window` |
    | Alert dialog (`showNidaraAlert`) | `window.nidara-alert-dialog` |
 
    ⚠️ **The window a class lands in is NOT the directory its TSX lives in.** `_bar.scss` was the last
-   unscoped surface sheet (closed 2026-08-10) and the mapping was not what the filenames said:
-   `Bar.tsx` builds the capsule row and hands it to `islandWin.mount()`, so `.bar-center` — declared
-   in `surfaces/bar/` — renders inside `#nidara-island` and nowhere else, while `.bar-centerbox` is
-   built twice and genuinely needs both scopes. `.workspace-dot` never appears in the bar at all
-   (`makeWorkspaceDot` is called only from the island and from the overview, which is mounted inside
-   the island). Scoping either one to `#nidara-bar` on the strength of its filename would have
-   silently unstyled the capsule and every workspace dot. **Follow the mount site, not the folder:**
+   unscoped surface sheet (closed 2026-08-10) and the mapping was not what the filenames said: while
+   the island had a window of its own (until #708 point 3), `.bar-center` — declared in
+   `surfaces/bar/` — rendered inside `#nidara-island` and nowhere else, and `.workspace-dot` never
+   appeared in the bar's window at all. Scoping either one by its filename would have silently
+   unstyled the capsule and every workspace dot. **Follow the mount site, not the folder:**
    grep the class, then grep where the widget holding it is `append`ed / `mount`ed.
 
    ⚠️ **Parent-referencing `&` and a scope wrapper do not mix.** `.app-grid-search-box:focus-within &`
@@ -4621,15 +4617,17 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
 
    ⚠️ **A window's scope can MOVE, and nothing tells you.** The app grid's was `#nidara-dock` until
    2026-08-09, because the panel lived inside the dock's window; giving it a surface of its own
-   (`AppGridWindow.ts`) changed the scope of `_app-grid.scss` **and** of `_workspace.scss`'s shared
-   block **and** of the app grid's entries in `_reset.scss`'s two neutralization lists. Miss any one
+   changed the scope of `_app-grid.scss` **and** of `_workspace.scss`'s shared block **and** of the
+   app grid's entries in `_reset.scss`'s two neutralization lists — and #708 point 3 moved it (and
+   the island) once more, into `#nidara-bar`. That last move was checked by comparing the compiled
+   sheet rule by rule before and after (every declaration the same, only the window prefix moved). Miss any one
    of the three and the rules stop matching in silence — no SCSS error, no GTK warning, just
    unstyled widgets. When a surface changes windows, `grep` the OLD scope selector across
    `styles/` before you call the move done.
 
    ⚠️ **Scoping changes what an unrooted widget resolves.** A probe that builds a widget outside a
    matching window gets NO styling and reads 0 for everything, with no error. That is why
-   `scripts/dev/gtk-probe.js` takes `SCOPE=settings|bar|island|dock|appgrid` — measured proof it matters: the
+   `scripts/dev/gtk-probe.js` takes `SCOPE=settings|bar|dock|greeter` (the island and the app grid are `bar`) — measured proof it matters: the
    same dropdown row is 29px in the Settings window (which re-anchors control text to the relative
    `$fse-*` ramp) and 28px in any other.
 

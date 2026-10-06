@@ -386,9 +386,8 @@ export const drawGlassEdgeLight = (
  *  Hyprland blurs the backdrop behind the shadow — a smeared halo tracking the
  *  silhouette, which is exactly debt #237 (the dock blurring behind its magnified icon
  *  shadows). Check the layer's rule in `config/hypr/hyprland.lua` before enabling this
- *  on a new surface: `nidara-dock` sits at 0.23 and has room to spare, while
- *  `nidara-bar` and `nidara-island` sit at 0.01 and will blur behind almost any
- *  shadow. `scripts/ci/blur-threshold-check.mjs` guards the other end of that coupling
+ *  on a new surface: `nidara-dock` sits at 0.23 and has room to spare; read
+ *  the bar's before assuming it does too. `scripts/ci/blur-threshold-check.mjs` guards the other end of that coupling
  *  (a threshold reaching the glass floor kills the blur entirely) but it does NOT know
  *  about shadows — this comment is the only warning there is. */
 export const drawGlassShadow = (

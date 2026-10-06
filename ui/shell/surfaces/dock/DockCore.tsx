@@ -26,10 +26,10 @@ import {
 } from "./state"
 import status from "../../core/Status"
 import compositor from "../../core/CompositorState"
-// No focus grab here any more: the dock holds no modality at all. The app grid was
-// the only thing on this window that ever grabbed, and it has its own surface now
-// (surfaces/app-grid/AppGridWindow.ts) — which is also why core/InputYield no
-// longer has anything to ask of the dock.
+// No modality of the dock's own beyond its keyboard walk. The app grid was the only
+// thing on this window that ever grabbed for a panel, and it left in 2026-08 (it is a
+// panel of the bar's window now) — which is also why core/InputYield has nothing
+// to ask of the dock.
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"

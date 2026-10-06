@@ -156,10 +156,6 @@ export interface Compositor {
     /** Window boxes as of NOW, by bare address (`clients` geometry can be stale). */
     readGeometry(): Promise<ClientGeometry>
     version(): Promise<string>
-    /** Top edge (global y) of one of our layer surfaces by namespace, or null. */
-    layerTop(namespace: string, monitor?: string): Promise<number | null>
-    /** Is layer surface `a` above `b` on the same level? null if not comparable. */
-    isLayerAbove(a: string, b: string): Promise<boolean | null>
 
     // ── Window management. A window is named by its address, bare or `0x`-prefixed.
     focusWorkspace(id: number): Promise<unknown>

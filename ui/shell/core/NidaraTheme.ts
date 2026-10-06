@@ -16,8 +16,6 @@ import { INK_DARK_CLASS } from "../../lib/nidara-kit/platform/material"
 export const CHROME_SCOPE_WINDOWS = [
   "nidara-bar",
   "nidara-dock",
-  "nidara-island",
-  "nidara-app-grid",
 ] as const
 
 /** The shell's skin: dark, whatever the system mode (owner, 2026-09-30) — see

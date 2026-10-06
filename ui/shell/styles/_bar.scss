@@ -4,19 +4,17 @@
    NIDARA BAR - STITCH FIDELITY (Pills, Dots and Cairo Circles)
    ==========================================================================
 
-   THIS FILE COVERS TWO WINDOWS, and which one a class lands in is NOT the
-   directory its TSX lives in. `Bar.tsx` builds the capsule row and hands it to
-   `islandWin.mount()` (Bar.tsx, "islandRow"), so widgets declared in
-   surfaces/bar/ are rendered inside `#nidara-island`; conversely everything
-   under surfaces/island/ paints there too. The scopes below follow the WINDOW,
-   which is the only thing CSS sees:
+   ONE WINDOW: the bar's. The Activity Island — capsule, chips and modes — and
+   the app grid paint in it too since #708 point 3 (it had a window of its own,
+   `#nidara-island`, from 2026-07-26). The sections below are by SUBJECT:
 
-     · shared      — the capsule row's geometry, built by the bar, mounted in both
-     · bar only    — left/right flanks, tray, window menu, popovers
-     · island only — `.bar-center` (the capsule group), workspace dots, activities
+     · the capsule row  — `.bar-centerbox`, the left/right flanks, `.bar-center`
+     · the island       — workspace dots, activities
 
-   A rule filed under the wrong one stays in the sheet, stops matching and
-   reports NOTHING. See design-system.md.
+   The scope follows the WINDOW, which is the only thing CSS sees, never the
+   directory a TSX lives in. A panel moved to another window takes its rules out
+   from under them: they stay in the sheet, stop matching and report NOTHING. See
+   design-system.md.
 
    (`.bar-capsule` deleted 2026-08-10 — DEAD: the name survives only in a comment
    at surfaces/bar/capsule.ts, no widget has ever carried the class. It was the
@@ -25,13 +23,7 @@
 
 /* --- Window surfaces themselves --- */
 #nidara-bar,
-.nidara-bar-window,
-/* The Activity Island's own layer surface. Transparent via CSS, never
-   set_opacity(0) — toplevel opacity goes through the compositing pipeline
-   (same reason as the zone reservor below). Everything it shows is painted
-   by the mode revealers. */
-#nidara-island,
-.nidara-island-window {
+.nidara-bar-window {
     background: transparent;
     padding: 0;
     margin: 0;
@@ -45,18 +37,14 @@ window#nidara-bar-zone {
 }
 
 /* ==========================================================================
-   SHARED — bar + island
-   The capsule row and the three flank groups. `.bar-left`/`.bar-right` only ever
-   exist in the bar and `.bar-center` only in the island, but they are ONE rule
-   because that is the point: `islandRow` reuses `.bar-centerbox` so the 4px top
-   margin and the BAR_H row height come from the same CSS the bar uses instead of
-   a constant duplicated across two windows (Bar.tsx says so at the mount site).
-   Splitting them would be the first step toward that duplication.
+   THE CAPSULE ROW
+   The row and its three flank groups. `islandRow` reuses `.bar-centerbox` so the
+   4px top margin and the BAR_H row height come from the same CSS rule as the
+   bar's own row instead of a constant stated twice (Bar.tsx says so at the
+   mount site).
    ========================================================================== */
 #nidara-bar,
-.nidara-bar-window,
-#nidara-island,
-.nidara-island-window {
+.nidara-bar-window {
 
     /* --- Centerbox --- */
     .bar-centerbox {
@@ -240,14 +228,13 @@ window#nidara-bar-zone {
 }
 
 /* ==========================================================================
-   ISLAND ONLY
+   THE ISLAND
    The workspace dots and the activity forms. `makeWorkspaceDot` is called from
-   ActivityIsland, IslandActivities and WorkspaceOverview — and the overview is
-   mounted INSIDE the island (ActivityIsland imports it), so all three land in
-   the same surface. The bar never draws a dot.
+   ActivityIsland, IslandActivities and WorkspaceOverview — the overview is an
+   island mode — so all three paint in the island.
    ========================================================================== */
-#nidara-island,
-.nidara-island-window {
+#nidara-bar,
+.nidara-bar-window {
 
     .workspace-dot {
         min-width: 6px;
@@ -354,14 +341,8 @@ window#nidara-bar-zone {
 // Compact "working pill" + the expanded chat panel. Neutral fills throughout —
 // accent is reserved for active/selected state (commandment 10), so bubbles and
 // chips use the surface/text tokens; a tool rejection tints its dot danger.
-//
-// BOTH windows: the compact pill stays in the bar's surface while the expanded
-// panel now paints in the island's own (IslandWindow.ts). Scoped CSS that names
-// only one of them silently loses half the Assistant's styling.
 #nidara-bar,
-.nidara-bar-window,
-#nidara-island,
-.nidara-island-window {
+.nidara-bar-window {
     .agent-compact-label {
         font-size: $fs-small;
         font-weight: $fw-medium;

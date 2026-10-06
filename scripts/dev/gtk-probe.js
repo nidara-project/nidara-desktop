@@ -29,7 +29,7 @@
  *   CLASS=…       a css class for the trigger (`greeter-session-dropdown`,
  *                 `locale-bar-dropdown`). Without it you measure the base rule only.
  *   SCOPE=…       which WINDOW the specimen stands in: settings (default),
- *                 bar, island, dock, appgrid or greeter. ⚠️ NOT cosmetic — our sheets are scoped per
+ *                 bar (the island and the app grid too), dock or greeter. ⚠️ NOT cosmetic — our sheets are scoped per
  *                 window (`#nidara-bar …`, `window.nidara-settings-window`), so a
  *                 specimen built in the wrong one matches NOTHING and every
  *                 measurement comes back as if the widget were unstyled. There is no
@@ -96,14 +96,12 @@ if (extraCss) { load(extraCss, Gtk.STYLE_PROVIDER_PRIORITY_USER + 40); print(`[a
 // ── the scope ────────────────────────────────────────────────────────────────
 // A shell window is identified BOTH ways in our sheets — by id (`#nidara-bar`) and
 // by class (`.nidara-bar-window`) — and the two names differ, so carry both. The
-// app grid got a window of its own on 2026-08-09; before that it was styled under
-// the dock's scope, so an app-grid specimen measured with SCOPE=dock is now wrong.
+// Activity Island and the app grid are panels of the bar's window (#708 point 3):
+// measure their specimens with SCOPE=bar.
 const SCOPES = {
     settings: { name: "nidara-settings-window", cls: "nidara-settings-window" },
     bar:      { name: "nidara-bar",             cls: "nidara-bar-window" },
-    island:   { name: "nidara-island",          cls: "nidara-island-window" },
     dock:     { name: "nidara-dock",            cls: "nidara-dock-window" },
-    appgrid:  { name: "nidara-app-grid",        cls: "nidara-app-grid-window" },
     // The greeter and the lockscreen, which share one sheet and one window
     // identity pattern. Pair it with CSS=ui/greeter/style.css — the scope alone
     // measures a specimen against the SHELL's rules, which is the exact trap the

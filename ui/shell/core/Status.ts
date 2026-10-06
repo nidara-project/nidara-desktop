@@ -132,8 +132,8 @@ export class UIStatus extends GObject.Object {
 
     // The app grid was NOT an overlay here until 2026-08-09: it lived inside the
     // dock's window as a closure flag, because opening it also REVEALED the dock.
-    // That coupling was traded away for a surface of its own (see
-    // surfaces/app-grid/AppGridWindow.ts), and with it gone there was nothing left
+    // That coupling was traded away for a surface of its own (a panel of the bar's
+    // window since #708 point 3), and with it gone there was nothing left
     // keeping the grid outside the exclusion — it could sit open behind the Control
     // Center, which was listed as an accepted wart rather than a decision.
     public get app_grid_open() { return this._app_grid_open }

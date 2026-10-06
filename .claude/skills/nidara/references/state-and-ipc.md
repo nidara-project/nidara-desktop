@@ -504,13 +504,13 @@ Things to keep if you touch it:
   by the same mechanism, instead of only the built-in Assistant.
 - **Dropping the grab is not enough on its own.** The grab is what makes Hyprland ignore input
   regions; the region itself still covers the screen while a panel is open. Every grabbing surface
-  therefore goes click-through for the duration: `Bar.updateInputRegion`, `IslandWindow.updateInputRegion`
-  (capsule included — the surface is monitor-sized) and both `DockAxis.buildInputRegion` bodies
+  therefore goes click-through for the duration: `Bar.updateInputRegion` (the island and the app grid
+  included — they are panels of the bar) and both `DockAxis.buildInputRegion` bodies
   return early on `inputYield.active`. In the dock that early return needs **its own region cache
   key** (`"yield"`), or the restore matches the stale key and silently skips. ⚠️ Since 2026-08-09 the
   dock's yield branch keeps its BLUR rect (only the input region is dropped): a yield changes who
   gets the clicks, not what is drawn, and the only thing that used to paint outside that rect — the
-  app grid — has its own surface now.
+  app grid — left the dock's window that day.
 - **`registerHolder` exists so the common case costs nothing.** With no surface grabbing, `begin()`
   resolves immediately instead of paying the 80 ms release wait on every single action.
 - **A watchdog (15 s) restores everything** if a helper dies between `begin` and `end`. Without it
@@ -642,7 +642,6 @@ nidara-ipc dumpState | jq -c '.keyboardFocus'
 ```
 "nidara-dock":   {"active": true,  "focusable": false, "focusWidget": null}   # ← keys go nowhere
 "nidara-bar":    {"active": false, ...}
-"nidara-island": {"active": false, ...}
 ```
 
 `active: true` on a shell surface means the keyboard is going **there**, not to the user's window.
@@ -1774,32 +1773,23 @@ The lockscreen needs the shell out of the way while it's active. These two IPC c
 
 This is commandment #5 in `SKILL.md` but it's worth restating here because it's load-bearing for the whole state model:
 
-Overlays (CC, NC, Prism, SystemMenu, Overview) **live as children of the Bar's window** via `Gtk.Overlay`. They are NOT separate `gtk4-layer-shell` windows. Reasons:
+Overlays (CC, NC, Prism, SystemMenu, the Activity Island — capsule, chips and every mode — and the app grid) **live as children of the Bar's window** via `Gtk.Overlay`. They are NOT separate `gtk4-layer-shell` windows, with **no exceptions** since #708 point 3 (owner, 2026-10-06). Reasons:
 
-- Avoids Hyprland layer-rule conflicts (one Bar layer is easier to reason about than five).
-- Lets show/hide animations be GTK-side via `common/ScaleRevealer.ts` (grow+fade) instead of fighting compositor animations.
-- Simplifies input region management (one window's mask, not five).
+- Hyalo draws each surface's glass on its own, under all of that surface's content: pieces can only melt into one silhouette (capsule ↔ panel morphs, fusion, #705) within one surface, and a panel on a surface of its own over the bar is glass on glass.
+- Show/hide animations stay GTK-side via `common/ScaleRevealer.ts` / `common/MorphRevealer.ts`; on Hyalo the compositor paints the glass from the shapes they declare.
+- One window's input region and ONE focus grab (`barModal`), not one per surface fighting over a single compositor slot.
 
 If you find yourself making a new overlay its own window, stop and ask why. The few exceptions (Settings, About) are full top-level windows for separate reasons and don't follow the overlay state machine.
 
-**Two exceptions INSIDE the overlay state machine, for different reasons. First, the Activity Island** (`surfaces/island/IslandWindow.ts`, namespace `nidara-island`, layer OVERLAY) — the compact capsule and the expanded modes together. It still lives on `status.island_mode` and still animates GTK-side; only the surface it paints on is different. The reason is physical, not stylistic: Hyprland blurs what is composited BEHIND a surface, so nothing painted inside the bar's window can ever blur the bar's own capsules — and the island is the only overlay that covers the bar row (every other panel drops below it at `PANEL_TOP`). At the default `overlayOpacity` of 0.05 the capsules read through the island sharp and unblurred. A surface one layer level up is composited after the bar, so the blur pass finally samples it.
+**The island and the app grid had layers of their own until #708 point 3** — `nidara-island` (2026-07-26, so its modes could blur the bar's capsules under them: Hyprland blurs what was composited BEHIND a surface) and `nidara-app-grid` (2026-08-09, because Hyprland charged a layer's blur by its BOX). Neither reason holds on Hyalo. What the separation had cost, and is gone with it: two input regions (and the capsule's, measured, failing in ways the bar's constant strip cannot), two grabs whitelisting each other, CSS scoped to two windows, hiding the island by NAME for fullscreen and lock, and re-asserting the island's layer above the bar in overlay mode. **What replaced the island's reason** is the reference material's own rule — no glass on glass: a mode that grows over the bar's row fades the groups it covers (`ActivityIsland.coveredBy`, `MorphRevealer` companions).
 
-**The second exception: the app grid** (`surfaces/app-grid/AppGridWindow.ts`, namespace `nidara-app-grid`, layer OVERLAY, 2026-08-09). Its reason is economic rather than physical, and the distinction matters because it is the one a third candidate is most likely to fake. The grid used to be a child of the DOCK's window; Hyprland charges layer blur by the surface's BOX, so a guest that can paint anywhere forced the dock to clear its declared region for as long as the grid was up — the §46 saving disappeared exactly when the screen was busiest. On its own surface it declares the panel's rect (measured 1110×834 of 2560×1440) and is UNMAPPED when closed, which costs nothing at all, and the dock keeps its pill rect in every state.
+**Move the capsule WITH the modes — still load-bearing.** A first cut (2026-07) kept the capsule on the bar's surface and the modes on the island's: `compute_bounds` stopped resolving (it works inside one hierarchy only), and mid-morph both surfaces painted glass over the same pixels. Today the capsule's row (`islandHost`) and every mode revealer are children of the same `masterOverlay`.
 
-It joined the state machine on the way out: `status.app_grid_open` is a normal mutually-exclusive overlay now. It was NOT one before — the dock coupling (opening the grid also revealed the dock) was the reason, and trading that coupling away removed the reason. What it inherits from being its own surface is the same list as the island's below, minus the morph-specific items: its own focus grab, its own input region, and CSS scoped to `#nidara-app-grid, .nidara-app-grid-window` rather than to the dock's window.
+What you inherit when touching it:
 
-⚠️ **Peers are load-bearing, and the failure is silent.** A focus grab CLAMPS pointer focus to the surfaces in its whitelist, so a shell surface left out stops receiving even MOTION. The grid shipped with only the DOCK as a peer and the bar's capsules went inert — no hover, no click (user-caught 2026-08-09). Its peers are now the bar, the island and the dock: the same set the bar and island already grant each other. **Adding the bar as a peer has a required counterpart** — `dismissOverlays()` must close whatever you just whitelisted, because a peer is precisely a surface the compositor will not dismiss on, and the empty bar strip is GTK's job (see below).
-
-**Move the capsule WITH the modes — this is load-bearing.** A first cut kept the capsule on the bar's surface. Two things went wrong: `compute_bounds` no longer resolved (it works inside one hierarchy only), forcing a coordinate bridge; and mid-morph both surfaces painted glass over the same pixels, so their blurs stacked and the transition showed a visible seam. One surface owning the shape end to end is what makes the morph what it was always meant to be — one object changing shape, not one dissolving into another. What the exception still costs, and what you inherit if you touch it:
-
-- **Two input regions, not one.** The island surface stamps the capsule (always — it is a click target on an otherwise click-through surface) plus whatever mode is revealed. **Re-stamp when the capsule RESIZES**, not just when a mode opens: the compact stack interpolates width when the fronting activity changes, and a different media title reshapes the pill with no page change. `Bar.tsx` hangs that off the capsule's glass `DrawingArea::resize`.
-- **A grab captures the POINTER, so the island's own surface owns its dismissal.** Whoever holds the grab receives the presses regardless of input regions, so a second surface cannot dismiss on its behalf. This first showed up under layer-shell `EXCLUSIVE`: only `needsKeyboard` modes grabbed, the bar's catcher therefore never saw an outside click while one was open, and the overview and the assistant stopped closing when the island moved out of the bar's window — while the ambient player, taking no grab, kept working. The symptom pointed at input regions and the cause was the grab. Today `IslandWindow` takes its own focus grab for EVERY open mode and whitelists the bar as a peer, which is what keeps capsule-to-capsule switching ONE click.
-- **Hiding is by NAME, in two places.** The surface is always mapped (the capsule is permanent furniture), so it must follow the bar out of sight explicitly, and both places filter windows by name.
-  - **Fullscreen (`Bar.tsx`) — this one has teeth.** The bar only goes to opacity 0; since the capsule no longer rides its surface, without `islandWin.setShown(false)` it stays floating over the fullscreen window.
-  - **Lock (`lockScreen`/`unlockScreen` in `app.ts`) — consistency, not a fix.** Under `ext-session-lock-v1` (the path Hyprland actually takes — the lockscreen logs `supported: true`) the compositor composites ONLY the lock surfaces, so nothing else is drawn regardless. It would only matter on `startFallback` (`ui/lockscreen/app.ts`), the plain OVERLAY layer-shell degradation used when the protocol is unsupported, which does not happen here. It is in the list because the agent pointer already sets that precedent one branch above ("paints on OVERLAY (above the lockscreen fallback)"), and leaving the island out would make it the only shell surface not covered by the convention.
-- **Grabs must not collide — and now they cannot silently.** The island takes its own focus grab on the ISLAND surface for every open mode, the bar takes one for what IT owns (`barModal()`). There is exactly ONE grab slot compositor-wide, so the two must never want it at the same time; when they do, the second EVICTS the first and the loser is TOLD (`onCleared`), which is what `FocusGrab`'s lease exists for. Under the old layer-shell path the same collision was silent: two surfaces holding EXCLUSIVE meant the compositor picked one and the other just stopped receiving keys.
-- **Scoped CSS must name both windows.** `.agent-*` lives under `#nidara-bar, .nidara-bar-window, #nidara-island, .nidara-island-window` because the compact pill is in one surface and the expanded panel in the other.
-- **Layer-level ordering is re-asserted, not assumed.** Bar overlay mode moves the bar to OVERLAY too, which would append it above the island; `islandWin.raise()` puts the island back on top.
+- **The capsule's row is centred, not full-width**: it is stacked ABOVE barBox, and GTK picks a box anywhere in its allocation — a full-width row would eat the groups' presses. A press on the row's own box, or on a chip faded to nothing while a mode is open, is the empty strip: `dismissOverlays()`.
+- **With the app grid open, the dock is a grab peer** (`gridPeers`, from `app.ts`), and only then: a peer is a surface the compositor will NOT dismiss on. The peer set changing under a held grab re-acquires it (`syncKeyboardMode`).
+- **The app grid over a fullscreen window** lifts the bar's surface to OVERLAY with the row hidden (`liftForGrid`), and drops it back once the grid has shrunk away.
 
 **Bar.tsx owns ALL overlay geometry**, not the surfaces themselves. `syncPanelMargins` in `Bar.tsx` sets each overlay's `margin_top`/`margin_start`/`margin_end` (and re-runs on dock-side changes); the surface modules just build content and align to a corner. Because each overlay is wrapped in a `ScaleRevealer`, **the wrapper IS the `cc`/`nc`/`systemMenu`/... variable**, so margins/alignment/input-region all operate on the wrapper transparently. Conventions: panels sit `BAR_MARGIN` (4 px since 2026-09-29) from the screen edge — the CC is a panel whose CONTENT sits a further `CC_PANEL_PAD` in (design-system.md, "The Control Center is a PANEL") — (flush with the bar capsules, which is a stronger visual reference than the tiling `gaps_out` grid beneath). Gotcha: **the system menu must dodge a left-side dock** (`margin_start += dock.width`) and CC/NC/popups dodge a right-side dock — because the **dock is its own layer-shell window stacked ABOVE the bar window**, so an un-dodged overlay slides under it. Don't move positioning logic back into a surface module.
 

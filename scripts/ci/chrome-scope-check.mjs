@@ -15,8 +15,9 @@
 // MOVED OUT of the bar's window and silently left behind everything that was scoped to
 // the bar's window. The Activity Island moved on 2026-07-26 and the app grid on
 // 2026-08-09; neither was added to the scope, and the bug shipped until 2026-08-24. The
-// same move also cost the island its `blur_popups` flag (see config/hypr/hyprland.lua),
-// which is the same failure in a different file.
+// same move also cost the island its `blur_popups` flag in Hyprland's layer rules,
+// which is the same failure in a different file. (Both moved back into the bar's
+// window with #708 point 3.)
 //
 // It fails silently in the worst way: only a surface that ACTUALLY flips ever shows
 // it, over a backdrop the default configuration — and every screenshot, and the
@@ -43,7 +44,7 @@ if (!listM) {
     console.error("chrome-scope-check: could not find CHROME_SCOPE_WINDOWS in ui/shell/core/NidaraTheme.ts")
     process.exit(1)
 }
-// ⚠️ Strip line comments FIRST. Without this a commented-out `// "nidara-island",`
+// ⚠️ Strip line comments FIRST. Without this a commented-out `// "nidara-dock",`
 // still reads as a member and the check passes on precisely the edit it exists to
 // catch — which is how its own positive control failed the first time it was run.
 const listBody = listM[1].replace(/\/\/[^\n]*/g, "")

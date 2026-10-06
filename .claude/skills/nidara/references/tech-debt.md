@@ -469,8 +469,8 @@ answered wrongly:
    (1207, 1308) still, seconds after `nidara-click` had exited. With the island
    CLOSED the panel stayed open indefinitely — user-confirmed on screen.
 2. **Opening the island closes it.** While an island mode is open, its surface owns
-   the pointer and `IslandWindow.updateInputRegion` stamps what it covers (at the
-   time of this entry, a catcher rect from y=0 to the full monitor height). `InputYield`
+   the pointer and its input region covers it (the island's own surface at the
+   time of this entry — the bar's since #708 point 3 — a catcher rect from y=0 to the full monitor height). `InputYield`
    empties that region for the action and `Bar.tsx`'s `notify::active` handler
    re-stamps it at `end()` — so the app under the cursor gets a pointer LEAVE and
    the popup closes. **A hover is not a state we hold; it is a consequence of which
@@ -634,7 +634,7 @@ verified failing against the old condition before being kept).
 - **It clicked controls sitting UNDER its own panel.** The user called this a design
   fault and had asked for the fix long before: *the agent must know whether the
   island is open and be able to control it.* The island now reports what it COVERS
-  (`IslandWindow.occupiedRect`, capsule + revealed mode, with the monitor connector
+  (`occupiedRect` — on the bar's window since #708 point 3 — capsule + revealed mode, with the monitor connector
   so a multi-monitor consumer cannot compare across screens) via
   `dumpState.overlays.islandBounds`; `yieldInput begin` returns the same rect so
   `nidara-click` can flag a click that lands inside it **as a warning on a SUCCESSFUL
@@ -1588,53 +1588,6 @@ These were paid down; the *rule* remains:
   only the click-time snapshot gets dismissed at the end; closing the NC mid-cascade must
   settle immediately (unmapped rows stop ticking — their tick callbacks never fire).
 
-### 40. Activity Island on its own layer surface — residuals (2026-07-26)
-
-The whole Activity Island — compact capsule included — moved out of the bar's window into
-`nidara-island` (`surfaces/island/IslandWindow.ts`, OVERLAY level) so Hyprland's blur finally
-reaches the bar capsules underneath: a surface cannot blur its own siblings, which is why they
-read sharp through the glass before. A deliberate, documented exception to commandment 5 (see
-`architecture.md` / `state-and-ipc.md`).
-
-**The capsule moved on the second pass, and the first pass is the lesson.** Leaving it on the bar's
-surface while only the modes moved cost a cross-window coordinate bridge in `MorphRevealer` — and
-made both surfaces paint glass over the same pixels mid-morph, whose blurs stacked into a seam the
-user caught immediately on close. Splitting an object that morphs across two surfaces is the wrong
-shape; the bridge is deleted, not refactored.
-
-What it left behind:
-
-- **The surface is MONITOR-SIZED and always mapped.** Anchored on all four edges with
-  `exclusive_zone = -1` — anything else and the bar's own 40px reservation pushes the surface, and
-  therefore the capsule, off the bar row. So there are now two permanently-mapped full-monitor
-  blurred layers instead of one. Damage tracking should make the idle cost of a static transparent
-  surface near zero (the bar has lived this way forever), but **that is reasoning, not a
-  measurement** — if a GPU-idle regression appears, this is the first suspect, and the fix
-  direction is a surface sized to the bar row when collapsed and to the monitor while a mode is
-  open (resize on open/close, never per frame).
-- ~~The capsule is now at the MONITOR centre, not the bar-surface centre.~~ **RETRACTED the same
-  day — the premise was false.** It assumed a side dock's exclusive zone insets the bar's surface.
-  It does not: layer-shell arranges a surface requesting `exclusive_zone > 0` against the FULL
-  output area, and only surfaces asking for zone 0 are pushed into the remaining usable area. The
-  bar asks for 40. Measured on DP-1: `hyprctl monitors -j` reports `reserved [0,40,0,100]` with a
-  bottom dock, while `hyprctl layers -j` still puts `nidara-bar` at `0 0 2560 1440` — the full
-  monitor. So **the bar and the island are the same rect in every dock configuration**, the capsule
-  does not move, and `measureOverflow`'s budget is unaffected. (The first pass's `sourceOffset`
-  therefore always computed 0 — dead code, correctly deleted with the rest of the bridge.) The
-  misleading claim came from a stale "trade-off" comment in `Bar.tsx`, now corrected in place.
-- **The island is above the DOCK now.** It used to be in the bar's window, which stacks below the
-  dock; on OVERLAY it stacks above. An expanded mode tall enough to reach a bottom dock will draw
-  over it instead of under. No mode is that tall today.
-- **UNVERIFIED BY EYE: the double blur.** The bar blurs the wallpaper; the island blurs
-  bar+wallpaper on top of that wherever it covers the bar's OTHER capsules (AppTitle, clock, tray).
-  Whether their 1px inner white edge survives that or smears is a judgement only the user's eye can
-  make (screenshots hide exactly this class of artifact).
-- **Pre-existing leak found in passing, NOT fixed:** `MorphRevealer.dismantle()` calls
-  `this.sourceGhost?.unparent()` — the field is `sourceGhosts` (an array), so the optional chain
-  no-ops and every source-ghost twin leaks its parent link. Harmless today (island revealers are
-  long-lived and `dismantle` is never called on them), one line to fix when someone is in there
-  for a real reason.
-
 ### 42. The Assistant can type into ANOTHER AGENT's terminal — accepted property, no fix (2026-07-30)
 
 Demonstrated live by the user, not theorised. They asked the Assistant to write into the Claude Code
@@ -1764,6 +1717,9 @@ block, is the lever** — the step-4 `query_app` dump (11 KB, no `match`) was re
 following steps, ≈25k of the turn's 127k tokens.
 
 ### 46. All three layers are monitor-sized and blurred — and dynamic sizing is a DEAD END (2026-08-02)
+
+> **Since #708 point 3 (2026-10-06) there are TWO such layers, the bar and the dock** — the island
+> is a panel of the bar again. The measurements below were taken with three, and stand as they were.
 
 `hyprctl layers` on a 2560x1440 desktop: `nidara-bar`, `nidara-dock` and `nidara-island` are all
 `0 0 2560 1440`, **all three with blur**. Making the island resize itself was implemented, measured,
@@ -2436,35 +2392,6 @@ alignment axes (Prism's `22`).
   (`scripts/dev/lock-probe.js`). The VM is still the gate for blur, the painted glass and the
   session-lock protocol — but not for type, colour and spacing, which is what had drifted.
 
-### 51. The island↔bar tracking is accepted as INTERIM — the owner wants a mechanical fix (2026-08-04)
-The watch in `Bar.tsx` is correct, costs nothing in a healthy session and is verified end to end
-(`architecture.md`), but the owner's call after seeing it is explicit: **it is still too much logic
-for what it buys**, and the direction to aim at is a mechanism that holds the island level *by
-construction* rather than shell code that notices and corrects. Recorded so nobody mistakes the
-current state for the intended end state.
-
-What has already been tried and must not be re-proposed as-is (measured, `architecture.md`):
-sharing the bar's `exclusive_zone`; `zone = 0` + `margin_top = -40` (perfect vertically, **50px
-off-centre horizontally with a side dock** — half the dock's own reservation, demoed live).
-
-The two avenues that are actually still open:
-
-1. **Upstream Hyprland: an event when a monitor's reserved area changes.** This is the missing
-   primitive and the honest fix — `arrangeLayersForMonitor` already knows the usable area changed,
-   and today nothing on the IPC socket says so, which is the ONLY reason the shell polls. With it,
-   the watch collapses into one `hs.connect(...)`. Nidara has landed upstream work before
-   (Aylur/astal#451), so this is a realistic PR rather than a wish.
-2. **`zone = 0` + negative margins cancelling OUR OWN reservations on all four edges.** Foreign
-   reservations (the error bar) then come for free from the compositor and only our own dock needs
-   bookkeeping — which the shell sets itself, so it is an event we own, not a poll. Two known
-   catches, both real: it relies on the bar being arranged BEFORE the dock (creation order, not
-   something Hyprland promises), and with `zone = 0` the compositor never tells the client where it
-   put the surface, so `occupiedRect` loses the position it exists to report.
-
-Considered and dead: making the island a Wayland **subsurface** of the bar (it would track the parent
-perfectly and for free, but a subsurface is composited as part of its parent's layer surface, which
-costs the island its own blur pass — the entire reason it is a separate surface at all).
-
 ### 52. IDEA (owner, 2026-08-04, NOT a plan): split the bar into left/centre/right surfaces
 Floated as a possible future layer restructuring, also hoped to help the window-title truncation and
 the capsule count on the right. Recorded with the analysis so it is re-opened with the numbers rather
@@ -2898,206 +2825,6 @@ trailing control, and that control is often a button whose own label is localise
 moves with the locale under test. Covering it honestly needs allocated widths harvested from a live
 session per locale — which, because the locale is read from `$LANG` at startup, means a shell
 restart per locale. That is the part worth designing before building.
-
-### 68. The island losing pointer input — the WHOLE-region half is FIXED; the chip-level half is still open (2026-08-13)
-
-Two failures wearing one symptom. The trap armed for the second one caught the FIRST.
-
-#### ✅ Fixed: the island goes fully dead on resume from suspend
-
-Reported by the owner 2026-08-13: *"coming back from sleep the activity island was left with no input
-until I reloaded the UI"*. The trap had it on the first occurrence:
-
-```
-05:16:56  stamp #421 rects=3 hitTargets=6      ← last before suspend (05:33)
-09:20:15  stamp #422 rects=0 hitTargets=6      ← 8s after resume: an EMPTY region
-[09:53:24] nidara-ui: DEV mode                  ← the owner's reload, 33 minutes later
-```
-
-🔑 **Six live targets, zero measurable, and an empty region stamped over a good one.** `boundsOf`
-returns null for a widget that is not mapped or has no allocation, so the union came out empty and
-`set_input_region` was handed nothing — which is not "click-through pending a correction", it is the
-terminal state. **The capsule is permanent furniture that had no re-stamp trigger of its own:** the
-revealers have `onAllocated`, the morph has `onDone`, and neither runs when no mode is open. Nothing
-was ever going to correct it.
-
-⚠️ **Why only this surface can die this way.** `Bar.tsx` unions an unconditional
-`{0,0,monGeo.width,BAR_H}` strip — a constant that cannot fail to measure, so the bar always stamps
-*something*. The island's capsule is CENTRED and changes width, so it has no such constant; it is
-measured, and measurement has an unmeasurable state. Same file, same job, opposite failure mode.
-
-**The numbers that sized the fix** (2435 stamps of the owner's log): only 7 stamps ever had
-`rects=0`, and **6 of them are `stamp #1`** — the first of a session, before any layout, each
-corrected milliseconds later. The 7th is #422. So the condition is real but never benign
-mid-session, which is exactly what `everStamped` keys on.
-
-**The fix** (`IslandWindow.ts`): `paintedBounds` now reports `targetsLive`/`targetsMeasured`, and
-`updateInputRegion` **holds the region already on the surface** instead of blanking it when targets
-are live but none measurable — plus a backing-off re-stamp ladder (`holdRegion`) and a
-`row.connect("map")` hook, the trigger the permanent furniture never had.
-
-🔑 **Holding is only correct because there is something to hold.** Before the first successful stamp
-there is no region, and a Wayland surface with none takes input across its whole buffer — this one is
-monitor-sized, so it would swallow every click on screen. That is why `everStamped` gates the guard
-and why those six `stamp #1`s must keep stamping empty.
-
-#### 🟡 The chips alone losing input — REPRODUCED AND MEASURED on a live session (2026-08-13), one cause fixed, root cause not yet proven
-
-The original 2026-08-12 report — *"sometimes the inactive island's icons stop taking mouse input, only
-the closed active island responds"* — describes the chips going dead while the capsule still works.
-The resume bug kills the capsule too, so it is **not** established that they are the same thing.
-
-🔑 **It was finally caught IN THE ACT** (user reported it live, 2026-08-13 15:24). What made that
-possible was measuring the SYMPTOM instead of the suspected mechanism — see the probe below. On the
-user's dead island:
-
-- both chips: **0 pixels changed** on hover, at every pointer position — no input at all;
-- the capsule: **19 pixels changed** on hover, and its response spanned exactly `[1091, 1385]`, i.e.
-  **its stamped rect matched its painted rect perfectly** while the chips beside it were unreachable;
-- the island had been at rest for ~3 minutes with **no stamp** since `#355 rects=3 hitTargets=6`;
-- forcing a re-stamp revived them (**30.7 px** response) — which also proved the probe can fire, so
-  the zeros before it were real and not a dead detector.
-
-▶️ **The probe (reusable, and the thing to reach for next time).** Hover a chip with the RAW injector
-and diff its pixels: `nidara-input move <x> <y> 2560 1440`, screenshot, `magick compare -metric AE`
-on a crop of that chip. Alive = the chip repaints its hover border; dead = pixel-identical.
-⚠️ **`nidara-click` cannot be used for this**: it yields the island's input region click-through
-before acting, so it would test nothing. ⚠️ **And gate the probe on a SETTLED island**:
-`islandBounds` unions the REVEALER rects, so a closing panel still reads as "the island" — a 474px
-player panel sailed through a `<600` gate and got hovered at its edge, producing two false DEADs
-before the gate was tightened to "geometry unchanged across 0.7 s AND no stamp in flight".
-
-✅ **Fixed: the PARTIAL-measurement hole** (`IslandWindow.updateInputRegion`). `holdRegion` from the
-whole-region half only engages when NOTHING measures — `targetsMeasured === 0`. The moment ONE target
-survives, the region goes out **missing the others, with no retry and no trigger that would ever
-re-cut it**. That is not theoretical: instrumented on this session, **116 stamps in ten minutes went
-out dropping a chip the island was showing, two of them dropping the CAPSULE itself**, every one with
-`measured > 0` so the guard stayed quiet. Now a stamp with any `missing` target keeps its stamp (the
-best region describable that instant) and climbs the same retry ladder.
-
-✅ **Fixed: the chips had no re-stamp trigger of their own.** The capsule re-stamps from its glass
-`resize`, a mode from its revealer's `onAllocated` — the chips had only a fixed **400 ms** guess
-(`Bar.tsx` → `onBackgroundChanged`), which has to be wrong only once, since nothing else re-cuts the
-region for them. `ActivityIsland.onChipsSettled` now fires on each chip revealer's
-`notify::child-revealed` — the frame the slide actually ends and the row's final rects exist. Both are
-kept: the timer covers a reveal that never animates, the signal one that outlasts it.
-
-✅ **Fixed: the row re-entering the hit set had no trigger either.** The `STALE` check fired
-**organically for the first time** at 2026-08-13 04:38 — *"stamped 1 target(s), 6 are live now and
-nothing re-stamped"* — which is a DIFFERENT path from the one above: `hitTargets()` returns the
-capsule alone while the row is faded out, so every stamp taken with a mode open drops the chips' rects
-**deliberately**, and the symptom appears the moment nothing re-stamps once they ramp back. That
-re-stamp comes from `MorphRevealer.reveal`'s `onDone`, which does not run when the morph is
-INTERRUPTED (a mode switched mid-close). `Bar.tsx` now also re-stamps when `indicatorRow.opacity`
-crosses back off zero: opacity does not affect `compute_bounds`, so that crossing is already a
-measurable layout, and it costs one stamp per morph. Note this path is invisible to both guards above
-— the chips are not `missing`, they are legitimately *excluded*, so neither the retry ladder nor
-`onChipsSettled` would ever have covered it.
-
-⚠️ **None of the three was the cause**, and the trap said so within minutes of them landing — worth
-keeping as the record of what "the fix is in, the bug is not fixed" looks like when the instrument is
-good enough to tell you.
-
-✅ **THE CAUSE: the stamp reads a TORN layout, and measuring more carefully cannot help.** Caught
-2026-08-13 16:55, minutes after the triggers above were merged:
-
-```
-#61  capsule=1091 297x32   agent=1396  dots=1436     healthy
-#62  capsule=1174 132x32   agent=1479  dots=1519     impossible
-     MOVED, 600 ms later:  agent is at 1314, dots at 1354
-#63  7.6 SECONDS later, still wrong          #64  correct again
-```
-
-🔑 **#62 is geometrically impossible and that is the whole proof.** A 132-wide capsule at 1174 IS a
-212-wide group centred on 1280, so the chips belonged at 1314/1354 — the stamp recorded 1479/1519, a
-**173 px gap** between the capsule and a chip the layout puts **8 px** apart. One pass of
-`paintedBounds` read the capsule with its NEW allocation and the chips with their OLD one, because the
-`glassArea "resize"` hook fires from **inside `size-allocate`**, before the row's siblings have been
-re-allocated. Then nothing re-stamped for 7.6 s, and for 7.6 s the chips took no input.
-
-None of the three triggers can see this: nothing is `missing` (everything measured), `child-revealed`
-does not fire (the chips are not revealing, they MOVED), and the opacity crossing already happened.
-**The measurement was wrong, not incomplete** — which is why every guard aimed at absence missed it.
-
-**Fix**: after every stamp, re-measure once the tree is still and re-stamp if the geometry moved
-(`scheduleVerify` in `IslandWindow.ts`). **DEBOUNCED, not merely coalesced**: during an animation
-stamps arrive every ~7 ms, and verifying per stamp would double the work on a path the blur region
-also pays for. Pushing the timer forward on each stamp buys **one** extra measurement per animation
-instead of ~20, taken where it matters — after the last frame, on the state that will persist. The
-yield path records an empty `stampedRects` and cancels the pending verify, so a yielded (deliberately
-click-through) surface is never read as torn and stamped back over the agent's own clicks.
-
-**Verified**: `TORN` fires (13 times over 32 cycles, i.e. the condition is real and frequent), and
-after it **0 `MOVED` and 0 `STALE` survive** where `MOVED` had been reporting the stale region before.
-32 cycles, 0 deaths, against a pre-fix reproduction that hit within 2 cycles. Cost measured in stamps
-per cycle: overview ~13 before and after, agent ~93–106 before and after.
-
-⚠️ 32 clean cycles is evidence, not proof — the pre-fix rate varied between 1-in-2 and 1-in-25. If it
-returns, the trap now has a fourth column to check (`TORN` firing but the geometry still wrong would
-mean the verify's own 50 ms window is too short).
-
-🔑 **The mechanism it would have to be.** `ActivityIsland.hitTargets()` returns the capsule ALONE
-while `indicatorRow.opacity === 0` — deliberately: leaving faded chips' rects stamped puts an
-invisible dead patch in the bar, which under a grab is read as a press INSIDE and neither dismisses
-nor passes through. So any stamp taken while a mode is open drops the chips, correctly, and becomes
-the reported symptom **only if nothing re-stamps once they ramp back**. And nothing has to: the morph
-ramps opacity in `applyProgress` without a relayout, so `onAllocated` never fires on the way out. The
-one thing that re-stamps is `MorphRevealer.reveal`'s `onDone` (wired in `syncIslandModes`).
-
-⚠️ **The blur region survives this same premise only because of `BLUR_PAD_X = 200`.** Its own comment
-says so — *"a re-stamp mid-morph measures a union without them, and on the way back OUT they ramp up
-again with no relayout to re-measure. They land inside the pad"*. **The input region has no pad.**
-Same premise, no net. If this turns out to be the bug, that asymmetry is where to look first.
-
-**Ruled out by measurement (2026-08-13), ~460 stamps, 99 of them capsule-only:** clean open/close of
-all four modes; mode switches at 100 ms (mid-morph); close-then-reopen inside the closing morph;
-computer-use yield with a mode open AND with the island closed; a chip changing while a mode is open
-(the `onBackgroundChanged` 400 ms deferred stamp). **0 stale regions.** In every one of those the
-`onDone` re-stamp arrives. So the failure is not in the deterministic paths, which is consistent with
-"sometimes" and is why guessing at code next would be wrong.
-
-▶️ **What is armed:** `NIDARA_ISLAND_REGION_TRACE=1` (`IslandWindow.traceStamp`) logs every stamp
-**with the actual rect it put in the region, per named target** (`capsule=1091,8 297x32 agent=1396,8
-32x32 …`; a trailing `-` on the name means the chip is deliberately collapsed, so its `NULL` is the
-healthy resting state), plus `measured=` and `MISSING=`. It fires a CRITICAL on `STALE` (target count
-later exceeded), on **`MOVED`** (the targets are at different coordinates 600 ms later with no stamp
-in between — the region is at the old numbers), and logs `HELD` / **`PARTIAL`** whenever the guards
-above decline to blank or complete the region.
-
-🔑 **Why the counts alone could never have caught this, and the shape of the mistake.**
-`hitTargets()` returns all five chips always, and three of them are legitimately collapsed at any
-moment — so `hitTargets=6 measured=3` is BOTH the healthy resting state and the broken one. "Live but
-unmeasurable" and "deliberately absent" are the same number. That is why every count-based check read
-healthy while the chips took no input, and it is why the chips now carry `islandTargetId` /
-`islandRevealed` tags: the trap needs the island's INTENT for each target, which no count can supply.
-This is the third time in this bug that the detector was watching the wrong column (see the lesson
-below, and the STALE check that missed #422). Off by default, no cost when off
-(the trace call is guarded, not just the body). **Proven to fire** by disabling the `onDone` re-stamp
-for one run; a silent trap nobody has seen trip proves nothing. Arm it with
-`systemctl --user set-environment NIDARA_ISLAND_REGION_TRACE=1 && systemctl --user restart nidara.service`.
-
-🔑 **The lesson from how it paid off: it was aimed at the wrong column.** The STALE check compares
-`hitTargets()` counts, and on #422 that number was 6 on both sides — the trap never fired. What
-caught the bug was the raw `rects=` it happened to log next to it. A detector narrowed to the
-mechanism you suspect will miss the one you don't; log the neighbouring quantity too.
-
-⚠️ **And the mirror lesson, from MOVED's first evening: 17 alarms, 17 of them false.** Its first
-version compared the whole trace STRING across 600 ms. Opening a mode fades `indicatorRow` to nothing
-and `hitTargets()` then correctly returns the capsule ALONE — so the strings differ for a reason that
-is not a stale region at all. It now compares each target against ITSELF by id (`byId`), over the
-targets present in both samples: **a target that left the set is not a target that moved.** A trap
-that cries wolf is worse than no trap, because the real line arrives in a column of noise nobody
-reads any more.
-
-⚠️ **Reading the HELD/FORCE volume in this log correctly.** 661 `HELD` lines look alarming and are
-not organic: they are all inside 10:07–10:16 on 2026-08-13, the window where a throwaway `FORCE`
-harness (since removed — do not look for it in the source) deliberately held the island unmeasurable
-for 120 s / 180 s to prove the #136 guard fires. Sessions since: **0**. Check the timestamps before
-treating a count in this log as a rate.
-
-⛔ **Do not "fix" the chip-level half on the strength of the reasoning above.** The next step is a log
-line, not a patch: the mechanism explains the symptom but so did the `syncIslandGrab` CRITICAL, which
-turned out to be a false alarm (#67).
 
 ### 76. What the toolchain swap left behind (2026-08-18)
 
@@ -4197,6 +3924,9 @@ of every menu on the desktop. Either fix is one token (`--nidara-accent-fg`, or 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
 number is never accidentally reused. 58 items; the split itself was 2026-08-23.
 
+- **#40** — ✅ RESOLVED 2026-10-06 — the Activity Island's own layer surface and its residuals: gone with #708 point 3 → `tech-debt-resolved.md`
+- **#51** — ✅ RESOLVED 2026-10-06 — the island↔bar tracking: one surface holds them level by construction (#708 point 3) → `tech-debt-resolved.md`
+- **#68** — ✅ RESOLVED 2026-10-06 — the island losing pointer input: its capsule is inside the bar's constant strip (#708 point 3) → `tech-debt-resolved.md`
 - **#7** — `pageHeader()` removed — RESOLVED → `tech-debt-resolved.md`
 - **#102** — ✅ RESOLVED 2026-08-31 — the shell's one door raises as well as focuses; the bench is a nested Hyprland → `tech-debt-resolved.md`
 - **#102** (the second one — ⚠️ the number was reused by a slip on 2026-09-04) — ✅ RESOLVED 2026-09-04 — manual mode's bootloader patching wrote to a hardcoded /mnt/boot → `tech-debt-resolved.md`
