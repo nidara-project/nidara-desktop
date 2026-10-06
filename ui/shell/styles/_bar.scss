@@ -260,8 +260,13 @@ window#nidara-bar-zone {
         padding: 0;
     }
 
+    // The dots take the island's INK, like its icons — white, or dark where Hyalo
+    // turned the pane's ink (#684). Not the accent: the owner, 2026-10-06 — the
+    // dots are the island's glyphs, and a coloured mark among white icons read as
+    // a second, louder signal than any of them. Active > occupied > empty is
+    // carried by the ink's own tiers (text → text-dim → surface).
     .workspace-dot.occupied {
-        background-color: var(--nidara-accent-60);
+        background-color: var(--nidara-text-dim);
     }
 
     .workspace-dot.active {
@@ -270,7 +275,7 @@ window#nidara-bar-zone {
         // shape — it was never a rung of the ladder.
         min-width: 18px;
         border-radius: var(--nidara-radius-pill);
-        background-color: $nidara-accent;
+        background-color: var(--nidara-text);
     }
 
     .workspace-dot.empty {

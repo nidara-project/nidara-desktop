@@ -15,8 +15,7 @@ export const WS_COUNT = 5
  *  island's indicator row. It says "you are on a workspace", not WHICH one: one
  *  pill cannot carry five, and the row's job is only to point back at a surface
  *  you can open. Same `.workspace-dot.active` classes as the real dots, so it is
- *  the same ink (and the only accent in the row — which is exactly what the
- *  accent is for: active state). */
+ *  the same ink — the island's, like the icons beside it (never the accent). */
 export function makeActiveDotGlyph(): Gtk.Widget {
     return new Gtk.Box({
         css_classes: ["workspace-dot", "active"],
