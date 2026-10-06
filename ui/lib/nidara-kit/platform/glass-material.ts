@@ -32,6 +32,8 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
  *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
+ *   fusion                                               how close two panes of one fusion
+ *                                                        group join, logical px (0 = off)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -115,6 +117,11 @@ const DEFAULTS = {
     // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
     // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
     tintLimit: 0.25,
+    // Fusion (#705 step 2, `trackFusionGroup`): two panes of one group closer than this many
+    // logical px are joined by a bridge, one silhouette. The island's chips sit 4 px from its
+    // capsule, so at 8 they are joined at rest. A starting point, to be judged with the owner
+    // on screen; 0 turns fusion off.
+    fusion: 8,
 }
 
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
@@ -222,6 +229,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
         glass: (_native: Gtk.Native) => params(),
         ink: (_native: Gtk.Native) => inkParams(),
         scrim: (_native: Gtk.Native) => scrimParams(),
+        fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         blur: (native: Gtk.Native) => {
             const panels = tuning.blur ?? h.panelBlur()
             // A tooltip or a menu is a popover: a surface of its own, blurred more.

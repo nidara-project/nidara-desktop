@@ -989,12 +989,17 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
       overflow by unmapping: the row (`islandHost`) simply rises out of the way.
     **What replaced the island's reason — no glass on glass.** A surface's glass is
     drawn under ALL of its content, so a mode growing over the bar's row would show
-    the row's groups sharp through its pane. A mode wide enough to reach a group
-    fades it out with the capsule's content: `MorphRevealer`'s `companions` is a
-    getter asked on every open (AFTER `set_visible(true)` — a hidden widget measures
-    0, which is how the first cut faded nothing), and `ActivityIsland.coveredBy`
-    returns the groups (`setRowNeighbours`) the mode's centred natural width
-    reaches. Only the overview is that wide today.
+    the row's groups sharp through its pane. A mode big enough to reach a group —
+    or the notification banners below the right group — fades it out with the
+    capsule's content: `MorphRevealer`'s `companions` is a getter asked on every
+    open (AFTER `set_visible(true)` — a hidden widget measures 0, which is how the
+    first cut faded nothing), and `ActivityIsland.coveredBy` returns the neighbours
+    (`setNeighbours`) the mode's centred natural rect reaches. The banners' box is
+    0 tall while it holds none, so the test is inclusive vertically: a banner that
+    arrives under the open overview stays hidden until it closes (it showed through
+    the overview's glass in #758, caught in the harness the same night). Only the
+    overview is that big today. The island's own pieces do the opposite: they
+    FUSE (hyalo.md → "Fusion").
     **The row is centred, never full-width**: it sits ABOVE barBox in the overlay,
     and GTK picks a `Gtk.Box` anywhere in its allocation — a full-width row would
     take every press meant for the left and right groups.

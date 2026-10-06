@@ -531,6 +531,18 @@ void nidara_wl_material_add_scrim_region (GdkSurface *surface,
                                           double falloff);
 
 /**
+ * nidara_wl_material_set_fusion:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @group: the fusion group of the shapes added from now on; 0 = none
+ * @spacing: logical pixels: two shapes of the group closer than this are joined
+ *
+ * The shapes added after this call, until the next one, belong to @group: the compositor
+ * draws a group as ONE pane of glass, the smooth union of their outlines. Pending until
+ * nidara_wl_material_commit(); back to 0 with nidara_wl_material_begin().
+ */
+void nidara_wl_material_set_fusion (GdkSurface *surface, guint group, double spacing);
+
+/**
  * nidara_wl_material_clear_glass:
  * @surface: the #GdkSurface
  *

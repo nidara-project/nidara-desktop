@@ -281,6 +281,13 @@ phase_run() {
         [ "$(glass_shapes "$ns")" -gt 0 ] \
             || { log "FAIL: $ns declared no glass for Hyalo to paint"; nidara-hyalo msg layers; exit 1; }
     done
+    # The island is one fusion group (#705 step 2): its capsule, chips and modes are drawn as
+    # one silhouette. Without the group Hyalo draws each piece on its own and nothing says so.
+    local fusion
+    fusion="$(nidara-hyalo msg layers | jq -r \
+        '[.ok.layers[] | select(.namespace == "nidara-bar") | (.glass.fusion // []) | length] | max // 0')"
+    [ "$fusion" -ge 1 ] \
+        || { log "FAIL: the bar's glass declares no fusion group — the island's pieces are not one silhouette"; nidara-hyalo msg layers; exit 1; }
     local strays
     strays="$(nidara-hyalo msg layers | jq -r \
         '[.ok.layers[] | select(.namespace | test("^nidara-(island|app-grid)$")) | .namespace] | unique | join(" ")')"

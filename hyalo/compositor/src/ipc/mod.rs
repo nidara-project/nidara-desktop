@@ -93,6 +93,8 @@ pub struct GlassInfo {
     pub refraction: Vec<f64>,
     /// The shadows under the glass: one per region holding a shape, or per lone shape.
     pub scrims: Vec<ScrimInfo>,
+    /// Its fusion groups (`set_fusion`): how many shapes each one joins, in group order.
+    pub fusion: Vec<usize>,
 }
 
 /// One shadow under the glass: what it lies under, and the strength it is easing to.

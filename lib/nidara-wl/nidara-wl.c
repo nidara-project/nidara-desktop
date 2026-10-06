@@ -495,6 +495,16 @@ nidara_wl_material_add_scrim_region (GdkSurface *surface,
 }
 
 void
+nidara_wl_material_set_fusion (GdkSurface *surface, guint group, double spacing)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m)
+    return;
+  nidara_material_v1_set_fusion (m, group, wl_fixed_from_double (MAX (spacing, 0.0)));
+}
+
+void
 nidara_wl_material_clear_glass (GdkSurface *surface)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));

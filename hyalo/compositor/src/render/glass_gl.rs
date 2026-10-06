@@ -32,7 +32,7 @@ use std::{
 use smithay::{
     backend::renderer::gles::ffi::{self, Gles2},
     reexports::wayland_server::{Weak, protocol::wl_surface::WlSurface},
-    utils::{Physical, Rectangle},
+    utils::{Physical, Point, Rectangle},
 };
 
 pub(super) const VS_PASS: &str = r#"#version 100
@@ -306,6 +306,9 @@ pub struct Shape {
     /// Output px per logical px (the output's scale): the shader's own widths in px — the rim's
     /// band, the bevel's cap — are logical, so a pane looks the same at any scale.
     pub px_scale: f64,
+    /// Its fusion group (`set_fusion`) and the smooth union's width, output px: twice the
+    /// group's spacing, so two shapes closer than the spacing are joined.
+    pub fusion: Option<(u32, f64)>,
 }
 
 impl Shape {
@@ -316,6 +319,34 @@ impl Shape {
             None => self.rect,
         }
     }
+}
+
+/// The most shapes one fusion group draws as one silhouette (the shader's arrays); past it the
+/// rest of the group is drawn shape by shape.
+pub const FUSE_MAX: usize = 8;
+
+/// How `draw` paints `shapes`, in their order: each shape on its own, or a fusion group as ONE
+/// draw at the place of its first member. Indices into `shapes`.
+pub fn draw_plan(shapes: &[Shape]) -> Vec<Vec<usize>> {
+    let mut plan: Vec<Vec<usize>> = Vec::new();
+    let mut seen: Vec<u32> = Vec::new();
+    for (i, s) in shapes.iter().enumerate() {
+        match s.fusion {
+            Some((g, _)) if !seen.contains(&g) => {
+                seen.push(g);
+                let members: Vec<usize> =
+                    (i..shapes.len()).filter(|&j| shapes[j].fusion.map(|f| f.0) == Some(g)).collect();
+                let mut chunks = members.chunks(FUSE_MAX);
+                if let Some(first) = chunks.next() {
+                    plan.push(first.to_vec());
+                }
+                plan.extend(chunks.flatten().map(|&j| vec![j]));
+            }
+            Some(_) => {}
+            None => plan.push(vec![i]),
+        }
+    }
+    plan
 }
 
 /// A pointer in output pixels, ready for the shader: its triangle inset by the tip radius.
@@ -892,16 +923,30 @@ pub unsafe fn draw(
                 gl.Uniform4fv(loc, 4, params.as_ptr());
             }
         }
-        for s in shapes {
-            let sr = s.bounds();
+        for members in draw_plan(shapes) {
+            let s = &shapes[members[0]];
+            let fused = members.len() > 1;
+            let sr = if fused {
+                // The bridges lie between the members, bulging past their bounds by at most a
+                // quarter of the union's width.
+                let k = s.fusion.map_or(0.0, |f| f.1);
+                let mut b = s.bounds();
+                for &j in &members[1..] {
+                    b = b.merge(shapes[j].bounds());
+                }
+                Rectangle::new(b.loc - Point::from((k / 4.0, k / 4.0)), (b.size.w + k / 2.0, b.size.h + k / 2.0).into())
+            } else {
+                s.bounds()
+            };
             // One pixel of margin for the anti-aliased edge.
             let mut bounds = Rectangle::<i32, Physical>::new(
                 ((sr.loc.x - 1.0).floor() as i32, (sr.loc.y - 1.0).floor() as i32).into(),
                 ((sr.size.w + 3.0).ceil() as i32, (sr.size.h + 3.0).ceil() as i32).into(),
             );
-            // No clip: one far larger than any output.
-            let cl = s.clip.unwrap_or(Rectangle::new((-1e6, -1e6).into(), (2e6, 2e6).into()));
-            if s.clip.is_some() {
+            // No clip: one far larger than any output. A fusion group's members carry their
+            // own (the shader cuts each one's outline).
+            let cl = if fused { None } else { s.clip }.unwrap_or(Rectangle::new((-1e6, -1e6).into(), (2e6, 2e6).into()));
+            if !fused && s.clip.is_some() {
                 let cb = Rectangle::<i32, Physical>::new(
                     ((cl.loc.x - 1.0).floor() as i32, (cl.loc.y - 1.0).floor() as i32).into(),
                     ((cl.size.w + 3.0).ceil() as i32, (cl.size.h + 3.0).ceil() as i32).into(),
@@ -910,6 +955,36 @@ pub unsafe fn draw(
                 bounds = b;
             }
             gl.Uniform4f(p.loc(gl, c"clip"), cl.loc.x as f32, cl.loc.y as f32, cl.size.w as f32, cl.size.h as f32);
+            if fused {
+                let mut rects = [0f32; 4 * FUSE_MAX];
+                let mut pars = [0f32; 4 * FUSE_MAX];
+                let mut clips = [0f32; 4 * FUSE_MAX];
+                let mut refr = [0f32; FUSE_MAX];
+                for (k, &j) in members.iter().enumerate() {
+                    let m = &shapes[j];
+                    rects[4 * k..4 * k + 4].copy_from_slice(&[
+                        m.rect.loc.x as f32, m.rect.loc.y as f32, m.rect.size.w as f32, m.rect.size.h as f32,
+                    ]);
+                    pars[4 * k..4 * k + 4].copy_from_slice(&[
+                        m.radius as f32, m.exponent as f32, m.opacity, m.ink_dark as i32 as f32,
+                    ]);
+                    if let Some(c) = m.clip {
+                        clips[4 * k..4 * k + 4].copy_from_slice(&[
+                            c.loc.x as f32, c.loc.y as f32, c.size.w as f32, c.size.h as f32,
+                        ]);
+                    }
+                    refr[k] = m.refraction as f32;
+                }
+                gl.Uniform1f(p.loc(gl, c"fused"), 1.0);
+                gl.Uniform1f(p.loc(gl, c"f_count"), members.len() as f32);
+                gl.Uniform1f(p.loc(gl, c"f_k"), s.fusion.map_or(0.0, |f| f.1) as f32);
+                gl.Uniform4fv(p.loc(gl, c"f_rect"), FUSE_MAX as i32, rects.as_ptr());
+                gl.Uniform4fv(p.loc(gl, c"f_par"), FUSE_MAX as i32, pars.as_ptr());
+                gl.Uniform4fv(p.loc(gl, c"f_clip"), FUSE_MAX as i32, clips.as_ptr());
+                gl.Uniform1fv(p.loc(gl, c"f_refr"), FUSE_MAX as i32, refr.as_ptr());
+            } else {
+                gl.Uniform1f(p.loc(gl, c"fused"), 0.0);
+            }
             let rr = s.rect;
             gl.Uniform4f(p.loc(gl, c"rect"), rr.loc.x as f32, rr.loc.y as f32, rr.size.w as f32, rr.size.h as f32);
             match &s.pointer {
@@ -1207,5 +1282,30 @@ mod tests {
         );
         let off = Rectangle::new((95, 45).into(), (20, 20).into());
         assert_eq!(normal.rect_to_fb(off), Some(Rectangle::new((95, 45).into(), (5, 5).into())));
+    }
+
+    #[test]
+    fn a_fusion_group_is_one_draw_where_its_first_member_was() {
+        let shape = |fusion: Option<(u32, f64)>| Shape {
+            index: 0,
+            rect: Rectangle::new((0.0, 0.0).into(), (10.0, 10.0).into()),
+            radius: 5.0,
+            exponent: 2.0,
+            opacity: 1.0,
+            clip: None,
+            ink_dark: false,
+            pointer: None,
+            refraction: 0.0,
+            px_scale: 1.0,
+            fusion,
+        };
+        // A lone shape, a group of two around another lone one, a group of one.
+        let shapes = [shape(None), shape(Some((7, 8.0))), shape(None), shape(Some((7, 8.0))), shape(Some((3, 8.0)))];
+        assert_eq!(draw_plan(&shapes), vec![vec![0], vec![1, 3], vec![2], vec![4]]);
+        // Past the shader's arrays the rest of the group is drawn shape by shape, never lost.
+        let many: Vec<Shape> = (0..FUSE_MAX + 2).map(|_| shape(Some((1, 8.0)))).collect();
+        let plan = draw_plan(&many);
+        assert_eq!(plan[0].len(), FUSE_MAX);
+        assert_eq!(plan.iter().map(Vec::len).sum::<usize>(), FUSE_MAX + 2);
     }
 }
