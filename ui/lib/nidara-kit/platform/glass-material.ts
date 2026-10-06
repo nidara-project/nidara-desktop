@@ -128,10 +128,12 @@ const DEFAULTS = {
     // The spacing a group reaches for an instant while it changes (`pulseFusion`: the island
     // swapping what its capsule and its chips show), there and back over the change — the
     // panes join by a bridge while their content trades places, and part again at rest.
-    // 18: the island's pieces are 36 px tall and 4 px apart, so at the pulse's height the
-    // bridge is as tall as they are — one capsule for an instant — without bulging past
-    // their edges (owner, 2026-10-07: "the bridge should get to form one single capsule").
-    fusionPulse: 18,
+    // 20: one capsule at the pulse's height (owner, 2026-10-07: "the bridge should get to
+    // form one single capsule"). Measured, held static on screen: the island's GLASS is 32 px
+    // tall and 8 px apart (its boxes are 36 and 4; SquircleContainer insets the glass 2 px a
+    // side) — at 18 the join keeps a waist, at 22 and 24 it bulges past the edges, at 20 the
+    // rim runs straight. The smooth union cannot be exactly flat; 20 is its flattest.
+    fusionPulse: 20,
 }
 
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev

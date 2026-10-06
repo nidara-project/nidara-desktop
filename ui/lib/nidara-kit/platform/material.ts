@@ -233,14 +233,26 @@ export function trackFusionGroup(widget: Gtk.Widget, group: object = widget): vo
     if (!fusionIds.has(group)) fusionIds.set(group, nextFusionId++)
 }
 
+/** A pulse's shape over its time, 0..1 → 0..1: up over the first 30 %, held, down over the
+ *  last 30 %, eased both ways. The hold is the point: a sine touched its peak for an instant,
+ *  and the owner saw "capsule and button half fused", never the one capsule (2026-10-07). */
+function pulseCurve(t: number): number {
+    const ease = (x: number) => x * x * (3 - 2 * x)
+    if (t <= 0 || t >= 1) return 0
+    if (t < PULSE_EDGE) return ease(t / PULSE_EDGE)
+    if (t > 1 - PULSE_EDGE) return ease((1 - t) / PULSE_EDGE)
+    return 1
+}
+const PULSE_EDGE = 0.3
+
 /** The groups changing shape right now (`pulseFusion`): id → how far into the pulse, 0..1. */
 const pulses = new Map<number, { start: number, ms: number, boost: number }>()
 
 /**
  * For `ms`, the panes of `group` reach for each other: their spacing rises from the material's
- * `fusion` to its `fusionPulse` and back (half a sine), so panes that sit apart at rest are
- * joined by a bridge while the group changes — the island trading what its capsule and its
- * chips show — and part again when it settles. `widget` is any mapped widget of the group's
+ * `fusion` to its `fusionPulse`, HOLDS there, and falls back (`pulseCurve`), so panes that sit
+ * apart at rest become one while the group changes — the island trading what its capsule and
+ * its chips show — and part again when it settles. `widget` is any mapped widget of the group's
  * surface: its frames carry the pulse. A pulse asked during another goes on from where that
  * one is, rising again, so a quick second change does not drop the bridge.
  */
@@ -250,8 +262,10 @@ export function pulseFusion(group: object, widget: Gtk.Widget, ms: number): void
     const now = GLib.get_monotonic_time() / 1000
     const running = pulses.get(id)
     if (running) {
-        const t = Math.asin(Math.min(1, running.boost)) / Math.PI
-        running.start = now - t * ms
+        // Rising: go on. Held: the hold starts over. Falling: rise again from the same height
+        // (the curve is symmetric, so the rising point of a falling t is 1 − t).
+        const t = (now - running.start) / running.ms
+        running.start = now - (t > 1 - PULSE_EDGE ? 1 - t : Math.min(t, PULSE_EDGE)) * ms
         running.ms = ms
         return
     }
@@ -259,7 +273,7 @@ export function pulseFusion(group: object, widget: Gtk.Widget, ms: number): void
     pulses.set(id, p)
     widget.add_tick_callback(() => {
         const t = (GLib.get_monotonic_time() / 1000 - p.start) / p.ms
-        p.boost = t >= 1 ? 0 : Math.sin(Math.PI * Math.max(0, t))
+        p.boost = pulseCurve(t)
         widget.queue_draw()
         if (t < 1) return GLib.SOURCE_CONTINUE
         pulses.delete(id)

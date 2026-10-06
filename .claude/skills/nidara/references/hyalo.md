@@ -190,14 +190,18 @@ array only with a LOOP index: the member loops read `f_rect[i]` inline, never th
 taking `int i` (Mesa accepts the helper, a stricter driver does not).
 
 **The pulse** (`pulseFusion(group, widget, ms)`, owner 2026-10-07): at rest the spacing is the
-material's `fusion` = 2, so the island's pieces, 4 px apart, are each their own pane — at 8 they
-were joined by a thin neck whose rims nearly met ("as if they tend to touch"). While the group
-CHANGES, its spacing rises to `fusionPulse` = 18 and back (half a sine over `ms`) and the pieces
-join for that instant. 18 is not a feel: for two 36 px pieces 4 px apart, the union at the gap's
-middle reaches the pieces' full height exactly there, one capsule, without bulging past their
-edges (the polynomial `smin` inflates by k/4 = spacing/2 where the two distances are equal). The
-spacing travels per group on the wire (`set_fusion` already carried it), so a pulse is
-client-side only. The island pulses on a front change and on a chip born, gone or changed.
+material's `fusion` = 2, so the island's pieces are each their own pane — at 8 they were joined
+by a thin neck whose rims nearly met ("as if they tend to touch"). While the group CHANGES, its
+spacing rises to `fusionPulse` = 20, HOLDS, and falls back (`pulseCurve`: up over 30 % of `ms`,
+held 40 %, down 30 %) — a sine touched its peak for an instant, and the owner saw "capsule and
+button half fused", never one capsule. 20 is MEASURED, not derived: holding `fusion` at each value
+on screen, 18 leaves a waist at the join, 22 and 24 bulge past the edges, 20 runs straight (the
+polynomial `smin` cannot be exactly flat). ⚠️ The arithmetic first gave 18 from the BOXES (36 px,
+4 px apart); the GLASS is what fuses, and `SquircleContainer` insets it 2 px a side (32 px, 8 px
+apart). Measure a shape's numbers on the glass, not on the widget. The spacing travels per group
+on the wire (`set_fusion` already carried it), so a pulse is client-side only. The island pulses
+on a front change and on a chip born, gone or changed. To judge a pulse value, hold it: set
+`fusion` to it in `glass-tuning.conf` and look at rest.
 
 `nidara-hyalo msg layers` reports each surface's groups (`glass.fusion`: the shapes each one
 joins); the smoke requires the bar to declare one.
