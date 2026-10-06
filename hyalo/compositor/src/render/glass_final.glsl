@@ -1,4 +1,5 @@
-// The glass: one shape of a surface, from the blurred copy of what is under it (glass_gl.rs).
+// The glass: one shape of a surface — or one fusion group of them, drawn as one silhouette —
+// from the blurred copy of what is under it (glass_gl.rs).
 //
 // LAB hooks. The glass lab (scripts/dev/glass-lab) runs this same file with glass_gl.rs's
 // `LAB_ON`, which gives each hook a value from lab_params.conf; Hyalo ships it with `LAB_OFF`,
@@ -43,19 +44,34 @@ uniform vec2 ptr_b;
 uniform vec2 ptr_t;
 uniform float ptr_tip_r;
 uniform float ptr_base_r;
+// A fusion group (`set_fusion`): f_count shapes drawn as ONE silhouette, the smooth union of
+// their outlines (glass_gl.rs `draw_plan`). The single-shape uniforms above then describe its
+// first member and are not what is drawn.
+#define FUSE_MAX 8
+uniform float fused;        // 1: a fusion group
+uniform float f_count;
+uniform float f_k;          // the smooth union's width, output px (twice the group's spacing)
+uniform vec4 f_rect[FUSE_MAX];   // each member, output px: x, y, w, h
+uniform vec4 f_par[FUSE_MAX];    // radius, exponent, opacity, ink_dark
+uniform vec4 f_clip[FUSE_MAX];   // what of it may show, output px; w 0 = no clip
+uniform float f_refr[FUSE_MAX];  // its refraction, output px
 varying vec2 v_out;
 varying vec2 v_fb;
 
-// A box of half size `half_size` centred on the shape, corners of radius `r`: signed
-// distance in output pixels, negative inside.
-float sdf_box(vec2 px, vec2 half_size, float r) {
-    vec2 q = abs(px - rect.xy - rect.zw * 0.5);
+// A box of half size `half_size` centred on `c`, corners superellipse quadrants of radius `r`
+// and exponent `e`: signed distance in output pixels, negative inside.
+float box_sdf(vec2 px, vec2 c, vec2 half_size, float r, float e) {
+    vec2 q = abs(px - c);
     vec2 inner = half_size - vec2(r);
     if (q.x > inner.x && q.y > inner.y && r > 0.0) {
         vec2 k = (q - inner) / r;
-        return (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * r;
+        return (pow(pow(k.x, e) + pow(k.y, e), 1.0 / e) - 1.0) * r;
     }
     return max(q.x - half_size.x, q.y - half_size.y);
+}
+// The same, centred on the shape and with its corners' exponent.
+float sdf_box(vec2 px, vec2 half_size, float r) {
+    return box_sdf(px, rect.xy + rect.zw * 0.5, half_size, r, exponent);
 }
 // The shape's signed distance.
 float sdf(vec2 px) { return sdf_box(px, rect.zw * 0.5, radius); }
@@ -122,6 +138,81 @@ float shape_sdf(vec2 px) {
     return d;
 }
 
+// ── Fusion ──────────────────────────────────────────────────────────────────
+// The polynomial smooth minimum (Inigo Quilez's): min(a, b) where they are k apart or more,
+// lowered by up to k/4 where they are close — so two outlines less than k/2 apart are joined
+// by a bridge, and the join is round.
+float smin(float a, float b, float k) {
+    float h = max(k - abs(a - b), 0.0) / max(k, 1e-4);
+    return min(a, b) - h * h * k * 0.25;
+}
+// How wide a shape's bevel is: as for one shape alone (main's lens_w).
+float bevel_width(vec4 r, float refr) {
+    return max(min(min(refr / 0.231, min(r.z, r.w) * 0.5), LAB_ADD(12, 80.0) * px_scale), 1.0);
+}
+// The group's silhouette moved inward: each member's outline moved `s` of its own bevel width
+// inward, corners rounder by as much (`inset_sdf`, member by member), all joined by the smooth
+// union. At s = 0 it is the silhouette itself, each member cut by its clip there (the clip is a
+// straight cut, not a contour: a single shape's bevel ignores it too). A member fading out
+// withdraws, by up to the union's width, so a bridge to it recedes as it goes.
+// ⚠️ The arrays are read only with the loop's index: in GLSL ES 1.00 a fragment shader may
+// index a uniform array with nothing else.
+float fused_sdf(vec2 px, float s) {
+    float d = 1e6;
+    for (int i = 0; i < FUSE_MAX; i++) {
+        if (float(i) >= f_count) break;
+        vec4 r = f_rect[i];
+        vec4 p = f_par[i];
+        float t = s * bevel_width(r, f_refr[i]);
+        vec2 h = r.zw * 0.5 - vec2(t);
+        float di = box_sdf(px, r.xy + r.zw * 0.5, h, max(min(p.x + LAB_MUL(11, t), min(h.x, h.y)), 0.0), p.y);
+        vec4 c = f_clip[i];
+        if (c.z > 0.0 && s <= 0.0) {
+            vec2 cq = abs(px - c.xy - c.zw * 0.5) - c.zw * 0.5;
+            di = max(di, max(cq.x, cq.y));
+        }
+        d = smin(d, di + (1.0 - p.z) * f_k, f_k);
+    }
+    return d;
+}
+// What of the members a pixel takes — its bevel's width, its opacity, its ink — each member
+// weighted by how near it is, the nearest whole, one f_k further away nothing.
+vec3 fused_blend(vec2 px) {
+    float dmin = 1e6;
+    for (int i = 0; i < FUSE_MAX; i++) {
+        if (float(i) >= f_count) break;
+        vec4 r = f_rect[i];
+        dmin = min(dmin, box_sdf(px, r.xy + r.zw * 0.5, r.zw * 0.5, f_par[i].x, f_par[i].y));
+    }
+    vec3 acc = vec3(0.0);
+    float wsum = 0.0;
+    for (int i = 0; i < FUSE_MAX; i++) {
+        if (float(i) >= f_count) break;
+        vec4 r = f_rect[i];
+        vec4 p = f_par[i];
+        float di = box_sdf(px, r.xy + r.zw * 0.5, r.zw * 0.5, p.x, p.y);
+        float w = clamp(1.0 - (di - dmin) / max(f_k, 1.0), 0.0, 1.0);
+        acc += w * vec3(bevel_width(r, f_refr[i]), p.z, p.w);
+        wsum += w;
+    }
+    return acc / max(wsum, 1e-4);
+}
+// How deep into the group's bevel a point is, as a fraction of it: the s whose contour passes
+// through it.
+float fused_depth(vec2 px) {
+    if (fused_sdf(px, 0.0) >= 0.0) return 0.0;
+    if (fused_sdf(px, 1.0) < 0.0) return 1.0;
+    float lo = 0.0;
+    float hi = 1.0;
+    for (int i = 0; i < 12; i++) {
+        float m = 0.5 * (lo + hi);
+        if (fused_sdf(px, m) < 0.0) lo = m; else hi = m;
+    }
+    return 0.5 * (lo + hi);
+}
+// The silhouette, whichever it is.
+float silhouette(vec2 px) { return fused > 0.5 ? fused_sdf(px, 0.0) : shape_sdf(px); }
+
 uniform float noise;
 uniform float brightness;
 float noise_hash(vec2 p) {
@@ -135,11 +226,15 @@ vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
 vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
 
 void main() {
-    float d = shape_sdf(v_out);
-    // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased.
+    float d = silhouette(v_out);
+    // A fusion group's width of bevel, opacity and ink at this pixel (fused_blend); a single
+    // shape's are its own.
+    vec3 fb = fused > 0.5 ? fused_blend(v_out) : vec3(0.0, opacity, ink_dark);
+    // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased. (A fusion
+    // group's members are cut inside `fused_sdf`; its clip uniform is none.)
     vec2 cin = min(v_out - clip.xy, clip.xy + clip.zw - v_out);
     float clipped = clamp(min(cin.x, cin.y) + 0.5, 0.0, 1.0);
-    float cov = clamp(0.5 - d, 0.0, 1.0) * clipped * opacity;
+    float cov = clamp(0.5 - d, 0.0, 1.0) * clipped * fb.y;
     if (cov <= 0.0) discard;
     if (glass < 0.5) {
         vec4 c = backdrop(vec2(0.0));
@@ -153,8 +248,8 @@ void main() {
 
     // ── Refractive glass ──────────────────────────────────────────────────
     // The outward normal, from the distance field.
-    vec2 n = vec2(shape_sdf(v_out + vec2(1.0, 0.0)) - shape_sdf(v_out - vec2(1.0, 0.0)),
-                  shape_sdf(v_out + vec2(0.0, 1.0)) - shape_sdf(v_out - vec2(0.0, 1.0)));
+    vec2 n = vec2(silhouette(v_out + vec2(1.0, 0.0)) - silhouette(v_out - vec2(1.0, 0.0)),
+                  silhouette(v_out + vec2(0.0, 1.0)) - silhouette(v_out - vec2(0.0, 1.0)));
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0);
     float inside = max(-d, 0.0);
     // Refraction: the pane's edge is a convex bevel, a quarter circle W wide and W thick,
@@ -187,10 +282,23 @@ void main() {
     // a curve of its own, not the corner's"); then every contour keeping the corner's own
     // radius, whose normal still turned at once along the diagonal — a fold from each corner,
     // "like a flap" (owner, 2026-10-05).
-    float lens_in = lens_depth(v_out, lens_w);
-    vec2 ln = vec2(inset_sdf(v_out + vec2(1.0, 0.0), lens_in) - inset_sdf(v_out - vec2(1.0, 0.0), lens_in),
-                   inset_sdf(v_out + vec2(0.0, 1.0), lens_in) - inset_sdf(v_out - vec2(0.0, 1.0), lens_in));
-    ln = length(ln) > 0.0001 && lens_in < lens_w ? normalize(ln) : vec2(0.0);
+    float lens_in;
+    vec2 ln;
+    if (fused > 0.5) {
+        // A fusion group: the bevel of the whole silhouette, the members' contours joined at
+        // every depth, so it bends round a bridge as it does round a corner.
+        lens_w = fb.x;
+        float sd = fused_depth(v_out);
+        lens_in = sd * lens_w;
+        ln = vec2(fused_sdf(v_out + vec2(1.0, 0.0), sd) - fused_sdf(v_out - vec2(1.0, 0.0), sd),
+                  fused_sdf(v_out + vec2(0.0, 1.0), sd) - fused_sdf(v_out - vec2(0.0, 1.0), sd));
+        ln = length(ln) > 0.0001 && sd < 1.0 ? normalize(ln) : vec2(0.0);
+    } else {
+        lens_in = lens_depth(v_out, lens_w);
+        ln = vec2(inset_sdf(v_out + vec2(1.0, 0.0), lens_in) - inset_sdf(v_out - vec2(1.0, 0.0), lens_in),
+                  inset_sdf(v_out + vec2(0.0, 1.0), lens_in) - inset_sdf(v_out - vec2(0.0, 1.0), lens_in));
+        ln = length(ln) > 0.0001 && lens_in < lens_w ? normalize(ln) : vec2(0.0);
+    }
     // The profile, then the strength, as the owner set them in the glass lab (2026-10-05,
     // preset "OK 2"): the quarter circle's height to the 5th power — the bend gathers at the
     // edge and the inside stays nearly flat — and three times Snell's displacement.
@@ -236,7 +344,7 @@ void main() {
     // ENCODED luma with it darkened a white backdrop to 10:1 where 4.5:1 was asked (owner-
     // caught 2026-10-01: "with a white background everything looks dark").
     vec3 c;
-    if (ink_dark > 0.5) {
+    if (fb.z > 0.5) {
         // Dark content (the ink event): the backdrop under it is bright everywhere, so the
         // glass stops darkening it for white content — a light veil instead.
         c = mix(bg, ink_tint, alpha_min);

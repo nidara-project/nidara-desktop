@@ -180,7 +180,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // the one surface every panel hangs from). It had a layer of its own until then,
   // so that its modes could blur the bar's capsules under them; that is glass on
   // glass, which the reference material itself avoids. A mode that grows over the
-  // bar's row takes the groups it covers out of the way instead (`rowNeighbours`
+  // bar's row takes the glass it covers out of the way instead (`coveredBy`
   // below, MorphRevealer's companions). One surface is also what lets the capsule
   // and a mode melt into one silhouette on Hyalo, which draws each surface's glass
   // on its own.
@@ -1315,9 +1315,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // the CC and the clock, in that order (barGroup, capsule.ts; owner, 2026-09-26).
   const rightGroup = barGroup()
   right.append(rightGroup.widget)
-  // An island mode wide enough to cover a group fades it out instead of laying its
-  // glass over it (ActivityIsland → coveredBy).
-  island.setRowNeighbours(() => [leftGroup.widget, rightGroup.widget])
+  // An island mode big enough to cover a group or the banners fades them out instead of
+  // laying its glass over them (ActivityIsland → coveredBy).
+  island.setNeighbours(() => [leftGroup.widget, rightGroup.widget, popups])
 
   const timeContent = new Gtk.Box({ margin_start: BAR_TEXT_PAD, margin_end: BAR_TEXT_PAD })
   const timeLabel = new Gtk.Label({ label: "...", css_classes: ["bar-time-label"] })

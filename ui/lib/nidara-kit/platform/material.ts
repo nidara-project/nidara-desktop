@@ -123,6 +123,9 @@ export interface MaterialSource {
     /** The shadow under this surface's glass, or null: none. Asked only where the
      *  compositor paints the glass. */
     scrim?(native: Gtk.Native): ScrimParams | null
+    /** How close, in logical px, two panes of one fusion group (`trackFusionGroup`) must be
+     *  to join; 0 or null: no fusion. Asked only where the compositor paints the glass. */
+    fusion?(native: Gtk.Native): number | null
     blur(native: Gtk.Native): { size: number, passes: number }
     onChange(cb: () => void): () => void
 }
@@ -156,6 +159,7 @@ type Shim = {
     material_set_scrim?(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number,
         regionEdge?: number): void
     material_add_scrim_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number): void
+    material_set_fusion?(surface: Gdk.Surface, group: number, spacing: number): void
 }
 
 const SHIM_MODULE = "gi://NidaraWl"   // in a variable on purpose: see VisibleRegion.ts
@@ -205,6 +209,34 @@ const inkGroups = new WeakMap<Gtk.Widget, number>()
  */
 export function trackInkGroup(widget: Gtk.Widget): void {
     if (!inkGroups.has(widget)) inkGroups.set(widget, nextInkId++)
+}
+
+/** Fusion groups (`trackFusionGroup`): the container → its group's token, the token → its id. */
+const fusionGroups = new WeakMap<Gtk.Widget, object>()
+const fusionIds = new WeakMap<object, number>()
+let nextFusionId = 1
+
+/**
+ * Every pane of glass inside `widget` is drawn with the others of `group` as ONE silhouette:
+ * the smooth union of their outlines (#705 step 2). Two of them closer than the material's
+ * `fusion` spacing are joined by a bridge that grows as they approach and breaks as they
+ * part, and the refraction and the rim follow the whole. `group` lets containers that are not
+ * one subtree fuse together (the island's capsule row and its modes); by default the
+ * container is its own group. Read when the surface sends its glass. ⚠️ One surface: Hyalo
+ * draws each surface's glass on its own, so panes on two surfaces never fuse.
+ */
+export function trackFusionGroup(widget: Gtk.Widget, group: object = widget): void {
+    fusionGroups.set(widget, group)
+    if (!fusionIds.has(group)) fusionIds.set(group, nextFusionId++)
+}
+
+/** A pane's fusion group: its nearest `trackFusionGroup` container's, or 0 (none). */
+function fusionIdOf(e: Entry): number {
+    for (let w: Gtk.Widget | null = e.widget; w; w = w.get_parent()) {
+        const g = fusionGroups.get(w)
+        if (g) return fusionIds.get(g) ?? 0
+    }
+    return 0
 }
 
 /** A pane's ink group: its nearest `trackInkGroup` container's, or its own. */
@@ -493,7 +525,7 @@ function sortByTree(list: Entry[]) {
 
 type Rect = { x: number, y: number, w: number, h: number }
 type Placed = { x: number, y: number, w: number, h: number, r: number, e: number, o: number, clip: Rect | null,
-    pointer?: GlassPointer }
+    pointer?: GlassPointer, fusion?: number }
 
 /** Past this many boxes a pane sends one, their union: a stricter measure, never a looser one. */
 const MAX_INK_BOXES_PER_PANE = 8
@@ -636,6 +668,8 @@ function flush(native: Gtk.Native, st: NativeState) {
         if (nested(e, native)) continue
         const p = place(e, native, inkWanted !== null && !e.clientPaints())
         if (p.shapes.length && e.clientPaints()) anyClient = true
+        const fusion = fusionIdOf(e)
+        for (const s of p.shapes) s.fusion = fusion
         placed.push(...p.shapes)
         for (const box of p.boxes) inkBoxes.push({ id: inkIdOf(e), box })
     }
@@ -650,19 +684,25 @@ function flush(native: Gtk.Native, st: NativeState) {
     const ink = paints ? inkWanted : null
     const scrim = paints && shim.material_set_scrim ? source?.scrim?.(native) ?? null : null
     const regions = scrim && glass ? placeScrimRegions(native, scrim, glass, placed) : []
+    // Fusion only where the compositor paints the glass: blurred only, every pane is its own.
+    const spacing = paints && shim.material_set_fusion ? source?.fusion?.(native) ?? 0 : 0
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
         s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],
         s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
-            round(s.pointer.width)]]), paints && glass, blur,
+            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0]), paints && glass, blur, spacing,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
         scrim, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff)])])
     if (key === st.last) return
     st.last = key
     shim.material_begin(surface)
+    let fusing = 0
     for (const s of placed) {
+        // `set_fusion` holds for the shapes added after it, until the next one.
+        const f = spacing > 0 ? s.fusion ?? 0 : 0
+        if (f !== fusing) { shim.material_set_fusion?.(surface, f, spacing); fusing = f }
         const p = s.pointer
         if (p && shim.material_add_shape_pointed) {
             const c = s.clip ?? { x: 0, y: 0, w: 0, h: 0 }

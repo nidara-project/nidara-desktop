@@ -36,6 +36,16 @@ pub struct Shape {
     pub clip: Option<[f64; 4]>,
     /// A pointer spliced into one side (a tooltip's or a menu's), same coordinates.
     pub pointer: Option<Pointer>,
+    /// The fusion group it belongs to (`set_fusion`): one silhouette with the group's others.
+    pub fusion: Option<Fusion>,
+}
+
+/// A fusion group (`set_fusion`): its shapes are drawn as one pane of glass, the smooth union
+/// of their outlines; two closer than `spacing` (logical px) are joined.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fusion {
+    pub group: u32,
+    pub spacing: f64,
 }
 
 /// A pointer from a shape's edge: its base centred on `base`, `width` wide, to `tip`; a
@@ -118,6 +128,8 @@ pub struct MaterialState {
     /// the shadow under the glass, and the regions shapes share one in.
     pub scrim: Option<Scrim>,
     pub scrim_regions: Vec<ScrimRegion>,
+    /// What `set_fusion` last said: the group the next shapes join.
+    pub fusing: Option<Fusion>,
 }
 
 impl MaterialState {
@@ -517,13 +529,14 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.shapes.clear();
                     m.ink_boxes.clear();
                     m.scrim_regions.clear();
+                    m.fusing = None;
                 });
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
                 self.pending(|m| {
                     m.shapes.push(Shape {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
-                        pointer: None,
+                        pointer: None, fusion: m.fusing,
                     })
                 });
             }
@@ -541,6 +554,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
+                            fusion: m.fusing,
                         })
                     });
                 }
@@ -561,11 +575,18 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                 });
                 if opacity > 0.0 {
                     self.pending(|m| {
+                        // A pointer's join is its own union: it fuses with nothing else.
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
+                            fusion: if pointer.is_some() { None } else { m.fusing },
                         })
                     });
                 }
+            }
+            Request::SetFusion { group, spacing } => {
+                self.pending(|m| {
+                    m.fusing = (group != 0 && spacing > 0.0).then_some(Fusion { group, spacing });
+                });
             }
             Request::SetBlur { size, passes } => {
                 self.pending(|m| {
@@ -688,6 +709,7 @@ mod tests {
     fn shapes_in_a_region_share_its_shadow_and_the_rest_get_their_own() {
         let shape = |x: f64, y: f64| Shape {
             x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
+            fusion: None,
         };
         let mut m = MaterialState {
             shapes: vec![shape(10.0, 10.0), shape(900.0, 100.0), shape(900.0, 200.0)],

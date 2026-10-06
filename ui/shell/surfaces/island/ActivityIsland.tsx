@@ -13,6 +13,7 @@ import RecordingIsland, { RECORDING_GLASS } from "./RecordingIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities, DOTS_ID } from "./IslandActivities"
 import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
+import { trackFusionGroup } from "../../../lib/nidara-kit/platform/material"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -398,25 +399,30 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // ── Mode registry ────────────────────────────────────────────────────────
     const modes = new Map<string, { mode: IslandMode, revealer: MorphRevealer }>()
 
-    // The bar's glass groups beside the island (the bar hands them over:
-    // `setRowNeighbours`). A mode grows from the capsule's top edge, i.e. over the
-    // bar's own row, and one wide enough to reach a group would put glass on glass —
-    // the group's capsule sharp under the mode's pane, since one surface's glass is
-    // drawn under ALL of its content. The reference material avoids exactly that
-    // (owner, #708 point 3): the groups it covers get out of the way, fading with
-    // the capsule's content. Today only the overview is that wide.
-    let rowNeighbours: () => Gtk.Widget[] = () => []
+    // The bar's glass a mode can grow over (the bar hands it over: `setNeighbours`) — its
+    // groups beside the island and the notification banners below them. A mode grows from the
+    // capsule's top edge, i.e. over the bar's own row, and one big enough to reach any of them
+    // would put glass on glass: their panes sharp under the mode's, since one surface's glass is
+    // drawn under ALL of its content. The reference material avoids exactly that (owner, #708
+    // point 3): what it covers gets out of the way, fading with the capsule's content. Today
+    // only the overview is that big.
+    let neighbours: () => Gtk.Widget[] = () => []
     const coveredBy = (revealer: MorphRevealer): Gtk.Widget[] => {
         const parent = revealer.get_parent()
         if (!parent) return []
-        // The mode is not laid out yet when it opens; centred, its natural width is
-        // where it will land.
+        // The mode is not laid out yet when it opens: centred, at its natural size, from its
+        // top margin is where it will land.
         const [, natW] = revealer.measure(Gtk.Orientation.HORIZONTAL, -1)
+        const [, natH] = revealer.measure(Gtk.Orientation.VERTICAL, natW)
         const x0 = (parent.get_width() - natW) / 2, x1 = x0 + natW
-        return rowNeighbours().filter(n => {
+        const y0 = revealer.margin_top, y1 = y0 + natH
+        return neighbours().filter(n => {
             if (!n.get_mapped()) return false
             const [ok, b] = n.compute_bounds(parent)
+            // Inclusive vertically: the banners' box is 0 tall while it holds none, and a
+            // banner arriving under an open mode must not show through it either.
             return ok && b.get_x() < x1 && b.get_x() + b.get_width() > x0
+                && b.get_y() <= y1 && b.get_y() + b.get_height() >= y0
         })
     }
 
@@ -524,14 +530,23 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         needsKeyboard: true,
     })
 
+    // ONE silhouette on Hyalo (#705 step 2): the capsule, its chips and whatever a mode morphs
+    // through are one fusion group — the chips join the capsule by a bridge, and the capsule
+    // growing into a mode takes the fading chips into its shape instead of passing over them.
+    // A mode's glass at rest is in the group too; nothing else of the island is lit then.
+    const fusion = {}
+    trackFusionGroup(capsule, fusion)
+    trackFusionGroup(indicatorRow, fusion)
+    for (const { revealer } of modes.values()) trackFusionGroup(revealer, fusion)
+
     const active = () => modes.get(status.island_mode) ?? null
 
     return {
         /** Compact state — the bar appends this to its center box. */
         capsule,
-        /** The bar's glass groups beside the island, which a wide mode fades out
-         *  rather than lay its glass over (see `coveredBy`). */
-        setRowNeighbours: (get: () => Gtk.Widget[]) => { rowNeighbours = get },
+        /** The bar's glass a mode can grow over — its groups, the banners — which a mode
+         *  big enough fades out rather than lay its glass over (see `coveredBy`). */
+        setNeighbours: (get: () => Gtk.Widget[]) => { neighbours = get },
         /** The indicator chips — appended to the same centre box, right of the
          *  capsule, so the GROUP is what centres on the monitor. */
         indicatorRow,

@@ -160,6 +160,38 @@ out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10
 layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
 dock and the island to declare theirs.
 
+### Fusion: a group of panes drawn as one silhouette (#705 step 2, 2026-10-06)
+
+Panes of one **fusion group** are drawn as ONE pane of glass: the smooth union of their
+outlines (Inigo Quilez's polynomial `smin`, width k = twice the group's spacing), so two of them
+closer than the spacing are joined by a bridge that grows as they approach and breaks as they
+part, and one bevel, one refraction and one rim follow the whole silhouette. The shell declares
+it with **`trackFusionGroup(container, group?)`** (`material.ts`, the same container pattern as
+`trackInkGroup`): every pane inside the container fuses with the others of `group`; the spacing
+is the material's `fusion` (`glass-material.ts`, live in `glass-tuning.conf`, 0 = off). On the
+wire it is `set_fusion(group, spacing)`, inside v1: it holds for the shapes added AFTER it, until
+the next one — not "the last shape", because the library drops a shape whose opacity is 0 and the
+request would then land on the shape before it.
+
+The island is the first group (owner, 2026-10-06): its capsule, its chips and its modes —
+so the chips join the capsule by a bridge at rest, and the capsule growing into a mode takes the
+fading chips into its shape. A member fading out also WITHDRAWS from the union (by up to k), so a
+bridge to a disappearing chip recedes instead of pointing at nothing.
+
+How Hyalo draws it: `glass.rs` keeps a group in one `GlassElement` whatever lies between its
+members; `glass_gl::draw_plan` paints a group as ONE draw where its first member was (up to
+`FUSE_MAX` = 8 members, the shader's arrays; past it the rest are drawn shape by shape); the
+shader's `fused_sdf(px, s)` is the members' bevel contours at depth `s` (a fraction of each one's
+own bevel width), joined by the same union, and the bevel depth is a bisection on it — so the
+bevel bends round a bridge as it does round a corner. Width of bevel, opacity and ink at a pixel
+are blended from the members by how near each is (`fused_blend`). A shape with a pointer fuses
+with nothing (its join is its own union). ⚠️ GLSL ES 1.00 lets a fragment shader index a uniform
+array only with a LOOP index: the member loops read `f_rect[i]` inline, never through a helper
+taking `int i` (Mesa accepts the helper, a stricter driver does not).
+
+`nidara-hyalo msg layers` reports each surface's groups (`glass.fusion`: the shapes each one
+joins); the smoke requires the bar to declare one.
+
 ### The glass lab (`scripts/dev/glass-lab/`)
 
 Where the material is tuned with the owner, and where it EVOLVES (owner, 2026-10-05: "it has to

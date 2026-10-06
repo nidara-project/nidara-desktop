@@ -178,6 +178,7 @@ impl GlassElement {
                 pointer: None,
                 refraction: 0.0,
                 px_scale: 1.0,
+                fusion: None,
             }],
             offset: offset as f32,
             passes: passes as usize,
@@ -334,6 +335,7 @@ fn groups(
             ink_dark: false,
             refraction: m.refraction_of(s) * scale.x,
             px_scale: scale.x,
+            fusion: s.fusion.map(|f| (f.group, 2.0 * f.spacing * scale.x)),
             pointer: s.pointer.and_then(|p| {
                 let at = |q: [f64; 2]| {
                     let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));
@@ -355,7 +357,9 @@ fn groups(
     }
     for a in 0..shapes.len() {
         for b in a + 1..shapes.len() {
-            if grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
+            // A fusion group is one silhouette: one element, whatever lies between its shapes.
+            let fused = shapes[a].fusion.is_some() && shapes[a].fusion.map(|f| f.0) == shapes[b].fusion.map(|f| f.0);
+            if fused || grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }

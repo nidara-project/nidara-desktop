@@ -302,6 +302,13 @@ impl Hyalo {
                         glass: crate::protocols::material::current(l.wl_surface()).map(|m| super::GlassInfo {
                             shapes: m.state.shapes.len(),
                             compositor_paints: m.state.glass.is_some(),
+                            fusion: {
+                                let mut groups: std::collections::BTreeMap<u32, usize> = Default::default();
+                                for f in m.state.shapes.iter().filter_map(|s| s.fusion) {
+                                    *groups.entry(f.group).or_default() += 1;
+                                }
+                                groups.into_values().collect()
+                            },
                             refraction: if m.state.glass.is_some() {
                                 m.state.shapes.iter().map(|s| (m.state.refraction_of(s) * 10.0).round() / 10.0).collect()
                             } else {

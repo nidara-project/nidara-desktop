@@ -235,5 +235,20 @@
       <arg name="height" type="fixed"/>
       <arg name="falloff" type="fixed"/>
     </request>
+    <request name="set_fusion">
+      <description summary="pending: the shapes added from now on fuse into one silhouette">
+        The shapes added after this request, until the next set_fusion, belong
+        to fusion group `group` (a number of the client's choosing; 0 = none).
+        The shapes of one group are drawn as ONE pane of glass: the smooth
+        union of their outlines. Two of them closer than `spacing` (logical
+        px) are joined by a bridge that grows as they approach and breaks as
+        they part, and one refraction and one rim follow the whole
+        silhouette. A shape fading out (its opacity) also withdraws from the
+        union, so a bridge to it recedes as it goes. A shape with a pointer
+        fuses with nothing. Reset to 0 by clear_shapes.
+      </description>
+      <arg name="group" type="uint"/>
+      <arg name="spacing" type="fixed" summary="logical px: closer than this, two shapes join"/>
+    </request>
   </interface>
 </protocol>
