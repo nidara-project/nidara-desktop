@@ -495,6 +495,25 @@ checkbutton:disabled {
         &:hover, &:selected, &:active {
             .nidara-sidebar-item { color: var(--nidara-text); }
         }
+
+        // The page you are on is the ACCENT, at full strength, with the accent's ink
+        // (owner, 2026-10-06). It was `--nidara-state-selected`, the accent at 22 %,
+        // which over the dark sidebar read as a muddy blue, nearly grey. Declared
+        // after `nidara-row-states`, so the pointer over the chosen row does not grey it.
+        &:selected {
+            background-color: var(--nidara-accent);
+            .nidara-sidebar-item { color: var(--nidara-accent-fg); }
+        }
+        // The accent ring would vanish on the accent fill: in the accent's ink instead.
+        &:selected:focus-visible { outline-color: var(--nidara-accent-fg); }
+    }
+
+    // A window that is not the one you are typing into keeps its place, in GREY: the
+    // accent on the chosen row is for the active window. GTK sets :backdrop on every
+    // widget of an inactive toplevel, so this needs no signal of ours.
+    &:backdrop > row:selected {
+        background-color: var(--nidara-surface-active);
+        .nidara-sidebar-item { color: var(--nidara-text); }
     }
 
     // Thematic divider: a thin title-less line between groups.
@@ -1033,15 +1052,20 @@ dropdown popover {
             @include nidara-row-states;
         }
 
-        // GTK highlights the pointed item via :selected on ITS node (hover-select), and
-        // the trigger already shows the current value — so deepen it like a hover instead
-        // of drawing the accent (accent is for PERSISTENT selection).
+        // The row about to be chosen takes the ACCENT, at full strength, with the
+        // accent's ink — the same as the shell's menus (`.nidara-menu-row`, owner
+        // 2026-10-06): an open dropdown IS a menu, and it was the one menu left on the
+        // neutral hover. GTK marks the pointed item with :selected on ITS node
+        // (hover-select), so that is a hover here too, never the chosen value — the
+        // chosen value is the check at the row's end (`NidaraDropDown`).
         > row:selected .nidara-dropdown-item,
         > row:hover .nidara-dropdown-item {
-            background-color: var(--nidara-surface-hover);
+            background-color: var(--nidara-accent);
+            color: var(--nidara-accent-fg);
+            label { color: var(--nidara-accent-fg); }
         }
         > row:active .nidara-dropdown-item {
-            background-color: var(--nidara-surface-active);
+            background-color: color-mix(in srgb, var(--nidara-accent) 85%, black 15%);
         }
 
         // ONE focus ring, on the box we own. Tabbing through the list drew TWO concentric

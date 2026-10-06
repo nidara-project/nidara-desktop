@@ -411,7 +411,7 @@ window.nidara-settings-window {
                 border-radius: $nidara-radius-sm;
                 border: 2px solid transparent;
                 background-color: var(--nidara-surface);
-                transition: border-color 0.15s ease, transform 0.15s ease;
+                transition: border-color 0.15s ease;
 
                 picture {
                     border-radius: calc(#{$nidara-radius-sm} - 2px);
@@ -419,9 +419,11 @@ window.nidara-settings-window {
                     background-color: var(--nidara-surface);
                 }
 
+                // The border alone marks the pointer. It also grew 4 % with a
+                // `transform: scale`, which moves a clickable's picture away from where
+                // it takes clicks (commandment 9) — gone 2026-10-06.
                 &:hover {
                     border-color: var(--nidara-surface-strong);
-                    transform: scale(1.04);
                 }
 
                 &.active {

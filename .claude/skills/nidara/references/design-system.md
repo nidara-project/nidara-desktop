@@ -3969,10 +3969,23 @@ like default GTK". Two consumers today, same pattern (see `surfaces/dock/DockIte
   accent fill with `--nidara-accent-fg` on its text and `.nd-icon`s, pressed a little darker;
   keyboard focus (`:focus-visible`) shows the same fill instead of a ring. The neutral hover
   (`nidara-row-states`, white at 12 %) barely read in a menu over glass. It is the ONE place the
-  accent marks a hover rather than a selection, and it is the shell's menus only — every
+  accent marks a hover rather than a selection, and it is MENUS only — every
   `.nidara-menu-row` (system, dock, app grid, tray, window, CC context menu, clipboard, network
-  lists). The kit's dropdown and Settings keep the accent for selection; Settings (its sidebar's
-  selected icons among others) is to be decided apart.
+  lists) and, since the Settings review the same day, every **dropdown's list**
+  (`.nidara-dropdown-item`, kit — so Settings, the installer, the greeter and the lock): an open
+  dropdown is a menu. There the chosen value is a **check at the row's end**
+  (`NidaraSelectionCheck`, in the row's ink), marked by `NidaraDropDown` from
+  `drop.get_selected_item()` — never from the list item's `selected`, which GTK's popup moves
+  with the pointer (hover-select).
+- **The Settings sidebar's chosen row is the accent, filled** (owner, 2026-10-06), icon and label
+  in `--nidara-accent-fg`; in a window that is not active (`:backdrop`) it turns the neutral
+  `--nidara-surface-active` with the normal ink. It was `--nidara-state-selected` (accent at
+  22 %), a muddy blue over the dark sidebar. Every other selected row keeps that tint. Rule in the
+  kit (`.nidara-sidebar`), so any `NidaraSidebar` gets it.
+- ⚠️ **White on the accent is OWED a decision** (tech-debt #113): `--nidara-accent-fg` is white
+  for all nine accents, and white on yellow (1.8:1), green (2.4) and orange (2.6) does not read.
+  Measured and laid out for the owner 2026-10-06 (black ink on those three / a deeper accent
+  under text / leave it); undecided — do not pick one silently.
 - **Destructive rows** are `menuRow({ danger: true })` → `.nidara-menu-row.danger-action`: the
   NORMAL text colour (no red lettering — owner, 2026-08-03: red text in a flat list reads as an
   error before anything went wrong) and a red-TINTED hover, **never a filled red row**. The
