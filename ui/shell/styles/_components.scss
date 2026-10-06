@@ -51,6 +51,25 @@
     padding: 7px 12px;
     border-radius: $nidara-radius-sm;
     @include nidara-row-states;
+
+    // The row you are about to choose takes the ACCENT, at full strength, and its text
+    // and icons the accent's own ink (owner, 2026-10-06). The neutral hover of every
+    // other row in this DE (`nidara-row-states`, white at 12 %) barely showed in a menu
+    // over glass. This is the one place the accent marks a hover rather than a
+    // selection — the shell's menus: system, dock, tray, window, CC, app grid. The
+    // KIT's dropdown and Settings keep the rule, and are reviewed apart.
+    // Keyboard focus is the same "this one", so it shows the same fill instead of a
+    // ring. A full-colour app icon (no `.nd-icon`) keeps its colours.
+    &:hover:not(:disabled),
+    &:focus-visible {
+        background-color: var(--nidara-accent);
+        color: var(--nidara-accent-fg);
+        outline: none;
+        label, .nd-icon { color: var(--nidara-accent-fg); }
+    }
+    &:active:not(:disabled) {
+        background-color: color-mix(in srgb, var(--nidara-accent) 85%, black 15%);
+    }
 }
 
 
@@ -62,10 +81,18 @@
    is actually being aimed. Beats nidara-row-states on specificity so the neutral
    hover doesn't win. This class was applied in three places (CC context menu
    "Remove", the system menu confirm, and now the clipboard) while being defined
-   NOWHERE — those rows had been rendering as ordinary rows. */
+   NOWHERE — those rows had been rendering as ordinary rows.
+   Since the rows' hover became the accent (2026-10-06) a destructive row keeps its
+   red TINT and the normal ink — never a filled red row (design-system.md → "Context
+   menus") — so it beats the accent rule above on specificity, focus included. */
 .nidara-menu-row.danger-action {
-    &:hover  { background-color: rgba(var(--nidara-danger-rgb), 0.14); }
-    &:active { background-color: rgba(var(--nidara-danger-rgb), 0.22); }
+    &:hover:not(:disabled),
+    &:focus-visible {
+        background-color: rgba(var(--nidara-danger-rgb), 0.14);
+        color: var(--nidara-text);
+        label, .nd-icon { color: var(--nidara-text); }
+    }
+    &:active:not(:disabled) { background-color: rgba(var(--nidara-danger-rgb), 0.22); }
 }
 
 .nidara-menu-label {

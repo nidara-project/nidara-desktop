@@ -42,7 +42,7 @@ gtk4-layer-shell ⇒ no bar, no dock, nothing in the log). See `references/archi
 primitives are used, despite the `.tsx` extensions. Read `references/architecture.md` ("There is no
 JSX in this repo") before writing a widget; a JSX-shaped contribution will not match anything here.
 
-The aesthetic is "Nidara literal": heavy-blur glass capsules with a 1px inner white edge, soft outer shadow, top sheen; the accent color is used **only for active/selected state**.
+The aesthetic is "Nidara literal": heavy-blur glass capsules with a 1px inner white edge, soft outer shadow, top sheen; the accent color is used **only for active/selected state** — with one exception, the shell's menus, whose row under the pointer is filled with it (design-system.md → "Context menus").
 
 It is also **AI-native by design**: this skill ships *inside* the repo so that any user's agent can extend, customize, and fix their own desktop — and propose globally-useful improvements back upstream. If you're helping a user with their installed copy rather than the project itself, start at `references/agent-contribution.md`.
 

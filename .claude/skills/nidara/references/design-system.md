@@ -3965,11 +3965,20 @@ like default GTK". Two consumers today, same pattern (see `surfaces/dock/DockIte
   separators, dim section/submenu headers — section labels render as headers too). It activates
   actions on the passed group directly. The bubble DrawingArea + rows box are built ONCE (stable host,
   rows rebuilt per show) so the Theme subscription isn't leaked per show.
-- **Destructive rows** are `menuRow({ danger: true })` → `.nidara-menu-row.danger-action`: red
-  LABEL and a red-tinted hover, **never a filled red row**. The shell's red budget is a small
-  mark or a destructive edge; a solid red bar in a flat menu reads as an alert rather than as one
-  option among several. It beats `nidara-row-states` on specificity so the neutral hover can't
-  win. *(Was applied in three places while being defined nowhere — CC context menu "Remove" and
+- **The row under the pointer takes the ACCENT, at full strength** (owner, 2026-10-06): the
+  accent fill with `--nidara-accent-fg` on its text and `.nd-icon`s, pressed a little darker;
+  keyboard focus (`:focus-visible`) shows the same fill instead of a ring. The neutral hover
+  (`nidara-row-states`, white at 12 %) barely read in a menu over glass. It is the ONE place the
+  accent marks a hover rather than a selection, and it is the shell's menus only — every
+  `.nidara-menu-row` (system, dock, app grid, tray, window, CC context menu, clipboard, network
+  lists). The kit's dropdown and Settings keep the accent for selection; Settings (its sidebar's
+  selected icons among others) is to be decided apart.
+- **Destructive rows** are `menuRow({ danger: true })` → `.nidara-menu-row.danger-action`: the
+  NORMAL text colour (no red lettering — owner, 2026-08-03: red text in a flat list reads as an
+  error before anything went wrong) and a red-TINTED hover, **never a filled red row**. The
+  shell's red budget is a small mark or a destructive edge; a solid red bar in a flat menu reads
+  as an alert rather than as one option among several. It beats the accent hover on specificity,
+  focus included. *(Was applied in three places while being defined nowhere — CC context menu "Remove" and
   the system menu's confirm action had been rendering as ordinary rows.)*
 - **Destructive confirmation in a popover surface is INLINE, never a dialog** — the row swaps in
   place for a cancel/confirm pair (`.nidara-confirm-secondary` / `.nidara-confirm-primary`, both
