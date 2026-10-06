@@ -5,11 +5,15 @@ import { SHELL_ROOT } from "../../core/Paths"
 export interface BarSettings {
     showAppTitle: boolean
     launcherIcon: string
+    /** A click on an Activity Island chip: the chip always flows into the capsule; this also
+     *  opens its panel once it has (off: the panel waits for a click on the capsule). */
+    chipOpensPanel: boolean
 }
 
 const DEFAULTS: BarSettings = {
     showAppTitle: true,
     launcherIcon: "nidara",
+    chipOpensPanel: false,
 }
 
 // Only KNOWN keys are read back. Two visibility toggles were retired in 0.6.0,

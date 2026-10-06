@@ -174,7 +174,7 @@ the next one — not "the last shape", because the library drops a shape whose o
 request would then land on the shape before it.
 
 The island is the first group (owner, 2026-10-06): its capsule, its chips and its modes —
-so the chips join the capsule by a bridge at rest, and the capsule growing into a mode takes the
+so the chips join the capsule while the island swaps (the pulse below), and the capsule growing into a mode takes the
 fading chips into its shape. A member fading out also WITHDRAWS from the union (by up to k), so a
 bridge to a disappearing chip recedes instead of pointing at nothing.
 
@@ -188,6 +188,16 @@ are blended from the members by how near each is (`fused_blend`). A shape with a
 with nothing (its join is its own union). ⚠️ GLSL ES 1.00 lets a fragment shader index a uniform
 array only with a LOOP index: the member loops read `f_rect[i]` inline, never through a helper
 taking `int i` (Mesa accepts the helper, a stricter driver does not).
+
+**The pulse** (`pulseFusion(group, widget, ms)`, owner 2026-10-07): at rest the spacing is the
+material's `fusion` = 2, so the island's pieces, 4 px apart, are each their own pane — at 8 they
+were joined by a thin neck whose rims nearly met ("as if they tend to touch"). While the group
+CHANGES, its spacing rises to `fusionPulse` = 18 and back (half a sine over `ms`) and the pieces
+join for that instant. 18 is not a feel: for two 36 px pieces 4 px apart, the union at the gap's
+middle reaches the pieces' full height exactly there, one capsule, without bulging past their
+edges (the polynomial `smin` inflates by k/4 = spacing/2 where the two distances are equal). The
+spacing travels per group on the wire (`set_fusion` already carried it), so a pulse is
+client-side only. The island pulses on a front change and on a chip born, gone or changed.
 
 `nidara-hyalo msg layers` reports each surface's groups (`glass.fusion`: the shapes each one
 joins); the smoke requires the bar to declare one.

@@ -126,6 +126,9 @@ export interface MaterialSource {
     /** How close, in logical px, two panes of one fusion group (`trackFusionGroup`) must be
      *  to join; 0 or null: no fusion. Asked only where the compositor paints the glass. */
     fusion?(native: Gtk.Native): number | null
+    /** The spacing a fusion group reaches at the height of a `pulseFusion`; null: the
+     *  group's own. */
+    fusionPulse?(native: Gtk.Native): number | null
     blur(native: Gtk.Native): { size: number, passes: number }
     onChange(cb: () => void): () => void
 }
@@ -228,6 +231,41 @@ let nextFusionId = 1
 export function trackFusionGroup(widget: Gtk.Widget, group: object = widget): void {
     fusionGroups.set(widget, group)
     if (!fusionIds.has(group)) fusionIds.set(group, nextFusionId++)
+}
+
+/** The groups changing shape right now (`pulseFusion`): id → how far into the pulse, 0..1. */
+const pulses = new Map<number, { start: number, ms: number, boost: number }>()
+
+/**
+ * For `ms`, the panes of `group` reach for each other: their spacing rises from the material's
+ * `fusion` to its `fusionPulse` and back (half a sine), so panes that sit apart at rest are
+ * joined by a bridge while the group changes — the island trading what its capsule and its
+ * chips show — and part again when it settles. `widget` is any mapped widget of the group's
+ * surface: its frames carry the pulse. A pulse asked during another goes on from where that
+ * one is, rising again, so a quick second change does not drop the bridge.
+ */
+export function pulseFusion(group: object, widget: Gtk.Widget, ms: number): void {
+    const id = fusionIds.get(group)
+    if (!id || ms <= 0) return
+    const now = GLib.get_monotonic_time() / 1000
+    const running = pulses.get(id)
+    if (running) {
+        const t = Math.asin(Math.min(1, running.boost)) / Math.PI
+        running.start = now - t * ms
+        running.ms = ms
+        return
+    }
+    const p = { start: now, ms, boost: 0 }
+    pulses.set(id, p)
+    widget.add_tick_callback(() => {
+        const t = (GLib.get_monotonic_time() / 1000 - p.start) / p.ms
+        p.boost = t >= 1 ? 0 : Math.sin(Math.PI * Math.max(0, t))
+        widget.queue_draw()
+        if (t < 1) return GLib.SOURCE_CONTINUE
+        pulses.delete(id)
+        return GLib.SOURCE_REMOVE
+    })
+    widget.queue_draw()
 }
 
 /** A pane's fusion group: its nearest `trackFusionGroup` container's, or 0 (none). */
@@ -686,13 +724,16 @@ function flush(native: Gtk.Native, st: NativeState) {
     const regions = scrim && glass ? placeScrimRegions(native, scrim, glass, placed) : []
     // Fusion only where the compositor paints the glass: blurred only, every pane is its own.
     const spacing = paints && shim.material_set_fusion ? source?.fusion?.(native) ?? 0 : 0
+    const peak = spacing > 0 ? Math.max(spacing, source?.fusionPulse?.(native) ?? spacing) : 0
+    const spacingOf = (group: number) => round(spacing + (peak - spacing) * (pulses.get(group)?.boost ?? 0))
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
         s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],
         s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
-            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0]), paints && glass, blur, spacing,
+            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0, spacing > 0 && s.fusion ? spacingOf(s.fusion) : 0]),
+        paints && glass, blur, spacing,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
         scrim, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff)])])
     if (key === st.last) return
@@ -702,7 +743,7 @@ function flush(native: Gtk.Native, st: NativeState) {
     for (const s of placed) {
         // `set_fusion` holds for the shapes added after it, until the next one.
         const f = spacing > 0 ? s.fusion ?? 0 : 0
-        if (f !== fusing) { shim.material_set_fusion?.(surface, f, spacing); fusing = f }
+        if (f !== fusing) { shim.material_set_fusion?.(surface, f, f ? spacingOf(f) : spacing); fusing = f }
         const p = s.pointer
         if (p && shim.material_add_shape_pointed) {
             const c = s.clip ?? { x: 0, y: 0, w: 0, h: 0 }

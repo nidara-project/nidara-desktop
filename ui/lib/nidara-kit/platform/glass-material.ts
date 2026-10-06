@@ -34,6 +34,8 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
  *   fusion                                               how close two panes of one fusion
  *                                                        group join, logical px (0 = off)
+ *   fusionPulse                                          the spacing a group reaches while it
+ *                                                        changes (the island's swaps)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -119,9 +121,17 @@ const DEFAULTS = {
     tintLimit: 0.25,
     // Fusion (#705 step 2, `trackFusionGroup`): two panes of one group closer than this many
     // logical px are joined by a bridge, one silhouette. The island's chips sit 4 px from its
-    // capsule, so at 8 they are joined at rest. A starting point, to be judged with the owner
-    // on screen; 0 turns fusion off.
-    fusion: 8,
+    // capsule: at 8 they were joined at rest by a thin neck whose rims nearly met (owner,
+    // 2026-10-06: "they look as if they tend to touch"); at 2 each one is its own pane at rest
+    // ("the separation is perfect") and they still fuse as they come together. 0: off.
+    fusion: 2,
+    // The spacing a group reaches for an instant while it changes (`pulseFusion`: the island
+    // swapping what its capsule and its chips show), there and back over the change — the
+    // panes join by a bridge while their content trades places, and part again at rest.
+    // 18: the island's pieces are 36 px tall and 4 px apart, so at the pulse's height the
+    // bridge is as tall as they are — one capsule for an instant — without bulging past
+    // their edges (owner, 2026-10-07: "the bridge should get to form one single capsule").
+    fusionPulse: 18,
 }
 
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
@@ -230,6 +240,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
         ink: (_native: Gtk.Native) => inkParams(),
         scrim: (_native: Gtk.Native) => scrimParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
+        fusionPulse: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusionPulse ?? DEFAULTS.fusionPulse),
         blur: (native: Gtk.Native) => {
             const panels = tuning.blur ?? h.panelBlur()
             // A tooltip or a menu is a popover: a surface of its own, blurred more.

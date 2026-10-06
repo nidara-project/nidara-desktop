@@ -430,6 +430,19 @@ export function registerConfigEntries() {
         // check-icon-name format as every other item there.
     })
 
+    registerConfig("bar.island.chipOpensPanel", {
+        desc: "Clicking an Activity Island chip moves it into the capsule; true also opens its panel once it has (false: a second click, on the capsule, opens it).",
+        type: "boolean",
+        get: () => barConfig.get("chipOpensPanel"),
+        set: v => barConfig.set("chipOpensPanel", v as boolean),
+        subscribe: (apply) => {
+            apply(barConfig.get("chipOpensPanel"))
+            return barConfig.subscribe("chipOpensPanel", apply)
+        },
+        // No `ui` yet: its row belongs to the Activity Island's own entry in the Top bar
+        // page, which the owner is designing (2026-10-07).
+    })
+
     // ── Input: Mouse ──────────────────────────────────────────────────────
     registerConfig("input.mouse.speed", {
         desc: "Pointer sensitivity (-1.0 to 1.0).",
