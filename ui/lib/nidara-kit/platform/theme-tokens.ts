@@ -306,7 +306,6 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-accent: ${accent};`,
     `  --nidara-accent-rgb: ${r}, ${g}, ${b};`,
     `  --nidara-accent-fg: #ffffff;`,
-    `  --nidara-accent-60: rgba(${r}, ${g}, ${b}, 0.6);`,
     `  --nidara-accent-30: rgba(${r}, ${g}, ${b}, 0.3);`,
     `  --nidara-accent-10: rgba(${r}, ${g}, ${b}, 0.1);`,
     `  --nidara-bg: rgba(${bg}, ${bgAlpha});`,
