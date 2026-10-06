@@ -3,7 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type NidaraTooltipText } from "../../../lib/nidara-kit"
 import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
@@ -16,29 +16,35 @@ import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
 // and AppTitle.
 export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 
-// The bar's geometry, on the design system's 4px scale (owner, 2026-09-25):
-//   4 above a capsule · 32 capsule (8 + a 16px icon + 8) · 4 to the windows below
-//   (Hyprland's gaps_out) · 4 between capsules · 4 at the two ends (BAR_MARGIN).
-// Inside a GROUP (barGroup below, 2026-09-26): 4 from the glass allocation to the
-// first item · each item its content + 8 a side (BAR_ITEM_PAD, common/widget-kit/bar.ts),
-// items touching · the hover pill 4 in from the top and bottom (BAR_VEIL_INSET).
+// The bar's geometry, on the design system's 4px scale (owner, 2026-09-25; the
+// capsule and its pills redone 2026-10-06, "B" in the bar mockup):
+//   4 above a capsule · 36 capsule (its glass is drawn 2 in: 32 visible, radius 16) ·
+//   4 to the windows below · 4 between capsules · 4 at the two ends (BAR_MARGIN).
+// Inside a GROUP (barGroup below, 2026-09-26) ONE rhythm, BAR_PILL_EDGE = 4: the
+// hover/open pill keeps 4 from the visible glass on every side and 4 from the next
+// pill. So the pill is 24 tall (32 − 2×4, radius 12, concentric with the glass), and
+// it clears Hyalo's rim, which fades in over 3.2 px from the edge — at 2 px from it,
+// as until 2026-10-06, the pill sat on the band of light. Items no longer touch:
+// with the pills touching, an open item and a hovered neighbour (or edit mode, every
+// pill at once) read as one bar. Each item is its content plus its own air:
+// BAR_ITEM_PAD round an icon, BAR_TEXT_PAD round text (common/widget-kit/bar.ts).
 
 // The strip the bar reserves (its exclusive zone): the capsule plus the 4px above it.
 // The side dock's window height is the monitor minus this, so it lives here and not
-// in Bar.tsx. 40 until 2026-09-25, with the capsule 8px from the edge.
-export const BAR_H = 36
+// in Bar.tsx. 40 until 2026-09-25 with the capsule 8px from the edge, 36 until
+// 2026-10-06 with a 32px capsule; 40 again for a 36px one 4px from the edge.
+export const BAR_H = 40
 
 // A bar capsule's height. NOT set anywhere as a size: the row is BAR_H tall and
 // `.bar-centerbox` gives it `margin-top: 4px`, which GTK takes out of the row's own
-// height_request — so what is left for the capsule is 32. It lives here for the ones
+// height_request — so what is left for the capsule is 36. It lives here for the ones
 // that must MATCH it: the island's indicator chips are this wide so that `perfect`'s
 // h/2 radius makes them circles. Change BAR_H, the CSS margin and this together.
-export const BAR_CAPSULE_H = 32
+export const BAR_CAPSULE_H = 36
 
 // The gap between two pieces of bar glass that sit side by side — since the groups
-// (2026-09-26) that is only the island's row: its capsule and its chips. Inside a
-// group items touch, and nothing else stands next to another capsule. (8 until
-// 2026-09-25.)
+// (2026-09-26) that is only the island's row: its capsule and its chips. Nothing else
+// stands next to another capsule. (8 until 2026-09-25.)
 export const BAR_GAP = 4
 
 // From the screen's left and right edges to the bar's two ends. It IS Hyprland's
@@ -55,18 +61,25 @@ export const BAR_MARGIN = 4
 // never changes; what marks hover and open is a pill INSIDE it, under the one item —
 // the way GNOME's top bar and a segmented control both do it.
 
-// From the group's allocation to its first/last item. The glass itself is painted
-// GLASS_INSET (2) in from the allocation, so the end items' pills sit 2px inside the
-// visible edge — the same 2px they keep from the top and bottom (BAR_VEIL_INSET).
-export const BAR_GROUP_PAD = 4
+// The hover/open pill's distance from the visible glass, on every side, and from the
+// next pill: the group's one rhythm (see the geometry at the top of this file).
+export const BAR_PILL_EDGE = 4
 
-// The hover/open pill's distance from the item's top and bottom: 32 − 2×4 = 24 tall,
-// radius 12 — concentric with the glass, which is 28 visible (radius 14) at 2px in.
-export const BAR_VEIL_INSET = 4
+// From the group's allocation to its first/last item. The glass is painted
+// GLASS_INSET (2) in from its allocation, so the end pills sit BAR_PILL_EDGE inside
+// the VISIBLE edge — the same distance they keep from the top and bottom.
+export const BAR_GROUP_PAD = GLASS_INSET + BAR_PILL_EDGE
+
+// The hover/open pill's distance from the item's top and bottom: 36 − 2×6 = 24 tall,
+// radius 12 — concentric with the glass, which is 32 visible (radius 16) at 2px in.
+export const BAR_VEIL_INSET = GLASS_INSET + BAR_PILL_EDGE
+
+// Between two items in a group, so that two lit pills never touch.
+export const BAR_ITEM_GAP = BAR_PILL_EDGE
 
 /** One piece of bar glass holding a row of items. Append items to `box`. */
 export function barGroup(): { widget: Gtk.Widget, box: Gtk.Box } {
-    const box = new Gtk.Box({ margin_start: BAR_GROUP_PAD, margin_end: BAR_GROUP_PAD })
+    const box = new Gtk.Box({ spacing: BAR_ITEM_GAP, margin_start: BAR_GROUP_PAD, margin_end: BAR_GROUP_PAD })
     const widget = SquircleContainer({
         child: box, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar",
         shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, perfect: true,
@@ -107,8 +120,8 @@ status.connect("notify::bar-edit-mode", () => {
 
 /** An item in a bar group: its content over a Cairo pill that shows only on hover
  *  (`GLASS_STATE_MIX.hover`) or while its panel is open (`.open`, which wins). The
- *  pill is the item's whole width — content + BAR_ITEM_PAD a side — and 24 tall; the
- *  whole 32px column is the hit target. Same ink and alphas the capsule's veil used,
+ *  pill is the item's whole width — its content plus that content's own air
+ *  (BAR_ITEM_PAD / BAR_TEXT_PAD) — and 24 tall; the whole 36px column is the hit target. Same ink and alphas the capsule's veil used,
  *  painted over the group's glass instead of folded into a capsule's own fill: the
  *  same pixels. */
 const itemKeys = new WeakMap<Gtk.Widget, () => void>()

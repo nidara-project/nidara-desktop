@@ -183,9 +183,11 @@ the details. ⚠️ GTK sets `:focus-visible` along the whole focus CHAIN, so a 
 states draws the ring around a focused child too — the current-network box turns it off.
 
 **Bar content carries its own side air.** In the bar a widget is an ITEM of the right-hand group,
-touching its neighbours, and the hover/open pill is drawn round whatever the content measures
+4 px from its neighbours, and the hover/open pill is drawn round whatever the content measures
 (design-system.md → "Bar groups"). `makeBarIcon`/`makeBarExpandable` already put `BAR_ITEM_PAD`
-(8) on each side; a hand-built `buildBarContent` must do the same, or its pill hugs the glyph.
+(7) on each side of the icon, and `BAR_TEXT_PAD` (12) where it ends in text; a hand-built
+`buildBarContent` must do the same, or its pill hugs the glyph or its text runs into the pill's
+curved end.
 
 Everything else on `AtomicWidget` is optional and documented at its field in
 `common/widget-kit/contract.ts`: `buildBarExpanded`, `buildCCDetail`, `buildSettings` (a

@@ -9,7 +9,7 @@ import { GAME_WORKSPACE } from "../../core/game-session-logic"
 import status from "../../core/Status"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
-import { BAR_ITEM_PAD } from "../../common/widget-kit"
+import { BAR_TEXT_PAD } from "../../common/widget-kit"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule,
 // anchored under the given widget. Injected by Bar (same pattern as Tray).
@@ -28,7 +28,7 @@ export interface AppTitleHandle {
   setMaxWidth: (px: number, immediate?: boolean) => void
 }
 
-const PAD_PX = 2 * BAR_ITEM_PAD // margin_start + margin_end
+const PAD_PX = 2 * BAR_TEXT_PAD // margin_start + margin_end
 
 /**
  * What the capsule says. A window: its app's name (`appNameForWindow`). No window: the
@@ -81,8 +81,8 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): AppTitleHan
   const appName = new Gtk.Label({
     label: "—",
     css_classes: ["bar-app-name"],
-    margin_start: BAR_ITEM_PAD,
-    margin_end: BAR_ITEM_PAD,
+    margin_start: BAR_TEXT_PAD,
+    margin_end: BAR_TEXT_PAD,
   })
 
   const updateLabel = () => {

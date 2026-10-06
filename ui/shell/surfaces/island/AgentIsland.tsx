@@ -3,7 +3,7 @@ import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
-import { PANEL_W } from "../../common/widget-kit"
+import { BAR_ICON_SIZE, PANEL_W } from "../../common/widget-kit"
 import { NidaraButton, NidaraScrolled } from "../../../lib/nidara-kit"
 import { makePulseDots, pulseOpacity } from "../../common/PulseDots"
 import { uiIcon } from "../../core/Icons"
@@ -62,7 +62,7 @@ function statusWord(): string {
 
 // ── Compact form ─────────────────────────────────────────────────────────────
 export function AgentCompact(opts: { ghost?: boolean } = {}): Gtk.Widget {
-    const glyph = new Gtk.Image({ gicon: uiIcon("nd-ai"), pixel_size: 16, css_classes: ["nd-icon", "agent-glyph"], valign: Gtk.Align.CENTER })
+    const glyph = new Gtk.Image({ gicon: uiIcon("nd-ai"), pixel_size: BAR_ICON_SIZE, css_classes: ["nd-icon", "agent-glyph"], valign: Gtk.Align.CENTER })
     const label = new Gtk.Label({ css_classes: ["agent-compact-label"], valign: Gtk.Align.CENTER, label: statusWord() })
     // Ghost twins carry NO margins (MorphRevealer gotcha — snapshot_child already
     // applies the child's own margin offset). halign CENTER so the pill resizes

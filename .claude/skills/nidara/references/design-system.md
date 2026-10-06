@@ -4168,34 +4168,49 @@ isn't replicated by the clone, so opening from hover snaps the glass to its rest
 frame 0. A future island mode (player, agent) is a
 `registerMode` call plus a new id exported from `Status.ts` — not a new Status field.
 
-### Bar capsule geometry: height and gaps (2026-09-25)
+### Bar capsule geometry: height and gaps (2026-09-25, redone 2026-10-06)
 
-Every number is on the design system's **4px scale** (`$space-*`), by the owner's rule:
+Every number is on the design system's **4px scale** (`$space-*`), by the owner's rule. The
+2026-10-06 numbers are "B" from a mockup the owner chose them in (measured live first: pills
+touching, a pill 2 px from the visible edge — on Hyalo's 3.2 px rim — text running into the
+pill's curved ends, icons at three sizes):
 
 | | px | where |
 |---|---|---|
 | above a capsule (screen edge) | 4 | `.bar-centerbox` `margin-top` |
-| capsule height | 32 (28 of it visible glass) | `BAR_CAPSULE_H` (derived, see below) |
-| strip the bar reserves | 36 | `BAR_H` (exclusive zone) |
+| capsule height | 36 (32 of it visible glass, radius 16) | `BAR_CAPSULE_H` (derived, see below) |
+| strip the bar reserves | 40 | `BAR_H` (exclusive zone) |
 | capsule → windows below | 4 | Hyprland `gaps_out` (8 until 2026-09-29) |
 | between two capsules (only the island and its chips, since the groups) | 4 | `BAR_GAP` |
-| group allocation → its first/last item | 4 | `BAR_GROUP_PAD` |
-| every icon in the bar | 18 | `BAR_ICON_SIZE` (the launcher's mark +2) |
-| each side of an item's content | 8 | `BAR_ITEM_PAD` → icon-only item 34 wide |
-| hover/open pill ↔ item top and bottom | 4 | `BAR_VEIL_INSET` → pill 24 tall, radius 12 |
+| hover/open pill ↔ visible glass, every side, AND ↔ the next pill | 4 | `BAR_PILL_EDGE` — the group's one rhythm |
+| group allocation → its first/last item | 6 | `BAR_GROUP_PAD` = `GLASS_INSET` 2 + `BAR_PILL_EDGE` |
+| hover/open pill ↔ item top and bottom | 6 | `BAR_VEIL_INSET` (same sum) → pill 24 tall, radius 12 |
+| between two items in a group | 4 | `BAR_ITEM_GAP` = `BAR_PILL_EDGE` (the group box's `spacing`) |
+| every icon in the bar AND the island | 18 | `BAR_ICON_SIZE` (the launcher's mark and the island's chips included) |
+| each side of an icon | 7 | `BAR_ITEM_PAD` → icon-only item and its pill 32 wide |
+| each side of text (title, clock, a revealed label) | 12 | `BAR_TEXT_PAD` = the pill's radius |
 | each side of a STANDALONE capsule's content (the island's compact forms) | 16 | `BAR_PILL_PAD` |
 | the two ends (system menu, clock) | 4 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` = `gaps_out` (8 until 2026-09-29) |
 
-`BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET` live in
-`surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_ICON_SIZE` and `BAR_PILL_PAD` in
-`common/widget-kit/bar.ts` so widgets can reach them.
+`BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_PILL_EDGE`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET`,
+`BAR_ITEM_GAP` live in `surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_TEXT_PAD`, `BAR_ICON_SIZE`
+and `BAR_PILL_PAD` in `common/widget-kit/bar.ts` so widgets can reach them.
+
+**Why these (2026-10-06).** One distance, 4, between a pill and everything round it — the glass
+on every side and the next pill — so the hover is never cramped against either, and the pill
+(24, radius 12) clears the rim, which fades in over 3.2 px from the edge. The pills stopped
+touching because an open item next to a hovered one, or edit mode lighting every pill, read as
+one bar. Text gets the pill's radius as its air, or its first and last letter sit in the curve.
+None of it fits a 28 px glass with an 18 px icon, so the capsule grew 4 (and with it the strip:
+every window 4 px lower) — the owner's call between this and keeping 32 with the pill on the rim.
 
 **Why the icons are 18 (2026-09-27, owner: "slightly small" at 16).** The reference is macOS with
 OUR CAPSULE as its whole bar — the air above the capsule has no counterpart there. macOS draws
 16 pt icons in a 24 pt bar; our visible glass is 28, and 16 × 28/24 ≈ 18.7. The hover pill gives
 the same answer: Apple's 16 in a ~22 highlight is 73 %, and 73 % of our 24 px pill is 17.5. The
 bar's height does not move (18 in the 24 pill leaves 3 above and below); each icon item is 2 px
-wider. The island's compact forms keep 16 — they are laid out on `BAR_PILL_PAD`, not on this.
+wider. Since 2026-10-06 the island's chips and compact glyphs are 18 too (they were 16, and the
+launcher's mark 20): one icon size across the bar and the island.
 Text already sits at the matching size: macOS's 13 pt is ~15 px here, and the clock inherits the
 system font (Inter 11 pt ≈ 14.7 px) — which also means it is NOT on the fixed `$fs-*` ramp, a
 small debt of its own.
@@ -4209,19 +4224,25 @@ separators). `barGroup()` builds the glass (`SquircleContainer` with the bar par
 `hoverLift`); `barItem({child, onClick?, ...barOpen(…)})` builds an item: its content over a
 Cairo pill painted ONLY on hover or while its panel is open. The group's glass never changes.
 
-- **The widget owns its air, the group owns none.** Items touch; each content carries
-  `BAR_ITEM_PAD` a side, and the pill is the item's WHOLE width. A widget's `buildBarContent`
-  that forgets the pad gets a pill hugging its glyph.
+- **The widget owns its air, the group owns only the gaps.** Items sit `BAR_ITEM_GAP` (4) apart;
+  each content carries its own air — `BAR_ITEM_PAD` round an icon, `BAR_TEXT_PAD` round text —
+  and the pill is the item's WHOLE width. A widget's `buildBarContent` that forgets the pad gets
+  a pill hugging its glyph. `makeBarExpandable` is an icon item collapsed and a text item
+  revealed: the extra `BAR_TEXT_PAD − BAR_ITEM_PAD` rides on the label, inside the revealer.
 - **Concentric by construction.** The glass is painted `GLASS_INSET` (2) in from its allocation,
-  so a 32 row shows 28 of glass (radius 14); the pill sits 4 in from the allocation on all
-  sides that face the glass (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends) → 2px
-  from the visible edge, radius 12. A segmented control's thumb, which is the prior art.
+  so a 36 row shows 32 of glass (radius 16); the pill sits 6 in from the allocation on all
+  sides that face the glass (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends) → 4px
+  from the visible edge, radius 12, past the rim's 3.2. A segmented control's thumb, which is the
+  prior art.
 - **The veil is the capsule's old one, moved.** Same ink (`GLASS_SPECULAR` / `GLASS_TINT.dark`)
   at the same `GLASS_STATE_MIX` alphas, painted OVER the group's glass instead of folded into a
   capsule's own fill — the same pixels.
-- **The whole 32px column is the hit target**, not just the 24px pill.
-- **Width arithmetic** (`measureOverflow`, `syncLeftBudget`): an item costs its own width and
-  nothing else; each group costs `2 × BAR_GROUP_PAD` once. There is no gap to multiply any more.
+- **The whole 36px column is the hit target**, not just the 24px pill (the 4px gaps between items
+  are not).
+- **Width arithmetic** (`measureOverflow`, `syncLeftBudget`): an item costs its own width plus the
+  `BAR_ITEM_GAP` before it, and each group costs `2 × BAR_GROUP_PAD − BAR_ITEM_GAP` once (its first
+  item has no gap before it). The ordered row (`bar-optional-widgets`) is hidden while empty, or
+  the group's spacing would put a gap on each side of nothing.
 - **The CC item is an ordinary icon item** since 2026-09-27. It was 36 while a 12px lane held the
   AI-control dot; the dot left the bar and the lane with it. The privacy mark planned for that
   button (state-and-ipc.md) brings a second icon back — size it then, not now.
@@ -4248,8 +4269,8 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
 - `BAR_GAP` was one constant for every row until the groups (2026-09-26); now only the island's
   capsule and chips stand side by side as separate glass, so it is theirs (`CHIP_GAP`).
 - `BAR_PILL_PAD` is the side air of a STANDALONE capsule — only the island's compact forms since
-  the groups. Every item in a group takes `BAR_ITEM_PAD` (8); the distro icon is 18px, so it
-  takes ITEM_PAD − 1.
+  the groups. Every icon item in a group takes `BAR_ITEM_PAD` (7), the distro mark included (it
+  was 20px with ITEM_PAD − 1 until 2026-10-06); text items take `BAR_TEXT_PAD` (12).
 - How it got here, same day (owner): first 36 tall / 6 gap / 18 sides — liked live, but 36, 18, 6
   and 10 are off the 4px scale, and 8 + 16 + 8 is the capsule. So the capsule went back to 32 and
   the gain moved OUT of the strip instead: 4px from the screen edge instead of 8, with the strip
