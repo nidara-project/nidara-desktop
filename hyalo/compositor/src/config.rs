@@ -52,6 +52,22 @@ pub struct Config {
     /// What Hyalo animates (wm/minimize.rs, wm/motion.rs). Settings → Accessibility → Reduce
     /// motion writes `enabled`.
     pub animations: AnimationsConfig,
+    /// X11 apps (xwayland.rs).
+    pub xwayland: XwaylandConfig,
+}
+
+/// X11 apps: Xwayland, with Hyalo as its window manager (xwayland.rs). Read when Hyalo starts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct XwaylandConfig {
+    /// Off, no X11 app runs: Steam and most games among them.
+    pub enabled: bool,
+}
+
+impl Default for XwaylandConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
 }
 
 /// What Hyalo animates, and how long it takes.
@@ -794,6 +810,9 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
     }
     if old.cursor != new.cursor {
         state.backend.reload_cursors(&new.cursor);
+        // X11 apps draw their own cursors from the theme in their resources (xwayland.rs).
+        state.update_x11_resources();
+        state.set_x11_cursor();
     }
     if old.binds != new.binds {
         // Validated by `load`, so this cannot fail here.

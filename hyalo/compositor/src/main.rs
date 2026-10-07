@@ -14,6 +14,7 @@ mod config;
 mod control;
 mod crash;
 mod cursor;
+mod focus;
 mod handlers;
 mod input;
 mod idle;
@@ -30,6 +31,7 @@ mod shell;
 mod shortcuts;
 mod state;
 mod wm;
+mod xwayland;
 
 use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 
@@ -139,6 +141,8 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
         std::env::set_var("XDG_SESSION_TYPE", "wayland");
         std::env::remove_var("DISPLAY");
     }
+    // Before the autostart: `uwsm finalize` exports DISPLAY to the session's services.
+    xwayland::start(state);
     tracing::info!(socket = ?state.socket_name, "listening");
     ipc::server::start(state);
     config::watch(state);

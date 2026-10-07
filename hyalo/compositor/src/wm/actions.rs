@@ -292,8 +292,13 @@ impl Hyalo {
             Action::Spawn(cmd) => crate::spawn(&cmd),
             Action::CloseWindow(w) => {
                 let id = self.any_target(w)?;
-                if let Some(t) = self.wm.get(id).and_then(|m| m.window.toplevel()) {
-                    t.send_close();
+                if let Some(w) = self.wm.get(id).map(|m| m.window.clone()) {
+                    if let Some(t) = w.toplevel() {
+                        t.send_close();
+                    } else if let Some(x) = w.x11_surface() {
+                        // WM_DELETE_WINDOW when it takes it; otherwise its client is cut off.
+                        let _ = x.close();
+                    }
                 }
             }
             Action::FocusWindow(id) => {

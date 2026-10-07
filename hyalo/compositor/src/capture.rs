@@ -248,7 +248,7 @@ impl ImageCopyCaptureHandler for Hyalo {
 pub fn draw_window(renderer: &mut GlesRenderer, window: &Window, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
     let geo = window.geometry();
     let size = geo.size.to_f64().to_physical_precise_round(scale);
-    let surface = window.toplevel().ok_or("not a toplevel")?.wl_surface().clone();
+    let surface = crate::wm::surface_of(window).ok_or("no surface yet")?;
     // A window on a hidden workspace has not been drawn since its last commits: its buffers
     // become textures here, as they would when shown.
     import_surface_tree(renderer, &surface).map_err(|e| format!("{e:?}"))?;

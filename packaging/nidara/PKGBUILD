@@ -566,9 +566,10 @@ package_nidara-hyalo() {
   # Ours, plus what Smithay's examples brought (MIT) and Hyprland's focus-grab protocol
   # (BSD-3-Clause, in protocols/hyprland-focus-grab-v1.xml).
   license=(GPL-3.0-or-later MIT BSD-3-Clause)
-  # pango + cairo: the title bar's text (render/title_bar.rs).
+  # pango + cairo: the title bar's text (render/title_bar.rs). xorg-xwayland: X11 apps — Steam
+  # and most games — with Hyalo as their window manager (xwayland.rs, #683).
   depends=("nidara-desktop=$pkgver-$pkgrel" uwsm libinput seatd libdisplay-info libxkbcommon mesa
-           systemd-libs awww pango cairo)
+           systemd-libs awww pango cairo xorg-xwayland)
 
   cd "$srcdir/nidara-desktop-$pkgver"
   install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"

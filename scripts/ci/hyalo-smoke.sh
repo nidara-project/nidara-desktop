@@ -44,7 +44,7 @@ phase_deps() {
         nodejs npm gjs \
         wayland-protocols hyprland-protocols wlr-protocols \
         jq librsvg dconf file procps-ng \
-        grim slurp wl-clipboard wf-recorder ffmpeg \
+        grim slurp wl-clipboard wf-recorder ffmpeg xorg-xwayland \
         ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji
     ldconfig
 }
@@ -594,6 +594,12 @@ phase_run() {
         || { log "FAIL: menus"; cat /tmp/hyalo/popup.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "menus OK ($(grep -c '^ok' /tmp/hyalo/popup.log) of 2: the keyboard back, closed under an input method)"
+    # X11 apps (#683): Hyalo's own Xwayland, Hyalo its window manager. A window with its own
+    # pid, the keyboard, the clipboard both ways, and an X11 menu that keeps drawing.
+    nidara-hyalo msg do workspace 1 >/dev/null
+    X11_LOG=/tmp/hyalo/x11 "$REPO/scripts/ci/hyalo-x11-check.sh" >/tmp/hyalo/x11.log 2>&1 \
+        || { log "FAIL: X11 apps"; cat /tmp/hyalo/x11.log; exit 1; }
+    log "X11 apps OK ($(grep -c '^ok' /tmp/hyalo/x11.log) of 5: Xwayland, a window, keys, the clipboard, a menu)"
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null

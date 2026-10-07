@@ -256,6 +256,10 @@ pub struct Wm {
     pub closing_taken: Vec<WindowId>,
     /// Outputs going from one workspace to another (wm/motion.rs).
     pub slides: Vec<motion::Slide>,
+    /// X11 override-redirect windows shown (menus, tooltips, a game's splash), bottom first:
+    /// never managed — placed where their client says, drawn over the windows and the bar
+    /// (xwayland.rs).
+    pub x11_overrides: Vec<smithay::xwayland::X11Surface>,
 }
 
 impl Wm {
@@ -274,10 +278,22 @@ impl Wm {
     pub fn by_surface(&self, surface: &WlSurface) -> Option<&Managed> {
         self.windows
             .iter()
-            .find(|m| m.window.toplevel().is_some_and(|t| t.wl_surface() == surface))
+            .find(|m| m.window.wl_surface().is_some_and(|s| *s == *surface))
     }
 
     /// The windows shown on a workspace — not a minimized one, nor its dialogs.
+    /// The surface of the window `window` belongs to: an xdg toplevel's parent, an X11
+    /// window's `WM_TRANSIENT_FOR`.
+    pub fn parent_of(&self, window: &Window) -> Option<WlSurface> {
+        if let Some(t) = window.toplevel() {
+            return t.parent();
+        }
+        let of = window.x11_surface()?.is_transient_for()?;
+        self.windows
+            .iter()
+            .find_map(|m| m.window.x11_surface().filter(|x| x.window_id() == of).and_then(|x| x.wl_surface()))
+    }
+
     pub fn on_workspace(&self, ws: i32) -> impl Iterator<Item = &Managed> {
         self.windows.iter().filter(move |m| m.workspace == ws && m.mapped && !self.is_hidden(m))
     }
@@ -388,12 +404,36 @@ fn awaits_configure(window: &Window) -> bool {
     toplevel_data(window, |d| !d.pending_configures().is_empty()).unwrap_or(false)
 }
 
+/// An xdg toplevel's app id; an X11 window's `WM_CLASS` class (what Hyprland calls its class:
+/// `steam_app_<id>` for a game Steam runs, `Steam` for Steam — its `StartupWMClass`).
 pub fn app_id(window: &Window) -> String {
+    if let Some(x) = window.x11_surface() {
+        return x.class();
+    }
     toplevel_data(window, |d| d.app_id.clone()).flatten().unwrap_or_default()
 }
 
 pub fn title(window: &Window) -> String {
+    if let Some(x) = window.x11_surface() {
+        return x.title();
+    }
     toplevel_data(window, |d| d.title.clone()).flatten().unwrap_or_default()
+}
+
+/// The window's process: a Wayland client's, by its socket; an X11 window's as the X server
+/// knows it — the X resource extension (the kernel's answer for its connection), else the
+/// `_NET_WM_PID` it declares — never Xwayland's, which is Hyalo's own child.
+pub fn window_pid(window: &Window, dh: &smithay::reexports::wayland_server::DisplayHandle) -> Option<i32> {
+    if let Some(x) = window.x11_surface() {
+        return x.get_client_pid().ok().or_else(|| x.pid()).map(|p| p as i32);
+    }
+    let surface = window.toplevel()?.wl_surface().clone();
+    dh.get_client(smithay::reexports::wayland_server::Resource::id(&surface)).ok()?.get_credentials(dh).ok().map(|c| c.pid)
+}
+
+/// The window's surface: an X11 window's once Xwayland has associated it.
+pub fn surface_of(window: &Window) -> Option<WlSurface> {
+    window.wl_surface().map(|s| s.into_owned())
 }
 
 /// Whether `window` gets Hyalo's title bar: it asked for server-side decorations (or left the
@@ -402,6 +442,11 @@ pub fn title(window: &Window) -> String {
 /// is its box, so it took the answer and dropped its own frame. A client told server-side that
 /// draws its own frame anyway keeps a shadow margin, and gets no second bar over it.
 fn wants_title_bar(window: &Window, predict: bool) -> bool {
+    // An X11 window that does not say it draws its own frame (Motif hints) expects the window
+    // manager's: xterm, an old toolkit's dialog. Steam and games say they draw their own.
+    if let Some(x) = window.x11_surface() {
+        return !x.is_decorated() && !x.is_override_redirect();
+    }
     let Some(t) = window.toplevel() else { return false };
     let surface = t.wl_surface();
     if crate::shell::decoration::asked(surface) != Some(true) || crate::protocols::window_controls::placed(surface).is_some() {
@@ -424,6 +469,9 @@ fn opaque_outside(surface: &WlSurface, geo: Rectangle<i32, Logical>) -> bool {
 /// A dialog, or a window that cannot be resized: these float wherever they open, as on
 /// every desktop — a tile would stretch a fixed-size window or tear a dialog off its parent.
 fn wants_floating(window: &Window) -> bool {
+    if let Some(x) = window.x11_surface() {
+        return crate::xwayland::wants_floating(x);
+    }
     let Some(t) = window.toplevel() else { return false };
     if t.parent().is_some() {
         return true;
@@ -463,6 +511,10 @@ impl Hyalo {
     }
 
     /// Where floating windows may be: the usable area inside the gaps and the border.
+    pub fn floating_area_of(&self, output: &Output) -> Rect {
+        self.floating_area(output)
+    }
+
     fn floating_area(&self, output: &Output) -> Rect {
         let l = &self.config.layout;
         inset(self.work_area(output), l.gaps_out + l.border)
@@ -566,12 +618,7 @@ impl Hyalo {
             Some(s) => s,
             None => self.active_workspace(&output),
         };
-        let dh = &self.display_handle;
-        let steam_app = window
-            .toplevel()
-            .and_then(|t| t.wl_surface().client())
-            .and_then(|c| c.get_credentials(dh).ok())
-            .and_then(|c| games::steam_app_of(c.pid));
+        let steam_app = window_pid(&window, &self.display_handle).and_then(games::steam_app_of);
         self.wm.next_id += 1;
         let id = self.wm.next_id;
         self.wm.windows.push(Managed {
@@ -607,23 +654,10 @@ impl Hyalo {
     /// it draws its first frame at the size it will have.
     pub fn initial_configure(&mut self, window: &Window) {
         let Some(m) = self.wm.by_window(window) else { return };
-        let (id, mut ws) = (m.id, m.workspace);
+        let id = m.id;
         let Some(t) = window.toplevel() else { return };
-        // What the rules will want when it is shown, so its first frame is already right.
-        let fx = self.new_rule_effects(id, false);
-        if let Some(w) = &fx.workspace {
-            let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
-            ws = self.rule_workspace(w, &output);
-            self.wm.get_mut(id).unwrap().workspace = ws;
-        }
-        let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
-        // Whether it will have Hyalo's title bar, before it has drawn anything: it asked for
-        // server-side decorations — corrected at map, when its surface can be measured.
-        let bar = fx.title_bar.unwrap_or(true) && wants_title_bar(window, true);
-        self.wm.get_mut(id).unwrap().has_title_bar = bar;
-        if tiled
-            && let Some(rect) = self.predicted_tile(ws, id)
-        {
+        let (ws, tiled) = self.initial_placement(id, window);
+        if let Some(rect) = tiled {
             t.with_pending_state(|s| {
                 s.size = Some(rect.size);
                 for st in TILED {
@@ -636,6 +670,25 @@ impl Hyalo {
             t.with_pending_state(|s| s.bounds = Some(bounds));
         }
         t.send_configure();
+    }
+
+    /// What the rules will want of a window about to be shown — its workspace, whether it has
+    /// Hyalo's title bar — so its first frame is already right: its workspace, and the box it
+    /// will have if it is to be tiled.
+    pub fn initial_placement(&mut self, id: WindowId, window: &Window) -> (i32, Option<Rect>) {
+        let mut ws = self.wm.get(id).map_or(0, |m| m.workspace);
+        let fx = self.new_rule_effects(id, false);
+        if let Some(w) = &fx.workspace {
+            let output = self.wm.workspaces.get(&ws).map(|w| w.output.clone()).unwrap_or_default();
+            ws = self.rule_workspace(w, &output);
+            self.wm.get_mut(id).unwrap().workspace = ws;
+        }
+        let tiled = fx.float.map_or(self.workspace_mode(ws) == WorkspaceMode::Tiling && !wants_floating(window), |f| !f);
+        // Whether it will have Hyalo's title bar, before it has drawn anything: it asked for
+        // server-side decorations — corrected at map, when its surface can be measured.
+        let bar = fx.title_bar.unwrap_or(true) && wants_title_bar(window, true);
+        self.wm.get_mut(id).unwrap().has_title_bar = bar;
+        (ws, if tiled { self.predicted_tile(ws, id) } else { None })
     }
 
     /// The box `id` would get if tiled on `ws` now.
@@ -676,9 +729,9 @@ impl Hyalo {
         let size = window.geometry().size;
         let og = self.space.output_geometry(&output).unwrap_or_default();
         // A dialog opens over its parent; anything else in the middle of the usable area.
-        let parent_rect = window
-            .toplevel()
-            .and_then(|t| t.parent())
+        let parent_rect = self
+            .wm
+            .parent_of(window)
             .and_then(|p| self.wm.by_surface(&p))
             .filter(|p| p.mapped)
             .map(|p| p.frame());
@@ -728,6 +781,15 @@ impl Hyalo {
         self.arrange_workspace(ws);
         self.sync_space();
         self.start_opening(id);
+        // An X11 window that asked for the whole screen before it was shown (a game) — X11
+        // says so with a state, not a request.
+        if let Some(x) = window.x11_surface() {
+            if x.is_fullscreen() {
+                self.set_fullscreen(id, Fullscreen::Fullscreen);
+            } else if x.is_maximized() {
+                self.set_fullscreen(id, Fullscreen::Maximized);
+            }
+        }
     }
 
     pub fn window_destroyed(&mut self, window: &Window) {
@@ -809,8 +871,8 @@ impl Hyalo {
         // A minimized window keeps the size it was last told: it is told again when it comes
         // back (wm/minimize.rs).
         let hidden: Vec<WindowId> = self.wm.windows.iter().filter(|m| self.wm.is_hidden(m)).map(|m| m.id).collect();
+        let mut x11: Vec<(smithay::xwayland::X11Surface, Rect, Fullscreen)> = Vec::new();
         for m in self.wm.windows.iter_mut().filter(|m| m.workspace == ws && m.mapped && !hidden.contains(&m.id)) {
-            let Some(t) = m.window.toplevel() else { continue };
             let tiled = boxes.get(&m.id).copied();
             // Hyalo's title bar takes the top of the box it is given; the client gets the rest.
             let bar = m.bar();
@@ -837,6 +899,11 @@ impl Hyalo {
                 }
             };
             m.rect = rect;
+            if let Some(x) = m.window.x11_surface() {
+                x11.push((x.clone(), Rectangle::new(rect.loc, size.unwrap_or(rect.size)), m.fullscreen));
+                continue;
+            }
+            let Some(t) = m.window.toplevel() else { continue };
             let is_tiled = tiled.is_some() && m.fullscreen == Fullscreen::None;
             t.with_pending_state(|s| {
                 s.size = size.filter(|s| s.w > 0 && s.h > 0);
@@ -869,6 +936,12 @@ impl Hyalo {
             if t.is_initial_configure_sent() {
                 t.send_pending_configure();
             }
+        }
+        // An X11 window is told its state, then its place and size together (xwayland.rs).
+        for (x, rect, full) in x11 {
+            let _ = x.set_fullscreen(full == Fullscreen::Fullscreen);
+            let _ = x.set_maximized(full == Fullscreen::Maximized);
+            self.configure_x11(&x, rect);
         }
     }
 
@@ -930,6 +1003,9 @@ impl Hyalo {
             let loc = m.rect.loc;
             if self.wm.grab.is_none_or(|g| g.id != id) {
                 self.space.map_element(window.clone(), loc, false);
+                if let Some(x) = window.x11_surface() {
+                    self.configure_x11(x, m.rect);
+                }
             } else {
                 self.space.raise_element(&window, false);
             }
@@ -994,7 +1070,12 @@ impl Hyalo {
         let pos = self.wm.windows.iter().position(|m| m.id == id).unwrap();
         let mut m = self.wm.windows.remove(pos);
         m.focus_serial = counter;
-        let surface = m.window.toplevel().map(|t| t.wl_surface().clone());
+        let surface = surface_of(&m.window);
+        // X11 keeps its own stacking: the window goes to its top too, or an X client that
+        // looks at it (a game's own overlay, a menu placed over its window) sees it under.
+        if let (Some(x), Some(xwm)) = (m.window.x11_surface(), self.x11.wm.as_mut()) {
+            let _ = xwm.raise_window(x);
+        }
         // To the top of the stack (tiled windows stay under floating ones: `sync_space`).
         self.wm.windows.push(m);
         self.wm.focused = Some(id);
@@ -1010,14 +1091,14 @@ impl Hyalo {
         let mut target = id;
         // Bounded: a client could make a cycle of parents.
         for _ in 0..8 {
-            let Some(surface) = self.wm.get(target).and_then(|m| m.window.toplevel().map(|t| t.wl_surface().clone()))
-            else {
+            let Some(surface) = self.wm.get(target).and_then(|m| surface_of(&m.window)) else {
                 break;
             };
             let modal = self.wm.windows.iter().find(|m| {
                 m.mapped
-                    && m.window.toplevel().and_then(|t| t.parent()).as_ref() == Some(&surface)
-                    && toplevel_data(&m.window, |d| d.dialog_hint) == Some(ToplevelDialogHint::Modal)
+                    && self.wm.parent_of(&m.window).as_ref() == Some(&surface)
+                    && (toplevel_data(&m.window, |d| d.dialog_hint) == Some(ToplevelDialogHint::Modal)
+                        || m.window.x11_surface().is_some_and(|x| x.is_modal()))
             });
             match modal {
                 Some(m) => target = m.id,
@@ -1035,7 +1116,7 @@ impl Hyalo {
             return;
         }
         let keyboard = self.seat.get_keyboard().unwrap();
-        if keyboard.current_focus().is_some_and(|f| f.is_alive()) {
+        if keyboard.current_focus().and_then(|f| f.surface()).is_some_and(|f| f.is_alive()) {
             return;
         }
         self.focus_window_keyboard();
@@ -1302,6 +1383,8 @@ impl Hyalo {
     /// Outputs came or went: each workspace goes home if it can, or to an output that is
     /// there; every output shows a workspace.
     pub fn outputs_changed(&mut self) {
+        // Xwayland draws at the largest scale there is now (xwayland.rs).
+        self.update_x11_scale();
         let present: Vec<String> = self.space.outputs().map(|o| o.name()).collect();
         self.wm.active.retain(|o, _| present.contains(o));
         self.wm.special_shown.retain(|o, _| present.contains(o));
@@ -1392,6 +1475,28 @@ impl Hyalo {
         }
         let (w, _) = self.space.element_under(pos)?;
         self.wm.by_window(w).map(|m| m.id)
+    }
+
+    /// A window's app id (an X11 window's class) changed. A GTK window takes its real app id
+    /// when it is mapped: a rule naming it applies now.
+    pub fn window_app_id_changed(&mut self, id: WindowId) {
+        self.wm.dirty_windows = true;
+        self.relist_window(id);
+        self.apply_late_rules(id);
+    }
+
+    /// A window's title changed: announced, listed, and matched by the rules again.
+    pub fn window_title_changed(&mut self, id: WindowId) {
+        let Some(m) = self.wm.get(id) else { return };
+        let event = crate::ipc::Event::WindowTitleChanged { id, title: title(&m.window) };
+        crate::ipc::server::broadcast(self, &event);
+        self.relist_window(id);
+        self.apply_late_rules(id);
+        // Hyalo's title bar shows it (render/title_bar.rs): a title can change without a
+        // new buffer.
+        if self.wm.get(id).is_some_and(|m| m.has_title_bar) {
+            self.queue_redraw(None);
+        }
     }
 
     // ── Hyalo's title bar ─────────────────────────────────────────────────────────────

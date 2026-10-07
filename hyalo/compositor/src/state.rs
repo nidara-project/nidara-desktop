@@ -104,6 +104,9 @@ pub struct Hyalo {
     pub idle: crate::idle::IdleState,
     /// logind and the ScreenSaver API, in a real session (logind.rs).
     pub login: Option<crate::logind::Login>,
+    /// X11 apps: Xwayland and its window manager (xwayland.rs).
+    pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
+    pub x11: crate::xwayland::XState,
 }
 
 impl Hyalo {
@@ -195,6 +198,8 @@ impl Hyalo {
         // An app holding the keyboard's shortcuts while focused (shortcuts.rs).
         let shortcuts_inhibit_state =
             smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState::new::<Self>(&dh);
+        // Offered to Xwayland alone: how it ties an X11 window to its surface (xwayland.rs).
+        let xwayland_shell_state = smithay::wayland::xwayland_shell::XWaylandShellState::new::<Self>(&dh);
 
         let mut seat_state = SeatState::new();
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, backend.seat_name());
@@ -274,6 +279,8 @@ impl Hyalo {
             lock,
             idle: crate::idle::IdleState::new(&dh_for_idle, loop_handle_for_idle),
             login: None,
+            xwayland_shell_state,
+            x11: Default::default(),
         }
     }
 
@@ -360,6 +367,16 @@ impl Hyalo {
         if let Some((_, s, p)) = self.layer_under(&[Layer::Overlay], pos) {
             return Some((s, p));
         }
+        // An X11 menu or tooltip, over everything but the overlay layers (xwayland.rs).
+        for x in self.wm.x11_overrides.iter().rev() {
+            let Some(surface) = x.wl_surface() else { continue };
+            let at = x.last_configure().loc;
+            if let Some((s, p)) =
+                smithay::desktop::utils::under_from_surface_tree(&surface, pos, at, WindowSurfaceType::ALL)
+            {
+                return Some((s, p.to_f64()));
+            }
+        }
         let output = self.space.output_under(pos).next().cloned();
         let (above, below) = match &output {
             Some(o) => crate::render::windows_front_to_back(&self.space, &self.wm, o),
@@ -404,6 +421,14 @@ impl Hyalo {
     pub fn chrome_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, Chrome)> {
         use smithay::wayland::shell::wlr_layer::Layer;
         if self.lock.is_locked() || self.layer_under(&[Layer::Overlay], pos).is_some() {
+            return None;
+        }
+        // An X11 menu over a title bar has the pointer, not the bar under it.
+        let on_x11_menu = self.wm.x11_overrides.iter().any(|x| {
+            let r = Rectangle::new(x.last_configure().loc, x.bbox().size).to_f64();
+            x.wl_surface().is_some() && r.contains(pos)
+        });
+        if on_x11_menu {
             return None;
         }
         let output = self.space.output_under(pos).next().cloned()?;

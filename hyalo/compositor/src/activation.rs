@@ -49,7 +49,7 @@ impl XdgActivationHandler for Hyalo {
         };
         let keyboard = self.seat.get_keyboard();
         let pointer = self.seat.get_pointer();
-        let valid = keyboard.as_ref().is_some_and(|k| since(k.current_focus(), k.last_enter()))
+        let valid = keyboard.as_ref().is_some_and(|k| since(k.current_focus().and_then(|f| f.surface()), k.last_enter()))
             || pointer.as_ref().is_some_and(|p| since(p.current_focus(), p.last_enter()));
         data.user_data.insert_if_missing(|| FromTheUser(valid));
         // Kept either way: a request with a token we know is refused knowingly, and said so.

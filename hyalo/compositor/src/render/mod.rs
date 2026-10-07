@@ -444,6 +444,13 @@ pub fn output_elements<R: HyaloRenderer>(
     for l in map.layers_on(Layer::Overlay).rev() {
         push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor), state.when);
     }
+    // X11 menus, tooltips and drop-downs (xwayland.rs): where their client puts them, over the
+    // windows and the bar, the last one shown in front.
+    for x in state.wm.x11_overrides.iter().rev() {
+        let Some(surface) = x.wl_surface() else { continue };
+        let at = x.last_configure().loc - output_geo.loc;
+        push_surface(&mut out, renderer, &surface, at.to_f64().to_physical_precise_round(scale), scale, output_size, None, state.when);
+    }
     push_closing(&mut out, true);
     push_windows(&mut out, renderer, &above);
     if !dock_on_overlay {

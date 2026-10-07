@@ -69,8 +69,8 @@ pub fn is_steam_app_id(app_id: &str) -> bool {
 
 /// Whether the surface says its content is a game.
 fn says_game(m: &Managed) -> bool {
-    let Some(t) = m.window.toplevel() else { return false };
-    with_states(t.wl_surface(), |states| {
+    let Some(surface) = super::surface_of(&m.window) else { return false };
+    with_states(&surface, |states| {
         *states.cached_state.get::<ContentTypeSurfaceCachedState>().current().content_type() == wp_content_type_v1::Type::Game
     })
 }

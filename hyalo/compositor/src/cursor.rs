@@ -50,6 +50,13 @@ impl Cursors {
             .clone()
     }
 
+    /// The default arrow nearest `scale`, as the theme stores it: what Xwayland shows over its
+    /// root window (xwayland.rs).
+    pub fn arrow(&self, scale: f64) -> Option<Image> {
+        let want = (self.size as f64 * scale).round() as i32;
+        self.images(CursorIcon::Default)?.into_iter().min_by_key(|i| (i.size as i32 - want).abs())
+    }
+
     /// The image for `icon` at an output scale, animated by `millis`. Falls back to the
     /// default arrow, and to a plain square when the theme has nothing at all.
     pub fn image(&self, icon: CursorIcon, scale: f64, millis: u32) -> CursorImage {
