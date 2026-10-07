@@ -13,7 +13,7 @@ is the WHY and the traps.
 |---|---|
 | `hyalo/compositor/src/backend/tty.rs` | the session: DRM/KMS + GBM, libinput, libseat, udev hotplug, frames paced by vblank |
 | `hyalo/compositor/src/backend/winit.rs` | a window in another compositor — development only |
-| `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`); how a window is drawn — corners and the blur behind it (`window.rs`); a window drawn alone into a picture of it (`snapshot.rs`) |
+| `hyalo/compositor/src/render/` | the scene as render elements, front to back; the glass (`glass.rs`, `glass_gl.rs`); how a window is drawn — corners and the blur behind it (`window.rs`); a window drawn alone into a picture of it (`snapshot.rs`); the moment a frame shows, that Hyalo's animations are drawn at (`timing.rs`) |
 | `hyalo/compositor/src/outputs.rs` | outputs as configured: arrange, apply, power, the windows' way home (#594) |
 | `hyalo/compositor/src/config.rs` | the TOML layers and the watcher |
 | `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`), minimizing (`minimize.rs`), opening and closing (`motion.rs`) |
@@ -809,6 +809,33 @@ expected 1.01 was wrong, not the curve).
   closed to finish fading: CI's first run of this one compared against the minimize check's
   killed probe, still closing.
 
+### Every animation of Hyalo's is drawn at the moment the frame SHOWS (#766 B, 2026-10-07)
+
+`render/timing.rs`. Opening and closing, minimize, the workspace slide and the shadow under the
+glass are sampled at `Scene::when` — the moment the frame being built will be on screen — never
+at `Instant::now()` inside the render. Sampled at the build, a frame shows the animation as it
+was up to a refresh before it appears, and by a different amount each frame (a frame that begins
+later or takes longer lands a step off). GTK's animations already follow the display, through
+the `wp_presentation` feedback we send; this is the same rule for ours.
+
+- **tty**: the next vblank after the frame begins, on the beat of the last flip the KERNEL timed
+  (`Surface::last_vblank`, from the page-flip event's CLOCK_MONOTONIC timestamp, set only when
+  the event carries one). The beat holds across an idle desktop: the CRTC keeps scanning at the
+  mode's rate whether we flip or not. **With VRR on, or in a window (winit), there is no beat
+  to predict**: those sample at the build, as before. Screenshots, screencopy and the closing
+  picture draw "now".
+- One `when` per frame, threaded explicitly (`Scene` → `push_surface`/`push_tree`/
+  `push_material`/`window::push`). 🔴 Never sample the clock again inside the render: before
+  this the render read the clock once per surface and twice more in `output_elements`; any read
+  of it now puts that piece back at the build, a refresh behind the rest of the frame.
+- Starting an animation still stamps the event's own time (`Instant::now()` in `start_*`): it
+  began then, and the first frame shows how far it has gone by the time that frame is on screen.
+  Ending stays at `Instant::now()` too (`step_motions`/`step_animations`, after a frame): an
+  animation over by then was over at the `when` of the frame just built (`when` ≥ now), so that
+  frame already drew its end; one not over yet asks for another frame.
+- A frame begun too close to the next vblank to make it shows a refresh later than predicted —
+  the error sampling at the build always had. `msg stats` counts those (below).
+
 ## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
 
 For an app that leaves its decorations to the compositor — kitty, Qt apps, Chrome with "Use
@@ -1497,7 +1524,7 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 - A screenshot's read-back (`ExportMem::copy_framebuffer`): a mapping that is NOT `flipped()`
   holds the bottom row first.
 
-## Measuring the render (#766 A)
+## Measuring the render (#766 A, B)
 
 `render/stats.rs` instruments every frame, per output:
 
@@ -1522,6 +1549,12 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   `gpu_busy_percent` counts every client, Chrome's video included — useless for that.
 - ⚠️ The nested Hyalo in the headless cage draws most frames whole (the host gives no buffer age:
   `frames_whole` says so) — **cost numbers are the session's, never the harness's**.
+- **`presentation`** (per output, tty only; null in a window or at rest): for each frame the
+  kernel timed on screen, `build_to_shown` (from the frame beginning to be built to its flip —
+  what sampling the animations at the build would be behind by), `error` (the flip minus the
+  predicted `when`, `avg_ms` signed, `max_ms` the largest either way) and `late` (frames shown a
+  refresh or more after the predicted vblank). The prediction is right when `error` stays near 0
+  while `build_to_shown` is most of a refresh.
 - **`nidara-hyalo msg debug-overlay on|off`** (or `HYALO_DEBUG_OVERLAY=1`): each glass element's
   capture region outlined (cyan), a flash where one re-captured, the frame's damage outlined
   (magenta), fading over 400 ms. It is drawn with damage tracking like anything else, so it

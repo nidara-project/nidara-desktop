@@ -8,7 +8,7 @@
 //! Started from Smithay's anvil (MIT, `hyalo/LICENSE-smithay-MIT.txt`), reorganised around
 //! that redraw state machine and Hyalo's own output configuration.
 
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{collections::HashMap, path::Path, time::{Duration, Instant}};
 
 use smithay::{
     backend::{
@@ -105,6 +105,12 @@ pub struct Surface {
     /// DPMS: an output switched off keeps its place and its windows (#594), it just does not
     /// draw.
     pub powered: bool,
+    /// When the kernel last timed a vblank here: the beat the next frames are predicted on
+    /// (render/timing.rs).
+    last_vblank: Option<Instant>,
+    /// The frame queued and not yet shown: when it began to be built, and when it was predicted
+    /// to show — checked against the flip's timestamp (`msg stats` `presentation`).
+    in_flight: Option<(Instant, Instant)>,
 }
 
 impl Drop for Surface {
@@ -694,6 +700,8 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
             dmabuf_feedback,
             redraw: Redraw::Queued,
             powered: true,
+            last_vblank: None,
+            in_flight: None,
         },
     );
     // A new output starts neutral: the night light reaches it too.
@@ -987,7 +995,16 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
+    // Hyalo's own animations are drawn as they are when this frame shows: the next vblank, on
+    // the beat of the last one — unless VRR leaves no beat (render/timing.rs).
+    let begun = Instant::now();
+    let period = render::timing::period(output.current_mode().map_or(60_000, |m| m.refresh));
+    let vrr = surface.drm_output.with_compositor(|c| c.vrr_enabled());
+    let when = match surface.last_vblank {
+        Some(last) if !vrr => render::timing::next_vblank(last, period, begun),
+        _ => begun,
+    };
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, when);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,
@@ -1055,7 +1072,10 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         let Backend::Tty(tty) = &mut state.backend else { return };
         let Some(surface) = tty.devices.get_mut(&node).and_then(|d| d.surfaces.get_mut(&crtc)) else { return };
         match surface.drm_output.queue_frame(Some(presentation)) {
-            Ok(()) => surface.redraw = Redraw::WaitingForVBlank { redraw_needed: false },
+            Ok(()) => {
+                surface.redraw = Redraw::WaitingForVBlank { redraw_needed: false };
+                surface.in_flight = Some((begun, when));
+            }
             Err(err) => {
                 let err: SwapBuffersError = err.into();
                 tracing::warn!(?err, "could not queue the frame");
@@ -1104,15 +1124,28 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     let output = surface.output.clone();
     let refresh = output.current_mode().map(|m| m.refresh).unwrap_or(60_000).max(1);
     let frame_duration = Duration::from_micros(1_000_000_000 / refresh as u64);
-    let (clock, flags) = match metadata.as_ref().map(|m| m.time) {
+    let (clock, flags, timed) = match metadata.as_ref().map(|m| m.time) {
         Some(DrmEventTime::Monotonic(tp)) if !tp.is_zero() => (
             Time::<Monotonic>::from(tp),
             wp_presentation_feedback::Kind::Vsync
                 | wp_presentation_feedback::Kind::HwClock
                 | wp_presentation_feedback::Kind::HwCompletion,
+            true,
         ),
-        _ => (state.clock.now(), wp_presentation_feedback::Kind::Vsync),
+        _ => (state.clock.now(), wp_presentation_feedback::Kind::Vsync, false),
     };
+    // The kernel's timestamp of the flip, on our clock (both are CLOCK_MONOTONIC): the beat the
+    // next frames are predicted on, and how far this one's prediction landed (render/timing.rs).
+    let in_flight = surface.in_flight.take();
+    if timed {
+        let ago = Duration::from(state.clock.now()).saturating_sub(Duration::from(clock));
+        if let Some(shown) = Instant::now().checked_sub(ago) {
+            surface.last_vblank = Some(shown);
+            if let Some((begun, predicted)) = in_flight {
+                render::stats::presented(&output.name(), begun, predicted, shown, frame_duration);
+            }
+        }
+    }
     let seq = metadata.as_ref().map(|m| m.sequence).unwrap_or(0);
     match surface.drm_output.frame_submitted() {
         Ok(Some(Some(mut feedback))) => {

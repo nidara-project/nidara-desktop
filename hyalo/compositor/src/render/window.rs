@@ -439,6 +439,7 @@ pub fn push<R: HyaloRenderer>(
     controls: Option<(Rectangle<f64, Physical>, super::controls::Controls)>,
     title_bar: Option<super::title_bar::TitleBar>,
     decor: Option<bool>,
+    when: std::time::Instant,
 ) {
     let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
     // A popup's position is relative to its parent's WINDOW GEOMETRY, not its surface (xdg-shell;
@@ -449,7 +450,7 @@ pub fn push<R: HyaloRenderer>(
     let geometry_loc = window.geometry().loc;
     for (popup, offset) in PopupManager::popups_for_surface(&surface) {
         let offset = (geometry_loc + offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
-        super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified);
+        super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified, when);
     }
     // Its controls: over its own surfaces, under its popups (a menu opened from the header
     // covers them).
@@ -483,9 +484,9 @@ pub fn push<R: HyaloRenderer>(
                     clip,
                 })
             }));
-            super::push_material(out, &surface, location, scale, output_size);
+            super::push_material(out, &surface, location, scale, output_size, when);
         }
-        None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate),
+        None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate, when),
     }
     // The title bar, made after the surfaces (their buffers are imported by now, and it samples
     // the client's), placed before them: under its popups like the controls.

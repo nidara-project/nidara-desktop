@@ -9,6 +9,10 @@
 //!   the whole process, **Hyalo's GPU time**: the kernel's own accounting of the engine time
 //!   its jobs took (`gpu_time`).
 //!
+//! - **Presentation** (#766 B, tty only): for each frame the kernel timed on screen, how far the
+//!   moment its animations were drawn at (render/timing.rs) landed from the flip, and how long
+//!   after the frame began building it showed — what sampling at the build would be off by.
+//!
 //! The repainted area is what the renderer drew, which is the frame's damage united with the
 //! damage of the frames since the buffer it draws into was last used (its buffer age): with
 //! three buffers, a window that moves repaints where it is, was and was before. That is the
@@ -65,9 +69,21 @@ struct Sample {
     glass: GlassCounts,
 }
 
+/// A frame the kernel timed on screen (`presented`).
+struct Shown {
+    at: Instant,
+    /// From the frame beginning to be built to the flip.
+    lead: Duration,
+    /// The flip minus the moment predicted, ms: positive = it showed later.
+    error_ms: f64,
+    /// It showed a refresh or more after the one predicted.
+    late: bool,
+}
+
 #[derive(Default)]
 struct OutputState {
     samples: VecDeque<Sample>,
+    shown: VecDeque<Shown>,
     /// The output's size, output px.
     area: u64,
     /// Overlay: the last frame's damage (minus the overlay's own), when it was taken.
@@ -181,6 +197,26 @@ pub fn frame_done(output: &str, rendered: bool, build: Duration, render: Duratio
             for r in pending {
                 remember(&mut st.flashes, r, now);
             }
+        }
+    });
+}
+
+/// A frame of `output`, begun at `begun` and predicted to show at `predicted`, was flipped at
+/// `shown`, by the kernel's clock; the output refreshes every `period`.
+pub fn presented(output: &str, begun: Instant, predicted: Instant, shown: Instant, period: Duration) {
+    let error = shown.saturating_duration_since(predicted).as_secs_f64() - predicted.saturating_duration_since(shown).as_secs_f64();
+    OUTPUTS.with(|o| {
+        let mut o = o.borrow_mut();
+        let st = o.entry(output.to_string()).or_default();
+        let now = Instant::now();
+        st.shown.push_back(Shown {
+            at: now,
+            lead: shown.saturating_duration_since(begun),
+            error_ms: error * 1000.0,
+            late: error > period.as_secs_f64() / 2.0,
+        });
+        while st.shown.front().is_some_and(|s| now.duration_since(s.at) > WINDOW * 2) {
+            st.shown.pop_front();
         }
     });
 }
@@ -306,6 +342,22 @@ pub struct OutputStats {
     pub cpu_render: Option<Timing>,
     /// The glass, summed over the second.
     pub glass: GlassCounts,
+    /// The frames the kernel timed on screen; null where it timed none (in a window, at rest).
+    pub presentation: Option<Presentation>,
+}
+
+/// How the frames' predicted presentation held (render/timing.rs).
+#[derive(Debug, Clone, Serialize)]
+pub struct Presentation {
+    pub frames: usize,
+    /// From a frame beginning to be built to its flip: what sampling the animations at the
+    /// build put them behind by.
+    pub build_to_shown: Timing,
+    /// The flip minus the moment the animations were drawn at, ms: `avg_ms` signed, `max_ms`
+    /// the largest either way.
+    pub error: Timing,
+    /// Frames shown a refresh or more after the one predicted.
+    pub late: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -317,6 +369,22 @@ pub struct Stats {
     /// Hyalo's GPU time, every output together; null where the driver does not account it.
     pub gpu_time: Option<GpuTime>,
     pub overlay: bool,
+}
+
+fn presentation(shown: &VecDeque<Shown>, now: Instant) -> Option<Presentation> {
+    let recent: Vec<&Shown> = shown.iter().filter(|s| now.duration_since(s.at) <= WINDOW).collect();
+    let build_to_shown = timing(recent.iter().map(|s| s.lead))?;
+    let r3 = |x: f64| (x * 1000.0).round() / 1000.0;
+    let errors: Vec<f64> = recent.iter().map(|s| s.error_ms).collect();
+    Some(Presentation {
+        frames: recent.len(),
+        build_to_shown,
+        error: Timing {
+            avg_ms: r3(errors.iter().sum::<f64>() / errors.len() as f64),
+            max_ms: r3(errors.iter().fold(0.0, |m, e| e.abs().max(m))),
+        },
+        late: recent.iter().filter(|s| s.late).count(),
+    })
 }
 
 fn timing(v: impl Iterator<Item = Duration>) -> Option<Timing> {
@@ -373,6 +441,7 @@ pub fn snapshot() -> Stats {
                     cpu_build: timing(recent.iter().map(|s| s.build)),
                     cpu_render: timing(recent.iter().map(|s| s.render)),
                     glass,
+                    presentation: presentation(&st.shown, now),
                 }
             })
             .collect();
