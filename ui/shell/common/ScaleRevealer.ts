@@ -6,7 +6,7 @@ import { reduceMotion } from "../core/ReduceMotion"
 import Theme from "../core/ThemeManager"
 import { blurSafeOpacity } from "../core/NidaraTheme"
 import compositor from "../core/CompositorState"
-import type { PaintTransform } from "../../lib/nidara-kit/platform/material"
+import type { GlassFormation, PaintTransform } from "../../lib/nidara-kit/platform/material"
 
 // ScaleRevealer: shows/hides its child with a grow/shrink + fade animation.
 // Two modes, one engine:
@@ -51,6 +51,16 @@ export type ScalePivot = "top-right" | "top-left" | "top-center" | "center"
 export const fadeFloor = (glassAlpha: number) =>
     compositor.caps.layerAlphaThreshold ? blurSafeOpacity(glassAlpha) : 0
 
+// 🔑 On Hyalo the glass and its content do not fade together (#764, owner 2026-10-07). Glass has
+// no opacity: a pane appearing MATERIALIZES — Hyalo grows its blur, refraction, tint and rim
+// from the number each shape carries (`glassFormation`) — and the content (text, icons, state)
+// fades by opacity, after it. On OPEN the glass forms over the whole reveal (the eased
+// progress) and the content fades in over its second half, so text never floats on glass not
+// yet formed; on CLOSE the content goes over the first half and the glass dissolves over the
+// whole. Hyprland paints the glass inside the content, so there both stay one fade (the floor).
+const CONTENT_HALF = 0.5
+const smooth = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c) }
+
 export const OVERLAY_POP = {
     scaleFrom: 0.97, durationIn: 220, durationOut: 150, animateLayout: false,
     opacityFloor: () => fadeFloor(Theme.overlayOpacity),
@@ -62,7 +72,7 @@ export const OVERLAY_POP = {
 // full Widget surface for type-checking. (The blame used to be pinned on the
 // `ags/gtk4` shim; that shim is gone and this is still needed.)
 export interface ScaleRevealer extends Gtk.Widget {}
-export class ScaleRevealer extends Gtk.Widget {
+export class ScaleRevealer extends Gtk.Widget implements GlassFormation {
     static {
         GObject.registerClass({ GTypeName: "ScaleRevealer" }, this)
     }
@@ -83,6 +93,9 @@ export class ScaleRevealer extends Gtk.Widget {
      *  while the bar's overflow is unfolded in line (see Bar.tsx). */
     riseFrom: number
     progress = 0          // 0 = hidden, 1 = fully revealed
+    /** How formed the glass under it is while a reveal animates it apart from the content
+     *  (#764); null: as its opacity. */
+    formation: number | null = null
     tickId: number | null = null
     swipeX = 0            // transient horizontal swipe offset (notification dismiss)
     morphFrom: number | null = null   // height-morph origin (see morphFromHeight)
@@ -212,6 +225,13 @@ export class ScaleRevealer extends Gtk.Widget {
     // ghost mid-flight.
     cancelAnim() {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+        // A swipe or a collapse fades glass and content together, from where the glass was.
+        if (this.formation !== null) { this.opacity = this.formation; this.formation = null }
+    }
+
+    /** How formed the glass under it is (`GlassFormation`, material.ts). */
+    glassFormation(): number {
+        return this.formation ?? this.opacity
     }
 
     // Fling the card off-screen in the swipe direction, fading, then onDone
@@ -326,6 +346,7 @@ export class ScaleRevealer extends Gtk.Widget {
         // relying on the delay, and none does.
         if (reduceMotion()) {
             this.progress = target
+            this.formation = null
             this.opacity = target
             if (this.animateLayout) this.queue_resize(); else this.queue_draw()
             if (!open) this.set_visible(false)
@@ -337,6 +358,10 @@ export class ScaleRevealer extends Gtk.Widget {
         const duration = open ? this.durationIn : this.durationOut
         // Latched per reveal: the floor follows the glass slider, but not mid-flight.
         const floor = this.opacityFloor?.() ?? 0
+        // The glass apart from the content (see CONTENT_HALF) — on Hyalo. The content resumes
+        // from where it is: a close interrupting an open takes it away from there.
+        const apart = !compositor.caps.layerAlphaThreshold
+        const fromContent = this.opacity
         let startUs: number | null = null
         this.tickId = this.add_tick_callback((_w, frameClock) => {
             const now = frameClock.get_frame_time()
@@ -345,12 +370,20 @@ export class ScaleRevealer extends Gtk.Widget {
             const eased = open ? 1 - Math.pow(1 - t, 3)   // ease-out cubic
                               : Math.pow(t, 3)            // ease-in cubic
             this.progress = from + (target - from) * eased
-            // Never below `floor` while shown: the close ends by hiding the widget
-            // (set_visible below), not by fading it through the unblurred range.
-            this.opacity = this.progress <= 0 ? 0 : floor + (1 - floor) * this.progress
+            if (apart) {
+                this.formation = this.progress
+                this.opacity = open
+                    ? fromContent + (1 - fromContent) * smooth((t - CONTENT_HALF) / (1 - CONTENT_HALF))
+                    : fromContent * (1 - smooth(t / CONTENT_HALF))
+            } else {
+                // Never below `floor` while shown: the close ends by hiding the widget
+                // (set_visible below), not by fading it through the unblurred range.
+                this.opacity = this.progress <= 0 ? 0 : floor + (1 - floor) * this.progress
+            }
             if (this.animateLayout) this.queue_resize(); else this.queue_draw()
             if (t >= 1) {
                 this.tickId = null
+                this.formation = null
                 if (!open) this.set_visible(false)
                 this.syncRestClip()
                 onDone?.()
@@ -452,6 +485,7 @@ export class ScaleRevealer extends Gtk.Widget {
     snapClosed() {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
         this.progress = 0
+        this.formation = null
         this.opacity = 0
         this.set_visible(false)
         this.syncRestClip()
@@ -464,6 +498,7 @@ export class ScaleRevealer extends Gtk.Widget {
     showInstant() {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
         this.progress = 1
+        this.formation = null
         this.opacity = 1
         this.set_visible(true)
         this.syncRestClip()

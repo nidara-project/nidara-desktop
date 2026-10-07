@@ -79,10 +79,11 @@
     <request name="add_shape_clipped">
       <description summary="pending: add one glass shape, faded and clipped">
         As add_shape, plus what a toolkit does to the widget that paints
-        the glass. opacity is the whole glass's opacity in this shape over
-        the plain backdrop, 0..1: the blur, the compositor's glass and its
-        rim fade together, so a panel fading in or out sends it every frame
-        (add_shape is opacity 1). The clip rectangle, in the same
+        the glass. opacity is how FORMED the glass is in this shape, 0..1 —
+        not a coverage: glass appearing materializes. The blur's reach, the
+        refraction, the tint, the rim and the shadow under it all grow with
+        it, so a panel appearing or going sends it every frame (add_shape
+        is 1). The clip rectangle, in the same
         coordinates, is what of the shape may show: a card scrolled half out
         of its list is cut straight where the list ends, not rounded. A clip
         of zero width or height means no clip.

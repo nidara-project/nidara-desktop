@@ -4055,10 +4055,12 @@ At the thinnest glass (0.24) the floor is ~1: no fade, only the scale — any fa
 would unblur glass that thin. `blur-threshold-check.mjs` holds every shell rule to the TS
 constant, since the floor is computed from it. Only `OVERLAY_POP` panels carry the floor;
 notification banners and the island's `MorphRevealer` (a solid morph, not a fade) do not.
-🔑 **On Hyalo the floor is 0** (`fadeFloor`, 2026-10-07): it asks `compositor.caps.layerAlphaThreshold`,
-false there. Hyalo has no `ignore_alpha`: each declared shape carries its opacity and the
-compositor fades its blur, glass and rim with it, so the panels fade all the way. Until then they
-appeared at 66 % opacity in one step (the "regular" material) and did not fade at all on "clear".
+🔑 **On Hyalo there is no floor and no glass fade at all** (#764, owner 2026-10-07): the floor is
+Hyprland's (`fadeFloor` asks `compositor.caps.layerAlphaThreshold`), and on Hyalo the glass
+MATERIALIZES — its blur, refraction, tint and rim grow over the whole reveal — while the content
+fades in over the second half (and out over the first half of a close). `ScaleRevealer` keeps the
+two apart (`glassFormation()`); hyalo.md → "Glass materializes, it never fades". Until #763 the
+panels appeared on Hyalo at 66 % opacity in one step ("regular") and did not fade at all on "clear".
 
 - **Teardown:** call `dismantle()` right after removing it from its parent. It deliberately
   has no `vfunc_dispose` override — GJS blocks JS vfuncs during garbage collection, so a

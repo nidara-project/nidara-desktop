@@ -37,6 +37,9 @@ pub struct GlassElement {
     shapes: Vec<glass_gl::Shape>,
     offset: f32,
     passes: usize,
+    /// How formed this group's glass is (#764): its most formed shape's. Its blur is captured
+    /// for that much (`glass_gl::formed_blur`).
+    formed: f32,
     glass: Option<glass_gl::Glass>,
     /// The ink boxes that fall in this group, measured when the capture or they change.
     ink_boxes: Vec<glass_gl::InkBox>,
@@ -128,7 +131,9 @@ impl GlassElement {
                 } else {
                     Vec::new()
                 };
+                let formed = shapes.iter().map(|s| s.opacity).fold(0.0, f32::max);
                 GlassElement {
+                    formed,
                     id,
                     commit: current.commit,
                     region,
@@ -183,6 +188,7 @@ impl GlassElement {
             }],
             offset: offset as f32,
             passes: passes as usize,
+            formed: 1.0,
             glass: None,
             ink_boxes: Vec::new(),
             probes: Vec::new(),
@@ -200,7 +206,11 @@ impl GlassElement {
             // Safety: the EGL context outlives this frame, and its user data with it.
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
-            glass_gl::capture(gl, user_data, map, self.region, self.offset, self.passes, &self.finish, &mut c);
+            // Measured on the full blur while it forms: there is something to measure.
+            let measure_full = self.glass.is_some() && (!self.ink_boxes.is_empty() || !self.probes.is_empty());
+            glass_gl::capture(
+                gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, &self.finish, &mut c,
+            );
         })
     }
 
@@ -280,6 +290,9 @@ impl<R: HyaloRenderer> RenderElement<R> for GlassElement {
         self.capture_gles(R::gles_frame(frame), cache).map_err(R::from_gles_error)
     }
 }
+
+/// Two shapes formed this alike (#764) share a blur: an animation moves a pane's shapes together.
+const FORMED_ALIKE: f32 = 0.01;
 
 /// Where to measure the backdrop under one shape for its shadow: its body, inset by where a
 /// round corner leaves the rectangle (0.29 of the radius, the corner's 45° point), cut by its
@@ -361,7 +374,10 @@ fn groups(
         for b in a + 1..shapes.len() {
             // A fusion group is one silhouette: one element, whatever lies between its shapes.
             let fused = shapes[a].fusion.is_some() && shapes[a].fusion.map(|f| f.0) == shapes[b].fusion.map(|f| f.0);
-            if fused || grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds())) {
+            // A pane forming (#764) has a blur of its own, its reach growing: it shares no
+            // pyramid with panes at rest beside it (the Control Center under the bar's capsules).
+            let formed_alike = (shapes[a].opacity - shapes[b].opacity).abs() < FORMED_ALIKE;
+            if fused || (formed_alike && grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds()))) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }
@@ -372,8 +388,12 @@ fn groups(
         let r = find(&mut root, i);
         by_root.entry(r).or_default().push(s);
     }
+    // Forming groups LAST — drawn first, below the rest of the surface's glass — so what a forming
+    // pane captures never holds a neighbour's finished glass.
+    let mut by_root: Vec<Vec<glass_gl::Shape>> = by_root.into_values().collect();
+    by_root.sort_by_key(|g| g.iter().all(|s| s.opacity >= 1.0) as u8 ^ 1);
     by_root
-        .into_values()
+        .into_iter()
         .filter_map(|shapes| {
             let mut bounds = shapes[0].bounds();
             for s in &shapes[1..] {

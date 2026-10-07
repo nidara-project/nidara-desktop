@@ -36,6 +36,8 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  *                                                        group join, logical px (0 = off)
  *   fusionHold                                           0..1: every fusion group held that far
  *                                                        towards one shape (to judge the pulse)
+ *   formationHold                                        0..1: every pane held that far formed
+ *                                                        (#764: to judge glass materializing)
  *   blur = SIZE:PASSES                                   every surface's blur
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
@@ -129,6 +131,9 @@ const DEFAULTS = {
     // An instrument, 0 in the product: every fusion group held this far towards its envelope
     // (`pulseFusion` passes in 350 ms; held, the shape can be judged — and screenshotted).
     fusionHold: 0,
+    // An instrument, 0 in the product: every pane held this far formed (#764 — a pane appears by
+    // materializing: its blur, refraction, tint and rim grow; held, a step of it can be judged).
+    formationHold: 0,
 }
 
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
@@ -238,6 +243,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
         scrim: (_native: Gtk.Native) => scrimParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         fusionHold: (_native: Gtk.Native) => tuning.fusionHold ?? DEFAULTS.fusionHold,
+        formationHold: (_native: Gtk.Native) => tuning.formationHold ?? DEFAULTS.formationHold,
         blur: (native: Gtk.Native) => {
             const panels = tuning.blur ?? h.panelBlur()
             // A tooltip or a menu is a popover: a surface of its own, blurred more.
