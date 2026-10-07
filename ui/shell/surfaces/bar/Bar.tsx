@@ -4,7 +4,7 @@ import app from "../../../lib/nidara-kit/platform/host"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
+import { ScaleRevealer, OVERLAY_POP, fadeFloor } from "../../common/ScaleRevealer"
 import { MorphRevealer } from "../../common/MorphRevealer"
 import { createRegionStamper } from "../../common/VisibleRegion"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
@@ -15,7 +15,6 @@ import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/Squir
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { BAR_GROUP_PAD, BAR_H, BAR_ITEM_GAP, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
 import Theme from "../../core/ThemeManager"
-import { blurSafeOpacity } from "../../core/NidaraTheme"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
@@ -212,7 +211,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const islandHost = new ScaleRevealer(islandRow, {
     durationIn: 220, durationOut: 150, scaleFrom: 1, animateLayout: false, pivot: "top-center",
     riseFrom: BAR_H + 8,
-    opacityFloor: () => blurSafeOpacity(Theme.barOpacity),
+    opacityFloor: () => fadeFloor(Theme.barOpacity),
   })
   // ScaleRevealer clips to its box; the capsule's shadow spills below the row.
   islandHost.set_overflow(Gtk.Overflow.VISIBLE)
