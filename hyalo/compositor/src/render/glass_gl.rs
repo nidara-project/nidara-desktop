@@ -292,7 +292,9 @@ pub struct Shape {
     pub rect: Rectangle<f64, Physical>,
     pub radius: f64,
     pub exponent: f64,
-    /// The glass's opacity in this shape over the plain backdrop, 0..1.
+    /// How FORMED the glass is in this shape, 0..1 (the protocol's per-shape `opacity`, #764):
+    /// its blur, refraction, tint, rim and shadow grow with it. It is not a coverage — glass
+    /// has no opacity; a pane appearing materializes, it does not cross-fade over the backdrop.
     pub opacity: f32,
     /// What of the shape may show, output pixels. None = all of it.
     pub clip: Option<Rectangle<f64, Physical>>,
@@ -695,14 +697,40 @@ pub struct Cache {
     generation: u64,
     /// What the last measurement was of: the capture, the boxes, the probes, the saturation.
     measured: Option<(u64, Vec<InkBox>, Vec<LightProbe>, f32)>,
+    /// How formed the glass this capture is for, 0..1 (`formed_blur`): what `draw` blends by.
+    formed: f32,
+    /// Under one pass of blur, how much of the sharp copy (level 0) `draw` mixes in.
+    sharp_mix: f32,
+    /// The FULL blur's level 1, kept while the glass forms (`capture`'s `measure_full`): the
+    /// ink and the shadow are measured on the glass as it will be, never on a partial blur —
+    /// a less blurred backdrop has darker darks and brighter lights, and the ink would turn
+    /// at the end of the animation, with the content already showing.
+    measure: Option<Level>,
+    /// The generation `measure` was taken at.
+    measure_gen: u64,
 }
 
 impl Drop for Cache {
     fn drop(&mut self) {
         if let Some(trash) = &self.trash {
-            trash.borrow_mut().extend(self.levels.drain(..).map(|l| (l.tex, l.fbo)));
+            trash.borrow_mut().extend(self.levels.drain(..).chain(self.measure.take()).map(|l| (l.tex, l.fbo)));
         }
     }
+}
+
+/// The blur of glass `formed` of the way (0..1) to one of `passes` passes at `offset`: the passes
+/// to run, their offset, and how much of the sharp copy to mix in. A fractional level
+/// L = formed·passes runs as ceil(L) passes (at least one) at offset·2^(L − ceil(L)), so the
+/// reach — ≈ offset·2^L — is continuous where the number of passes changes; under one pass
+/// the reach is one pass's least and the sharp copy makes up the rest, by 1 − L.
+pub fn formed_blur(offset: f32, passes: usize, formed: f32) -> (usize, f32, f32) {
+    let formed = formed.clamp(0.0, 1.0);
+    if formed >= 1.0 || passes == 0 {
+        return (passes, offset, 0.0);
+    }
+    let level = formed * passes as f32;
+    let run = (level.ceil() as usize).max(1);
+    (run, offset * 2f32.powf(level - run as f32), (1.0 - level).max(0.0))
 }
 
 impl Cache {
@@ -803,6 +831,10 @@ pub unsafe fn capture(
     region: Rectangle<i32, Physical>,
     offset: f32,
     passes: usize,
+    // How formed the glass is (0..1, `formed_blur`), and whether a measurement needs the full
+    // blur kept aside while it forms (`Cache::measure`).
+    formed: f32,
+    measure_full: bool,
     finish: &Finish,
     cache: &mut Cache,
 ) {
@@ -814,6 +846,7 @@ pub unsafe fn capture(
         if passes == 0 {
             return;
         }
+        let (run_passes, run_offset, sharp_mix) = formed_blur(offset, passes, formed);
         let mut prev_fbo = 0;
         gl.GetIntegerv(ffi::FRAMEBUFFER_BINDING, &mut prev_fbo);
         let mut vp = [0i32; 4];
@@ -822,8 +855,10 @@ pub unsafe fn capture(
         cache.ensure(gl, (region_fb.size.w, region_fb.size.h), passes + 1, &progs.trash);
         cache.region_fb = region_fb;
         cache.generation += 1;
-        cache.passes = passes;
-        cache.offset = offset;
+        cache.passes = run_passes;
+        cache.offset = run_offset;
+        cache.formed = formed.clamp(0.0, 1.0);
+        cache.sharp_mix = sharp_mix;
 
         // 1. The region, out of the frame, into level 0.
         gl.BindFramebuffer(ffi::FRAMEBUFFER, prev_fbo as u32);
@@ -836,7 +871,7 @@ pub unsafe fn capture(
         gl.Disable(ffi::BLEND);
         gl.Disable(ffi::SCISSOR_TEST);
         gl.BindBuffer(ffi::ARRAY_BUFFER, progs.vbo);
-        let set_quad = |p: &Program| {
+        let set_quad = |p: &Program, offset: f32| {
             gl.UseProgram(p.id);
             gl.EnableVertexAttribArray(p.pos);
             gl.VertexAttribPointer(p.pos, 2, ffi::FLOAT, ffi::FALSE, 0, std::ptr::null());
@@ -857,25 +892,59 @@ pub unsafe fn capture(
             gl.DrawArrays(ffi::TRIANGLE_STRIP, 0, 4);
         };
 
-        // 2. Down: level 0 → … → level n.
-        set_quad(&progs.down);
-        let d = &progs.down;
-        gl.Uniform1f(d.loc(gl, c"contrast"), finish.contrast);
-        gl.Uniform1f(d.loc(gl, c"brightness"), finish.brightness);
-        gl.Uniform1f(d.loc(gl, c"vibrancy"), finish.vibrancy);
-        gl.Uniform1f(d.loc(gl, c"vibrancy_darkness"), finish.vibrancy_darkness);
-        gl.Uniform1f(d.loc(gl, c"passes"), passes as f32);
-        for k in 1..=passes {
-            gl.Uniform1f(d.loc(gl, c"prepare"), (k == 1) as i32 as f32);
-            pass(&progs.down, &levels[k - 1], used(k - 1), &levels[k], used(k));
+        let chain = |passes: usize, offset: f32| {
+            // 2. Down: level 0 → … → level n.
+            set_quad(&progs.down, offset);
+            let d = &progs.down;
+            gl.Uniform1f(d.loc(gl, c"contrast"), finish.contrast);
+            gl.Uniform1f(d.loc(gl, c"brightness"), finish.brightness);
+            gl.Uniform1f(d.loc(gl, c"vibrancy"), finish.vibrancy);
+            gl.Uniform1f(d.loc(gl, c"vibrancy_darkness"), finish.vibrancy_darkness);
+            gl.Uniform1f(d.loc(gl, c"passes"), passes as f32);
+            for k in 1..=passes {
+                gl.Uniform1f(d.loc(gl, c"prepare"), (k == 1) as i32 as f32);
+                pass(&progs.down, &levels[k - 1], used(k - 1), &levels[k], used(k));
+            }
+            gl.DisableVertexAttribArray(progs.down.pos);
+            // 3. Up: level n → … → level 1. The last up-sample, to full size, is `draw`'s.
+            set_quad(&progs.up, offset);
+            for k in (1..passes).rev() {
+                pass(&progs.up, &levels[k + 1], used(k + 1), &levels[k], used(k));
+            }
+            gl.DisableVertexAttribArray(progs.up.pos);
+        };
+        // While the glass forms, the full blur first, its level 1 set aside for the measurement.
+        let keep_full = measure_full && (run_passes, run_offset) != (passes, offset);
+        if keep_full {
+            chain(passes, offset);
+            let l1 = &levels[1];
+            if cache.measure.as_ref().is_none_or(|m| (m.w, m.h) != (l1.w, l1.h)) {
+                if let Some(old) = cache.measure.take() {
+                    progs.trash.borrow_mut().push((old.tex, old.fbo));
+                }
+                let mut tex = 0;
+                gl.GenTextures(1, &mut tex);
+                gl.BindTexture(ffi::TEXTURE_2D, tex);
+                gl.TexImage2D(
+                    ffi::TEXTURE_2D, 0, ffi::RGBA as i32, l1.w, l1.h, 0, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null(),
+                );
+                for (p, v) in [
+                    (ffi::TEXTURE_MIN_FILTER, ffi::LINEAR),
+                    (ffi::TEXTURE_MAG_FILTER, ffi::LINEAR),
+                    (ffi::TEXTURE_WRAP_S, ffi::CLAMP_TO_EDGE),
+                    (ffi::TEXTURE_WRAP_T, ffi::CLAMP_TO_EDGE),
+                ] {
+                    gl.TexParameteri(ffi::TEXTURE_2D, p, v as i32);
+                }
+                cache.measure = Some(Level { tex, fbo: 0, w: l1.w, h: l1.h });
+            }
+            let m = cache.measure.as_ref().unwrap();
+            gl.BindFramebuffer(ffi::FRAMEBUFFER, l1.fbo);
+            gl.BindTexture(ffi::TEXTURE_2D, m.tex);
+            gl.CopyTexSubImage2D(ffi::TEXTURE_2D, 0, 0, 0, 0, 0, l1.w, l1.h);
+            cache.measure_gen = cache.generation;
         }
-        gl.DisableVertexAttribArray(progs.down.pos);
-        // 3. Up: level n → … → level 1. The last up-sample, to full size, is `draw`'s.
-        set_quad(&progs.up);
-        for k in (1..passes).rev() {
-            pass(&progs.up, &levels[k + 1], used(k + 1), &levels[k], used(k));
-        }
-        gl.DisableVertexAttribArray(progs.up.pos);
+        chain(run_passes, run_offset);
 
         // Leave the state as Smithay's renderer expects to find it.
         gl.BindFramebuffer(ffi::FRAMEBUFFER, prev_fbo as u32);
@@ -926,6 +995,15 @@ pub unsafe fn draw(
         gl.Uniform1f(p.loc(gl, c"offset"), cache.offset);
         gl.Uniform2f(p.loc(gl, c"src_size"), l1.w as f32, l1.h as f32);
         gl.Uniform2f(p.loc(gl, c"src_used"), used1.0 as f32, used1.1 as f32);
+        // The sharp copy, for glass still forming (`formed_blur`).
+        let l0 = &cache.levels[0];
+        gl.ActiveTexture(ffi::TEXTURE1);
+        gl.BindTexture(ffi::TEXTURE_2D, l0.tex);
+        gl.Uniform1i(p.loc(gl, c"sharp"), 1);
+        gl.ActiveTexture(ffi::TEXTURE0);
+        gl.Uniform2f(p.loc(gl, c"sharp_size"), l0.w as f32, l0.h as f32);
+        gl.Uniform1f(p.loc(gl, c"sharp_mix"), cache.sharp_mix);
+        gl.Uniform1f(p.loc(gl, c"blur_formed"), cache.formed);
         gl.UniformMatrix3fv(p.loc(gl, c"projection"), 1, ffi::FALSE, map.projection.as_ptr());
         gl.Uniform2f(p.loc(gl, c"fb_size"), map.fb_size.0 as f32, map.fb_size.1 as f32);
         let r = cache.region_fb;
@@ -1048,6 +1126,9 @@ pub unsafe fn draw(
         }
         gl.DisableVertexAttribArray(p.pos);
         gl.BindBuffer(ffi::ARRAY_BUFFER, 0);
+        gl.ActiveTexture(ffi::TEXTURE1);
+        gl.BindTexture(ffi::TEXTURE_2D, 0);
+        gl.ActiveTexture(ffi::TEXTURE0);
         gl.BindTexture(ffi::TEXTURE_2D, 0);
         gl.UseProgram(0);
     }
@@ -1152,7 +1233,11 @@ pub unsafe fn measure_ink(
         gl.BindBuffer(ffi::ARRAY_BUFFER, progs.vbo);
         gl.EnableVertexAttribArray(p.pos);
         gl.VertexAttribPointer(p.pos, 2, ffi::FLOAT, ffi::FALSE, 0, std::ptr::null());
-        let l1 = &cache.levels[1];
+        // The full blur's level 1 while the glass forms (`Cache::measure`), else level 1 itself.
+        let l1 = match &cache.measure {
+            Some(m) if cache.measure_gen == cache.generation => m,
+            _ => &cache.levels[1],
+        };
         let used1 = ((cache.region_fb.size.w >> 1).max(1), (cache.region_fb.size.h >> 1).max(1));
         gl.ActiveTexture(ffi::TEXTURE0);
         gl.BindTexture(ffi::TEXTURE_2D, l1.tex);
@@ -1285,6 +1370,28 @@ mod tests {
         // Normal: output (x, y) → ndc (2x/w - 1, 2y/h - 1); Flipped180 negates y.
         let s = if flip_y { -1.0 } else { 1.0 };
         [2.0 / w, 0.0, 0.0, 0.0, s * 2.0 / h, 0.0, -1.0, -s, 1.0]
+    }
+
+    #[test]
+    fn a_forming_blur_grows_without_a_step() {
+        // The reach, ≈ offset·2^passes, mixed with the sharp copy under one pass.
+        let reach = |(n, o, sharp): (usize, f32, f32)| (1.0 - sharp) * o * 2f32.powi(n as i32);
+        let (o, n) = (2.0, 2);
+        assert_eq!(formed_blur(o, n, 1.0), (2, 2.0, 0.0), "formed: the material's own blur");
+        assert_eq!(formed_blur(o, n, 0.0).2, 1.0, "unformed: all sharp");
+        let mut last = reach(formed_blur(o, n, 0.0));
+        for i in 1..=200 {
+            let r = reach(formed_blur(o, n, i as f32 / 200.0));
+            assert!(r >= last - 1e-4, "the reach never shrinks as the glass forms ({last} → {r} at {i})");
+            assert!(r - last < 0.2, "and never jumps ({last} → {r} at {i})");
+            last = r;
+        }
+        // Across a change in the number of passes, the same reach on both sides.
+        let below = formed_blur(o, n, 0.5 - 1e-4);
+        let above = formed_blur(o, n, 0.5 + 1e-4);
+        assert_eq!((below.0, above.0), (1, 2), "one pass, then two");
+        assert!((reach(below) - reach(above)).abs() < 0.01);
+        assert_eq!(formed_blur(o, 3, 0.5).0, 2, "1.5 passes run as two");
     }
 
     #[test]

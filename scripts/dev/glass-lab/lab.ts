@@ -1048,6 +1048,9 @@ function fillControls() {
         labSlider(2, "Velo oscuro uniforme", "como la capa del 35 % de la variante transparente", 0, 0.7, 0),
         tuningSlider("saturation", "Saturación", "1 = sin cambio", 0.5, 2),
     ])
+    section("Aparición", [
+        tuningSlider("formationHold", "Formación (congelar)", "0 = apagado, cristal formado; 0,01–0,99 = congelado a esa formación", 0, 1),
+    ], "Un cristal que aparece se materializa: su desenfoque, su refracción, su tinte y su canto crecen desde cero, sin fundido (#764). El deslizador congela todas las piezas en un punto de ese crecimiento para juzgarlo; en el escritorio el contenido aparece en la segunda mitad.")
     section("Refracción, escarcha y luz", [
         NidaraToggleRow("Cristal refractivo", "apagado: solo desenfoque", state.flags.glass, v => { state.flags.glass = v; apply() }),
         tuningSlider("refraction", "Refracción mínima", "px", 0, 40, 0),

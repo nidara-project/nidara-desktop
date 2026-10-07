@@ -104,8 +104,9 @@ the bare white backdrop.
 What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 - **snapshot-time transforms** of the ancestors — `ScaleRevealer.glassPaintTransform()`; GTK's own
   geometry never sees a scale applied in `vfunc_snapshot`;
-- **the opacity** of the widget and every ancestor, per shape: a panel fading in or out fades its
-  blur, glass and rim with it;
+- **how formed the glass is**, per shape (the protocol's `opacity`, #764): the opacity of the widget
+  and every ancestor — or what an ancestor that animates its glass apart from its content says
+  (`GlassFormation`, `ScaleRevealer.glassFormation()`). See "Glass materializes" below;
 - **the clip** of every ancestor whose overflow is hidden, per shape: a card scrolled half out of
   its list is cut straight, not rounded. The clip is pushed BEFORE that ancestor's own snapshot
   transform, so it is its unscaled box.
@@ -159,6 +160,40 @@ steps) rather than solving in encoded luma: compared against encoded luma, a whi
 out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10-01). `nidara-hyalo msg layers` shows what each
 layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
 dock and the island to declare theirs.
+
+### Glass materializes, it never fades (#764, owner 2026-10-07)
+
+Glass has no opacity. The per-shape number the protocol calls `opacity` is, in Hyalo, **how formed
+the glass is** (0..1), and it scales the MATERIAL, not the coverage: the blur's reach, the bevel's
+bend, the saturation, the tint (after the legibility bisection), the rim and the shadow under it
+(`scrim.rs` already took its shapes' most). Coverage is the silhouette's antialiasing and the clip
+only. So every glass fade in the shell — a panel opening, a covered bar group, a banner, a fusion
+member withdrawing — is a pane forming or dissolving, never the finished glass cross-faded over
+the sharp backdrop (two images at once, which is what it was until #764).
+
+- **The blur grows in the capture** (`glass_gl::formed_blur`): full glass is `passes` passes at
+  `offset`; formed `f`, it runs the fractional level L = f·passes as ceil(L) passes (≥ 1) at
+  offset·2^(L − ceil(L)), so the reach (≈ offset·2^L) is continuous where the number of passes
+  changes (a unit test holds it — and fails when the offset stops following L). Under one pass the
+  draw mixes in the sharp copy (level 0, already in the cache: `sharp`, `sharp_mix`). Same cost as
+  before: a forming shape's commit changes every frame, so Smithay re-captured it every frame anyway.
+- **A forming pane has a blur of its own** (`glass.rs` `groups()`): shapes formed differently
+  (`FORMED_ALIKE`) share no pyramid — the Control Center forming beside the bar's capsules at rest —
+  except within a fusion group, which is blurred for its most formed member and blends the rest per
+  pixel (`blur_formed`). Forming groups are drawn first, below the surface's other glass.
+- **The ink and the shadow are measured on the glass as it will be**: while it forms, the capture
+  runs the full blur first and keeps its level 1 aside (`Cache::measure`). A partial blur has darker
+  darks and brighter lights; measured on it, the ink would turn at the end of the animation, with the
+  content already showing.
+- **The client separates the glass from its content** (`ScaleRevealer`, on Hyalo only — Hyprland
+  paints the glass inside the content): on OPEN the glass forms over the whole reveal (its eased
+  progress) and the content fades in over the second half, so text never floats on glass not yet
+  formed; on CLOSE the content goes over the first half and the glass dissolves over the whole
+  (owner's order). A swipe or a collapse fades both together.
+- **Instrument**: `formationHold = f` in `glass-tuning.conf` holds every pane at `f` (0 = off); the
+  glass lab has it as «Formación (congelar)». Measured nested over a checkerboard (detail under the
+  dock, std of grey levels): bare backdrop 24.7, f 0.01 → 24.6, 0.25 → 18.9, 0.5 → 13.5, 0.75 → 7.2,
+  0.99 → 5.05, formed → 4.95.
 
 ### Fusion: a group of panes drawn as one silhouette (#705 step 2, 2026-10-06)
 
@@ -1298,8 +1333,8 @@ Two kinds of request:
 
 🔑 **No limit that exists for Hyprland constrains the desktop on Hyalo** (owner, 2026-10-07). Where
 the shell still holds one back for Hyprland's sake, it asks a `caps` flag and Hyalo answers false
-— `layerAlphaThreshold` (Hyprland's `ignore_alpha`): the panels' fade goes to 0 (`fadeFloor`,
-design-system.md → "The fade stops at the blur line") and the dock's icons cast a shadow
+— `layerAlphaThreshold` (Hyprland's `ignore_alpha`): the panels' glass materializes from nothing
+instead of fading from a floor ("Glass materializes" above) and the dock's icons cast a shadow
 (`DockIcon`). What is left of Hyprland's glass in the client — the painted body, rim and shadow,
 `VisibleRegion`, `BackdropProbe`, `SlicedCairoArea` — goes with the switch (#685, listed in
 #762, which also holds the sweep of what still runs on Hyalo); whether the bar's and the dock's

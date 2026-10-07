@@ -17,7 +17,10 @@ import Gdk from "gi://Gdk?version=4.0"
  * What is sent is what the toolkit SHOWS, not the allocation (#684):
  *  - snapshot-time transforms of the ancestors (`GlassPaintTransform` — a panel growing
  *    from its corner is a scale GTK's own geometry never sees),
- *  - the opacity of the widget and every ancestor (a panel fading in or out),
+ *  - how FORMED the glass is (#764): the opacity of the widget and every ancestor — or, for an
+ *    ancestor that animates its glass apart from its content (`GlassFormation`: the shell's
+ *    ScaleRevealer), what it says. On Hyalo it is not a coverage: glass has no opacity, a pane
+ *    appearing materializes (its blur, refraction, tint and rim grow) — never cross-fades,
  *  - the clip of every ancestor whose overflow is hidden (a card scrolled half out of its
  *    list is cut straight, not rounded),
  *  - once per frame, in the frame clock's LAYOUT phase — after GTK allocated, before it
@@ -129,6 +132,9 @@ export interface MaterialSource {
     /** 0..1: every fusion group held this far towards its envelope — an instrument, to judge
      *  the shape `pulseFusion` passes through; 0 in the product. */
     fusionHold?(native: Gtk.Native): number
+    /** 0..1: every pane held this far formed — an instrument, to judge glass materializing
+     *  (#764); 0 in the product. */
+    formationHold?(native: Gtk.Native): number
     blur(native: Gtk.Native): { size: number, passes: number }
     onChange(cb: () => void): () => void
 }
@@ -137,6 +143,15 @@ export interface MaterialSource {
  *  a translation), in its own coordinates. Implemented by the shell's ScaleRevealer. */
 export type PaintTransform = { scale: number, pivotX: number, pivotY: number, dx: number, dy: number }
 export interface GlassPaintTransform { glassPaintTransform(): PaintTransform | null }
+/** An ancestor that animates its glass apart from its content (#764: the glass forms over the
+ *  whole reveal, the content fades in over its second half): how formed the glass under it is,
+ *  in place of its opacity. Implemented by the shell's ScaleRevealer. */
+export interface GlassFormation { glassFormation(): number }
+
+function formationOf(w: Gtk.Widget): number {
+    const f = (w as unknown as Partial<GlassFormation>).glassFormation
+    return typeof f === "function" ? f.call(w) : w.get_opacity()
+}
 
 type Shim = {
     init(): boolean
@@ -642,7 +657,7 @@ function place(e: Entry, native: Gtk.Native, ink = false): { shapes: Placed[], b
     const w = e.widget
     if (!w.get_mapped() || !w.is_drawable()) return none
     let opacity = 1
-    for (let p: Gtk.Widget | null = w; p; p = p.get_parent()) opacity *= p.get_opacity()
+    for (let p: Gtk.Widget | null = w; p; p = p.get_parent()) opacity *= formationOf(p)
     if (opacity < 0.005) return none
     const shapes: Placed[] = e.shapes().filter(s => s.w > 0 && s.h > 0).map(s => ({
         x: s.x, y: s.y, w: s.w, h: s.h, r: s.radius, e: s.exponent, o: opacity * (s.opacity ?? 1),
@@ -744,6 +759,8 @@ function flush(native: Gtk.Native, st: NativeState) {
     // Fusion only where the compositor paints the glass: blurred only, every pane is its own.
     const spacing = paints && shim.material_set_fusion ? source?.fusion?.(native) ?? 0 : 0
     const hold = source?.fusionHold?.(native) ?? 0
+    const formationHold = source?.formationHold?.(native) ?? 0
+    if (formationHold > 0) for (const s of placed) s.o = formationHold
     const mergeOf = (group: number) => shim?.material_set_fusion_merge
         ? round(Math.max(hold, pulses.get(group)?.boost ?? 0)) : 0
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.

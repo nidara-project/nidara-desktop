@@ -25,7 +25,7 @@ uniform mat2 out_to_fb;     // output-pixel offsets → framebuffer-pixel offset
 uniform vec4 rect;          // the shape, output pixels
 uniform float radius;
 uniform float exponent;
-uniform float opacity;      // the whole glass in this shape, over the plain backdrop
+uniform float opacity;      // how FORMED the glass is in this shape, 0..1 (#764): not a coverage
 uniform vec4 clip;          // what of the shape may show, output px: x, y, w, h
 uniform float glass;        // 1: refractive glass — the compositor paints the whole glass
 uniform vec3 tint;
@@ -54,7 +54,7 @@ uniform float f_k;          // the smooth union's width, output px (twice the gr
 uniform vec4 f_env;         // the group's envelope (set_fusion_merge): x, y, w, h, output px
 uniform vec4 f_env_par;     // its corner radius, exponent; the merge (0..1); its refraction
 uniform vec4 f_rect[FUSE_MAX];   // each member, output px: x, y, w, h
-uniform vec4 f_par[FUSE_MAX];    // radius, exponent, opacity, ink_dark
+uniform vec4 f_par[FUSE_MAX];    // radius, exponent, formed (`opacity`), ink_dark
 uniform vec4 f_clip[FUSE_MAX];   // what of it may show, output px; w 0 = no clip
 uniform float f_refr[FUSE_MAX];  // its refraction, output px
 varying vec2 v_out;
@@ -238,24 +238,47 @@ float noise_hash(vec2 p) {
 vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
 vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
 
+// ── Glass that forms (#764) ─────────────────────────────────────────────────
+// Glass has no opacity: a pane appearing MATERIALIZES — its blur, refraction, tint and rim grow
+// from nothing — and is never the finished glass cross-faded over the sharp backdrop. The blur
+// is grown in the capture (glass_gl.rs `formed_blur`: fewer passes, a shorter reach); what is
+// left here is the sharp copy (level 0, full size) under one pass's least blur (`sharp_mix`),
+// and, in a fusion group blurred for its most formed member, the members formed less.
+uniform sampler2D sharp;
+uniform vec2 sharp_size;
+uniform float sharp_mix;
+uniform float blur_formed;  // how formed the glass the blur was captured for is
+vec3 sharp_at(vec2 out_offset) {
+    vec2 fb = v_fb + out_to_fb * out_offset;
+    return texture2D(sharp, clamp((fb - region_fb.xy) / sharp_size, 0.5 / sharp_size, 1.0 - 0.5 / sharp_size)).rgb;
+}
+// The backdrop as glass formed `formed` of the way sees it.
+vec3 formed_backdrop(vec2 out_offset, float formed) {
+    vec3 blurred = backdrop(out_offset).rgb;
+    float w = (1.0 - sharp_mix) * clamp(formed / max(blur_formed, 1e-4), 0.0, 1.0);
+    return w >= 0.999 ? blurred : mix(sharp_at(out_offset), blurred, w);
+}
+
 void main() {
     float d = silhouette(v_out);
-    // A fusion group's width of bevel, opacity and ink at this pixel (fused_blend); a single
+    // A fusion group's width of bevel, how formed it is and its ink at this pixel (fused_blend); a single
     // shape's are its own.
     vec3 fb = fused > 0.5 ? fused_blend(v_out) : vec3(0.0, opacity, ink_dark);
     // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased. (A fusion
     // group's members are cut inside `fused_sdf`; its clip uniform is none.)
     vec2 cin = min(v_out - clip.xy, clip.xy + clip.zw - v_out);
     float clipped = clamp(min(cin.x, cin.y) + 0.5, 0.0, 1.0);
-    float cov = clamp(0.5 - d, 0.0, 1.0) * clipped * fb.y;
-    if (cov <= 0.0) discard;
+    // Coverage is the silhouette and the clip only; how formed the glass is, is `formed`.
+    float formed = fb.y;
+    float cov = clamp(0.5 - d, 0.0, 1.0) * clipped;
+    if (cov <= 0.0 || formed <= 0.0) discard;
     if (glass < 0.5) {
-        vec4 c = backdrop(vec2(0.0));
+        vec3 c = formed_backdrop(vec2(0.0), formed);
         // Hyprland's blurFinish: noise, then its brightness (a window's backdrop; 0 and 1 for
         // the shell's blur-only surfaces).
-        c.rgb += (noise_hash(v_out) - 0.5) * noise;
-        c.rgb *= min(1.0, brightness);
-        gl_FragColor = vec4(c.rgb * cov, cov);
+        c += (noise_hash(v_out) - 0.5) * noise * formed;
+        c *= mix(1.0, min(1.0, brightness), formed);
+        gl_FragColor = vec4(c * cov, cov);
         return;
     }
 
@@ -319,19 +342,20 @@ void main() {
     float q = max(1.0 - v * v, 1e-4);
     float theta = atan(v / sqrt(q));
     float bend = lens_w * sqrt(q) * tan(theta - asin(sin(theta) / 1.5));
-    vec2 off = -ln * bend * LAB_MUL(5, 3.0);
+    // The bend grows with the glass (#764).
+    vec2 off = -ln * bend * LAB_MUL(5, 3.0) * formed;
     // No dispersion: the colours bend together (the lab's preset; a red/blue fringe was the
     // default until then).
-    vec3 bg = backdrop(off).rgb;
+    vec3 bg = formed_backdrop(off, formed);
 #ifdef GLASS_LAB
     if (lab(6) != 0.0) {
         float sp = 0.08 * max(lab(6), 0.0);
         bg = vec3(backdrop(off * (1.0 - sp)).r, bg.g, backdrop(off * (1.0 + sp)).b);
     }
 #endif
-    // Vibrancy: the backdrop's colour, a little stronger.
+    // Vibrancy: the backdrop's colour, a little stronger — as much as the glass is formed.
     float l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
-    bg = clamp(mix(vec3(l), bg, saturation), 0.0, 1.0);
+    bg = clamp(mix(vec3(l), bg, mix(1.0, saturation, formed)), 0.0, 1.0);
     l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
 #ifdef GLASS_LAB
     // Tone: highlights compressed in linear light toward a ceiling, hue kept (C1 at the knee).
@@ -360,7 +384,7 @@ void main() {
     if (fb.z > 0.5) {
         // Dark content (the ink event): the backdrop under it is bright everywhere, so the
         // glass stops darkening it for white content — a light veil instead.
-        c = mix(bg, ink_tint, alpha_min);
+        c = mix(bg, ink_tint, alpha_min * formed);
     } else {
         float a = 0.0;
         if (luminance(bg) > target) {
@@ -372,7 +396,8 @@ void main() {
             }
             a = hi;
         }
-        a = clamp(a, alpha_min, alpha_max);
+        // The tint thickens as the glass forms.
+        a = clamp(a, alpha_min, alpha_max) * formed;
         c = mix(bg, tint, a);
     }
     // Specular rim: a band of light along the edge where it faces the light (top-left) and again
@@ -401,6 +426,6 @@ void main() {
         spec += max(lab(9), 0.0) * (1.0 - smoothstep(0.0, band * 0.6, inside)) * (0.10 + 0.25 * facing) * rim;
     }
 #endif
-    c = c + spec * (1.0 - c);
+    c = c + spec * formed * (1.0 - c);
     gl_FragColor = vec4(c * cov, cov);
 }
