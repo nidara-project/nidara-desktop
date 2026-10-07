@@ -9,6 +9,7 @@
 
 pub mod controls;
 pub mod decor;
+pub mod drawn;
 pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
@@ -133,6 +134,8 @@ impl<'r> HyaloRenderer for UdevRenderer<'r> {
 smithay::backend::renderer::element::render_elements! {
     pub OutputElement<R> where R: HyaloRenderer;
     Surface=WaylandSurfaceRenderElement<R>,
+    Drawn=drawn::Clipped<WaylandSurfaceRenderElement<R>>,
+    DrawnChange=drawn::DrawnChange,
     Scaled=window::AtScale<WaylandSurfaceRenderElement<R>>,
     Rounded=window::RoundedElement<R>,
     Glass=GlassElement,
@@ -149,6 +152,8 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Surface(e) => f.debug_tuple("Surface").field(e).finish(),
+            Self::Drawn(e) => f.debug_tuple("Drawn").field(e).finish(),
+            Self::DrawnChange(e) => f.debug_tuple("DrawnChange").field(e).finish(),
             Self::Scaled(e) => f.debug_tuple("Scaled").field(e).finish(),
             Self::Rounded(e) => f.debug_tuple("Rounded").field(e).finish(),
             Self::Glass(e) => f.debug_tuple("Glass").field(e).finish(),
@@ -185,7 +190,23 @@ fn push_surface<R: HyaloRenderer>(
 ) {
     let now = std::time::Instant::now();
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
-        out.extend(render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind));
+        let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
+        // A surface that declared where it draws (#761) is drawn only there, and repainted where
+        // that changed.
+        match crate::protocols::material::drawn(s) {
+            None => out.extend(elements.into_iter().map(OutputElement::Surface)),
+            Some(d) => {
+                match &d.rects {
+                    None => out.extend(elements.into_iter().map(OutputElement::Surface)),
+                    Some(rects) => {
+                        let region = drawn::region_on_output(rects, loc, scale);
+                        out.extend(elements.into_iter().map(|inner| OutputElement::Drawn(drawn::Clipped { inner, region: region.clone() })));
+                    }
+                }
+                let tree = smithay::desktop::utils::bbox_from_surface_tree(s, (0, 0));
+                out.push(OutputElement::DrawnChange(drawn::DrawnChange::new(d.id, d.changes, tree, loc, scale)));
+            }
+        }
         match floor {
             Some(floor) => {
                 out.extend(GlassElement::for_surface(s, loc, scale, output_size, floor).into_iter().map(OutputElement::Glass));

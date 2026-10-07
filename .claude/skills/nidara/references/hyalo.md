@@ -1336,9 +1336,37 @@ the shell still holds one back for Hyprland's sake, it asks a `caps` flag and Hy
 — `layerAlphaThreshold` (Hyprland's `ignore_alpha`): the panels' glass materializes from nothing
 instead of fading from a floor ("Glass materializes" above) and the dock's icons cast a shadow
 (`DockIcon`). What is left of Hyprland's glass in the client — the painted body, rim and shadow,
-`VisibleRegion`, `BackdropProbe`, `SlicedCairoArea` — goes with the switch (#685, listed in
-#762, which also holds the sweep of what still runs on Hyalo); whether the bar's and the dock's
-monitor-sized surfaces need a Hyalo-native stand-in for `VisibleRegion` is measured in #761.
+`BackdropProbe`, `SlicedCairoArea` — goes with the switch (#685, listed in #762, which also holds
+the sweep of what still runs on Hyalo). `VisibleRegion` stays: on Hyalo it is where a surface draws
+(next section).
+
+### Where a surface draws (`set_drawn_region`, #761)
+
+The bar and the dock are layers the size of the monitor (every panel hangs from the bar; the dock
+leaves room for a magnified icon) that paint a strip and whatever is open. Hyalo blended every
+damage under them through their empty pixels: with a video under them, **9 % of Hyalo's GPU time
+per frame** for the two (measured in the session, 2026-10-07: 1.436 → 1.305 ms a frame; the
+numbers are in #761). The shell already knew what each paints — the `VisibleRegion` bookkeeping
+written for Hyprland's blur (`tech-debt.md` §46) — so Hyalo takes that, not a new mechanism:
+
+- `nidara-material-v1` → `set_drawn_region(wl_region | null)`, inside v1. Surface-local LOGICAL
+  pixels like the rest of the protocol; double-buffered on commit; not cleared by `clear_shapes`.
+  `libnidara-wl`'s `visible_region_*` sends it when the compositor offers the material protocol,
+  converting the buffer pixels its callers pass back to logical ones, outward.
+- Hyalo (`render/drawn.rs`) wraps each element of the surface's tree in `Clipped`: it draws, and
+  reports damage, only inside the region — damage under the empty part repaints none of it. A
+  second element, `DrawnChange`, draws nothing and damages where the region itself changed (what
+  appeared or went), since a region lands on a commit that need not carry new pixels there. The
+  glass is not affected (it is Hyalo's own), nor are popovers (their own surfaces). The glass's
+  counter does not move with the region: a dock re-declaring it every frame of a hover does not
+  redraw its glass for it.
+- ⚠️ Same failure mode as on Hyprland: content outside the region is NOT DRAWN. The bar's producer
+  walks every child of its overlay (`paintedRects`), so a panel added later is covered by
+  construction; `NIDARA_VISIBLE_REGION=0` is still the escape hatch.
+- Seen with `nidara-hyalo msg layers` → each layer's `drawn` (`[x, y, w, h]`, surface-local, the
+  overlaps removed — a panel's rect minus the strip above it is what is listed). The smoke requires
+  the bar and the dock to declare one, under half their surface at rest, and the bar's to grow with
+  the Control Center open.
 
 - **Over a fullscreen window, Super+B brings the bar AND the dock** (`toggleBarOverlay` in app.ts →
   the bar's `setBarOverlayMode` and the dock's `setOverFullscreen`: both join the OVERLAY layer,
@@ -1473,18 +1501,27 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 
 `render/stats.rs` instruments every frame, per output:
 
-- **`nidara-hyalo msg stats`** — over the last second: frames drawn, unchanged and drawn WHOLE
-  (damage ≥ 99 % of the output), damage per frame, CPU time to build the elements and to render
-  them, **GPU time** of the render, and what the glass did (`captures`, blur `passes`,
-  `capture_px`, `draws`, `measures`), plus the GPU memory its caches hold
-  (`glass_texture_bytes`). Counts are taken where the work happens (`glass_gl::capture`,
-  `draw`, `measure_ink`, every texture alloc/delete), so they are what ran, not an estimate.
-- **GPU time = two GL timestamps around the render** (GL_EXT_disjoint_timer_query), read back
-  frames later without waiting. **tty backend only**: in a window (winit) `with_context` makes
-  the context current WITHOUT the window's surface, and the next `buffer_age` then fails
-  (EGL_BAD_SURFACE) — every frame drawn whole; the nested Hyalo reports `gpu: null`. ⚠️ The
-  nested Hyalo in the headless cage draws most frames whole anyway (the host gives no buffer
-  age: `frames_whole` says so) — **cost numbers are the session's, never the harness's**.
+- **`nidara-hyalo msg stats`** — over the last second, per output: frames drawn, unchanged and
+  repainted WHOLE (≥ 99 % of the output), the area repainted per frame, CPU time to build the
+  elements and to render them, and what the glass did (`captures`, blur `passes`, `capture_px`,
+  `draws`, `measures`); plus the GPU memory the glass's caches hold (`glass_texture_bytes`) and,
+  for the whole process, **`gpu_time`**. Counts are taken where the work happens
+  (`glass_gl::capture`, `draw`, `measure_ink`, every texture alloc/delete), so they are what ran,
+  not an estimate.
+- ⚠️ **The area repainted is NOT the new damage**: Smithay returns the frame's damage united with
+  that of the last `age − 1` frames (the buffer it draws into last held an older frame). That is
+  the cost, so it is what is counted — and why a video covering 89 % of the screen shows as
+  frames repainted whole with triple buffering.
+- **`gpu_time` = the kernel's per-client accounting**, `drm-engine-<name>: <ns>` in
+  `/proc/self/fdinfo` of Hyalo's DRM files (amdgpu, i915, xe, msm… report it; llvmpipe does not:
+  null): `ms_per_s`, `ms_per_frame` (every output's frames together), `engines`. It is the time
+  the jobs RAN. 🔴 Until 2026-10-07 it was two GL timestamps around the render — a span on the GL
+  timeline that holds the waits on clients' buffers and other contexts' work: it read ~10 ms a
+  frame where the kernel said 1.4 (#761). Never put a span back as "GPU time". For an A/B outside
+  Hyalo, `cat /proc/<pid>/fdinfo/*` gives the same number (one value per `drm-client-id`);
+  `gpu_busy_percent` counts every client, Chrome's video included — useless for that.
+- ⚠️ The nested Hyalo in the headless cage draws most frames whole (the host gives no buffer age:
+  `frames_whole` says so) — **cost numbers are the session's, never the harness's**.
 - **`nidara-hyalo msg debug-overlay on|off`** (or `HYALO_DEBUG_OVERLAY=1`): each glass element's
   capture region outlined (cyan), a flash where one re-captured, the frame's damage outlined
   (magenta), fading over 400 ms. It is drawn with damage tracking like anything else, so it

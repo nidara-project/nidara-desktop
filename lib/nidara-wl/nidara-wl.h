@@ -84,9 +84,10 @@ gboolean nidara_wl_is_available (void);
 /**
  * nidara_wl_has_visible_region:
  *
- * Whether the compositor advertises hyprland_surface_manager_v1 at version 2 or
- * later. Version 1 has no set_visible_region, so the blur optimisation silently
- * does nothing there — check this before assuming it took effect.
+ * Whether the compositor takes a visible region: Hyalo through nidara-material-v1
+ * (set_drawn_region), Hyprland through hyprland_surface_manager_v1 at version 2 or
+ * later. Hyprland's version 1 has no set_visible_region, so the optimisation
+ * silently does nothing there — check this before assuming it took effect.
  *
  * Returns: %TRUE if visible regions are supported
  */
@@ -199,7 +200,8 @@ GdkTexture *nidara_wl_capture_region_finish (GAsyncResult  *result,
  * DANGER, and it is the whole risk of this API: anything OUTSIDE the committed
  * region is not drawn at all. Hyprland clips with a hard GL scissor
  * (OpenGL.cpp), and an empty intersection cancels the element entirely
- * (SurfacePassElement.cpp) — there is exactly 1px of tolerance. The failure mode
+ * (SurfacePassElement.cpp) — there is exactly 1px of tolerance. Hyalo draws the
+ * surface's content only inside it too (render/drawn.rs). The failure mode
  * is "the surface vanished", not "the surface looks worse". Declare a region only
  * from geometry you own, and be generous at the edges.
  */
@@ -208,12 +210,15 @@ void nidara_wl_visible_region_begin (GdkSurface *surface);
 /**
  * nidara_wl_visible_region_add_rect:
  * @surface: the #GdkSurface being described
- * @x: rectangle x, in surface-local coordinates
+ * @x: rectangle x, in BUFFER pixels (surface-local, times the surface's scale)
  * @y: rectangle y
  * @width: rectangle width
  * @height: rectangle height
  *
  * Adds a rectangle to the region opened by nidara_wl_visible_region_begin().
+ * Buffer pixels are what Hyprland's protocol takes; on Hyalo, whose protocol takes
+ * logical pixels, the rectangle is converted back with the surface's scale,
+ * rounded outward.
  */
 void nidara_wl_visible_region_add_rect (GdkSurface *surface,
                                         int         x,

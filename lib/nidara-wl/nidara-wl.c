@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <gdk/wayland/gdkwayland.h>
+#include <math.h>
 #include <poll.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -156,7 +157,7 @@ nidara_wl_is_available (void)
 gboolean
 nidara_wl_has_visible_region (void)
 {
-  return wl_ok && surface_mgr != NULL;
+  return wl_ok && (surface_mgr != NULL || material_mgr != NULL);
 }
 
 gboolean
@@ -175,10 +176,20 @@ nidara_wl_has_focus_grab (void)
  * Visible region
  * ====================================================================== */
 
+/* Two compositors take a visible region, through two protocols (#761):
+ *  - Hyprland: hyprland_surface_v1.set_visible_region, in BUFFER pixels — what the
+ *    callers pass (ui/shell/common/VisibleRegion.ts converts).
+ *  - Hyalo: nidara_material_v1.set_drawn_region, in surface-local LOGICAL pixels like
+ *    every other request of that protocol. add_rect converts back, outward, with the
+ *    scale GTK renders the buffer at: a rect one pixel short is a column not drawn.
+ * Hyalo's when both are offered: the material object is the one Hyalo draws from. */
+
+static struct nidara_material_v1 *material_get (GdkSurface *surface);
+
 /* Per-GdkSurface state, hung off the surface itself so it dies with it. */
 typedef struct
 {
-  struct hyprland_surface_v1 *hypr_surface;
+  struct hyprland_surface_v1 *hypr_surface;   /* NULL on Hyalo */
   struct wl_region           *pending;
 } SurfaceState;
 
@@ -209,13 +220,32 @@ surface_state_get (GdkSurface *surface, gboolean create)
     return NULL;   /* not mapped yet — there is no surface to talk about */
 
   st = g_new0 (SurfaceState, 1);
-  st->hypr_surface =
-    hyprland_surface_manager_v1_get_hyprland_surface (surface_mgr, wls);
-  wl_proxy_set_queue ((struct wl_proxy *) st->hypr_surface, shim_queue);
+  if (material_mgr == NULL)
+    {
+      st->hypr_surface =
+        hyprland_surface_manager_v1_get_hyprland_surface (surface_mgr, wls);
+      wl_proxy_set_queue ((struct wl_proxy *) st->hypr_surface, shim_queue);
+    }
 
   g_object_set_data_full (G_OBJECT (surface), "nidara-wl-state", st,
                           surface_state_free);
   return st;
+}
+
+/* Sends @region (NULL = the whole surface) to whichever compositor this is. */
+static gboolean
+surface_state_send (GdkSurface *surface, SurfaceState *st, struct wl_region *region)
+{
+  if (st->hypr_surface)
+    hyprland_surface_v1_set_visible_region (st->hypr_surface, region);
+  else
+    {
+      struct nidara_material_v1 *m = material_get (surface);
+      if (!m)
+        return FALSE;
+      nidara_material_v1_set_drawn_region (m, region);
+    }
+  return TRUE;
 }
 
 void
@@ -246,6 +276,17 @@ nidara_wl_visible_region_add_rect (GdkSurface *surface,
   if (!st || !st->pending || width <= 0 || height <= 0)
     return;
 
+  if (!st->hypr_surface)
+    {
+      /* Buffer pixels → logical, outward (see the top of this section). */
+      double scale = gdk_surface_get_scale (surface);
+      if (scale > 0 && scale != 1)
+        {
+          int x0 = (int) floor (x / scale), y0 = (int) floor (y / scale);
+          int x1 = (int) ceil ((x + width) / scale), y1 = (int) ceil ((y + height) / scale);
+          x = x0; y = y0; width = x1 - x0; height = y1 - y0;
+        }
+    }
   wl_region_add (st->pending, x, y, width, height);
 }
 
@@ -258,7 +299,7 @@ nidara_wl_visible_region_commit (GdkSurface *surface)
   if (!st || !st->pending)
     return FALSE;
 
-  hyprland_surface_v1_set_visible_region (st->hypr_surface, st->pending);
+  gboolean sent = surface_state_send (surface, st, st->pending);
   wl_region_destroy (st->pending);
   st->pending = NULL;
 
@@ -266,7 +307,7 @@ nidara_wl_visible_region_commit (GdkSurface *surface)
    * GTK issues on its own frame cycle. Flushing only pushes it down the socket;
    * it does not make it take effect any sooner. */
   wl_display_flush (gdk_wl_display);
-  return TRUE;
+  return sent;
 }
 
 void
@@ -284,7 +325,7 @@ nidara_wl_visible_region_clear (GdkSurface *surface)
       st->pending = NULL;
     }
 
-  hyprland_surface_v1_set_visible_region (st->hypr_surface, NULL);
+  surface_state_send (surface, st, NULL);
   wl_display_flush (gdk_wl_display);
 }
 
