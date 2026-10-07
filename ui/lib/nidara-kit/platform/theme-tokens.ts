@@ -103,6 +103,29 @@ export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
  */
 export const LAYER_IGNORE_ALPHA = 0.23
 
+/** One layer of an elevation shadow: down by `dy`, blurred over `blur` px, black at `alpha`. */
+export type ShadowLayer = { dy: number; blur: number; alpha: number }
+
+/**
+ * The elevation shadows — "whisper" range, heavier in dark (less ambient contrast) — as
+ * NUMBERS. `--nidara-shadow-sm/-md` are generated from them, and a widget that draws its
+ * own content as textures (the dock's icons, `DockIcon`, through a GSK shadow node) reads
+ * the same layers instead of copying a CSS string.
+ */
+export const ELEVATION_SHADOW: Record<"dark" | "light", Record<"sm" | "md", ShadowLayer[]>> = {
+  dark: {
+    sm: [{ dy: 1, blur: 2, alpha: 0.20 }, { dy: 1, blur: 1, alpha: 0.16 }],
+    md: [{ dy: 2, blur: 8, alpha: 0.28 }, { dy: 1, blur: 2, alpha: 0.18 }],
+  },
+  light: {
+    sm: [{ dy: 1, blur: 2, alpha: 0.06 }, { dy: 1, blur: 1, alpha: 0.04 }],
+    md: [{ dy: 2, blur: 8, alpha: 0.08 }, { dy: 1, blur: 2, alpha: 0.05 }],
+  },
+}
+
+const shadowCss = (layers: ShadowLayer[]) =>
+  layers.map(l => `0 ${l.dy}px ${l.blur}px rgba(0,0,0,${l.alpha.toFixed(2)})`).join(", ")
+
 /**
  * The lowest whole-widget opacity at which glass painted at `glassAlpha` still clears
  * `LAYER_IGNORE_ALPHA`, i.e. still has its blur. A fade that goes below it shows the
@@ -285,16 +308,8 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
   const pbG = parseInt(popoverBg.slice(3, 5), 16)
   const pbB = parseInt(popoverBg.slice(5, 7), 16)
 
-  // Shadows: "whisper" range, heavier in dark (less ambient contrast).
-  const sh = isDark
-    ? {
-        sm: "0 1px 2px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.16)",
-        md: "0 2px 8px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18)",
-      }
-    : {
-        sm: "0 1px 2px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.04)",
-        md: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)",
-      }
+  const shadows = ELEVATION_SHADOW[isDark ? "dark" : "light"]
+  const sh = { sm: shadowCss(shadows.sm), md: shadowCss(shadows.md) }
   // ⚠️ `--nidara-edge` (the rim of light) is NOT emitted any more, and neither are
   // the four `--nidara-material-*` or `--nidara-shadow-popover`. Buried 2026-09-20,
   // tech-debt #106: the rim is painted in Cairo (`ui/lib/nidara-kit/platform/glass-paint.ts`, mirrored

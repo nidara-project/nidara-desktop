@@ -82,13 +82,11 @@ window.nidara-dock-window,
     .cd-icon-container .cd-icon,
     .cd-icon-container image {
         color: var(--nidara-text);
-        // NO -gtk-icon-shadow here: the dock is a blurred layer with ignore_alpha 0.04
-        // (pinned just under dockOpacity's 0.05 floor so the 5%-frost capsule still
-        // blurs — see config/hypr/hyprland.lua:516). Hyprland blurs the wallpaper
-        // behind ANY shadow pixel above that threshold → a halo around the shadow. A
-        // shadow faint enough to stay under 0.04 everywhere is invisible anyway, so a
-        // real drop shadow and this blurred layer are mutually exclusive.
-        -gtk-icon-shadow: none;
+        // The elevation shadow (owner, 2026-10-07). DockIcon draws its own, from the same
+        // numbers (`ELEVATION_SHADOW`), so this reaches only the Gtk.Image fallback.
+        // It was `none` while the dock ran on Hyprland, which blurs a layer wherever its
+        // alpha clears `ignore_alpha` and grew a halo round any shadow; Hyalo does not.
+        -gtk-icon-shadow: var(--nidara-shadow-md);
     }
 }
 

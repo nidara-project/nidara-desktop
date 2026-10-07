@@ -111,6 +111,12 @@ interface SquircleContainerProps {
  * that has to line up with the curve — a flush panel's content margin, a scroll
  * lane's corner clearance — must subtract it, or it silently sits outside the shape.
  * That is what put the clipboard scroll pill on the panel's curve (2026-08-03).
+ *
+ * Its two reasons were Hyprland's: a Cairo rim antialiases INSIDE the DrawingArea's box,
+ * and the 2 px shadow needs room. On Hyalo neither holds — the compositor draws the rim and
+ * is not clipped to the box — but the inset is now part of the bar's and the island's
+ * approved geometry (a 36 px box = 32 px of glass). Whether box = glass is worth re-deriving
+ * those numbers is decided with the switch (#762).
  */
 export const GLASS_INSET = 2.0
 

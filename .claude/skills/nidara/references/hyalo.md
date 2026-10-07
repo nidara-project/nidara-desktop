@@ -1296,6 +1296,15 @@ Two kinds of request:
 
 ## The shell on Hyalo
 
+🔑 **No limit that exists for Hyprland constrains the desktop on Hyalo** (owner, 2026-10-07). Where
+the shell still holds one back for Hyprland's sake, it asks a `caps` flag and Hyalo answers false
+— `layerAlphaThreshold` (Hyprland's `ignore_alpha`): the panels' fade goes to 0 (`fadeFloor`,
+design-system.md → "The fade stops at the blur line") and the dock's icons cast a shadow
+(`DockIcon`). What is left of Hyprland's glass in the client — the painted body, rim and shadow,
+`VisibleRegion`, `BackdropProbe`, `SlicedCairoArea` — goes with the switch (#685, listed in
+#762, which also holds the sweep of what still runs on Hyalo); whether the bar's and the dock's
+monitor-sized surfaces need a Hyalo-native stand-in for `VisibleRegion` is measured in #761.
+
 - **Over a fullscreen window, Super+B brings the bar AND the dock** (`toggleBarOverlay` in app.ts →
   the bar's `setBarOverlayMode` and the dock's `setOverFullscreen`: both join the OVERLAY layer,
   the dock revealed; the dock follows the bar's state, and leaving fullscreen ends it for both).

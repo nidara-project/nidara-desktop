@@ -5,6 +5,7 @@ import Graphene from "gi://Graphene"
 import { reduceMotion } from "../core/ReduceMotion"
 import Theme from "../core/ThemeManager"
 import { blurSafeOpacity } from "../core/NidaraTheme"
+import compositor from "../core/CompositorState"
 import type { PaintTransform } from "../../lib/nidara-kit/platform/material"
 
 // ScaleRevealer: shows/hides its child with a grow/shrink + fade animation.
@@ -38,15 +39,21 @@ export type ScalePivot = "top-right" | "top-left" | "top-center" | "center"
 // overview, app grid, bar expansion): subtle pop, fast accelerating
 // exit, no layout animation. Pivot is per-surface (toward its visual anchor).
 //
-// `opacityFloor`: every one of these panels is glass at `overlayOpacity` on a layer
-// with `ignore_alpha`, so fading the whole widget toward 0 drops the glass under the
-// threshold while the panel is still clearly on screen — its last frames were drawn
-// with NO blur behind them. The fade therefore runs between 1 and the lowest opacity
-// that keeps the blur (`blurSafeOpacity`), and the panel appears / disappears in one
-// step at that end. Read per animation, so the opacity slider is followed live.
+// `opacityFloor`: on Hyprland every one of these panels is glass at `overlayOpacity` on
+// a layer with `ignore_alpha`, so fading the whole widget toward 0 drops the glass under
+// the threshold while the panel is still clearly on screen — its last frames were drawn
+// with NO blur behind them. There the fade runs between 1 and the lowest opacity that
+// keeps the blur (`blurSafeOpacity`), and the panel appears / disappears in one step at
+// that end (at the "regular" material, 0.66; at "clear", ~1 — no fade at all).
+// On Hyalo there is no threshold: each declared shape carries its opacity, and the
+// compositor fades its blur, glass and rim with it — so the floor is 0 and the panel
+// fades all the way (`fadeFloor`). Read per animation, so the material is followed live.
+export const fadeFloor = (glassAlpha: number) =>
+    compositor.caps.layerAlphaThreshold ? blurSafeOpacity(glassAlpha) : 0
+
 export const OVERLAY_POP = {
     scaleFrom: 0.97, durationIn: 220, durationOut: 150, animateLayout: false,
-    opacityFloor: () => blurSafeOpacity(Theme.overlayOpacity),
+    opacityFloor: () => fadeFloor(Theme.overlayOpacity),
 } as const
 
 // Declaration merging: `gi.d.ts` declares `gi://Gtk` as `any` in value position

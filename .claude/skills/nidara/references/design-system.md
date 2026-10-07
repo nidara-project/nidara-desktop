@@ -2270,6 +2270,12 @@ reserved comes out of the painted glass.
 | CC / NC / Prism / system menu / the Activity Island / the app grid | guests on `nidara-bar` | **0.23** | an outer shadow — the bar was raised from 0.01 for it (#243); the island and the grid had layers of their own at 0.23 until #708 point 3 |
 | the tooltip / dock menu bubble | a POPUP, not a layer | `popups_ignorealpha` **0.30** | an outer shadow; 0.18 is under it and the 0.38 glass floor is over it |
 
+🔑 **All of the above is HYPRLAND's.** Hyalo blurs only the shapes a surface declares, whatever
+their opacity, so no threshold limits a shadow or a fade there — and a limit that exists only for
+Hyprland must never constrain what the desktop does on Hyalo (owner, 2026-10-07). A limit of this
+kind asks `compositor.caps.layerAlphaThreshold` (true on Hyprland only); the dock's icons cast the
+elevation shadow (`ELEVATION_SHADOW`, `DockIcon`) on both compositors, Hyprland's halo accepted.
+
 ⚠️ **Raising a threshold has a cost that is temporal, so no screenshot shows it — and it turned out
 not to be visible either.** The overlays fade on close (`ScaleRevealer` animates opacity) and a
 glass pixel's alpha is `glassOpacity x widgetOpacity`, so the blur switches off the moment that
@@ -4049,6 +4055,10 @@ At the thinnest glass (0.24) the floor is ~1: no fade, only the scale — any fa
 would unblur glass that thin. `blur-threshold-check.mjs` holds every shell rule to the TS
 constant, since the floor is computed from it. Only `OVERLAY_POP` panels carry the floor;
 notification banners and the island's `MorphRevealer` (a solid morph, not a fade) do not.
+🔑 **On Hyalo the floor is 0** (`fadeFloor`, 2026-10-07): it asks `compositor.caps.layerAlphaThreshold`,
+false there. Hyalo has no `ignore_alpha`: each declared shape carries its opacity and the
+compositor fades its blur, glass and rim with it, so the panels fade all the way. Until then they
+appeared at 66 % opacity in one step (the "regular" material) and did not fade at all on "clear".
 
 - **Teardown:** call `dismantle()` right after removing it from its parent. It deliberately
   has no `vfunc_dispose` override — GJS blocks JS vfuncs during garbage collection, so a

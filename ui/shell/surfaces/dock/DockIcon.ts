@@ -6,6 +6,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 import { appendScaledTextureDevice, surfaceScale } from "../../../lib/device-texture"
+import { ELEVATION_SHADOW } from "../../../lib/nidara-kit/platform/theme-tokens"
 
 /**
  * DockIcon — a dock app icon drawn as GPU textures, not as a Cairo repaint.
@@ -40,6 +41,14 @@ import { appendScaledTextureDevice, surfaceScale } from "../../../lib/device-tex
  * captured once when the window went (core/WindowCapture.ts), its proportions kept — with the
  * app's icon small at its bottom-right corner, so three windows of one app tell which app and
  * which window. The window shrank into this square (Hyalo's animation lands on it).
+ *
+ * Every icon casts the elevation shadow (`ELEVATION_SHADOW.md`, the numbers behind
+ * `--nidara-shadow-md`), through a GSK shadow node around whatever the icon draws — so it
+ * follows the icon's own silhouette, and a window's picture too. It grows with the icon as
+ * the dock magnifies. The skin is read from the widget's CSS `color` (`--nidara-text`: white
+ * on the dark skin), which `vfunc_css_changed` already watches. Owner, 2026-10-07: icons
+ * have a shadow. They had none since July because Hyprland blurs a layer wherever its alpha
+ * clears `ignore_alpha`, and a shadow there grew a blurred halo; Hyalo has no such threshold.
  */
 export const DockIcon = GObject.registerClass({
     GTypeName: "NidaraDockIcon",
@@ -108,6 +117,8 @@ export const DockIcon = GObject.registerClass({
 
     vfunc_css_changed(change: any): void {
         super.vfunc_css_changed(change)
+        // The shadow follows the skin, which the CSS colour carries.
+        this.queue_draw()
         if (!this._symbolic || !this._source) return
         const key = this._colorKey()
         if (key === this._tint) return
@@ -150,12 +161,29 @@ export const DockIcon = GObject.registerClass({
         return this._rest
     }
 
+    /** The elevation shadow, its offset and blur grown with the icon (`grow` = size / rest
+     *  size), for the skin the CSS colour says: light ink = the dark skin. */
+    private _shadows(grow: number): Gsk.Shadow[] {
+        const c = this.get_color()
+        const darkSkin = 0.2126 * c.red + 0.7152 * c.green + 0.0722 * c.blue > 0.5
+        return ELEVATION_SHADOW[darkSkin ? "dark" : "light"].md.map(l => new Gsk.Shadow({
+            color: new Gdk.RGBA({ red: 0, green: 0, blue: 0, alpha: l.alpha }),
+            dx: 0, dy: l.dy * grow, radius: l.blur * grow,
+        }))
+    }
+
     vfunc_snapshot(snapshot: Gtk.Snapshot): void {
         if (!this._pixbuf || !this._full) return
         const w = this.get_width(), h = this.get_height()
         if (w <= 0 || h <= 0) return
-        const fit = this._fit(w, h)
         const rest = this.restSize()
+        snapshot.push_shadow(this._shadows(rest > 0 ? Math.max(1, Math.min(w, h) / rest) : 1))
+        this._snapshotIcon(snapshot, w, h, rest)
+        snapshot.pop()
+    }
+
+    private _snapshotIcon(snapshot: Gtk.Snapshot, w: number, h: number, rest: number): void {
+        const fit = this._fit(w, h)
         // The FRACTIONAL scale: `get_scale_factor()` rounds 1.25 up to 2, and a rest copy
         // built at 2× is then minified by the GPU — soft, which is the thing this copy
         // exists to avoid. And both paths append in DEVICE space: a scaled texture drawn

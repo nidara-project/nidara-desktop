@@ -111,6 +111,11 @@ export interface CompositorCaps {
      *  (common/BackdropProbe.ts). Not on Hyalo: there the compositor measures under the glass
      *  itself, while drawing it (#684), and has no screencopy for the shell to poll. */
     backdropCapture: boolean
+    /** The compositor blurs a layer only where its alpha clears a threshold (Hyprland's
+     *  `ignore_alpha`, `LAYER_IGNORE_ALPHA`): glass faded below it loses its blur, and a soft
+     *  shadow above it gets a blurred halo. Hyalo blurs the shapes a surface declares, at
+     *  whatever opacity they carry — no threshold, so none of the limits it imposed apply. */
+    layerAlphaThreshold: boolean
     /** A window can be minimized: hidden on its workspace, back through the dock (Hyalo, #724).
      *  Hyprland has no minimize — an app's minimize button does nothing there. */
     minimize: boolean
