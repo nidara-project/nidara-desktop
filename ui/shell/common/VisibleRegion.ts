@@ -4,10 +4,14 @@ import type Gdk from "gi://Gdk?version=4.0"
 /**
  * Thin wrapper over libnidara-wl's visible-region API.
  *
- * Hyprland charges layer blur by the surface's BOX, not by the pixels that end
- * up visible, so Nidara's monitor-sized layers tax every repaint of every
- * window. Declaring what a surface actually paints recovers most of that — see
- * `references/tech-debt.md` §46.
+ * The bar and the dock are layers the size of the monitor that paint a strip and
+ * whatever is open. Declaring what a surface actually paints keeps the compositor
+ * from working through the rest:
+ *  - Hyalo (`nidara-material-v1` set_drawn_region, #761) draws the surface only
+ *    inside the region, so damage under it — a video under the dock — is no longer
+ *    blended through its empty pixels: 9 % of Hyalo's GPU time per frame for the
+ *    two of them, measured in the session.
+ *  - Hyprland charged layer blur by the surface's BOX — `references/tech-debt.md` §46.
  *
  * Loaded LAZILY and tolerated missing: the typelib is installed by install.sh
  * and the PKGBUILD, but a checkout updated without reinstalling would otherwise
@@ -22,9 +26,10 @@ import type Gdk from "gi://Gdk?version=4.0"
  *    path that repaints; queue_draw() alone is not enough (GTK skips the frame
  *    when the render node is identical).
  *
- * 🔑 Callers speak SURFACE (logical) coordinates, the protocol speaks BUFFER
+ * 🔑 Callers speak SURFACE (logical) coordinates, the shim speaks BUFFER
  * pixels — "The visible region is specified in buffer-local coordinates"
- * (hyprland-surface-v1), and Hyprland intersects it with the buffer's size
+ * (hyprland-surface-v1; on Hyalo the shim converts back to the logical pixels
+ * nidara-material-v1 takes), and Hyprland intersects it with the buffer's size
  * (SurfacePassElement::visibleRegion). At scale 1 the two are the same number,
  * which is how every surface shipped declaring logical rects: at 1.25 each rect
  * covered only the top-left 80 % of what it meant, and the dock (bottom), the
@@ -60,6 +65,10 @@ const DISABLED = GLib.getenv("NIDARA_VISIBLE_REGION") === "0"
 
 let shim: Shim | null = null
 let loading = false
+// Declarations made before the shim was ready, the last per surface (see setVisibleRects).
+const beforeReady = new Map<Gdk.Surface, VisibleRect[] | null>()
+let gaveUp = false
+const giveUp = () => { gaveUp = true; beforeReady.clear() }
 
 function load() {
     if (shim || loading) return
@@ -79,13 +88,19 @@ function load() {
             const wl = (mod.default ?? mod) as unknown as Shim
             if (!wl.init()) throw new Error("init returned false")
             if (!wl.has_visible_region()) {
-                console.log("[VisibleRegion] compositor has no hyprland-surface v2 — skipping")
+                console.log("[VisibleRegion] compositor takes no visible region (no nidara-material-v1, no hyprland-surface v2) — skipping")
+                giveUp()
                 return
             }
             shim = wl
             console.log("[VisibleRegion] libnidara-wl ready")
+            // What was declared while the shim was still loading. The last word per
+            // surface, sent now: it lands with the surface's next commit.
+            const early = [...beforeReady]
+            beforeReady.clear()
+            for (const [surface, rects] of early) setVisibleRects(surface, rects)
         })
-        .catch(e => console.log(`[VisibleRegion] unavailable, using full surfaces: ${e}`))
+        .catch(e => { giveUp(); console.log(`[VisibleRegion] unavailable, using full surfaces: ${e}`) })
 }
 
 /** Start using the shim. Safe to call more than once; also runs on import. */
@@ -111,7 +126,15 @@ export type VisibleRect = { x: number, y: number, width: number, height: number 
  * giving the whole surface back (`references/tech-debt.md` §46).
  */
 export function setVisibleRects(surface: Gdk.Surface | null, rects: VisibleRect[] | null) {
-    if (!shim || !surface) return
+    if (!surface) return
+    if (!shim) {
+        // Still loading (the import is async): kept, not dropped. A caller that
+        // dedupes its own declarations — the dock does, on a key — would otherwise
+        // never send this one again, and a dock at rest stayed undeclared for good
+        // (found on Hyalo, #761: the bar re-stamps, the dock did not).
+        if (loading && !gaveUp && !DISABLED) beforeReady.set(surface, rects)
+        return
+    }
     const solid = rects?.filter(r => r.width > 0 && r.height > 0) ?? []
     if (solid.length === 0) {
         declared.delete(surface)

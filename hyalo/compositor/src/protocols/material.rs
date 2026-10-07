@@ -7,10 +7,14 @@ use smithay::{
         Client, DataInit, DisplayHandle, New, Resource, Weak, backend::ClientId,
         protocol::wl_surface::WlSurface,
     },
-    backend::renderer::utils::CommitCounter,
+    backend::renderer::{
+        element::Id,
+        utils::{CommitCounter, DamageBag, DamageSnapshot},
+    },
+    utils::{Logical, Rectangle},
     wayland::{
         Dispatch2, GlobalDispatch2,
-        compositor::{Cacheable, with_states},
+        compositor::{Cacheable, RectangleKind, RegionAttributes, get_region_attributes, with_states},
     },
 };
 
@@ -132,6 +136,9 @@ pub struct MaterialState {
     pub scrim_regions: Vec<ScrimRegion>,
     /// What `set_fusion` last said: the group the next shapes join.
     pub fusing: Option<Fusion>,
+    /// `set_drawn_region`: where the surface's content is drawn, surface-local logical
+    /// rectangles that do not overlap. None: the whole surface.
+    pub drawn: Option<Vec<Rectangle<i32, Logical>>>,
 }
 
 impl MaterialState {
@@ -447,11 +454,96 @@ pub fn on_commit(surface: &WlSurface) {
             // clear_ink: every group is light again, on both ends.
             current.dark_ink.clear();
         }
+        if current.state.drawn != committed.drawn {
+            let drawn = states.data_map.get_or_insert_threadsafe(|| std::sync::Mutex::new(DrawnState::default()));
+            drawn.lock().unwrap().changed(current.state.drawn.as_deref(), committed.drawn.as_deref());
+        }
+        // The glass's counter moves only when the glass changed: a dock that re-declares its
+        // drawn region on every frame of a hover does not redraw its glass for it.
+        let glass_changed = MaterialState { drawn: None, ..current.state.clone() } != MaterialState { drawn: None, ..committed.clone() };
         if current.state != committed {
             current.state = committed;
-            current.commit.increment();
+            if glass_changed {
+                current.commit.increment();
+            }
         }
     });
+}
+
+/// Past this many rectangles a drawn region is taken as its bounding box: generous, never short.
+const MAX_DRAWN_RECTS: usize = 64;
+
+/// A wl_region as rectangles that do not overlap, in its own order of adds and subtracts.
+fn flatten(region: &RegionAttributes) -> Vec<Rectangle<i32, Logical>> {
+    let mut out: Vec<Rectangle<i32, Logical>> = Vec::new();
+    for (kind, r) in &region.rects {
+        match kind {
+            RectangleKind::Add => {
+                let new = r.subtract_rects(out.iter().copied());
+                out.extend(new);
+            }
+            RectangleKind::Subtract => out = Rectangle::subtract_rects_many(out, [*r]),
+        }
+        out.retain(|r| !r.is_empty());
+    }
+    if out.len() > MAX_DRAWN_RECTS {
+        let bbox = out.iter().copied().reduce(|a, b| a.merge(b)).unwrap_or_default();
+        out = vec![bbox];
+    }
+    out
+}
+
+/// The whole surface, for a damage that involves "no region": the renderer cuts it to the
+/// surface (render/drawn.rs).
+fn whole() -> Rectangle<i32, Logical> {
+    Rectangle::from_size((1 << 20, 1 << 20).into())
+}
+
+/// A surface's drawn region over time: what changed, so the renderer repaints where content
+/// appeared or went (render/drawn.rs) — the client's buffer need not have changed there.
+pub struct DrawnState {
+    changes: DamageBag<i32, Logical>,
+    id: Id,
+}
+
+impl Default for DrawnState {
+    fn default() -> Self {
+        Self { changes: DamageBag::new(16), id: Id::new() }
+    }
+}
+
+impl DrawnState {
+    /// The region went from `old` to `new`: both repaint (what appeared and what went).
+    fn changed(&mut self, old: Option<&[Rectangle<i32, Logical>]>, new: Option<&[Rectangle<i32, Logical>]>) {
+        let side = |r: Option<&[Rectangle<i32, Logical>]>| r.map_or_else(|| vec![whole()], <[_]>::to_vec);
+        let (old, new) = (side(old), side(new));
+        // What is in one and not the other: content shown on one side only.
+        let mut damage = Rectangle::subtract_rects_many(old.iter().copied(), new.iter().copied());
+        damage.extend(Rectangle::subtract_rects_many(new.iter().copied(), old.iter().copied()));
+        if damage.is_empty() {
+            return;
+        }
+        self.changes.add(damage);
+    }
+}
+
+/// What the renderer reads of a surface's drawn region (render/drawn.rs).
+pub struct Drawn {
+    /// Surface-local logical; None = the whole surface.
+    pub rects: Option<Vec<Rectangle<i32, Logical>>>,
+    /// Where the region changed, for the element that repaints it.
+    pub changes: DamageSnapshot<i32, Logical>,
+    pub id: Id,
+}
+
+/// The drawn region of a surface that has ever declared one. None for every other surface:
+/// drawn whole, nothing to track.
+pub fn drawn(surface: &WlSurface) -> Option<Drawn> {
+    with_states(surface, |states| {
+        let state = states.data_map.get::<std::sync::Mutex<DrawnState>>()?.lock().unwrap();
+        let rects = states.data_map.get::<std::sync::Mutex<Current>>().and_then(|c| c.lock().unwrap().state.drawn.clone());
+        Some(Drawn { rects, changes: state.changes.snapshot(), id: state.id.clone() })
+    })
 }
 
 /// The material a surface has right now, if it has one worth resolving.
@@ -657,6 +749,11 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff }));
                 }
             }
+            Request::SetDrawnRegion { region } => {
+                // Copied now: the client may destroy the wl_region right after this request.
+                let rects = region.map(|r| flatten(&get_region_attributes(&r)));
+                self.pending(|m| m.drawn = rects);
+            }
             Request::Destroy => {
                 self.pending(|m| *m = MaterialState::default());
             }
@@ -669,6 +766,30 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_drawn_region_is_its_adds_and_subtracts_in_order_and_its_changes_repaint() {
+        let r = |x, y, w, h| Rectangle::<i32, Logical>::new((x, y).into(), (w, h).into());
+        let area = |v: &[Rectangle<i32, Logical>]| v.iter().map(|r| r.size.w * r.size.h).sum::<i32>();
+        // The bar: its strip and an open panel overlapping it — no pixel counted twice.
+        let region = RegionAttributes { rects: vec![(RectangleKind::Add, r(0, 0, 2560, 60)), (RectangleKind::Add, r(1900, 40, 600, 800))] };
+        let flat = flatten(&region);
+        assert_eq!(area(&flat), 2560 * 60 + 600 * 780, "the overlap once: {flat:?}");
+        // A subtract takes from what came before it, and an add after it puts it back.
+        let region = RegionAttributes {
+            rects: vec![(RectangleKind::Add, r(0, 0, 100, 100)), (RectangleKind::Subtract, r(0, 0, 50, 100)), (RectangleKind::Add, r(0, 0, 10, 10))],
+        };
+        assert_eq!(area(&flatten(&region)), 50 * 100 + 10 * 10);
+        // A dock growing up by 40 px repaints the 40 px it gained, nothing it kept.
+        let mut d = DrawnState::default();
+        d.changed(Some(&[r(0, 1300, 2560, 140)]), Some(&[r(0, 1260, 2560, 180)]));
+        let changes = d.changes.snapshot().damage_since(Some(CommitCounter::default())).unwrap();
+        assert_eq!(changes.iter().copied().collect::<Vec<_>>(), vec![r(0, 1260, 2560, 40)]);
+        // The same region again: nothing.
+        let before = d.changes.current_commit();
+        d.changed(Some(&[r(0, 0, 10, 10)]), Some(&[r(0, 0, 10, 10)]));
+        assert_eq!(d.changes.current_commit(), before);
+    }
 
     #[test]
     fn ink_turns_only_past_its_thresholds() {

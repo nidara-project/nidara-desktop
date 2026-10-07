@@ -81,6 +81,10 @@ pub struct LayerInfo {
     /// The glass this layer declared (nidara-material-v1), if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub glass: Option<GlassInfo>,
+    /// Where its content is drawn (`set_drawn_region`, #761): surface-local logical
+    /// `[x, y, w, h]` rectangles. Absent: the whole surface.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub drawn: Option<Vec<[i32; 4]>>,
 }
 
 /// What a surface asked of its glass: how many shapes, and whether the compositor paints the

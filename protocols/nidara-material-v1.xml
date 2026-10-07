@@ -266,5 +266,22 @@
       </description>
       <arg name="merge" type="fixed" summary="0..1: the union (0) to the envelope (1)"/>
     </request>
+    <request name="set_drawn_region">
+      <description summary="pending: the part of the surface its content is drawn in">
+        Surface-local, logical coordinates, like wl_surface.set_opaque_region:
+        the compositor draws the surface's content (its buffer and its
+        subsurfaces') only inside this region, and treats the rest as
+        transparent without sampling it. For a surface far larger than what
+        it paints — a layer the size of the monitor that holds a strip and a
+        panel — so that what changes under it is not blended through its
+        empty pixels. Content outside the region is NOT DRAWN. The glass
+        (the shapes) is not affected: it is the compositor's own.
+
+        A null region, the initial state, is the whole surface. Not cleared
+        by clear_shapes; destroying the material clears it. The region is
+        copied when this request is received, so it may be destroyed at once.
+      </description>
+      <arg name="region" type="object" interface="wl_region" allow-null="true"/>
+    </request>
   </interface>
 </protocol>

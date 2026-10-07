@@ -334,6 +334,9 @@ impl Hyalo {
                                 })
                                 .collect(),
                         }),
+                        drawn: crate::protocols::material::drawn(l.wl_surface())
+                            .and_then(|d| d.rects)
+                            .map(|rects| rects.iter().map(|r| [r.loc.x, r.loc.y, r.size.w, r.size.h]).collect()),
                     });
                 }
             }

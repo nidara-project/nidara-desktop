@@ -305,9 +305,28 @@ phase_run() {
         [ "$lone" -eq 0 ] \
             || { log "FAIL: $lone of $ns's panes cast a shadow of their own"; nidara-hyalo msg layers; exit 1; }
     done
+    # Where the bar and the dock draw (set_drawn_region, #761): both declare it, a small part
+    # of their monitor-sized surfaces at rest — or every damage under them is blended through
+    # their empty pixels — and the bar's grows with a panel open, or the panel is not drawn.
+    drawn_area() {
+        nidara-hyalo msg layers | jq -r --arg ns "$1" \
+            '[.ok.layers[] | select(.namespace == $ns) | .drawn // empty | .[] | .[2] * .[3]] | if length == 0 then -1 else add end'
+    }
+    surface_area() {
+        nidara-hyalo msg layers | jq -r --arg ns "$1" '[.ok.layers[] | select(.namespace == $ns) | .width * .height] | max // 0'
+    }
+    local area whole bar_drawn bar_drawn_cc
+    for ns in nidara-bar nidara-dock; do
+        for i in $(seq 1 20); do [ "$(drawn_area "$ns")" -gt 0 ] && break; sleep 0.5; done
+        area="$(drawn_area "$ns")"; whole="$(surface_area "$ns")"
+        [ "$area" -gt 0 ] && [ "$area" -lt $((whole / 2)) ] \
+            || { log "FAIL: $ns draws over $area of its $whole px (none declared: -1)"; nidara-hyalo msg layers; exit 1; }
+    done
+    bar_drawn="$(drawn_area nidara-bar)"
     /tmp/hyalo/nidara-ipc toggleCC >/dev/null
     sleep 2
     bar_cc="$(glass_shapes nidara-bar)"
+    bar_drawn_cc="$(drawn_area nidara-bar)"
     # The shadow under the glass: the Control Center's panes share ONE, centred on the
     # panel (trackScrimRegion), rather than one each. Its strength depends on the
     # wallpaper; what is checked is that the region reached Hyalo and holds the panes (the
@@ -321,6 +340,8 @@ phase_run() {
         || { log "FAIL: the Control Center's panes never reached Hyalo ($bar_rest shapes closed, $bar_cc open)"; exit 1; }
     [ "$cc_scrim" -gt 1 ] \
         || { log "FAIL: the Control Center's panes do not share one shadow under their glass ($cc_scrim in its region)"; nidara-hyalo msg layers; exit 1; }
+    [ "$bar_drawn_cc" -gt "$bar_drawn" ] \
+        || { log "FAIL: the bar's drawn region did not grow with the Control Center open ($bar_drawn px closed, $bar_drawn_cc open) — the panel is not drawn"; exit 1; }
     # The app grid's glass lands on the bar's surface too.
     /tmp/hyalo/nidara-ipc toggleAppGrid >/dev/null
     sleep 2
@@ -329,7 +350,7 @@ phase_run() {
     sleep 1
     [ "$bar_grid" -gt "$bar_rest" ] \
         || { log "FAIL: the app grid's glass never reached the bar's surface ($bar_rest shapes closed, $bar_grid open)"; nidara-hyalo msg layers; exit 1; }
-    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open, $cc_scrim of them on one shadow, $bar_grid with the app grid open; the dock's)"
+    log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open, $cc_scrim of them on one shadow, $bar_grid with the app grid open; the dock's; the bar draws over $bar_drawn px, $bar_drawn_cc with the Control Center)"
 
     # The render's instruments (#766 A): the counters answer, and the debug overlay SETTLES — an
     # overlay that showed the damage it causes itself would redraw every frame for ever (it
@@ -347,7 +368,7 @@ phase_run() {
     nidara-hyalo msg debug-overlay off >/dev/null
     [ "$with_overlay" -le $((idle + 10)) ] \
         || { log "FAIL: with the debug overlay on, the desktop at rest draws $with_overlay frames a second ($idle without it)"; cat /tmp/hyalo/stats.json; exit 1; }
-    log "render stats OK (at rest: $idle frames/s, $with_overlay with the debug overlay; GPU timer queries: $(jq -r '.ok.stats.gpu_timer_queries' /tmp/hyalo/stats.json))"
+    log "render stats OK (at rest: $idle frames/s, $with_overlay with the debug overlay; Hyalo's GPU time: $(jq -c '.ok.stats.gpu_time' /tmp/hyalo/stats.json))"
 
     # Settings reach Hyalo through the compositor interface (#682): the shell states its
     # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is

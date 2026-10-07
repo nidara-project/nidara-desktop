@@ -3,11 +3,16 @@
 //! Two instruments, both per output:
 //!
 //! - **Counters** (`nidara-hyalo msg stats`): over the last second, the frames drawn and the
-//!   frames that had nothing new, the damaged area, the CPU time to build the frame's elements
-//!   and to render them, the **GPU time** of the render (GL_EXT_disjoint_timer_query: two
-//!   timestamps around it, read back a few frames later without waiting; none where the driver
-//!   lacks the extension), and what the glass did — backdrop captures, blur passes, the area
-//!   captured, draws, ink/shadow measurements — plus the GPU memory its caches hold.
+//!   frames that had nothing new, the area repainted, the CPU time to build the frame's elements
+//!   and to render them, what the glass did — backdrop captures, blur passes, the area
+//!   captured, draws, ink/shadow measurements — plus the GPU memory its caches hold. And, for
+//!   the whole process, **Hyalo's GPU time**: the kernel's own accounting of the engine time
+//!   its jobs took (`gpu_time`).
+//!
+//! The repainted area is what the renderer drew, which is the frame's damage united with the
+//! damage of the frames since the buffer it draws into was last used (its buffer age): with
+//! three buffers, a window that moves repaints where it is, was and was before. That is the
+//! cost, so it is what is counted — not the new damage alone.
 //! - **An overlay** (`nidara-hyalo msg debug-overlay on`, or `HYALO_DEBUG_OVERLAY=1`): over each
 //!   output, every glass element's capture region outlined, a flash where one re-captured, and
 //!   the previous frame's damage outlined, fading.
@@ -31,7 +36,6 @@ use smithay::{
     backend::renderer::{
         Color32F,
         element::{Id, Kind, solid::SolidColorRenderElement},
-        gles::ffi::{self, Gles2},
         utils::CommitCounter,
     },
     utils::{Physical, Rectangle},
@@ -57,17 +61,13 @@ struct Sample {
     rendered: bool,
     build: Duration,
     render: Duration,
-    gpu: Option<Duration>,
     damage_px: u64,
     glass: GlassCounts,
-    id: u64,
 }
 
 #[derive(Default)]
 struct OutputState {
     samples: VecDeque<Sample>,
-    /// Timer queries in flight: the frame, its two timestamps.
-    queries: Vec<(u64, u32, u32)>,
     /// The output's size, output px.
     area: u64,
     /// Overlay: the last frame's damage (minus the overlay's own), when it was taken.
@@ -94,13 +94,11 @@ struct Slot {
 thread_local! {
     static CURRENT: RefCell<Option<String>> = const { RefCell::new(None) };
     static FRAME: Cell<GlassCounts> = Cell::new(GlassCounts::default());
-    static FRAME_ID: Cell<u64> = const { Cell::new(0) };
     static OUTPUTS: RefCell<HashMap<String, OutputState>> = RefCell::new(HashMap::new());
     /// Bytes of GPU memory each glass texture holds, by GL name.
     static TEXTURES: RefCell<HashMap<u32, u64>> = RefCell::new(HashMap::new());
     static OVERLAY: Cell<bool> = Cell::new(std::env::var_os("HYALO_DEBUG_OVERLAY").is_some_and(|v| v != "0"));
-    /// Whether this GL context has timer queries: unknown until asked.
-    static TIMER: Cell<Option<bool>> = const { Cell::new(None) };
+    static GPU: RefCell<GpuClock> = RefCell::new(GpuClock::default());
 }
 
 /// The window the counters are taken over.
@@ -142,101 +140,12 @@ pub fn set_overlay(on: bool) {
     }
 }
 
-fn has_timer(gl: &Gles2) -> bool {
-    TIMER.with(|t| {
-        if let Some(v) = t.get() {
-            return v;
-        }
-        // Safety: a current context (the caller is inside `with_context`).
-        let v = unsafe {
-            let p = gl.GetString(ffi::EXTENSIONS);
-            !p.is_null()
-                && std::ffi::CStr::from_ptr(p as *const _).to_string_lossy().split(' ').any(|e| e == "GL_EXT_disjoint_timer_query")
-                && gl.QueryCounterEXT.is_loaded()
-                && gl.GetQueryObjectui64vEXT.is_loaded()
-        };
-        t.set(Some(v));
-        v
-    })
-}
-
-unsafe fn timestamp(gl: &Gles2) -> u32 {
-    let mut q = 0;
-    unsafe {
-        gl.GenQueriesEXT(1, &mut q);
-        gl.QueryCounterEXT(q, ffi::TIMESTAMP_EXT);
-    }
-    q
-}
-
 /// A frame of `output` (`area` output px) starts: the counts that follow are its.
 pub fn frame_begin(output: &str, area: u64) {
     CURRENT.with(|c| *c.borrow_mut() = Some(output.to_string()));
     FRAME.with(|c| c.set(GlassCounts::default()));
-    FRAME_ID.with(|i| i.set(i.get() + 1));
+    GPU.with(|g| g.borrow_mut().tick(Instant::now()));
     OUTPUTS.with(|o| o.borrow_mut().entry(output.to_string()).or_default().area = area);
-}
-
-/// The GPU side of a frame's start, after `frame_begin`: the GPU time of frames before it that
-/// has come back is collected, and the frame's start timestamp is queued — returned, if the
-/// context has timer queries. Inside `with_context`.
-///
-/// Only on the tty backend. In a window (winit) `with_context` makes the context current
-/// without the window's surface, so the next `buffer_age` fails and every frame is drawn whole
-/// (measured: damage 100 % of the output, EGL_BAD_SURFACE per frame); and its timestamps would
-/// straddle the swap. The nested Hyalo reports no GPU time.
-///
-/// # Safety
-/// The GL context must be current.
-pub unsafe fn gpu_start(gl: &Gles2, output: &str) -> Option<u32> {
-    let timer = has_timer(gl);
-    OUTPUTS.with(|o| {
-        let mut o = o.borrow_mut();
-        let st = o.entry(output.to_string()).or_default();
-        if !timer {
-            return;
-        }
-        // Collect what has come back, oldest first; stop at the first still in flight.
-        unsafe {
-            let mut disjoint = 0;
-            gl.GetIntegerv(ffi::GPU_DISJOINT_EXT, &mut disjoint);
-            while let Some(&(id, q0, q1)) = st.queries.first() {
-                let mut ready = 0;
-                gl.GetQueryObjectivEXT(q1, ffi::QUERY_RESULT_AVAILABLE_EXT, &mut ready);
-                if ready == 0 {
-                    break;
-                }
-                let (mut t0, mut t1) = (0u64, 0u64);
-                gl.GetQueryObjectui64vEXT(q0, ffi::QUERY_RESULT_EXT, &mut t0);
-                gl.GetQueryObjectui64vEXT(q1, ffi::QUERY_RESULT_EXT, &mut t1);
-                gl.DeleteQueriesEXT(2, [q0, q1].as_ptr());
-                st.queries.remove(0);
-                if disjoint == 0
-                    && t1 >= t0
-                    && let Some(s) = st.samples.iter_mut().find(|s| s.id == id)
-                {
-                    s.gpu = Some(Duration::from_nanos(t1 - t0));
-                }
-            }
-            // A GPU that stopped answering: drop the oldest rather than grow.
-            while st.queries.len() > 16 {
-                let (_, q0, q1) = st.queries.remove(0);
-                gl.DeleteQueriesEXT(2, [q0, q1].as_ptr());
-            }
-        }
-    });
-    if timer { Some(unsafe { timestamp(gl) }) } else { None }
-}
-
-/// The render was submitted: its end timestamp, paired with `gpu_start`'s.
-///
-/// # Safety
-/// The GL context must be current.
-pub unsafe fn gpu_end(gl: &Gles2, output: &str, start: Option<u32>) {
-    let Some(q0) = start else { return };
-    let q1 = unsafe { timestamp(gl) };
-    let id = FRAME_ID.with(Cell::get);
-    OUTPUTS.with(|o| o.borrow_mut().entry(output.to_string()).or_default().queries.push((id, q0, q1)));
 }
 
 /// The frame is done: what it cost on the CPU, whether anything was new, and its damage
@@ -244,7 +153,6 @@ pub unsafe fn gpu_end(gl: &Gles2, output: &str, start: Option<u32>) {
 pub fn frame_done(output: &str, rendered: bool, build: Duration, render: Duration, damage: Option<&[Rectangle<i32, Physical>]>) {
     let now = Instant::now();
     let glass = FRAME.with(Cell::get);
-    let id = FRAME_ID.with(Cell::get);
     OUTPUTS.with(|o| {
         let mut o = o.borrow_mut();
         let st = o.entry(output.to_string()).or_default();
@@ -253,7 +161,7 @@ pub fn frame_done(output: &str, rendered: bool, build: Duration, render: Duratio
         } else {
             damage.map_or(st.area, |d| d.iter().map(|r| r.size.w.max(0) as u64 * r.size.h.max(0) as u64).sum())
         };
-        st.samples.push_back(Sample { at: now, rendered, build, render, gpu: None, damage_px, glass, id });
+        st.samples.push_back(Sample { at: now, rendered, build, render, damage_px, glass });
         while st.samples.front().is_some_and(|s| now.duration_since(s.at) > WINDOW * 2) {
             st.samples.pop_front();
         }
@@ -386,17 +294,16 @@ pub struct OutputStats {
     /// Frames in the last second: drawn with something new, and skipped as unchanged.
     pub frames_drawn: usize,
     pub frames_unchanged: usize,
-    /// Of the frames drawn, those drawn WHOLE (damage ≥ 99 % of the output).
+    /// Of the frames drawn, those repainted WHOLE (≥ 99 % of the output).
     pub frames_whole: usize,
-    /// Damage per drawn frame, output px, and as a share of the output.
+    /// The area repainted per drawn frame (the damage with its buffer age, see the header),
+    /// output px, and as a share of the output.
     pub damage_px_avg: f64,
     pub damage_share_avg: f64,
     pub damage_share_max: f64,
     /// CPU: building the frame's elements, and rendering them (submission included).
     pub cpu_build: Option<Timing>,
     pub cpu_render: Option<Timing>,
-    /// GPU time of the render; null where the driver has no timer queries.
-    pub gpu: Option<Timing>,
     /// The glass, summed over the second.
     pub glass: GlassCounts,
 }
@@ -407,7 +314,8 @@ pub struct Stats {
     pub outputs: Vec<OutputStats>,
     /// GPU memory held by the glass's caches (every pyramid level and kept blur), bytes.
     pub glass_texture_bytes: u64,
-    pub gpu_timer_queries: Option<bool>,
+    /// Hyalo's GPU time, every output together; null where the driver does not account it.
+    pub gpu_time: Option<GpuTime>,
     pub overlay: bool,
 }
 
@@ -422,6 +330,19 @@ fn timing(v: impl Iterator<Item = Duration>) -> Option<Timing> {
 
 pub fn snapshot() -> Stats {
     let now = Instant::now();
+    let gpu_time = GPU.with(|g| g.borrow_mut().rate(now)).map(|(since, ms_per_s, engines)| {
+        let frames: usize = OUTPUTS.with(|o| {
+            o.borrow().values().map(|st| st.samples.iter().filter(|s| s.rendered && s.at > since).count()).sum()
+        });
+        let secs = now.duration_since(since).as_secs_f64();
+        let r3 = |x: f64| (x * 1000.0).round() / 1000.0;
+        GpuTime {
+            ms_per_s: r3(ms_per_s),
+            ms_per_frame: (frames > 0).then(|| r3(ms_per_s * secs / frames as f64)),
+            engines: engines.into_iter().map(|(k, v)| (k, r3(v))).collect(),
+            over_ms: (secs * 1000.0).round() as u64,
+        }
+    });
     let outputs = OUTPUTS.with(|o| {
         let mut out: Vec<OutputStats> = o
             .borrow()
@@ -451,7 +372,6 @@ pub fn snapshot() -> Stats {
                     damage_share_max: r3(damage.iter().cloned().fold(0.0, f64::max) / area),
                     cpu_build: timing(recent.iter().map(|s| s.build)),
                     cpu_render: timing(recent.iter().map(|s| s.render)),
-                    gpu: timing(drawn.iter().filter_map(|s| s.gpu)),
                     glass,
                 }
             })
@@ -463,7 +383,168 @@ pub fn snapshot() -> Stats {
         window_ms: WINDOW.as_millis() as u64,
         outputs,
         glass_texture_bytes: TEXTURES.with(|t| t.borrow().values().sum()),
-        gpu_timer_queries: TIMER.with(Cell::get),
+        gpu_time,
         overlay: overlay_enabled(),
+    }
+}
+
+/// Hyalo's GPU time over the window.
+#[derive(Debug, Clone, Serialize)]
+pub struct GpuTime {
+    /// Engine time per second of wall time, ms, every engine together.
+    pub ms_per_s: f64,
+    /// The same per frame drawn on any output; null when none was.
+    pub ms_per_frame: Option<f64>,
+    /// ms per second by engine (`gfx`, `compute`… as the driver names them).
+    pub engines: std::collections::BTreeMap<String, f64>,
+    /// The span it was taken over, ms (about the window; longer when nothing was drawn).
+    pub over_ms: u64,
+}
+
+/// The kernel's accounting of the GPU time this process's jobs took: `drm-engine-<name>: <ns>`
+/// in `/proc/self/fdinfo/<fd>` of each DRM file it holds (the DRM client usage stats; amdgpu,
+/// i915, xe, msm, panfrost… report it, a software renderer does not). Engine time is the time
+/// the jobs RAN — not a span between two timestamps on the GL timeline, which also holds the
+/// waits on other clients' buffers: that is what #767's GL timer queries measured, and they
+/// read ~10 ms a frame where the work was 1.4 (#761).
+#[derive(Default)]
+struct GpuClock {
+    /// The fds that are DRM clients, found by scanning `/proc/self/fdinfo`; and when.
+    fds: Vec<u32>,
+    scanned: Option<Instant>,
+    /// Readings, oldest first: when, and the ns by engine.
+    readings: VecDeque<(Instant, std::collections::BTreeMap<String, u64>)>,
+}
+
+/// How often a reading is taken while frames are drawn, and how often the fds are found again.
+const GPU_EVERY: Duration = Duration::from_millis(250);
+const GPU_RESCAN: Duration = Duration::from_secs(10);
+
+/// One fdinfo: its DRM client id and its engines' ns. None for an fd that is not a DRM client.
+fn read_fdinfo(text: &str) -> Option<(u64, Vec<(String, u64)>)> {
+    let mut client = None;
+    let mut engines = Vec::new();
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else { continue };
+        let value = value.trim();
+        if key == "drm-client-id" {
+            client = value.parse().ok();
+        } else if let Some(engine) = key.strip_prefix("drm-engine-")
+            && let Some(ns) = value.strip_suffix(" ns").and_then(|v| v.trim().parse().ok())
+        {
+            // `drm-engine-capacity-<name>` is a count, not a time: it has no " ns".
+            engines.push((engine.to_string(), ns));
+        }
+    }
+    client.map(|c| (c, engines))
+}
+
+impl GpuClock {
+    fn scan(&mut self, now: Instant) {
+        self.scanned = Some(now);
+        self.fds.clear();
+        let Ok(dir) = std::fs::read_dir("/proc/self/fdinfo") else { return };
+        for entry in dir.flatten() {
+            let Some(fd) = entry.file_name().to_str().and_then(|n| n.parse().ok()) else { continue };
+            if std::fs::read_to_string(entry.path()).ok().as_deref().and_then(read_fdinfo).is_some() {
+                self.fds.push(fd);
+            }
+        }
+    }
+
+    /// Now, by engine: per DRM client the largest of its fds' values (an fd duplicated, or the
+    /// same client reached twice, reports the same counters read a moment apart), then summed
+    /// over clients (a render node and a primary node, two GPUs). None without any client.
+    fn read(&mut self, now: Instant) -> Option<std::collections::BTreeMap<String, u64>> {
+        if self.scanned.is_none_or(|t| now.duration_since(t) >= GPU_RESCAN) {
+            self.scan(now);
+        }
+        let mut clients: HashMap<u64, HashMap<String, u64>> = HashMap::new();
+        let mut gone = false;
+        for fd in &self.fds {
+            match std::fs::read_to_string(format!("/proc/self/fdinfo/{fd}")).ok().as_deref().and_then(read_fdinfo) {
+                Some((client, engines)) => {
+                    let c = clients.entry(client).or_default();
+                    for (engine, ns) in engines {
+                        let v = c.entry(engine).or_default();
+                        *v = (*v).max(ns);
+                    }
+                }
+                None => gone = true,
+            }
+        }
+        if gone {
+            // An fd closed (or reused by something else): find them again next time.
+            self.scanned = None;
+        }
+        let mut total = std::collections::BTreeMap::new();
+        for engines in clients.into_values() {
+            for (engine, ns) in engines {
+                *total.entry(engine).or_insert(0u64) += ns;
+            }
+        }
+        (!total.is_empty()).then_some(total)
+    }
+
+    /// A frame starts: a reading every `GPU_EVERY`, kept for twice the window.
+    fn tick(&mut self, now: Instant) {
+        if self.readings.back().is_some_and(|(t, _)| now.duration_since(*t) < GPU_EVERY) {
+            return;
+        }
+        self.record(now);
+    }
+
+    fn record(&mut self, now: Instant) {
+        if let Some(r) = self.read(now) {
+            self.readings.push_back((now, r));
+        }
+        self.trim(now);
+    }
+
+    fn trim(&mut self, now: Instant) {
+        while self.readings.len() > 2 && self.readings.front().is_some_and(|(t, _)| now.duration_since(*t) > WINDOW * 2) {
+            self.readings.pop_front();
+        }
+    }
+
+    /// The engine time per second since the reading closest to one window ago (the oldest
+    /// there is if none is that old): from when, the total ms/s, and ms/s by engine.
+    fn rate(&mut self, now: Instant) -> Option<(Instant, f64, std::collections::BTreeMap<String, f64>)> {
+        let fresh = self.read(now)?;
+        let base = self
+            .readings
+            .iter()
+            .rev()
+            .find(|(t, _)| now.duration_since(*t) >= WINDOW)
+            .or(self.readings.front())
+            .cloned();
+        self.readings.push_back((now, fresh.clone()));
+        self.trim(now);
+        let (since, old) = base?;
+        let secs = now.duration_since(since).as_secs_f64();
+        if secs < 0.05 {
+            return None;
+        }
+        let engines: std::collections::BTreeMap<String, f64> = fresh
+            .iter()
+            .map(|(k, v)| (k.clone(), v.saturating_sub(old.get(k).copied().unwrap_or(*v)) as f64 / 1e6 / secs))
+            .collect();
+        Some((since, engines.values().sum(), engines))
+    }
+}
+
+#[cfg(test)]
+mod gpu_tests {
+    use super::*;
+
+    #[test]
+    fn fdinfo_gives_the_client_and_its_engine_times() {
+        let amdgpu = "pos:\t0\nflags:\t02100002\ndrm-driver:\tamdgpu\ndrm-client-id:\t6556\ndrm-pdev:\t0000:2d:00.0\n\
+                      drm-memory-vram:\t320892 KiB\ndrm-engine-gfx:\t37879210026 ns\ndrm-engine-compute:\t141560541 ns\n\
+                      drm-engine-capacity-gfx:\t2\n";
+        let (client, engines) = read_fdinfo(amdgpu).expect("a DRM client");
+        assert_eq!(client, 6556);
+        assert_eq!(engines, vec![("gfx".to_string(), 37879210026), ("compute".to_string(), 141560541)], "the capacity is no time");
+        assert!(read_fdinfo("pos:\t0\nflags:\t02\n").is_none(), "an fd that is not a DRM client");
     }
 }

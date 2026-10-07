@@ -65,7 +65,7 @@ echo "==> compiling $REAL"
 cc "${CFLAGS[@]}" "${PKG_CFLAGS[@]}" -shared \
    -Wl,-soname,"$SONAME" \
    "$SRC_DIR/nidara-wl.c" "${PROTO_SOURCES[@]}" \
-   "${PKG_LIBS[@]}" -o "$OUT_DIR/$REAL"
+   "${PKG_LIBS[@]}" -lm -o "$OUT_DIR/$REAL"
 
 ln -sf "$REAL" "$OUT_DIR/$SONAME"
 ln -sf "$SONAME" "$OUT_DIR/libnidara-wl.so"

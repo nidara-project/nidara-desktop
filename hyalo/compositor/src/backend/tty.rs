@@ -1004,12 +1004,10 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         tty.gpus.renderer(&primary_gpu, &render_node, format)
     }
     .expect("a renderer for this output");
-    // Instrumented (render/stats.rs, #766): the CPU to build and to render, the GPU between two
-    // timestamps around the render, the damage.
+    // Instrumented (render/stats.rs, #766): the CPU to build and to render, the area repainted.
     let name = output.name();
     let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);
     render::stats::frame_begin(&name, area);
-    let gpu_start = renderer.as_mut().with_context(|gl| unsafe { render::stats::gpu_start(gl, &name) }).ok().flatten();
     let built = std::time::Instant::now();
     let elements = render::output_elements(&scene, &mut renderer, &output, pointer_here.then_some(&cursor));
     let build = built.elapsed();
@@ -1026,7 +1024,6 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         .drm_output
         .render_frame(&mut renderer, &elements, render::CLEAR_COLOR, frame_flags);
     let render_time = rendering.elapsed();
-    let _ = renderer.as_mut().with_context(|gl| unsafe { render::stats::gpu_end(gl, &name, gpu_start) });
     drop(renderer);
 
     let (rendered, states, damage) = match result {

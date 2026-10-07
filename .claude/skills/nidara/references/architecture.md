@@ -163,7 +163,7 @@ is why one library carries all of them — the packaging cost is paid once:
 |---|---|---|
 | `capture_window()` → `GdkTexture` | `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` + `hyprland-toplevel-mapping` | Real window thumbnails (Overview, window switcher) |
 | `capture_region()` → `GdkTexture` | `zwlr_screencopy_v1` v3 (`capture_output_region`) | What the screen shows behind a surface — the adaptive glass (#673) |
-| `visible_region_*()` | `hyprland-surface-v1` **v2** | The layer-blur cost in `tech-debt.md` §46 |
+| `visible_region_*()` | `nidara-material-v1` `set_drawn_region` (Hyalo) · `hyprland-surface-v1` **v2** (Hyprland) | Hyalo: drawing the bar and the dock only where they paint (#761, `hyalo.md` → "Where a surface draws"); Hyprland: the layer-blur cost in `tech-debt.md` §46 |
 | `focus_grab_*()` | `hyprland-focus-grab-v1` | Keyboard without layer-shell EXCLUSIVE + compositor-side outside-click dismissal |
 
 Built by `lib/nidara-wl/build.sh` — plain `cc` + `wayland-scanner` + `g-ir-scanner`, deliberately no
@@ -239,6 +239,9 @@ owns three decisions:
 - `NIDARA_VISIBLE_REGION=0` disables the optimisation everywhere. Keep this working: the failure
   mode above is a missing piece of desktop, so a user who hits it needs a bootable shell before they
   can report anything, and `systemctl --user set-environment` is reachable from a TTY.
+- A declaration made while the module is still loading is KEPT (the last per surface) and sent
+  once it is ready. It used to be dropped, and a caller that dedupes on its own key — the dock —
+  never declared at rest again (found on Hyalo, #761: the bar re-stamps, the dock did not).
 - It speaks **many rects** (`setVisibleRects`; `setVisibleRect` is the one-rect convenience).
   `wl_region_add` is additive and Hyprland iterates the clip region rather than its bounding box, so
   N rects cost their own area, not their union's — which is what lets the bar declare "strip PLUS
