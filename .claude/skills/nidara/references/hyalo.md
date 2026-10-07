@@ -1469,6 +1469,31 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 - A screenshot's read-back (`ExportMem::copy_framebuffer`): a mapping that is NOT `flipped()`
   holds the bottom row first.
 
+## Measuring the render (#766 A)
+
+`render/stats.rs` instruments every frame, per output:
+
+- **`nidara-hyalo msg stats`** — over the last second: frames drawn, unchanged and drawn WHOLE
+  (damage ≥ 99 % of the output), damage per frame, CPU time to build the elements and to render
+  them, **GPU time** of the render, and what the glass did (`captures`, blur `passes`,
+  `capture_px`, `draws`, `measures`), plus the GPU memory its caches hold
+  (`glass_texture_bytes`). Counts are taken where the work happens (`glass_gl::capture`,
+  `draw`, `measure_ink`, every texture alloc/delete), so they are what ran, not an estimate.
+- **GPU time = two GL timestamps around the render** (GL_EXT_disjoint_timer_query), read back
+  frames later without waiting. **tty backend only**: in a window (winit) `with_context` makes
+  the context current WITHOUT the window's surface, and the next `buffer_age` then fails
+  (EGL_BAD_SURFACE) — every frame drawn whole; the nested Hyalo reports `gpu: null`. ⚠️ The
+  nested Hyalo in the headless cage draws most frames whole anyway (the host gives no buffer
+  age: `frames_whole` says so) — **cost numbers are the session's, never the harness's**.
+- **`nidara-hyalo msg debug-overlay on|off`** (or `HYALO_DEBUG_OVERLAY=1`): each glass element's
+  capture region outlined (cyan), a flash where one re-captured, the frame's damage outlined
+  (magenta), fading over 400 ms. It is drawn with damage tracking like anything else, so it
+  leaves out of what it shows (1) damage inside its own elements of this frame and the last and
+  (2) frames drawn whole (and their re-captures) — or it would show its own redraws and never
+  settle. One entry per rectangle (a region re-captured every frame flashes once). It shows in
+  `msg screenshot` too. The smoke (`hyalo-smoke.sh`) requires a desktop at rest to draw no more
+  frames with the overlay on than without it.
+
 ## Testing Hyalo
 
 - Never against the live session. `hyalo/scripts/headless-shot.sh` and `headless-shell.sh` run

@@ -161,6 +161,10 @@ pub enum Request {
     Layers,
     /// Where the pointer is, global logical pixels.
     CursorPosition,
+    /// What each output's frames cost over the last second (render/stats.rs, #766).
+    Stats,
+    /// The debug overlay: each glass's capture region, re-captures, damage (render/stats.rs).
+    DebugOverlay { on: bool },
     /// Whether the session is locked, and the outputs a lock surface covers (lock.rs).
     Lock,
     /// Seconds since the last input, whether something holds idle off, the steps (idle.rs).
@@ -214,6 +218,7 @@ pub enum Response {
     Workspaces { workspaces: Vec<WorkspaceInfo> },
     Layers { layers: Vec<LayerInfo> },
     CursorPosition { x: f64, y: f64 },
+    Stats { stats: crate::render::stats::Stats },
     Lock { locked: bool, surfaces: Vec<String> },
     Idle { idle_secs: u64, inhibited: bool, config: crate::config::IdleConfig },
     Config { config: Box<crate::config::Config> },

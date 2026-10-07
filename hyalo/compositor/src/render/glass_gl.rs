@@ -670,6 +670,7 @@ impl Programs {
                     gl.DeleteFramebuffers(1, &fbo);
                 }
                 gl.DeleteTextures(1, &tex);
+                super::stats::texture_free(tex);
             }
         }
     }
@@ -751,6 +752,7 @@ impl Cache {
                 gl.TexImage2D(
                     ffi::TEXTURE_2D, 0, format as i32, w, h, 0, format, ffi::UNSIGNED_BYTE, std::ptr::null(),
                 );
+                super::stats::texture_alloc(tex, w as u64 * h as u64 * if k == 0 { 3 } else { 4 });
                 for (p, v) in [
                     (ffi::TEXTURE_MIN_FILTER, ffi::LINEAR),
                     (ffi::TEXTURE_MAG_FILTER, ffi::LINEAR),
@@ -928,6 +930,7 @@ pub unsafe fn capture(
                 gl.TexImage2D(
                     ffi::TEXTURE_2D, 0, ffi::RGBA as i32, l1.w, l1.h, 0, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null(),
                 );
+                super::stats::texture_alloc(tex, l1.w as u64 * l1.h as u64 * 4);
                 for (p, v) in [
                     (ffi::TEXTURE_MIN_FILTER, ffi::LINEAR),
                     (ffi::TEXTURE_MAG_FILTER, ffi::LINEAR),
@@ -945,6 +948,11 @@ pub unsafe fn capture(
             cache.measure_gen = cache.generation;
         }
         chain(run_passes, run_offset);
+        super::stats::count(|c| {
+            c.captures += 1;
+            c.passes += 2 * run_passes as u32 - 1 + if keep_full { 2 * passes as u32 - 1 } else { 0 };
+            c.capture_px += region_fb.size.w.max(0) as u64 * region_fb.size.h.max(0) as u64;
+        });
 
         // Leave the state as Smithay's renderer expects to find it.
         gl.BindFramebuffer(ffi::FRAMEBUFFER, prev_fbo as u32);
@@ -1028,6 +1036,7 @@ pub unsafe fn draw(
                 gl.Uniform4fv(loc, 4, params.as_ptr());
             }
         }
+        super::stats::count(|c| c.draws += 1);
         for members in draw_plan(shapes) {
             let s = &shapes[members[0]];
             let fused = members.len() > 1;
@@ -1287,6 +1296,7 @@ pub unsafe fn measure_ink(
             surface: surface.clone(),
         });
         INK_ISSUED.with(|f| f.set(true));
+        super::stats::count(|c| c.measures += 1);
 
         gl.BindFramebuffer(ffi::FRAMEBUFFER, prev_fbo as u32);
         gl.Viewport(vp[0], vp[1], vp[2], vp[3]);

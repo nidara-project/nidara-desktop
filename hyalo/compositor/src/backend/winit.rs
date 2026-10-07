@@ -140,8 +140,13 @@ fn render(state: &mut Hyalo) {
     w.queued = false;
     let output = w.output.clone();
     let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows);
+    // Instrumented (render/stats.rs, #766) as on the tty backend, without the GPU time
+    // (`stats::gpu_start` says why).
+    let name = output.name();
+    let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);
+    render::stats::frame_begin(&name, area);
     let age = w.graphics.buffer_age().unwrap_or(0);
-    let result = {
+    let (result, build, render_time) = {
         let (renderer, mut framebuffer) = match w.graphics.bind() {
             Ok(b) => b,
             Err(err) => {
@@ -149,21 +154,31 @@ fn render(state: &mut Hyalo) {
                 return;
             }
         };
+        let built = std::time::Instant::now();
         // No cursor: the host compositor draws its own over the window.
         let elements = render::output_elements(&scene, renderer, &output, None);
-        w.damage_tracker
+        let build = built.elapsed();
+        let rendering = std::time::Instant::now();
+        let result = w
+            .damage_tracker
             .render_output(renderer, &mut framebuffer, age, &elements, render::CLEAR_COLOR)
-            .map(|r| (r.damage.cloned(), r.states))
+            .map(|r| (r.damage.cloned(), r.states));
+        (result, build, rendering.elapsed())
     };
     match result {
         Ok((damage, states)) => {
             if let Err(err) = w.graphics.submit(damage.as_deref()) {
                 tracing::warn!(?err, "winit: submit failed");
             }
+            let rendered = damage.is_some();
+            render::stats::frame_done(&name, rendered, build, render_time, damage.as_deref().or(rendered.then_some(&[])));
             state.lock_frame_shown(&output);
             super::post_repaint(state, &output, &states, None);
         }
-        Err(err) => tracing::warn!(?err, "winit: render failed"),
+        Err(err) => {
+            render::stats::frame_done(&name, false, build, render_time, None);
+            tracing::warn!(?err, "winit: render failed");
+        }
     }
     let _ = state.display_handle.flush_clients();
 }
