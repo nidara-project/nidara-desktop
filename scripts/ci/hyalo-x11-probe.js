@@ -7,24 +7,13 @@
 //   popup    an override-redirect window at 100,100, 120×80: red in its first frame, green from
 //              the next; prints SHOWN, then GREEN once it has drawn it. Without frame callbacks
 //              Xwayland never commits that second frame (xwayland.rs; Steam's black menus)
-//   pixel PNG X Y   prints the pixel's colour as `RGB r g b`
 import Gtk from 'gi://Gtk?version=3.0';
 import Gdk from 'gi://Gdk?version=3.0';
-import GdkPixbuf from 'gi://GdkPixbuf';
 import GLib from 'gi://GLib';
 import System from 'system';
 
-const [mode, ...rest] = ARGV;
+const [mode] = ARGV;
 const out = s => print(s);
-
-if (mode === 'pixel') {
-    const [path, x, y] = rest;
-    const pb = GdkPixbuf.Pixbuf.new_from_file(path);
-    const px = pb.get_pixels();
-    const o = Number(y) * pb.get_rowstride() + Number(x) * pb.get_n_channels();
-    out(`RGB ${px[o]} ${px[o + 1]} ${px[o + 2]}`);
-    System.exit(0);
-}
 
 Gtk.init(null);
 

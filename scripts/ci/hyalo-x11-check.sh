@@ -70,10 +70,15 @@ for _ in $(seq 1 40); do grep -q GREEN "$log/popup.log" && break; sleep 0.25; do
 grep -q GREEN "$log/popup.log" || fail "the popup never drew its second frame"
 sleep 0.5
 [ "$($MSG xwayland | jq -r '.ok.overrides')" -ge 1 ] || fail "Hyalo does not count the popup as an X11 menu"
-$MSG screenshot "$log/popup.png" >/dev/null
+# The raw PPM (P6: "P6\nW H\n255\n", then RGB): read with od — GdkPixbuf's loaders run in
+# a bwrap sandbox that a CI container refuses.
+$MSG screenshot "$log/popup.ppm" >/dev/null
 origin=$($MSG outputs | jq -r '.ok.outputs[0].position | "\(.[0]) \(.[1])"')
 set -- $origin
-rgb=$(probe pixel "$log/popup.png" $((160 - $1)) $((140 - $2)) | sed -n 's/^RGB //p')
+width=$(head -n 2 "$log/popup.ppm" | tail -n 1 | cut -d' ' -f1)
+header=$(head -n 3 "$log/popup.ppm" | wc -c)
+offset=$((header + ((140 - $2) * width + (160 - $1)) * 3))
+rgb=$(od -An -tu1 -j "$offset" -N 3 "$log/popup.ppm" | tr -s ' ' | sed 's/^ //')
 case "$rgb" in
     "0 255 0") echo "ok    an X11 menu is drawn where it was put, and its next frame shows" ;;
     "255 0 0") fail "the X11 menu is stuck on its first frame (no frame callbacks)" ;;
