@@ -369,6 +369,20 @@ phase_run() {
     [ "$with_overlay" -le $((idle + 10)) ] \
         || { log "FAIL: with the debug overlay on, the desktop at rest draws $with_overlay frames a second ($idle without it)"; cat /tmp/hyalo/stats.json; exit 1; }
     log "render stats OK (at rest: $idle frames/s, $with_overlay with the debug overlay; Hyalo's GPU time: $(jq -c '.ok.stats.gpu_time' /tmp/hyalo/stats.json))"
+    # Hyalo's own animations are drawn at the moment the frame shows (#766 B): each frame queued
+    # carries the vblank it was predicted for, checked against the kernel's timestamp of its flip.
+    # vkms times its vblanks, so frames drawn here must come back timed; how far off they land
+    # depends on llvmpipe keeping up, so it is printed, not held to a number.
+    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    sleep 0.6
+    nidara-hyalo msg stats > /tmp/hyalo/presentation.json || true
+    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    sleep 1
+    local timed
+    timed="$(jq -r '[.ok.stats.outputs[].presentation.frames // 0] | max // 0' /tmp/hyalo/presentation.json)"
+    [ "$timed" -gt 0 ] \
+        || { log "FAIL: frames were drawn opening the Control Center, but none came back timed — the predicted presentation is not checked against the flip"; cat /tmp/hyalo/presentation.json; exit 1; }
+    log "presentation OK ($(jq -c '[.ok.stats.outputs[] | {output, frames_drawn, presentation}]' /tmp/hyalo/presentation.json))"
 
     # Settings reach Hyalo through the compositor interface (#682): the shell states its
     # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is

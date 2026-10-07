@@ -15,6 +15,7 @@ pub mod glass_gl;
 pub mod scrim;
 pub mod snapshot;
 pub mod stats;
+pub mod timing;
 pub mod title_bar;
 pub mod window;
 
@@ -179,6 +180,7 @@ pub const CLEAR_COLOR: Color32F = Color32F::new(0.06, 0.06, 0.07, 1.0);
 /// measures its backdrop with the whole floor divided out — not only its own shadow, or the
 /// Control Center's would split the dock's backdrop and switch the dock's on (owner,
 /// 2026-10-02: "the dock's shadow only comes on when the Control Center opens").
+#[allow(clippy::too_many_arguments)]
 fn push_surface<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     renderer: &mut R,
@@ -187,8 +189,8 @@ fn push_surface<R: HyaloRenderer>(
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
     floor: Option<&[scrim::ScrimPx]>,
+    when: std::time::Instant,
 ) {
-    let now = std::time::Instant::now();
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
         let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
         // A surface that declared where it draws (#761) is drawn only there, and repainted where
@@ -212,7 +214,7 @@ fn push_surface<R: HyaloRenderer>(
                 out.extend(GlassElement::for_surface(s, loc, scale, output_size, floor).into_iter().map(OutputElement::Glass));
             }
             None => {
-                let scrims = scrim::scrims_for(s, loc, scale, now);
+                let scrims = scrim::scrims_for(s, loc, scale, when);
                 out.extend(GlassElement::for_surface(s, loc, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
                 let e = with_states(s, |states| ScrimElement::new(&states.data_map, scrims, output_size));
                 out.extend(e.map(OutputElement::Scrim));
@@ -230,6 +232,7 @@ fn push_surface<R: HyaloRenderer>(
 /// push_surface's own step, without the popups (render/window.rs handles a window's). Its
 /// surfaces are sized at `scale`, which is not the output's while a window shrinks into the
 /// dock (`window::AtScale`).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn push_tree<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     renderer: &mut R,
@@ -238,21 +241,23 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
     kind: Kind,
+    when: std::time::Instant,
 ) {
     let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
     out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));
-    push_material(out, surface, location, scale, output_size);
+    push_material(out, surface, location, scale, output_size, when);
 }
 
-/// A surface's declared glass (`nidara-material-v1`) and the shadow under it.
+/// A surface's declared glass (`nidara-material-v1`) and the shadow under it, as it is `when`.
 pub(super) fn push_material<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     surface: &WlSurface,
     location: Point<i32, Physical>,
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
+    when: std::time::Instant,
 ) {
-    let scrims = scrim::scrims_for(surface, location, scale, std::time::Instant::now());
+    let scrims = scrim::scrims_for(surface, location, scale, when);
     out.extend(GlassElement::for_surface(surface, location, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
     let e = with_states(surface, |states| ScrimElement::new(&states.data_map, scrims, output_size));
     out.extend(e.map(OutputElement::Scrim));
@@ -279,6 +284,8 @@ pub struct Scene<'a> {
     pub lock: &'a crate::lock::LockState,
     /// How windows are drawn: corners, the blur behind them (render/window.rs).
     pub windows: &'a crate::config::WindowsConfig,
+    /// The moment the frame shows: what Hyalo's own animations are drawn at (render/timing.rs).
+    pub when: std::time::Instant,
 }
 
 impl<'a> Scene<'a> {
@@ -289,8 +296,9 @@ impl<'a> Scene<'a> {
         cursor_status: &'a CursorImageStatus,
         lock: &'a crate::lock::LockState,
         windows: &'a crate::config::WindowsConfig,
+        when: std::time::Instant,
     ) -> Self {
-        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status, lock, windows }
+        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status, lock, windows, when }
     }
 }
 
@@ -339,15 +347,16 @@ pub fn output_elements<R: HyaloRenderer>(
     if state.lock.draws_locked(output) {
         state.lock.note_rendered(output);
         if let Some(surface) = state.lock.surface_for(output) {
-            push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, None);
+            push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, None, state.when);
         }
         for l in map.layers_on(Layer::Background).rev() {
-            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);
+            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None, state.when);
         }
         return with_overlay(out, output);
     }
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
-    let now = std::time::Instant::now();
+    // Hyalo's own animations, as they are when this frame shows (render/timing.rs).
+    let now = state.when;
     // A window shrinking into the dock or growing back out of it (wm/minimize.rs): where its
     // whole box is drawn now, scaled. `None` = where it is, as it is.
     let placement = |m: &crate::wm::Managed| state.wm.placement(m, now);
@@ -424,7 +433,6 @@ pub fn output_elements<R: HyaloRenderer>(
     // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
     // it, combined by their maximum like one surface's (two surfaces' shadows that overlap —
     // the Control Center's strip and the dock's band — never darken the corner twice).
-    let now = std::time::Instant::now();
     let floor: Vec<scrim::ScrimPx> = [Layer::Overlay, Layer::Top]
         .into_iter()
         .flat_map(|layer| map.layers_on(layer).map(|l| chrome_scrims(l.wl_surface(), layer_loc(l), scale, now)).collect::<Vec<_>>())
@@ -434,7 +442,7 @@ pub fn output_elements<R: HyaloRenderer>(
         push_windows(&mut out, renderer, &moving);
     }
     for l in map.layers_on(Layer::Overlay).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor), state.when);
     }
     push_closing(&mut out, true);
     push_windows(&mut out, renderer, &above);
@@ -442,7 +450,7 @@ pub fn output_elements<R: HyaloRenderer>(
         push_windows(&mut out, renderer, &moving);
     }
     for l in map.layers_on(Layer::Top).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor));
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor), state.when);
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
     push_closing(&mut out, false);
@@ -455,7 +463,7 @@ pub fn output_elements<R: HyaloRenderer>(
     }
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
-            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);
+            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None, state.when);
         }
     }
     with_overlay(out, output)
@@ -548,7 +556,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
     // Its line and its shadow (decor.rs), focused or not: not on a fullscreen window, nor
     // where a rule took its corners (games).
     let decor = managed.filter(|m| !fullscreen && m.rounded).map(|m| state.wm.focused == Some(m.id));
-    window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor);
+    window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor, state.when);
 }
 
 /// The pointer: the client's own cursor surface, or our themed one.
