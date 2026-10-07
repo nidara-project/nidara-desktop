@@ -41,11 +41,13 @@ pub struct Shape {
 }
 
 /// A fusion group (`set_fusion`): its shapes are drawn as one pane of glass, the smooth union
-/// of their outlines; two closer than `spacing` (logical px) are joined.
+/// of their outlines; two closer than `spacing` (logical px) are joined. `merge`
+/// (`set_fusion_merge`, 0..1) takes that union towards the group's envelope, one shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fusion {
     pub group: u32,
     pub spacing: f64,
+    pub merge: f64,
 }
 
 /// A pointer from a shape's edge: its base centred on `base`, `width` wide, to `tip`; a
@@ -585,7 +587,14 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::SetFusion { group, spacing } => {
                 self.pending(|m| {
-                    m.fusing = (group != 0 && spacing > 0.0).then_some(Fusion { group, spacing });
+                    m.fusing = (group != 0 && spacing > 0.0).then_some(Fusion { group, spacing, merge: 0.0 });
+                });
+            }
+            Request::SetFusionMerge { merge } => {
+                self.pending(|m| {
+                    if let Some(f) = m.fusing.as_mut() {
+                        f.merge = merge.clamp(0.0, 1.0);
+                    }
                 });
             }
             Request::SetBlur { size, passes } => {

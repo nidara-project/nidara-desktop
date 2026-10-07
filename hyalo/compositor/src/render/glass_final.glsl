@@ -51,6 +51,8 @@ uniform float ptr_base_r;
 uniform float fused;        // 1: a fusion group
 uniform float f_count;
 uniform float f_k;          // the smooth union's width, output px (twice the group's spacing)
+uniform vec4 f_env;         // the group's envelope (set_fusion_merge): x, y, w, h, output px
+uniform vec4 f_env_par;     // its corner radius, exponent; the merge (0..1); its refraction
 uniform vec4 f_rect[FUSE_MAX];   // each member, output px: x, y, w, h
 uniform vec4 f_par[FUSE_MAX];    // radius, exponent, opacity, ink_dark
 uniform vec4 f_clip[FUSE_MAX];   // what of it may show, output px; w 0 = no clip
@@ -172,6 +174,17 @@ float fused_sdf(vec2 px, float s) {
             di = max(di, max(cq.x, cq.y));
         }
         d = smin(d, di + (1.0 - p.z) * f_k, f_k);
+    }
+    // Towards the envelope (set_fusion_merge): a blend of two distance fields, so the silhouette
+    // lies between the union and the envelope at every step — it fills the space between the
+    // members from their middle outwards, never bulges past the envelope, never dents the union
+    // — and at 1 it IS the envelope, its bevel inset as one shape's (one lens, one rim).
+    if (f_env_par.z > 0.0) {
+        float t = s * bevel_width(f_env, f_env_par.w);
+        vec2 h = f_env.zw * 0.5 - vec2(t);
+        float de = box_sdf(px, f_env.xy + f_env.zw * 0.5, h,
+                           max(min(f_env_par.x + LAB_MUL(11, t), min(h.x, h.y)), 0.0), f_env_par.y);
+        d = mix(d, de, f_env_par.z);
     }
     return d;
 }

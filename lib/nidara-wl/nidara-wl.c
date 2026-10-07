@@ -505,6 +505,16 @@ nidara_wl_material_set_fusion (GdkSurface *surface, guint group, double spacing)
 }
 
 void
+nidara_wl_material_set_fusion_merge (GdkSurface *surface, double merge)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m)
+    return;
+  nidara_material_v1_set_fusion_merge (m, wl_fixed_from_double (CLAMP (merge, 0.0, 1.0)));
+}
+
+void
 nidara_wl_material_clear_glass (GdkSurface *surface)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));

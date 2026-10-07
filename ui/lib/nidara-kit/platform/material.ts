@@ -126,6 +126,9 @@ export interface MaterialSource {
     /** How close, in logical px, two panes of one fusion group (`trackFusionGroup`) must be
      *  to join; 0 or null: no fusion. Asked only where the compositor paints the glass. */
     fusion?(native: Gtk.Native): number | null
+    /** 0..1: every fusion group held this far towards its envelope — an instrument, to judge
+     *  the shape `pulseFusion` passes through; 0 in the product. */
+    fusionHold?(native: Gtk.Native): number
     blur(native: Gtk.Native): { size: number, passes: number }
     onChange(cb: () => void): () => void
 }
@@ -160,6 +163,8 @@ type Shim = {
         regionEdge?: number): void
     material_add_scrim_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number): void
     material_set_fusion?(surface: Gdk.Surface, group: number, spacing: number): void
+    /** Since 2026-10-07 (`set_fusion_merge`, inside v1): the library and Hyalo ship together. */
+    material_set_fusion_merge?(surface: Gdk.Surface, merge: number): void
 }
 
 const SHIM_MODULE = "gi://NidaraWl"   // in a variable on purpose: see VisibleRegion.ts
@@ -228,6 +233,58 @@ let nextFusionId = 1
 export function trackFusionGroup(widget: Gtk.Widget, group: object = widget): void {
     fusionGroups.set(widget, group)
     if (!fusionIds.has(group)) fusionIds.set(group, nextFusionId++)
+}
+
+/** A pulse's shape over its time, 0..1 → 0..1: up over the first 30 %, held, down over the
+ *  last 30 %, eased both ways. The hold is the point: a sine touched its peak for an instant,
+ *  and the owner saw "capsule and button half fused", never the one capsule (2026-10-07). */
+function pulseCurve(t: number): number {
+    const ease = (x: number) => x * x * (3 - 2 * x)
+    if (t <= 0 || t >= 1) return 0
+    if (t < PULSE_EDGE) return ease(t / PULSE_EDGE)
+    if (t > 1 - PULSE_EDGE) return ease((1 - t) / PULSE_EDGE)
+    return 1
+}
+const PULSE_EDGE = 0.3
+
+/** The groups changing shape right now (`pulseFusion`): id → its merge now, 0..1. */
+const pulses = new Map<number, { start: number, ms: number, boost: number }>()
+
+/**
+ * For `ms`, the panes of `group` become ONE: the compositor draws the group towards its
+ * envelope — one shape spanning them (`set_fusion_merge`) — up, HELD, and back (`pulseCurve`),
+ * so panes that sit apart at rest are one capsule while the group changes — the island trading
+ * what its capsule and its chips show — and part again when it settles. Not a wider smooth
+ * union: that one can only leave a waist at the join or raise a mound past the edges, whatever
+ * its width (measured 18 to 24, 2026-10-07); the envelope is exact at its height and lies
+ * between the union and itself on the way. `widget` is any mapped widget of the group's
+ * surface: its frames carry the pulse. A pulse asked during another goes on from where that
+ * one is, rising again, so a quick second change does not drop the bridge.
+ */
+export function pulseFusion(group: object, widget: Gtk.Widget, ms: number): void {
+    const id = fusionIds.get(group)
+    if (!id || ms <= 0) return
+    const now = GLib.get_monotonic_time() / 1000
+    const running = pulses.get(id)
+    if (running) {
+        // Rising: go on. Held: the hold starts over. Falling: rise again from the same height
+        // (the curve is symmetric, so the rising point of a falling t is 1 − t).
+        const t = (now - running.start) / running.ms
+        running.start = now - (t > 1 - PULSE_EDGE ? 1 - t : Math.min(t, PULSE_EDGE)) * ms
+        running.ms = ms
+        return
+    }
+    const p = { start: now, ms, boost: 0 }
+    pulses.set(id, p)
+    widget.add_tick_callback(() => {
+        const t = (GLib.get_monotonic_time() / 1000 - p.start) / p.ms
+        p.boost = pulseCurve(t)
+        widget.queue_draw()
+        if (t < 1) return GLib.SOURCE_CONTINUE
+        pulses.delete(id)
+        return GLib.SOURCE_REMOVE
+    })
+    widget.queue_draw()
 }
 
 /** A pane's fusion group: its nearest `trackFusionGroup` container's, or 0 (none). */
@@ -686,13 +743,17 @@ function flush(native: Gtk.Native, st: NativeState) {
     const regions = scrim && glass ? placeScrimRegions(native, scrim, glass, placed) : []
     // Fusion only where the compositor paints the glass: blurred only, every pane is its own.
     const spacing = paints && shim.material_set_fusion ? source?.fusion?.(native) ?? 0 : 0
+    const hold = source?.fusionHold?.(native) ?? 0
+    const mergeOf = (group: number) => shim?.material_set_fusion_merge
+        ? round(Math.max(hold, pulses.get(group)?.boost ?? 0)) : 0
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
     if (!ink) for (const e of st.entries) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
         s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],
         s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
-            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0]), paints && glass, blur, spacing,
+            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0, spacing > 0 && s.fusion ? mergeOf(s.fusion) : 0]),
+        paints && glass, blur, spacing,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
         scrim, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff)])])
     if (key === st.last) return
@@ -702,7 +763,12 @@ function flush(native: Gtk.Native, st: NativeState) {
     for (const s of placed) {
         // `set_fusion` holds for the shapes added after it, until the next one.
         const f = spacing > 0 ? s.fusion ?? 0 : 0
-        if (f !== fusing) { shim.material_set_fusion?.(surface, f, spacing); fusing = f }
+        if (f !== fusing) {
+            shim.material_set_fusion?.(surface, f, spacing)
+            const merge = f ? mergeOf(f) : 0
+            if (merge > 0) shim.material_set_fusion_merge?.(surface, merge)
+            fusing = f
+        }
         const p = s.pointer
         if (p && shim.material_add_shape_pointed) {
             const c = s.clip ?? { x: 0, y: 0, w: 0, h: 0 }

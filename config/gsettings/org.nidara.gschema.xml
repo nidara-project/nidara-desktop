@@ -65,6 +65,10 @@
       <default>"nidara"</default>
       <summary>Launcher icon: a built-in name or an absolute path to an image</summary>
     </key>
+    <key name="chip-opens-panel" type="b">
+      <default>false</default>
+      <summary>A click on an Activity Island chip also opens its panel, once the chip has fused into the capsule</summary>
+    </key>
   </schema>
 
   <schema id="org.nidara.dock" path="/org/nidara/dock/">

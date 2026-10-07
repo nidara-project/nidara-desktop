@@ -250,5 +250,20 @@
       <arg name="group" type="uint"/>
       <arg name="spacing" type="fixed" summary="logical px: closer than this, two shapes join"/>
     </request>
+    <request name="set_fusion_merge">
+      <description summary="pending: how far the current fusion group becomes one shape">
+        The fusion group set by the last set_fusion is drawn `merge` of the
+        way (0..1) from the smooth union of its shapes towards their envelope:
+        ONE shape spanning them all — the bounds of its shapes whose opacity is
+        at least a half, with the smallest of their corner radii. At 1 the
+        group is that one shape, refraction and rim included; on the way, the
+        space between the shapes fills from their middle outwards, and the
+        silhouette never goes past the envelope nor inside the union. Holds
+        for the shapes added after it, until the next set_fusion or
+        set_fusion_merge; reset to 0 by set_fusion and clear_shapes.
+        Meaningless outside a fusion group.
+      </description>
+      <arg name="merge" type="fixed" summary="0..1: the union (0) to the envelope (1)"/>
+    </request>
   </interface>
 </protocol>

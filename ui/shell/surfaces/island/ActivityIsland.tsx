@@ -13,7 +13,8 @@ import RecordingIsland, { RECORDING_GLASS } from "./RecordingIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities, DOTS_ID } from "./IslandActivities"
 import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
-import { trackFusionGroup } from "../../../lib/nidara-kit/platform/material"
+import { trackFusionGroup, pulseFusion } from "../../../lib/nidara-kit/platform/material"
+import { barConfig } from "../bar/barState"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -86,8 +87,8 @@ export interface IslandActivity {
         makeGhost: () => Gtk.Widget
         getSource: () => Gtk.Widget | null
     }
-    /** Expanded mode opened by clicking the capsule (or this activity's chip)
-     *  while it fronts. Omit = there is no island surface for it, and the click
+    /** Expanded mode opened by clicking the capsule while this activity fronts
+     *  (a chip never opens it: it flows into the capsule first). Omit = there is no island surface for it, and the click
      *  falls to `onExpand`. It does NOT fall back to the workspace overview:
      *  that fallback made sense only while the overview was the capsule's
      *  default identity, and once the dots became an activity with a mode of
@@ -159,6 +160,10 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // along with the crossfade when the compact mutates — one shape reshaping,
     // not a jump-cut (same principle as the big morph, GTK-native here).
     const COMPACT_SWAP_MS = 350
+    // The island's fusion group (#705 step 2): its pieces are one silhouette on Hyalo — see
+    // where the containers join it, below. A swap PULSES it: the pieces sit apart at rest and
+    // join by a bridge while what they show trades places (`pulseFusion`).
+    const fusion = {}
     const compactStack = new Gtk.Stack({
         transition_type: Gtk.StackTransitionType.CROSSFADE,
         transition_duration: COMPACT_SWAP_MS,
@@ -206,8 +211,10 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // A chip click PINS its activity to the front, because priority is a guess
     // about what matters and a click is not. The pin outlives every ordinary
     // change and ends only when the user picks something else or the pinned
-    // activity dies — otherwise "put the workspaces back" would last exactly
-    // until the next track change.
+    // activity is neither live nor indicated any more — otherwise "put the
+    // workspaces back" would last exactly until the next track change. An
+    // indicated activity can be pinned while idle (the Assistant): its chip is
+    // what put it one click away, and the click brings it to the capsule.
     let pinned: IslandActivity | null = null
 
     // Open a mode ONE BEAT after the compact mutation, never in the same tick:
@@ -216,7 +223,8 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // Expanding immediately grew the island out of a still-resizing pill and
     // dissolved a compact form the user never saw settle (a phantom red % —
     // user-caught 2026-07-20). Two deliberate steps: mutate, then open. Shared
-    // by auto-expand and by a chip click, which need exactly the same beat.
+    // by auto-expand and by a chip click under `chipOpensPanel`, which need
+    // exactly the same beat.
     // ISLAND MODES ONLY, on purpose. The beat exists because the island cannot
     // grow out of a pill that is still interpolating its width; jumping to
     // another surface (`onExpand`) is not a morph and has no such constraint —
@@ -231,7 +239,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
             autoExpandTimer = null
             // Still the front and still live: the beat is long enough for the
             // world to have moved on (the turn ended, the battery recovered).
-            if (front === a && a.isLive()) status.island_mode = a.expandMode!
+            if (front === a && (a.isLive() || a.isIndicated?.())) status.island_mode = a.expandMode!
             return GLib.SOURCE_REMOVE
         })
     }
@@ -241,7 +249,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         // The dots activity is always live, so `live` is never empty and the
         // compact always has a front.
         const top = live.reduce((m, a) => (a.priority > m.priority ? a : m))
-        if (pinned && !pinned.isLive()) pinned = null
+        if (pinned && !pinned.isLive() && !pinned.isIndicated?.()) pinned = null
         // The pin holds the front against priority — with ONE exception: an
         // auto-expanding activity (a critical battery) exists to interrupt, so
         // it takes the front anyway. It does not CLEAR the pin: when the
@@ -264,6 +272,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         const prev = front
         front = next
         compactStack.visible_child_name = front.id
+        pulseFusion(fusion, capsule, COMPACT_SWAP_MS)
         // The thing the open surface was showing is GONE (player left the bus,
         // battery recovered) — close it; a mere front takeover by a higher
         // priority leaves a still-live activity's surface open.
@@ -273,18 +282,20 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         if (backChanged) for (const cb of backgroundSubs) cb()
     }
 
-    // A chip click: take the front in the compact capsule without auto-expanding.
-    // The chip swaps into the capsule so you can see and control it in the bar.
-    // A second click, on the capsule itself, expands the island surface.
+    // A chip click: the chip FLOWS INTO the capsule, which then shows its
+    // activity — never a panel straight from the chip (owner, 2026-10-07: the
+    // chips always flow to the capsule, and the capsule is what becomes the
+    // panel). The capsule as a mere indicator is a use of its own: the dots
+    // without the overview, what is playing without the player. So the panel
+    // waits for a click on the capsule, unless `chipOpensPanel` asks for it to
+    // open once the fusion has landed (island modes only, see openAfterSwap).
+    // A chip whose activity is neither live nor indicated is on its way out:
+    // its click does nothing.
     const promote = (a: IslandActivity) => {
-        if (a.isLive()) {
-            pinned = a
-            arbitrate()
-        } else if (a.expandMode) {
-            status.island_mode = a.expandMode
-        } else {
-            a.onExpand?.()
-        }
+        if (!a.isLive() && !a.isIndicated?.()) return
+        pinned = a
+        arbitrate()
+        if (barConfig.get("chipOpensPanel")) openAfterSwap(a)
     }
     // ── The indicator row (Dynamic indicator slots) ─────────────────────────
     // Instead of a fixed revealer per activity (which causes overlapping cross-slides
@@ -354,6 +365,10 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     const syncIndicators = () => {
         const shown = background.slice(0, INDICATOR_MAX)
         const count = shown.length
+        // A chip born, gone or showing something else is the group changing: it buds off the
+        // capsule, or melts back into it, rather than appearing beside it.
+        if (slots.some((slot, i) => (shown[i] ?? null) !== slot.currentActivity))
+            pulseFusion(fusion, capsule, COMPACT_SWAP_MS)
 
         for (let i = 0; i < INDICATOR_MAX; i++) {
             const slot = slots[i]
@@ -531,10 +546,10 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     })
 
     // ONE silhouette on Hyalo (#705 step 2): the capsule, its chips and whatever a mode morphs
-    // through are one fusion group — the chips join the capsule by a bridge, and the capsule
-    // growing into a mode takes the fading chips into its shape instead of passing over them.
-    // A mode's glass at rest is in the group too; nothing else of the island is lit then.
-    const fusion = {}
+    // through are one fusion group — the chips join the capsule by a bridge while a swap pulses
+    // the group, and the capsule growing into a mode takes the fading chips into its shape
+    // instead of passing over them. A mode's glass at rest is in the group too; nothing else
+    // of the island is lit then.
     trackFusionGroup(capsule, fusion)
     trackFusionGroup(indicatorRow, fusion)
     for (const { revealer } of modes.values()) trackFusionGroup(revealer, fusion)
