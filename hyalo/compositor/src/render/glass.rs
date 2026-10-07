@@ -211,6 +211,7 @@ impl GlassElement {
             glass_gl::capture(
                 gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, &self.finish, &mut c,
             );
+            super::stats::captured(self.region);
         })
     }
 
@@ -238,6 +239,13 @@ impl GlassElement {
             }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish);
         })
+    }
+}
+
+impl GlassElement {
+    /// What its blur reads, output px (the debug overlay draws it: render/stats.rs).
+    pub fn region(&self) -> Rectangle<i32, Physical> {
+        self.region
     }
 }
 

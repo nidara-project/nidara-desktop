@@ -19,6 +19,11 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   workspaces                      every workspace: id, output, mode, shown
   layers                          the layer surfaces (bar, dock, panels), bottom first
   cursor                          where the pointer is
+  stats                           what each output's frames cost over the last second: frames
+                                    drawn/unchanged, damage, CPU build/render, GPU time, and
+                                    what the glass did (captures, passes, px, draws, measures)
+  debug-overlay on|off            outline each glass's capture region, flash a re-capture,
+                                    outline the damage (also HYALO_DEBUG_OVERLAY=1)
   do <command…>                   a window-manager command, as in a binding:
                                     workspace 3 · focus-window ID · move-to-workspace 2 [ID]
                                     toggle-floating [ID] · fullscreen [ID] · close-window [ID]
@@ -107,6 +112,8 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "workspaces" => Request::Workspaces,
         "layers" => Request::Layers,
         "cursor" => Request::CursorPosition,
+        "stats" => Request::Stats,
+        "debug-overlay" => Request::DebugOverlay { on: on_off(args.get(1).ok_or("debug-overlay needs on or off")?)? },
         "lock" => Request::Lock,
         "idle" => Request::Idle,
         "night-light" => {

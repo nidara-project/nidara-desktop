@@ -146,6 +146,12 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         Request::Windows => Reply::Ok(Response::Windows { windows: state.window_infos() }),
         Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
         Request::Layers => Reply::Ok(Response::Layers { layers: state.layer_infos() }),
+        Request::Stats => Reply::Ok(Response::Stats { stats: crate::render::stats::snapshot() }),
+        Request::DebugOverlay { on } => {
+            crate::render::stats::set_overlay(on);
+            state.queue_redraw(None);
+            Reply::Ok(Response::Handled)
+        }
         Request::NightLight { temperature } => match state.set_night_light(temperature) {
             Ok(()) => Reply::Ok(Response::Handled),
             Err(e) => Reply::Error(e),

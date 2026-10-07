@@ -1004,7 +1004,15 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         tty.gpus.renderer(&primary_gpu, &render_node, format)
     }
     .expect("a renderer for this output");
+    // Instrumented (render/stats.rs, #766): the CPU to build and to render, the GPU between two
+    // timestamps around the render, the damage.
+    let name = output.name();
+    let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);
+    render::stats::frame_begin(&name, area);
+    let gpu_start = renderer.as_mut().with_context(|gl| unsafe { render::stats::gpu_start(gl, &name) }).ok().flatten();
+    let built = std::time::Instant::now();
     let elements = render::output_elements(&scene, &mut renderer, &output, pointer_here.then_some(&cursor));
+    let build = built.elapsed();
     // The cursor plane always; the primary plane for a fullscreen window's direct scan-out unless
     // `[render] direct_scanout = false` (read every frame: a change applies at once). No overlay
     // planes exist to allow (output setup, above).
@@ -1013,19 +1021,37 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     } else {
         FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT
     };
+    let rendering = std::time::Instant::now();
     let result = surface
         .drm_output
         .render_frame(&mut renderer, &elements, render::CLEAR_COLOR, frame_flags);
+    let render_time = rendering.elapsed();
+    let _ = renderer.as_mut().with_context(|gl| unsafe { render::stats::gpu_end(gl, &name, gpu_start) });
     drop(renderer);
 
-    let (rendered, states) = match result {
-        Ok(r) => (!r.is_empty, r.states),
+    let (rendered, states, damage) = match result {
+        Ok(r) => {
+            // The swapchain's newest damage is this frame's; a direct scan-out redraws it whole.
+            let damage = match &r.primary_element {
+                smithay::backend::drm::compositor::PrimaryPlaneElement::Swapchain(e) if !r.is_empty => {
+                    let size = output.current_mode().map(|m| m.size).unwrap_or_default();
+                    let buffer = smithay::utils::Size::<i32, smithay::utils::Buffer>::from((size.w, size.h));
+                    e.damage.raw().next().map(|d| {
+                        d.map(|r| r.to_logical(1, e.transform, &buffer).to_physical(1)).collect::<Vec<_>>()
+                    })
+                }
+                _ => None,
+            };
+            (!r.is_empty, r.states, damage)
+        }
         Err(err) => {
             tracing::warn!(?err, "render failed");
+            render::stats::frame_done(&name, false, build, render_time, None);
             surface.redraw = Redraw::Idle;
             return;
         }
     };
+    render::stats::frame_done(&name, rendered, build, render_time, damage.as_deref());
     let feedback = surface.dmabuf_feedback.clone();
     if rendered {
         let presentation = super::take_presentation_feedback(state, &output, &states);

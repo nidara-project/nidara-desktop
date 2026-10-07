@@ -331,6 +331,24 @@ phase_run() {
         || { log "FAIL: the app grid's glass never reached the bar's surface ($bar_rest shapes closed, $bar_grid open)"; nidara-hyalo msg layers; exit 1; }
     log "glass OK (the bar's $bar_rest shapes, $bar_cc with the Control Center open, $cc_scrim of them on one shadow, $bar_grid with the app grid open; the dock's)"
 
+    # The render's instruments (#766 A): the counters answer, and the debug overlay SETTLES — an
+    # overlay that showed the damage it causes itself would redraw every frame for ever (it
+    # leaves its own elements out of the damage it shows; render/stats.rs). Its picture goes up
+    # with the screenshots.
+    sleep 2
+    local idle with_overlay
+    idle="$(nidara-hyalo msg stats | jq -r '[.ok.stats.outputs[].frames_drawn] | max // -1')"
+    [ "$idle" -ge 0 ] || { log "FAIL: msg stats reported no output"; nidara-hyalo msg stats; exit 1; }
+    nidara-hyalo msg debug-overlay on >/dev/null || { log "FAIL: msg debug-overlay refused"; exit 1; }
+    sleep 3
+    with_overlay="$(nidara-hyalo msg stats | jq -r '[.ok.stats.outputs[].frames_drawn] | max // -1')"
+    nidara-hyalo msg screenshot /tmp/hyalo/debug-overlay.png >/dev/null || true
+    nidara-hyalo msg stats > /tmp/hyalo/stats.json || true
+    nidara-hyalo msg debug-overlay off >/dev/null
+    [ "$with_overlay" -le $((idle + 10)) ] \
+        || { log "FAIL: with the debug overlay on, the desktop at rest draws $with_overlay frames a second ($idle without it)"; cat /tmp/hyalo/stats.json; exit 1; }
+    log "render stats OK (at rest: $idle frames/s, $with_overlay with the debug overlay; GPU timer queries: $(jq -r '.ok.stats.gpu_timer_queries' /tmp/hyalo/stats.json))"
+
     # Settings reach Hyalo through the compositor interface (#682): the shell states its
     # workspace modes at boot, which lands in the settings layer Hyalo writes; a patch is
     # applied, and re-stating it changes nothing (or the shell's reload handlers would loop).

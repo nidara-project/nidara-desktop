@@ -13,6 +13,7 @@ pub mod glass;
 pub mod glass_gl;
 pub mod scrim;
 pub mod snapshot;
+pub mod stats;
 pub mod title_bar;
 pub mod window;
 
@@ -141,6 +142,7 @@ smithay::backend::renderer::element::render_elements! {
     Decor=decor::DecorElement,
     Snapshot=snapshot::SnapshotElement,
     Cursor=MemoryRenderBufferRenderElement<R>,
+    Debug=smithay::backend::renderer::element::solid::SolidColorRenderElement,
 }
 
 impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
@@ -156,6 +158,7 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
             Self::Decor(e) => f.debug_tuple("Decor").field(e).finish(),
             Self::Snapshot(e) => f.debug_tuple("Snapshot").field(e).finish(),
             Self::Cursor(e) => f.debug_tuple("Cursor").field(e).finish(),
+            Self::Debug(e) => f.debug_tuple("Debug").field(e).finish(),
             Self::_GenericCatcher(_) => f.write_str("_GenericCatcher"),
         }
     }
@@ -320,7 +323,7 @@ pub fn output_elements<R: HyaloRenderer>(
         for l in map.layers_on(Layer::Background).rev() {
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);
         }
-        return out;
+        return with_overlay(out, output);
     }
     let (above, below) = windows_front_to_back(state.space, state.wm, output);
     let now = std::time::Instant::now();
@@ -434,6 +437,17 @@ pub fn output_elements<R: HyaloRenderer>(
             push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None);
         }
     }
+    with_overlay(out, output)
+}
+
+/// The debug overlay over everything (stats.rs, #766): where each glass element samples.
+fn with_overlay<R: HyaloRenderer>(mut out: Vec<OutputElement<R>>, output: &Output) -> Vec<OutputElement<R>> {
+    if !stats::overlay_enabled() {
+        return out;
+    }
+    let regions: Vec<_> = out.iter().filter_map(|e| if let OutputElement::Glass(g) = e { Some(g.region()) } else { None }).collect();
+    let overlay = stats::overlay(&output.name(), &regions);
+    out.splice(0..0, overlay.into_iter().map(OutputElement::Debug));
     out
 }
 
