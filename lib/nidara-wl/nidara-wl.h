@@ -722,4 +722,16 @@ void nidara_wl_window_controls_unset_position (GdkSurface *surface);
  */
 gboolean nidara_wl_window_controls_set_buttons (GdkSurface *surface, guint buttons);
 
+/**
+ * nidara_wl_window_controls_set_ink:
+ * @surface: the #GdkSurface passed to nidara_wl_window_controls_request()
+ * @dark: %TRUE when the header under the controls is light: draw them dark
+ *
+ * The ink the compositor draws the controls with — the app knows what its header is. Lands
+ * with the surface's next commit; light until it is sent.
+ *
+ * Returns: %FALSE if the compositor draws no controls
+ */
+gboolean nidara_wl_window_controls_set_ink (GdkSurface *surface, gboolean dark);
+
 G_END_DECLS

@@ -34,6 +34,11 @@
       <entry name="left" value="1"/>
     </enum>
 
+    <enum name="ink">
+      <entry name="light" value="0" summary="light glyphs: the header under the controls is dark"/>
+      <entry name="dark" value="1" summary="dark glyphs: the header under the controls is light"/>
+    </enum>
+
     <enum name="button" bitfield="true">
       <entry name="close" value="1"/>
       <entry name="minimize" value="2"/>
@@ -82,6 +87,16 @@
         follows.
       </description>
       <arg name="buttons" type="uint" enum="button"/>
+    </request>
+
+    <request name="set_ink">
+      <description summary="pending: the ink the controls are drawn with">
+        Whether the controls are drawn light (over a dark header) or dark (over
+        a light one), double-buffered on wl_surface.commit. The app knows what
+        its header is — its own appearance — where the compositor would have
+        to guess from pixels. Until it is sent, light.
+      </description>
+      <arg name="ink" type="uint" enum="ink"/>
     </request>
   </interface>
 </protocol>

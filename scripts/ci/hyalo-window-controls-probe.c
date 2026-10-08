@@ -10,6 +10,8 @@
  * SIGHUP:  it can change size again.
  * SIGURG:  it asks to be minimized (xdg_toplevel.set_minimized), as an app's own minimize
  *          button does.
+ * SIGWINCH: it asks for its controls in dark ink (set_ink), as a window with a light header
+ *          does; a second one, light again.
  * HYALO_PROBE_DIALOG=1: it also opens a dialog of its window (xdg_toplevel.set_parent), which
  *          leaves room for its controls the same way.
  * HYALO_PROBE_TIDY=1: asked to close, it destroys its window before it exits — toplevel, xdg
@@ -188,6 +190,7 @@ int main(void) {
     signal(SIGUSR2, on_signal);
     signal(SIGHUP, on_signal);
     signal(SIGURG, on_signal);
+    signal(SIGWINCH, on_signal);
 
     open_window(d, &main_win, "window-controls-probe", NULL);
     const char *dialog = getenv("HYALO_PROBE_DIALOG");
@@ -210,6 +213,11 @@ int main(void) {
                 xdg_toplevel_set_max_size(main_win.top, main_win.w, main_win.h);
             } else if (sig == SIGURG) {
                 xdg_toplevel_set_minimized(main_win.top);
+            } else if (sig == SIGWINCH) {
+                static int dark;
+                dark = !dark;
+                nidara_window_controls_v1_set_ink(main_win.controls, dark ? NIDARA_WINDOW_CONTROLS_V1_INK_DARK
+                                                                          : NIDARA_WINDOW_CONTROLS_V1_INK_LIGHT);
             } else {
                 xdg_toplevel_set_min_size(main_win.top, 0, 0);
                 xdg_toplevel_set_max_size(main_win.top, 0, 0);

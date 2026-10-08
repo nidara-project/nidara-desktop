@@ -792,6 +792,19 @@ nidara_wl_window_controls_set_buttons (GdkSurface *surface, guint buttons)
   return TRUE;
 }
 
+gboolean
+nidara_wl_window_controls_set_ink (GdkSurface *surface, gboolean dark)
+{
+  g_return_val_if_fail (GDK_IS_SURFACE (surface), FALSE);
+  struct nidara_window_controls_v1 *c = controls_get (surface);
+  if (!c)
+    return FALSE;
+  nidara_window_controls_v1_set_ink (c, dark ? NIDARA_WINDOW_CONTROLS_V1_INK_DARK
+                                             : NIDARA_WINDOW_CONTROLS_V1_INK_LIGHT);
+  controls_mark_dirty (surface);
+  return TRUE;
+}
+
 /* ======================================================================
  * Focus grab
  *

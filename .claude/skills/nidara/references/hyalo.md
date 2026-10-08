@@ -653,6 +653,11 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   with the frame that left room for them. `set_buttons` was added INSIDE v1 (2026-10-04): the
   library and Hyalo are installed together — a new library on an older Hyalo is a protocol error
   that takes the shell down. Not offered to sandboxed clients (like the glass).
+  `set_ink(light|dark)` likewise (2026-10-08): the INK the controls are drawn with, since the app
+  knows what its header is. Light (white glyphs) until it is sent; the kit sends dark whenever
+  the window's own appearance is light (`kitAppearance().surfaceIsDark(win)`, re-sent on every
+  appearance change). White glyphs on Settings' light header were invisible (owner, live). Hyalo's
+  own title bar ignores it: it decides its ink from the bar's colour, as before.
 - **Drawn** by `render/controls.rs`: one shader pass in output pixels (the capsule, its inset
   edge, the hovered button's fill, one glyph a button (`count`, 1 to 3) as distance fields, all anti-aliased at the
   output's scale), pushed over the window's own surfaces and under its popups; never on a
@@ -711,7 +716,9 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   switched live and followed; close alone from the user's buttons and from the app's
   `set_buttons` (SIGUSR1), minimize and close while it cannot change size even asking for all
   (SIGUSR2; SIGHUP undoes it); a rule's `controls = ["close"]` on a new window of the app; close
-  asks the window to close. Controls, each seen failing nested: a Hyalo without the protocol
+  asks the window to close; the ink (SIGWINCH → `set_ink`): over the probe's 0x404040 window the
+  brightest pixel of the controls is above 150 with light ink and at most 70 with dark, read
+  from a raw PPM with od. Controls, each seen failing nested: a Hyalo without the protocol
   prints NO_CONTROLS; the one before #724 (no minimize) tells 60 at once; one that ignores
   `set_buttons` still tells 88. Minimizing itself: "Minimizing" above.
 
