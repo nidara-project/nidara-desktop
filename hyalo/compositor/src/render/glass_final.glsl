@@ -20,6 +20,7 @@
 //   lab[12] bevel width cap: + to its 80 px                                           ADD
 //   lab[13] rim, the side opposite the light: × (1 + it) on its echo (0.70)           MUL
 //   lab[14] rim, the line all round: + to its floor (0; 0.18 until 2026-10-05)           ADD
+//   lab[15] dark contour: a 1 px line along the outline, darkened by it, 0..1           block
 uniform vec4 region_fb;     // the captured region, framebuffer pixels
 uniform mat2 out_to_fb;     // output-pixel offsets → framebuffer-pixel offsets
 uniform vec4 rect;          // the shape, output pixels
@@ -427,5 +428,11 @@ void main() {
     }
 #endif
     c = c + spec * formed * (1.0 - c);
+#ifdef GLASS_LAB
+    // A dark line along the outline, one logical px: the reference material's edge at rest, where
+    // its rim of light is off (glass-probe, 2026-10-08: the line at ≈0.63 of the glass inside it,
+    // i.e. lab[15] ≈ 0.37).
+    if (lab(15) != 0.0) c *= 1.0 - clamp(lab(15), 0.0, 1.0) * (1.0 - smoothstep(0.0, px_scale, inside)) * formed;
+#endif
     gl_FragColor = vec4(c * cov, cov);
 }
