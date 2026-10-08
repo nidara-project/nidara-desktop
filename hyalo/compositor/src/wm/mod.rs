@@ -303,6 +303,16 @@ impl Wm {
         self.active.values().chain(self.special_shown.values()).copied().collect()
     }
 
+    /// Whether `output` shows a game in fullscreen — on its active workspace, with no special
+    /// workspace over it. What `vrr = "games"` waits for (backend/tty.rs → `vrr_for_games`).
+    pub fn game_fullscreen_on(&self, output: &str) -> bool {
+        if self.special_shown.contains_key(output) {
+            return false;
+        }
+        let Some(ws) = self.active.get(output) else { return false };
+        self.on_workspace(*ws).any(|m| m.fullscreen == Fullscreen::Fullscreen && games::is_game(m))
+    }
+
     pub fn is_visible(&self, ws: i32) -> bool {
         self.active.values().any(|w| *w == ws) || self.special_shown.values().any(|w| *w == ws)
     }

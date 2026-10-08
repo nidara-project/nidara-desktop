@@ -277,4 +277,4 @@ mode = "1920x1080@60"
 # scale = 1.25
 # position = [0, 0]
 # transform = "normal"
-# vrr = false
+# vrr = false            # true = always; "games" = only while a game is fullscreen here

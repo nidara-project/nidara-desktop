@@ -12,7 +12,7 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
 
   version
   outputs
-  output <NAME> [enabled=on|off] [mode=WxH[@HZ]] [scale=S] [transform=T] [position=X,Y] [vrr=on|off]
+  output <NAME> [enabled=on|off] [mode=WxH[@HZ]] [scale=S] [transform=T] [position=X,Y] [vrr=on|off|games]
   power on|off [NAME]             switch outputs on or off (DPMS); no NAME = all
   screenshot PATH [NAME]          a PNG of one output (no NAME = the first); PATH.ppm: raw
   windows                         every window: id, app id, title, workspace, state, box
@@ -166,7 +166,13 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
                             y.parse().map_err(|_| "bad position y")?,
                         ));
                     }
-                    "vrr" => vrr = Some(on_off(v)?),
+                    "vrr" => {
+                        vrr = Some(match v {
+                            "games" => crate::config::Vrr::Games,
+                            v if on_off(v)? => crate::config::Vrr::On,
+                            _ => crate::config::Vrr::Off,
+                        })
+                    }
                     _ => return Err(format!("unknown setting {k:?}")),
                 }
             }
@@ -197,6 +203,9 @@ mod tests {
         assert_eq!(v["position"], serde_json::json!([0, 0]));
         assert_eq!(v["vrr"], true);
         assert!(v["enabled"].is_null(), "an unset field stays unset");
+        let games = p(&["output", "DP-1", "vrr=games"]).unwrap().unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&games).unwrap()["vrr"], "games");
+        assert!(p(&["output", "DP-1", "vrr=sometimes"]).is_err());
     }
 
     #[test]

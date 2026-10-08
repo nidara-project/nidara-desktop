@@ -37,8 +37,14 @@ export interface HyaloOutput {
     position: [number, number] | null
     logical_size: [number, number] | null
     vrr_supported: boolean
+    /** On now; with `vrr: "games"`, only while a game is fullscreen there. */
     vrr_enabled: boolean
+    /** What the configuration asks. */
+    vrr: HyaloVrr
 }
+
+/** An output's `vrr`: off, on, or on while a game is fullscreen on it. */
+export type HyaloVrr = boolean | "games"
 
 /** The fields of `set_output`; one left out keeps its current value. */
 export interface HyaloOutputSettings {
@@ -47,7 +53,7 @@ export interface HyaloOutputSettings {
     scale?: number
     transform?: string
     position?: [number, number]
-    vrr?: boolean
+    vrr?: HyaloVrr
 }
 
 /** Whether the shell is running on Hyalo. */

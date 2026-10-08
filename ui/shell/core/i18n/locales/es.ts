@@ -353,6 +353,7 @@ export default {
     "settings.display.vrr.off": "Desactivado",
     "settings.display.vrr.always": "Siempre",
     "settings.display.vrr.fullscreen": "Solo pantalla completa",
+    "settings.display.vrr.games": "Juegos a pantalla completa",
     "settings.dock.group.behavior": "Comportamiento",
     "settings.dock.group.effects": "Efectos",
     "settings.dock.group.geometry": "Geometría",

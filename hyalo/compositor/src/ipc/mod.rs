@@ -146,7 +146,7 @@ pub enum Request {
         #[serde(default)]
         position: Option<(i32, i32)>,
         #[serde(default)]
-        vrr: Option<bool>,
+        vrr: Option<crate::config::Vrr>,
     },
     /// DPMS. No name = every output.
     OutputPower {

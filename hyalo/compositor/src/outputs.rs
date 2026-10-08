@@ -17,7 +17,7 @@ use smithay::{
 
 use crate::{
     backend::Backend,
-    config::{self, Input, OutputConfig},
+    config::{self, Input, OutputConfig, Vrr},
     state::Hyalo,
 };
 
@@ -92,11 +92,19 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
             arrange(state);
             state.update_x11_scale();
             if let Backend::Tty(tty) = &mut state.backend {
-                let (_, enabled) = tty.vrr_state(&output);
-                if cfg.vrr != enabled {
+                let (supported, enabled) = tty.vrr_state(&output);
+                let want = match cfg.vrr {
+                    Vrr::Off => false,
+                    Vrr::On => true,
+                    // Its frames decide (backend/tty.rs → `vrr_for_games`; `arrange` queued
+                    // one) — refused here all the same on a monitor without it.
+                    Vrr::Games if !supported => return Err("this output does not support VRR".into()),
+                    Vrr::Games => enabled,
+                };
+                if want != enabled {
                     // Refused on a monitor without VRR: said, never silently ignored. Last, so
                     // the rest of the settings apply either way.
-                    tty.set_vrr(&output, cfg.vrr)?;
+                    tty.set_vrr(&output, want)?;
                 }
             }
             Ok(())
@@ -154,7 +162,10 @@ pub struct OutputInfo {
     pub position: Option<(i32, i32)>,
     pub logical_size: Option<(i32, i32)>,
     pub vrr_supported: bool,
+    /// On now — with `vrr = "games"`, only while a game is fullscreen here.
     pub vrr_enabled: bool,
+    /// What the configuration asks: `false`, `true` or `"games"`.
+    pub vrr: Vrr,
 }
 
 pub fn info(state: &Hyalo) -> Vec<OutputInfo> {
@@ -183,6 +194,7 @@ pub fn info(state: &Hyalo) -> Vec<OutputInfo> {
             logical_size: geo.map(|g| (g.size.w, g.size.h)),
             vrr_supported: vrr.0,
             vrr_enabled: vrr.1,
+            vrr: state.config.outputs.get(&o.name()).map_or(Vrr::Off, |c| c.vrr),
         }
     };
     match &state.backend {
@@ -226,6 +238,7 @@ pub fn info(state: &Hyalo) -> Vec<OutputInfo> {
                         logical_size: None,
                         vrr_supported: false,
                         vrr_enabled: false,
+                        vrr: Vrr::Off,
                     },
                 }
             })

@@ -337,6 +337,7 @@
     "settings.display.vrr.off": "f4f4473d",
     "settings.display.vrr.always": "a91bcce8",
     "settings.display.vrr.fullscreen": "860a7936",
+    "settings.display.vrr.games": "c8a5f1f7",
     "settings.dock.group.behavior": "70cb647a",
     "settings.dock.group.effects": "8f25a859",
     "settings.dock.group.geometry": "9d122671",
@@ -844,7 +845,7 @@
   "locales": {
     "de": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -915,6 +916,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -968,14 +970,14 @@
       "stale": []
     },
     "es": {
-      "translated": 839,
-      "of": 839,
+      "translated": 840,
+      "of": 840,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1046,6 +1048,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1100,7 +1103,7 @@
     },
     "it": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1171,6 +1174,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1225,7 +1229,7 @@
     },
     "ja": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1296,6 +1300,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1350,7 +1355,7 @@
     },
     "nl": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1421,6 +1426,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1475,7 +1481,7 @@
     },
     "pl": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1546,6 +1552,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1600,7 +1607,7 @@
     },
     "pt-BR": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1671,6 +1678,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1725,7 +1733,7 @@
     },
     "pt-PT": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1796,6 +1804,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1850,7 +1859,7 @@
     },
     "ru": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1921,6 +1930,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",
@@ -1975,7 +1985,7 @@
     },
     "zh-CN": {
       "translated": 721,
-      "of": 839,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2046,6 +2056,7 @@
         "settings.desktop.workspace-5.opt.default",
         "settings.desktop.workspace-5.opt.floating",
         "settings.desktop.workspace-5.opt.tiling",
+        "settings.display.vrr.games",
         "settings.gaming.group.notifications",
         "settings.gaming.silence-notifications",
         "settings.gaming.silence-notifications.desc",

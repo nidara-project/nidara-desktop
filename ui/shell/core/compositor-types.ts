@@ -283,8 +283,9 @@ export interface SettingsCaps {
     animations: boolean
     /** One blur for every surface, set by the glass material. Hyalo's is per surface (#684). */
     sharedBlur: boolean
-    /** VRR "fullscreen only" (Hyprland's `misc:vrr = 2`); Hyalo has on and off, per output. */
-    vrrFullscreenOnly: boolean
+    /** What VRR's third choice (2) means: "fullscreen" = any fullscreen window (Hyprland's
+     *  `misc:vrr = 2`); "games" = a game in fullscreen (Hyalo's `vrr = "games"`, per output). */
+    vrrOnDemand: "fullscreen" | "games"
     /** The blur behind translucent windows has a switch of its own, apart from the interface's
      *  glass (Hyalo, #708 point 1). Hyprland's is one blur for windows and layers alike. */
     windowBackdrop: boolean
@@ -340,7 +341,7 @@ export interface CompositorSettings {
     /** `next` is the whole state; `changed` what to apply live. Persists. */
     setInput(next: InputSettings, changed: readonly InputKey[]): void
 
-    /** 0 off, 1 on, 2 fullscreen only. Synchronous: Display reads it right after `init`. */
+    /** 0 off, 1 on, 2 on demand (`caps.vrrOnDemand`). Synchronous: Display reads it right after `init`. */
     readVrr(current: number): number
     /** Live, NOT persisted: a mode the user has not confirmed must not reach the file. */
     applyMonitor(name: string, m: MonitorSetting): void

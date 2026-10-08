@@ -16,6 +16,7 @@
 // (#684).
 
 import * as hyalo from "./hyalo-ipc"
+import type { HyaloVrr } from "./hyalo-ipc"
 import { GLASS_BLUR } from "./NidaraTheme"
 import {
     TRANSFORM_NAMES, type CompositorSettings, type IdleConfig, type InputKey, type InputSettings, type MonitorSetting,
@@ -60,9 +61,14 @@ function put(obj: any, path: string, value: unknown) {
     o[keys[keys.length - 1]] = value
 }
 
+/** Settings' VRR choice (0 off, 1 on, 2 games) as Hyalo's `vrr`. */
+function hyaloVrr(vrr: number): HyaloVrr {
+    return vrr === 2 ? "games" : vrr === 1
+}
+
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: true, sharedBlur: false, vrrFullscreenOnly: false, windowBackdrop: true, windowControls: true, recordedPointer: true },
+        caps: { animations: true, sharedBlur: false, vrrOnDemand: "games", windowBackdrop: true, windowControls: true, recordedPointer: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -81,9 +87,13 @@ export function createHyaloSettings(): CompositorSettings {
             patch(`input ${changed.join(", ")}`, { input })
         },
 
+        // What the configuration asks, not whether it is on now: with "games" it is off
+        // until a game goes fullscreen.
         readVrr(current) {
-            const outputs = hyalo.getOutputs()
-            return outputs.length ? (outputs.some(o => o.vrr_enabled) ? 1 : 0) : current
+            const outputs = hyalo.getOutputs().filter(o => o.vrr_supported)
+            if (!outputs.length) return current
+            if (outputs.some(o => o.vrr === "games")) return 2
+            return outputs.some(o => o.vrr === true) ? 1 : 0
         },
 
         applyMonitor(name, m) {
@@ -95,11 +105,10 @@ export function createHyaloSettings(): CompositorSettings {
             if (err) console.error(`[HyaloSettings] Hyalo refused ${name}: ${err}`)
         },
 
-        // Per output, on those that have it (the rest would refuse). No "fullscreen only"
-        // (`caps.vrrFullscreenOnly`): 2 is off here.
+        // Per output, on those that have it (the rest would refuse).
         applyVrr(vrr) {
             for (const o of hyalo.getOutputs().filter(o => o.vrr_supported)) {
-                const err = hyalo.setOutput(o.name, { vrr: vrr === 1 })
+                const err = hyalo.setOutput(o.name, { vrr: hyaloVrr(vrr) })
                 if (err) console.error(`[HyaloSettings] Hyalo refused VRR on ${o.name}: ${err}`)
             }
         },
@@ -113,7 +122,7 @@ export function createHyaloSettings(): CompositorSettings {
                     mode: m.mode ?? null,
                     scale: m.scale,
                     transform: TRANSFORM_NAMES[m.transform] ?? "normal",
-                    vrr: vrr === 1 && vrrCapable.has(name),
+                    vrr: vrrCapable.has(name) ? hyaloVrr(vrr) : false,
                 }
             }
             patch("display", { outputs })
