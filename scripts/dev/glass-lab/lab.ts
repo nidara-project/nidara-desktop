@@ -1086,7 +1086,8 @@ function fillControls() {
         labSlider(8, "Ángulo de la luz", "grados, 0 = fábrica", -180, 180, 0, 0),
         labSlider(15, "Línea oscura en el contorno", "1 px; 0 = fábrica (ninguna); 0,37 = la referencia", 0, 1, 0),
     ], "La escarcha (desenfoque) es la de los paneles del shell; tooltips y menús llevan un pase más. " +
-        "La referencia medida (glass-probe, 2026-10-08): escarcha 3:3, canto de luz 0 y línea oscura 0,37. " +
+        "La referencia medida (glass-probe, 2026-10-08): escarcha 3:3 y, en reposo, una línea oscura (0,37). " +
+        "Su canto de luz no salió en esa captura (máquina a 1×, sin HDR), pero sí en los vídeos: no es motivo para quitarlo. " +
         "Su franja mide 20 px, pero cuánto desvía NO está medido, y aquí el ancho del bisel fija también la fuerza: " +
         "a 20 el borde desvía 14 px como mucho (55 a 80), así que estrecharlo apaga la refracción.")
 }
