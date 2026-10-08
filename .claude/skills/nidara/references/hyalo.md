@@ -316,6 +316,15 @@ the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-
   the factory's numbers and the tuning only the keys off its defaults, so a factory change moves
   every preset. When the factory changes, convert them (the 2026-10-05 conversion, to these hooks,
   rendered the same pixels).
+- **The frost is on the bench too** (2026-10-08): «Escarcha: tamaño / pasadas» write the
+  material's `blur = SIZE:PASSES` (held in a preset's tuning as `blurSize`/`blurPasses`; until then
+  the lab's panels had the `regular` blur only). And `lab[15]`, a dark 1 px line along the outline.
+  Both came from measuring the reference material's captures (the private glass-probe repo,
+  `tools/blur_sigma.py`, self-tested against this kawase simulated): its regular glass blurs at
+  σ ≈ 13–14 px — our `3:3` (σ 13.2); `regular` 2:2 is σ 4.6 — its refracting band is 20 px at
+  every size (our bevel cap is 80), and at rest it shows no rim of light, no shadow, and a dark
+  contour line at ≈ 0.63 of the glass inside it. Starting point to judge, not a factory: frost 3:3,
+  bevel cap 20, rim 0, `lab[15]` 0.37.
 - What it has shown so far (2026-10-05): with the per-pixel adaptive tint, any treatment of the
   backdrop's whites (compression, a dark veil) ends at the same `target` — it changes how much of
   the backdrop shows, not the contrast; the ink at 0.80 never turns over a page of text; with

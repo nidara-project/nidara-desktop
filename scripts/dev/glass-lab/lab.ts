@@ -131,6 +131,7 @@ interface LabState {
     ink: Ink
     show: Show
     tuning: Record<string, number> // glass-tuning.conf keys, only those off the factory value
+                                   // (and blurSize/blurPasses, written as its `blur`)
     flags: { ink: boolean, scrim: boolean, glass: boolean, dark: boolean }
     lab: number[]                  // lab_params.conf, 16 values: the shader's LAB hooks, 0 = factory
 }
@@ -152,7 +153,12 @@ function apply() {
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
     const lines = ["# written by glass-lab"]
-    for (const [k, v] of Object.entries(state.tuning)) lines.push(`${k} = ${v}`)
+    // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
+    // numbers, so a preset and A/B carry them like any other.
+    const { blurSize, blurPasses, ...material } = state.tuning
+    for (const [k, v] of Object.entries(material)) lines.push(`${k} = ${v}`)
+    if (blurSize !== undefined || blurPasses !== undefined)
+        lines.push(`blur = ${blurSize ?? GLASS_BLUR.regular.size}:${Math.round(blurPasses ?? GLASS_BLUR.regular.passes)}`)
     if (!state.flags.ink) lines.push("ink = off")
     if (!state.flags.scrim) lines.push("scrim = off")
     if (!state.flags.glass) lines.push("glass = off")
@@ -952,6 +958,14 @@ function fillControls() {
             if (Math.abs(v - D[key]) < 1e-6) delete state.tuning[key]; else state.tuning[key] = v
             apply()
         }, { decimals, debounce: 0 })
+    // The frost: the panels' blur, which the shell takes from Settings' glass material.
+    const frostSlider = (key: "blurSize" | "blurPasses", title: string, sub: string, min: number, max: number,
+        neutral: number, decimals: number) =>
+        NidaraSliderRow(title, sub, state.tuning[key] ?? neutral, min, max, v => {
+            if (decimals === 0) v = Math.round(v)
+            if (Math.abs(v - neutral) < 1e-6) delete state.tuning[key]; else state.tuning[key] = v
+            apply()
+        }, { decimals, debounce: 0 })
     const labSlider = (i: number, title: string, sub: string, min: number, max: number, neutral: number, decimals = 2) =>
         NidaraSliderRow(title, sub, state.lab[i] + neutral, min, max, v => {
             state.lab[i] = Math.abs(v - neutral) < 1e-6 ? 0 : v - neutral
@@ -1053,6 +1067,10 @@ function fillControls() {
     ], "Un cristal que aparece se materializa: su desenfoque, su refracción, su tinte y su canto crecen desde cero, sin fundido (#764). El deslizador congela todas las piezas en un punto de ese crecimiento para juzgarlo; en el escritorio el contenido aparece en la segunda mitad.")
     section("Refracción, escarcha y luz", [
         NidaraToggleRow("Cristal refractivo", "apagado: solo desenfoque", state.flags.glass, v => { state.flags.glass = v; apply() }),
+        frostSlider("blurSize", "Escarcha: tamaño", `por pasada; ${GLASS_BLUR.regular.size} = fábrica («normal»)`, 0.5, 6,
+            GLASS_BLUR.regular.size, 1),
+        frostSlider("blurPasses", "Escarcha: pasadas", `${GLASS_BLUR.regular.passes} = fábrica; 3 con tamaño 3 = la referencia`, 1, 5,
+            GLASS_BLUR.regular.passes, 0),
         tuningSlider("refraction", "Refracción mínima", "px", 0, 40, 0),
         tuningSlider("lensing", "Refracción según tamaño", "fracción del lado corto", 0, 0.15, 3),
         labSlider(4, "Perfil del bisel", "5 = fábrica; más = se dobla más en el borde y menos dentro", 1, 9, 5),
@@ -1066,7 +1084,10 @@ function fillControls() {
         labSlider(14, "Canto: línea en todo el contorno", "0 = fábrica (ninguna); 0,18 = la de antes", 0, 0.4, 0),
         labSlider(9, "Brillo interior", "0 = fábrica (ninguno); 1 = el de antes", 0, 3, 0),
         labSlider(8, "Ángulo de la luz", "grados, 0 = fábrica", -180, 180, 0, 0),
-    ], "La escarcha (desenfoque) es la de los paneles del shell; tooltips y menús llevan un pase más.")
+        labSlider(15, "Línea oscura en el contorno", "1 px; 0 = fábrica (ninguna); 0,37 = la referencia", 0, 1, 0),
+    ], "La escarcha (desenfoque) es la de los paneles del shell; tooltips y menús llevan un pase más. " +
+        "La referencia medida (glass-probe, 2026-10-08): escarcha 3:3, ancho máximo del bisel 20, canto de luz 0 " +
+        "y línea oscura 0,37.")
 }
 
 // ── Start ───────────────────────────────────────────────────────────────────
