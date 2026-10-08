@@ -231,6 +231,52 @@ export function trackInkGroup(widget: Gtk.Widget): void {
     if (!inkGroups.has(widget)) inkGroups.set(widget, nextInkId++)
 }
 
+/** Containers whose panes of glass never take the backdrop's ink (`trackNoInk`). */
+const noInk = new WeakSet<Gtk.Widget>()
+
+/**
+ * The panes of glass inside `widget` never take the ink: the compositor is given none of
+ * their content to measure, so their content stays as the bundle paints it, whatever is
+ * behind. Owner, 2026-10-08, after measuring the reference (glass-probe, `macos` set): only
+ * glass BUTTONS change their content with the backdrop; the Control Center and the
+ * notifications keep white text always, as the reference does, and the dock follows the
+ * system mode (`trackModeGlass`).
+ */
+export function trackNoInk(widget: Gtk.Widget): void {
+    noInk.add(widget)
+}
+
+/** Whether a pane lies inside a `trackNoInk` container (its own widget included). */
+function inkless(e: Entry): boolean {
+    for (let w: Gtk.Widget | null = e.widget; w; w = w.get_parent()) if (noInk.has(w)) return true
+    return false
+}
+
+/** Widgets whose surface's glass follows the system mode (`trackModeGlass`). */
+const modeGlass = new Set<Gtk.Widget>()
+
+/**
+ * The glass of `widget`'s SURFACE follows the system's light/dark mode, as the reference's
+ * dock does (owner, 2026-10-08): dark glass in dark mode, a light veil in light mode — the
+ * material decides how (`glassFollowsMode`, glass-material.ts). Its content follows the mode
+ * too, which is the bundle's to paint; pair it with `trackNoInk`.
+ */
+export function trackModeGlass(widget: Gtk.Widget): void {
+    modeGlass.add(widget)
+    widget.connect("destroy", () => modeGlass.delete(widget))
+}
+
+/** Whether this surface's glass follows the system mode (`trackModeGlass`): it holds such a
+ *  widget, or it is a popover attached inside one (the dock's tooltips and menus — a surface
+ *  of their own whose content already follows the dock's skin). */
+export function glassFollowsMode(native: Gtk.Native): boolean {
+    for (const w of modeGlass) if (w.get_native() === native) return true
+    for (let w: Gtk.Widget | null = (native as unknown as Gtk.Widget).get_parent(); w; w = w.get_parent()) {
+        if (modeGlass.has(w)) return true
+    }
+    return false
+}
+
 /** Fusion groups (`trackFusionGroup`): the container → its group's token, the token → its id. */
 const fusionGroups = new WeakMap<Gtk.Widget, object>()
 const fusionIds = new WeakMap<object, number>()
@@ -738,7 +784,7 @@ function flush(native: Gtk.Native, st: NativeState) {
     let anyClient = false
     for (const e of st.entries) {
         if (nested(e, native)) continue
-        const p = place(e, native, inkWanted !== null && !e.clientPaints())
+        const p = place(e, native, inkWanted !== null && !e.clientPaints() && !inkless(e))
         if (p.shapes.length && e.clientPaints()) anyClient = true
         const fusion = fusionIdOf(e)
         for (const s of p.shapes) s.fusion = fusion
@@ -764,7 +810,8 @@ function flush(native: Gtk.Native, st: NativeState) {
     const mergeOf = (group: number) => shim?.material_set_fusion_merge
         ? round(Math.max(hold, pulses.get(group)?.boost ?? 0)) : 0
     // Nobody decides this surface's ink any more: its panes are light again, on both ends.
-    if (!ink) for (const e of st.entries) setDarkInk(e, false)
+    // Nor anybody's inside a `trackNoInk` container, declared after it was dark.
+    for (const e of st.entries) if (!ink || inkless(e)) setDarkInk(e, false)
     const blur = source?.blur(native) ?? { size: 2, passes: 2 }
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
         s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],

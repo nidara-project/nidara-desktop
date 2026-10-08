@@ -367,6 +367,24 @@ before its tint — is brighter than `inkDarkAbove`, and back only below `inkLig
 (hysteresis). Never by an area's average: a mostly-light wallpaper with one dark stroke under the
 text keeps it white.
 
+- 🔑 **WHO takes the ink (owner, 2026-10-08), measured against the reference first.** The
+  reference changes nothing's content with the backdrop: its menu bar, menus, Spotlight and dock
+  dots follow the system MODE, and its Control Center keeps WHITE text in both modes over every
+  wallpaper (glass-probe's `macos` set — the private repo's `results/FINDINGS.md`). So:
+  - **Glass buttons** take the ink: the kit's glass buttons, over a window's content, are the one
+    thing that changes with the backdrop (none sits over content yet).
+  - **Control Center, Notification Center, notification banners: never.** `trackNoInk(widget)`
+    (kit `material.ts`) gives the compositor none of their content to measure, so they stay white;
+    their legibility is the tint and the shadow under the glass. Declared in `Bar.tsx`.
+  - **The dock: the system mode.** `trackNoInk` + `trackModeGlass` on its layout, and
+    `skinFromMode` on its adaptive-glass surface (`AdaptiveGlass.ts` → `skinOf`): its dots and
+    marks are light in dark mode and dark in light mode, and its glass on Hyalo turns to the light
+    one in light mode — `glassFollowsMode(native)` makes the material send a white veil, even
+    (`modeLightVeil`, 0.2: the reference's regular light glass is filled with white at 0.2) and
+    never thickened for white text (`target` 1). Off Hyalo, the light skin's tint does it.
+  - **The bar row: UNDECIDED** — each capsule by its backdrop (today) or by the mode like the dock.
+    The glass lab compares them («Texto que cambia a oscuro», «Deciden juntas»).
+  - Not decided either, so unchanged: the island, menus, tooltips, the app grid, Prism.
 - **Groups and boxes (client).** Each `trackGlass` entry is an ink group (`inkId`) — unless a
   container round it called `trackInkGroup(widget)`: then every pane inside turns TOGETHER, one
   group measured over all their boxes (read when the surface sends its glass, so nothing in the

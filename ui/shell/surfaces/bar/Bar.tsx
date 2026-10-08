@@ -36,7 +36,7 @@ import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import { ActivityIsland } from "../island/ActivityIsland"
 import AppGridPanel from "../app-grid/AppGrid"
 import { execAsync } from "../../../lib/process"
-import { trackNoScrim, trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
+import { trackNoInk, trackNoScrim, trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
 import { t } from "../../core/i18n"
 import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
@@ -168,6 +168,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   trackScrimRegion(nc)
   const prism = Prism()
   const popups = NotificationPopupsWidget()
+  // White text ALWAYS in the Control Center and the notifications, whatever is behind them
+  // (owner, 2026-10-08): the reference's Control Center keeps white text in both modes and
+  // over every wallpaper (glass-probe, `macos` set). Their legibility is the glass's tint and
+  // the shadow under it. Only glass buttons change their content with the backdrop; the bar
+  // row is still to be decided.
+  trackNoInk(cc)
+  trackNoInk(nc)
+  trackNoInk(popups)
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
   // The Activity Island: the bar-center workspace capsule as a multi-purpose
   // morphing surface — capsule = compact state, expanded modes morph out of

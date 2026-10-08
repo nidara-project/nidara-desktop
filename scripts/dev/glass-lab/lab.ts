@@ -44,7 +44,7 @@ import { withKitSheet } from "../../../ui/lib/nidara-kit/platform/kit-css"
 import { setKitAppearance, NidaraCircleButton, NidaraButton, NidaraList, NidaraSliderRow,
     NidaraToggleRow, NidaraDropDownRow, attachTooltip, GlassBubbleMenu } from "../../../ui/lib/nidara-kit"
 import { registerGlassMaterial, GLASS_MATERIAL_DEFAULTS } from "../../../ui/lib/nidara-kit/platform/glass-material"
-import { trackScrimRegion, trackNoScrim, trackInkGroup, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
+import { trackScrimRegion, trackNoScrim, trackInkGroup, trackNoInk, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
 import { RADIUS } from "../../../ui/lib/nidara-kit/platform/tokens"
 import Theme from "../../../ui/shell/core/ThemeManager"
 import { safeDisconnect } from "../../../ui/shell/core/signals"
@@ -330,8 +330,8 @@ function controlCenter(): Gtk.Widget {
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
     trackScrimRegion(panel)
-    if (state.ink === "grupo") rowBoxes.forEach(b => trackInkGroup(b))
-    if (state.ink === "panel") trackInkGroup(panel)
+    // As in the shell (Bar.tsx): the Control Center's text is white always (owner, 2026-10-08).
+    trackNoInk(panel)
     return panel
 }
 
@@ -356,8 +356,8 @@ function notifications(): Gtk.Widget {
     column.append(stack)
     column.append(card("Calendario", "Revisión del material, 17:00"))
     trackScrimRegion(column)
-    if (state.ink === "grupo") trackInkGroup(stack)
-    if (state.ink === "panel") trackInkGroup(column)
+    // As in the shell (Bar.tsx): the notifications' text is white always (owner, 2026-10-08).
+    trackNoInk(column)
     return column
 }
 
