@@ -126,6 +126,17 @@ impl Hyalo {
                 if let Some(t) = window.toplevel() {
                     t.with_pending_state(|s| s.size = Some(size));
                     t.send_pending_configure();
+                } else if let Some(x) = window.x11_surface() {
+                    // An X11 window is told its place with its size: grown from the left or the
+                    // top edge, its origin moves.
+                    let mut loc = g.initial.loc;
+                    if edges.contains(ResizeEdge::LEFT) {
+                        loc.x = g.initial.loc.x + g.initial.size.w - size.w;
+                    }
+                    if edges.contains(ResizeEdge::TOP) {
+                        loc.y = g.initial.loc.y + g.initial.size.h - size.h;
+                    }
+                    self.configure_x11(x, Rectangle::new(loc, size));
                 }
             }
             (Kind::Resize(edges), true) => {
@@ -270,6 +281,9 @@ impl Hyalo {
 
 /// The client's minimum and maximum size (0 = none).
 fn size_limits(window: &smithay::desktop::Window) -> (Size<i32, Logical>, Size<i32, Logical>) {
+    if let Some(x) = window.x11_surface() {
+        return (x.min_size().unwrap_or_default(), x.max_size().unwrap_or_default());
+    }
     let Some(t) = window.toplevel() else { return (Size::default(), Size::default()) };
     with_states(t.wl_surface(), |states| {
         let mut cached = states.cached_state.get::<SurfaceCachedState>();

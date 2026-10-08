@@ -10,8 +10,8 @@
 # (`nidara-hyalo --session`, which is how the greeter's session entry starts it), never in
 # a development window.
 autostart = [
-  # Tell uwsm the compositor is ready: it exports WAYLAND_DISPLAY (and the IPC socket) to the
-  # session's services and activates graphical-session.target. Must come first — uwsm ends
+  # Tell uwsm the compositor is ready: it exports WAYLAND_DISPLAY, DISPLAY (Xwayland) and the
+  # IPC socket to the session's services and activates graphical-session.target. Must come first — uwsm ends
   # the session if this does not arrive.
   "uwsm finalize HYALO_SOCKET",
   # The shell, as a systemd user unit, so a crash restarts it rather than leaving a bare
@@ -249,6 +249,11 @@ workspace = 600
 # planes are never used: the hardware blends them its own way.
 [render]
 direct_scanout = true
+
+# X11 apps — Steam and most games — through Xwayland, with Hyalo as their window manager. Read
+# when Hyalo starts; off, no X11 app runs.
+[xwayland]
+enabled = true
 
 # The keyboard follows the system's (localectl set-x11-keymap) unless set here.
 [input.keyboard]

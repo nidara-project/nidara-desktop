@@ -121,7 +121,7 @@ impl Hyalo {
             return;
         }
         let keyboard = self.seat.get_keyboard().unwrap();
-        let current = keyboard.current_focus();
+        let current = keyboard.current_focus().and_then(|f| f.surface());
         let previous_focus = if is_active {
             self.focus_grab.take().unwrap().previous_focus
         } else {
@@ -144,7 +144,7 @@ impl Hyalo {
             active.grab.cleared();
         }
         let keyboard = self.seat.get_keyboard().unwrap();
-        if keyboard.current_focus().is_some_and(|f| active.surfaces.contains(&f)) {
+        if keyboard.current_focus().and_then(|f| f.surface()).is_some_and(|f| active.surfaces.contains(&f)) {
             let back = active.previous_focus.filter(|s| s.is_alive());
             self.set_keyboard_focus(back, SERIAL_COUNTER.next_serial());
         }

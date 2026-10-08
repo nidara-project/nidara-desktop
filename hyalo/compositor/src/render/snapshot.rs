@@ -55,7 +55,7 @@ fn margin(cfg: &crate::config::WindowsConfig) -> f64 {
 /// `window` alone at `scale`, as it is now.
 pub fn take(gles: &mut GlesRenderer, scene: &Scene<'_>, window: &Window, scale: f64) -> Result<Snapshot, String> {
     let m = scene.wm.by_window(window).ok_or("not a window of ours")?;
-    let surface = window.toplevel().ok_or("not a toplevel")?.wl_surface().clone();
+    let surface = crate::wm::surface_of(window).ok_or("no surface yet")?;
     import_surface_tree(gles, &surface).map_err(|e| format!("{e:?}"))?;
     for (popup, _) in PopupManager::popups_for_surface(&surface) {
         import_surface_tree(gles, popup.wl_surface()).map_err(|e| format!("{e:?}"))?;

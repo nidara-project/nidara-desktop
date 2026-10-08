@@ -204,7 +204,7 @@ pub const BAR_MARGIN: f64 = 8.0;
 /// Where a window's controls are, surface-local logical px, and its buttons: in Hyalo's title
 /// bar when it has one (above the surface, so `y` is negative), else where the app placed them.
 pub fn managed_rect(m: &crate::wm::Managed, cfg: &ControlsConfig) -> Option<(Rectangle<f64, Logical>, Buttons)> {
-    let surface = m.window.toplevel()?.wl_surface().clone();
+    let surface = crate::wm::surface_of(&m.window)?;
     let buttons = shown(&surface, m.controls, cfg);
     let bar = m.bar() as f64;
     if bar > 0.0 {

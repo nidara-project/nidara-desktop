@@ -81,8 +81,16 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
                         crate::backend::tty::set_mode(state, &output, m)?;
                     }
                 }
+            // In a window (winit) the transform is the window's own — its rows are stored
+            // bottom-up — and not the user's: a scale set over IPC turned the whole nested
+            // desktop upside down (2026-10-07).
+            let transform = match state.backend {
+                Backend::Winit(_) => output.current_transform(),
+                _ => transform,
+            };
             output.change_current_state(None, Some(transform), Some(Scale::Fractional(cfg.scale)), None);
             arrange(state);
+            state.update_x11_scale();
             if let Backend::Tty(tty) = &mut state.backend {
                 let (_, enabled) = tty.vrr_state(&output);
                 if cfg.vrr != enabled {

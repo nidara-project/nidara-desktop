@@ -406,14 +406,14 @@ fn surface_size(surface: &WlSurface) -> Option<Size<i32, Logical>> {
 /// Whether a window's surface is its box: no client-side shadow margin around it — the
 /// decorations it may draw are inside its geometry, or it draws none.
 pub fn fits(window: &Window) -> bool {
-    let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return false };
+    let Some(surface) = crate::wm::surface_of(window) else { return false };
     let geo = window.geometry();
     geo.loc == Point::from((0, 0)) && surface_size(&surface).is_some_and(|s| s == geo.size)
 }
 
 /// What `cfg` and the window's rules make of it.
 pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, cfg: &WindowsConfig) -> Look {
-    let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return Look::default() };
+    let Some(surface) = crate::wm::surface_of(window) else { return Look::default() };
     let geo = window.geometry();
     // Every window, its own frame drawn or not (owner, 2026-10-04: "no window keeps square
     // corners"): one that draws a frame with a shadow margin is cut to its box (`push`).
@@ -441,7 +441,7 @@ pub fn push<R: HyaloRenderer>(
     decor: Option<bool>,
     when: std::time::Instant,
 ) {
-    let Some(surface) = window.toplevel().map(|t| t.wl_surface().clone()) else { return };
+    let Some(surface) = crate::wm::surface_of(window) else { return };
     // A popup's position is relative to its parent's WINDOW GEOMETRY, not its surface (xdg-shell;
     // Smithay's own `Window::render_elements` adds `geometry().loc`). Left out, the menus of a
     // window whose geometry starts inside its surface — Firefox drawing its own frame, a 21,19 px

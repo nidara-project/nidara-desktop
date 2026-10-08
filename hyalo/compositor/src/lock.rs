@@ -194,8 +194,9 @@ impl Hyalo {
             tracing::debug!("keyboard focus refused: the session is locked");
             return;
         }
+        let target = surface.map(|s| self.keyboard_target(s));
         let keyboard = self.seat.get_keyboard().unwrap();
-        keyboard.set_focus(self, surface, serial);
+        keyboard.set_focus(self, target, serial);
     }
 
     /// While locked: the lock surface under `pos`, if any.
@@ -216,7 +217,7 @@ impl Hyalo {
     /// first one there is), unless a lock surface has it already.
     pub fn focus_lock_surface(&mut self) {
         let keyboard = self.seat.get_keyboard().unwrap();
-        if keyboard.current_focus().is_some_and(|f| f.is_alive() && self.belongs_to_lock(&f)) {
+        if keyboard.current_focus().and_then(|f| f.surface()).is_some_and(|f| f.is_alive() && self.belongs_to_lock(&f)) {
             return;
         }
         let pointer = self.seat.get_pointer().unwrap().current_location();

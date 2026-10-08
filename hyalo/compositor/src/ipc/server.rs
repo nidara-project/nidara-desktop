@@ -156,6 +156,12 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             Ok(()) => Reply::Ok(Response::Handled),
             Err(e) => Reply::Error(e),
         },
+        Request::Xwayland => Reply::Ok(Response::Xwayland {
+            display: state.x11.display.map(|d| format!(":{d}")),
+            ready: state.x11.wm.is_some(),
+            scale: state.x11.scale,
+            overrides: state.wm.x11_overrides.len(),
+        }),
         Request::Idle => {
             let (idle_secs, inhibited) = state.idle_info();
             Reply::Ok(Response::Idle { idle_secs, inhibited, config: state.config.idle.clone() })
@@ -235,13 +241,8 @@ impl Hyalo {
             .iter()
             .filter(|m| m.mapped)
             .map(|m| {
-                let surface = m.window.toplevel().map(|t| t.wl_surface().clone());
-                let pid = surface
-                    .as_ref()
-                    .and_then(|s| dh.get_client(smithay::reexports::wayland_server::Resource::id(s)).ok())
-                    .and_then(|c| c.get_credentials(dh).ok())
-                    .map(|c| c.pid);
-                let parent = m.window.toplevel().and_then(|t| t.parent()).and_then(|p| self.wm.by_surface(&p)).map(|p| p.id);
+                let pid = crate::wm::window_pid(&m.window, dh);
+                let parent = self.wm.parent_of(&m.window).and_then(|p| self.wm.by_surface(&p)).map(|p| p.id);
                 super::WindowInfo {
                     id: m.id,
                     app_id: crate::wm::app_id(&m.window),
@@ -249,6 +250,7 @@ impl Hyalo {
                     initial_app_id: m.initial_app_id.clone(),
                     initial_title: m.initial_title.clone(),
                     pid,
+                    xwayland: m.window.x11_surface().is_some(),
                     parent,
                     workspace: m.workspace,
                     output: self.wm.workspaces.get(&m.workspace).map(|w| w.output.clone()).unwrap_or_default(),

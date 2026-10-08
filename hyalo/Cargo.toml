@@ -32,6 +32,7 @@ features = [
     "renderer_multi",
     "wayland_frontend",
     "desktop",
+    "xwayland",
 ]
 
 [workspace.dependencies.smithay-drm-extras]

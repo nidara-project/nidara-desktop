@@ -41,6 +41,9 @@ impl CompositorHandler for Hyalo {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
+        if let Some(x) = client.get_data::<smithay::xwayland::XWaylandClientData>() {
+            return &x.compositor_state;
+        }
         &client.get_data::<ClientState>().unwrap().compositor_state
     }
 
@@ -92,7 +95,7 @@ impl ShmHandler for Hyalo {
 }
 
 impl SeatHandler for Hyalo {
-    type KeyboardFocus = WlSurface;
+    type KeyboardFocus = crate::focus::KeyboardFocus;
     type PointerFocus = WlSurface;
     type TouchFocus = WlSurface;
 
@@ -105,9 +108,9 @@ impl SeatHandler for Hyalo {
         self.queue_redraw(None);
     }
 
-    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
+    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&crate::focus::KeyboardFocus>) {
         let dh = &self.display_handle;
-        let client = focused.and_then(|s| dh.get_client(s.id()).ok());
+        let client = focused.and_then(|f| f.surface()).and_then(|s| dh.get_client(s.id()).ok());
         set_data_device_focus(dh, seat, client.clone());
         set_primary_focus(dh, seat, client);
     }
@@ -124,6 +127,41 @@ impl smithay::input::tablet::TabletSeatHandler for Hyalo {
 
 impl SelectionHandler for Hyalo {
     type SelectionUserData = ();
+
+    /// The Wayland clipboard changed: offered to X11 clients too (xwayland.rs).
+    fn new_selection(
+        &mut self,
+        ty: smithay::wayland::selection::SelectionTarget,
+        source: Option<smithay::wayland::selection::SelectionSource>,
+        _seat: Seat<Self>,
+    ) {
+        if let Some(xwm) = self.x11.wm.as_mut() {
+            if let Err(err) = xwm.new_selection(ty, source.map(|s| s.mime_types())) {
+                tracing::debug!(?err, ?ty, "the X11 selection");
+            }
+            // Smithay queues the claim on the X selection without sending it: it went out with
+            // the next X event, so an X11 app pasting right after a Wayland copy still got its
+            // own last copy (the check caught it one run in two, 2026-10-07). A request that
+            // waits for its reply sends everything queued before it; this one changes nothing.
+            let _ = xwm.get_randr_primary_output();
+        }
+    }
+
+    /// A Wayland client pastes what an X11 client copied.
+    fn send_selection(
+        &mut self,
+        ty: smithay::wayland::selection::SelectionTarget,
+        mime_type: String,
+        fd: std::os::unix::io::OwnedFd,
+        _seat: Seat<Self>,
+        _user_data: &(),
+    ) {
+        if let Some(xwm) = self.x11.wm.as_mut()
+            && let Err(err) = xwm.send_selection(ty, mime_type, fd)
+        {
+            tracing::debug!(?err, ?ty, "an X11 selection for a Wayland client");
+        }
+    }
 }
 
 impl DataDeviceHandler for Hyalo {

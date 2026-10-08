@@ -114,7 +114,9 @@ pub fn init(
             let Backend::Winit(w) = &mut state.backend else { return };
             let output = w.output.clone();
             output.change_current_state(Some(Mode { size, refresh: 60_000 }), None, None, None);
-            state.arrange_layers();
+            // A new size for the output, as a mode change on the hardware: layers, windows (a
+            // fullscreen one fills it again) and Xwayland's screen follow.
+            crate::outputs::arrange(state);
             state.queue_redraw(Some(&output));
         }
         WinitEvent::Input(event) => state.process_input_event(event),

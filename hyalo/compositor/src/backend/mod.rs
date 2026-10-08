@@ -365,6 +365,19 @@ pub fn post_repaint(
         }
     }
     drop(map);
+    // X11 menus and tooltips (xwayland.rs) are in no space: Xwayland draws a window's next
+    // frame only when told the last one was shown, and a Steam menu stayed at its first —
+    // black — without these (2026-10-07).
+    let og = state.space.output_geometry(output);
+    for x in &state.wm.x11_overrides {
+        let Some(surface) = x.wl_surface() else { continue };
+        let on = og.is_some_and(|g| g.overlaps(smithay::utils::Rectangle::new(x.last_configure().loc, x.bbox().size)));
+        if !on {
+            continue;
+        }
+        with_surfaces_surface_tree(&surface, |surface, s| update(surface, s));
+        smithay::desktop::utils::send_frames_surface_tree(&surface, output, time, throttle, |_, _| Some(output.clone()));
+    }
     // The lock screen is a surface of its own (lock.rs): without its frame callbacks GTK's clock
     // never ticks there, and everything it fades in stays at its first frame — invisible.
     if let Some(surface) = state.lock.surface_for(output).cloned() {
@@ -422,6 +435,14 @@ pub fn take_presentation_feedback(state: &Hyalo, output: &Output, states: &Rende
         layer.take_presentation_feedback(&mut feedback, surface_primary_scanout_output, |surface, _| {
             surface_presentation_feedback_flags_from_states(surface, None, states)
         });
+    }
+    for surface in state.wm.x11_overrides.iter().filter_map(|x| x.wl_surface()) {
+        smithay::desktop::utils::take_presentation_feedback_surface_tree(
+            &surface,
+            &mut feedback,
+            |_, _| Some(output.clone()),
+            |surface, _| surface_presentation_feedback_flags_from_states(surface, None, states),
+        );
     }
     feedback
 }

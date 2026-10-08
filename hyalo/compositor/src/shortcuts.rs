@@ -29,14 +29,14 @@ impl KeyboardShortcutsInhibitHandler for Hyalo {
 impl Hyalo {
     /// The focused surface holds the shortcuts.
     pub fn shortcuts_inhibited(&self) -> bool {
-        let Some(focus) = self.seat.get_keyboard().and_then(|k| k.current_focus()) else { return false };
+        let Some(focus) = self.seat.get_keyboard().and_then(|k| k.current_focus()).and_then(|f| f.surface()) else { return false };
         self.seat.keyboard_shortcuts_inhibitor_for_surface(&focus).is_some_and(|i| i.is_active())
     }
 
     /// Super+Escape: the focused app gives the shortcuts back — or takes them again, if it still
     /// asks. `Err` when it never asked.
     pub fn toggle_shortcuts_inhibit(&mut self) -> Result<(), String> {
-        let focus = self.seat.get_keyboard().and_then(|k| k.current_focus()).ok_or("nothing has the keyboard")?;
+        let focus = self.seat.get_keyboard().and_then(|k| k.current_focus()).and_then(|f| f.surface()).ok_or("nothing has the keyboard")?;
         let inhibitor = self
             .seat
             .keyboard_shortcuts_inhibitor_for_surface(&focus)

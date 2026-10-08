@@ -28,6 +28,8 @@ pub struct WindowInfo {
     pub initial_app_id: String,
     pub initial_title: String,
     pub pid: Option<i32>,
+    /// An X11 window, through Xwayland (xwayland.rs).
+    pub xwayland: bool,
     /// The window it is a dialog of.
     pub parent: Option<WindowId>,
     pub workspace: i32,
@@ -173,6 +175,9 @@ pub enum Request {
     Lock,
     /// Seconds since the last input, whether something holds idle off, the steps (idle.rs).
     Idle,
+    /// X11 apps: Xwayland's display, whether its window manager is up, the scale it draws at
+    /// (xwayland.rs).
+    Xwayland,
     /// Night light: the screens warmed to `temperature` kelvin, or neutral with none.
     NightLight {
         #[serde(default)]
@@ -225,6 +230,7 @@ pub enum Response {
     Stats { stats: crate::render::stats::Stats },
     Lock { locked: bool, surfaces: Vec<String> },
     Idle { idle_secs: u64, inhibited: bool, config: crate::config::IdleConfig },
+    Xwayland { display: Option<String>, ready: bool, scale: f64, overrides: usize },
     Config { config: Box<crate::config::Config> },
     Settings { changed: bool },
 }

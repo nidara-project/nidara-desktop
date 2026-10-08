@@ -153,25 +153,14 @@ impl XdgShellHandler for Hyalo {
 
     fn app_id_changed(&mut self, surface: ToplevelSurface) {
         self.wm.dirty_windows = true;
-        // A GTK window takes its real app id when it is mapped: a rule naming it applies now.
         if let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) {
-            self.relist_window(id);
-            self.apply_late_rules(id);
+            self.window_app_id_changed(id);
         }
     }
 
     fn title_changed(&mut self, surface: ToplevelSurface) {
-        if let Some(m) = self.wm.by_surface(surface.wl_surface()) {
-            let id = m.id;
-            let event = crate::ipc::Event::WindowTitleChanged { id, title: crate::wm::title(&m.window) };
-            crate::ipc::server::broadcast(self, &event);
-            self.relist_window(id);
-            self.apply_late_rules(id);
-            // Hyalo's title bar shows it (render/title_bar.rs): a title can change without a
-            // new buffer.
-            if self.wm.get(id).is_some_and(|m| m.has_title_bar) {
-                self.queue_redraw(None);
-            }
+        if let Some(id) = self.wm.by_surface(surface.wl_surface()).map(|m| m.id) {
+            self.window_title_changed(id);
         }
     }
 
@@ -186,7 +175,7 @@ impl XdgShellHandler for Hyalo {
         if self.lock.is_locked() && !self.belongs_to_lock(&root) {
             return;
         }
-        let mut grab = match self.popups.grab_popup(root, kind, &seat, serial) {
+        let mut grab = match self.popups.grab_popup(crate::focus::KeyboardFocus::Surface(root), kind, &seat, serial) {
             Ok(grab) => grab,
             Err(err) => {
                 tracing::debug!(?err, "popup grab refused");
@@ -208,7 +197,7 @@ impl XdgShellHandler for Hyalo {
                 grab.ungrab(PopupUngrabStrategy::All);
                 return;
             }
-            self.set_keyboard_focus(grab.current_grab(), serial);
+            self.set_keyboard_focus(grab.current_grab().and_then(|f| f.surface()), serial);
             keyboard.set_grab(self, PopupKeyboardGrab::new(&grab), serial);
         }
         if let Some(pointer) = seat.get_pointer() {
@@ -239,7 +228,7 @@ impl Hyalo {
         }
         let keyboard = self.seat.get_keyboard().unwrap();
         let root = find_popup_root_surface(&PopupKind::Xdg(surface.clone())).ok();
-        let focus = keyboard.current_focus();
+        let focus = keyboard.current_focus().and_then(|f| f.surface());
         let on_menu = focus.as_ref() == Some(surface.wl_surface());
         let on_root = focus.is_some() && focus == root;
         if !(on_menu || on_root) {
@@ -289,6 +278,18 @@ pub fn root_surface(state: &Hyalo, surface: &WlSurface) -> WlSurface {
 impl Hyalo {
     /// Called on every commit: first configures, popups, the first placement of a window.
     pub fn xdg_commit(&mut self, surface: &WlSurface) {
+        // An X11 window has no configure to begin with: placed by its first frame
+        // (xwayland.rs).
+        if let Some(window) = self.window_for_surface(surface).filter(|w| w.x11_surface().is_some()) {
+            let mapped = self.wm.by_window(&window).is_some_and(|m| m.mapped);
+            let drawn = smithay::backend::renderer::utils::with_renderer_surface_state(surface, |s| s.buffer().is_some()).unwrap_or(false);
+            if !mapped && drawn {
+                self.window_mapped(&window);
+            } else if mapped {
+                self.window_committed(&window);
+            }
+            return;
+        }
         if let Some(window) = self.window_for_surface(surface) {
             let initial_configure_sent = with_states(surface, |states| {
                 states

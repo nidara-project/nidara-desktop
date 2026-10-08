@@ -19,6 +19,7 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   workspaces                      every workspace: id, output, mode, shown
   layers                          the layer surfaces (bar, dock, panels), bottom first
   cursor                          where the pointer is
+  xwayland                        X11 apps: Xwayland's DISPLAY, whether it is ready, its scale
   stats                           what each output's frames cost over the last second: frames
                                     drawn/unchanged, damage, CPU build/render, GPU time, and
                                     what the glass did (captures, passes, px, draws, measures)
@@ -116,6 +117,7 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "debug-overlay" => Request::DebugOverlay { on: on_off(args.get(1).ok_or("debug-overlay needs on or off")?)? },
         "lock" => Request::Lock,
         "idle" => Request::Idle,
+        "xwayland" => Request::Xwayland,
         "night-light" => {
             let arg = args.get(1).ok_or("night-light needs a temperature in kelvin, or `off`")?;
             let temperature = if arg == "off" { None } else { Some(arg.parse::<u32>().map_err(|e| format!("night-light: {e}"))?) };

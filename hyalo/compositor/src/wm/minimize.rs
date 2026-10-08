@@ -152,7 +152,7 @@ impl super::Wm {
             if cur.id == root {
                 return true;
             }
-            let Some(parent) = cur.window.toplevel().and_then(|t| t.parent()).and_then(|p| self.by_surface(&p)) else {
+            let Some(parent) = self.parent_of(&cur.window).and_then(|p| self.by_surface(&p)) else {
                 return false;
             };
             cur = parent;
@@ -168,7 +168,7 @@ impl super::Wm {
             if cur.minimized.is_some() {
                 return Some(cur.id);
             }
-            cur = cur.window.toplevel().and_then(|t| t.parent()).and_then(|p| self.by_surface(&p))?;
+            cur = self.parent_of(&cur.window).and_then(|p| self.by_surface(&p))?;
         }
         None
     }
@@ -190,7 +190,7 @@ impl super::Wm {
                 let own = m.frame().to_f64();
                 return Some(Placement { origin: p.origin + (own.loc - frame.loc).upscale(p.scale), scale: p.scale });
             }
-            cur = cur.window.toplevel().and_then(|t| t.parent()).and_then(|p| self.by_surface(&p))?;
+            cur = self.parent_of(&cur.window).and_then(|p| self.by_surface(&p))?;
         }
         None
     }
@@ -204,7 +204,7 @@ impl Hyalo {
         if m.minimized.is_some() {
             return Ok(());
         }
-        if m.window.toplevel().and_then(|t| t.parent()).is_some() {
+        if self.wm.parent_of(&m.window).is_some() {
             return Err("a dialog is minimized with the window it belongs to".into());
         }
         let ws = m.workspace;

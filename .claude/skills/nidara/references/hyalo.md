@@ -25,6 +25,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/protocols/window_controls.rs`, `render/controls.rs` | a window's controls, Hyalo's: the protocol, and the capsule drawn over the app's header |
 | `hyalo/compositor/src/render/title_bar.rs` | Hyalo's title bar, for apps that leave their decorations to the compositor (kitty, Qt, Chrome's "system title bar") |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
+| `hyalo/compositor/src/xwayland.rs`, `hyalo/compositor/src/focus.rs` | X11 apps: Hyalo starts Xwayland and is its window manager (Smithay's `X11Wm`); what the keyboard can be given (a surface, or an X11 window) |
 | `hyalo/compositor/src/lock.rs` | the lock screen (ext-session-lock-v1): what is drawn and reachable while locked |
 | `hyalo/compositor/src/idle.rs`, `hyalo/compositor/src/logind.rs` | idle (screens off, lock, suspend; inhibitors) and the session's D-Bus side (lock before sleep, `org.freedesktop.ScreenSaver`) |
 | `protocols/` | OUR protocols' XML, for both ends: Hyalo builds the server half, `lib/nidara-wl` the client half |
@@ -1073,6 +1074,79 @@ everything an application needs.
 - Not covered here: Hyalo's JSON IPC socket (`HYALO_SOCKET`) is a file in the runtime dir. A
   Flatpak app gets a runtime dir of its own with the Wayland socket in it, not this one — unless it
   is granted the host's (`--filesystem=xdg-run/…`), and then nothing here stops it.
+
+## X11 apps: Xwayland, with Hyalo as its window manager (#683)
+
+`xwayland.rs`. Hyalo starts Xwayland itself at startup (`[xwayland] enabled`, read once) and is
+its window manager through Smithay's `X11Wm`. `DISPLAY` is set for every child, the autostart's
+`uwsm finalize` included, as soon as the sockets are bound. An X11 window is a `Managed` like any
+other — same layout, rules, title bar, controls, animations, minimize — and `msg windows` marks
+it `xwayland: true`. `msg xwayland` says the display, whether the WM is up, the scale, and how
+many X11 menus are shown.
+
+🔑 **Why not xwayland-satellite (owner, 2026-10-07: "full compatibility — no game that does not
+run or runs badly").** Both were measured on the owner's machine against Steam, Thumper (Proton),
+LIMBO (native) and Portal (#683). Satellite failed on three counts: an output's size change
+never reached Xwayland, so a running game fell out of fullscreen and off the screen; every X11
+window carried satellite's pid, so a native X11 game was not detected; and it gave Xwayland twice
+the DPI on a 1.5 screen. All three pass here, and frame rate and GPU cost were the same (satellite
+costs ~1 % more CPU).
+
+What X11 needs that xdg-shell does not:
+- **A position.** An X client knows where its window is and opens its menus from there.
+  `configure_x11` sends place and size together whenever either changes: in `arrange_workspace`,
+  `sync_space`, and during a resize grab. The rect Hyalo lays out is the visible box; the X window
+  is larger by the shadow a client-side frame declares (`_GTK_FRAME_EXTENTS`), which is added there.
+- **Focus.** The X server routes keys to its own input focus, which the window manager sets. The
+  seat's `KeyboardFocus` is therefore `focus::KeyboardFocus` (a surface, or a boxed `X11Surface`
+  whose `enter` sets the X focus or sends `WM_TAKE_FOCUS`). Everything in Hyalo still names a
+  focus by its surface; `set_keyboard_focus` looks the X11 window up (`keyboard_target`). Read the
+  focus as a surface with `current_focus().and_then(|f| f.surface())`.
+- **The pid.** Xwayland is Hyalo's child, so the socket's credentials are Hyalo's own.
+  `wm::window_pid` asks the X server instead (XRes, else `_NET_WM_PID`). That is how a game Steam
+  runs is found (`games.rs`), and what IPC reports.
+- **An app id when there is no class.** The app id of an X11 window is its `WM_CLASS` class, and
+  some games set none: Distance (Unity 5, native) has only Steam's `STEAM_GAME`. With an empty app
+  id the dock skipped the window, so a game on `gamespace` could not be reached from it. A window
+  with no class whose process carries a Steam app id is `steam_app_<id>`, the class Proton games
+  have (`wm::remember_steam_class`, read once at map, kept in the surface's user data).
+- **Override-redirect windows** (menus, tooltips, drop-downs, splash screens) are never managed:
+  `Wm::x11_overrides`, drawn over the windows and the bar (below the overlay layers), hit-tested
+  first in `surface_under`, and they cover a title bar in `chrome_under`. 🔴 **They get frame
+  callbacks in `backend/mod.rs`, like a window.** Without them Xwayland never commits a second
+  frame, and Steam's menus stayed black.
+- **Scale.** Xwayland gets the largest output scale as its client scale (Smithay converts every
+  coordinate), so X clients draw at the real pixels: sharp at 1.5, with the X screen at the
+  output's full resolution. 🔴 Smithay describes an output to a client in that client's pixels,
+  and only when something changes. After `set_client_scale` every output is described again
+  (`resend_outputs`). Without it Xwayland kept the screen size it had before the scale changed:
+  853×533 for 1280×800 at 1.5, then 1920×1200 back at 1.
+- **DPI and cursor.** `update_x11_resources` sets XSETTINGS (`Xft/DPI`, `Gtk/CursorTheme*`) and
+  the root window's resource database (`Xft.dpi`, `Xcursor.theme`, `Xcursor.size`; what `xrdb`
+  writes, read by Qt, Wine, Xft and Xcursor). It does this on its own X connection, on a thread,
+  because Xwayland may be inside a Wayland roundtrip with Hyalo. The property change is
+  `.check()`ed: only flushed, it was lost when the connection closed.
+- **The clipboard** both ways goes through Smithay (`XwmHandler` selection methods; the Wayland
+  side forwards in `SelectionHandler::new_selection`). 🔴 Smithay queues the X selection claim
+  without flushing it, so it went out with the next X event, and an X app pasting right after a
+  Wayland copy got its own last copy. A request that waits for a reply flushes what was queued
+  (`get_randr_primary_output`, changing nothing). The CI check caught this one run in two.
+- An X11 window that unmaps is gone. Mapped again, it is a new window, as on every X window
+  manager.
+
+Tests: `scripts/ci/hyalo-x11-check.sh` (with `hyalo-x11-probe.js`, GTK 3 on X11) in the smoke.
+It checks that a window has its own pid, that keys reach it, the clipboard both ways (each against
+what was there before), and an X11 menu at its place whose SECOND frame shows. Its control: with
+the menus' frame callbacks removed, the last check fails "stuck on its first frame" (checked,
+2026-10-07). Measured by hand (nested, the owner's Steam library): Steam (login, store, its menus,
+its own maximize/minimize, dragging by its header), Thumper fullscreen through size and scale
+changes, LIMBO detected as a game by its pid. A real session still has to show games at the
+monitor's rate (tty).
+
+- Nested: `msg output winit scale=…` used to replace the winit output's `Flipped180` with the
+  config's transform, turning the whole nested desktop upside down. `outputs::apply` keeps the
+  window's own transform now. A winit resize also re-arranges like a mode change
+  (`outputs::arrange`), so a fullscreen window fills the window again.
 
 ## Bringing a window to the front (xdg-activation-v1)
 
