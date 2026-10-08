@@ -527,7 +527,45 @@ pub struct OutputConfig {
     pub position: Option<(i32, i32)>,
     /// normal, 90, 180, 270, flipped, flipped-90, flipped-180, flipped-270.
     pub transform: String,
-    pub vrr: bool,
+    pub vrr: Vrr,
+}
+
+/// Variable refresh rate on an output: `false`, `true`, or `"games"` — on only while a game is
+/// fullscreen on it (niri's on-demand VRR, Hyprland's `misc:vrr = 3`). A bool as before, so the
+/// layers already written keep their meaning. `"games"` is decided every frame in the tty
+/// backend (`backend/tty.rs` → `vrr_for_games`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Vrr {
+    #[default]
+    Off,
+    On,
+    Games,
+}
+
+impl Serialize for Vrr {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Vrr::Off => s.serialize_bool(false),
+            Vrr::On => s.serialize_bool(true),
+            Vrr::Games => s.serialize_str("games"),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Vrr {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum V {
+            B(bool),
+            S(String),
+        }
+        match V::deserialize(d)? {
+            V::B(b) => Ok(if b { Vrr::On } else { Vrr::Off }),
+            V::S(s) if s == "games" => Ok(Vrr::Games),
+            V::S(s) => Err(serde::de::Error::custom(format!("vrr is false, true or \"games\", not {s:?}"))),
+        }
+    }
 }
 
 impl Default for OutputConfig {
@@ -538,7 +576,7 @@ impl Default for OutputConfig {
             scale: 1.0,
             position: None,
             transform: "normal".into(),
-            vrr: false,
+            vrr: Vrr::Off,
         }
     }
 }
@@ -1019,7 +1057,19 @@ mod tests {
         let o = load_from(&[sys, settings, user]).unwrap().outputs["DP-1"].clone();
         assert_eq!(o.scale, 1.5, "the user's hand edit wins over Settings");
         assert_eq!(o.mode, "2560x1440@144", "Settings' value where the user set nothing");
-        assert!(o.vrr, "the shipped value where neither did");
+        assert_eq!(o.vrr, Vrr::On, "the shipped value where neither did");
+    }
+
+    #[test]
+    fn vrr_is_a_bool_or_games() {
+        let d = tmpdir("vrr");
+        let f = write(&d, "a.toml", "[outputs.A]\nvrr = false\n[outputs.B]\nvrr = true\n[outputs.C]\nvrr = \"games\"\n");
+        let c = load_from(&[f]).unwrap();
+        assert_eq!((c.outputs["A"].vrr, c.outputs["B"].vrr, c.outputs["C"].vrr), (Vrr::Off, Vrr::On, Vrr::Games));
+        let bad = write(&d, "b.toml", "[outputs.A]\nvrr = \"always\"\n");
+        assert!(load_from(&[bad]).is_err(), "a word that is not games is refused, not read as off");
+        let json = serde_json::to_string(&[Vrr::Off, Vrr::On, Vrr::Games]).unwrap();
+        assert_eq!(json, r#"[false,true,"games"]"#, "written back as it is read");
     }
 
     #[test]

@@ -680,7 +680,7 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
     drop(renderer);
     let dmabuf_feedback = drm_output
         .with_compositor(|c| surface_feedback(primary_gpu, device.render_node, node, &mut tty.gpus, c.surface()));
-    if config.vrr {
+    if config.vrr == crate::config::Vrr::On {
         let conn = connector.handle();
         drm_output.with_compositor(|c| {
             use smithay::backend::drm::VrrSupport;
@@ -965,6 +965,29 @@ fn surface_feedback(
     Some(SurfaceDmabufFeedback { render, scanout })
 }
 
+/// `vrr = "games"`: VRR on while a game is fullscreen on this output, off otherwise — asked
+/// before every frame, so it follows the game into and out of fullscreen, a workspace switch
+/// and its closing without a hook in each. Only where the monitor takes it without a modeset
+/// (`VrrSupport::Supported`): one that needs a modeset would go black each time a game comes
+/// and goes, so there it stays off.
+fn vrr_for_games(surface: &mut Surface, vrr: Option<crate::config::Vrr>, game: bool) {
+    if vrr != Some(crate::config::Vrr::Games) {
+        return;
+    }
+    let conn = surface.connector.handle();
+    let name = surface.output.name();
+    surface.drm_output.with_compositor(|c| {
+        use smithay::backend::drm::VrrSupport;
+        let want = game && matches!(c.vrr_supported(conn), Ok(VrrSupport::Supported));
+        if want != c.vrr_enabled() {
+            match c.use_vrr(want) {
+                Ok(()) => tracing::info!(output = %name, on = want, "VRR for a fullscreen game"),
+                Err(err) => tracing::warn!(output = %name, ?err, "VRR not switched"),
+            }
+        }
+    });
+}
+
 /// Draws every output whose redraw is queued.
 pub fn redraw_queued(state: &mut Hyalo) {
     let queued: Vec<(DrmNode, crtc::Handle)> = {
@@ -995,6 +1018,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
+    vrr_for_games(surface, config.outputs.get(&output.name()).map(|c| c.vrr), wm.game_fullscreen_on(&output.name()));
     // Hyalo's own animations are drawn as they are when this frame shows: the next vblank, on
     // the beat of the last one — unless VRR leaves no beat (render/timing.rs).
     let begun = Instant::now();

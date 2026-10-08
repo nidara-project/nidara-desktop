@@ -1028,7 +1028,16 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   on every rename. The shipped `[rules.games]` sends games to `name:gamespace`, and the user goes
   with them; everything else about game mode is the shell's (architecture.md → "Game mode").
   Immediate presentation and tearing need async page flips, which Smithay's DRM backend does not
-  have — that, VRR for a fullscreen game and idle inhibition are #683, not a rule.
+  have — that is #683, not a rule.
+- **VRR for games** (`[outputs.X] vrr = "games"`, Settings → Display → "Fullscreen games"): VRR
+  on while a game (`games::is_game`) is fullscreen on the output's active workspace with no
+  special workspace over it (`Wm::game_fullscreen_on`), off otherwise. `vrr` is still a bool
+  for always/never, so the layers already written keep their meaning (`config::Vrr`). The tty
+  backend asks before EVERY frame (`vrr_for_games`), so entering and leaving fullscreen, a
+  workspace switch and the game closing need no hook each. Only where the monitor switches
+  without a modeset (`VrrSupport::Supported`): one that needs a modeset would go black each time
+  a game comes and goes, so there it stays off. `msg outputs` gives `vrr` (asked) apart from
+  `vrr_enabled` (on now), and Settings reads the first.
 - **Border and rounding are not drawn yet**: the geometry reserves `layout.border` (1 px) so
   windows line up with the bar exactly as on Hyprland; the border is drawn with the rounding and
   shadows in #684.

@@ -1,6 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
+import { settings } from "../../../core/CompositorState"
 import displays from "../../../core/Displays"
 import { t } from "../../../core/i18n"
 import { uiIcon } from "../../../core/Icons"
@@ -251,9 +252,9 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
 
 // ── Settings that are NOT per monitor ─────────────────────────────────────────
 /**
- * VRR is `misc:vrr` — a single GLOBAL Hyprland int (0=off, 1=always,
- * 2=fullscreen-only), which `MonitorConfig` says out loud and writes as one
- * `hl.config({ misc = { vrr = N } })` line.
+ * VRR is one choice for every monitor: 0=off, 1=always, 2=on demand — on Hyprland
+ * `misc:vrr` (a single GLOBAL int; 2 = any fullscreen window), on Hyalo each output's
+ * `vrr` (2 = a game in fullscreen, `"games"`). `caps.vrrOnDemand` says which 2 it is.
  *
  * It used to be built inside `buildMonitorSection`, i.e. once per monitor. On a
  * two-monitor desk that put the SAME setting under two different monitor headings
@@ -265,13 +266,11 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
 function buildGlobalSection(): Gtk.Widget {
     const { box, listBox } = listGroup(t("settings.display.group.all"))
 
-    // Index == value applied: 0=off, 1=always, 2=fullscreen-only. Hyalo has no
-    // fullscreen-only yet — it needs fullscreen windows (#682) — so it is not offered
-    // there rather than offered and ignored.
+    // Index == value applied: 0=off, 1=always, 2=on demand (`caps.vrrOnDemand`).
     const VRR_OPTS = [
         t("settings.display.vrr.off"),
         t("settings.display.vrr.always"),
-        ...(displays.onHyalo ? [] : [t("settings.display.vrr.fullscreen")]),
+        settings.caps.vrrOnDemand === "games" ? t("settings.display.vrr.games") : t("settings.display.vrr.fullscreen"),
     ]
     const vrrDrp = NidaraDropDown({
         model: new Gtk.StringList({ strings: VRR_OPTS }), valign: Gtk.Align.CENTER,

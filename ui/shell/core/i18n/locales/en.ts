@@ -368,6 +368,7 @@ export default {
     "settings.display.vrr.off": "Disabled",
     "settings.display.vrr.always": "Always",
     "settings.display.vrr.fullscreen": "Fullscreen only",
+    "settings.display.vrr.games": "Fullscreen games",
 
     // Dock
     "settings.dock.group.behavior": "Behavior",
