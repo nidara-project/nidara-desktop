@@ -1105,6 +1105,11 @@ What X11 needs that xdg-shell does not:
 - **The pid.** Xwayland is Hyalo's child, so the socket's credentials are Hyalo's own.
   `wm::window_pid` asks the X server instead (XRes, else `_NET_WM_PID`). That is how a game Steam
   runs is found (`games.rs`), and what IPC reports.
+- **An app id when there is no class.** The app id of an X11 window is its `WM_CLASS` class, and
+  some games set none: Distance (Unity 5, native) has only Steam's `STEAM_GAME`. With an empty app
+  id the dock skipped the window, so a game on `gamespace` could not be reached from it. A window
+  with no class whose process carries a Steam app id is `steam_app_<id>`, the class Proton games
+  have (`wm::remember_steam_class`, read once at map, kept in the surface's user data).
 - **Override-redirect windows** (menus, tooltips, drop-downs, splash screens) are never managed:
   `Wm::x11_overrides`, drawn over the windows and the bar (below the overlay layers), hit-tested
   first in `surface_under`, and they cover a title bar in `chrome_under`. 🔴 **They get frame

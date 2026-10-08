@@ -406,11 +406,37 @@ fn awaits_configure(window: &Window) -> bool {
 
 /// An xdg toplevel's app id; an X11 window's `WM_CLASS` class (what Hyprland calls its class:
 /// `steam_app_<id>` for a game Steam runs, `Steam` for Steam — its `StartupWMClass`).
+/// An X11 window that declares no class but was started by Steam is `steam_app_<id>` too
+/// (`X11SteamClass`): without it the dock had nothing to show it by.
 pub fn app_id(window: &Window) -> String {
     if let Some(x) = window.x11_surface() {
-        return x.class();
+        let class = x.class();
+        if class.is_empty()
+            && let Some(steam) = x.user_data().get::<X11SteamClass>()
+        {
+            return steam.0.clone();
+        }
+        return class;
     }
     toplevel_data(window, |d| d.app_id.clone()).flatten().unwrap_or_default()
+}
+
+/// The app id an X11 window gets when it sets no `WM_CLASS` and its process (or a parent) carries
+/// a Steam app id: `steam_app_<id>`, the class Steam's Proton games have. Distance (Unity 5,
+/// native) sets none — measured 2026-10-08: `WM_CLASS: not found`, only Steam's `STEAM_GAME`.
+/// Kept on the X11 surface, read when the window maps (`remember_steam_class`).
+pub struct X11SteamClass(pub String);
+
+/// For an X11 window about to map: no class, a Steam app id in its environment →
+/// `X11SteamClass`. Read once; `/proc` is not read again on every `app_id`.
+pub fn remember_steam_class(x: &smithay::xwayland::X11Surface) {
+    if !x.class().is_empty() {
+        return;
+    }
+    let Some(pid) = x.get_client_pid().ok().or_else(|| x.pid()) else { return };
+    if let Some(n) = games::steam_app_of(pid as i32) {
+        x.user_data().insert_if_missing(|| X11SteamClass(format!("steam_app_{n}")));
+    }
 }
 
 pub fn title(window: &Window) -> String {

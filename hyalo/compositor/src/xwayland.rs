@@ -284,6 +284,7 @@ impl XwmHandler for Hyalo {
         if self.x11_managed(&x).is_some() {
             return;
         }
+        crate::wm::remember_steam_class(&x);
         let window = Window::new_x11_window(x);
         self.window_created(window.clone());
         self.x11_initial_configure(&window);
