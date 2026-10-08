@@ -38,6 +38,7 @@ import { safeDisconnect } from "../../core/signals"
 import inputYield from "../../core/InputYield"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
+import { trackModeGlass, trackNoInk } from "../../../lib/nidara-kit/platform/material"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
 export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
@@ -1531,12 +1532,18 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (!axis.vertical) return { x: 0, y: y + off }
         return dockSettings.position === 'right' ? { x: g.width - win.get_width() + off, y } : { x: -off, y }
     }
+    // The dock follows the SYSTEM MODE (owner, 2026-10-08, after measuring the reference: its
+    // dots are light in dark mode and dark in light mode, whatever the wallpaper): its content
+    // never takes the backdrop's ink, and its glass on Hyalo turns light with the mode.
+    trackNoInk(layout)
+    trackModeGlass(layout)
     glass = registerGlassSurface({
         id: `dock-${gdkmonitor.get_connector() ?? "?"}`,
         root: layout,
         role: "dock",
         content: "marks",
         thickens: false,
+        skinFromMode: true,
         probeArea: () => axis.capsuleRect(),
         windowOrigin: dockOrigin,
         // At rest, in place, with nothing of ours over it: magnifying, sliding, a menu

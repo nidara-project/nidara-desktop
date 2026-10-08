@@ -5,7 +5,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { GLASS_TINT } from "./tokens"
 import { SOLID_GLASS } from "./theme-tokens"
 import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "./glass-legibility"
-import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
+import { glassFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
 
 /**
  * THE glass material (#684, #705 step 0): one material for everything Nidara draws as glass —
@@ -32,6 +32,8 @@ import { setMaterialSource, type GlassParams, type InkParams, type ScrimParams }
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
  *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
+ *   modeLightVeil                                        the light glass of a surface that
+ *                                                        follows the mode (the dock), light mode
  *   fusion                                               how close two panes of one fusion
  *                                                        group join, logical px (0 = off)
  *   fusionHold                                           0..1: every fusion group held that far
@@ -134,6 +136,11 @@ const DEFAULTS = {
     // An instrument, 0 in the product: every pane held this far formed (#764 — a pane appears by
     // materializing: its blur, refraction, tint and rim grow; held, a step of it can be judged).
     formationHold: 0,
+    // A surface whose glass follows the system mode (`trackModeGlass`: the dock), in light
+    // mode: a white veil this thick, even — the reference's regular light glass is filled with
+    // white at 0.2 (glass-probe, 2026-10-08) — and no darkening for white text, which it does
+    // not carry (its content is dark in light mode).
+    modeLightVeil: 0.2,
 }
 
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
@@ -151,16 +158,28 @@ export interface GlassMaterialHost {
     reduceTransparency(): boolean
     /** The panels' blur (a tooltip or a menu takes one pass more). */
     panelBlur(): Blur
-    /** Calls `cb` whenever either of the two above may have changed; returns the disconnect. */
+    /** The system mode is light — for a surface whose glass follows it (`trackModeGlass`).
+     *  Absent: dark. */
+    lightMode?(): boolean
+    /** Calls `cb` whenever any of the above may have changed; returns the disconnect. */
     onChange(cb: () => void): () => void
 }
 
 let host: GlassMaterialHost | null = null
 const reduced = () => host?.reduceTransparency() ?? false
 
-function params(): GlassParams | null {
+function params(native: Gtk.Native | null = null): GlassParams | null {
     if (tuning.off) return null
     const p = { ...DEFAULTS, ...tuning }
+    // A surface that follows the system mode, in light mode: the light glass — a white veil,
+    // even (alphaMin = alphaMax), never thickened for white text (a target no backdrop exceeds).
+    if (native && host?.lightMode?.() && glassFollowsMode(native)) {
+        const l = GLASS_TINT.light
+        const veil = reduced() ? SOLID_GLASS : p.modeLightVeil
+        return { tint: { r: l.r, g: l.g, b: l.b }, alphaMin: veil, alphaMax: veil, target: 1,
+            refraction: reduced() ? 0 : p.refraction, lensing: reduced() ? 0 : p.lensing, rim: p.rim,
+            saturation: reduced() ? 1 : p.saturation }
+    }
     const t = GLASS_TINT.dark
     if (reduced()) {
         return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: SOLID_GLASS, alphaMax: SOLID_GLASS,
@@ -238,7 +257,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
     host = h
     watchTuning()
     setMaterialSource({
-        glass: (_native: Gtk.Native) => params(),
+        glass: (native: Gtk.Native) => params(native),
         ink: (_native: Gtk.Native) => inkParams(),
         scrim: (_native: Gtk.Native) => scrimParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),

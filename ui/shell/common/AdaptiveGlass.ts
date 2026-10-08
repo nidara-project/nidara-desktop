@@ -137,6 +137,11 @@ export interface GlassSurfaceOpts {
      *  see-through included (`ProbeRequest.seeThrough`): its skin must not depend on how
      *  far its glass happens to reach. */
     skinFromBackdrop?: boolean
+    /** The skin comes from the SYSTEM MODE, not from the shell's fixed dark one — the dock
+     *  (owner, 2026-10-08, after measuring the reference: its dots follow the mode, light in
+     *  dark mode and dark in light mode, whatever the wallpaper). Its glass follows too: on
+     *  Hyalo through `trackModeGlass`, here through the light skin's tint. */
+    skinFromMode?: boolean
 }
 
 interface Surface extends GlassSurfaceOpts {
@@ -172,13 +177,18 @@ const SHELL_FLIPS = false
 const NEUTRAL_TINT: Rgb = { r: GLASS_TINT.dark.r, g: GLASS_TINT.dark.g, b: GLASS_TINT.dark.b }
 const LIGHT_TINT: Rgb = { r: GLASS_TINT.light.r, g: GLASS_TINT.light.g, b: GLASS_TINT.light.b }
 
-/** The shell's rule, in one place: the mode's skin, thicken only (`SHELL_FLIPS`), and
- *  the dark glass tinted in the backdrop's own colour (`tintFromBackdrop`, 2026-09-30),
+/** The skin a surface wears before (and without) a flip: the shell's — dark — or, for one
+ *  that follows the system mode (`skinFromMode`: the dock), the mode's. */
+const skinOf = (s: { skinFromMode?: boolean }): boolean => s.skinFromMode ? Theme.isDark : Theme.chromeIsDark
+
+/** The shell's rule, in one place: the surface's skin (`skinOf`), thicken only (`SHELL_FLIPS`),
+ *  and the dark glass tinted in the backdrop's own colour (`tintFromBackdrop`, 2026-09-30),
  *  the contrast computed against that tint. */
 const decide = (stats: BackdropStats, floor: number, current: GlassDecision | undefined, s: Surface): GlassDecision => {
     const tint = tintFromBackdrop(stats.mean)
-    if (s.thickens === false) return Theme.chromeIsDark ? { isDark: true, alpha: floor, tint } : { isDark: false, alpha: floor }
-    return decideGlass(stats, Theme.chromeIsDark, floor, current, s.content, SHELL_FLIPS, tint)
+    const dark = skinOf(s)
+    if (s.thickens === false) return dark ? { isDark: true, alpha: floor, tint } : { isDark: false, alpha: floor }
+    return decideGlass(stats, dark, floor, current, s.content, SHELL_FLIPS, tint)
 }
 
 const tintDiffers = (a: Rgb, b: Rgb) => Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)) > 0.5 / 255
@@ -227,7 +237,7 @@ function tintAlphaFor(widget: Gtk.Widget | null, role: GlassRole): number {
 export function chromeIsDarkFor(widget: Gtk.Widget | null): boolean {
     if (darkInkFor(widget)) return false
     const s = surfaceOf(widget)
-    return s?.decision ? s.decision.isDark : Theme.chromeIsDark
+    return s?.decision ? s.decision.isDark : s ? skinOf(s) : Theme.chromeIsDark
 }
 
 /** The TINT a glass painter inside `widget` should fill with: on the dark skin, the one
@@ -254,10 +264,12 @@ function redrawSubtree(w: Gtk.Widget) {
 }
 
 function applySkinClass(s: Surface) {
-    const flipped = s.decision !== null && s.decision.isDark !== Theme.chromeIsDark
+    // Undecided, a surface that follows the mode already wears the mode's skin.
+    const isDark = s.decision ? s.decision.isDark : s.skinFromMode ? Theme.isDark : null
+    const flipped = isDark !== null && isDark !== Theme.chromeIsDark
     s.root.remove_css_class("nidara-skin-dark")
     s.root.remove_css_class("nidara-skin-light")
-    if (flipped) s.root.add_css_class(s.decision!.isDark ? "nidara-skin-dark" : "nidara-skin-light")
+    if (flipped) s.root.add_css_class(isDark ? "nidara-skin-dark" : "nidara-skin-light")
 }
 
 /** One log line per SKIN change — never per measurement: a flip is rare and visible,
@@ -266,7 +278,7 @@ function applySkinClass(s: Surface) {
  *  `NIDARA_BACKDROP_DEBUG` the probe's images carry the same tag. */
 function logFlip(s: Surface, prev: GlassDecision | null, next: GlassDecision, why: string, stats: BackdropStats | null) {
     // A change of skin — or a FIRST decision against the mode, which is a flip too.
-    if (prev ? prev.isDark === next.isDark : next.isDark === Theme.chromeIsDark) return
+    if (prev ? prev.isDark === next.isDark : next.isDark === skinOf(s)) return
     const rgb = (c: { r: number; g: number; b: number }) => [c.r, c.g, c.b].map(v => Math.round(v * 255)).join(",")
     const st = stats ? ` mean ${rgb(stats.mean)} brightest ${rgb(stats.brightest)} darkest ${rgb(stats.darkest)} samples ${stats.samples}` : ""
     console.log(`[AdaptiveGlass] ${s.id}: skin ${prev ? (prev.isDark ? "dark" : "light") : "(none)"} → ${next.isDark ? "dark" : "light"} (${why}, probe ${s.id}-${s.seq}, ws ${compositor.focusedWorkspaceId})${st}`)
@@ -594,11 +606,15 @@ export function startAdaptiveGlass(): void {
     // and anything that asked in that second kept the wrong answer: the dock's tooltips
     // came up with black text on dark glass (2026-09-29). The measurement still follows.
     let lastMode = Theme.chromeIsDark
+    let lastSystemMode = Theme.isDark
     let lastPasses = blur.passes
     let glassFrostBefore = Theme.glassFrost
     Theme.connect("changed", () => {
         const modeChanged = Theme.chromeIsDark !== lastMode
         lastMode = Theme.chromeIsDark
+        // The system mode moves only the surfaces that follow it (`skinFromMode`: the dock).
+        const systemModeChanged = Theme.isDark !== lastSystemMode
+        lastSystemMode = Theme.isDark
         // Solid: nothing to adapt (`measure` resets each surface and captures nothing).
         if (Theme.reduceTransparency) { for (const s of surfaces.values()) reset(s); return }
         // A new material moved the blur: what each surface last measured went through
@@ -612,12 +628,17 @@ export function startAdaptiveGlass(): void {
         for (const s of surfaces.values()) {
             // The bar row reads its skin from its backdrop, not the mode: its group
             // re-decides on the measurement, as before.
+            const skinChanged = modeChanged || (systemModeChanged && !!s.skinFromMode)
             if (s.lastStats && !s.skinFromBackdrop && !s.group?.()) {
                 // A fresh decision across a mode change: the old one's skin was chosen
                 // against the OTHER mode, and passing it would read as a flip to keep.
                 apply(s, decide(s.lastStats, floorFor(s),
-                    modeChanged ? undefined : s.decision ?? undefined, s), "theme changed")
-            } else applySkinClass(s)
+                    skinChanged ? undefined : s.decision ?? undefined, s), "theme changed")
+            } else {
+                applySkinClass(s)
+                // Its Cairo painters ask `chromeIsDarkFor`, which answers the mode while undecided.
+                if (skinChanged) redrawSubtree(s.root)
+            }
         }
         scheduleAll()
     })

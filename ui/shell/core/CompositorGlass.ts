@@ -14,6 +14,8 @@ export function initCompositorGlass() {
     registerGlassMaterial({
         reduceTransparency: () => Theme.reduceTransparency,
         panelBlur: glassBlurInForce,
+        // The dock's glass follows the system mode (`trackModeGlass`, owner 2026-10-08).
+        lightMode: () => !Theme.isDark,
         onChange: (cb) => {
             const id = Theme.connect("changed", cb)
             return () => safeDisconnect(Theme, id)
