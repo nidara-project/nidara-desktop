@@ -324,7 +324,11 @@ the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-
   σ ≈ 13–14 px — our `3:3` (σ 13.2); `regular` 2:2 is σ 4.6 — its refracting band is 20 px at
   every size (our bevel cap is 80), and at rest it shows no rim of light, no shadow, and a dark
   contour line at ≈ 0.63 of the glass inside it. Starting point to judge, not a factory: frost 3:3,
-  bevel cap 20, rim 0, `lab[15]` 0.37.
+  rim 0, `lab[15]` 0.37. ⚠️ Not the bevel cap 20: how far the reference's band DISPLACES was never
+  measured, and here the bevel's width sets its strength too (0.231·W·3) — at 20 the edge moves the
+  backdrop 14 px at most, over its outer 7 px (55 px over 42 at 80), and under a 3:3 frost that
+  reads as no refraction at all (owner, 2026-10-08: "there is no refraction, or it doesn't show").
+  A narrower band with the same strength needs the two decoupled first.
 - What it has shown so far (2026-10-05): with the per-pixel adaptive tint, any treatment of the
   backdrop's whites (compression, a dark veil) ends at the same `target` — it changes how much of
   the backdrop shows, not the contrast; the ink at 0.80 never turns over a page of text; with
