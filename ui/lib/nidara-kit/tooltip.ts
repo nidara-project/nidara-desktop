@@ -6,7 +6,7 @@ import { ARROW_H, BUF, sideFor, paintGlassBubble, trackBubbleGlass, type ArrowSi
 import { kitAppearance } from "./appearance"
 import { cairoDraw } from "./platform/cairo-draw"
 import { TOOLTIP_GLASS_FLOOR } from "./platform/glass-legibility"
-import { compositorPaintsGlass, darkInkFor } from "./platform/material"
+import { compositorPaintsGlass, darkInkFor, glassFollowsMode } from "./platform/material"
 
 export type NidaraTooltipText = string | (() => string)
 
@@ -88,7 +88,14 @@ export function attachTooltip(
     // ONE answer for the glass and the label's class, so the two cannot disagree.
     // On Hyalo the bubble is a pane of glass of its own: white text, dark only where the
     // compositor measured the backdrop under it white (the ink, `darkInkFor`).
-    const isDark = () => compositorPaintsGlass(da) ? !darkInkFor(da) : opts.chrome === false
+    // A bubble whose glass follows the system mode (`trackModeGlass`: the dock's, 2026-10-08)
+    // wears its surface's skin instead — light glass in light mode wants dark text. Asking only
+    // the ink left white text on it. (Only there: elsewhere the widget's own pane may carry an
+    // ink the bubble's own glass does not share.)
+    const followsMode = () => { const n = da.get_native(); return !!n && glassFollowsMode(n) }
+    const isDark = () => compositorPaintsGlass(da)
+        ? !darkInkFor(da) && (!followsMode() || (kitAppearance().chromeIsDark?.(widget) ?? true))
+        : opts.chrome === false
         ? kitAppearance().surfaceIsDark(widget)
         : (kitAppearance().chromeIsDark?.(widget) ?? kitAppearance().surfaceIsDark(widget))
     da.set_draw_func(cairoDraw((_da, cr, w, h) => {
