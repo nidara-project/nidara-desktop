@@ -403,7 +403,9 @@ function controlCenter(): Gtk.Widget {
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
     trackFluidCrystal(panel, "panel")
-    trackScrimRegion(panel)
+    // The CC's regular crystal must stay translucent: its legibility is judged from the glass
+    // and the tiles' own elevation, not from a shared scrim that fills the whole panel grey.
+    trackNoScrim(panel)
     // As in the shell (Bar.tsx): the Control Center's text is white always (owner, 2026-10-08).
     trackNoInk(panel)
     return panel
