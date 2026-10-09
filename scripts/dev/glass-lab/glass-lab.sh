@@ -68,7 +68,7 @@ export HYALO_CONFIG="$sb/hyalo.toml" HYALO_SETTINGS="$sb/hyalo-settings.toml"
 if [ -n "$devshader" ]; then export HYALO_SHADER_DIR="$sb/shaders"; else unset HYALO_SHADER_DIR; fi
 lab_env=(
     HOME="$sb/home" XDG_CONFIG_HOME="$sb/home/.config" GSETTINGS_BACKEND=memory NIDARA_GREETER_MIRROR_DIR="$sb/mirror"
-    NIDARA_SHELL_ROOT="$repo/ui/shell" LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
+    NIDARA_SHELL_ROOT="$repo/ui/shell" GDK_BACKEND=wayland LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
     GLASS_LAB_REPO="$repo" GLASS_LAB_TUNING="$sb/home/.config/nidara/glass-tuning.conf"
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
     GLASS_LAB_PRESETS="${GLASS_LAB_PRESETS:-${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab}"

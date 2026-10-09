@@ -3,6 +3,7 @@ import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
+import { FLUID_CRYSTAL_PRESETS, type FluidCrystalSelection, type FluidCrystalSpec } from "./fluid-crystal"
 
 /**
  * The client half of nidara-material-v1 (`protocols/` at the repository root): every piece
@@ -233,6 +234,39 @@ export function trackInkGroup(widget: Gtk.Widget): void {
 
 /** Containers whose panes of glass never take the backdrop's ink (`trackNoInk`). */
 const noInk = new WeakSet<Gtk.Widget>()
+
+/** The semantic material selected for a surface, independent of its renderer. */
+const fluidCrystalWidgets = new Set<Gtk.Widget>()
+const fluidCrystalSpecs = new WeakMap<Gtk.Widget, FluidCrystalSpec>()
+
+/**
+ * Give a surface a Fluid Crystal recipe. This is the semantic seam between the kit and the
+ * renderer: callers choose a role (`"bar"`, `"panel"`, `"media"`) or provide all four axes,
+ * while the active material backend decides how that recipe becomes glass, ink and elevation.
+ *
+ * This deliberately does not replace the older low-level trackers yet. Existing surfaces can
+ * keep their current behaviour while the backend learns the new contract one profile at a time.
+ */
+export function trackFluidCrystal(widget: Gtk.Widget, selection: FluidCrystalSelection): void {
+    const spec = typeof selection === "string"
+        ? FLUID_CRYSTAL_PRESETS[selection]
+        : Object.freeze({ ...selection })
+    fluidCrystalSpecs.set(widget, spec)
+    fluidCrystalWidgets.add(widget)
+    widget.connect("destroy", () => fluidCrystalWidgets.delete(widget))
+}
+
+/** The nearest Fluid Crystal recipe that applies to a native surface, if one is declared. */
+export function fluidCrystalFor(native: Gtk.Native): FluidCrystalSpec | null {
+    for (const widget of fluidCrystalWidgets) {
+        if (widget.get_native() === native) return fluidCrystalSpecs.get(widget) ?? null
+    }
+    for (let widget: Gtk.Widget | null = native as unknown as Gtk.Widget; widget; widget = widget.get_parent()) {
+        const spec = fluidCrystalSpecs.get(widget)
+        if (spec) return spec
+    }
+    return null
+}
 
 /**
  * The panes of glass inside `widget` never take the ink: the compositor is given none of

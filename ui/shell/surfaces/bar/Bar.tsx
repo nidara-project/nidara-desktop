@@ -1285,7 +1285,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // The grid's labels over whatever is behind it — only once the pop has landed:
   // mid-pop the capture and the render are different frames.
   glassHandles.set(grid.widget, registerGlassSurface({
-    id: "app-grid", root: grid.widget, role: "overlay",
+    id: "app-grid", root: grid.widget, role: "launcher",
+    // The launcher is a large content surface: its labels follow the system's light/dark
+    // mode as a coherent group, not the wallpaper behind one side of the grid.
+    skinFromMode: true,
     settled: atRest(grid.widget as unknown as ScaleRevealer),
   }))
   win.connect("destroy", () => { for (const h of glassHandles.values()) h.dispose(); glassHandles.clear() })

@@ -119,5 +119,12 @@ export { attachTooltip } from "./tooltip"
 export type { GlassBubbleMenuOpts } from "./menu"
 export { GlassBubbleMenu, NidaraMenu } from "./menu"
 
-
+// Fluid Crystal — the kit's backend-neutral material contract. Rendering is supplied by the
+// active bundle/platform; these presets are the public vocabulary apps build against.
+export type {
+  FluidCrystalVariant, FluidCrystalProfile, FluidCrystalInk, FluidCrystalElevation,
+  FluidCrystalSpec, FluidCrystalPreset, FluidCrystalSelection,
+} from "./platform/fluid-crystal"
+export { FLUID_CRYSTAL_PRESETS } from "./platform/fluid-crystal"
+export { trackFluidCrystal } from "./platform/material"
 
