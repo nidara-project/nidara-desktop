@@ -316,6 +316,24 @@ export function trackModeInk(widget: Gtk.Widget): void {
     widget.connect("destroy", () => modeInk.delete(widget))
 }
 
+/** Widgets whose surface uses the experimental dense Fluid Crystal material in the lab. */
+const denseGlass = new Set<Gtk.Widget>()
+
+/** Mark the surface containing `widget` as the dense material type. */
+export function trackDenseGlass(widget: Gtk.Widget): void {
+    denseGlass.add(widget)
+    widget.connect("destroy", () => denseGlass.delete(widget))
+}
+
+/** Whether this surface uses the dense material type. */
+export function glassIsDense(native: Gtk.Native): boolean {
+    for (const w of denseGlass) if (w.get_native() === native) return true
+    for (let w: Gtk.Widget | null = (native as unknown as Gtk.Widget).get_parent(); w; w = w.get_parent()) {
+        if (denseGlass.has(w)) return true
+    }
+    return false
+}
+
 /** Whether this surface's ink follows the system mode (`trackModeInk`), as `glassFollowsMode`. */
 export function inkFollowsMode(native: Gtk.Native): boolean {
     for (const w of modeInk) if (w.get_native() === native) return true

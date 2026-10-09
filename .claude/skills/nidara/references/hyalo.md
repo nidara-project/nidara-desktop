@@ -299,6 +299,14 @@ in: Hyalo nested with `HYALO_CONFIG=/dev/null`, a HOME of its own (the material 
 `~/.config/nidara/glass-tuning.conf`, so a lab with the real HOME shows the owner's tuning, not
 the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-mirror dir.
 
+The lab also has a `tipos de cristal` bench for comparing the two material families on separate
+surfaces: `cristal` is the regular adaptive material, while `denso` follows the system colour and
+is nearly opaque, with its elevation shadow drawn around the pane. The type selector assigns the
+menu and Control Center specimens independently. Regular and dense values are kept separately in
+presets; the dense material is written as `dense.<key>` and `dense.blur = SIZE:PASSES` in the
+sandbox tuning file. `trackDenseGlass` is the lab's low-level experimental marker; product
+surfaces should continue to declare their public role with `trackFluidCrystal`.
+
 - **ONE shader, hooks compiled out.** `glass_final.glsl` is the shader Hyalo ships
   (`include_str!`), and it carries the lab's hooks: `LAB_ADD(i, x)` / `LAB_MUL(i, x)` around a
   number, `#ifdef GLASS_LAB` around a whole layer. Hyalo prepends `LAB_OFF` (each hook is its

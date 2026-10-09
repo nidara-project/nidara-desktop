@@ -5,7 +5,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { GLASS_TINT } from "./tokens"
 import { SOLID_GLASS } from "./theme-tokens"
 import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "./glass-legibility"
-import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
+import { glassFollowsMode, glassIsDense, inkFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
 
 /**
  * THE glass material (#684, #705 step 0): one material for everything Nidara draws as glass —
@@ -143,12 +143,22 @@ const DEFAULTS = {
     modeLightVeil: 0.2,
 }
 
+/** The dense material's starting values, tuned independently in the Glass Lab. */
+const DENSE_DEFAULTS: Partial<typeof DEFAULTS> = {
+    alphaMin: 0.9,
+    alphaMax: 0.9,
+    target: 1,
+}
+
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
  *  instrument shows them; nothing else should need them). */
 export const GLASS_MATERIAL_DEFAULTS: Readonly<typeof DEFAULTS> = DEFAULTS
+/** The dense type's defaults, exposed to the Glass Lab. */
+export const GLASS_DENSE_DEFAULTS: Readonly<typeof DEFAULTS> = { ...DEFAULTS, ...DENSE_DEFAULTS }
 
 type Blur = { size: number, passes: number }
-type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, scrimOff?: boolean }
+type TypeTuning = Partial<typeof DEFAULTS> & { blur?: Blur }
+type Tuning = TypeTuning & { popoverBlur?: Blur, off?: boolean, inkOff?: boolean, scrimOff?: boolean, dense?: TypeTuning }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
 
@@ -179,6 +189,16 @@ function params(native: Gtk.Native | null = null): GlassParams | null {
         return { tint: { r: l.r, g: l.g, b: l.b }, alphaMin: veil, alphaMax: veil, target: 1,
             refraction: reduced() ? 0 : p.refraction, lensing: reduced() ? 0 : p.lensing, rim: p.rim,
             saturation: reduced() ? 1 : p.saturation }
+    }
+    // Dense crystal is nearly opaque, follows the system colour and does not thicken for ink.
+    if (native && glassIsDense(native)) {
+        const d = { ...DEFAULTS, ...DENSE_DEFAULTS, ...tuning.dense }
+        const c = host?.lightMode?.() ? GLASS_TINT.light : GLASS_TINT.dark
+        return { tint: { r: c.r, g: c.g, b: c.b },
+            alphaMin: reduced() ? SOLID_GLASS : d.alphaMin,
+            alphaMax: reduced() ? SOLID_GLASS : Math.max(d.alphaMax, d.alphaMin),
+            target: d.target, refraction: reduced() ? 0 : d.refraction,
+            lensing: reduced() ? 0 : d.lensing, rim: d.rim, saturation: reduced() ? 1 : d.saturation }
     }
     const t = GLASS_TINT.dark
     if (reduced()) {
@@ -218,12 +238,15 @@ function scrimParams(): ScrimParams | null {
 function parse(text: string): Tuning {
     const out: Tuning = {}
     for (const line of text.split("\n")) {
-        const m = line.replace(/#.*/, "").match(/^\s*([A-Za-z]+)\s*=\s*(\S+)\s*$/)
+        const m = line.replace(/#.*/, "").match(/^\s*(?:(dense)\.)?([A-Za-z]+)\s*=\s*(\S+)\s*$/)
         if (!m) continue
-        const [, k, v] = m
-        if (k === "blur" || k === "popoverBlur") {
+        const [, type, k, v] = m
+        const into: TypeTuning = type ? (out.dense ??= {}) : out
+        if (k === "blur" || (!type && k === "popoverBlur")) {
             const [size, passes] = v.split(":").map(Number)
-            if (Number.isFinite(size) && Number.isInteger(passes)) out[k] = { size, passes }
+            if (Number.isFinite(size) && Number.isInteger(passes)) (into as Tuning)[k as "blur"] = { size, passes }
+        } else if (type) {
+            if (k in DEFAULTS && Number.isFinite(Number(v))) (into as Record<string, number>)[k] = Number(v)
         } else if (k === "glass") {
             out.off = v === "off"
         } else if (k === "ink") {
@@ -267,11 +290,12 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
     setMaterialSource({
         glass: (native: Gtk.Native) => params(native),
         ink: (native: Gtk.Native) => inkParams(native),
-        scrim: (_native: Gtk.Native) => scrimParams(),
+        scrim: (native: Gtk.Native) => glassIsDense(native) ? null : scrimParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         fusionHold: (_native: Gtk.Native) => tuning.fusionHold ?? DEFAULTS.fusionHold,
         formationHold: (_native: Gtk.Native) => tuning.formationHold ?? DEFAULTS.formationHold,
         blur: (native: Gtk.Native) => {
+            if (tuning.dense?.blur && glassIsDense(native)) return tuning.dense.blur
             const panels = tuning.blur ?? h.panelBlur()
             // A tooltip or a menu is a popover: a surface of its own, blurred more.
             if (!(native instanceof Gtk.Popover)) return panels
