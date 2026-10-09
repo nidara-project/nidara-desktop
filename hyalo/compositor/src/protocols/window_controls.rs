@@ -175,6 +175,8 @@ pub struct ControlsState {
     pub position: Option<Point<f64, Logical>>,
     /// The buttons the window asked for (`set_buttons`), the protocol's bits; none = every one.
     pub buttons: Option<u32>,
+    /// The app's header under the controls is light: draw them with dark ink (`set_ink`).
+    pub dark_ink: bool,
 }
 
 impl Cacheable for ControlsState {
@@ -193,6 +195,13 @@ pub fn placed(surface: &WlSurface) -> Option<Point<f64, Logical>> {
             return None;
         }
         states.cached_state.get::<ControlsState>().current().position
+    })
+}
+
+/// Whether the app asked for its controls in dark ink (`set_ink`: its header is light).
+pub fn dark_ink(surface: &WlSurface) -> bool {
+    with_states(surface, |states| {
+        states.cached_state.has::<ControlsState>() && states.cached_state.get::<ControlsState>().current().dark_ink
     })
 }
 
@@ -350,6 +359,11 @@ impl Dispatch2<NidaraWindowControlsV1, Hyalo> for ControlsData {
                     smithay::reexports::wayland_server::WEnum::Unknown(u) => u,
                 };
                 self.pending(|c| c.buttons = Some(bits & ALL))
+            }
+            // An unknown value is light, the default.
+            Request::SetInk { ink } => {
+                let dark = matches!(ink, smithay::reexports::wayland_server::WEnum::Value(nidara_window_controls_v1::Ink::Dark));
+                self.pending(|c| c.dark_ink = dark)
             }
         }
     }

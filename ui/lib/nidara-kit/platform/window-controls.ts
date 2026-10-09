@@ -3,6 +3,7 @@ import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
+import { kitAppearance } from "../appearance"
 
 /**
  * The client half of nidara-window-controls-v1 (`protocols/` at the repository root, #708
@@ -45,6 +46,7 @@ type Shim = {
     window_controls_set_position?(surface: Gdk.Surface, x: number, y: number): boolean
     window_controls_unset_position?(surface: Gdk.Surface): void
     window_controls_set_buttons?(surface: Gdk.Surface, buttons: number): boolean
+    window_controls_set_ink?(surface: Gdk.Surface, dark: boolean): boolean
 }
 
 const SHIM_MODULE = "gi://NidaraWl"   // in a variable on purpose: see VisibleRegion.ts
@@ -57,6 +59,9 @@ class Controller {
     sent = "\u0000"
     surface: Gdk.Surface | null = null
     tick = 0
+    /** The ink last sent (null: none yet), and the appearance subscription that resends it. */
+    ink: boolean | null = null
+    offAppearance: (() => void) | null = null
 
     constructor(
         readonly win: Gtk.Window,
@@ -101,6 +106,17 @@ class Controller {
         else shim.window_controls_unset_position?.(surface)
     }
 
+    /** The controls' ink follows the window's own appearance: dark over a light header (owner,
+     *  2026-10-08 — white glyphs on Settings' light header were invisible). */
+    sendInk() {
+        const surface = this.surface
+        if (!surface || !shim) return
+        const dark = !kitAppearance().surfaceIsDark(this.win)
+        if (dark === this.ink) return
+        this.ink = dark
+        shim.window_controls_set_ink?.(surface, dark)
+    }
+
     attach() {
         const surface = this.win.get_surface()
         if (!surface || !shim?.window_controls_request?.(surface)) return
@@ -109,6 +125,8 @@ class Controller {
         // Before its first position: the box the compositor answers with is already this one's.
         if (this.buttons)
             shim.window_controls_set_buttons?.(surface, this.buttons.reduce((m, b) => m | BUTTON_BIT[b], 0))
+        this.sendInk()
+        this.offAppearance ??= kitAppearance().onChange(() => this.sendInk())
         const clock = surface.get_frame_clock()
         if (clock && !this.tick) this.tick = clock.connect_after("layout", () => this.place())
     }
@@ -118,6 +136,9 @@ class Controller {
             controllers.delete(this.surface)
             if (this.tick) this.surface.get_frame_clock()?.disconnect(this.tick)
         }
+        this.offAppearance?.()
+        this.offAppearance = null
+        this.ink = null
         this.tick = 0
         this.surface = null
         this.sent = "\u0000"

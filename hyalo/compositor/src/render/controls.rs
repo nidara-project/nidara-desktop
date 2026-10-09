@@ -3,7 +3,9 @@
 //! shape of the back/forward pair in Settings' header. Painted in one pass by a shader of ours,
 //! in output pixels: the capsule, its inset edge, the hovered button's circle (close's red), and
 //! the glyphs, all anti-aliased at the output's scale. The colours are the mockup's, the
-//! owner's choice (2026-10-03): white over whatever the header is, like the pair beside it.
+//! owner's choice (2026-10-03): white, like the pair beside it — or dark, when the app says its
+//! header is light (`set_ink`: white glyphs were invisible on Settings' light header, owner,
+//! 2026-10-08).
 
 use std::cell::RefCell;
 
@@ -98,8 +100,9 @@ pub const FS_CONTROLS: &str = concat!(
     "#version 100\nprecision highp float;\nvarying vec2 v_out;\nvarying vec2 v_fb;\n",
     controls_glsl!(),
     r#"
+uniform float dark_ink;  // 1: the app's header is light (`set_ink`)
 void main() {
-    vec4 c = controls(v_out, 0.0);
+    vec4 c = controls(v_out, dark_ink);
     if (c.a <= 0.0) discard;
     gl_FragColor = c;
 }
@@ -114,6 +117,9 @@ pub struct Controls {
     pub hover: Option<usize>,
     pub pressed: bool,
     pub active: bool,
+    /// Dark ink, over a light header: the app's `set_ink` (Hyalo's own title bar decides its
+    /// ink from the bar's colour instead, and ignores this).
+    pub dark: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -186,6 +192,7 @@ impl ControlsElement {
             gl.Uniform1f(p.loc(gl, c"hover"), c.hover.map_or(-1.0, |h| h as f32));
             gl.Uniform1f(p.loc(gl, c"pressed"), if c.pressed { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"active"), if c.active { 1.0 } else { 0.0 });
+            gl.Uniform1f(p.loc(gl, c"dark_ink"), if c.dark { 1.0 } else { 0.0 });
             for d in damage {
                 let q = Rectangle::new(d.loc + dst.loc, d.size);
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);

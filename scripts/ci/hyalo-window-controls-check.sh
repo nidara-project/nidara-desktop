@@ -14,6 +14,9 @@
 #   5. the buttons: the user's choice of close alone (the settings layer) gives a 32 px box;
 #      the app asking for close alone (set_buttons) too; asking for all again while it cannot
 #      change size, minimize and close (60); resizable again, maximize comes back;
+#   5b. the ink: white glyphs over the probe's dark window; the app asks for dark ink
+#      (set_ink) and the brightest pixel of its controls falls below its own window's grey;
+#      asked again, light again;
 #   6. a rule's `controls = ["close"]` gives a new window of the app a 32 px box;
 #   7. close closes: the probe gets xdg_toplevel.close.
 # The controls: the same probe against a Hyalo without the protocol prints NO_CONTROLS (step 1);
@@ -99,6 +102,40 @@ sleep 0.6
 kill -HUP "$pid"
 wait_layout 'right 88 32' || fail "it can change size again, and was told '$(last_layout)'"
 echo "ok    close alone when the user chooses it, when the app asks for it, and maximize only while it can change size"
+
+# 5b. The ink. The brightest and the darkest pixel inside the controls, from a raw PPM (P6:
+# "P6\nW H\n255\n", then RGB; read with od — GdkPixbuf's loaders run in a bwrap sandbox that a
+# CI container refuses). The probe's window is 0x404040: white glyphs read well above it, dark
+# ones leave nothing above it.
+span() {
+    $MSG screenshot "$log/ink.ppm" >/dev/null
+    origin=$($MSG outputs | jq -r '.ok.outputs[0].position | "\(.[0]) \(.[1])"')
+    box=$(win | jq -r '.controls | map(floor) | join(" ")')
+    width=$(head -n 2 "$log/ink.ppm" | tail -n 1 | cut -d' ' -f1)
+    header=$(head -n 3 "$log/ink.ppm" | wc -c)
+    od -An -v -tu1 -j "$header" "$log/ink.ppm" | tr -s ' ' '\n' | grep -v '^$' | awk \
+        -v W="$width" -v O="$origin" -v B="$box" 'BEGIN { split(O, o, " "); split(B, b, " ");
+            x0 = b[1] - o[1] + 2; y0 = b[2] - o[2] + 2; x1 = x0 + b[3] - 4; y1 = y0 + b[4] - 4; lo = 999; hi = -1 }
+        { i = int((NR - 1) / 3); c = (NR - 1) % 3; s += $1
+          if (c == 2) { x = i % W; y = int(i / W)
+            if (x >= x0 && x < x1 && y >= y0 && y < y1) { v = s / 3; if (v < lo) lo = v; if (v > hi) hi = v }
+            s = 0 } }
+        END { printf "%d %d\n", lo, hi }'
+}
+# The pointer on maximize: its glyph at full strength, whether the window has the focus or not.
+echo "move $(at 0.5)" >"$C"; sleep 0.4
+set -- $(span)
+[ "$2" -gt 150 ] || fail "light ink: the brightest pixel of the controls is $2, white glyphs should read well above the window's 64"
+kill -WINCH "$pid"
+wait_line '^ASKED 28' || fail "the probe did not ask for dark ink"
+sleep 0.6
+set -- $(span)
+[ "$2" -le 70 ] && [ "$1" -lt 40 ] || fail "dark ink asked, and the controls span $1..$2 (want nothing much above the window's 64, and dark glyphs below 40)"
+kill -WINCH "$pid"
+sleep 0.6
+set -- $(span)
+[ "$2" -gt 150 ] || fail "light ink again, and the brightest pixel is $2"
+echo "ok    the app sets the controls' ink: white over its dark header, dark when it asks"
 
 # 6. A rule: a new window of the app gets close alone.
 kill $pid 2>/dev/null; sleep 0.4
