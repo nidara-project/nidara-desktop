@@ -90,6 +90,38 @@ Three calls are not optional, and none of them fails loudly when missing:
    opacities from the XDG Settings portal and follows them live. Skip it and the kit renders its
    fallback (a blue accent on a light surface) and logs a warning.
 
+## Fluid Crystal
+
+The kit owns the semantic vocabulary for Nidara's material system. Import the presets from the
+public index instead of choosing raw blur or alpha values in an app:
+
+```ts
+import { FLUID_CRYSTAL_PRESETS, trackFluidCrystal } from "file:///usr/share/nidara-kit/js/index.js"
+
+const crystal = FLUID_CRYSTAL_PRESETS.panel
+trackFluidCrystal(panel, crystal)
+```
+
+For common surfaces, the named form is shorter: `trackFluidCrystal(panel, "panel")`. The
+registration only declares intent for the active renderer; it does not make an app depend on
+Hyalo or on a particular blur implementation.
+
+The current contract keeps four decisions separate:
+
+| Axis | Values | Meaning |
+|---|---|---|
+| Variant | `regular`, `clear` | Adaptive everyday crystal, or highly translucent media crystal |
+| Profile | `compact`, `panel`, `launcher`, `popover` | Bar chrome, a lighter large panel, a denser launcher, or a menu/popover |
+| Ink | `mode`, `adaptive`, `light`, `dark` | Shared system appearance, local backdrop, or fixed foreground |
+| Elevation | `none`, `tile`, `panel` | No shadow, a local tile separation, or a floating panel shadow |
+
+Profiles are roles of Regular Crystal, not additional variants. The `panel` and `tile` presets use
+fixed light ink for Control Center and Notification Center: those surfaces stay white instead of
+flipping with the wallpaper. `launcher` follows the system mode and is denser for App Grid;
+`popover` is denser still for menus. `clear` does not promise automatic foreground contrast over
+arbitrary media; use it with bright content and add explicit dimming when the background needs it.
+The presets describe intent only: the active bundle supplies the renderer and its Hyalo/GTK fallback.
+
 ## Types (TypeScript)
 
 The kit ships its sources as its types. Map the runtime URI onto them in your `tsconfig.json`:

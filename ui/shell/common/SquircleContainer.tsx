@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
-import { chromeIsDarkFor, glassAlphaFor, glassTintFor } from "./AdaptiveGlass"
+import { chromeIsDarkFor, glassAlphaFor, glassTintFor, type GlassRole } from "./AdaptiveGlass"
 import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 import { compositorPaintsGlass, trackGlass } from "../../lib/nidara-kit/platform/material"
@@ -69,9 +69,9 @@ interface SquircleContainerProps {
      *  (About) that should follow the system mode like a third-party app. */
     chrome?: boolean
     /** Which opacity this capsule's glass tracks when useShellOpacity is set:
-     *  "bar" → Theme.barOpacity, "overlay" (default) → Theme.overlayOpacity.
-     *  (The dock paints from Theme.dockOpacity directly in DockAxis.) */
-    opacityRole?: "bar" | "overlay"
+     *  "bar" → Theme.barOpacity, "overlay" (default) → Theme.overlayOpacity,
+     *  "launcher" → the denser App Grid floor, or "dock" → Theme.dockOpacity. */
+    opacityRole?: GlassRole
     /** Active/"on" fill — while this returns true, the WHOLE capsule paints with
      *  the live accent colour instead of the base glass (standard
      *  quick-settings convention: a toggle's on-state fills its entire tile, not

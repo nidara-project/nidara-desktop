@@ -173,6 +173,21 @@ export const GLASS_FLOORS: Record<GlassMaterial, GlassFloors> = {
 }
 
 /**
+ * Profile-specific floors for shell surfaces that share a Wayland layer with another
+ * surface. The launcher is intentionally denser than a generic overlay: it carries a
+ * persistent grid of labels, but it is still lighter than a solid application menu.
+ *
+ * These are starting points for the Fluid Crystal lab, not user-facing settings. Keep
+ * them here, rather than in a widget, so the visual hierarchy remains one token decision
+ * and can be calibrated without scattering alpha literals through the shell.
+ */
+export const GLASS_ROLE_FLOORS: Record<GlassMaterial, { launcher: number }> = {
+  clear:   { launcher: GLASS_RANGE.min },
+  regular: { launcher: 0.42 },
+  frosted: { launcher: 0.52 },
+}
+
+/**
  * Nidara's WINDOWS (Settings, About, the installer, their dialogs) are not glass material
  * and do not follow the material (owner's decision, 2026-09-30). The glass material is
  * for the interface's surfaces and controls; a window is only translucent or not — one

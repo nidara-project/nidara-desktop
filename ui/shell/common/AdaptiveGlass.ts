@@ -12,6 +12,7 @@ import {
     frostedFill, setGlassFrost,
     type GlassDecision, type BackdropStats, type HyprlandBlurParams, type GlassContent, type Rgb,
 } from "../../lib/nidara-kit/platform/glass-legibility"
+import { GLASS_ROLE_FLOORS } from "../../lib/nidara-kit/platform/theme-tokens"
 import { GLASS_TINT } from "../../lib/nidara-kit/platform/tokens"
 import { darkInkFor } from "../../lib/nidara-kit/platform/material"
 
@@ -49,7 +50,7 @@ import { darkInkFor } from "../../lib/nidara-kit/platform/material"
  *   capture and the offscreen render would describe different frames.
  */
 
-export type GlassRole = "bar" | "overlay" | "dock"
+export type GlassRole = "bar" | "overlay" | "launcher" | "dock"
 
 /** After an event, before measuring. Longer than the compositor's own animations
  *  on purpose (workspaces slide for 600 ms, layers fade in for 300–400 ms): a
@@ -205,7 +206,11 @@ function surfaceOf(widget: Gtk.Widget | null): Surface | null {
 }
 
 const floorOf = (role: GlassRole) =>
-    role === "bar" ? Theme.barOpacity : role === "dock" ? Theme.dockOpacity : Theme.overlayOpacity
+    role === "bar" ? Theme.barOpacity
+        : role === "dock" ? Theme.dockOpacity
+            : role === "launcher"
+                ? Math.max(Theme.overlayOpacity, GLASS_ROLE_FLOORS[Theme.glassMaterial].launcher)
+                : Theme.overlayOpacity
 
 /** The least a surface can wear: its slider. */
 const floorFor = (s: Surface): number => floorOf(roleOf(s))

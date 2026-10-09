@@ -41,10 +41,10 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import { useNoGtkTheme } from "../../../ui/lib/nidara-kit/platform/gtk-theme"
 import { initAppearance } from "../../../ui/lib/nidara-kit/platform/appearance-css"
 import { withKitSheet } from "../../../ui/lib/nidara-kit/platform/kit-css"
-import { setKitAppearance, NidaraCircleButton, NidaraButton, NidaraList, NidaraSliderRow,
-    NidaraToggleRow, NidaraDropDownRow, attachTooltip, GlassBubbleMenu } from "../../../ui/lib/nidara-kit"
+import { setKitAppearance, NidaraCircleButton, NidaraButton,
+    attachTooltip, GlassBubbleMenu } from "../../../ui/lib/nidara-kit"
 import { registerGlassMaterial, GLASS_MATERIAL_DEFAULTS } from "../../../ui/lib/nidara-kit/platform/glass-material"
-import { trackScrimRegion, trackNoScrim, trackInkGroup, trackNoInk, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
+import { trackFluidCrystal, trackScrimRegion, trackNoScrim, trackInkGroup, trackNoInk, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
 import { RADIUS } from "../../../ui/lib/nidara-kit/platform/tokens"
 import Theme from "../../../ui/shell/core/ThemeManager"
 import { safeDisconnect } from "../../../ui/shell/core/signals"
@@ -103,7 +103,12 @@ registerGlassMaterial({
         window.glass-lab-controls, window.glass-lab-controls scrolledwindow { background: #ececf0; color: #1d1d22; }
         window.glass-lab-controls.dark, window.glass-lab-controls.dark scrolledwindow { background: #1f1f24; color: #ececf0; }
         .glass-lab-mark { color: var(--nidara-text); }
-        .glass-lab-readout { font-family: monospace; font-size: 12px; }`)
+        .glass-lab-readout { font-family: monospace; font-size: 12px; }
+        .glass-lab-row-title { font-weight: 600; }
+        .glass-lab-row-sub { opacity: 0.65; font-size: 11px; }
+        .glass-lab-value { font-family: monospace; font-size: 12px; opacity: 0.8; }
+        .glass-lab-section > title label { font-weight: 700; font-size: 14px; }
+        .glass-lab-footer { opacity: 0.65; font-size: 11px; }`)
     Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default()!, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
     if (!GLib.file_test(css, GLib.FileTest.EXISTS)) printerr(`glass-lab: ${css} missing — compile the shell's SCSS first`)
 }
@@ -289,6 +294,7 @@ function barRow(): Gtk.Widget {
     const clock = label("12:34", ["bar-widget-label"])
     right.box.append(barItem({ child: clock }))
     row.set_start_widget(left.widget); row.set_end_widget(right.widget)
+    trackFluidCrystal(row, "bar")
     trackNoScrim(row)
     specimens.push({ name: "barra", contents: [title, ...items, clock] })
     if (state.ink === "grupo") { trackInkGroup(left.widget); trackInkGroup(right.widget) }
@@ -297,7 +303,9 @@ function barRow(): Gtk.Widget {
 }
 
 function tile(size: WidgetSize, w: number, h: number, child: Gtk.Widget, getFill?: () => number) {
-    return BaseIsland({ name: "glass-lab", child, width: w, height: h, size, getFill })
+    const surface = BaseIsland({ name: "glass-lab", child, width: w, height: h, size, getFill })
+    trackFluidCrystal(surface, "tile")
+    return surface
 }
 /** The Control Center: BaseIsland tiles on the CC grid, one shadow region for the panel. */
 function controlCenter(): Gtk.Widget {
@@ -329,6 +337,7 @@ function controlCenter(): Gtk.Widget {
     const panel = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_start: 16, margin_end: 16,
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
+    trackFluidCrystal(panel, "panel")
     trackScrimRegion(panel)
     // As in the shell (Bar.tsx): the Control Center's text is white always (owner, 2026-10-08).
     trackNoInk(panel)
@@ -355,6 +364,7 @@ function notifications(): Gtk.Widget {
     const stack = makeGroupStack(card("Mensajes", "¿Has visto el cristal nuevo?"), 3)
     column.append(stack)
     column.append(card("Calendario", "Revisión del material, 17:00"))
+    trackFluidCrystal(column, "panel")
     trackScrimRegion(column)
     // As in the shell (Bar.tsx): the notifications' text is white always (owner, 2026-10-08).
     trackNoInk(column)
@@ -392,6 +402,7 @@ function islandPiece(): Gtk.Widget {
     island.set_size_request(-1, 32)
     const stop = NidaraCircleButton({ icon: uiIcon("nd-media-playback-stop"), iconSize: 14, variant: "neutral" })
     islandRow.append(island); islandRow.append(stop)
+    trackFluidCrystal(islandRow, "bar")
     trackNoScrim(islandRow)
     specimens.push({ name: "isla (sustituto)", contents: [islandText] })
     if (state.ink === "panel") trackInkGroup(islandRow)
@@ -406,6 +417,7 @@ function dockPiece(): Gtk.Widget {
     const dock = SquircleContainer({ child: dockIcons, shape: Shape.DOCK_PILL, useShellOpacity: true, gloss: true,
         chrome: true, shadow: GLASS_SHADOW })
     const dockWrap = new Gtk.Box(); dockWrap.append(dock)
+    trackFluidCrystal(dockWrap, "bar")
     trackNoScrim(dockWrap)
     specimens.push({ name: "dock (sustituto)", contents: [dockIcons] })
     const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
@@ -445,8 +457,10 @@ function bigPanel(): Gtk.Widget {
     const area = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 920,
         height_request: ROWS * ROW_H + (ROWS - 1) * 8 + 16, margin_top: 28, margin_start: 32, margin_end: 32, margin_bottom: 4 })
     area.append(grid)
-    const panel = SquircleContainer({ child: area, radius: RADIUS.xl, gloss: true, useShellOpacity: true, inset: 2.0,
+    const panel = SquircleContainer({ child: area, radius: RADIUS.xl, gloss: true, useShellOpacity: true,
+        opacityRole: "launcher", inset: 2.0,
         hexpand: false, vexpand: false, shadow: GLASS_SHADOW })
+    trackFluidCrystal(panel, "launcher")
     specimens.push({ name: "panel grande", contents: labels })
     if (state.ink === "panel" || state.ink === "grupo") trackInkGroup(panel)
     const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
@@ -477,6 +491,7 @@ function promoPiece(): Gtk.Widget {
         gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${REPO}/ui/shell/assets/nidara/assets/nidara-symbolic.svg`)) })
     const disc = SquircleContainer({ child: mark, shape: Shape.CIRCLE, useShellOpacity: true, gloss: true,
         chrome: true, shadow: GLASS_SHADOW })
+    trackFluidCrystal(disc, "media")
     promoDisc = { disc, mark }
     sizePromo()
     specimens.push({ name: "logo", contents: [mark] })
@@ -938,36 +953,101 @@ for (const e of [Gtk4LayerShell.Edge.TOP, Gtk4LayerShell.Edge.BOTTOM, Gtk4LayerS
 Gtk4LayerShell.set_exclusive_zone(controlsWin, CONTROLS_W)
 Gtk4LayerShell.set_keyboard_mode(controlsWin, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
 controlsWin.set_size_request(CONTROLS_W, -1)
-const scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER })
+// A scrollbar that is always there: overlay scrollbars hid it until the pointer found the edge.
+const scroller = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER,
+    vscrollbar_policy: Gtk.PolicyType.ALWAYS, overlay_scrolling: false })
 controlsWin.set_child(scroller)
+
+// ── The lab's own rows ──────────────────────────────────────────────────────
+// The generic kit rows are intentionally compact for application settings. This column is an
+// instrument: its notes are long, so they wrap instead of being ellipsised; sliders show their
+// live value, and the wheel scrolls the column rather than changing the value under the pointer.
+const textCol = (title: string, sub: string) => {
+    const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 1, hexpand: true })
+    col.append(new Gtk.Label({ label: title, xalign: 0, wrap: true, css_classes: ["glass-lab-row-title"] }))
+    if (sub) col.append(new Gtk.Label({ label: sub, xalign: 0, wrap: true, css_classes: ["glass-lab-row-sub"] }))
+    return col
+}
+function SliderRow(title: string, sub: string, init: number, min: number, max: number, cb: (v: number) => void,
+    opts: { decimals?: number, debounce?: number } = {}): Gtk.Widget {
+    const decimals = opts.decimals ?? 0
+    const fmt = (v: number) => v.toFixed(decimals).replace(".", ",")
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+    const head = new Gtk.Box({ spacing: 8 })
+    const value = new Gtk.Label({ label: fmt(init), css_classes: ["glass-lab-value"], valign: Gtk.Align.START })
+    head.append(textCol(title, sub)); head.append(value)
+    const scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, min, max, decimals === 0 ? 1 : 10 ** -decimals)
+    scale.set_draw_value(false)
+    scale.set_value(init)
+    scale.connect("value-changed", () => {
+        let v = scale.get_value()
+        if (decimals === 0) v = Math.round(v)
+        value.set_label(fmt(v))
+        cb(v)
+    })
+    const wheel = new Gtk.EventControllerScroll({ flags: Gtk.EventControllerScrollFlags.VERTICAL })
+    wheel.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    wheel.connect("scroll", (_c: Gtk.EventControllerScroll, _dx: number, dy: number) => {
+        const adj = scroller.get_vadjustment()
+        adj.set_value(adj.get_value() + dy * 48)
+        return true
+    })
+    scale.add_controller(wheel)
+    row.append(head); row.append(scale)
+    return row
+}
+function ToggleRow(title: string, sub: string, init: boolean, cb: (v: boolean) => void): Gtk.Widget {
+    const row = new Gtk.Box({ spacing: 8 })
+    const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
+    sw.connect("notify::active", () => cb(sw.active))
+    row.append(textCol(title, sub)); row.append(sw)
+    return row
+}
+function DropDownRow(title: string, sub: string, init: string, options: string[], cb: (v: string) => void): Gtk.Widget {
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+    const dd = Gtk.DropDown.new_from_strings(options)
+    dd.set_selected(Math.max(0, options.indexOf(init)))
+    dd.connect("notify::selected", () => cb(options[dd.get_selected()]))
+    row.append(textCol(title, sub)); row.append(dd)
+    return row
+}
+
+// Keep the useful sections open across rebuilds; the long tuning sections start folded.
+const openSections = new Set(["Presets", "Fondo", "Piezas", "Sistema", "Color del texto"])
 let stash: LabState | null = null   // A/B: the recipe, while the factory values are shown
 /** (Re)builds the controls from `state` — after a preset or a reset every slider moves. */
 function fillControls() {
     const page = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 18, margin_start: 16, margin_end: 16,
         margin_top: 16, margin_bottom: 16 })
+    const at = scroller.get_vadjustment().get_value()
     scroller.set_child(page)
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { scroller.get_vadjustment().set_value(at); return GLib.SOURCE_REMOVE })
     const rebuild = () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { fillControls(); return GLib.SOURCE_REMOVE })
 
     const section = (title: string, rows: Gtk.Widget[], footer = "") => {
-        const l = NidaraList(title, [], footer)
-        rows.forEach(r => l.listBox.append(r))
-        page.append(l.box)
+        const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_top: 10, margin_start: 4 })
+        rows.forEach(r => body.append(r))
+        if (footer) body.append(new Gtk.Label({ label: footer, xalign: 0, wrap: true, css_classes: ["glass-lab-footer"] }))
+        const ex = new Gtk.Expander({ label: title, expanded: openSections.has(title), css_classes: ["glass-lab-section"] })
+        ex.set_child(body)
+        ex.connect("notify::expanded", () => { if (ex.expanded) openSections.add(title); else openSections.delete(title) })
+        page.append(ex)
     }
     const tuningSlider = (key: string, title: string, sub: string, min: number, max: number, decimals = 2) =>
-        NidaraSliderRow(title, sub, state.tuning[key] ?? D[key], min, max, v => {
+        SliderRow(title, sub, state.tuning[key] ?? D[key], min, max, v => {
             if (Math.abs(v - D[key]) < 1e-6) delete state.tuning[key]; else state.tuning[key] = v
             apply()
         }, { decimals, debounce: 0 })
     // The frost: the panels' blur, which the shell takes from Settings' glass material.
     const frostSlider = (key: "blurSize" | "blurPasses", title: string, sub: string, min: number, max: number,
         neutral: number, decimals: number) =>
-        NidaraSliderRow(title, sub, state.tuning[key] ?? neutral, min, max, v => {
+        SliderRow(title, sub, state.tuning[key] ?? neutral, min, max, v => {
             if (decimals === 0) v = Math.round(v)
             if (Math.abs(v - neutral) < 1e-6) delete state.tuning[key]; else state.tuning[key] = v
             apply()
         }, { decimals, debounce: 0 })
     const labSlider = (i: number, title: string, sub: string, min: number, max: number, neutral: number, decimals = 2) =>
-        NidaraSliderRow(title, sub, state.lab[i] + neutral, min, max, v => {
+        SliderRow(title, sub, state.lab[i] + neutral, min, max, v => {
             state.lab[i] = Math.abs(v - neutral) < 1e-6 ? 0 : v - neutral
             apply()
         }, { decimals, debounce: 0 })
@@ -980,7 +1060,7 @@ function fillControls() {
     bar.append(name); bar.append(save)
     page.append(bar)
     const names = presetNames()
-    if (names.length) section("Presets", [NidaraDropDownRow("Cargar", "", "—", ["—", ...names], v => {
+    if (names.length) section("Presets", [DropDownRow("Cargar", "", "—", ["—", ...names], v => {
         if (v !== "—" && loadPreset(`${PRESETS}/${v}.json`)) { apply(); buildScene(); rebuild() }
     })])
     const ab = NidaraButton({ label: stash ? "A/B: volver a la receta" : "A/B: ver los valores de fábrica" })
@@ -1018,30 +1098,30 @@ function fillControls() {
     page.append(mrow); page.append(vrow); page.append(readout)
 
     section("Fondo", [
-        NidaraDropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
-        NidaraSliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
+        DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
+        SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
             v => { state.offset = v / 100; apply() }, { debounce: 0 }),
-        NidaraToggleRow("Movimiento automático", "el fondo pasa despacio por debajo del cristal", state.drift,
+        ToggleRow("Movimiento automático", "el fondo pasa despacio por debajo del cristal", state.drift,
             v => { state.drift = v }),
-        NidaraSliderRow("Velocidad", "× del movimiento; también la del vídeo", state.driftSpeed, 0.25, 4,
+        SliderRow("Velocidad", "× del movimiento; también la del vídeo", state.driftSpeed, 0.25, 4,
             v => { state.driftSpeed = v }, { decimals: 2, debounce: 0 }),
     ])
     section("Exportar", [
-        NidaraDropDownRow("Formato", "16:9 1920×1080 · 1:1 1080×1080 · 4:5 1080×1350 · 9:16 1080×1920",
+        DropDownRow("Formato", "16:9 1920×1080 · 1:1 1080×1080 · 4:5 1080×1350 · 9:16 1080×1920",
             state.promoFormat, Object.keys(FORMATS), v => { state.promoFormat = v as PromoFormat; frameGuide.queue_draw(); backdropArea?.queue_draw() }),
-        NidaraSliderRow("Tamaño del círculo", "px del archivo exportado; 72 = un icono de la cuadrícula de apps",
+        SliderRow("Tamaño del círculo", "px del archivo exportado; 72 = un icono de la cuadrícula de apps",
             state.promoSize, 32, 1024, v => { state.promoSize = v; sizePromo() }, { decimals: 0, debounce: 0 }),
-        NidaraSliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
+        SliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
     ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El archivo es la misma escena que el marco, dibujada a más resolución: lo que ves es lo que sale. «promo: logo» deja solo el círculo; su tamaño, en px del archivo.")
-    section("Piezas", [NidaraDropDownRow("En el banco", "una a una, la sombra de una no cae sobre otra",
+    section("Piezas", [DropDownRow("En el banco", "una a una, la sombra de una no cae sobre otra",
         state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
-    section("Sistema", [NidaraToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,
+    section("Sistema", [ToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,
         v => { state.flags.dark = v; apply() })])
     section("Color del texto", [
-        NidaraToggleRow("Texto que cambia a oscuro", "apagado: siempre blanco (ink = off)", state.flags.ink,
+        ToggleRow("Texto que cambia a oscuro", "apagado: siempre blanco (ink = off)", state.flags.ink,
             v => { state.flags.ink = v; apply() }),
-        NidaraDropDownRow("Deciden juntas", "qué piezas cambian a la vez", state.ink, ["pieza", "grupo", "panel"],
+        DropDownRow("Deciden juntas", "qué piezas cambian a la vez", state.ink, ["pieza", "grupo", "panel"],
             v => { state.ink = v as Ink; apply(); buildScene() }),
         tuningSlider("inkDarkAbove", "Umbral a oscuro", "luminancia del punto más oscuro bajo el texto", 0.5, 1),
         tuningSlider("inkLightBelow", "Umbral de vuelta a blanco", "", 0.3, 0.95),
@@ -1050,7 +1130,7 @@ function fillControls() {
         tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
         tuningSlider("tintLimit", "Tinte máximo del cristal", "lo demás lo pone la sombra", 0.05, 0.7),
         tuningSlider("target", "Objetivo de legibilidad", "0,183 = 4,5:1; más bajo = más oscuro", 0.05, 0.4, 3),
-        NidaraToggleRow("Sombra bajo el cristal", "", state.flags.scrim, v => { state.flags.scrim = v; apply() }),
+        ToggleRow("Sombra bajo el cristal", "", state.flags.scrim, v => { state.flags.scrim = v; apply() }),
         tuningSlider("scrimMax", "Sombra máxima", "", 0, 1),
         tuningSlider("scrimFalloff", "Fundido de la sombra del panel", "px", 0, 400, 0),
         tuningSlider("scrimEdge", "Sombra en el borde / centro", "1 = uniforme", 0, 1),
@@ -1066,7 +1146,7 @@ function fillControls() {
         tuningSlider("formationHold", "Formación (congelar)", "0 = apagado, cristal formado; 0,01–0,99 = congelado a esa formación", 0, 1),
     ], "Un cristal que aparece se materializa: su desenfoque, su refracción, su tinte y su canto crecen desde cero, sin fundido (#764). El deslizador congela todas las piezas en un punto de ese crecimiento para juzgarlo; en el escritorio el contenido aparece en la segunda mitad.")
     section("Refracción, escarcha y luz", [
-        NidaraToggleRow("Cristal refractivo", "apagado: solo desenfoque", state.flags.glass, v => { state.flags.glass = v; apply() }),
+        ToggleRow("Cristal refractivo", "apagado: solo desenfoque", state.flags.glass, v => { state.flags.glass = v; apply() }),
         frostSlider("blurSize", "Escarcha: tamaño", `por pasada; ${GLASS_BLUR.regular.size} = fábrica («normal»)`, 0.5, 6,
             GLASS_BLUR.regular.size, 1),
         frostSlider("blurPasses", "Escarcha: pasadas", `${GLASS_BLUR.regular.passes} = fábrica; 3 con tamaño 3 = la referencia`, 1, 5,
