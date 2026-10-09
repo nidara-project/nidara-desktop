@@ -205,10 +205,10 @@ function params(native: Gtk.Native | null = null): GlassParams | null {
         return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: SOLID_GLASS, alphaMax: SOLID_GLASS,
             target: p.target, refraction: 0, lensing: 0, rim: p.rim, saturation: 1 }
     }
-    // With the shadow under it, the glass never darkens past `tintLimit` — not even to keep the
-    // text legible, which is the shadow's job (owner, 2026-10-02: a ceiling above it "makes the
-    // grey plastic again"). Without the shadow (the A/B), `alphaMax` as before.
-    const alphaMax = tuning.scrimOff ? p.alphaMax : Math.min(p.alphaMax, p.tintLimit)
+    // Keep the material tint ceiling independent from scrim regions. The scrim toggle removes
+    // the shadow source below, while tintLimit still controls how opaque regular crystal may
+    // become over difficult backgrounds.
+    const alphaMax = Math.min(p.alphaMax, p.tintLimit)
     return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: p.alphaMin, alphaMax, target: p.target,
         refraction: p.refraction, lensing: p.lensing, rim: p.rim, saturation: p.saturation }
 }
