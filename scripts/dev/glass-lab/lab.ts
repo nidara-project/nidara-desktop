@@ -139,7 +139,7 @@ interface LabState {
     show: Show
     tuning: Record<string, number> // glass-tuning.conf keys, only those off the factory value
                                    // (and blurSize/blurPasses, written as its `blur`)
-    flags: { ink: boolean, scrim: boolean, glass: boolean, dark: boolean }
+    flags: { ink: boolean, glass: boolean, dark: boolean }
     lab: number[]                  // lab_params.conf, 16 values: the shader's LAB hooks, 0 = factory
     dense: Record<string, number>  // the dense type's keys (`dense.<key>`), only those off its defaults
                                    // (and blurSize/blurPasses, written as its `dense.blur`)
@@ -163,7 +163,7 @@ type BenchPiece = "menú" | "centro de control"
 const BENCH_PIECES: BenchPiece[] = ["menú", "centro de control"]
 const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, driftSpeed: 1,
     promoSize: 72, videoSeconds: 10, promoFormat: "16:9", ink: "pieza", show: "tipos de cristal", tuning: {},
-    flags: { ink: true, scrim: true, glass: true, dark: true }, lab: new Array(16).fill(0), dense: {},
+    flags: { ink: true, glass: true, dark: true }, lab: new Array(16).fill(0), dense: {},
     elevation: { cristal: { alpha: 0, blur: 15, dy: 4 }, denso: { alpha: 0.23, blur: 15, dy: 4 } },
     types: { "menú": "denso", "centro de control": "cristal" } })
 let state = factory()
@@ -188,7 +188,6 @@ function apply() {
     if (blurSize !== undefined || blurPasses !== undefined)
         lines.push(`blur = ${blurSize ?? GLASS_BLUR.regular.size}:${Math.round(blurPasses ?? GLASS_BLUR.regular.passes)}`)
     if (!state.flags.ink) lines.push("ink = off")
-    if (!state.flags.scrim) lines.push("scrim = off")
     if (!state.flags.glass) lines.push("glass = off")
     const { blurSize: dSize, blurPasses: dPasses, ...dense } = state.dense
     for (const [k, v] of Object.entries(dense)) lines.push(`dense.${k} = ${v}`)
@@ -1281,7 +1280,7 @@ function fillControls() {
         typeSlider(type, "blurPasses", "Escarcha: pasadas", `${GLASS_BLUR.regular.passes} = fábrica; 3 con tamaño 3 = la referencia`, 1, 5, 0),
         typeSlider(type, "alphaMin", "Tinte mínimo", "sobre fondo oscuro", 0, 1),
         typeSlider(type, type === "cristal" ? "tintLimit" : "alphaMax", "Tinte máximo",
-            type === "cristal" ? "sobre fondo claro; lo demás lo pone la sombra de debajo" : "igual al mínimo = tinte uniforme", 0, 1),
+            type === "cristal" ? "sobre fondo claro; límite de opacidad del cristal" : "igual al mínimo = tinte uniforme", 0, 1),
         typeSlider(type, "target", "Objetivo de legibilidad", "0,183 = 4,5:1 para texto blanco; 1 = nunca se espesa", 0.05, 1, 3),
         typeSlider(type, "refraction", "Refracción mínima", "px", 0, 40, 0),
         typeSlider(type, "lensing", "Refracción según tamaño", "fracción del lado corto", 0, 0.15, 3),
@@ -1293,13 +1292,8 @@ function fillControls() {
     ]
     section("Tipo: cristal", [
         ...typeRows("cristal"),
-        ToggleRow("Sombra bajo el cristal", "la de legibilidad, debajo", state.flags.scrim, v => { state.flags.scrim = v; apply() }),
-        typeSlider("cristal", "scrimMax", "Sombra bajo el cristal: máxima", "", 0, 1),
-        typeSlider("cristal", "scrimFalloff", "Sombra bajo el cristal: fundido del panel", "px", 0, 400, 0),
-        typeSlider("cristal", "scrimEdge", "Sombra bajo el cristal: borde / centro", "1 = uniforme", 0, 1),
-        typeSlider("cristal", "scrimSize", "Sombra bajo el cristal: alcance suelta", "fracción del lado corto", 0, 1.5),
     ], "El cristal translúcido. En la referencia: el dock, el centro de control y la etiqueta del dock — sin sombra " +
-        "alrededor, separados solo por una línea de 1 px («Línea oscura en el contorno», en «Común»). Tinte oscuro; " +
+        "global debajo, separados solo por una línea de 1 px («Línea oscura en el contorno», en «Común»). Tinte oscuro; " +
         "el texto, blanco o por el fondo («Color del texto»).")
     section("Tipo: denso", typeRows("denso"),
         "El mismo cristal con otras propiedades: tinte del color del modo (blanco en claro, oscuro en oscuro), " +

@@ -118,7 +118,8 @@ What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
 rim saturation inkDarkAbove inkLightBelow tintLimit scrimMax scrimSize scrimFalloff`,
-`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
+`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` for the A/B; legacy scrim keys are
+accepted but ignored by Fluid Crystal; the full list is `glass-material.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
 (`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
@@ -437,6 +438,13 @@ text keeps it white.
   backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
 
 ### The shadow under the glass: what the glass is missing, within its limit (#684)
+
+**Current Fluid Crystal decision (2026-10-10): this material path is disabled.** The global scrim
+made large translucent surfaces read as grey panels and coupled legibility to a second layer that
+was difficult to tune. `glass-material.ts` returns no scrim source, and the Glass Lab no longer
+exposes scrim controls. The protocol and the investigation below remain as historical reference;
+future shadows should be designed as explicit component elevation rather than silently re-enabled
+as a property of every crystal pane.
 
 Owner, 2026-10-02: "parts almost entirely grey and parts right, on the same element". The tint
 thickens PER PIXEL, so a pane over a backdrop bright in one place and dark in another came out

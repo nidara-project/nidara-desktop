@@ -26,12 +26,12 @@ import { glassFollowsMode, glassIsDense, inkFollowsMode, setMaterialSource, type
  *
  * The glass's own numbers — refraction, lensing, rim, saturation, the least tint, the ink's
  * thresholds — are the owner's, tuned in the glass lab (`scripts/dev/glass-lab/`, 2026-10-05,
- * preset "OK 2", #705) together with the shader's (hyalo's `glass_gl.rs`). The shadow's are
- * still those of 2026-10-02: how the shadow applies is undecided (#705). To tune live, a dev install (`~/.config/nidara/.dev`) reads
+ * preset "OK 2", #705) together with the shader's (hyalo's `glass_gl.rs`). To tune live, a dev
+ * install (`~/.config/nidara/.dev`) reads
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
- *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
+ *   tintLimit                                              regular crystal's tint ceiling
  *   modeLightVeil                                        the light glass of a surface that
  *                                                        follows the mode (the dock), light mode
  *   fusion                                               how close two panes of one fusion
@@ -47,7 +47,6 @@ import { glassFollowsMode, glassIsDense, inkFollowsMode, setMaterialSource, type
  *   glass = off                                          blur only: the shell paints its own
  *                                                        glass, as on Hyprland (A/B)
  *   ink = off                                            the text stays white everywhere
- *   scrim = off                                          no shadow under the glass (A/B)
  *
  * The ink (owner, 2026-10-01, #684): the shell's text on Hyalo's glass is white and turns
  * dark only where even the DARKEST point under it is brighter than `inkDarkAbove` (WCAG
@@ -57,24 +56,10 @@ import { glassFollowsMode, glassIsDense, inkFollowsMode, setMaterialSource, type
  * under it instead of darkening. ⚠️ Both thresholds are a starting point, to be calibrated
  * with the owner on screen.
  *
- * The shadow under the glass (owner, 2026-10-02, #684): with the tint alone, a pane over a
- * backdrop bright in one place and dark in another came out grey in one part and clear in the
- * other — the tint thickens per pixel — and over a bright one the whole pane looked painted
- * grey. "The limit has to be in the glass": the glass takes no more tint than `tintLimit`, and
- * Hyalo lays a soft shadow UNDER it, even across the pane, with exactly what the glass is
- * missing for the text to be legible at the brightest point — none where the glass reaches it
- * alone, none under a pane whose text has turned dark (the ink's veil), at most `scrimMax`.
- * The glass's ceiling IS `tintLimit` while there is a shadow: nothing makes up past
- * `scrimMax`, because a tint above the limit is the grey plastic again. A pane's own
- * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's); the
- * Control Center and the Notification Center share one the size of the panel
- * (`trackScrimRegion` in Bar.tsx), even across the container (`scrimEdge` 1; below 1 it
- * sweeps from the centre), then fading over `scrimFalloff` px. Owner, 2026-10-02: even across the
- * panel "it looks like a translucent dark panel with a gradient at its border", where it
- * should be "very subtle, very slightly darker at the centre, sweeping from the centre, over
- * the container's area". The bar and the dock cast none for now (`trackNoScrim`): a shadow that
- * hugs them cannot fade without running over the windows — an edge shadow drawn by Hyalo,
- * under the windows, is the next step.
+ * A global scrim under the glass is intentionally disabled while Fluid Crystal is being
+ * established. It made large translucent surfaces read as grey panels and coupled legibility
+ * to a second, hard-to-tune layer. Component elevation remains available for individual tiles
+ * and panels; it is a separate effect, outside this material's base recipe.
  */
 
 const DEFAULTS = {
@@ -104,24 +89,14 @@ const DEFAULTS = {
     inkDarkAbove: 0.35,
     // The gap is the hysteresis, so a backdrop on the line does not flicker.
     inkLightBelow: 0.25,
-    // The shadow's opacity at its core, at most. Pure white needs ≈0.41 with the glass at
-    // `tintLimit`; past this the text is less legible, not the glass greyer.
+    // Legacy scrim knobs are retained so older tuning files remain readable. The global scrim is
+    // currently disabled; component elevation is tuned separately by the owning surface.
     scrimMax: 0.6,
-    // A pane's own shadow fades over this fraction of its shorter side (a notification
-    // ≈35 px; the app grid, the overview).
     scrimSize: 0.5,
-    // The Control Center's shadow fades to nothing over this many px outside its glass. 380
-    // with the shadow even across the panel was "totally exaggerated" and 48 a step you could
-    // see (owner, 2026-10-02: "it has to end with no jump between the shadow and the
-    // backdrop"); with the sweep from the centre a long fade reads as none.
     scrimFalloff: 160,
-    // The Control Center's shadow at its edges, as a fraction of its centre's (1: even). Even
-    // (owner, 2026-10-02): the shadow is what the glass lacks at the brightest point, so it holds
-    // across the whole container and only fades outside it; the sweep (0.7) left the edge tiles
-    // short of it and did not read on screen anyway.
     scrimEdge: 1,
-    // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
-    // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
+    // The maximum opacity regular crystal takes over bright backdrops. Keeping this independent
+    // from the scrim lets the Lab tune translucency directly.
     tintLimit: 0.25,
     // Fusion (#705 step 2, `trackFusionGroup`): two panes of one group closer than this many
     // logical px are joined by a bridge, one silhouette. The island's chips' glass sits 8 px from
@@ -229,10 +204,9 @@ function inkParams(native: Gtk.Native | null = null): InkParams | null {
 }
 
 function scrimParams(): ScrimParams | null {
-    if (tuning.off || tuning.scrimOff || reduced()) return null
-    const p = { ...DEFAULTS, ...tuning }
-    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, tintLimit: p.tintLimit,
-        regionEdge: p.scrimEdge }
+    // Keep the lower-level Hyalo protocol available for a future component effect, but do not
+    // enable a global scrim as part of Fluid Crystal's base recipe.
+    return null
 }
 
 function parse(text: string): Tuning {
@@ -252,6 +226,8 @@ function parse(text: string): Tuning {
         } else if (k === "ink") {
             out.inkOff = v === "off"
         } else if (k === "scrim") {
+            // Legacy tuning files may still contain this switch; Fluid Crystal no longer paints
+            // a global scrim, so the value is accepted only for backwards compatibility.
             out.scrimOff = v === "off"
         } else if (k in DEFAULTS && Number.isFinite(Number(v))) {
             (out as Record<string, number>)[k] = Number(v)
