@@ -42,8 +42,8 @@ import { useNoGtkTheme } from "../../../ui/lib/nidara-kit/platform/gtk-theme"
 import { initAppearance } from "../../../ui/lib/nidara-kit/platform/appearance-css"
 import { withKitSheet } from "../../../ui/lib/nidara-kit/platform/kit-css"
 import { setKitAppearance, NidaraCircleButton, NidaraButton, attachTooltip } from "../../../ui/lib/nidara-kit"
-import { registerGlassMaterial, GLASS_MATERIAL_DEFAULTS, GLASS_DENSE_DEFAULTS } from "../../../ui/lib/nidara-kit/platform/glass-material"
-import { trackFluidCrystal, trackScrimRegion, trackNoScrim, trackInkGroup, trackNoInk, trackDenseGlass, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
+import { registerGlassMaterial, GLASS_MATERIAL_DEFAULTS, GLASS_REGULAR_LIGHT_DEFAULTS, GLASS_CLEAR_DEFAULTS } from "../../../ui/lib/nidara-kit/platform/glass-material"
+import { trackFluidCrystal, trackScrimRegion, trackNoScrim, trackInkGroup, trackNoInk, INK_DARK_CLASS } from "../../../ui/lib/nidara-kit/platform/material"
 import { RADIUS, rowInsetFor } from "../../../ui/lib/nidara-kit/platform/tokens"
 import Theme from "../../../ui/shell/core/ThemeManager"
 import { safeDisconnect } from "../../../ui/shell/core/signals"
@@ -141,31 +141,26 @@ interface LabState {
                                    // (and blurSize/blurPasses, written as its `blur`)
     flags: { ink: boolean, glass: boolean, dark: boolean }
     lab: number[]                  // lab_params.conf, 16 values: the shader's LAB hooks, 0 = factory
-    dense: Record<string, number>  // the dense type's keys (`dense.<key>`), only those off its defaults
-                                   // (and blurSize/blurPasses, written as its `dense.blur`)
-    elevation: Record<GlassType, Elevation>   // the shadow around each type (the lab's, on trial)
-    types: Record<BenchPiece, GlassType>      // the type each piece of the bench wears
+    variants: Record<VariantKey, Record<string, number>> // per-variant overrides in the tuning file
+    elevation: Record<GlassVariant, Elevation>   // the shadow around each variant (the lab's, on trial)
+    types: Record<BenchPiece, GlassVariant>      // the variant each piece of the bench wears
 }
-// The TYPES of glass (2026-10-08, owner: "several types of glass, each with its controls, and a
-// piece can change its type"). Measured on the reference (glass-probe FINDINGS, «Elevación,
-// densidad y geometría del Dock»): the dock, the Control Center and the dock's label are GLASS —
-// translucent, no shadow, edged by a 1 px line; menus and large panels are DENSE — ≈0.98 of the
-// mode's colour, with a drop shadow OUTSIDE them, offset down (menus 0.23 · 15 px · 4 px, large
-// panels 0.39 · 38 px · 18 px; stronger in dark mode). A type is the GLASS's own properties, never a
-// layer over it (owner: "a glass with other properties, not a glass with a sticker"): the dense
-// type is the material's (`trackDenseGlass`, `dense.<key>` in glass-tuning.conf). Only the shadow
-// around is the lab's, drawn behind the piece, until the compositor learns it. A type is per
-// SURFACE, so every piece of the bench is a window of its own.
-type GlassType = "cristal" | "denso"
-const GLASS_TYPES: GlassType[] = ["cristal", "denso"]
+// Apple-like material model: Regular follows the system's light/dark appearance; Clear is a
+// separate fixed-light-ink variant for imagery and media. Density belongs to a profile (menu,
+// launcher, panel), not to a third crystal type.
+type GlassVariant = "regular" | "clear"
+type VariantKey = "regularLight" | "regularDark" | "clear"
+const GLASS_VARIANTS: GlassVariant[] = ["regular", "clear"]
+const VARIANT_KEYS: VariantKey[] = ["regularLight", "regularDark", "clear"]
 interface Elevation { alpha: number, blur: number, dy: number }
 type BenchPiece = "menú" | "centro de control"
 const BENCH_PIECES: BenchPiece[] = ["menú", "centro de control"]
 const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, driftSpeed: 1,
     promoSize: 72, videoSeconds: 10, promoFormat: "16:9", ink: "pieza", show: "tipos de cristal", tuning: {},
-    flags: { ink: true, glass: true, dark: true }, lab: new Array(16).fill(0), dense: {},
-    elevation: { cristal: { alpha: 0, blur: 15, dy: 4 }, denso: { alpha: 0.23, blur: 15, dy: 4 } },
-    types: { "menú": "denso", "centro de control": "cristal" } })
+    flags: { ink: true, glass: true, dark: true }, lab: new Array(16).fill(0),
+    variants: { regularLight: {}, regularDark: {}, clear: {} },
+    elevation: { regular: { alpha: 0.23, blur: 15, dy: 4 }, clear: { alpha: 0.12, blur: 15, dy: 4 } },
+    types: { "menú": "regular", "centro de control": "clear" } })
 let state = factory()
 
 function writeFile(path: string, text: string) {
@@ -181,18 +176,20 @@ function apply() {
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
     const lines = ["# written by glass-lab"]
-    // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
-    // numbers, so a preset and A/B carry them like any other.
-    const { blurSize, blurPasses, ...material } = state.tuning
-    for (const [k, v] of Object.entries(material)) lines.push(`${k} = ${v}`)
+    // Common tuning is still written at the root; material values are kept independently for
+    // Regular light, Regular dark and Clear so the Lab can compare real variants.
+    const { blurSize, blurPasses, ...common } = state.tuning
+    for (const [k, v] of Object.entries(common)) lines.push(`${k} = ${v}`)
     if (blurSize !== undefined || blurPasses !== undefined)
         lines.push(`blur = ${blurSize ?? GLASS_BLUR.regular.size}:${Math.round(blurPasses ?? GLASS_BLUR.regular.passes)}`)
     if (!state.flags.ink) lines.push("ink = off")
     if (!state.flags.glass) lines.push("glass = off")
-    const { blurSize: dSize, blurPasses: dPasses, ...dense } = state.dense
-    for (const [k, v] of Object.entries(dense)) lines.push(`dense.${k} = ${v}`)
-    if (dSize !== undefined || dPasses !== undefined)
-        lines.push(`dense.blur = ${dSize ?? GLASS_BLUR.regular.size}:${Math.round(dPasses ?? GLASS_BLUR.regular.passes)}`)
+    for (const key of VARIANT_KEYS) {
+        const { blurSize: size, blurPasses: passes, ...variant } = state.variants[key]
+        for (const [k, v] of Object.entries(variant)) lines.push(`${key}.${k} = ${v}`)
+        if (size !== undefined || passes !== undefined)
+            lines.push(`${key}.blur = ${size ?? GLASS_BLUR.regular.size}:${Math.round(passes ?? GLASS_BLUR.regular.passes)}`)
+    }
     writeFile(TUNING, lines.join("\n") + "\n")
     writeFile(`${SHADERS}/lab_params.conf`,
         state.lab.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
@@ -299,7 +296,7 @@ const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget
 // painter under its child): no container of its own to dispose, so nothing is unparented while
 // the JS engine sweeps a scene a rebuild dropped (a container that did closed the lab at random,
 // 2026-10-08). Its settings ride on the wrapper (`cfg`).
-interface Layer { type: GlassType, radius: number, inset: number }
+interface Layer { type: GlassVariant, radius: number, inset: number }
 const ElevationLayer = GObject.registerClass(class ElevationLayer extends Gtk.Widget {
     vfunc_snapshot(snap: Gtk.Snapshot): void {
         const cfg = (this as unknown as { cfg?: Layer }).cfg
@@ -317,10 +314,10 @@ const ElevationLayer = GObject.registerClass(class ElevationLayer extends Gtk.Wi
 })
 const shadowLayers: Gtk.Widget[] = []
 /** `pane` (a pane of glass with `radius` and `inset`, as SquircleContainer takes them) over the
- *  shadow of `type`. */
-function withShadow(type: GlassType, pane: Gtk.Widget, radius: number, inset: number): Gtk.Widget {
+ *  shadow of `variant`. */
+function withShadow(variant: GlassVariant, pane: Gtk.Widget, radius: number, inset: number): Gtk.Widget {
     const layer = new ElevationLayer({ hexpand: true, vexpand: true, can_target: false })
-    ;(layer as unknown as { cfg: Layer }).cfg = { type, radius, inset }
+    ;(layer as unknown as { cfg: Layer }).cfg = { type: variant, radius, inset }
     const grid = new Gtk.Grid({ halign: pane.halign, valign: pane.valign })
     grid.attach(layer, 0, 0, 1, 1)
     grid.attach(pane, 0, 0, 1, 1)
@@ -363,11 +360,14 @@ function barRow(): Gtk.Widget {
     return row
 }
 
-/** The bench's type for the Control Center's tiles (null off the bench: no shadow around them). */
-let tileType: GlassType | null = null
+/** The bench's variant for the Control Center's tiles (null off the bench: no local elevation). */
+let tileType: GlassVariant | null = null
+let benchVariant: GlassVariant | null = null
 function tile(size: WidgetSize, w: number, h: number, child: Gtk.Widget, getFill?: () => number) {
     const t = BaseIsland({ name: "glass-lab", child, width: w, height: h, size, getFill })
-    trackFluidCrystal(t, "tile")
+    trackFluidCrystal(t, benchVariant
+        ? { variant: benchVariant, profile: "compact", ink: "light", elevation: "tile" }
+        : "tile")
     // A tile is a circle or a capsule: the shadow's radius is held to half its shorter side.
     return tileType ? withShadow(tileType, t, 999, GLASS_INSET) : t
 }
@@ -401,7 +401,9 @@ function controlCenter(): Gtk.Widget {
     const panel = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_start: 16, margin_end: 16,
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
-    trackFluidCrystal(panel, "panel")
+    trackFluidCrystal(panel, benchVariant
+        ? { variant: benchVariant, profile: "panel", ink: "light", elevation: "panel" }
+        : "panel")
     // The CC's regular crystal must stay translucent: its legibility is judged from the glass
     // and the tiles' own elevation, not from a shared scrim that fills the whole panel grey.
     trackNoScrim(panel)
@@ -454,7 +456,7 @@ function controls(): Gtk.Widget {
 
 /** A menu as the shell builds its flat menus (the system menu, the Control Center's context
  *  menu): `menuRow` rows in a pane of glass of radius lg, inset as the system menu insets them. */
-function menuPiece(type: GlassType): Gtk.Widget {
+function menuPiece(type: GlassVariant): Gtk.Widget {
     const inset = rowInsetFor(RADIUS.lg) + GLASS_INSET
     const rows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2,
         margin_top: inset, margin_bottom: inset, margin_start: inset, margin_end: inset })
@@ -470,7 +472,7 @@ function menuPiece(type: GlassType): Gtk.Widget {
     const card = SquircleContainer({ child: rows, radius: RADIUS.lg, useShellOpacity: true, gloss: true, chrome: true,
         shadow: GLASS_SHADOW })
     card.set_size_request(240, -1)
-    trackFluidCrystal(card, "popover")
+    trackFluidCrystal(card, { variant: type, profile: "popover", ink: "mode", elevation: "panel" })
     specimens.push({ name: "menú", contents: [...items, quit] })
     return withShadow(type, card, RADIUS.lg, GLASS_INSET)
 }
@@ -726,12 +728,14 @@ function benchWindow(piece: BenchPiece, x: number, y: number) {
     const holder = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, margin_top: room, margin_bottom: room,
         margin_start: room, margin_end: room })
     tileType = type
+    benchVariant = type
     const content = piece === "menú" ? menuPiece(type) : controlCenter()
     tileType = null
+    benchVariant = null
     holder.append(content)
     holder.append(tag(`${piece}: ${type}`))
-    // The dense type: the material's dense glass, and content that follows the mode (no ink).
-    if (type === "denso") { trackDenseGlass(content); trackNoInk(content) }
+    // Control Center content stays white in both variants; menu content follows Regular's mode.
+    if (piece === "centro de control") trackNoInk(content)
     win.set_child(holder)
     win.present()
     benchWindows.push({ win, root: content, piece })
@@ -743,10 +747,11 @@ function buildBench() {
     benchWindow("menú", r.x + 40, r.y + 80)
     benchWindow("centro de control", r.x + 420, r.y + 80)
 }
-/** A dense piece in light mode wears the light skin (dark text); every shadow is redrawn. */
+/** Regular menus in light mode wear the light skin (dark text); every elevation is redrawn. */
 function refreshBench() {
     for (const b of benchWindows) {
-        if (state.types[b.piece] === "denso" && state.flags.dark === false) b.root.add_css_class("nidara-skin-light")
+        if (state.types[b.piece] === "regular" && state.flags.dark === false && b.piece === "menú")
+            b.root.add_css_class("nidara-skin-light")
         else b.root.remove_css_class("nidara-skin-light")
     }
     for (const l of shadowLayers) l.queue_draw()
@@ -1066,10 +1071,23 @@ function loadPreset(path: string): boolean {
         const [, bytes] = GLib.file_get_contents(path)
         const loaded = JSON.parse(new TextDecoder().decode(bytes))
         const f = factory()
-        state = { ...f, ...loaded, flags: { ...f.flags, ...loaded.flags }, dense: { ...loaded.dense },
-            elevation: { cristal: { ...f.elevation.cristal, ...loaded.elevation?.cristal },
-                denso: { ...f.elevation.denso, ...loaded.elevation?.denso } },
-            types: { ...f.types, ...loaded.types } }
+        const oldType = (value: unknown, fallback: GlassVariant): GlassVariant =>
+            value === "cristal" ? "clear" : value === "denso" ? "regular" : value === "regular" || value === "clear" ? value : fallback
+        const legacyVariants = {
+            regularLight: {},
+            regularDark: { ...(loaded.dense ?? {}) },
+            clear: { ...(loaded.tuning ?? {}) },
+        }
+        state = { ...f, ...loaded, flags: { ...f.flags, ...loaded.flags },
+            variants: { ...legacyVariants, ...loaded.variants },
+            elevation: {
+                regular: { ...f.elevation.regular, ...(loaded.elevation?.denso ?? {}) },
+                clear: { ...f.elevation.clear, ...(loaded.elevation?.cristal ?? {}) },
+            },
+            types: {
+                "menú": oldType(loaded.types?.["menú"], f.types["menú"]),
+                "centro de control": oldType(loaded.types?.["centro de control"], f.types["centro de control"]),
+            } }
         if (!SHOWS.includes(state.show)) state.show = f.show
         return true
     } catch (e) { printerr(`glass-lab: preset ${path}: ${e}`); return false }
@@ -1085,7 +1103,8 @@ function presetNames(): string[] {
 
 // ── The controls window ─────────────────────────────────────────────────────
 const D = GLASS_MATERIAL_DEFAULTS as Record<string, number>
-const DD = GLASS_DENSE_DEFAULTS as Record<string, number>
+const DL = GLASS_REGULAR_LIGHT_DEFAULTS as Record<string, number>
+const DC = GLASS_CLEAR_DEFAULTS as Record<string, number>
 // A column on the right of the nested desktop, reserving its width so the scene never sits under it.
 const CONTROLS_W = 440
 const controlsWin = new Gtk.Window({ title: "Laboratorio de cristal", css_classes: ["glass-lab-controls"] })
@@ -1158,7 +1177,7 @@ function DropDownRow(title: string, sub: string, init: string, options: string[]
     return row
 }
 // Which sections are open, kept across a rebuild of the column; the rest folded away.
-const openSections = new Set(["Presets", "Fondo", "Piezas", "Sistema", "Tipo: cristal", "Tipo: denso"])
+const openSections = new Set(["Presets", "Fondo", "Piezas", "Sistema", "Variante: regular · claro", "Variante: regular · oscuro", "Variante: clear", "Elevación"])
 let stash: LabState | null = null   // A/B: the recipe, while the factory values are shown
 /** (Re)builds the controls from `state` — after a preset or a reset every slider moves. */
 function fillControls() {
@@ -1208,7 +1227,7 @@ function fillControls() {
         // backdrop, the system's mode and the export's settings stay as they are. A/B used to
         // swap the whole state without rebuilding the scene, so after «A/B, pick promo, A/B» the
         // screen showed the disc while the state said «todas» — and the export drew «todas».
-        const recipe = (from: LabState) => ({ tuning: from.tuning, lab: from.lab, dense: from.dense, elevation: from.elevation,
+        const recipe = (from: LabState) => ({ tuning: from.tuning, lab: from.lab, variants: from.variants, elevation: from.elevation,
             flags: { ...from.flags, dark: state.flags.dark } })
         if (stash) { state = { ...state, ...recipe(stash) }; stash = null; ab.set_label("A/B: ver los valores de fábrica") }
         else { stash = state; state = { ...state, ...recipe(factory()) }; ab.set_label("A/B: volver a la receta") }
@@ -1254,52 +1273,55 @@ function fillControls() {
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
     ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El archivo es la misma escena que el marco, dibujada a más resolución: lo que ves es lo que sale. «promo: logo» deja solo el círculo; su tamaño, en px del archivo.")
     const benchTypes = state.show === "tipos de cristal"
-        ? BENCH_PIECES.map(piece => DropDownRow(`Tipo: ${piece}`, "", state.types[piece], [...GLASS_TYPES],
-            v => { state.types[piece] = v as GlassType; buildScene() }))
+        ? BENCH_PIECES.map(piece => DropDownRow(`Variante: ${piece}`, "", state.types[piece], [...GLASS_VARIANTS],
+            v => { state.types[piece] = v as GlassVariant; buildScene() }))
         : []
-    section("Piezas", [DropDownRow("En el banco", "«tipos de cristal»: un menú y las tiles del centro de control, cada uno con su tipo",
+    section("Piezas", [DropDownRow("En el banco", "«tipos de cristal»: un menú y las tiles del centro de control, cada uno con su variante",
         state.show, [...SHOWS], v => { state.show = v as Show; buildScene(); rebuild() }), ...benchTypes])
     section("Sistema", [ToggleRow("Modo oscuro", "el del sistema: lo siguen los controles del kit", state.flags.dark !== false,
         v => { state.flags.dark = v; apply() })])
 
-    // ONE set of controls per TYPE of glass: the same rows, each type its own values.
-    const store = (type: GlassType) => type === "cristal" ? state.tuning : state.dense
-    const neutralOf = (type: GlassType, key: string) =>
-        (type === "cristal" ? D : DD)[key] ?? (key === "blurSize" ? GLASS_BLUR.regular.size : GLASS_BLUR.regular.passes)
-    const typeSlider = (type: GlassType, key: string, title: string, sub: string, min: number, max: number, decimals = 2) =>
-        SliderRow(title, sub, store(type)[key] ?? neutralOf(type, key), min, max, v => {
+    // One set of controls per Apple-like variant. Regular has two mode-selected recipes; Clear is
+    // independent from the system mode and keeps light content over imagery.
+    const variantDefaults: Record<VariantKey, Record<string, number>> = { regularLight: DL, regularDark: D, clear: DC }
+    const store = (variant: VariantKey) => state.variants[variant]
+    const neutralOf = (variant: VariantKey, key: string) =>
+        variantDefaults[variant][key] ?? (key === "blurSize" ? GLASS_BLUR.regular.size : GLASS_BLUR.regular.passes)
+    const variantSlider = (variant: VariantKey, key: string, title: string, sub: string, min: number, max: number, decimals = 2) =>
+        SliderRow(title, sub, store(variant)[key] ?? neutralOf(variant, key), min, max, v => {
             if (key === "blurPasses") v = Math.round(v)
-            if (Math.abs(v - neutralOf(type, key)) < 1e-6) delete store(type)[key]; else store(type)[key] = v
+            if (Math.abs(v - neutralOf(variant, key)) < 1e-6) delete store(variant)[key]; else store(variant)[key] = v
             apply()
         }, { decimals, debounce: 0 })
-    const shadowSlider = (type: GlassType, k: keyof Elevation, title: string, sub: string, max: number, decimals: number) =>
-        SliderRow(title, sub, state.elevation[type][k], 0, max, v => { state.elevation[type][k] = v; refreshBench() },
-            { decimals, debounce: 0 })
-    const typeRows = (type: GlassType) => [
-        typeSlider(type, "blurSize", "Escarcha: tamaño", `por pasada; ${GLASS_BLUR.regular.size} = fábrica`, 0.5, 6, 1),
-        typeSlider(type, "blurPasses", "Escarcha: pasadas", `${GLASS_BLUR.regular.passes} = fábrica; 3 con tamaño 3 = la referencia`, 1, 5, 0),
-        typeSlider(type, "alphaMin", "Tinte mínimo", "sobre fondo oscuro", 0, 1),
-        typeSlider(type, type === "cristal" ? "tintLimit" : "alphaMax", "Tinte máximo",
-            type === "cristal" ? "sobre fondo claro; límite de opacidad del cristal" : "igual al mínimo = tinte uniforme", 0, 1),
-        typeSlider(type, "target", "Objetivo de legibilidad", "0,183 = 4,5:1 para texto blanco; 1 = nunca se espesa", 0.05, 1, 3),
-        typeSlider(type, "refraction", "Refracción mínima", "px", 0, 40, 0),
-        typeSlider(type, "lensing", "Refracción según tamaño", "fracción del lado corto", 0, 0.15, 3),
-        typeSlider(type, "rim", "Canto de luz", "", 0, 1.5),
-        typeSlider(type, "saturation", "Saturación", "1 = sin cambio", 0.5, 2),
-        shadowSlider(type, "alpha", "Sombra alrededor: opacidad", "fuera de la pieza; la dibuja el laboratorio, solo en «tipos de cristal»", 1, 2),
-        shadowSlider(type, "blur", "Sombra alrededor: desenfoque", "px, como el blur de CSS", 80, 0),
-        shadowSlider(type, "dy", "Sombra alrededor: hacia abajo", "px", 40, 0),
+    const variantRows = (variant: VariantKey) => [
+        variantSlider(variant, "blurSize", "Escarcha: tamaño", `por pasada; ${GLASS_BLUR.regular.size} = fábrica`, 0.5, 6, 1),
+        variantSlider(variant, "blurPasses", "Escarcha: pasadas", `${GLASS_BLUR.regular.passes} = fábrica; 3 con tamaño 3 = la referencia`, 1, 5, 0),
+        variantSlider(variant, "alphaMin", "Tinte mínimo", "sobre fondo oscuro", 0, 1),
+        variantSlider(variant, variant === "regularLight" ? "alphaMax" : "tintLimit", "Tinte máximo",
+            variant === "regularLight" ? "opacidad del velo claro" : "límite de opacidad del cristal", 0, 1),
+        variantSlider(variant, "target", "Objetivo de legibilidad", "0,183 = 4,5:1 para texto blanco; 1 = nunca se espesa", 0.05, 1, 3),
+        variantSlider(variant, "refraction", "Refracción mínima", "px", 0, 40, 0),
+        variantSlider(variant, "lensing", "Refracción según tamaño", "fracción del lado corto", 0, 0.15, 3),
+        variantSlider(variant, "rim", "Canto de luz", "", 0, 1.5),
+        variantSlider(variant, "saturation", "Saturación", "1 = sin cambio", 0.5, 2),
     ]
-    section("Tipo: cristal", [
-        ...typeRows("cristal"),
-    ], "El cristal translúcido. En la referencia: el dock, el centro de control y la etiqueta del dock — sin sombra " +
-        "global debajo, separados solo por una línea de 1 px («Línea oscura en el contorno», en «Común»). Tinte oscuro; " +
-        "el texto, blanco o por el fondo («Color del texto»).")
-    section("Tipo: denso", typeRows("denso"),
-        "El mismo cristal con otras propiedades: tinte del color del modo (blanco en claro, oscuro en oscuro), " +
-        "espeso, y el texto sigue al modo; sin sombra debajo. En la referencia: menús y paneles grandes, ≈ 0,98 de su " +
-        "color, con sombra FUERA desplazada abajo — menú 0,23 · 15 px · 4 px, paneles 0,39 · 38 px · 18 px; en oscuro " +
-        "más fuerte (0,27 y 0,68).")
+    section("Variante: regular · claro", variantRows("regularLight"),
+        "La apariencia Regular en modo claro: velo claro, contenido oscuro y densidad dependiente del perfil. " +
+        "Se activa automáticamente cuando el sistema está en modo claro.")
+    section("Variante: regular · oscuro", variantRows("regularDark"),
+        "La apariencia Regular en modo oscuro: tinte oscuro adaptativo y contenido claro salvo que el perfil indique otra cosa. " +
+        "Se activa automáticamente cuando el sistema está en modo oscuro.")
+    section("Variante: clear", variantRows("clear"),
+        "La variante Clear: más transparente, independiente del modo y con contenido claro fijo. Está pensada para fotos, vídeo, " +
+        "Centro de Control y Centro de Notificaciones.")
+    const elevationRows = (variant: GlassVariant, label: string) => [
+        SliderRow(`${label}: opacidad`, "sombra individual fuera de cada pieza", state.elevation[variant].alpha, 0, 1, v => { state.elevation[variant].alpha = v; refreshBench() }, { decimals: 2, debounce: 0 }),
+        SliderRow(`${label}: desenfoque`, "px, como el blur de CSS", state.elevation[variant].blur, 0, 80, v => { state.elevation[variant].blur = v; refreshBench() }, { decimals: 0, debounce: 0 }),
+        SliderRow(`${label}: desplazamiento`, "px hacia abajo", state.elevation[variant].dy, 0, 40, v => { state.elevation[variant].dy = v; refreshBench() }, { decimals: 0, debounce: 0 }),
+    ]
+    section("Elevación", [...elevationRows("regular", "Regular"), ...elevationRows("clear", "Clear")],
+        "La elevación no es otra variante de cristal: es una sombra individual dibujada alrededor de tiles o paneles. " +
+        "El scrim global permanece desactivado.")
 
     // What every type shares: the shader's own hooks and the text's colour.
     section("Común: color del texto", [

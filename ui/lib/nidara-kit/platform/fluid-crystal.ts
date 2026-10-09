@@ -38,11 +38,10 @@ export type FluidCrystalSelection = FluidCrystalPreset | FluidCrystalSpec
 /**
  * Stable starting points for apps and shell surfaces.
  *
- * These are all Regular Crystal roles except `media`; profiles are not variants. `panel` and
- * `tile` are intentionally light-inked: Control Center and Notification Center keep white
- * content regardless of the wallpaper. `launcher` follows the system mode and is denser than a
- * general panel; `popover` is denser still for menus and command surfaces. `media` has a fixed
- * foreground because Clear Crystal does not promise to adapt over arbitrary media.
+ * Profiles are not variants. The bar, launcher and popovers use Regular so their appearance and
+ * content can follow the system mode. Control Center/Notification Center panels and tiles use
+ * Clear: they remain translucent and keep light content over wallpaper. `launcher` and `popover`
+ * are denser profiles of Regular, while `media` is Clear for arbitrary imagery.
  */
 export const FLUID_CRYSTAL_PRESETS: Readonly<Record<FluidCrystalPreset, FluidCrystalSpec>> = Object.freeze({
     bar: Object.freeze({
@@ -52,13 +51,13 @@ export const FLUID_CRYSTAL_PRESETS: Readonly<Record<FluidCrystalPreset, FluidCry
         elevation: "none",
     }),
     panel: Object.freeze({
-        variant: "regular",
+        variant: "clear",
         profile: "panel",
         ink: "light",
         elevation: "panel",
     }),
     tile: Object.freeze({
-        variant: "regular",
+        variant: "clear",
         profile: "compact",
         ink: "light",
         elevation: "tile",
