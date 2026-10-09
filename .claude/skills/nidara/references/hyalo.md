@@ -382,9 +382,17 @@ text keeps it white.
     one in light mode — `glassFollowsMode(native)` makes the material send a white veil, even
     (`modeLightVeil`, 0.2: the reference's regular light glass is filled with white at 0.2) and
     never thickened for white text (`target` 1). Off Hyalo, the light skin's tint does it.
-  - **The bar row: UNDECIDED** — each capsule by its backdrop (today) or by the mode like the dock.
-    The glass lab compares them («Texto que cambia a oscuro», «Deciden juntas»).
-  - Not decided either, so unchanged: the island, menus, tooltips, the app grid, Prism.
+  - **The bar's surface — capsules, island, its menus and Prism: the system MODE** (owner,
+    2026-10-09: by the backdrop each capsule turned on its own, and over a wallpaper bright on
+    one side only that end had dark text). `trackModeInk(barBox)` (kit `material.ts`): the
+    material sends that surface ink thresholds no backdrop can miss — light mode −1/−2 (dark at
+    once, never back), dark mode 2/1.5 — so its panes lie on the ink's light veil with dark
+    content in light mode, and on the dark glass with light content in dark mode. CC, NC and the
+    banners keep `trackNoInk` and are untouched (they take no ink at all). ⚠️ Hyalo applies a NEW
+    set_ink rule to the LAST measurement at commit (`ink_darkest`, `apply_ink`): a still backdrop
+    is not measured again (the measurement is keyed on the capture), so without it a mode switch
+    turned the bar only when something moved behind it. By the backdrop again — the whole bar at
+    once, by majority, gradually — is for later.
 - **Groups and boxes (client).** Each `trackGlass` entry is an ink group (`inkId`) — unless a
   container round it called `trackInkGroup(widget)`: then every pane inside turns TOGETHER, one
   group measured over all their boxes (read when the surface sends its glass, so nothing in the

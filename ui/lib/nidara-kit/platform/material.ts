@@ -266,6 +266,31 @@ export function trackModeGlass(widget: Gtk.Widget): void {
     widget.connect("destroy", () => modeGlass.delete(widget))
 }
 
+/** Widgets whose surface's INK follows the system mode (`trackModeInk`). */
+const modeInk = new Set<Gtk.Widget>()
+
+/**
+ * The ink of `widget`'s SURFACE follows the system's light/dark mode instead of the backdrop:
+ * dark content (on the ink's light veil) in light mode, light content in dark mode, whatever is
+ * behind. The bar (owner, 2026-10-09: "like the dock, by the theme, and later we'll see about
+ * automatic" — by the backdrop, each capsule turned on its own, and over a wallpaper bright on one
+ * side only one end turned). Only panes that take an ink at all: one under `trackNoInk` keeps its
+ * content as the bundle paints it. A popover attached inside it follows too.
+ */
+export function trackModeInk(widget: Gtk.Widget): void {
+    modeInk.add(widget)
+    widget.connect("destroy", () => modeInk.delete(widget))
+}
+
+/** Whether this surface's ink follows the system mode (`trackModeInk`), as `glassFollowsMode`. */
+export function inkFollowsMode(native: Gtk.Native): boolean {
+    for (const w of modeInk) if (w.get_native() === native) return true
+    for (let w: Gtk.Widget | null = (native as unknown as Gtk.Widget).get_parent(); w; w = w.get_parent()) {
+        if (modeInk.has(w)) return true
+    }
+    return false
+}
+
 /** Whether this surface's glass follows the system mode (`trackModeGlass`): it holds such a
  *  widget, or it is a popover attached inside one (the dock's tooltips and menus — a surface
  *  of their own whose content already follows the dock's skin). */
