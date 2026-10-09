@@ -233,6 +233,10 @@ pub struct Current {
     /// The ink groups whose content is dark now (the hysteresis' memory). A group no longer
     /// declared keeps its decision, as the client does: a panel reopened starts as it closed.
     pub dark_ink: std::collections::BTreeSet<u32>,
+    /// The darkest point last measured under each ink group: a new rule (set_ink) is applied to
+    /// it at once, as the backdrop under a still surface is not measured again (the bar's ink
+    /// following the mode, 2026-10-09: it turned only when something moved behind it).
+    pub ink_darkest: std::collections::BTreeMap<u32, f64>,
     /// The backdrop under each shape as the glass treats it, WITHOUT the shadow: its
     /// darkest and brightest WCAG luminance, by shape index. Measured with the ink.
     pub shape_light: std::collections::BTreeMap<usize, (f32, f32)>,
@@ -343,40 +347,58 @@ pub fn ink_measured(surface: &WlSurface, darkest: &[(u32, f32)]) -> bool {
     with_states(surface, |states| {
         let Some(current) = states.data_map.get::<std::sync::Mutex<Current>>() else { return false };
         let mut current = current.lock().unwrap();
-        let Some(ink) = current.state.ink else { return false };
-        let mut changed = Vec::new();
+        if current.ink_darkest.len() > MAX_INK_GROUPS {
+            current.ink_darkest.clear();
+        }
         for &(id, l) in darkest {
-            if let Some(dark) = next_ink(current.dark_ink.contains(&id), l as f64, &ink) {
-                changed.push((id, dark));
-            }
+            current.ink_darkest.insert(id, l as f64);
         }
-        if changed.is_empty() {
-            return false;
-        }
-        if current.dark_ink.len() > MAX_INK_GROUPS {
-            current.dark_ink.clear();
-        }
-        for &(id, dark) in &changed {
-            if dark {
-                current.dark_ink.insert(id);
-            } else {
-                current.dark_ink.remove(&id);
-            }
-        }
-        current.commit.increment();
+        let Some(ink) = current.state.ink else { return false };
+        let changed = apply_ink(&mut current, darkest.iter().map(|&(id, l)| (id, l as f64)), &ink);
         drop(current);
-        // The protocol is v1 and stays v1 (additions go inside it): the event is in v1, so no
-        // version test. A `>= 3` left from before that rule sent it to nobody, while the glass
-        // still wore the light veil — white text on a white veil.
-        if let Some(res) = states.data_map.get::<MaterialResource>()
-            && let Some(res) = res.0.lock().unwrap().as_ref()
-        {
-            for (id, dark) in changed {
-                res.ink(id, dark as u32);
-            }
-        }
-        true
+        send_ink(states, changed)
     })
+}
+
+/// The rule applied to these measurements: what changed, recorded in `current` (its counter
+/// moved, as a shape's tint follows its group's ink).
+fn apply_ink(current: &mut Current, darkest: impl Iterator<Item = (u32, f64)>, ink: &Ink) -> Vec<(u32, bool)> {
+    let changed: Vec<(u32, bool)> = darkest
+        .filter_map(|(id, l)| next_ink(current.dark_ink.contains(&id), l, ink).map(|dark| (id, dark)))
+        .collect();
+    if changed.is_empty() {
+        return changed;
+    }
+    if current.dark_ink.len() > MAX_INK_GROUPS {
+        current.dark_ink.clear();
+    }
+    for &(id, dark) in &changed {
+        if dark {
+            current.dark_ink.insert(id);
+        } else {
+            current.dark_ink.remove(&id);
+        }
+    }
+    current.commit.increment();
+    changed
+}
+
+/// Tells the client what changed; whether anything did (the glass must be redrawn).
+fn send_ink(states: &smithay::wayland::compositor::SurfaceData, changed: Vec<(u32, bool)>) -> bool {
+    if changed.is_empty() {
+        return false;
+    }
+    // The protocol is v1 and stays v1 (additions go inside it): the event is in v1, so no
+    // version test. A `>= 3` left from before that rule sent it to nobody, while the glass
+    // still wore the light veil — white text on a white veil.
+    if let Some(res) = states.data_map.get::<MaterialResource>()
+        && let Some(res) = res.0.lock().unwrap().as_ref()
+    {
+        for (id, dark) in changed {
+            res.ink(id, dark as u32);
+        }
+    }
+    true
 }
 
 /// A measurement came back (render/glass_gl.rs): the darkest and brightest luminance under
@@ -461,11 +483,19 @@ pub fn on_commit(surface: &WlSurface) {
         // The glass's counter moves only when the glass changed: a dock that re-declares its
         // drawn region on every frame of a hover does not redraw its glass for it.
         let glass_changed = MaterialState { drawn: None, ..current.state.clone() } != MaterialState { drawn: None, ..committed.clone() };
+        // A new ink rule meets the last measurement now: nothing measures a still backdrop again.
+        let new_rule = committed.ink.filter(|i| current.state.ink.as_ref() != Some(i));
         if current.state != committed {
             current.state = committed;
             if glass_changed {
                 current.commit.increment();
             }
+        }
+        if let Some(ink) = new_rule {
+            let darkest: Vec<(u32, f64)> = current.ink_darkest.iter().map(|(&id, &l)| (id, l)).collect();
+            let changed = apply_ink(&mut current, darkest.into_iter(), &ink);
+            drop(current);
+            send_ink(states, changed);
         }
     });
 }
@@ -800,6 +830,26 @@ mod tests {
         assert_eq!(next_ink(false, 0.70, &ink), None, "...whichever way it was");
         assert_eq!(next_ink(true, 0.60, &ink), Some(false), "below the lower one: light again");
         assert_eq!(next_ink(true, 0.95, &ink), None, "already dark: no event");
+    }
+
+    #[test]
+    fn a_new_rule_meets_the_last_measurement() {
+        // An ink that follows the mode (the bar): a still backdrop is measured once, and each
+        // mode's rule must turn it at once — light mode's (−1/−2) dark, dark mode's (2/1.5) light.
+        let mut current = Current::default();
+        current.ink_darkest.insert(7, 0.1);
+        let light_mode = Ink { dark_above: -1.0, light_below: -2.0, tint: [1.0; 3] };
+        let last = |c: &Current| c.ink_darkest.iter().map(|(&id, &l)| (id, l)).collect::<Vec<_>>();
+        let m = last(&current);
+        assert_eq!(apply_ink(&mut current, m.into_iter(), &light_mode), vec![(7, true)],
+            "over a dark backdrop, light mode turns it dark");
+        let m = last(&current);
+        assert_eq!(apply_ink(&mut current, m.into_iter(), &light_mode), vec![], "and keeps it");
+        let dark_mode = Ink { dark_above: 2.0, light_below: 1.5, tint: [1.0; 3] };
+        current.ink_darkest.insert(7, 0.99);
+        let m = last(&current);
+        assert_eq!(apply_ink(&mut current, m.into_iter(), &dark_mode), vec![(7, false)],
+            "over a white backdrop, dark mode turns it light");
     }
 
     fn glass() -> Glass {

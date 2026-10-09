@@ -5,7 +5,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { GLASS_TINT } from "./tokens"
 import { SOLID_GLASS } from "./theme-tokens"
 import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "./glass-legibility"
-import { glassFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
+import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
 
 /**
  * THE glass material (#684, #705 step 0): one material for everything Nidara draws as glass —
@@ -193,10 +193,18 @@ function params(native: Gtk.Native | null = null): GlassParams | null {
         refraction: p.refraction, lensing: p.lensing, rim: p.rim, saturation: p.saturation }
 }
 
-function inkParams(): InkParams | null {
+function inkParams(native: Gtk.Native | null = null): InkParams | null {
     if (tuning.off || tuning.inkOff || reduced()) return null
     const p = { ...DEFAULTS, ...tuning }
     const t = GLASS_TINT.light
+    // An ink that follows the mode (`trackModeInk`): thresholds no backdrop can miss — any
+    // luminance (0..1) is above −1, so light mode turns it dark at the first measurement and
+    // nothing turns it back (light_below −2); in dark mode nothing turns it dark (2) and
+    // anything turns it light (1.5).
+    if (native && inkFollowsMode(native)) {
+        const light = host?.lightMode?.() ?? false
+        return { darkAbove: light ? -1 : 2, lightBelow: light ? -2 : 1.5, tint: { r: t.r, g: t.g, b: t.b } }
+    }
     return { darkAbove: p.inkDarkAbove, lightBelow: p.inkLightBelow, tint: { r: t.r, g: t.g, b: t.b } }
 }
 
@@ -258,7 +266,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
     watchTuning()
     setMaterialSource({
         glass: (native: Gtk.Native) => params(native),
-        ink: (_native: Gtk.Native) => inkParams(),
+        ink: (native: Gtk.Native) => inkParams(native),
         scrim: (_native: Gtk.Native) => scrimParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         fusionHold: (_native: Gtk.Native) => tuning.fusionHold ?? DEFAULTS.fusionHold,
