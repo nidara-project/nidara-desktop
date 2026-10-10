@@ -393,10 +393,17 @@ an unverified proposal, not a result of this probe.
 
 Next gate: use the Lab to compare Nidara's appearances under the same backdrops and sizes,
 including text contrast, while keeping its preview/export equivalence. Only after that
-comparison should a role mapping or numerical
-recipe be promoted to the shell and Hyalo. The current `trackFluidCrystal` registry picks one
+comparison should a role mapping or numerical recipe be promoted to the shell and Hyalo. The
+current `trackFluidCrystal` registry picks one
 spec per `Gtk.Native`, while the bar now holds several different panel roles in one surface;
 per-pane selection needs a defined protocol path before that mapping can work in the shell.
+The existing Lab already runs headless with its one scene surface. Its factory Control Center
+on pure white measured 2.93:1 for the Brightness label and 3.51:1 for Wi-Fi/Bluetooth (2026-10-10,
+`--show 'centro de control' --bg blanco`); on black the same Wi-Fi/Bluetooth labels measured
+13.08:1. The white capture also showed a broad grey scrim around the controls. This is a baseline
+failure to tune, not a Clear or Regular validation. Compare candidate variants one at a time on
+that scene and preserve the existing backdrop and controls surfaces; do not create a native
+window for every glass specimen.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
