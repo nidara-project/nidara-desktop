@@ -92,8 +92,9 @@ Three calls are not optional, and none of them fails loudly when missing:
 
 ## Fluid Crystal
 
-The kit owns the semantic vocabulary for Nidara's material system. Import the presets from the
-public index instead of choosing raw blur or alpha values in an app:
+The kit owns the semantic vocabulary for Nidara's material system. The presets are proposed UI
+roles; their visual values and role assignments still need Glass Lab validation. Import them from
+the public index instead of choosing raw blur or alpha values in an app:
 
 ```ts
 import { FLUID_CRYSTAL_PRESETS, trackFluidCrystal } from "file:///usr/share/nidara-kit/js/index.js"
@@ -115,11 +116,13 @@ The current contract keeps four decisions separate:
 | Ink | `mode`, `adaptive`, `light`, `dark` | Shared system appearance, local backdrop, or fixed foreground |
 | Elevation | `none`, `tile`, `panel` | No shadow, a local tile separation, or a floating panel shadow |
 
-Profiles are roles of Regular Crystal, not additional variants. The `panel` and `tile` presets use
+Profiles are UI roles, not additional variants. The `panel` and `tile` presets currently use
 fixed light ink for Control Center and Notification Center: those surfaces stay white instead of
-flipping with the wallpaper. `launcher` follows the system mode and is denser for App Grid;
-`popover` is denser still for menus. `clear` does not promise automatic foreground contrast over
-arbitrary media; use it with bright content and add explicit dimming when the background needs it.
+flipping with the wallpaper. This is a Nidara design choice awaiting contrast tests, not a property
+measured by the macOS probe. `launcher` follows the system mode and is intended to be denser for
+App Grid; `popover` is intended to be denser still for menus. `clear` does not promise automatic
+foreground contrast over arbitrary media; use it with bright content and add explicit dimming
+when the background needs it.
 The presets describe intent only: the active bundle supplies the renderer and its Hyalo/GTK fallback.
 
 ## Types (TypeScript)

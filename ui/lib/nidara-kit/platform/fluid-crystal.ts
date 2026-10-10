@@ -12,13 +12,13 @@
 /** How much of the content below the crystal should remain visible. */
 export type FluidCrystalVariant = "regular" | "clear"
 
-/** The scale and role of the surface wearing the crystal. */
+/** A proposed UI role, not another material variant or a measured density. */
 export type FluidCrystalProfile = "compact" | "panel" | "launcher" | "popover"
 
 /** How the content on the crystal chooses its foreground ink. */
 export type FluidCrystalInk = "mode" | "adaptive" | "light" | "dark"
 
-/** The spatial separation the surface casts around itself. */
+/** Spatial separation requested by the UI; it is independent of the glass variant. */
 export type FluidCrystalElevation = "none" | "tile" | "panel"
 
 /** A complete, backend-neutral Fluid Crystal recipe. */
@@ -36,7 +36,10 @@ export type FluidCrystalPreset = "bar" | "panel" | "tile" | "launcher" | "popove
 export type FluidCrystalSelection = FluidCrystalPreset | FluidCrystalSpec
 
 /**
- * Stable starting points for apps and shell surfaces.
+ * Provisional role mappings for apps and shell surfaces. The macOS probe measured Regular and
+ * Clear on isolated shapes; it did not establish that a Control Center, launcher or popover must
+ * use a particular variant, ink policy or shadow. Validate these mappings in the Glass Lab
+ * before using them to change the shell's rendered material.
  *
  * These are all Regular Crystal roles except `media`; profiles are not variants. `panel` and
  * `tile` are intentionally light-inked: Control Center and Notification Center keep white
