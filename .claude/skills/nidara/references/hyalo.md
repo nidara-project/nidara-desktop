@@ -447,8 +447,8 @@ In the headless white-backdrop trial, Clear + this band + system-mode ink reache
 in dark mode and visibly formed a grey strip. The owner expects the area strip to turn grey
 on an extreme white backdrop; the unresolved point is the foreground contrast, not that
 area colour. Light mode chose dark ink and drew no band. Keep this candidate in the Lab for
-comparison, not in the shell. The Lab still has no
-independent elevation-shadow control; its scrim modes are backdrop treatments.
+comparison, not in the shell. The promo Regular specimen has a separate outer elevation
+shadow control; its scrim modes remain backdrop treatments.
 
 The nested Lab compositor alone sets `HYALO_LAB_AREA_DIM=1` to give shared regions the largest
 pane's corner radius; the production compositor's region geometry stays as before. Apple's
@@ -461,7 +461,15 @@ Regular tint-fade trial: with backdrop-driven ink, its dark tint fades from
 `regularFade.start` to `inkDarkAbove`, reaching zero before the ink event. This is a Lab shader
 hook and does not change the shipped Hyalo shader. The ink event and Gtk/Cairo content still
 change discretely; this tests the optical discontinuity, not a continuous-ink protocol. The
-`gris variable` backdrop maps its slider to linear WCAG luminance to expose the threshold.
+trial is now off by default. On `promo: logo`, backdrop-driven Regular instead uses the same
+Hyalo ink event to switch the whole logo, a Lab-only light veil (`lab[7]`, initially 0.20) and
+an outer shadow (initially alpha 0.18), leaving the background behind the disc alone. The
+Lab's Regular backdrop policy stays adaptive even in system light mode. The shadow is painted
+in the GTK surface outside the compositor's glass silhouette, using the shared shadow painter;
+the product's compositor-glass shadows remain off. The split backdrop's two-colour logo is a
+separate trial without a whole-logo ink event, so it must not be read as evidence of a synced
+Regular transition. These values await the owner's visual calibration, not a shell promotion.
+The `gris variable` backdrop maps its slider to linear WCAG luminance to expose the threshold.
 The Clear candidate forces zero dark tint (also from older presets); its light-mode white veil
 and optional backdrop area dim stay separate. `areaDim` persists its knobs
 in presets; legacy `clearDim` area values retain their tuning, while older two-field in-glass

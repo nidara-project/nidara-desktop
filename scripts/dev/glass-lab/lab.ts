@@ -93,7 +93,9 @@ let labAppearanceDark = true
 registerGlassMaterial({
     reduceTransparency: () => Theme.reduceTransparency,
     panelBlur: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
-    lightMode: () => !labAppearanceDark,
+    // Backdrop-driven Regular chooses its light or dark treatment with the same ink event,
+    // regardless of the system mode. Mode-bound roles still follow the system appearance.
+    lightMode: () => !labAppearanceDark && !(state.variant === "regular" && effectiveInk() === "fondo"),
     onChange: (cb) => { const id = Theme.connect("changed", cb); return () => safeDisconnect(Theme, id) },
 })
 {
@@ -162,7 +164,8 @@ interface LabState {
     inkPolicy: InkPolicy           // role, system mode, fixed white, or backdrop measurement
     backdropPolicy: BackdropPolicy // independent of the material variant
     areaDim: { max: number, target: number, falloff: number, barFade: number } // optional area treatment
-    regularFade: { enabled: boolean, start: number } // Lab-only fade before backdrop ink flips
+    regularFade: { enabled: boolean, start: number } // optional old A/B: fades before the ink flips
+    regularElevation: number        // outer shadow when Regular's backdrop ink is dark
     show: Show
     tuning: Record<CrystalVariant, Record<string, number>> // each candidate keeps its own slider values
                                                         // (blurSize/blurPasses are written as `blur`)
@@ -173,7 +176,7 @@ const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5
     promoSize: 72, promoInk: "tinta por zona", videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", inkPolicy: "según rol",
     backdropPolicy: "ninguna", show: "barra",
     tuning: { regular: {}, clear: {} }, areaDim: { ...AREA_DIM_DEFAULT },
-    regularFade: { enabled: true, start: 0.14 },
+    regularFade: { enabled: false, start: 0.14 }, regularElevation: GLASS_SHADOW.alpha,
     flags: { glass: true, dark: true }, lab: new Array(16).fill(0) })
 let state = factory()
 
@@ -200,6 +203,13 @@ const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 let controlsWinRef: Gtk.Window | null = null
 function apply() {
     labAppearanceDark = state.flags.dark !== false
+    // Backdrop ink starts from a dark skin even in system light mode, then its own ink class
+    // supplies the light skin. Otherwise a white logo would be black before the first event.
+    const adaptivePromo = state.variant === "regular" && effectiveInk() === "fondo"
+    if (promoDisc?.disc) {
+        if (adaptivePromo && !labAppearanceDark) promoDisc.disc.add_css_class("nidara-skin-dark")
+        else promoDisc.disc.remove_css_class("nidara-skin-dark")
+    }
     const scheme = state.flags.dark === false ? "default" : "prefer-dark"
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
@@ -244,6 +254,10 @@ function apply() {
     const labValues = [...state.lab]
     labValues[2] = fade[0]
     labValues[3] = fade[1]
+    // In the backdrop-driven Regular trial, a bright pane takes the SAME light veil as the
+    // mode-bound light recipe at the instant Hyalo changes its content to dark ink.
+    labValues[7] = state.variant === "regular" && ink === "fondo"
+        ? (state.tuning.regular.modeLightVeil ?? GLASS_MATERIAL_DEFAULTS.modeLightVeil) : 0
     writeFile(`${SHADERS}/lab_params.conf`,
         labValues.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
     backdropArea?.queue_draw()
@@ -568,6 +582,7 @@ class PromoSplitInk extends Gtk.Widget {
         this.darkSkin.set_parent(this); this.lightSkin.set_parent(this)
     }
     setCut(v: number) { this.cut = Math.max(0, Math.min(1, v)); this.queue_draw() }
+    getCut() { return this.cut }
     vfunc_get_request_mode(): Gtk.SizeRequestMode { return Gtk.SizeRequestMode.CONSTANT_SIZE }
     vfunc_measure(o: Gtk.Orientation, forSize: number): [number, number, number, number] {
         const a = this.darkSkin.measure(o, forSize), b = this.lightSkin.measure(o, forSize)
@@ -621,6 +636,9 @@ function syncPromoInk() {
     // on black. The displayed colour changes by a moving boundary, not a switch.
     const frame = stageRect(), size = promoScreenSize()
     if (frame.w > 0 && size > 0) promoDisc.split.setCut(0.5 + (state.offset - 0.5) * frame.w / size)
+    // The split trial has no compositor ink event; its elevation follows the fraction of the
+    // logo that is dark over white. The regular gradient trial uses the real ink event instead.
+    ;(promoDisc.disc as any).glassArea?.queue_draw()
 }
 function promoPiece(): Gtk.Widget {
     const byArea = state.backdrop === "mitad blanco/negro" && effectiveInk() === "fondo"
@@ -633,8 +651,16 @@ function promoPiece(): Gtk.Widget {
         const single = promoMark()
         content = single; marks = [single]
     }
-    const disc = SquircleContainer({ child: content, shape: Shape.CIRCLE, useShellOpacity: true, gloss: true,
-        chrome: true, shadow: GLASS_SHADOW })
+    let disc: Gtk.Widget
+    disc = SquircleContainer({ child: content, shape: Shape.CIRCLE, useShellOpacity: true, gloss: true,
+        chrome: true, shadow: { ...GLASS_SHADOW, compositor: true,
+            alpha: () => {
+                if (state.variant !== "regular" || effectiveInk() !== "fondo") return 0
+                const bright = split ? split.getCut() : disc.has_css_class(INK_DARK_CLASS) ? 1 : 0
+                return state.regularElevation * bright
+            } } })
+    if (state.variant === "regular" && effectiveInk() === "fondo" && !labAppearanceDark)
+        disc.add_css_class("nidara-skin-dark")
     trackFluidCrystal(disc, "media")
     // The split logo owns its ink in this synthetic experiment. The material's
     // darkest-point event must not recolour both glyphs at once.
@@ -1367,17 +1393,20 @@ function fillControls() {
         ...(state.variant === "regular" ? [
             tuningSlider("target", "Objetivo de luminancia", "0,183 ≈ texto blanco a 4,5:1; 1 = sin oscurecimiento adaptativo", 0.05, 1, 3),
         ] : []),
-        tuningSlider("modeLightVeil", "Velo blanco en modo claro", "Regular inicia en 0,20; Clear en 0,05 (prueba)", 0, 0.5),
+        tuningSlider("modeLightVeil", "Velo claro", "Regular: con logo oscuro o aspecto claro según rol; Clear: aspecto claro", 0, 0.5),
     ])
-    if (state.variant === "regular") section("Transición de Regular (ensayo)", [
-        ToggleRow("Retirar tinte antes del cambio de texto", "solo con política de tinta «fondo»",
+    if (state.variant === "regular") section("Regular sobre fondo claro (ensayo)", [
+        SliderRow("Sombra del círculo promo", "aparece con el logo oscuro; 0 = sin sombra",
+            state.regularElevation, 0, 0.4, v => { state.regularElevation = v; (promoDisc?.disc as any)?.glassArea?.queue_draw() },
+            { decimals: 2, debounce: 0 }),
+        ToggleRow("Retirar tinte antes del cambio de texto (A/B anterior)", "curva independiente, apagada por defecto",
             state.regularFade.enabled, v => { state.regularFade.enabled = v; apply(); rebuild() }),
         ...(state.regularFade.enabled ? [
             SliderRow("Inicio de la retirada", "luminancia lineal; termina al umbral «a oscuro»",
                 state.regularFade.start, 0.05, 0.34, v => { state.regularFade.start = v; apply() },
                 { decimals: 3, debounce: 0 }),
         ] : []),
-    ], "Esta curva suaviza solo el cristal. El evento actual de tinta sigue siendo binario; para una transición gradual del texto y de los iconos hace falta medir y transmitir un valor continuo. Usa «gris variable», tinta «fondo» y sin capa de fondo para aislarla.")
+    ], "En «promo: logo» con tinta «fondo», el logo oscuro, el velo claro y la sombra responden al mismo evento de Hyalo. El cambio sigue siendo binario. La curva A/B antigua altera el tinte antes de ese evento.")
     section("Fondo bajo el cristal (capas nuevas)", [
         labSlider(0, "Comprimir blancos: techo", "0 = apagado; luminancia a la que llega el blanco", 0, 1, 0),
         labSlider(1, "Comprimir blancos: rodilla", "por debajo no cambia nada (0 = 0,15)", 0, 0.6, 0),

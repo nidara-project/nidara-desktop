@@ -13,6 +13,7 @@
 //   lab[4]  bevel profile: + to its exponent (5)                                      ADD
 //   lab[5]  refraction: × (1 + it) on its strength (3 × Snell's)                      MUL
 //   lab[6]  dispersion: its spread, 1 = the fringe there was until 2026-10-05          block
+//   lab[7]  Regular trial: light veil when the ink event turns its content dark
 //   lab[8]  light: rotation of the rim's light, degrees                               block
 //   lab[9]  inner glow: × it, 1 = the glow along the edge there was until 2026-10-05  block
 //   lab[10] rim line: × (1 + it) on its width                                         MUL
@@ -384,7 +385,13 @@ void main() {
     if (fb.z > 0.5) {
         // Dark content (the ink event): the backdrop under it is bright everywhere, so the
         // glass stops darkening it for white content — a light veil instead.
-        c = mix(bg, ink_tint, alpha_min * formed);
+        float light_veil = alpha_min;
+#ifdef GLASS_LAB
+        // The Lab's backdrop-driven Regular uses this same ink event for its logo, veil and
+        // elevation. The mode-bound light recipe already has alpha_min = modeLightVeil.
+        light_veil = max(light_veil, lab(7));
+#endif
+        c = mix(bg, ink_tint, light_veil * formed);
     } else {
         float a = 0.0;
         if (luminance(bg) > target) {
