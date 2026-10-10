@@ -8,10 +8,12 @@
 // and becomes the factory's by changing the number the hook wraps (and the lab's neutral).
 //   lab[0]  tone: ceiling, the WCAG luminance white is compressed to (0 = off)        block
 //   lab[1]  tone: knee, the luminance below which nothing changes (0 = 0.15)          block
-//   lab[2]  dim: a black veil over the backdrop before the tint, 0..1                 block
+//   lab[2]  Regular trial: begin removing adaptive dark tint at this backdrop luminance
+//   lab[3]  Regular trial: finish removing it at the ink's dark threshold (0 = off)
 //   lab[4]  bevel profile: + to its exponent (5)                                      ADD
 //   lab[5]  refraction: × (1 + it) on its strength (3 × Snell's)                      MUL
 //   lab[6]  dispersion: its spread, 1 = the fringe there was until 2026-10-05          block
+//   lab[7]  Regular trial: light veil when the ink event turns its content dark
 //   lab[8]  light: rotation of the rim's light, degrees                               block
 //   lab[9]  inner glow: × it, 1 = the glow along the edge there was until 2026-10-05  block
 //   lab[10] rim line: × (1 + it) on its width                                         MUL
@@ -372,8 +374,6 @@ void main() {
                             to_encoded(to_linear(bg.b) * k)), 0.0, 1.0);
         }
     }
-    // Dim: an even black veil over the backdrop, before the tint.
-    if (lab(2) != 0.0) bg *= 1.0 - clamp(lab(2), 0.0, 1.0);
 #endif
     // The tint thickens exactly where the backdrop is too bright for white content:
     // after tinting, the luminance does not exceed target (per pixel; #673's rule, on the GPU).
@@ -385,7 +385,13 @@ void main() {
     if (fb.z > 0.5) {
         // Dark content (the ink event): the backdrop under it is bright everywhere, so the
         // glass stops darkening it for white content — a light veil instead.
-        c = mix(bg, ink_tint, alpha_min * formed);
+        float light_veil = alpha_min;
+#ifdef GLASS_LAB
+        // The Lab's backdrop-driven Regular uses this same ink event for its logo, veil and
+        // elevation. The mode-bound light recipe already has alpha_min = modeLightVeil.
+        light_veil = max(light_veil, lab(7));
+#endif
+        c = mix(bg, ink_tint, light_veil * formed);
     } else {
         float a = 0.0;
         if (luminance(bg) > target) {
@@ -399,6 +405,14 @@ void main() {
         }
         // The tint thickens as the glass forms.
         a = clamp(a, alpha_min, alpha_max) * formed;
+#ifdef GLASS_LAB
+        // Trial only: on a uniformly brightening backdrop, the old ink event took
+        // the whole shape from darkened glass to a light veil in one frame. Let the
+        // dark tint vanish continuously before that event. The ink itself remains
+        // the protocol's boolean decision; this does not make text continuously adaptive.
+        if (lab(2) > 0.0 && lab(3) > lab(2))
+            a *= 1.0 - smoothstep(lab(2), lab(3), luminance(bg));
+#endif
         c = mix(bg, tint, a);
     }
     // Specular rim: a band of light along the edge where it faces the light (top-left) and again

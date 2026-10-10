@@ -426,7 +426,8 @@ function inkIdOf(e: Entry): number {
 }
 
 /** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). */
-type ScrimRegion = { widget: Gtk.Widget, casts: boolean }
+type ScrimRegion = { widget: Gtk.Widget, casts: boolean,
+    exactBounds?: { horizontalOutset: number } }
 const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
 
 /**
@@ -434,10 +435,11 @@ const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
  * lie on one shadow the size of their container, at one strength, whole at its centre and
  * swept out to `regionEdge` of that at its rim, fading only outside it. Declared while the
  * widget is shown; it shares its surface's material (`trackGlass`). Where two regions hold a
- * pane, the one declared first wins.
+ * pane, the one declared first wins. `exactBounds` is a Glass Lab instrument: it sends the
+ * widget's whole box (plus a horizontal outset) instead of the panes' refracting union.
  */
-export function trackScrimRegion(widget: Gtk.Widget): void {
-    addScrimRegion({ widget, casts: true })
+export function trackScrimRegion(widget: Gtk.Widget, exactBounds?: { horizontalOutset: number }): void {
+    addScrimRegion({ widget, casts: true, exactBounds })
 }
 
 /**
@@ -478,7 +480,7 @@ function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassP
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
     const out: (Rect & { falloff: number })[] = []
-    for (const { widget, casts } of scrimRegions.values()) {
+    for (const { widget, casts, exactBounds } of scrimRegions.values()) {
         if (widget.get_native() !== native || !widget.get_mapped() || !widget.is_drawable()) continue
         const [ok, b] = widget.compute_bounds(nw)
         if (!ok || b.get_width() <= 0 || b.get_height() <= 0) continue
@@ -490,6 +492,14 @@ function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassP
             return cx >= box.x && cx < box.x + box.w && cy >= box.y && cy < box.y + box.h
         })
         if (!panes.length) continue
+        // A caller can request its exact widget box instead of the refracting panes' union.
+        // The Glass Lab uses this only for the proposed full-width bar backdrop band.
+        if (exactBounds) {
+            const dx = exactBounds.horizontalOutset
+            out.push({ x: box.x - dx, y: box.y, w: box.w + 2 * dx, h: box.h,
+                falloff: scrim.regionFalloff })
+            continue
+        }
         // How far each refracts is the compositor's rule (refraction_of).
         const margin = Math.max(...panes.map(s => Math.max(glass.refraction, glass.lensing * Math.min(s.w, s.h))))
         const x0 = Math.min(...panes.map(s => s.x)) - margin
