@@ -1157,7 +1157,7 @@ function fillControls() {
                 state.clearDim.falloff, 0, 160, v => { state.clearDim.falloff = v; apply() },
                 { decimals: 0, debounce: 0 }),
         ] : []),
-    ], "Regular no usa scrim en el Lab. Clear coloca una capa bajo el área de las piezas, que se desvanece fuera del panel; el cristal conserva su tinte ligero. 0,35 es la recomendación pública de Apple para contenido brillante, no un valor medido del filtro. Menús y paneles grandes se ajustarán por tamaño o función.")
+    ], "Regular no usa scrim en el Lab. Clear coloca una capa bajo el área de las piezas, con esquinas basadas en la pieza mayor y desvanecimiento exterior; el cristal conserva su tinte ligero. Apple recomienda considerar un 35 % sobre contenido brillante, pero no prescribe la forma de la capa. Menús y paneles grandes se ajustarán por tamaño o función.")
     section("Fondo", [
         DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
         SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,

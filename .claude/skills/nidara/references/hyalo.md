@@ -425,8 +425,10 @@ content) and its design video allows localizing that layer. The Lab now gives Cl
 bright ink and a backdrop-aware underlay for an AREA: CC and NC each share one region around
 their pieces, while isolated pieces get their own. Hyalo's existing scrim measurement chooses
 the least opacity toward the Lab's target, capped by `clearDim.max`; its tint stays fixed at
-0.08. The nested Lab compositor alone sets `HYALO_LAB_CLEAR_AREA_DIM=1` to round shared
-regions into soft capsules; the production compositor's region geometry stays as before.
+0.08. The nested Lab compositor alone sets `HYALO_LAB_CLEAR_AREA_DIM=1` to give shared
+regions the largest pane's corner radius, instead of a capsule around the group;
+the production compositor's region geometry stays as before. Apple's guidance does not
+specify the dimming layer's geometry; this region remains a Nidara experiment.
 The Lab defaults to max 0.35, target 0.183, outer falloff 80 px, all adjustable. Against pure
 white, Wi-Fi/Bluetooth rose only from 1.13:1 to 2.36:1 at that cap; Clear is intended for rich
 media, and the blue selected Brillo tile needs separate contrast treatment. A 35% layer is
