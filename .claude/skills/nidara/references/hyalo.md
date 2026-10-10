@@ -407,6 +407,19 @@ failure to tune, not a Clear or Regular validation. Compare candidate variants o
 that scene and preserve the existing backdrop and controls surfaces; do not create a native
 window for every glass specimen.
 
+The Lab now does that comparison on its EXISTING scene surface (`lab.ts`): a Regular/Clear
+selector, the system appearance toggle, and separate tuning maps for the two candidates in
+presets. Regular starts at the measured 3:3 frost with the factory's adaptive dark tint; Clear
+starts at 2:2, a fixed 0.08 tint/veil and saturation 1. These Clear numbers are trial values,
+not Apple's filter parameters. The Lab writes `scrim = off` unconditionally, removes its scrim
+controls and the old uniform dark-veil hook (`lab[2]`); the production material is unchanged.
+For CC and NC there is a separate fixed/adaptive ink selector: fixed matches the current shell,
+adaptive lets the Lab test readability without changing the shell. Old flat tuning presets load
+into Regular's tuning map. In headless checks on white, Clear with fixed white CC ink measured
+1.13:1 on Wi-Fi/Bluetooth; adaptive dark ink measured 15.13:1. This is a testable design choice,
+not a finished role mapping. The one-surface-per-variant Lab comparison does not solve the
+per-pane protocol requirement for a mixed-role bar in production.
+
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
 Owner's decision, 2026-10-01, Hyalo only (on Hyprland the shell's skin stays dark, 2026-09-30).
