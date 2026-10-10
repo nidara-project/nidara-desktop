@@ -21,7 +21,10 @@ export type FluidCrystalInk = "mode" | "adaptive" | "light" | "dark"
 /** Spatial separation requested by the UI; it is independent of the glass variant. */
 export type FluidCrystalElevation = "none" | "tile" | "panel"
 
-/** A complete, backend-neutral Fluid Crystal recipe. */
+/**
+ * A backend-neutral semantic selection. Backdrop dimming is still an open design decision;
+ * these four axes alone do not guarantee text contrast over arbitrary content.
+ */
 export type FluidCrystalSpec = Readonly<{
     variant: FluidCrystalVariant
     profile: FluidCrystalProfile

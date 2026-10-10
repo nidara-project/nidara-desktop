@@ -364,6 +364,8 @@ one renumbers every request after it, and an older client then speaks a differen
 axes are distinct: `variant` (Regular or Clear), `profile` (a Nidara UI role), `ink` (foreground
 policy), and `elevation` (spatial separation). Light and dark are appearances of both variants,
 not two more variants. A profile must not silently choose a new variant or a measured density.
+Backdrop dimming is still missing from the semantic contract, so the four-axis presets must not
+be treated as complete production recipes.
 
 The private `glass-probe` reference runs `37729946989` and `38056119736` passed their validity
 checks. The latter captured all 27 scenarios on macOS 27.0.1 (26A434): Regular and Clear in both

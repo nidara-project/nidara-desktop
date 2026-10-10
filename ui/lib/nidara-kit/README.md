@@ -125,7 +125,8 @@ mode-based `.primary` label can have poor contrast over an opposing backdrop, es
 Clear (about 1.5:1 with light text over white glass, 2.1:1 with dark text over black glass).
 Neither variant guarantees foreground contrast. Test the ink policy and any needed dimming
 against the actual backdrop in the Glass Lab.
-The presets describe intent only: the active bundle supplies the renderer and its Hyalo/GTK fallback.
+Backdrop dimming is not yet an axis in `FluidCrystalSpec`; the presets are proposals, not
+complete production recipes. The active bundle supplies the renderer and its Hyalo/GTK fallback.
 
 ## Types (TypeScript)
 
