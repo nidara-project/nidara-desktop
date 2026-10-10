@@ -145,10 +145,10 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
         let o = location.to_f64();
         out.push(ScrimPx {
             core: [o.x + x * scale.x, o.y + y * scale.y, w * scale.x, h * scale.y],
-            // The Lab's Clear comparison uses the largest pane's corner radius for a
+            // The Lab's optional area dim uses the largest pane's corner radius for a
             // shared underlay. This avoids forcing its whole region into a capsule.
             // Production region geometry remains unchanged.
-            radius: if std::env::var_os("HYALO_LAB_CLEAR_AREA_DIM").is_some()
+            radius: if std::env::var_os("HYALO_LAB_AREA_DIM").is_some()
                 && unit.key < material::LONE_SCRIM
             {
                 unit.members.iter()

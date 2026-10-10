@@ -65,9 +65,9 @@ ln -s "$repo/hyalo/compositor/src/render/glass_final.glsl" "$sb/shaders/glass_fi
 # and would have started the lock screen INSIDE itself at ten.
 printf '[idle]\nscreen_off = 0\nlock = 0\nsuspend = 0\n' > "$sb/hyalo.toml"
 export HYALO_CONFIG="$sb/hyalo.toml" HYALO_SETTINGS="$sb/hyalo-settings.toml"
-# This nested compositor alone gives Clear's area dim the largest pane's corner radius;
+# This nested compositor alone gives the optional area dim the largest pane's corner radius;
 # production region geometry retains its established behavior.
-export HYALO_LAB_CLEAR_AREA_DIM=1
+export HYALO_LAB_AREA_DIM=1
 if [ -n "$devshader" ]; then export HYALO_SHADER_DIR="$sb/shaders"; else unset HYALO_SHADER_DIR; fi
 lab_env=(
     HOME="$sb/home" XDG_CONFIG_HOME="$sb/home/.config" GSETTINGS_BACKEND=memory NIDARA_GREETER_MIRROR_DIR="$sb/mirror"

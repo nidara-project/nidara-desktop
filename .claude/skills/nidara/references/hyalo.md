@@ -420,24 +420,28 @@ factory's adaptive dark tint; Clear starts with a fixed 0.08 tint/veil and satur
 Clear numbers are trial values, not Apple's filter parameters. The first Clear dim trial
 darkened each pixel INSIDE its glass silhouette: on white it improved contrast but made
 the glass look like a dark piece on a white field. That was the wrong visual relationship.
-Apple's public guidance puts a dark layer BEHIND Clear components (suggesting 35% over bright
-content) and its design video allows localizing that layer. The Lab now gives Clear fixed
-bright ink and a backdrop-aware underlay for an AREA: CC and NC each share one region around
-their pieces, while isolated pieces get their own. Hyalo's existing scrim measurement chooses
-the least opacity toward the Lab's target, capped by `clearDim.max`; its tint stays fixed at
-0.08. The nested Lab compositor alone sets `HYALO_LAB_CLEAR_AREA_DIM=1` to give shared
-regions the largest pane's corner radius, instead of a capsule around the group;
-the production compositor's region geometry stays as before. Apple's guidance does not
-specify the dimming layer's geometry; this region remains a Nidara experiment.
-The Lab defaults to max 0.35, target 0.183, outer falloff 80 px, all adjustable. Against pure
-white, Wi-Fi/Bluetooth rose only from 1.13:1 to 2.36:1 at that cap; Clear is intended for rich
-media, and the blue selected Brillo tile needs separate contrast treatment. A 35% layer is
-guidance, not proof of accessible contrast on arbitrary backgrounds. The old LAB shader hook
-`lab[2]` is retired and never written by the Lab. Clear's glass stays dark in either system
-appearance so its fixed light text is comparable. Clear's area controls persist in the Lab
-preset (`clearDim`); old two-field in-glass dim presets reset to the area defaults, so saved
-strengths are not silently reinterpreted. Regular writes `scrim = off` in the Lab; the
-production material is unchanged. For CC and NC Regular has a separate
+Apple's public guidance asks developers to CONSIDER adding a dark layer BEHIND Clear components
+(35% over bright content); the layer is not an automatic part of `.clear`. Its design video
+allows localizing the layer. In the Lab, both variants now start with `scrim = off`. A separate
+"Capa del fondo" switch enables an experimental area underlay with either variant: CC and NC
+each share one region around their pieces, while isolated pieces get their own. Hyalo's
+existing scrim measurement chooses the least opacity toward the Lab's target, capped by
+`areaDim.max`. Clear itself retains fixed bright ink, a 0.08 tint, and target 1 when the
+optional layer is off. The current Hyalo scrim solver reads the glass target internally;
+the Lab overrides that target only while the separate layer is on. Do not mistake this
+internal coupling for a property of Apple's Clear variant.
+The nested Lab compositor alone sets `HYALO_LAB_AREA_DIM=1` to give shared regions the largest
+pane's corner radius; the production compositor's region geometry stays as before. Apple's
+guidance does not specify the layer's geometry, so this region remains a Nidara experiment.
+The optional layer starts disabled with max 0.35, target 0.183, outer falloff 80 px. In its
+earlier enabled trial against pure white, Wi-Fi/Bluetooth rose only from 1.13:1 to 2.36:1 at
+that cap; the blue selected Brillo tile still needs separate contrast treatment. A 35% layer
+is guidance, not proof of accessible contrast on arbitrary backgrounds. The old LAB shader
+hook `lab[2]` is retired and never written by the Lab. Clear's glass stays dark in either
+system appearance so its fixed light text is comparable. The optional layer persists in
+presets as `areaDim`; legacy `clearDim` area values retain their tuning but load disabled,
+and older two-field in-glass values are discarded. The production material is unchanged.
+For CC and NC Regular has a separate
 fixed/adaptive ink selector: fixed matches the current shell, adaptive tests readability without
 changing the shell. Old flat tuning presets load
 into Regular's tuning map. In headless checks on white, Clear with fixed white CC ink measured

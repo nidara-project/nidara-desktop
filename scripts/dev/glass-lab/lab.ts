@@ -130,9 +130,9 @@ const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
     clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1,
         saturation: 1, blurSize: 3, blurPasses: 3 },
 }
-// Area dim under Clear, starting from Apple's public 35%-over-bright-content guidance. It is
-// a Lab trial: pure white and small low-opacity labels may need a different treatment.
-const CLEAR_DIM_DEFAULT = { max: 0.35, target: 0.183, falloff: 80 }
+// Optional content-layer treatment, separate from either glass recipe. Apple's 35%-over-bright-
+// content guidance is a developer choice, not a built-in property of Clear.
+const AREA_DIM_DEFAULT = { enabled: false, max: 0.35, target: 0.183, falloff: 80 }
 // Which pieces are on the bench. One at a time keeps neighbouring glass out of the reading;
 // «todas» is the overview.
 const SHOWS = ["todas", "barra", "centro de control", "avisos", "botones y menú", "isla y dock", "panel grande",
@@ -154,7 +154,7 @@ interface LabState {
     variant: CrystalVariant        // one recipe at a time on the existing scene surface
     ink: Ink
     panelInk: PanelInk             // test the fixed shell ink against backdrop adaptation
-    clearDim: { max: number, target: number, falloff: number } // area below Clear, not glass tint
+    areaDim: { enabled: boolean, max: number, target: number, falloff: number } // backdrop treatment
     show: Show
     tuning: Record<CrystalVariant, Record<string, number>> // each candidate keeps its own slider values
                                                         // (blurSize/blurPasses are written as `blur`)
@@ -163,7 +163,7 @@ interface LabState {
 }
 const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, driftSpeed: 1,
     promoSize: 72, videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", panelInk: "fijo", show: "todas",
-    tuning: { regular: {}, clear: {} }, clearDim: { ...CLEAR_DIM_DEFAULT },
+    tuning: { regular: {}, clear: {} }, areaDim: { ...AREA_DIM_DEFAULT },
     flags: { ink: true, glass: true, dark: true }, lab: new Array(16).fill(0) })
 let state = factory()
 
@@ -184,13 +184,15 @@ function apply() {
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
     const lines = [`# written by glass-lab; ${state.variant} candidate; ${labAppearanceDark ? "dark" : "light"}`]
-    if (state.variant === "regular") lines.push("scrim = off")
-    else lines.push(`scrimMax = ${state.clearDim.max}`, "scrimSize = 0.5",
-        `scrimFalloff = ${state.clearDim.falloff}`, "scrimEdge = 1", "tintLimit = 0.08")
+    if (!state.areaDim.enabled) lines.push("scrim = off")
+    else lines.push(`scrimMax = ${state.areaDim.max}`, "scrimSize = 0.5",
+        `scrimFalloff = ${state.areaDim.falloff}`, "scrimEdge = 1", "tintLimit = 0.08")
     // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
     // numbers, so a preset and A/B carry them like any other.
     const { blurSize, blurPasses, ...material } = { ...CRYSTAL_CANDIDATES[state.variant], ...state.tuning[state.variant] }
-    if (state.variant === "clear") material.target = state.clearDim.target
+    // Hyalo's current scrim solver reads the glass target. Override only while the optional
+    // backdrop layer is in use; the Clear recipe itself keeps target=1.
+    if (state.areaDim.enabled && state.areaDim.max > 0) material.target = state.areaDim.target
     for (const [k, v] of Object.entries(material)) {
         if (["scrimMax", "scrimSize", "scrimFalloff", "scrimEdge", "tintLimit"].includes(k)) continue
         lines.push(`${k} = ${v}`)
@@ -368,7 +370,7 @@ function controlCenter(): Gtk.Widget {
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
     trackFluidCrystal(panel, "panel")
-    if (state.variant === "clear") trackScrimRegion(panel)
+    if (state.areaDim.enabled) trackScrimRegion(panel)
     // Clear's trial keeps bright content; Regular can compare today's fixed ink and adaptation.
     if (state.variant === "clear" || state.panelInk === "fijo") trackNoInk(panel)
     return panel
@@ -395,7 +397,7 @@ function notifications(): Gtk.Widget {
     column.append(stack)
     column.append(card("Calendario", "Revisión del material, 17:00"))
     trackFluidCrystal(column, "panel")
-    if (state.variant === "clear") trackScrimRegion(column)
+    if (state.areaDim.enabled) trackScrimRegion(column)
     if (state.variant === "clear" || state.panelInk === "fijo") trackNoInk(column)
     return column
 }
@@ -957,11 +959,13 @@ function loadPreset(path: string): boolean {
         const tuning = loaded.tuning?.regular || loaded.tuning?.clear
             ? { regular: loaded.tuning.regular ?? {}, clear: loaded.tuning.clear ?? {} }
             : { regular: loaded.tuning ?? {}, clear: {} }
-        // The earlier Clear trial stored an in-glass dim as {max,target}; do not reinterpret
-        // that saved strength as an area underlay. Area presets also carry a falloff.
-        const clearDim = loaded.clearDim?.falloff !== undefined
-            ? { ...CLEAR_DIM_DEFAULT, ...loaded.clearDim } : { ...CLEAR_DIM_DEFAULT }
-        state = { ...factory(), ...loaded, tuning, flags: { ...factory().flags, ...loaded.flags }, clearDim }
+        // Old two-field clearDim was inside the glass; later three-field clearDim was an
+        // area underlay. Preserve only the latter's tuning, always off until explicitly enabled.
+        const { clearDim: legacyDim, ...saved } = loaded
+        const areaDim = { ...AREA_DIM_DEFAULT,
+            ...(legacyDim?.falloff !== undefined ? legacyDim : {}), ...loaded.areaDim,
+            enabled: loaded.areaDim?.enabled === true }
+        state = { ...factory(), ...saved, tuning, flags: { ...factory().flags, ...loaded.flags }, areaDim }
         return true
     } catch (e) { printerr(`glass-lab: preset ${path}: ${e}`); return false }
 }
@@ -1108,7 +1112,7 @@ function fillControls() {
         // swap the whole state without rebuilding the scene, so after «A/B, pick promo, A/B» the
         // screen showed the disc while the state said «todas» — and the export drew «todas».
         const recipe = (from: LabState) => ({ variant: from.variant, panelInk: from.panelInk, tuning: from.tuning,
-            clearDim: from.clearDim, lab: from.lab,
+            lab: from.lab,
             flags: { ...from.flags, dark: state.flags.dark } })
         if (stash) { state = { ...state, ...recipe(stash) }; stash = null; ab.set_label("A/B: ver punto de partida") }
         else {
@@ -1147,17 +1151,21 @@ function fillControls() {
         DropDownRow("Variante", "Regular y Clear son candidatos para comparar en una sola escena; no son aún recetas del shell",
             state.variant === "regular" ? "Regular" : "Clear", ["Regular", "Clear"],
             v => { state.variant = v === "Clear" ? "clear" : "regular"; apply(); buildScene(); rebuild() }),
-        ...(state.variant === "clear" ? [
-            SliderRow("Oscurecimiento del área", "detrás del conjunto Clear; 0 = apagado",
-                state.clearDim.max, 0, 1, v => { state.clearDim.max = v; apply() }, { decimals: 2, debounce: 0 }),
+    ], "La variante define el cristal y el contenido sobre él. La capa opcional del fondo se controla aparte; Apple no la incorpora automáticamente a Clear. Menús y paneles grandes se ajustarán por tamaño o función.")
+    section("Capa del fondo", [
+        ToggleRow("Oscurecer bajo el cristal", "tratamiento del contenido, independiente de la variante; apagado de inicio",
+            state.areaDim.enabled, v => { state.areaDim.enabled = v; apply(); buildScene(); rebuild() }),
+        ...(state.areaDim.enabled ? [
+            SliderRow("Oscurecimiento máximo", "0,35 es una referencia opcional para fondos brillantes",
+                state.areaDim.max, 0, 1, v => { state.areaDim.max = v; apply() }, { decimals: 2, debounce: 0 }),
             SliderRow("Luminancia objetivo del área", "la capa aumenta si el fondo es demasiado luminoso",
-                state.clearDim.target, 0.05, 1, v => { state.clearDim.target = v; apply() },
+                state.areaDim.target, 0.05, 1, v => { state.areaDim.target = v; apply() },
                 { decimals: 3, debounce: 0 }),
-            SliderRow("Desvanecimiento exterior", "px fuera del área redondeada",
-                state.clearDim.falloff, 0, 160, v => { state.clearDim.falloff = v; apply() },
+            SliderRow("Desvanecimiento exterior", "px fuera del área",
+                state.areaDim.falloff, 0, 160, v => { state.areaDim.falloff = v; apply() },
                 { decimals: 0, debounce: 0 }),
         ] : []),
-    ], "Regular no usa scrim en el Lab. Clear coloca una capa bajo el área de las piezas, con esquinas basadas en la pieza mayor y desvanecimiento exterior; el cristal conserva su tinte ligero. Apple recomienda considerar un 35 % sobre contenido brillante, pero no prescribe la forma de la capa. Menús y paneles grandes se ajustarán por tamaño o función.")
+    ], "Prueba opcional del entorno: usa una zona bajo las piezas y se desvanece fuera de ella. Apple recomienda considerar un 35 % sobre contenido brillante, pero no prescribe la forma ni activa esta capa por elegir Clear.")
     section("Fondo", [
         DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
         SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
@@ -1192,11 +1200,11 @@ function fillControls() {
             tuningSlider("inkDarkAbove", "Umbral a oscuro", "luminancia del punto más oscuro bajo el texto", 0, 1),
             tuningSlider("inkLightBelow", "Umbral de vuelta a blanco", "", 0, 1),
         ] : []),
-    ], state.variant === "clear" ? "Clear usa texto claro fijo; su legibilidad se prueba con el oscurecimiento del área detrás del cristal." : "")
+    ], state.variant === "clear" ? "Clear usa texto claro fijo. Comprueba su legibilidad sobre el fondo elegido y añade una capa del fondo solo cuando haga falta." : "")
     section("Tinte y legibilidad", [
         tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
         tuningSlider("alphaMax", "Tinte máximo", state.variant === "clear"
-            ? "Clear empieza con tinte leve; el área se ajusta en Cristal"
+            ? "Clear empieza con tinte leve; el fondo se ajusta por separado"
             : "Regular puede adaptarlo al fondo", 0, 1),
         ...(state.variant === "regular" ? [
             tuningSlider("target", "Objetivo de luminancia", "0,183 ≈ texto blanco a 4,5:1; 1 = sin oscurecimiento adaptativo", 0.05, 1, 3),
