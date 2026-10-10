@@ -18,6 +18,8 @@
 #             --bin PATH      the Hyalo to draw on (default: the lab build, else the installed one)
 #             --no-dev-shader the shader compiled into Hyalo, no LAB hooks (the parity check: at
 #                             the lab's neutral values both must draw the same pixels)
+#             --batch FILE    with --headless: one capture per line `NAME<TAB>BACKDROP` into
+#                             dirname(OUT)/NAME/window.png, in one session (calibrate.sh uses it)
 #
 # Nothing it does reaches your session: Hyalo runs nested (a window, or inside a headless
 # cage) with HYALO_CONFIG=/dev/null and a settings file of its own, so no binding or setting of
@@ -28,7 +30,7 @@ set -euo pipefail
 here=$(dirname "$(realpath "$0")")
 repo=$(realpath "$here/../../..")
 
-headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size="" scale=""
+headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size="" scale="" batch=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --headless) headless=1; out=$(realpath -m "$2"); shift ;;
@@ -40,6 +42,7 @@ while [ $# -gt 0 ]; do
         --export) export="$2"; shift ;;
         --size) size="$2"; shift ;;
         --scale) scale="$2"; shift ;;
+        --batch) batch=$(realpath "$2"); shift ;;
         *) echo "glass-lab: unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -76,7 +79,7 @@ lab_env=(
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
     GLASS_LAB_PRESETS="${GLASS_LAB_PRESETS:-${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab}"
     GLASS_LAB_WALLPAPERS="$repo/defaults/wallpaper" GLASS_LAB_PRESET="$preset" GLASS_LAB_BG="$bg" GLASS_LAB_SHOW="$show"
-    GLASS_LAB_SHOT="$out" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
+    GLASS_LAB_SHOT="$out" GLASS_LAB_BATCH="$batch" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
 )
 lab="env $(printf '%q ' "${lab_env[@]}") gjs -m $sb/lab.js"
 # The output's scale, set before the lab connects (`msg` answers once it is applied).
@@ -108,9 +111,10 @@ cat > "$inner" <<INNER
 $mode
 "$bin" --winit -c "$lab" >"$sb/hyalo.log" 2>&1 &
 pid=\$!
-for _ in \$(seq 1 $([ -n "$export" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
+for _ in \$(seq 1 $([ -n "$export$batch" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
 kill \$pid
 INNER
 chmod +x "$inner"
 env -u DISPLAY WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 cage -d -- "$inner" 2>&1 | grep -v -E 'EGL|GLES|extensions' || true
+if [ -n "$batch" ] && [ -f "${out%.png}.txt" ]; then tail -n +2 "${out%.png}.txt"; exit 0; fi
 if [ -f "${out%.png}.txt" ]; then tail -n +2 "${out%.png}.txt"; else echo "glass-lab: no capture (Hyalo log: $sb/hyalo.log)" >&2; cat "$sb/hyalo.log" >&2; exit 1; fi

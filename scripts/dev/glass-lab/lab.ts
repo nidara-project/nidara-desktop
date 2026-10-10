@@ -132,7 +132,8 @@ const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
     // On a uniform grey bar, this crossover kept either ink above 4.5:1 at
     // L=.17/.19. It remains a candidate: patterned backgrounds need their own trial.
     regular: { inkDarkAbove: 0.18, inkLightBelow: 0.14, blurSize: 3, blurPasses: 3 },
-    // Dark Clear has no dark tint. Its optional area dim belongs behind the material.
+    // The first, unmeasured candidate: no dark tint. The calibration (2026-10-11) measured one;
+    // the «calibrado —» presets carry it. Its optional area dim belongs behind the material.
     clear: { alphaMin: 0, alphaMax: 0, target: 1, modeLightVeil: 0.05,
         inkDarkAbove: 0.18, inkLightBelow: 0.14,
         saturation: 1, blurSize: 3, blurPasses: 3 },
@@ -143,7 +144,7 @@ const AREA_DIM_DEFAULT = { max: 0.35, target: 0.183, falloff: 80, barFade: 4 }
 // Which pieces are on the bench. One at a time keeps neighbouring glass out of the reading;
 // «todas» is the overview.
 const SHOWS = ["todas", "barra", "centro de control", "avisos", "botones y menú", "isla y dock", "panel grande",
-    "promo: logo"] as const
+    "promo: logo", "calibración", "calibración: sin cristal"] as const
 type Show = typeof SHOWS[number]
 // What every export is cut to, and the size it is written at: drawn natively at that size, never
 // the window's.
@@ -184,7 +185,9 @@ let state = factory()
 // independent experiments. «Todas» is an overview on one material surface, not a shell clone.
 function effectiveInk(): Exclude<InkPolicy, "según rol"> {
     if (state.inkPolicy !== "según rol") return state.inkPolicy
-    if (["barra", "isla y dock", "panel grande"].includes(state.show)) return "sistema"
+    // The calibration square holds no content: «sistema» makes the light appearance the light
+    // veil and the dark one the dark glass, as the reference's appearance does.
+    if (["barra", "isla y dock", "panel grande", "calibración", "calibración: sin cristal"].includes(state.show)) return "sistema"
     if (["centro de control", "avisos"].includes(state.show)) return "blanco"
     return "fondo"
 }
@@ -224,12 +227,11 @@ function apply() {
     // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
     // numbers, so a preset and A/B carry them like any other.
     const { blurSize, blurPasses, ...material } = { ...CRYSTAL_CANDIDATES[state.variant], ...state.tuning[state.variant] }
-    // Even an older preset with a dark Clear tint must not turn that tint back on.
-    if (state.variant === "clear") {
-        material.alphaMin = 0
-        material.alphaMax = 0
-        material.target = 1
-    }
+    // Clear never adapts its tint to the backdrop (target 1). It was also held at NO tint until
+    // 2026-10-11, from the filter's input (face fill alpha 0); the calibration measured its
+    // OUTPUT darkening ≈ 40 % in dark mode (another layer of the filter), so a preset's tint
+    // stands — see «calibrado —» presets and references/hyalo.md → "Calibrated against the reference".
+    if (state.variant === "clear") material.target = 1
     // Hyalo's current scrim solver reads the glass target. Override only while the optional
     // backdrop layer is in use; the Clear recipe itself keeps target=1.
     if (backdrop === "dim experimental" && state.areaDim.max > 0) material.target = state.areaDim.target
@@ -312,6 +314,8 @@ function paintBackdrop(cr: any, w: number, h: number) {
         for (let x = (x0 % 40); x < w; x += 40) { cr.rectangle(x, 0, 2, h) }
         for (let y = (y0 % 40); y < h; y += 40) { cr.rectangle(0, y, w, 2) }
         cr.fill()
+    } else if (b.startsWith("cal ")) {
+        paintCalibration(cr, b.slice(4), w, h)
     } else if (b === "página de texto") {
         fill(0.97, 0.97, 0.96)
         const layout = PangoCairo.create_layout(cr)
@@ -322,6 +326,32 @@ function paintBackdrop(cr: any, w: number, h: number) {
             cr.moveTo(-((x0 + i * 37) % 400), y)
             layout.set_text(line.repeat(4), -1)
             PangoCairo.show_layout(cr, layout)
+        }
+    }
+}
+/** The calibration backdrops (`--bg "cal <kind>"`), point for point the reference probe's
+ *  (glass-probe's `ContentView.swift`): `level:V` a uniform grey of sRGB value V, `rgb:RRGGBB`,
+ *  `edge` black | white through the centre, `edge:LO:HI` two greys, `ramp-x` / `ramp-y` a grey
+ *  linear in sRGB over the 480 px centred on the output, flat outside. Values are encoded sRGB,
+ *  as Cairo draws them. With `--show calibración` and `--size 800x600` a capture of the lab is
+ *  directly comparable to one of the probe (scripts/dev/glass-lab/calibrate.sh). */
+const CAL_RAMP = 480
+function paintCalibration(cr: any, kind: string, w: number, h: number) {
+    const fill = (v: number[], x = 0, y = 0, ww = w, hh = h) => {
+        cr.setSourceRGB(v[0], v[1], v[2]); cr.rectangle(x, y, ww, hh); cr.fill()
+    }
+    if (kind.startsWith("level:")) { const v = Number(kind.slice(6)); fill([v, v, v]) }
+    else if (kind.startsWith("rgb:")) {
+        const n = parseInt(kind.slice(4), 16)
+        fill([(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255])
+    } else if (kind === "edge" || kind.startsWith("edge:")) {
+        const [lo, hi] = kind === "edge" ? [0, 1] : kind.slice(5).split(":").map(Number)
+        fill([lo, lo, lo], 0, 0, w / 2, h); fill([hi, hi, hi], w / 2, 0, w - w / 2, h)
+    } else if (kind === "ramp-x" || kind === "ramp-y") {
+        const horizontal = kind === "ramp-x", length = horizontal ? w : h, start = (length - CAL_RAMP) / 2
+        for (let i = 0; i < length; i++) {
+            const v = Math.min(Math.max((i + 0.5 - start) / CAL_RAMP, 0), 1)
+            if (horizontal) fill([v, v, v], i, 0, 1, h); else fill([v, v, v], 0, i, w, 1)
         }
     }
 }
@@ -671,6 +701,17 @@ function promoPiece(): Gtk.Widget {
     return disc
 }
 
+/** The reference probe's specimen: a 240 px square of glass, corner radius 30, nothing inside, no
+ *  shadow, centred. «sin cristal» keeps the same layout with no glass — the reference capture. */
+const CAL_SIZE = 240, CAL_RADIUS = 30
+function calibrationPiece(glass: boolean): Gtk.Widget {
+    const content = new Gtk.Box({ width_request: CAL_SIZE, height_request: CAL_SIZE })
+    if (!glass) return content
+    const pane = SquircleContainer({ child: content, radius: CAL_RADIUS, inset: 0, useShellOpacity: true, chrome: true })
+    pane.set_size_request(CAL_SIZE, CAL_SIZE)
+    return pane
+}
+
 function standIns(): Gtk.Widget {
     const col = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 40 })
     col.append(islandPiece()); col.append(dockPiece())
@@ -812,7 +853,9 @@ function buildScene() {
     if (show !== "todas") {
         const one = show === "centro de control" ? controlCenter() : show === "avisos" ? notifications()
             : show === "botones y menú" ? controls() : show === "panel grande" ? bigPanel()
-            : show === "promo: logo" ? promoPiece() : standIns()
+            : show === "promo: logo" ? promoPiece()
+            : show === "calibración" ? calibrationPiece(true) : show === "calibración: sin cristal" ? calibrationPiece(false)
+            : standIns()
         one.halign = Gtk.Align.CENTER; one.valign = Gtk.Align.CENTER
         setSceneContent(one)
         frameGuide.queue_draw()
@@ -1470,6 +1513,29 @@ if (SHOT && env("GLASS_LAB_EXPORT")) {
         if (kind === "image") exportImage(report); else exportVideo(report)
         return GLib.SOURCE_REMOVE
     })
+} else if (SHOT && env("GLASS_LAB_BATCH")) {
+    // Headless batch (glass-lab.sh --batch FILE): one capture per line `NAME<TAB>BACKDROP`, into
+    // DIR/NAME/window.png beside SHOT, all in one session — starting Hyalo is most of a capture's
+    // cost, and a calibration set is ~25 backdrops per recipe. OUT.txt when every one is written.
+    const [, bytes] = GLib.file_get_contents(env("GLASS_LAB_BATCH"))
+    const jobs = new TextDecoder().decode(bytes).split("\n").filter(Boolean).map(l => l.split("\t"))
+    const dir = GLib.path_get_dirname(SHOT)
+    const next = (i: number) => {
+        if (i >= jobs.length) { writeFile(SHOT.replace(/\.png$/, ".txt"), `${JSON.stringify(state)}\nbatch ${jobs.length}\n`); loop.quit(); return }
+        const [name, bg] = jobs[i]
+        state.backdrop = bg
+        apply()
+        // A new backdrop is a new capture for Hyalo's blur and its ink: give it a few frames.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
+            GLib.mkdir_with_parents(`${dir}/${name}`, 0o755)
+            screenshot(`${dir}/${name}/window.png`, ok => {
+                if (!ok) printerr(`glass-lab: screenshot failed for ${name}`)
+                next(i + 1)
+            })
+            return GLib.SOURCE_REMOVE
+        })
+    }
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => { next(0); return GLib.SOURCE_REMOVE })
 } else if (SHOT) {
     // Headless: let the glass, the ink and the shadow settle, then one capture and the readings.
     // GLASS_LAB_SHOT_DELAY (ms): wait longer, e.g. to measure the lab's own cost while it drifts.

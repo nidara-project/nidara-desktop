@@ -470,7 +470,8 @@ the product's compositor-glass shadows remain off. The split backdrop's two-colo
 separate trial without a whole-logo ink event, so it must not be read as evidence of a synced
 Regular transition. These values await the owner's visual calibration, not a shell promotion.
 The `gris variable` backdrop maps its slider to linear WCAG luminance to expose the threshold.
-The Clear candidate forces zero dark tint (also from older presets); its light-mode white veil
+The Clear candidate starts with no dark tint, but since the calibration (below) a preset's tint
+is no longer forced to zero — only its target is (Clear never adapts); its light-mode white veil
 and optional backdrop area dim stay separate. `areaDim` persists its knobs
 in presets; legacy `clearDim` area values retain their tuning, while older two-field in-glass
 values are discarded. Old `areaDim.enabled` becomes an explicit "dim experimental" choice.
@@ -506,6 +507,52 @@ recolouring both copies. This uses the synthetic split's known geometry and rema
 comparison; arbitrary photographs require a compositor-side luminance map or a different
 content treatment. The ordinary `Medir` path assumes a single ink and is disabled for this
 two-colour trial. The shell's ink protocol and product behaviour are unchanged.
+
+### Calibrated against the reference (2026-10-11)
+
+The filter's numbers that the private `glass-probe` dumps are INPUTS to the reference's own
+pipeline (sampling at ¼ or ½, curves of its own) and do not transfer. Its calibration set measures
+the OUTPUT instead: known backdrops under a 240 pt square — nine greys, six colours, a black|white
+and a 0.4|0.6 edge, linear ramps in x and y — each also captured with no glass, from which the
+input is read. Its `tools/calibrate.py` turns a run into a tone curve, a 3×4 colour map, the blur's
+σ and the refraction's displacement by depth; `tools/compare.py` sets two runs side by side.
+
+The lab draws the SAME set, so a lab run and a reference run compare capture by capture:
+`--show calibración` (the same square, radius 30, empty, no shadow; `calibración: sin cristal`
+for the reference capture), `--bg "cal <kind>"` (`level:V`, `rgb:RRGGBB`, `edge`, `edge:LO:HI`,
+`ramp-x`, `ramp-y`), and `scripts/dev/glass-lab/calibrate.sh OUTDIR [--preset F] [--combos …]`,
+which writes the reference's directory names. `glass-lab.sh --batch FILE` takes every capture of
+one recipe in ONE session (95 captures in ≈ 90 s; starting Hyalo was most of a capture's cost).
+
+What the fit found (reference CI 38089871930; error = RMS of output luminance over the greys,
+|Δσ| on the 0.4|0.6 edge, RMS displacement over depths 4…30 after removing the method's constant
+offset):
+
+| recipe | #780 lab candidates | fitted | error before → after (tone · σ · refraction) |
+|---|---|---|---|
+| Regular dark | target 0.183 hard clamp, `3:3` | `2.9:3`, tone knee 0.06 → ceiling 0.22 (lab[0..1]) | 0.015→0.014 · 5.5→1.0 |
+| Regular light | light veil 0.2 | veil 0.5 + knee 0.4 → ceiling 0.75 | 0.169→0.023 · 1.0→1.0 |
+| Clear dark | no tint, `3:3` | tint 0.2 (black), saturation 1.3, `5:3` | 0.176→0.018 · 6.6→0 · 27.5→3.3 |
+| Clear light | veil 0.05 | veil 0.25, knee 0.5 → 0.9, saturation 1.3, `5:3` | 0.081→0.022 · 6.6→0 · 35.1→4.7 |
+| refraction (all) | bevel up to 80 px, exponent 5 | bevel 30 px (lab[12] −50), exponent 4 (lab[4] −1), strength ×3 | |
+
+Three corrections to what the filter's inputs suggested: Clear dark DOES darken (≈ 40 % on its
+output, from another layer than the face fill, which is 0); the reference's light Regular is far
+milkier than its fill's 0.2 (black → L 0.235, white → 0.871); and its bevel is a third as wide
+and less deep than ours. Its Regular dark is adaptive with a ceiling ≈ our target (white text
+4.8:1 over pure white), reached by a SOFT knee: our hard clamp at `target` leaves a dark valley
+and a bright band at a backdrop's edge, and is what made its σ read 5 instead of 12. The blur
+agrees with an independent measure (`blur_sigma.py` on a checkerboard, ≤ 13–14 px for Regular).
+The fitted recipes are the owner's presets «calibrado — Regular oscuro / claro, Clear oscuro /
+claro» (not in the repo); nothing of it is in the shipped material yet.
+
+Not modelled, or still open: tone hooks per APPEARANCE (lab[0..1] are LAB-only and one pair per
+preset, while the two appearances need different ones — shipping it is a shader change); the
+reference lifts black a little in Regular dark and darkens again over pure white; its corner is
+rounder at the same nominal radius; its 1 px dark contour (lab[15] exists, uncalibrated); how
+refraction scales with size (the ramp cannot be read through Regular's per-pixel adaptive tone,
+so the next reference run needs Clear at several sizes); and a virtual machine's 8-bit captures.
+Which of this ships is the owner's call in the lab, as every change of look is.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
