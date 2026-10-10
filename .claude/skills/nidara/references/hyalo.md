@@ -485,6 +485,20 @@ At the present protocol's boolean ink event, Gtk text and Cairo icons still swit
 continuous text color would cross through low-contrast middle greys without an additional
 legibility treatment. The optical trial should not be mistaken for that completed ink behavior.
 
+The Lab's **promo circle over `mitad blanco/negro`** has a separate ink experiment (2026-10-10).
+The existing `punto más oscuro` choice asks Hyalo to sample the icon's ink box; one black
+sample changes the WHOLE symbolic mark to white, even while its strokes still lie on white.
+At the split centred in a 320 px promo capture, that left a sampled logo pixel white on white
+(1:1). `tinta por zona` is now the Lab default for this backdrop: two copies of the same
+symbolic mark inherit the light and dark token skins and a custom Gtk widget clips them at
+the exact vertical backdrop boundary. As the boundary crosses the circle, black strokes stay
+on its white side and white strokes on its black side; the mark changes spatially, without
+a whole-glyph threshold or a middle-grey blend. `trackNoInk` keeps Hyalo's binary event from
+recolouring both copies. This uses the synthetic split's known geometry and remains a Lab
+comparison; arbitrary photographs require a compositor-side luminance map or a different
+content treatment. The ordinary `Medir` path assumes a single ink and is disabled for this
+two-colour trial. The shell's ink protocol and product behaviour are unchanged.
+
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
 Owner's decision, 2026-10-01, Hyalo only (on Hyprland the shell's skin stays dark, 2026-09-30).

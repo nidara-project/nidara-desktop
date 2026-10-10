@@ -121,6 +121,7 @@ type Ink = "pieza" | "grupo" | "panel"
 type InkPolicy = "según rol" | "sistema" | "blanco" | "fondo"
 type BackdropPolicy = "según rol" | "ninguna" | "sombra shell" | "dim experimental"
 type CrystalVariant = "regular" | "clear"
+type PromoInk = "punto más oscuro" | "tinta por zona"
 // Lab candidates, not Apple filter values or production presets. Keep the frost at the same
 // 3:3 starting point so the first A/B isolates treatment and legibility. Apple's filter uses
 // different blur inputs and sampling scales for the two variants; no 1:1 Hyalo blur follows.
@@ -153,6 +154,7 @@ interface LabState {
     drift: boolean                 // the backdrop moves on its own, under the glass
     driftSpeed: number             // × the drift's pace
     promoSize: number              // the promotional disc's diameter, px
+    promoInk: PromoInk             // split-backdrop study, independent of the material recipe
     videoSeconds: number           // how long an exported video runs
     promoFormat: PromoFormat       // the frame every export is cut to (the name predates the scene's)
     variant: CrystalVariant        // one recipe at a time on the existing scene surface
@@ -168,7 +170,7 @@ interface LabState {
     lab: number[]                  // lab_params.conf, 16 values: the shader's LAB hooks, 0 = factory
 }
 const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, driftSpeed: 1,
-    promoSize: 72, videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", inkPolicy: "según rol",
+    promoSize: 72, promoInk: "tinta por zona", videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", inkPolicy: "según rol",
     backdropPolicy: "ninguna", show: "barra",
     tuning: { regular: {}, clear: {} }, areaDim: { ...AREA_DIM_DEFAULT },
     regularFade: { enabled: true, start: 0.14 },
@@ -547,10 +549,57 @@ function bigPanel(): Gtk.Widget {
 }
 
 /** For promotional images and videos: one round pane of glass with the Nidara mark, alone and
- *  centred — the material and nothing else. The mark is the bar's (symbolic, so it takes the
- *  pane's ink: white, dark where the backdrop under it turns bright). Default: the app grid's
- *  icon size. */
-let promoDisc: { disc: Gtk.Widget, mark: Gtk.Image } | null = null
+ *  centred. On the split backdrop, the Lab can compare the current whole-glyph ink event with
+ *  a zone-aligned two-colour rendering. Default: the app grid's icon size. */
+const promoGicon = () => Gio.FileIcon.new(Gio.File.new_for_path(`${REPO}/ui/shell/assets/nidara/assets/nidara-symbolic.svg`))
+const promoMark = () => new Gtk.Image({ css_classes: ["glass-lab-mark"], gicon: promoGicon(),
+    halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER })
+/** A split background asks for two contrasting inks at once. The split crosses the
+ *  same logo continuously, rather than recolouring its entire glyph at one sample. */
+class PromoSplitInk extends Gtk.Widget {
+    readonly darkMark = promoMark()
+    readonly lightMark = promoMark()
+    private readonly darkSkin = new Gtk.Box({ css_classes: ["nidara-skin-light"] })
+    private readonly lightSkin = new Gtk.Box({ css_classes: ["nidara-skin-dark"] })
+    private cut = 0.5
+    constructor() {
+        super()
+        this.darkSkin.append(this.darkMark); this.lightSkin.append(this.lightMark)
+        this.darkSkin.set_parent(this); this.lightSkin.set_parent(this)
+    }
+    setCut(v: number) { this.cut = Math.max(0, Math.min(1, v)); this.queue_draw() }
+    vfunc_get_request_mode(): Gtk.SizeRequestMode { return Gtk.SizeRequestMode.CONSTANT_SIZE }
+    vfunc_measure(o: Gtk.Orientation, forSize: number): [number, number, number, number] {
+        const a = this.darkSkin.measure(o, forSize), b = this.lightSkin.measure(o, forSize)
+        return [Math.max(a[0], b[0]), Math.max(a[1], b[1]), -1, -1]
+    }
+    vfunc_size_allocate(w: number, h: number, baseline: number) {
+        this.darkSkin.allocate(w, h, baseline, null)
+        this.lightSkin.allocate(w, h, baseline, null)
+    }
+    vfunc_snapshot(snapshot: Gtk.Snapshot) {
+        const w = this.get_width(), h = this.get_height(), x = w * this.cut
+        if (w <= 0 || h <= 0) return
+        if (x > 0) {
+            snapshot.push_clip(rect(0, 0, x, h))
+            this.snapshot_child(this.darkSkin, snapshot)
+            snapshot.pop()
+        }
+        if (x < w) {
+            snapshot.push_clip(rect(x, 0, w - x, h))
+            this.snapshot_child(this.lightSkin, snapshot)
+            snapshot.pop()
+        }
+    }
+    // This transient Lab widget is rebuilt by the selectors; GTK/GJS custom
+    // children need explicit unparenting before the old scene is discarded.
+    dismantle() {
+        if (this.darkSkin.get_parent() === this) this.darkSkin.unparent()
+        if (this.lightSkin.get_parent() === this) this.lightSkin.unparent()
+    }
+}
+const RegisteredPromoSplitInk = GObject.registerClass(PromoSplitInk)
+let promoDisc: { disc: Gtk.Widget, marks: Gtk.Image[], split?: PromoSplitInk } | null = null
 /** The disc's size on screen: `promoSize` is px of the EXPORTED file, and the frame on screen is
  *  that file at a scale (the format's height over the frame's). */
 function promoScreenSize(): number {
@@ -562,17 +611,37 @@ function sizePromo() {
     if (!promoDisc) return
     const size = promoScreenSize()
     promoDisc.disc.set_size_request(size, size)
-    promoDisc.mark.pixel_size = Math.round(size * 0.5)
+    for (const mark of promoDisc.marks) mark.pixel_size = Math.round(size * 0.5)
+    syncPromoInk()
+}
+function syncPromoInk() {
+    if (!promoDisc?.split) return
+    // The disc is centred in the export frame. Its split moves with the actual
+    // backdrop edge; the left of the glyph stays dark on white, the right white
+    // on black. The displayed colour changes by a moving boundary, not a switch.
+    const frame = stageRect(), size = promoScreenSize()
+    if (frame.w > 0 && size > 0) promoDisc.split.setCut(0.5 + (state.offset - 0.5) * frame.w / size)
 }
 function promoPiece(): Gtk.Widget {
-    const mark = new Gtk.Image({ css_classes: ["glass-lab-mark"],
-        gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${REPO}/ui/shell/assets/nidara/assets/nidara-symbolic.svg`)) })
-    const disc = SquircleContainer({ child: mark, shape: Shape.CIRCLE, useShellOpacity: true, gloss: true,
+    const byArea = state.backdrop === "mitad blanco/negro" && effectiveInk() === "fondo"
+        && state.promoInk === "tinta por zona"
+    let content: Gtk.Widget, marks: Gtk.Image[], split: PromoSplitInk | undefined
+    if (byArea) {
+        split = new RegisteredPromoSplitInk()
+        content = split; marks = [split.darkMark, split.lightMark]
+    } else {
+        const single = promoMark()
+        content = single; marks = [single]
+    }
+    const disc = SquircleContainer({ child: content, shape: Shape.CIRCLE, useShellOpacity: true, gloss: true,
         chrome: true, shadow: GLASS_SHADOW })
     trackFluidCrystal(disc, "media")
-    promoDisc = { disc, mark }
+    // The split logo owns its ink in this synthetic experiment. The material's
+    // darkest-point event must not recolour both glyphs at once.
+    if (byArea) trackNoInk(disc)
+    promoDisc = { disc, marks, split }
     sizePromo()
-    specimens.push({ name: "logo", contents: [mark] })
+    if (!byArea) specimens.push({ name: "logo", contents: marks })
     return disc
 }
 
@@ -612,6 +681,7 @@ function panBy(dx: number, dy: number, from: { x: number, y: number }) {
         state.offsetY = clamp01(from.y + dy / h)
     }
     backdropArea!.queue_draw()
+    syncPromoInk()
 }
 /** Where the drift has the backdrop `k` seconds in: a slow loop (≈ 24 s across, 17 s down at
  *  ×1) — content passing under the glass, not a shake. A function of time alone, so an exported
@@ -621,6 +691,7 @@ function driftTo(k: number) {
     state.offset = 0.5 - 0.5 * Math.cos(t * 2 * Math.PI / 24)
     state.offsetY = 0.5 - 0.5 * Math.cos(t * 2 * Math.PI / 17)
     backdropArea!.queue_draw()
+    syncPromoInk()
 }
 let driftStart = 0
 let recording = false
@@ -703,6 +774,7 @@ stageHolder.add_overlay(frameGuide)
 }
 function buildScene() {
     specimens.length = 0
+    promoDisc?.split?.dismantle()
     promoDisc = null
     const show = state.show
     if (show === "barra") {
@@ -1202,6 +1274,11 @@ function fillControls() {
     const measureBtn = NidaraButton({ label: "Medir" }), exportBtn = NidaraButton({ label: "Exportar imagen" })
     const videoBtn = NidaraButton({ label: "Exportar vídeo" })
     measureBtn.connect("clicked", () => {
+        if (state.show === "promo: logo" && state.backdrop === "mitad blanco/negro" && effectiveInk() === "fondo"
+            && state.promoInk === "tinta por zona") {
+            readout.set_label("La medición actual supone una tinta única. Esta prueba necesita contraste separado en cada mitad; usa la captura para juzgarla.")
+            return
+        }
         readout.set_label("midiendo…")
         measure(`${GLib.get_tmp_dir()}/glass-lab-${GLib.get_monotonic_time()}`, r =>
             readout.set_label(r.length ? r.map(fmt).join("\n") : "no se pudo capturar (¿Hyalo sin `msg`?)"))
@@ -1241,24 +1318,30 @@ function fillControls() {
         ] : []),
     ], "«Sombra shell» reproduce el tratamiento actual de CC/NC como punto de partida; no es un parámetro medido de Apple. «Dim experimental» es una capa contextual separada: en la barra cubre sus 40 px reservados y se desvanece en el gap siguiente. Sobre blanco, la franja gris es esperada; con tinta blanca y dim 0,35 midió 2,32:1, así que hay que ajustar su legibilidad antes de adoptarla.")
     section("Fondo", [
-        DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply(); rebuild() }),
+        DropDownRow("Fondo", "", state.backdrop, BACKDROPS,
+            v => { state.backdrop = v; apply(); if (state.show === "promo: logo") buildScene(); rebuild() }),
         SliderRow(state.backdrop === "gris variable" ? "Luminancia del gris" : "Desplazar",
             state.backdrop === "gris variable" ? "0 = negro, 100 = blanco; luminancia lineal WCAG"
                 : "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
-            v => { state.offset = v / 100; apply() }, { debounce: 0 }),
+            v => { state.offset = v / 100; apply(); syncPromoInk() }, { debounce: 0 }),
         ToggleRow("Movimiento automático", "el fondo pasa despacio por debajo del cristal", state.drift,
             v => { state.drift = v }),
         SliderRow("Velocidad", "× del movimiento; también la del vídeo", state.driftSpeed, 0.25, 4,
             v => { state.driftSpeed = v }, { decimals: 2, debounce: 0 }),
     ])
     section("Exportar", [
+        ...(state.show === "promo: logo" ? [
+            DropDownRow("Tinta del logo en blanco/negro", "«tinta por zona» requiere el fondo dividido y política «fondo»",
+                state.promoInk, ["tinta por zona", "punto más oscuro"],
+                v => { state.promoInk = v as PromoInk; apply(); buildScene(); rebuild() }),
+        ] : []),
         DropDownRow("Formato", "16:9 1920×1080 · 1:1 1080×1080 · 4:5 1080×1350 · 9:16 1080×1920",
             state.promoFormat, Object.keys(FORMATS), v => { state.promoFormat = v as PromoFormat; frameGuide.queue_draw(); backdropArea?.queue_draw() }),
         SliderRow("Tamaño del círculo", "px del archivo exportado; 72 = un icono de la cuadrícula de apps",
             state.promoSize, 32, 1024, v => { state.promoSize = v; sizePromo() }, { decimals: 0, debounce: 0 }),
         SliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
-    ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El archivo es la misma escena que el marco, dibujada a más resolución: lo que ves es lo que sale. «promo: logo» deja solo el círculo; su tamaño, en px del archivo.")
+    ], "El marco del formato elegido es lo que sale en el archivo. «promo: logo» deja solo el círculo. Con el fondo mitad blanco/negro, «tinta por zona» mueve el límite negro/blanco por el logo sin cambiarlo entero; es una prueba específica de este fondo, no una regla medida de Apple ni la solución para fotografías.")
     section("Piezas", [DropDownRow("En el banco", "aísla una función para probar su política; «todas» solo compara formas",
         state.show, [...SHOWS], v => { state.show = v as Show; apply(); buildScene(); rebuild() })],
         "El Lab envía una receta de cristal por superficie. «Todas» no reproduce las variantes y políticas mezcladas del shell.")
