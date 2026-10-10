@@ -126,8 +126,12 @@ type CrystalVariant = "regular" | "clear"
 // different blur inputs and sampling scales for the two variants; no 1:1 Hyalo blur follows.
 // Size/role-dependent scattering is a separate experiment, not a third variant.
 const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
-    regular: { blurSize: 3, blurPasses: 3 },
-    clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1, modeLightVeil: 0.05,
+    // On a uniform grey bar, this crossover kept either ink above 4.5:1 at
+    // L=.17/.19. It remains a candidate: patterned backgrounds need their own trial.
+    regular: { inkDarkAbove: 0.18, inkLightBelow: 0.14, blurSize: 3, blurPasses: 3 },
+    // Dark Clear has no dark tint. Its optional area dim belongs behind the material.
+    clear: { alphaMin: 0, alphaMax: 0, target: 1, modeLightVeil: 0.05,
+        inkDarkAbove: 0.18, inkLightBelow: 0.14,
         saturation: 1, blurSize: 3, blurPasses: 3 },
 }
 // Optional content-layer treatment, separate from either glass recipe. Apple's 35%-over-bright-
@@ -156,6 +160,7 @@ interface LabState {
     inkPolicy: InkPolicy           // role, system mode, fixed white, or backdrop measurement
     backdropPolicy: BackdropPolicy // independent of the material variant
     areaDim: { max: number, target: number, falloff: number, barFade: number } // optional area treatment
+    regularFade: { enabled: boolean, start: number } // Lab-only fade before backdrop ink flips
     show: Show
     tuning: Record<CrystalVariant, Record<string, number>> // each candidate keeps its own slider values
                                                         // (blurSize/blurPasses are written as `blur`)
@@ -166,6 +171,7 @@ const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5
     promoSize: 72, videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", inkPolicy: "según rol",
     backdropPolicy: "ninguna", show: "barra",
     tuning: { regular: {}, clear: {} }, areaDim: { ...AREA_DIM_DEFAULT },
+    regularFade: { enabled: true, start: 0.14 },
     flags: { glass: true, dark: true }, lab: new Array(16).fill(0) })
 let state = factory()
 
@@ -192,8 +198,6 @@ const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 let controlsWinRef: Gtk.Window | null = null
 function apply() {
     labAppearanceDark = state.flags.dark !== false
-    state.lab[2] = 0 // legacy presets' broad veil must never return
-    state.lab[3] = 0
     const scheme = state.flags.dark === false ? "default" : "prefer-dark"
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
@@ -208,6 +212,12 @@ function apply() {
     // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
     // numbers, so a preset and A/B carry them like any other.
     const { blurSize, blurPasses, ...material } = { ...CRYSTAL_CANDIDATES[state.variant], ...state.tuning[state.variant] }
+    // Even an older preset with a dark Clear tint must not turn that tint back on.
+    if (state.variant === "clear") {
+        material.alphaMin = 0
+        material.alphaMax = 0
+        material.target = 1
+    }
     // Hyalo's current scrim solver reads the glass target. Override only while the optional
     // backdrop layer is in use; the Clear recipe itself keeps target=1.
     if (backdrop === "dim experimental" && state.areaDim.max > 0) material.target = state.areaDim.target
@@ -224,8 +234,16 @@ function apply() {
         : "inkDarkAbove = 2\ninkLightBelow = 1.5")
     if (!state.flags.glass) lines.push("glass = off")
     writeFile(TUNING, lines.join("\n") + "\n")
+    // The shader trial is only meaningful with adaptive ink: its fade reaches zero at
+    // the same backdrop luminance at which this group's content turns dark.
+    const fadeEnd = state.tuning.regular.inkDarkAbove ?? CRYSTAL_CANDIDATES.regular.inkDarkAbove
+    const fade = state.variant === "regular" && ink === "fondo" && state.regularFade.enabled
+        && fadeEnd > state.regularFade.start ? [state.regularFade.start, fadeEnd] : [0, 0]
+    const labValues = [...state.lab]
+    labValues[2] = fade[0]
+    labValues[3] = fade[1]
     writeFile(`${SHADERS}/lab_params.conf`,
-        state.lab.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
+        labValues.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
     backdropArea?.queue_draw()
 }
 
@@ -241,7 +259,7 @@ if (WALLPAPERS) {
         }
     } catch { /* no wallpapers: the synthetic backdrops still work */ }
 }
-const BACKDROPS = ["blanco", "negro", "gris", "mitad blanco/negro", "degradado", "rejilla", "página de texto",
+const BACKDROPS = ["blanco", "negro", "gris", "gris variable", "mitad blanco/negro", "degradado", "rejilla", "página de texto",
     ...Object.keys(wallpapers).sort()]
 // A photo is a texture, uploaded once and only moved (scaled on the GPU): drawn through Cairo it
 // was converted and rescaled on the CPU every frame — two cores and 6 GB within minutes of
@@ -262,6 +280,13 @@ function paintBackdrop(cr: any, w: number, h: number) {
     if (b === "blanco") fill(1, 1, 1)
     else if (b === "negro") fill(0, 0, 0)
     else if (b === "gris") fill(0.5, 0.5, 0.5)
+    else if (b === "gris variable") {
+        // The slider is WCAG linear luminance, not encoded sRGB grey. This gives the ink
+        // thresholds and the measured glass response a common, inspectable x axis.
+        const l = Math.max(0, Math.min(1, state.offset))
+        const v = l <= 0.0031308 ? 12.92 * l : 1.055 * Math.pow(l, 1 / 2.4) - 0.055
+        fill(v, v, v)
+    }
     else if (b === "mitad blanco/negro") { fill(1, 1, 1); fill(0, 0, 0, x0, 0, w - x0, h) }
     else if (b === "degradado") {
         for (let x = 0; x < w; x += 2) { const v = ((x - x0) / w + 1) % 1; fill(v, v, v, x, 0, 2, h) }
@@ -984,6 +1009,11 @@ function loadPreset(path: string): boolean {
         const tuning = loaded.tuning?.regular || loaded.tuning?.clear
             ? { regular: loaded.tuning.regular ?? {}, clear: loaded.tuning.clear ?? {} }
             : { regular: loaded.tuning ?? {}, clear: {} }
+        if (!loaded.regularFade) {
+            // A saved recipe used the old factory thresholds unless it wrote overrides.
+            tuning.regular.inkDarkAbove ??= GLASS_MATERIAL_DEFAULTS.inkDarkAbove
+            tuning.regular.inkLightBelow ??= GLASS_MATERIAL_DEFAULTS.inkLightBelow
+        }
         // Old two-field clearDim was inside the glass; later three-field clearDim was an
         // area underlay. Preserve only the latter's tuning, always off until explicitly enabled.
         const { clearDim: legacyDim, panelInk: legacyPanelInk, ...saved } = loaded
@@ -996,7 +1026,12 @@ function loadPreset(path: string): boolean {
             : legacyPanelInk === "adaptativo" ? "fondo" : "según rol")
         state = { ...factory(), ...saved, tuning,
             flags: { glass: loaded.flags?.glass !== false, dark: loaded.flags?.dark !== false },
-            areaDim, backdropPolicy, inkPolicy }
+            areaDim, backdropPolicy, inkPolicy,
+            // Existing presets predate this shader trial; preserve their previous optics.
+            regularFade: { ...factory().regularFade, enabled: false, ...loaded.regularFade },
+            // lab[2] once meant an in-glass veil. Only the new regularFade fields can
+            // enable the optical trial, so legacy values cannot revive that veil.
+            lab: (loaded.lab ?? factory().lab).map((v: number, i: number) => i === 2 || i === 3 ? 0 : v) }
         return true
     } catch (e) { printerr(`glass-lab: preset ${path}: ${e}`); return false }
 }
@@ -1143,6 +1178,7 @@ function fillControls() {
         // swap the whole state without rebuilding the scene, so after «A/B, pick promo, A/B» the
         // screen showed the disc while the state said «todas» — and the export drew «todas».
         const recipe = (from: LabState) => ({ variant: from.variant, inkPolicy: from.inkPolicy, tuning: from.tuning,
+            regularFade: from.regularFade,
             lab: from.lab,
             flags: { ...from.flags, dark: state.flags.dark } })
         if (stash) { state = { ...state, ...recipe(stash) }; stash = null; ab.set_label("A/B: ver punto de partida") }
@@ -1182,7 +1218,7 @@ function fillControls() {
         DropDownRow("Variante", "Regular y Clear son candidatos para comparar en una sola escena; no son aún recetas del shell",
             state.variant === "regular" ? "Regular" : "Clear", ["Regular", "Clear"],
             v => { state.variant = v === "Clear" ? "clear" : "regular"; apply(); buildScene(); rebuild() }),
-    ], "La variante solo define el cristal. El aspecto, el texto y las capas del fondo se eligen por separado; Clear no enciende dim automáticamente.")
+    ], "Regular puede oscurecer el fondo de forma adaptativa. Clear no le añade tinte oscuro: su dim, si se usa, es una capa detrás de la pieza. El aspecto y el texto se eligen por separado.")
     section("Fondo y sombra", [
         DropDownRow("Tratamiento detrás", "independiente de Regular/Clear; según rol muestra el shell actual",
             state.backdropPolicy, ["ninguna", "según rol", "sombra shell", "dim experimental"],
@@ -1203,10 +1239,12 @@ function fillControls() {
                     { decimals: 0, debounce: 0 }),
             ]),
         ] : []),
-    ], "«Sombra shell» reproduce el tratamiento actual de CC/NC como punto de partida; no es un parámetro medido de Apple. «Dim experimental» es otra capa contextual, apagada salvo elección explícita. En la barra cubre sus 40 px reservados y se desvanece en el gap siguiente. Con fondo blanco y modo oscuro, el candidato de banda 0,35 quedó gris y dio 2,32:1: aún no sirve como receta.")
+    ], "«Sombra shell» reproduce el tratamiento actual de CC/NC como punto de partida; no es un parámetro medido de Apple. «Dim experimental» es una capa contextual separada: en la barra cubre sus 40 px reservados y se desvanece en el gap siguiente. Sobre blanco, la franja gris es esperada; con tinta blanca y dim 0,35 midió 2,32:1, así que hay que ajustar su legibilidad antes de adoptarla.")
     section("Fondo", [
-        DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
-        SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
+        DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply(); rebuild() }),
+        SliderRow(state.backdrop === "gris variable" ? "Luminancia del gris" : "Desplazar",
+            state.backdrop === "gris variable" ? "0 = negro, 100 = blanco; luminancia lineal WCAG"
+                : "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
             v => { state.offset = v / 100; apply() }, { debounce: 0 }),
         ToggleRow("Movimiento automático", "el fondo pasa despacio por debajo del cristal", state.drift,
             v => { state.drift = v }),
@@ -1239,15 +1277,24 @@ function fillControls() {
         ] : []),
     ], "El texto se decide aparte del cristal. «Según rol» imita el criterio actual del shell cuando se aísla una pieza; «todas» es solo una vista comparativa.")
     section("Tinte y legibilidad", [
-        tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
-        tuningSlider("alphaMax", "Tinte máximo", state.variant === "clear"
-            ? "Clear empieza con tinte leve; el fondo se ajusta por separado"
-            : "Regular puede adaptarlo al fondo", 0, 1),
+        ...(state.variant === "regular" ? [
+            tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
+            tuningSlider("alphaMax", "Tinte máximo", "techo del oscurecimiento dentro del cristal", 0, 1),
+        ] : []),
         ...(state.variant === "regular" ? [
             tuningSlider("target", "Objetivo de luminancia", "0,183 ≈ texto blanco a 4,5:1; 1 = sin oscurecimiento adaptativo", 0.05, 1, 3),
         ] : []),
-        tuningSlider("modeLightVeil", "Velo en modo claro", "Regular inicia en 0,20; Clear en 0,05 (prueba)", 0, 0.5),
+        tuningSlider("modeLightVeil", "Velo blanco en modo claro", "Regular inicia en 0,20; Clear en 0,05 (prueba)", 0, 0.5),
     ])
+    if (state.variant === "regular") section("Transición de Regular (ensayo)", [
+        ToggleRow("Retirar tinte antes del cambio de texto", "solo con política de tinta «fondo»",
+            state.regularFade.enabled, v => { state.regularFade.enabled = v; apply(); rebuild() }),
+        ...(state.regularFade.enabled ? [
+            SliderRow("Inicio de la retirada", "luminancia lineal; termina al umbral «a oscuro»",
+                state.regularFade.start, 0.05, 0.34, v => { state.regularFade.start = v; apply() },
+                { decimals: 3, debounce: 0 }),
+        ] : []),
+    ], "Esta curva suaviza solo el cristal. El evento actual de tinta sigue siendo binario; para una transición gradual del texto y de los iconos hace falta medir y transmitir un valor continuo. Usa «gris variable», tinta «fondo» y sin capa de fondo para aislarla.")
     section("Fondo bajo el cristal (capas nuevas)", [
         labSlider(0, "Comprimir blancos: techo", "0 = apagado; luminancia a la que llega el blanco", 0, 1, 0),
         labSlider(1, "Comprimir blancos: rodilla", "por debajo no cambia nada (0 = 0,15)", 0, 0.6, 0),

@@ -8,7 +8,8 @@
 // and becomes the factory's by changing the number the hook wraps (and the lab's neutral).
 //   lab[0]  tone: ceiling, the WCAG luminance white is compressed to (0 = off)        block
 //   lab[1]  tone: knee, the luminance below which nothing changes (0 = 0.15)          block
-//   lab[2]  retired: the old veil darkened the glass, not the area behind it
+//   lab[2]  Regular trial: begin removing adaptive dark tint at this backdrop luminance
+//   lab[3]  Regular trial: finish removing it at the ink's dark threshold (0 = off)
 //   lab[4]  bevel profile: + to its exponent (5)                                      ADD
 //   lab[5]  refraction: × (1 + it) on its strength (3 × Snell's)                      MUL
 //   lab[6]  dispersion: its spread, 1 = the fringe there was until 2026-10-05          block
@@ -397,6 +398,14 @@ void main() {
         }
         // The tint thickens as the glass forms.
         a = clamp(a, alpha_min, alpha_max) * formed;
+#ifdef GLASS_LAB
+        // Trial only: on a uniformly brightening backdrop, the old ink event took
+        // the whole shape from darkened glass to a light veil in one frame. Let the
+        // dark tint vanish continuously before that event. The ink itself remains
+        // the protocol's boolean decision; this does not make text continuously adaptive.
+        if (lab(2) > 0.0 && lab(3) > lab(2))
+            a *= 1.0 - smoothstep(lab(2), lab(3), luminance(bg));
+#endif
         c = mix(bg, tint, a);
     }
     // Specular rim: a band of light along the edge where it faces the light (top-left) and again

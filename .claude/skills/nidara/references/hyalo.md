@@ -416,8 +416,8 @@ The Lab now does that comparison on its EXISTING scene surface (`lab.ts`): a Reg
 selector, the system appearance toggle, and separate tuning maps for the two candidates in
 presets. Both start at the Lab's 3:3 frost to hold that variable constant for an initial A/B;
 this is a test condition, not a measured equivalence with Apple's blur. Regular keeps the
-factory's adaptive dark tint; Clear starts with a fixed 0.08 tint and saturation 1, with a
-separate 0.05 light-mode veil as an unmeasured candidate. These Clear numbers are trials, not
+factory's adaptive dark tint; Clear now has no dark tint, saturation 1, and a separate 0.05
+light-mode white veil as an unmeasured candidate. These Clear numbers are trials, not
 Apple's filter parameters. The first Clear dim trial darkened each pixel INSIDE its glass
 silhouette: on white it improved contrast but made the glass look like a dark piece on a white
 field. That was the wrong visual relationship. Apple's public guidance asks developers to
@@ -443,9 +443,11 @@ without any backdrop layer to encourage isolated comparisons. The Lab's experime
 can span the 40 px exclusive strip and fade through the following 4 px gap: `trackScrimRegion`
 has an opt-in exact-widget-bounds option, and the nested Lab compositor alone gives such a
 very wide shallow region square corners. This is a candidate, not a measured Apple bar rule.
-In the headless white-backdrop trial, Clear + this band + system-mode ink reached only 2.32:1
-in dark mode and visibly formed a grey strip; light mode chose dark ink and drew no band.
-Keep this candidate in the Lab for comparison, not in the shell. The Lab still has no
+In the headless white-backdrop trial, Clear + this band + system-mode ink reached 2.32:1
+in dark mode and visibly formed a grey strip. The owner expects the area strip to turn grey
+on an extreme white backdrop; the unresolved point is the foreground contrast, not that
+area colour. Light mode chose dark ink and drew no band. Keep this candidate in the Lab for
+comparison, not in the shell. The Lab still has no
 independent elevation-shadow control; its scrim modes are backdrop treatments.
 
 The nested Lab compositor alone sets `HYALO_LAB_AREA_DIM=1` to give shared regions the largest
@@ -454,12 +456,34 @@ guidance does not specify the layer's geometry, so this region remains a Nidara 
 In an earlier enabled Clear trial against pure white, Wi-Fi/Bluetooth rose only from 1.13:1 to
 2.36:1 at the 0.35 cap; the blue selected Brillo tile still needs separate contrast treatment.
 A 35% layer is guidance, not proof of accessible contrast on arbitrary backgrounds. The old
-LAB shader hook `lab[2]` is retired and never written by the Lab. `areaDim` persists its knobs
+in-glass dim use of `lab[2]` stays retired. The Lab reuses `lab[2]` and `lab[3]` only for a
+Regular tint-fade trial: with backdrop-driven ink, its dark tint fades from
+`regularFade.start` to `inkDarkAbove`, reaching zero before the ink event. This is a Lab shader
+hook and does not change the shipped Hyalo shader. The ink event and Gtk/Cairo content still
+change discretely; this tests the optical discontinuity, not a continuous-ink protocol. The
+`gris variable` backdrop maps its slider to linear WCAG luminance to expose the threshold.
+The Clear candidate forces zero dark tint (also from older presets); its light-mode white veil
+and optional backdrop area dim stay separate. `areaDim` persists its knobs
 in presets; legacy `clearDim` area values retain their tuning, while older two-field in-glass
 values are discarded. Old `areaDim.enabled` becomes an explicit "dim experimental" choice.
-Old flat tuning presets load into Regular's tuning map. The production material is unchanged.
+Old flat tuning presets load into Regular's tuning map; their old ink thresholds remain and the
+new tint fade starts disabled. The production material is unchanged.
 The one-surface-per-variant comparison does not solve the per-pane protocol requirement for
 mixed variants in the production bar or shell.
+
+The Lab's trial ink crossover is 0.18 to dark / 0.14 back to white, with Regular's dark-tint
+fade beginning at 0.14. On a uniform grey bar with no backdrop layer, headless captures at
+L=0.17 and 0.19 measured 4.81:1 white ink and 4.82:1 dark ink. The older 0.35 threshold plus
+a tint fade left only 2.68:1 at L=0.34, despite the material looking smoother. These numbers
+are one static specimen, not a guarantee on a patterned wallpaper or during an ink transition.
+At the same static settings, the Lab reported 21.00:1 with dark ink on pure white, 14.29:1
+on its synthetic page of text, 5.39:1 on `wallpaper.jpg` and 10.34:1 on
+`wallpaper-chroma.jpg`. Clear with no area dim and fixed white ink on pure white left the
+backdrop at L=1.000 and the ink at 1.00:1, which is the explicit role-policy failure to solve
+outside that material.
+At the present protocol's boolean ink event, Gtk text and Cairo icons still switch at once;
+continuous text color would cross through low-contrast middle greys without an additional
+legibility treatment. The optical trial should not be mistaken for that completed ink behavior.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
