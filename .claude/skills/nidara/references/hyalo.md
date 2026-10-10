@@ -417,18 +417,25 @@ selector, the system appearance toggle, and separate tuning maps for the two can
 presets. Both start at the Lab's 3:3 frost to hold that variable constant for an initial A/B;
 this is a test condition, not a measured equivalence with Apple's blur. Regular keeps the
 factory's adaptive dark tint; Clear starts with a fixed 0.08 tint/veil and saturation 1. These
-Clear numbers are trial values, not Apple's filter parameters. The Lab's Clear candidate now
-uses fixed bright ink and a LAB-only local dim INSIDE each glass silhouette: `lab[2]` caps the
-black opacity, `lab[3]` is the target WCAG luminance before the tint. The shader searches for
-the least opacity needed per pixel, so dark backdrop pixels are untouched. Its starting 0.8 /
-0.12 values are experiments, not Apple's algorithm; test them on photographs as well as flat
-backdrops, since per-pixel dimming may flatten bright image details. On the white CC bench this
-raised ordinary Wi-Fi/Bluetooth labels from 1.13:1 (off) to 5.04:1; the selected blue Brillo
-tile remains 3.05:1 and needs separate treatment. Clear's glass stays dark
-in either system appearance so its fixed light text remains legible. These controls and values
-live in the Lab preset (`clearDim`) and `HYALO_SHADER_DIR` hook, not the material protocol or
-production shell. The Lab writes `scrim = off` unconditionally and discards the old uniform
-dark-veil hook; the production material is unchanged. For CC and NC Regular has a separate
+Clear numbers are trial values, not Apple's filter parameters. The first Clear dim trial
+darkened each pixel INSIDE its glass silhouette: on white it improved contrast but made
+the glass look like a dark piece on a white field. That was the wrong visual relationship.
+Apple's public guidance puts a dark layer BEHIND Clear components (suggesting 35% over bright
+content) and its design video allows localizing that layer. The Lab now gives Clear fixed
+bright ink and a backdrop-aware underlay for an AREA: CC and NC each share one region around
+their pieces, while isolated pieces get their own. Hyalo's existing scrim measurement chooses
+the least opacity toward the Lab's target, capped by `clearDim.max`; its tint stays fixed at
+0.08. The nested Lab compositor alone sets `HYALO_LAB_CLEAR_AREA_DIM=1` to round shared
+regions into soft capsules; the production compositor's region geometry stays as before.
+The Lab defaults to max 0.35, target 0.183, outer falloff 80 px, all adjustable. Against pure
+white, Wi-Fi/Bluetooth rose only from 1.13:1 to 2.36:1 at that cap; Clear is intended for rich
+media, and the blue selected Brillo tile needs separate contrast treatment. A 35% layer is
+guidance, not proof of accessible contrast on arbitrary backgrounds. The old LAB shader hook
+`lab[2]` is retired and never written by the Lab. Clear's glass stays dark in either system
+appearance so its fixed light text is comparable. Clear's area controls persist in the Lab
+preset (`clearDim`); old two-field in-glass dim presets reset to the area defaults, so saved
+strengths are not silently reinterpreted. Regular writes `scrim = off` in the Lab; the
+production material is unchanged. For CC and NC Regular has a separate
 fixed/adaptive ink selector: fixed matches the current shell, adaptive tests readability without
 changing the shell. Old flat tuning presets load
 into Regular's tuning map. In headless checks on white, Clear with fixed white CC ink measured

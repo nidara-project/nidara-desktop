@@ -145,7 +145,15 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
         let o = location.to_f64();
         out.push(ScrimPx {
             core: [o.x + x * scale.x, o.y + y * scale.y, w * scale.x, h * scale.y],
-            radius: unit.radius * scale.x,
+            // The Lab's Clear comparison uses a rounded AREA under a group of panes. Keep
+            // production's region geometry unchanged; lone panes retain their own radius.
+            radius: if std::env::var_os("HYALO_LAB_CLEAR_AREA_DIM").is_some()
+                && unit.key < material::LONE_SCRIM
+            {
+                (w * scale.x).min(h * scale.y) * 0.5
+            } else {
+                unit.radius * scale.x
+            },
             falloff: unit.falloff * scale.x,
             alpha,
             edge: unit.edge,
