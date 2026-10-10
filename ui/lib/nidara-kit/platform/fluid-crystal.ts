@@ -9,7 +9,7 @@
  * from becoming accidental "variants" of one another.
  */
 
-/** How much of the content below the crystal should remain visible. */
+/** Reference treatment: Regular or the more backdrop-revealing Clear. */
 export type FluidCrystalVariant = "regular" | "clear"
 
 /** A proposed UI role, not another material variant or a measured density. */
@@ -45,7 +45,9 @@ export type FluidCrystalSelection = FluidCrystalPreset | FluidCrystalSpec
  * `tile` are intentionally light-inked: Control Center and Notification Center keep white
  * content regardless of the wallpaper. `launcher` follows the system mode and is denser than a
  * general panel; `popover` is denser still for menus and command surfaces. `media` has a fixed
- * foreground because Clear Crystal does not promise to adapt over arbitrary media.
+ * foreground because Clear Crystal does not promise to adapt over arbitrary media. The macOS
+ * probe also found that mode-based text can lose contrast on both variants when the backdrop
+ * opposes the chosen appearance. No preset is a contrast guarantee.
  */
 export const FLUID_CRYSTAL_PRESETS: Readonly<Record<FluidCrystalPreset, FluidCrystalSpec>> = Object.freeze({
     bar: Object.freeze({

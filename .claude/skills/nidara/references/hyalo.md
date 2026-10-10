@@ -362,30 +362,38 @@ one renumbers every request after it, and an older client then speaks a differen
 
 `ui/lib/nidara-kit/platform/fluid-crystal.ts` defines Nidara's semantic vocabulary. Its four
 axes are distinct: `variant` (Regular or Clear), `profile` (a Nidara UI role), `ink` (foreground
-policy), and `elevation` (spatial separation). Light and dark are appearances of Regular, not
-two more variants. A profile must not silently choose a new variant or a measured density.
+policy), and `elevation` (spatial separation). Light and dark are appearances of both variants,
+not two more variants. A profile must not silently choose a new variant or a measured density.
 
-The private `glass-probe` reference run `37729946989` is valid according to its run checks and
-contains real window captures and filter dumps. Its `environment.txt` reports macOS 27.0.1
-(26A434); `results/FINDINGS.md` says 27.0 (26A428), so use the run's environment for provenance.
-The measured cases are Regular light, Regular dark, and Clear dark on a checkerboard, plus Regular
-at three sizes, tint-slider endpoints, and interaction states. The `glassBackground` values are
-inputs to Apple's filter, **not** total opacity or a recipe that can be copied numerically into
-Hyalo. In particular, Regular light's face fill alpha 0.2 does not prove our `alphaMin = 0.2`.
+The private `glass-probe` reference runs `37729946989` and `38056119736` passed their validity
+checks. The latter captured all 27 scenarios on macOS 27.0.1 (26A434): Regular and Clear in both
+appearances, each with a `.primary` text label over white, black and a four-colour backdrop.
+Across the three backdrops, a given variant and appearance had identical filter inputs; the
+rendered pixels changed with the backdrop. Regular and Clear had distinct filter recipes in
+both appearances. The `glassBackground` values are inputs to Apple's filter, **not** total
+opacity or a recipe that can be copied numerically into Hyalo. In particular, Regular light's
+face fill alpha 0.2 does not prove our `alphaMin = 0.2`.
 
-What remains unmeasured: Clear in light appearance; foreground ink and contrast (`--label` was
-off); Clear or Regular over white, black and colourful media; the role of dimming behind Clear;
-and the claimed density/elevation of Nidara's launcher, popover, CC and NC. `compact`, `panel`,
-`launcher`, `popover`, `tile` and `media` are Nidara design roles, not macOS filter variants.
+The new captures show why ink must remain a separate axis. The probe's `.primary` label follows
+the light/dark appearance; it does not automatically switch to the better foreground over each
+backdrop. On a white backdrop in dark appearance, an approximate central text-to-glass contrast
+is 4.0:1 for Regular and 1.5:1 for Clear; on black in light appearance it is 5.0:1 for Regular
+and 2.1:1 for Clear (8-bit SDR window captures, single text sample; see `glass-probe` findings
+for the sampling method). These are evidence of a failure mode, not accessibility certification
+for a whole panel. A fixed light ink on Clear over bright media needs its own dimming or another
+legibility treatment. Regular also needs contrast checks; selecting it alone is no guarantee.
+
+Still unmeasured: how much dimming Clear needs on real media, motion and interaction across
+backdrops, and the claimed density/elevation of Nidara's launcher, popover, CC and NC. `compact`,
+`panel`, `launcher`, `popover`, `tile` and `media` are Nidara design roles, not macOS filter variants.
 Apple's public materials guidance describes Regular as the general adaptive choice, especially
 for text-heavy panels, and Clear as a highly translucent choice over rich media that can need
 dimming for legibility. Therefore assigning CC/NC to Clear and removing their backing shadow is
 an unverified proposal, not a result of this probe.
 
-Next gate: extend the probe with matched light/dark, Regular/Clear, labelled captures over flat
-and rich backdrops; inspect the actual pixels and contrast, not just the filter tree. Then use
-the Lab to compare Nidara's three appearances under the same backdrops and sizes, keeping its
-preview/export equivalence. Only after that comparison should a role mapping or numerical
+Next gate: use the Lab to compare Nidara's appearances under the same backdrops and sizes,
+including text contrast, while keeping its preview/export equivalence. Only after that
+comparison should a role mapping or numerical
 recipe be promoted to the shell and Hyalo. The current `trackFluidCrystal` registry picks one
 spec per `Gtk.Native`, while the bar now holds several different panel roles in one surface;
 per-pane selection needs a defined protocol path before that mapping can work in the shell.

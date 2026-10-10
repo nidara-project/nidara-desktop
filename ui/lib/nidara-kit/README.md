@@ -111,18 +111,20 @@ The current contract keeps four decisions separate:
 
 | Axis | Values | Meaning |
 |---|---|---|
-| Variant | `regular`, `clear` | Adaptive everyday crystal, or highly translucent media crystal |
-| Profile | `compact`, `panel`, `launcher`, `popover` | Bar chrome, a lighter large panel, a denser launcher, or a menu/popover |
+| Variant | `regular`, `clear` | The two reference glass treatments; Clear reveals more of the backdrop |
+| Profile | `compact`, `panel`, `launcher`, `popover` | The intended UI role and scale, with visual values still to tune |
 | Ink | `mode`, `adaptive`, `light`, `dark` | Shared system appearance, local backdrop, or fixed foreground |
 | Elevation | `none`, `tile`, `panel` | No shadow, a local tile separation, or a floating panel shadow |
 
 Profiles are UI roles, not additional variants. The `panel` and `tile` presets currently use
 fixed light ink for Control Center and Notification Center: those surfaces stay white instead of
 flipping with the wallpaper. This is a Nidara design choice awaiting contrast tests, not a property
-measured by the macOS probe. `launcher` follows the system mode and is intended to be denser for
-App Grid; `popover` is intended to be denser still for menus. `clear` does not promise automatic
-foreground contrast over arbitrary media; use it with bright content and add explicit dimming
-when the background needs it.
+measured by the macOS probe. `launcher` follows the system mode for App Grid and `popover` does
+so for menus; their intended densities are proposals. The macOS 27 probe showed that a
+mode-based `.primary` label can have poor contrast over an opposing backdrop, especially on
+Clear (about 1.5:1 with light text over white glass, 2.1:1 with dark text over black glass).
+Neither variant guarantees foreground contrast. Test the ink policy and any needed dimming
+against the actual backdrop in the Glass Lab.
 The presets describe intent only: the active bundle supplies the renderer and its Hyalo/GTK fallback.
 
 ## Types (TypeScript)
