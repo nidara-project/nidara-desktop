@@ -120,13 +120,14 @@ registerGlassMaterial({
 type Ink = "pieza" | "grupo" | "panel"
 type PanelInk = "fijo" | "adaptativo"
 type CrystalVariant = "regular" | "clear"
-// Lab candidates, not Apple filter values or production presets. Start Regular at the measured
-// frost (3:3) and Clear with less coverage and frost; tune them against the same backdrops.
-// Their common refraction/rim remain the factory's until measured on the bench.
+// Lab candidates, not Apple filter values or production presets. Keep the frost at the same
+// 3:3 starting point so the first A/B isolates treatment and legibility. Apple's filter uses
+// different blur inputs and sampling scales for the two variants; no 1:1 Hyalo blur follows.
+// Size/role-dependent scattering is a separate experiment, not a third variant.
 const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
     regular: { blurSize: 3, blurPasses: 3 },
     clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1, modeLightVeil: 0.08,
-        saturation: 1, blurSize: 2, blurPasses: 2 },
+        saturation: 1, blurSize: 3, blurPasses: 3 },
 }
 // Which pieces are on the bench. One at a time keeps neighbouring glass out of the reading;
 // «todas» is the overview.
@@ -1128,7 +1129,7 @@ function fillControls() {
         DropDownRow("Variante", "Regular y Clear son candidatos para comparar en una sola escena; no son aún recetas del shell",
             state.variant === "regular" ? "Regular" : "Clear", ["Regular", "Clear"],
             v => { state.variant = v === "Clear" ? "clear" : "regular"; apply(); rebuild() }),
-    ], "El scrim y el velo oscuro experimental están desactivados. Regular empieza con escarcha 3:3; Clear deja ver más el fondo con escarcha 2:2 y un velo inicial de 0,08. Son puntos de partida para el Lab, no alphas copiados del filtro de Apple.")
+    ], "El scrim y el velo oscuro experimental están desactivados. Ambas variantes empiezan con escarcha 3:3 para comparar su tratamiento; Clear deja ver más el fondo con un velo inicial de 0,08. Clear aún no tiene una capa local de oscurecimiento para texto blanco: esta prueba no valida su legibilidad. Menús y paneles grandes necesitan ajuste por tamaño o función, aparte de la variante. Los valores del Lab no son parámetros del filtro de Apple.")
     section("Fondo", [
         DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
         SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
@@ -1195,7 +1196,7 @@ function fillControls() {
         labSlider(8, "Ángulo de la luz", "grados, 0 = fábrica", -180, 180, 0, 0),
         labSlider(15, "Línea oscura en el contorno", "1 px; 0 = fábrica (ninguna); 0,37 = la referencia", 0, 1, 0),
     ], "La escarcha (desenfoque) es la de los paneles del shell; tooltips y menús llevan un pase más. " +
-        "La referencia medida (glass-probe, 2026-10-08): escarcha 3:3 y, en reposo, una línea oscura (0,37). " +
+        "El 3:3 es el punto de partida de Nidara, no una equivalencia medida con Apple. La referencia visual de 2026-10-08 mostró en reposo una línea oscura (0,37). " +
         "Su canto de luz no salió en esa captura (máquina a 1×, sin HDR), pero sí en los vídeos: no es motivo para quitarlo. " +
         "Su franja mide 20 px, pero cuánto desvía NO está medido, y aquí el ancho del bisel fija también la fuerza: " +
         "a 20 el borde desvía 14 px como mucho (55 a 80), así que estrecharlo apaga la refracción.")

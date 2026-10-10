@@ -389,9 +389,14 @@ Still unmeasured: how much dimming Clear needs on real media, motion and interac
 backdrops, and the claimed density/elevation of Nidara's launcher, popover, CC and NC. `compact`,
 `panel`, `launcher`, `popover`, `tile` and `media` are Nidara design roles, not macOS filter variants.
 Apple's public materials guidance describes Regular as the general adaptive choice, especially
-for text-heavy panels, and Clear as a highly translucent choice over rich media that can need
-dimming for legibility. Therefore assigning CC/NC to Clear and removing their backing shadow is
-an unverified proposal, not a result of this probe.
+for text-heavy panels, and Clear as a highly translucent choice over rich media that needs
+dimming for legibility. Apple also says larger elements such as menus and sidebars become thicker,
+with softer scattering and deeper shadows; this is a size/context behavior, not a new variant.
+The macOS probe measured different blur inputs for Regular and Clear at different backdrop
+sampling scales, so it does not establish equal physical frost or a direct Hyalo blur mapping.
+Regular's shadow responds to backdrop complexity: Apple's example strengthens it over text and
+reduces it over a solid light background. Therefore assigning CC/NC to Clear and removing their
+backing shadow is an unverified proposal, not a result of this probe.
 
 Next gate: use the Lab to compare Nidara's appearances under the same backdrops and sizes,
 including text contrast, while keeping its preview/export equivalence. Only after that
@@ -409,9 +414,12 @@ window for every glass specimen.
 
 The Lab now does that comparison on its EXISTING scene surface (`lab.ts`): a Regular/Clear
 selector, the system appearance toggle, and separate tuning maps for the two candidates in
-presets. Regular starts at the measured 3:3 frost with the factory's adaptive dark tint; Clear
-starts at 2:2, a fixed 0.08 tint/veil and saturation 1. These Clear numbers are trial values,
-not Apple's filter parameters. The Lab writes `scrim = off` unconditionally, removes its scrim
+presets. Both start at the Lab's 3:3 frost to hold that variable constant for an initial A/B;
+this is a test condition, not a measured equivalence with Apple's blur. Regular keeps the
+factory's adaptive dark tint; Clear starts with a fixed 0.08 tint/veil and saturation 1. These
+Clear numbers are trial values, not Apple's filter parameters. Clear still lacks a localized
+dimming layer and fixed bright content as a coherent default, so it is not yet a faithful Clear
+recipe or a legibility pass. The Lab writes `scrim = off` unconditionally, removes its scrim
 controls and the old uniform dark-veil hook (`lab[2]`); the production material is unchanged.
 For CC and NC there is a separate fixed/adaptive ink selector: fixed matches the current shell,
 adaptive lets the Lab test readability without changing the shell. Old flat tuning presets load
