@@ -416,38 +416,50 @@ The Lab now does that comparison on its EXISTING scene surface (`lab.ts`): a Reg
 selector, the system appearance toggle, and separate tuning maps for the two candidates in
 presets. Both start at the Lab's 3:3 frost to hold that variable constant for an initial A/B;
 this is a test condition, not a measured equivalence with Apple's blur. Regular keeps the
-factory's adaptive dark tint; Clear starts with a fixed 0.08 tint/veil and saturation 1. These
-Clear numbers are trial values, not Apple's filter parameters. The first Clear dim trial
-darkened each pixel INSIDE its glass silhouette: on white it improved contrast but made
-the glass look like a dark piece on a white field. That was the wrong visual relationship.
-Apple's public guidance asks developers to CONSIDER adding a dark layer BEHIND Clear components
-(35% over bright content); the layer is not an automatic part of `.clear`. Its design video
-allows localizing the layer. In the Lab, both variants now start with `scrim = off`. A separate
-"Capa del fondo" switch enables an experimental area underlay with either variant: CC and NC
-each share one region around their pieces, while isolated pieces get their own. Hyalo's
-existing scrim measurement chooses the least opacity toward the Lab's target, capped by
-`areaDim.max`. Clear itself retains fixed bright ink, a 0.08 tint, and target 1 when the
-optional layer is off. The current Hyalo scrim solver reads the glass target internally;
-the Lab overrides that target only while the separate layer is on. Do not mistake this
-internal coupling for a property of Apple's Clear variant.
+factory's adaptive dark tint; Clear starts with a fixed 0.08 tint and saturation 1, with a
+separate 0.05 light-mode veil as an unmeasured candidate. These Clear numbers are trials, not
+Apple's filter parameters. The first Clear dim trial darkened each pixel INSIDE its glass
+silhouette: on white it improved contrast but made the glass look like a dark piece on a white
+field. That was the wrong visual relationship. Apple's public guidance asks developers to
+CONSIDER adding a dark layer BEHIND Clear components (35% over bright content); the layer is
+not an automatic part of `.clear`. Its design video allows localizing the layer.
+
+The Lab now separates **variant, system appearance, ink policy and backdrop treatment**. A
+single isolated specimen uses `inkPolicy`: the role default is system-mode ink on the bar,
+island/dock and large panel; fixed white in CC/NC; backdrop measurement for controls/media.
+The dock on this bench is only a shape/icon substitute; it uses the Lab's mode ink to match
+the shell's visible light/dark switch, while the real Dock uses its own mode skin.
+The alternatives system/white/backdrop can be chosen with either variant. `backdropPolicy`
+starts at "ninguna"; "según rol" compares the shell's CURRENT scrim on CC/NC and none
+elsewhere; "sombra shell" and "dim experimental" are explicit alternatives. The experimental dim starts
+at max 0.35, target 0.183, outer falloff 80 px. Hyalo's existing scrim measurement chooses the
+least opacity toward the target, capped by `areaDim.max`. The current solver reads the glass
+target internally; the Lab overrides it only while an exterior layer is selected. Do not
+mistake this internal coupling for a property of either Apple variant. "Sombra shell" is an
+unmeasured Nidara baseline, not a reconstruction of Apple's elevation shadow. The overview
+"todas" remains a shape/layout comparison: one Wayland surface carries one material recipe,
+so it cannot represent mixed variants and policies faithfully. The fresh Lab opens at "barra"
+without any backdrop layer to encourage isolated comparisons. The Lab's experimental bar dim
+can span the 40 px exclusive strip and fade through the following 4 px gap: `trackScrimRegion`
+has an opt-in exact-widget-bounds option, and the nested Lab compositor alone gives such a
+very wide shallow region square corners. This is a candidate, not a measured Apple bar rule.
+In the headless white-backdrop trial, Clear + this band + system-mode ink reached only 2.32:1
+in dark mode and visibly formed a grey strip; light mode chose dark ink and drew no band.
+Keep this candidate in the Lab for comparison, not in the shell. The Lab still has no
+independent elevation-shadow control; its scrim modes are backdrop treatments.
+
 The nested Lab compositor alone sets `HYALO_LAB_AREA_DIM=1` to give shared regions the largest
 pane's corner radius; the production compositor's region geometry stays as before. Apple's
 guidance does not specify the layer's geometry, so this region remains a Nidara experiment.
-The optional layer starts disabled with max 0.35, target 0.183, outer falloff 80 px. In its
-earlier enabled trial against pure white, Wi-Fi/Bluetooth rose only from 1.13:1 to 2.36:1 at
-that cap; the blue selected Brillo tile still needs separate contrast treatment. A 35% layer
-is guidance, not proof of accessible contrast on arbitrary backgrounds. The old LAB shader
-hook `lab[2]` is retired and never written by the Lab. Clear's glass stays dark in either
-system appearance so its fixed light text is comparable. The optional layer persists in
-presets as `areaDim`; legacy `clearDim` area values retain their tuning but load disabled,
-and older two-field in-glass values are discarded. The production material is unchanged.
-For CC and NC Regular has a separate
-fixed/adaptive ink selector: fixed matches the current shell, adaptive tests readability without
-changing the shell. Old flat tuning presets load
-into Regular's tuning map. In headless checks on white, Clear with fixed white CC ink measured
-1.13:1 on Wi-Fi/Bluetooth; adaptive dark ink measured 15.13:1. This is a testable design choice,
-not a finished role mapping. The one-surface-per-variant Lab comparison does not solve the
-per-pane protocol requirement for a mixed-role bar in production.
+In an earlier enabled Clear trial against pure white, Wi-Fi/Bluetooth rose only from 1.13:1 to
+2.36:1 at the 0.35 cap; the blue selected Brillo tile still needs separate contrast treatment.
+A 35% layer is guidance, not proof of accessible contrast on arbitrary backgrounds. The old
+LAB shader hook `lab[2]` is retired and never written by the Lab. `areaDim` persists its knobs
+in presets; legacy `clearDim` area values retain their tuning, while older two-field in-glass
+values are discarded. Old `areaDim.enabled` becomes an explicit "dim experimental" choice.
+Old flat tuning presets load into Regular's tuning map. The production material is unchanged.
+The one-surface-per-variant comparison does not solve the per-pane protocol requirement for
+mixed variants in the production bar or shell.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 

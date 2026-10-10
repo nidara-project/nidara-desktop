@@ -151,10 +151,16 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
             radius: if std::env::var_os("HYALO_LAB_AREA_DIM").is_some()
                 && unit.key < material::LONE_SCRIM
             {
-                unit.members.iter()
-                    .map(|&i| &m.shapes[i])
-                    .max_by(|a, b| (a.w * a.h).total_cmp(&(b.w * b.h)))
-                    .map_or(0.0, |s| s.radius.min(w.min(h) * 0.5) * scale.x)
+                if w > h * 10.0 && h <= 64.0 {
+                    // The Lab's optional bar band fills its 40 px exclusive strip. A
+                    // capsule radius would cut holes at the output's top corners.
+                    0.0
+                } else {
+                    unit.members.iter()
+                        .map(|&i| &m.shapes[i])
+                        .max_by(|a, b| (a.w * a.h).total_cmp(&(b.w * b.h)))
+                        .map_or(0.0, |s| s.radius.min(w.min(h) * 0.5) * scale.x)
+                }
             } else {
                 unit.radius * scale.x
             },

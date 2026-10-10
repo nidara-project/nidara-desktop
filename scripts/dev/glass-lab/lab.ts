@@ -90,11 +90,10 @@ setKitAppearance({
 ;(Theme as unknown as { applyTokens(): void }).applyTokens()
 // The shell's glass on Hyalo (core/CompositorGlass.ts, with hyalo-settings' blur baseline).
 let labAppearanceDark = true
-let labGlassFollowsLight = true
 registerGlassMaterial({
     reduceTransparency: () => Theme.reduceTransparency,
     panelBlur: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
-    lightMode: () => !labAppearanceDark && labGlassFollowsLight,
+    lightMode: () => !labAppearanceDark,
     onChange: (cb) => { const id = Theme.connect("changed", cb); return () => safeDisconnect(Theme, id) },
 })
 {
@@ -119,7 +118,8 @@ registerGlassMaterial({
 
 // ── State: everything a preset holds ────────────────────────────────────────
 type Ink = "pieza" | "grupo" | "panel"
-type PanelInk = "fijo" | "adaptativo"
+type InkPolicy = "según rol" | "sistema" | "blanco" | "fondo"
+type BackdropPolicy = "según rol" | "ninguna" | "sombra shell" | "dim experimental"
 type CrystalVariant = "regular" | "clear"
 // Lab candidates, not Apple filter values or production presets. Keep the frost at the same
 // 3:3 starting point so the first A/B isolates treatment and legibility. Apple's filter uses
@@ -127,12 +127,12 @@ type CrystalVariant = "regular" | "clear"
 // Size/role-dependent scattering is a separate experiment, not a third variant.
 const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
     regular: { blurSize: 3, blurPasses: 3 },
-    clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1,
+    clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1, modeLightVeil: 0.05,
         saturation: 1, blurSize: 3, blurPasses: 3 },
 }
 // Optional content-layer treatment, separate from either glass recipe. Apple's 35%-over-bright-
 // content guidance is a developer choice, not a built-in property of Clear.
-const AREA_DIM_DEFAULT = { enabled: false, max: 0.35, target: 0.183, falloff: 80 }
+const AREA_DIM_DEFAULT = { max: 0.35, target: 0.183, falloff: 80, barFade: 4 }
 // Which pieces are on the bench. One at a time keeps neighbouring glass out of the reading;
 // «todas» is the overview.
 const SHOWS = ["todas", "barra", "centro de control", "avisos", "botones y menú", "isla y dock", "panel grande",
@@ -153,19 +153,34 @@ interface LabState {
     promoFormat: PromoFormat       // the frame every export is cut to (the name predates the scene's)
     variant: CrystalVariant        // one recipe at a time on the existing scene surface
     ink: Ink
-    panelInk: PanelInk             // test the fixed shell ink against backdrop adaptation
-    areaDim: { enabled: boolean, max: number, target: number, falloff: number } // backdrop treatment
+    inkPolicy: InkPolicy           // role, system mode, fixed white, or backdrop measurement
+    backdropPolicy: BackdropPolicy // independent of the material variant
+    areaDim: { max: number, target: number, falloff: number, barFade: number } // optional area treatment
     show: Show
     tuning: Record<CrystalVariant, Record<string, number>> // each candidate keeps its own slider values
                                                         // (blurSize/blurPasses are written as `blur`)
-    flags: { ink: boolean, glass: boolean, dark: boolean }
+    flags: { glass: boolean, dark: boolean }
     lab: number[]                  // lab_params.conf, 16 values: the shader's LAB hooks, 0 = factory
 }
 const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, driftSpeed: 1,
-    promoSize: 72, videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", panelInk: "fijo", show: "todas",
+    promoSize: 72, videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", inkPolicy: "según rol",
+    backdropPolicy: "ninguna", show: "barra",
     tuning: { regular: {}, clear: {} }, areaDim: { ...AREA_DIM_DEFAULT },
-    flags: { ink: true, glass: true, dark: true }, lab: new Array(16).fill(0) })
+    flags: { glass: true, dark: true }, lab: new Array(16).fill(0) })
 let state = factory()
+
+// A role chooses only the content policy. The glass variant and backdrop layer remain
+// independent experiments. «Todas» is an overview on one material surface, not a shell clone.
+function effectiveInk(): Exclude<InkPolicy, "según rol"> {
+    if (state.inkPolicy !== "según rol") return state.inkPolicy
+    if (["barra", "isla y dock", "panel grande"].includes(state.show)) return "sistema"
+    if (["centro de control", "avisos"].includes(state.show)) return "blanco"
+    return "fondo"
+}
+function effectiveBackdrop(): Exclude<BackdropPolicy, "según rol"> {
+    if (state.backdropPolicy !== "según rol") return state.backdropPolicy
+    return ["centro de control", "avisos"].includes(state.show) ? "sombra shell" : "ninguna"
+}
 
 function writeFile(path: string, text: string) {
     GLib.file_set_contents(path, text)
@@ -177,28 +192,36 @@ const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 let controlsWinRef: Gtk.Window | null = null
 function apply() {
     labAppearanceDark = state.flags.dark !== false
-    labGlassFollowsLight = state.variant === "regular"
     state.lab[2] = 0 // legacy presets' broad veil must never return
     state.lab[3] = 0
     const scheme = state.flags.dark === false ? "default" : "prefer-dark"
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
     const lines = [`# written by glass-lab; ${state.variant} candidate; ${labAppearanceDark ? "dark" : "light"}`]
-    if (!state.areaDim.enabled) lines.push("scrim = off")
-    else lines.push(`scrimMax = ${state.areaDim.max}`, "scrimSize = 0.5",
-        `scrimFalloff = ${state.areaDim.falloff}`, "scrimEdge = 1", "tintLimit = 0.08")
+    const backdrop = effectiveBackdrop()
+    if (backdrop === "ninguna") lines.push("scrim = off")
+    else if (backdrop === "dim experimental") lines.push(`scrimMax = ${state.areaDim.max}`, "scrimSize = 0.5",
+        `scrimFalloff = ${state.show === "barra" ? state.areaDim.barFade : state.areaDim.falloff}`,
+        "scrimEdge = 1", "tintLimit = 0.08")
+    // «sombra shell» reads the shipped scrim strengths; it is the current baseline, not a
+    // measured Apple recipe. The experimental dim above remains a separate opt-in treatment.
     // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
     // numbers, so a preset and A/B carry them like any other.
     const { blurSize, blurPasses, ...material } = { ...CRYSTAL_CANDIDATES[state.variant], ...state.tuning[state.variant] }
     // Hyalo's current scrim solver reads the glass target. Override only while the optional
     // backdrop layer is in use; the Clear recipe itself keeps target=1.
-    if (state.areaDim.enabled && state.areaDim.max > 0) material.target = state.areaDim.target
+    if (backdrop === "dim experimental" && state.areaDim.max > 0) material.target = state.areaDim.target
+    if (backdrop === "sombra shell") material.target = GLASS_MATERIAL_DEFAULTS.target
     for (const [k, v] of Object.entries(material)) {
         if (["scrimMax", "scrimSize", "scrimFalloff", "scrimEdge", "tintLimit"].includes(k)) continue
         lines.push(`${k} = ${v}`)
     }
     lines.push(`blur = ${blurSize}:${Math.round(blurPasses)}`)
-    if (state.variant === "clear" || !state.flags.ink) lines.push("ink = off")
+    const ink = effectiveInk()
+    if (ink === "blanco") lines.push("ink = off")
+    else if (ink === "sistema") lines.push(state.flags.dark === false
+        ? "inkDarkAbove = -1\ninkLightBelow = -2"
+        : "inkDarkAbove = 2\ninkLightBelow = 1.5")
     if (!state.flags.glass) lines.push("glass = off")
     writeFile(TUNING, lines.join("\n") + "\n")
     writeFile(`${SHADERS}/lab_params.conf`,
@@ -328,6 +351,8 @@ function barRow(): Gtk.Widget {
     right.box.append(barItem({ child: clock }))
     row.set_start_widget(left.widget); row.set_end_widget(right.widget)
     trackFluidCrystal(row, "bar")
+    if (state.show === "barra" && effectiveBackdrop() === "dim experimental")
+        trackScrimRegion(row, { horizontalOutset: BAR_MARGIN })
     specimens.push({ name: "barra", contents: [title, ...items, clock] })
     if (state.ink === "grupo") { trackInkGroup(left.widget); trackInkGroup(right.widget) }
     if (state.ink === "panel") trackInkGroup(row)
@@ -339,7 +364,7 @@ function tile(size: WidgetSize, w: number, h: number, child: Gtk.Widget, getFill
     trackFluidCrystal(surface, "tile")
     return surface
 }
-/** The Control Center: BaseIsland tiles on the CC grid, one shadow region for the panel. */
+/** The Control Center: BaseIsland tiles on the CC grid; its backdrop treatment is separate. */
 function controlCenter(): Gtk.Widget {
     const grid = new Gtk.Grid({ column_spacing: GAP, row_spacing: GAP })
     // The tiles' content is the widget kit's own (common/widget-kit/tile.ts), as the CC's widgets build it.
@@ -370,9 +395,9 @@ function controlCenter(): Gtk.Widget {
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
     trackFluidCrystal(panel, "panel")
-    if (state.areaDim.enabled) trackScrimRegion(panel)
-    // Clear's trial keeps bright content; Regular can compare today's fixed ink and adaptation.
-    if (state.variant === "clear" || state.panelInk === "fijo") trackNoInk(panel)
+    if (effectiveBackdrop() !== "ninguna") trackScrimRegion(panel)
+    // The ink policy belongs to this role, independent of the selected glass variant.
+    if (effectiveInk() === "blanco" || state.show === "todas" && state.inkPolicy === "según rol") trackNoInk(panel)
     return panel
 }
 
@@ -397,8 +422,8 @@ function notifications(): Gtk.Widget {
     column.append(stack)
     column.append(card("Calendario", "Revisión del material, 17:00"))
     trackFluidCrystal(column, "panel")
-    if (state.areaDim.enabled) trackScrimRegion(column)
-    if (state.variant === "clear" || state.panelInk === "fijo") trackNoInk(column)
+    if (effectiveBackdrop() !== "ninguna") trackScrimRegion(column)
+    if (effectiveInk() === "blanco" || state.show === "todas" && state.inkPolicy === "según rol") trackNoInk(column)
     return column
 }
 
@@ -961,11 +986,17 @@ function loadPreset(path: string): boolean {
             : { regular: loaded.tuning ?? {}, clear: {} }
         // Old two-field clearDim was inside the glass; later three-field clearDim was an
         // area underlay. Preserve only the latter's tuning, always off until explicitly enabled.
-        const { clearDim: legacyDim, ...saved } = loaded
+        const { clearDim: legacyDim, panelInk: legacyPanelInk, ...saved } = loaded
+        const { enabled: legacyAreaEnabled, ...savedArea } = loaded.areaDim ?? {}
         const areaDim = { ...AREA_DIM_DEFAULT,
-            ...(legacyDim?.falloff !== undefined ? legacyDim : {}), ...loaded.areaDim,
-            enabled: loaded.areaDim?.enabled === true }
-        state = { ...factory(), ...saved, tuning, flags: { ...factory().flags, ...loaded.flags }, areaDim }
+            ...(legacyDim?.falloff !== undefined ? legacyDim : {}), ...savedArea }
+        const backdropPolicy: BackdropPolicy = loaded.backdropPolicy
+            ?? (legacyAreaEnabled === true ? "dim experimental" : "ninguna")
+        const inkPolicy: InkPolicy = loaded.inkPolicy ?? (loaded.flags?.ink === false ? "blanco"
+            : legacyPanelInk === "adaptativo" ? "fondo" : "según rol")
+        state = { ...factory(), ...saved, tuning,
+            flags: { glass: loaded.flags?.glass !== false, dark: loaded.flags?.dark !== false },
+            areaDim, backdropPolicy, inkPolicy }
         return true
     } catch (e) { printerr(`glass-lab: preset ${path}: ${e}`); return false }
 }
@@ -1052,7 +1083,7 @@ function DropDownRow(title: string, sub: string, init: string, options: string[]
 }
 
 // Keep the useful sections open across rebuilds; the long tuning sections start folded.
-const openSections = new Set(["Presets", "Cristal", "Fondo", "Piezas", "Sistema", "Color del texto"])
+const openSections = new Set(["Presets", "Cristal", "Fondo y sombra", "Fondo", "Piezas", "Sistema", "Color del texto"])
 let stash: LabState | null = null   // A/B: the recipe, while the candidate baseline is shown
 /** (Re)builds the controls from `state` — after a preset or a reset every slider moves. */
 function fillControls() {
@@ -1111,7 +1142,7 @@ function fillControls() {
         // backdrop, the system's mode and the export's settings stay as they are. A/B used to
         // swap the whole state without rebuilding the scene, so after «A/B, pick promo, A/B» the
         // screen showed the disc while the state said «todas» — and the export drew «todas».
-        const recipe = (from: LabState) => ({ variant: from.variant, panelInk: from.panelInk, tuning: from.tuning,
+        const recipe = (from: LabState) => ({ variant: from.variant, inkPolicy: from.inkPolicy, tuning: from.tuning,
             lab: from.lab,
             flags: { ...from.flags, dark: state.flags.dark } })
         if (stash) { state = { ...state, ...recipe(stash) }; stash = null; ab.set_label("A/B: ver punto de partida") }
@@ -1119,7 +1150,7 @@ function fillControls() {
             stash = state
             const baseline = factory()
             baseline.variant = state.variant
-            baseline.panelInk = state.panelInk
+            baseline.inkPolicy = state.inkPolicy
             state = { ...state, ...recipe(baseline) }
             ab.set_label("A/B: volver a la receta")
         }
@@ -1151,21 +1182,28 @@ function fillControls() {
         DropDownRow("Variante", "Regular y Clear son candidatos para comparar en una sola escena; no son aún recetas del shell",
             state.variant === "regular" ? "Regular" : "Clear", ["Regular", "Clear"],
             v => { state.variant = v === "Clear" ? "clear" : "regular"; apply(); buildScene(); rebuild() }),
-    ], "La variante define el cristal y el contenido sobre él. La capa opcional del fondo se controla aparte; Apple no la incorpora automáticamente a Clear. Menús y paneles grandes se ajustarán por tamaño o función.")
-    section("Capa del fondo", [
-        ToggleRow("Oscurecer bajo el cristal", "tratamiento del contenido, independiente de la variante; apagado de inicio",
-            state.areaDim.enabled, v => { state.areaDim.enabled = v; apply(); buildScene(); rebuild() }),
-        ...(state.areaDim.enabled ? [
+    ], "La variante solo define el cristal. El aspecto, el texto y las capas del fondo se eligen por separado; Clear no enciende dim automáticamente.")
+    section("Fondo y sombra", [
+        DropDownRow("Tratamiento detrás", "independiente de Regular/Clear; según rol muestra el shell actual",
+            state.backdropPolicy, ["ninguna", "según rol", "sombra shell", "dim experimental"],
+            v => { state.backdropPolicy = v as BackdropPolicy; apply(); buildScene(); rebuild() }),
+        ...(effectiveBackdrop() === "dim experimental" ? [
             SliderRow("Oscurecimiento máximo", "0,35 es una referencia opcional para fondos brillantes",
                 state.areaDim.max, 0, 1, v => { state.areaDim.max = v; apply() }, { decimals: 2, debounce: 0 }),
             SliderRow("Luminancia objetivo del área", "la capa aumenta si el fondo es demasiado luminoso",
                 state.areaDim.target, 0.05, 1, v => { state.areaDim.target = v; apply() },
                 { decimals: 3, debounce: 0 }),
-            SliderRow("Desvanecimiento exterior", "px fuera del área",
-                state.areaDim.falloff, 0, 160, v => { state.areaDim.falloff = v; apply() },
-                { decimals: 0, debounce: 0 }),
+            ...(state.show === "barra" ? [
+                SliderRow("Desvanecimiento hasta la ventana", "px bajo la zona exclusiva; 4 = gap actual",
+                    state.areaDim.barFade, 0, 40, v => { state.areaDim.barFade = v; apply() },
+                    { decimals: 0, debounce: 0 }),
+            ] : [
+                SliderRow("Desvanecimiento exterior", "px fuera del área",
+                    state.areaDim.falloff, 0, 160, v => { state.areaDim.falloff = v; apply() },
+                    { decimals: 0, debounce: 0 }),
+            ]),
         ] : []),
-    ], "Prueba opcional del entorno: usa una zona bajo las piezas y se desvanece fuera de ella. Apple recomienda considerar un 35 % sobre contenido brillante, pero no prescribe la forma ni activa esta capa por elegir Clear.")
+    ], "«Sombra shell» reproduce el tratamiento actual de CC/NC como punto de partida; no es un parámetro medido de Apple. «Dim experimental» es otra capa contextual, apagada salvo elección explícita. En la barra cubre sus 40 px reservados y se desvanece en el gap siguiente. Con fondo blanco y modo oscuro, el candidato de banda 0,35 quedó gris y dio 2,32:1: aún no sirve como receta.")
     section("Fondo", [
         DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
         SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
@@ -1183,24 +1221,23 @@ function fillControls() {
         SliderRow("Duración del vídeo", "segundos, a 60 fotogramas por segundo", state.videoSeconds, 2, 60,
             v => { state.videoSeconds = v }, { decimals: 0, debounce: 0 }),
     ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El archivo es la misma escena que el marco, dibujada a más resolución: lo que ves es lo que sale. «promo: logo» deja solo el círculo; su tamaño, en px del archivo.")
-    section("Piezas", [DropDownRow("En el banco", "una a una para medir sin otras piezas",
-        state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
-    section("Sistema", [ToggleRow("Modo oscuro", "Regular y los controles del kit lo siguen; Clear mantiene su cristal oscuro", state.flags.dark !== false,
+    section("Piezas", [DropDownRow("En el banco", "aísla una función para probar su política; «todas» solo compara formas",
+        state.show, [...SHOWS], v => { state.show = v as Show; apply(); buildScene(); rebuild() })],
+        "El Lab envía una receta de cristal por superficie. «Todas» no reproduce las variantes y políticas mezcladas del shell.")
+    section("Sistema", [ToggleRow("Modo oscuro", "ambas variantes prueban su aspecto claro u oscuro",
+        state.flags.dark !== false,
         v => { state.flags.dark = v; apply() })])
     section("Color del texto", [
-        ...(state.variant === "regular" ? [
-            DropDownRow("Texto de paneles y avisos", "fijo = blanco como hoy; adaptativo = prueba el cambio según el fondo",
-                state.panelInk, ["fijo", "adaptativo"], v => { state.panelInk = v as PanelInk; buildScene() }),
-            ToggleRow("Texto que cambia a oscuro", "apagado: siempre blanco (ink = off)", state.flags.ink,
-                v => { state.flags.ink = v; apply() }),
-        ] : []),
-        ...(state.variant === "regular" ? [
+        DropDownRow("Política", "según rol = barra/dock por modo, CC/NC blanco, controles por fondo",
+            state.inkPolicy, ["según rol", "sistema", "blanco", "fondo"],
+            v => { state.inkPolicy = v as InkPolicy; apply(); buildScene(); rebuild() }),
+        ...(effectiveInk() === "fondo" ? [
             DropDownRow("Deciden juntas", "qué piezas cambian a la vez", state.ink, ["pieza", "grupo", "panel"],
                 v => { state.ink = v as Ink; apply(); buildScene() }),
             tuningSlider("inkDarkAbove", "Umbral a oscuro", "luminancia del punto más oscuro bajo el texto", 0, 1),
             tuningSlider("inkLightBelow", "Umbral de vuelta a blanco", "", 0, 1),
         ] : []),
-    ], state.variant === "clear" ? "Clear usa texto claro fijo. Comprueba su legibilidad sobre el fondo elegido y añade una capa del fondo solo cuando haga falta." : "")
+    ], "El texto se decide aparte del cristal. «Según rol» imita el criterio actual del shell cuando se aísla una pieza; «todas» es solo una vista comparativa.")
     section("Tinte y legibilidad", [
         tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
         tuningSlider("alphaMax", "Tinte máximo", state.variant === "clear"
@@ -1209,9 +1246,7 @@ function fillControls() {
         ...(state.variant === "regular" ? [
             tuningSlider("target", "Objetivo de luminancia", "0,183 ≈ texto blanco a 4,5:1; 1 = sin oscurecimiento adaptativo", 0.05, 1, 3),
         ] : []),
-        ...(state.variant === "regular" ? [
-            tuningSlider("modeLightVeil", "Velo en modo claro", "solo cuando el aspecto es claro", 0, 0.5),
-        ] : []),
+        tuningSlider("modeLightVeil", "Velo en modo claro", "Regular inicia en 0,20; Clear en 0,05 (prueba)", 0, 0.5),
     ])
     section("Fondo bajo el cristal (capas nuevas)", [
         labSlider(0, "Comprimir blancos: techo", "0 = apagado; luminancia a la que llega el blanco", 0, 1, 0),
