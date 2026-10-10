@@ -90,10 +90,11 @@ setKitAppearance({
 ;(Theme as unknown as { applyTokens(): void }).applyTokens()
 // The shell's glass on Hyalo (core/CompositorGlass.ts, with hyalo-settings' blur baseline).
 let labAppearanceDark = true
+let labGlassFollowsLight = true
 registerGlassMaterial({
     reduceTransparency: () => Theme.reduceTransparency,
     panelBlur: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
-    lightMode: () => !labAppearanceDark,
+    lightMode: () => !labAppearanceDark && labGlassFollowsLight,
     onChange: (cb) => { const id = Theme.connect("changed", cb); return () => safeDisconnect(Theme, id) },
 })
 {
@@ -126,9 +127,12 @@ type CrystalVariant = "regular" | "clear"
 // Size/role-dependent scattering is a separate experiment, not a third variant.
 const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
     regular: { blurSize: 3, blurPasses: 3 },
-    clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1, modeLightVeil: 0.08,
+    clear: { alphaMin: 0.08, alphaMax: 0.08, target: 1,
         saturation: 1, blurSize: 3, blurPasses: 3 },
 }
+// On the white CC bench this reaches >4.5:1 for the ordinary Wi-Fi/Bluetooth labels; the
+// selected blue Brillo tile still needs its own ink/fill treatment, and photos must be judged.
+const CLEAR_DIM_DEFAULT = { max: 0.8, target: 0.12 }
 // Which pieces are on the bench. One at a time keeps neighbouring glass out of the reading;
 // «todas» is the overview.
 const SHOWS = ["todas", "barra", "centro de control", "avisos", "botones y menú", "isla y dock", "panel grande",
@@ -150,6 +154,7 @@ interface LabState {
     variant: CrystalVariant        // one recipe at a time on the existing scene surface
     ink: Ink
     panelInk: PanelInk             // test the fixed shell ink against backdrop adaptation
+    clearDim: { max: number, target: number } // Lab-only shader trial, inside the Clear silhouette
     show: Show
     tuning: Record<CrystalVariant, Record<string, number>> // each candidate keeps its own slider values
                                                         // (blurSize/blurPasses are written as `blur`)
@@ -158,7 +163,7 @@ interface LabState {
 }
 const factory = (): LabState => ({ backdrop: "blanco", offset: 0.5, offsetY: 0.5, drift: false, driftSpeed: 1,
     promoSize: 72, videoSeconds: 10, promoFormat: "16:9", variant: "regular", ink: "pieza", panelInk: "fijo", show: "todas",
-    tuning: { regular: {}, clear: {} },
+    tuning: { regular: {}, clear: {} }, clearDim: { ...CLEAR_DIM_DEFAULT },
     flags: { ink: true, glass: true, dark: true }, lab: new Array(16).fill(0) })
 let state = factory()
 
@@ -172,7 +177,9 @@ const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
 let controlsWinRef: Gtk.Window | null = null
 function apply() {
     labAppearanceDark = state.flags.dark !== false
-    state.lab[2] = 0 // the old uniform dark veil is retired along with the scrim
+    labGlassFollowsLight = state.variant === "regular"
+    state.lab[2] = 0 // legacy presets' broad veil must never return
+    state.lab[3] = 0
     const scheme = state.flags.dark === false ? "default" : "prefer-dark"
     if (iface.get_string("color-scheme") !== scheme) iface.set_string("color-scheme", scheme)
     if (state.flags.dark === false) controlsWinRef?.remove_css_class("dark"); else controlsWinRef?.add_css_class("dark")
@@ -185,11 +192,16 @@ function apply() {
         lines.push(`${k} = ${v}`)
     }
     lines.push(`blur = ${blurSize}:${Math.round(blurPasses)}`)
-    if (!state.flags.ink) lines.push("ink = off")
+    if (state.variant === "clear" || !state.flags.ink) lines.push("ink = off")
     if (!state.flags.glass) lines.push("glass = off")
     writeFile(TUNING, lines.join("\n") + "\n")
+    const lab = [...state.lab]
+    if (state.variant === "clear") {
+        lab[2] = state.clearDim.max
+        lab[3] = state.clearDim.target
+    }
     writeFile(`${SHADERS}/lab_params.conf`,
-        state.lab.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
+        lab.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
     backdropArea?.queue_draw()
 }
 
@@ -357,8 +369,8 @@ function controlCenter(): Gtk.Widget {
         margin_top: 16, margin_bottom: 16 })
     panel.append(grid)
     trackFluidCrystal(panel, "panel")
-    // Fixed matches today's shell; adaptive is an explicit Lab experiment for Clear.
-    if (state.panelInk === "fijo") trackNoInk(panel)
+    // Clear's trial keeps bright content; Regular can compare today's fixed ink and adaptation.
+    if (state.variant === "clear" || state.panelInk === "fijo") trackNoInk(panel)
     return panel
 }
 
@@ -383,7 +395,7 @@ function notifications(): Gtk.Widget {
     column.append(stack)
     column.append(card("Calendario", "Revisión del material, 17:00"))
     trackFluidCrystal(column, "panel")
-    if (state.panelInk === "fijo") trackNoInk(column)
+    if (state.variant === "clear" || state.panelInk === "fijo") trackNoInk(column)
     return column
 }
 
@@ -944,7 +956,8 @@ function loadPreset(path: string): boolean {
         const tuning = loaded.tuning?.regular || loaded.tuning?.clear
             ? { regular: loaded.tuning.regular ?? {}, clear: loaded.tuning.clear ?? {} }
             : { regular: loaded.tuning ?? {}, clear: {} }
-        state = { ...factory(), ...loaded, tuning, flags: { ...factory().flags, ...loaded.flags } }
+        state = { ...factory(), ...loaded, tuning, flags: { ...factory().flags, ...loaded.flags },
+            clearDim: { ...CLEAR_DIM_DEFAULT, ...loaded.clearDim } }
         return true
     } catch (e) { printerr(`glass-lab: preset ${path}: ${e}`); return false }
 }
@@ -1090,7 +1103,8 @@ function fillControls() {
         // backdrop, the system's mode and the export's settings stay as they are. A/B used to
         // swap the whole state without rebuilding the scene, so after «A/B, pick promo, A/B» the
         // screen showed the disc while the state said «todas» — and the export drew «todas».
-        const recipe = (from: LabState) => ({ variant: from.variant, panelInk: from.panelInk, tuning: from.tuning, lab: from.lab,
+        const recipe = (from: LabState) => ({ variant: from.variant, panelInk: from.panelInk, tuning: from.tuning,
+            clearDim: from.clearDim, lab: from.lab,
             flags: { ...from.flags, dark: state.flags.dark } })
         if (stash) { state = { ...state, ...recipe(stash) }; stash = null; ab.set_label("A/B: ver punto de partida") }
         else {
@@ -1128,8 +1142,15 @@ function fillControls() {
     section("Cristal", [
         DropDownRow("Variante", "Regular y Clear son candidatos para comparar en una sola escena; no son aún recetas del shell",
             state.variant === "regular" ? "Regular" : "Clear", ["Regular", "Clear"],
-            v => { state.variant = v === "Clear" ? "clear" : "regular"; apply(); rebuild() }),
-    ], "El scrim y el velo oscuro experimental están desactivados. Ambas variantes empiezan con escarcha 3:3 para comparar su tratamiento; Clear deja ver más el fondo con un velo inicial de 0,08. Clear aún no tiene una capa local de oscurecimiento para texto blanco: esta prueba no valida su legibilidad. Menús y paneles grandes necesitan ajuste por tamaño o función, aparte de la variante. Los valores del Lab no son parámetros del filtro de Apple.")
+            v => { state.variant = v === "Clear" ? "clear" : "regular"; apply(); buildScene(); rebuild() }),
+        ...(state.variant === "clear" ? [
+            SliderRow("Oscurecimiento local máximo", "solo dentro de cada forma Clear; 0 = apagado",
+                state.clearDim.max, 0, 1, v => { state.clearDim.max = v; apply() }, { decimals: 2, debounce: 0 }),
+            SliderRow("Luminancia objetivo del fondo", "el dim aumenta solo donde el fondo supera este valor",
+                state.clearDim.target, 0.05, 1, v => { state.clearDim.target = v; apply() },
+                { decimals: 3, debounce: 0 }),
+        ] : []),
+    ], "El scrim alrededor de las piezas está desactivado. Ambas variantes empiezan con escarcha 3:3. Clear mantiene texto claro y oscurece localmente el fondo luminoso dentro de su silueta; los valores son una prueba de Nidara, no parámetros copiados de Apple. Menús y paneles grandes se ajustarán por tamaño o función.")
     section("Fondo", [
         DropDownRow("Fondo", "", state.backdrop, BACKDROPS, v => { state.backdrop = v; apply() }),
         SliderRow("Desplazar", "también: arrastra el fondo con el ratón", state.offset * 100, 0, 100,
@@ -1149,23 +1170,29 @@ function fillControls() {
     ], "El marco del formato elegido es lo que sale en el archivo, con lo que haya en el banco. «Exportar» lo dibuja aparte al tamaño exacto del formato (un Hyalo invisible de 1080×1920 para un 9:16), nunca al de la ventana; la ventana sigue funcionando mientras. El archivo es la misma escena que el marco, dibujada a más resolución: lo que ves es lo que sale. «promo: logo» deja solo el círculo; su tamaño, en px del archivo.")
     section("Piezas", [DropDownRow("En el banco", "una a una para medir sin otras piezas",
         state.show, [...SHOWS], v => { state.show = v as Show; buildScene() })])
-    section("Sistema", [ToggleRow("Modo oscuro", "el aspecto que siguen el cristal y los controles del kit", state.flags.dark !== false,
+    section("Sistema", [ToggleRow("Modo oscuro", "Regular y los controles del kit lo siguen; Clear mantiene su cristal oscuro", state.flags.dark !== false,
         v => { state.flags.dark = v; apply() })])
     section("Color del texto", [
-        DropDownRow("Texto de paneles y avisos", "fijo = blanco como hoy; adaptativo = prueba el cambio según el fondo",
-            state.panelInk, ["fijo", "adaptativo"], v => { state.panelInk = v as PanelInk; buildScene() }),
-        ToggleRow("Texto que cambia a oscuro", "apagado: siempre blanco (ink = off)", state.flags.ink,
-            v => { state.flags.ink = v; apply() }),
-        DropDownRow("Deciden juntas", "qué piezas cambian a la vez", state.ink, ["pieza", "grupo", "panel"],
-            v => { state.ink = v as Ink; apply(); buildScene() }),
-        tuningSlider("inkDarkAbove", "Umbral a oscuro", "luminancia del punto más oscuro bajo el texto", 0, 1),
-        tuningSlider("inkLightBelow", "Umbral de vuelta a blanco", "", 0, 1),
-    ])
+        ...(state.variant === "regular" ? [
+            DropDownRow("Texto de paneles y avisos", "fijo = blanco como hoy; adaptativo = prueba el cambio según el fondo",
+                state.panelInk, ["fijo", "adaptativo"], v => { state.panelInk = v as PanelInk; buildScene() }),
+            ToggleRow("Texto que cambia a oscuro", "apagado: siempre blanco (ink = off)", state.flags.ink,
+                v => { state.flags.ink = v; apply() }),
+        ] : []),
+        ...(state.variant === "regular" ? [
+            DropDownRow("Deciden juntas", "qué piezas cambian a la vez", state.ink, ["pieza", "grupo", "panel"],
+                v => { state.ink = v as Ink; apply(); buildScene() }),
+            tuningSlider("inkDarkAbove", "Umbral a oscuro", "luminancia del punto más oscuro bajo el texto", 0, 1),
+            tuningSlider("inkLightBelow", "Umbral de vuelta a blanco", "", 0, 1),
+        ] : []),
+    ], state.variant === "clear" ? "Clear usa texto claro fijo; su legibilidad se prueba con el oscurecimiento local del cristal." : "")
     section("Tinte y legibilidad", [
         tuningSlider("alphaMin", "Tinte mínimo", "", 0, 0.4),
         tuningSlider("alphaMax", "Tinte máximo", "sin scrim; Regular puede adaptarlo al fondo", 0, 1),
         tuningSlider("target", "Objetivo de luminancia", "0,183 ≈ texto blanco a 4,5:1; 1 = sin oscurecimiento adaptativo", 0.05, 1, 3),
-        tuningSlider("modeLightVeil", "Velo en modo claro", "solo cuando el aspecto es claro", 0, 0.5),
+        ...(state.variant === "regular" ? [
+            tuningSlider("modeLightVeil", "Velo en modo claro", "solo cuando el aspecto es claro", 0, 0.5),
+        ] : []),
     ])
     section("Fondo bajo el cristal (capas nuevas)", [
         labSlider(0, "Comprimir blancos: techo", "0 = apagado; luminancia a la que llega el blanco", 0, 1, 0),

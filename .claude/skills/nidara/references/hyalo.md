@@ -417,12 +417,20 @@ selector, the system appearance toggle, and separate tuning maps for the two can
 presets. Both start at the Lab's 3:3 frost to hold that variable constant for an initial A/B;
 this is a test condition, not a measured equivalence with Apple's blur. Regular keeps the
 factory's adaptive dark tint; Clear starts with a fixed 0.08 tint/veil and saturation 1. These
-Clear numbers are trial values, not Apple's filter parameters. Clear still lacks a localized
-dimming layer and fixed bright content as a coherent default, so it is not yet a faithful Clear
-recipe or a legibility pass. The Lab writes `scrim = off` unconditionally, removes its scrim
-controls and the old uniform dark-veil hook (`lab[2]`); the production material is unchanged.
-For CC and NC there is a separate fixed/adaptive ink selector: fixed matches the current shell,
-adaptive lets the Lab test readability without changing the shell. Old flat tuning presets load
+Clear numbers are trial values, not Apple's filter parameters. The Lab's Clear candidate now
+uses fixed bright ink and a LAB-only local dim INSIDE each glass silhouette: `lab[2]` caps the
+black opacity, `lab[3]` is the target WCAG luminance before the tint. The shader searches for
+the least opacity needed per pixel, so dark backdrop pixels are untouched. Its starting 0.8 /
+0.12 values are experiments, not Apple's algorithm; test them on photographs as well as flat
+backdrops, since per-pixel dimming may flatten bright image details. On the white CC bench this
+raised ordinary Wi-Fi/Bluetooth labels from 1.13:1 (off) to 5.04:1; the selected blue Brillo
+tile remains 3.05:1 and needs separate treatment. Clear's glass stays dark
+in either system appearance so its fixed light text remains legible. These controls and values
+live in the Lab preset (`clearDim`) and `HYALO_SHADER_DIR` hook, not the material protocol or
+production shell. The Lab writes `scrim = off` unconditionally and discards the old uniform
+dark-veil hook; the production material is unchanged. For CC and NC Regular has a separate
+fixed/adaptive ink selector: fixed matches the current shell, adaptive tests readability without
+changing the shell. Old flat tuning presets load
 into Regular's tuning map. In headless checks on white, Clear with fixed white CC ink measured
 1.13:1 on Wi-Fi/Bluetooth; adaptive dark ink measured 15.13:1. This is a testable design choice,
 not a finished role mapping. The one-surface-per-variant Lab comparison does not solve the

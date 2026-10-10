@@ -8,7 +8,8 @@
 // and becomes the factory's by changing the number the hook wraps (and the lab's neutral).
 //   lab[0]  tone: ceiling, the WCAG luminance white is compressed to (0 = off)        block
 //   lab[1]  tone: knee, the luminance below which nothing changes (0 = 0.15)          block
-//   lab[2]  dim: a black veil over the backdrop before the tint, 0..1                 block
+//   lab[2]  Clear trial: maximum local dim inside each glass silhouette, 0..1          block
+//   lab[3]  Clear trial: target WCAG luminance before the tint, 0..1                    block
 //   lab[4]  bevel profile: + to its exponent (5)                                      ADD
 //   lab[5]  refraction: × (1 + it) on its strength (3 × Snell's)                      MUL
 //   lab[6]  dispersion: its spread, 1 = the fringe there was until 2026-10-05          block
@@ -372,8 +373,19 @@ void main() {
                             to_encoded(to_linear(bg.b) * k)), 0.0, 1.0);
         }
     }
-    // Dim: an even black veil over the backdrop, before the tint.
-    if (lab(2) != 0.0) bg *= 1.0 - clamp(lab(2), 0.0, 1.0);
+    // Clear trial: darken only the background seen THROUGH this glass silhouette. The final
+    // pass already clips to the signed-distance shape; no black is drawn around it. Find the
+    // least black opacity that reaches the target, bounded by the Lab slider. This is a local
+    // per-pixel experiment, not a reconstruction of Apple's undocumented dimming layer.
+    if (lab(2) > 0.0 && lab(3) > 0.0 && luminance(bg) > lab(3)) {
+        float lo = 0.0;
+        float hi = clamp(lab(2), 0.0, 1.0);
+        for (int i = 0; i < 8; i++) {
+            float m = 0.5 * (lo + hi);
+            if (luminance(bg * (1.0 - m)) > lab(3)) lo = m; else hi = m;
+        }
+        bg *= 1.0 - hi * formed;
+    }
 #endif
     // The tint thickens exactly where the backdrop is too bright for white content:
     // after tinting, the luminance does not exceed target (per pixel; #673's rule, on the GPU).
