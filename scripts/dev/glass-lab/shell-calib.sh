@@ -7,7 +7,7 @@
 #
 # OUTDIR/<mode>-desktop-<wall>.png  the desktop (bar, dock) over each wallpaper
 # OUTDIR/<mode>-cc-<wall>.png       the same with the Control Center open (opened once, the
-#                                   wallpaper changed under it — as the probe does on macOS)
+#                                   wallpaper changed under it — as the probe does on the reference)
 # OUTDIR/<mode>-layers.json         Hyalo's `msg layers`
 # OUTDIR/shell.log, hyalo.log
 # --tuning   a glass-tuning.conf for the shell (dev mode reads it): the glass under test; without
