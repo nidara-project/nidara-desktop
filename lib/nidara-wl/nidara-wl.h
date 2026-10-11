@@ -533,6 +533,19 @@ void nidara_wl_material_set_ink_tone (GdkSurface *surface, double saturation, do
                                       double ambient, double ambient_lift, double ambient_gain);
 
 /**
+ * nidara_wl_material_set_shape_blur:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @size: the kawase offset, logical px
+ * @passes: the number of passes; 0 = the surface's blur (nidara_wl_material_commit())
+ *
+ * The blur of the shapes added after this call, until the next one, in place of the
+ * surface's (nidara-material-v1.set_shape_blur): a large pane blurred further than the small
+ * controls beside it on the same surface. Pending until nidara_wl_material_commit(); reset by
+ * nidara_wl_material_begin().
+ */
+void nidara_wl_material_set_shape_blur (GdkSurface *surface, double size, guint passes);
+
+/**
  * nidara_wl_material_set_lensing:
  * @surface: the #GdkSurface
  * @size_fraction: of each shape's shorter side, 0..1; 0 = set_glass's refraction everywhere

@@ -30,7 +30,8 @@
     <request name="clear_shapes">
       <description summary="pending: no shapes (no material)">
         The ink boxes (add_ink_box) and veil regions (add_veil_region) go
-        with them, and the tones (set_tone, set_ink_tone) are reset to none.
+        with them, the tones (set_tone, set_ink_tone) are reset to none, and
+        the shapes' blur (set_shape_blur) to the surface's.
       </description>
     </request>
     <request name="add_shape">
@@ -334,6 +335,18 @@
       <arg name="ambient" type="fixed"/>
       <arg name="ambient_lift" type="fixed"/>
       <arg name="ambient_gain" type="fixed"/>
+    </request>
+    <request name="set_shape_blur">
+      <description summary="pending: the blur of the shapes added from now on">
+        The blur (as set_blur: the kawase offset in logical pixels and the
+        number of passes) of the shapes added after this request, until the
+        next set_shape_blur, in place of the surface's: a large pane is blurred
+        further than the small controls beside it on the same surface, as the
+        reference material blurs its menus and panels further than its buttons.
+        passes 0 = the surface's blur (set_blur). Reset to it by clear_shapes.
+      </description>
+      <arg name="size" type="fixed"/>
+      <arg name="passes" type="uint"/>
     </request>
   </interface>
 </protocol>

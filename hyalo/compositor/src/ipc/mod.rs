@@ -101,6 +101,9 @@ pub struct GlassInfo {
     pub scrims: Vec<ScrimInfo>,
     /// How many of its shapes carry a tone (`set_tone`).
     pub toned: usize,
+    /// Each shape's blur, "size:passes" (logical px): its own (`set_shape_blur`) or the
+    /// surface's.
+    pub blurs: Vec<String>,
     /// Its fusion groups (`set_fusion`): how many shapes each one joins, in group order.
     pub fusion: Vec<usize>,
 }

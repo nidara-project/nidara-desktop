@@ -34,6 +34,12 @@ import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, t
  *
  * Reduce transparency makes every pane solid: a wash of the skin's own colour. The panels'
  * blur is the bundle's to say (the shell's follows Settings' glass material, `GlassBlur.ts`).
+ * A large pane (PIECE panel) blurs one pass further than the small ones beside it, whatever
+ * that material: the reference's large floating glass (its menu, a popover, a 220×150 panel)
+ * spreads a 0.4|0.6 edge to σ 7.25–8 pt where its buttons and toolbar groups stay at 4.75, and
+ * so do ours, measured the same way in the real shell (2026-10-11): 4.5 at the surface's
+ * regular blur, 7.75 one pass further. Hyalo gives such a pane a blur of its own
+ * (`set_shape_blur`), so the bar's capsules keep theirs on the same surface.
  *
  * The glass's other numbers — refraction, lensing, rim, the ink's thresholds — are the
  * owner's, tuned in the glass lab (`scripts/dev/glass-lab/`, 2026-10-05, preset "OK 2", #705)
@@ -57,6 +63,10 @@ import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, t
  *   popoverBlur = SIZE:PASSES                            tooltips' and menus' (default: one
  *                                                        pass more than the panels', owner
  *                                                        2026-10-01: more blur than panels)
+ *   panelBlur = SIZE:PASSES                              a large pane's on a surface of small
+ *                                                        ones (PIECE panel: the system menu,
+ *                                                        Prism, the app grid; default: one pass
+ *                                                        more than the surface's)
  *   glass = off                                          blur only: the shell paints its own
  *                                                        glass, as on Hyprland (A/B)
  *   ink = off                                            the text stays white everywhere
@@ -187,7 +197,7 @@ export const GLASS_MATERIAL_DEFAULTS: Readonly<typeof DEFAULTS> = DEFAULTS
 
 type Blur = { size: number, passes: number }
 type ToneTuning = Partial<Record<`${GlassPiece}.${"dark" | "light"}.${string}`, number>>
-type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, toneOff?: boolean,
+type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, panelBlur?: Blur, off?: boolean, inkOff?: boolean, toneOff?: boolean,
     tones?: ToneTuning }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
@@ -282,7 +292,7 @@ function parse(text: string): Tuning {
             if (piece in TONES && (face === "dark" || face === "light")
                 && (TONE_STAGES as readonly string[]).includes(stage) && Number.isFinite(Number(v)))
                 out.tones = { ...out.tones, [k]: Number(v) }
-        } else if (k === "blur" || k === "popoverBlur") {
+        } else if (k === "blur" || k === "popoverBlur" || k === "panelBlur") {
             const [size, passes] = v.split(":").map(Number)
             if (Number.isFinite(size) && Number.isInteger(passes)) out[k] = { size, passes }
         } else if (k === "glass") {
@@ -339,6 +349,13 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
             // A tooltip or a menu is a popover: a surface of its own, blurred more.
             if (!(native instanceof Gtk.Popover)) return panels
             return tuning.popoverBlur ?? { size: panels.size, passes: panels.passes + 1 }
+        },
+        // A large pane on a surface of small ones blurs one pass further (the header says why).
+        // A popover is already blurred as one, the whole surface.
+        pieceBlur: (native: Gtk.Native, piece: GlassPiece) => {
+            if (piece !== "panel" || native instanceof Gtk.Popover) return null
+            const panels = tuning.blur ?? h.panelBlur()
+            return tuning.panelBlur ?? { size: panels.size, passes: panels.passes + 1 }
         },
         onChange: (cb) => {
             // The mode or Reduce transparency may have changed: every tone is asked again.

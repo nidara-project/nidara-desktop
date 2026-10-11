@@ -528,6 +528,15 @@ nidara_wl_material_set_ink_tone (GdkSurface *surface, double saturation, double 
 }
 
 void
+nidara_wl_material_set_shape_blur (GdkSurface *surface, double size, guint passes)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m)
+    nidara_material_v1_set_shape_blur (m, wl_fixed_from_double (size), passes);
+}
+
+void
 nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));

@@ -46,6 +46,16 @@ pub struct Shape {
     pub tone: Option<Tone>,
     /// Its tone while its ink group's content is dark (`set_ink_tone`). None: `tone`.
     pub ink_tone: Option<Tone>,
+    /// Its own blur (`set_shape_blur`). None: the surface's (`set_blur`).
+    pub blur: Option<Blur>,
+}
+
+/// A blur: the kawase offset (logical px) and the number of passes (`set_blur`,
+/// `set_shape_blur`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Blur {
+    pub size: f64,
+    pub passes: u32,
 }
 
 /// How the glass treats the blurred backdrop under a shape (`set_tone`), in this order, on the
@@ -167,6 +177,8 @@ pub struct MaterialState {
     /// What `set_tone` and `set_ink_tone` last said: the tones the next shapes take.
     pub toning: Option<Tone>,
     pub ink_toning: Option<Tone>,
+    /// What `set_shape_blur` last said: the blur the next shapes take.
+    pub blurring: Option<Blur>,
     /// `set_drawn_region`: where the surface's content is drawn, surface-local logical
     /// rectangles that do not overlap. None: the whole surface.
     pub drawn: Option<Vec<Rectangle<i32, Logical>>>,
@@ -177,6 +189,11 @@ impl MaterialState {
     /// `lensing` of its shorter side where that is more. 0 without the compositor's glass.
     pub fn refraction_of(&self, s: &Shape) -> f64 {
         self.glass.map_or(0.0, |g| g.refraction.max(self.lensing * s.w.min(s.h)))
+    }
+
+    /// The blur a shape is resolved with: its own (`set_shape_blur`), else the surface's.
+    pub fn blur_of(&self, s: &Shape) -> Blur {
+        s.blur.unwrap_or(Blur { size: self.blur_size, passes: self.blur_passes })
     }
 }
 
@@ -440,7 +457,8 @@ pub fn drawn(surface: &WlSurface) -> Option<Drawn> {
 pub fn current(surface: &WlSurface) -> Option<Current> {
     with_states(surface, |states| {
         let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().clone();
-        (!current.state.shapes.is_empty() && current.state.blur_passes > 0).then_some(current)
+        let m = &current.state;
+        (m.shapes.iter().any(|s| m.blur_of(s).passes > 0)).then_some(current)
     })
 }
 
@@ -516,6 +534,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.fusing = None;
                     m.toning = None;
                     m.ink_toning = None;
+                    m.blurring = None;
                 });
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
@@ -523,7 +542,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.shapes.push(Shape {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
                         pointer: None, fusion: m.fusing,
-                        tone: m.toning, ink_tone: m.ink_toning,
+                        tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring,
                     })
                 });
             }
@@ -541,7 +560,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
-                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning,
+                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring,
                         })
                     });
                 }
@@ -566,7 +585,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
                             fusion: if pointer.is_some() { None } else { m.fusing },
-                            tone: m.toning, ink_tone: m.ink_toning,
+                            tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring,
                         })
                     });
                 }
@@ -588,6 +607,9 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.blur_size = size;
                     m.blur_passes = passes.min(8);
                 });
+            }
+            Request::SetShapeBlur { size, passes } => {
+                self.pending(|m| m.blurring = (passes > 0).then_some(Blur { size: size.max(0.0), passes: passes.min(8) }));
             }
             // The tint's arguments are inert since set_tone (the protocol stays v1).
             Request::SetGlass { refraction, rim, .. } => {
@@ -712,7 +734,7 @@ mod tests {
     fn shape(x: f64, y: f64) -> Shape {
         Shape {
             x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None,
+            fusion: None, tone: None, ink_tone: None, blur: None,
         }
     }
 
@@ -750,5 +772,18 @@ mod tests {
         add(&mut m);
         assert_eq!((m.shapes[0].tone, m.shapes[0].ink_tone), (Some(dark), Some(light)));
         assert_eq!((m.shapes[1].tone, m.shapes[1].ink_tone), (None, None), "after a reset: none");
+    }
+
+    #[test]
+    fn a_shape_without_a_blur_of_its_own_takes_the_surface_s() {
+        let wide = Blur { size: 2.0, passes: 3 };
+        let m = MaterialState {
+            shapes: vec![shape(0.0, 0.0), Shape { blur: Some(wide), ..shape(0.0, 100.0) }],
+            blur_size: 2.0,
+            blur_passes: 2,
+            ..Default::default()
+        };
+        assert_eq!(m.blur_of(&m.shapes[0]), Blur { size: 2.0, passes: 2 }, "the surface's");
+        assert_eq!(m.blur_of(&m.shapes[1]), wide, "its own");
     }
 }

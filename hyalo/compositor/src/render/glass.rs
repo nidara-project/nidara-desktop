@@ -97,7 +97,7 @@ impl GlassElement {
         groups
             .into_iter()
             .zip(ids)
-            .map(|((region, mut shapes), id)| {
+            .map(|((region, mut shapes, blur), id)| {
                 let center = |b: &glass_gl::InkBox| {
                     Point::<f64, Physical>::from((b.rect.loc.x + b.rect.size.w / 2.0, b.rect.loc.y + b.rect.size.h / 2.0))
                 };
@@ -125,8 +125,8 @@ impl GlassElement {
                     region,
                     ink_saturation,
                     shapes,
-                    offset: (m.blur_size * scale.x) as f32,
-                    passes: m.blur_passes as usize,
+                    offset: (blur.size * scale.x) as f32,
+                    passes: blur.passes as usize,
                     glass,
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
@@ -290,16 +290,19 @@ impl<R: HyaloRenderer> RenderElement<R> for GlassElement {
 const FORMED_ALIKE: f32 = 0.01;
 
 /// A material's shapes in output pixels, grouped where their blur reaches overlap, each group
-/// with the region it blurs: its bounds grown by how far the kawase chain reaches.
+/// with the region it blurs — its bounds grown by how far the kawase chain reaches — and the
+/// blur it is resolved with. Shapes blurred alike only (`set_shape_blur`): one pyramid has one
+/// blur. A fusion group is one silhouette whatever its members' blurs, and takes the widest.
 fn groups(
     size: smithay::utils::Size<i32, Physical>,
     scale: Scale<f64>,
     location: Point<i32, Physical>,
     m: &material::MaterialState,
-) -> Vec<(Rectangle<i32, Physical>, Vec<glass_gl::Shape>)> {
+) -> Vec<(Rectangle<i32, Physical>, Vec<glass_gl::Shape>, material::Blur)> {
     // The refractive edge reads the backdrop from INSIDE the shape (glass_gl.rs), so this is all.
-    let reach = m.blur_size * scale.x * 2f64.powi(m.blur_passes as i32 + 1);
-    let grow = |r: &Rectangle<f64, Physical>| {
+    let reach_of = |b: material::Blur| b.size * scale.x * 2f64.powi(b.passes as i32 + 1);
+    let blur_at = |s: &glass_gl::Shape| m.blur_of(&m.shapes[s.index]);
+    let grow_by = |r: &Rectangle<f64, Physical>, reach: f64| {
         Rectangle::<f64, Physical>::new(
             r.loc - Point::from((reach, reach)),
             (r.size.w + 2.0 * reach, r.size.h + 2.0 * reach).into(),
@@ -349,6 +352,7 @@ fn groups(
         }
         i
     }
+    let grow = |s: &glass_gl::Shape| grow_by(&s.bounds(), reach_of(blur_at(s)));
     for a in 0..shapes.len() {
         for b in a + 1..shapes.len() {
             // A fusion group is one silhouette: one element, whatever lies between its shapes.
@@ -356,7 +360,8 @@ fn groups(
             // A pane forming (#764) has a blur of its own, its reach growing: it shares no
             // pyramid with panes at rest beside it (the Control Center under the bar's capsules).
             let formed_alike = (shapes[a].opacity - shapes[b].opacity).abs() < FORMED_ALIKE;
-            if fused || (formed_alike && grow(&shapes[a].bounds()).overlaps(grow(&shapes[b].bounds()))) {
+            let blurred_alike = blur_at(&shapes[a]) == blur_at(&shapes[b]);
+            if fused || (formed_alike && blurred_alike && grow(&shapes[a]).overlaps(grow(&shapes[b]))) {
                 let (ra, rb) = (find(&mut root, a), find(&mut root, b));
                 root[ra] = rb;
             }
@@ -378,8 +383,44 @@ fn groups(
             for s in &shapes[1..] {
                 bounds = bounds.merge(s.bounds());
             }
-            let region = grow(&bounds).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
-            (region.size.w >= 2 && region.size.h >= 2).then_some((region, shapes))
+            let blur = shapes
+                .iter()
+                .map(blur_at)
+                .max_by(|a, b| reach_of(*a).total_cmp(&reach_of(*b)))
+                .unwrap_or(material::Blur { size: m.blur_size, passes: m.blur_passes });
+            let region = grow_by(&bounds, reach_of(blur)).to_i32_round::<i32>().intersection(Rectangle::from_size(size))?;
+            (region.size.w >= 2 && region.size.h >= 2 && blur.passes > 0).then_some((region, shapes, blur))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn shape(x: f64, y: f64, blur: Option<material::Blur>) -> material::Shape {
+        material::Shape {
+            x, y, w: 200.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
+            fusion: None, tone: None, ink_tone: None, blur,
+        }
+    }
+
+    #[test]
+    fn panes_blurred_differently_share_no_pyramid_and_each_keeps_its_blur() {
+        let wide = material::Blur { size: 2.0, passes: 3 };
+        let m = material::MaterialState {
+            // A capsule, and a menu right under it: their reaches overlap.
+            shapes: vec![shape(0.0, 0.0, None), shape(0.0, 50.0, Some(wide)), shape(220.0, 0.0, None)],
+            blur_size: 2.0,
+            blur_passes: 2,
+            ..Default::default()
+        };
+        let g = groups((2560, 1440).into(), Scale::from(1.0), Point::from((0, 0)), &m);
+        let blurs: Vec<_> = g.iter().map(|(_, s, b)| (s.iter().map(|s| s.index).collect::<Vec<_>>(), *b)).collect();
+        assert_eq!(blurs.len(), 2, "the menu alone, the capsules together: {blurs:?}");
+        assert!(blurs.contains(&(vec![1], wide)));
+        assert!(blurs.contains(&(vec![0, 2], material::Blur { size: 2.0, passes: 2 })));
+        let menu = g.iter().find(|(_, s, _)| s[0].index == 1).unwrap().0;
+        assert!(menu.loc.y <= 50 - 32, "its region reaches as far as its own blur (2·2⁴): {menu:?}");
+    }
 }

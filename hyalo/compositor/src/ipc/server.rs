@@ -333,6 +333,10 @@ impl Hyalo {
                                 })
                                 .collect(),
                             toned: m.state.shapes.iter().filter(|s| s.tone.is_some()).count(),
+                            blurs: m.state.shapes.iter().map(|s| {
+                                let b = m.state.blur_of(s);
+                                format!("{}:{}", b.size, b.passes)
+                            }).collect(),
                         }),
                         drawn: crate::protocols::material::drawn(l.wl_surface())
                             .and_then(|d| d.rects)

@@ -118,7 +118,7 @@ What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `refraction lensing rim inkDarkAbove
 inkLightBelow veilStrength veilFalloff veilExponent`, one stage of one tone as `PIECE.FACE.STAGE`
-(`dock.light.gain = 0.9`), `blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` /
+(`dock.light.gain = 0.9`), `blur`/`popoverBlur`/`panelBlur = SIZE:PASSES`, `glass = off` / `ink = off` /
 `tone = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
@@ -689,6 +689,31 @@ botched replica by eye … it doesn't add up"). The owner's call: copy the MACHI
   modeLightVeil`. Their history — the CC's camera tile going grey on the owner's wallpaper, the
   strip, the halo per capsule, the dock's band switched on by the CC — is in git, `hyalo.md`
   before this change.
+
+### A large pane's blur (2026-10-11)
+
+A large pane — `GlassPiece` `panel`: the system menu, Prism, the app grid — blurs ONE PASS further
+than the small panes beside it on the same surface. Owner, 2026-10-11: "over anything but plain
+black or white the reference's menus look more uniform … more blur?" — measured, and yes. The
+probe's `bare-regular-panel` and real menu spread a 0.4|0.6 edge (bands 48 px) to σ 7.25–8 pt and
+let 0.007–0.023 of a page of text through; its buttons and toolbar groups stay at σ 4.75. Our
+menu and app grid had the bar's blur (σ 4.5, 0.03–0.11 of the page): same tone on plain greys,
+far more detail through. One pass more (2:2 → 2:3 at the regular material) measures σ 7.75–8 and
+0.01–0.02 on the real shell, the tone unchanged (`texture-calib`: glass-probe's own estimators,
+`tools/catalog.py`, on our captures). The app grid reads σ 9.75 with the same blur: unexplained,
+and the reference's Applications panel was never read from its filter.
+
+- **Why a protocol request.** The blur was per SURFACE (`set_blur`), and every panel lives on the
+  bar's (commandment 5): the menu could not blur more without the capsules. `set_shape_blur`
+  (within v1) is a pen like `set_tone`: the shapes added after it take that blur, passes 0 = the
+  surface's again, reset by `clear_shapes`.
+- **Hyalo** (`material::Blur`, `MaterialState::blur_of`, `render/glass.rs` `groups`): shapes
+  blurred differently never share a pyramid (one capture, one blur); a group's region grows by
+  its own blur's reach; a fusion group is one silhouette whatever its members' blurs, and takes
+  the widest. `msg layers` lists each shape's blur (`blurs`, "size:passes").
+- **The kit** (`MaterialSource.pieceBlur`, `glass-material.ts`): `panel` → the surface's blur
+  plus one pass, whatever the material Settings chose; a popover is already blurred so as a
+  whole surface (`popoverBlur`), so its panes ask nothing. Tuned live: `panelBlur = SIZE:PASSES`.
 
 ### The veil under the Control Center (2026-10-11)
 
