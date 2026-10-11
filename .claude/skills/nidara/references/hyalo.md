@@ -718,23 +718,25 @@ owner's idea: a soft black shadow UNDER the glass, even across the pane, only wh
 - **Who casts what.** A pane in no region gets a halo, its outline fading outward over
   `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
   "a shadow downward separating the top from the bottom").
-  - **The Control Center and the Notification Center share ONE region** (`trackScrimRegion(widget)`
-    in Bar.tsx): their CONTAINER, EVEN across it (`scrimEdge` 1 — the shadow is what the glass
-    lacks at the brightest point, so a sweep leaves the edge tiles short of it; 0.7 did not read
-    on screen either, owner 2026-10-02: settled, no more tuning rounds), then fading to nothing over `scrimFalloff` (160) px — 48 read as a step ("there must be no jump between the shadow and the backdrop", owner). Tuned live. How it got
-    there, all on 2026-10-02: first the screen's whole right-hand strip, down to the bottom,
-    shading wallpaper far below a short panel — the owner, from a reference video: "the shadow
-    occupies only the CC's area"; then the panel's block, even: "it looks like a translucent
-    dark panel with a gradient at its border"; an ELLIPSE darkest at the centre was written and
-    thrown away unseen — "I did not say an ellipse … very subtle, very slightly darker at the
-    centre, sweeping from the centre, over the container's area"; the sweep then went back to
-    even, above. The region
-    no longer reaches past the screen's edges: its centre has to be the panel's. Its core ends
-    at its GLASS's edges plus what
-    that glass refracts (`placeScrimRegions`), not at the widget's box, which holds margins:
-    "the fade should start right where the CC ends" (owner; it was 32 px of margin and 380 of
-    fade — 800 px of shadow for a 368 px panel). Measured nested without it: each tile got its own
-    strength (0, 0.31, 0.37, 0.43…) — blotches, exactly what the owner predicted.
+  - **The Control Center and the Notification Center lie on a fixed VEIL** (`trackVeilRegion(widget)`
+    in Bar.tsx → `nidara_material_v1.add_veil_region`), not on the measured shadow. Owner,
+    2026-10-09: "the shadow under it cannot define how the glass looks" — out. What replaced it
+    is the reference's own, MEASURED on its real Control Center over known wallpapers
+    (2026-10-11, glass-probe `tools/cc_calib.py`, runs 38119286883/38119289287): 0.078 black,
+    even behind the tiles, falling from their edge as (1 − d/125)^1.5 (0.055 at 25 px, 0.035 at
+    50, 0.020 at 75, 0.008 at 100), the same in both modes. A veil is FIXED: no measurement, no
+    easing, no part in `scrim_target`, and it needs no `set_scrim` (`render/scrim.rs` draws it
+    as a unit whose `veil` exponent replaces the smootherstep; the shader takes it as a
+    negative `edge`). The glass's measurement still divides it out (`alpha_at`). Its core is
+    the panes' container, as the shadow's was (`placeScrimRegions`); the glass material's
+    `veilStrength veilFalloff veilExponent` tune it. A library without `add_veil_region`
+    claims the panes and casts nothing — never the measured shadow. `msg layers` lists it as
+    `kind: "veil"` with its strength. Its tiles keep the glass's ceiling (`tintLimit`): the bar's
+    surface still casts the measured shadow under the app grid and the overview. Measured on the
+    real shell (`scripts/dev/glass-lab/shell-calib.sh`, 2026-10-11): before, the CC's shadow
+    took white to 0.60 and its tiles to 0.47; the reference: 0.92 at the tiles' edge, tiles 0.73.
+    The measured shadow's history (2026-10-02: the strip, the block, the ellipse thrown away,
+    the even region, `scrimFalloff` 160) is in git, `hyalo.md` before this change.
   - **The bar and the dock cast NONE** (`trackNoScrim`: a region with a negative falloff,
     which claims its panes and casts nothing). Tried and dropped on 2026-10-02: a halo per
     capsule, then a band hugging each (`fade: "strip"`). Measured on screen: the bar's band

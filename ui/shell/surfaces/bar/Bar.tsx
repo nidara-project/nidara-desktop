@@ -36,7 +36,7 @@ import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import { ActivityIsland } from "../island/ActivityIsland"
 import AppGridPanel from "../app-grid/AppGrid"
 import { execAsync } from "../../../lib/process"
-import { trackModeInk, trackNoInk, trackNoScrim, trackScrimRegion } from "../../../lib/nidara-kit/platform/material"
+import { trackModeInk, trackNoInk, trackNoScrim, trackVeilRegion } from "../../../lib/nidara-kit/platform/material"
 import { t } from "../../core/i18n"
 import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
@@ -155,17 +155,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right", unclipAtRest: true })
   const ncWidget = NotificationCenter()
   const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
-  // On Hyalo, the panes of both lie on ONE shadow under their glass, the size of the panel,
-  // a little darker at its centre (owner, 2026-10-02): one per tile would show as patches
-  // with and without shadow, a strip down to the bottom of the screen shaded what the panel
-  // does not cover, and an even block looked like a dark panel. Hyalo lays it only where the
-  // backdrop needs it; the sweep is the glass material's `scrimEdge` (nidara-kit glass-material.ts).
-  // The bar's capsules cast none (owner, 2026-10-02: a halo, or a band hugging the bar, ran
-  // over the windows). Declared FIRST: a capsule on the right also lies in the Control
-  // Center's strip, and must not join it.
+  // On Hyalo, the panes of each lie on ONE fixed veil behind them, the size of the panel and
+  // fading outside it — the reference's Control Center, measured over known wallpapers
+  // (2026-10-11): 0.078 black, gone ~150 px out (the glass material's `veil*`). It replaced
+  // the measured shadow under the glass, which the owner took out (2026-10-09: "the shadow
+  // under it cannot define how the glass looks"). The bar's capsules cast none (owner,
+  // 2026-10-02: a halo, or a band hugging the bar, ran over the windows). Declared FIRST: a
+  // capsule on the right also lies in the Control Center's box, and must not join it.
   trackNoScrim(barBox)
-  trackScrimRegion(cc)
-  trackScrimRegion(nc)
+  trackVeilRegion(cc)
+  trackVeilRegion(nc)
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   // White text ALWAYS in the Control Center and the notifications, whatever is behind them

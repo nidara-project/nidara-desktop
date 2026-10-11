@@ -119,6 +119,16 @@ pub struct ScrimRegion {
     pub w: f64,
     pub h: f64,
     pub falloff: f64,
+    /// add_veil_region: a fixed veil instead of the measured shadow.
+    pub veil: Option<Veil>,
+}
+
+/// A fixed veil (add_veil_region): its opacity, even under its region, and the shape of its
+/// fall-off outside it, `(1 − d/falloff)^exponent`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Veil {
+    pub strength: f64,
+    pub exponent: f64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -162,6 +172,8 @@ pub struct ScrimUnit {
     /// The shadow at the core's rim, as a fraction of its centre's: it sweeps between the two
     /// following the core's shape. 1: even across the core (a lone shape's).
     pub edge: f64,
+    /// A fixed veil (add_veil_region): drawn as it says, never measured nor eased.
+    pub veil: Option<Veil>,
     /// Indices into `MaterialState::shapes`.
     pub members: Vec<usize>,
 }
@@ -172,22 +184,26 @@ pub const LONE_SCRIM: u32 = 0x1_0000;
 impl MaterialState {
     /// The shadows this material asks for: one per region that holds a shape, and one
     /// per shape inside no region — none for a region whose falloff is negative, which claims
-    /// its shapes and casts nothing. Nothing without set_scrim, or without the compositor's
-    /// glass (the shadow is there for its tint).
+    /// its shapes and casts nothing. A veil region (add_veil_region) casts its fixed veil with
+    /// or without set_scrim; the measured shadows need set_scrim. Nothing without the
+    /// compositor's glass.
     pub fn scrim_units(&self) -> Vec<ScrimUnit> {
-        let Some(scrim) = self.scrim.filter(|s| s.max_strength > 0.0 && self.glass.is_some()) else {
+        if self.glass.is_none() {
             return Vec::new();
-        };
+        }
+        let scrim = self.scrim.filter(|s| s.max_strength > 0.0);
         let mut units: Vec<ScrimUnit> = self
             .scrim_regions
             .iter()
             .enumerate()
+            .filter(|(_, r)| r.veil.is_some() || scrim.is_some())
             .map(|(i, r)| ScrimUnit {
                 key: i as u32,
                 core: [r.x, r.y, r.w, r.h],
                 radius: 0.0,
                 falloff: r.falloff,
-                edge: scrim.region_edge,
+                edge: if r.veil.is_some() { 1.0 } else { scrim.map_or(1.0, |s| s.region_edge) },
+                veil: r.veil,
                 members: Vec::new(),
             })
             .collect();
@@ -199,12 +215,14 @@ impl MaterialState {
             });
             match home {
                 Some(u) => u.members.push(i),
+                None if scrim.is_none() => {}
                 None => lone.push(ScrimUnit {
                     key: LONE_SCRIM + i as u32,
                     core: [s.x, s.y, s.w, s.h],
                     radius: s.radius.min(s.w.min(s.h) / 2.0),
-                    falloff: scrim.size_fraction.max(0.0) * s.w.min(s.h),
+                    falloff: scrim.map_or(0.0, |s| s.size_fraction).max(0.0) * s.w.min(s.h),
                     edge: 1.0,
+                    veil: None,
                     members: vec![i],
                 }),
             }
@@ -428,7 +446,8 @@ pub fn scrim_measured(surface: &WlSurface, light: &[(usize, f32, f32)], now: std
             })
         };
         let mut wanted = Vec::new();
-        for unit in state.scrim_units() {
+        // A veil is fixed: nothing to measure for it.
+        for unit in state.scrim_units().into_iter().filter(|u| u.veil.is_none()) {
             let lights: Vec<f32> = unit.members.iter().filter_map(|i| current.shape_light.get(i).map(|l| l.1)).collect();
             if lights.is_empty() {
                 continue;
@@ -776,7 +795,15 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::AddScrimRegion { x, y, width, height, falloff } => {
                 if width > 0.0 && height > 0.0 {
-                    self.pending(|m| m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff }));
+                    self.pending(|m| m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff, veil: None }));
+                }
+            }
+            Request::AddVeilRegion { x, y, width, height, falloff, strength, exponent } => {
+                if width > 0.0 && height > 0.0 {
+                    let veil = Veil { strength: strength.clamp(0.0, 1.0), exponent: exponent.max(0.1) };
+                    self.pending(|m| {
+                        m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff: falloff.max(0.0), veil: Some(veil) })
+                    });
                 }
             }
             Request::SetDrawnRegion { region } => {
@@ -899,8 +926,8 @@ mod tests {
             }),
             scrim: Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25, region_edge: 0.7 }),
             scrim_regions: vec![
-                ScrimRegion { x: 850.0, y: -1e5, w: 1e5, h: 2e5, falloff: 300.0 },
-                ScrimRegion { x: 0.0, y: 600.0, w: 10.0, h: 10.0, falloff: 50.0 },
+                ScrimRegion { x: 850.0, y: -1e5, w: 1e5, h: 2e5, falloff: 300.0, veil: None },
+                ScrimRegion { x: 0.0, y: 600.0, w: 10.0, h: 10.0, falloff: 50.0, veil: None },
             ],
             ..Default::default()
         };
@@ -911,10 +938,37 @@ mod tests {
         assert_eq!(units[1].falloff, 20.0, "fading over half its shorter side");
         assert_eq!((units[0].edge, units[1].edge), (0.7, 1.0), "a region sweeps from its centre; a lone shape's is even");
         // A region that casts nothing claims the shape anyway: no shadow of its own either.
-        m.scrim_regions.insert(0, ScrimRegion { x: 0.0, y: 0.0, w: 200.0, h: 100.0, falloff: -1.0 });
+        m.scrim_regions.insert(0, ScrimRegion { x: 0.0, y: 0.0, w: 200.0, h: 100.0, falloff: -1.0, veil: None });
         let units = m.scrim_units();
         assert_eq!(units.iter().map(|u| u.members.clone()).collect::<Vec<_>>(), vec![vec![1, 2]], "the first pane casts nothing");
         m.glass = None;
         assert!(m.scrim_units().is_empty(), "no shadow without the compositor's glass");
+    }
+
+    #[test]
+    fn a_veil_region_casts_its_own_fixed_veil_without_set_scrim() {
+        let shape = |x: f64, y: f64| Shape {
+            x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
+            fusion: None,
+        };
+        let veil = Veil { strength: 0.078, exponent: 1.5 };
+        let mut m = MaterialState {
+            shapes: vec![shape(10.0, 10.0), shape(900.0, 100.0)],
+            glass: Some(Glass {
+                tint: [0.0; 3], alpha_min: 0.05, alpha_max: 0.6, target_luminance: 0.183, refraction: 10.0, rim: 0.7,
+                saturation: 1.0,
+            }),
+            scrim: None,
+            scrim_regions: vec![ScrimRegion { x: 850.0, y: 0.0, w: 400.0, h: 400.0, falloff: 125.0, veil: Some(veil) }],
+            ..Default::default()
+        };
+        let units = m.scrim_units();
+        assert_eq!(units.len(), 1, "no set_scrim: the veil only, no lone shadow for the other pane: {units:?}");
+        assert_eq!((units[0].members.clone(), units[0].veil, units[0].edge), (vec![1], Some(veil), 1.0));
+        // With set_scrim the pane outside gets its measured shadow; the veil's pane still none of its own.
+        m.scrim = Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25, region_edge: 0.7 });
+        let units = m.scrim_units();
+        assert_eq!(units.iter().map(|u| (u.members.clone(), u.veil.is_some())).collect::<Vec<_>>(),
+            vec![(vec![1], true), (vec![0], false)]);
     }
 }

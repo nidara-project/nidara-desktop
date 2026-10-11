@@ -536,6 +536,22 @@ nidara_wl_material_add_scrim_region (GdkSurface *surface,
 }
 
 void
+nidara_wl_material_add_veil_region (GdkSurface *surface,
+                                    double x, double y, double width, double height,
+                                    double falloff, double strength, double exponent)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (!m || width <= 0 || height <= 0)
+    return;
+  nidara_material_v1_add_veil_region (m,
+                                      wl_fixed_from_double (x), wl_fixed_from_double (y),
+                                      wl_fixed_from_double (width), wl_fixed_from_double (height),
+                                      wl_fixed_from_double (falloff), wl_fixed_from_double (strength),
+                                      wl_fixed_from_double (exponent));
+}
+
+void
 nidara_wl_material_set_fusion (GdkSurface *surface, guint group, double spacing)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));

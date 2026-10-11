@@ -283,5 +283,28 @@
       </description>
       <arg name="region" type="object" interface="wl_region" allow-null="true"/>
     </request>
+    <request name="add_veil_region">
+      <description summary="pending: a FIXED veil under the shapes inside it">
+        Like add_scrim_region — surface-local, logical; every shape whose centre
+        lies inside it is claimed by it and gets no other shadow — but what it
+        casts is not measured: a black veil of opacity strength (0..1), even
+        under the whole rectangle, falling to nothing over falloff logical
+        pixels outside it as (1 − d/falloff)^exponent. It needs no set_scrim
+        and takes no part in its rule: the glass's tint is not limited by it,
+        and the backdrop's brightness does not change it. It fades with the
+        shapes' opacity. Cleared by clear_shapes; meaningful only while the
+        compositor paints the glass (set_glass).
+
+        The darkening a group of panes lies on, behind them, rather than a
+        shadow that makes up what the glass lacks.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="falloff" type="fixed"/>
+      <arg name="strength" type="fixed"/>
+      <arg name="exponent" type="fixed" summary="the fall-off's shape outside the rectangle: 1 linear, more falls faster near it"/>
+    </request>
   </interface>
 </protocol>
