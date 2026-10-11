@@ -563,6 +563,16 @@ that flattens everything bright to one grey; and the blur aims at the Retina loo
 The «cristal real — …» presets carry it (Regular dark smoke 0.6, white text ≈ 6:1 over a white
 page; Regular `1.2:3`; Clear `1.0:1`), awaiting the owner's eye.
 
+🔑 **The better reference is the reference's own Figma kit, not the VM** (2026-10-11). The macOS 26
+community kit (`LKYsrYxCaH9NWaLMGGn3ZB`, page «Materials») lays glass of three sizes over columns of
+known colour, and Figma draws it with a real GPU at 1 px = 1 pt. Measured (glass-probe FINDINGS):
+dark = a PROPORTIONAL smoke that keeps the colour under it (medium ≈ 0.9·backdrop − 0.095 in sRGB,
+large ≈ ×0.48; black stays black), light = a white veil (medium ≈ 0.6, large ≈ 0.75), blur σ ≈ 5–7
+pt — the VM's σ corrected for its 1× screen. No ceiling, no grey block, and larger means thicker.
+The «kit — Regular claro/oscuro (mediano/grande)» presets carry it (`1.1:3`, smoke 0.3 / 0.52,
+veil 0.6 / 0.75). It is Figma's renderer, not the reference's: geometry (corner, refraction) and
+Clear still come from the VM's active captures.
+
 Not modelled, or still open: Clear's gain (no lab control brightens the highs); tone hooks per
 APPEARANCE (lab[0..1] are LAB-only and one pair per preset — shipping it is a shader change);
 Regular's outer shadow in an active window; its smaller blur on small shapes; the reference's
