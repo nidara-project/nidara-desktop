@@ -223,12 +223,10 @@ float lab(int i) {
 "#;
 
 /// The darkest and brightest WCAG luminance under one box (`nidara-material-v1`), from
-/// the blurred backdrop as the glass treats it before its tint: blurred and saturated. A grid
+/// the blurred backdrop as the glass treats it before its tone: blurred and saturated. A grid
 /// of samples is enough because the backdrop is blurred: nothing narrower than the blur
-/// survives it. `unscale` divides out the shadow under the box (what the backdrop is
-/// without it; 1 for an ink box, whose question is what the content sits on now). Each is
-/// written as two bytes (high, low) so 8-bit readback keeps ~16 bits of it: the darkest in
-/// red and green, the brightest in blue and alpha.
+/// survives it. Each is written as two bytes (high, low) so 8-bit readback keeps ~16 bits of
+/// it: the darkest in red and green, the brightest in blue and alpha.
 const FS_INK: &str = r#"#version 100
 precision highp float;
 uniform sampler2D tex;
@@ -236,7 +234,6 @@ uniform vec2 src_size;
 uniform vec2 src_used;
 uniform vec4 box_src;       // the box in the blurred texture's pixels: x0, y0, x1, y1
 uniform float saturation;
-uniform float unscale;
 varying vec2 v_px;
 float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
 float luminance(vec3 c) {
@@ -249,7 +246,6 @@ void main() {
         for (int i = 0; i < 12; i++) {
             vec2 p = mix(box_src.xy, box_src.zw, (vec2(float(i), float(j)) + 0.5) / 12.0);
             vec3 c = texture2D(tex, clamp(p / src_size, 0.5 / src_size, (src_used - 0.5) / src_size)).rgb;
-            c = min(c * unscale, vec3(1.0));
             float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
             c = clamp(mix(vec3(l), c, saturation), 0.0, 1.0);
             float y = luminance(c);
@@ -268,21 +264,47 @@ pub struct InkBox {
     pub rect: Rectangle<f64, Physical>,
 }
 
-/// Where the backdrop under one shape is measured for its shadow, output pixels: the
-/// shape's body, inset where a round corner leaves it, and how much of it the shadow already
-/// takes (1 / (1 − the shadow's opacity there)).
+/// The most ink boxes measured in one glass at once: the width of the measurement's target.
+pub const MAX_INK_BOXES: usize = 64;
+const MEASURE_WIDTH: usize = MAX_INK_BOXES;
+
+/// A shape's tone (`set_tone`) as the shader takes it, its ambient already sized for the shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LightProbe {
-    pub shape: usize,
-    pub rect: Rectangle<f64, Physical>,
-    pub unscale: f32,
+pub struct ToneGl {
+    /// saturation, ceiling, lift, gain
+    pub tone: [f32; 4],
+    /// r, g, b, a
+    pub wash: [f32; 4],
+    /// its opacity on this shape, lift, gain, radius (output px)
+    pub ambient: [f32; 4],
 }
 
-/// The most ink boxes measured in one glass at once, and the most shapes: together, the width
-/// of the measurement's target.
-pub const MAX_INK_BOXES: usize = 64;
-pub const MAX_LIGHT_PROBES: usize = 64;
-const MEASURE_WIDTH: usize = MAX_INK_BOXES + MAX_LIGHT_PROBES;
+impl ToneGl {
+    /// How far the ambient reaches, of the shape's shorter side; and the shorter sides (logical
+    /// px) between which it comes in: none up to the first, all of it from the second. The
+    /// reference's, measured on five panes of five sizes (2026-10-11, glass-probe catalogue).
+    pub const AMBIENT_REACH: f64 = 0.35;
+    pub const AMBIENT_FROM: f64 = 64.0;
+    pub const AMBIENT_FULL: f64 = 160.0;
+
+    /// `tone` on a shape whose shorter side is `side` logical px, at `px_scale` output px each.
+    pub fn new(t: &crate::protocols::material::Tone, side: f64, px_scale: f64) -> Self {
+        let grown = ((side - Self::AMBIENT_FROM) / (Self::AMBIENT_FULL - Self::AMBIENT_FROM)).clamp(0.0, 1.0);
+        Self {
+            tone: [t.saturation as f32, t.ceiling as f32, t.lift as f32, t.gain as f32],
+            wash: t.wash.map(|v| v as f32),
+            ambient: [
+                (t.ambient * grown) as f32,
+                t.ambient_lift as f32,
+                t.ambient_gain as f32,
+                (Self::AMBIENT_REACH * side * px_scale) as f32,
+            ],
+        }
+    }
+
+    /// The backdrop as it is.
+    pub const NONE: ToneGl = ToneGl { tone: [1.0, 1.0, 0.0, 1.0], wash: [0.0; 4], ambient: [0.0, 0.0, 1.0, 0.0] };
+}
 
 /// A shape in output pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -298,8 +320,11 @@ pub struct Shape {
     pub opacity: f32,
     /// What of the shape may show, output pixels. None = all of it.
     pub clip: Option<Rectangle<f64, Physical>>,
-    /// It holds an ink group whose content is dark: the light veil, not the dark tint.
+    /// It holds an ink group whose content is dark: its tone is already the one for that.
     pub ink_dark: bool,
+    /// How the glass treats the backdrop under it (`set_tone`, or `set_ink_tone` while it is
+    /// `ink_dark`).
+    pub tone: ToneGl,
     /// A pointer spliced into it.
     pub pointer: Option<PointerPx>,
     /// How far its edge reads the backdrop from outside it, output pixels: the glass's
@@ -445,14 +470,7 @@ impl PointerPx {
 /// Refractive glass parameters, in output pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glass {
-    pub tint: [f32; 3],
-    pub alpha_min: f32,
-    pub alpha_max: f32,
-    pub target: f32,
     pub rim: f32,
-    pub saturation: f32,
-    /// The veil over a shape whose content is dark (`set_ink`).
-    pub ink_tint: [f32; 3],
 }
 
 /// Hyprland's `decoration:blur` finishing, for a window's backdrop (config `[windows.backdrop]`).
@@ -696,8 +714,8 @@ pub struct Cache {
     trash: Option<Trash>,
     /// Moves at every capture: a measurement is of one capture.
     generation: u64,
-    /// What the last measurement was of: the capture, the boxes, the probes, the saturation.
-    measured: Option<(u64, Vec<InkBox>, Vec<LightProbe>, f32)>,
+    /// What the last measurement was of: the capture, the boxes, the saturation.
+    measured: Option<(u64, Vec<InkBox>, f32)>,
     /// How formed the glass this capture is for, 0..1 (`formed_blur`): what `draw` blends by.
     formed: f32,
     /// Under one pass of blur, how much of the sharp copy (level 0) `draw` mixes in.
@@ -1021,13 +1039,7 @@ pub unsafe fn draw(
         gl.Uniform1f(p.loc(gl, c"noise"), finish.noise);
         gl.Uniform1f(p.loc(gl, c"brightness"), finish.brightness);
         if let Some(g) = glass {
-            gl.Uniform3f(p.loc(gl, c"tint"), g.tint[0], g.tint[1], g.tint[2]);
-            gl.Uniform1f(p.loc(gl, c"alpha_min"), g.alpha_min);
-            gl.Uniform1f(p.loc(gl, c"alpha_max"), g.alpha_max);
-            gl.Uniform1f(p.loc(gl, c"target"), g.target);
             gl.Uniform1f(p.loc(gl, c"rim"), g.rim);
-            gl.Uniform1f(p.loc(gl, c"saturation"), g.saturation);
-            gl.Uniform3f(p.loc(gl, c"ink_tint"), g.ink_tint[0], g.ink_tint[1], g.ink_tint[2]);
         }
         if let Some(dev) = &progs.dev {
             let loc = p.loc(gl, c"lab_params");
@@ -1124,9 +1136,12 @@ pub unsafe fn draw(
             gl.Uniform1f(p.loc(gl, c"radius"), s.radius as f32);
             gl.Uniform1f(p.loc(gl, c"exponent"), s.exponent as f32);
             gl.Uniform1f(p.loc(gl, c"opacity"), s.opacity);
-            gl.Uniform1f(p.loc(gl, c"ink_dark"), s.ink_dark as i32 as f32);
             gl.Uniform1f(p.loc(gl, c"refraction"), s.refraction as f32);
             gl.Uniform1f(p.loc(gl, c"px_scale"), s.px_scale as f32);
+            // A fusion group is one pane: its first member's tone.
+            gl.Uniform4fv(p.loc(gl, c"tone"), 1, s.tone.tone.as_ptr());
+            gl.Uniform4fv(p.loc(gl, c"wash"), 1, s.tone.wash.as_ptr());
+            gl.Uniform4fv(p.loc(gl, c"ambient"), 1, s.tone.ambient.as_ptr());
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -1150,9 +1165,8 @@ pub unsafe fn draw(
 struct Readback {
     fence: ffi::types::GLsync,
     pbo: u32,
-    /// The ink group of each box, then the shape of each probe, in texel order.
+    /// The ink group of each box, in texel order.
     ids: Vec<u32>,
-    shapes: Vec<usize>,
     surface: Weak<WlSurface>,
 }
 
@@ -1178,9 +1192,8 @@ fn can_measure(gl: &Gles2) -> bool {
     gl.FenceSync.is_loaded() && gl.MapBufferRange.is_loaded() && gl.ClientWaitSync.is_loaded()
 }
 
-/// Measure the darkest point under each ink box, and the darkest and brightest under each
-/// shape that casts a shadow, if the capture, the boxes or the probes changed since the
-/// last measurement. Called from `draw`'s context, inside the frame; leaves the GL state as
+/// Measure the darkest point under each ink box, if the capture or the boxes changed since
+/// the last measurement. Called from `draw`'s context, inside the frame; leaves the GL state as
 /// it found it.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn measure_ink(
@@ -1189,19 +1202,17 @@ pub unsafe fn measure_ink(
     map: FrameMap,
     cache: &mut Cache,
     boxes: &[InkBox],
-    probes: &[LightProbe],
     saturation: f32,
     surface: &Weak<WlSurface>,
 ) {
-    if !cache.valid || cache.passes == 0 || (boxes.is_empty() && probes.is_empty()) || !can_measure(gl) {
+    if !cache.valid || cache.passes == 0 || boxes.is_empty() || !can_measure(gl) {
         return;
     }
     let boxes = &boxes[..boxes.len().min(MAX_INK_BOXES)];
-    let probes = &probes[..probes.len().min(MAX_LIGHT_PROBES)];
-    if cache.measured.as_ref().is_some_and(|(g, b, p, s)| *g == cache.generation && b == boxes && p == probes && *s == saturation) {
+    if cache.measured.as_ref().is_some_and(|(g, b, s)| *g == cache.generation && b == boxes && *s == saturation) {
         return;
     }
-    cache.measured = Some((cache.generation, boxes.to_vec(), probes.to_vec(), saturation));
+    cache.measured = Some((cache.generation, boxes.to_vec(), saturation));
     unsafe {
         let progs = programs(gl, user_data);
         let (tex, fbo) = match progs.ink_target.get() {
@@ -1256,9 +1267,7 @@ pub unsafe fn measure_ink(
         gl.Uniform1f(p.loc(gl, c"saturation"), saturation);
         gl.Uniform2f(p.loc(gl, c"target_size"), MEASURE_WIDTH as f32, 1.0);
         let r = cache.region_fb;
-        let all = boxes.iter().map(|b| (b.rect, 1.0)).chain(probes.iter().map(|p| (p.rect, p.unscale)));
-        for (i, (q, unscale)) in all.enumerate() {
-            gl.Uniform1f(p.loc(gl, c"unscale"), unscale);
+        for (i, q) in boxes.iter().map(|b| b.rect).enumerate() {
             // The box in framebuffer pixels (follows the output's transform), then in the
             // blurred copy's: relative to the captured region, at half size.
             let (ax, ay) = map.map_point(q.loc.x, q.loc.y);
@@ -1276,7 +1285,7 @@ pub unsafe fn measure_ink(
         let mut pbo = 0;
         gl.GenBuffers(1, &mut pbo);
         gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, pbo);
-        let texels = boxes.len() + probes.len();
+        let texels = boxes.len();
         gl.BufferData(ffi::PIXEL_PACK_BUFFER, (texels * 4) as isize, std::ptr::null(), ffi::STREAM_READ);
         gl.ReadPixels(0, 0, texels as i32, 1, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null_mut());
         gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, 0);
@@ -1292,7 +1301,6 @@ pub unsafe fn measure_ink(
             fence,
             pbo,
             ids: boxes.iter().map(|b| b.id).collect(),
-            shapes: probes.iter().map(|p| p.shape).collect(),
             surface: surface.clone(),
         });
         INK_ISSUED.with(|f| f.set(true));
@@ -1313,11 +1321,10 @@ pub unsafe fn measure_ink(
 }
 
 /// One finished measurement: per ink group the darkest luminance under it (the least over its
-/// boxes), and per shape the darkest and brightest under it, its shadow divided out.
+/// boxes).
 pub struct Measured {
     pub surface: Weak<WlSurface>,
     pub ink: Vec<(u32, f32)>,
-    pub light: Vec<(usize, f32, f32)>,
 }
 
 /// The measurements the GPU has finished, without waiting for any, and whether any is still
@@ -1334,11 +1341,10 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
             continue;
         }
         let mut darkest: Vec<(u32, f32)> = Vec::new();
-        let mut light: Vec<(usize, f32, f32)> = Vec::new();
         unsafe {
             if status != ffi::WAIT_FAILED {
                 gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, rb.pbo);
-                let len = (rb.ids.len() + rb.shapes.len()) * 4;
+                let len = rb.ids.len() * 4;
                 let ptr = gl.MapBufferRange(ffi::PIXEL_PACK_BUFFER, 0, len as isize, ffi::MAP_READ_BIT) as *const u8;
                 if !ptr.is_null() {
                     let bytes = std::slice::from_raw_parts(ptr, len);
@@ -1350,10 +1356,6 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
                             None => darkest.push((id, l)),
                         }
                     }
-                    for (k, &shape) in rb.shapes.iter().enumerate() {
-                        let at = (rb.ids.len() + k) * 4;
-                        light.push((shape, two(at), two(at + 2)));
-                    }
                     gl.UnmapBuffer(ffi::PIXEL_PACK_BUFFER);
                 }
                 gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, 0);
@@ -1361,8 +1363,8 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
             gl.DeleteSync(rb.fence);
             gl.DeleteBuffers(1, &rb.pbo);
         }
-        if !darkest.is_empty() || !light.is_empty() {
-            out.push(Measured { surface: rb.surface, ink: darkest, light });
+        if !darkest.is_empty() {
+            out.push(Measured { surface: rb.surface, ink: darkest });
         }
     }
     let pending = !keep.is_empty();
@@ -1373,6 +1375,22 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_ambient_comes_in_with_the_shape_s_size_and_reaches_a_third_of_it() {
+        let t = crate::protocols::material::Tone {
+            saturation: 1.3, ceiling: 0.35, lift: 0.125, gain: 1.125, wash: [0.0; 4],
+            ambient: 0.8, ambient_lift: 0.125, ambient_gain: 0.5,
+        };
+        // The reference's five panes (2026-10-11): 141 → 0.6417, 150 → 0.7167, 190 → 0.8.
+        let op = |side: f64| ToneGl::new(&t, side, 1.0).ambient[0] as f64;
+        assert_eq!(op(40.0), 0.0, "a control: none");
+        assert_eq!(op(64.0), 0.0);
+        assert!((op(141.0) - 0.6417).abs() < 1e-3 && (op(150.0) - 0.7167).abs() < 1e-3, "{} {}", op(141.0), op(150.0));
+        assert!((op(190.0) - 0.8).abs() < 1e-6, "from 160 on: all of it");
+        assert!((ToneGl::new(&t, 150.0, 2.0).ambient[3] - 105.0).abs() < 1e-3, "0.35 of the side, in output px");
+        assert_eq!(ToneGl::new(&t, 150.0, 1.0).tone, [1.3, 0.35, 0.125, 1.125]);
+    }
 
     /// Smithay's projection for an output of `w`×`h` with `transform`, rebuilt the way
     /// `GlesRenderer::render` does it (see its source), for checking our mapping.
@@ -1448,6 +1466,7 @@ mod tests {
             opacity: 1.0,
             clip: None,
             ink_dark: false,
+            tone: ToneGl::NONE,
             pointer: None,
             refraction: 0.0,
             px_scale: 1.0,
@@ -1473,6 +1492,7 @@ mod tests {
             opacity,
             clip,
             ink_dark: false,
+            tone: ToneGl::NONE,
             pointer: None,
             refraction: 0.0,
             px_scale: 1.0,

@@ -38,7 +38,7 @@ import { safeDisconnect } from "../../core/signals"
 import inputYield from "../../core/InputYield"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
-import { trackModeGlass, trackNoInk } from "../../../lib/nidara-kit/platform/material"
+import { trackGlassPiece, trackModeGlass, trackNoInk } from "../../../lib/nidara-kit/platform/material"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
 export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
@@ -1537,6 +1537,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // never takes the backdrop's ink, and its glass on Hyalo turns light with the mode.
     trackNoInk(layout)
     trackModeGlass(layout)
+    // Its glass is the reference's Dock's, measured on it (the glass material's `TONES`).
+    trackGlassPiece(layout, "dock")
     glass = registerGlassSurface({
         id: `dock-${gdkmonitor.get_connector() ?? "?"}`,
         root: layout,

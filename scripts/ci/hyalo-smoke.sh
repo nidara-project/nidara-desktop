@@ -297,13 +297,15 @@ phase_run() {
     bar_rest="$(glass_shapes nidara-bar)"
     [ "$bar_rest" -ge 3 ] \
         || { log "FAIL: the bar declares $bar_rest glass shapes at rest — the island's capsule is not among them"; nidara-hyalo msg layers; exit 1; }
-    # The bar's and the dock's glass cast no shadow (`trackNoScrim`): not a halo per capsule.
-    local ns lone
+    # Every pane of the bar and the dock carries its tone (set_tone, the glass material's
+    # `TONES`): a pane without one is the bare blurred backdrop.
+    local ns toned shapes
     for ns in nidara-bar nidara-dock; do
-        lone="$(nidara-hyalo msg layers | jq -r --arg ns "$ns" \
-            '[.ok.layers[] | select(.namespace == $ns) | .glass.scrims[]? | select(.kind == "shape")] | length')"
-        [ "$lone" -eq 0 ] \
-            || { log "FAIL: $lone of $ns's panes cast a shadow of their own"; nidara-hyalo msg layers; exit 1; }
+        toned="$(nidara-hyalo msg layers | jq -r --arg ns "$ns" \
+            '[.ok.layers[] | select(.namespace == $ns) | .glass.toned // 0] | max // 0')"
+        shapes="$(glass_shapes "$ns")"
+        [ "$toned" -gt 0 ] && [ "$toned" -eq "$shapes" ] \
+            || { log "FAIL: $toned of $ns's $shapes panes carry a tone"; nidara-hyalo msg layers; exit 1; }
     done
     # Where the bar and the dock draw (set_drawn_region, #761): both declare it, a small part
     # of their monitor-sized surfaces at rest — or every damage under them is blended through

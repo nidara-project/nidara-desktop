@@ -476,22 +476,61 @@ gboolean nidara_wl_material_commit (GdkSurface *surface, double blur_size, guint
 /**
  * nidara_wl_material_set_glass:
  * @surface: the #GdkSurface
- * @tint_r: tint red, 0..1
- * @tint_g: tint green
- * @tint_b: tint blue
- * @alpha_min: the tint's least opacity
- * @alpha_max: its most
- * @target_luminance: backdrop luminance, after tint, not to exceed (legibility of white content)
  * @refraction: edge displacement, logical pixels
  * @rim: specular rim strength, 0..1
- * @saturation: backdrop saturation, 1 = unchanged
  *
- * Asks the compositor to paint the whole glass (refractive glass); the client paints content only.
+ * Asks the compositor to paint the whole glass (refractive glass); the client paints content
+ * only. How the glass treats the backdrop under each shape is its tone
+ * (nidara_wl_material_set_tone()).
  */
-void nidara_wl_material_set_glass (GdkSurface *surface,
-                                   double tint_r, double tint_g, double tint_b,
-                                   double alpha_min, double alpha_max, double target_luminance,
-                                   double refraction, double rim, double saturation);
+void nidara_wl_material_set_glass (GdkSurface *surface, double refraction, double rim);
+
+/**
+ * nidara_wl_material_set_tone:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @saturation: about the Rec.709 luma, 1 = unchanged
+ * @ceiling: the luma l goes to l·(1 − (1 − ceiling)·l): white lands on it, 1 = unchanged
+ * @lift: where black lands (levels), 0 = unchanged
+ * @gain: where white would land (levels), 1 = unchanged
+ * @wash_r: the wash laid over, red 0..1
+ * @wash_g: green
+ * @wash_b: blue
+ * @wash_a: its opacity, 0 = none
+ * @ambient: the ambient's opacity on a large shape, 0..1, 0 = none
+ * @ambient_lift: the ambient's own levels: where black lands
+ * @ambient_gain: where white would
+ *
+ * The tone of the shapes added after this call, until the next one: the stages, in this order,
+ * of nidara-material-v1.set_tone. Resets the ink tone. Pending until
+ * nidara_wl_material_commit(); reset by nidara_wl_material_begin().
+ */
+void nidara_wl_material_set_tone (GdkSurface *surface, double saturation, double ceiling,
+                                  double lift, double gain,
+                                  double wash_r, double wash_g, double wash_b, double wash_a,
+                                  double ambient, double ambient_lift, double ambient_gain);
+
+/**
+ * nidara_wl_material_set_ink_tone:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @saturation: as nidara_wl_material_set_tone()
+ * @ceiling: as nidara_wl_material_set_tone()
+ * @lift: as nidara_wl_material_set_tone()
+ * @gain: as nidara_wl_material_set_tone()
+ * @wash_r: as nidara_wl_material_set_tone()
+ * @wash_g: as nidara_wl_material_set_tone()
+ * @wash_b: as nidara_wl_material_set_tone()
+ * @wash_a: as nidara_wl_material_set_tone()
+ * @ambient: as nidara_wl_material_set_tone()
+ * @ambient_lift: as nidara_wl_material_set_tone()
+ * @ambient_gain: as nidara_wl_material_set_tone()
+ *
+ * The tone those shapes take while their ink group's content is dark
+ * (nidara-material-v1.set_ink_tone). Until it is set, they keep their tone whatever their ink.
+ */
+void nidara_wl_material_set_ink_tone (GdkSurface *surface, double saturation, double ceiling,
+                                      double lift, double gain,
+                                      double wash_r, double wash_g, double wash_b, double wash_a,
+                                      double ambient, double ambient_lift, double ambient_gain);
 
 /**
  * nidara_wl_material_set_lensing:
@@ -504,38 +543,6 @@ void nidara_wl_material_set_glass (GdkSurface *surface,
 void nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction);
 
 /**
- * nidara_wl_material_set_scrim:
- * @surface: the #GdkSurface
- * @max_strength: the shadow's opacity at its core, at most, 0..1; 0 = no shadow
- * @size_fraction: a shape inside no scrim region fades over this fraction of its shorter side
- * @tint_limit: the most tint the glass takes while the shadow makes up the rest (0..1)
- * @region_edge: a region's shadow at its rim, as a fraction of its centre's (0..1): it sweeps
- *   from the centre out, following the region's shape; 1 = even across it
- *
- * A soft black shadow under the glass with exactly the strength the glass is missing, within
- * @tint_limit, to keep the content legible: the glass never looks painted grey
- * (nidara-material-v1.set_scrim).
- */
-void nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
-                                   double tint_limit, double region_edge);
-
-/**
- * nidara_wl_material_add_scrim_region:
- * @surface: the #GdkSurface passed to nidara_wl_material_begin()
- * @x: surface-local, logical; the region may reach past the surface
- * @y: surface-local, logical
- * @width: logical
- * @height: logical
- * @falloff: how far the shadow fades outside the region, logical pixels
- *
- * One shadow shared by every shape whose centre lies inside the region. Pending until
- * nidara_wl_material_commit(); cleared by nidara_wl_material_begin().
- */
-void nidara_wl_material_add_scrim_region (GdkSurface *surface,
-                                          double x, double y, double width, double height,
-                                          double falloff);
-
-/**
  * nidara_wl_material_add_veil_region:
  * @surface: the #GdkSurface passed to nidara_wl_material_begin()
  * @x: surface-local, logical; the region may reach past the surface
@@ -546,8 +553,8 @@ void nidara_wl_material_add_scrim_region (GdkSurface *surface,
  * @strength: its opacity under the region, 0..1
  * @exponent: the fade's shape, (1 − d/falloff)^exponent
  *
- * A FIXED black veil under every shape whose centre lies inside the region — not measured,
- * not part of set_scrim's rule — even under it and fading outside it
+ * A FIXED black veil under every shape whose centre lies inside the region — not measured —
+ * even under it and fading outside it
  * (nidara-material-v1.add_veil_region). Pending until nidara_wl_material_commit(); cleared by
  * nidara_wl_material_begin().
  */
@@ -615,15 +622,12 @@ void nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
  * @dark_above: the content turns dark when even the darkest point under it is brighter
  *   than this (WCAG relative luminance, 0..1)
  * @light_below: and light again only below this
- * @tint_r: the veil over a shape whose content is dark: red, 0..1
- * @tint_g: green
- * @tint_b: blue
  *
  * Asks the compositor to measure the ink boxes; the answer is the ink function's
- * (nidara_wl_material_set_ink_func()).
+ * (nidara_wl_material_set_ink_func()). A shape whose content turns dark takes its ink tone
+ * (nidara_wl_material_set_ink_tone()).
  */
-void nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below,
-                                 double tint_r, double tint_g, double tint_b);
+void nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below);
 
 /**
  * nidara_wl_material_clear_ink:

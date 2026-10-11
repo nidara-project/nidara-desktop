@@ -174,12 +174,9 @@ impl<R: HyaloRenderer> std::fmt::Debug for OutputElement<R> {
 pub const CLEAR_COLOR: Color32F = Color32F::new(0.06, 0.06, 0.07, 1.0);
 
 /// A surface tree and its popups, front to back, each with its glass right below it, and the
-/// shadow under that glass below the glass — unless `floor` is given: the shell's chrome
-/// casts ONE floor of shadows under all of it (`chrome_scrims`, drawn by the caller), so the
-/// Control Center's never falls on the dock, which sits in the same layer, and each glass
-/// measures its backdrop with the whole floor divided out — not only its own shadow, or the
-/// Control Center's would split the dock's backdrop and switch the dock's on (owner,
-/// 2026-10-02: "the dock's shadow only comes on when the Control Center opens").
+/// veil under that glass below the glass — unless it is on the `floor`: the shell's chrome
+/// casts ONE floor of veils under all of it (`chrome_scrims`, drawn by the caller), combined by
+/// their maximum, so the Control Center's never darkens the dock, in the same layer, twice.
 #[allow(clippy::too_many_arguments)]
 fn push_surface<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
@@ -188,7 +185,7 @@ fn push_surface<R: HyaloRenderer>(
     location: Point<i32, Physical>,
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
-    floor: Option<&[scrim::ScrimPx]>,
+    floor: bool,
     when: std::time::Instant,
 ) {
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
@@ -209,16 +206,13 @@ fn push_surface<R: HyaloRenderer>(
                 out.push(OutputElement::DrawnChange(drawn::DrawnChange::new(d.id, d.changes, tree, loc, scale)));
             }
         }
-        match floor {
-            Some(floor) => {
-                out.extend(GlassElement::for_surface(s, loc, scale, output_size, floor).into_iter().map(OutputElement::Glass));
-            }
-            None => {
-                let scrims = scrim::scrims_for(s, loc, scale, when);
-                out.extend(GlassElement::for_surface(s, loc, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
-                let e = with_states(s, |states| ScrimElement::new(&states.data_map, scrims, output_size));
-                out.extend(e.map(OutputElement::Scrim));
-            }
+        out.extend(GlassElement::for_surface(s, loc, scale, output_size).into_iter().map(OutputElement::Glass));
+        // The veils under the shell's glass are its floor's (one element for all of them);
+        // anything else draws its own.
+        if !floor {
+            let veils = scrim::scrims_for(s, loc, scale, when);
+            let e = with_states(s, |states| ScrimElement::new(&states.data_map, veils, output_size));
+            out.extend(e.map(OutputElement::Scrim));
         }
     };
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
@@ -248,7 +242,7 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     push_material(out, surface, location, scale, output_size, when);
 }
 
-/// A surface's declared glass (`nidara-material-v1`) and the shadow under it, as it is `when`.
+/// A surface's declared glass (`nidara-material-v1`) and the veil under it, as it is `when`.
 pub(super) fn push_material<R: HyaloRenderer>(
     out: &mut Vec<OutputElement<R>>,
     surface: &WlSurface,
@@ -257,13 +251,13 @@ pub(super) fn push_material<R: HyaloRenderer>(
     output_size: smithay::utils::Size<i32, Physical>,
     when: std::time::Instant,
 ) {
-    let scrims = scrim::scrims_for(surface, location, scale, when);
-    out.extend(GlassElement::for_surface(surface, location, scale, output_size, &scrims).into_iter().map(OutputElement::Glass));
-    let e = with_states(surface, |states| ScrimElement::new(&states.data_map, scrims, output_size));
+    out.extend(GlassElement::for_surface(surface, location, scale, output_size).into_iter().map(OutputElement::Glass));
+    let veils = scrim::scrims_for(surface, location, scale, when);
+    let e = with_states(surface, |states| ScrimElement::new(&states.data_map, veils, output_size));
     out.extend(e.map(OutputElement::Scrim));
 }
 
-/// The shadows a surface tree and its popups cast, for the chrome's floor.
+/// The veils a surface tree and its popups cast, for the chrome's floor.
 fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<scrim::ScrimPx> {
     let mut out = Vec::new();
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
@@ -347,10 +341,10 @@ pub fn output_elements<R: HyaloRenderer>(
     if state.lock.draws_locked(output) {
         state.lock.note_rendered(output);
         if let Some(surface) = state.lock.surface_for(output) {
-            push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, None, state.when);
+            push_surface(&mut out, renderer, surface, Point::from((0, 0)), scale, output_size, false, state.when);
         }
         for l in map.layers_on(Layer::Background).rev() {
-            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None, state.when);
+            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, false, state.when);
         }
         return with_overlay(out, output);
     }
@@ -430,9 +424,8 @@ pub fn output_elements<R: HyaloRenderer>(
         .get(&output.name())
         .and_then(|t| map.layers().find(|l| l.namespace() == t.namespace))
         .is_some_and(|l| l.layer() == Layer::Overlay);
-    // The shadows the shell's chrome (top and overlay layers) casts: one floor under all of
-    // it, combined by their maximum like one surface's (two surfaces' shadows that overlap —
-    // the Control Center's strip and the dock's band — never darken the corner twice).
+    // The veils the shell's chrome (top and overlay layers) casts: one floor under all of it,
+    // combined by their maximum like one surface's (two that overlap never darken twice).
     let floor: Vec<scrim::ScrimPx> = [Layer::Overlay, Layer::Top]
         .into_iter()
         .flat_map(|layer| map.layers_on(layer).map(|l| chrome_scrims(l.wl_surface(), layer_loc(l), scale, now)).collect::<Vec<_>>())
@@ -442,14 +435,14 @@ pub fn output_elements<R: HyaloRenderer>(
         push_windows(&mut out, renderer, &moving);
     }
     for l in map.layers_on(Layer::Overlay).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor), state.when);
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, true, state.when);
     }
     // X11 menus, tooltips and drop-downs (xwayland.rs): where their client puts them, over the
     // windows and the bar, the last one shown in front.
     for x in state.wm.x11_overrides.iter().rev() {
         let Some(surface) = x.wl_surface() else { continue };
         let at = x.last_configure().loc - output_geo.loc;
-        push_surface(&mut out, renderer, &surface, at.to_f64().to_physical_precise_round(scale), scale, output_size, None, state.when);
+        push_surface(&mut out, renderer, &surface, at.to_f64().to_physical_precise_round(scale), scale, output_size, false, state.when);
     }
     push_closing(&mut out, true);
     push_windows(&mut out, renderer, &above);
@@ -457,7 +450,7 @@ pub fn output_elements<R: HyaloRenderer>(
         push_windows(&mut out, renderer, &moving);
     }
     for l in map.layers_on(Layer::Top).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, Some(&floor), state.when);
+        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, true, state.when);
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
     push_closing(&mut out, false);
@@ -470,7 +463,7 @@ pub fn output_elements<R: HyaloRenderer>(
     }
     for layer in [Layer::Bottom, Layer::Background] {
         for l in map.layers_on(layer).rev() {
-            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, None, state.when);
+            push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, false, state.when);
         }
     }
     with_overlay(out, output)

@@ -97,17 +97,18 @@ pub struct GlassInfo {
     pub compositor_paints: bool,
     /// Each shape's edge displacement, logical px (`set_lensing`): empty when blur only.
     pub refraction: Vec<f64>,
-    /// The shadows under the glass: one per region holding a shape, or per lone shape.
+    /// The veils under the glass (add_veil_region): one per region holding a shape.
     pub scrims: Vec<ScrimInfo>,
+    /// How many of its shapes carry a tone (`set_tone`).
+    pub toned: usize,
     /// Its fusion groups (`set_fusion`): how many shapes each one joins, in group order.
     pub fusion: Vec<usize>,
 }
 
-/// One shadow under the glass: what it lies under, and the strength it is easing to.
+/// One veil under the glass: what it lies under, and its strength.
 #[derive(Debug, Clone, Serialize)]
 pub struct ScrimInfo {
-    /// "region" (shared, add_scrim_region), "veil" (shared and fixed, add_veil_region) or
-    /// "shape" (a lone shape's own).
+    /// "veil" (add_veil_region): the only kind since the measured shadow went (2026-10-11).
     pub kind: &'static str,
     pub shapes: usize,
     pub strength: f64,

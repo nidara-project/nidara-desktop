@@ -480,22 +480,51 @@ nidara_wl_material_add_shape_pointed (GdkSurface *surface,
 }
 
 void
-nidara_wl_material_set_glass (GdkSurface *surface,
-                              double tint_r, double tint_g, double tint_b,
-                              double alpha_min, double alpha_max, double target_luminance,
-                              double refraction, double rim, double saturation)
+nidara_wl_material_set_glass (GdkSurface *surface, double refraction, double rim)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
   if (!m)
     return;
-  nidara_material_v1_set_glass (m,
-                                wl_fixed_from_double (tint_r), wl_fixed_from_double (tint_g),
-                                wl_fixed_from_double (tint_b), wl_fixed_from_double (alpha_min),
-                                wl_fixed_from_double (alpha_max),
-                                wl_fixed_from_double (target_luminance),
+  /* The tint's arguments are inert since set_tone (the protocol stays v1). */
+  wl_fixed_t none = wl_fixed_from_double (0);
+  nidara_material_v1_set_glass (m, none, none, none, none, none, none,
                                 wl_fixed_from_double (refraction), wl_fixed_from_double (rim),
-                                wl_fixed_from_double (saturation));
+                                wl_fixed_from_int (1));
+}
+
+void
+nidara_wl_material_set_tone (GdkSurface *surface, double saturation, double ceiling,
+                             double lift, double gain,
+                             double wash_r, double wash_g, double wash_b, double wash_a,
+                             double ambient, double ambient_lift, double ambient_gain)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m)
+    nidara_material_v1_set_tone (m, wl_fixed_from_double (saturation), wl_fixed_from_double (ceiling),
+                                 wl_fixed_from_double (lift), wl_fixed_from_double (gain),
+                                 wl_fixed_from_double (wash_r), wl_fixed_from_double (wash_g),
+                                 wl_fixed_from_double (wash_b), wl_fixed_from_double (wash_a),
+                                 wl_fixed_from_double (ambient), wl_fixed_from_double (ambient_lift),
+                                 wl_fixed_from_double (ambient_gain));
+}
+
+void
+nidara_wl_material_set_ink_tone (GdkSurface *surface, double saturation, double ceiling,
+                                 double lift, double gain,
+                                 double wash_r, double wash_g, double wash_b, double wash_a,
+                                 double ambient, double ambient_lift, double ambient_gain)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m)
+    nidara_material_v1_set_ink_tone (m, wl_fixed_from_double (saturation), wl_fixed_from_double (ceiling),
+                                     wl_fixed_from_double (lift), wl_fixed_from_double (gain),
+                                     wl_fixed_from_double (wash_r), wl_fixed_from_double (wash_g),
+                                     wl_fixed_from_double (wash_b), wl_fixed_from_double (wash_a),
+                                     wl_fixed_from_double (ambient), wl_fixed_from_double (ambient_lift),
+                                     wl_fixed_from_double (ambient_gain));
 }
 
 void
@@ -505,34 +534,6 @@ nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
   struct nidara_material_v1 *m = material_get (surface);
   if (m)
     nidara_material_v1_set_lensing (m, wl_fixed_from_double (size_fraction));
-}
-
-void
-nidara_wl_material_set_scrim (GdkSurface *surface, double max_strength, double size_fraction,
-                              double tint_limit, double region_edge)
-{
-  g_return_if_fail (GDK_IS_SURFACE (surface));
-  struct nidara_material_v1 *m = material_get (surface);
-  if (m)
-    nidara_material_v1_set_scrim (m, wl_fixed_from_double (max_strength),
-                                  wl_fixed_from_double (size_fraction),
-                                  wl_fixed_from_double (tint_limit),
-                                  wl_fixed_from_double (region_edge));
-}
-
-void
-nidara_wl_material_add_scrim_region (GdkSurface *surface,
-                                     double x, double y, double width, double height,
-                                     double falloff)
-{
-  g_return_if_fail (GDK_IS_SURFACE (surface));
-  struct nidara_material_v1 *m = material_get (surface);
-  if (!m || width <= 0 || height <= 0)
-    return;
-  nidara_material_v1_add_scrim_region (m,
-                                       wl_fixed_from_double (x), wl_fixed_from_double (y),
-                                       wl_fixed_from_double (width), wl_fixed_from_double (height),
-                                       wl_fixed_from_double (falloff));
 }
 
 void
@@ -594,16 +595,16 @@ nidara_wl_material_add_ink_box (GdkSurface *surface, guint id,
 }
 
 void
-nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below,
-                            double tint_r, double tint_g, double tint_b)
+nidara_wl_material_set_ink (GdkSurface *surface, double dark_above, double light_below)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));
   struct nidara_material_v1 *m = material_get (surface);
   if (!m)
     return;
+  /* The tint is inert since set_ink_tone. */
+  wl_fixed_t none = wl_fixed_from_double (0);
   nidara_material_v1_set_ink (m, wl_fixed_from_double (dark_above), wl_fixed_from_double (light_below),
-                              wl_fixed_from_double (tint_r), wl_fixed_from_double (tint_g),
-                              wl_fixed_from_double (tint_b));
+                              none, none, none);
 }
 
 void

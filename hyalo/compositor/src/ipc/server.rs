@@ -324,26 +324,15 @@ impl Hyalo {
                             },
                             scrims: m
                                 .state
-                                .scrim_units()
+                                .veil_units()
                                 .into_iter()
-                                .map(|u| {
-                                    let anim = m.scrims.get(&u.key);
-                                    super::ScrimInfo {
-                                        kind: if u.veil.is_some() {
-                                            "veil"
-                                        } else if u.key >= crate::protocols::material::LONE_SCRIM {
-                                            "shape"
-                                        } else {
-                                            "region"
-                                        },
-                                        shapes: u.members.len(),
-                                        strength: u.veil.map_or_else(
-                                            || anim.map_or(0.0, |a| (a.to * 1000.0).round() / 1000.0),
-                                            |v| (v.strength * 1000.0).round() / 1000.0,
-                                        ),
-                                    }
+                                .map(|u| super::ScrimInfo {
+                                    kind: "veil",
+                                    shapes: u.members.len(),
+                                    strength: (u.veil.strength * 1000.0).round() / 1000.0,
                                 })
                                 .collect(),
+                            toned: m.state.shapes.iter().filter(|s| s.tone.is_some()).count(),
                         }),
                         drawn: crate::protocols::material::drawn(l.wl_surface())
                             .and_then(|d| d.rects)

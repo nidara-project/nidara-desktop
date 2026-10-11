@@ -9,7 +9,7 @@ import { FLUID_CRYSTAL_PRESETS, type FluidCrystalSelection, type FluidCrystalSpe
  * The client half of nidara-material-v1 (`protocols/` at the repository root): every piece
  * of glass tells a compositor of our own (Hyalo, #680) exactly where it is, and the
  * compositor resolves it against what lies behind — the blur, and on a surface whose
- * source asks for it, the whole glass (`GlassParams`: refraction, tint, rim). A painter
+ * source asks for it, the whole glass (`GlassParams`: refraction, rim; a tone per pane). A painter
  * then asks `compositorPaintsGlass(itsWidget)` and paints only content and state.
  *
  * A no-op where the compositor does not offer the protocol (Hyprland): nothing is sent,
@@ -39,15 +39,12 @@ import { FLUID_CRYSTAL_PRESETS, type FluidCrystalSelection, type FluidCrystalSpe
  * average). The pane then carries `INK_DARK_CLASS`, which the bundle's stylesheet gives the
  * light skin's tokens, and a Cairo painter asks `darkInkFor(itsWidget)`.
  *
- * The SHADOW under the glass (owner 2026-10-02, #684): where the backdrop under a pane is
- * bright in one place and dark in another, the compositor's per-pixel tint left it grey in one
- * part and clear in the other, and past a point a pane looks painted grey. With a scrim the
- * glass takes no more tint than its limit and the compositor lays a soft shadow under it, even
- * across the pane, with exactly what the glass is missing to keep the text legible — none
- * where the glass reaches it alone. A pane gets one of its own; panes that sit together share one through
- * `trackScrimRegion` — the Control Center's, the size of the panel and a little darker at
- * its centre — and panes that must cast none say so through `trackNoScrim` (the bar's, the
- * dock's, owner 2026-10-02: a halo around them ran over the windows).
+ * The TONE (owner 2026-10-11): how the glass treats the backdrop under each pane is the
+ * reference's own filter, stage by stage as it was measured — saturation, a ceiling, levels, a
+ * wash, the ambient — with each kind of pane's values (`GlassTone`, `trackGlassPiece`, the
+ * material's table in glass-material.ts). It replaced a tint that thickened per pixel to keep
+ * white text legible, and the shadow under the glass that made up what that tint lacked; the
+ * Control Center and the Notification Center still lie on a FIXED veil (`trackVeilRegion`).
  *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
  * reinstalling libnidara-wl must not take the shell down. `NIDARA_MATERIAL=0` turns the
@@ -76,41 +73,49 @@ export type GlassPointer = {
 
 /** The glass the compositor paints itself (nidara_material_v1.set_glass). */
 export type GlassParams = {
-    tint: { r: number, g: number, b: number }
-    alphaMin: number
-    alphaMax: number
-    target: number
     /** Edge displacement, logical px: every shape's least. */
     refraction: number
     /** A fraction of each shape's shorter side, where that bends more than `refraction`:
      *  large panes lens more than small controls (nidara_material_v1.set_lensing). */
     lensing: number
     rim: number
-    saturation: number
 }
 
-/** The ink measurement (nidara_material_v1.set_ink): WCAG luminances, and the veil over a
- *  pane whose content is dark. */
+/**
+ * How the glass treats the blurred backdrop under a pane (nidara_material_v1.set_tone), stage
+ * by stage in this order, on the sRGB-encoded colour: `saturation` about the Rec.709 luma; the
+ * `ceiling` (the luma l goes to l·(1 − (1 − ceiling)·l): white lands on it, the mids bend
+ * towards it); levels `lift + (gain − lift)·v`; the `wash` laid over; the `ambient` — what
+ * surrounds the pane, blurred far wider, through its own levels — lightening what is darker
+ * than it, at `ambient` on a large pane (the compositor sizes it: none up to 64 px of shorter
+ * side, all of it from 160). Neutral: saturation 1, ceiling 1, lift 0, gain 1, no wash, no
+ * ambient.
+ */
+export type GlassTone = {
+    saturation: number
+    ceiling: number
+    lift: number
+    gain: number
+    wash: { r: number, g: number, b: number, a: number }
+    ambient: number
+    ambientLift: number
+    ambientGain: number
+}
+
+/** What kind of pane a piece of glass is (`trackGlassPiece`): the material gives each its own
+ *  tone. `control` — the bar's capsules, the island, buttons: small glass; `panel` — menus,
+ *  popovers, the app grid: large floating glass; `controlCenter` and `dock`: the reference's
+ *  own two, each measured on its own. */
+export type GlassPiece = "control" | "panel" | "controlCenter" | "dock"
+
+/** A pane's tone, and the one it takes while its content is dark (the ink); null: the same. */
+export type PaneTone = { tone: GlassTone, inkTone: GlassTone | null }
+
+/** The ink measurement (nidara_material_v1.set_ink): WCAG luminances. A pane whose content
+ *  turns dark takes its `inkTone`. */
 export type InkParams = {
     darkAbove: number
     lightBelow: number
-    tint: { r: number, g: number, b: number }
-}
-
-/** The shadow under the glass (nidara_material_v1.set_scrim). */
-export type ScrimParams = {
-    /** The shadow's opacity at its core, at most (the compositor picks less where less does). */
-    maxStrength: number
-    /** A pane inside no region: its shadow fades over this fraction of its shorter side. */
-    sizeFraction: number
-    /** The most tint the glass takes while the shadow makes up the rest (an opacity): past it a
-     *  pane looks painted grey. The shadow is exactly what the glass is missing within it. */
-    tintLimit: number
-    /** A region's shadow fades over this many logical px outside it. */
-    regionFalloff: number
-    /** A region's shadow at its rim, as a fraction of its centre's: it sweeps from the centre
-     *  out following the container's shape (1: even across it). */
-    regionEdge: number
 }
 
 /** A fixed veil under a group of panes (nidara_material_v1.add_veil_region, `trackVeilRegion`):
@@ -129,9 +134,10 @@ export interface MaterialSource {
     /** Whether, and how, the compositor decides the ink of this surface's panes; null: the
      *  content stays as the bundle paints it. Asked only where the compositor paints the glass. */
     ink?(native: Gtk.Native): InkParams | null
-    /** The shadow under this surface's glass, or null: none. Asked only where the
-     *  compositor paints the glass. */
-    scrim?(native: Gtk.Native): ScrimParams | null
+    /** The tone of a pane of `piece` on this surface; `light` when it wears the light skin by the
+     *  system mode (`trackModeGlass`, `trackModeInk`, and not under `trackNoInk`). Asked only
+     *  where the compositor paints the glass. */
+    tone?(native: Gtk.Native, piece: GlassPiece, light: boolean): PaneTone
     /** The veil of this surface's veil regions (`trackVeilRegion`), or null: none. Asked only
      *  where the compositor paints the glass. */
     veil?(native: Gtk.Native): VeilParams | null
@@ -173,19 +179,20 @@ type Shim = {
         opacity: number, cx: number, cy: number, cw: number, ch: number,
         bx: number, by: number, tx: number, ty: number, pw: number, tipR: number, baseR: number): void
     material_commit(surface: Gdk.Surface, size: number, passes: number): boolean
-    material_set_glass(surface: Gdk.Surface, r: number, g: number, b: number, aMin: number, aMax: number,
-        target: number, refraction: number, rim: number, saturation: number): void
+    material_set_glass(surface: Gdk.Surface, refraction: number, rim: number): void
+    material_set_tone?(surface: Gdk.Surface, saturation: number, ceiling: number, lift: number, gain: number,
+        washR: number, washG: number, washB: number, washA: number, ambient: number, ambientLift: number,
+        ambientGain: number): void
+    material_set_ink_tone?(surface: Gdk.Surface, saturation: number, ceiling: number, lift: number, gain: number,
+        washR: number, washG: number, washB: number, washA: number, ambient: number, ambientLift: number,
+        ambientGain: number): void
     material_set_lensing?(surface: Gdk.Surface, sizeFraction: number): void
     material_clear_glass(surface: Gdk.Surface): void
     material_has_ink?(): boolean
     material_add_ink_box?(surface: Gdk.Surface, id: number, x: number, y: number, w: number, h: number): void
-    material_set_ink?(surface: Gdk.Surface, darkAbove: number, lightBelow: number, r: number, g: number, b: number): void
+    material_set_ink?(surface: Gdk.Surface, darkAbove: number, lightBelow: number): void
     material_clear_ink?(surface: Gdk.Surface): void
     material_set_ink_func?(func: (surface: Gdk.Surface, id: number, dark: boolean) => void): void
-    /** `regionEdge` is the library's since 2026-10-02; an older one takes the first four. */
-    material_set_scrim?(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number,
-        regionEdge?: number): void
-    material_add_scrim_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number): void
     material_add_veil_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number,
         strength: number, exponent: number): void
     material_set_fusion?(surface: Gdk.Surface, group: number, spacing: number): void
@@ -326,6 +333,26 @@ export function trackModeInk(widget: Gtk.Widget): void {
     widget.connect("destroy", () => modeInk.delete(widget))
 }
 
+/** Containers whose panes of glass are of one kind (`trackGlassPiece`). */
+const glassPieces = new WeakMap<Gtk.Widget, GlassPiece>()
+
+/**
+ * Every pane of glass inside `widget` is a `piece` — the material gives each kind its own tone
+ * (glass-material.ts): the dock, the Control Center, a large panel. The nearest container wins;
+ * a pane in none is a `control`, or a `panel` on a popover's surface (a menu, a tooltip).
+ */
+export function trackGlassPiece(widget: Gtk.Widget, piece: GlassPiece): void {
+    glassPieces.set(widget, piece)
+}
+
+function pieceOf(e: Entry, native: Gtk.Native): GlassPiece {
+    for (let w: Gtk.Widget | null = e.widget; w; w = w.get_parent()) {
+        const p = glassPieces.get(w)
+        if (p) return p
+    }
+    return native instanceof Gtk.Popover ? "panel" : "control"
+}
+
 /** Whether this surface's ink follows the system mode (`trackModeInk`), as `glassFollowsMode`. */
 export function inkFollowsMode(native: Gtk.Native): boolean {
     for (const w of modeInk) if (w.get_native() === native) return true
@@ -435,49 +462,19 @@ function inkIdOf(e: Entry): number {
     return e.inkId
 }
 
-/** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). `veil`: they lie on
- *  a fixed veil instead of the measured shadow (`trackVeilRegion`). */
-type ScrimRegion = { widget: Gtk.Widget, casts: boolean, veil?: boolean,
-    exactBounds?: { horizontalOutset: number } }
-const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
-
-/**
- * One shadow under every pane of glass inside `widget`'s box, instead of one each: the panes
- * lie on one shadow the size of their container, at one strength, whole at its centre and
- * swept out to `regionEdge` of that at its rim, fading only outside it. Declared while the
- * widget is shown; it shares its surface's material (`trackGlass`). Where two regions hold a
- * pane, the one declared first wins. `exactBounds` is a Glass Lab instrument: it sends the
- * widget's whole box (plus a horizontal outset) instead of the panes' refracting union.
- */
-export function trackScrimRegion(widget: Gtk.Widget, exactBounds?: { horizontalOutset: number }): void {
-    addScrimRegion({ widget, casts: true, exactBounds })
-}
+/** The containers whose panes lie on a fixed veil (`trackVeilRegion`). */
+const veilRegions = new Set<Gtk.Widget>()
 
 /**
  * The panes of glass inside `widget`'s box lie on one FIXED veil (the material source's
  * `veil`), the size of their container and fading outside it — the darkening a group of panes
- * sits on, not a shadow making up what the glass lacks: no measurement, and no shadow of their
- * own. The Control Center and the Notification Center (owner, 2026-10-11: the reference's
- * Control Center, measured). Without a library that knows the veil, the panes cast nothing.
+ * sits on: no measurement. The Control Center and the Notification Center (owner, 2026-10-11:
+ * the reference's Control Center, measured). Declared while the widget is shown; it shares its
+ * surface's material (`trackGlass`). Where two regions hold a pane, the one declared first wins.
  */
 export function trackVeilRegion(widget: Gtk.Widget): void {
-    addScrimRegion({ widget, casts: true, veil: true })
-}
-
-/**
- * The panes of glass inside `widget`'s box cast no shadow — not a shared one, not one of
- * their own. The bar and the dock, for now (owner, 2026-10-02): a halo around their glass ran
- * over the windows, and a band hugging them could not fade without reaching the windows
- * either. Declare it BEFORE any region that could also hold those panes: the first one wins.
- */
-export function trackNoScrim(widget: Gtk.Widget): void {
-    addScrimRegion({ widget, casts: false })
-}
-
-function addScrimRegion(r: ScrimRegion): void {
     load()
-    const widget = r.widget
-    scrimRegions.set(widget, r)
+    veilRegions.add(widget)
     const resend = () => {
         const native = widget.get_native()
         const st = native && natives.get(native)
@@ -485,67 +482,39 @@ function addScrimRegion(r: ScrimRegion): void {
     }
     widget.connect("map", resend)
     widget.connect("unmap", resend)
-    widget.connect("destroy", () => scrimRegions.delete(widget))
+    widget.connect("destroy", () => veilRegions.delete(widget))
 }
 
 /**
- * The scrim regions shown on `native`, surface-local, each with its falloff: negative for one
- * that casts nothing (nidara_material_v1.add_scrim_region). A casting region is its panes'
- * CONTAINER: it ends where their GLASS ends — not the widget's box, which holds margins — plus
- * as far as that glass refracts (it reads its backdrop from beyond its own edge): the fade
- * starts right at the Control Center's edge (owner, 2026-10-02), and the sweep is centred on
- * the panel itself. It used to reach past the screen's edges (the whole right-hand strip),
- * which put its centre off the screen.
+ * The veil regions shown on `native`, surface-local (nidara_material_v1.add_veil_region): each
+ * is its panes' CONTAINER — it ends where their GLASS ends, not the widget's box, which holds
+ * margins — plus as far as that glass refracts (it reads its backdrop from beyond its own
+ * edge), so the fall-off starts right at the panel's edge.
  */
-function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams | null, veil: VeilParams | null,
-    glass: GlassParams, placed: Placed[]): (Rect & { falloff: number, veil?: VeilParams })[] {
+function placeVeilRegions(native: Gtk.Native, veil: VeilParams, glass: GlassParams, placed: Placed[]): Rect[] {
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
-    const out: (Rect & { falloff: number, veil?: VeilParams })[] = []
-    for (const { widget, casts, veil: isVeil, exactBounds } of scrimRegions.values()) {
+    const out: Rect[] = []
+    for (const widget of veilRegions) {
         if (widget.get_native() !== native || !widget.get_mapped() || !widget.is_drawable()) continue
         const [ok, b] = widget.compute_bounds(nw)
         if (!ok || b.get_width() <= 0 || b.get_height() <= 0) continue
         const box = { x: b.get_x() + tx, y: b.get_y() + ty, w: b.get_width(), h: b.get_height() }
-        // A veil region with no veil to cast (none asked, or a library that does not know it)
-        // still claims its panes: never a measured shadow under them.
-        const canVeil = isVeil && veil && shim?.material_add_veil_region
-        if (!casts || (isVeil && !canVeil)) { if (scrim) out.push({ ...box, falloff: -1 }); continue }
-        if (!isVeil && !scrim) continue
         // Its panes: the shapes whose centre lies in the widget's box, as the compositor counts.
         const panes = placed.filter(s => {
             const cx = s.x + s.w / 2, cy = s.y + s.h / 2
             return cx >= box.x && cx < box.x + box.w && cy >= box.y && cy < box.y + box.h
         })
-        if (!panes.length) continue
-        // A caller can request its exact widget box instead of the refracting panes' union.
-        // The Glass Lab uses this only for the proposed full-width bar backdrop band.
-        if (exactBounds) {
-            const dx = exactBounds.horizontalOutset
-            out.push({ x: box.x - dx, y: box.y, w: box.w + 2 * dx, h: box.h,
-                falloff: isVeil && veil ? veil.falloff : scrim!.regionFalloff, ...(isVeil && veil ? { veil } : {}) })
-            continue
-        }
+        if (!panes.length || veil.strength <= 0) continue
         // How far each refracts is the compositor's rule (refraction_of).
         const margin = Math.max(...panes.map(s => Math.max(glass.refraction, glass.lensing * Math.min(s.w, s.h))))
         const x0 = Math.min(...panes.map(s => s.x)) - margin
         const y0 = Math.min(...panes.map(s => s.y)) - margin
         const x1 = Math.max(...panes.map(s => s.x + s.w)) + margin
         const y1 = Math.max(...panes.map(s => s.y + s.h)) + margin
-        if (isVeil && veil) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: veil.falloff, veil })
-        else if (scrim) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: scrim.regionFalloff })
+        out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
     }
     return out
-}
-
-/** set_scrim; an older library takes four arguments (GJS warns on a fifth), and its regions'
- *  shadows are even. */
-function setScrim(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number,
-    regionEdge: number): void {
-    const f = shim?.material_set_scrim
-    if (!f) return
-    if (f.length >= 5) f(surface, maxStrength, sizeFraction, tintLimit, regionEdge)
-    else f(surface, maxStrength, sizeFraction, tintLimit)
 }
 
 /** Register this bundle's glass. Without one, every surface gets a plain blur behind its
@@ -739,7 +708,7 @@ function sortByTree(list: Entry[]) {
 
 type Rect = { x: number, y: number, w: number, h: number }
 type Placed = { x: number, y: number, w: number, h: number, r: number, e: number, o: number, clip: Rect | null,
-    pointer?: GlassPointer, fusion?: number }
+    pointer?: GlassPointer, fusion?: number, tone?: PaneTone }
 
 /** Past this many boxes a pane sends one, their union: a stricter measure, never a looser one. */
 const MAX_INK_BOXES_PER_PANE = 8
@@ -869,6 +838,11 @@ function place(e: Entry, native: Gtk.Native, ink = false): { shapes: Placed[], b
 
 const round = (v: number) => Math.round(v * 100) / 100
 
+function sendTone(f: NonNullable<Shim["material_set_tone"]>, surface: Gdk.Surface, t: GlassTone) {
+    f(surface, t.saturation, t.ceiling, t.lift, t.gain, t.wash.r, t.wash.g, t.wash.b, t.wash.a, t.ambient, t.ambientLift,
+        t.ambientGain)
+}
+
 function flush(native: Gtk.Native, st: NativeState) {
     if (!shim) return
     const surface = native.get_surface()
@@ -883,7 +857,12 @@ function flush(native: Gtk.Native, st: NativeState) {
         const p = place(e, native, inkWanted !== null && !e.clientPaints() && !inkless(e))
         if (p.shapes.length && e.clientPaints()) anyClient = true
         const fusion = fusionIdOf(e)
-        for (const s of p.shapes) s.fusion = fusion
+        // Its tone: the light face by the system mode where the surface's GLASS follows it (the
+        // dock, `trackModeGlass`), or its ink does (the bar, `trackModeInk`) and the pane takes
+        // an ink at all — never under `trackNoInk` there (the Control Center keeps its own).
+        const light = glassFollowsMode(native) || (inkFollowsMode(native) && !inkless(e))
+        const tone = source?.tone?.(native, pieceOf(e, native), light)
+        for (const s of p.shapes) { s.fusion = fusion; s.tone = tone }
         placed.push(...p.shapes)
         for (const box of p.boxes) inkBoxes.push({ id: inkIdOf(e), box })
     }
@@ -896,9 +875,8 @@ function flush(native: Gtk.Native, st: NativeState) {
         for (const e of st.entries) e.widget.queue_draw()
     }
     const ink = paints ? inkWanted : null
-    const scrim = paints && shim.material_set_scrim ? source?.scrim?.(native) ?? null : null
-    const veil = paints ? source?.veil?.(native) ?? null : null
-    const regions = (scrim || veil) && glass ? placeScrimRegions(native, scrim, veil, glass, placed) : []
+    const veil = paints && shim.material_add_veil_region ? source?.veil?.(native) ?? null : null
+    const regions = veil && glass ? placeVeilRegions(native, veil, glass, placed) : []
     // Fusion only where the compositor paints the glass: blurred only, every pane is its own.
     const spacing = paints && shim.material_set_fusion ? source?.fusion?.(native) ?? 0 : 0
     const hold = source?.fusionHold?.(native) ?? 0
@@ -913,15 +891,24 @@ function flush(native: Gtk.Native, st: NativeState) {
     const key = JSON.stringify([placed.map(s => [round(s.x), round(s.y), round(s.w), round(s.h), round(s.r), s.e, round(s.o),
         s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],
         s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
-            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0, spacing > 0 && s.fusion ? mergeOf(s.fusion) : 0]),
+            round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0, spacing > 0 && s.fusion ? mergeOf(s.fusion) : 0,
+            paints ? s.tone ?? null : null]),
         paints && glass, blur, spacing,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
-        scrim, veil, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff), !!r.veil])])
+        veil, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h)])])
     if (key === st.last) return
     st.last = key
     shim.material_begin(surface)
     let fusing = 0
+    // `set_tone` holds for the shapes added after it, until the next one (and resets the ink
+    // tone, which follows it).
+    let toning: PaneTone | undefined
     for (const s of placed) {
+        if (paints && s.tone && s.tone !== toning && shim.material_set_tone) {
+            sendTone(shim.material_set_tone, surface, s.tone.tone)
+            if (s.tone.inkTone && shim.material_set_ink_tone) sendTone(shim.material_set_ink_tone, surface, s.tone.inkTone)
+            toning = s.tone
+        }
         // `set_fusion` holds for the shapes added after it, until the next one.
         const f = spacing > 0 ? s.fusion ?? 0 : 0
         if (f !== fusing) {
@@ -943,25 +930,18 @@ function flush(native: Gtk.Native, st: NativeState) {
         }
     }
     if (paints && glass) {
-        const t = glass.tint
-        shim.material_set_glass(surface, t.r, t.g, t.b, glass.alphaMin, glass.alphaMax, glass.target,
-            glass.refraction, glass.rim, glass.saturation)
+        shim.material_set_glass(surface, glass.refraction, glass.rim)
         shim.material_set_lensing?.(surface, glass.lensing)
     } else {
         shim.material_clear_glass(surface)
     }
     if (ink) {
         for (const { id, box } of inkBoxes) shim.material_add_ink_box?.(surface, id, box.x, box.y, box.w, box.h)
-        shim.material_set_ink?.(surface, ink.darkAbove, ink.lightBelow, ink.tint.r, ink.tint.g, ink.tint.b)
+        shim.material_set_ink?.(surface, ink.darkAbove, ink.lightBelow)
     } else {
         shim.material_clear_ink?.(surface)
     }
-    for (const r of regions) {
-        if (r.veil) shim.material_add_veil_region?.(surface, r.x, r.y, r.w, r.h, r.falloff, r.veil.strength, r.veil.exponent)
-        else shim.material_add_scrim_region?.(surface, r.x, r.y, r.w, r.h, r.falloff)
-    }
-    if (scrim) setScrim(surface, scrim.maxStrength, scrim.sizeFraction, scrim.tintLimit, scrim.regionEdge)
-    else setScrim(surface, 0, 0, 0, 1)
+    if (veil) for (const r of regions) shim.material_add_veil_region?.(surface, r.x, r.y, r.w, r.h, veil.falloff, veil.strength, veil.exponent)
     shim.material_commit(surface, blur.size, placed.length ? blur.passes : 0)
-    if (DEBUG) console.log(`[Material] ${(native as unknown as Gtk.Widget).get_name()}: ${placed.length} shapes, ${inkBoxes.length} ink boxes, ${regions.length} scrim regions, ${paints ? "compositor glass" : "blur only"} ${key}`)
+    if (DEBUG) console.log(`[Material] ${(native as unknown as Gtk.Widget).get_name()}: ${placed.length} shapes, ${inkBoxes.length} ink boxes, ${regions.length} veil regions, ${paints ? "compositor glass" : "blur only"} ${key}`)
 }

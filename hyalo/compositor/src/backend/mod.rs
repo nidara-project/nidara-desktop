@@ -277,15 +277,11 @@ fn poll_ink(state: &mut Hyalo) -> bool {
     };
     let Some((results, pending)) = polled else { return false };
     let mut redraw = false;
-    let now = std::time::Instant::now();
     for m in results {
-        if let Ok(surface) = m.surface.upgrade() {
-            if !m.ink.is_empty() {
-                redraw |= crate::protocols::material::ink_measured(&surface, &m.ink);
-            }
-            if !m.light.is_empty() {
-                redraw |= crate::protocols::material::scrim_measured(&surface, &m.light, now);
-            }
+        if let Ok(surface) = m.surface.upgrade()
+            && !m.ink.is_empty()
+        {
+            redraw |= crate::protocols::material::ink_measured(&surface, &m.ink);
         }
     }
     if redraw {
@@ -304,10 +300,6 @@ pub fn post_repaint(
 ) {
     if crate::render::glass_gl::take_ink_issued() {
         arm_ink_poll(state);
-    }
-    // A shadow under the glass is easing toward its strength: the next frame too.
-    if crate::render::scrim::take_easing() {
-        state.queue_redraw(Some(output));
     }
     // The debug overlay is fading a flash or a damage outline out (render/stats.rs).
     if crate::render::stats::overlay_animating(&output.name()) {

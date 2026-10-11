@@ -21,7 +21,7 @@ import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip, GlassBubbleMenu } from "../../../lib/nidara-kit"
 import { renderMenuModel } from "../../common/NidaraMenu"
-import { trackFluidCrystal } from "../../../lib/nidara-kit/platform/material"
+import { trackFluidCrystal, trackGlassPiece } from "../../../lib/nidara-kit/platform/material"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -312,6 +312,8 @@ export default function AppGridPanel(
     // The App Grid shares the bar's Wayland surface, so its launcher profile is local:
     // it changes the panel's density without changing the surface-wide compositor material.
     trackFluidCrystal(squirclePanel, "launcher")
+    // A large panel: the reference's large floating glass (the glass material's `TONES`).
+    trackGlassPiece(squirclePanel, "panel")
     // Shared overlay pop — same grow+fade as CC/NC/Prism. The docks call
     // setVisible() instead of toggling .visible directly so it animates.
     const panelPop = new ScaleRevealer(squirclePanel, { ...OVERLAY_POP, pivot: "center" })

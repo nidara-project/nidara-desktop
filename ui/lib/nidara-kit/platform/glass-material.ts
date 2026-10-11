@@ -4,37 +4,49 @@ import Gio from "gi://Gio"
 import Gtk from "gi://Gtk?version=4.0"
 import { GLASS_TINT } from "./tokens"
 import { SOLID_GLASS } from "./theme-tokens"
-import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "./glass-legibility"
-import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams, type VeilParams } from "./material"
+import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, type GlassTone, type InkParams,
+    type PaneTone, type VeilParams } from "./material"
 
 /**
  * THE glass material (#684, #705 step 0): one material for everything Nidara draws as glass —
  * the shell's panes, the lock screen's card — registered as the source behind `material.ts`
  * by each bundle through `registerGlassMaterial`, which supplies only what is its own (Reduce
- * transparency, the panels' blur). Where the compositor offers nidara-material-v1
- * (Hyalo), every surface's glass is the compositor's — the backdrop blurred, bent at
- * the edge, saturated, a tint that thickens per pixel only where the backdrop is too bright
- * for white text, a rim of light — and the painters keep content and state. Elsewhere this
- * registers a source nobody asks.
+ * transparency, the panels' blur, the system mode). Where the compositor offers
+ * nidara-material-v1 (Hyalo), every surface's glass is the compositor's — the backdrop
+ * blurred, bent at the edge, then each pane's TONE, a rim of light — and the painters keep
+ * content and state. Elsewhere this registers a source nobody asks.
  *
- * The shell's skin is dark whatever the mode (2026-09-30), so the tint is the dark one.
- * Reduce transparency makes every pane solid, as it does on Hyprland. The panels' blur is the
- * bundle's to say (the shell's follows Settings' glass material, `GlassBlur.ts`).
+ * The TONE (owner, 2026-10-11): not a look made to resemble the reference, its MACHINE. The
+ * reference's own glass filter was changed input by input in a process of ours and measured
+ * over known backdrops (glass-probe `tweak`): five stages, in this order, each with its law
+ * (`GlassTone`, material.ts; the shader is hyalo's glass_final.glsl). Each kind of pane
+ * (`GlassPiece`) carries the values the reference gives its pair — read from its filter where
+ * the filter could be read (the bar's capsules ↔ the toolbar's glass groups, a control; a menu ↔
+ * the real menu, a panel), fitted with this same machine where it could not (the Dock and the
+ * Control Center are other processes'). `TONES` says which, number by number. The owner chose
+ * the reference's values AS THEY ARE, the large dark panels' ceiling included (over white a
+ * dark menu lands at ≈ 0.48: the reference's own).
  *
- * The tint's rule is the adaptive glass's on Hyprland, held by the same two numbers: primary
- * text at 4.5:1, and no thicker than its ceiling. Over pure white that is the tint at ≈0.59.
+ * Which face a pane wears: the dark one, unless its surface follows the system mode (the dock,
+ * `trackModeGlass`; the bar, `trackModeInk`) and the mode is light — and never the light one
+ * under `trackNoInk` (the Control Center keeps its own whatever the mode, owner 2026-10-11).
+ * A pane whose content the backdrop turns dark (the ink) takes the light face of its piece.
  *
- * The glass's own numbers — refraction, lensing, rim, saturation, the least tint, the ink's
- * thresholds — are the owner's, tuned in the glass lab (`scripts/dev/glass-lab/`, 2026-10-05,
- * preset "OK 2", #705) together with the shader's (hyalo's `glass_gl.rs`). The shadow's are
- * still those of 2026-10-02: how the shadow applies is undecided (#705). To tune live, a dev install (`~/.config/nidara/.dev`) reads
+ * Reduce transparency makes every pane solid: a wash of the skin's own colour. The panels'
+ * blur is the bundle's to say (the shell's follows Settings' glass material, `GlassBlur.ts`).
+ *
+ * The glass's other numbers — refraction, lensing, rim, the ink's thresholds — are the
+ * owner's, tuned in the glass lab (`scripts/dev/glass-lab/`, 2026-10-05, preset "OK 2", #705)
+ * together with the shader's. To tune live, a dev install (`~/.config/nidara/.dev`) reads
  * `~/.config/nidara/glass-tuning.conf` — `key = value` lines, applied as the file is saved:
- *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
+ *   refraction lensing rim                               the glass (see GlassParams)
+ *   PIECE.FACE.STAGE                                     one number of one tone: PIECE control,
+ *                                                        panel, controlCenter or dock; FACE dark
+ *                                                        or light; STAGE saturation, ceiling,
+ *                                                        lift, gain, washR/G/B/A, ambient,
+ *                                                        ambientLift, ambientGain
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
- *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
  *   veilStrength veilFalloff veilExponent                the Control Center's veil (below)
- *   modeLightVeil                                        the light glass of a surface that
- *                                                        follows the mode (the dock), light mode
  *   fusion                                               how close two panes of one fusion
  *                                                        group join, logical px (0 = off)
  *   fusionHold                                           0..1: every fusion group held that far
@@ -48,42 +60,66 @@ import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, 
  *   glass = off                                          blur only: the shell paints its own
  *                                                        glass, as on Hyprland (A/B)
  *   ink = off                                            the text stays white everywhere
- *   scrim = off                                          no shadow under the glass (A/B)
+ *   tone = off                                           every pane's tone neutral (A/B: the
+ *                                                        blurred backdrop as it is)
  *
  * The ink (owner, 2026-10-01, #684): the shell's text on Hyalo's glass is white and turns
  * dark only where even the DARKEST point under it is brighter than `inkDarkAbove` (WCAG
- * luminance, the glass's own treatment of the backdrop: blurred, saturated, before its
- * tint); it turns back only below `inkLightBelow`. Hyalo measures, per pane of glass; the
- * pane then wears the light skin's tokens (`INK_DARK_CLASS`) and Hyalo lays a light veil
- * under it instead of darkening. ⚠️ Both thresholds are a starting point, to be calibrated
- * with the owner on screen.
+ * luminance, of the backdrop blurred and saturated, before the rest of its tone); it turns
+ * back only below `inkLightBelow`. Hyalo measures, per pane of glass; the pane then wears the
+ * light skin's tokens (`INK_DARK_CLASS`) and Hyalo gives it the light face of its tone.
  *
- * The shadow under the glass (owner, 2026-10-02, #684): with the tint alone, a pane over a
- * backdrop bright in one place and dark in another came out grey in one part and clear in the
- * other — the tint thickens per pixel — and over a bright one the whole pane looked painted
- * grey. "The limit has to be in the glass": the glass takes no more tint than `tintLimit`, and
- * Hyalo lays a soft shadow UNDER it, even across the pane, with exactly what the glass is
- * missing for the text to be legible at the brightest point — none where the glass reaches it
- * alone, none under a pane whose text has turned dark (the ink's veil), at most `scrimMax`.
- * The glass's ceiling IS `tintLimit` while there is a shadow: nothing makes up past
- * `scrimMax`, because a tint above the limit is the grey plastic again. A pane's own
- * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's). The
- * Control Center and the Notification Center cast no measured shadow: they lie on a FIXED veil
- * the size of the panel (`trackVeilRegion` in Bar.tsx; `veilStrength veilFalloff veilExponent`,
- * the reference's own, measured 2026-10-11). A region declared with `trackScrimRegion` still
- * shares one measured shadow, even across it (`scrimEdge` 1; below 1 it sweeps from the
- * centre), fading over `scrimFalloff` px. The bar and the dock cast none for now (`trackNoScrim`): a shadow that
- * hugs them cannot fade without running over the windows — an edge shadow drawn by Hyalo,
- * under the windows, is the next step.
+ * The Control Center and the Notification Center lie on a FIXED veil the size of the panel
+ * (`trackVeilRegion` in Bar.tsx; `veilStrength veilFalloff veilExponent`, the reference's own,
+ * measured 2026-10-11). Nothing else casts anything under its glass.
  */
 
+/** One tone, written as the protocol takes it (`GlassTone`), wash given as a colour and its
+ *  opacity. */
+function tone(saturation: number, ceiling: number, lift: number, gain: number,
+    wash: [number, number, number, number] = [0, 0, 0, 0], ambient = 0, ambientLift = 0, ambientGain = 1): GlassTone {
+    return { saturation, ceiling, lift, gain, wash: { r: wash[0], g: wash[1], b: wash[2], a: wash[3] }, ambient,
+        ambientLift, ambientGain }
+}
+
+/**
+ * Each kind of pane's tone, dark and light face. Sources (glass-probe, 2026-10-11):
+ *  - control, panel: READ from the reference's filter (catalogue run 38116434211, every glass
+ *    layer's inputs): small controls (buttons of every size, the toolbar's groups, a capsule) and
+ *    large floating glass (the real menu, a popover, a 220×150 panel) share everything but the
+ *    dark ceiling, 0.6 against 0.35. The ambient (its bleed): 0.8 dark, 0.5 light, black 0.125
+ *    and white 0.5 dark — the compositor sizes it (none on a control: under 64 px). The light
+ *    face's ambient is not modelled (it fits no blend that was tried: ≤ 0.03 on a large pane), so
+ *    it carries none. Checked against the same catalogue's PIXELS with this machine: the toolbar's
+ *    groups fit to within 0.03, the real menu to within 0.006.
+ *  - dock: FITTED to the real Dock over nine greys (run 38104320473): dark within 0.002, light
+ *    within 0.001. Saturation is the controls' (unmeasured on it).
+ *  - controlCenter: FITTED to the real Control Center's tiles over black, mid grey and white,
+ *    behind them the fixed veil (cc_calib, 2026-10-11): exact on those three. One face: the
+ *    reference's is the same in both modes, and ours too (owner). Saturation the controls'.
+ */
+const TONES: Record<GlassPiece, { dark: GlassTone, light: GlassTone }> = {
+    control: {
+        dark: tone(1.3, 0.6, 0.125, 1.125, [0, 0, 0, 0], 0.8, 0.125, 0.5),
+        light: tone(1.2, 0.94, 0.4, 1.03, [1, 1, 1, 0.2]),
+    },
+    panel: {
+        dark: tone(1.3, 0.35, 0.125, 1.125, [0, 0, 0, 0], 0.8, 0.125, 0.5),
+        light: tone(1.2, 0.94, 0.4, 1.03, [1, 1, 1, 0.2]),
+    },
+    dock: {
+        dark: tone(1.3, 0.745, 0.048, 0.908),
+        light: tone(1.2, 1, 0.15, 0.899),
+    },
+    controlCenter: {
+        dark: tone(1.3, 0.985, 0.125, 0.794),
+        light: tone(1.3, 0.985, 0.125, 0.794),
+    },
+}
+
+const NEUTRAL_TONE = tone(1, 1, 0, 1)
+
 const DEFAULTS = {
-    // The least tint, over a dark backdrop: none — the glass darkens only where the backdrop is
-    // too bright for white text (the lab, 2026-10-05; 0.12 before).
-    alphaMin: 0,
-    alphaMax: GLASS_ADAPT_CEILING,   // the most, over the brightest
-    // The backdrop's WCAG luminance (linear) after tint ≤ this: white text at 4.5:1.
-    target: 1.05 / LEGIBILITY_TARGET.primary - 0.05,
     // Logical px, every shape's least: what sets the bevel's width (≈4.3× this, hyalo's
     // glass_gl.rs), held to half the shape's shorter side and to 80 px (`BEVEL_MAX`). At 40 the
     // bevel is as wide as it may be on every shape: a bar capsule is lens all across, a large
@@ -96,7 +132,6 @@ const DEFAULTS = {
     // 2026-10-05).
     lensing: 0.15,
     rim: 0.5,
-    saturation: 1.25,
     // The darkest point under the text, as the glass treats the backdrop: past this the text
     // turns dark. 0.35 (the lab, 2026-10-05; 0.80 before): a page of text behind the glass —
     // always black letters under it — turns it too, and the pane reads as clear glass with
@@ -104,31 +139,11 @@ const DEFAULTS = {
     inkDarkAbove: 0.35,
     // The gap is the hysteresis, so a backdrop on the line does not flicker.
     inkLightBelow: 0.25,
-    // The shadow's opacity at its core, at most. Pure white needs ≈0.41 with the glass at
-    // `tintLimit`; past this the text is less legible, not the glass greyer.
-    scrimMax: 0.6,
-    // A pane's own shadow fades over this fraction of its shorter side (a notification
-    // ≈35 px; the app grid, the overview).
-    scrimSize: 0.5,
-    // The Control Center's shadow fades to nothing over this many px outside its glass. 380
-    // with the shadow even across the panel was "totally exaggerated" and 48 a step you could
-    // see (owner, 2026-10-02: "it has to end with no jump between the shadow and the
-    // backdrop"); with the sweep from the centre a long fade reads as none.
-    scrimFalloff: 160,
-    // The Control Center's shadow at its edges, as a fraction of its centre's (1: even). Even
-    // (owner, 2026-10-02): the shadow is what the glass lacks at the brightest point, so it holds
-    // across the whole container and only fades outside it; the sweep (0.7) left the edge tiles
-    // short of it and did not read on screen anyway.
-    scrimEdge: 1,
-    // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
-    // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
-    tintLimit: 0.25,
     // The VEIL the Control Center and the Notification Center lie on (`trackVeilRegion` in
-    // Bar.tsx), in place of the measured shadow — the owner took that out (2026-10-09: "the
-    // shadow under it cannot define how the glass looks"). The reference's, measured on its own
-    // Control Center over known wallpapers (2026-10-11, glass-probe cc_calib): 0.078 black,
-    // even behind the tiles, falling from their edge as (1 − d/125)^1.5 — 0.055 at 25 px,
-    // 0.035 at 50, 0.020 at 75, 0.008 at 100. Fixed: the backdrop does not change it.
+    // Bar.tsx). The reference's, measured on its own Control Center over known wallpapers
+    // (2026-10-11, glass-probe cc_calib): 0.078 black, even behind the tiles, falling from their
+    // edge as (1 − d/125)^1.5 — 0.055 at 25 px, 0.035 at 50, 0.020 at 75, 0.008 at 100. Fixed:
+    // the backdrop does not change it.
     veilStrength: 0.078,
     veilFalloff: 125,
     veilExponent: 1.5,
@@ -145,11 +160,6 @@ const DEFAULTS = {
     // An instrument, 0 in the product: every pane held this far formed (#764 — a pane appears by
     // materializing: its blur, refraction, tint and rim grow; held, a step of it can be judged).
     formationHold: 0,
-    // A surface whose glass follows the system mode (`trackModeGlass`: the dock), in light
-    // mode: a white veil this thick, even — the reference's regular light glass is filled with
-    // white at 0.2 (glass-probe, 2026-10-08) — and no darkening for white text, which it does
-    // not carry (its content is dark in light mode).
-    modeLightVeil: 0.2,
 }
 
 /** The material's numbers as it ships them — what `glass-tuning.conf` overrides (a dev
@@ -157,7 +167,9 @@ const DEFAULTS = {
 export const GLASS_MATERIAL_DEFAULTS: Readonly<typeof DEFAULTS> = DEFAULTS
 
 type Blur = { size: number, passes: number }
-type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, scrimOff?: boolean }
+type ToneTuning = Partial<Record<`${GlassPiece}.${"dark" | "light"}.${string}`, number>>
+type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, toneOff?: boolean,
+    tones?: ToneTuning }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
 
@@ -177,74 +189,92 @@ export interface GlassMaterialHost {
 let host: GlassMaterialHost | null = null
 const reduced = () => host?.reduceTransparency() ?? false
 
-function params(native: Gtk.Native | null = null): GlassParams | null {
+function params(): GlassParams | null {
     if (tuning.off) return null
     const p = { ...DEFAULTS, ...tuning }
-    // A surface that follows the system mode, in light mode: the light glass — a white veil,
-    // even (alphaMin = alphaMax), never thickened for white text (a target no backdrop exceeds).
-    if (native && host?.lightMode?.() && glassFollowsMode(native)) {
-        const l = GLASS_TINT.light
-        const veil = reduced() ? SOLID_GLASS : p.modeLightVeil
-        return { tint: { r: l.r, g: l.g, b: l.b }, alphaMin: veil, alphaMax: veil, target: 1,
-            refraction: reduced() ? 0 : p.refraction, lensing: reduced() ? 0 : p.lensing, rim: p.rim,
-            saturation: reduced() ? 1 : p.saturation }
-    }
-    const t = GLASS_TINT.dark
+    return { refraction: reduced() ? 0 : p.refraction, lensing: reduced() ? 0 : p.lensing, rim: p.rim }
+}
+
+const TONE_STAGES = ["saturation", "ceiling", "lift", "gain", "washR", "washG", "washB", "washA", "ambient",
+    "ambientLift", "ambientGain"] as const
+
+/** One face of a piece's tone, with what `glass-tuning.conf` says of it. */
+function faceOf(piece: GlassPiece, face: "dark" | "light"): GlassTone {
+    if (tuning.toneOff) return NEUTRAL_TONE
+    const base = TONES[piece][face]
     if (reduced()) {
-        return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: SOLID_GLASS, alphaMax: SOLID_GLASS,
-            target: p.target, refraction: 0, lensing: 0, rim: p.rim, saturation: 1 }
+        // Solid: the skin's own colour over everything.
+        const c = face === "dark" ? GLASS_TINT.dark : GLASS_TINT.light
+        return { ...NEUTRAL_TONE, wash: { r: c.r, g: c.g, b: c.b, a: SOLID_GLASS } }
     }
-    // With the shadow under it, the glass never darkens past `tintLimit` — not even to keep the
-    // text legible, which is the shadow's job (owner, 2026-10-02: a ceiling above it "makes the
-    // grey plastic again"). Without the shadow (the A/B), `alphaMax` as before.
-    const alphaMax = tuning.scrimOff ? p.alphaMax : Math.min(p.alphaMax, p.tintLimit)
-    return { tint: { r: t.r, g: t.g, b: t.b }, alphaMin: p.alphaMin, alphaMax, target: p.target,
-        refraction: p.refraction, lensing: p.lensing, rim: p.rim, saturation: p.saturation }
+    const t = tuning.tones
+    if (!t) return base
+    const get = (stage: typeof TONE_STAGES[number], v: number) => t[`${piece}.${face}.${stage}`] ?? v
+    return {
+        saturation: get("saturation", base.saturation), ceiling: get("ceiling", base.ceiling),
+        lift: get("lift", base.lift), gain: get("gain", base.gain),
+        wash: { r: get("washR", base.wash.r), g: get("washG", base.wash.g), b: get("washB", base.wash.b),
+            a: get("washA", base.wash.a) },
+        ambient: get("ambient", base.ambient), ambientLift: get("ambientLift", base.ambientLift),
+        ambientGain: get("ambientGain", base.ambientGain),
+    }
+}
+
+/** A pane of `piece`: its face by the system mode where its surface follows it, and the light
+ *  face while the backdrop turns its content dark. One object per answer, so a surface's panes
+ *  of one kind share it (material.ts sends a tone only where it changes). */
+const paneTones = new Map<string, PaneTone>()
+function paneTone(piece: GlassPiece, light: boolean): PaneTone {
+    const lightMode = light && (host?.lightMode?.() ?? false)
+    const key = `${piece}:${lightMode}`
+    let t = paneTones.get(key)
+    if (!t) {
+        t = { tone: faceOf(piece, lightMode ? "light" : "dark"), inkTone: lightMode ? null : faceOf(piece, "light") }
+        paneTones.set(key, t)
+    }
+    return t
 }
 
 function inkParams(native: Gtk.Native | null = null): InkParams | null {
     if (tuning.off || tuning.inkOff || reduced()) return null
     const p = { ...DEFAULTS, ...tuning }
-    const t = GLASS_TINT.light
     // An ink that follows the mode (`trackModeInk`): thresholds no backdrop can miss — any
     // luminance (0..1) is above −1, so light mode turns it dark at the first measurement and
     // nothing turns it back (light_below −2); in dark mode nothing turns it dark (2) and
     // anything turns it light (1.5).
     if (native && inkFollowsMode(native)) {
         const light = host?.lightMode?.() ?? false
-        return { darkAbove: light ? -1 : 2, lightBelow: light ? -2 : 1.5, tint: { r: t.r, g: t.g, b: t.b } }
+        return { darkAbove: light ? -1 : 2, lightBelow: light ? -2 : 1.5 }
     }
-    return { darkAbove: p.inkDarkAbove, lightBelow: p.inkLightBelow, tint: { r: t.r, g: t.g, b: t.b } }
+    return { darkAbove: p.inkDarkAbove, lightBelow: p.inkLightBelow }
 }
 
 function veilParams(): VeilParams | null {
-    if (tuning.off || tuning.scrimOff || reduced()) return null
+    if (tuning.off || reduced()) return null
     const p = { ...DEFAULTS, ...tuning }
     return { strength: p.veilStrength, falloff: p.veilFalloff, exponent: p.veilExponent }
-}
-
-function scrimParams(): ScrimParams | null {
-    if (tuning.off || tuning.scrimOff || reduced()) return null
-    const p = { ...DEFAULTS, ...tuning }
-    return { maxStrength: p.scrimMax, sizeFraction: p.scrimSize, regionFalloff: p.scrimFalloff, tintLimit: p.tintLimit,
-        regionEdge: p.scrimEdge }
 }
 
 function parse(text: string): Tuning {
     const out: Tuning = {}
     for (const line of text.split("\n")) {
-        const m = line.replace(/#.*/, "").match(/^\s*([A-Za-z]+)\s*=\s*(\S+)\s*$/)
+        const m = line.replace(/#.*/, "").match(/^\s*([A-Za-z.]+)\s*=\s*(\S+)\s*$/)
         if (!m) continue
         const [, k, v] = m
-        if (k === "blur" || k === "popoverBlur") {
+        const [piece, face, stage] = k.split(".")
+        if (stage !== undefined) {
+            if (piece in TONES && (face === "dark" || face === "light")
+                && (TONE_STAGES as readonly string[]).includes(stage) && Number.isFinite(Number(v)))
+                out.tones = { ...out.tones, [k]: Number(v) }
+        } else if (k === "blur" || k === "popoverBlur") {
             const [size, passes] = v.split(":").map(Number)
             if (Number.isFinite(size) && Number.isInteger(passes)) out[k] = { size, passes }
         } else if (k === "glass") {
             out.off = v === "off"
         } else if (k === "ink") {
             out.inkOff = v === "off"
-        } else if (k === "scrim") {
-            out.scrimOff = v === "off"
+        } else if (k === "tone") {
+            out.toneOff = v === "off"
         } else if (k in DEFAULTS && Number.isFinite(Number(v))) {
             (out as Record<string, number>)[k] = Number(v)
         }
@@ -265,6 +295,7 @@ function watchTuning() {
             if (ok) text = new TextDecoder().decode(bytes)
         } catch { /* no file: the defaults */ }
         tuning = parse(text)
+        paneTones.clear()
         console.log(`[glass-material] tuning: ${JSON.stringify(tuning)}`)
         for (const cb of listeners) cb()
     }
@@ -280,9 +311,9 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
     host = h
     watchTuning()
     setMaterialSource({
-        glass: (native: Gtk.Native) => params(native),
+        glass: (_native: Gtk.Native) => params(),
         ink: (native: Gtk.Native) => inkParams(native),
-        scrim: (_native: Gtk.Native) => scrimParams(),
+        tone: (_native: Gtk.Native, piece: GlassPiece, light: boolean) => paneTone(piece, light),
         veil: (_native: Gtk.Native) => veilParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         fusionHold: (_native: Gtk.Native) => tuning.fusionHold ?? DEFAULTS.fusionHold,
@@ -294,7 +325,8 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
             return tuning.popoverBlur ?? { size: panels.size, passes: panels.passes + 1 }
         },
         onChange: (cb) => {
-            const off = h.onChange(cb)
+            // The mode or Reduce transparency may have changed: every tone is asked again.
+            const off = h.onChange(() => { paneTones.clear(); cb() })
             listeners.add(cb)
             return () => { off(); listeners.delete(cb) }
         },

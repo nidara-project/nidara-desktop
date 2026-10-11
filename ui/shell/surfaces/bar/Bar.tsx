@@ -36,7 +36,7 @@ import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import { ActivityIsland } from "../island/ActivityIsland"
 import AppGridPanel from "../app-grid/AppGrid"
 import { execAsync } from "../../../lib/process"
-import { trackModeInk, trackNoInk, trackNoScrim, trackVeilRegion } from "../../../lib/nidara-kit/platform/material"
+import { trackGlassPiece, trackModeInk, trackNoInk, trackVeilRegion } from "../../../lib/nidara-kit/platform/material"
 import { t } from "../../core/i18n"
 import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
@@ -157,20 +157,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
   // On Hyalo, the panes of each lie on ONE fixed veil behind them, the size of the panel and
   // fading outside it — the reference's Control Center, measured over known wallpapers
-  // (2026-10-11): 0.078 black, gone ~150 px out (the glass material's `veil*`). It replaced
-  // the measured shadow under the glass, which the owner took out (2026-10-09: "the shadow
-  // under it cannot define how the glass looks"). The bar's capsules cast none (owner,
-  // 2026-10-02: a halo, or a band hugging the bar, ran over the windows). Declared FIRST: a
-  // capsule on the right also lies in the Control Center's box, and must not join it.
-  trackNoScrim(barBox)
+  // (2026-10-11): 0.078 black, gone ~150 px out (the glass material's `veil*`). Nothing else on
+  // this surface lies on anything.
   trackVeilRegion(cc)
   trackVeilRegion(nc)
+  // Each kind of pane takes its own tone (the glass material's `TONES`): the Control Center's
+  // tiles their measured own; the large panels the reference's large floating glass; the rest —
+  // the bar's capsules, the island, the notifications — a control's.
+  trackGlassPiece(cc, "controlCenter")
   const prism = Prism()
+  trackGlassPiece(prism, "panel")
   const popups = NotificationPopupsWidget()
   // White text ALWAYS in the Control Center and the notifications, whatever is behind them
   // (owner, 2026-10-08): the reference's Control Center keeps white text in both modes and
-  // over every wallpaper (glass-probe, `macos` set). Their legibility is the glass's tint and
-  // the shadow under it.
+  // over every wallpaper (glass-probe, `macos` set). Their legibility is their tone's.
   trackNoInk(cc)
   trackNoInk(nc)
   trackNoInk(popups)
@@ -180,6 +180,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // turns with the backdrop again — the whole bar at once, by majority, gradually — is for later.
   trackModeInk(barBox)
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
+  trackGlassPiece(systemMenu, "panel")
   // The Activity Island: the bar-center workspace capsule as a multi-purpose
   // morphing surface — capsule = compact state, expanded modes morph out of
   // it Dynamic-Island-style, one MorphRevealer per mode, all driven by

@@ -42,6 +42,47 @@ pub struct Shape {
     pub pointer: Option<Pointer>,
     /// The fusion group it belongs to (`set_fusion`): one silhouette with the group's others.
     pub fusion: Option<Fusion>,
+    /// How the glass treats the backdrop under it (`set_tone`). None: as it is, blurred.
+    pub tone: Option<Tone>,
+    /// Its tone while its ink group's content is dark (`set_ink_tone`). None: `tone`.
+    pub ink_tone: Option<Tone>,
+}
+
+/// How the glass treats the blurred backdrop under a shape (`set_tone`), in this order, on the
+/// sRGB-encoded colour: saturation about the Rec.709 luma; the luma l brought to
+/// l·(1 − (1 − ceiling)·l); levels lift + (gain − lift)·v; the wash laid over; the ambient —
+/// what surrounds the pane, blurred far wider, mapped by its own levels — lightening what is
+/// darker than it, at `ambient` times how large the shape is (render/glass_gl.rs).
+/// Each stage measured, input by input, on the reference's own glass (2026-10-11).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tone {
+    pub saturation: f64,
+    pub ceiling: f64,
+    pub lift: f64,
+    pub gain: f64,
+    pub wash: [f64; 4],
+    pub ambient: f64,
+    pub ambient_lift: f64,
+    pub ambient_gain: f64,
+}
+
+impl Tone {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        saturation: f64, ceiling: f64, lift: f64, gain: f64,
+        wash: [f64; 4], ambient: f64, ambient_lift: f64, ambient_gain: f64,
+    ) -> Self {
+        Self {
+            saturation: saturation.clamp(0.0, 4.0),
+            ceiling: ceiling.clamp(0.0, 1.0),
+            lift: lift.clamp(-1.0, 2.0),
+            gain: gain.clamp(-1.0, 4.0),
+            wash: [wash[0].clamp(0.0, 1.0), wash[1].clamp(0.0, 1.0), wash[2].clamp(0.0, 1.0), wash[3].clamp(0.0, 1.0)],
+            ambient: ambient.clamp(0.0, 1.0),
+            ambient_lift: ambient_lift.clamp(-1.0, 2.0),
+            ambient_gain: ambient_gain.clamp(-1.0, 4.0),
+        }
+    }
 }
 
 /// A fusion group (`set_fusion`): its shapes are drawn as one pane of glass, the smooth union
@@ -68,13 +109,8 @@ pub struct Pointer {
 /// Refractive glass: the compositor paints the whole glass (src/render/glass_gl.rs, the last pass).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glass {
-    pub tint: [f64; 3],
-    pub alpha_min: f64,
-    pub alpha_max: f64,
-    pub target_luminance: f64,
     pub refraction: f64,
     pub rim: f64,
-    pub saturation: f64,
 }
 
 /// Where content of one ink group sits, surface-local logical coordinates.
@@ -87,44 +123,27 @@ pub struct InkBox {
     pub h: f64,
 }
 
-/// The ink measurement: WCAG luminance thresholds, and the tint over a dark-ink shape.
+/// The ink measurement: WCAG luminance thresholds. A dark-ink shape takes its `ink_tone`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ink {
     pub dark_above: f64,
     pub light_below: f64,
-    pub tint: [f64; 3],
 }
 
-/// The shadow under the glass: its strongest, and how far a lone shape's fades.
+/// A fixed veil under the shapes whose centre lies inside it (add_veil_region), surface-local
+/// logical coordinates; it may reach past the surface.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Scrim {
-    /// The shadow's opacity at its core, at most: 0..1.
-    pub max_strength: f64,
-    /// A shape inside no region fades over this fraction of its shorter side.
-    pub size_fraction: f64,
-    /// The most tint the glass takes while a shadow can make up the rest (an opacity): the
-    /// glass's own limit — past it the pane looks painted grey. The shadow is what is missing.
-    pub tint_limit: f64,
-    /// A region's shadow at its rim, as a fraction of its centre's: it sweeps from the centre
-    /// out following the region's shape. 1: even across it.
-    pub region_edge: f64,
-}
-
-/// One shadow shared by the shapes whose centre lies inside it, surface-local logical
-/// coordinates; it may reach past the surface.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ScrimRegion {
+pub struct VeilRegion {
     pub x: f64,
     pub y: f64,
     pub w: f64,
     pub h: f64,
     pub falloff: f64,
-    /// add_veil_region: a fixed veil instead of the measured shadow.
-    pub veil: Option<Veil>,
+    pub veil: Veil,
 }
 
-/// A fixed veil (add_veil_region): its opacity, even under its region, and the shape of its
-/// fall-off outside it, `(1 − d/falloff)^exponent`.
+/// A fixed veil's opacity, even under its region, and the shape of its fall-off outside it,
+/// `(1 − d/falloff)^exponent`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Veil {
     pub strength: f64,
@@ -141,11 +160,13 @@ pub struct MaterialState {
     pub ink: Option<Ink>,
     /// each shape's refraction is at least this fraction of its shorter side.
     pub lensing: f64,
-    /// the shadow under the glass, and the regions shapes share one in.
-    pub scrim: Option<Scrim>,
-    pub scrim_regions: Vec<ScrimRegion>,
+    /// The fixed veils the shapes inside them lie on.
+    pub veil_regions: Vec<VeilRegion>,
     /// What `set_fusion` last said: the group the next shapes join.
     pub fusing: Option<Fusion>,
+    /// What `set_tone` and `set_ink_tone` last said: the tones the next shapes take.
+    pub toning: Option<Tone>,
+    pub ink_toning: Option<Tone>,
     /// `set_drawn_region`: where the surface's content is drawn, surface-local logical
     /// rectangles that do not overlap. None: the whole surface.
     pub drawn: Option<Vec<Rectangle<i32, Logical>>>,
@@ -159,76 +180,41 @@ impl MaterialState {
     }
 }
 
-/// One shadow under the glass: a core (surface-local logical px, a rounded rectangle) that
-/// fades to nothing over `falloff` outside it, and the shapes it lies under.
+/// One fixed veil (add_veil_region): its core (surface-local logical px), how far it falls
+/// outside, and the shapes that lie on it.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ScrimUnit {
-    /// Stable while the client declares the same thing: a region's index, or a lone shape's
-    /// index past `LONE_SCRIM`.
+pub struct VeilUnit {
+    /// The region's index.
     pub key: u32,
     pub core: [f64; 4],
-    pub radius: f64,
     pub falloff: f64,
-    /// The shadow at the core's rim, as a fraction of its centre's: it sweeps between the two
-    /// following the core's shape. 1: even across the core (a lone shape's).
-    pub edge: f64,
-    /// A fixed veil (add_veil_region): drawn as it says, never measured nor eased.
-    pub veil: Option<Veil>,
+    pub veil: Veil,
     /// Indices into `MaterialState::shapes`.
     pub members: Vec<usize>,
 }
 
-/// A lone shape's shadow is keyed past every region's.
-pub const LONE_SCRIM: u32 = 0x1_0000;
-
 impl MaterialState {
-    /// The shadows this material asks for: one per region that holds a shape, and one
-    /// per shape inside no region — none for a region whose falloff is negative, which claims
-    /// its shapes and casts nothing. A veil region (add_veil_region) casts its fixed veil with
-    /// or without set_scrim; the measured shadows need set_scrim. Nothing without the
-    /// compositor's glass.
-    pub fn scrim_units(&self) -> Vec<ScrimUnit> {
+    /// The veils this material casts: one per region that holds a shape (by its centre).
+    /// Nothing without the compositor's glass.
+    pub fn veil_units(&self) -> Vec<VeilUnit> {
         if self.glass.is_none() {
             return Vec::new();
         }
-        let scrim = self.scrim.filter(|s| s.max_strength > 0.0);
-        let mut units: Vec<ScrimUnit> = self
-            .scrim_regions
+        let mut units: Vec<VeilUnit> = self
+            .veil_regions
             .iter()
             .enumerate()
-            .filter(|(_, r)| r.veil.is_some() || scrim.is_some())
-            .map(|(i, r)| ScrimUnit {
-                key: i as u32,
-                core: [r.x, r.y, r.w, r.h],
-                radius: 0.0,
-                falloff: r.falloff,
-                edge: if r.veil.is_some() { 1.0 } else { scrim.map_or(1.0, |s| s.region_edge) },
-                veil: r.veil,
-                members: Vec::new(),
-            })
+            .map(|(i, r)| VeilUnit { key: i as u32, core: [r.x, r.y, r.w, r.h], falloff: r.falloff, veil: r.veil, members: Vec::new() })
             .collect();
-        let mut lone = Vec::new();
         for (i, s) in self.shapes.iter().enumerate() {
             let (cx, cy) = (s.x + s.w / 2.0, s.y + s.h / 2.0);
-            let home = units.iter_mut().find(|u| {
+            if let Some(u) = units.iter_mut().find(|u| {
                 cx >= u.core[0] && cx < u.core[0] + u.core[2] && cy >= u.core[1] && cy < u.core[1] + u.core[3]
-            });
-            match home {
-                Some(u) => u.members.push(i),
-                None if scrim.is_none() => {}
-                None => lone.push(ScrimUnit {
-                    key: LONE_SCRIM + i as u32,
-                    core: [s.x, s.y, s.w, s.h],
-                    radius: s.radius.min(s.w.min(s.h) / 2.0),
-                    falloff: scrim.map_or(0.0, |s| s.size_fraction).max(0.0) * s.w.min(s.h),
-                    edge: 1.0,
-                    veil: None,
-                    members: vec![i],
-                }),
+            }) {
+                u.members.push(i);
             }
         }
-        units.retain(|u| !u.members.is_empty() && u.falloff >= 0.0);
-        units.extend(lone);
+        units.retain(|u| !u.members.is_empty());
         units
     }
 }
@@ -255,88 +241,6 @@ pub struct Current {
     /// it at once, as the backdrop under a still surface is not measured again (the bar's ink
     /// following the mode, 2026-10-09: it turned only when something moved behind it).
     pub ink_darkest: std::collections::BTreeMap<u32, f64>,
-    /// The backdrop under each shape as the glass treats it, WITHOUT the shadow: its
-    /// darkest and brightest WCAG luminance, by shape index. Measured with the ink.
-    pub shape_light: std::collections::BTreeMap<usize, (f32, f32)>,
-    /// Each shadow's strength over time, by `ScrimUnit::key`. Kept when its unit goes,
-    /// like the ink: a panel reopened lies on the shadow it closed on.
-    pub scrims: std::collections::BTreeMap<u32, ScrimAnim>,
-}
-
-/// A shadow's strength, easing from one value to the next.
-#[derive(Debug, Clone, Copy)]
-pub struct ScrimAnim {
-    pub from: f64,
-    pub to: f64,
-    pub start: std::time::Instant,
-    pub duration: std::time::Duration,
-}
-
-impl ScrimAnim {
-    pub fn value(&self, now: std::time::Instant) -> f64 {
-        let t = if self.duration.is_zero() {
-            1.0
-        } else {
-            (now.saturating_duration_since(self.start).as_secs_f64() / self.duration.as_secs_f64()).clamp(0.0, 1.0)
-        };
-        let e = t * t * (3.0 - 2.0 * t);
-        self.from + (self.to - self.from) * e
-    }
-
-    pub fn settled(&self, now: std::time::Instant) -> bool {
-        now.saturating_duration_since(self.start) >= self.duration
-    }
-}
-
-/// How fast a shadow comes and goes: in quickly, as the backdrop brightens under a pane; out
-/// slowly, so a backdrop that flickers (a video) does not pump the shadow.
-const SCRIM_IN: std::time::Duration = std::time::Duration::from_millis(220);
-const SCRIM_OUT: std::time::Duration = std::time::Duration::from_millis(600);
-/// A new strength closer than this to the one in force is not worth a change.
-const SCRIM_DEADBAND: f64 = 0.04;
-
-/// sRGB encoding of a linear value: the inverse of the shader's `to_linear`.
-fn encode(l: f64) -> f64 {
-    let l = l.clamp(0.0, 1.0);
-    if l <= 0.0031308 { l * 12.92 } else { 1.055 * l.powf(1.0 / 2.4) - 0.055 }
-}
-
-fn to_linear(v: f64) -> f64 {
-    if v <= 0.04045 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
-}
-
-/// The WCAG luminance of a grey of encoded value `c` under the glass's tint at opacity `a`
-/// (render/glass_gl.rs, the last pass).
-fn tinted(c: f64, a: f64, glass: &Glass) -> f64 {
-    let ch = |k: usize| to_linear(c * (1.0 - a) + glass.tint[k] * a);
-    0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
-}
-
-/// The shadow one unit wants, from the brightest WCAG luminance of the backdrop under its
-/// light-ink shapes without any shadow: exactly what the glass is missing at that point to make
-/// the text legible within its own limit (owner, 2026-10-02: "the limit has to be in the
-/// glass"). The glass takes up to `tint_limit` — past it a pane looks painted grey — and the
-/// shadow brings the brightest point down until that tint reaches the target; none where the
-/// glass reaches it alone. It grows and shrinks with the backdrop, never switching: no
-/// threshold, no hysteresis. Black laid over the encoded colour scales it, so the encoded value
-/// is what is solved for. At most `max_strength`; past that, the tint makes up the rest
-/// (set_glass's alpha_max is the legibility's own safety net).
-fn scrim_target(brightest: f64, glass: &Glass, scrim: &Scrim) -> f64 {
-    let limit = scrim.tint_limit.max(glass.alpha_min).min(glass.alpha_max);
-    let legible = |s: f64| tinted(encode(brightest) * (1.0 - s), limit, glass) <= glass.target_luminance;
-    if legible(0.0) {
-        return 0.0;
-    }
-    let max = scrim.max_strength.clamp(0.0, 1.0);
-    if !legible(max) {
-        return max;
-    }
-    let (mut lo, mut hi) = (0.0, max);
-    for _ in 0..16 {
-        let m = 0.5 * (lo + hi);
-        if legible(m) { hi = m } else { lo = m }
-    }
-    hi
 }
 
 /// The surface's material object, for the ink event.
@@ -417,69 +321,6 @@ fn send_ink(states: &smithay::wayland::compositor::SurfaceData, changed: Vec<(u3
         }
     }
     true
-}
-
-/// A measurement came back (render/glass_gl.rs): the darkest and brightest luminance under
-/// each shape, the shadow divided out. Moves each shadow toward the strength it now wants, and
-/// returns whether one started to change (the caller redraws; the renderer keeps redrawing
-/// while one eases, `scrim_easing`).
-pub fn scrim_measured(surface: &WlSurface, light: &[(usize, f32, f32)], now: std::time::Instant) -> bool {
-    with_states(surface, |states| {
-        let Some(current) = states.data_map.get::<std::sync::Mutex<Current>>() else { return false };
-        let mut current = current.lock().unwrap();
-        let current = &mut *current;
-        for &(i, lo, hi) in light {
-            current.shape_light.insert(i, (lo, hi));
-        }
-        let n = current.state.shapes.len();
-        current.shape_light.retain(|&i, _| i < n);
-        let (Some(scrim), Some(glass)) = (current.state.scrim, current.state.glass) else { return false };
-        let mut changed = false;
-        // A shape whose content is dark (the ink) sits on a light veil, not on a shadow: it asks
-        // for none.
-        let state = &current.state;
-        let dark_ink = |i: usize| {
-            let s = &state.shapes[i];
-            state.ink_boxes.iter().any(|b| {
-                let (cx, cy) = (b.x + b.w / 2.0, b.y + b.h / 2.0);
-                current.dark_ink.contains(&b.id) && cx >= s.x && cx < s.x + s.w && cy >= s.y && cy < s.y + s.h
-            })
-        };
-        let mut wanted = Vec::new();
-        // A veil is fixed: nothing to measure for it.
-        for unit in state.scrim_units().into_iter().filter(|u| u.veil.is_none()) {
-            let lights: Vec<f32> = unit.members.iter().filter_map(|i| current.shape_light.get(i).map(|l| l.1)).collect();
-            if lights.is_empty() {
-                continue;
-            }
-            let brightest = unit
-                .members
-                .iter()
-                .filter(|&&i| !dark_ink(i))
-                .filter_map(|i| current.shape_light.get(i).map(|l| l.1 as f64))
-                .fold(None, |m: Option<f64>, l| Some(m.map_or(l, |m| m.max(l))));
-            wanted.push((unit.key, brightest.map_or(0.0, |b| scrim_target(b, &glass, &scrim))));
-        }
-        for (key, strength) in wanted {
-            let anim = current.scrims.get(&key).copied();
-            let to = anim.map_or(0.0, |a| a.to);
-            let now_value = anim.map_or(0.0, |a| a.value(now));
-            let retarget = (strength - to).abs() > SCRIM_DEADBAND || (strength == 0.0 && to > 0.0) || (strength > 0.0 && to == 0.0);
-            if retarget {
-                current.scrims.insert(key, ScrimAnim {
-                    from: now_value,
-                    to: strength,
-                    start: now,
-                    duration: if strength > now_value { SCRIM_IN } else { SCRIM_OUT },
-                });
-                changed = true;
-            }
-        }
-        if current.scrims.len() > MAX_INK_GROUPS {
-            current.scrims.clear();
-        }
-        changed
-    })
 }
 
 /// Called after every surface commit: keeps `Current` in step with the committed state.
@@ -671,8 +512,10 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                 self.pending(|m| {
                     m.shapes.clear();
                     m.ink_boxes.clear();
-                    m.scrim_regions.clear();
+                    m.veil_regions.clear();
                     m.fusing = None;
+                    m.toning = None;
+                    m.ink_toning = None;
                 });
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
@@ -680,6 +523,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.shapes.push(Shape {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
                         pointer: None, fusion: m.fusing,
+                        tone: m.toning, ink_tone: m.ink_toning,
                     })
                 });
             }
@@ -697,7 +541,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
-                            fusion: m.fusing,
+                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning,
                         })
                     });
                 }
@@ -722,6 +566,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
                             fusion: if pointer.is_some() { None } else { m.fusing },
+                            tone: m.toning, ink_tone: m.ink_toning,
                         })
                     });
                 }
@@ -744,20 +589,24 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.blur_passes = passes.min(8);
                 });
             }
-            Request::SetGlass {
-                tint_r, tint_g, tint_b, alpha_min, alpha_max, target_luminance, refraction, rim, saturation,
+            // The tint's arguments are inert since set_tone (the protocol stays v1).
+            Request::SetGlass { refraction, rim, .. } => {
+                self.pending(|m| m.glass = Some(Glass { refraction, rim }));
+            }
+            Request::SetTone {
+                saturation, ceiling, lift, gain, wash_r, wash_g, wash_b, wash_a, ambient, ambient_lift, ambient_gain,
             } => {
+                let tone = Tone::new(saturation, ceiling, lift, gain, [wash_r, wash_g, wash_b, wash_a], ambient, ambient_lift, ambient_gain);
                 self.pending(|m| {
-                    m.glass = Some(Glass {
-                        tint: [tint_r, tint_g, tint_b],
-                        alpha_min,
-                        alpha_max,
-                        target_luminance,
-                        refraction,
-                        rim,
-                        saturation,
-                    })
+                    m.toning = Some(tone);
+                    m.ink_toning = None;
                 });
+            }
+            Request::SetInkTone {
+                saturation, ceiling, lift, gain, wash_r, wash_g, wash_b, wash_a, ambient, ambient_lift, ambient_gain,
+            } => {
+                let tone = Tone::new(saturation, ceiling, lift, gain, [wash_r, wash_g, wash_b, wash_a], ambient, ambient_lift, ambient_gain);
+                self.pending(|m| m.ink_toning = Some(tone));
             }
             Request::SetLensing { size_fraction } => {
                 self.pending(|m| m.lensing = size_fraction.clamp(0.0, 1.0));
@@ -770,39 +619,20 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| m.ink_boxes.push(InkBox { id, x, y, w: width, h: height }));
                 }
             }
-            Request::SetInk { dark_above, light_below, tint_r, tint_g, tint_b } => {
-                self.pending(|m| {
-                    m.ink = Some(Ink {
-                        dark_above,
-                        light_below: light_below.min(dark_above),
-                        tint: [tint_r, tint_g, tint_b],
-                    })
-                });
+            // The tint is inert since set_ink_tone.
+            Request::SetInk { dark_above, light_below, .. } => {
+                self.pending(|m| m.ink = Some(Ink { dark_above, light_below: light_below.min(dark_above) }));
             }
             Request::ClearInk => {
                 self.pending(|m| m.ink = None);
             }
-            Request::SetScrim { max_strength, size_fraction, tint_limit, region_edge } => {
-                let max_strength = max_strength.clamp(0.0, 1.0);
-                self.pending(|m| {
-                    m.scrim = (max_strength > 0.0).then_some(Scrim {
-                        max_strength,
-                        size_fraction: size_fraction.clamp(0.0, 4.0),
-                        tint_limit: tint_limit.clamp(0.0, 1.0),
-                        region_edge: region_edge.clamp(0.0, 1.0),
-                    })
-                });
-            }
-            Request::AddScrimRegion { x, y, width, height, falloff } => {
-                if width > 0.0 && height > 0.0 {
-                    self.pending(|m| m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff, veil: None }));
-                }
-            }
+            // Inert: the shadow under the glass is gone (set_tone replaced the tint it made up for).
+            Request::SetScrim { .. } | Request::AddScrimRegion { .. } => {}
             Request::AddVeilRegion { x, y, width, height, falloff, strength, exponent } => {
                 if width > 0.0 && height > 0.0 {
                     let veil = Veil { strength: strength.clamp(0.0, 1.0), exponent: exponent.max(0.1) };
                     self.pending(|m| {
-                        m.scrim_regions.push(ScrimRegion { x, y, w: width, h: height, falloff: falloff.max(0.0), veil: Some(veil) })
+                        m.veil_regions.push(VeilRegion { x, y, w: width, h: height, falloff: falloff.max(0.0), veil })
                     });
                 }
             }
@@ -850,7 +680,7 @@ mod tests {
 
     #[test]
     fn ink_turns_only_past_its_thresholds() {
-        let ink = Ink { dark_above: 0.8, light_below: 0.65, tint: [1.0; 3] };
+        let ink = Ink { dark_above: 0.8, light_below: 0.65 };
         assert_eq!(next_ink(false, 0.95, &ink), Some(true), "all white under the text: dark");
         assert_eq!(next_ink(false, 0.79, &ink), None, "one point below the threshold keeps it light");
         assert_eq!(next_ink(true, 0.70, &ink), None, "between the two: it stays as it is (hysteresis)");
@@ -865,110 +695,60 @@ mod tests {
         // mode's rule must turn it at once — light mode's (−1/−2) dark, dark mode's (2/1.5) light.
         let mut current = Current::default();
         current.ink_darkest.insert(7, 0.1);
-        let light_mode = Ink { dark_above: -1.0, light_below: -2.0, tint: [1.0; 3] };
+        let light_mode = Ink { dark_above: -1.0, light_below: -2.0 };
         let last = |c: &Current| c.ink_darkest.iter().map(|(&id, &l)| (id, l)).collect::<Vec<_>>();
         let m = last(&current);
         assert_eq!(apply_ink(&mut current, m.into_iter(), &light_mode), vec![(7, true)],
             "over a dark backdrop, light mode turns it dark");
         let m = last(&current);
         assert_eq!(apply_ink(&mut current, m.into_iter(), &light_mode), vec![], "and keeps it");
-        let dark_mode = Ink { dark_above: 2.0, light_below: 1.5, tint: [1.0; 3] };
+        let dark_mode = Ink { dark_above: 2.0, light_below: 1.5 };
         current.ink_darkest.insert(7, 0.99);
         let m = last(&current);
         assert_eq!(apply_ink(&mut current, m.into_iter(), &dark_mode), vec![(7, false)],
             "over a white backdrop, dark mode turns it light");
     }
 
-    fn glass() -> Glass {
-        Glass {
-            tint: [0.08, 0.08, 0.1], alpha_min: 0.05, alpha_max: 0.6, target_luminance: 0.183, refraction: 10.0,
-            rim: 0.7, saturation: 1.0,
+    fn shape(x: f64, y: f64) -> Shape {
+        Shape {
+            x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
+            fusion: None, tone: None, ink_tone: None,
         }
     }
 
     #[test]
-    fn the_shadow_is_what_the_glass_is_missing() {
-        let g = glass();
-        let scrim = Scrim { max_strength: 0.7, size_fraction: 0.5, tint_limit: 0.25, region_edge: 1.0 };
-        // The shader's last pass, written out: a grey under the tint at opacity a.
-        let lum = |c: f64, a: f64| {
-            let ch = |k: usize| to_linear(c * (1.0 - a) + g.tint[k] * a);
-            0.2126 * ch(0) + 0.7152 * ch(1) + 0.0722 * ch(2)
-        };
-        // White: black over the encoded colour scales it, and what the strength leaves of it,
-        // under the glass at its limit, is the target — no darker.
-        let s = scrim_target(1.0, &g, &scrim);
-        let left = lum(1.0 - s, 0.25);
-        assert!((left - g.target_luminance).abs() < 0.003, "white under the shadow and the limit is the target: {left} for {s}");
-        assert!(s > 0.3 && s < 0.5, "the glass at 0.25 is missing about 0.4 over white: {s}");
-        // Less bright, less shadow; where the glass reaches it alone, none.
-        let light = scrim_target(0.45, &g, &scrim);
-        assert!(light > 0.0 && light < s, "a light backdrop wants less: {light}");
-        assert_eq!(scrim_target(0.15, &g, &scrim), 0.0, "the glass reaches it alone: none");
-        // The limit is what decides: with all of the glass's tint allowed, white needs none.
-        let all = Scrim { tint_limit: g.alpha_max, ..scrim };
-        assert_eq!(scrim_target(1.0, &g, &all), 0.0, "a glass allowed its whole tint is missing nothing");
-        let weak = Scrim { max_strength: 0.2, ..scrim };
-        assert_eq!(scrim_target(1.0, &g, &weak), 0.2, "never past max_strength");
-    }
-
-    #[test]
-    fn shapes_in_a_region_share_its_shadow_and_the_rest_get_their_own() {
-        let shape = |x: f64, y: f64| Shape {
-            x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None,
-        };
+    fn a_veil_region_holds_the_shapes_whose_centre_is_inside_it() {
+        let veil = Veil { strength: 0.078, exponent: 1.5 };
         let mut m = MaterialState {
             shapes: vec![shape(10.0, 10.0), shape(900.0, 100.0), shape(900.0, 200.0)],
-            glass: Some(Glass {
-                tint: [0.0; 3], alpha_min: 0.05, alpha_max: 0.6, target_luminance: 0.183, refraction: 10.0, rim: 0.7,
-                saturation: 1.0,
-            }),
-            scrim: Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25, region_edge: 0.7 }),
-            scrim_regions: vec![
-                ScrimRegion { x: 850.0, y: -1e5, w: 1e5, h: 2e5, falloff: 300.0, veil: None },
-                ScrimRegion { x: 0.0, y: 600.0, w: 10.0, h: 10.0, falloff: 50.0, veil: None },
+            glass: Some(Glass { refraction: 10.0, rim: 0.7 }),
+            veil_regions: vec![
+                VeilRegion { x: 850.0, y: 0.0, w: 400.0, h: 400.0, falloff: 125.0, veil },
+                VeilRegion { x: 0.0, y: 600.0, w: 10.0, h: 10.0, falloff: 50.0, veil },
             ],
             ..Default::default()
         };
-        let units = m.scrim_units();
-        assert_eq!(units.len(), 2, "the empty region casts nothing: {units:?}");
-        assert_eq!((units[0].key, units[0].members.clone()), (0, vec![1, 2]), "the two panes on the right share one");
-        assert_eq!((units[1].key, units[1].members.clone()), (LONE_SCRIM, vec![0]), "the other gets its own");
-        assert_eq!(units[1].falloff, 20.0, "fading over half its shorter side");
-        assert_eq!((units[0].edge, units[1].edge), (0.7, 1.0), "a region sweeps from its centre; a lone shape's is even");
-        // A region that casts nothing claims the shape anyway: no shadow of its own either.
-        m.scrim_regions.insert(0, ScrimRegion { x: 0.0, y: 0.0, w: 200.0, h: 100.0, falloff: -1.0, veil: None });
-        let units = m.scrim_units();
-        assert_eq!(units.iter().map(|u| u.members.clone()).collect::<Vec<_>>(), vec![vec![1, 2]], "the first pane casts nothing");
+        let units = m.veil_units();
+        assert_eq!(units.len(), 1, "the empty region casts nothing: {units:?}");
+        assert_eq!((units[0].key, units[0].members.clone(), units[0].veil), (0, vec![1, 2], veil),
+            "the two panes on the right lie on it; the other on nothing");
         m.glass = None;
-        assert!(m.scrim_units().is_empty(), "no shadow without the compositor's glass");
+        assert!(m.veil_units().is_empty(), "no veil without the compositor's glass");
     }
 
     #[test]
-    fn a_veil_region_casts_its_own_fixed_veil_without_set_scrim() {
-        let shape = |x: f64, y: f64| Shape {
-            x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None,
-        };
-        let veil = Veil { strength: 0.078, exponent: 1.5 };
-        let mut m = MaterialState {
-            shapes: vec![shape(10.0, 10.0), shape(900.0, 100.0)],
-            glass: Some(Glass {
-                tint: [0.0; 3], alpha_min: 0.05, alpha_max: 0.6, target_luminance: 0.183, refraction: 10.0, rim: 0.7,
-                saturation: 1.0,
-            }),
-            scrim: None,
-            scrim_regions: vec![ScrimRegion { x: 850.0, y: 0.0, w: 400.0, h: 400.0, falloff: 125.0, veil: Some(veil) }],
-            ..Default::default()
-        };
-        let units = m.scrim_units();
-        assert_eq!(units.len(), 1, "no set_scrim: the veil only, no lone shadow for the other pane: {units:?}");
-        assert_eq!((units[0].members.clone(), units[0].veil, units[0].edge), (vec![1], Some(veil), 1.0));
-        // With set_scrim the pane outside gets its measured shadow; the veil's pane still none of its own.
-        m.scrim = Some(Scrim { max_strength: 0.6, size_fraction: 0.5, tint_limit: 0.25, region_edge: 0.7 });
-        let units = m.scrim_units();
-        assert_eq!(units.iter().map(|u| (u.members.clone(), u.veil.is_some())).collect::<Vec<_>>(),
-            vec![(vec![1], true), (vec![0], false)]);
+    fn a_shape_takes_the_tones_last_set_and_clear_shapes_resets_them() {
+        let dark = Tone::new(1.3, 0.6, 0.125, 1.125, [0.0; 4], 0.0, 0.0, 1.0);
+        let light = Tone::new(1.2, 0.94, 0.4, 1.03, [1.0, 1.0, 1.0, 0.2], 0.0, 0.0, 1.0);
+        assert_eq!(Tone::new(9.0, 2.0, 0.0, 1.0, [2.0, -1.0, 0.5, 3.0], -1.0, 0.0, 1.0),
+            Tone::new(4.0, 1.0, 0.0, 1.0, [1.0, 0.0, 0.5, 1.0], 0.0, 0.0, 1.0), "held to its range");
+        let mut m = MaterialState { toning: Some(dark), ink_toning: Some(light), ..Default::default() };
+        let add = |m: &mut MaterialState| m.shapes.push(Shape { tone: m.toning, ink_tone: m.ink_toning, ..shape(0.0, 0.0) });
+        add(&mut m);
+        m.toning = None;
+        m.ink_toning = None;
+        add(&mut m);
+        assert_eq!((m.shapes[0].tone, m.shapes[0].ink_tone), (Some(dark), Some(light)));
+        assert_eq!((m.shapes[1].tone, m.shapes[1].ink_tone), (None, None), "after a reset: none");
     }
 }
