@@ -137,7 +137,8 @@ export interface MaterialSource {
     /** The tone of a pane of `piece` on this surface; `light` when it wears the light skin by the
      *  system mode (`trackModeGlass`, `trackModeInk`, and not under `trackNoInk`). Asked only
      *  where the compositor paints the glass. */
-    tone?(native: Gtk.Native, piece: GlassPiece, light: boolean): PaneTone
+    /** `side`: the pane's shorter side, logical px — its dark ceiling follows it. */
+    tone?(native: Gtk.Native, piece: GlassPiece, light: boolean, side: number): PaneTone
     /** The veil of this surface's veil regions (`trackVeilRegion`), or null: none. Asked only
      *  where the compositor paints the glass. */
     veil?(native: Gtk.Native): VeilParams | null
@@ -862,7 +863,8 @@ function flush(native: Gtk.Native, st: NativeState) {
         // an ink at all — never under `trackNoInk` there (the Control Center keeps its own).
         const light = glassFollowsMode(native) || (inkFollowsMode(native) && !inkless(e))
         const piece = pieceOf(e, native)
-        const tone = source?.tone?.(native, piece, light)
+        const side = p.shapes.length ? Math.min(p.shapes[0].w, p.shapes[0].h) : 0
+        const tone = source?.tone?.(native, piece, light, side)
         for (const s of p.shapes) { s.fusion = fusion; s.tone = tone }
         placed.push(...p.shapes)
         for (const box of p.boxes) inkBoxes.push({ id: inkIdOf(e), box })

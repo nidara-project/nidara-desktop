@@ -90,8 +90,10 @@ function tone(saturation: number, ceiling: number, lift: number, gain: number,
  * Each kind of pane's tone, dark and light face. Sources (glass-probe, 2026-10-11):
  *  - control, panel: READ from the reference's filter (catalogue run 38116434211, every glass
  *    layer's inputs): small controls (buttons of every size, the toolbar's groups, a capsule) and
- *    large floating glass (the real menu, a popover, a 220×150 panel) share everything but the
- *    dark ceiling, 0.6 against 0.35. The ambient (its bleed): 0.8 dark, 0.5 light, black 0.125
+ *    large floating glass (the real menu, a popover, a 220×150 panel) are ONE material — they
+ *    share everything but the dark ceiling, and that one follows the pane's SIZE, not its kind
+ *    (`darkCeilingFor`: 0.6 up to 64 px of shorter side, 0.35 from 104). The table's ceilings are
+ *    the two ends, kept for reading; the size decides. The ambient (its bleed): 0.8 dark, 0.5 light, black 0.125
  *    and white 0.5 dark — the compositor sizes it (none on a control: under 64 px). The light
  *    face's ambient is not modelled (it fits no blend that was tried: ≤ 0.03 on a large pane), so
  *    it carries none. Checked against the same catalogue's PIXELS with this machine: the toolbar's
@@ -102,6 +104,21 @@ function tone(saturation: number, ceiling: number, lift: number, gain: number,
  *    behind them the fixed veil (cc_calib, 2026-10-11): exact on those three. One face: the
  *    reference's is the same in both modes, and ours too (owner). Saturation the controls'.
  */
+/**
+ * The reference's dark ceiling for a pane whose shorter side is `side` logical px: 0.6 up to 64,
+ * 0.35 from 104, linearly between — read back from its own filter at 64, 72, 80 … 112 pt, exact at
+ * every step (glass-probe `tweak-tone`, run 38180489443). A shorter ramp than its blur's, shadow's
+ * and bleed's (64 → 160, Hyalo's `ToneGl::grown`). Only the dark face: the light one is 0.94 at
+ * every size.
+ */
+export function darkCeilingFor(side: number): number {
+    const t = Math.min(Math.max((side - 64) / 40, 0), 1)
+    return 0.6 + (0.35 - 0.6) * t
+}
+
+/** The pieces that are the reference's one material, whose dark ceiling follows the size. */
+const SIZED: ReadonlySet<GlassPiece> = new Set<GlassPiece>(["control", "panel"])
+
 const TONES: Record<GlassPiece, { dark: GlassTone, light: GlassTone }> = {
     control: {
         dark: tone(1.3, 0.6, 0.125, 1.125, [0, 0, 0, 0], 0.8, 0.125, 0.5),
@@ -219,9 +236,10 @@ function params(): GlassParams | null {
 }
 
 /** One face of a piece's tone, with what `glass-tuning.conf` says of it. */
-function faceOf(piece: GlassPiece, face: "dark" | "light"): GlassTone {
+function faceOf(piece: GlassPiece, face: "dark" | "light", side: number | null): GlassTone {
     if (tuning.toneOff) return NEUTRAL_TONE
-    const base = TONES[piece][face]
+    const table = TONES[piece][face]
+    const base = side !== null && face === "dark" && SIZED.has(piece) ? { ...table, ceiling: darkCeilingFor(side) } : table
     if (reduced()) {
         // Solid: the skin's own colour over everything.
         const c = face === "dark" ? GLASS_TINT.dark : GLASS_TINT.light
@@ -244,12 +262,15 @@ function faceOf(piece: GlassPiece, face: "dark" | "light"): GlassTone {
  *  face while the backdrop turns its content dark. One object per answer, so a surface's panes
  *  of one kind share it (material.ts sends a tone only where it changes). */
 const paneTones = new Map<string, PaneTone>()
-function paneTone(piece: GlassPiece, light: boolean): PaneTone {
+/** A pane's tone and ink tone; `side` its shorter side, logical px (the dark ceiling follows it). */
+function paneTone(piece: GlassPiece, light: boolean, side: number): PaneTone {
     const lightMode = light && (host?.lightMode?.() ?? false)
-    const key = `${piece}:${lightMode}`
+    // Whole px: a pane growing (a morph) changes its ceiling at most once a pixel.
+    const sized = SIZED.has(piece) ? Math.round(side) : null
+    const key = `${piece}:${lightMode}:${sized ?? ""}`
     let t = paneTones.get(key)
     if (!t) {
-        t = { tone: faceOf(piece, lightMode ? "light" : "dark"), inkTone: lightMode ? null : faceOf(piece, "light") }
+        t = { tone: faceOf(piece, lightMode ? "light" : "dark", sized), inkTone: lightMode ? null : faceOf(piece, "light", sized) }
         paneTones.set(key, t)
     }
     return t
@@ -333,7 +354,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
     setMaterialSource({
         glass: (_native: Gtk.Native) => params(),
         ink: (native: Gtk.Native) => inkParams(native),
-        tone: (_native: Gtk.Native, piece: GlassPiece, light: boolean) => paneTone(piece, light),
+        tone: (_native: Gtk.Native, piece: GlassPiece, light: boolean, side: number) => paneTone(piece, light, side),
         veil: (_native: Gtk.Native) => veilParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         fusionHold: (_native: Gtk.Native) => tuning.fusionHold ?? DEFAULTS.fusionHold,
