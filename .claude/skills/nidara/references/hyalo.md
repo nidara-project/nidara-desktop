@@ -552,12 +552,16 @@ Regular's blur (σ 12–13) is the same active or not and agrees with an indepen
 (`blur_sigma.py`); it is smaller on small shapes (80 pt → 8, 120 → 10, from 160 → 12).
 The fitted recipes are the owner's presets «calibrado — Regular oscuro / claro, Clear oscuro /
 claro» (not in the repo); nothing of it is in the shipped material yet.
-Over a page of text (the probe's `page` set, CI 38099090759) the reference's Regular dark is a SOLID
-grey block — its ceiling flattens a light page to one grey, which is what keeps white text on it
-legible — and its Regular light is nearly plain white; only Clear lets the text be read, with a
-narrow, strong refractive band at the edge. The lab with the presets draws the same. "Reading
-through the glass" is Clear's property, not Regular's: a Regular that shows a light page would
-be a Nidara decision beyond the reference, paid for in white-text legibility.
+Over a page of text (the probe's `page` set, CI 38099090759) the reference's Regular dark came out a
+solid grey block and only Clear let the text be read. ⚠️ That capture does NOT show how the glass
+looks on a real screen: the VM is 1×, and since the reference's blur is in DEVICE pixels its σ ≈ 13
+there wipes out lines 26 px apart (< 1 % of their contrast left; ≈ 30 % at 2×, > 50 % at 3×).
+🔑 **Owner, 2026-10-11: Regular and Clear are REAL glass** — Regular frosted, Clear clearer, always —
+and a pane never turns into a painted grey block: over a newspaper, glass shows the newspaper.
+So a dark tint is a SMOKE, linear (`alphaMin = alphaMax`, `target` 1), never a per-pixel ceiling
+that flattens everything bright to one grey; and the blur aims at the Retina look in logical px.
+The «cristal real — …» presets carry it (Regular dark smoke 0.6, white text ≈ 6:1 over a white
+page; Regular `1.2:3`; Clear `1.0:1`), awaiting the owner's eye.
 
 Not modelled, or still open: Clear's gain (no lab control brightens the highs); tone hooks per
 APPEARANCE (lab[0..1] are LAB-only and one pair per preset — shipping it is a shader change);
