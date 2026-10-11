@@ -116,9 +116,10 @@ What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 
 `NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
-`~/.config/nidara/glass-tuning.conf` (`key = value`: `alphaMin alphaMax target refraction lensing
-rim saturation inkDarkAbove inkLightBelow tintLimit scrimMax scrimSize scrimFalloff`,
-`blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` / `scrim = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
+`~/.config/nidara/glass-tuning.conf` (`key = value`: `refraction lensing rim inkDarkAbove
+inkLightBelow veilStrength veilFalloff veilExponent`, one stage of one tone as `PIECE.FACE.STAGE`
+(`dock.light.gain = 0.9`), `blur`/`popoverBlur = SIZE:PASSES`, `glass = off` / `ink = off` /
+`tone = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
 (`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
@@ -154,20 +155,15 @@ grid read 125 px out within 32, and a window under it showed whole, shrunk, wall
 (owner-caught: "an inverted magnifier"). Compare numbers on the bevel in the harness, never on
 the live session: `HYALO_GLASS_TUNING=<file>` gives the sandboxed shell its own
 `glass-tuning.conf` (`hyalo/scripts/sandboxed-shell.sh`), over a grid as `HYALO_WALLPAPER`.
-⚠️ `target` is a WCAG relative luminance — LINEAR light, the adaptive glass's own number (primary
-text at 4.5:1 → 0.183), and `alphaMax` is its ceiling (`GLASS_ADAPT_CEILING`). The shader mixes
-the tint into the ENCODED colour, so it searches for the least alpha that meets it (8 bisection
-steps) rather than solving in encoded luma: compared against encoded luma, a white backdrop came
-out at 10:1 under a near-black glass where 4.5:1 was asked (owner-caught 2026-10-01). `nidara-hyalo msg layers` shows what each
-layer declared (`glass.shapes`, `glass.compositor_paints`), and the smoke requires the bar, the
-dock and the island to declare theirs.
+`nidara-hyalo msg layers` shows what each layer declared (`glass.shapes`, `glass.compositor_paints`,
+`glass.toned` — how many of its shapes carry a tone — and its veils), and the smoke requires the
+bar, the dock and the island to declare theirs, every pane of the bar and the dock with a tone.
 
 ### Glass materializes, it never fades (#764, owner 2026-10-07)
 
 Glass has no opacity. The per-shape number the protocol calls `opacity` is, in Hyalo, **how formed
 the glass is** (0..1), and it scales the MATERIAL, not the coverage: the blur's reach, the bevel's
-bend, the saturation, the tint (after the legibility bisection), the rim and the shadow under it
-(`scrim.rs` already took its shapes' most). Coverage is the silhouette's antialiasing and the clip
+bend, every stage of the tone, the rim and the veil under it (`scrim.rs` takes its shapes' most). Coverage is the silhouette's antialiasing and the clip
 only. So every glass fade in the shell — a panel opening, a covered bar group, a banner, a fusion
 member withdrawing — is a pane forming or dissolving, never the finished glass cross-faded over
 the sharp backdrop (two images at once, which is what it was until #764).
@@ -258,11 +254,12 @@ joins); the smoke requires the bar to declare one.
 a day of a bench "that punishes its user": a model of the desktop (the bar's real capsules, a menu held
 open, the Control Center's real tiles, the dock's pill) over a wallpaper, each piece a layer surface of
 its own so each wears its own glass. The model it is built on: ONE glass with two variants (Regular,
-Clear: frost, a proportional dark smoke, a light veil, saturation, rim), and per piece its variant, a
-thickness (compounds the tint, a little more frost), its aspect (follows the mode / always dark, as the
-reference's Control Center) and a shadow AROUND it (CSS outset box-shadow). It is the MATERIAL SOURCE
-itself (`setMaterialSource` after `registerGlassMaterial`): per-surface `GlassParams` from its state, no
-glass-tuning.conf; what is global in Hyalo (bevel width, profile, strength: lab[12], lab[4], lab[5]) is
+Clear: frost, rim), and per piece its variant, its TONE (dark and light face; Regular starts from the
+tone its kind ships with, Clear from the reference's Clear — "The tone", below), its aspect (follows
+the mode / always dark, as the reference's Control Center / follows the backdrop: the dark face with
+the light one as its ink tone) and a shadow AROUND it (CSS outset box-shadow). It is the MATERIAL
+SOURCE itself (`setMaterialSource` after `registerGlassMaterial`): per-surface `GlassParams` and
+tones from its state, no glass-tuning.conf; what is global in Hyalo (bevel width, profile, strength: lab[12], lab[4], lab[5]) is
 one section, "Refracción (común)". A fixed header (preset shown by name, Guardar / Guardar como, mode,
 scene, backdrop) over a scrolling column; presets in `glass-lab/maqueta/`, whole state.
 `install-desktop.sh` puts it in the app grid. `--classic` opens the older bench (lab.ts, below — the
@@ -439,61 +436,19 @@ field. That was the wrong visual relationship. Apple's public guidance asks deve
 CONSIDER adding a dark layer BEHIND Clear components (35% over bright content); the layer is
 not an automatic part of `.clear`. Its design video allows localizing the layer.
 
-The Lab now separates **variant, system appearance, ink policy and backdrop treatment**. A
+The Lab separates **variant, system appearance, ink policy and what lies behind the CC/NC**. A
 single isolated specimen uses `inkPolicy`: the role default is system-mode ink on the bar,
 island/dock and large panel; fixed white in CC/NC; backdrop measurement for controls/media.
-The dock on this bench is only a shape/icon substitute; it uses the Lab's mode ink to match
-the shell's visible light/dark switch, while the real Dock uses its own mode skin.
-The alternatives system/white/backdrop can be chosen with either variant. `backdropPolicy`
-starts at "ninguna"; "según rol" compares the shell's CURRENT scrim on CC/NC and none
-elsewhere; "sombra shell" and "dim experimental" are explicit alternatives. The experimental dim starts
-at max 0.35, target 0.183, outer falloff 80 px. Hyalo's existing scrim measurement chooses the
-least opacity toward the target, capped by `areaDim.max`. The current solver reads the glass
-target internally; the Lab overrides it only while an exterior layer is selected. Do not
-mistake this internal coupling for a property of either Apple variant. "Sombra shell" is an
-unmeasured Nidara baseline, not a reconstruction of Apple's elevation shadow. The overview
-"todas" remains a shape/layout comparison: one Wayland surface carries one material recipe,
-so it cannot represent mixed variants and policies faithfully. The fresh Lab opens at "barra"
-without any backdrop layer to encourage isolated comparisons. The Lab's experimental bar dim
-can span the 40 px exclusive strip and fade through the following 4 px gap: `trackScrimRegion`
-has an opt-in exact-widget-bounds option, and the nested Lab compositor alone gives such a
-very wide shallow region square corners. This is a candidate, not a measured Apple bar rule.
-In the headless white-backdrop trial, Clear + this band + system-mode ink reached 2.32:1
-in dark mode and visibly formed a grey strip. The owner expects the area strip to turn grey
-on an extreme white backdrop; the unresolved point is the foreground contrast, not that
-area colour. Light mode chose dark ink and drew no band. Keep this candidate in the Lab for
-comparison, not in the shell. The promo Regular specimen has a separate outer elevation
-shadow control; its scrim modes remain backdrop treatments.
-
-The nested Lab compositor alone sets `HYALO_LAB_AREA_DIM=1` to give shared regions the largest
-pane's corner radius; the production compositor's region geometry stays as before. Apple's
-guidance does not specify the layer's geometry, so this region remains a Nidara experiment.
-In an earlier enabled Clear trial against pure white, Wi-Fi/Bluetooth rose only from 1.13:1 to
-2.36:1 at the 0.35 cap; the blue selected Brillo tile still needs separate contrast treatment.
-A 35% layer is guidance, not proof of accessible contrast on arbitrary backgrounds. The old
-in-glass dim use of `lab[2]` stays retired. The Lab reuses `lab[2]` and `lab[3]` only for a
-Regular tint-fade trial: with backdrop-driven ink, its dark tint fades from
-`regularFade.start` to `inkDarkAbove`, reaching zero before the ink event. This is a Lab shader
-hook and does not change the shipped Hyalo shader. The ink event and Gtk/Cairo content still
-change discretely; this tests the optical discontinuity, not a continuous-ink protocol. The
-trial is now off by default. On `promo: logo`, backdrop-driven Regular instead uses the same
-Hyalo ink event to switch the whole logo, a Lab-only light veil (`lab[7]`, initially 0.20) and
-an outer shadow (initially alpha 0.18), leaving the background behind the disc alone. The
-Lab's Regular backdrop policy stays adaptive even in system light mode. The shadow is painted
-in the GTK surface outside the compositor's glass silhouette, using the shared shadow painter;
-the product's compositor-glass shadows remain off. The split backdrop's two-colour logo is a
-separate trial without a whole-logo ink event, so it must not be read as evidence of a synced
-Regular transition. These values await the owner's visual calibration, not a shell promotion.
-The `gris variable` backdrop maps its slider to linear WCAG luminance to expose the threshold.
-The Clear candidate starts with no dark tint, but since the calibration (below) a preset's tint
-is no longer forced to zero — only its target is (Clear never adapts); its light-mode white veil
-and optional backdrop area dim stay separate. `areaDim` persists its knobs
-in presets; legacy `clearDim` area values retain their tuning, while older two-field in-glass
-values are discarded. Old `areaDim.enabled` becomes an explicit "dim experimental" choice.
-Old flat tuning presets load into Regular's tuning map; their old ink thresholds remain and the
-new tint fade starts disabled. The production material is unchanged.
-The one-surface-per-variant comparison does not solve the per-pane protocol requirement for
-mixed variants in the production bar or shell.
+The dock on this bench is only a shape/icon substitute (marked a `dock` piece, so it wears the
+Dock's tone). `backdropPolicy` is «según rol» (the shell's fixed veil under CC/NC, none
+elsewhere), «velo» or «ninguna». The «Tono» section shows the stages of ONE piece's tone — the
+face the mode gives it — as `PIECE.FACE.STAGE` keys of glass-tuning.conf: Regular starts from the
+shipped tones, Clear from the reference's Clear on every piece. Since the tone (2026-10-11) the
+bench's shadow treatments («sombra shell», «dim experimental» and its area dim), the in-glass tint
+sliders and the tint-fade trial are gone with the machine they drove, and so are the LAB hooks
+lab[0..3] and lab[7]; a preset that holds them loads without them. The measurements below
+(contrast at given luminances, the white-backdrop trials) were taken on that older machine.
+"todas" remains a shape/layout comparison.
 
 The Lab's trial ink crossover is 0.18 to dark / 0.14 back to white, with Regular's dark-tint
 fade beginning at 0.14. On a uniform grey bar with no backdrop layer, headless captures at
@@ -588,12 +543,14 @@ The «kit — Regular claro/oscuro (mediano/grande)» presets carry it (`1.1:3`,
 veil 0.6 / 0.75). It is Figma's renderer, not the reference's: geometry (corner, refraction) and
 Clear still come from the VM's active captures.
 
-Not modelled, or still open: Clear's gain (no lab control brightens the highs); tone hooks per
-APPEARANCE (lab[0..1] are LAB-only and one pair per preset — shipping it is a shader change);
-Regular's outer shadow in an active window; its smaller blur on small shapes; the reference's
-rounder corner at the same nominal radius; its 1 px dark contour (lab[15], uncalibrated); and the
-display scale — the reference VM is 1× and has no 2× mode, so whether the blur in POINTS changes on
-a Retina screen is unmeasured. Which of this ships is the owner's call in the lab.
+⚠️ **Superseded the same day by "The tone" (below).** Everything above fitted OUR machine (a smoke,
+a veil, a soft knee) to the reference's output; the tone copies the reference's machine itself,
+measured input by input, and the owner chose its values as they are — the large dark panels'
+ceiling included, the very "grey block" over white this section argued against. Clear's gain is
+the tone's levels (gain 1.08 > 1). Still open: Regular's outer shadow in an active window; its
+smaller blur on small shapes; the reference's rounder corner at the same nominal radius; its 1 px
+dark contour (lab[15], uncalibrated); and the display scale — the reference VM is 1× and has no 2×
+mode, so whether the blur in POINTS changes on a Retina screen is unmeasured.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
@@ -612,19 +569,18 @@ text keeps it white.
     thing that changes with the backdrop (none sits over content yet).
   - **Control Center, Notification Center, notification banners: never.** `trackNoInk(widget)`
     (kit `material.ts`) gives the compositor none of their content to measure, so they stay white;
-    their legibility is the tint and the shadow under the glass. Declared in `Bar.tsx`.
+    their legibility is their tone's (the CC's, the reference's own). Declared in `Bar.tsx`.
   - **The dock: the system mode.** `trackNoInk` + `trackModeGlass` on its layout, and
     `skinFromMode` on its adaptive-glass surface (`AdaptiveGlass.ts` → `skinOf`): its dots and
     marks are light in dark mode and dark in light mode, and its glass on Hyalo turns to the light
-    one in light mode — `glassFollowsMode(native)` makes the material send a white veil, even
-    (`modeLightVeil`, 0.2: the reference's regular light glass is filled with white at 0.2) and
-    never thickened for white text (`target` 1). Off Hyalo, the light skin's tint does it.
+    one in light mode — `glassFollowsMode(native)` makes the material send its piece's LIGHT tone.
+    Off Hyalo, the light skin's tint does it.
   - **The bar's surface — capsules, island, its menus and Prism: the system MODE** (owner,
     2026-10-09: by the backdrop each capsule turned on its own, and over a wallpaper bright on
     one side only that end had dark text). `trackModeInk(barBox)` (kit `material.ts`): the
     material sends that surface ink thresholds no backdrop can miss — light mode −1/−2 (dark at
-    once, never back), dark mode 2/1.5 — so its panes lie on the ink's light veil with dark
-    content in light mode, and on the dark glass with light content in dark mode. CC, NC and the
+    once, never back), dark mode 2/1.5 — and its panes their LIGHT tone in light mode (dark
+    content), the dark one in dark mode (light content). CC, NC and the
     banners keep `trackNoInk` and are untouched (they take no ink at all). ⚠️ Hyalo applies a NEW
     set_ink rule to the LAST measurement at commit (`ink_darkest`, `apply_ink`): a still backdrop
     is not measured again (the measurement is keyed on the capture), so without it a mode switch
@@ -650,8 +606,8 @@ text keeps it white.
   exists only while a readback is in flight — no frame waits, nothing ticks at rest. The
   hysteresis (`material::next_ink`, unit-tested with a control) runs there; a change sends `ink`
   and redraws.
-- **The glass follows.** A shape holding a dark group is not darkened for white content: it gets
-  the light veil (`set_ink`'s tint at `alpha_min`).
+- **The glass follows.** A shape holding a dark group takes its ink tone (`set_ink_tone`: the
+  material sends its piece's light face), chosen in Hyalo's `GlassElement::for_surface`.
 - **The client follows.** `libnidara-wl` puts the material object on GDK's own event queue, so
   GDK dispatches `ink` on the main loop as it arrives (no pump). The pane gets `INK_DARK_CLASS`,
   which `generateSkinFlipScope` gives the light skin's tokens; `chromeIsDarkFor` answers
@@ -665,95 +621,92 @@ text keeps it white.
 - To see it nested, `awww-daemon` crashes inside the headless cage (broken pipe), so give the
   backdrop with a gtk4-layer-shell BACKGROUND surface of your own through `HYALO_EXTRA`.
 
-### The shadow under the glass: what the glass is missing, within its limit (#684)
+### The tone: the reference's own filter, stage by stage (owner, 2026-10-11)
 
-Owner, 2026-10-02: "parts almost entirely grey and parts right, on the same element". The tint
-thickens PER PIXEL, so a pane over a backdrop bright in one place and dark in another came out
-grey in one part and clear in the other — on the owner's own wallpaper (light blue over dark
-purple) the CC's camera and volume tiles went grey while Focus stayed clear. The fix is the
-owner's idea: a soft black shadow UNDER the glass, even across the pane, only when needed.
+What the glass does to the blurred backdrop under a pane. Until 2026-10-11 our glass imitated the
+reference's OUTPUT with a machine of its own — a tint that thickened per pixel to keep white text
+legible (a bisection against a WCAG `target`), and a soft shadow under the glass making up what
+that tint, held to a limit, lacked — and every difference was patched with a new knob (owner: "a
+botched replica by eye … it doesn't add up"). The owner's call: copy the MACHINE, not the result.
 
-- **The protocol** (`set_scrim(max_strength, size_fraction, tint_limit, region_edge)`,
-  `add_scrim_region(x, y, w, h, falloff)`). A region is shared by every shape whose centre lies
-  in it; a shape in none gets its own (its outline as core, fading over `size_fraction` of its
-  shorter side, even across it). A region's shadow is whole at its CENTRE and sweeps out to
-  `region_edge` of that at its rim — a superellipse norm (exponent 4) of the offset from the
-  centre over the half-size, so the sweep follows the container's shape, sides and ends alike —
-  then fades over its falloff (`render/scrim.rs`, unit-tested). `region_edge` 1: even.
-- **The rule** (`material::scrim_target`, unit-tested with a control). Owner, 2026-10-02: "the
-  limit has to be in the glass". The glass takes no more tint than `tint_limit` (0.25) — past it
-  a pane reads as painted grey — and the shadow is EXACTLY what the glass is missing for the
-  brightest point under the unit's light-ink shapes to reach `target`: ≈0.41 over white, 0.15
-  over a light backdrop (0.45), none where the glass reaches it alone. It grows and shrinks
-  with the backdrop: no threshold, no hysteresis. While there is a shadow the shell sends the
-  limit AS the glass's `alpha_max` (`glass-material.ts`): nothing tints past it, not even for
-  legibility — a ceiling above it "makes the grey plastic again" (owner). Past `max_strength`
-  the text is less legible, not the glass greyer. The bar and the dock, which cast none for
-  now, are held to the same ceiling. A shape whose content has turned
-  dark (an ink box of a dark group inside it) asks for none: it lies on the ink's light veil.
-  Two rules came before and went the same day: "bring the brightest point to `target`" (the
-  tint idle, the shadow doing everything), then "the least that evens the pane out", gated by
-  a spread between the darkest and brightest point's tints (`min_spread`) — a threshold nobody
-  could explain, and a glass still allowed to turn grey up to `alpha_max`.
-- **Measured with the ink**, in the same pass: one probe per shadowed shape (its body, inset by
-  0.29 of its radius), darkest and brightest in one texel. 🔴 The probe DIVIDES OUT the shadow
-  drawn this frame (`unscale` = 1 / (1 − its opacity there)), or the shadow would measure itself
-  and chase its own tail. 🔴 On the chrome it divides out the WHOLE floor, every chrome
-  surface's shadows — not only its own. Dividing out only its own, the Control Center's strip
-  (which reaches the bottom of the screen) darkened the right of the dock's backdrop, split it,
-  and switched the dock's band on; its hysteresis then held it on after the CC closed — and
-  the CC's strip did the same to the bar's right-hand capsule (owner, 2026-10-02: "the dock's
-  shadow only comes on when the CC opens"; measured: dock 0.462, bar 0.344, both 0 after a
-  reload). The ink boxes are NOT unscaled: their question is what the text sits on.
-- **Drawn** by `render/scrim.rs`: one pass, shadows combined by their MAXIMUM (two panes side
-  by side never make a darker band between them), smootherstep fade, half-level dither against
-  banding. 🔴 The shell's chrome (top and overlay layers) casts its shadows onto ONE FLOOR under
-  all of it, right above the windows (`render/mod.rs`, `chrome_scrims`): the bar and the dock
-  are both TOP, and a shadow placed right under the bar darkened the dock's icons. One element
-  for the whole floor (its memo on the output), so two surfaces' shadows that overlap — the
-  CC's strip and the dock's band — combine by their maximum too, never darkening the corner
-  twice. A window's glass keeps one element per surface.
-- **Eases** in 220 ms, out 600 ms (a video under a pane must not pump it); while one eases the
-  backend queues the next frame (`scrim::take_easing`), and at rest nothing is redrawn.
-- **Who casts what.** A pane in no region gets a halo, its outline fading outward over
-  `scrimSize` of its shorter side — the app grid, the overview (the owner likes the overview's:
-  "a shadow downward separating the top from the bottom").
-  - **The Control Center and the Notification Center lie on a fixed VEIL** (`trackVeilRegion(widget)`
-    in Bar.tsx → `nidara_material_v1.add_veil_region`), not on the measured shadow. Owner,
-    2026-10-09: "the shadow under it cannot define how the glass looks" — out. What replaced it
-    is the reference's own, MEASURED on its real Control Center over known wallpapers
-    (2026-10-11, glass-probe `tools/cc_calib.py`, runs 38119286883/38119289287): 0.078 black,
-    even behind the tiles, falling from their edge as (1 − d/125)^1.5 (0.055 at 25 px, 0.035 at
-    50, 0.020 at 75, 0.008 at 100), the same in both modes. A veil is FIXED: no measurement, no
-    easing, no part in `scrim_target`, and it needs no `set_scrim` (`render/scrim.rs` draws it
-    as a unit whose `veil` exponent replaces the smootherstep; the shader takes it as a
-    negative `edge`). The glass's measurement still divides it out (`alpha_at`). Its core is
-    the panes' container, as the shadow's was (`placeScrimRegions`); the glass material's
-    `veilStrength veilFalloff veilExponent` tune it. A library without `add_veil_region`
-    claims the panes and casts nothing — never the measured shadow. `msg layers` lists it as
-    `kind: "veil"` with its strength. Its tiles keep the glass's ceiling (`tintLimit`): the bar's
-    surface still casts the measured shadow under the app grid and the overview. Measured on the
-    real shell (`scripts/dev/glass-lab/shell-calib.sh`, 2026-10-11): before, the CC's shadow
-    took white to 0.60 and its tiles to 0.47; the reference: 0.92 at the tiles' edge, tiles 0.73.
-    The measured shadow's history (2026-10-02: the strip, the block, the ellipse thrown away,
-    the even region, `scrimFalloff` 160) is in git, `hyalo.md` before this change.
-  - **The bar and the dock cast NONE** (`trackNoScrim`: a region with a negative falloff,
-    which claims its panes and casts nothing). Tried and dropped on 2026-10-02: a halo per
-    capsule, then a band hugging each (`fade: "strip"`). Measured on screen: the bar's band
-    covered 0–48 px and fell to nothing in ~10 px, the dock's 16 px above it and ~35 px of
-    fade — over the title bar and the bottom of a window that starts 4 px under the bar's
-    exclusive zone. A shadow ABOVE the windows cannot fade gently there without darkening
-    them, and two surfaces' bands made a crease where they met (the CC's and the bar's).
-    ▶️ The owner's direction: an EDGE shadow drawn by Hyalo itself — it already knows which
-    edge each layer sits on and what it reserves — UNDER the windows (only the wallpaper gets
-    it, so it can fade long), each edge at its own strength, no stacking where two meet.
-  - 🔴 A shape joins the FIRST region its centre lies in, in declaration order: the bar's
-    no-shadow region is declared before the CC's strip, which reaches past the top and would
-    otherwise take the bar's right-hand capsules.
-- Tuned live in `glass-tuning.conf`: `tintLimit scrimMax scrimSize scrimFalloff`,
-  `scrim = off` for the A/B. `nidara-hyalo msg layers` shows each surface's `glass.scrims` (kind, shapes,
-  strength); the smoke requires the CC's panes to share one region and no bar or dock pane to
-  cast a shadow of its own.
+- **How it was measured.** The private glass-probe's `tweak` set (rama `claude/tweak`): one large
+  `glassEffect` panel over a grey ramp and nine colour bands, the bare backdrop above and below it
+  in the same capture, and the panel's own `glassBackground` filter changed IN OUR PROCESS, one
+  input at a time. 🔴 Mutating the CAFilter in the layer's array reads back changed and never
+  reaches the screen (180 changes, Δ 0, run 38135614744); a COPY of the filter in a new array, or
+  the key path `filters.glassBackground.KEY`, does (run 38136023059, with controls — the layer's
+  opacity, hidden — that must and did change the pixels). With every stage off the panel is the
+  backdrop exactly; five stages act at rest, in this order, on the sRGB-ENCODED colour (runs
+  38136170522, 38136810278, 38137620939):
+  1. **saturation** about the Rec.709 luma (exact: 0 gives that luma's grey);
+  2. **ceiling** (the filter's max luma, its SDR one): the luma l goes to l·(1 − (1 − m)·l) — white
+     lands on m, and the mids bend towards it, rising and then falling a little past
+     l = 1/(2(1 − m)). Exact on greys for m from 0.1 to 0.9 (≤ 0.003); the colour around the luma
+     scales by s^0.75 of the luma's factor s (measured, not exact). This is the curve that BENDS
+     the reference's dark menus and bar, which no mix with a colour can draw;
+  3. **levels** lift + (gain − lift)·v (the face colour matrix's black and white; exact);
+  4. **wash**: a colour laid over at its opacity (the fill colour; exact);
+  5. **ambient** (its bleed): the surroundings blurred 0.35 of the shape's shorter side, through
+     levels of their own, lightening what is darker than them — at an opacity that grows with the
+     shape, none up to 64 px of shorter side and all of it from 160 (exact on five panes of five
+     sizes). Dark: within ≈ 0.02 on plain greys, 0.205 against 0.22 for black among neighbours. The
+     LIGHT one brightens the mid-highs a little (≤ 0.03 at the reference's own setting) and fits no
+     blend that was tried: not modelled, a light tone carries no ambient.
+  The rest acts only at edges, in detail or outside the pane: the blur-fill (a darken/lighten
+  with a wider copy: nothing on a smooth backdrop), the shadows, the refraction's opacity.
+- **The protocol** (`set_tone`, `set_ink_tone`, within v1): pens that hold for the shapes added
+  after them, reset by `clear_shapes`; `set_tone` resets the ink tone. `set_glass`'s tint, alpha
+  and target, `set_ink`'s tint, `set_scrim` and `add_scrim_region` are inert.
+- **Hyalo** (`material::Tone`, `glass_gl::ToneGl`, `glass_final.glsl` `tone_of`): per shape; the
+  ambient's opacity and reach are sized there (`ToneGl::new`, unit-tested on the five panes). Its
+  wide blur is 17 taps over the blurred capture, which reaches only as far as the glass's own
+  blur (past it, the capture's edge repeats). A shape whose ink group turned dark takes its ink
+  tone. A fusion group is one pane: its first member's tone.
+- **The values** (`TONES` in `glass-material.ts`, each number with its source). Each kind of pane
+  (`GlassPiece`, `trackGlassPiece`: `control`, `panel`, `controlCenter`, `dock`; a popover's
+  panes are panels) has a dark and a light face. Owner: the reference's values AS THEY ARE.
+  `control` and `panel` were READ from the reference's filter (catalogue run 38116434211: every
+  glass layer's inputs) — small controls and large floating glass share everything but the dark
+  ceiling, 0.6 against 0.35, so a dark menu over white lands at ≈ 0.48, the reference's own grey;
+  checked against the same catalogue's PIXELS with this machine (the toolbar's groups within
+  0.03, the real menu within 0.006). The Dock and the Control Center are other processes', not
+  readable: their values were FITTED with this machine to the real ones over the calibration
+  wallpapers (Dock within 0.002 dark and 0.001 light; the CC's tiles exact on black, grey and
+  white, with the veil behind them). Which face: the dark one, unless the surface follows the
+  system mode (`trackModeGlass`, or `trackModeInk` for a pane that takes an ink) and the mode is
+  light; the light face is also the ink tone. The CC keeps its one face (`trackNoInk`).
+- **Measured on the real shell** (`scripts/dev/glass-lab/shell-calib.sh` with `--lib` and a Hyalo
+  built from the tree, black / grey / white): bar dark 0.12 / 0.53 / 0.72 (reference 0.12 / 0.53 /
+  0.72), light 0.52 / 0.77 / 1.00 (0.51 / 0.75 / 0.98); Dock dark 0.05 / 0.42 / 0.69 and light
+  0.15 / 0.53 / 0.90 (the reference's, both); the CC's tiles 0.12 / 0.43 / 0.73 (0.125 / 0.43 /
+  0.73). Before: bar 0.00 / 0.47 / 0.78 dark and invisible in light, tiles 0.00 / 0.47 / 0.47.
+- Tuned live: `PIECE.FACE.STAGE` in glass-tuning.conf (`panel.dark.ceiling = 0.5`), `tone = off`
+  for the A/B (every pane the blurred backdrop as it is). Reduce transparency: a wash of the
+  skin's own colour at `SOLID_GLASS`.
+- What went with the old machine: the per-pixel tint and its bisection, the measured shadow
+  (`scrim_target`, its easing, its probes that divided the floor out), `trackScrimRegion`,
+  `trackNoScrim`, the material's `alphaMin alphaMax target saturation tintLimit scrim*
+  modeLightVeil`. Their history — the CC's camera tile going grey on the owner's wallpaper, the
+  strip, the halo per capsule, the dock's band switched on by the CC — is in git, `hyalo.md`
+  before this change.
+
+### The veil under the Control Center (2026-10-11)
+
+The Control Center and the Notification Center lie on a FIXED veil (`trackVeilRegion(widget)` in
+Bar.tsx → `nidara_material_v1.add_veil_region`). Owner, 2026-10-09: "the shadow under it cannot
+define how the glass looks" — the measured shadow out. The veil is the reference's own, MEASURED
+on its real Control Center over known wallpapers (glass-probe `tools/cc_calib.py`, runs
+38119286883/38119289287): 0.078 black, even behind the tiles, falling from their edge as
+(1 − d/125)^1.5 (0.055 at 25 px, 0.035 at 50, 0.020 at 75, 0.008 at 100), the same in both modes.
+Fixed: no measurement. A region holds the shapes whose centre lies in it (`veil_units`); its core
+is the panes' container plus their refraction (`placeVeilRegions`); the material's `veilStrength
+veilFalloff veilExponent` tune it, `veilStrength = 0` takes it away. `msg layers` lists it as
+`kind: "veil"`; the smoke requires the CC's panes on one.
+- **Drawn** by `render/scrim.rs`: one pass, veils combined by their MAXIMUM, half-level dither.
+  🔴 The shell's chrome (top and overlay layers) casts its veils onto ONE FLOOR under all of it,
+  right above the windows (`render/mod.rs`, `chrome_scrims`): one element for the whole floor
+  (its memo on the output), so two that overlap never darken a corner twice.
+- Measured on the real shell: white beside the tiles 0.92 (the reference 0.922).
 - To see it nested, the backdrop must be a REAL full-screen layer: `gjs bg.js` without
   `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` comes up as a window with a dark title bar and the
   clear colour around it, and the bar and dock then sit on a mixed backdrop whatever you painted.
