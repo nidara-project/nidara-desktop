@@ -50,6 +50,9 @@ pub struct GlassElement {
     /// Hyprland's blur finishing: a window's backdrop has it (render/window.rs), the shell's
     /// glass does not.
     finish: glass_gl::Finish,
+    /// The glass's soft blur, output px (`glass_gl::BlurMix`): where the compositor paints the
+    /// glass it mixes three blurs by each shape's size. None: the chain's blur alone.
+    soft: Option<f32>,
 }
 
 /// One id per group of a surface's shapes, stable across frames.
@@ -131,6 +134,7 @@ impl GlassElement {
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
                     finish: glass_gl::Finish::NEUTRAL,
+                    soft: m.glass.is_some().then_some((glass_gl::BlurMix::SOFT * scale.x) as f32),
                 }
             })
             .collect()
@@ -167,6 +171,7 @@ impl GlassElement {
                 clip: None,
                 ink_dark: false,
                 tone: glass_gl::ToneGl::NONE,
+                blur_mix: glass_gl::BlurMix::FULL,
                 pointer: None,
                 refraction: 0.0,
                 px_scale: 1.0,
@@ -181,6 +186,7 @@ impl GlassElement {
             ink_saturation: 1.0,
             surface: surface.downgrade(),
             finish,
+            soft: None,
         })
     }
 
@@ -196,7 +202,7 @@ impl GlassElement {
             // Measured on the full blur while it forms: there is something to measure.
             let measure_full = self.glass.is_some() && !self.ink_boxes.is_empty();
             glass_gl::capture(
-                gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, &self.finish, &mut c,
+                gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, self.soft, &self.finish, &mut c,
             );
             super::stats::captured(self.region);
         })
@@ -329,6 +335,7 @@ fn groups(
             }),
             ink_dark: false,
             tone: s.tone.map_or(glass_gl::ToneGl::NONE, |t| glass_gl::ToneGl::new(&t, s.w.min(s.h), scale.x)),
+            blur_mix: if m.glass.is_some() { glass_gl::BlurMix::weights(s.w.min(s.h)) } else { glass_gl::BlurMix::FULL },
             refraction: m.refraction_of(s) * scale.x,
             px_scale: scale.x,
             fusion: s.fusion.map(|f| (f.group, 2.0 * f.spacing * scale.x)),
@@ -422,5 +429,25 @@ mod tests {
         assert!(blurs.contains(&(vec![0, 2], material::Blur { size: 2.0, passes: 2 })));
         let menu = g.iter().find(|(_, s, _)| s[0].index == 1).unwrap().0;
         assert!(menu.loc.y <= 50 - 32, "its region reaches as far as its own blur (2·2⁴): {menu:?}");
+    }
+
+    #[test]
+    fn glass_the_compositor_paints_shares_one_capture_and_mixes_its_blurs_by_each_pane_s_size() {
+        let wide = material::Blur { size: 2.0, passes: 3 };
+        let mut menu = shape(0.0, 50.0, Some(wide));
+        menu.h = 300.0;
+        let m = material::MaterialState {
+            shapes: vec![shape(0.0, 0.0, None), menu, shape(220.0, 0.0, None)],
+            blur_size: 2.0,
+            blur_passes: 2,
+            glass: Some(material::Glass { refraction: 10.0, rim: 1.0 }),
+            ..Default::default()
+        };
+        let g = groups((2560, 1440).into(), Scale::from(1.0), Point::from((0, 0)), &m);
+        assert_eq!(g.len(), 1, "one blur for all of them, whatever set_shape_blur said");
+        assert_eq!(g[0].2, material::GLASS_BLUR);
+        let mix = |i: usize| g[0].1.iter().find(|s| s.index == i).unwrap().blur_mix;
+        assert_eq!(mix(0), glass_gl::BlurMix::SMALL, "a capsule, 40 tall");
+        assert_eq!(mix(1), glass_gl::BlurMix::LARGE, "the menu, 200 by 300");
     }
 }

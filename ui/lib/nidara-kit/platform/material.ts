@@ -141,9 +141,6 @@ export interface MaterialSource {
     /** The veil of this surface's veil regions (`trackVeilRegion`), or null: none. Asked only
      *  where the compositor paints the glass. */
     veil?(native: Gtk.Native): VeilParams | null
-    /** The blur of a pane of `piece` on this surface, or null: the surface's (`blur`). Asked
-     *  only where the compositor paints the glass. */
-    pieceBlur?(native: Gtk.Native, piece: GlassPiece): { size: number, passes: number } | null
     /** How close, in logical px, two panes of one fusion group (`trackFusionGroup`) must be
      *  to join; 0 or null: no fusion. Asked only where the compositor paints the glass. */
     fusion?(native: Gtk.Native): number | null
@@ -190,7 +187,6 @@ type Shim = {
         washR: number, washG: number, washB: number, washA: number, ambient: number, ambientLift: number,
         ambientGain: number): void
     material_set_lensing?(surface: Gdk.Surface, sizeFraction: number): void
-    material_set_shape_blur?(surface: Gdk.Surface, size: number, passes: number): void
     material_clear_glass(surface: Gdk.Surface): void
     material_has_ink?(): boolean
     material_add_ink_box?(surface: Gdk.Surface, id: number, x: number, y: number, w: number, h: number): void
@@ -712,7 +708,6 @@ function sortByTree(list: Entry[]) {
 
 type Rect = { x: number, y: number, w: number, h: number }
 type Placed = { x: number, y: number, w: number, h: number, r: number, e: number, o: number, clip: Rect | null,
-    blur?: { size: number, passes: number } | null,
     pointer?: GlassPointer, fusion?: number, tone?: PaneTone }
 
 /** Past this many boxes a pane sends one, their union: a stricter measure, never a looser one. */
@@ -868,8 +863,7 @@ function flush(native: Gtk.Native, st: NativeState) {
         const light = glassFollowsMode(native) || (inkFollowsMode(native) && !inkless(e))
         const piece = pieceOf(e, native)
         const tone = source?.tone?.(native, piece, light)
-        const blur = source?.pieceBlur?.(native, piece) ?? null
-        for (const s of p.shapes) { s.fusion = fusion; s.tone = tone; s.blur = blur }
+        for (const s of p.shapes) { s.fusion = fusion; s.tone = tone }
         placed.push(...p.shapes)
         for (const box of p.boxes) inkBoxes.push({ id: inkIdOf(e), box })
     }
@@ -899,7 +893,7 @@ function flush(native: Gtk.Native, st: NativeState) {
         s.clip && [round(s.clip.x), round(s.clip.y), round(s.clip.w), round(s.clip.h)],
         s.pointer && [round(s.pointer.baseX), round(s.pointer.baseY), round(s.pointer.tipX), round(s.pointer.tipY),
             round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0, spacing > 0 && s.fusion ? mergeOf(s.fusion) : 0,
-            paints ? s.tone ?? null : null, paints ? s.blur ?? null : null]),
+            paints ? s.tone ?? null : null]),
         paints && glass, blur, spacing,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
         veil, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h)])])
@@ -910,15 +904,9 @@ function flush(native: Gtk.Native, st: NativeState) {
     // `set_tone` holds for the shapes added after it, until the next one (and resets the ink
     // tone, which follows it).
     let toning: PaneTone | undefined
-    // So does `set_shape_blur`; passes 0 is the surface's blur again.
-    let blurring = ""
+    // No `set_shape_blur`: where the compositor paints the glass its blur is the glass's, mixed
+    // by each pane's size (references/hyalo.md → "The blur"); it blurs only a client's own glass.
     for (const s of placed) {
-        const b = paints && s.blur ? s.blur : null
-        const bk = b ? `${b.size}:${b.passes}` : ""
-        if (bk !== blurring && shim.material_set_shape_blur) {
-            shim.material_set_shape_blur(surface, b?.size ?? 0, b?.passes ?? 0)
-            blurring = bk
-        }
         if (paints && s.tone && s.tone !== toning && shim.material_set_tone) {
             sendTone(shim.material_set_tone, surface, s.tone.tone)
             if (s.tone.inkTone && shim.material_set_ink_tone) sendTone(shim.material_set_ink_tone, surface, s.tone.inkTone)

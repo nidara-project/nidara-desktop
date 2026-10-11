@@ -539,9 +539,9 @@ void nidara_wl_material_set_ink_tone (GdkSurface *surface, double saturation, do
  * @passes: the number of passes; 0 = the surface's blur (nidara_wl_material_commit())
  *
  * The blur of the shapes added after this call, until the next one, in place of the
- * surface's (nidara-material-v1.set_shape_blur): a large pane blurred further than the small
- * controls beside it on the same surface. Pending until nidara_wl_material_commit(); reset by
- * nidara_wl_material_begin().
+ * surface's (nidara-material-v1.set_shape_blur). Only on a surface whose glass the client
+ * paints: where the compositor paints it, the blur is the glass's own, by each shape's size.
+ * Pending until nidara_wl_material_commit(); reset by nidara_wl_material_begin().
  */
 void nidara_wl_material_set_shape_blur (GdkSurface *surface, double size, guint passes);
 

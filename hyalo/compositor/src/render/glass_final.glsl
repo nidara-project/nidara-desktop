@@ -229,6 +229,23 @@ float noise_hash(vec2 p) {
 vec2 to_src(vec2 fb_px) { return (fb_px - region_fb.xy) * 0.5; }
 vec4 backdrop(vec2 out_offset) { return up(to_src(v_fb + out_to_fb * out_offset)); }
 
+// ── The blur: three of the capture's, mixed by the shape's size (glass_gl.rs `BlurMix`) ──
+// The reference's blur is no single gaussian: it keeps a fifth of the finest detail on a small
+// pane and blurs the coarse far more than one kawase would. The soft copy, the middle one and
+// the full one (`backdrop`), weighted per shape (`blur_mix`), reproduce it within 0.011 at five
+// periods from 8 to 128 pt. A window's backdrop takes the full one alone (0, 0, 1).
+uniform sampler2D mid_tex;
+uniform sampler2D soft_tex;
+uniform float soft_offset;
+uniform vec3 blur_mix;      // soft, middle, full
+vec3 blurred(vec2 out_offset) {
+    vec2 at = to_src(v_fb + out_to_fb * out_offset);
+    vec3 c = blur_mix.z * up(at).rgb;
+    if (blur_mix.y > 0.0) c += blur_mix.y * up_of(mid_tex, src_size, src_used, offset, at).rgb;
+    if (blur_mix.x > 0.0) c += blur_mix.x * up_of(soft_tex, src_size, src_used, soft_offset, at).rgb;
+    return c;
+}
+
 // ── Glass that forms (#764) ─────────────────────────────────────────────────
 // Glass has no opacity: a pane appearing MATERIALIZES — its blur, refraction, tint and rim grow
 // from nothing — and is never the finished glass cross-faded over the sharp backdrop. The blur
@@ -245,9 +262,9 @@ vec3 sharp_at(vec2 out_offset) {
 }
 // The backdrop as glass formed `formed` of the way sees it.
 vec3 formed_backdrop(vec2 out_offset, float formed) {
-    vec3 blurred = backdrop(out_offset).rgb;
+    vec3 b = blurred(out_offset);
     float w = (1.0 - sharp_mix) * clamp(formed / max(blur_formed, 1e-4), 0.0, 1.0);
-    return w >= 0.999 ? blurred : mix(sharp_at(out_offset), blurred, w);
+    return w >= 0.999 ? b : mix(sharp_at(out_offset), b, w);
 }
 
 // ── The tone (set_tone) ──────────────────────────────────────────────────────

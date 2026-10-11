@@ -156,26 +156,29 @@ uniform sampler2D tex;
 uniform vec2 src_size;
 uniform vec2 src_used;
 uniform float offset;
-vec4 tap(vec2 uv) { return texture2D(tex, clamp(uv, 0.5 / src_size, (src_used - 0.5) / src_size)); }
+vec4 tap_of(sampler2D t, vec2 size, vec2 used, vec2 uv) { return texture2D(t, clamp(uv, 0.5 / size, (used - 0.5) / size)); }
+vec4 tap(vec2 uv) { return tap_of(tex, src_size, src_used, uv); }
 // The up-sample's taps sit a quarter and a half of a SOURCE texel per unit of offset: the
 // half-pixel of the destination, as dual kawase has it and as Hyprland's blur2 does. Until
 // 2026-10-02 they sat 1 and 2 texels out — four times as far — and a given size:passes
 // blurred over twice as wide as the same numbers on Hyprland (a step edge, 10-90 %: 2:2 was
 // 28 px against 12), which is what the owner saw: "1:2 here blurs more than Hyprland's 2:2".
 // The numbers are shared with Hyprland (`GLASS_BLUR`), so they must mean the same blur.
-vec4 up(vec2 src_px) {
-    vec2 uv = src_px / src_size;
-    vec2 o = 0.25 * offset / src_size;
-    vec4 sum = tap(uv + vec2(-o.x * 2.0, 0.0));
-    sum += tap(uv + vec2(-o.x, o.y)) * 2.0;
-    sum += tap(uv + vec2(0.0, o.y * 2.0));
-    sum += tap(uv + vec2(o.x, o.y)) * 2.0;
-    sum += tap(uv + vec2(o.x * 2.0, 0.0));
-    sum += tap(uv + vec2(o.x, -o.y)) * 2.0;
-    sum += tap(uv + vec2(0.0, -o.y * 2.0));
-    sum += tap(uv + vec2(-o.x, -o.y)) * 2.0;
+// The up-sample of any of a capture's level-1 copies (the glass mixes three: BlurMix).
+vec4 up_of(sampler2D t, vec2 size, vec2 used, float off, vec2 src_px) {
+    vec2 uv = src_px / size;
+    vec2 o = 0.25 * off / size;
+    vec4 sum = tap_of(t, size, used, uv + vec2(-o.x * 2.0, 0.0));
+    sum += tap_of(t, size, used, uv + vec2(-o.x, o.y)) * 2.0;
+    sum += tap_of(t, size, used, uv + vec2(0.0, o.y * 2.0));
+    sum += tap_of(t, size, used, uv + vec2(o.x, o.y)) * 2.0;
+    sum += tap_of(t, size, used, uv + vec2(o.x * 2.0, 0.0));
+    sum += tap_of(t, size, used, uv + vec2(o.x, -o.y)) * 2.0;
+    sum += tap_of(t, size, used, uv + vec2(0.0, -o.y * 2.0));
+    sum += tap_of(t, size, used, uv + vec2(-o.x, -o.y)) * 2.0;
     return sum / 12.0;
 }
+vec4 up(vec2 src_px) { return up_of(tex, src_size, src_used, offset, src_px); }
 "#;
 
 const FS_UP_MAIN: &str = r#"
@@ -287,9 +290,17 @@ impl ToneGl {
     pub const AMBIENT_FROM: f64 = 64.0;
     pub const AMBIENT_FULL: f64 = 160.0;
 
+    /// How far a shape whose shorter side is `side` logical px is from small (0) to large (1):
+    /// the reference's ramp, the same for every input of its glass that grows with the shape —
+    /// the ambient here, the blur's mix (`BlurMix`), its shadow and the rest (glass-probe,
+    /// `tweak-sigma`, 2026-10-11: read back from the system's own filter at 24 to 340 pt).
+    pub fn grown(side: f64) -> f64 {
+        ((side - Self::AMBIENT_FROM) / (Self::AMBIENT_FULL - Self::AMBIENT_FROM)).clamp(0.0, 1.0)
+    }
+
     /// `tone` on a shape whose shorter side is `side` logical px, at `px_scale` output px each.
     pub fn new(t: &crate::protocols::material::Tone, side: f64, px_scale: f64) -> Self {
-        let grown = ((side - Self::AMBIENT_FROM) / (Self::AMBIENT_FULL - Self::AMBIENT_FROM)).clamp(0.0, 1.0);
+        let grown = Self::grown(side);
         Self {
             tone: [t.saturation as f32, t.ceiling as f32, t.lift as f32, t.gain as f32],
             wash: t.wash.map(|v| v as f32),
@@ -304,6 +315,40 @@ impl ToneGl {
 
     /// The backdrop as it is.
     pub const NONE: ToneGl = ToneGl { tone: [1.0, 1.0, 0.0, 1.0], wash: [0.0; 4], ambient: [0.0, 0.0, 1.0, 0.0] };
+}
+
+/// The glass's blur: the reference's, as it was MEASURED (glass-probe `tools/sigma.py`, runs
+/// 38173179067 and 38175196633, 2026-10-11). A sinusoid grating under the glass, five periods
+/// (8 to 128 pt); what each period keeps is the blur, the tone divided out — the system's own
+/// filter with its colour stages neutral and its blur and blur fill as the system set them:
+///   small (shorter side ≤ 64 pt)  0.19 0.25 0.30 0.49 0.79
+///   large (≥ 160 pt)              0.05 0.05 0.15 0.45 0.79
+/// Neither is one gaussian (the reference mixes the backdrop at several blurs; its blur opacities
+/// scale the radius, 0/0 small and 0.8/0.4 large), so neither is one kawase. Three copies of the
+/// capture mixed by weight reproduce both within 0.011, measured through this very kawase
+/// (`sigma.py --hyalo`): the backdrop barely softened (`SOFT`, one pass), and the kawase at
+/// `GLASS_BLUR`'s offset after `MID_PASSES` and after all its passes — the two share their
+/// down-samples. The weights go from `SMALL` to `LARGE` with the shape's size, by the
+/// reference's own ramp (`ToneGl::grown`). Logical px: at 2× the offsets double — whether the
+/// reference blurs in points or in pixels is NOT known (its runner has no 2× mode).
+pub struct BlurMix;
+
+impl BlurMix {
+    /// The soft copy's offset, logical px: one down-sample, then the up-sample in `draw`.
+    pub const SOFT: f64 = 0.5;
+    /// The passes of the middle copy, fewer than `GLASS_BLUR`'s, at its offset.
+    pub const MID_PASSES: usize = 2;
+    /// soft, middle, full.
+    pub const SMALL: [f32; 3] = [0.27, 0.11, 0.62];
+    pub const LARGE: [f32; 3] = [0.06, 0.37, 0.57];
+    /// The full blur alone: glass whose blur is not the reference's (a window's backdrop).
+    pub const FULL: [f32; 3] = [0.0, 0.0, 1.0];
+
+    /// The weights of a shape whose shorter side is `side` logical px.
+    pub fn weights(side: f64) -> [f32; 3] {
+        let t = ToneGl::grown(side) as f32;
+        std::array::from_fn(|i| (1.0 - t) * Self::SMALL[i] + t * Self::LARGE[i])
+    }
 }
 
 /// A shape in output pixels.
@@ -325,6 +370,8 @@ pub struct Shape {
     /// How the glass treats the backdrop under it (`set_tone`, or `set_ink_tone` while it is
     /// `ink_dark`).
     pub tone: ToneGl,
+    /// How it mixes the capture's three blurs (`BlurMix`): soft, middle, full.
+    pub blur_mix: [f32; 3],
     /// A pointer spliced into it.
     pub pointer: Option<PointerPx>,
     /// How far its edge reads the backdrop from outside it, output pixels: the glass's
@@ -727,12 +774,21 @@ pub struct Cache {
     measure: Option<Level>,
     /// The generation `measure` was taken at.
     measure_gen: u64,
+    /// The glass's other two blurs (`BlurMix`), level-1 sized, each up-sampled by `draw`: the
+    /// middle one (`MID_PASSES` of the chain, at its offset) and the soft one. Kept only while
+    /// the capture mixes (`mixed`): a window's backdrop blurs once.
+    mid: Option<Level>,
+    soft: Option<Level>,
+    mixed: bool,
+    soft_offset: f32,
 }
 
 impl Drop for Cache {
     fn drop(&mut self) {
         if let Some(trash) = &self.trash {
-            trash.borrow_mut().extend(self.levels.drain(..).chain(self.measure.take()).map(|l| (l.tex, l.fbo)));
+            trash.borrow_mut().extend(
+                self.levels.drain(..).chain(self.measure.take()).chain(self.mid.take()).chain(self.soft.take()).map(|l| (l.tex, l.fbo)),
+            );
         }
     }
 }
@@ -788,6 +844,36 @@ impl Cache {
                 self.levels.push(Level { tex, fbo, w, h });
             }
         }
+    }
+}
+
+/// `slot` as a render target of `w`×`h` (RGBA, linear, clamped), reallocated if it is not.
+unsafe fn ensure_target(gl: &Gles2, slot: &mut Option<Level>, w: i32, h: i32, trash: &Trash) {
+    unsafe {
+        if slot.as_ref().is_some_and(|l| (l.w, l.h) == (w, h)) {
+            return;
+        }
+        if let Some(old) = slot.take() {
+            trash.borrow_mut().push((old.tex, old.fbo));
+        }
+        let mut tex = 0;
+        gl.GenTextures(1, &mut tex);
+        gl.BindTexture(ffi::TEXTURE_2D, tex);
+        gl.TexImage2D(ffi::TEXTURE_2D, 0, ffi::RGBA as i32, w, h, 0, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null());
+        super::stats::texture_alloc(tex, w as u64 * h as u64 * 4);
+        for (p, v) in [
+            (ffi::TEXTURE_MIN_FILTER, ffi::LINEAR),
+            (ffi::TEXTURE_MAG_FILTER, ffi::LINEAR),
+            (ffi::TEXTURE_WRAP_S, ffi::CLAMP_TO_EDGE),
+            (ffi::TEXTURE_WRAP_T, ffi::CLAMP_TO_EDGE),
+        ] {
+            gl.TexParameteri(ffi::TEXTURE_2D, p, v as i32);
+        }
+        let mut fbo = 0;
+        gl.GenFramebuffers(1, &mut fbo);
+        gl.BindFramebuffer(ffi::FRAMEBUFFER, fbo);
+        gl.FramebufferTexture2D(ffi::FRAMEBUFFER, ffi::COLOR_ATTACHMENT0, ffi::TEXTURE_2D, tex, 0);
+        *slot = Some(Level { tex, fbo, w, h });
     }
 }
 
@@ -855,6 +941,9 @@ pub unsafe fn capture(
     // blur kept aside while it forms (`Cache::measure`).
     formed: f32,
     measure_full: bool,
+    // The glass's mix of three blurs (`BlurMix`): the soft copy's offset, output px. None: the
+    // chain's blur alone (a window's backdrop).
+    soft: Option<f32>,
     finish: &Finish,
     cache: &mut Cache,
 ) {
@@ -879,6 +968,13 @@ pub unsafe fn capture(
         cache.offset = run_offset;
         cache.formed = formed.clamp(0.0, 1.0);
         cache.sharp_mix = sharp_mix;
+        cache.mixed = soft.is_some();
+        cache.soft_offset = soft.unwrap_or(0.0);
+        if cache.mixed {
+            let (w1, h1) = (cache.levels[1].w, cache.levels[1].h);
+            ensure_target(gl, &mut cache.mid, w1, h1, &progs.trash);
+            ensure_target(gl, &mut cache.soft, w1, h1, &progs.trash);
+        }
 
         // 1. The region, out of the frame, into level 0.
         gl.BindFramebuffer(ffi::FRAMEBUFFER, prev_fbo as u32);
@@ -901,6 +997,7 @@ pub unsafe fn capture(
         let size = region_fb.size;
         let used = |k: usize| ((size.w >> k).max(1), (size.h >> k).max(1));
         let levels = &cache.levels;
+        let (mid, soft_level) = (cache.mid.as_ref(), cache.soft.as_ref());
         let pass = |p: &Program, src: &Level, src_used: (i32, i32), dst: &Level, dst_used: (i32, i32)| {
             gl.Uniform2f(p.loc(gl, c"src_used"), src_used.0 as f32, src_used.1 as f32);
             gl.BindFramebuffer(ffi::FRAMEBUFFER, dst.fbo);
@@ -912,7 +1009,7 @@ pub unsafe fn capture(
             gl.DrawArrays(ffi::TRIANGLE_STRIP, 0, 4);
         };
 
-        let chain = |passes: usize, offset: f32| {
+        let chain = |passes: usize, offset: f32, mixed: bool| {
             // 2. Down: level 0 → … → level n.
             set_quad(&progs.down, offset);
             let d = &progs.down;
@@ -925,7 +1022,32 @@ pub unsafe fn capture(
                 gl.Uniform1f(d.loc(gl, c"prepare"), (k == 1) as i32 as f32);
                 pass(&progs.down, &levels[k - 1], used(k - 1), &levels[k], used(k));
             }
+            // The soft copy (`BlurMix::SOFT`): one down-sample of level 0, at its own offset.
+            if let (true, Some(sl)) = (mixed, soft_level) {
+                gl.Uniform1f(d.loc(gl, c"offset"), cache.soft_offset);
+                gl.Uniform1f(d.loc(gl, c"prepare"), 1.0);
+                pass(&progs.down, &levels[0], used(0), sl, used(1));
+            }
             gl.DisableVertexAttribArray(progs.down.pos);
+            // The middle copy (`BlurMix::MID_PASSES`, one pass fewer than the chain while the
+            // glass forms): the same down-samples, up from one level lower, BEFORE the chain's
+            // own up-samples overwrite them. Its last up-sample, like the chain's, is `draw`'s.
+            if let (true, Some(m)) = (mixed, mid) {
+                let top = passes.saturating_sub(1).min(BlurMix::MID_PASSES);
+                if top >= 2 {
+                    set_quad(&progs.up, offset);
+                    for k in (2..top).rev() {
+                        pass(&progs.up, &levels[k + 1], used(k + 1), &levels[k], used(k));
+                    }
+                    pass(&progs.up, &levels[2], used(2), m, used(1));
+                    gl.DisableVertexAttribArray(progs.up.pos);
+                } else {
+                    // One pass (or none): level 1 as the down-sample left it.
+                    gl.BindFramebuffer(ffi::FRAMEBUFFER, levels[1].fbo);
+                    gl.BindTexture(ffi::TEXTURE_2D, m.tex);
+                    gl.CopyTexSubImage2D(ffi::TEXTURE_2D, 0, 0, 0, 0, 0, used(1).0, used(1).1);
+                }
+            }
             // 3. Up: level n → … → level 1. The last up-sample, to full size, is `draw`'s.
             set_quad(&progs.up, offset);
             for k in (1..passes).rev() {
@@ -936,7 +1058,7 @@ pub unsafe fn capture(
         // While the glass forms, the full blur first, its level 1 set aside for the measurement.
         let keep_full = measure_full && (run_passes, run_offset) != (passes, offset);
         if keep_full {
-            chain(passes, offset);
+            chain(passes, offset, false);
             let l1 = &levels[1];
             if cache.measure.as_ref().is_none_or(|m| (m.w, m.h) != (l1.w, l1.h)) {
                 if let Some(old) = cache.measure.take() {
@@ -965,10 +1087,15 @@ pub unsafe fn capture(
             gl.CopyTexSubImage2D(ffi::TEXTURE_2D, 0, 0, 0, 0, 0, l1.w, l1.h);
             cache.measure_gen = cache.generation;
         }
-        chain(run_passes, run_offset);
+        chain(run_passes, run_offset, cache.mixed);
         super::stats::count(|c| {
             c.captures += 1;
             c.passes += 2 * run_passes as u32 - 1 + if keep_full { 2 * passes as u32 - 1 } else { 0 };
+            if cache.mixed {
+                // The soft copy's down-sample, the middle copy's up-sample(s), their two last
+                // up-samples in `draw`.
+                c.passes += 1 + run_passes.saturating_sub(2).min(BlurMix::MID_PASSES - 1) as u32 + 2;
+            }
             c.capture_px += region_fb.size.w.max(0) as u64 * region_fb.size.h.max(0) as u64;
         });
 
@@ -1029,6 +1156,19 @@ pub unsafe fn draw(
         gl.ActiveTexture(ffi::TEXTURE0);
         gl.Uniform2f(p.loc(gl, c"sharp_size"), l0.w as f32, l0.h as f32);
         gl.Uniform1f(p.loc(gl, c"sharp_mix"), cache.sharp_mix);
+        // The glass's two other blurs (`BlurMix`), level-1 sized like the chain's.
+        let (mid, soft) = match (cache.mixed, &cache.mid, &cache.soft) {
+            (true, Some(m), Some(s)) => (m, s),
+            _ => (l1, l1),
+        };
+        gl.ActiveTexture(ffi::TEXTURE2);
+        gl.BindTexture(ffi::TEXTURE_2D, mid.tex);
+        gl.Uniform1i(p.loc(gl, c"mid_tex"), 2);
+        gl.ActiveTexture(ffi::TEXTURE3);
+        gl.BindTexture(ffi::TEXTURE_2D, soft.tex);
+        gl.Uniform1i(p.loc(gl, c"soft_tex"), 3);
+        gl.ActiveTexture(ffi::TEXTURE0);
+        gl.Uniform1f(p.loc(gl, c"soft_offset"), cache.soft_offset);
         gl.Uniform1f(p.loc(gl, c"blur_formed"), cache.formed);
         gl.UniformMatrix3fv(p.loc(gl, c"projection"), 1, ffi::FALSE, map.projection.as_ptr());
         gl.Uniform2f(p.loc(gl, c"fb_size"), map.fb_size.0 as f32, map.fb_size.1 as f32);
@@ -1142,6 +1282,8 @@ pub unsafe fn draw(
             gl.Uniform4fv(p.loc(gl, c"tone"), 1, s.tone.tone.as_ptr());
             gl.Uniform4fv(p.loc(gl, c"wash"), 1, s.tone.wash.as_ptr());
             gl.Uniform4fv(p.loc(gl, c"ambient"), 1, s.tone.ambient.as_ptr());
+            let mix = if cache.mixed { s.blur_mix } else { BlurMix::FULL };
+            gl.Uniform3f(p.loc(gl, c"blur_mix"), mix[0], mix[1], mix[2]);
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -1150,8 +1292,10 @@ pub unsafe fn draw(
         }
         gl.DisableVertexAttribArray(p.pos);
         gl.BindBuffer(ffi::ARRAY_BUFFER, 0);
-        gl.ActiveTexture(ffi::TEXTURE1);
-        gl.BindTexture(ffi::TEXTURE_2D, 0);
+        for unit in [ffi::TEXTURE3, ffi::TEXTURE2, ffi::TEXTURE1] {
+            gl.ActiveTexture(unit);
+            gl.BindTexture(ffi::TEXTURE_2D, 0);
+        }
         gl.ActiveTexture(ffi::TEXTURE0);
         gl.BindTexture(ffi::TEXTURE_2D, 0);
         gl.UseProgram(0);
@@ -1423,6 +1567,21 @@ mod tests {
     }
 
     #[test]
+    fn the_blur_mix_goes_from_the_small_pane_s_to_the_large_one_s_with_its_size() {
+        let close = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6);
+        assert!(close(BlurMix::weights(24.0), BlurMix::SMALL), "a capsule: the small pane's");
+        assert!(close(BlurMix::weights(64.0), BlurMix::SMALL), "up to 64: still small");
+        assert!(close(BlurMix::weights(340.0), BlurMix::LARGE), "a menu: the large pane's");
+        assert!(close(BlurMix::weights(160.0), BlurMix::LARGE), "from 160: large");
+        let half: [f32; 3] = std::array::from_fn(|i| (BlurMix::SMALL[i] + BlurMix::LARGE[i]) / 2.0);
+        assert!(close(BlurMix::weights(112.0), half), "half way along the ramp, half way between");
+        for side in [24.0, 64.0, 90.0, 112.0, 160.0, 400.0] {
+            let w = BlurMix::weights(side);
+            assert!((w.iter().sum::<f32>() - 1.0).abs() < 1e-5, "a mix, not a gain: {side} → {w:?}");
+        }
+    }
+
+    #[test]
     fn a_pointer_reaches_its_tip_and_rounds_it() {
         // A tooltip's pointer pointing down: base centred at (50, 20), 16 wide, tip at (50, 28).
         let p = PointerPx::new([50.0, 20.0], [50.0, 28.0], 16.0, 4.0, 8.0).unwrap();
@@ -1467,6 +1626,7 @@ mod tests {
             clip: None,
             ink_dark: false,
             tone: ToneGl::NONE,
+            blur_mix: BlurMix::FULL,
             pointer: None,
             refraction: 0.0,
             px_scale: 1.0,
@@ -1493,6 +1653,7 @@ mod tests {
             clip,
             ink_dark: false,
             tone: ToneGl::NONE,
+            blur_mix: BlurMix::FULL,
             pointer: None,
             refraction: 0.0,
             px_scale: 1.0,
