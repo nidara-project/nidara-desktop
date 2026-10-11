@@ -60,13 +60,18 @@ export function fireHook(event: string, ...args: string[]): void {
  *
  * main() runs on every UI RELOAD, not just at login (the same trap the DnD
  * seeding block in app.ts was deleted for). A stamp in the runtime dir is what
- * makes the event mean what its name says: $XDG_RUNTIME_DIR is created with the
- * user's first session and destroyed with their last, so the file cannot outlive
- * the session that made it, and no cleanup of ours is needed.
+ * makes the event mean what its name says — but the runtime dir alone is NOT a
+ * login: with lingering on (`loginctl enable-linger`) it outlives every logout,
+ * and a stamp that only had to exist swallowed every login after the first one
+ * since boot. So the stamp counts only when it is newer than the compositor's
+ * display socket, which each login creates afresh and a UI reload never touches.
  */
 export function fireSessionStartedOnce(): void {
-    const stamp = `${GLib.get_user_runtime_dir()}/nidara-session-started`
-    if (GLib.file_test(stamp, GLib.FileTest.EXISTS)) return
+    const runtime = GLib.get_user_runtime_dir()
+    const stamp = `${runtime}/nidara-session-started`
+    const display = GLib.getenv("WAYLAND_DISPLAY")
+    const stamped = mtime(stamp)
+    if (stamped > 0 && stamped >= (display ? mtime(`${runtime}/${display}`) : 0)) return
     try {
         GLib.file_set_contents(stamp, "")
     } catch (e) {
@@ -75,6 +80,16 @@ export function fireSessionStartedOnce(): void {
         console.warn("[Hooks] session stamp unwritable:", e)
     }
     fireHook("session-started")
+}
+
+/** A file's modification time in µs, or 0 when it cannot be read. */
+function mtime(path: string): number {
+    try {
+        const info = Gio.File.new_for_path(path).query_info("time::modified,time::modified-usec", Gio.FileQueryInfoFlags.NONE, null)
+        return info.get_attribute_uint64("time::modified") * 1e6 + info.get_attribute_uint32("time::modified-usec")
+    } catch {
+        return 0
+    }
 }
 
 // ── battery-low ──────────────────────────────────────────────────────────────
