@@ -1023,7 +1023,7 @@ function exportNative(kind: "image" | "video", report: (s: string) => void) {
     // In 120ths: what fractional-scale-v1 carries, so GTK draws at exactly the output's scale.
     const scale = Math.round(Math.min(4, Math.max(0.25, fw / Math.max(1, stageRect().w))) * 120) / 120
     const argv = [`${REPO}/scripts/dev/glass-lab/glass-lab.sh`, "--headless", `${base}.png`, "--export", kind,
-        "--preset", `${base}.json`, "--size", `${fw}x${fh}`, "--scale", scale.toFixed(4), "--bin", HYALO]
+        "--preset", `${base}.json`, "--size", `${fw}x${fh}`, "--scale", scale.toFixed(4), "--bin", HYALO, "--classic"]
     const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE })
     // The lab runs in a sandbox HOME: the presets dir is said outright, not re-derived from it.
     launcher.setenv("GLASS_LAB_PRESETS", PRESETS, true)

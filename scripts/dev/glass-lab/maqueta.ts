@@ -26,6 +26,7 @@ import Gio from "gi://Gio"
 import GObject from "gi://GObject"
 import Gsk from "gi://Gsk?version=4.0"
 import Graphene from "gi://Graphene"
+import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import System from "system"
@@ -84,10 +85,18 @@ interface Glass { frost: number, passes: number, smoke: number, veil: number, sa
  *  the smoke and white text in both — what the reference's Control Center does. */
 interface Piece { glass: Variant, thick: number, aspect: "modo" | "oscuro",
     shadow: { on: boolean, alpha: number, blur: number, dy: number } }
+const FORMATS = { "16:9": [1920, 1080], "1:1": [1080, 1080], "4:5": [1080, 1350], "9:16": [1080, 1920] } as const
+type Format = keyof typeof FORMATS
 interface State {
     dark: boolean
     scene: Scene
     backdrop: string
+    offset: { x: number, y: number }    // the backdrop's pan, 0..1 each way
+    drift: boolean                      // the backdrop moves on its own, under the glass
+    driftSpeed: number
+    promoSize: number                   // the disc's diameter, px (of the file: exports are at scale 1)
+    format: Format                      // what an export is made at
+    videoSeconds: number
     regular: Glass
     clear: Glass
     common: { bevel: number, profile: number, strength: number }
@@ -100,6 +109,7 @@ const noShadow = () => ({ on: false, alpha: 0.23, blur: 15, dy: 4 })
 // ≈ 1 Clear); the tints are proportional; the menu's shadow is the one measured on the reference.
 const factory = (): State => ({
     dark: true, scene: "Escritorio", backdrop: "página de texto",
+    offset: { x: 0.5, y: 0.5 }, drift: false, driftSpeed: 1, promoSize: 200, format: "16:9", videoSeconds: 10,
     regular: { frost: 1.2, passes: 3, smoke: 0.35, veil: 0.3, saturation: 1.25, rim: 0.5 },
     clear: { frost: 1.0, passes: 1, smoke: 0, veil: 0.1, saturation: 1.3, rim: 0.5 },
     common: { bevel: 30, profile: 4, strength: 1 },
@@ -191,23 +201,25 @@ if (WALLPAPERS) {
 const BACKDROPS = [...Object.keys(wallpapers).sort(), "página de texto", "blanco", "negro", "gris", "mitad blanco/negro", "degradado"]
 const rect = (x: number, y: number, w: number, h: number) => { const r = new Graphene.Rect(); r.init(x, y, w, h); return r }
 const textures = new Map<string, Gdk.Texture>()
+const PHOTO_ZOOM = 1.4
+let photoSlack = { x: 1, y: 1 }
 function paintSynthetic(cr: any, w: number, h: number) {
-    const b = state.backdrop
+    const b = state.backdrop, x0 = state.offset.x * w, y0 = state.offset.y * h
     const fill = (r: number, g: number, bl: number, x = 0, y = 0, ww = w, hh = h) => {
         cr.setSourceRGB(r, g, bl); cr.rectangle(x, y, ww, hh); cr.fill()
     }
     if (b === "negro") fill(0, 0, 0)
     else if (b === "gris") fill(0.5, 0.5, 0.5)
-    else if (b === "mitad blanco/negro") { fill(1, 1, 1); fill(0, 0, 0, w / 2, 0, w - w / 2, h) }
-    else if (b === "degradado") { for (let x = 0; x < w; x += 2) { const v = x / w; fill(v, v, v, x, 0, 2, h) } }
+    else if (b === "mitad blanco/negro") { fill(1, 1, 1); fill(0, 0, 0, x0, 0, w - x0, h) }
+    else if (b === "degradado") { for (let x = 0; x < w; x += 2) { const v = ((x - x0) / w + 1) % 1; fill(v, v, v, x, 0, 2, h) } }
     else if (b === "página de texto") {
         fill(0.97, 0.97, 0.96)
         const layout = PangoCairo.create_layout(cr)
         layout.set_font_description(Pango.FontDescription.from_string("Sans 15"))
         const line = "El material de cristal deja ver lo que hay detrás y aun así se tiene que leer lo que lleva encima. "
         cr.setSourceRGB(0.08, 0.08, 0.1)
-        for (let y = 8, i = 0; y < h; y += 26, i++) {
-            cr.moveTo(-((i * 37) % 400), y)
+        for (let y = 8 + (y0 % 26) - 26, i = Math.floor(-y0 / 26); y < h; y += 26, i++) {
+            cr.moveTo(-((x0 + i * 37) % 400) - 400, y)
             layout.set_text(line.repeat(6), -1)
             PangoCairo.show_layout(cr, layout)
         }
@@ -225,9 +237,14 @@ const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget
         }
         let tex = textures.get(path)
         if (!tex) { tex = Gdk.Texture.new_from_filename(path); textures.set(path, tex) }
-        const s = Math.max(w / tex.get_width(), h / tex.get_height())
+        // Larger than the output, so there is room to pan it under the glass.
+        const s = Math.max(w / tex.get_width(), h / tex.get_height()) * PHOTO_ZOOM
         const dw = tex.get_width() * s, dh = tex.get_height() * s
-        snap.append_scaled_texture(tex, Gsk.ScalingFilter.LINEAR, rect((w - dw) / 2, (h - dh) / 2, dw, dh))
+        photoSlack = { x: dw - w, y: dh - h }
+        snap.push_clip(rect(0, 0, w, h))
+        snap.append_scaled_texture(tex, Gsk.ScalingFilter.LINEAR,
+            rect(-photoSlack.x * state.offset.x, -photoSlack.y * state.offset.y, dw, dh))
+        snap.pop()
     }
 })
 
@@ -253,6 +270,38 @@ function layer(ns: string, layerKind: Gtk4LayerShell.Layer, anchors: Gtk4LayerSh
 const bgWin = layer("glass-lab-backdrop", Gtk4LayerShell.Layer.BACKGROUND, [E.TOP, E.BOTTOM, E.LEFT, E.RIGHT])
 const backdropView = new BackdropView({ hexpand: true, vexpand: true })
 bgWin.set_child(backdropView)
+// Moving the backdrop: drag it (where no piece is), or let it drift.
+{
+    const drag = new Gtk.GestureDrag()
+    let from = { x: 0.5, y: 0.5 }
+    drag.connect("drag-begin", () => { from = { ...state.offset } })
+    drag.connect("drag-update", (_g, dx: number, dy: number) => {
+        if (state.drift) return
+        const clamp = (v: number) => Math.min(1, Math.max(0, v))
+        const photo = !!wallpapers[state.backdrop]
+        const w = backdropView.get_width() || 1, h = backdropView.get_height() || 1
+        state.offset = photo
+            ? { x: clamp(from.x - dx / Math.max(photoSlack.x, 1)), y: clamp(from.y - dy / Math.max(photoSlack.y, 1)) }
+            : { x: clamp(from.x + dx / w), y: clamp(from.y + dy / h) }
+        dirty = true; refreshHead(); backdropView.queue_draw()
+    })
+    backdropView.add_controller(drag)
+}
+/** Where the drift has the backdrop `k` seconds in: a slow loop, a function of time alone, so a
+ *  video steps it frame by frame and comes out smooth however slowly the frames are captured. */
+function driftTo(k: number) {
+    const t = k * state.driftSpeed
+    state.offset = { x: 0.5 - 0.5 * Math.cos(t * 2 * Math.PI / 24), y: 0.5 - 0.5 * Math.cos(t * 2 * Math.PI / 17) }
+    backdropView.queue_draw()
+}
+let driftStart = 0, recording = false
+backdropView.add_tick_callback((_w, clock) => {
+    if (!state.drift || recording) { driftStart = 0; return GLib.SOURCE_CONTINUE }
+    const t = clock.get_frame_time() / 1e6
+    if (!driftStart) driftStart = t
+    driftTo(t - driftStart)
+    return GLib.SOURCE_CONTINUE
+})
 
 // A piece: a surface of its own, named as the shell's bar window (its pieces' CSS is scoped to it),
 // with room round its glass for the shadow AROUND it (CSS box-shadow: outset, so never under it).
@@ -348,11 +397,17 @@ function dockPiece(): Gtk.Widget {
 function promoPiece(): Gtk.Widget {
     const mark = new Gtk.Image({ css_classes: ["glass-lab-mark"], pixel_size: 96, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${REPO}/ui/shell/assets/nidara/assets/nidara-symbolic.svg`)) })
+    mark.pixel_size = Math.round(state.promoSize * 0.48)
     const disc = SquircleContainer({ child: mark, shape: Shape.CIRCLE, inset: 0, useShellOpacity: true, chrome: true })
-    disc.set_size_request(200, 200)
+    disc.set_size_request(state.promoSize, state.promoSize)
     return disc
 }
 
+let rebuildId = 0
+function rebuildSoon() {
+    if (rebuildId) GLib.source_remove(rebuildId)
+    rebuildId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { rebuildId = 0; buildScene(); return GLib.SOURCE_REMOVE })
+}
 function buildScene() {
     for (const w of pieceWins.splice(0)) { pieceOf.delete(w as unknown as Gtk.Native); w.destroy() }
     // The controls' exclusive zone already keeps every piece out of the column: no margin for it.
@@ -401,6 +456,95 @@ function loadPreset(name: string): boolean {
         presetName = name; dirty = false
         return true
     } catch (e) { printerr(`glass-lab: preset ${name}: ${e}`); return false }
+}
+
+// ── Exports ─────────────────────────────────────────────────────────────────
+// An export is made by a second lab, headless, whose output IS the format (glass-lab.sh --size),
+// at scale 1: the file is the scene drawn at the format's px, never an enlarged window. The window
+// goes on working meanwhile and shows the export's progress.
+const stamp = () => GLib.DateTime.new_now_local().format("%Y%m%d-%H%M%S")!
+const OUT_DIR = GLib.path_get_dirname(PRESETS)        // beside the classic lab's captures and videos
+function screenshot(path: string, done: (ok: boolean) => void) {
+    try {
+        const p = Gio.Subprocess.new([HYALO, "msg", "screenshot", path], Gio.SubprocessFlags.STDOUT_SILENCE)
+        p.wait_check_async(null, (_p, res) => { try { done(p.wait_check_finish(res)) } catch { done(false) } })
+    } catch { done(false) }
+}
+let exporting: Gio.Subprocess | null = null
+function exportNative(kind: "image" | "video", report: (s: string) => void) {
+    if (exporting) { report("ya hay una exportación en marcha"); return }
+    const [fw, fh] = FORMATS[state.format]
+    const base = `${GLib.get_tmp_dir()}/glass-lab-export-${GLib.get_monotonic_time()}`
+    GLib.mkdir_with_parents(`${base}-presets/maqueta`, 0o755)
+    GLib.file_set_contents(`${base}-presets/maqueta/export.json`, JSON.stringify({ ...state, drift: false }))
+    const argv = [`${REPO}/scripts/dev/glass-lab/glass-lab.sh`, "--headless", `${base}.png`, "--export", kind,
+        "--preset", `${base}-presets/maqueta/export.json`, "--size", `${fw}x${fh}`, "--bin", HYALO]
+    const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE })
+    // The export's preset is read from its own dir; what it writes goes to OUR output dir.
+    launcher.setenv("GLASS_LAB_PRESETS", `${base}-presets`, true)
+    launcher.setenv("GLASS_LAB_OUT", OUT_DIR, true)
+    try { exporting = launcher.spawnv(argv) } catch (e) { report(`no se pudo lanzar la exportación: ${e}`); return }
+    report(`exportando a ${fw}×${fh}…`)
+    const poll = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+        try { report(new TextDecoder().decode(GLib.file_get_contents(`${base}.progress`)[1])) } catch { /* not yet */ }
+        return GLib.SOURCE_CONTINUE
+    })
+    exporting.wait_async(null, () => {
+        GLib.source_remove(poll)
+        exporting = null
+        let text = ""
+        try { text = new TextDecoder().decode(GLib.file_get_contents(`${base}.txt`)[1]).split("\n").slice(1).join("\n").trim() }
+        catch { /* no result */ }
+        report(text || "la exportación falló")
+    })
+}
+/** Headless (the export's own lab): one image, or a video with the backdrop drifting under the glass. */
+function runExport(kind: string) {
+    const out = env("GLASS_LAB_OUT") || OUT_DIR
+    const finish = (msg: string) => { GLib.file_set_contents(SHOT.replace(/\.png$/, ".txt"), `maqueta\n${msg}\n`); loop.quit() }
+    const progress = (msg: string) => GLib.file_set_contents(SHOT.replace(/\.png$/, ".progress"), msg)
+    const json = (path: string) => GLib.file_set_contents(path, JSON.stringify(state, null, 1))
+    if (kind === "image") {
+        const path = `${out}/captura-${stamp()}.png`
+        screenshot(path, ok => { if (ok) json(path.replace(/\.png$/, ".json")); finish(ok ? `guardada: ${path}` : "no se pudo capturar") })
+        return
+    }
+    const FPS = 60, frames = Math.max(1, Math.round(state.videoSeconds * FPS))
+    const path = `${out}/video-${stamp()}.mp4`
+    const frame = `${GLib.get_tmp_dir()}/glass-lab-frame-${GLib.get_monotonic_time()}.ppm`
+    const [fw, fh] = FORMATS[state.format]
+    let ff: Gio.Subprocess, pipe: Gio.OutputStream
+    try {
+        ff = Gio.Subprocess.new(["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", `${FPS}`, "-i", "-",
+            "-vf", `crop=${fw}:${fh}:0:0`, "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart", path], Gio.SubprocessFlags.STDIN_PIPE)
+        pipe = ff.get_stdin_pipe()!
+    } catch (e) { finish(`no se pudo arrancar ffmpeg: ${e}`); return }
+    recording = true
+    const step = (i: number) => {
+        if (i >= frames) {
+            try { pipe.close(null) } catch { /* closed */ }
+            ff.wait_check_async(null, (_p, res) => {
+                let ok = false; try { ok = ff.wait_check_finish(res) } catch { /* below */ }
+                if (ok) json(path.replace(/\.mp4$/, ".json"))
+                finish(ok ? `vídeo: ${state.videoSeconds} s, ${fw}×${fh}\n${path}` : "ffmpeg falló")
+            })
+            return
+        }
+        driftTo(i / FPS)
+        // A few ms for the backdrop's new frame to be painted and committed before the capture.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 30, () => {
+            screenshot(frame, ok => {
+                if (!ok) { finish(`captura fallida en el fotograma ${i}`); return }
+                try { pipe.write_all(GLib.file_get_contents(frame)[1], null); Gio.File.new_for_path(frame).delete(null) }
+                catch (e) { finish(`ffmpeg dejó de leer: ${e}`); return }
+                if (i % 30 === 0) progress(`grabando… ${i}/${frames}`)
+                step(i + 1)
+            })
+            return GLib.SOURCE_REMOVE
+        })
+    }
+    step(0)
 }
 
 // ── The controls ────────────────────────────────────────────────────────────
@@ -573,6 +717,25 @@ function fillBody() {
     page.append(slider("Ancho del bisel (px)", () => state.common.bevel, x => { state.common.bevel = x }, 10, 120, 0))
     page.append(slider("Perfil del bisel", () => state.common.profile, x => { state.common.profile = x }, 1, 9, 1))
     page.append(slider("Fuerza ×", () => state.common.strength, x => { state.common.strength = x }, 0, 3, 2))
+    section("Fondo", "Arrastra el fondo con el ratón donde no hay piezas, o déjalo moverse solo.")
+    page.append(toggle("Mover solo", () => state.drift, x => { state.drift = x }))
+    page.append(slider("Velocidad", () => state.driftSpeed, x => { state.driftSpeed = x }, 0.2, 4, 1))
+    if (state.scene === "Círculo promo") {
+        section("Círculo promo")
+        // The disc is rebuilt once the slider rests, not on every step.
+        page.append(slider("Tamaño (px del archivo)", () => state.promoSize, x => { state.promoSize = x; rebuildSoon() }, 48, 720, 0))
+    }
+    section("Exportar", "Se hace aparte, al tamaño exacto del formato; la ventana sigue funcionando.")
+    page.append(segmented("Formato", Object.keys(FORMATS), () => state.format, v => { state.format = v as Format }))
+    page.append(slider("Duración del vídeo (s)", () => state.videoSeconds, x => { state.videoSeconds = x }, 1, 30, 0))
+    const exportRow = new Gtk.Box({ spacing: 6 })
+    const status = new Gtk.Label({ xalign: 0, wrap: true, css_classes: ["lab-note"], selectable: true })
+    for (const [t, k] of [["Exportar imagen", "image"], ["Exportar vídeo", "video"]] as const) {
+        const b = new Gtk.Button({ label: t, hexpand: true })
+        b.connect("clicked", () => exportNative(k, m => status.set_label(m)))
+        exportRow.append(b)
+    }
+    page.append(exportRow); page.append(status)
     const ids: PieceId[] = state.scene === "Círculo promo" ? ["promo"] : ["barra", "menu", "cc", "dock"]
     for (const id of ids) {
         const p = state.pieces[id]
@@ -602,7 +765,9 @@ apply()
 bgWin.present()
 buildScene()
 const loop = GLib.MainLoop.new(null, false)
-if (SHOT) {
+if (SHOT && env("GLASS_LAB_EXPORT")) {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => { runExport(env("GLASS_LAB_EXPORT")); return GLib.SOURCE_REMOVE })
+} else if (SHOT) {
     // Headless: one capture of the scene once the glass has settled, then quit.
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => {
         try {

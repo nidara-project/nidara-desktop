@@ -69,8 +69,8 @@ touch "$sb/home/.config/nidara/.dev" "$sb/home/.config/nidara/glass-tuning.conf"
 # The glass shader itself, LINKED: an edit to it shows in the lab as it is saved (Hyalo recompiles
 # it, keeping the last one that compiled), with its LAB hooks live (glass_gl.rs's LAB_ON).
 ln -s "$repo/hyalo/compositor/src/render/glass_final.glsl" "$sb/shaders/glass_final.glsl"
-# --batch and --export are the classic bench's.
-[ -n "$batch$export$show" ] && app=lab
+# --batch and --show are the classic bench's (its own exports pass --classic).
+[ -n "$batch$show" ] && app=lab
 "$repo/scripts/bundle.sh" --js "$here/$app.ts" "$sb/lab.js" >/dev/null
 
 # No config of yours — and no idle: with the defaults a lab left alone went dark at five minutes
@@ -88,7 +88,7 @@ lab_env=(
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
     GLASS_LAB_PRESETS="${GLASS_LAB_PRESETS:-${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab}"
     GLASS_LAB_WALLPAPERS="$repo/defaults/wallpaper" GLASS_LAB_PRESET="$preset" GLASS_LAB_BG="$bg" GLASS_LAB_SHOW="$show"
-    GLASS_LAB_SHOT="$out" GLASS_LAB_BATCH="$batch" GLASS_LAB_SCENE="$scene" GLASS_LAB_LIGHT="$light" GLASS_LAB_WITH_CONTROLS="${GLASS_LAB_WITH_CONTROLS:-}" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
+    GLASS_LAB_SHOT="$out" GLASS_LAB_BATCH="$batch" GLASS_LAB_SCENE="$scene" GLASS_LAB_LIGHT="$light" GLASS_LAB_WITH_CONTROLS="${GLASS_LAB_WITH_CONTROLS:-}" GLASS_LAB_OUT="${GLASS_LAB_OUT:-}" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
 )
 lab="env $(printf '%q ' "${lab_env[@]}") gjs -m $sb/lab.js"
 # The output's scale, set before the lab connects (`msg` answers once it is applied).
