@@ -132,8 +132,8 @@ const CRYSTAL_CANDIDATES: Record<CrystalVariant, Record<string, number>> = {
     // On a uniform grey bar, this crossover kept either ink above 4.5:1 at
     // L=.17/.19. It remains a candidate: patterned backgrounds need their own trial.
     regular: { inkDarkAbove: 0.18, inkLightBelow: 0.14, blurSize: 3, blurPasses: 3 },
-    // The first, unmeasured candidate: no dark tint. The calibration (2026-10-11) measured one;
-    // the «calibrado —» presets carry it. Its optional area dim belongs behind the material.
+    // The first candidate: no dark tint — which an active reference window confirms (2026-10-11).
+    // Its blur does not: the calibrated Clear is `1.5:1`. Its optional area dim belongs behind it.
     clear: { alphaMin: 0, alphaMax: 0, target: 1, modeLightVeil: 0.05,
         inkDarkAbove: 0.18, inkLightBelow: 0.14,
         saturation: 1, blurSize: 3, blurPasses: 3 },
@@ -227,10 +227,9 @@ function apply() {
     // The frost is one key of the material's, `blur = SIZE:PASSES`; the lab keeps its two halves as
     // numbers, so a preset and A/B carry them like any other.
     const { blurSize, blurPasses, ...material } = { ...CRYSTAL_CANDIDATES[state.variant], ...state.tuning[state.variant] }
-    // Clear never adapts its tint to the backdrop (target 1). It was also held at NO tint until
-    // 2026-10-11, from the filter's input (face fill alpha 0); the calibration measured its
-    // OUTPUT darkening ≈ 40 % in dark mode (another layer of the filter), so a preset's tint
-    // stands — see «calibrado —» presets and references/hyalo.md → "Calibrated against the reference".
+    // Clear never adapts its tint to the backdrop (target 1). Its tint is no longer forced to zero:
+    // an active reference window has none, but an inactive one darkens it ≈ 40 %, and a preset may
+    // try either — references/hyalo.md → "Calibrated against the reference".
     if (state.variant === "clear") material.target = 1
     // Hyalo's current scrim solver reads the glass target. Override only while the optional
     // backdrop layer is in use; the Clear recipe itself keeps target=1.

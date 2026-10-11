@@ -524,35 +524,41 @@ for the reference capture), `--bg "cal <kind>"` (`level:V`, `rgb:RRGGBB`, `edge`
 which writes the reference's directory names. `glass-lab.sh --batch FILE` takes every capture of
 one recipe in ONE session (95 captures in ≈ 90 s; starting Hyalo was most of a capture's cost).
 
-What the fit found (reference CI 38089871930; error = RMS of output luminance over the greys,
-|Δσ| on the 0.4|0.6 edge, RMS displacement over depths 4…30 after removing the method's constant
-offset):
+⚠️ **The reference is an ACTIVE window.** The first two calibration runs had an inactive one,
+and an inactive window's glass is a different, frosted material (Clear σ 20.7 instead of 1.5;
+still glass, not a solid fill). Owner-caught 2026-10-11 ("almost readable text under the glass"
+against a grey block); the probe now checks it (`window.json`).
+
+What the fit found against the active reference (CI 38095860773; error = RMS of output luminance
+over the greys, |Δσ| on the 0.4|0.6 edge, RMS displacement over depths 4…30 after removing the
+method's constant offset):
 
 | recipe | #780 lab candidates | fitted | error before → after (tone · σ · refraction) |
 |---|---|---|---|
-| Regular dark | target 0.183 hard clamp, `3:3` | `2.9:3`, tone knee 0.06 → ceiling 0.22 (lab[0..1]) | 0.015→0.014 · 5.5→1.0 |
-| Regular light | light veil 0.2 | veil 0.5 + knee 0.4 → ceiling 0.75 | 0.169→0.023 · 1.0→1.0 |
-| Clear dark | no tint, `3:3` | tint 0.2 (black), saturation 1.3, `5:3` | 0.176→0.018 · 6.6→0 · 27.5→3.3 |
-| Clear light | veil 0.05 | veil 0.25, knee 0.5 → 0.9, saturation 1.3, `5:3` | 0.081→0.022 · 6.6→0 · 35.1→4.7 |
+| Regular dark | target 0.183 hard clamp, `3:3` | `2.9:3`, tone knee 0.06 → ceiling 0.24 (lab[0..1]) | 0.024→0.025 · 6.5→1.0 |
+| Regular light | light veil 0.2 | veil 0.6 | 0.222→0.035 · 1.0→1.0 |
+| Clear (both modes) | no tint, `3:3` | `1.5:1` (the owner's pick by eye: σ 1.76 against 1.51), no tint, saturation 1.3, light veil 0.1 | dark 0.103 · 12.6→0.25 · 28.3→5.3; light 0.092→0.079 · 12.6→0.4 · 28.9→3.5 |
 | refraction (all) | bevel up to 80 px, exponent 5 | bevel 30 px (lab[12] −50), exponent 4 (lab[4] −1), strength ×3 | |
 
-Three corrections to what the filter's inputs suggested: Clear dark DOES darken (≈ 40 % on its
-output, from another layer than the face fill, which is 0); the reference's light Regular is far
-milkier than its fill's 0.2 (black → L 0.235, white → 0.871); and its bevel is a third as wide
-and less deep than ours. Its Regular dark is adaptive with a ceiling ≈ our target (white text
-4.8:1 over pure white), reached by a SOFT knee: our hard clamp at `target` leaves a dark valley
-and a bright band at a backdrop's edge, and is what made its σ read 5 instead of 12. The blur
-agrees with an independent measure (`blur_sigma.py` on a checkerboard, ≤ 13–14 px for Regular).
+The refraction was confirmed against the active Clear, which is nearly sharp and so the most
+reliable reading: from 0 to 12 px of the edge the reference displaces 47/26/17/11/6/1/−3, the lab
+58/21/13/9/4/−1/−3. Corrections to what the filter's inputs suggested: Clear is the SAME in both
+appearances, barely blurred and brighter than its backdrop (≈ ×1.2, saturating at white), not
+darkened; the reference's light Regular is far milkier than its fill's 0.2 but keeps its whites;
+its bevel is a third as wide as ours. Its Regular dark is adaptive with a ceiling (L 0.22; over
+pure white 0.195, white text ≈ 4.2:1) reached by a SOFT knee: our hard clamp at `target` leaves a
+dark valley and a bright band at a backdrop's edge, and is what made its σ read 6 instead of 13.
+Regular's blur (σ 12–13) is the same active or not and agrees with an independent measure
+(`blur_sigma.py`); it is smaller on small shapes (80 pt → 8, 120 → 10, from 160 → 12).
 The fitted recipes are the owner's presets «calibrado — Regular oscuro / claro, Clear oscuro /
 claro» (not in the repo); nothing of it is in the shipped material yet.
 
-Not modelled, or still open: tone hooks per APPEARANCE (lab[0..1] are LAB-only and one pair per
-preset, while the two appearances need different ones — shipping it is a shader change); the
-reference lifts black a little in Regular dark and darkens again over pure white; its corner is
-rounder at the same nominal radius; its 1 px dark contour (lab[15] exists, uncalibrated); how
-refraction scales with size (the ramp cannot be read through Regular's per-pixel adaptive tone,
-so the next reference run needs Clear at several sizes); and a virtual machine's 8-bit captures.
-Which of this ships is the owner's call in the lab, as every change of look is.
+Not modelled, or still open: Clear's gain (no lab control brightens the highs); tone hooks per
+APPEARANCE (lab[0..1] are LAB-only and one pair per preset — shipping it is a shader change);
+Regular's outer shadow in an active window; its smaller blur on small shapes; the reference's
+rounder corner at the same nominal radius; its 1 px dark contour (lab[15], uncalibrated); and the
+display scale — the reference VM is 1× and has no 2× mode, so whether the blur in POINTS changes on
+a Retina screen is unmeasured. Which of this ships is the owner's call in the lab.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 
