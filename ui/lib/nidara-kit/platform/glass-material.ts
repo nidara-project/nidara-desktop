@@ -117,6 +117,25 @@ const TONES: Record<GlassPiece, { dark: GlassTone, light: GlassTone }> = {
     },
 }
 
+/** The tones as the material ships them (a dev instrument starts from them; nothing else
+ *  should need them). */
+export const GLASS_TONES: Readonly<typeof TONES> = TONES
+
+/** The tone stages `glass-tuning.conf` names (`PIECE.FACE.STAGE`). */
+export const TONE_STAGES = ["saturation", "ceiling", "lift", "gain", "washR", "washG", "washB", "washA", "ambient",
+    "ambientLift", "ambientGain"] as const
+
+/** A stage of a tone, by its `glass-tuning.conf` name. */
+export function toneStage(t: GlassTone, stage: typeof TONE_STAGES[number]): number {
+    switch (stage) {
+        case "washR": return t.wash.r
+        case "washG": return t.wash.g
+        case "washB": return t.wash.b
+        case "washA": return t.wash.a
+        default: return t[stage]
+    }
+}
+
 const NEUTRAL_TONE = tone(1, 1, 0, 1)
 
 const DEFAULTS = {
@@ -194,9 +213,6 @@ function params(): GlassParams | null {
     const p = { ...DEFAULTS, ...tuning }
     return { refraction: reduced() ? 0 : p.refraction, lensing: reduced() ? 0 : p.lensing, rim: p.rim }
 }
-
-const TONE_STAGES = ["saturation", "ceiling", "lift", "gain", "washR", "washG", "washB", "washA", "ambient",
-    "ambientLift", "ambientGain"] as const
 
 /** One face of a piece's tone, with what `glass-tuning.conf` says of it. */
 function faceOf(piece: GlassPiece, face: "dark" | "light"): GlassTone {
