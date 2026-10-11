@@ -82,8 +82,11 @@ type PieceId = "barra" | "menu" | "cc" | "dock" | "promo"
 type Scene = "Escritorio" | "Círculo promo"
 interface Glass { frost: number, passes: number, smoke: number, veil: number, saturation: number, rim: number }
 /** `aspect`: "modo" follows the system mode (light veil and dark text in light mode); "oscuro" keeps
- *  the smoke and white text in both — what the reference's Control Center does. */
-interface Piece { glass: Variant, thick: number, aspect: "modo" | "oscuro",
+ *  the smoke and white text in both — what the reference's Control Center does; "fondo" follows the
+ *  BACKDROP: Hyalo measures what is under the piece (the ink event) and turns it to the light veil
+ *  with dark content over a bright backdrop, back to the smoke over a dark one. */
+type Aspect = "modo" | "oscuro" | "fondo"
+interface Piece { glass: Variant, thick: number, aspect: Aspect,
     shadow: { on: boolean, alpha: number, blur: number, dy: number } }
 const FORMATS = { "16:9": [1920, 1080], "1:1": [1080, 1080], "4:5": [1080, 1350], "9:16": [1080, 1920] } as const
 type Format = keyof typeof FORMATS
@@ -100,6 +103,8 @@ interface State {
     regular: Glass
     clear: Glass
     common: { bevel: number, profile: number, strength: number }
+    /** "Según fondo": to dark content above this backdrop luminance, back below the other. */
+    autoInk: { darkAbove: number, lightBelow: number }
     pieces: Record<PieceId, Piece>
 }
 const PIECE_NAMES: Record<PieceId, string> = { barra: "Barra", menu: "Menú", cc: "Centro de Control", dock: "Dock",
@@ -113,12 +118,13 @@ const factory = (): State => ({
     regular: { frost: 1.2, passes: 3, smoke: 0.35, veil: 0.3, saturation: 1.25, rim: 0.5 },
     clear: { frost: 1.0, passes: 1, smoke: 0, veil: 0.1, saturation: 1.3, rim: 0.5 },
     common: { bevel: 30, profile: 4, strength: 1 },
+    autoInk: { darkAbove: 0.35, lightBelow: 0.25 },
     pieces: {
         barra: { glass: "regular", thick: 1, aspect: "modo", shadow: noShadow() },
         menu: { glass: "regular", thick: 1.8, aspect: "modo", shadow: { on: true, alpha: 0.23, blur: 15, dy: 4 } },
         cc: { glass: "regular", thick: 1, aspect: "oscuro", shadow: noShadow() },
         dock: { glass: "regular", thick: 1, aspect: "modo", shadow: noShadow() },
-        promo: { glass: "clear", thick: 1, aspect: "modo", shadow: noShadow() },
+        promo: { glass: "clear", thick: 1, aspect: "fondo", shadow: noShadow() },
     },
 })
 let state = factory()
@@ -146,6 +152,13 @@ const rgb = (c: { r: number, g: number, b: number }) => ({ r: c.r, g: c.g, b: c.
 setMaterialSource({
     glass(native): GlassParams {
         const p = pieceFor(native), g = state[p.glass]
+        if (p.aspect === "fondo") {
+            // Both faces at once: the smoke (alphaMax, held by a target no backdrop is under) while
+            // the content is light, and the light veil (alphaMin — Hyalo's veil for dark content)
+            // once the ink event turns it dark.
+            return { tint: rgb(GLASS_TINT.dark), alphaMin: thicken(g.veil, p.thick), alphaMax: thicken(g.smoke, p.thick),
+                target: -1, refraction: 40, lensing: 0.15, rim: g.rim, saturation: g.saturation }
+        }
         const dark = darkFace(p)
         const a = thicken(dark ? g.smoke : g.veil, p.thick)
         // One strength everywhere (alphaMin = alphaMax, target 1): a smoke or a veil, proportional.
@@ -155,7 +168,10 @@ setMaterialSource({
     ink(native): InkParams | null {
         // Thresholds no backdrop can miss (the kit's trackModeInk recipe): dark face → white text,
         // light face → dark text.
-        const dark = darkFace(pieceFor(native))
+        const p = pieceFor(native)
+        if (p.aspect === "fondo")
+            return { darkAbove: state.autoInk.darkAbove, lightBelow: state.autoInk.lightBelow, tint: rgb(GLASS_TINT.light) }
+        const dark = darkFace(p)
         return { darkAbove: dark ? 2 : -1, lightBelow: dark ? 1.5 : -2, tint: rgb(GLASS_TINT.light) }
     },
     scrim: () => null,
@@ -446,7 +462,7 @@ function loadPreset(name: string): boolean {
         const f = factory()
         // Missing keys take the factory's, so an older preset still loads whole.
         state = { ...f, ...loaded, regular: { ...f.regular, ...loaded.regular }, clear: { ...f.clear, ...loaded.clear },
-            common: { ...f.common, ...loaded.common },
+            common: { ...f.common, ...loaded.common }, autoInk: { ...f.autoInk, ...loaded.autoInk },
             pieces: Object.fromEntries((Object.keys(f.pieces) as PieceId[]).map(id =>
                 [id, { ...f.pieces[id], ...loaded.pieces?.[id], shadow: { ...f.pieces[id].shadow, ...loaded.pieces?.[id]?.shadow } }])) as Record<PieceId, Piece> }
         for (const id of Object.keys(state.pieces) as PieceId[]) {
@@ -717,6 +733,11 @@ function fillBody() {
     page.append(slider("Ancho del bisel (px)", () => state.common.bevel, x => { state.common.bevel = x }, 10, 120, 0))
     page.append(slider("Perfil del bisel", () => state.common.profile, x => { state.common.profile = x }, 1, 9, 1))
     page.append(slider("Fuerza ×", () => state.common.strength, x => { state.common.strength = x }, 0, 3, 2))
+    section("Cambio según el fondo", "Para las piezas con aspecto «Según fondo»: Hyalo mide el punto más oscuro bajo su "
+        + "contenido. Por encima del primer umbral pasan a velo claro con texto e icono oscuros; vuelven por debajo del segundo "
+        + "(el hueco evita el parpadeo). Luminancia 0 = negro, 1 = blanco.")
+    page.append(slider("Pasar a oscuro por encima de", () => state.autoInk.darkAbove, x => { state.autoInk.darkAbove = x }, 0.05, 0.95, 2))
+    page.append(slider("Volver a claro por debajo de", () => state.autoInk.lightBelow, x => { state.autoInk.lightBelow = x }, 0.02, 0.9, 2))
     section("Fondo", "Arrastra el fondo con el ratón donde no hay piezas, o déjalo moverse solo.")
     page.append(toggle("Mover solo", () => state.drift, x => { state.drift = x }))
     page.append(slider("Velocidad", () => state.driftSpeed, x => { state.driftSpeed = x }, 0.2, 4, 1))
@@ -743,8 +764,9 @@ function fillBody() {
         page.append(segmented("Cristal", ["Regular", "Clear"], () => p.glass === "regular" ? "Regular" : "Clear",
             v => { p.glass = v === "Regular" ? "regular" : "clear" }))
         page.append(slider("Grosor (más tinte y escarcha)", () => p.thick, x => { p.thick = x }, 0.5, 3, 2))
-        page.append(segmented("Aspecto", ["Según modo", "Siempre oscuro"], () => p.aspect === "modo" ? "Según modo" : "Siempre oscuro",
-            v => { p.aspect = v === "Según modo" ? "modo" : "oscuro" }))
+        const ASPECTS: [string, Aspect][] = [["Según modo", "modo"], ["Siempre oscuro", "oscuro"], ["Según fondo", "fondo"]]
+        page.append(segmented("Aspecto", ASPECTS.map(a => a[0]), () => ASPECTS.find(a => a[1] === p.aspect)![0],
+            v => { p.aspect = ASPECTS.find(a => a[0] === v)![1] }))
         page.append(toggle("Sombra alrededor", () => p.shadow.on, x => { p.shadow.on = x }))
         page.append(slider("  opacidad", () => p.shadow.alpha, x => { p.shadow.alpha = x }, 0, 0.8, 2))
         page.append(slider("  desenfoque (px)", () => p.shadow.blur, x => { p.shadow.blur = x }, 0, 40, 0))
