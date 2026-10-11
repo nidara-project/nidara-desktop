@@ -52,9 +52,11 @@ an event:
 
 - **`session-started` is not "main() ran".** `main()` re-runs on every UI reload (Super+Shift+R), so
   a bare call there would fire on reloads too — the same trap that got the DnD seeding block deleted
-  from `app.ts` in 2026-08-16. A stamp in `$XDG_RUNTIME_DIR` is what makes the name true: that
-  directory is born with the user's first session and destroyed with their last, so it cannot
-  outlive the session that wrote it and needs no cleanup of ours. It is also the reason this one
+  from `app.ts` in 2026-08-16. A stamp in `$XDG_RUNTIME_DIR` is what makes the name true — but
+  only while it is NEWER than the compositor's display socket (`$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY`),
+  which every login creates afresh and a reload never touches. 🔴 The directory alone is not a
+  login: with lingering on it outlives every logout, and until 2026-10-11 a stamp that merely
+  existed swallowed every login after the first since boot. It is also the reason this one
   event cannot be tested by reloading alone — `nidara-hook --list` carries the command that clears
   the stamp, so nobody has to know the path.
 - **`battery-low` has no natural firing site**, because nothing in the shell *decides* a battery is
