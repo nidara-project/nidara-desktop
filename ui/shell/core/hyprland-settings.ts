@@ -263,19 +263,13 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
     const pushMotion = (reduce: boolean) =>
         hs.evalLua(`hl.config({ animations = { enabled = ${reduce ? false : animBaseline} } })`)
 
-    // ── The glass material's blur (#674): `decoration:blur` size and passes, ONE blur for
-    // the whole compositor. Same baseline rule: the default material shows what the config
-    // asks for, and leaving another one restores that.
-    const shipped: BlurStrength = { size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }
-    let blurBase: BlurStrength = shipped
-    let blurPushed: BlurStrength | null = null
-    let blurSaid = false
+    // ── The blur: `decoration:blur` size and passes, ONE blur for the whole compositor, as
+    // its config sets it. The shell pushes none since the glass material went (2026-10-11).
+    let blurBase: BlurStrength | null = null
     const readBlur = (): BlurStrength => ({
-        size: hs.getOptionInt("decoration:blur:size", shipped.size),
-        passes: hs.getOptionInt("decoration:blur:passes", shipped.passes),
+        size: hs.getOptionInt("decoration:blur:size", GLASS_BLUR.size),
+        passes: hs.getOptionInt("decoration:blur:passes", GLASS_BLUR.passes),
     })
-    const pushBlur = (b: BlurStrength) =>
-        hs.evalLua(`hl.config({ decoration = { blur = { size = ${b.size}, passes = ${b.passes} } } })`)
 
     /** Read once and on every reload (`getoption` is a synchronous spawn: never per measurement). */
     let colour: BlurColour | null = null
@@ -297,17 +291,14 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
             animBaseline = hs.getOptionBool("animations:enabled", true)
             if (reduced) pushMotion(true)
         }
-        if (blurSaid) {
-            blurBase = readBlur()
-            if (blurPushed) pushBlur(blurPushed)
-        }
+        blurBase = null
     })
 
     return {
         setNightLight: setNightLightHyprland,
         readIdle: parseHypridle,
         setIdle: writeHypridle,
-        caps: { animations: true, sharedBlur: true, vrrOnDemand: "fullscreen", windowBackdrop: false, windowControls: false, recordedPointer: false },
+        caps: { animations: true, vrrOnDemand: "fullscreen", windowBackdrop: false, windowControls: false, recordedPointer: false },
 
         // One blur for windows and layers (`decoration:blur`): no switch of its own here.
         readWindowBackdrop: () => true,
@@ -382,19 +373,7 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
             pushMotion(reduce)
         },
 
-        setBlur(b) {
-            if (!blurSaid) {
-                blurSaid = true
-                // Same rule as motion: the live value is the baseline only at the default.
-                if (b === null) { blurBase = readBlur(); return }
-            } else if (b === null && blurPushed === null) {
-                return
-            }
-            pushBlur(b ?? blurBase)
-            blurPushed = b
-        },
-
-        blurBaseline: () => blurBase,
+        blurBaseline: () => blurBase ??= readBlur(),
 
         blurColour() {
             return colour ??= readColour()

@@ -152,7 +152,7 @@ let dirty = false          // changed since
 // to the kit), then replaced as the SOURCE by one that reads this state, per surface.
 registerGlassMaterial({
     reduceTransparency: () => Theme.reduceTransparency,
-    panelBlur: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
+    panelBlur: () => ({ ...GLASS_BLUR }),
     lightMode: () => !state.dark,
     onChange: (cb) => { const id = Theme.connect("changed", cb); return () => safeDisconnect(Theme, id) },
 })

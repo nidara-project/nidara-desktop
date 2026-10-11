@@ -4,7 +4,6 @@ import GLib from "gi://GLib"
 import { ACCENT_HEX, rgbToClosestAccent, type AccentKey } from "./accent"
 import {
   DEFAULT_CONFIG,
-  asGlassMaterial,
   withGlass,
   type NidaraThemeConfig,
 } from "./theme-tokens"
@@ -22,7 +21,7 @@ import {
  *    names live where GNOME keeps them — `accent-color` and `color-scheme` in
  *    `org.gnome.desktop.interface`, `high-contrast` in `…a11y.interface`,
  *    `enable-animations` for reduced motion, and the GTK / icon / cursor theme. The
- *    keys only Nidara has (the glass material, reduce transparency, window transparency) live in
+ *    keys only Nidara has (reduce transparency, window transparency) live in
  *    GSettings `org.nidara.appearance` (#573). Anybody with `gsettings` can write
  *    either; `ThemeManager` (the shell) follows both live.
  *
@@ -113,11 +112,9 @@ function applyPortalKey(state: AppearanceState, ns: string, key: string, raw: un
       state.isDark = v === 1
     }
   } else if (ns === NIDARA_NS) {
-    // The two keys are the choice; the four opacities every painter reads are derived
-    // from them HERE, with the table in theme-tokens.ts, so an app and the shell cannot
-    // disagree about what "frosted" means.
-    if (key === "glass-material") withGlass(Object.assign(state, { glassMaterial: asGlassMaterial(v) }))
-    else if (key === "reduce-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { reduceTransparency: v }))
+    // The two switches; the four opacities every painter reads are derived from them
+    // HERE, with the table in theme-tokens.ts, so an app and the shell cannot disagree.
+    if (key === "reduce-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { reduceTransparency: v }))
     else if (key === "window-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { windowTransparency: v }))
   }
   return JSON.stringify(state) !== before
@@ -175,7 +172,6 @@ function readMirrorState(): AppearanceState | null {
       // DEFAULT_CONFIG ships. Defaulting the other way makes an unreadable file
       // look like a deliberate dark session.
       isDark: raw.isDark === true,
-      glassMaterial: asGlassMaterial(raw.glassMaterial),
       reduceTransparency: raw.reduceTransparency === true,
       // `!== false`: window transparency is ON by default, and a mirror written before the key
       // existed must not turn it off.

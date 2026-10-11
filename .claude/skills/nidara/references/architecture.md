@@ -1710,11 +1710,11 @@ channel, and the second channel is where the bugs lived.
 | high contrast | gsettings `org.gnome.desktop.a11y.interface high-contrast` | `org.freedesktop.appearance contrast` |
 | reduced motion | gsettings `…interface enable-animations` (inverted) | `org.freedesktop.appearance reduced-motion` |
 | fonts, icon theme, cursor | gsettings `…interface` | `org.gnome.desktop.interface` (served by the gtk backend) |
-| glass material / reduce transparency / window transparency (#674) | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there — the four glass opacities are DERIVED by each reader from the kit's tables, never served |
+| reduce transparency / window transparency (#674; the glass material choice is retired, 2026-10-11) | gsettings `org.nidara.appearance` (#573) | `org.nidara.appearance` (same kebab-case names), served ONLY there — the four glass opacities are DERIVED by each reader from the kit's tables, never served |
 
 Every key in this table is read by `ThemeManager` FROM its home and followed through `changed::`, so
-`gsettings set … accent-color pink`, `… icon-theme Adwaita` or `org.nidara.appearance glass-material
-frosted` from a terminal or an agent changes the whole desktop live — as in GNOME. There is no
+`gsettings set … accent-color pink`, `… icon-theme Adwaita` or `org.nidara.appearance
+reduce-transparency true` from a terminal or an agent changes the whole desktop live — as in GNOME. There is no
 `appearance.json` any more: until #534 (accent, mode) and #536 (icon / cursor / GTK theme) every
 start copied that file OVER gsettings, which made the file the real home and silently reverted such
 a change at the next login; its Nidara-only keys were imported into `org.nidara.appearance` once

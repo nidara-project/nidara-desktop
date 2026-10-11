@@ -93,7 +93,7 @@ setKitAppearance({
 let labAppearanceDark = true
 registerGlassMaterial({
     reduceTransparency: () => Theme.reduceTransparency,
-    panelBlur: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
+    panelBlur: () => ({ ...GLASS_BLUR }),
     // Backdrop-driven Regular chooses its light or dark treatment with the same ink event,
     // regardless of the system mode. Mode-bound roles still follow the system appearance.
     lightMode: () => !labAppearanceDark && !(state.variant === "regular" && effectiveInk() === "fondo"),
@@ -1259,7 +1259,7 @@ function fillControls() {
             if (Math.abs(v - candidateDefault(key)) < 1e-6) delete tuning[key]; else tuning[key] = v
             apply()
         }, { decimals, debounce: 0 })
-    // The frost: the panels' blur, which the shell takes from Settings' glass material.
+    // The frost: the panels' blur, which the shell takes from the compositor (`GLASS_BLUR`).
     const frostSlider = (key: "blurSize" | "blurPasses", title: string, sub: string, min: number, max: number,
         neutral: number, decimals: number) =>
         SliderRow(title, sub, state.tuning[state.variant][key] ?? neutral, min, max, v => {

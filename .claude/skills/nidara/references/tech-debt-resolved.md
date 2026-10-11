@@ -1776,8 +1776,9 @@ became ONE choice of three — `glass-material` = clear / regular / frosted — 
 TABLE (`GLASS_FLOORS` in the kit's `theme-tokens.ts`), so the dock can sit thinner than a panel
 full of text and nothing claims a uniformity it does not have. The windows the question began with
 left the material altogether: they are not part of the glass material, and have their own switch
-(`window-transparency`). The four opacities are derived, stored nowhere. `design-system.md` →
-"Opacity — one glass material of three…" has the model.
+(`window-transparency`). The four opacities are derived, stored nowhere. 2026-10-11: the choice of
+three is retired too (owner) — one set of values, its old `regular`; `design-system.md` → "What the
+user picks: two switches, and no glass style" has the model.
 
 ### 84. ✅ RESOLVED — the bubble spoke a second dialect of the same curve, and of the same rim (2026-08-23)
 

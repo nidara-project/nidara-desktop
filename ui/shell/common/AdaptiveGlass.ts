@@ -1,7 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
-import { glassBlurInForce } from "../core/GlassBlur"
 import compositor, { settings } from "../core/CompositorState"
 import Wallpaper from "../core/WallpaperManager"
 import Gdk from "gi://Gdk?version=4.0"
@@ -209,7 +208,7 @@ const floorOf = (role: GlassRole) =>
     role === "bar" ? Theme.barOpacity
         : role === "dock" ? Theme.dockOpacity
             : role === "launcher"
-                ? Math.max(Theme.overlayOpacity, GLASS_ROLE_FLOORS[Theme.glassMaterial].launcher)
+                ? Math.max(Theme.overlayOpacity, GLASS_ROLE_FLOORS.launcher)
                 : Theme.overlayOpacity
 
 /** The least a surface can wear: its slider. */
@@ -342,9 +341,7 @@ let blur: HyprlandBlurParams = NIDARA_BLUR
 function readBlur() {
     blur = {
         ...(settings.blurColour() ?? UNPROCESSED),
-        // Not asked of the compositor: the glass material moves it with `hl.config`, which
-        // raises no "config-reloaded" to re-read on (#674, core/GlassBlur.ts).
-        passes: Math.max(1, glassBlurInForce().passes),
+        passes: Math.max(1, settings.blurBaseline().passes),
     }
 }
 

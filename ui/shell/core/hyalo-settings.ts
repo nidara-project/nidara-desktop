@@ -68,7 +68,7 @@ function hyaloVrr(vrr: number): HyaloVrr {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: true, sharedBlur: false, vrrOnDemand: "games", windowBackdrop: true, windowControls: true, recordedPointer: true },
+        caps: { animations: true, vrrOnDemand: "games", windowBackdrop: true, windowControls: true, recordedPointer: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -182,8 +182,7 @@ export function createHyaloSettings(): CompositorSettings {
         // enabled` off while reducing; not reducing REMOVES the key, so the layers below — the
         // user's own hyalo.toml included — say again what they said, never a hard-coded "on".
         setReduceMotion(reduce) { patch("reduce motion", { animations: { enabled: reduce ? false : null } }) },
-        setBlur() { /* caps.sharedBlur: Hyalo's blur is per surface (#684) */ },
-        blurBaseline: () => ({ size: GLASS_BLUR.regular.size, passes: GLASS_BLUR.regular.passes }),
+        blurBaseline: () => ({ ...GLASS_BLUR }),
         // The shell's surfaces declare no material yet (#684), so Hyalo does nothing to the
         // backdrop's colour: the glass lies on the wallpaper as it is.
         blurColour: () => null,

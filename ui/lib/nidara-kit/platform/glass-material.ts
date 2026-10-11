@@ -33,7 +33,7 @@ import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, t
  * A pane whose content the backdrop turns dark (the ink) takes the light face of its piece.
  *
  * Reduce transparency makes every pane solid: a wash of the skin's own colour. The panels'
- * blur is the bundle's to say (the shell's follows Settings' glass material, `GlassBlur.ts`).
+ * blur is the bundle's to say (the shell's is the compositor's own, `GLASS_BLUR` in theme-tokens.ts).
  * A large pane (PIECE panel) blurs one pass further than the small ones beside it, whatever
  * that material: the reference's large floating glass (its menu, a popover, a 220×150 panel)
  * spreads a 0.4|0.6 edge to σ 7.25–8 pt where its buttons and toolbar groups stay at 4.75, and

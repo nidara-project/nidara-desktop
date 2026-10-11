@@ -122,7 +122,7 @@ inkLightBelow veilStrength veilFalloff veilExponent`, one stage of one tone as `
 `tone = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
-(`GLASS_BLUR`, the material selector). Hyalo's dual kawase is Hyprland's: the down-sample's taps
+(`GLASS_BLUR`). Hyalo's dual kawase is Hyprland's: the down-sample's taps
 at `size` source texels, the up-sample's at ¼ and ½ of that. Until 2026-10-02 the up-sample's sat
 four times as far, and 2:2 blurred a step edge over 28 px against Hyprland's 12 (owner-caught:
 "1:2 here blurs more than Hyprland's 2:2"). Measured since on the real GPU, nested, glass off,
@@ -712,7 +712,7 @@ and the reference's Applications panel was never read from its filter.
   its own blur's reach; a fusion group is one silhouette whatever its members' blurs, and takes
   the widest. `msg layers` lists each shape's blur (`blurs`, "size:passes").
 - **The kit** (`MaterialSource.pieceBlur`, `glass-material.ts`): `panel` → the surface's blur
-  plus one pass, whatever the material Settings chose; a popover is already blurred so as a
+  plus one pass; a popover is already blurred so as a
   whole surface (`popoverBlur`), so its panes ask nothing. Tuned live: `panelBlur = SIZE:PASSES`.
 
 ### The veil under the Control Center (2026-10-11)
@@ -1770,7 +1770,7 @@ than failing.
 displays, workspace modes, reduce motion, the glass's blur, the groupbar accent —
 goes through `settings` (`CompositorSettings`, exported by CompositorState.ts), and the modules
 that own those settings (InputConfig, MonitorConfig, WorkspaceModes, ReduceMotion,
-GlassBlur, AdaptiveGlass, AppearanceSync) name no compositor. Each backend applies live AND
+AdaptiveGlass, AppearanceSync) name no compositor. Each backend applies live AND
 persists in its own layer: `core/hyprland-settings.ts` (the `nidara-*.lua` files, `hl.config`
 evals, the baselines below) and `core/hyalo-settings.ts` (`settings` patches). Hyprland's
 sensitivity and acceleration profile reach every pointing device; Hyalo has them per kind, so

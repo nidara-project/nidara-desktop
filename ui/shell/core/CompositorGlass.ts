@@ -1,6 +1,6 @@
 import Theme from "./ThemeManager"
 import { safeDisconnect } from "./signals"
-import { glassBlurInForce } from "./GlassBlur"
+import { settings } from "./CompositorState"
 import { registerGlassMaterial } from "../../lib/nidara-kit/platform/glass-material"
 
 /**
@@ -9,11 +9,11 @@ import { registerGlassMaterial } from "../../lib/nidara-kit/platform/glass-mater
  * come from the shell's Settings.
  */
 
-/** Called once from core/AppearanceSync.ts, beside the blur. */
+/** Called once from core/AppearanceSync.ts. */
 export function initCompositorGlass() {
     registerGlassMaterial({
         reduceTransparency: () => Theme.reduceTransparency,
-        panelBlur: glassBlurInForce,
+        panelBlur: () => settings.blurBaseline(),
         // The dock's glass follows the system mode (`trackModeGlass`, owner 2026-10-08).
         lightMode: () => !Theme.isDark,
         onChange: (cb) => {
