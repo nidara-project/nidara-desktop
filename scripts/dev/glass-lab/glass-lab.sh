@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# The glass lab (lab.ts): the shell's glass pieces on a Hyalo of their own.
+# The glass lab: the shell's glass on a Hyalo of its own. By default the desktop mock-up
+# (maqueta.ts: one glass, Regular and Clear, per-piece properties); --classic, the older bench
+# (lab.ts: promo exports, video, A/B, the readings).
 #
 #   scripts/dev/glass-lab/glass-lab.sh                       a window on your desktop
 #   scripts/dev/glass-lab/glass-lab.sh --headless OUT.png    nothing on screen: one capture,
@@ -18,6 +20,10 @@
 #             --bin PATH      the Hyalo to draw on (default: the lab build, else the installed one)
 #             --no-dev-shader the shader compiled into Hyalo, no LAB hooks (the parity check: at
 #                             the lab's neutral values both must draw the same pixels)
+#             --classic       the older bench (lab.ts) instead of the mock-up
+#             --scene NAME    mock-up: «Escritorio» or «Círculo promo»;  --light: light mode
+#             --batch FILE    with --headless: one capture per line `NAME<TAB>BACKDROP` into
+#                             dirname(OUT)/NAME/window.png, in one session (calibrate.sh uses it)
 #
 # Nothing it does reaches your session: Hyalo runs nested (a window, or inside a headless
 # cage) with HYALO_CONFIG=/dev/null and a settings file of its own, so no binding or setting of
@@ -28,7 +34,7 @@ set -euo pipefail
 here=$(dirname "$(realpath "$0")")
 repo=$(realpath "$here/../../..")
 
-headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size="" scale=""
+headless="" out="" preset="" bg="" show="" bin="" devshader=1 export="" size="" scale="" batch="" app=maqueta scene="" light=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --headless) headless=1; out=$(realpath -m "$2"); shift ;;
@@ -40,6 +46,10 @@ while [ $# -gt 0 ]; do
         --export) export="$2"; shift ;;
         --size) size="$2"; shift ;;
         --scale) scale="$2"; shift ;;
+        --batch) batch=$(realpath "$2"); shift ;;
+        --classic) app=lab ;;
+        --scene) scene="$2"; shift ;;
+        --light) light=1 ;;
         *) echo "glass-lab: unknown option $1" >&2; exit 2 ;;
     esac
     shift
@@ -59,12 +69,17 @@ touch "$sb/home/.config/nidara/.dev" "$sb/home/.config/nidara/glass-tuning.conf"
 # The glass shader itself, LINKED: an edit to it shows in the lab as it is saved (Hyalo recompiles
 # it, keeping the last one that compiled), with its LAB hooks live (glass_gl.rs's LAB_ON).
 ln -s "$repo/hyalo/compositor/src/render/glass_final.glsl" "$sb/shaders/glass_final.glsl"
-"$repo/scripts/bundle.sh" --js "$here/lab.ts" "$sb/lab.js" >/dev/null
+# --batch and --show are the classic bench's (its own exports pass --classic).
+[ -n "$batch$show" ] && app=lab
+"$repo/scripts/bundle.sh" --js "$here/$app.ts" "$sb/lab.js" >/dev/null
 
 # No config of yours — and no idle: with the defaults a lab left alone went dark at five minutes
 # and would have started the lock screen INSIDE itself at ten.
 printf '[idle]\nscreen_off = 0\nlock = 0\nsuspend = 0\n' > "$sb/hyalo.toml"
 export HYALO_CONFIG="$sb/hyalo.toml" HYALO_SETTINGS="$sb/hyalo-settings.toml"
+# This nested compositor alone gives the optional area dim the largest pane's corner radius;
+# production region geometry retains its established behavior.
+export HYALO_LAB_AREA_DIM=1
 if [ -n "$devshader" ]; then export HYALO_SHADER_DIR="$sb/shaders"; else unset HYALO_SHADER_DIR; fi
 lab_env=(
     HOME="$sb/home" XDG_CONFIG_HOME="$sb/home/.config" GSETTINGS_BACKEND=memory NIDARA_GREETER_MIRROR_DIR="$sb/mirror"
@@ -73,7 +88,7 @@ lab_env=(
     HYALO_SHADER_DIR="$sb/shaders" GLASS_LAB_HYALO="$bin"
     GLASS_LAB_PRESETS="${GLASS_LAB_PRESETS:-${XDG_DATA_HOME:-$HOME/.local/share}/nidara/glass-lab}"
     GLASS_LAB_WALLPAPERS="$repo/defaults/wallpaper" GLASS_LAB_PRESET="$preset" GLASS_LAB_BG="$bg" GLASS_LAB_SHOW="$show"
-    GLASS_LAB_SHOT="$out" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
+    GLASS_LAB_SHOT="$out" GLASS_LAB_BATCH="$batch" GLASS_LAB_SCENE="$scene" GLASS_LAB_LIGHT="$light" GLASS_LAB_WITH_CONTROLS="${GLASS_LAB_WITH_CONTROLS:-}" GLASS_LAB_OUT="${GLASS_LAB_OUT:-}" GLASS_LAB_SIZE="$size" GLASS_LAB_EXPORT="$export" GLASS_LAB_TEST_EXPORT="${GLASS_LAB_TEST_EXPORT:-}" GLASS_LAB_SHOT_DELAY="${GLASS_LAB_SHOT_DELAY:-}" GLASS_LAB_DEBUG="${GLASS_LAB_DEBUG:-}" NIDARA_MATERIAL_DEBUG="${GLASS_LAB_DEBUG:-}"
 )
 lab="env $(printf '%q ' "${lab_env[@]}") gjs -m $sb/lab.js"
 # The output's scale, set before the lab connects (`msg` answers once it is applied).
@@ -105,9 +120,10 @@ cat > "$inner" <<INNER
 $mode
 "$bin" --winit -c "$lab" >"$sb/hyalo.log" 2>&1 &
 pid=\$!
-for _ in \$(seq 1 $([ -n "$export" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
+for _ in \$(seq 1 $([ -n "$export$batch" ] && echo 4800 || echo 120)); do [ -f "${out%.png}.txt" ] && break; sleep 0.25; done
 kill \$pid
 INNER
 chmod +x "$inner"
 env -u DISPLAY WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 cage -d -- "$inner" 2>&1 | grep -v -E 'EGL|GLES|extensions' || true
+if [ -n "$batch" ] && [ -f "${out%.png}.txt" ]; then tail -n +2 "${out%.png}.txt"; exit 0; fi
 if [ -f "${out%.png}.txt" ]; then tail -n +2 "${out%.png}.txt"; else echo "glass-lab: no capture (Hyalo log: $sb/hyalo.log)" >&2; cat "$sb/hyalo.log" >&2; exit 1; fi

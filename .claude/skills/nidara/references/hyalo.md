@@ -254,6 +254,21 @@ joins); the smoke requires the bar to declare one.
 
 ### The glass lab (`scripts/dev/glass-lab/`)
 
+🔑 **Since 2026-10-11 the lab opens on the desktop MOCK-UP (`maqueta.ts`)** — the owner's request after
+a day of a bench "that punishes its user": a model of the desktop (the bar's real capsules, a menu held
+open, the Control Center's real tiles, the dock's pill) over a wallpaper, each piece a layer surface of
+its own so each wears its own glass. The model it is built on: ONE glass with two variants (Regular,
+Clear: frost, a proportional dark smoke, a light veil, saturation, rim), and per piece its variant, a
+thickness (compounds the tint, a little more frost), its aspect (follows the mode / always dark, as the
+reference's Control Center) and a shadow AROUND it (CSS outset box-shadow). It is the MATERIAL SOURCE
+itself (`setMaterialSource` after `registerGlassMaterial`): per-surface `GlassParams` from its state, no
+glass-tuning.conf; what is global in Hyalo (bevel width, profile, strength: lab[12], lab[4], lab[5]) is
+one section, "Refracción (común)". A fixed header (preset shown by name, Guardar / Guardar como, mode,
+scene, backdrop) over a scrolling column; presets in `glass-lab/maqueta/`, whole state.
+`install-desktop.sh` puts it in the app grid. `--classic` opens the older bench (lab.ts, below — the
+promo exports, the readings, `--batch`); `GLASS_LAB_WITH_CONTROLS=1` keeps the column in a headless
+capture.
+
 Where the material is tuned with the owner, and where it EVOLVES (owner, 2026-10-05: "it has to
 be kept, to go on evolving it"). The factory glass of #745 came out of it: the owner set it there,
 and it went to the code the same day, measured equal. It is the shell's own pieces — bar groups,
@@ -357,6 +372,228 @@ message was read with the wrong arguments, and the shell hung on its first frame
 `protocols/mod.rs` now `include_bytes!`s every XML it generates from — a new protocol there
 needs its line too. And a new request goes at the END of its interface, with `since`: inserting
 one renumbers every request after it, and an older client then speaks a different protocol.
+
+### Fluid Crystal: evidence before assigning roles (2026-10-10)
+
+`ui/lib/nidara-kit/platform/fluid-crystal.ts` defines Nidara's semantic vocabulary. Its four
+axes are distinct: `variant` (Regular or Clear), `profile` (a Nidara UI role), `ink` (foreground
+policy), and `elevation` (spatial separation). Light and dark are appearances of both variants,
+not two more variants. A profile must not silently choose a new variant or a measured density.
+Backdrop dimming is still missing from the semantic contract, so the four-axis presets must not
+be treated as complete production recipes.
+
+The private `glass-probe` reference runs `37729946989` and `38056119736` passed their validity
+checks. The latter captured all 27 scenarios on macOS 27.0.1 (26A434): Regular and Clear in both
+appearances, each with a `.primary` text label over white, black and a four-colour backdrop.
+Across the three backdrops, a given variant and appearance had identical filter inputs; the
+rendered pixels changed with the backdrop. Regular and Clear had distinct filter recipes in
+both appearances. The `glassBackground` values are inputs to Apple's filter, **not** total
+opacity or a recipe that can be copied numerically into Hyalo. In particular, Regular light's
+face fill alpha 0.2 does not prove our `alphaMin = 0.2`.
+
+The new captures show why ink must remain a separate axis. The probe's `.primary` label follows
+the light/dark appearance; it does not automatically switch to the better foreground over each
+backdrop. On a white backdrop in dark appearance, an approximate central text-to-glass contrast
+is 4.0:1 for Regular and 1.5:1 for Clear; on black in light appearance it is 5.0:1 for Regular
+and 2.1:1 for Clear (8-bit SDR window captures, single text sample; see `glass-probe` findings
+for the sampling method). These are evidence of a failure mode, not accessibility certification
+for a whole panel. A fixed light ink on Clear over bright media needs its own dimming or another
+legibility treatment. Regular also needs contrast checks; selecting it alone is no guarantee.
+
+Still unmeasured: how much dimming Clear needs on real media, motion and interaction across
+backdrops, and the claimed density/elevation of Nidara's launcher, popover, CC and NC. `compact`,
+`panel`, `launcher`, `popover`, `tile` and `media` are Nidara design roles, not macOS filter variants.
+Apple's public materials guidance describes Regular as the general adaptive choice, especially
+for text-heavy panels, and Clear as a highly translucent choice over rich media that needs
+dimming for legibility. Apple also says larger elements such as menus and sidebars become thicker,
+with softer scattering and deeper shadows; this is a size/context behavior, not a new variant.
+The macOS probe measured different blur inputs for Regular and Clear at different backdrop
+sampling scales, so it does not establish equal physical frost or a direct Hyalo blur mapping.
+Regular's shadow responds to backdrop complexity: Apple's example strengthens it over text and
+reduces it over a solid light background. Therefore assigning CC/NC to Clear and removing their
+backing shadow is an unverified proposal, not a result of this probe.
+
+Next gate: use the Lab to compare Nidara's appearances under the same backdrops and sizes,
+including text contrast, while keeping its preview/export equivalence. Only after that
+comparison should a role mapping or numerical recipe be promoted to the shell and Hyalo. The
+current `trackFluidCrystal` registry picks one
+spec per `Gtk.Native`, while the bar now holds several different panel roles in one surface;
+per-pane selection needs a defined protocol path before that mapping can work in the shell.
+The existing Lab already runs headless with its one scene surface. Its factory Control Center
+on pure white measured 2.93:1 for the Brightness label and 3.51:1 for Wi-Fi/Bluetooth (2026-10-10,
+`--show 'centro de control' --bg blanco`); on black the same Wi-Fi/Bluetooth labels measured
+13.08:1. The white capture also showed a broad grey scrim around the controls. This is a baseline
+failure to tune, not a Clear or Regular validation. Compare candidate variants one at a time on
+that scene and preserve the existing backdrop and controls surfaces; do not create a native
+window for every glass specimen.
+
+The Lab now does that comparison on its EXISTING scene surface (`lab.ts`): a Regular/Clear
+selector, the system appearance toggle, and separate tuning maps for the two candidates in
+presets. Both start at the Lab's 3:3 frost to hold that variable constant for an initial A/B;
+this is a test condition, not a measured equivalence with Apple's blur. Regular keeps the
+factory's adaptive dark tint; Clear now has no dark tint, saturation 1, and a separate 0.05
+light-mode white veil as an unmeasured candidate. These Clear numbers are trials, not
+Apple's filter parameters. The first Clear dim trial darkened each pixel INSIDE its glass
+silhouette: on white it improved contrast but made the glass look like a dark piece on a white
+field. That was the wrong visual relationship. Apple's public guidance asks developers to
+CONSIDER adding a dark layer BEHIND Clear components (35% over bright content); the layer is
+not an automatic part of `.clear`. Its design video allows localizing the layer.
+
+The Lab now separates **variant, system appearance, ink policy and backdrop treatment**. A
+single isolated specimen uses `inkPolicy`: the role default is system-mode ink on the bar,
+island/dock and large panel; fixed white in CC/NC; backdrop measurement for controls/media.
+The dock on this bench is only a shape/icon substitute; it uses the Lab's mode ink to match
+the shell's visible light/dark switch, while the real Dock uses its own mode skin.
+The alternatives system/white/backdrop can be chosen with either variant. `backdropPolicy`
+starts at "ninguna"; "según rol" compares the shell's CURRENT scrim on CC/NC and none
+elsewhere; "sombra shell" and "dim experimental" are explicit alternatives. The experimental dim starts
+at max 0.35, target 0.183, outer falloff 80 px. Hyalo's existing scrim measurement chooses the
+least opacity toward the target, capped by `areaDim.max`. The current solver reads the glass
+target internally; the Lab overrides it only while an exterior layer is selected. Do not
+mistake this internal coupling for a property of either Apple variant. "Sombra shell" is an
+unmeasured Nidara baseline, not a reconstruction of Apple's elevation shadow. The overview
+"todas" remains a shape/layout comparison: one Wayland surface carries one material recipe,
+so it cannot represent mixed variants and policies faithfully. The fresh Lab opens at "barra"
+without any backdrop layer to encourage isolated comparisons. The Lab's experimental bar dim
+can span the 40 px exclusive strip and fade through the following 4 px gap: `trackScrimRegion`
+has an opt-in exact-widget-bounds option, and the nested Lab compositor alone gives such a
+very wide shallow region square corners. This is a candidate, not a measured Apple bar rule.
+In the headless white-backdrop trial, Clear + this band + system-mode ink reached 2.32:1
+in dark mode and visibly formed a grey strip. The owner expects the area strip to turn grey
+on an extreme white backdrop; the unresolved point is the foreground contrast, not that
+area colour. Light mode chose dark ink and drew no band. Keep this candidate in the Lab for
+comparison, not in the shell. The promo Regular specimen has a separate outer elevation
+shadow control; its scrim modes remain backdrop treatments.
+
+The nested Lab compositor alone sets `HYALO_LAB_AREA_DIM=1` to give shared regions the largest
+pane's corner radius; the production compositor's region geometry stays as before. Apple's
+guidance does not specify the layer's geometry, so this region remains a Nidara experiment.
+In an earlier enabled Clear trial against pure white, Wi-Fi/Bluetooth rose only from 1.13:1 to
+2.36:1 at the 0.35 cap; the blue selected Brillo tile still needs separate contrast treatment.
+A 35% layer is guidance, not proof of accessible contrast on arbitrary backgrounds. The old
+in-glass dim use of `lab[2]` stays retired. The Lab reuses `lab[2]` and `lab[3]` only for a
+Regular tint-fade trial: with backdrop-driven ink, its dark tint fades from
+`regularFade.start` to `inkDarkAbove`, reaching zero before the ink event. This is a Lab shader
+hook and does not change the shipped Hyalo shader. The ink event and Gtk/Cairo content still
+change discretely; this tests the optical discontinuity, not a continuous-ink protocol. The
+trial is now off by default. On `promo: logo`, backdrop-driven Regular instead uses the same
+Hyalo ink event to switch the whole logo, a Lab-only light veil (`lab[7]`, initially 0.20) and
+an outer shadow (initially alpha 0.18), leaving the background behind the disc alone. The
+Lab's Regular backdrop policy stays adaptive even in system light mode. The shadow is painted
+in the GTK surface outside the compositor's glass silhouette, using the shared shadow painter;
+the product's compositor-glass shadows remain off. The split backdrop's two-colour logo is a
+separate trial without a whole-logo ink event, so it must not be read as evidence of a synced
+Regular transition. These values await the owner's visual calibration, not a shell promotion.
+The `gris variable` backdrop maps its slider to linear WCAG luminance to expose the threshold.
+The Clear candidate starts with no dark tint, but since the calibration (below) a preset's tint
+is no longer forced to zero — only its target is (Clear never adapts); its light-mode white veil
+and optional backdrop area dim stay separate. `areaDim` persists its knobs
+in presets; legacy `clearDim` area values retain their tuning, while older two-field in-glass
+values are discarded. Old `areaDim.enabled` becomes an explicit "dim experimental" choice.
+Old flat tuning presets load into Regular's tuning map; their old ink thresholds remain and the
+new tint fade starts disabled. The production material is unchanged.
+The one-surface-per-variant comparison does not solve the per-pane protocol requirement for
+mixed variants in the production bar or shell.
+
+The Lab's trial ink crossover is 0.18 to dark / 0.14 back to white, with Regular's dark-tint
+fade beginning at 0.14. On a uniform grey bar with no backdrop layer, headless captures at
+L=0.17 and 0.19 measured 4.81:1 white ink and 4.82:1 dark ink. The older 0.35 threshold plus
+a tint fade left only 2.68:1 at L=0.34, despite the material looking smoother. These numbers
+are one static specimen, not a guarantee on a patterned wallpaper or during an ink transition.
+At the same static settings, the Lab reported 21.00:1 with dark ink on pure white, 14.29:1
+on its synthetic page of text, 5.39:1 on `wallpaper.jpg` and 10.34:1 on
+`wallpaper-chroma.jpg`. Clear with no area dim and fixed white ink on pure white left the
+backdrop at L=1.000 and the ink at 1.00:1, which is the explicit role-policy failure to solve
+outside that material.
+At the present protocol's boolean ink event, Gtk text and Cairo icons still switch at once;
+continuous text color would cross through low-contrast middle greys without an additional
+legibility treatment. The optical trial should not be mistaken for that completed ink behavior.
+
+The Lab's **promo circle over `mitad blanco/negro`** has a separate ink experiment (2026-10-10).
+The existing `punto más oscuro` choice asks Hyalo to sample the icon's ink box; one black
+sample changes the WHOLE symbolic mark to white, even while its strokes still lie on white.
+At the split centred in a 320 px promo capture, that left a sampled logo pixel white on white
+(1:1). `tinta por zona` is now the Lab default for this backdrop: two copies of the same
+symbolic mark inherit the light and dark token skins and a custom Gtk widget clips them at
+the exact vertical backdrop boundary. As the boundary crosses the circle, black strokes stay
+on its white side and white strokes on its black side; the mark changes spatially, without
+a whole-glyph threshold or a middle-grey blend. `trackNoInk` keeps Hyalo's binary event from
+recolouring both copies. This uses the synthetic split's known geometry and remains a Lab
+comparison; arbitrary photographs require a compositor-side luminance map or a different
+content treatment. The ordinary `Medir` path assumes a single ink and is disabled for this
+two-colour trial. The shell's ink protocol and product behaviour are unchanged.
+
+### Calibrated against the reference (2026-10-11)
+
+The filter's numbers that the private `glass-probe` dumps are INPUTS to the reference's own
+pipeline (sampling at ¼ or ½, curves of its own) and do not transfer. Its calibration set measures
+the OUTPUT instead: known backdrops under a 240 pt square — nine greys, six colours, a black|white
+and a 0.4|0.6 edge, linear ramps in x and y — each also captured with no glass, from which the
+input is read. Its `tools/calibrate.py` turns a run into a tone curve, a 3×4 colour map, the blur's
+σ and the refraction's displacement by depth; `tools/compare.py` sets two runs side by side.
+
+The lab draws the SAME set, so a lab run and a reference run compare capture by capture:
+`--show calibración` (the same square, radius 30, empty, no shadow; `calibración: sin cristal`
+for the reference capture), `--bg "cal <kind>"` (`level:V`, `rgb:RRGGBB`, `edge`, `edge:LO:HI`,
+`ramp-x`, `ramp-y`), and `scripts/dev/glass-lab/calibrate.sh OUTDIR [--preset F] [--combos …]`,
+which writes the reference's directory names. `glass-lab.sh --batch FILE` takes every capture of
+one recipe in ONE session (95 captures in ≈ 90 s; starting Hyalo was most of a capture's cost).
+
+⚠️ **The reference is an ACTIVE window.** The first two calibration runs had an inactive one,
+and an inactive window's glass is a different, frosted material (Clear σ 20.7 instead of 1.5;
+still glass, not a solid fill). Owner-caught 2026-10-11 ("almost readable text under the glass"
+against a grey block); the probe now checks it (`window.json`).
+
+What the fit found against the active reference (CI 38095860773; error = RMS of output luminance
+over the greys, |Δσ| on the 0.4|0.6 edge, RMS displacement over depths 4…30 after removing the
+method's constant offset):
+
+| recipe | #780 lab candidates | fitted | error before → after (tone · σ · refraction) |
+|---|---|---|---|
+| Regular dark | target 0.183 hard clamp, `3:3` | `2.9:3`, tone knee 0.06 → ceiling 0.24 (lab[0..1]) | 0.024→0.025 · 6.5→1.0 |
+| Regular light | light veil 0.2 | veil 0.6 | 0.222→0.035 · 1.0→1.0 |
+| Clear (both modes) | no tint, `3:3` | `1.5:1` (the owner's pick by eye: σ 1.76 against 1.51), no tint, saturation 1.3, light veil 0.1 | dark 0.103 · 12.6→0.25 · 28.3→5.3; light 0.092→0.079 · 12.6→0.4 · 28.9→3.5 |
+| refraction (all) | bevel up to 80 px, exponent 5 | bevel 30 px (lab[12] −50), exponent 4 (lab[4] −1), strength ×3 | |
+
+The refraction was confirmed against the active Clear, which is nearly sharp and so the most
+reliable reading: from 0 to 12 px of the edge the reference displaces 47/26/17/11/6/1/−3, the lab
+58/21/13/9/4/−1/−3. Corrections to what the filter's inputs suggested: Clear is the SAME in both
+appearances, barely blurred and brighter than its backdrop (≈ ×1.2, saturating at white), not
+darkened; the reference's light Regular is far milkier than its fill's 0.2 but keeps its whites;
+its bevel is a third as wide as ours. Its Regular dark is adaptive with a ceiling (L 0.22; over
+pure white 0.195, white text ≈ 4.2:1) reached by a SOFT knee: our hard clamp at `target` leaves a
+dark valley and a bright band at a backdrop's edge, and is what made its σ read 6 instead of 13.
+Regular's blur (σ 12–13) is the same active or not and agrees with an independent measure
+(`blur_sigma.py`); it is smaller on small shapes (80 pt → 8, 120 → 10, from 160 → 12).
+The fitted recipes are the owner's presets «calibrado — Regular oscuro / claro, Clear oscuro /
+claro» (not in the repo); nothing of it is in the shipped material yet.
+Over a page of text (the probe's `page` set, CI 38099090759) the reference's Regular dark came out a
+solid grey block and only Clear let the text be read. ⚠️ That capture does NOT show how the glass
+looks on a real screen: the VM is 1×, and since the reference's blur is in DEVICE pixels its σ ≈ 13
+there wipes out lines 26 px apart (< 1 % of their contrast left; ≈ 30 % at 2×, > 50 % at 3×).
+🔑 **Owner, 2026-10-11: Regular and Clear are REAL glass** — Regular frosted, Clear clearer, always —
+and a pane never turns into a painted grey block: over a newspaper, glass shows the newspaper.
+So a dark tint is a SMOKE, linear (`alphaMin = alphaMax`, `target` 1), never a per-pixel ceiling
+that flattens everything bright to one grey; and the blur aims at the Retina look in logical px.
+The «cristal real — …» presets carry it (Regular dark smoke 0.6, white text ≈ 6:1 over a white
+page; Regular `1.2:3`; Clear `1.0:1`), awaiting the owner's eye.
+
+🔑 **The better reference is the reference's own Figma kit, not the VM** (2026-10-11). The macOS 26
+community kit (`LKYsrYxCaH9NWaLMGGn3ZB`, page «Materials») lays glass of three sizes over columns of
+known colour, and Figma draws it with a real GPU at 1 px = 1 pt. Measured (glass-probe FINDINGS):
+dark = a PROPORTIONAL smoke that keeps the colour under it (medium ≈ 0.9·backdrop − 0.095 in sRGB,
+large ≈ ×0.48; black stays black), light = a white veil (medium ≈ 0.6, large ≈ 0.75), blur σ ≈ 5–7
+pt — the VM's σ corrected for its 1× screen. No ceiling, no grey block, and larger means thicker.
+The «kit — Regular claro/oscuro (mediano/grande)» presets carry it (`1.1:3`, smoke 0.3 / 0.52,
+veil 0.6 / 0.75). It is Figma's renderer, not the reference's: geometry (corner, refraction) and
+Clear still come from the VM's active captures.
+
+Not modelled, or still open: Clear's gain (no lab control brightens the highs); tone hooks per
+APPEARANCE (lab[0..1] are LAB-only and one pair per preset — shipping it is a shader change);
+Regular's outer shadow in an active window; its smaller blur on small shapes; the reference's
+rounder corner at the same nominal radius; its 1 px dark contour (lab[15], uncalibrated); and the
+display scale — the reference VM is 1× and has no 2× mode, so whether the blur in POINTS changes on
+a Retina screen is unmeasured. Which of this ships is the owner's call in the lab.
 
 ### The ink: white text, dark only where the whole backdrop under it is white (#684)
 

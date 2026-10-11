@@ -20,7 +20,10 @@ interface SquircleContainerProps {
      *  the shadow needs: it forces `inset` up to at least that, which SHRINKS the
      *  painted glass by the same amount. ⚠️ Read `drawGlassShadow` before enabling it on
      *  a surface whose layer has a low `ignore_alpha` — the shadow gets blurred. */
-    shadow?: { spread?: number, alpha?: number, drop?: number }
+    shadow?: { spread?: number, alpha?: number | (() => number), drop?: number,
+        /** A surface-level experiment may draw the outer shadow even when Hyalo paints its
+         *  glass. The silhouette is punched out, so the shadow never tints the material. */
+        compositor?: boolean }
     child: Gtk.Widget
     radius?: number
     gloss?: boolean
@@ -283,14 +286,14 @@ export default function SquircleContainer({
 
         // The shadow goes down FIRST, outside the silhouette, in the room `techInset`
         // reserved for it above. Same geometry as the glass, so it tracks the shape.
-        // Not on the compositor's glass: there its 2 px dark ring sat against the rim's band of
-        // light and read as a drawn frame (owner, 2026-10-06, in the glass lab: "3.2 without the
-        // halo looks best"). The room stays reserved, so nothing moves.
-        if (shadow && !glassIsCompositors) {
+        // Normally not on the compositor's glass: its old always-on 2 px ring read as a frame.
+        // The Lab can opt in to a shadow only when bright-backdrop ink asks for elevation.
+        if (shadow && (!glassIsCompositors || shadow.compositor)) {
+            const shadowAlpha = typeof shadow.alpha === "function" ? shadow.alpha() : shadow.alpha ?? 0.18
             drawGlassShadow(
                 cr, techInset, techInset, w - techInset * 2, h - techInset * 2,
                 drawRadius, drawN, drawPerfect,
-                shadow.spread ?? 4, shadow.alpha ?? 0.18, shadow.drop ?? 1,
+                shadow.spread ?? 4, shadowAlpha, shadow.drop ?? 1,
             )
         }
 

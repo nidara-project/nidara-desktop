@@ -9,19 +9,22 @@
  * from becoming accidental "variants" of one another.
  */
 
-/** How much of the content below the crystal should remain visible. */
+/** Reference treatment: Regular or the more backdrop-revealing Clear. */
 export type FluidCrystalVariant = "regular" | "clear"
 
-/** The scale and role of the surface wearing the crystal. */
+/** A proposed UI role, not another material variant or a measured density. */
 export type FluidCrystalProfile = "compact" | "panel" | "launcher" | "popover"
 
 /** How the content on the crystal chooses its foreground ink. */
 export type FluidCrystalInk = "mode" | "adaptive" | "light" | "dark"
 
-/** The spatial separation the surface casts around itself. */
+/** Spatial separation requested by the UI; it is independent of the glass variant. */
 export type FluidCrystalElevation = "none" | "tile" | "panel"
 
-/** A complete, backend-neutral Fluid Crystal recipe. */
+/**
+ * A backend-neutral semantic selection. Backdrop dimming is still an open design decision;
+ * these four axes alone do not guarantee text contrast over arbitrary content.
+ */
 export type FluidCrystalSpec = Readonly<{
     variant: FluidCrystalVariant
     profile: FluidCrystalProfile
@@ -36,13 +39,18 @@ export type FluidCrystalPreset = "bar" | "panel" | "tile" | "launcher" | "popove
 export type FluidCrystalSelection = FluidCrystalPreset | FluidCrystalSpec
 
 /**
- * Stable starting points for apps and shell surfaces.
+ * Provisional role mappings for apps and shell surfaces. The macOS probe measured Regular and
+ * Clear on isolated shapes; it did not establish that a Control Center, launcher or popover must
+ * use a particular variant, ink policy or shadow. Validate these mappings in the Glass Lab
+ * before using them to change the shell's rendered material.
  *
  * These are all Regular Crystal roles except `media`; profiles are not variants. `panel` and
  * `tile` are intentionally light-inked: Control Center and Notification Center keep white
  * content regardless of the wallpaper. `launcher` follows the system mode and is denser than a
  * general panel; `popover` is denser still for menus and command surfaces. `media` has a fixed
- * foreground because Clear Crystal does not promise to adapt over arbitrary media.
+ * foreground because Clear Crystal does not promise to adapt over arbitrary media. The macOS
+ * probe also found that mode-based text can lose contrast on both variants when the backdrop
+ * opposes the chosen appearance. No preset is a contrast guarantee.
  */
 export const FLUID_CRYSTAL_PRESETS: Readonly<Record<FluidCrystalPreset, FluidCrystalSpec>> = Object.freeze({
     bar: Object.freeze({
