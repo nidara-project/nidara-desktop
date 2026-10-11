@@ -287,6 +287,12 @@
     (ui/lib/nidara-kit/platform/theme-tokens.ts), read by every process the same.
   -->
   <schema id="org.nidara.appearance" path="/org/nidara/appearance/">
+    <!--
+      RETIRED 2026-10-11: the glass material (clear / regular / frosted, #674) is no longer
+      a choice — it predated measuring the reference and only confused the two. Nothing
+      reads it but migrations/2026-09-30-glass-material-from-opacities.sh, which still
+      writes it on an install upgrading from before then; it stays so that migration can.
+    -->
     <key name="glass-material" type="s">
       <choices>
         <choice value="clear"/>
@@ -294,8 +300,7 @@
         <choice value="frosted"/>
       </choices>
       <default>'regular'</default>
-      <summary>Glass material of the desktop</summary>
-      <description>Clear shows the most of what is behind the glass, frosted the least. Each shell surface still thickens its glass by itself when its text needs it.</description>
+      <summary>Retired: glass material of the desktop</summary>
     </key>
     <key name="reduce-transparency" type="b">
       <default>false</default>

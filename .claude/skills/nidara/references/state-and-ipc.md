@@ -833,8 +833,8 @@ Rules:
   already active (a shell reload would capture our own value as the user's), and a
   `hyprctl reload` discards the eval, so re-assert on `config-reloaded` — which is also
   the moment the live value is trustworthy as the baseline again. Both baselines (motion and
-  the glass material's blur) live in `core/hyprland-settings.ts` since #682: the modules say
-  only "reduce" / "this blur or the compositor's own", and the backend keeps the baseline and
+  the blur) live in `core/hyprland-settings.ts` since #682: the modules say
+  only "reduce" / "the compositor's own blur" (nothing pushes a blur since 2026-10-11), and the backend keeps the baseline and
   re-asserts on its own reload, from a handler connected at construction so it runs before any
   module's reload handler reads `blurColour()`. ⚠️ No file is written in answer to
   `config-reloaded` (`setGamingPolicy(p, reassert = true)` evals only): `hyprland.lua` requires

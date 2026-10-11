@@ -268,7 +268,7 @@ export interface MonitorSetting {
     mode?: string
 }
 
-/** A blur, as the glass material sets it (#674). */
+/** A blur: kawase size and passes. */
 export interface BlurStrength { size: number; passes: number }
 
 /** The blur's colour settings: what it does to a backdrop before our glass is laid on it
@@ -281,8 +281,6 @@ export interface BlurColour { contrast: number; brightness: number; vibrancy: nu
 export interface SettingsCaps {
     /** Animations the compositor draws, which reduce motion turns off (Hyalo's: minimize, #724). */
     animations: boolean
-    /** One blur for every surface, set by the glass material. Hyalo's is per surface (#684). */
-    sharedBlur: boolean
     /** What VRR's third choice (2) means: "fullscreen" = any fullscreen window (Hyprland's
      *  `misc:vrr = 2`); "games" = a game in fullscreen (Hyalo's `vrr = "games"`, per output). */
     vrrOnDemand: "fullscreen" | "games"
@@ -356,9 +354,7 @@ export interface CompositorSettings {
      *  off restores that, never a hard-coded "on", and the backend re-asserts it on reload. */
     setReduceMotion(reduce: boolean): void
 
-    /** The glass material's blur; null = the compositor's own config (the default material). */
-    setBlur(b: BlurStrength | null): void
-    /** The compositor's own blur, as its config sets it. */
+    /** The compositor's own blur, as its config sets it (Hyalo: the surface's, `GLASS_BLUR`). */
     blurBaseline(): BlurStrength
     /** null when the compositor does not process the backdrop's colour. */
     blurColour(): BlurColour | null

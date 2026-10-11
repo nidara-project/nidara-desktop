@@ -34,7 +34,6 @@ import Pango from "gi://Pango"
 import { writeFile } from "../../lib/nidara-kit/platform/file"
 import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import compositor, { settings } from "./CompositorState"
-import { initGlassBlur } from "./GlassBlur"
 import { initCompositorGlass } from "./CompositorGlass"
 import { startWindowButtonsSync } from "./WindowButtons"
 import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
@@ -290,9 +289,7 @@ export function startAppearanceSync(): void {
     // since #536 — pushing a copy over them at start is what reverted a theme set elsewhere.
     schedule("ini", "cursor", "groupbar", "mirror", "titleFont")
 
-    // The glass material's compositor half: Hyprland's blur (#674) — and on a compositor
-    // of our own, the whole glass (#684).
-    initGlassBlur()
+    // The glass's compositor half: on a compositor of our own, the whole glass (#684).
     initCompositorGlass()
     // The compositor's window controls follow the apps' `button-layout` (WindowButtons.ts).
     startWindowButtonsSync()

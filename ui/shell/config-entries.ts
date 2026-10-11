@@ -12,7 +12,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { registerConfig, type ConfigValue } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
-import { ACCENT_PALETTE, GLASS_MATERIALS, type AccentKey, type GlassMaterial } from "./core/NidaraTheme"
+import { ACCENT_PALETTE, type AccentKey } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, TRANSITIONS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
@@ -150,23 +150,8 @@ export function registerConfigEntries() {
         get: () => Theme.accentColor,
         set: v => void Theme.setAccentColor(v as AccentKey),
     })
-    // The glass (#674): ONE choice of three, in place of the five sliders it replaced.
-    // What each position means per surface is GLASS_FLOORS / GLASS_BLUR in the kit.
-    registerConfig("appearance.glassMaterial", {
-        desc: "Glass material of the interface — bar, panels, dock, menus: clear (most see-through), regular, or frosted (least). Sets the minimum glass opacity per surface and the compositor blur; shell surfaces still thicken by themselves where text needs it. Not Nidara's windows (appearance.windowTransparency). Ignored while accessibility.reduceTransparency is on.",
-        type: "enum",
-        enum: [...GLASS_MATERIALS],
-        get: () => Theme.glassMaterial,
-        set: v => void Theme.setGlassMaterial(v as GlassMaterial),
-        subscribe: onThemeCfg(() => Theme.glassMaterial),
-        ui: {
-            i18n: "settings.appearance.glass",
-            control: "segmented",
-            optI18n: (v: string) => t(`settings.appearance.glass.${v}` as any),
-        },
-    })
     registerConfig("appearance.windowTransparency", {
-        desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the glass material, which is for the interface's surfaces — though the blur is the one the material sets (Hyprland has one). Ignored while accessibility.reduceTransparency is on.",
+        desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the interface's glass. Ignored while accessibility.reduceTransparency is on.",
         type: "boolean",
         get: () => Theme.windowTransparency,
         set: v => void Theme.setWindowTransparency(v as boolean),
@@ -180,7 +165,7 @@ export function registerConfigEntries() {
     // one for windows and layers, so the entry is unavailable there and has no row.
     const backdropListeners = new Set<(v: ConfigValue) => void>()
     registerConfig("appearance.windowBlur", {
-        desc: "Whether windows that let the background through (a translucent terminal, Nidara's own windows) blur what is behind them. Separate from the glass material, which is for the interface's surfaces, and from appearance.windowTransparency, which decides whether Nidara's windows are translucent at all. A per-app rule in hyalo.toml (`backdrop = false`) turns it off for one app.",
+        desc: "Whether windows that let the background through (a translucent terminal, Nidara's own windows) blur what is behind them. Separate from the interface's glass, and from appearance.windowTransparency, which decides whether Nidara's windows are translucent at all. A per-app rule in hyalo.toml (`backdrop = false`) turns it off for one app.",
         type: "boolean",
         available: () => compositorSettings.caps.windowBackdrop,
         get: () => compositorSettings.readWindowBackdrop(),
@@ -699,7 +684,7 @@ export function registerConfigEntries() {
         },
     })
     registerConfig("accessibility.reduceTransparency", {
-        desc: "Reduce transparency: every glass surface — bar, panels, dock, menus, Nidara's windows, the lock screen and the login screen — becomes solid, whatever appearance.glassMaterial says.",
+        desc: "Reduce transparency: every glass surface — bar, panels, dock, menus, Nidara's windows, the lock screen and the login screen — becomes solid.",
         type: "boolean",
         get: () => Theme.reduceTransparency,
         set: v => void Theme.setReduceTransparency(v as boolean),

@@ -55,7 +55,7 @@ app.start({
     // The desktop's one glass material (#705): on Hyalo the card's capsules are Hyalo's glass.
     registerGlassMaterial({
       reduceTransparency: () => kitAppearance().reduceTransparency?.() === true,
-      panelBlur: () => GLASS_BLUR.regular,
+      panelBlur: () => ({ ...GLASS_BLUR }),
       onChange: (cb) => kitAppearance().onChange(cb),
     })
 

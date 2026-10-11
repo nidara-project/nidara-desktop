@@ -11,7 +11,6 @@ import {
     type AccentKey,
     DEFAULT_CONFIG,
     withGlass,
-    type GlassMaterial,
     ACCENT_PALETTE,
     generateTokensCss,
     generateSkinFlipScope,
@@ -28,7 +27,7 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 // Two homes, no file:
 //  - what the desktop standard already names — accent, colour scheme, GTK / icon /
 //    cursor theme, fonts — in `org.gnome.desktop.interface`, where every app reads it;
-//  - what only Nidara has — the glass material and reduce transparency (#674) — in
+//  - what only Nidara has — reduce transparency (#674) and window transparency — in
 //    `org.nidara.appearance`, below. bin/nidara-portal serves it to applications.
 // A change made by `gsettings set`, an agent or another process reaches this class
 // through `changed`, exactly like one made from Settings.
@@ -41,20 +40,18 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 // compositor call here: in a second process it runs a second time.
 // (appearance.json was imported once by migrations/2026-09-14c-appearance-to-gsettings.sh.)
 interface NidaraAppearance {
-    glassMaterial: GlassMaterial
     reduceTransparency: boolean
     windowTransparency: boolean
 }
 
 const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
-    glassMaterial: DEFAULT_CONFIG.glassMaterial,
     reduceTransparency: DEFAULT_CONFIG.reduceTransparency,
     windowTransparency: DEFAULT_CONFIG.windowTransparency,
 })
 
 /** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. The four
  *  opacities are DERIVED from them (`withGlass`) and stored nowhere. */
-const NIDARA_KEYS = ["glassMaterial", "reduceTransparency", "windowTransparency"] as const
+const NIDARA_KEYS = ["reduceTransparency", "windowTransparency"] as const
 
 // ── DARK/LIGHT in-process ────────────────────────────────────────────────────
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
@@ -621,15 +618,8 @@ class ThemeManager extends GObject.Object {
         // core/AppearanceHooks.ts, and see setDarkMode.
     }
 
-    /** The glass material (#674): Settings → Appearance's selector. */
-    get glassMaterial(): GlassMaterial { return this.fcConfig.glassMaterial }
-    async setGlassMaterial(material: GlassMaterial) {
-        this.fcConfig.glassMaterial = material
-        this.applyGlass()
-    }
-
     /** Reduce transparency (#674): Settings → Accessibility → Vision. Every glass
-     *  surface solid, whatever the material. */
+     *  surface solid. */
     get reduceTransparency(): boolean { return this.fcConfig.reduceTransparency }
     async setReduceTransparency(on: boolean) {
         this.fcConfig.reduceTransparency = on
@@ -637,9 +627,9 @@ class ThemeManager extends GObject.Object {
     }
 
     /** Settings → Appearance → Windows: Nidara's windows translucent or solid. Not the
-     *  glass material, which is for the interface's surfaces (`WINDOW_GLASS_OPACITY`). */
+     *  interface's glass (`GLASS_FLOORS`): `WINDOW_GLASS_OPACITY` or solid. */
     get windowTransparency(): boolean { return this.fcConfig.windowTransparency }
-    /** The material's haze (derived; `GLASS_FROST`). */
+    /** The glass's haze (derived; `GLASS_FROST`). */
     get glassFrost(): number { return this.fcConfig.glassFrost }
     async setWindowTransparency(on: boolean) {
         this.fcConfig.windowTransparency = on
@@ -720,11 +710,10 @@ class ThemeManager extends GObject.Object {
 
     /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
      *  mirror). A copy: nothing outside writes Theme's state. */
-    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "glassMaterial" | "reduceTransparency" | "windowTransparency"> {
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "reduceTransparency" | "windowTransparency"> {
         return {
             ...this.state,
             accent: this.fcConfig.accent,
-            glassMaterial: this.fcConfig.glassMaterial,
             reduceTransparency: this.fcConfig.reduceTransparency,
             windowTransparency: this.fcConfig.windowTransparency,
         }

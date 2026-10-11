@@ -1381,43 +1381,45 @@ anywhere, and a single-use number in a shared file advertises a sharing that doe
 and both are already named where they are used.
 
 
-**What the user picks is a CHOICE, not a number** (owner's decision, 2026-09-30, #674). Five
-opacity sliders — a master and four per surface under "Advanced" — became three controls:
+**What the user picks: two switches, and no glass style** (#674, then owner 2026-10-11). Five
+opacity sliders became, on 2026-09-30, a choice of three materials (Clear / Standard / Frosted,
+`glass-material`). 🔑 **That choice is GONE since 2026-10-11** (owner): it predated measuring the
+reference, and its names collided with the reference's own (its default setting, its Regular and
+Clear variants), so it only confused what we were matching. What stayed is its factory position, the
+one every measurement against the reference was made on. How the glass's STYLE becomes configurable
+is to be decided anew — do not bring the three back. The key stays in the schema, retired, only for
+`migrations/2026-09-30-glass-material-from-opacities.sh`; nothing reads it, the portal does not serve it.
 
 | control | key (`org.nidara.appearance`) | what it sets |
 |---|---|---|
-| Appearance → Glass: **Clear / Standard / Frosted** | `glass-material` (`clear`/`regular`/`frosted`) | per-surface floors (`GLASS_FLOORS`), a white haze (`GLASS_FROST`) and Hyprland's blur (`GLASS_BLUR`) |
 | Appearance → Windows: **Transparent windows** | `window-transparency` (on) | Nidara's WINDOWS: `WINDOW_GLASS_OPACITY` (0.80) or solid |
-| Accessibility → Vision: **Reduce transparency** | `reduce-transparency` (off) | every glass surface SOLID (`SOLID_GLASS`), no haze; greys out both controls above |
+| Accessibility → Vision: **Reduce transparency** | `reduce-transparency` (off) | every glass surface SOLID (`SOLID_GLASS`), no haze |
 
-All three tables live in `ui/lib/nidara-kit/platform/theme-tokens.ts`, and **the four opacities
-every painter reads — `barOpacity` / `overlayOpacity` / `dockOpacity` / `windowOpacity` — are
-DERIVED, stored nowhere**: `glassOpacities()` is the one place the tables are read, and `withGlass()`
-re-derives them on a config after any of the three keys moves. The portal serves the three KEYS, not
-the numbers, and every process (the shell, Settings, the installer, the lock screen, the greeter
-through the mirror) derives the numbers itself with the same table — so no two processes can
-disagree about what "frosted" means. The numbers per position are PROVISIONAL until calibrated on
-screen with the owner.
+The glass itself is one set of values in `ui/lib/nidara-kit/platform/theme-tokens.ts`: per-surface
+floors (`GLASS_FLOORS`), a white haze (`GLASS_FROST`), the launcher's floor (`GLASS_ROLE_FLOORS`) and
+the compositor blur (`GLASS_BLUR`). **The four opacities every painter reads — `barOpacity` /
+`overlayOpacity` / `dockOpacity` / `windowOpacity` — are DERIVED, stored nowhere**: `glassOpacities()`
+is the one place the values are read, and `withGlass()` re-derives them after either switch moves.
+The portal serves the two KEYS, not the numbers, and every process (the shell, Settings, the
+installer, the lock screen, the greeter through the mirror) derives the numbers itself.
 
-⚠️ **Windows are NOT part of the glass material** (owner, 2026-09-30). The material is for the interface's surfaces
-and controls — bar, panels, dock, menus, tooltips. Nidara's windows are only translucent or solid.
-And the switch says TRANSPARENCY, deliberately not macOS's "wallpaper tinting": what shows through a
-window is shaped by the compositor's blur, and **Hyprland has ONE blur for everything** (no
-per-layer or per-window size), which the material sets. A tint of our own would be a promise we
-cannot keep; a compositor of our own could (`project_own_compositor_vision` in the owner's notes,
-and the inventory issue it leads to).
+⚠️ **Windows are NOT part of the interface's glass** (owner, 2026-09-30). The glass is for the
+interface's surfaces and controls — bar, panels, dock, menus, tooltips. Nidara's windows are only
+translucent or solid. And the switch says TRANSPARENCY, deliberately not macOS's "wallpaper tinting":
+what shows through a window is shaped by the compositor's blur. A tint of our own would be a promise
+we cannot keep on Hyprland (ONE blur for everything); a compositor of our own could
+(`project_own_compositor_vision` in the owner's notes, and the inventory issue it leads to).
 
-**The blur is the compositor half** (`ui/shell/core/GlassBlur.ts`): `hl.config` pushes `GLASS_BLUR`
-for a non-default material. `regular` is exactly what `config/hypr/hyprland.lua` ships, so at the
-default the shell pushes NOTHING and a `hyprland-user.lua` override stands; leaving another material
-for the default restores the baseline read from the compositor BEFORE the shell touched it (the
-same discipline as `ReduceMotion.ts`, including re-reading it on `config-reloaded`). Reduce
-transparency leaves the blur on: switching it off would reach every other app's translucent window.
+**The blur is the compositor's own.** `GLASS_BLUR` (2:2) is what `config/hypr/hyprland.lua` ships and
+what Hyalo gives a surface (a large pane one pass further — `references/hyalo.md` → "A large pane's
+blur"); the shell pushes no blur to either. `settings.blurBaseline()` reads Hyprland's live value (a
+`hyprland-user.lua` override included), re-read after `config-reloaded`. Reduce transparency leaves
+the blur on: switching it off would reach every other app's translucent window.
 
-**The haze — why the materials need more than opacity.** Our dark tint only DARKENS, so over a
-near-black wallpaper more of it shows nothing: measured 2026-09-30 behind the bar (19,1,61), clear
-and frosted were identical. Each material lays a white haze over its tint (clear 0, regular 0.04,
-frosted 0.10) — macOS's dark glass lightens too. The haze costs white text contrast, so it is IN
+**The haze — why the glass needs more than opacity.** Our dark tint only DARKENS, so over a
+near-black wallpaper more of it shows nothing: measured 2026-09-30 behind the bar (19,1,61), the
+old clear and frosted were identical. The glass lays a white haze over its tint (`GLASS_FROST`,
+0.04) — macOS's dark glass lightens too. The haze costs white text contrast, so it is IN
 the legibility model (`glassOver` → `frostAt`) and it gives way as the adaptive glass thickens: full
 up to `FROST_FULL_UNTIL` (0.48, the thickest floor), none from `FROST_GONE_AT` (0.58) — under the
 tooltips' floor and the ceiling, so every guarantee measured without a haze still holds. Painters do
@@ -3846,7 +3848,7 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
 - **Lives in `common/`, not `lib/nidara-kit`** — it reads `Theme` (chrome pin + opacity), like the
   other shared Cairo widgets (`SquircleContainer`, `Slider`, `ScaleRevealer`). `nidara-kit` stays
   Theme-free / portable, so a Theme-coupled widget can't live there.
-- **Glass:** fill tint follows `Theme.chromeIsDark` (shell skin) and alpha is `Math.max(Theme.overlayOpacity, 0.38)`, with the glass material's haze folded into that one fill (`frostedFill`, via the kit seam's `glassFrost`).
+- **Glass:** fill tint follows `Theme.chromeIsDark` (shell skin) and alpha is `Math.max(Theme.overlayOpacity, 0.38)`, with the glass's haze folded into that one fill (`frostedFill`, via the kit seam's `glassFrost`).
   **The 0.38 floor is load-bearing:** a tooltip is a *popup*, and Hyprland blurs popups with
   `popups_ignorealpha = 0.30` (NOT the bar/dock layer's `ignore_alpha` 0.01/0.04). Track the raw
   overlay slider and at a low setting the bubble drops below 0.30 and **stops blurring** (reads flat).
