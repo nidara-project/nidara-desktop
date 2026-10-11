@@ -106,7 +106,8 @@ pub struct GlassInfo {
 /// One shadow under the glass: what it lies under, and the strength it is easing to.
 #[derive(Debug, Clone, Serialize)]
 pub struct ScrimInfo {
-    /// "region" (shared, add_scrim_region) or "shape" (a lone shape's own).
+    /// "region" (shared, add_scrim_region), "veil" (shared and fixed, add_veil_region) or
+    /// "shape" (a lone shape's own).
     pub kind: &'static str,
     pub shapes: usize,
     pub strength: f64,

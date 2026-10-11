@@ -5,7 +5,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { GLASS_TINT } from "./tokens"
 import { SOLID_GLASS } from "./theme-tokens"
 import { GLASS_ADAPT_CEILING, LEGIBILITY_TARGET } from "./glass-legibility"
-import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams } from "./material"
+import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, type InkParams, type ScrimParams, type VeilParams } from "./material"
 
 /**
  * THE glass material (#684, #705 step 0): one material for everything Nidara draws as glass —
@@ -32,6 +32,7 @@ import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, 
  *   alphaMin alphaMax target refraction lensing rim saturation   the glass (see GlassParams)
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
  *   tintLimit scrimMax scrimSize scrimFalloff scrimEdge  the shadow under the glass (below)
+ *   veilStrength veilFalloff veilExponent                the Control Center's veil (below)
  *   modeLightVeil                                        the light glass of a surface that
  *                                                        follows the mode (the dock), light mode
  *   fusion                                               how close two panes of one fusion
@@ -66,13 +67,12 @@ import { glassFollowsMode, inkFollowsMode, setMaterialSource, type GlassParams, 
  * alone, none under a pane whose text has turned dark (the ink's veil), at most `scrimMax`.
  * The glass's ceiling IS `tintLimit` while there is a shadow: nothing makes up past
  * `scrimMax`, because a tint above the limit is the grey plastic again. A pane's own
- * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's); the
- * Control Center and the Notification Center share one the size of the panel
- * (`trackScrimRegion` in Bar.tsx), even across the container (`scrimEdge` 1; below 1 it
- * sweeps from the centre), then fading over `scrimFalloff` px. Owner, 2026-10-02: even across the
- * panel "it looks like a translucent dark panel with a gradient at its border", where it
- * should be "very subtle, very slightly darker at the centre, sweeping from the centre, over
- * the container's area". The bar and the dock cast none for now (`trackNoScrim`): a shadow that
+ * shadow fades over `scrimSize` of its shorter side (the app grid's, the overview's). The
+ * Control Center and the Notification Center cast no measured shadow: they lie on a FIXED veil
+ * the size of the panel (`trackVeilRegion` in Bar.tsx; `veilStrength veilFalloff veilExponent`,
+ * the reference's own, measured 2026-10-11). A region declared with `trackScrimRegion` still
+ * shares one measured shadow, even across it (`scrimEdge` 1; below 1 it sweeps from the
+ * centre), fading over `scrimFalloff` px. The bar and the dock cast none for now (`trackNoScrim`): a shadow that
  * hugs them cannot fade without running over the windows — an edge shadow drawn by Hyalo,
  * under the windows, is the next step.
  */
@@ -123,6 +123,15 @@ const DEFAULTS = {
     // The most tint the glass takes while the shadow makes up the rest (owner, 2026-10-02):
     // past it a pane looks painted grey. Over white the shadow is then ≈0.41.
     tintLimit: 0.25,
+    // The VEIL the Control Center and the Notification Center lie on (`trackVeilRegion` in
+    // Bar.tsx), in place of the measured shadow — the owner took that out (2026-10-09: "the
+    // shadow under it cannot define how the glass looks"). The reference's, measured on its own
+    // Control Center over known wallpapers (2026-10-11, glass-probe cc_calib): 0.078 black,
+    // even behind the tiles, falling from their edge as (1 − d/125)^1.5 — 0.055 at 25 px,
+    // 0.035 at 50, 0.020 at 75, 0.008 at 100. Fixed: the backdrop does not change it.
+    veilStrength: 0.078,
+    veilFalloff: 125,
+    veilExponent: 1.5,
     // Fusion (#705 step 2, `trackFusionGroup`): two panes of one group closer than this many
     // logical px are joined by a bridge, one silhouette. The island's chips' glass sits 8 px from
     // its capsule's (their boxes 4, the glass inset 2 a side): at 8 they were joined at rest by a thin neck whose rims nearly met (owner,
@@ -208,6 +217,12 @@ function inkParams(native: Gtk.Native | null = null): InkParams | null {
     return { darkAbove: p.inkDarkAbove, lightBelow: p.inkLightBelow, tint: { r: t.r, g: t.g, b: t.b } }
 }
 
+function veilParams(): VeilParams | null {
+    if (tuning.off || tuning.scrimOff || reduced()) return null
+    const p = { ...DEFAULTS, ...tuning }
+    return { strength: p.veilStrength, falloff: p.veilFalloff, exponent: p.veilExponent }
+}
+
 function scrimParams(): ScrimParams | null {
     if (tuning.off || tuning.scrimOff || reduced()) return null
     const p = { ...DEFAULTS, ...tuning }
@@ -268,6 +283,7 @@ export function registerGlassMaterial(h: GlassMaterialHost) {
         glass: (native: Gtk.Native) => params(native),
         ink: (native: Gtk.Native) => inkParams(native),
         scrim: (_native: Gtk.Native) => scrimParams(),
+        veil: (_native: Gtk.Native) => veilParams(),
         fusion: (_native: Gtk.Native) => tuning.off ? null : (tuning.fusion ?? DEFAULTS.fusion),
         fusionHold: (_native: Gtk.Native) => tuning.fusionHold ?? DEFAULTS.fusionHold,
         formationHold: (_native: Gtk.Native) => tuning.formationHold ?? DEFAULTS.formationHold,

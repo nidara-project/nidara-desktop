@@ -536,6 +536,26 @@ void nidara_wl_material_add_scrim_region (GdkSurface *surface,
                                           double falloff);
 
 /**
+ * nidara_wl_material_add_veil_region:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @x: surface-local, logical; the region may reach past the surface
+ * @y: surface-local, logical
+ * @width: logical
+ * @height: logical
+ * @falloff: how far the veil fades outside the region, logical pixels
+ * @strength: its opacity under the region, 0..1
+ * @exponent: the fade's shape, (1 − d/falloff)^exponent
+ *
+ * A FIXED black veil under every shape whose centre lies inside the region — not measured,
+ * not part of set_scrim's rule — even under it and fading outside it
+ * (nidara-material-v1.add_veil_region). Pending until nidara_wl_material_commit(); cleared by
+ * nidara_wl_material_begin().
+ */
+void nidara_wl_material_add_veil_region (GdkSurface *surface,
+                                         double x, double y, double width, double height,
+                                         double falloff, double strength, double exponent);
+
+/**
  * nidara_wl_material_set_fusion:
  * @surface: the #GdkSurface passed to nidara_wl_material_begin()
  * @group: the fusion group of the shapes added from now on; 0 = none

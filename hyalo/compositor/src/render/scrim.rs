@@ -41,7 +41,7 @@ pub const MAX_SCRIMS: usize = 32;
 pub const FS_SCRIM: &str = r#"#version 100
 precision highp float;
 uniform vec4 cores[32];     // x, y, w, h — output pixels
-uniform vec4 pars[32];      // corner radius, falloff, opacity, edge
+uniform vec4 pars[32];      // corner radius, falloff, opacity, edge (< 0: a veil, −exponent)
 uniform int count;
 varying vec2 v_out;
 varying vec2 v_fb;
@@ -57,7 +57,10 @@ void main() {
         if (i >= count) break;
         float d = rr(v_out, cores[i], pars[i].x);
         float k;
-        if (d > 0.0) {
+        if (pars[i].w < 0.0) {
+            // A veil (add_veil_region): even under its core, (1 - d/falloff)^exponent outside.
+            k = d > 0.0 ? pow(clamp(1.0 - d / max(pars[i].y, 1.0), 0.0, 1.0), -pars[i].w) : 1.0;
+        } else if (d > 0.0) {
             k = pars[i].w * (1.0 - ss(clamp(d / max(pars[i].y, 1.0), 0.0, 1.0)));
         } else {
             vec2 h = cores[i].zw * 0.5;
@@ -84,6 +87,9 @@ pub struct ScrimPx {
     pub alpha: f64,
     /// At the core's rim, as a fraction of its centre (the shader's sweep); 1: even.
     pub edge: f64,
+    /// A veil's fall-off exponent (add_veil_region): even under the core, (1 − d/falloff)^it
+    /// outside. 0: a measured shadow's smootherstep.
+    pub veil: f64,
 }
 
 impl ScrimPx {
@@ -95,6 +101,9 @@ impl ScrimPx {
         let qx = (p.x - x - hw).abs() - hw + self.radius;
         let qy = (p.y - y - hh).abs() - hh + self.radius;
         let d = qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - self.radius;
+        if self.veil > 0.0 {
+            return if d > 0.0 { self.alpha * (1.0 - d / self.falloff.max(1.0)).clamp(0.0, 1.0).powf(self.veil) } else { self.alpha };
+        }
         if d > 0.0 {
             return self.alpha * self.edge * (1.0 - ss((d / self.falloff.max(1.0)).clamp(0.0, 1.0)));
         }
@@ -132,12 +141,19 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
     let m = &current.state;
     let mut out: Vec<ScrimPx> = Vec::new();
     for unit in m.scrim_units() {
-        let Some(anim) = current.scrims.get(&unit.key) else { continue };
-        if !anim.settled(now) {
-            EASING.with(|f| f.set(true));
-        }
         let opacity = unit.members.iter().map(|&i| m.shapes[i].opacity).fold(0.0, f64::max);
-        let alpha = anim.value(now) * opacity;
+        // A veil is what it says, at once; a measured shadow eases toward what it wants.
+        let strength = match unit.veil {
+            Some(v) => v.strength,
+            None => {
+                let Some(anim) = current.scrims.get(&unit.key) else { continue };
+                if !anim.settled(now) {
+                    EASING.with(|f| f.set(true));
+                }
+                anim.value(now)
+            }
+        };
+        let alpha = strength * opacity;
         if alpha < 0.5 / 255.0 {
             continue;
         }
@@ -167,6 +183,7 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
             falloff: unit.falloff * scale.x,
             alpha,
             edge: unit.edge,
+            veil: unit.veil.map_or(0.0, |v| v.exponent),
         });
     }
     if out.len() > MAX_SCRIMS {
@@ -230,7 +247,8 @@ impl ScrimElement {
         let mut pars = [0f32; MAX_SCRIMS * 4];
         for (i, s) in self.scrims.iter().enumerate() {
             cores[i * 4..i * 4 + 4].copy_from_slice(&s.core.map(|v| v as f32));
-            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.radius as f32, s.falloff as f32, s.alpha as f32, s.edge as f32]);
+            let w = if s.veil > 0.0 { -s.veil } else { s.edge };
+            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.radius as f32, s.falloff as f32, s.alpha as f32, w as f32]);
         }
         frame.with_context(|gl| unsafe {
             // Safety: the EGL context outlives this frame, and its user data with it.
@@ -302,18 +320,18 @@ mod tests {
 
     #[test]
     fn the_shadow_is_even_over_its_core_and_gone_past_its_falloff() {
-        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 100.0, alpha: 0.5, edge: 1.0 };
+        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 100.0, alpha: 0.5, edge: 1.0, veil: 0.0 };
         assert_eq!(s.at((250.0, 100.0).into()), 0.5, "inside: the whole strength");
         assert_eq!(s.at((100.0, 100.0).into()), 0.5, "on the core's edge: still whole");
         assert!((s.at((50.0, 100.0).into()) - 0.25).abs() < 1e-9, "halfway out: half (smootherstep is symmetric)");
         assert_eq!(s.at((0.0, 100.0).into()), 0.0, "past the falloff: nothing");
-        let other = ScrimPx { core: [0.0, 0.0, 50.0, 50.0], radius: 0.0, falloff: 10.0, alpha: 0.3, edge: 1.0 };
+        let other = ScrimPx { core: [0.0, 0.0, 50.0, 50.0], radius: 0.0, falloff: 10.0, alpha: 0.3, edge: 1.0, veil: 0.0 };
         assert_eq!(alpha_at(&[s, other], (40.0, 25.0).into()), s.at((40.0, 25.0).into()).max(0.3), "two shadows: the stronger, never their sum");
     }
 
     #[test]
     fn a_swept_core_is_whole_at_its_centre_and_at_its_edge_on_the_rim() {
-        let s = ScrimPx { core: [100.0, 100.0, 200.0, 400.0], radius: 0.0, falloff: 50.0, alpha: 0.4, edge: 0.75 };
+        let s = ScrimPx { core: [100.0, 100.0, 200.0, 400.0], radius: 0.0, falloff: 50.0, alpha: 0.4, edge: 0.75, veil: 0.0 };
         assert_eq!(s.at((200.0, 300.0).into()), 0.4, "the centre: the whole strength");
         let side = s.at((100.0, 300.0).into());
         let end = s.at((200.0, 100.0).into());
@@ -324,5 +342,15 @@ mod tests {
         assert_eq!(s.at((40.0, 300.0).into()), 0.0, "past it: nothing");
         let even = ScrimPx { edge: 1.0, ..s };
         assert_eq!(even.at((101.0, 101.0).into()), 0.4, "edge 1: even across the core");
+    }
+
+    #[test]
+    fn a_veil_is_even_under_its_core_and_falls_as_its_power() {
+        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 125.0, alpha: 0.078, edge: 1.0, veil: 1.5 };
+        assert_eq!(s.at((250.0, 100.0).into()), 0.078, "under the core: its whole strength, even");
+        assert_eq!(s.at((101.0, 199.0).into()), 0.078, "even at the core's corner, no sweep");
+        // The reference's own profile (2026-10-11): 25 px out, (1 − 0.2)^1.5 of it.
+        assert!((s.at((75.0, 100.0).into()) - 0.078 * 0.8f64.powf(1.5)).abs() < 1e-9);
+        assert_eq!(s.at((-30.0, 100.0).into()), 0.0, "past the falloff: nothing");
     }
 }

@@ -113,6 +113,11 @@ export type ScrimParams = {
     regionEdge: number
 }
 
+/** A fixed veil under a group of panes (nidara_material_v1.add_veil_region, `trackVeilRegion`):
+ *  `strength` black, even under their container, falling over `falloff` logical px outside it
+ *  as (1 − d/falloff)^`exponent`. Not measured: the backdrop does not change it. */
+export type VeilParams = { strength: number, falloff: number, exponent: number }
+
 /** The class a pane of glass carries while its content is dark. */
 export const INK_DARK_CLASS = "nidara-ink-dark"
 
@@ -127,6 +132,9 @@ export interface MaterialSource {
     /** The shadow under this surface's glass, or null: none. Asked only where the
      *  compositor paints the glass. */
     scrim?(native: Gtk.Native): ScrimParams | null
+    /** The veil of this surface's veil regions (`trackVeilRegion`), or null: none. Asked only
+     *  where the compositor paints the glass. */
+    veil?(native: Gtk.Native): VeilParams | null
     /** How close, in logical px, two panes of one fusion group (`trackFusionGroup`) must be
      *  to join; 0 or null: no fusion. Asked only where the compositor paints the glass. */
     fusion?(native: Gtk.Native): number | null
@@ -178,6 +186,8 @@ type Shim = {
     material_set_scrim?(surface: Gdk.Surface, maxStrength: number, sizeFraction: number, tintLimit: number,
         regionEdge?: number): void
     material_add_scrim_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number): void
+    material_add_veil_region?(surface: Gdk.Surface, x: number, y: number, w: number, h: number, falloff: number,
+        strength: number, exponent: number): void
     material_set_fusion?(surface: Gdk.Surface, group: number, spacing: number): void
     /** Since 2026-10-07 (`set_fusion_merge`, inside v1): the library and Hyalo ship together. */
     material_set_fusion_merge?(surface: Gdk.Surface, merge: number): void
@@ -425,8 +435,9 @@ function inkIdOf(e: Entry): number {
     return e.inkId
 }
 
-/** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). */
-type ScrimRegion = { widget: Gtk.Widget, casts: boolean,
+/** `casts: false`: the panes inside cast no shadow at all (`trackNoScrim`). `veil`: they lie on
+ *  a fixed veil instead of the measured shadow (`trackVeilRegion`). */
+type ScrimRegion = { widget: Gtk.Widget, casts: boolean, veil?: boolean,
     exactBounds?: { horizontalOutset: number } }
 const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
 
@@ -440,6 +451,17 @@ const scrimRegions = new Map<Gtk.Widget, ScrimRegion>()
  */
 export function trackScrimRegion(widget: Gtk.Widget, exactBounds?: { horizontalOutset: number }): void {
     addScrimRegion({ widget, casts: true, exactBounds })
+}
+
+/**
+ * The panes of glass inside `widget`'s box lie on one FIXED veil (the material source's
+ * `veil`), the size of their container and fading outside it — the darkening a group of panes
+ * sits on, not a shadow making up what the glass lacks: no measurement, and no shadow of their
+ * own. The Control Center and the Notification Center (owner, 2026-10-11: the reference's
+ * Control Center, measured). Without a library that knows the veil, the panes cast nothing.
+ */
+export function trackVeilRegion(widget: Gtk.Widget): void {
+    addScrimRegion({ widget, casts: true, veil: true })
 }
 
 /**
@@ -475,17 +497,21 @@ function addScrimRegion(r: ScrimRegion): void {
  * the panel itself. It used to reach past the screen's edges (the whole right-hand strip),
  * which put its centre off the screen.
  */
-function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassParams,
-    placed: Placed[]): (Rect & { falloff: number })[] {
+function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams | null, veil: VeilParams | null,
+    glass: GlassParams, placed: Placed[]): (Rect & { falloff: number, veil?: VeilParams })[] {
     const nw = native as unknown as Gtk.Widget
     const [tx, ty] = native.get_surface_transform()
-    const out: (Rect & { falloff: number })[] = []
-    for (const { widget, casts, exactBounds } of scrimRegions.values()) {
+    const out: (Rect & { falloff: number, veil?: VeilParams })[] = []
+    for (const { widget, casts, veil: isVeil, exactBounds } of scrimRegions.values()) {
         if (widget.get_native() !== native || !widget.get_mapped() || !widget.is_drawable()) continue
         const [ok, b] = widget.compute_bounds(nw)
         if (!ok || b.get_width() <= 0 || b.get_height() <= 0) continue
         const box = { x: b.get_x() + tx, y: b.get_y() + ty, w: b.get_width(), h: b.get_height() }
-        if (!casts) { out.push({ ...box, falloff: -1 }); continue }
+        // A veil region with no veil to cast (none asked, or a library that does not know it)
+        // still claims its panes: never a measured shadow under them.
+        const canVeil = isVeil && veil && shim?.material_add_veil_region
+        if (!casts || (isVeil && !canVeil)) { if (scrim) out.push({ ...box, falloff: -1 }); continue }
+        if (!isVeil && !scrim) continue
         // Its panes: the shapes whose centre lies in the widget's box, as the compositor counts.
         const panes = placed.filter(s => {
             const cx = s.x + s.w / 2, cy = s.y + s.h / 2
@@ -497,7 +523,7 @@ function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassP
         if (exactBounds) {
             const dx = exactBounds.horizontalOutset
             out.push({ x: box.x - dx, y: box.y, w: box.w + 2 * dx, h: box.h,
-                falloff: scrim.regionFalloff })
+                falloff: isVeil && veil ? veil.falloff : scrim!.regionFalloff, ...(isVeil && veil ? { veil } : {}) })
             continue
         }
         // How far each refracts is the compositor's rule (refraction_of).
@@ -506,7 +532,8 @@ function placeScrimRegions(native: Gtk.Native, scrim: ScrimParams, glass: GlassP
         const y0 = Math.min(...panes.map(s => s.y)) - margin
         const x1 = Math.max(...panes.map(s => s.x + s.w)) + margin
         const y1 = Math.max(...panes.map(s => s.y + s.h)) + margin
-        out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: scrim.regionFalloff })
+        if (isVeil && veil) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: veil.falloff, veil })
+        else if (scrim) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0, falloff: scrim.regionFalloff })
     }
     return out
 }
@@ -870,7 +897,8 @@ function flush(native: Gtk.Native, st: NativeState) {
     }
     const ink = paints ? inkWanted : null
     const scrim = paints && shim.material_set_scrim ? source?.scrim?.(native) ?? null : null
-    const regions = scrim && glass ? placeScrimRegions(native, scrim, glass, placed) : []
+    const veil = paints ? source?.veil?.(native) ?? null : null
+    const regions = (scrim || veil) && glass ? placeScrimRegions(native, scrim, veil, glass, placed) : []
     // Fusion only where the compositor paints the glass: blurred only, every pane is its own.
     const spacing = paints && shim.material_set_fusion ? source?.fusion?.(native) ?? 0 : 0
     const hold = source?.fusionHold?.(native) ?? 0
@@ -888,7 +916,7 @@ function flush(native: Gtk.Native, st: NativeState) {
             round(s.pointer.width)], spacing > 0 ? s.fusion ?? 0 : 0, spacing > 0 && s.fusion ? mergeOf(s.fusion) : 0]),
         paints && glass, blur, spacing,
         ink, ink && inkBoxes.map(b => [b.id, round(b.box.x), round(b.box.y), round(b.box.w), round(b.box.h)]),
-        scrim, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff)])])
+        scrim, veil, regions.map(r => [round(r.x), round(r.y), round(r.w), round(r.h), round(r.falloff), !!r.veil])])
     if (key === st.last) return
     st.last = key
     shim.material_begin(surface)
@@ -928,12 +956,12 @@ function flush(native: Gtk.Native, st: NativeState) {
     } else {
         shim.material_clear_ink?.(surface)
     }
-    if (scrim) {
-        for (const r of regions) shim.material_add_scrim_region?.(surface, r.x, r.y, r.w, r.h, r.falloff)
-        setScrim(surface, scrim.maxStrength, scrim.sizeFraction, scrim.tintLimit, scrim.regionEdge)
-    } else {
-        setScrim(surface, 0, 0, 0, 1)
+    for (const r of regions) {
+        if (r.veil) shim.material_add_veil_region?.(surface, r.x, r.y, r.w, r.h, r.falloff, r.veil.strength, r.veil.exponent)
+        else shim.material_add_scrim_region?.(surface, r.x, r.y, r.w, r.h, r.falloff)
     }
+    if (scrim) setScrim(surface, scrim.maxStrength, scrim.sizeFraction, scrim.tintLimit, scrim.regionEdge)
+    else setScrim(surface, 0, 0, 0, 1)
     shim.material_commit(surface, blur.size, placed.length ? blur.passes : 0)
     if (DEBUG) console.log(`[Material] ${(native as unknown as Gtk.Widget).get_name()}: ${placed.length} shapes, ${inkBoxes.length} ink boxes, ${regions.length} scrim regions, ${paints ? "compositor glass" : "blur only"} ${key}`)
 }
