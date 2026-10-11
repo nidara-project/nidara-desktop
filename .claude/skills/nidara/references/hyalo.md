@@ -666,8 +666,12 @@ botched replica by eye … it doesn't add up"). The owner's call: copy the MACHI
   (`GlassPiece`, `trackGlassPiece`: `control`, `panel`, `controlCenter`, `dock`; a popover's
   panes are panels) has a dark and a light face. Owner: the reference's values AS THEY ARE.
   `control` and `panel` were READ from the reference's filter (catalogue run 38116434211: every
-  glass layer's inputs) — small controls and large floating glass share everything but the dark
-  ceiling, 0.6 against 0.35, so a dark menu over white lands at ≈ 0.48, the reference's own grey;
+  glass layer's inputs) — small controls and large floating glass are ONE material: they share
+  everything but the dark ceiling, and that one follows the pane's SIZE, not its kind
+  (`darkCeilingFor` in `glass-material.ts`: 0.6 up to 64 px of shorter side, 0.35 from 104,
+  linearly between — read back at every 8 pt from 64 to 112, exact, glass-probe `tweak-tone`,
+  run 38180489443; a shorter ramp than the blur's). A dark menu over white lands at ≈ 0.48, the
+  reference's own grey;
   checked against the same catalogue's PIXELS with this machine (the toolbar's groups within
   0.03, the real menu within 0.006). The Dock and the Control Center are other processes', not
   readable: their values were FITTED with this machine to the real ones over the calibration
@@ -727,10 +731,13 @@ reference answers it: its filter is one, and the system sizes its inputs.
   its CLIENT paints; where the compositor paints it (`set_glass`) the blur is `GLASS_BLUR` mixed
   as above, and every shape of the surface shares one capture. `msg layers` lists each shape's
   weights (`blurs`: "mix soft/middle/full"). The kit sends no per-pane blur any more.
-- **Still owed — the tone's local contrast.** Through the same grating, the reference keeps
-  about 1.15× (small) and 1.4× (large) more of the backdrop's contrast than its own tone
-  stages give on plain greys (they are exact there, and so are ours). Its ceiling probably
-  reads a blurred copy, not the pixel; it needs a run of its own to model, not a guess.
+- **The tone acts pixel by pixel** (run 38180489443: each colour stage alone over the grating,
+  blurs off, keeps the same share of every period). 🔴 A trap that looked like a gap: the
+  reference's VM shows the grating's sRGB 0.5 as **0.407** (its display's colour management),
+  and the ceiling's slope depends on where it is read — 1 − 2(1 − m)·x gives 0.471 and 0.674
+  at 0.407 for m 0.35 and 0.6 (measured 0.47 and 0.67), 0.35 and 0.6 at our harness's 0.5. So
+  "the reference keeps 1.15–1.4× more contrast" was the two means, not the tone: compare slopes
+  at the SAME backdrop level.
 
 ### The veil under the Control Center (2026-10-11)
 
