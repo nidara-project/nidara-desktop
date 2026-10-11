@@ -58,6 +58,12 @@ pub struct Blur {
     pub passes: u32,
 }
 
+/// The blur of glass the compositor paints: the widest of the three it mixes per shape
+/// (render/glass_gl.rs `BlurMix`, which says where the numbers come from). It is the glass's,
+/// not the client's: `set_blur` and `set_shape_blur` blur only a surface whose glass its client
+/// paints.
+pub const GLASS_BLUR: Blur = Blur { size: 4.0, passes: 3 };
+
 /// How the glass treats the blurred backdrop under a shape (`set_tone`), in this order, on the
 /// sRGB-encoded colour: saturation about the Rec.709 luma; the luma l brought to
 /// l·(1 − (1 − ceiling)·l); levels lift + (gain − lift)·v; the wash laid over; the ambient —
@@ -191,8 +197,13 @@ impl MaterialState {
         self.glass.map_or(0.0, |g| g.refraction.max(self.lensing * s.w.min(s.h)))
     }
 
-    /// The blur a shape is resolved with: its own (`set_shape_blur`), else the surface's.
+    /// The blur a shape is resolved with: the glass's where the compositor paints it
+    /// (`GLASS_BLUR`, mixed per shape by its size); else its own (`set_shape_blur`), else the
+    /// surface's.
     pub fn blur_of(&self, s: &Shape) -> Blur {
+        if self.glass.is_some() {
+            return GLASS_BLUR;
+        }
         s.blur.unwrap_or(Blur { size: self.blur_size, passes: self.blur_passes })
     }
 }
@@ -785,5 +796,19 @@ mod tests {
         };
         assert_eq!(m.blur_of(&m.shapes[0]), Blur { size: 2.0, passes: 2 }, "the surface's");
         assert_eq!(m.blur_of(&m.shapes[1]), wide, "its own");
+    }
+
+    #[test]
+    fn glass_the_compositor_paints_takes_the_glass_s_blur_whatever_the_client_set() {
+        let wide = Blur { size: 2.0, passes: 3 };
+        let m = MaterialState {
+            shapes: vec![shape(0.0, 0.0), Shape { blur: Some(wide), ..shape(0.0, 100.0) }],
+            blur_size: 1.0,
+            blur_passes: 2,
+            glass: Some(Glass { refraction: 10.0, rim: 1.0 }),
+            ..Default::default()
+        };
+        assert_eq!(m.blur_of(&m.shapes[0]), GLASS_BLUR);
+        assert_eq!(m.blur_of(&m.shapes[1]), GLASS_BLUR, "set_shape_blur blurs only glass its client paints");
     }
 }

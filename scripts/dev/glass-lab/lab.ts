@@ -1259,7 +1259,8 @@ function fillControls() {
             if (Math.abs(v - candidateDefault(key)) < 1e-6) delete tuning[key]; else tuning[key] = v
             apply()
         }, { decimals, debounce: 0 })
-    // The frost: the panels' blur, which the shell takes from the compositor (`GLASS_BLUR`).
+    // The frost: the blur of glass the CLIENT paints (refractive glass off). Hyalo's own glass
+    // blurs as the reference does, measured, by each pane's size (references/hyalo.md → "The blur").
     const frostSlider = (key: "blurSize" | "blurPasses", title: string, sub: string, min: number, max: number,
         neutral: number, decimals: number) =>
         SliderRow(title, sub, state.tuning[state.variant][key] ?? neutral, min, max, v => {
@@ -1420,9 +1421,9 @@ function fillControls() {
     ], "Un cristal que aparece se materializa: su desenfoque, su refracción, su tinte y su canto crecen desde cero, sin fundido (#764). El deslizador congela todas las piezas en un punto de ese crecimiento para juzgarlo; en el escritorio el contenido aparece en la segunda mitad.")
     section("Refracción, escarcha y luz", [
         ToggleRow("Cristal refractivo", "apagado: solo desenfoque", state.flags.glass, v => { state.flags.glass = v; apply() }),
-        frostSlider("blurSize", "Escarcha: tamaño", `por pasada; ${CRYSTAL_CANDIDATES[state.variant].blurSize} = candidato ${state.variant}`, 0.5, 6,
+        frostSlider("blurSize", "Escarcha: tamaño", `solo con el cristal refractivo apagado; ${CRYSTAL_CANDIDATES[state.variant].blurSize} = candidato ${state.variant}`, 0.5, 6,
             CRYSTAL_CANDIDATES[state.variant].blurSize, 1),
-        frostSlider("blurPasses", "Escarcha: pasadas", `${CRYSTAL_CANDIDATES[state.variant].blurPasses} = candidato ${state.variant}`, 1, 5,
+        frostSlider("blurPasses", "Escarcha: pasadas", `solo con el cristal refractivo apagado; ${CRYSTAL_CANDIDATES[state.variant].blurPasses} = candidato ${state.variant}`, 1, 5,
             CRYSTAL_CANDIDATES[state.variant].blurPasses, 0),
         tuningSlider("refraction", "Refracción mínima", "px", 0, 40, 0),
         tuningSlider("lensing", "Refracción según tamaño", "fracción del lado corto", 0, 0.15, 3),

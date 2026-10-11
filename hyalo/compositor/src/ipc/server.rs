@@ -334,6 +334,11 @@ impl Hyalo {
                                 .collect(),
                             toned: m.state.shapes.iter().filter(|s| s.tone.is_some()).count(),
                             blurs: m.state.shapes.iter().map(|s| {
+                                if m.state.glass.is_some() {
+                                    // The glass's own: its three blurs' weights by the shape's size.
+                                    let w = crate::render::glass_gl::BlurMix::weights(s.w.min(s.h));
+                                    return format!("mix {:.2}/{:.2}/{:.2}", w[0], w[1], w[2]);
+                                }
                                 let b = m.state.blur_of(s);
                                 format!("{}:{}", b.size, b.passes)
                             }).collect(),

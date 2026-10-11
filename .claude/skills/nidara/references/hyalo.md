@@ -118,7 +118,7 @@ What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `refraction lensing rim inkDarkAbove
 inkLightBelow veilStrength veilFalloff veilExponent`, one stage of one tone as `PIECE.FACE.STAGE`
-(`dock.light.gain = 0.9`), `blur`/`popoverBlur`/`panelBlur = SIZE:PASSES`, `glass = off` / `ink = off` /
+(`dock.light.gain = 0.9`), `blur`/`popoverBlur = SIZE:PASSES` (glass the client paints), `glass = off` / `ink = off` /
 `tone = off` for the A/B; the full list is `glass-material.ts`'s header) is re-read as it is saved
 — it is how the numbers are tuned with the owner on screen.
 A blur's `SIZE:PASSES` means the SAME blur on Hyalo as on Hyprland — the numbers are shared
@@ -690,30 +690,47 @@ botched replica by eye … it doesn't add up"). The owner's call: copy the MACHI
   strip, the halo per capsule, the dock's band switched on by the CC — is in git, `hyalo.md`
   before this change.
 
-### A large pane's blur (2026-10-11)
+### The blur: the reference's, mixed by the pane's size (2026-10-11)
 
-A large pane — `GlassPiece` `panel`: the system menu, Prism, the app grid — blurs ONE PASS further
-than the small panes beside it on the same surface. Owner, 2026-10-11: "over anything but plain
-black or white the reference's menus look more uniform … more blur?" — measured, and yes. The
-probe's `bare-regular-panel` and real menu spread a 0.4|0.6 edge (bands 48 px) to σ 7.25–8 pt and
-let 0.007–0.023 of a page of text through; its buttons and toolbar groups stay at σ 4.75. Our
-menu and app grid had the bar's blur (σ 4.5, 0.03–0.11 of the page): same tone on plain greys,
-far more detail through. One pass more (2:2 → 2:3 at the regular material) measures σ 7.75–8 and
-0.01–0.02 on the real shell, the tone unchanged (`texture-calib`: glass-probe's own estimators,
-`tools/catalog.py`, on our captures). The app grid reads σ 9.75 with the same blur: unexplained,
-and the reference's Applications panel was never read from its filter.
+The glass Hyalo paints blurs as the reference's does, MEASURED: one material whose inputs come
+from each pane's shorter side, not a blur per kind of pane. Owner, 2026-10-11: "what is the
+point of defining a material if it is then applied differently to each piece?" — and the
+reference answers it: its filter is one, and the system sizes its inputs.
 
-- **Why a protocol request.** The blur was per SURFACE (`set_blur`), and every panel lives on the
-  bar's (commandment 5): the menu could not blur more without the capsules. `set_shape_blur`
-  (within v1) is a pen like `set_tone`: the shapes added after it take that blur, passes 0 = the
-  surface's again, reset by `clear_shapes`.
-- **Hyalo** (`material::Blur`, `MaterialState::blur_of`, `render/glass.rs` `groups`): shapes
-  blurred differently never share a pyramid (one capture, one blur); a group's region grows by
-  its own blur's reach; a fusion group is one silhouette whatever its members' blurs, and takes
-  the widest. `msg layers` lists each shape's blur (`blurs`, "size:passes").
-- **The kit** (`MaterialSource.pieceBlur`, `glass-material.ts`): `panel` → the surface's blur
-  plus one pass; a popover is already blurred so as a
-  whole surface (`popoverBlur`), so its panes ask nothing. Tuned live: `panelBlur = SIZE:PASSES`.
+- **How it was measured** (private glass-probe, branch `claude/sigma`, `tools/sigma.py`). A
+  sinusoid grating along x (periods 8, 16, 32, 64, 128 pt), constant along y — so the refraction
+  of a pane's top and bottom edges cannot touch it — under panes 24 to 340 pt tall, the bare
+  grating above and below in the same capture. What each period keeps IS the blur once the tone
+  is divided out. The tool is self-tested (gaussians of known σ come back within 3 %; no blur, a
+  25 px box and a plain tone scale are rejected); `--hyalo` runs our kawase through it.
+- **What the reference does** (runs 38173179067, 38175196633, read back from its own filter):
+  its blur opacities SCALE the blur radius (op 0.5 at radius 5 ≡ op 1 at 2.5), 0/0 up to 64 pt
+  of shorter side and 0.8/0.4 from 160 — the same ramp as the ambient (`ToneGl::grown`), which
+  is also its shadow's and its bleed's. With its tone neutral, what a pane keeps:
+  small 0.19 0.25 0.30 0.49 0.79 · large 0.05 0.05 0.15 0.45 0.79. Neither is ONE gaussian:
+  a small pane keeps a fifth of the finest detail and blurs the coarse far more than a kawase
+  of the same reach. The σ the catalogue fitted to band edges (4.75 vs 7.5 "small vs large") and
+  the old calibration ("2:3 → 7.75") were another method's, and are not to be used.
+- **Hyalo** (`render/glass_gl.rs` `BlurMix`, `glass_final.glsl` `blurred`): one capture, three
+  of its blurs — the backdrop barely softened (one pass at 0.5), the kawase at 4.0 after two
+  passes and after three; the last two share their down-samples (`capture`: the middle copy is
+  up-sampled from level 2 before the full chain's up-samples overwrite it). Each shape mixes
+  them by its size: `SMALL` 0.27/0.11/0.62 up to 64, `LARGE` 0.06/0.37/0.57 from 160, linearly
+  between. Fitted through this very kawase to the reference's curves within 0.011; measured on
+  the real shell (`glass-probe/scripts/nidara-grating-calib.sh`, `tone = off`, content masked):
+  bar 0.19 0.25 0.28 0.45 0.76, app grid 0.04 0.05 0.14 0.43 0.78. While a pane forms (#764) the
+  middle copy runs one pass fewer than the full chain at the same reduced offset, so the two
+  grow together. Its cost over one blur: the soft down-sample, one up-sample and two in `draw`.
+- **Logical px** (`× px_scale`). Whether the reference blurs in points or pixels is NOT known:
+  its runner has no 2× mode.
+- **The protocol.** `set_blur` and `set_shape_blur` (v1, kept) blur only a surface whose glass
+  its CLIENT paints; where the compositor paints it (`set_glass`) the blur is `GLASS_BLUR` mixed
+  as above, and every shape of the surface shares one capture. `msg layers` lists each shape's
+  weights (`blurs`: "mix soft/middle/full"). The kit sends no per-pane blur any more.
+- **Still owed — the tone's local contrast.** Through the same grating, the reference keeps
+  about 1.15× (small) and 1.4× (large) more of the backdrop's contrast than its own tone
+  stages give on plain greys (they are exact there, and so are ours). Its ceiling probably
+  reads a blurred copy, not the pixel; it needs a run of its own to model, not a guess.
 
 ### The veil under the Control Center (2026-10-11)
 

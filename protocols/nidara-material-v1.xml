@@ -50,7 +50,10 @@
     <request name="set_blur">
       <description summary="pending: blur size and passes for this surface">
         size is the kawase offset in logical pixels, passes the number of
-        downsampling levels. passes 0 = no blur.
+        downsampling levels. passes 0 = no blur. Where the compositor paints
+        the glass (set_glass) the blur is the glass's own, mixed per shape by
+        its size, and this blurs nothing: it is the blur of a surface whose
+        glass its client paints.
       </description>
       <arg name="size" type="fixed"/>
       <arg name="passes" type="uint"/>
@@ -340,10 +343,11 @@
       <description summary="pending: the blur of the shapes added from now on">
         The blur (as set_blur: the kawase offset in logical pixels and the
         number of passes) of the shapes added after this request, until the
-        next set_shape_blur, in place of the surface's: a large pane is blurred
-        further than the small controls beside it on the same surface, as the
-        reference material blurs its menus and panels further than its buttons.
-        passes 0 = the surface's blur (set_blur). Reset to it by clear_shapes.
+        next set_shape_blur, in place of the surface's. passes 0 = the
+        surface's blur (set_blur). Reset to it by clear_shapes. Like set_blur,
+        it blurs only a surface whose glass its client paints: where the
+        compositor paints the glass (set_glass), a large pane already blurs
+        further than the small controls beside it, by its size.
       </description>
       <arg name="size" type="fixed"/>
       <arg name="passes" type="uint"/>
