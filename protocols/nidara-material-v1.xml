@@ -29,8 +29,8 @@
     </request>
     <request name="clear_shapes">
       <description summary="pending: no shapes (no material)">
-        The ink boxes (add_ink_box) and scrim regions (add_scrim_region) go
-        with them.
+        The ink boxes (add_ink_box) and veil regions (add_veil_region) go
+        with them, and the tones (set_tone, set_ink_tone) are reset to none.
       </description>
     </request>
     <request name="add_shape">
@@ -57,21 +57,24 @@
     <request name="set_glass">
       <description summary="pending: the compositor paints the glass itself">
         The compositor resolves the whole glass against the real backdrop,
-        per pixel: the blurred backdrop, refracted near the edge; its
-        saturation; a tint whose opacity rises where the backdrop is bright
-        so that content of target_luminance contrast stays legible, between
-        alpha_min and alpha_max; and a specular rim. The client then paints
+        per pixel: the blurred backdrop, refracted near the edge; the tone of
+        each shape (set_tone); and a specular rim. The client then paints
         only its content and state (active fills, hover), not the glass.
+
+        tint_r, tint_g, tint_b, alpha_min, alpha_max, target_luminance and
+        saturation are inert: they drove a tint that thickened per pixel to
+        keep content legible, which set_tone replaced. A shape with no tone is
+        the blurred, refracted backdrop alone.
       </description>
-      <arg name="tint_r" type="fixed"/>
-      <arg name="tint_g" type="fixed"/>
-      <arg name="tint_b" type="fixed"/>
-      <arg name="alpha_min" type="fixed"/>
-      <arg name="alpha_max" type="fixed"/>
-      <arg name="target_luminance" type="fixed" summary="the backdrop's WCAG relative (linear) luminance, after tint, not to exceed"/>
+      <arg name="tint_r" type="fixed" summary="inert"/>
+      <arg name="tint_g" type="fixed" summary="inert"/>
+      <arg name="tint_b" type="fixed" summary="inert"/>
+      <arg name="alpha_min" type="fixed" summary="inert"/>
+      <arg name="alpha_max" type="fixed" summary="inert"/>
+      <arg name="target_luminance" type="fixed" summary="inert"/>
       <arg name="refraction" type="fixed" summary="edge displacement, logical px"/>
       <arg name="rim" type="fixed" summary="specular rim strength, 0..1"/>
-      <arg name="saturation" type="fixed" summary="1 = unchanged"/>
+      <arg name="saturation" type="fixed" summary="inert (set_tone's saturation)"/>
     </request>
     <request name="clear_glass">
       <description summary="pending: back to blur only; the client paints its glass"/>
@@ -126,16 +129,15 @@
     <request name="set_ink">
       <description summary="pending: measure the ink boxes, with these thresholds">
         Thresholds are WCAG relative (linear) luminances, 0..1, with
-        light_below below dark_above (the gap is the hysteresis). Over a
-        shape that holds a group whose ink is dark, the compositor's glass
-        stops darkening the backdrop for white content: it lays the tint
-        given here at alpha_min instead.
+        light_below below dark_above (the gap is the hysteresis). A shape
+        that holds a group whose ink is dark takes its set_ink_tone. The tint
+        is inert (it was the veil laid over such a shape before set_ink_tone).
       </description>
       <arg name="dark_above" type="fixed"/>
       <arg name="light_below" type="fixed"/>
-      <arg name="tint_r" type="fixed"/>
-      <arg name="tint_g" type="fixed"/>
-      <arg name="tint_b" type="fixed"/>
+      <arg name="tint_r" type="fixed" summary="inert"/>
+      <arg name="tint_g" type="fixed" summary="inert"/>
+      <arg name="tint_b" type="fixed" summary="inert"/>
     </request>
     <request name="clear_ink">
       <description summary="pending: no ink measurement; every group is light again"/>
@@ -188,30 +190,11 @@
       <arg name="size_fraction" type="fixed" summary="of the shape's shorter side, 0..1"/>
     </request>
     <request name="set_scrim">
-      <description summary="pending: a shadow under the glass, where the glass alone would turn grey">
-        While the compositor paints the glass (set_glass), its tint thickens
-        per pixel where the backdrop is too bright for the content, and past a
-        point the pane looks painted grey rather than glass. With a scrim, the
-        glass takes no more than tint_limit (an opacity, 0..1) and the
-        compositor lays a soft black shadow UNDER it (below the surface, inside
-        what the glass blurs), even across each shape, with exactly the
-        strength the glass is missing: the brightest point of the backdrop
-        under the shapes comes down until tint_limit brings it to set_glass's
-        target_luminance. None where the glass reaches it alone; none for a
-        shape whose content is dark (set_ink), which lies on its light veil.
-        It grows and shrinks with the backdrop, smoothly, at most max_strength
-        (0..1, the shadow's opacity at its core) — past that, the tint makes up
-        the rest, up to set_glass's alpha_max — and fades with the shapes'
-        opacity.
-
-        A shape inside no scrim region (add_scrim_region) gets a shadow of its
-        own: its outline as the core, fading over size_fraction of its shorter
-        side. 0 max_strength (the initial value): no shadow.
-
-        A region's shadow (add_scrim_region) is not even across it: it is
-        whole at the region's centre and sweeps out to region_edge of that at
-        the region's rim, following the region's shape, then fades over the
-        region's falloff outside it. 1: even across the region.
+      <description summary="inert: the shadow under the glass is gone">
+        It laid a shadow under the glass with what a per-pixel tint was
+        missing to keep content legible; set_tone replaced that tint, and
+        nothing is missing any more. Accepted and ignored. Fixed veils
+        (add_veil_region) do not need it.
       </description>
       <arg name="max_strength" type="fixed"/>
       <arg name="size_fraction" type="fixed"/>
@@ -219,16 +202,9 @@
       <arg name="region_edge" type="fixed" summary="a region's shadow at its rim, as a fraction of its centre's (0..1)"/>
     </request>
     <request name="add_scrim_region">
-      <description summary="pending: one shadow shared by the shapes inside it">
-        Surface-local, logical coordinates; the region may reach past the
-        surface, and the compositor cuts it to the output. Every shape whose
-        centre lies inside it shares one shadow at one strength: this rectangle
-        as the core, swept from its centre as set_scrim's region_edge says, and
-        fading over falloff logical pixels outside it — so panes side by side
-        lie on one shadow instead of one each. A negative
-        falloff claims the shapes inside it and casts nothing: they get no
-        shadow at all, not one of their own. Cleared by clear_shapes;
-        meaningful only with set_scrim.
+      <description summary="inert: the shadow under the glass is gone">
+        Accepted and ignored, like set_scrim. A shape inside one is claimed by
+        no veil region.
       </description>
       <arg name="x" type="fixed"/>
       <arg name="y" type="fixed"/>
@@ -286,11 +262,9 @@
     <request name="add_veil_region">
       <description summary="pending: a FIXED veil under the shapes inside it">
         Like add_scrim_region — surface-local, logical; every shape whose centre
-        lies inside it is claimed by it and gets no other shadow — but what it
-        casts is not measured: a black veil of opacity strength (0..1), even
+        lies inside it is claimed by it — but what it casts is not measured: a black veil of opacity strength (0..1), even
         under the whole rectangle, falling to nothing over falloff logical
         pixels outside it as (1 − d/falloff)^exponent. It needs no set_scrim
-        and takes no part in its rule: the glass's tint is not limited by it,
         and the backdrop's brightness does not change it. It fades with the
         shapes' opacity. Cleared by clear_shapes; meaningful only while the
         compositor paints the glass (set_glass).
@@ -305,6 +279,61 @@
       <arg name="falloff" type="fixed"/>
       <arg name="strength" type="fixed"/>
       <arg name="exponent" type="fixed" summary="the fall-off's shape outside the rectangle: 1 linear, more falls faster near it"/>
+    </request>
+    <request name="set_tone">
+      <description summary="pending: the tone of the shapes added from now on">
+        How the glass treats the blurred backdrop under the shapes added
+        after this request, until the next set_tone, in this order, on the
+        sRGB-encoded colour:
+
+        1. saturation, about the Rec.709 luma (1 = unchanged);
+        2. ceiling: the luma l is brought to l·(1 − (1 − ceiling)·l), so
+           white ends at ceiling and the mid tones bend towards it
+           (1 = unchanged);
+        3. levels: lift + (gain − lift)·v, where black lands and where
+           white would (0 and 1 = unchanged);
+        4. wash: the colour wash_r, wash_g, wash_b laid over at opacity
+           wash_a (0 = none);
+        5. ambient: what surrounds the pane, blurred far wider than the
+           glass (0.35 of the shape's shorter side), mapped by
+           ambient_lift + (ambient_gain − ambient_lift)·w, lightens what
+           is darker than it, at an opacity of ambient times how large the
+           shape is — none for a shorter side up to 64 logical px, all of
+           it from 160 (0 = none).
+
+        All of it grows with how formed the shape is. Reset to none (the
+        backdrop as it is, blurred and refracted) by clear_shapes.
+      </description>
+      <arg name="saturation" type="fixed"/>
+      <arg name="ceiling" type="fixed" summary="0..1, 1 = unchanged"/>
+      <arg name="lift" type="fixed"/>
+      <arg name="gain" type="fixed"/>
+      <arg name="wash_r" type="fixed"/>
+      <arg name="wash_g" type="fixed"/>
+      <arg name="wash_b" type="fixed"/>
+      <arg name="wash_a" type="fixed"/>
+      <arg name="ambient" type="fixed" summary="0..1, its opacity on a large shape"/>
+      <arg name="ambient_lift" type="fixed"/>
+      <arg name="ambient_gain" type="fixed"/>
+    </request>
+    <request name="set_ink_tone">
+      <description summary="pending: the tone of those shapes while their content is dark">
+        The tone (as set_tone) a shape added after this request takes while
+        its ink group's content is dark (set_ink). Until it is set — and
+        after set_tone and clear_shapes, which reset it — a shape keeps its
+        set_tone whatever its ink.
+      </description>
+      <arg name="saturation" type="fixed"/>
+      <arg name="ceiling" type="fixed"/>
+      <arg name="lift" type="fixed"/>
+      <arg name="gain" type="fixed"/>
+      <arg name="wash_r" type="fixed"/>
+      <arg name="wash_g" type="fixed"/>
+      <arg name="wash_b" type="fixed"/>
+      <arg name="wash_a" type="fixed"/>
+      <arg name="ambient" type="fixed"/>
+      <arg name="ambient_lift" type="fixed"/>
+      <arg name="ambient_gain" type="fixed"/>
     </request>
   </interface>
 </protocol>

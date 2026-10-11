@@ -24,7 +24,7 @@ import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { compositorPaintsGlass, trackGlass, trackNoScrim } from "../../../lib/nidara-kit/platform/material"
+import { compositorPaintsGlass, trackGlass } from "../../../lib/nidara-kit/platform/material"
 import { SlicedCairoArea } from "../../../lib/sliced-cairo"
 import { BAR_H } from "../bar/capsule"
 
@@ -244,8 +244,6 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 const pw = gloss.get_width() - DOCK_SHADOW_PAD * 2, ph = gloss.get_height() - DOCK_SHADOW_PAD * 2
                 return [{ x: DOCK_SHADOW_PAD, y: DOCK_SHADOW_PAD, w: pw, h: ph, radius: Math.min(pw, ph) / 2, exponent: 3.2 }]
             })
-            // On Hyalo its glass casts no shadow (owner, 2026-10-02: one ran over the windows).
-            trackNoScrim(gloss)
             da = gloss
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
@@ -657,8 +655,6 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 const { x, y, width, height } = capsuleIn(pillArea.get_width(), pillArea.get_height())
                 return [{ x, y, w: width, h: height, radius: Math.min(width, height) / 2, exponent: 3.2 }]
             })
-            // On Hyalo its glass casts no shadow (owner, 2026-10-02: one ran over the windows).
-            trackNoScrim(pillArea)
 
             // Shim: positioned by margin_top (set dynamically via updateSize → getGtkCenter).
             shim = new Gtk.Box({

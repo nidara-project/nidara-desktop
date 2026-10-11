@@ -6,14 +6,11 @@
 // where `LAB_ADD(i, x)` and `LAB_MUL(i, x)` are `x` and every `#ifdef GLASS_LAB` block is
 // compiled out. Every value 0 is the factory glass. A new layer to try goes here, behind a hook,
 // and becomes the factory's by changing the number the hook wraps (and the lab's neutral).
-//   lab[0]  tone: ceiling, the WCAG luminance white is compressed to (0 = off)        block
-//   lab[1]  tone: knee, the luminance below which nothing changes (0 = 0.15)          block
-//   lab[2]  Regular trial: begin removing adaptive dark tint at this backdrop luminance
-//   lab[3]  Regular trial: finish removing it at the ink's dark threshold (0 = off)
+//   lab[0..3] free: retired 2026-10-11 with the adaptive tint they tried variations of
 //   lab[4]  bevel profile: + to its exponent (5)                                      ADD
 //   lab[5]  refraction: × (1 + it) on its strength (3 × Snell's)                      MUL
 //   lab[6]  dispersion: its spread, 1 = the fringe there was until 2026-10-05          block
-//   lab[7]  Regular trial: light veil when the ink event turns its content dark
+//   lab[7]  free: retired 2026-10-11 (the light veil of dark content is set_ink_tone's)
 //   lab[8]  light: rotation of the rim's light, degrees                               block
 //   lab[9]  inner glow: × it, 1 = the glow along the edge there was until 2026-10-05  block
 //   lab[10] rim line: × (1 + it) on its width                                         MUL
@@ -31,16 +28,14 @@ uniform float exponent;
 uniform float opacity;      // how FORMED the glass is in this shape, 0..1 (#764): not a coverage
 uniform vec4 clip;          // what of the shape may show, output px: x, y, w, h
 uniform float glass;        // 1: refractive glass — the compositor paints the whole glass
-uniform vec3 tint;
-uniform float alpha_min;
-uniform float alpha_max;
-uniform float target;
 uniform float refraction;   // output px
 uniform float px_scale;     // output px per logical px: the widths below are logical
 uniform float rim;
-uniform float saturation;
-uniform float ink_dark;     // 1: this shape holds dark content (the ink event)
-uniform vec3 ink_tint;
+// The shape's tone (set_tone, or set_ink_tone while its content is dark), its ambient already
+// sized for the shape (glass_gl.rs `ToneGl`).
+uniform vec4 tone;          // saturation, ceiling, lift, gain
+uniform vec4 wash;          // r, g, b, a
+uniform vec4 ambient;       // its opacity here, lift, gain, reach (output px)
 uniform float has_pointer;  // 1: a pointer is spliced into the shape (a tooltip, a menu)
 uniform vec2 ptr_a;         // the pointer's triangle, inset by its tip radius, output px
 uniform vec2 ptr_b;
@@ -57,7 +52,7 @@ uniform float f_k;          // the smooth union's width, output px (twice the gr
 uniform vec4 f_env;         // the group's envelope (set_fusion_merge): x, y, w, h, output px
 uniform vec4 f_env_par;     // its corner radius, exponent; the merge (0..1); its refraction
 uniform vec4 f_rect[FUSE_MAX];   // each member, output px: x, y, w, h
-uniform vec4 f_par[FUSE_MAX];    // radius, exponent, formed (`opacity`), ink_dark
+uniform vec4 f_par[FUSE_MAX];    // radius, exponent, formed (`opacity`), ink_dark (unused here)
 uniform vec4 f_clip[FUSE_MAX];   // what of it may show, output px; w 0 = no clip
 uniform float f_refr[FUSE_MAX];  // its refraction, output px
 varying vec2 v_out;
@@ -107,14 +102,7 @@ float lens_depth(vec2 px, float w) {
     return 0.5 * (lo + hi);
 }
 
-// WCAG relative luminance of an sRGB-encoded colour (glass-legibility.ts's `luminance`).
-float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
-#ifdef GLASS_LAB
-float to_encoded(float v) { return v <= 0.0031308 ? v * 12.92 : 1.055 * pow(v, 1.0 / 2.4) - 0.055; }
-#endif
-float luminance(vec3 c) {
-    return 0.2126 * to_linear(c.r) + 0.7152 * to_linear(c.g) + 0.0722 * to_linear(c.b);
-}
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 // A triangle's signed distance (Inigo Quilez's, exact): negative inside, either winding.
 float sd_triangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
@@ -262,11 +250,57 @@ vec3 formed_backdrop(vec2 out_offset, float formed) {
     return w >= 0.999 ? blurred : mix(sharp_at(out_offset), blurred, w);
 }
 
+// ── The tone (set_tone) ──────────────────────────────────────────────────────
+// What the glass does to the blurred backdrop, stage by stage, in the order and with the laws
+// measured on the reference's own glass input by input (glass-probe `tweak`, 2026-10-11), all on
+// the sRGB-ENCODED colour, every stage growing with how formed the glass is:
+//   1. saturation about the Rec.709 luma (exact: 0 gives that luma's grey);
+//   2. the ceiling: the luma l goes to l·(1 − (1 − ceiling)·l) — white lands on the ceiling and
+//      the mid tones bend towards it, rising and then falling a little past
+//      l = 1 / (2(1 − ceiling)) (exact on greys, ≤ 0.003 from 0.1 to 0.9). The colour around
+//      the luma is scaled by s^0.75 of the luma's factor s — the measured colours, not exact;
+//   3. levels: lift + (gain − lift)·v (exact);
+//   4. the wash laid over (exact);
+//   5. the ambient: what surrounds the pane, blurred `ambient.w` wide (the reference's 0.35 of
+//      the shorter side; here 17 taps over the blurred capture, which reaches only as far as
+//      the glass's own blur — past it, the capture's edge repeats), through its own levels,
+//      lightening what is darker than it. Dark: within ≈ 0.02 of the reference on plain greys,
+//      0.205 against 0.22 for black among neighbours. Its LIGHT version (which brightens the
+//      mid-highs a little, ≤ 0.03 at the reference's own setting) fits no blend that was tried
+//      and is not modelled: a light tone carries no ambient.
+vec3 ambient_backdrop() {
+    float r = ambient.w;
+    vec3 sum = backdrop(vec2(0.0)).rgb;
+    for (int i = 0; i < 8; i++) {
+        float a = float(i) * 0.785398;
+        vec2 d = vec2(cos(a), sin(a));
+        sum += backdrop(d * r * 0.5).rgb + backdrop(d * r).rgb;
+    }
+    return sum / 17.0;
+}
+vec3 tone_of(vec3 bg, float formed) {
+    float l = dot(bg, LUMA);
+    vec3 c = clamp(mix(vec3(l), bg, mix(1.0, tone.x, formed)), 0.0, 1.0);
+    l = dot(c, LUMA);
+    float s = 1.0 - (1.0 - mix(1.0, tone.y, formed)) * l;
+    c = clamp(vec3(l * s) + (c - vec3(l)) * pow(max(s, 0.0), 0.75), 0.0, 1.0);
+    float lift = tone.z * formed;
+    float gain = mix(1.0, tone.w, formed);
+    c = clamp(vec3(lift) + (gain - lift) * c, 0.0, 1.0);
+    c = mix(c, wash.rgb, wash.a * formed);
+    if (ambient.x > 0.0) {
+        vec3 w = ambient_backdrop();
+        vec3 b = clamp(vec3(ambient.y) + (ambient.z - ambient.y) * w, 0.0, 1.0);
+        c = mix(c, max(c, b), ambient.x * formed);
+    }
+    return c;
+}
+
 void main() {
     float d = silhouette(v_out);
-    // A fusion group's width of bevel, how formed it is and its ink at this pixel (fused_blend); a single
-    // shape's are its own.
-    vec3 fb = fused > 0.5 ? fused_blend(v_out) : vec3(0.0, opacity, ink_dark);
+    // A fusion group's width of bevel and how formed it is at this pixel (fused_blend); a single
+    // shape's are its own. (Its ink is the CPU's: a dark-ink shape is given its ink tone.)
+    vec3 fb = fused > 0.5 ? fused_blend(v_out) : vec3(0.0, opacity, 0.0);
     // Cut straight where the clip ends (a list scrolled under its edge), anti-aliased. (A fusion
     // group's members are cut inside `fused_sdf`; its clip uniform is none.)
     vec2 cin = min(v_out - clip.xy, clip.xy + clip.zw - v_out);
@@ -356,65 +390,7 @@ void main() {
         bg = vec3(backdrop(off * (1.0 - sp)).r, bg.g, backdrop(off * (1.0 + sp)).b);
     }
 #endif
-    // Vibrancy: the backdrop's colour, a little stronger — as much as the glass is formed.
-    float l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
-    bg = clamp(mix(vec3(l), bg, mix(1.0, saturation, formed)), 0.0, 1.0);
-    l = dot(bg, vec3(0.2126, 0.7152, 0.0722));
-#ifdef GLASS_LAB
-    // Tone: highlights compressed in linear light toward a ceiling, hue kept (C1 at the knee).
-    if (lab(0) != 0.0) {
-        float cap = lab(0);
-        float knee = lab(1) != 0.0 ? lab(1) : 0.15;
-        float lin = luminance(bg);
-        if (lin > knee && cap > knee) {
-            float b = ((1.0 - knee) / (cap - knee) - 1.0) / (1.0 - knee);
-            float x = lin - knee;
-            float k = (knee + x / (1.0 + b * x)) / lin;
-            bg = clamp(vec3(to_encoded(to_linear(bg.r) * k), to_encoded(to_linear(bg.g) * k),
-                            to_encoded(to_linear(bg.b) * k)), 0.0, 1.0);
-        }
-    }
-#endif
-    // The tint thickens exactly where the backdrop is too bright for white content:
-    // after tinting, the luminance does not exceed target (per pixel; #673's rule, on the GPU).
-    // target is a WCAG relative luminance — LINEAR light — while the tint is mixed into the
-    // encoded colour, so the least alpha is searched for, not solved for. Comparing the
-    // ENCODED luma with it darkened a white backdrop to 10:1 where 4.5:1 was asked (owner-
-    // caught 2026-10-01: "with a white background everything looks dark").
-    vec3 c;
-    if (fb.z > 0.5) {
-        // Dark content (the ink event): the backdrop under it is bright everywhere, so the
-        // glass stops darkening it for white content — a light veil instead.
-        float light_veil = alpha_min;
-#ifdef GLASS_LAB
-        // The Lab's backdrop-driven Regular uses this same ink event for its logo, veil and
-        // elevation. The mode-bound light recipe already has alpha_min = modeLightVeil.
-        light_veil = max(light_veil, lab(7));
-#endif
-        c = mix(bg, ink_tint, light_veil * formed);
-    } else {
-        float a = 0.0;
-        if (luminance(bg) > target) {
-            float lo = 0.0;
-            float hi = alpha_max;
-            for (int i = 0; i < 8; i++) {
-                float m = 0.5 * (lo + hi);
-                if (luminance(mix(bg, tint, m)) > target) lo = m; else hi = m;
-            }
-            a = hi;
-        }
-        // The tint thickens as the glass forms.
-        a = clamp(a, alpha_min, alpha_max) * formed;
-#ifdef GLASS_LAB
-        // Trial only: on a uniformly brightening backdrop, the old ink event took
-        // the whole shape from darkened glass to a light veil in one frame. Let the
-        // dark tint vanish continuously before that event. The ink itself remains
-        // the protocol's boolean decision; this does not make text continuously adaptive.
-        if (lab(2) > 0.0 && lab(3) > lab(2))
-            a *= 1.0 - smoothstep(lab(2), lab(3), luminance(bg));
-#endif
-        c = mix(bg, tint, a);
-    }
+    vec3 c = tone_of(bg, formed);
     // Specular rim: a band of light along the edge where it faces the light (top-left) and again
     // on the opposite side, nothing between — two highlights across a diagonal, as the reference
     // material's (the lab, 2026-10-05: the echo 0.35 → 0.70, the line all round 0.18 → 0). No

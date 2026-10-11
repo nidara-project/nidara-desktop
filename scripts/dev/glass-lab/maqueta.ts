@@ -12,12 +12,12 @@
 // hooks) is in a section of its own, "Refracción (común)".
 //
 // The model of the glass this lab is built on:
-//   · one material, two variants: Regular and Clear, each with its frost, its dark smoke, its light
-//     veil, its saturation and its rim. A tint is PROPORTIONAL — a smoke or a veil mixed into what
-//     is behind at one strength — never a brightness ceiling: glass over a newspaper shows the
-//     newspaper (owner, 2026-10-11; references/hyalo.md → "Calibrated against the reference").
-//   · per piece: which variant, how thick (more tint and a little more frost — larger pieces are
-//     thicker), the colour of its text, and a shadow AROUND it (never under it).
+//   · one material, two variants: Regular and Clear, each with its frost and its rim. What the
+//     glass does to the backdrop is each piece's TONE — the stages measured on the reference's own
+//     filter (references/hyalo.md → "The tone"): Regular starts from the tones the shell ships,
+//     Clear from the reference's Clear.
+//   · per piece: which variant, its tone (dark and light face), the colour of its text, and a
+//     shadow AROUND it (never under it).
 import "../gtk-init"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
@@ -35,9 +35,9 @@ import { useNoGtkTheme } from "../../../ui/lib/nidara-kit/platform/gtk-theme"
 import { initAppearance } from "../../../ui/lib/nidara-kit/platform/appearance-css"
 import { withKitSheet } from "../../../ui/lib/nidara-kit/platform/kit-css"
 import { setKitAppearance } from "../../../ui/lib/nidara-kit"
-import { registerGlassMaterial } from "../../../ui/lib/nidara-kit/platform/glass-material"
-import { setMaterialSource, type GlassParams, type InkParams } from "../../../ui/lib/nidara-kit/platform/material"
-import { GLASS_TINT, RADIUS } from "../../../ui/lib/nidara-kit/platform/tokens"
+import { registerGlassMaterial, GLASS_TONES, TONE_STAGES, toneStage } from "../../../ui/lib/nidara-kit/platform/glass-material"
+import { setMaterialSource, type GlassParams, type GlassPiece, type GlassTone, type InkParams } from "../../../ui/lib/nidara-kit/platform/material"
+import { RADIUS } from "../../../ui/lib/nidara-kit/platform/tokens"
 import Theme from "../../../ui/shell/core/ThemeManager"
 import { safeDisconnect } from "../../../ui/shell/core/signals"
 import { GLASS_BLUR } from "../../../ui/shell/core/NidaraTheme"
@@ -80,13 +80,17 @@ setKitAppearance({
 type Variant = "regular" | "clear"
 type PieceId = "barra" | "menu" | "cc" | "dock" | "promo"
 type Scene = "Escritorio" | "Círculo promo"
-interface Glass { frost: number, passes: number, smoke: number, veil: number, saturation: number, rim: number }
-/** `aspect`: "modo" follows the system mode (light veil and dark text in light mode); "oscuro" keeps
- *  the smoke and white text in both — what the reference's Control Center does; "fondo" follows the
- *  BACKDROP: Hyalo measures what is under the piece (the ink event) and turns it to the light veil
- *  with dark content over a bright backdrop, back to the smoke over a dark one. */
+interface Glass { frost: number, passes: number, rim: number }
+type ToneVals = Record<typeof TONE_STAGES[number], number>
+type Faces = { dark: ToneVals, light: ToneVals }
+/** `aspect`: "modo" follows the system mode (the light face and dark text in light mode); "oscuro"
+ *  keeps the dark face and white text in both — what the reference's Control Center does; "fondo"
+ *  follows the BACKDROP: Hyalo measures what is under the piece (the ink event) and turns it to the
+ *  light face with dark content over a bright backdrop, back to the dark one over a dark one. */
 type Aspect = "modo" | "oscuro" | "fondo"
-interface Piece { glass: Variant, thick: number, aspect: Aspect,
+interface Piece { glass: Variant, aspect: Aspect,
+    /** Its Regular tone, both faces (from the shipped tone of its kind); Clear takes `clearTone`. */
+    tone: Faces,
     shadow: { on: boolean, alpha: number, blur: number, dy: number } }
 const FORMATS = { "16:9": [1920, 1080], "1:1": [1080, 1080], "4:5": [1080, 1350], "9:16": [1080, 1920] } as const
 type Format = keyof typeof FORMATS
@@ -102,6 +106,8 @@ interface State {
     videoSeconds: number
     regular: Glass
     clear: Glass
+    /** The reference's Clear, read from its filter (glass-probe catalogue): one tone, both faces. */
+    clearTone: ToneVals
     common: { bevel: number, profile: number, strength: number }
     /** "Según fondo": to dark content above this backdrop luminance, back below the other. */
     autoInk: { darkAbove: number, lightBelow: number }
@@ -110,21 +116,31 @@ interface State {
 const PIECE_NAMES: Record<PieceId, string> = { barra: "Barra", menu: "Menú", cc: "Centro de Control", dock: "Dock",
     promo: "Círculo promo" }
 const noShadow = () => ({ on: false, alpha: 0.23, blur: 15, dy: 4 })
+/** Which kind of pane each piece is: its shipped tone. */
+const KIND: Record<PieceId, GlassPiece> = { barra: "control", menu: "panel", cc: "controlCenter", dock: "dock", promo: "control" }
+const vals = (t: GlassTone): ToneVals => Object.fromEntries(TONE_STAGES.map(st => [st, toneStage(t, st)])) as ToneVals
+const shipped = (id: PieceId): Faces => ({ dark: vals(GLASS_TONES[KIND[id]].dark), light: vals(GLASS_TONES[KIND[id]].light) })
+const toTone = (v: ToneVals): GlassTone => ({ saturation: v.saturation, ceiling: v.ceiling, lift: v.lift, gain: v.gain,
+    wash: { r: v.washR, g: v.washG, b: v.washB, a: v.washA }, ambient: v.ambient, ambientLift: v.ambientLift,
+    ambientGain: v.ambientGain })
+const CLEAR_TONE: ToneVals = { saturation: 1.06, ceiling: 1, lift: 0.125, gain: 1.08, washR: 1, washG: 1, washB: 1, washA: 0,
+    ambient: 0, ambientLift: 0, ambientGain: 1 }
 // Starting points, not decisions: the frost is the reference's on a Retina screen (σ ≈ 6 Regular,
 // ≈ 1 Clear); the tints are proportional; the menu's shadow is the one measured on the reference.
 const factory = (): State => ({
     dark: true, scene: "Escritorio", backdrop: "página de texto",
     offset: { x: 0.5, y: 0.5 }, drift: false, driftSpeed: 1, promoSize: 200, format: "16:9", videoSeconds: 10,
-    regular: { frost: 1.2, passes: 3, smoke: 0.35, veil: 0.3, saturation: 1.25, rim: 0.5 },
-    clear: { frost: 1.0, passes: 1, smoke: 0, veil: 0.1, saturation: 1.3, rim: 0.5 },
+    regular: { frost: 1.2, passes: 3, rim: 0.5 },
+    clear: { frost: 1.0, passes: 1, rim: 0.5 },
+    clearTone: { ...CLEAR_TONE },
     common: { bevel: 30, profile: 4, strength: 1 },
     autoInk: { darkAbove: 0.35, lightBelow: 0.25 },
     pieces: {
-        barra: { glass: "regular", thick: 1, aspect: "modo", shadow: noShadow() },
-        menu: { glass: "regular", thick: 1.8, aspect: "modo", shadow: { on: true, alpha: 0.23, blur: 15, dy: 4 } },
-        cc: { glass: "regular", thick: 1, aspect: "oscuro", shadow: noShadow() },
-        dock: { glass: "regular", thick: 1, aspect: "modo", shadow: noShadow() },
-        promo: { glass: "clear", thick: 1, aspect: "fondo", shadow: noShadow() },
+        barra: { glass: "regular", tone: shipped("barra"), aspect: "modo", shadow: noShadow() },
+        menu: { glass: "regular", tone: shipped("menu"), aspect: "modo", shadow: { on: true, alpha: 0.23, blur: 15, dy: 4 } },
+        cc: { glass: "regular", tone: shipped("cc"), aspect: "oscuro", shadow: noShadow() },
+        dock: { glass: "regular", tone: shipped("dock"), aspect: "modo", shadow: noShadow() },
+        promo: { glass: "clear", tone: shipped("promo"), aspect: "fondo", shadow: noShadow() },
     },
 })
 let state = factory()
@@ -146,39 +162,32 @@ const changed = () => { for (const cb of listeners) cb() }
 const pieceFor = (native: Gtk.Native): Piece => state.pieces[pieceOf.get(native) ?? "promo"]
 /** Whether this piece wears its dark face now: the system is dark, or the piece always is. */
 const darkFace = (p: Piece) => state.dark || p.aspect === "oscuro"
-/** A thicker pane absorbs more: thickness t compounds the tint as (1 − a)^t would through t panes. */
-const thicken = (a: number, t: number) => Math.min(0.95, 1 - Math.pow(1 - Math.max(0, Math.min(0.95, a)), t))
-const rgb = (c: { r: number, g: number, b: number }) => ({ r: c.r, g: c.g, b: c.b })
+/** The piece's face of its variant's tone. */
+const faceTone = (p: Piece, face: "dark" | "light"): GlassTone => toTone(p.glass === "clear" ? state.clearTone : p.tone[face])
 setMaterialSource({
     glass(native): GlassParams {
         const p = pieceFor(native), g = state[p.glass]
-        if (p.aspect === "fondo") {
-            // Both faces at once: the smoke (alphaMax, held by a target no backdrop is under) while
-            // the content is light, and the light veil (alphaMin — Hyalo's veil for dark content)
-            // once the ink event turns it dark.
-            return { tint: rgb(GLASS_TINT.dark), alphaMin: thicken(g.veil, p.thick), alphaMax: thicken(g.smoke, p.thick),
-                target: -1, refraction: 40, lensing: 0.15, rim: g.rim, saturation: g.saturation }
-        }
-        const dark = darkFace(p)
-        const a = thicken(dark ? g.smoke : g.veil, p.thick)
-        // One strength everywhere (alphaMin = alphaMax, target 1): a smoke or a veil, proportional.
-        return { tint: rgb(dark ? GLASS_TINT.dark : GLASS_TINT.light), alphaMin: a, alphaMax: a, target: 1,
-            refraction: 40, lensing: 0.15, rim: g.rim, saturation: g.saturation }
+        return { refraction: 40, lensing: 0.15, rim: g.rim }
+    },
+    tone(native) {
+        const p = pieceFor(native)
+        // «Según fondo»: the dark face while the content is light, the light one once the ink event
+        // turns it dark. Otherwise one face, by the mode or always dark.
+        if (p.aspect === "fondo") return { tone: faceTone(p, "dark"), inkTone: faceTone(p, "light") }
+        return { tone: faceTone(p, darkFace(p) ? "dark" : "light"), inkTone: null }
     },
     ink(native): InkParams | null {
         // Thresholds no backdrop can miss (the kit's trackModeInk recipe): dark face → white text,
         // light face → dark text.
         const p = pieceFor(native)
-        if (p.aspect === "fondo")
-            return { darkAbove: state.autoInk.darkAbove, lightBelow: state.autoInk.lightBelow, tint: rgb(GLASS_TINT.light) }
+        if (p.aspect === "fondo") return { darkAbove: state.autoInk.darkAbove, lightBelow: state.autoInk.lightBelow }
         const dark = darkFace(p)
-        return { darkAbove: dark ? 2 : -1, lightBelow: dark ? 1.5 : -2, tint: rgb(GLASS_TINT.light) }
+        return { darkAbove: dark ? 2 : -1, lightBelow: dark ? 1.5 : -2 }
     },
-    scrim: () => null,
     fusion: () => 2,
     blur(native) {
         const p = pieceFor(native), g = state[p.glass]
-        return { size: g.frost * Math.sqrt(Math.max(0.5, p.thick)), passes: Math.round(g.passes) }
+        return { size: g.frost, passes: Math.round(g.passes) }
     },
     onChange(cb) { listeners.add(cb); return () => listeners.delete(cb) },
 })
@@ -461,10 +470,18 @@ function loadPreset(name: string): boolean {
         const loaded = JSON.parse(new TextDecoder().decode(bytes))
         const f = factory()
         // Missing keys take the factory's, so an older preset still loads whole.
-        state = { ...f, ...loaded, regular: { ...f.regular, ...loaded.regular }, clear: { ...f.clear, ...loaded.clear },
+        // A preset of the machine before the tone (2026-10-11) kept a smoke, a veil, a saturation and
+        // a thickness: none means anything to the tone, so none is carried over.
+        const glassOf = (from: Glass, l: Record<string, number> | undefined) =>
+            ({ frost: l?.frost ?? from.frost, passes: l?.passes ?? from.passes, rim: l?.rim ?? from.rim })
+        state = { ...f, ...loaded, regular: glassOf(f.regular, loaded.regular), clear: glassOf(f.clear, loaded.clear),
+            clearTone: { ...f.clearTone, ...loaded.clearTone },
             common: { ...f.common, ...loaded.common }, autoInk: { ...f.autoInk, ...loaded.autoInk },
-            pieces: Object.fromEntries((Object.keys(f.pieces) as PieceId[]).map(id =>
-                [id, { ...f.pieces[id], ...loaded.pieces?.[id], shadow: { ...f.pieces[id].shadow, ...loaded.pieces?.[id]?.shadow } }])) as Record<PieceId, Piece> }
+            pieces: Object.fromEntries((Object.keys(f.pieces) as PieceId[]).map(id => {
+                const { thick: _thick, ...lp } = loaded.pieces?.[id] ?? {}
+                return [id, { ...f.pieces[id], ...lp, shadow: { ...f.pieces[id].shadow, ...lp.shadow },
+                    tone: { dark: { ...f.pieces[id].tone.dark, ...lp.tone?.dark }, light: { ...f.pieces[id].tone.light, ...lp.tone?.light } } }]
+            })) as Record<PieceId, Piece> }
         for (const id of Object.keys(state.pieces) as PieceId[]) {
             const legacy = loaded.pieces?.[id]?.ink
             if (legacy && !loaded.pieces?.[id]?.aspect) state.pieces[id].aspect = legacy === "blanco" ? "oscuro" : "modo"
@@ -724,9 +741,6 @@ function fillBody() {
             "Propiedades generales de la variante. Cada pieza elige variante abajo.")
         page.append(slider("Escarcha: tamaño", () => g.frost, x => { g.frost = x }, 0.3, 6, 2))
         page.append(slider("Escarcha: pasadas", () => g.passes, x => { g.passes = x }, 1, 5, 0))
-        page.append(slider("Ahumado (modo oscuro)", () => g.smoke, x => { g.smoke = x }, 0, 0.9, 2))
-        page.append(slider("Velo (modo claro)", () => g.veil, x => { g.veil = x }, 0, 0.9, 2))
-        page.append(slider("Saturación", () => g.saturation, x => { g.saturation = x }, 0.5, 2, 2))
         page.append(slider("Canto de luz", () => g.rim, x => { g.rim = x }, 0, 1.5, 2))
     }
     section("Refracción (común a todo)", "Hyalo la aplica igual a todas las piezas.")
@@ -763,7 +777,15 @@ function fillBody() {
         section(PIECE_NAMES[id])
         page.append(segmented("Cristal", ["Regular", "Clear"], () => p.glass === "regular" ? "Regular" : "Clear",
             v => { p.glass = v === "Regular" ? "regular" : "clear" }))
-        page.append(slider("Grosor (más tinte y escarcha)", () => p.thick, x => { p.thick = x }, 0.5, 3, 2))
+        // Its tone, the face it wears now (in «según fondo», the dark one; the light one is the ink's).
+        const face: "dark" | "light" = darkFace(p) ? "dark" : "light"
+        const t = (): ToneVals => p.glass === "clear" ? state.clearTone : p.tone[face]
+        page.append(note(p.glass === "clear" ? "Tono: el Clear de la referencia (común a las piezas Clear)."
+            : `Tono Regular de esta pieza, cara ${face === "dark" ? "oscura" : "clara"}.`))
+        const TONE_ROWS: [typeof TONE_STAGES[number], string, number, number][] = [
+            ["saturation", "Saturación", 0, 2], ["ceiling", "Techo", 0, 1], ["lift", "Niveles: negro", 0, 1],
+            ["gain", "Niveles: blanco", 0, 1.5], ["washA", "Velado: opacidad", 0, 1], ["ambient", "Luz ambiente", 0, 1]]
+        for (const [st, title, min, max] of TONE_ROWS) page.append(slider(title, () => t()[st], x => { t()[st] = x }, min, max, 3))
         const ASPECTS: [string, Aspect][] = [["Según modo", "modo"], ["Siempre oscuro", "oscuro"], ["Según fondo", "fondo"]]
         page.append(segmented("Aspecto", ASPECTS.map(a => a[0]), () => ASPECTS.find(a => a[1] === p.aspect)![0],
             v => { p.aspect = ASPECTS.find(a => a[0] === v)![1] }))

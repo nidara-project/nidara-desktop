@@ -1,18 +1,14 @@
-//! The shadow under a surface's glass (`nidara-material-v1`), as a render element of its
-//! own, drawn below the glass — inside what the glass captures and blurs.
+//! The fixed veils under a surface's glass (`nidara-material-v1`, add_veil_region), as a render
+//! element of their own, drawn below the glass — inside what the glass captures and blurs.
 //!
-//! Why it exists: the glass's tint thickens per pixel where the backdrop is too bright for
-//! white content, so one pane over a backdrop bright in one place and dark in another came out
-//! grey in one part and clear in the other (owner, 2026-10-02: "parts almost entirely grey and
-//! parts right, on the same element"). A shadow under the glass, even across each shape and
-//! just strong enough that the brightest point of the backdrop comes down to the tint's target,
-//! leaves the tint even: one pane of glass over a shadow, the way the other platform does it.
+//! A veil is the darkening a group of panes lies on (the Control Center's, measured on the
+//! reference, 2026-10-11): even under its region, falling outside it as (1 − d/falloff)^exp.
+//! Nothing measures it: the backdrop does not change it. Every veil of a surface — or of the
+//! whole shell chrome, its floor (render/mod.rs) — is one element and one pass, and overlapping
+//! veils combine by their MAXIMUM, not by laying one over the other.
 //!
-//! The strength is decided in protocols/material.rs from what the glass measured (the shadow
-//! divided out, so it does not chase itself); here it is only drawn. Every shadow of a surface
-//! — or of the whole shell chrome, its floor (render/mod.rs) — is one element and one pass,
-//! and overlapping shadows combine by their MAXIMUM, not by laying one over the other: two
-//! panes side by side never make a darker band between them.
+//! Until 2026-10-11 this also drew a MEASURED shadow: what a per-pixel tint was missing to keep
+//! white text legible. The tone (set_tone) replaced that tint and the shadow went with it.
 
 use std::cell::RefCell;
 
@@ -29,47 +25,30 @@ use smithay::{
 use super::{HyaloRenderer, glass_gl};
 use crate::protocols::material;
 
-/// The most shadows one surface draws; past it, the strongest.
+/// The most veils one surface draws; past it, the strongest.
 pub const MAX_SCRIMS: usize = 32;
 
-/// The fragment shader. Each shadow: a rounded-rectangle core, whole at its centre and swept
-/// out to `edge` of that at its rim (a superellipse norm, so the sweep follows the core's
-/// shape: a tall panel sweeps from its centre to its sides and its ends alike), then fading
-/// over its falloff with smootherstep — no visible edge where the core ends nor where the fade
-/// does — and a half-level of dither, so a long, faint gradient over 8 bits does not band.
-/// `edge` 1: even across the core.
+/// The fragment shader. Each veil: even under its rectangle, (1 − d/falloff)^exponent outside,
+/// and a half-level of dither, so a long, faint gradient over 8 bits does not band.
 pub const FS_SCRIM: &str = r#"#version 100
 precision highp float;
 uniform vec4 cores[32];     // x, y, w, h — output pixels
-uniform vec4 pars[32];      // corner radius, falloff, opacity, edge (< 0: a veil, −exponent)
+uniform vec4 pars[32];      // falloff, opacity, exponent, unused
 uniform int count;
 varying vec2 v_out;
 varying vec2 v_fb;
-float ss(float t) { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
-float rr(vec2 p, vec4 r, float rad) {
+float rr(vec2 p, vec4 r) {
     vec2 h = r.zw * 0.5;
-    vec2 q = abs(p - r.xy - h) - h + vec2(rad);
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rad;
+    vec2 q = abs(p - r.xy - h) - h;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
 }
 void main() {
     float a = 0.0;
     for (int i = 0; i < 32; i++) {
         if (i >= count) break;
-        float d = rr(v_out, cores[i], pars[i].x);
-        float k;
-        if (pars[i].w < 0.0) {
-            // A veil (add_veil_region): even under its core, (1 - d/falloff)^exponent outside.
-            k = d > 0.0 ? pow(clamp(1.0 - d / max(pars[i].y, 1.0), 0.0, 1.0), -pars[i].w) : 1.0;
-        } else if (d > 0.0) {
-            k = pars[i].w * (1.0 - ss(clamp(d / max(pars[i].y, 1.0), 0.0, 1.0)));
-        } else {
-            vec2 h = cores[i].zw * 0.5;
-            vec2 q = abs(v_out - cores[i].xy - h) / max(h, vec2(1.0));
-            vec2 q2 = q * q;
-            float n = sqrt(sqrt(q2.x * q2.x + q2.y * q2.y));
-            k = mix(1.0, pars[i].w, ss(min(n, 1.0)));
-        }
-        a = max(a, pars[i].z * k);
+        float d = rr(v_out, cores[i]);
+        float k = d > 0.0 ? pow(clamp(1.0 - d / max(pars[i].x, 1.0), 0.0, 1.0), pars[i].z) : 1.0;
+        a = max(a, pars[i].y * k);
     }
     if (a <= 0.0) discard;
     float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -78,38 +57,26 @@ void main() {
 }
 "#;
 
-/// One shadow in output pixels, ready for the shader.
+/// One veil in output pixels, ready for the shader.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ScrimPx {
     pub core: [f64; 4],
-    pub radius: f64,
     pub falloff: f64,
     pub alpha: f64,
-    /// At the core's rim, as a fraction of its centre (the shader's sweep); 1: even.
-    pub edge: f64,
-    /// A veil's fall-off exponent (add_veil_region): even under the core, (1 − d/falloff)^it
-    /// outside. 0: a measured shadow's smootherstep.
-    pub veil: f64,
+    /// Its fall-off's exponent outside the core.
+    pub exponent: f64,
 }
 
 impl ScrimPx {
-    /// The shader's value at `p`: what the glass's measurement divides out there.
+    /// The shader's value at `p`.
+    #[cfg(test)]
     fn at(&self, p: Point<f64, Physical>) -> f64 {
-        let ss = |t: f64| t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
         let [x, y, w, h] = self.core;
         let (hw, hh) = (w / 2.0, h / 2.0);
-        let qx = (p.x - x - hw).abs() - hw + self.radius;
-        let qy = (p.y - y - hh).abs() - hh + self.radius;
-        let d = qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - self.radius;
-        if self.veil > 0.0 {
-            return if d > 0.0 { self.alpha * (1.0 - d / self.falloff.max(1.0)).clamp(0.0, 1.0).powf(self.veil) } else { self.alpha };
-        }
-        if d > 0.0 {
-            return self.alpha * self.edge * (1.0 - ss((d / self.falloff.max(1.0)).clamp(0.0, 1.0)));
-        }
-        let (nx, ny) = (((p.x - x - hw) / hw.max(1.0)).powi(4), ((p.y - y - hh) / hh.max(1.0)).powi(4));
-        let n = (nx + ny).sqrt().sqrt().min(1.0);
-        self.alpha * (1.0 + (self.edge - 1.0) * ss(n))
+        let qx = (p.x - x - hw).abs() - hw;
+        let qy = (p.y - y - hh).abs() - hh;
+        let d = qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0);
+        if d > 0.0 { self.alpha * (1.0 - d / self.falloff.max(1.0)).clamp(0.0, 1.0).powf(self.exponent) } else { self.alpha }
     }
 
     fn reach(&self) -> Rectangle<f64, Physical> {
@@ -119,41 +86,15 @@ impl ScrimPx {
     }
 }
 
-/// The shadow's opacity at `p`: the strongest of them there.
-pub fn alpha_at(scrims: &[ScrimPx], p: Point<f64, Physical>) -> f64 {
-    scrims.iter().map(|s| s.at(p)).fold(0.0, f64::max)
-}
-
-thread_local! {
-    /// A shadow is still easing: the backend keeps redrawing (`take_easing`).
-    static EASING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Whether a shadow drawn since the last call is still easing toward its strength.
-pub fn take_easing() -> bool {
-    EASING.with(|f| f.replace(false))
-}
-
-/// The shadows of `surface` placed at `location` (its origin, output pixels), as they stand
-/// at `now`: each at its eased strength times the opacity of its most opaque shape.
-pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<ScrimPx> {
+/// The veils of `surface` placed at `location` (its origin, output pixels), each at its strength
+/// times the opacity of its most opaque shape (it forms with them).
+pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, _now: std::time::Instant) -> Vec<ScrimPx> {
     let Some(current) = material::current(surface) else { return Vec::new() };
     let m = &current.state;
     let mut out: Vec<ScrimPx> = Vec::new();
-    for unit in m.scrim_units() {
+    for unit in m.veil_units() {
         let opacity = unit.members.iter().map(|&i| m.shapes[i].opacity).fold(0.0, f64::max);
-        // A veil is what it says, at once; a measured shadow eases toward what it wants.
-        let strength = match unit.veil {
-            Some(v) => v.strength,
-            None => {
-                let Some(anim) = current.scrims.get(&unit.key) else { continue };
-                if !anim.settled(now) {
-                    EASING.with(|f| f.set(true));
-                }
-                anim.value(now)
-            }
-        };
-        let alpha = strength * opacity;
+        let alpha = unit.veil.strength * opacity;
         if alpha < 0.5 / 255.0 {
             continue;
         }
@@ -161,29 +102,9 @@ pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Sc
         let o = location.to_f64();
         out.push(ScrimPx {
             core: [o.x + x * scale.x, o.y + y * scale.y, w * scale.x, h * scale.y],
-            // The Lab's optional area dim uses the largest pane's corner radius for a
-            // shared underlay. This avoids forcing its whole region into a capsule.
-            // Production region geometry remains unchanged.
-            radius: if std::env::var_os("HYALO_LAB_AREA_DIM").is_some()
-                && unit.key < material::LONE_SCRIM
-            {
-                if w > h * 10.0 && h <= 64.0 {
-                    // The Lab's optional bar band fills its 40 px exclusive strip. A
-                    // capsule radius would cut holes at the output's top corners.
-                    0.0
-                } else {
-                    unit.members.iter()
-                        .map(|&i| &m.shapes[i])
-                        .max_by(|a, b| (a.w * a.h).total_cmp(&(b.w * b.h)))
-                        .map_or(0.0, |s| s.radius.min(w.min(h) * 0.5) * scale.x)
-                }
-            } else {
-                unit.radius * scale.x
-            },
             falloff: unit.falloff * scale.x,
             alpha,
-            edge: unit.edge,
-            veil: unit.veil.map_or(0.0, |v| v.exponent),
+            exponent: unit.veil.exponent,
         });
     }
     if out.len() > MAX_SCRIMS {
@@ -208,7 +129,7 @@ struct ScrimMemo(RefCell<Option<(Id, CommitCounter, Vec<ScrimPx>)>>);
 impl ScrimElement {
     /// The element drawing `scrims` (from `scrims_for`) on an output of `output_size`; none
     /// when there is nothing to draw. `memo` keeps its id and what it last drew: the surface's
-    /// data for one surface's shadows, the output's for the chrome's floor.
+    /// data for one surface's veils, the output's for the chrome's floor.
     pub fn new(memo: &UserDataMap, mut scrims: Vec<ScrimPx>, output_size: Size<i32, Physical>) -> Option<Self> {
         if scrims.is_empty() {
             return None;
@@ -247,8 +168,7 @@ impl ScrimElement {
         let mut pars = [0f32; MAX_SCRIMS * 4];
         for (i, s) in self.scrims.iter().enumerate() {
             cores[i * 4..i * 4 + 4].copy_from_slice(&s.core.map(|v| v as f32));
-            let w = if s.veil > 0.0 { -s.veil } else { s.edge };
-            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.radius as f32, s.falloff as f32, s.alpha as f32, w as f32]);
+            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.falloff as f32, s.alpha as f32, s.exponent as f32, 0.0]);
         }
         frame.with_context(|gl| unsafe {
             // Safety: the EGL context outlives this frame, and its user data with it.
@@ -319,36 +239,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_shadow_is_even_over_its_core_and_gone_past_its_falloff() {
-        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 100.0, alpha: 0.5, edge: 1.0, veil: 0.0 };
-        assert_eq!(s.at((250.0, 100.0).into()), 0.5, "inside: the whole strength");
-        assert_eq!(s.at((100.0, 100.0).into()), 0.5, "on the core's edge: still whole");
-        assert!((s.at((50.0, 100.0).into()) - 0.25).abs() < 1e-9, "halfway out: half (smootherstep is symmetric)");
-        assert_eq!(s.at((0.0, 100.0).into()), 0.0, "past the falloff: nothing");
-        let other = ScrimPx { core: [0.0, 0.0, 50.0, 50.0], radius: 0.0, falloff: 10.0, alpha: 0.3, edge: 1.0, veil: 0.0 };
-        assert_eq!(alpha_at(&[s, other], (40.0, 25.0).into()), s.at((40.0, 25.0).into()).max(0.3), "two shadows: the stronger, never their sum");
-    }
-
-    #[test]
-    fn a_swept_core_is_whole_at_its_centre_and_at_its_edge_on_the_rim() {
-        let s = ScrimPx { core: [100.0, 100.0, 200.0, 400.0], radius: 0.0, falloff: 50.0, alpha: 0.4, edge: 0.75, veil: 0.0 };
-        assert_eq!(s.at((200.0, 300.0).into()), 0.4, "the centre: the whole strength");
-        let side = s.at((100.0, 300.0).into());
-        let end = s.at((200.0, 100.0).into());
-        assert!((side - 0.3).abs() < 1e-9 && (end - 0.3).abs() < 1e-9, "the rim, sides and ends alike: the edge's ({side}, {end})");
-        let halfway = s.at((150.0, 300.0).into());
-        assert!(halfway < 0.4 && halfway > 0.3, "between: the sweep ({halfway})");
-        assert!((s.at((75.0, 300.0).into()) - 0.15).abs() < 1e-9, "halfway through the falloff: half the edge's");
-        assert_eq!(s.at((40.0, 300.0).into()), 0.0, "past it: nothing");
-        let even = ScrimPx { edge: 1.0, ..s };
-        assert_eq!(even.at((101.0, 101.0).into()), 0.4, "edge 1: even across the core");
-    }
-
-    #[test]
     fn a_veil_is_even_under_its_core_and_falls_as_its_power() {
-        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], radius: 0.0, falloff: 125.0, alpha: 0.078, edge: 1.0, veil: 1.5 };
+        let s = ScrimPx { core: [100.0, 0.0, 300.0, 200.0], falloff: 125.0, alpha: 0.078, exponent: 1.5 };
         assert_eq!(s.at((250.0, 100.0).into()), 0.078, "under the core: its whole strength, even");
-        assert_eq!(s.at((101.0, 199.0).into()), 0.078, "even at the core's corner, no sweep");
+        assert_eq!(s.at((101.0, 199.0).into()), 0.078, "even at the core's corner");
         // The reference's own profile (2026-10-11): 25 px out, (1 − 0.2)^1.5 of it.
         assert!((s.at((75.0, 100.0).into()) - 0.078 * 0.8f64.powf(1.5)).abs() < 1e-9);
         assert_eq!(s.at((-30.0, 100.0).into()), 0.0, "past the falloff: nothing");

@@ -43,8 +43,9 @@ pub struct GlassElement {
     glass: Option<glass_gl::Glass>,
     /// The ink boxes that fall in this group, measured when the capture or they change.
     ink_boxes: Vec<glass_gl::InkBox>,
-    /// Where the backdrop under this group's shadowed shapes is measured.
-    probes: Vec<glass_gl::LightProbe>,
+    /// The saturation the ink is measured with: the group's first tone's (the glass's own
+    /// treatment of the backdrop before the rest of its tone).
+    ink_saturation: f32,
     surface: Weak<WlSurface>,
     /// Hyprland's blur finishing: a window's backdrop has it (render/window.rs), the shell's
     /// glass does not.
@@ -57,20 +58,15 @@ struct GlassIds(RefCell<Vec<Id>>);
 
 impl GlassElement {
     /// The glass elements of `surface`, placed at `location` (its origin, output pixels):
-    /// one per group of shapes whose blurs would overlap. `scrims` is the shadow drawn under
-    /// it this frame (render/scrim.rs), which its measurement divides out.
+    /// one per group of shapes whose blurs would overlap.
     pub fn for_surface(
         surface: &WlSurface,
         location: Point<i32, Physical>,
         scale: Scale<f64>,
         output_size: smithay::utils::Size<i32, Physical>,
-        scrims: &[super::scrim::ScrimPx],
     ) -> Vec<GlassElement> {
         let Some(current) = material::current(surface) else { return Vec::new() };
         let m = &current.state;
-        // The shapes that lie under a shadow: the backdrop under each is measured.
-        let shadowed: std::collections::BTreeSet<usize> =
-            m.scrim_units().into_iter().flat_map(|u| u.members).collect();
         let groups = groups(output_size, scale, location, m);
         let ids: Vec<Id> = with_states(surface, |states| {
             let ids = states.data_map.get_or_insert(GlassIds::default);
@@ -80,16 +76,7 @@ impl GlassElement {
             }
             ids[..groups.len()].to_vec()
         });
-        let ink_tint = m.ink.map_or([1.0; 3], |i| [i.tint[0] as f32, i.tint[1] as f32, i.tint[2] as f32]);
-        let glass = m.glass.map(|g| glass_gl::Glass {
-            tint: [g.tint[0] as f32, g.tint[1] as f32, g.tint[2] as f32],
-            alpha_min: g.alpha_min as f32,
-            alpha_max: g.alpha_max as f32,
-            target: g.target_luminance as f32,
-            rim: g.rim as f32,
-            saturation: g.saturation as f32,
-            ink_tint,
-        });
+        let glass = m.glass.map(|g| glass_gl::Glass { rim: g.rim as f32 });
         // The ink is measured only where the compositor paints the glass: it is that glass's
         // tint the decision changes.
         let ink_boxes: Vec<glass_gl::InkBox> = if m.ink.is_some() && glass.is_some() {
@@ -119,25 +106,24 @@ impl GlassElement {
                     .filter(|b| shapes.iter().any(|s| s.rect.contains(center(b))))
                     .copied()
                     .collect();
-                // A dark group darkens no shape: the topmost shape holding one of its boxes
-                // wears the light veil.
+                // A dark group's content sits on the topmost shape holding one of its boxes:
+                // that shape takes its ink tone.
                 for b in mine.iter().filter(|b| current.dark_ink.contains(&b.id)) {
                     if let Some(s) = shapes.iter_mut().rev().find(|s| s.rect.contains(center(b))) {
                         s.ink_dark = true;
+                        if let Some(t) = m.shapes.get(s.index).and_then(|ms| ms.ink_tone) {
+                            s.tone = glass_gl::ToneGl::new(&t, m.shapes[s.index].w.min(m.shapes[s.index].h), scale.x);
+                        }
                     }
                 }
-                let probes = if glass.is_some() {
-                    shapes.iter().filter(|s| shadowed.contains(&s.index)).filter_map(|s| probe(s, scrims)).collect()
-                } else {
-                    Vec::new()
-                };
+                let ink_saturation = m.shapes.iter().find_map(|s| s.tone).map_or(1.0, |t| t.saturation as f32);
                 let formed = shapes.iter().map(|s| s.opacity).fold(0.0, f32::max);
                 GlassElement {
                     formed,
                     id,
                     commit: current.commit,
                     region,
-                    probes,
+                    ink_saturation,
                     shapes,
                     offset: (m.blur_size * scale.x) as f32,
                     passes: m.blur_passes as usize,
@@ -180,6 +166,7 @@ impl GlassElement {
                 opacity: 1.0,
                 clip: None,
                 ink_dark: false,
+                tone: glass_gl::ToneGl::NONE,
                 pointer: None,
                 refraction: 0.0,
                 px_scale: 1.0,
@@ -191,7 +178,7 @@ impl GlassElement {
             formed: 1.0,
             glass: None,
             ink_boxes: Vec::new(),
-            probes: Vec::new(),
+            ink_saturation: 1.0,
             surface: surface.downgrade(),
             finish,
         })
@@ -207,7 +194,7 @@ impl GlassElement {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
             // Measured on the full blur while it forms: there is something to measure.
-            let measure_full = self.glass.is_some() && (!self.ink_boxes.is_empty() || !self.probes.is_empty());
+            let measure_full = self.glass.is_some() && !self.ink_boxes.is_empty();
             glass_gl::capture(
                 gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, &self.finish, &mut c,
             );
@@ -234,8 +221,8 @@ impl GlassElement {
         frame.with_context(|gl| unsafe {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
-            if let Some(g) = &self.glass {
-                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, &self.probes, g.saturation, &self.surface);
+            if self.glass.is_some() {
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface);
             }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish);
         })
@@ -302,23 +289,6 @@ impl<R: HyaloRenderer> RenderElement<R> for GlassElement {
 /// Two shapes formed this alike (#764) share a blur: an animation moves a pane's shapes together.
 const FORMED_ALIKE: f32 = 0.01;
 
-/// Where to measure the backdrop under one shape for its shadow: its body, inset by where a
-/// round corner leaves the rectangle (0.29 of the radius, the corner's 45° point), cut by its
-/// clip; and what of the backdrop there the shadow drawn this frame already takes.
-fn probe(s: &glass_gl::Shape, scrims: &[super::scrim::ScrimPx]) -> Option<glass_gl::LightProbe> {
-    let inset = s.radius * 0.29;
-    let mut r = Rectangle::<f64, Physical>::new(
-        s.rect.loc + Point::from((inset, inset)),
-        ((s.rect.size.w - 2.0 * inset).max(1.0), (s.rect.size.h - 2.0 * inset).max(1.0)).into(),
-    );
-    if let Some(c) = s.clip {
-        r = r.intersection(c)?;
-    }
-    let centre = Point::from((r.loc.x + r.size.w / 2.0, r.loc.y + r.size.h / 2.0));
-    let shadow = super::scrim::alpha_at(scrims, centre).min(0.95);
-    Some(glass_gl::LightProbe { shape: s.index, rect: r, unscale: (1.0 / (1.0 - shadow)) as f32 })
-}
-
 /// A material's shapes in output pixels, grouped where their blur reaches overlap, each group
 /// with the region it blurs: its bounds grown by how far the kawase chain reaches.
 fn groups(
@@ -355,6 +325,7 @@ fn groups(
                 )
             }),
             ink_dark: false,
+            tone: s.tone.map_or(glass_gl::ToneGl::NONE, |t| glass_gl::ToneGl::new(&t, s.w.min(s.h), scale.x)),
             refraction: m.refraction_of(s) * scale.x,
             px_scale: scale.x,
             fusion: s.fusion.map(|f| (f.group, 2.0 * f.spacing * scale.x)),
