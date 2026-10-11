@@ -552,6 +552,12 @@ Regular's blur (σ 12–13) is the same active or not and agrees with an indepen
 (`blur_sigma.py`); it is smaller on small shapes (80 pt → 8, 120 → 10, from 160 → 12).
 The fitted recipes are the owner's presets «calibrado — Regular oscuro / claro, Clear oscuro /
 claro» (not in the repo); nothing of it is in the shipped material yet.
+Over a page of text (the probe's `page` set, CI 38099090759) the reference's Regular dark is a SOLID
+grey block — its ceiling flattens a light page to one grey, which is what keeps white text on it
+legible — and its Regular light is nearly plain white; only Clear lets the text be read, with a
+narrow, strong refractive band at the edge. The lab with the presets draws the same. "Reading
+through the glass" is Clear's property, not Regular's: a Regular that shows a light page would
+be a Nidara decision beyond the reference, paid for in white-text legibility.
 
 Not modelled, or still open: Clear's gain (no lab control brightens the highs); tone hooks per
 APPEARANCE (lab[0..1] are LAB-only and one pair per preset — shipping it is a shader change);
