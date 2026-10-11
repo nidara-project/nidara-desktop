@@ -254,6 +254,21 @@ joins); the smoke requires the bar to declare one.
 
 ### The glass lab (`scripts/dev/glass-lab/`)
 
+🔑 **Since 2026-10-11 the lab opens on the desktop MOCK-UP (`maqueta.ts`)** — the owner's request after
+a day of a bench "that punishes its user": a model of the desktop (the bar's real capsules, a menu held
+open, the Control Center's real tiles, the dock's pill) over a wallpaper, each piece a layer surface of
+its own so each wears its own glass. The model it is built on: ONE glass with two variants (Regular,
+Clear: frost, a proportional dark smoke, a light veil, saturation, rim), and per piece its variant, a
+thickness (compounds the tint, a little more frost), its aspect (follows the mode / always dark, as the
+reference's Control Center) and a shadow AROUND it (CSS outset box-shadow). It is the MATERIAL SOURCE
+itself (`setMaterialSource` after `registerGlassMaterial`): per-surface `GlassParams` from its state, no
+glass-tuning.conf; what is global in Hyalo (bevel width, profile, strength: lab[12], lab[4], lab[5]) is
+one section, "Refracción (común)". A fixed header (preset shown by name, Guardar / Guardar como, mode,
+scene, backdrop) over a scrolling column; presets in `glass-lab/maqueta/`, whole state.
+`install-desktop.sh` puts it in the app grid. `--classic` opens the older bench (lab.ts, below — the
+promo exports, the readings, `--batch`); `GLASS_LAB_WITH_CONTROLS=1` keeps the column in a headless
+capture.
+
 Where the material is tuned with the owner, and where it EVOLVES (owner, 2026-10-05: "it has to
 be kept, to go on evolving it"). The factory glass of #745 came out of it: the owner set it there,
 and it went to the code the same day, measured equal. It is the shell's own pieces — bar groups,
