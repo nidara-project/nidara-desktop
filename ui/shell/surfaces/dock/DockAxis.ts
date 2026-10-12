@@ -16,7 +16,6 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
 import { setVisibleRect } from "../../common/VisibleRegion"
-import { GLASS_SHADOW } from "../../common/SquircleContainer"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
@@ -193,24 +192,24 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             })
 
             // The capsule's box, nothing painted: Hyalo paints the glass from the shape it
-            // declares (#684), the pad around it is the room its shadow had (DOCK_SHADOW_PAD).
+            // declares (#684), which is the whole box.
             const gloss = new Gtk.Box({
                 name: "dock-gloss-layer",
                 valign: Gtk.Align.END,
                 halign: Gtk.Align.START,
-                height_request: DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2,
-                margin_bottom: Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD),
+                height_request: DOCK_CONSTANTS.PILL_HEIGHT,
+                margin_bottom: dockSettings.screenGap,
                 can_focus: false,
             })
             trackGlass(gloss, () => {
-                const pw = gloss.get_width() - DOCK_SHADOW_PAD * 2, ph = gloss.get_height() - DOCK_SHADOW_PAD * 2
-                return [{ x: DOCK_SHADOW_PAD, y: DOCK_SHADOW_PAD, w: pw, h: ph, radius: Math.min(pw, ph) / 2, exponent: 3.2 }]
+                const pw = gloss.get_width(), ph = gloss.get_height()
+                return [{ x: 0, y: 0, w: pw, h: ph, radius: Math.min(pw, ph) / 2, exponent: 3.2 }]
             })
             da = gloss
 
             const initialMargin = Math.round((monMain - initialSmoothedMain) / 2)
             bar.margin_start = Math.max(0, initialMargin)
-            da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN - DOCK_SHADOW_PAD)
+            da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN)
 
             shim = new Gtk.Box({
                 valign: Gtk.Align.END,
@@ -236,7 +235,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             lastRenderedWidth = s
             bar.set_size_request(s, -1)
             const targetW = s + (DOCK_CONSTANTS.BASE_MARGIN * 2)
-            da.set_size_request(targetW + DOCK_SHADOW_PAD * 2, DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2)
+            da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
             da.queue_draw()
         },
 
@@ -244,7 +243,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             const barM = Math.round((monMain - totalMain) / 2)
             if (bar.margin_start !== barM) {
                 bar.margin_start = barM
-                da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN - DOCK_SHADOW_PAD
+                da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN
             }
         },
 
@@ -443,35 +442,15 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
 
         mainStart: (extent: number) => Math.max(0, (monMain - extent) / 2),
         onSettingsResize() {
-            da.height_request = DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2
+            da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
             shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
-            da.margin_bottom = Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD)
+            da.margin_bottom = dockSettings.screenGap
             shim.margin_bottom = dockSettings.screenGap
         },
 
     }
 }
 
-/** Room reserved OUTSIDE the capsule so its drop shadow has somewhere to land.
- *
- *  🔑 THE INVARIANT: the painted capsule must not move by one pixel. Everything the
- *  dock's geometry is tuned around — `PILL_PADDING` (the air between an icon and the
- *  capsule wall), `BASE_MARGIN` (the side air), `ICON_MARGIN`, the running-dot zone,
- *  `EXCLUSIVE_ZONE` — is derived from `iconSize` in `DockPhysics.deriveConstants` and
- *  none of it changes here. This pad is added to the gloss `DrawingArea`'s SIZE and
- *  subtracted from its MARGINS in the same breath, and the capsule is then drawn at
- *  `inset = DOCK_SHADOW_PAD`, so it lands on exactly the pixels it landed on before.
- *  If you touch one of the two halves, touch the other.
- *
- *  The icons, the separators and the indicators live in `bar`/`shim`/`dotZone`, which
- *  this does not go near — that is the structural reason the dock's spacing cannot
- *  drift from a shadow.
- *
- *  There is room for it: the dock's window is the FULL monitor height (`WIN_H`), not
- *  the exclusive zone, which is also how a magnified icon overflows above the capsule.
- *  And the drawn region already pads by `DRAWN_PAD_CROSS`/`DRAWN_PAD_MAIN` = 24 px on
- *  every side, so 2 px of shadow is well inside what is already declared. */
-const DOCK_SHADOW_PAD = GLASS_SHADOW.spread
 
 // ─── VERTICAL (left/right) ────────────────────────────────────────────────────
 

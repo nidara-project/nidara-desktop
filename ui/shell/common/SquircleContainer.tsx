@@ -14,12 +14,10 @@ export enum Shape {
 }
 
 interface SquircleContainerProps {
-    /** Soft outer shadow, for surfaces that must stay legible against a FLAT backdrop
-     *  (a white window behind the control centre) where the rim's white top and bottom
-     *  stops vanish and only the dark flank survives. `spread` doubles as how much room
-     *  the shadow needs: it forces `inset` up to at least that, which SHRINKS the
-     *  painted glass by the same amount. ⚠️ Read `drawGlassShadow` before enabling it on
-     *  a surface whose layer has a low `ignore_alpha` — the shadow gets blurred. */
+    /** A drop shadow the container paints itself, for glass it paints itself (a near-opaque
+     *  card: `alpha`). `spread` is the room it needs outside the silhouette: it sets `inset`
+     *  to at least that, and the glass is that much smaller than the box. A pane whose glass
+     *  is Hyalo's takes none — Hyalo casts each pane's shadow (`set_shadow`). */
     shadow?: { spread?: number, alpha?: number | (() => number), drop?: number,
         /** A surface-level experiment may draw the outer shadow even when Hyalo paints its
          *  glass. The silhouette is punched out, so the shadow never tints the material. */
@@ -107,24 +105,12 @@ interface SquircleContainerProps {
     getFill?: () => number
 }
 
-/**
- * How far inside the widget rect the glass is actually painted, on every side —
- * `drawSquircle`'s `inset`, the buffer that keeps the border stroke off the
- * allocation edge.
- *
- * ⚠️ **The VISIBLE edge of a capsule is this far in from its allocation**, so a child
- * laid out flush to the widget rect overhangs the glass by `GLASS_INSET`. Anything
- * that has to line up with the curve — a flush panel's content margin, a scroll
- * lane's corner clearance — must subtract it, or it silently sits outside the shape.
- * That is what put the clipboard scroll pill on the panel's curve (2026-08-03).
- *
- * Its two reasons were Hyprland's: a Cairo rim antialiases INSIDE the DrawingArea's box,
- * and the 2 px shadow needs room. On Hyalo neither holds — the compositor draws the rim and
- * is not clipped to the box — but the inset is now part of the bar's and the island's
- * approved geometry (a 36 px box = 32 px of glass). Whether box = glass is worth re-deriving
- * those numbers is decided with the switch (#762).
- */
-export const GLASS_INSET = 2.0
+// The glass IS the widget's box (#762, 2026-10-13): a child laid out flush to the box is flush
+// to the glass. Until then it was painted 2 px in (`GLASS_INSET`), room for a Cairo rim to
+// antialias and for a 2 px shadow — Hyprland's reasons; on Hyalo the compositor draws the
+// rim and the shadow and is not clipped to the box. The one container that still reserves
+// room is one that paints its OWN glass with a shadow (`shadow` on a pane Hyalo does not
+// draw: the CC's context menu): the shadow needs the band outside its silhouette.
 
 const NO_BORDER = { r: 0, g: 0, b: 0, a: 0 }
 
@@ -201,9 +187,9 @@ export default function SquircleContainer({
 
     let isHovered = false
     // The shadow lives OUTSIDE the silhouette, so the inset is what reserves its room:
-    // without this a `spread` larger than GLASS_INSET is simply clipped by the widget.
+    // without it the shadow is simply clipped by the widget.
     const shadowSpread = shadow ? (shadow.spread ?? 4) : 0
-    const techInset = Math.max(inset !== undefined ? inset : GLASS_INSET, shadowSpread)
+    const techInset = Math.max(inset ?? 0, shadowSpread)
 
     if (useShellOpacity || chrome) {
         Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })

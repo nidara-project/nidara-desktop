@@ -417,8 +417,8 @@ export class GlassCapsule extends Gtk.Box {
         //
         // Room comes from the snapshot, not from an inset: the cairo node is bigger than
         // the widget and GTK4 does not clip a widget to its allocation, so the falloff
-        // costs the capsule no painted glass — unlike the shell, where `GLASS_INSET`
-        // has to buy it.
+        // costs the capsule no painted glass — unlike the shell's SquircleContainer, whose
+        // box has to make room for it.
         // Not on the compositor's glass (SquircleContainer says why).
         if (!compositors) {
           const m = GLASS_SHADOW.spread + 2

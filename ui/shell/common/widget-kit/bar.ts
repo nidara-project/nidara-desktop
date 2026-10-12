@@ -26,11 +26,12 @@ const AUTO_HIDE_MS = 3000
 const keyActions = new WeakMap<Gtk.Widget, () => void>()
 export const barKeyAction = (w: Gtk.Widget): (() => void) | undefined => keyActions.get(w)
 
-/** The air on each side of a STANDALONE bar capsule's content — an icon-only pill
- *  is PAD + 16 + PAD = 48 wide. Since 2026-09-26 that is only the island's compact
+/** The air on each side of a STANDALONE bar capsule's content, from its glass — an
+ *  icon-only pill is PAD + 16 + PAD = 44 wide (16 from the box until #762, whose glass
+ *  was painted 2 px inside it). Since 2026-09-26 that is only the island's compact
  *  forms: everything else in the bar is an ITEM inside a group (BAR_ITEM_PAD). On the
  *  4px scale with the rest of the bar's geometry (surfaces/bar/capsule.ts). */
-export const BAR_PILL_PAD = 16
+export const BAR_PILL_PAD = 14
 
 /** The air on each side of an ICON in a bar item — an icon-only item is
  *  7 + 18 + 7 = 32 wide (on the 4px scale; owner, 2026-10-06), and its hover/open

@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import agentConfig from "../../core/AgentConfig"
 import { GRID_WIDTH } from "../control-center/CCLayoutManager"
-import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape } from "../../common/SquircleContainer"
 import { NidaraButton } from "../../../lib/nidara-kit/button"
 import { NidaraClamp } from "../../../lib/nidara-kit/clamp"
 import { t } from "../../core/i18n"
@@ -124,10 +124,7 @@ function buildNoticePill(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
         gloss: true,
         useShellOpacity: true,
         borderWidth: 1.5,
-        inset: 2.0,
         css_classes: ["cc-status-banner"],
-        // Outer glass, like the tiles it sits above.
-        shadow: GLASS_SHADOW,
     })
     // Asymmetric: a capsule's ends want more air than its top and bottom.
     clamped.margin_top = clamped.margin_bottom = PILL_PAD_Y
@@ -137,14 +134,15 @@ function buildNoticePill(ind: BarIndicator, s: IndicatorState): Gtk.Widget {
     return pill
 }
 
-/** The pill's air: 6 above and below its content (a compact button is ~24 tall, so
- *  the pill is ~36 visible), 12 at its ends. */
-const PILL_PAD_Y = 6
-const PILL_PAD_X = 12
+/** The pill's air: 4 above and below its content (a compact button is ~24 tall, so
+ *  the pill is ~32), 10 at its ends. (6 and 12 to its box until #762, whose glass was
+ *  painted 2 px in.) */
+const PILL_PAD_Y = 4
+const PILL_PAD_X = 10
 
 export function ccStatusBanner(): Gtk.Widget {
     // Hidden entirely when nothing is on: an empty box would still hold the gap open.
-    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, halign: Gtk.Align.FILL, css_classes: ["cc-status-notices"] })
+    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, halign: Gtk.Align.FILL, css_classes: ["cc-status-notices"] })
 
     const rebuild = () => {
         let c = list.get_first_child()

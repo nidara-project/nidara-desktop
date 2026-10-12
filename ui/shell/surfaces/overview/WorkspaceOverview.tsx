@@ -2,7 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
 import status, { ISLAND_OVERVIEW } from "../../core/Status"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
@@ -18,7 +18,7 @@ import { warmUp as warmUpCapture } from "../../core/WindowCapture"
  * surface whose whole job is to show you every window at once, so it takes
  * essentially the whole width and leaves a hairline of wallpaper on each side.
  */
-const WO_EDGE_MARGIN = 8
+const WO_EDGE_MARGIN = 10
 
 /**
  * Chrome around the previews, in px — and 🔑 **the only definition of these
@@ -40,7 +40,7 @@ const WO_EDGE_MARGIN = 8
  * `border: 1px`) — a border is not a spacing token and does not move; if it ever
  * did, the cost is 2px of edge margin, not a broken layout.
  */
-const WO_PANEL_PAD   = 32  // inset from the glass panel's edge to the card grid
+const WO_PANEL_PAD   = 30  // inset from the glass panel's edge to the card grid
 const WO_GRID_GAP    = 16  // between cards
 const WO_CARD_PAD    = 16  // inset from a card's border to its content
 const WO_CARD_BORDER = 1   // .wo-item border-width — mirrors CSS, see above
@@ -62,7 +62,7 @@ const WO_PREVIEW_MIN = 120
  *
  * Solving `2·margin + 2·pad + (n−1)·gap + n·(preview + chrome) = monitorWidth`
  * for `preview`. Measured against the real widget tree (offscreen GTK probe,
- * 2026-08-06): 2560 → 449, panel 2543, 8px of wallpaper each side.
+ * 2026-08-06): 2560 → 449, panel 2539 (its glass), 10px of wallpaper each side.
  *
  * ⚠️ The gain is NOT uniform: on a 1920 laptop the same formula gives 321, barely
  * above the old 300. Wide screens are where this pays.
@@ -111,7 +111,6 @@ export default function WorkspaceOverview(gdkmonitor: Gdk.Monitor) {
 
     // SquircleContainer wraps the entire overview, providing a unified glass background
     const overviewSquircle = SquircleContainer({
-        shadow: GLASS_SHADOW,
         child: overview,
         n: WO_GLASS.n,
         radius: WO_GLASS.radius,

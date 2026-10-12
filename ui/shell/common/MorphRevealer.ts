@@ -81,7 +81,6 @@ const PAIR_STAGGER = 0       // per-pair timeline offset. 0.06 was tried and rea
                              // as "out of sync with the animation" (user,
                              // 2026-07-19): ghosts move in lockstep with the shape.
 const POP_SOLID_AT = 0.25    // fallback pop only: whole-widget fade window
-const GLASS_INSET = 2.0      // MUST match SquircleContainer's techInset default
 
 /** The shape of one END of the glass morph. Read per frame. */
 export interface MorphGlass {
@@ -227,11 +226,10 @@ export class MorphRevealer extends Gtk.Widget {
         if (this.progress >= 1 || w <= 0 || h <= 0) return []
         const { f, s, R, k } = this.morphGeometry(w, h)
         const gFrom = this.glassFrom(), gTo = this.glassTo()
-        const gw = R.w - GLASS_INSET * 2, gh = R.h - GLASS_INSET * 2
-        if (gw <= 0 || gh <= 0) return []
+        if (R.w <= 0 || R.h <= 0) return []
         const radius = lerp(gFrom.radius ?? s.h / 2, gTo.radius ?? f.h / 2, k)
-        return [{ x: R.x + GLASS_INSET, y: R.y + GLASS_INSET, w: gw, h: gh,
-            radius: Math.min(radius, gw / 2, gh / 2), exponent: lerp(gFrom.n, gTo.n, k) }]
+        return [{ x: R.x, y: R.y, w: R.w, h: R.h,
+            radius: Math.min(radius, R.w / 2, R.h / 2), exponent: lerp(gFrom.n, gTo.n, k) }]
     }
 
     // Widget bounds in this widget's coordinates, or null when unusable.

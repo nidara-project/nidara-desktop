@@ -5,7 +5,7 @@ import { execAsync } from "../../../lib/process"
 import status from "../../core/Status"
 import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
-import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { t } from "../../core/i18n"
 
@@ -41,8 +41,8 @@ export function SystemMenuOverlay() {
     // number that ships is measured from the widget rect, so this menu still sat
     // 10 from the glass against its siblings' 12. Use the token, not a literal
     // copied from another file's constructor.
-    margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
-    margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+    margin_top: rowInsetFor(RADIUS.lg), margin_bottom: rowInsetFor(RADIUS.lg),
+    margin_start: rowInsetFor(RADIUS.lg), margin_end: rowInsetFor(RADIUS.lg),
   })
 
   const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
@@ -165,9 +165,10 @@ export function SystemMenuOverlay() {
     // Horizontal matches menuBox: the confirm page swaps INTO the same card, so its
     // content sits on the same axis as the menu rows it replaces. Vertical is
     // symmetric — the 16/14 this used to be was a 2px optical nudge nobody wrote
-    // down, and the token sweep turned it into 16/12, a nudge nobody chose.
-    margin_top: 16, margin_bottom: 16,
-    margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+    // down, and the token sweep turned it into 16/12, a nudge nobody chose. (14 from the
+    // glass: 16 from the box until #762, whose glass was painted 2 px inside it.)
+    margin_top: 14, margin_bottom: 14,
+    margin_start: rowInsetFor(RADIUS.lg), margin_end: rowInsetFor(RADIUS.lg),
     width_request: 210,
   })
   confirmBox.append(confirmIcon)
@@ -193,7 +194,6 @@ export function SystemMenuOverlay() {
   showPage(menuBox)
 
   const squircleWrapper = SquircleContainer({
-    shadow: GLASS_SHADOW,
     child: pageHost,
     radius: RADIUS.lg,
     gloss: true,

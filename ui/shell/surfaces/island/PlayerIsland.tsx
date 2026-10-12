@@ -1,6 +1,6 @@
 import Gtk from "gi://Gtk?version=4.0"
 import GLib from "gi://GLib"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS, INK } from "../../../lib/nidara-kit/platform/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeCoverArt, PANEL_ART, PANEL_ART_RADIUS } from "../../common/CoverArt"
@@ -40,10 +40,9 @@ export const PLAYER_GLASS = { radius: RADIUS.xl, n: 3.2, border: { r: 1, g: 1, b
 
 export default function PlayerIsland() {
     const panel = buildMediaDetailPanel(PANEL_W.full)
-    const inner = new Gtk.Box({ margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 20 })
+    const inner = new Gtk.Box({ margin_top: 14, margin_bottom: 14, margin_start: 18, margin_end: 18 })
     inner.append(panel)
     const squircle = SquircleContainer({
-        shadow: GLASS_SHADOW,
         child: inner,
         n: PLAYER_GLASS.n,
         radius: PLAYER_GLASS.radius,

@@ -2142,8 +2142,8 @@ clipping for us.
 
 🔑 **The pad is 16, not the app grid's 48, and the reason is structural**: every panel here sits
 inside a revealer whose `overflow` is `HIDDEN`, so whatever it paints outside its allocation is
-already clipped by GTK before the compositor sees it. The squircle's soft edge lives INSIDE the rect
-(`GLASS_INSET`). The pad covers rounding, not an escaping shadow. When a surface's own widget tree
+already clipped by GTK before the compositor sees it. The pad covers rounding, not an escaping shadow
+(Hyalo casts the panes' shadows itself). When a surface's own widget tree
 already clips, the region does not have to guess at a margin — check that before padding.
 
 `common/VisibleRegion.ts` grew `setVisibleRects` for this (`setVisibleRect` is now the one-rect
@@ -3021,7 +3021,7 @@ Three things a future pass should know:
 - **`drop` is the obvious knob and it is already spent.** It is 0 in `GLASS_SHADOW` because at
   `spread 2` a downward offset costs the top edge more than it buys — see the measurements there.
   Reaching for asymmetry to shape the bevel means buying `spread` first, which comes out of the
-  glass (the shadow lives in `GLASS_INSET`).
+  glass (a container that paints its own shadow keeps the spread inside its box).
 - **The instruments already exist.** `rim-backdrop-probe` renders any surface over a real blurred
   wallpaper and measures the same pixel with the rim against without it, which is the right shape of
   measurement for this too — the bevel is the rim and the shadow considered together, and that probe

@@ -852,7 +852,8 @@ right under it, check whether it is circular by accident before touching its pad
 **The row's radius is the fixed side of the equation.** Varying a row's corner per container would
 make the same menu row look different in the dock and in the system menu — a worse inconsistency
 than any halo. Rows stay at `sm`; the container yields. Consumers write
-`rowInsetFor(R) + GLASS_INSET`, because the box is laid out against the widget rect.
+`rowInsetFor(R)` from the container's box, which is its glass (until #762 they added `GLASS_INSET`,
+the 2 px the glass was painted inside the box).
 
 Uniform on all four sides, too. The +4 horizontal of the other two tiers is right while the padding
 is a **text** inset; once the fill spans the box it is a margin, and it ran `12 / 6` until the user
@@ -923,7 +924,7 @@ move one and the value appears to slide as the list opens.
 with one value and **rewrites it on every open** (flush panels take the horizontal over), so the
 number in the constructor is not the number that ships. The system menu was fixed twice for this:
 the second fix read the constructor's `12`, wrote `12`, and stayed 2px tighter than its siblings
-because theirs is measured after `+ GLASS_INSET`. Import the token.
+because theirs was measured after `+ GLASS_INSET` (gone with #762). Import the token.
 
 **Menus are NOT a separate tier** — an earlier version of this section claimed a symmetric `8/8`
 "menu tier" and it was wrong. It was invented to justify a blanket `sed`: `SystemMenu.tsx` held
@@ -931,7 +932,7 @@ because theirs is measured after `+ GLASS_INSET`. Import the token.
 written down afterwards to make that look deliberate. The user caught it from the pixels — a menu
 row's hover fill spans that box, so the margin **is** the gap between the hover and the card edge,
 and the system menu's sat **6px from the glass against the window menu's 12** (measured, both
-minus `GLASS_INSET`). Both are bar surfaces; both take `8 / 12`.
+from the glass). Both are bar surfaces; both take `8 / 12`.
 
 Two rules out of that:
 - **Never sweep a spacing value by its NUMBER; sweep it by its ROLE.** Read what the box is.
@@ -950,12 +951,12 @@ not.** Prefer the token; a bare number in a padding is now a claim that it is de
 
 Two shapes of derived padding worth recognising, both of which a "tidy" sweep would break:
 
-- **A gap measured from a rect, when the glass is painted inside it.** `.prism-results-list` is
-  `10px` on the sides because `SquircleContainer` paints 2px in from the widget rect
-  (`GLASS_INSET`), so 10 from the rect *is* `$space-2` from the visible edge. Same trap as the
-  scroll-pill corner: what you write is the rect, what the eye measures is the glass.
-- **An ALIGNMENT AXIS wearing spacing's clothes.** Prism's search field is `padding: $space-4 22px`
-  and 22 is not a spacing value at all — a result row's text lands at 10 (list) + 12 (row) = 22, so
+- **A gap measured from a rect, when the glass was painted inside it** (until #762:
+  `.prism-results-list` was `10px` on the sides because the glass sat 2 px in from the box, so 10
+  from the rect *was* `$space-2` from the visible edge). Since #762 the box is the glass and the
+  list is `$space-2`.
+- **An ALIGNMENT AXIS wearing spacing's clothes.** Prism's search field is `padding: 14px 20px`
+  and 20 is not a spacing value at all — a result row's text lands at 8 (list) + 12 (row) = 20, so
   the field and the results share one left edge. Before you correct a number, find out what it
   lines up with; if something else has to move with it, say so in the comment.
 
@@ -1879,8 +1880,9 @@ left. Three things about it are load-bearing:
   zero on tight shadows and only spend it once `spread` can spare it.
 
 **One recipe, `GLASS_SHADOW` in `ui/lib/nidara-kit/platform/glass-paint.ts`** — `{ spread: 2, alpha: 0.18, drop: 0 }`,
-chosen because `spread 2` is what `GLASS_INSET` already reserves, so no surface's glass shrinks and
-nothing moves. (It lived in `SquircleContainer.tsx` until 2026-08-24 and moved down with the
+chosen because `spread 2` was what `GLASS_INSET` already reserved, so no surface's glass shrank and
+nothing moved. Since #762 only a container that paints its own glass carries it (the CC's context
+menu), and its box reserves the spread. (It lived in `SquircleContainer.tsx` until 2026-08-24 and moved down with the
 primitives it parameterises, for the reason in the rim section above; that file re-exports it.) It
 goes on the OUTERMOST glass of a surface and nowhere else: a shadow on a control that sits inside
 another glass panel is a shadow inside a window, and reads as dirt rather than as depth. Currently:
@@ -1899,8 +1901,8 @@ inside a card.
 rim, a 3.2 px band of light — and the 2 px dark ring right outside it read as a drawn frame; the
 owner compared both in the glass lab and dropped it (2026-10-06: "3.2 without the halo looks best").
 Every painter skips the shadow while `compositorPaintsGlass` is true: `SquircleContainer`, the
-dock on both axes (`DockAxis.ts`), `GlassCapsule` and `paintGlassBubble`. The room `GLASS_INSET`
-reserves for it stays, so nothing moves. On Hyprland (frozen) it is drawn as before.
+dock on both axes (`DockAxis.ts`), `GlassCapsule` and `paintGlassBubble`. Since #762 the shell's panes
+carry no `shadow` at all (Hyalo casts each pane's own, `set_shadow`) and their box is their glass.
 
 🔑 **The pills were missed for six days because the rollout enumerated SURFACES and the pills are
 CONTROLS.** #244's list reads "the NC's notification cards and calendar island, Prism's wrapper,
@@ -1954,27 +1956,9 @@ the four expanded modes — and its layer went to 0.23 with them. ⚠️ Its mor
 300 ms in / **220 ms out**, half again as long as the bar's 150 ms close, so it is the surface where
 a threshold pop would show first if it ever shows at all.
 
-The **dock capsule** has it too, and it is the only surface where the shadow could not be added by
-passing a prop. Its gloss `DrawingArea` **is** the capsule (`inset: 0`), so making room outside the
-silhouette meant growing that widget and subtracting the same `DOCK_SHADOW_PAD` from its margins in
-the same breath, then drawing the capsule at `inset = pad`.
-
-🔑 **The invariant is that the painted capsule does not move by one pixel.** Everything the dock is
-tuned around — `PILL_PADDING` (the air between an icon and the capsule wall), `BASE_MARGIN` (the
-side air), `ICON_MARGIN`, the running-dot zone, `EXCLUSIVE_ZONE` — is derived from `iconSize` in
-`DockPhysics.deriveConstants`, and none of it changes. The icons, separators and indicators live in
-`bar`/`shim`/`dotZone`, which the change does not go near: that is the *structural* reason the
-dock's spacing cannot drift from a shadow. `scripts/dev/dock-capsule-probe.ts` renders it both ways
-and reports **0 differing pixels**, with a positive control that trips at 576 when the compensation
-is off by one.
-
-There was room because the dock's window is the FULL monitor height (`WIN_H`), not the exclusive
-zone — which is also how a magnified icon overflows above the capsule — and the blur region already
-pads `BLUR_PAD_CROSS`/`BLUR_PAD_MAIN` = 24 px on every side. The VERTICAL axis needed no layout
-change at all: there `da` spans the surface and the capsule is placed by a `cr.translate`, which
-absorbs the pad. ⚠️ The one residual: `da.margin_start` is clamped at 0, so on a dock within ~18 px
-of the monitor's width the capsule would shift — it was ~14 px before the pad, so the pad narrows an
-edge case rather than creating one.
+The **dock capsule** had it too, through `DOCK_SHADOW_PAD` (its gloss widget grown by the pad and
+its margins shrunk by it, so the capsule did not move); both went with #762, and the gloss widget is
+the capsule again.
 
 The **glass bubble** was the last one, and the only one whose shadow had to wrap a POINTER. It
 could be written at all because `bubblePath` already knew how to grow its own outline: the `offset`
@@ -1985,7 +1969,7 @@ punch-out, and `drawGlassShadow` is a caller that happens to hand it a squircle.
 recipe and one falloff.
 
 🔑 **The pointer fits in the room the bubble already had, and the arithmetic says it should not.**
-`BUF` is 2 px and so is `spread`, which is the same deal `GLASS_INSET` gives the capsule — but an
+`BUF` is 2 px and so is `spread`, which is the same deal `GLASS_INSET` gave the capsule until #762 — but an
 offset outline moves each vertex along its bisector by `offset / sin θ`, so the ~90° apex should
 reach 1.41 × spread = 2.83 px into 2 px. It does not, because **the tip is an arc, not a vertex**:
 `bubblePath` grows `tipR` by the offset too, and a fatter arc sits further back from the vertex it
@@ -2585,18 +2569,18 @@ only when someone boots a VM). The `styles` job now compiles it too.
   compete with it at equal specificity and the reorder cannot change an outcome. And move the
   tokens the rules spend with them — `--nidara-thumb` went from the shell's static block to the
   engine in the same change, because the rules that read it now run in three processes.
-- **A capsule's VISIBLE edge is `GLASS_INSET` (2px) inside its allocation.** `drawSquircle`
-  paints the glass in from the widget rect so the border stroke never lands on the allocation
-  edge, which means **a child laid out flush to the rect overhangs the shape**. Nothing warns
+- **Until #762 (2026-10-13) a capsule's VISIBLE edge was `GLASS_INSET` (2px) inside its
+  allocation**, which meant **a child laid out flush to the rect overhung the shape**. Since #762
+  the box is the glass; what follows is why that mattered. Nothing warns
   you: it typechecks, it renders, and the overhang is invisible until something has to line up
   with the curve. Two things bit at once here (2026-08-03, both user-caught): the bar's
   `barExpandedFlush` set the content margin to `0` — flush to the rect, 2px outside the glass,
   violating the written rule that a viewport reaches its *visible* inner edge — and that put the
   clipboard's scroll pill 2px nearer the curve than its corner clearance assumed. At 2px from
   the wall a radius-24 arc eats **14.4px**, not the 10.7px the 4px-distance maths predicts; the
-  pill was left with 0.6px and the user saw the curve under it on hover. **Subtract
-  `GLASS_INSET` (exported from `SquircleContainer`) whenever a child must meet the curve** —
-  flush margins, scroll `cornerInset`, anything measuring from the rect.
+  pill was left with 0.6px and the user saw the curve under it on hover. A child that must meet
+  the curve measures from the box now — except inside a container that paints its own shadow,
+  whose glass is the shadow's spread in.
 - **Icon glyphs are CSS-recolorable — but only because the FILENAME says so.** GTK4 recolours a
   `Gio.FileIcon` if, and only if, its filename ends in `-symbolic` — that's the WHOLE mechanism,
   filename-gated, nothing to do with the SVG's own `fill="currentColor"`. Since #587 our own set
@@ -3179,7 +3163,8 @@ wide reads on one line and ellipsizes, the way every other desktop's quick toggl
 branch was written for ("Screen Recording" reading in full) is untouched: a name that breaks at a
 space still gets its two lines.
 
-The column is **96px** — the 2×1 span (2·UNIT + GAP = 176) minus the island's padding (2·12) minus
+The column is **96px** — the 2×1 span (2·UNIT + GAP = 172, on the glass since #762: it was 176 on
+the boxes) minus the island's padding (2·10; 2·12 from the box) minus
 the capsule's own chrome (`CAPSULE_CHROME` = margin 4 + `CAPSULE_ICON_SIZE` 44 + `CAPSULE_ICON_GAP`
 8; macOS 27's proportions, 2026-09-30 — it was 48 + 12). It was 84 with the old 12px gap and 48/12
 chrome, confirmed then against a live session, not derived on paper: `queryUI` put the island at
@@ -3840,15 +3825,14 @@ appeared on Hyalo at 66 % opacity in one step; until #762 a floor (`opacityFloor
 
 **`MorphRevealer`** (`common/MorphRevealer.ts`) is the Dynamic-Island variant of the same
 engine: ONE shape that transforms. Instead of scaling a rendered container (which
-stretches the 1px border and the corners), mid-morph the revealer paints a Cairo squircle
-**every frame with truly interpolated geometry** — rect, corner radius, superellipse `n`,
-glass alpha and border color all lerp from the capsule's pill (perfect pill ≡ `n=2`,
-`r=h/2`) to the island container's recipe. It paints with the same `drawSquircle` +
-params (inset 2, borderWidth 1, gloss) as `SquircleContainer` — which exposes its paint
-layer as `(grid as any).glassArea` exactly for this — so the clone is pixel-identical to
-both real widgets at the endpoints: the source capsule is hard-swapped for the clone on
-frame 0 (opacity only, stays clickable geometry) and the island's real glass takes over
-at rest. Hyprland's blur keys off painted pixels, so it follows the morph for free.
+stretches the 1px border and the corners), mid-morph the revealer declares a squircle
+**every frame with truly interpolated geometry** — rect, corner radius and superellipse `n`
+lerp from the capsule's pill (perfect pill ≡ `n=2`, `r=h/2`) to the island container's
+recipe — and Hyalo paints its glass (`glassShape`, #684; the Cairo clone it painted for
+Hyprland went with #762). Both ends are boxes that are their glass, so the clone meets both
+real widgets exactly: the source capsule is hard-swapped for the clone on frame 0 (opacity
+only, stays clickable geometry — `SquircleContainer` exposes its paint layer as
+`(grid as any).glassArea` for this) and the island's real glass takes over at rest.
 Three more tracks complete the "same object" illusion — the rule they implement:
 **something must be on the glass at every instant of the flight** (an empty-glass window
 reads as "content disappears and reappears", user-caught 2026-07-19). (a) **Traveling
@@ -3954,20 +3938,24 @@ pill's curved ends, icons at three sizes):
 
 | | px | where |
 |---|---|---|
-| above a capsule (screen edge) | 4 | `.bar-centerbox` `margin-top` |
-| capsule height | 36 (32 of it visible glass, radius 16) | `BAR_CAPSULE_H` (derived, see below) |
+| above a capsule's glass (screen edge) | 6 | `.bar-centerbox` `margin-top` (+ `margin-bottom` 2) |
+| capsule height | 32 (radius 16) | `BAR_CAPSULE_H` (derived, see below) |
 | strip the bar reserves | 40 | `BAR_H` (exclusive zone) |
-| capsule → windows below | 4 | Hyprland `gaps_out` (8 until 2026-09-29) |
-| between two capsules (only the island and its chips, since the groups) | 4 | `BAR_GAP` |
+| between two capsules' glass (only the island and its chips, since the groups) | 8 | `BAR_GAP` |
 | hover/open pill ↔ visible glass, every side, AND ↔ the next pill | 4 | `BAR_PILL_EDGE` — the group's one rhythm |
-| group allocation → its first/last item | 6 | `BAR_GROUP_PAD` = `GLASS_INSET` 2 + `BAR_PILL_EDGE` |
-| hover/open pill ↔ item top and bottom | 6 | `BAR_VEIL_INSET` (same sum) → pill 24 tall, radius 12 |
+| group glass → its first/last item | 4 | `BAR_GROUP_PAD` = `BAR_PILL_EDGE` |
+| hover/open pill ↔ item top and bottom | 4 | `BAR_VEIL_INSET` = `BAR_PILL_EDGE` → pill 24 tall, radius 12 |
 | between two items in a group | 4 | `BAR_ITEM_GAP` = `BAR_PILL_EDGE` (the group box's `spacing`) |
 | every icon in the bar AND the island | 18 | `BAR_ICON_SIZE` (the launcher's mark and the island's chips included) |
 | each side of an icon | 7 | `BAR_ITEM_PAD` → icon-only item and its pill 32 wide |
 | each side of text (title, clock, a revealed label) | 12 | `BAR_TEXT_PAD` = the pill's radius |
-| each side of a STANDALONE capsule's content (the island's compact forms) | 16 | `BAR_PILL_PAD` |
-| the two ends (system menu, clock) | 4 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` = `gaps_out` (8 until 2026-09-29) |
+| each side of a STANDALONE capsule's content (the island's compact forms) | 14 | `BAR_PILL_PAD` |
+| the two ends' glass (system menu, clock) | 6 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` |
+| between the island's glass and a flank's | 20 | `ISLAND_GAP` (`Bar.tsx`) |
+
+Counted on the GLASS since #762 (2026-10-13). Until then the capsules' boxes were 36 with the glass
+painted 2 px inside (`GLASS_INSET`), and the table read 4 · 36 · 4 between capsules · 6 · 6 · 16 · 4
+· 16 — on the boxes. Not one pixel moved.
 
 `BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_PILL_EDGE`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET`,
 `BAR_ITEM_GAP` live in `surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_TEXT_PAD`, `BAR_ICON_SIZE`
@@ -4006,10 +3994,9 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
   and the pill is the item's WHOLE width. A widget's `buildBarContent` that forgets the pad gets
   a pill hugging its glyph. `makeBarExpandable` is an icon item collapsed and a text item
   revealed: the extra `BAR_TEXT_PAD − BAR_ITEM_PAD` rides on the label, inside the revealer.
-- **Concentric by construction.** The glass is painted `GLASS_INSET` (2) in from its allocation,
-  so a 36 row shows 32 of glass (radius 16); the pill sits 6 in from the allocation on all
-  sides that face the glass (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends) → 4px
-  from the visible edge, radius 12, past the rim's 3.2. A segmented control's thumb, which is the
+- **Concentric by construction.** The capsule is 32 of glass (radius 16); the pill sits 4 in from
+  it on all sides (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends), radius 12, past the
+  rim's 3.2. A segmented control's thumb, which is the
   prior art.
 - **The veil is the capsule's old one, moved.** Same ink (`GLASS_SPECULAR` / `GLASS_TINT.dark`)
   at the same `GLASS_STATE_MIX` alphas, painted OVER the group's glass instead of folded into a

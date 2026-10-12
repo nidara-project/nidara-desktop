@@ -15,10 +15,12 @@
         // focus surface, so there's no rounded rect to mismatch the Cairo squircle.
         background: none;
         border: none;
-        // The 22 is an ALIGNMENT AXIS, not a spacing value: a result row's text sits at
-        // 10 (.prism-results-list) + 12 (.prism-result-row) = 22, so the field's text and
-        // the results below it share one left edge. Move one, move all three.
-        padding: $space-4 22px;
+        // The 20 is an ALIGNMENT AXIS, not a spacing value: a result row's text sits at
+        // 8 (.prism-results-list) + 12 (.prism-result-row) = 20 from the glass, so the field's
+        // text and the results below it share one left edge. Move one, move all three.
+        // 14 above and below: from the glass (16 from the box until #762, whose glass was
+        // 2 px in); the divider keeps the 16 to the field when the results show.
+        padding: 14px 20px;
     }
 
     .prism-search-entry {
@@ -35,17 +37,17 @@
     // Hairline between the search field and the results — only present when results
     // are revealed (it lives inside the revealer). Full-bleed, like Raycast.
     .prism-divider {
+        margin-top: 2px;
         min-height: 1px;
         background: var(--nidara-border);
     }
 
     .prism-results-list {
         background: transparent;
-        // Every gap from a row to its boundary reads 8px: the sides/bottom are 10 because
-        // SquircleContainer paints the glass 2px INSIDE the widget rect (GLASS_INSET), so
-        // 10 from the rect is 8 from the visible edge; the top is a true 8 to .prism-divider.
-        // The 10 is also the alignment axis above — see .prism-search-box.
-        padding: $space-2 10px 10px;
+        // Every gap from a row to its boundary reads 8px: to the glass at the sides and the
+        // bottom, to .prism-divider at the top. The 8 is also the alignment axis above — see
+        // .prism-search-box.
+        padding: $space-2;
     }
 
     .prism-result-row {

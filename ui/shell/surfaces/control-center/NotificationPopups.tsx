@@ -14,7 +14,7 @@ const ANIM_MS = 300         // grow/shrink in+out duration
 export function NotificationPopupsWidget() {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
+        spacing: 16,   // between the banners' glass (12 between their boxes until #762)
         css_classes: ["notif-popup-container"],
         valign: Gtk.Align.START,
         halign: Gtk.Align.END,

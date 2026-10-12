@@ -12,7 +12,7 @@ import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
 import { uiIcon } from "../../core/Icons"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
@@ -299,15 +299,8 @@ export default function AppGridPanel(
         gloss: true,
         useShellOpacity: true,
         opacityRole: "launcher",
-        inset: 2.0,
         hexpand: false,
         vexpand: false,
-        // The last outer glass to get the shadow, and it had to wait for its LAYER:
-        // the band is `alpha 0.18` and this surface sat at `ignore_alpha 0.04`, so
-        // Hyprland blurred behind the shadow and smeared a halo along the silhouette.
-        // The threshold moved to 0.23 (`hyprland.lua`) in the same change; do not put
-        // this back on a surface whose threshold is under 0.18.
-        shadow: GLASS_SHADOW,
     })
     // The App Grid shares the bar's Wayland surface, so its launcher profile is local:
     // it changes the panel's density without changing the surface-wide compositor material.
@@ -318,10 +311,11 @@ export default function AppGridPanel(
     // setVisible() instead of toggling .visible directly so it animates.
     const panelPop = new ScaleRevealer(squirclePanel, { ...OVERLAY_POP, pivot: "center" })
     const setVisible = (open: boolean, onDone?: () => void) => panelPop.reveal(open, onDone)
-    contentBox.margin_top    = 28
-    contentBox.margin_start  = 32
-    contentBox.margin_end    = 32
-    contentBox.margin_bottom = 4
+    // From the glass (28 · 32 · 4 from the box until #762, whose glass was 2 px inside it).
+    contentBox.margin_top    = 26
+    contentBox.margin_start  = 30
+    contentBox.margin_end    = 30
+    contentBox.margin_bottom = 2
     panelPop.halign = Gtk.Align.CENTER
     panelPop.valign = Gtk.Align.CENTER
 

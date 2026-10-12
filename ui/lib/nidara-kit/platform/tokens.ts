@@ -75,11 +75,10 @@ export const RADIUS = {
  * a mistake (it was 12/6; no menu system runs 2:1 — AppKit ~5/4, Windows 11
  * flyouts 4/4). The text's own breathing room lives on the row.
  *
- * ⚠️ Measured from the GLASS, not from the widget rect: `SquircleContainer` paints
- * the glass `GLASS_INSET` (2px) inside its allocation, so a box aligned to the rect
- * is that much closer to the visible edge than it looks in the source. Callers
- * write `rowInsetFor(...) + GLASS_INSET` and say so — that discrepancy is what left
- * the system menu 2px tighter than its siblings while its comment claimed parity.
+ * Measured from the GLASS — which is the shell's container box since #762 (until then
+ * the glass was painted 2px inside it, callers wrote `rowInsetFor(...) + GLASS_INSET`,
+ * and forgetting it left the system menu 2px tighter than its siblings). A container
+ * that paints its own glass and shadow keeps the shadow's spread inside its box: add it.
  */
 const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
 
