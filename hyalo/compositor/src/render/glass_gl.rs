@@ -1358,6 +1358,10 @@ pub unsafe fn measure_ink(
     }
     cache.measured = Some((cache.generation, boxes.to_vec(), saturation));
     unsafe {
+        // The frame's framebuffer, read before the target below is made: making it binds it,
+        // and restoring that at the end would leave the rest of the frame drawing into it.
+        let mut prev_fbo = 0;
+        gl.GetIntegerv(ffi::FRAMEBUFFER_BINDING, &mut prev_fbo);
         let progs = programs(gl, user_data);
         let (tex, fbo) = match progs.ink_target.get() {
             (0, _) => {
@@ -1379,8 +1383,6 @@ pub unsafe fn measure_ink(
             t => t,
         };
         let _ = tex;
-        let mut prev_fbo = 0;
-        gl.GetIntegerv(ffi::FRAMEBUFFER_BINDING, &mut prev_fbo);
         let mut vp = [0i32; 4];
         gl.GetIntegerv(ffi::VIEWPORT, vp.as_mut_ptr());
         let mut scissor = 0u8;
