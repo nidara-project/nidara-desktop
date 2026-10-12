@@ -195,8 +195,8 @@ setMaterialSource({
 // The global hooks of the shader (lab_params.conf: each a delta from the factory glass).
 function writeShader() {
     const lab = new Array(16).fill(0)
-    lab[12] = state.common.bevel - 80          // bevel width cap, + to its 80 px
-    lab[4] = state.common.profile - 5          // bevel profile exponent, + to its 5
+    lab[12] = state.common.bevel - 30          // bevel width cap, + to its 30 px
+    lab[4] = state.common.profile - 4          // bevel profile exponent, + to its 4
     lab[5] = state.common.strength - 1         // refraction strength, × (1 + it)
     GLib.file_set_contents(`${SHADERS}/lab_params.conf`,
         lab.map((v, i) => v !== 0 ? `lab[${i}] = ${v}` : "").filter(Boolean).join("\n") + "\n")
