@@ -29,6 +29,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../../../lib/nidara-kit"
+import { ON_WHITE } from "../../../lib/nidara-kit/platform/tokens"
 import { CCWidgetSpec, ContentBudget, WidgetSize } from "./contract"
 
 /** Arm a live-state subscription and hand back its disposer. Every tile takes one
@@ -416,6 +417,8 @@ export function makeHSliderTile(opts: {
 
     const slider = makeHSlider({
         value: opts.getValue(),
+        // White, as the CC's tiles that are on and its vertical gauge (owner, 2026-10-12).
+        fillColor: ON_WHITE,
         onChange: opts.onChange,
         onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
         onExtChange: opts.onExtChange,

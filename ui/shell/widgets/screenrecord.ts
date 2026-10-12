@@ -188,7 +188,7 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     // through makeCapsuleInner + wrapCapsuleTile (like screenshot/clipboard) lands
     // the icon/text on the exact same grid. Idle = action tile (name, no sub);
     // recording = "Recording…" + a live elapsed timer in the subtitle slot. The
-    // accent fill itself is BaseIsland's getActive (see the widget registration
+    // on-state itself is BaseIsland's getActive (see the widget registration
     // below) — this content only owns icon/text, not any
     // background tint anymore (the old .rec-active-bg icon-badge tint and
     // .rec-stop-icon/.rec-label colour overrides are gone: the WHOLE capsule fills
@@ -482,8 +482,8 @@ const screenrecordWidget: AtomicWidget = {
         void stopRecording()
         return true
     },
-    // Recording fills the capsule with the ACCENT, exactly like every other tile
-    // that is switched on (dark_mode, night_light, focus…) — no `activeColorHex`,
+    // Recording shows the tile ON, exactly like every other tile that is switched
+    // on (dark_mode, night_light, focus…: white, the icon in the accent) — no `activeColorHex`,
     // no pulse. It used to be a throbbing DANGER_HEX, which was two mistakes at
     // once (2026-08-02): the throb meant a ~15 fps Cairo redraw of a tile on a
     // blurred surface for the whole capture, and the red said "alarm" about a

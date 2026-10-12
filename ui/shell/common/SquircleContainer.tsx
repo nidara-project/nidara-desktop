@@ -91,6 +91,9 @@ interface SquircleContainerProps {
      *  with the user's accent choice — e.g. screen recording uses `DANGER_HEX`,
      *  same red as every other "this needs attention" indicator. */
     activeColorHex?: string
+    /** The fill's colour as RGB, over `activeColorHex` and the accent: the Control
+     *  Center's tiles fill with `ON_WHITE` (BaseIsland). */
+    activeColor?: { r: number, g: number, b: number }
     /** Notifies this container to redraw when the active state flips (the
      *  container has no way to know on its own — it's driven by the caller's own
      *  domain signal, e.g. BluetoothService.watchPower). */
@@ -180,6 +183,7 @@ export default function SquircleContainer({
     getActive,
     activeAlpha = 0.85,
     activeColorHex,
+    activeColor,
     watchActive,
     getFill,
     shadow,
@@ -240,14 +244,14 @@ export default function SquircleContainer({
             const frac = getFill ? Math.max(0, Math.min(1, getFill())) : (getActive!() ? 1 : 0)
             if (frac > 0) {
                 filled = true
-                const activeColor = hexToFloatRgb(activeColorHex ?? Theme.accentPalette[Theme.accentColor].color)
+                const fillColor = activeColor ?? hexToFloatRgb(activeColorHex ?? Theme.accentPalette[Theme.accentColor].color)
                 const resolvedAlpha = typeof activeAlpha === "function" ? activeAlpha() : activeAlpha
                 if (frac >= 1) {
-                    shareColor = activeColor
+                    shareColor = fillColor
                     shareAlpha = resolvedAlpha
                 } else {
                     fillFrac = frac
-                    shareColor = activeColor  // the FILLED (bottom) portion
+                    shareColor = fillColor  // the FILLED (bottom) portion
                     shareAlpha = resolvedAlpha  // baseColor/baseAlpha (still held above) become the empty portion
                 }
             }

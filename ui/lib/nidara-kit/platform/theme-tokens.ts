@@ -338,6 +338,9 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     // left in the shell's static block because the switch rules moved to the KIT
     // on 2026-09-20 — every bundle that uses `NidaraToggleRow` now paints with it.
     `  --nidara-thumb: #ffffff;`,
+    // What is ON in the Control Center (a capsule's icon circle; the 1×1 and the gauge are
+    // Cairo's, `ON_WHITE` in tokens.ts): white in both modes, its icon in the accent.
+    `  --nidara-on: #ffffff;`,
     `  --nidara-danger: ${DANGER_HEX};`,
     `  --nidara-danger-rgb: ${hexToRgb(DANGER_HEX)};`,
     `  --nidara-warning: ${WARNING_HEX};`,
