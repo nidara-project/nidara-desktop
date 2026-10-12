@@ -11,7 +11,7 @@ import widgetConfig from "../../core/WidgetConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import { uiIcon } from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer, { Shape, resolveDrawParams, GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape, resolveDrawParams } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
@@ -38,7 +38,7 @@ function makeDropGhost(size: WidgetSize, w: number, h: number): { widget: Gtk.Dr
     da.set_draw_func(cairoDraw((_widget: Gtk.DrawingArea, cr: any, dw: number, dh: number) => {
         const { radius: r, n, perfect } = resolveDrawParams(shape, radius, 3.2, false, dw, dh)
         const accent = invalid ? GHOST_DANGER : hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
-        drawSquircle(cr, dw, dh, undefined, 0.12, false, accent, r, perfect, { ...accent, a: 0.6 }, n, 2, 2.0, [4, 3])
+        drawSquircle(cr, dw, dh, undefined, 0.12, false, accent, r, perfect, { ...accent, a: 0.6 }, n, 2, 0, [4, 3])
     }))
     return {
         widget: da,
@@ -432,11 +432,11 @@ export default function IslandGrid() {
         backBtn.connect("clicked", hideDetail)
         // Same gap from the glass on top and on the left: the button sits in the
         // squircle's corner, and an uneven gap there reads as misplaced.
-        const headerGap = rowInsetFor(RADIUS.lg) + GLASS_INSET + 6
+        const headerGap = rowInsetFor(RADIUS.lg) + 6
         const header = new Gtk.Box({
             spacing: 10,
             margin_start: headerGap,
-            margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+            margin_end: rowInsetFor(RADIUS.lg),
             margin_top: headerGap,
             margin_bottom: 10,
         })
@@ -466,10 +466,10 @@ export default function IslandGrid() {
             css_classes: ["nidara-detail-panel"],
             hexpand: true,
             // Same halo as every other list of rows on a radius-lg surface. This island is
-            // a FIXED 356px wide, so the inset is paid out of the row: 340 → 328 usable.
-            margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET,
-            margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
-            margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+            // a FIXED GRID_WIDTH wide, so the inset is paid out of the row.
+            margin_start: rowInsetFor(RADIUS.lg),
+            margin_end: rowInsetFor(RADIUS.lg),
+            margin_bottom: rowInsetFor(RADIUS.lg),
         })
         panel.append(w.buildCCDetail(hideDetail))
 
@@ -493,13 +493,8 @@ export default function IslandGrid() {
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: GRID_WIDTH })
         inner.append(header)
-        // Full-bleed, but flush to the GLASS: with no margin it spanned the widget rect,
-        // i.e. 2px past the painted edge on each side (SquircleContainer draws GLASS_INSET
-        // in). A hairline is exactly the kind of child that overhangs without anyone noticing.
-        inner.append(new Gtk.Separator({
-            css_classes: ["cc-detail-sep"], margin_bottom: 4,
-            margin_start: GLASS_INSET, margin_end: GLASS_INSET,
-        }))
+        // Full-bleed: flush to the glass, which is the island's box.
+        inner.append(new Gtk.Separator({ css_classes: ["cc-detail-sep"], margin_bottom: 4 }))
         inner.append(scroll)
 
         detailIsland = SquircleContainer({
@@ -508,9 +503,6 @@ export default function IslandGrid() {
             useShellOpacity: true,
             borderColor: { r: 1, g: 1, b: 1, a: 0.12 },
             radius: RADIUS.lg,
-            // Outer glass: in detail mode this island REPLACES the grid, so it floats on
-            // the wallpaper exactly like the tiles it stands in for — same shadow.
-            shadow: GLASS_SHADOW,
         })
         detailPage.append(detailIsland)
         mainStack.set_visible_child_name("detail")
@@ -725,12 +717,12 @@ export default function IslandGrid() {
 
     fixed.add_controller(dropTarget)
 
-    const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
-    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], shadow: GLASS_SHADOW, keyboardStop: true })
-    // 16 above it, and nothing below: the CC's panel margin (ControlCenter.tsx,
-    // CC_PANEL_PAD) closes the panel under it. It was 24 + 12 until 2026-09-30, when the
-    // CC became a panel (owner's call).
-    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 16, margin_bottom: 0 })
+    const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 30, margin_end: 30, margin_top: 10, margin_bottom: 10 })
+    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"], keyboardStop: true })
+    // 20 from the tiles' glass to its glass, and 2 below it before the CC's panel margin
+    // (ControlCenter.tsx, CC_PANEL_PAD) closes the panel. It was 24 + 12 until 2026-09-30,
+    // when the CC became a panel (owner's call); 16 + 0 between the boxes until #762.
+    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 20, margin_bottom: 2 })
     editBtnWrapper.append(editBtn)
 
     overviewPage.append(gridOverlay)

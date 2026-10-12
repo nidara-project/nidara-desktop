@@ -377,8 +377,8 @@ export const drawGlassEdgeLight = (
  *
  *  ⚠️ IT NEEDS ROOM OUTSIDE THE SILHOUETTE, and that room is `inset` — the caller must
  *  reserve at least `spread` px or the falloff is simply clipped by the DrawingArea.
- *  `SquircleContainer`'s `GLASS_INSET` is 2.0, so a tile gets a 2px shadow unless it
- *  is given more, and buying more shrinks the painted glass by the same amount.
+ *  The shell's `SquircleContainer` reserves the shadow's `spread` when it is given one,
+ *  and buying more shrinks the painted glass by the same amount.
  *
  *  ⚠️ AND IT INTERACTS WITH COMPOSITOR BLUR. Hyprland decides where to blur by an
  *  alpha threshold per layer (`ignore_alpha`), and a shadow is by definition a band of
@@ -484,9 +484,9 @@ export const drawShadowFromPath = (
 
 /** The shell's one drop-shadow recipe, for glass that FLOATS OVER CONTENT.
  *
- *  `spread: 2` is the value that costs nothing: the shadow lives in the surface's
- *  `inset`, and `GLASS_INSET` already reserves exactly that — so the painted glass
- *  does not shrink and nothing moves. Anything wider comes out of the glass.
+ *  `spread: 2` was the value that cost nothing while the shell's glass was painted 2px
+ *  inside its box (`GLASS_INSET`, gone with #762): the shadow lived in that room. A
+ *  container that still paints its own shadow reserves `spread` for it.
  *
  *  `drop: 0` because at this spread a downward offset costs the TOP edge more than
  *  it buys in depth, and the top is precisely where the rim gives up: its top stop is

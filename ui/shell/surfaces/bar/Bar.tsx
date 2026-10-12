@@ -11,7 +11,7 @@ import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
-import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { BAR_GROUP_PAD, BAR_H, BAR_ITEM_GAP, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
 import appService from "../../core/AppService"
@@ -124,8 +124,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // panel is a squircle like every other floating popup of the shell, so 6. See
   // rowInsetFor in tokens.ts.
   const expansionInner = new Gtk.Box({
-      margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
-      margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+      margin_top: rowInsetFor(RADIUS.lg), margin_bottom: rowInsetFor(RADIUS.lg),
+      margin_start: rowInsetFor(RADIUS.lg), margin_end: rowInsetFor(RADIUS.lg),
   })
   // Pop animation (grow toward the anchor + fade) shared by every overlay —
   // the wrapper is the variable, so all the existing alignment/margin/region
@@ -139,7 +139,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // the halo above drops from 14 to 6 — the reason this panel read airy next to a menu
   // sitting right under it.
   const expansionCapsule = new ScaleRevealer(SquircleContainer({
-      shadow: GLASS_SHADOW,
       child: expansionInner, gloss: true, useShellOpacity: true,
       borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, radius: RADIUS.lg,
       css_classes: ["bar-expansion-panel"],
@@ -363,7 +362,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // Derived from the bar height and the dock's actual footprint (dock size is
   // user-configurable) instead of hardcoded magic numbers.
 
-  const PANEL_TOP = BAR_H + 8   // gap below the bar (8: same rhythm as the side gap)
+  // Where a panel's glass starts below the bar: 12 under the capsules' glass (BAR_H − 2).
+  const PANEL_TOP = BAR_H + 10
   const SAFETY = 28
   const DOCK_VPAD = 20           // dock padding around its icons
 
@@ -380,12 +380,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const SIDE_GAP = BAR_MARGIN
 
   // The CC and the NC are panels with their own margin (ControlCenter.tsx, CC_PANEL_PAD):
-  // the PANEL hangs `BAR_MARGIN` below the bar, as a window does, and its content lands
-  // where the margin puts it. The other panels have no margin of their own yet, so
-  // they keep 8.
+  // the PANEL hangs `BAR_MARGIN` below the bar's strip, and its content lands where the
+  // margin puts it. The other panels have no margin of their own, so their glass starts at
+  // PANEL_TOP.
   cc.margin_top = BAR_H + BAR_MARGIN
   nc.margin_top = BAR_H + BAR_MARGIN
-  expansionCapsule.margin_top = PANEL_TOP   // 8 below the bar: its glass starts there, it has no panel margin
+  expansionCapsule.margin_top = PANEL_TOP   // its glass starts there: it has no panel margin
   systemMenu.margin_top = PANEL_TOP         // Bar owns the menu geometry (see syncPanelMargins)
   const syncPanelMargins = () => {
     const end = SIDE_GAP + (dockSideState.position === 'right' ? dockSideState.width : 0)
@@ -573,8 +573,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // and NOT the app grid's 48: every panel here is wrapped in a ScaleRevealer,
   // which is `overflow: HIDDEN`, so whatever a panel paints outside its
   // allocation is already clipped by GTK before the compositor sees it — the pad
-  // is for rounding and the squircle's soft edge (which lives INSIDE the rect,
-  // GLASS_INSET), not for a shadow that escapes. The banners are the one
+  // is for rounding, not for a shadow that escapes (Hyalo casts the panes' shadows, outside
+  // the surface's drawn region). The banners are the one
   // exception and are handled below.
   const PANEL_PAD = 16
   // Vertical is where the whole gain is (1440 → 64), so the pad only has to
@@ -1078,10 +1078,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
       const iconCenterX = tx + iconAlloc.width / 2
       const panelAlloc = expansionCapsule.get_allocation()
       const panelW = panelAlloc.width > 1 ? panelAlloc.width : 260
-      // Left edge of the panel: flush with the anchor (start-align) or centered
-      // under it. halign is END, so margin_end pins the panel's RIGHT edge.
-      const panelLeft = (id === CUSTOM_ID && customAlign === "start") ? tx : iconCenterX - panelW / 2
-      expansionCapsule.margin_end = Math.max(8, Math.round(geo().width - panelLeft - panelW))
+      // Left edge of the panel's glass: 2 in from the anchor's left edge (start-align — where
+      // it sat while the glass was painted 2 px inside a box flush with the anchor, #762)
+      // or centered under it. halign is END, so margin_end pins the panel's RIGHT edge, never
+      // nearer the screen's than 10.
+      const panelLeft = (id === CUSTOM_ID && customAlign === "start") ? tx + 2 : iconCenterX - panelW / 2
+      expansionCapsule.margin_end = Math.max(10, Math.round(geo().width - panelLeft - panelW))
   }
 
   const showExpansion = (id: string) => {
@@ -1097,14 +1099,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
           content = w.buildBarExpanded(onClose)
           flush = !!w.barExpandedFlush
       }
-      // A flush panel reaches the capsule's inner edge horizontally (its scroll bar
-      // has to live there); it keeps the vertical breathing room either way.
-      // GLASS_INSET, not 0: the capsule's VISIBLE edge is that far inside its own
-      // allocation (drawSquircle paints the glass in from the rect), so flush-to-rect
-      // hangs the content outside the shape — and puts a scroll lane's pill 2px nearer
-      // the curve than its clearance assumes, which is what clipped the clipboard bar.
-      expansionInner.margin_start = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg) + GLASS_INSET
-      expansionInner.margin_end = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg) + GLASS_INSET
+      // A flush panel reaches the capsule's glass horizontally (its scroll bar has to live
+      // there); it keeps the vertical breathing room either way.
+      expansionInner.margin_start = flush ? 0 : rowInsetFor(RADIUS.lg)
+      expansionInner.margin_end = flush ? 0 : rowInsetFor(RADIUS.lg)
       // Direct pill→pill switch (one click, no dismissal in between): the
       // capsule is still fully revealed at the PREVIOUS anchor's position, so
       // snap it to the hidden state first — otherwise the new content paints
@@ -1228,7 +1226,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // mode as a coherent group, not the wallpaper behind one side of the grid.
   registerGlassSurface({ id: "app-grid", root: grid.widget, role: "launcher", skinFromMode: true })
 
-  const ISLAND_GAP = 16
+  // Between the island's glass and a flank's (16 between their boxes until #762).
+  const ISLAND_GAP = 20
 
   // Forward declaration for layout sync across the left/right flanks and Activity Island
   let scheduleBarLayoutSync: (delayMs?: number) => void = () => {}

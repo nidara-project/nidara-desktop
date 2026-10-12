@@ -23,8 +23,9 @@ export const PANEL_W = {
     lg: 240,
     /** content lists — clipboard */
     xl: 280,
-    /** mirrors the CC grid width (4·80 + 3·16 = CCLayoutManager.GRID_WIDTH, which says so
-     *  at boot if the two disagree). 356 until the gap went 12 → 16 on 2026-09-30. */
+    /** the widest panel: what the CC grid measured across its tiles' boxes (4·80 + 3·16)
+     *  while the glass was painted 2 px inside them; the grid's glass is 4 narrower
+     *  (CCLayoutManager.GRID_WIDTH, #762). 356 until the gap went 12 → 16 on 2026-09-30. */
     full: 368,
 } as const
 

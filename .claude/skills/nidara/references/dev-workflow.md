@@ -2080,7 +2080,7 @@ text box, add it here in the same change.
 |---|---|---|---|
 | Settings sidebar label | 250px column → 174px | natural width | truncation FAILS |
 | Control Center tile title | 2×1 tile → **96px** (since 2026-09-30) | wrapped MINIMUM for a title that can lose its subtitle, natural otherwise | overflow FAILS, truncation reported |
-| Control Center status pill | 368px grid − the pill's ends, dot and gaps − a Stop button whose label is translated | natural width (one line) | truncation FAILS |
+| Control Center status pill | the 364px grid − the pill's ends, dot and gaps − a Stop button whose label is translated | natural width (one line) | truncation FAILS |
 
 ⚠️ **The script READS those numbers out of the source with regexes**, so a refactor that only
 renames or restructures a constant breaks it without changing a pixel: it exits 2 ("could not read

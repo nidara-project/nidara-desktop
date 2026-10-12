@@ -6,7 +6,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import appService, { AppData } from "../../core/AppService"
 import status from "../../core/Status"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { t } from "../../core/i18n"
 import { uiIcon } from "../../core/Icons"
@@ -82,14 +82,14 @@ export default function Prism() {
         reveal_child: false,
         child: resultsWrap,
     })
-    const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650, halign: Gtk.Align.CENTER })
+    const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 646, halign: Gtk.Align.CENTER })
     const searchContainer = new Gtk.Box({ css_classes: ["prism-search-box"], spacing: 12 })
     searchContainer.append(new Gtk.Image({ gicon: uiIcon("nd-system-search"), pixel_size: 20 , css_classes: ["nd-icon"] }))
     searchContainer.append(entry)
     contentBox.append(searchContainer)
     contentBox.append(revealer)
 
-    const prismWrapper = SquircleContainer({ child: contentBox, radius: RADIUS.xl, n: 3.2, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 }, shadow: GLASS_SHADOW })
+    const prismWrapper = SquircleContainer({ child: contentBox, radius: RADIUS.xl, n: 3.2, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
 
     const clearList = () => {
         let child = resultsList.get_first_child()

@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { BAR_ICON_SIZE, PANEL_W } from "../../common/widget-kit"
 import { NidaraButton, NidaraScrolled } from "../../../lib/nidara-kit"
@@ -259,8 +259,9 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
 // out of the text column: the transcript alone spans into it (every other row
 // keeps margin_end: LANE), so the bar rides flush to the glass edge, ~11px clear
 // of the bubbles, and its hover growth eats padding instead of text. The panel's
-// outer size is unchanged — inner is LANE wider and its right margin is 0.
-const LANE = 16
+// outer size is unchanged — inner is LANE wider and its right margin is 0. 14 from the
+// glass (16 from the box until #762, whose glass was painted 2 px inside it).
+const LANE = 14
 
 export default function AgentIsland() {
     const svc = agentService
@@ -288,8 +289,8 @@ export default function AgentIsland() {
         child: listBox,
         propagateNaturalHeight: true,
         maxContentHeight: 300,
-        // .agent-transcript already pads the 16px lane in CSS.
-        lane: 16, reserveLane: false,
+        // .agent-transcript already pads the lane in CSS.
+        lane: LANE, reserveLane: false,
         cssClasses: ["agent-scroller"],
     })
 
@@ -329,7 +330,7 @@ export default function AgentIsland() {
         orientation: Gtk.Orientation.VERTICAL, spacing: 12,
         // margin_end 0 + a LANE-wider request: same outer glass as before, but the
         // right padding now lives INSIDE, where the scrollbar can use it.
-        margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 0,
+        margin_top: 14, margin_bottom: 14, margin_start: 18, margin_end: 0,
         width_request: PANEL_W.full + LANE,
         css_classes: ["agent-panel"],
     })
@@ -380,7 +381,6 @@ export default function AgentIsland() {
 
     // Glass + morph wrapper, same shape as PlayerIsland/BatteryIsland.
     const squircle = SquircleContainer({
-        shadow: GLASS_SHADOW,
         child: inner,
         n: AGENT_GLASS.n,
         radius: AGENT_GLASS.radius,

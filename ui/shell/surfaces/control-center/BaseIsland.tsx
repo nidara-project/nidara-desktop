@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape } from "../../common/SquircleContainer"
 import { RADIUS, ON_WHITE } from "../../../lib/nidara-kit/platform/tokens"
 import { bindWhileRealized } from "../../../lib/nidara-kit/lifetime"
 import { WidgetSize } from "../../common/widget-kit"
@@ -11,14 +11,13 @@ import { WidgetSize } from "../../common/widget-kit"
  * - 2x1 (WIDE): Force perfect Capsules 💊
  * - 2x2/4x1: Sync with Dock System (n=3.2)
  */
-// The island's inner padding per size — single source for BaseIsland itself
-// AND for IslandGrid's ContentBudget math (tile span − 2·padding). TALL
-// slider tiles fill the capsule flush against the INSIDE of the drawn Cairo
-// border: the border occupies ~2.75–4.25px in (glass fill at inset 2 + a
-// 1.5px stroke inset a further 1.5), so padding 4 lands the fill right at the
-// border's inner edge — no gap, no covering. trackH = inner width (UNIT − 2·4).
+// The island's inner padding per size, from its glass — single source for BaseIsland
+// itself AND for IslandGrid's ContentBudget math (tile span − 2·padding). TALL slider
+// tiles fill the capsule 2 in from its glass, flush against the inside of a painted 1.5px
+// border. trackH = inner width (UNIT − 2·2). (4 and 12 from the tile's box until #762,
+// whose glass was painted 2 px inside it.)
 export function islandPadding(size: WidgetSize): number {
-    return size === WidgetSize.TALL ? 4 : 12
+    return size === WidgetSize.TALL ? 2 : 10
 }
 
 // Per-size shape identity — SINGLE: full circle, WIDE/TALL: perfect capsule,
@@ -120,11 +119,6 @@ export default function BaseIsland({
         shape,
         // cc-size-*: the tile's shape, which its keyboard ring (CSS) has to follow.
         css_classes: ["cc-island", `cc-${name}-island`, `cc-size-${size}`],
-        inset: 2.0,
-        // The CC has no panel — these islands ARE its outer glass, which is why they
-        // carry the shadow while a control inside a panel must not. One recipe for the
-        // whole shell; see GLASS_SHADOW.
-        shadow: GLASS_SHADOW,
         padding: islandPadding(size),
         getActive: wholeIsOn ? getActive : undefined,
         watchActive,

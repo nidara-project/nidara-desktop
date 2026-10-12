@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import GLib from "gi://GLib"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { BAR_CAPSULE_H, BAR_GAP, CAPSULE_BORDER } from "../bar/capsule"
@@ -188,7 +188,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
         if (front?.expandMode) status.toggleIsland(front.expandMode)
         else front?.onExpand?.()
     }
-    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", shadow: GLASS_SHADOW, borderColor: CAPSULE_BORDER, hoverLift: true, perfect: true, onClick: () => openFront() })
+    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverLift: true, perfect: true, onClick: () => openFront() })
     // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
     // compact shows another activity the dots are unmapped and MorphRevealer
     // lets the overview's landing dots ride the content fade instead.)
@@ -329,7 +329,6 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
 
         let slotRef: IndicatorSlot
         const chip = SquircleContainer({
-            shadow: GLASS_SHADOW,
             child: stack,
             gloss: true,
             useShellOpacity: true,
@@ -601,9 +600,8 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
                 catch (e) { console.error(`[ActivityIsland] ${rt.mode.id} failed to re-solve its geometry:`, e) }
             }
         },
-        /** Pin every revealer's top edge to the capsule's top (both wear their
-         *  glass with the same 2px Cairo inset, so aligning the BOXES aligns
-         *  the drawn edges). Falls back to the panel gap when the capsule is
+        /** Pin every revealer's top edge to the capsule's top (both boxes are their
+         *  glass, so aligning the BOXES aligns the drawn edges). Falls back to the panel gap when the capsule is
          *  hidden or not yet mapped (matches the morph's centered-pop
          *  fallback). Call per-open, before the reveal.
          *

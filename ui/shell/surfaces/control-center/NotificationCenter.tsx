@@ -6,7 +6,7 @@ import { execAsync } from "../../../lib/process"
 import compositor from "../../core/CompositorState"
 import { drawSquircle, squircleThumb } from "../../common/DrawingUtils"
 import { NidaraScrolled } from "../../../lib/nidara-kit"
-import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape } from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { ScaleRevealer, attachGhostSwipeDismiss } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
@@ -120,7 +120,7 @@ export function timeAgo(time: number): string {
 
 export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void, onClearGroup: () => void }) {
     const { name, count, onToggle, onClearGroup } = props
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, valign: Gtk.Align.CENTER, hexpand: true, margin_start: 12, margin_end: 8, margin_top: 4, margin_bottom: 4 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 8, valign: Gtk.Align.CENTER, hexpand: true, margin_start: 10, margin_end: 6, margin_top: 2, margin_bottom: 2 })
     const labelBox = new Gtk.Box({ spacing: 8, hexpand: true, valign: Gtk.Align.CENTER })
     labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, max_width_chars: 24, xalign: 0 }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
@@ -133,7 +133,7 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     // surface fill was fixed and didn't follow the Settings opacity). Tapping the header
     // background collapses the group, same as the chevron — release-phase because the
     // header is also a swipe target (see the NC row capsules for the pattern).
-    const header = SquircleContainer({ child: box, radius: RADIUS.md, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"], onClick: onToggle, clickOnRelease: true, shadow: GLASS_SHADOW })
+    const header = SquircleContainer({ child: box, radius: RADIUS.md, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"], onClick: onToggle, clickOnRelease: true })
     // Hover-reveal via OPACITY (not `visible`): the header spans full width, so keeping
     // the buttons allocated costs no text space and the row never reflows on hover.
     const setShown = (shown: boolean) => [collapseBtn, clearAllBtn].forEach(b => { b.opacity = shown ? 1 : 0; b.can_target = shown })
@@ -159,7 +159,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
 
     // The card is a vertical stack: the classic horizontal row on top and, when the item
     // is expanded with a big-enough image, the full-width hero (+ actions) below it.
-    const outerV = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12, valign: Gtk.Align.START, hexpand: true })
+    const outerV = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10, valign: Gtk.Align.START, hexpand: true })
     // Content top-aligned: title sits at the same height as the badge/chevron on the right.
     const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, hexpand: true })
     outerV.append(box)
@@ -226,7 +226,7 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
 
     // Expanded + big source → full-width hero below the row (replaces the thumb);
     // otherwise the compact right thumb.
-    const bigHero = itemExpanded ? createExpandedHeroWidget(n, GRID_WIDTH - 32) : null
+    const bigHero = itemExpanded ? createExpandedHeroWidget(n, GRID_WIDTH - 28) : null
     let thumb: Gtk.Widget | null = null
     if (bigHero) outerV.append(bigHero)
     else {
@@ -244,9 +244,9 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // so the text never rewraps under the pointer.
     let bannerActions: Gtk.Box | null = null
     if (isPopup && actions.length > 0) {
-        bannerActions = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, margin_end: 12, visible: false, css_classes: ["nc-banner-actions"] })
+        bannerActions = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, margin_end: 12, visible: false, css_classes: ["nc-banner-actions"] })
         actions.slice(0, 2).forEach(a => {
-            const lbl = new Gtk.Label({ label: a.label, css_classes: ["nc-banner-action-label"], margin_start: 14, margin_end: 14, margin_top: 5, margin_bottom: 5, ellipsize: 3, max_width_chars: 14 })
+            const lbl = new Gtk.Label({ label: a.label, css_classes: ["nc-banner-action-label"], margin_start: 12, margin_end: 12, margin_top: 3, margin_bottom: 3, ellipsize: 3, max_width_chars: 14 })
             const btn = SquircleContainer({ child: lbl, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.10 } })
             // Capture-claim like the expanded row's action buttons: beats the card's
             // release-tap AND the swipe detector.
@@ -331,13 +331,13 @@ export function NotificationCapsule(props: { n: Notification, groupCount?: numbe
     // banner action capsules take the right edge.
     const ov = new Gtk.Overlay({ child: outerV })
     clearBtn.halign = Gtk.Align.START; clearBtn.valign = Gtk.Align.START
-    clearBtn.margin_start = 6; clearBtn.margin_top = 6
+    clearBtn.margin_start = 4; clearBtn.margin_top = 4
     ov.add_overlay(clearBtn)
     if (bannerActions) ov.add_overlay(bannerActions)
     // CRITICAL urgency gets no visual decoration — GNOME doesn't mark it
     // either: never auto-expiring IS the signal. The 1px inner edge is part of
     // the glass sheen, not an indicator channel.
-    const capsule = SquircleContainer({ child: ov, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true, shadow: GLASS_SHADOW })
+    const capsule = SquircleContainer({ child: ov, radius: RADIUS.xl, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
     // Hover ⇄ rest (leave restores). The timestamp only swaps out when a chevron takes
     // its place — with the close in the corner, hiding it otherwise buys nothing.
     // enter/leave fire on the capsule's whole territory — a child crossing is not a leave.
@@ -380,7 +380,7 @@ function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widge
 export function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     if (groupCount <= 1) return card
 
-    const CARD_H = 80
+    const CARD_H = 76          // the real card's least height (.nc-capsule-item)
     const CARD_R = RADIUS.xl   // match the real card's corner radius
     const PEEK   = 14          // how far the nearest ghost peeks below the card
     const STEP   = 10          // extra peek per deeper layer (enough to show body, not just the rim)
@@ -401,9 +401,10 @@ export function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget
         if (compositorPaintsGlass(da)) return   // the compositor paints these bands (#684)
         const color = glassTintFor(da)   // the shell's skin, in its surface's tint
         for (let i = layers - 1; i >= 0; i--) {
-            // Inset >= the card's corner radius so each ghost's straight top edge sits under the
+            // Inset >= the card's corner radius − 2 so each ghost's straight top edge sits under the
             // STRAIGHT part of the card's bottom (clear of the rounded corners) — no corner gap.
-            const inset = CARD_R + i * 16
+            // (From the card's glass: CARD_R from its box, 2 px wider each side, until #762.)
+            const inset = CARD_R - 2 + i * 16
             const bottomY = PEEK + i * STEP
             // Clip to this layer's band, overlapping the previous layer by ~2px of BODY. The
             // card→ghost1 seam overlaps 4px but the card's inner inset (~2.5) eats most of it,
@@ -427,7 +428,7 @@ export function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget
         const w = da.get_width()
         const out: GlassShape[] = []
         for (let i = layers - 1; i >= 0; i--) {
-            const inset = CARD_R + i * 16
+            const inset = CARD_R - 2 + i * 16
             const bottomY = PEEK + i * STEP
             const bandTop = i === 0 ? 0 : PEEK + (i - 1) * STEP - 2
             const solid = glassAlphaFor(da, "overlay") >= 1
@@ -493,7 +494,6 @@ export default function NotificationCenter() {
 
     const CAL_H = 3 * UNIT + 2 * GAP      // 3 rows = 264px
     const calendarIsland = SquircleContainer({
-        shadow: GLASS_SHADOW,
         child: new Gtk.Calendar({ hexpand: true, vexpand: true, css_classes: ["nc-calendar-widget"] }),
         radius: RADIUS.xl, gloss: true, useShellOpacity: true,
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
@@ -505,11 +505,11 @@ export default function NotificationCenter() {
     calendarIsland.set_halign(Gtk.Align.START)
     // The empty state rides the same glass capsule as the clear-all pill — bare text sat
     // straight on the wallpaper and washed out on light backgrounds.
-    // 16 above, like the CC's Edit pill, and nothing below: the panel's margin closes it.
-    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 0, visible: false })
-    emptyBox.append(SquircleContainer({ child: new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, shadow: GLASS_SHADOW }))
-    const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 0, visible: false })
-    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => clearAllAnimated(), css_classes: ["nc-clear-all-pill"], shadow: GLASS_SHADOW })
+    // 18 above its glass, like the CC's Edit pill, and nothing below: the panel's margin closes it.
+    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 18, margin_bottom: 0, visible: false })
+    emptyBox.append(SquircleContainer({ child: new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_start: 30, margin_end: 30, margin_top: 10, margin_bottom: 10 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 } }))
+    const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 16, margin_bottom: 2, visible: false })
+    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 30, margin_end: 30, margin_top: 10, margin_bottom: 10 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => clearAllAnimated(), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
     const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: GAP, hexpand: true })
@@ -548,7 +548,7 @@ export default function NotificationCenter() {
             const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => `${n.id}~${n.time}~${n.summary}~${n.body}`).join("|")}:${sortedGroup.map(n => expandedItems.has(n.id) ? '1' : '0').join('')}`
             let cache = groupCache.get(id)
             if (!cache) {
-                const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 4 })
+                const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, margin_top: 8 })
                 const revealer = new (Gtk as any).Revealer({ child: subBox, transition_type: (Gtk as any).RevealerTransitionType.SLIDE_DOWN, transition_duration: 350 })
                 const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
                 const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })

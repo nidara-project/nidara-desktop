@@ -4,7 +4,6 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { squircleThumb } from "../common/DrawingUtils"
-import { GLASS_INSET } from "../common/SquircleContainer"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import IconButton from "../common/IconButton"
 import { NidaraScrolled } from "../../lib/nidara-kit"
@@ -70,14 +69,14 @@ const MAX_ROWS = 200
 
 // What Bar.tsx gives every other expansion panel. We take the HORIZONTAL over
 // (barExpandedFlush) so the scroll can reach the panel edge, then re-apply it to the
-// content. Flush leaves the box at GLASS_INSET, so this is measured from the glass —
+// content. Flush puts the box at the glass, so this is measured from the glass —
 // which is what rowInsetFor() already means. Default `n`: the panel is a squircle, like
 // every other floating popup of the shell.
 const PANEL_PAD = rowInsetFor(RADIUS.lg)
 
 // How far this panel's content already starts inside the capsule's VISIBLE corner —
 // the vertical margin Bar.tsx keeps on `expansionInner` even when flush, measured from
-// the widget rect, less the glass that SquircleContainer paints inside it. Feeds the
+// the glass (the capsule's box). Feeds the
 // scroll's corner clearance; it moves with Bar.tsx, so derive it, never copy it.
 const PANEL_TOP_INSET = rowInsetFor(RADIUS.lg)
 

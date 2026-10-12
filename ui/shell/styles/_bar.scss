@@ -39,7 +39,7 @@ window#nidara-bar-zone {
 /* ==========================================================================
    THE CAPSULE ROW
    The row and its three flank groups. `islandRow` reuses `.bar-centerbox` so the
-   4px top margin and the BAR_H row height come from the same CSS rule as the
+   top margin and the BAR_H row height come from the same CSS rule as the
    bar's own row instead of a constant stated twice (Bar.tsx says so at the
    mount site).
    ========================================================================== */
@@ -50,7 +50,8 @@ window#nidara-bar-zone {
     .bar-centerbox {
         background-color: transparent;
         border: none;
-        margin-top: 4px;   // ⚠️ capsule height = BAR_H − this; keep BAR_H/BAR_CAPSULE_H (capsule.ts) in step
+        margin-top: 6px;     // ⚠️ capsule height = BAR_H − these two; keep BAR_H/BAR_CAPSULE_H (capsule.ts) in step
+        margin-bottom: 2px;
     }
 
     /* --- Widget labels ---
@@ -386,7 +387,7 @@ window#nidara-bar-zone {
        over once hovered. Do NOT reintroduce `scrollbar` rules here. */
     /* Matches LANE in AgentIsland.tsx — keeps the bubbles in the same column as
        the header/entry while the scroller itself spans into the panel padding. */
-    .agent-transcript { padding-right: $space-4; }
+    .agent-transcript { padding-right: 14px; }   // AgentIsland LANE
 
 
     .agent-bubble {

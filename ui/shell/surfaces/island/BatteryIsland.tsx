@@ -1,5 +1,5 @@
 import Gtk from "gi://Gtk?version=4.0"
-import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer from "../../common/SquircleContainer"
 import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
 import { PANEL_W } from "../../common/widget-kit"
 import { makeBatteryGlyph, batteryFrac } from "../../common/BatteryGlyph"
@@ -38,7 +38,7 @@ export default function BatteryIsland(): Gtk.Widget {
 
     const inner = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 8,
-        margin_top: 16, margin_bottom: 16, margin_start: 20, margin_end: 20,
+        margin_top: 14, margin_bottom: 14, margin_start: 18, margin_end: 18,
         width_request: PANEL_W.lg,
     })
     inner.append(glyph)
@@ -46,7 +46,6 @@ export default function BatteryIsland(): Gtk.Widget {
     inner.append(sub)
 
     const squircle = SquircleContainer({
-        shadow: GLASS_SHADOW,
         child: inner,
         n: BATTERY_GLASS.n,
         radius: BATTERY_GLASS.radius,

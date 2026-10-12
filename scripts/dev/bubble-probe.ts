@@ -394,7 +394,7 @@ say()
 // ── SPECIMEN E — does the drop shadow fit in the room the bubble reserves? ──────
 // The bubble keeps `BUF` = 2 px of transparent margin on every side, and
 // `GLASS_SHADOW.spread` is 2, so on the flat runs the shadow fits exactly — the same
-// deal the capsule has with `GLASS_INSET`. The POINTER is the part that had to be
+// deal the shell's capsules had with `GLASS_INSET` until #762. The POINTER is the part that had to be
 // measured, and the arithmetic says it should NOT fit: growing an outline moves each
 // vertex along its bisector by `offset / sin θ`, so the pointer's ~90° apex should
 // reach 1.41 x spread = 2.83 px into 2 px of room.

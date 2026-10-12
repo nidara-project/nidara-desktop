@@ -5,7 +5,7 @@ import widgetConfig from "../../core/WidgetConfig"
 import registry from "../../widgets/index"
 import { uiIcon } from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
+import SquircleContainer, { GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { menuRow, menuSeparator } from "../../common/MenuRow"
 
@@ -65,8 +65,10 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
         // The halo from the GLASS, all four sides — the row hover fill spans this box.
         // Squircle corner (default `n`), so 6: same call as the system menu, and the same
         // reason the bar's circular panel gets a different number from the same radius.
-        margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
-        margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+        // The card paints its own glass and shadow, so its glass is the shadow's spread
+        // inside its box (SquircleContainer `shadow`).
+        margin_top: rowInsetFor(RADIUS.lg) + GLASS_SHADOW.spread, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_SHADOW.spread,
+        margin_start: rowInsetFor(RADIUS.lg) + GLASS_SHADOW.spread, margin_end: rowInsetFor(RADIUS.lg) + GLASS_SHADOW.spread,
     })
 
     const card = SquircleContainer({
