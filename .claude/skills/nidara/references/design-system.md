@@ -3526,7 +3526,8 @@ the circle (`--nidara-on`) and the icon. The tile's text stays white on the glas
 (below) fills with the same white, and its icon and value take `INK_DARK_CLASS` where the fill
 covers them — decided when the slider gets its size (`resize`), never on a later tick: the CC's
 open animation draws what its first frame had, and a check one tick after map left the icon white
-on the white until the CC reopened (measured). Wired via `AtomicWidget.getActive`/
+on the white until the CC reopened (measured). The CC's horizontal sliders (4×1, `makeHSliderTile`)
+fill white too — `makeSlider`'s `fillColor`; every other slider keeps the accent. Wired via `AtomicWidget.getActive`/
 `watchActive` (`common/widget-kit/contract.ts`) → `BaseIsland` → `SquircleContainer`'s `getActive`/`activeAlpha`/
 `watchActive` props: `getActive()` is read live *inside the Cairo draw call*, so it paints through
 the exact same `resolveDrawParams`/`drawSquircle` path a real tile already uses — no separate CSS

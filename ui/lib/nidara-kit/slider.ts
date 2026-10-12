@@ -69,6 +69,9 @@ export interface SliderOpts {
      *  CC gauge tiles: BaseIsland's getFill, one continuous shape/border instead
      *  of a separate inner fill layer — see makeVerticalFillTile). */
     paintFill?: boolean
+    /** The fill's colour; the accent when omitted. The CC's sliders fill with
+     *  `ON_WHITE`, as its tiles that are on do (`makeHSliderTile`). */
+    fillColor?: { r: number, g: number, b: number }
     onChange: (v: number) => void
     onValueChanged?: (v: number) => void   // every change (for label sync)
     onExtChange?: (cb: (v: number) => void) => (() => void)
@@ -154,10 +157,10 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
             capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
         }
 
-        // Fill (accent) — skipped when a host paints it instead (paintFill:false;
+        // Fill (accent, or `fillColor`) — skipped when a host paints it instead (paintFill:false;
         // see makeVerticalFillTile, whose gauge fill now lives in BaseIsland).
         if (paintFill) {
-            const { r: ar, g: ag, b: ab } = hexToFloatRgb(kitAppearance().accent())
+            const { r: ar, g: ag, b: ab } = opts.fillColor ?? hexToFloatRgb(kitAppearance().accent())
             cr.setSourceRGBA(ar, ag, ab, 0.9)
             if (thumb) {
                 // Capsule whose rounded end meets the thumb.
