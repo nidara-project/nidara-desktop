@@ -187,15 +187,17 @@ const NEUTRAL_TONE = tone(1, 1, 0, 1)
 
 const DEFAULTS = {
     // Logical px, every shape's least: what sets the bevel's width (≈4.3× this, hyalo's
-    // glass_gl.rs), held to half the shape's shorter side and to 80 px (`BEVEL_MAX`). At 40 the
-    // bevel is as wide as it may be on every shape: a bar capsule is lens all across, a large
-    // pane bends over its outer 80 px and is flat inside. The shader's profile (5th power) and
+    // glass_final.glsl), held to half the shape's shorter side and to 30 px (`BEVEL_MAX`,
+    // measured: the reference's edge bends the same on every pane from 80 to 240 tall). At 40
+    // the bevel is as wide as it may be on every shape: a bar capsule is lens all across, a
+    // pane bends over its outer 30 px and is flat inside. The shader's profile (4th power) and
     // strength (×3) do the rest.
     refraction: 40,
     // A fraction of the shape's shorter side, where that is more than `refraction`: a large
-    // pane lenses more than a small control — up to `BEVEL_MAX`. 0.15 turned the app grid into
-    // one magnifier on 2026-10-02 and was dropped to 0.03; the cap made it safe again (the lab,
-    // 2026-10-05).
+    // pane lenses more than a small control — up to `BEVEL_MAX`, which every pane over 60 px
+    // reaches through `refraction` alone, so this decides nothing today. 0.15 turned the app
+    // grid into one magnifier on 2026-10-02 and was dropped to 0.03; the cap made it safe again
+    // (the lab, 2026-10-05).
     lensing: 0.15,
     rim: 0.5,
     // The darkest point under the text, as the glass treats the backdrop: past this the text
