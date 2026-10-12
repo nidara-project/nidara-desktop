@@ -7,7 +7,7 @@ import { t } from "../core/i18n"
 import { uiIcon } from "../core/Icons"
 import { INK } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
-import { chromeIsDarkFor } from "../common/AdaptiveGlass"
+import { chromeIsDarkFor } from "../common/ShellGlass"
 
 function readFile(path: string): string {
     try {
@@ -53,7 +53,7 @@ function makeArc(
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2 - 2
         const xc = w / 2, yc = h / 2
-        const c = chromeIsDarkFor(canvas) ? 1 : 0   // bar chrome — its surface's skin, see AdaptiveGlass
+        const c = chromeIsDarkFor(canvas) ? 1 : 0   // bar chrome — its surface's skin, see ShellGlass
         cr.setSourceRGBA(c, c, c, INK.track)
         cr.setLineWidth(size > 28 ? 3 : 2)
         cr.arc(xc, yc, r, 0, 2 * Math.PI)
@@ -134,7 +134,7 @@ function makeCCMetric(
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2 - lineW / 2 - 1
         const xc = w / 2, yc = h / 2
-        const c = chromeIsDarkFor(canvas) ? 1 : 0   // shell skin (bar + CC) — its surface's, see AdaptiveGlass
+        const c = chromeIsDarkFor(canvas) ? 1 : 0   // shell skin (bar + CC) — its surface's, see ShellGlass
         cr.setLineCap(1)
         cr.setSourceRGBA(c, c, c, INK.track)
         cr.setLineWidth(lineW)

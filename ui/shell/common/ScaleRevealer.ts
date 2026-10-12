@@ -3,9 +3,6 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
 import { reduceMotion } from "../core/ReduceMotion"
-import Theme from "../core/ThemeManager"
-import { blurSafeOpacity } from "../core/NidaraTheme"
-import compositor from "../core/CompositorState"
 import type { GlassFormation, PaintTransform } from "../../lib/nidara-kit/platform/material"
 
 // ScaleRevealer: shows/hides its child with a grow/shrink + fade animation.
@@ -38,32 +35,19 @@ export type ScalePivot = "top-right" | "top-left" | "top-center" | "center"
 // Shared preset for the big overlay panels (CC, NC, Prism, system menu,
 // overview, app grid, bar expansion): subtle pop, fast accelerating
 // exit, no layout animation. Pivot is per-surface (toward its visual anchor).
-//
-// `opacityFloor`: on Hyprland every one of these panels is glass at `overlayOpacity` on
-// a layer with `ignore_alpha`, so fading the whole widget toward 0 drops the glass under
-// the threshold while the panel is still clearly on screen — its last frames were drawn
-// with NO blur behind them. There the fade runs between 1 and the lowest opacity that
-// keeps the blur (`blurSafeOpacity`), and the panel appears / disappears in one step at
-// that end (at the "regular" material, 0.66; at "clear", ~1 — no fade at all).
-// On Hyalo there is no threshold: each declared shape carries its opacity, and the
-// compositor fades its blur, glass and rim with it — so the floor is 0 and the panel
-// fades all the way (`fadeFloor`). Read per animation, so the material is followed live.
-export const fadeFloor = (glassAlpha: number) =>
-    compositor.caps.layerAlphaThreshold ? blurSafeOpacity(glassAlpha) : 0
 
-// 🔑 On Hyalo the glass and its content do not fade together (#764, owner 2026-10-07). Glass has
+// 🔑 The glass and its content do not fade together (#764, owner 2026-10-07). Glass has
 // no opacity: a pane appearing MATERIALIZES — Hyalo grows its blur, refraction, tint and rim
 // from the number each shape carries (`glassFormation`) — and the content (text, icons, state)
 // fades by opacity, after it. On OPEN the glass forms over the whole reveal (the eased
 // progress) and the content fades in over its second half, so text never floats on glass not
 // yet formed; on CLOSE the content goes over the first half and the glass dissolves over the
-// whole. Hyprland paints the glass inside the content, so there both stay one fade (the floor).
+// whole.
 const CONTENT_HALF = 0.5
 const smooth = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c) }
 
 export const OVERLAY_POP = {
     scaleFrom: 0.97, durationIn: 220, durationOut: 150, animateLayout: false,
-    opacityFloor: () => fadeFloor(Theme.overlayOpacity),
 } as const
 
 // Declaration merging: `gi.d.ts` declares `gi://Gtk` as `any` in value position
@@ -85,8 +69,6 @@ export class ScaleRevealer extends Gtk.Widget implements GlassFormation {
     scaleFrom: number
     pivot: ScalePivot
     animateLayout: boolean
-    /** Opacity at progress→0 while the widget is still shown (see OVERLAY_POP). */
-    opacityFloor: (() => number) | null
     /** Upward travel in px at progress→0 (0 = none). Paint-only, like the scale:
      *  the child slides UP out of its box while hiding and back down while
      *  showing. The island's capsule uses it to rise off the top of the screen
@@ -130,7 +112,7 @@ export class ScaleRevealer extends Gtk.Widget implements GlassFormation {
     constructor(child: Gtk.Widget, opts?: {
         duration?: number, durationIn?: number, durationOut?: number,
         scaleFrom?: number, pivot?: ScalePivot, animateLayout?: boolean,
-        opacityFloor?: () => number, riseFrom?: number, unclipAtRest?: boolean,
+        riseFrom?: number, unclipAtRest?: boolean,
     }) {
         super({ overflow: Gtk.Overflow.HIDDEN })
         this.unclipAtRest = opts?.unclipAtRest ?? false
@@ -139,7 +121,6 @@ export class ScaleRevealer extends Gtk.Widget implements GlassFormation {
         this.scaleFrom = opts?.scaleFrom ?? 0.25
         this.pivot = opts?.pivot ?? "top-right"
         this.animateLayout = opts?.animateLayout ?? true
-        this.opacityFloor = opts?.opacityFloor ?? null
         this.riseFrom = opts?.riseFrom ?? 0
         this.child = child
         this.child.set_parent(this)
@@ -356,11 +337,8 @@ export class ScaleRevealer extends Gtk.Widget implements GlassFormation {
         }
         if (this.unclipAtRest && this.animateLayout) this.overflow = Gtk.Overflow.HIDDEN
         const duration = open ? this.durationIn : this.durationOut
-        // Latched per reveal: the floor follows the glass slider, but not mid-flight.
-        const floor = this.opacityFloor?.() ?? 0
-        // The glass apart from the content (see CONTENT_HALF) — on Hyalo. The content resumes
-        // from where it is: a close interrupting an open takes it away from there.
-        const apart = !compositor.caps.layerAlphaThreshold
+        // The glass apart from the content (see CONTENT_HALF). The content resumes from where
+        // it is: a close interrupting an open takes it away from there.
         const fromContent = this.opacity
         let startUs: number | null = null
         this.tickId = this.add_tick_callback((_w, frameClock) => {
@@ -370,16 +348,10 @@ export class ScaleRevealer extends Gtk.Widget implements GlassFormation {
             const eased = open ? 1 - Math.pow(1 - t, 3)   // ease-out cubic
                               : Math.pow(t, 3)            // ease-in cubic
             this.progress = from + (target - from) * eased
-            if (apart) {
-                this.formation = this.progress
-                this.opacity = open
-                    ? fromContent + (1 - fromContent) * smooth((t - CONTENT_HALF) / (1 - CONTENT_HALF))
-                    : fromContent * (1 - smooth(t / CONTENT_HALF))
-            } else {
-                // Never below `floor` while shown: the close ends by hiding the widget
-                // (set_visible below), not by fading it through the unblurred range.
-                this.opacity = this.progress <= 0 ? 0 : floor + (1 - floor) * this.progress
-            }
+            this.formation = this.progress
+            this.opacity = open
+                ? fromContent + (1 - fromContent) * smooth((t - CONTENT_HALF) / (1 - CONTENT_HALF))
+                : fromContent * (1 - smooth(t / CONTENT_HALF))
             if (this.animateLayout) this.queue_resize(); else this.queue_draw()
             if (t >= 1) {
                 this.tickId = null

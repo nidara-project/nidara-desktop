@@ -162,7 +162,6 @@ is why one library carries all of them — the packaging cost is paid once:
 | Capability | Protocol | What it unlocks |
 |---|---|---|
 | `capture_window()` → `GdkTexture` | `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` + `hyprland-toplevel-mapping` | Real window thumbnails (Overview, window switcher) |
-| `capture_region()` → `GdkTexture` | `zwlr_screencopy_v1` v3 (`capture_output_region`) | What the screen shows behind a surface — the adaptive glass (#673) |
 | `visible_region_*()` | `nidara-material-v1` `set_drawn_region` (Hyalo) · `hyprland-surface-v1` **v2** (Hyprland) | Hyalo: drawing the bar and the dock only where they paint (#761, `hyalo.md` → "Where a surface draws"); Hyprland: the layer-blur cost in `tech-debt.md` §46 |
 | `focus_grab_*()` | `hyprland-focus-grab-v1` | Keyboard without layer-shell EXCLUSIVE + compositor-side outside-click dismissal |
 
@@ -202,31 +201,12 @@ the typelib on the **default** girepository path, so all three bundles just `imp
   speaking logical coordinates — never pre-multiply. The INPUT region stays logical (wl_surface
   semantics).
 
-- **A region capture is the compositor's FINAL frame, our own layers included** (Hyprland
-  0.56.2, `ScreenshareFrame.cpp`, `SHARE_REGION`: a blit of the monitor's mirror texture). There
-  is no way to capture the screen WITHOUT a layer: the `no_screen_share` layer rule paints a black
-  box over it instead. The adaptive glass does not need one — it subtracts its own paint
-  (`common/BackdropProbe.ts`, design-system.md → "Adaptive glass"). The region is in LOGICAL
-  coordinates and comes back at buffer resolution; the output is named by its connector (a
-  `wl_output` v4 `name`, the same string `Gdk.Monitor.get_connector()` gives). ~3–20 ms, most of
-  it waiting for the next frame, on a worker thread with its own connection like
-  `capture_window()`.
-- 🔑 **A region capture and the visible region (`visible_region_*`) are opposite directions over
-  the same geometry**: the region tells Hyprland which parts of our surface it may draw and blur,
-  the capture reads back what it drew. They meet in one invariant — **only pixels INSIDE the
-  declared visible region can be subtracted**: outside it Hyprland draws nothing of ours, so an
-  offscreen render that paints there (a shadow's halo, a panel spilling past its stamped rect)
-  would recover a false backdrop. `BackdropProbe` holds this by using only the flat BODY of the
-  glass (`isFlatGlass`), which is always declared; halos sit under `ignore_alpha` and are excluded
-  by alpha. A surface that starts measuring something that can leave its stamped rect has to
-  re-check this. Merging the two buys nothing: the region costs ~0, the capture runs off the main
-  thread, and the only main-thread cost is the offscreen render (≈2 ms for the bar, ≈7 ms for the CC;
-  design-system.md → "Adaptive glass" has the measurements).
-- ⚠️ **Every capture of either kind starts and stops a Hyprland screencast session**, and its
-  `screencast` / `screencastv2` IPC events do NOT name the client that asked (for a region the
-  name is the monitor's; for a window, its title). A privacy indicator built on those events (#646)
-  must discount the captures the shell itself makes — the overview's thumbnails and the adaptive
-  glass — or it lights up for them.
+- (A region capture, `capture_region()` over `zwlr_screencopy_v1`, fed the adaptive glass until
+  #762, which deleted both.)
+- ⚠️ **Every window capture starts and stops a Hyprland screencast session**, and its
+  `screencast` / `screencastv2` IPC events do NOT name the client that asked (for a window, its
+  title). A privacy indicator built on those events (#646) must discount the captures the shell
+  itself makes — the overview's thumbnails — or it lights up for them.
 
 **From the shell, do not import the shim directly** — go through `common/VisibleRegion.ts`, which
 owns three decisions:

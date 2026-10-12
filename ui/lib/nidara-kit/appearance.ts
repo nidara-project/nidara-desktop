@@ -51,8 +51,8 @@ export interface KitAppearance {
      *  tooltips and menus (default: 0, none). */
     glassFrost?: () => number
     /** Whether shell chrome is dark (default: follows surfaceIsDark). Given the widget
-     *  being painted, the shell answers for the SURFACE it sits in — the adaptive glass
-     *  can flip one surface's skin (#673) — so pass it whenever there is one. */
+     *  being painted, the shell answers for the SURFACE it sits in — one surface can wear
+     *  the other skin (the dock follows the mode, Hyalo's ink) — so pass it whenever there is one. */
     chromeIsDark?: (widget?: Gtk.Widget | null) => boolean
 }
 

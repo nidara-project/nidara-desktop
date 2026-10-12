@@ -114,7 +114,8 @@ What is sent is what the toolkit SHOWS (`add_shape_clipped`):
 - Glass inside glass is not declared (`nested`): a control painted on a panel keeps painting
   itself, or Hyalo would draw a rim inside the panel. Shapes are drawn in tree order.
 
-`NIDARA_MATERIAL=0` turns the client half off (every painter back to its own glass);
+(`NIDARA_MATERIAL=0`, the switch that turned the client half off, went with #762: the shell
+no longer paints its panes' glass itself, so nothing would be left to show.)
 `NIDARA_MATERIAL_DEBUG=1` logs every surface's shapes as they change. On a dev install,
 `~/.config/nidara/glass-tuning.conf` (`key = value`: `refraction lensing rim inkDarkAbove
 inkLightBelow veilStrength veilFalloff veilExponent`, one stage of one tone as `PIECE.FACE.STAGE`
@@ -576,7 +577,7 @@ text keeps it white.
     (kit `material.ts`) gives the compositor none of their content to measure, so they stay white;
     their legibility is their tone's (the CC's, the reference's own). Declared in `Bar.tsx`.
   - **The dock: the system mode.** `trackNoInk` + `trackModeGlass` on its layout, and
-    `skinFromMode` on its adaptive-glass surface (`AdaptiveGlass.ts` → `skinOf`): its dots and
+    `skinFromMode` on its glass surface (`ShellGlass.ts` → `skinOf`): its dots and
     marks are light in dark mode and dark in light mode, and its glass on Hyalo turns to the light
     one in light mode — `glassFollowsMode(native)` makes the material send its piece's LIGHT tone.
     Off Hyalo, the light skin's tint does it.
@@ -1689,8 +1690,8 @@ window on a hidden workspace captures, as on Hyprland. One draw per request, nev
 - ⚠️ **Smithay's `Session` stops the client's session when it is DROPPED.** `new_session` must
   keep it (`capture_sessions`) until `session_destroyed`; dropping it answered every capture
   "stopped" before a frame was asked for (measured, 2026-10-01).
-- The shell does NOT capture the screen on Hyalo (`caps.backdropCapture` false): the adaptive
-  glass's backdrop is the compositor's to measure while drawing the glass (#684).
+- The shell does not capture the screen (the adaptive glass that did, on Hyprland, went with #762):
+  the backdrop is the compositor's to measure while drawing the glass (#684).
 - CI: the Hyalo smoke parks a window of a known colour on a hidden workspace and requires the
   capture's centre to come back as that colour (`scripts/ci/hyalo-capture-probe.js`).
 
@@ -1786,14 +1787,16 @@ Two kinds of request:
 
 ## The shell on Hyalo
 
-🔑 **No limit that exists for Hyprland constrains the desktop on Hyalo** (owner, 2026-10-07). Where
-the shell still holds one back for Hyprland's sake, it asks a `caps` flag and Hyalo answers false
-— `layerAlphaThreshold` (Hyprland's `ignore_alpha`): the panels' glass materializes from nothing
-instead of fading from a floor ("Glass materializes" above) and the dock's icons cast a shadow
-(`DockIcon`). What is left of Hyprland's glass in the client — the painted body, rim and shadow,
-`BackdropProbe`, `SlicedCairoArea` — goes with the switch (#685, listed in #762, which also holds
-the sweep of what still runs on Hyalo). `VisibleRegion` stays: on Hyalo it is where a surface draws
-(next section).
+🔑 **No limit that exists for Hyprland constrains the desktop on Hyalo** (owner, 2026-10-07), and
+since #762 (2026-10-13) the shell carries none of Hyprland's glass any more: the panels' glass
+materializes from nothing ("Glass materializes" above), the dock's icons cast a shadow
+(`DockIcon`), and the adaptive glass (`BackdropProbe`, the backdrop capture), the dock's painted
+capsule (`SlicedCairoArea`), the vertical dock's layer round-trip (`forceReflow`), the fade floor
+and the `NIDARA_MATERIAL=0` switch are gone, with the `backdropCapture` and `layerAlphaThreshold`
+caps. What still paints glass in the client is glass Hyalo does not draw: a control on a pane
+(`nested`) — and the GREETER, which still runs on Hyprland until #685 moves it, so the kit's
+painters (`glass-capsule`, `glass-bubble`, `glass-paint`) keep their client glass for it (owner,
+2026-10-13). `VisibleRegion` stays: on Hyalo it is where a surface draws (next section).
 
 ### Where a surface draws (`set_drawn_region`, #761)
 
@@ -1850,7 +1853,7 @@ than failing.
 displays, workspace modes, reduce motion, the glass's blur, the groupbar accent —
 goes through `settings` (`CompositorSettings`, exported by CompositorState.ts), and the modules
 that own those settings (InputConfig, MonitorConfig, WorkspaceModes, ReduceMotion,
-AdaptiveGlass, AppearanceSync) name no compositor. Each backend applies live AND
+AppearanceSync) name no compositor. Each backend applies live AND
 persists in its own layer: `core/hyprland-settings.ts` (the `nidara-*.lua` files, `hl.config`
 evals, the baselines below) and `core/hyalo-settings.ts` (`settings` patches). Hyprland's
 sensitivity and acceleration profile reach every pointing device; Hyalo has them per kind, so

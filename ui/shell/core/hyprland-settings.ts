@@ -5,7 +5,7 @@
 // files `hyprland.lua` requires at login, and read back with `hyprctl getoption` — the
 // effective value, `hyprland-user.lua` included. Until #682 this lived in each module that
 // owned a setting (InputConfig, MonitorConfig, WorkspaceModes, GamingSync, ReduceMotion,
-// GlassBlur, AdaptiveGlass, AppearanceSync); they now ask `settings` in CompositorState.ts
+// GlassBlur, the adaptive glass, AppearanceSync); they now ask `settings` in CompositorState.ts
 // and know no compositor.
 //
 // ⚠️ `hl.config`, NOT `hyprctl keyword`: the Lua config answers `keyword` with "Use eval."
@@ -26,7 +26,7 @@ import {
 import { GLASS_BLUR } from "./NidaraTheme"
 import type {
     IdleConfig,
-    BlurColour, BlurStrength, CompositorSettings, InputKey, InputSettings, MonitorSetting,
+    BlurStrength, CompositorSettings, InputKey, InputSettings, MonitorSetting,
 } from "./compositor-types"
 
 const nidaraFile = (name: string) => GLib.build_filenamev([GLib.get_home_dir(), ".config", "nidara", name])
@@ -271,22 +271,10 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         passes: hs.getOptionInt("decoration:blur:passes", GLASS_BLUR.passes),
     })
 
-    /** Read once and on every reload (`getoption` is a synchronous spawn: never per measurement). */
-    let colour: BlurColour | null = null
-    const readColour = (): BlurColour => ({
-        contrast: hs.getOptionFloat("decoration:blur:contrast", 1.2),
-        brightness: hs.getOptionFloat("decoration:blur:brightness", 1.0),
-        vibrancy: hs.getOptionFloat("decoration:blur:vibrancy", 0.4),
-        vibrancyDarkness: hs.getOptionFloat("decoration:blur:vibrancy_darkness", 0.1),
-    })
-
     // A `hyprctl reload` (or an edit to hyprland-user.lua) re-reads the config and silently
     // discards what was pushed with `hl.config`. Re-read the baselines from the config that
     // just loaded — it is the user's last word — and re-assert what the shell chose.
-    // Connected here, at construction, so it runs before any module's own reload handler
-    // reads `blurColour()`.
     hs.connect("config-reloaded", () => {
-        colour = null
         if (reduced !== null) {
             animBaseline = hs.getOptionBool("animations:enabled", true)
             if (reduced) pushMotion(true)
@@ -374,10 +362,6 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         },
 
         blurBaseline: () => blurBase ??= readBlur(),
-
-        blurColour() {
-            return colour ??= readColour()
-        },
 
         // The active tab of a group — the one place accent enters Hyprland's chrome (borders
         // stay neutral glass on purpose). A groupbar bakes its colours when the group is

@@ -2,8 +2,8 @@
 // chrome-scope-check — every shell-skin surface must be inside the shell-skin scope,
 // and nothing notices when one is not.
 //
-// The adaptive glass (#673) can flip ONE surface's skin (dark ↔ light) to keep its
-// text legible. The flipped token set is one scoped CSS block per skin, built from
+// ONE surface can wear the other skin (dark ↔ light) than the shell's: one that follows
+// the system mode (`skinFromMode`, common/ShellGlass.ts: the dock, the app grid). That token set is one scoped CSS block per skin, built from
 // `CHROME_SCOPE_WINDOWS` in `ui/shell/core/NidaraTheme.ts` (`generateSkinFlipScope`),
 // selecting each surface by its GTK window name; `Theme.isChromeSurface` resolves
 // Cairo painters and the kit against the same list. A surface missing from it keeps

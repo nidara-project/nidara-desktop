@@ -141,7 +141,7 @@ export const bubblePath = (
 }
 
 export interface GlassBubbleOpts {
-    /** Shell skin (glass follows the shell's skin — the mode, or its surface's if the adaptive glass flipped it)
+    /** Shell skin (glass follows the shell's skin — or its surface's, where that differs)
      *  vs app-mode (follows the system mode, e.g. the About window). Default true. */
     chrome?: boolean
     /** Max corner radius (clamped further so the arrow base fits the straight edge).
@@ -162,7 +162,7 @@ export interface GlassBubbleOpts {
     /** Explicit glass opacity override. If omitted, resolved through kitAppearance(). */
     alpha?: number
     /** The widget being painted, so the shell can answer for the surface it sits in
-     *  (a tooltip or menu inside a panel the adaptive glass flipped wears that skin). */
+     *  (a tooltip or menu inside a surface that wears the other skin wears it too). */
     widget?: Gtk.Widget | null
     /** The DrawingArea `trackBubbleGlass` was given: while the compositor paints its glass,
      *  only the shadow is painted here. */

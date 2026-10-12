@@ -12,7 +12,6 @@ import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
 import RecordingIsland, { RECORDING_GLASS } from "./RecordingIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities, DOTS_ID } from "./IslandActivities"
-import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
 import { trackFusionGroup, pulseFusion } from "../../../lib/nidara-kit/platform/material"
 import { barConfig } from "../bar/barState"
 
@@ -394,22 +393,10 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     // `backChanged` is false when the session starts idle), so seed the row.
     syncIndicators()
 
-    // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
-    // tint from the island's skin, alpha from the bar/overlay opacity axes.
-    // Asked through the capsule, so these follow the adaptive glass (#673) when it
-    // thickens or flips the island.
-    const chromeGlassColor = () => glassTintFor(capsule)
-    // Pill of the compact capsule (perfect pill ≡ n=2, radius null = h/2).
-    const compactGlass = (): MorphGlass => ({ alpha: glassAlphaFor(capsule, "bar"), color: chromeGlassColor(), border: CAPSULE_BORDER, n: 2.0, radius: null })
-    // A mode's end of the morph is asked through the MODE's own widget: each mode is a
-    // surface of its own for the adaptive glass (Bar.tsx), measured where it last
-    // opened — so the morph travels from the capsule's glass to the mode's, and a mode
-    // can open already wearing the skin its backdrop needs.
-    const modeGlass = (w: Gtk.Widget, g: { border: MorphGlass["border"], n: number, radius: MorphGlass["radius"] }) => (): MorphGlass => ({
-        alpha: glassAlphaFor(w, "overlay"),
-        color: glassTintFor(w),
-        border: g.border, n: g.n, radius: g.radius,
-    })
+    // The morph's two ends: the compact capsule's pill (perfect pill ≡ n=2, radius null = h/2)
+    // and each mode's container.
+    const compactGlass = (): MorphGlass => ({ n: 2.0, radius: null })
+    const modeGlass = (g: { n: number, radius: MorphGlass["radius"] }) => (): MorphGlass => ({ n: g.n, radius: g.radius })
 
     // ── Mode registry ────────────────────────────────────────────────────────
     const modes = new Map<string, { mode: IslandMode, revealer: MorphRevealer }>()
@@ -507,7 +494,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_OVERVIEW,
         widget: overviewModeWidget,
-        glass: modeGlass(overviewModeWidget, WO_GLASS),
+        glass: modeGlass(WO_GLASS),
         needsKeyboard: true,
     })
     // No keyboard grab: the player panel is ambient — media keys and app focus
@@ -516,7 +503,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_PLAYER,
         widget: playerModeWidget,
-        glass: modeGlass(playerModeWidget, PLAYER_GLASS),
+        glass: modeGlass(PLAYER_GLASS),
     })
     // No keyboard grab either: the battery alert is dismissed by outside click
     // / Esc-less design, same ambient contract as the player.
@@ -524,7 +511,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_BATTERY,
         widget: batteryModeWidget,
-        glass: modeGlass(batteryModeWidget, BATTERY_GLASS),
+        glass: modeGlass(BATTERY_GLASS),
     })
     // No keyboard grab: the capture card is a statement + Stop, dismissed by
     // outside click / capsule click like the player and the battery alert.
@@ -532,7 +519,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_RECORDING,
         widget: recordingModeWidget,
-        glass: modeGlass(recordingModeWidget, RECORDING_GLASS),
+        glass: modeGlass(RECORDING_GLASS),
     })
     // Keyboard grab: the assistant has a text entry (like the overview cursor
     // needs keys, this needs the entry to receive them — the bar grants EXCLUSIVE
@@ -541,7 +528,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
     registerMode({
         id: ISLAND_AGENT,
         widget: agentModeWidget,
-        glass: modeGlass(agentModeWidget, AGENT_GLASS),
+        glass: modeGlass(AGENT_GLASS),
         needsKeyboard: true,
     })
 
@@ -587,7 +574,7 @@ export function ActivityIsland(gdkmonitor: Gdk.Monitor) {
          *  includes them in its input-region pass (visibility-gated there). */
         revealers: [...modes.values()].map(rt => rt.revealer),
         /** The same revealers with their mode ids — each is a surface of its own for
-         *  the adaptive glass (Bar.tsx), so it can be measured where it last opened. */
+         *  its glass (Bar.tsx → registerGlassSurface). */
         modeRevealers: [...modes.entries()].map(([id, rt]) => ({ id, revealer: rt.revealer })),
         /** Reveal/hide every mode against status.island_mode. The bar passes
          *  its popToggle-equivalent so close keeps the input-region refresh. */

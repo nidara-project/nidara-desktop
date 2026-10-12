@@ -183,9 +183,6 @@ export function createHyaloSettings(): CompositorSettings {
         // user's own hyalo.toml included — say again what they said, never a hard-coded "on".
         setReduceMotion(reduce) { patch("reduce motion", { animations: { enabled: reduce ? false : null } }) },
         blurBaseline: () => ({ ...GLASS_BLUR }),
-        // The shell's surfaces declare no material yet (#684), so Hyalo does nothing to the
-        // backdrop's colour: the glass lies on the wallpaper as it is.
-        blurColour: () => null,
         setAccent() { /* no tab groups (CompositorState caps.groups) */ },
 
         effectiveLayout() {

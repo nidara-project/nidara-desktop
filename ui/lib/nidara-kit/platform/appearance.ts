@@ -53,8 +53,8 @@ import {
 /** The user's appearance, complete — the token engine's config plus the mode. */
 export interface AppearanceState extends NidaraThemeConfig {
   /** The system's dark/light mode — the skin every Nidara surface prefers. (The shell
-   *  pin that could override it is gone, #676; the adaptive glass flips a single surface
-   *  when its text needs it, and that is the shell's business, not an app's.) */
+   *  pin that could override it is gone, #676; the shell's own skin is the shell's business,
+   *  not an app's.) */
   isDark: boolean
 }
 

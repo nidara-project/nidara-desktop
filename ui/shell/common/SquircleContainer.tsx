@@ -1,7 +1,7 @@
 import Gtk from "gi://Gtk?version=4.0"
 import { drawGlassShadow, drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
-import { chromeIsDarkFor, glassAlphaFor, glassTintFor, type GlassRole } from "./AdaptiveGlass"
+import { chromeIsDarkFor, glassAlphaFor, glassTintFor, type GlassRole } from "./ShellGlass"
 import { RADIUS, GLASS_TINT, GLASS_SPECULAR, GLASS_STATE_MIX } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
 import { compositorPaintsGlass, trackGlass } from "../../lib/nidara-kit/platform/material"
@@ -217,10 +217,10 @@ export default function SquircleContainer({
         if (w <= 0 || h <= 0) return
         // Shell-skin capsules (default) follow the shell's skin;
         // app-mode surfaces (chrome:false, e.g. About) follow the system mode.
-        // …and a shell-skin capsule inside a surface the adaptive glass has flipped
-        // (#673) wears that surface's skin: `chromeIsDarkFor` walks up to it.
+        // …and a shell-skin capsule inside a surface that wears the other skin wears it
+        // too: `chromeIsDarkFor` walks up to it.
         const dark = chrome ? chromeIsDarkFor(da) : Theme.isDark
-        // The tint: on the shell's skin, the one its surface took from its backdrop.
+        // The tint: on the shell's skin, its surface's.
         const themeColor = chrome
             ? glassTintFor(da)
             : dark

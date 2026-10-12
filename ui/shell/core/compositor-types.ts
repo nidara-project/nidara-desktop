@@ -107,15 +107,6 @@ export interface CompositorCaps {
     layouts: boolean
     /** The inner glow the Assistant lights on the window it works in (Hyprland ≥ 0.56). */
     glow: boolean
-    /** The shell may capture what lies behind its glass (zwlr_screencopy) to adapt it
-     *  (common/BackdropProbe.ts). Not on Hyalo: there the compositor measures under the glass
-     *  itself, while drawing it (#684), and has no screencopy for the shell to poll. */
-    backdropCapture: boolean
-    /** The compositor blurs a layer only where its alpha clears a threshold (Hyprland's
-     *  `ignore_alpha`, `LAYER_IGNORE_ALPHA`): glass faded below it loses its blur, and a soft
-     *  shadow above it gets a blurred halo. Hyalo blurs the shapes a surface declares, at
-     *  whatever opacity they carry — no threshold, so none of the limits it imposed apply. */
-    layerAlphaThreshold: boolean
     /** A window can be minimized: hidden on its workspace, back through the dock (Hyalo, #724).
      *  Hyprland has no minimize — an app's minimize button does nothing there. */
     minimize: boolean
@@ -271,10 +262,6 @@ export interface MonitorSetting {
 /** A blur: kawase size and passes. */
 export interface BlurStrength { size: number; passes: number }
 
-/** The blur's colour settings: what it does to a backdrop before our glass is laid on it
- *  (common/AdaptiveGlass.ts models it). */
-export interface BlurColour { contrast: number; brightness: number; vibrancy: number; vibrancyDarkness: number }
-
 /** What one compositor's settings can do and the other's cannot (yet). A caller does not
  *  need to ask before calling — a setting the compositor lacks is a no-op there — but a page
  *  that OFFERS one should. */
@@ -356,8 +343,6 @@ export interface CompositorSettings {
 
     /** The compositor's own blur, as its config sets it (Hyalo: the surface's, `GLASS_BLUR`). */
     blurBaseline(): BlurStrength
-    /** null when the compositor does not process the backdrop's colour. */
-    blurColour(): BlurColour | null
 
     /** The accent, where the compositor draws one (Hyprland's tab groups). */
     setAccent(rgbaHex: string): void

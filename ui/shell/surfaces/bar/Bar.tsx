@@ -4,7 +4,7 @@ import app from "../../../lib/nidara-kit/platform/host"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
-import { ScaleRevealer, OVERLAY_POP, fadeFloor } from "../../common/ScaleRevealer"
+import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import { MorphRevealer } from "../../common/MorphRevealer"
 import { createRegionStamper } from "../../common/VisibleRegion"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
@@ -14,7 +14,6 @@ import Gio from "gi://Gio"
 import SquircleContainer, { GLASS_INSET, GLASS_SHADOW } from "../../common/SquircleContainer"
 import { RADIUS, rowInsetFor } from "../../../lib/nidara-kit/platform/tokens"
 import { BAR_GROUP_PAD, BAR_H, BAR_ITEM_GAP, BAR_MARGIN, CUSTOM_EXPANSION_ID, barEditSelected, barGroup, barItem, barOpen, barTooltip, setBarCustomAnchor, setBarEditSelected } from "./capsule"
-import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
 import inputYield from "../../core/InputYield"
@@ -46,7 +45,7 @@ import shellActions from "../../core/ShellActions"
 import compositor from "../../core/CompositorState"
 import { safeDisconnect } from "../../core/signals"
 import { BAR_ICON_SIZE, BAR_ITEM_PAD, BAR_TEXT_PAD } from "../../common/widget-kit"
-import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
+import { registerGlassSurface } from "../../common/ShellGlass"
 
 function SystemMenuIcon(): Gtk.Widget {
   // The same size and air as every other bar icon (it was 2px larger, with 1px less
@@ -223,7 +222,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const islandHost = new ScaleRevealer(islandRow, {
     durationIn: 220, durationOut: 150, scaleFrom: 1, animateLayout: false, pivot: "top-center",
     riseFrom: BAR_H + 8,
-    opacityFloor: () => fadeFloor(Theme.barOpacity),
   })
   // ScaleRevealer clips to its box; the capsule's shadow spills below the row.
   islandHost.set_overflow(Gtk.Overflow.VISIBLE)
@@ -593,9 +591,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // it). False between a banner being appended and the deferred stamp that
   // follows its grow-in — the window in which the box's bounds are a lie.
   let popupsSettled = true
-  // Adaptive glass (#673): one handle per registered surface, filled once they all
-  // exist (below the island's mount); read by the reveal and settle hooks here.
-  const glassHandles = new Map<Gtk.Widget, GlassSurfaceHandle>()
 
   type BlurRect = { x: number, y: number, width: number, height: number }
 
@@ -687,11 +682,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // stack settles (banner grown in, or dismissed) to re-stamp the region. It is
   // also what re-arms the blur region: settled means the box's bounds finally
   // describe every banner in it.
-  // Settled is also when a banner can be measured for the adaptive glass (#673).
-  ;(popups as any).onStackChanged = () => {
-    popupsSettled = true; updateInputRegion()
-    glassHandles.get(popups)?.remeasure()
-  }
+  ;(popups as any).onStackChanged = () => { popupsSettled = true; updateInputRegion() }
   // Every panel re-stamps from the layout pass that gave it an allocation. The
   // synchronous stamp in syncOverlays() cannot see a panel that was revealed in
   // the same turn — get_allocation() is a layout pass behind, and for a panel
@@ -721,11 +712,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
   // the wrapper hides itself when the animation completes and THEN refreshes the
   // layer-shell input region, so the panel never keeps catching clicks.
-  //
-  // Once OPEN and still, the panel is measured for the adaptive glass (#673): only
-  // then do the capture and the offscreen render describe the same frame.
   const popToggle = (pop: ScaleRevealer | MorphRevealer) => (open: boolean) =>
-      pop.reveal(open, () => { if (!open) updateInputRegion(); else glassHandles.get(pop)?.remeasure() })
+      pop.reveal(open, () => { if (!open) updateInputRegion() })
   const setCCVisible = popToggle(cc)
   const setNCVisible = popToggle(nc)
   const setSystemMenuVisible = popToggle(systemMenu)
@@ -897,13 +885,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
     updateInputRegion()
   }
 
-  // The island's modes: the same reveal contract as the panels above. A closing mode
-  // hands the capsule back, and the bar row re-decides its glass with it.
+  // The island's modes: the same reveal contract as the panels above.
   const syncIslandModes = () => {
-    island.sync((r, open) => r.reveal(open, () => {
-      if (!open) updateInputRegion()
-      glassHandles.get(open ? r : islandHost)?.remeasure()
-    }))
+    island.sync((r, open) => r.reveal(open, () => { if (!open) updateInputRegion() }))
     updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
@@ -1203,19 +1187,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   leftGroup.box.append(sysMenuWidget)
   leftGroup.box.append(appTitleWidget)
 
-  // ── Adaptive glass (#673) ─────────────────────────────────────────────────
-  // Each surface keeps its text legible over whatever is behind it: thicker glass,
-  // or the other skin (common/AdaptiveGlass.ts). One registration per SURFACE — the
-  // bar strip is one decision, each panel another — never per capsule.
-  const atRest = (r: ScaleRevealer | MorphRevealer) => () => r.tickId === null && r.progress >= 1
   // What the island covers on this window: its row (capsule + chips) and whichever
   // mode is open or still morphing, as one rect, or null when nothing of it is
-  // measurable. masterOverlay is the window's child at 0,0 and the surface starts
+  // shown. masterOverlay is the window's child at 0,0 and the surface starts
   // at the monitor's corner, so these are monitor-relative too.
   //
-  // Two readers. The adaptive glass, for whom the island is paint of OURS over the
-  // backdrop of another registration (each measures only itself). And the Assistant,
-  // which lives in this island and must not click controls UNDER it: the click lands
+  // Its reader is the Assistant, which lives in this island and must not click controls UNDER it: the click lands
   // (the yield makes the surface click-through), but where the user cannot see it,
   // which reads as the assistant acting behind their back (app.ts → islandRect).
   const islandBounds = (): { x: number, y: number, w: number, h: number } | null => {
@@ -1237,61 +1214,19 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
     // whether this rect is even on the output it is clicking.
     return r ? { ...r, monitor: gdkmonitor.get_connector() ?? "" } : null
   }
-  const underIsland = () => {
-    const r = islandBounds()
-    return r ? [{ x: r.x, y: r.y, width: r.w, height: r.h }] : []
-  }
+  // Each surface's glass: its slider, and the app grid's skin from the system mode
+  // (common/ShellGlass.ts).
   for (const [id, pop] of [
     ["control-center", cc], ["notification-center", nc], ["system-menu", systemMenu],
     ["search", prism], ["bar-expansion", expansionCapsule],
-  ] as const) {
-    glassHandles.set(pop, registerGlassSurface({ id, root: pop, role: "overlay", settled: atRest(pop), exclude: underIsland }))
-  }
-  glassHandles.set(barBox, registerGlassSurface({
-    id: "bar", root: barBox, role: "bar", exclude: underIsland, group: () => "bar-row",
-    // No `skinFromBackdrop` since 2026-09-30 (owner): the row's ink is the shell's —
-    // white — and does not change with the wallpaper; the glass only thickens.
-    // Hidden for a fullscreen window the bar stays MAPPED (opacity 0), so it looked
-    // measurable — and what it found behind it was the fullscreen window: X's black page
-    // and white text, which flipped the row and brought it back from fullscreen in that
-    // skin (2026-09-29). Not settled while hidden; an event missed then is measured when
-    // it shows again (`settle()` in setBarFullscreenMode / setBarOverlayMode).
-    settled: () => !barFullscreenMode || barOverlayActive,
-  }))
-  glassHandles.set(popups, registerGlassSurface({ id: "notification-banners", root: popups, role: "overlay", exclude: underIsland }))
-  // The island is TWO kinds of surface for the glass. Its row (the capsule and the
-  // indicator chips) is part of the bar's row and decides with it. Each MODE is a panel
-  // of its own — measured where it last opened, also while closed, so it opens already
-  // right; the morph travels from the capsule's glass to the mode's. (One decision for
-  // the whole island, switching between the two, could not be measured in advance: a
-  // mode's rect is only known while it is open.)
-  glassHandles.set(islandHost, registerGlassSurface({
-    id: "island",
-    root: islandHost,
-    role: "bar",
-    probe: () => island.capsule,
-    // While a mode is open the capsule is switched off (opacity 0): nothing to measure.
-    settled: () => !status.island_mode && islandHost.tickId === null,
-    group: () => "bar-row",
-  }))
-  for (const { id, revealer } of island.modeRevealers) {
-    glassHandles.set(revealer, registerGlassSurface({
-      id: `island-${id}`,
-      root: revealer,
-      role: "overlay",
-      settled: atRest(revealer),
-    }))
-  }
-  // The grid's labels over whatever is behind it — only once the pop has landed:
-  // mid-pop the capture and the render are different frames.
-  glassHandles.set(grid.widget, registerGlassSurface({
-    id: "app-grid", root: grid.widget, role: "launcher",
-    // The launcher is a large content surface: its labels follow the system's light/dark
-    // mode as a coherent group, not the wallpaper behind one side of the grid.
-    skinFromMode: true,
-    settled: atRest(grid.widget as unknown as ScaleRevealer),
-  }))
-  win.connect("destroy", () => { for (const h of glassHandles.values()) h.dispose(); glassHandles.clear() })
+  ] as const) registerGlassSurface({ id, root: pop, role: "overlay" })
+  registerGlassSurface({ id: "bar", root: barBox, role: "bar" })
+  registerGlassSurface({ id: "notification-banners", root: popups, role: "overlay" })
+  registerGlassSurface({ id: "island", root: islandHost, role: "bar" })
+  for (const { id, revealer } of island.modeRevealers) registerGlassSurface({ id: `island-${id}`, root: revealer, role: "overlay" })
+  // The launcher is a large content surface: its labels follow the system's light/dark
+  // mode as a coherent group, not the wallpaper behind one side of the grid.
+  registerGlassSurface({ id: "app-grid", root: grid.widget, role: "launcher", skinFromMode: true })
 
   const ISLAND_GAP = 16
 
@@ -1933,7 +1868,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
               }
               Gtk4LayerShell.set_exclusive_zone(win, BAR_H) // restore top reservation
               win.set_opacity(1)
-              glassHandles.get(barBox)?.settle()
           }
       } catch (e) {}
   }
@@ -1959,7 +1893,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(1)
               win.present()
-              glassHandles.get(barBox)?.settle()
           } else {
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               if (barFullscreenMode) {

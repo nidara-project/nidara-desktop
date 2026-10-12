@@ -274,8 +274,8 @@ export const glassRimGradient = (
 /** The glass's edge (`drawGlassEdgeLight`): how far it reaches INTO the glass (px), how
  *  bright its light is at the silhouette (white alpha, before the vertical profile), and
  *  how much of the body's tint it takes away there (`clear`, falling to none at `width`).
- *  Chosen by the owner (2026-09-30) among four variants over four backdrops
- *  (`scripts/dev/edge-light-probe.ts`): the "transparent edge". */
+ *  Chosen by the owner (2026-09-30) among four variants over four backdrops (a probe
+ *  deleted with #762): the "transparent edge". */
 export const EDGE_LIGHT = { width: 10, alpha: 0.12, clear: 0.7 }
 
 /** The least alpha the edge may clear the body DOWN to: just above the layers'

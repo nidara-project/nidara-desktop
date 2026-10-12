@@ -27,7 +27,7 @@ export interface NidaraTooltipOpts {
     markup?: boolean
     /** Return true to suppress showing it (e.g. while a context menu is open). */
     suppress?: () => boolean
-    /** Shell skin (glass follows the shell's skin — the mode, or its surface's if the adaptive glass flipped it)
+    /** Shell skin (glass follows the shell's skin — or its surface's, where that differs)
      *  vs app-mode (follows the system mode, e.g. the About window). Default true. */
     chrome?: boolean
 }
@@ -215,8 +215,8 @@ export function attachTooltip(
             if (suppress?.()) return GLib.SOURCE_REMOVE
             refresh()
             // Asked again NOW, not only on a theme change: in the shell the answer comes
-            // from the adaptive glass, which re-decides a surface on its own events and
-            // tells nobody. A class computed at the last theme change was the black text
+            // from the surface it sits in, whose skin can change on events that tell
+            // nobody here (Hyalo's ink). A class computed at the last theme change was the black text
             // on dark glass in the dock (2026-09-29): stale from the moment the mode
             // switched until the next one.
             syncDarkClass()

@@ -37,7 +37,7 @@ import { iconAssetPath } from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
 import inputYield from "../../core/InputYield"
 import { acquireFocusGrab, releaseFocusGrab } from "../../common/FocusGrab"
-import { registerGlassSurface, type GlassSurfaceHandle } from "../../common/AdaptiveGlass"
+import { registerGlassSurface } from "../../common/ShellGlass"
 import { trackGlassPiece, trackModeGlass, trackNoInk } from "../../../lib/nidara-kit/platform/material"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
@@ -126,9 +126,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // dock is a dock again — magnification and the keyboard walk with it.
     let overFullscreen = false
     const hiddenByFullscreen = () => fullscreenMode && !overFullscreen
-    // The adaptive glass (see its section near the end). Early for the same reason:
-    // the tick tells it when the dock comes to rest.
-    let glass: GlassSurfaceHandle | null = null
 
     const unpinnedOpenOrder = new Map<string, number>()
     let unpinnedSeq = 0
@@ -495,7 +492,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             if (!active) {
                 tickId = null
-                glass?.settle()
                 // At rest: every item where it will stay — measure the places exactly.
                 calibrateMinimizeTargets()
                 publishMinimizeTargets()
@@ -1197,19 +1193,6 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                     isSettlingIn = false
                     return GLib.SOURCE_REMOVE
                 })
-                // Startup race: the dock can map before the bar's top exclusive zone is
-                // honored, so it loads at y=0 until a later re-commit. The bar zone is
-                // registered before the dock (Bar created before Dock in app.ts), so
-                // force a fresh layer-surface configure as early as possible — here, at
-                // realize, BEFORE first map — so the dock appears already at its correct
-                // y=BAR_HEIGHT position rather than visibly dropping later. One delayed
-                // retry covers the case the zone wasn't yet committed at first map.
-                // No-op on the horizontal axis. See axis.forceReflow.
-                if (layerShellReady) axis.forceReflow(win)
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-                    if (layerShellReady) axis.forceReflow(win)
-                    return GLib.SOURCE_REMOVE
-                })
             })
         } catch (e) { console.error(e) }
     }
@@ -1516,22 +1499,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (walkToken) { releaseFocusGrab(walkToken); walkToken = 0 }
     })
 
-    // ── Adaptive glass (#673) ─────────────────────────────────────────────────
-    // The dock is measured for its TINT only (`tintFromBackdrop`): it never thickens
-    // past its slider (`thickens: false`, owner 2026-09-30 — no text on it, and a dark
-    // dock loses the glass look). Measured: at the 0.24 floor its white running
-    // dot is ~2:1 over a pale yellow-green wallpaper, 1.6:1 over pure white, >10:1 over
-    // the default one — below WCAG 1.4.11's 3:1 on pale backdrops, accepted on sight.
-    // `content: "marks"` stays, for the day it thickens again. Its skin is the mode's. The glass is the capsule, not the
-    // monitor-sized layout; the layout is what gets rendered over it, icons included.
-    const dockOrigin = (off = Math.round(slideCurrent)) => {
-        // Every axis anchors BOTTOM (the vertical one also TOP, under the bar's zone);
-        // the slide is a negative margin on the edge the dock hides behind.
-        const g = gdkmonitor.get_geometry()
-        const y = g.height - win.get_height()
-        if (!axis.vertical) return { x: 0, y: y + off }
-        return dockSettings.position === 'right' ? { x: g.width - win.get_width() + off, y } : { x: -off, y }
-    }
+    // ── Its glass ─────────────────────────────────────────────────────────────
     // The dock follows the SYSTEM MODE (owner, 2026-10-08, after measuring the reference: its
     // dots are light in dark mode and dark in light mode, whatever the wallpaper): its content
     // never takes the backdrop's ink, and its glass on Hyalo turns light with the mode.
@@ -1539,56 +1507,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     trackModeGlass(layout)
     // Its glass is the reference's Dock's, measured on it (the glass material's `TONES`).
     trackGlassPiece(layout, "dock")
-    glass = registerGlassSurface({
-        id: `dock-${gdkmonitor.get_connector() ?? "?"}`,
-        root: layout,
-        role: "dock",
-        content: "marks",
-        thickens: false,
-        skinFromMode: true,
-        probeArea: () => axis.capsuleRect(),
-        windowOrigin: dockOrigin,
-        // At rest, in place, with nothing of ours over it: magnifying, sliding, a menu
-        // (its own surface, over the capsule) or a drag would each put a frame in the
-        // capture that the offscreen render does not have. The pointer resting on it is
-        // fine — magnified icons at rest are rendered and subtracted like any others, and
-        // the tooltip sits above the capsule — and it has to be: auto-hidden, the dock is
-        // on screen ONLY under the pointer, and would never be measured shown otherwise.
-        settled: () => tickId === null && isRevealed && slideCurrent === 0
-            && !dndActive && menuState.openCount === 0,
-        // Slid away by auto-hide or a fullscreen window: measured where it last stood,
-        // so it slides back in already wearing the right glass.
-        hidden: () => !isRevealed && slideCurrent === slideTarget,
-        // ⚠️ Hidden, its rest rect shows the TILED windows — and they will not be there
-        // when it shows: revealing claims the exclusive zone, and they shrink out of the
-        // way (setRevealed). Measured 2026-09-29: hidden, it read a terminal and a browser
-        // it never sits on. So those windows are left out; what is left — wallpaper,
-        // floating windows, other layers — is what it will have behind it. Covered
-        // entirely, nothing is measured and it keeps its last decision.
-        exclude: () => {
-            if (isRevealed) return []
-            const mon = compositor.monitors.find(m => m.name === gdkmonitor.get_connector())
-            if (!mon) return []
-            return compositor.clients
-                .filter(c => c.workspace?.id === mon.activeWorkspace?.id && !c.floating && !c.hidden && c.mapped !== false)
-                .map(c => ({ x: c.x - mon.x, y: c.y - mon.y, width: c.width, height: c.height }))
-        },
-        // Where it will stand: the capsule with no slide. Auto-hidden, the dock is on
-        // screen only under the pointer — never `settled` — so it is measured here.
-        restsAt: () => {
-            const c = axis.capsuleRect()
-            const [ok, b] = layout.compute_bounds(win)
-            if (!c || !ok) return null
-            const o = dockOrigin(0)
-            const x = b.get_x() + o.x + c.x, y = b.get_y() + o.y + c.y
-            const rect = {
-                x: Math.floor(x), y: Math.floor(y),
-                width: Math.ceil(x + c.width) - Math.floor(x), height: Math.ceil(y + c.height) - Math.floor(y),
-            }
-            return { monitor: gdkmonitor, rect }
-        },
-    })
-    win.connect("destroy", () => { glass?.dispose(); glass = null })
+    registerGlassSurface({ id: `dock-${gdkmonitor.get_connector() ?? "?"}`, root: layout, role: "dock", skinFromMode: true })
 
     const fsConn = compositor.connect("changed", checkFullscreen)
     // Own destroy hook (the main one above predates this section): the dock is

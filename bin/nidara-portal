@@ -106,8 +106,7 @@ const NIDARA_NS = "org.nidara.appearance"
  * reaching every GTK3, Qt and Chromium application on the desktop.
  */
 const GNOME_NS = "org.gnome.desktop.interface"
-// `shell-appearance` is gone (#676): the shell pin it carried was replaced by the
-// adaptive glass (#673), and a key the schema no longer has cannot be read.
+// `shell-appearance` is gone (#676), and a key the schema no longer has cannot be read.
 // The glass is served as the SWITCHES (#674), not as four opacities: what they mean is a
 // table in the kit (theme-tokens.ts GLASS_FLOORS), and each reader derives the numbers
 // from it, so this daemon never has to know them. `glass-material` is no longer served:

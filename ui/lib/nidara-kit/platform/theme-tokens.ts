@@ -48,9 +48,8 @@ export type { AccentKey }
 // ── TYPES & INTERFACES ──────────────────────────────────────────────
 
 // There is no shell-skin PIN any more (`shellAppearance`, removed 2026-09-29, #676).
-// It existed to keep the shell legible over any wallpaper; the adaptive glass (#673)
-// does that per surface, measuring what is really behind it, so the shell follows the
-// system mode and the bar row reads its skin from its backdrop.
+// It existed to keep the shell legible over any wallpaper; on Hyalo the compositor paints
+// the shell's glass and turns its ink where the backdrop needs it (references/hyalo.md).
 
 export interface NidaraThemeConfig {
   accent: AccentKey
@@ -88,9 +87,8 @@ export interface NidaraThemeConfig {
  * `0.2 + 0.8·α` over an undimmed one, and `0.2 + 0.8 × 0.05 = 0.24`. So the new
  * floor IS the old default, honestly named.
  *
- * ⚠️ It is a floor, NOT a legibility guarantee. Legibility is the adaptive glass's
- * job (#673, `glass-legibility.ts`): each shell surface thickens itself over a pale
- * backdrop, up to `GLASS_ADAPT_CEILING`. `scripts/ci/blur-threshold-check.mjs` reads
+ * ⚠️ It is a floor, NOT a legibility guarantee: on Hyalo the shell's glass is the
+ * compositor's, and legibility is its tone and its ink. `scripts/ci/blur-threshold-check.mjs` reads
  * `min` from this line: it must stay above every layer's `ignore_alpha`.
  */
 export const GLASS_RANGE = { min: 0.24, max: 0.80 } as const
@@ -127,19 +125,6 @@ const shadowCss = (layers: ShadowLayer[]) =>
   layers.map(l => `0 ${l.dy}px ${l.blur}px rgba(0,0,0,${l.alpha.toFixed(2)})`).join(", ")
 
 /**
- * The lowest whole-widget opacity at which glass painted at `glassAlpha` still clears
- * `LAYER_IGNORE_ALPHA`, i.e. still has its blur. A fade that goes below it shows the
- * panel UNBLURRED for its last frames — sharp wallpaper through a still-visible panel —
- * so the overlay pop fades down to this and then hides in one step
- * (`OVERLAY_POP.opacityFloor`, `ui/shell/common/ScaleRevealer.ts`). The 0.02 is headroom
- * for the compositor's 8-bit alpha. At the thinnest glass (0.24) this is ~1: the fade
- * goes away and only the scale moves, which is the honest consequence of glass that
- * thin — any fade at all would unblur it.
- */
-export const blurSafeOpacity = (glassAlpha: number) =>
-    glassAlpha > 0 ? Math.min(1, LAYER_IGNORE_ALPHA / glassAlpha + 0.02) : 0
-
-/**
  * The glass: ONE material, no choice (owner, 2026-10-11). Settings → Appearance offered
  * three (#674: clear / regular / frosted) — a choice that predates measuring the reference
  * and never meant what the reference's own setting means, so it only confused the two. What
@@ -148,8 +133,8 @@ export const blurSafeOpacity = (glassAlpha: number) =>
  *
  * A floor per surface (`GLASS_FLOORS`) and a compositor blur (`GLASS_BLUR`): the dock,
  * which carries no text, takes thinner glass than a panel full of it (tech-debt #83).
- * Every value is a FLOOR since the adaptive glass (#673): a shell surface thickens itself
- * over a pale backdrop until its text is legible. The windows are not in it:
+ * They are what glass a client paints itself wears (a control on a pane, the greeter on
+ * Hyprland); on Hyalo the shell's panes are the compositor's. The windows are not in it:
  * `WINDOW_GLASS_OPACITY`.
  */
 export interface GlassFloors { bar: number; overlay: number; dock: number }
@@ -183,7 +168,7 @@ export const GLASS_ROLE_FLOORS = { launcher: 0.42 }
 export const WINDOW_GLASS_OPACITY = 0.80
 
 /** The white haze laid over the tint (`frostAt` in glass-legibility.ts). It gives way by
- *  itself as the adaptive glass thickens. Provisional. */
+ *  itself as the glass thickens. Provisional. */
 export const GLASS_FROST = 0.04
 
 /** The compositor's blur: Hyalo's per surface (a large pane one pass further,
@@ -326,9 +311,9 @@ export function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[]
     `  --nidara-surface-raised: rgba(${fg}, 0.20);`,
     `  --nidara-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills
     `  --nidara-text: ${whiteOrBlack};`,
-    // The ramp's alphas live in `TEXT_INK` (glass-legibility.ts), which is also what
-    // the adaptive glass checks for contrast — so the tiers it holds to a target are
-    // the tiers on screen by construction, not a copy that can drift.
+    // The ramp's alphas live in `TEXT_INK` (glass-legibility.ts), which is also what the
+    // tooltips' floors are checked against — so the tiers held to a target are the tiers
+    // on screen by construction, not a copy that can drift.
     `  --nidara-text-secondary: rgba(${fg}, ${ink.secondary});`,
     `  --nidara-text-dim: rgba(${fg}, ${ink.dim});`,
     `  --nidara-text-disabled: rgba(${fg}, 0.3);`,
@@ -357,8 +342,8 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
 
 /**
  * Scoped token sets — `generateSkinFlipScope` in `ui/shell/core/NidaraTheme.ts`, the
- * full `--nidara-*` family a surface wears while the adaptive glass (#673) has flipped
- * its skin. (Until 2026-09-29 the shell PIN used the same scope, `generateChromeTokenScope`;
+ * full `--nidara-*` family a surface wears while its skin differs from the shell's (one that
+ * follows the system mode: common/ShellGlass.ts). (Until 2026-09-29 the shell PIN used the same scope, `generateChromeTokenScope`;
  * the pin is gone, #676, and the lessons below are why the scope is shaped as it is.)
  *
  * Scope = every toplevel of the shell skin, listed in `CHROME_SCOPE_WINDOWS`.
