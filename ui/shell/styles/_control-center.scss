@@ -131,6 +131,16 @@
         color: var(--nidara-text);
     }
 
+    /* A tile that is ON (BaseIsland adds `active`): its icon circle WHITE, the icon in the
+       accent — the rest of the tile stays glass, its text white (owner, 2026-10-12, after
+       the reference). A 1×1 is its circle: Cairo fills the whole tile with the same white
+       (`ON_WHITE`), and only its icon is left to colour here. */
+    .cc-island.active {
+        .nidara-atomic-icon-circle-bg { background-color: var(--nidara-on); }
+        .nidara-atomic-icon-circle-bg image.nd-icon,
+        &.cc-size-1x1 image.nd-icon { color: var(--nidara-accent); }
+    }
+
     /* --- Typographical Utilities for Toggles --- */
     // A tile's title — 14 since 2026-09-30 (13 before), the reference proportions at our
     // scale (design-system.md, "The Control Center is a PANEL"). ⚠️ Only because the 2×1 capsule's text column went

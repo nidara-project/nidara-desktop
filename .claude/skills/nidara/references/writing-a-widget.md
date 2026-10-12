@@ -143,7 +143,7 @@ and a fixed tile cannot be removed. `widgets/index.ts` derives `DEFAULT_BAR_MODE
 `BAR_PRESENCE` from these declarations; `WidgetConfig.barMode` answers "active" for a presence
 widget and ignores a stored choice for anything not choosable. A presence indicator must not be
 the way the thing is turned on — that is the trap the rule exists for.
-`barActive` is NOT the CC's `getActive` (the tile's accent fill): dark mode is "on" in that sense,
+`barActive` is NOT the CC's `getActive` (the tile's on-state: white, its icon in the accent): dark mode is "on" in that sense,
 and hiding its own switch while it is off would leave no way back.
 A missing adapter is not a mode: `isAvailable` false = the control does not exist on this machine
 (not in the bar, not listed in Settings → Top bar), and a dongle plugged in later brings it back.
@@ -195,8 +195,8 @@ Configure subpage — keep a widget's own options with the widget; ⚠️ it is 
 cannot receive once it runs in its own process (#571), so put the options themselves in GSettings
 and keep the page a thin set of rows over them, as `screenrecord` does), `isAvailable`/`watchAvailable`
 (a hardware gate: without it the widget stops existing for the user rather than showing
-broken), `getActive`/`watchActive` (fills the whole island with the accent, the standard
-quick-settings convention), `getFill` (the gauge variant), `barClick` (intercept the pill's
+broken), `getActive`/`watchActive` (the tile's on-state: a 1×1 turns white, a larger tile's icon
+circle does, the icon in the accent), `getFill` (the gauge variant), `barClick` (intercept the pill's
 click; consulted on every click, so it can answer differently as state changes),
 `barTooltipState` (the pill's tooltip is the widget's `name` for free; return a short,
 translated state and it reads "name · state" — owner's call 2026-09-24: title by default, state

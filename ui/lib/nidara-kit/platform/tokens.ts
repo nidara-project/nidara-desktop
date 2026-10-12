@@ -146,6 +146,15 @@ export const GLASS_TINT = {
 export const GLASS_SPECULAR = { r: 1, g: 1, b: 1 } as const
 
 /**
+ * What is ON in the Control Center: the 1×1 tile's whole circle, a capsule's icon circle
+ * (`--nidara-on`, the same white) and the gauge's fill. White in both modes, with the icon
+ * in the accent over it (owner, 2026-10-12, after the reference): the accent fills no tile —
+ * until that day an active tile filled whole with it. Its own token for the reason
+ * `GLASS_SPECULAR` is: the same number, a different quantity.
+ */
+export const ON_WHITE = { r: 1, g: 1, b: 1 } as const
+
+/**
  * A clickable capsule while its panel is OPEN, and while the pointer is over it: a
  * veil laid OVER the glass, at these alphas — `GLASS_SPECULAR` on dark glass (it
  * lightens), `GLASS_TINT.dark` on light glass (it darkens) — the gesture a menu bar

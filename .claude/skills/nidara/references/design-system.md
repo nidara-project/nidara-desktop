@@ -3518,8 +3518,15 @@ context menu are the only routes: the round toggle button swallows plain taps by
 compact quick-toggle stays a toggle on every platform, "open detail" is
 never a fallback on tap.
 
-**A "stateful" tile's on-state fills the WHOLE capsule with the live accent colour** (standard
-quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive`/
+**A "stateful" tile's on-state is WHITE, with its icon in the accent** (owner, 2026-10-12, after
+the reference; until that day the whole capsule filled with the accent). A 1×1 IS its circle, so
+the whole tile turns white (`ON_WHITE`, Cairo); a 2×1/2×2 keeps its glass and only its icon
+circle turns white — `BaseIsland` puts `active` on the island and `_control-center.scss` paints
+the circle (`--nidara-on`) and the icon. The tile's text stays white on the glass. The gauge
+(below) fills with the same white, and its icon and value take `INK_DARK_CLASS` where the fill
+covers them — decided when the slider gets its size (`resize`), never on a later tick: the CC's
+open animation draws what its first frame had, and a check one tick after map left the icon white
+on the white until the CC reopened (measured). Wired via `AtomicWidget.getActive`/
 `watchActive` (`common/widget-kit/contract.ts`) → `BaseIsland` → `SquircleContainer`'s `getActive`/`activeAlpha`/
 `watchActive` props: `getActive()` is read live *inside the Cairo draw call*, so it paints through
 the exact same `resolveDrawParams`/`drawSquircle` path a real tile already uses — no separate CSS
@@ -3624,7 +3631,7 @@ inner `DrawingArea`, inset within `BaseIsland`'s own padding — visually a caps
 (the island's own border, THEN a gap, THEN the slider's own smaller pill with no border of its
 own). User called it out: it didn't read as the same "material" as an active toggle's fill.
 Fixed by extending `drawSquircle` itself with `fillFrac`/`emptyColor`/`emptyAlpha`: ONE path/clip
-paints the empty (top) portion with the base glass and the filled (bottom) portion with accent,
+paints the empty (top) portion with the base glass and the filled (bottom) portion with `ON_WHITE`,
 so the border + gloss steps right after wrap BOTH portions as one continuous shape — structurally
 identical to how `getActive` fills the whole thing, just clipped to a fraction.
 `SquircleContainer`'s `getFill` takes priority over `getActive` when given (`frac >= 1` collapses

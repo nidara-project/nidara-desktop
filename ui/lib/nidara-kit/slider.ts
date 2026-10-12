@@ -12,6 +12,7 @@ import { bindWhileRealized } from "./lifetime"
 import { safeDisconnect } from "./platform/signals"
 import { hexToFloatRgb } from "./platform/accent"
 import { cairoDraw } from "./platform/cairo-draw"
+import { INK_DARK_CLASS } from "./platform/material"
 
 const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)
@@ -411,6 +412,25 @@ export function makeVerticalFillTile(
         })
     }
 
+    // The fill is WHITE (the host's, `ON_WHITE`), so what it covers turns dark: the icon at
+    // the foot once the fill passes its middle, the value at the head at 100 %: they take
+    // `INK_DARK_CLASS`, which each bundle gives the light skin's ink (as on a pane of glass
+    // over a white backdrop).
+    const overlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
+    let lastValue = opts.value
+    const inkOverFill = (v: number) => {
+        lastValue = v
+        const h = overlay.get_height()
+        if (h <= 0) return
+        const top = h * Math.max(0, Math.min(100, v)) / 100
+        const cover = (w: Gtk.Widget, middleFromFoot: number) => {
+            if (top >= middleFromFoot) w.add_css_class(INK_DARK_CLASS)
+            else w.remove_css_class(INK_DARK_CLASS)
+        }
+        cover(iconImg, iconImg.margin_bottom + iconImg.pixel_size / 2)
+        cover(valueLabel, h - valueLabel.margin_top - valueLabel.get_height() / 2)
+    }
+
     const slider = makeSlider({
         ...opts,
         orientation: "vertical",
@@ -425,7 +445,7 @@ export function makeVerticalFillTile(
         // sizes the hit-region's width (crossMin/width_request) even with nothing painted,
         // so drag/click-to-jump spans the visible capsule, not a thin sliver.
         trackH: opts.trackH ?? 72,
-        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%`; opts.onValueChanged?.(v) },
+        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%`; inkOverFill(v); opts.onValueChanged?.(v) },
     })
     slider.hexpand = true
     slider.vexpand = true
@@ -435,10 +455,15 @@ export function makeVerticalFillTile(
     // the CC's volume tile.
     slider.focusable = false
 
-    const overlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
     overlay.set_child(slider)
     overlay.add_overlay(valueLabel)
     overlay.add_overlay(iconImg)
+    // Its height is only known once it is laid out, and that is the moment to look: the
+    // slider fills the overlay, so its `resize` comes with the overlay's height and BEFORE
+    // the frame is drawn. Later than that is too late on the CC's first showing — its open
+    // animation draws what the first frame had (measured, 2026-10-12: a check on the first
+    // tick after map left the icon white on the white until the CC reopened).
+    ;(slider as Gtk.DrawingArea).connect("resize", () => inkOverFill(lastValue))
     const keysOf = sliderKeys.get(slider)
     if (keysOf) sliderKeys.set(overlay, keysOf)
     return overlay

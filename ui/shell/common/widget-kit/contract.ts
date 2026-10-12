@@ -63,7 +63,7 @@ export interface AtomicWidget {
     defaultInBar?: boolean              // shown in the bar by default (default false)
     /** When the widget is a state that COMES AND GOES (Do Not Disturb on, night light
      *  on, a cable plugged in), the bar can show it only while that holds. Not the CC's
-     *  `getActive`, which is "paint the tile in the accent" — dark mode is on in that
+     *  `getActive`, which is "show the tile ON" — dark mode is on in that
      *  sense, and hiding its own switch while it is off would leave no way back.
      *  Who gets to CHOOSE (owner, 2026-09-28):
      *   · `ccFixed` + `barActive` → Settings → Top bar offers "Always" / "When active".
@@ -130,27 +130,27 @@ export interface AtomicWidget {
     // Optional companion: invoke cb whenever availability may have changed (e.g.
     // BT adapter plugged/removed). Subscriptions are shell-lifetime — no dispose.
     watchAvailable?: (cb: () => void) => void
-    // On/off state for CC tiles: while true, the WHOLE island fills with the live
-    // accent colour (standard quick-settings convention) instead of the
-    // base glass — see BaseIsland/SquircleContainer's getActive/watchActive. Omit
-    // for widgets with no persistent on/off state (screenshot, clipboard, media…).
+    // On/off state for CC tiles: while true the tile is ON — a 1×1 turns white, a
+    // larger tile's icon circle does, the icon in the accent (owner, 2026-10-12; the
+    // whole island filled with the accent before) — see BaseIsland. Omit for widgets
+    // with no persistent on/off state (screenshot, clipboard, media…).
     getActive?: () => boolean
     watchActive?: (cb: () => void) => (() => void)
     // Fractional variant of getActive for gauge-style tiles (CC sliders: volume,
     // brightness) — fills that fraction (0..1) of the island from the bottom with
-    // accent, same single shape/border as getActive. Size-aware (receives the
-    // widget's current WidgetSize) because a slider widget's OTHER sizes (its 1×1
+    // white (`ON_WHITE`), same single shape/border as a 1×1's on-state. Size-aware
+    // (receives the widget's current WidgetSize) because a slider widget's OTHER sizes (its 1×1
     // icon, its 4×1 horizontal bar) aren't gauges and must return 0 for those, or
     // the whole island fills unexpectedly at that size too. Shares watchActive.
     getFill?: (size: WidgetSize) => number
-    // Override which colour getActive/getFill fills with — a hex string, live
-    // theme accent if omitted. Set for a FIXED semantic colour that must not move
+    // Override which colour getActive/getFill fills with — a hex string, `ON_WHITE`
+    // if omitted. Set for a FIXED semantic colour that must not move
     // with the user's accent choice (screenrecord: DANGER_HEX, same red as every
     // other "needs attention" indicator — see lib/nidara-kit/platform/status-colors.ts).
     activeColorHex?: string
     // Static alpha, or a getter for a live-varying one (a pulsing indicator reads
     // it every redraw — pair with a watchActive that ticks a redraw timer while
-    // active, e.g. screenrecord). Default 0.85 if omitted.
+    // active). Default 1 if omitted (BaseIsland).
     activeAlpha?: number | (() => number)
 }
 

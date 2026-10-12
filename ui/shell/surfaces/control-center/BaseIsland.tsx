@@ -2,7 +2,8 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import SquircleContainer, { Shape, GLASS_SHADOW } from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/nidara-kit/platform/tokens"
+import { RADIUS, ON_WHITE } from "../../../lib/nidara-kit/platform/tokens"
+import { bindWhileRealized } from "../../../lib/nidara-kit/lifetime"
 import { WidgetSize } from "../../common/widget-kit"
 
 /**
@@ -101,6 +102,13 @@ export default function BaseIsland({
     }
     child.valign = Gtk.Align.FILL
 
+    // What is ON is WHITE, its icon in the accent (owner, 2026-10-12, after the reference;
+    // until then the whole tile filled with the accent). A 1×1 IS its circle, so the whole
+    // tile turns white; a larger tile keeps its glass and only its icon circle does — the
+    // island carries `active` and the stylesheet paints the circle (`_control-center.scss`).
+    // The gauge (getFill) fills with the same white.
+    const wholeIsOn = size === WidgetSize.SINGLE
+
     const island = SquircleContainer({
         child,
         radius,
@@ -118,13 +126,22 @@ export default function BaseIsland({
         // whole shell; see GLASS_SHADOW.
         shadow: GLASS_SHADOW,
         padding: islandPadding(size),
-        getActive,
+        getActive: wholeIsOn ? getActive : undefined,
         watchActive,
         getFill,
         activeColorHex,
-        activeAlpha,
+        activeColor: activeColorHex ? undefined : ON_WHITE,
+        activeAlpha: activeAlpha ?? 1,
         keyboardStop,
     })
+    if (getActive) {
+        const sync = () => {
+            if (getActive()) island.add_css_class("active")
+            else island.remove_css_class("active")
+        }
+        sync()
+        if (watchActive) bindWhileRealized(island, () => { sync(); return watchActive(sync) })
+    }
 
     island.set_size_request(width, height)
     return island
