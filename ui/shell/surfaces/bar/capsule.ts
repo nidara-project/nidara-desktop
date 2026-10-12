@@ -8,7 +8,7 @@ import { attachTooltip, type NidaraTooltipHandle, type NidaraTooltipOpts, type N
 import { GLASS_SPECULAR, GLASS_TINT, GLASS_STATE_MIX } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { barKeyAction } from "../../common/widget-kit"
-import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
+import { chromeIsDarkFor } from "../../common/ShellGlass"
 
 // Shared bar-capsule edge: a faint white inner border. It no longer changes on
 // hover: the capsules pass `hoverLift` (the glass lifts a little) and `barOpen`

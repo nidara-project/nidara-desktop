@@ -44,16 +44,14 @@ export function generateChromeTokenScope(
 }
 
 /**
- * The token sets a surface wears when the ADAPTIVE GLASS flips its skin (#673,
- * `common/AdaptiveGlass.ts`): a full `--nidara-*` set for each skin, scoped to a class
- * the surface's root carries only while flipped. Always emitted — toggling the class
- * is the whole switch, no stylesheet reload per flip.
+ * The token sets a surface wears when its skin differs from the shell's — one that follows
+ * the system mode (`skinFromMode`, `common/ShellGlass.ts`): a full `--nidara-*` set for each
+ * skin, scoped to a class the surface's root carries only while it differs. Always emitted —
+ * toggling the class is the whole switch, no stylesheet reload per change.
  *
  * `window#<w> .nidara-skin-light *` is (1,1,1) and beats both the global `*` and the
  * shell's `window#<w> *` (1,0,1), so a flipped surface's tokens win everywhere inside
- * it. (Nothing flips automatically since 2026-09-30 — `decideGlass`'s `flip: false` —
- * but the classes stay, for the light skin that is to come.)
- */
+ * it.  */
 export function generateSkinFlipScope(config: NidaraThemeConfig): string {
   const block = (isDark: boolean) => {
     // A pane of Hyalo's glass whose content the compositor said is dark (the ink, #684,

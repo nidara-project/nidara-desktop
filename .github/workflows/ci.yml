@@ -301,33 +301,30 @@ jobs:
       - name: Settings rows contract (declarative rows match config registry)
         run: node --experimental-strip-types scripts/ci/settings-config-contract.mjs
 
-      # The adaptive glass's rule (#673): whether text on a piece of glass is legible
-      # over a backdrop, and what the glass does if not — thicken (A), then flip the
-      # skin (B). Pure arithmetic in the kit, so it is checked here with the rest of
-      # the design system rather than on a live screen, where it cannot be.
-      - name: The adaptive glass rule holds its numbers
+      # The client-painted glass's model: whether text on a piece of glass is legible over a
+      # backdrop — what the tooltips' floors are held to. Pure arithmetic in the kit, so it is
+      # checked here with the rest of the design system rather than on a live screen.
+      - name: The glass legibility model holds its numbers
         run: |
           npx --yes esbuild@0.28.2 scripts/dev/glass-legibility-probe.ts --bundle \
             --platform=node --format=esm --log-level=warning --outfile=/tmp/glass-probe.mjs
           node /tmp/glass-probe.mjs
 
-      # ⚠️ And the control. B deleted: the last-resort branch still flips pure white
-      # to the light skin, so a probe that only asked "did it flip" went on passing
-      # (it did, the first time this was run). It must also notice the flipped skin
-      # arriving at FULL body instead of the slider's.
-      - name: The adaptive glass probe can fail (control, must be caught)
+      # ⚠️ And the control: a tooltip floor one step thicker is no longer the LEAST that reads
+      # 4.5:1, and the probe must say so.
+      - name: The glass legibility probe can fail (control, must be caught)
         run: |
           f=ui/lib/nidara-kit/platform/glass-legibility.ts
           cp "$f" /tmp/glass-legibility.bak
-          sed -i 's|    const b = leastAlpha(worst(!preferDark), !preferDark, floor, top, 1, content, tint)|    const b = null as number \| null|' "$f"
+          sed -i 's|TOOLTIP_GLASS_FLOOR = { dark: 0.59,|TOOLTIP_GLASS_FLOOR = { dark: 0.60,|' "$f"
           if git diff --quiet "$f"; then
-            echo "::error::the control patched nothing — rule B has moved or been reworded"
+            echo "::error::the control patched nothing — TOOLTIP_GLASS_FLOOR has moved or been reworded"
             exit 1
           fi
           npx --yes esbuild@0.28.2 scripts/dev/glass-legibility-probe.ts --bundle \
             --platform=node --format=esm --log-level=warning --outfile=/tmp/glass-probe-defect.mjs
           if node /tmp/glass-probe-defect.mjs; then
-            echo "::error::the probe passed with rule B deleted — it is not checking what it prints"
+            echo "::error::the probe passed with a tooltip floor moved — it is not checking what it prints"
             cp /tmp/glass-legibility.bak "$f"
             exit 1
           fi

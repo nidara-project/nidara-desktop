@@ -76,7 +76,7 @@ import { setWidgetCatalog } from "./core/WidgetCatalog"
 // Last on purpose: by the time it evaluates, the registry and the CC grid already have
 // (through Settings and the bar), so adding the seam did not reorder the shell's boot.
 import { widgetCatalogSource } from "./core/WidgetCatalogSource"
-import { startAdaptiveGlass, adaptiveGlassState, remeasureAllGlass, chromeIsDarkFor } from "./common/AdaptiveGlass"
+import { startShellGlass, shellGlassState, chromeIsDarkFor } from "./common/ShellGlass"
 
 // ── The kit's appearance seam ────────────────────────────────────────────────
 // `nidara-kit/slider.ts` paints in Cairo, and Cairo cannot read a CSS token: it
@@ -88,8 +88,8 @@ import { startAdaptiveGlass, adaptiveGlassState, remeasureAllGlass, chromeIsDark
 // `ui/lib/nidara-kit/appearance.ts`.
 setKitAppearance({
   accent:         () => Theme.accentPalette[Theme.accentColor].color,
-  // A shell surface answers through the adaptive glass (#673): a slider, tooltip or
-  // menu inside a panel whose skin was flipped wears that skin, not the mode's.
+  // A shell surface answers for itself (common/ShellGlass.ts): a slider, tooltip or menu
+  // inside a surface that wears the other skin wears it too, not the mode's.
   surfaceIsDark:  (widget) => Theme.isChromeSurface(widget) ? chromeIsDarkFor(widget) : Theme.isDark,
   onChange:       (cb) => {
     const id = Theme.connect("changed", cb)
@@ -741,10 +741,6 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return JSON.stringify(out, null, 2)
     },
   },
-  glassRemeasure: {
-    desc: "Measure what is behind every visible shell surface NOW and let the adaptive glass (#673) re-decide (thicker glass, or the other skin). It normally runs by itself on events — a window opening, moving or going fullscreen, a workspace or wallpaper change, a panel settling open. Read the result from dumpState `glass` about a second later. Returns how many surfaces were queued.",
-    run: () => `${remeasureAllGlass()} surface(s) queued — read dumpState glass in ~1 s`,
-  },
   dumpState: {
     desc: "Dump live shell state as JSON (version, theme, locale, monitors incl. resolution/refresh/scale, overlays, effective Hyprland config)",
     run: () => {
@@ -826,10 +822,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             settings: compositor.clients.some(isSettingsClient),
             about: status.about_open,
           },
-          // The adaptive glass (#673), per surface: the slider (floor), what it wears
-          // now (alpha, skin, flipped) and the backdrop it was measured against.
-          // `alpha: null` = never measured, i.e. exactly the user's glass.
-          glass: adaptiveGlassState(),
+          // Each surface's glass: its slider (floor) and its skin (common/ShellGlass.ts).
+          glass: shellGlassState(),
           flags: {
             ccEditMode: status.cc_edit_mode,
             recording: status.recording,
@@ -1183,9 +1177,8 @@ app.start({
     //  Toggles Logic
     // Plain Status, like every other overlay; dumpState reads the same property.
     const toggleAppGrid = () => { status.app_grid_open = !status.app_grid_open }
-    // Adaptive glass (#673): every surface is registered by now (Bar.tsx), so the
-    // events that can change what is behind them start counting from here.
-    startAdaptiveGlass()
+    // Every surface's glass is registered by now (Bar.tsx): it follows the theme from here.
+    startShellGlass()
     // Same idiom for the island's covered rect (see islandRect's declaration).
     islandRect = () => {
       let r: Rect | null = null

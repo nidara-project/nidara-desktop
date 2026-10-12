@@ -2984,10 +2984,8 @@ reason that did not apply to the login screens: a shell surface can have a FULLS
 WINDOW behind it, which no wallpaper measurement can see. The answer does not read the wallpaper at
 all: each surface captures the region it covers, subtracts its OWN paint (rendered offscreen) and
 is left with the backdrop exactly as its text sees it — windows, video, other clients' layers,
-Hyprland's blur included. Then, per surface: thicken up to 0.60, and past that flip the skin. The
-mechanism, its four measured traps and the rule's CI probe are in design-system.md → "Adaptive
-glass". The appearance PIN stays what it was — a preference — and a flipped surface overrides it,
-on purpose. What is left of this item is the login half (the veil, #613), which is the owner's.
+Hyprland's blur included. Then, per surface: thicken up to 0.60, and past that flip the skin. ⛔ **Since #762 (2026-10-13) that mechanism is gone**: on Hyalo the compositor paints the shell's
+glass and measures under it itself (references/hyalo.md → "The ink", "The tone"). What is left of this item is the login half (the veil, #613), which is the owner's.
 
 *(History — the paragraph this replaced:)* "STILL OPEN FOR THE SHELL, and not as a follow-up chore
 … `shellAppearance: auto` would be right about the wallpaper case and blind about the other …

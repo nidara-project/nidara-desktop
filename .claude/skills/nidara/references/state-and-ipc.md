@@ -596,17 +596,12 @@ old exact-id-only version cost two steps and a 7 KB catalogue dump that then rod
 the rest of the turn — the model asked for `calculator`, was told "see listApps", and obeyed. Same
 lesson as `settingsPage` (#68): **a reply that points at the catalogue costs the catalogue.**
 
-### What each surface's glass is wearing: `dumpState.glass` + `glassRemeasure`
+### What each surface's glass is wearing: `dumpState.glass`
 
-The adaptive glass (#673, design-system.md → "Adaptive glass") decides per surface, on events,
-where no screenshot shows its reasoning. `dumpState.glass` is one entry per registered surface:
-`floor` (the slider), `alpha` (what it paints now; `null` = never measured, i.e. exactly the
-slider), `skin` + `flipped`, `group` (surfaces that decide together — the bar and the compact
-island are `bar-row`), `backdrop` (the brightest and darkest backdrop it measured, 0–255, and how
-many pixels) and `measuredMsAgo`. `nidara-ipc glassRemeasure` queues a measurement of every
-visible surface now; read the result about a second later. An agent that just changed what is
-behind the shell (opened a white window, switched workspace) can use the pair to confirm the text
-stayed legible instead of guessing from a screenshot.
+One entry per registered surface (`common/ShellGlass.ts`): `role`, `floor` (its slider), `skin`
+and where it comes from (`shell`, or `mode` for the dock and the app grid), and `mapped`. The glass
+itself is Hyalo's: `nidara-hyalo msg layers` shows what each layer declared (references/hyalo.md).
+(`glassRemeasure` and the measured backdrop went with the adaptive glass, #762.)
 
 ### How to find out who holds the keyboard: `dumpState.keyboardFocus`
 

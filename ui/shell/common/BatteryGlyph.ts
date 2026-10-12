@@ -22,7 +22,7 @@
 //
 // Fill ∝ exact charge; green while charging, danger-red at/below the low
 // threshold (semantic status colors, NOT the theme accent — accent is
-// reserved for selection). Chrome color follows its surface's skin (AdaptiveGlass).
+// reserved for selection). Chrome color follows its surface's skin (ShellGlass).
 
 import Gtk from "gi://Gtk?version=4.0"
 import * as Battery from "../core/BatteryService"
@@ -30,7 +30,7 @@ import { hexToFloatRgb } from "./DrawingUtils"
 import { DANGER_HEX, SUCCESS_HEX } from "../../lib/nidara-kit/platform/status-colors"
 import { INK } from "../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../lib/nidara-kit/platform/cairo-draw"
-import { chromeIsDarkFor } from "./AdaptiveGlass"
+import { chromeIsDarkFor } from "./ShellGlass"
 
 /** A real battery device is present (false on desktops, where the display
  *  device exists but reports is_present = false). */
@@ -74,7 +74,7 @@ export function makeBatteryGlyph(box: number, fill = false): Gtk.DrawingArea {
         // and the glyph is the one place that conflation was the RIGHT reading, so
         // it is spelled out here instead of inherited.
         const charging = batteryPresent() && (Battery.charging() || Battery.charged())
-        const c = chromeIsDarkFor(da) ? 1 : 0   // shell skin (bar + CC) — its surface's, see AdaptiveGlass
+        const c = chromeIsDarkFor(da) ? 1 : 0   // shell skin (bar + CC) — its surface's, see ShellGlass
 
         // SVG units → px. The 24-unit box is centred in the allocation; every
         // coordinate below is read straight off battery.svg.

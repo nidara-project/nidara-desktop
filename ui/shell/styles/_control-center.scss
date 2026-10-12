@@ -154,7 +154,7 @@
     }
 
     // A tile's SUBTITLE — its state ("Activo", "Sin conexión"): information, so the
-    // SECONDARY ink tier (80 %, held to 4.5:1 by the adaptive glass), not the dim one.
+    // SECONDARY ink tier (80 %), not the dim one.
     // Same size as the title and only lighter in weight and ink (owner, 2026-09-30, over 12px / 400 / dim, which read "very thin next to the
     // title"). It shares the title's 96px column (widget-kit/tile.ts), so a long
     // network name ellipsizes sooner than it did at 12.

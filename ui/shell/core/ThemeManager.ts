@@ -399,8 +399,8 @@ class ThemeManager extends GObject.Object {
      *  DARK — dark glass, white ink — whatever the system mode (owner, 2026-09-30). The
      *  mode is the applications' (Settings and About included), not the shell's: a
      *  shell that changed its ink with the mode, or with the wallpaper, was changing it
-     *  for no reason the person could see. Legibility is the adaptive glass's job, by
-     *  thickening only (`AdaptiveGlass.ts`). A light skin is to come back as a SETTING,
+     *  for no reason the person could see. On Hyalo legibility is the compositor's glass
+     *  — its tone, and its ink where the backdrop is white. A light skin is to come back as a SETTING,
      *  not decided yet — which is why this is still a getter and not a literal at every
      *  call site. (Until 2026-09-29 it followed the mode unless pinned; until today it
      *  followed the mode, and the bar row followed its backdrop, #676.) */
@@ -677,8 +677,8 @@ class ThemeManager extends GObject.Object {
     private applyTokens() {
         this.ensureProvidersLinked()
         // The global block is the MODE's (Settings, About); the shell's windows wear
-        // their own skin over it (`generateChromeTokenScope`), and a surface flipped by
-        // the adaptive glass wears the other over that (`generateSkinFlipScope`).
+        // their own skin over it (`generateChromeTokenScope`), and a surface that follows the
+        // mode wears it over that (`generateSkinFlipScope`).
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
             + "\n" + generateChromeTokenScope(this.fcConfig, this.chromeIsDark, this.state.isDark)
             + "\n" + generateSkinFlipScope(this.fcConfig)

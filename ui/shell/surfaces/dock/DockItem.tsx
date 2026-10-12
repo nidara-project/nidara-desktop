@@ -25,7 +25,7 @@ import { INK } from "../../../lib/nidara-kit/platform/tokens"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { DockIcon } from "./DockIcon"
 import { captureWindow } from "../../core/WindowCapture"
-import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
+import { chromeIsDarkFor } from "../../common/ShellGlass"
 
 /** A `*-symbolic` icon is a mask meant to take the text colour (see DockIcon). */
 const isSymbolicFile = (path: string | null | undefined) => !!path && /-symbolic\.(svg|png)$/.test(path)

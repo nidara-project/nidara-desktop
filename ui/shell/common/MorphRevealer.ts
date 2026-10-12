@@ -2,8 +2,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Graphene from "gi://Graphene"
-import { drawSquircle } from "./DrawingUtils"
-import { compositorPaintsGlass, trackGlass, type GlassShape } from "../../lib/nidara-kit/platform/material"
+import { trackGlass, type GlassShape } from "../../lib/nidara-kit/platform/material"
 
 // MorphRevealer: Dynamic-Island-style show/hide — ONE shape that TRANSFORMS.
 // The bar's workspace capsule doesn't fade out while an island fades in over
@@ -15,19 +14,15 @@ import { compositorPaintsGlass, trackGlass, type GlassShape } from "../../lib/ni
 // How the illusion is built (v2 — real interpolated geometry, not a scaled
 // render):
 //
-//   1. THE SHAPE. Mid-morph this widget paints a Cairo squircle EVERY FRAME
-//      with truly interpolated geometry — rect (x/y/w/h), corner radius,
-//      superellipse exponent n, glass alpha and border color all lerp from the
-//      capsule's pill (perfect pill ≡ n=2, r=h/2) to the island container
-//      (r=64, n=3.2). Painting via the same `drawSquircle` + params
-//      (inset 2, borderWidth 1, gloss) as SquircleContainer means the clone is
-//      pixel-identical to both real widgets at the endpoints: the capsule is
-//      HARD-SWAPPED for the clone on frame 0 (opacity, so it stays clickable
-//      geometry) and the island's real glass (`glassArea`) takes over at rest.
-//      Border stays 1px-crisp and corners stay true the whole trip — the v1
-//      defect (scaling the rendered container stretched them) is gone. The
-//      compositor blur keys off the painted pixels, so it follows the morph
-//      for free.
+//   1. THE SHAPE. Mid-morph this widget declares, EVERY FRAME, a squircle with
+//      truly interpolated geometry — rect (x/y/w/h), corner radius and
+//      superellipse exponent n lerp from the capsule's pill (perfect pill ≡
+//      n=2, r=h/2) to the island container (r=64, n=3.2) — and the compositor
+//      paints its glass (`glassShape`, #684). The capsule is HARD-SWAPPED for
+//      the clone on frame 0 (opacity, so it stays clickable geometry) and the
+//      island's real glass (`glassArea`) takes over at rest. Edge and corners
+//      stay true the whole trip — the v1 defect (scaling the rendered
+//      container stretched them) is gone.
 //   2. THE PAIRS. Compact elements with a slot in the expanded content don't
 //      vanish — ghost twins (REAL widgets, children of this revealer, so CSS
 //      state/live data stay correct) travel from each source element's bounds
@@ -88,12 +83,8 @@ const PAIR_STAGGER = 0       // per-pair timeline offset. 0.06 was tried and rea
 const POP_SOLID_AT = 0.25    // fallback pop only: whole-widget fade window
 const GLASS_INSET = 2.0      // MUST match SquircleContainer's techInset default
 
-/** Live paint recipe for one END of the glass morph. Read per frame (theme
- *  opacity/dark-mode changes mid-flight track automatically). */
+/** The shape of one END of the glass morph. Read per frame. */
 export interface MorphGlass {
-    alpha: number
-    color: { r: number, g: number, b: number }
-    border: { r: number, g: number, b: number, a: number }
     n: number
     /** Corner radius; null = perfect pill (radius follows the rect's h/2). */
     radius: number | null
@@ -378,35 +369,8 @@ export class MorphRevealer extends Gtk.Widget {
         const sx = f.w > 0 ? R.w / f.w : 1
         const sy = f.h > 0 ? R.h / f.h : 1
 
-        // 1. THE SHAPE — real interpolated Cairo geometry, same painter and
-        // params as SquircleContainer so both endpoint swaps are invisible. On a
-        // compositor of our own the compositor paints it, from `glassShape` (#684).
-        const gFrom = this.glassFrom()
-        const gTo = this.glassTo()
-        const bounds = new Graphene.Rect()
-        bounds.init(-8, -8, w + 16, h + 16)   // slack for sub-pixel source rects
-        const cr = snapshot.append_cairo(bounds)
-        cr.translate(R.x, R.y)
-        if (!compositorPaintsGlass(this)) drawSquircle(
-            cr, R.w, R.h, undefined,
-            lerp(gFrom.alpha, gTo.alpha, k), true,
-            {
-                r: lerp(gFrom.color.r, gTo.color.r, k),
-                g: lerp(gFrom.color.g, gTo.color.g, k),
-                b: lerp(gFrom.color.b, gTo.color.b, k),
-            },
-            lerp(gFrom.radius ?? s.h / 2, gTo.radius ?? f.h / 2, k), false,
-            {
-                r: lerp(gFrom.border.r, gTo.border.r, k),
-                g: lerp(gFrom.border.g, gTo.border.g, k),
-                b: lerp(gFrom.border.b, gTo.border.b, k),
-                a: lerp(gFrom.border.a, gTo.border.a, k),
-            },
-            lerp(gFrom.n, gTo.n, k), 1.0, GLASS_INSET,
-        )
-        // Released now, not at the next JS GC: a morph appends a context per frame, and an
-        // undisposed one holds native memory the collector never feels (#100, ui/lib/nidara-kit/platform/cairo-draw.ts).
-        cr.$dispose()
+        // 1. THE SHAPE — real interpolated geometry, declared to the compositor, which paints
+        // it (`glassShape`, #684).
 
         // 2. THE CONTENT — child painted with the glass rect mapped onto R(p)
         // (glassArea is opacity-0, so only content pixels land); contentTarget

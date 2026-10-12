@@ -13,7 +13,7 @@ import { BAR_ICON_SIZE, BAR_ITEM_PAD } from "../../common/widget-kit"
 import { rememberTrayItem, trayKey } from "../../core/BarOrder"
 import appService from "../../core/AppService"
 import Theme from "../../core/ThemeManager"
-import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
+import { chromeIsDarkFor } from "../../common/ShellGlass"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 
 // ── Which APP owns a tray icon ────────────────────────────────────────────────
@@ -140,8 +140,8 @@ function isTemplatePixbuf(pb: any): boolean {
 }
 
 /** The image a template pixmap becomes on the bar: its shape, in the bar's ink. A
- *  DrawingArea, so the adaptive glass's repaint of the bar (and a mode change) reaches
- *  it like every other Cairo mark on the glass. */
+ *  DrawingArea, so a repaint of the bar (a mode change, the ink) reaches it like every
+ *  other Cairo mark on the glass. */
 function templateIcon(): { widget: Gtk.DrawingArea, set(pb: any): void, dispose(): void } {
     let pixbuf: any = null
     const da = new Gtk.DrawingArea({

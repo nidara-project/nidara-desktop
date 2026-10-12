@@ -23,7 +23,7 @@ import { safeDisconnect } from "../../core/signals"
 import { type Notification, notifications as allNotifications, watchNotified, watchResolved } from "../../core/NotifService"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { compositorPaintsGlass, trackGlass, type GlassShape } from "../../../lib/nidara-kit/platform/material"
-import { glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
+import { glassAlphaFor, glassTintFor } from "../../common/ShellGlass"
 
 export function createIconWidget(n: Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""

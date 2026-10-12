@@ -12,20 +12,16 @@
  */
 
 import Gtk from "gi://Gtk?version=4.0"
-import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
-import { drawSquircle, drawGlassShadow } from "../../common/DrawingUtils"
 import { setVisibleRect } from "../../common/VisibleRegion"
 import { GLASS_SHADOW } from "../../common/SquircleContainer"
-import { chromeIsDarkFor, glassAlphaFor, glassTintFor } from "../../common/AdaptiveGlass"
 import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { compositorPaintsGlass, trackGlass } from "../../../lib/nidara-kit/platform/material"
-import { SlicedCairoArea } from "../../../lib/sliced-cairo"
+import { trackGlass } from "../../../lib/nidara-kit/platform/material"
 import { BAR_H } from "../bar/capsule"
 
 type Rect = { x: number, y: number, width: number, height: number }
@@ -33,8 +29,9 @@ type Rect = { x: number, y: number, width: number, height: number }
 // Widgets the adapter builds; DockCore assembles them into the window.
 export interface AxisWidgets {
     bar: Gtk.Box
-    /** The glass layer: a SlicedCairoArea on the horizontal axis, a DrawingArea on the
-     *  vertical one (see each factory for why). DockCore only needs queue_draw/get_mapped. */
+    /** The glass layer: the widget whose box is the capsule Hyalo paints (`trackGlass`) — a
+     *  plain sized box on the horizontal axis, a DrawingArea spanning the surface on the
+     *  vertical one, which places the capsule itself. DockCore only needs queue_draw/get_mapped. */
     da: Gtk.Widget
     shim: Gtk.Box
     layout: Gtk.Overlay
@@ -96,9 +93,6 @@ export interface AxisAdapter {
     setupAnchors(win: Gtk.Window): void
     applySlide(win: Gtk.Window, offset: number): void
     setExclusiveZone(win: Gtk.Window, zone: number): void
-    // force a fresh layer-surface configure (V only; H no-op). Used once at startup
-    // to make Hyprland re-honor the bar's top exclusive zone — see forceReflow impl.
-    forceReflow(win: Gtk.Window): void
 
     // per-icon layout (tick step 2)
     // called once at the start of each layout pass, before the per-item loop, so the
@@ -121,10 +115,6 @@ export interface AxisAdapter {
 
     // settings changed: reset axis widget sizes/margins for the new constants
     onSettingsResize(): void
-
-    // Where the glass capsule is, in `layout`'s coordinates — what the adaptive glass
-    // captures (common/AdaptiveGlass.ts). Null before the first allocation.
-    capsuleRect(): Rect | null
 }
 
 // Shared flat (rest-state) target assignment — used when the pointer is away.
@@ -202,43 +192,15 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 vexpand: false,
             })
 
-            // Three GPU textures, not a Cairo repaint per frame: the capsule only changes
-            // WIDTH while the dock magnifies, and its ends and middle column do not depend on
-            // it (the rim gradient is vertical, the fill uniform). perf put this repaint at
-            // 38 % of the shell's main thread during dock hover — see ui/lib/sliced-cairo.ts.
-            const gloss = new SlicedCairoArea({
+            // The capsule's box, nothing painted: Hyalo paints the glass from the shape it
+            // declares (#684), the pad around it is the room its shadow had (DOCK_SHADOW_PAD).
+            const gloss = new Gtk.Box({
                 name: "dock-gloss-layer",
                 valign: Gtk.Align.END,
                 halign: Gtk.Align.START,
                 height_request: DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SHADOW_PAD * 2,
                 margin_bottom: Math.max(0, dockSettings.screenGap - DOCK_SHADOW_PAD),
                 can_focus: false,
-            })
-            gloss.configure({
-                // The adaptive glass's answer for the dock, not the global mode and slider:
-                // it thickens the tint (or flips the skin) over a backdrop the running
-                // dot would vanish on (common/AdaptiveGlass.ts).
-                key: () => `${chromeIsDarkFor(gloss)}|${glassAlphaFor(gloss, "dock")}|${compositorPaintsGlass(gloss)}`,
-                // The squircle's corner spans its radius (half the pill) from the inset edge;
-                // one more pixel keeps the rim's antialiasing inside the cap.
-                capLength: (h) => DOCK_SHADOW_PAD + (h - DOCK_SHADOW_PAD * 2) / 2 + 1,
-                paint: (cr, w, _h) => {
-                    if (w <= 0 || _h <= 0) return
-                    const dark = chromeIsDarkFor(gloss)   // the mode's skin — unless its surface flipped
-                    const dockAlpha = glassAlphaFor(gloss, "dock")
-                    const dockColor = glassTintFor(gloss)
-                    const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
-                    // On a compositor of our own the pill's glass is the compositor's (#684), and
-                    // so is its edge: no shadow either (SquircleContainer says why).
-                    if (compositorPaintsGlass(gloss)) return
-                    // The pad is the `inset`, so the capsule lands where it always did; the
-                    // shadow gets the ring the widget grew to hold it.
-                    drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD,
-                        w - DOCK_SHADOW_PAD * 2, _h - DOCK_SHADOW_PAD * 2,
-                        (_h - DOCK_SHADOW_PAD * 2) / 2, 3.2, false,
-                        GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                    drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
-                },
             })
             trackGlass(gloss, () => {
                 const pw = gloss.get_width() - DOCK_SHADOW_PAD * 2, ph = gloss.get_height() - DOCK_SHADOW_PAD * 2
@@ -300,7 +262,6 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             lastExclZone = zone
             Gtk4LayerShell.set_exclusive_zone(win, zone)
         },
-        forceReflow(_win: Gtk.Window) { /* H anchors BOTTOM; position is bar-independent */ },
 
         beginLayoutPass() { peakIconCross = DOCK_CONSTANTS.ICON_SIZE },
         applyIconLayout(m: IconLayout) {
@@ -376,22 +337,23 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             // Apply only when the region's shape changed (see verticalAxis note). This
             // runs every frame during the autohide slide, so the region itself is only
             // built when the key changes — the hot path is integer math + a compare.
-            // `blur` defaults to null so every branch that does NOT pass one clears
+            // `drawn` defaults to null so every branch that does NOT pass one clears
             // the declaration. That default is the safety property: a new dock state
             // added later gets the un-optimised full surface, never a stale rect.
-            const apply = (key: string, set: () => void, blur: Rect | null = null) => {
+            const apply = (key: string, set: () => void, drawn: Rect | null = null) => {
                 if (key === lastRegionKey) return
                 lastRegionKey = key
                 set()
-                setBlurRect(blur)
+                setDrawnRect(drawn)
             }
-            // The BLUR region rides the same key/apply cycle as the input region —
-            // both answer "what is the dock right now", so computing them apart
-            // would let them drift, which is exactly the disagreement CROSS_PAD
-            // exists to prevent on the input side.
+            // The DRAWN region (Hyalo's `set_drawn_region`, #761: it draws, and blends damage,
+            // only inside it) rides the same key/apply cycle as the input region — both
+            // answer "what is the dock right now", so computing them apart would let them
+            // drift, which is exactly the disagreement CROSS_PAD exists to prevent on the
+            // input side.
             //
             // It is NOT the same rectangle, though: the input region is what you can
-            // CLICK, the visible region is what gets DRAWN. Hence "declare only at
+            // CLICK, the drawn region is what gets DRAWN. Hence "declare only at
             // rest": every state that can paint something this rect does not describe
             // clears it instead. A wrong region here does not degrade the dock, it
             // ERASES it.
@@ -399,25 +361,24 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             // The padding is small ON PURPOSE, and the reason is worth writing down
             // because the obvious candidates for a fat margin do not need one:
             //  · The tooltip and the context menu are both Gtk.Popover — their OWN
-            //    Wayland surfaces, which this region cannot touch (that separation is
-            //    also why the dock's layer needs `blur_popups` on top of `blur`).
+            //    Wayland surfaces, which this region cannot touch.
             //  · The magnified bulge is already inside the rect: `reach()` tracks the
             //    tallest icon of the current layout pass, cross-axis.
             //  · Sideways slack is already in the rect too — it is built at
             //    `totalMain + 500`, i.e. 250 px past each end of the bar.
-            // What is left to cover is the soft edge of the Cairo squircle and the
+            // What is left to cover is the capsule's shadow, outside its glass, and the
             // odd rounding, so: enough to never clip a pixel, not a guess-margin.
             // Measured on the real shell (2560x1440@144, damage 1600x340 landing ON
             // the dock's strip): 260/200 → 60/40 is worth 1.8 GPU points.
-            const BLUR_PAD_CROSS = 24
-            const BLUR_PAD_MAIN = 24
-            const setBlurRect = (rect: Rect | null) => {
+            const DRAWN_PAD_CROSS = 24
+            const DRAWN_PAD_MAIN = 24
+            const setDrawnRect = (rect: Rect | null) => {
                 if (!rect) { setVisibleRect(surface, null); return }
-                const x = Math.max(0, rect.x - BLUR_PAD_MAIN)
-                const y = Math.max(0, rect.y - BLUR_PAD_CROSS)
+                const x = Math.max(0, rect.x - DRAWN_PAD_MAIN)
+                const y = Math.max(0, rect.y - DRAWN_PAD_CROSS)
                 setVisibleRect(surface, {
                     x, y,
-                    width: Math.min(monMain - x, rect.width + BLUR_PAD_MAIN * 2),
+                    width: Math.min(monMain - x, rect.width + DRAWN_PAD_MAIN * 2),
                     height: WIN_H - y,
                 })
             }
@@ -427,7 +388,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
-            // The dock's silhouette in SURFACE (logical) coordinates, which is what the blur
+            // The dock's silhouette in SURFACE (logical) coordinates, which is what the drawn
             // region takes (setVisibleRects converts to buffer pixels). Height tracks the current shape (pill at rest, pill+bulge
             // on hover) so the bulged top of a magnified icon stays inside. Pin the
             // outer edge (screen bottom) to WIN_H exactly with integers — fractional
@@ -449,7 +410,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             // Yielded for an agent action (core/InputYield): click-through, so a
             // synthetic click reaches the app rather than the dock. Its own key, so
             // the restore recomputes a different one and re-applies instead of
-            // matching a stale cache. It KEEPS its blur rect: a yield changes who
+            // matching a stale cache. It KEEPS its drawn rect: a yield changes who
             // gets the clicks, not what is drawn, and the only thing that used to
             // paint outside this rect — the app grid — has its own surface now.
             if (inputYield.active) { apply("yield", setRect(null), body); return }
@@ -488,15 +449,6 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             shim.margin_bottom = dockSettings.screenGap
         },
 
-        capsuleRect() {
-            // `da` is the capsule plus the shadow's ring around it (DOCK_SHADOW_PAD).
-            const [ok, b] = da.compute_bounds(layout)
-            if (!ok || b.get_width() <= DOCK_SHADOW_PAD * 2 || b.get_height() <= DOCK_SHADOW_PAD * 2) return null
-            return {
-                x: b.get_x() + DOCK_SHADOW_PAD, y: b.get_y() + DOCK_SHADOW_PAD,
-                width: b.get_width() - DOCK_SHADOW_PAD * 2, height: b.get_height() - DOCK_SHADOW_PAD * 2,
-            }
-        },
     }
 }
 
@@ -517,7 +469,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
  *
  *  There is room for it: the dock's window is the FULL monitor height (`WIN_H`), not
  *  the exclusive zone, which is also how a magnified icon overflows above the capsule.
- *  And the blur region already pads by `BLUR_PAD_CROSS`/`BLUR_PAD_MAIN` = 24 px on
+ *  And the drawn region already pads by `DRAWN_PAD_CROSS`/`DRAWN_PAD_MAIN` = 24 px on
  *  every side, so 2 px of shadow is well inside what is already declared. */
 const DOCK_SHADOW_PAD = GLASS_SHADOW.spread
 
@@ -546,8 +498,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
     let lastRenderedShimTop = -1
     let lastExclZone = -999
 
-    // The capsule inside `da` (w×h), which spans the surface: one place for the painter
-    // and for the adaptive glass, which captures exactly this.
+    // The capsule inside `da` (w×h), which spans the surface: the shape Hyalo paints.
     const capsuleIn = (w: number, h: number): Rect => {
         const width = DOCK_CONSTANTS.PILL_HEIGHT
         const height = smoothedBarMain + DOCK_CONSTANTS.BASE_MARGIN * 2
@@ -609,17 +560,15 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 vexpand: false,
             })
 
-            // Stays a Cairo DrawingArea: the rim gradient runs top→bottom, i.e. ALONG a
-            // vertical capsule, so its middle is not one repeated row and SlicedCairoArea's
-            // contract does not hold (ui/lib/sliced-cairo.ts).
+            // A DrawingArea spanning the surface: the capsule is placed inside it (`capsuleIn`).
             da = new Gtk.DrawingArea({
                 name: "dock-gloss-layer",
                 valign: Gtk.Align.FILL,
                 halign: Gtk.Align.FILL,
                 can_focus: false,
             })
-            // theme→redraw handled by DockCore (single, disconnected on destroy)
-            da.set_draw_func(cairoDraw((_, cr, _w, _h) => {
+            // Its draw is where the surface's real height arrives (it paints nothing).
+            da.set_draw_func(cairoDraw((_, _cr, _w, _h) => {
                 if (_w <= 0 || _h <= 0) return
                 if (_h !== realizedMain) {
                     // The true compositor-allocated height arrived (or changed). The pill
@@ -633,22 +582,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                         shim.margin_top = shimTop
                     }
                 }
-                const dark = chromeIsDarkFor(da)   // the mode's skin — unless its surface flipped
-                const dockAlpha = glassAlphaFor(da, "dock")
-                const dockColor = glassTintFor(da)
-                const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
-                const { x: px, y: py, width: pw, height: ph } = capsuleIn(_w, _h)
-                // No layout change on this axis: `da` spans the surface and the capsule is
-                // placed by this translate, so the pad is absorbed here. Cairo clips a shadow
-                // that runs past the screen wall, which is where it would be invisible anyway.
-                // On a compositor of our own the pill's glass is the compositor's (#684), and so
-                // is its edge: no shadow either (SquircleContainer says why).
-                if (compositorPaintsGlass(da)) return
-                cr.translate(px - DOCK_SHADOW_PAD, py - DOCK_SHADOW_PAD)
-                drawGlassShadow(cr, DOCK_SHADOW_PAD, DOCK_SHADOW_PAD, pw, ph, pw / 2, 3.2, false,
-                    GLASS_SHADOW.spread, GLASS_SHADOW.alpha, GLASS_SHADOW.drop)
-                drawSquircle(cr, pw + DOCK_SHADOW_PAD * 2, ph + DOCK_SHADOW_PAD * 2, undefined,
-                    dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, DOCK_SHADOW_PAD)
+                // Nothing painted: Hyalo paints the capsule's glass from the shape below (#684).
             }))
             const pillArea = da
             trackGlass(pillArea, () => {
@@ -710,25 +644,6 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             Gtk4LayerShell.set_exclusive_zone(win, zone)
             dockSideState.update(position, zone)
         },
-        forceReflow(win: Gtk.Window) {
-            // The dock is anchored SIDE+TOP+BOTTOM with an explicit set_size(WIN_H).
-            // Its vertical position is driven by the bar's TOP exclusive zone pushing
-            // it down to y=BAR_HEIGHT. At startup the dock often maps BEFORE the bar
-            // registers that zone, so Hyprland places it at y=0 ("loads too high") and
-            // doesn't reflow until the surface re-commits. Opening the AppGrid does
-            // exactly this — it toggles the layer (TOP→OVERLAY→…→TOP), which Hyprland
-            // treats as real state and fully reconfigures (incl. position). A transient
-            // set_size can't trigger it (final size == current → Hyprland no-ops).
-            // Replicate the proven path: flip to OVERLAY, then back to TOP on a LATER
-            // frame so the two changes land as SEPARATE commits (same-frame coalesces
-            // to no-op). Net layer is unchanged; the round-trip forces the reposition.
-            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-                return GLib.SOURCE_REMOVE
-            })
-        },
-
         beginLayoutPass() { peakIconCross = DOCK_CONSTANTS.ICON_SIZE },
         applyIconLayout(m: IconLayout) {
             const { gtkRev, slotMain, tps, marginLo, marginHi, slide } = m
@@ -841,16 +756,16 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             // Apply only when the region's shape changed (see lastRegionKey note above).
             // Runs every frame during the autohide slide — the region is only built when
             // the key changes, so the hot path is integer math + a string compare.
-            // `blur` defaults to null, so a branch that does NOT pass one clears the
+            // `drawn` defaults to null, so a branch that does NOT pass one clears the
             // declaration: a state added later gets the un-optimised full surface rather
             // than a stale rect. Same contract as the horizontal axis.
-            const apply = (key: string, set: () => void, blur: Rect | null = null) => {
+            const apply = (key: string, set: () => void, drawn: Rect | null = null) => {
                 if (key === lastRegionKey) return
                 lastRegionKey = key
                 set()
-                setBlurRect(blur)
+                setDrawnRect(drawn)
             }
-            // Blur region: the mirror image of the horizontal axis (`tech-debt.md` §46),
+            // Drawn region: the mirror image of the horizontal axis (`tech-debt.md` §46),
             // and the padding reasoning transfers unchanged — the tooltip and the context
             // menu are `Gtk.Popover`s living in their own surfaces, the magnified bulge is
             // already inside the rect via `peakIconCross` → `innerEdgeCross()`, and the
@@ -863,15 +778,15 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             // MOVES (items added, magnification, the bar re-centering), which is exactly
             // where a rect that lags would erase icons — and it costs almost nothing next
             // to the 2560 → 178 cut.
-            const BLUR_PAD_CROSS = 24
-            const BLUR_PAD_MAIN = 24
-            const setBlurRect = (rect: Rect | null) => {
+            const DRAWN_PAD_CROSS = 24
+            const DRAWN_PAD_MAIN = 24
+            const setDrawnRect = (rect: Rect | null) => {
                 if (!rect) { setVisibleRect(surface, null); return }
-                const y = Math.max(0, rect.y - BLUR_PAD_MAIN)
+                const y = Math.max(0, rect.y - DRAWN_PAD_MAIN)
                 // Pin the OUTER edge to the screen wall (0 / WIN_W) with integers and pad
                 // only inward — same reason the input rect does: fractional geometry
                 // truncated by Cairo otherwise loses the last pixel column at the wall.
-                const x = position === 'left' ? 0 : Math.max(0, rect.x - BLUR_PAD_CROSS)
+                const x = position === 'left' ? 0 : Math.max(0, rect.x - DRAWN_PAD_CROSS)
                 // Measured on the real shell (2560x1440@144, dock on the left, damage
                 // 1600x700 to the right of the column, 3 rounds, bar and island declaring
                 // in either branch): 20.8% → 12.9% GPU, −7.9 points for a 130x1252 rect.
@@ -881,9 +796,9 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 setVisibleRect(surface, {
                     x, y,
                     width: position === 'left'
-                        ? Math.min(WIN_W, rect.width + BLUR_PAD_CROSS)
+                        ? Math.min(WIN_W, rect.width + DRAWN_PAD_CROSS)
                         : WIN_W - x,
-                    height: Math.min(realizedMain - y, rect.height + BLUR_PAD_MAIN * 2),
+                    height: Math.min(realizedMain - y, rect.height + DRAWN_PAD_MAIN * 2),
                 })
             }
             const setRect = (rect: { x: number, y: number, width: number, height: number } | null) => () => {
@@ -892,7 +807,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
-            // The dock's silhouette in SURFACE (logical) coordinates, which is what the blur region
+            // The dock's silhouette in SURFACE (logical) coordinates, which is what the drawn region
             // takes (setVisibleRects converts to buffer pixels). Computed before the branches so each of them can hand it over
             // instead of giving up.
             //
@@ -920,7 +835,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             // Yielded for an agent action (core/InputYield): click-through, so a
             // synthetic click reaches the app rather than the dock. Its own key, so
             // the restore recomputes a different one and re-applies instead of
-            // matching a stale cache. It KEEPS its blur rect: a yield changes who
+            // matching a stale cache. It KEEPS its drawn rect: a yield changes who
             // gets the clicks, not what is drawn, and the only thing that used to
             // paint outside this rect — the app grid — has its own surface now.
             if (inputYield.active) { apply("yield", setRect(null), body); return }
@@ -967,11 +882,5 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             da.queue_draw()
         },
 
-        capsuleRect() {
-            const [ok, b] = da.compute_bounds(layout)
-            if (!ok || b.get_width() <= 0 || b.get_height() <= 0) return null
-            const c = capsuleIn(b.get_width(), b.get_height())
-            return { x: b.get_x() + c.x, y: b.get_y() + c.y, width: c.width, height: c.height }
-        },
     }
 }

@@ -9,7 +9,7 @@ import * as media from "../../core/MediaService"
 import Theme from "../../core/ThemeManager"
 import { safeDisconnect } from "../../core/signals"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
-import { chromeIsDarkFor } from "../../common/AdaptiveGlass"
+import { chromeIsDarkFor } from "../../common/ShellGlass"
 
 // The Activity Island's PLAYER mode — both halves of the media activity:
 //

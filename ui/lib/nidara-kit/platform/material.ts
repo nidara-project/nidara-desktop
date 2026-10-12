@@ -47,8 +47,7 @@ import { FLUID_CRYSTAL_PRESETS, type FluidCrystalSelection, type FluidCrystalSpe
  * Control Center and the Notification Center still lie on a FIXED veil (`trackVeilRegion`).
  *
  * Loaded lazily and tolerated missing, like VisibleRegion: a checkout updated without
- * reinstalling libnidara-wl must not take the shell down. `NIDARA_MATERIAL=0` turns the
- * whole thing off — every painter back to its own glass, the compositor blurring nothing.
+ * reinstalling libnidara-wl must not take the shell down.
  */
 
 /** A shape of glass, in the tracked widget's own coordinates. */
@@ -214,7 +213,6 @@ type Shim = {
 }
 
 const SHIM_MODULE = "gi://NidaraWl"   // in a variable on purpose: see VisibleRegion.ts
-const DISABLED = GLib.getenv("NIDARA_MATERIAL") === "0"
 const DEBUG = GLib.getenv("NIDARA_MATERIAL_DEBUG") === "1"
 
 type Entry = {
@@ -604,7 +602,7 @@ export function trackGlass(widget: Gtk.Widget, shapes: () => GlassShape[],
 }
 
 function load() {
-    if (shim || DISABLED || loadStarted) return
+    if (shim || loadStarted) return
     loadStarted = true
     import(SHIM_MODULE)
         .then(mod => {
