@@ -24,13 +24,23 @@
  * signature of a duplicated section, it costs nothing to run, and the fix when it
  * fires is always the same — one of the two is stale, find out which.
  *
+ * ── And one copy of the skill ───────────────────────────────────────────────
+ *
+ * The same failure one level up. Agents other than Claude Code look for skills in
+ * `.agents/skills/`, and until 2026-10-12 that directory held a hand-made copy for
+ * one of them — weeks behind, with no Hyalo reference at all, and an AGENTS.md
+ * pointing at a directory that did not exist. That agent was working from a skill
+ * that described another desktop. So `.agents/skills/nidara` is a SYMLINK to
+ * `.claude/skills/nidara`, and this fails if it is anything else; AGENTS.md is
+ * the one entry text, and CLAUDE.md must import it rather than say anything itself.
+ *
  * ⚠️ A repeated heading is not always a duplicated section (two pages could
  * legitimately both want "### Gotchas"). If that day comes, make the heading say
  * which thing it is about — that is better writing anyway, and it keeps this
  * check able to see the real failure.
  */
 
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = ".claude/skills"
@@ -67,6 +77,21 @@ for (const file of markdownFiles(ROOT).sort()) {
         console.error(`  lines ${lines.join(", ")} — ${heading}`)
 }
 
+// One copy of the skill, one entry text.
+const LINK = ".agents/skills/nidara"
+const skillProblems = []
+if (!existsSync(LINK) || !lstatSync(LINK).isSymbolicLink())
+    skillProblems.push(`${LINK} must be a symlink to ${ROOT}/nidara, not a directory of its own (a copy drifts)`)
+else if (realpathSync(LINK) !== realpathSync(join(ROOT, "nidara")))
+    skillProblems.push(`${LINK} points at ${realpathSync(LINK)}, not at ${ROOT}/nidara`)
+if (!existsSync("AGENTS.md")) skillProblems.push("AGENTS.md is missing: it is what every agent reads first")
+if (!/^@AGENTS\.md\s*$/m.test(readFileSync("CLAUDE.md", "utf8")))
+    skillProblems.push("CLAUDE.md must import AGENTS.md (`@AGENTS.md` on a line of its own), so Claude Code reads the same text")
+if (skillProblems.length) {
+    for (const p of skillProblems) console.error(`\n${p}`)
+    process.exit(1)
+}
+
 if (failed) {
     console.error(
         "\nA heading appears more than once. Almost always this means a section was " +
@@ -77,4 +102,4 @@ if (failed) {
     process.exit(1)
 }
 
-console.log("skill-docs-check: no repeated headings.")
+console.log("skill-docs-check: no repeated headings; one copy of the skill, and AGENTS.md is every agent's entry.")

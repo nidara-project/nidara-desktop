@@ -474,9 +474,10 @@ personal-vs-global heuristic and the full PR flow.
 ## Contributing
 
 Nidara is **AI-native by design**: it ships an agent skill inside the repo
-(`.claude/skills/nidara/`) so that anyone running [Claude Code](https://claude.com/claude-code)
-— or a similar coding agent — can extend, customize, and fix their own desktop, and propose
-globally-useful improvements back upstream. You can also contribute the traditional way.
+(`.claude/skills/nidara/`, also reachable as `.agents/skills/nidara/`) so that anyone running a
+coding agent — [Claude Code](https://claude.com/claude-code), Codex, Gemini, Cursor or another —
+can extend, customize, and fix their own desktop, and propose globally-useful improvements back
+upstream. Every agent starts from the same [`AGENTS.md`](AGENTS.md). You can also contribute the traditional way.
 
 Start with [`CONTRIBUTING.md`](CONTRIBUTING.md). The key idea: classify each change as **personal**
 (stays in your config), **a setting** (add the knob, not a hardcode), or **global** (worth a PR —

@@ -5,7 +5,8 @@
 # any PR that touches these paths CANNOT merge without @aalonx's explicit review.
 #
 # We protect the GUARDIAN as much as the guarded:
-#   - .claude/skills/  is read by agents as AUTHORITATIVE INSTRUCTIONS. A poisoned
+#   - .claude/skills/ (and AGENTS.md, CLAUDE.md, the .agents/ symlink to it)
+#                      is read by agents as AUTHORITATIVE INSTRUCTIONS. A poisoned
 #     skill is a prompt-injection / supply-chain attack on every user's agent.
 #   - .github/         holds CI and THIS file — a malicious PR could otherwise edit
 #     them to disable the protections themselves.
@@ -14,7 +15,12 @@
 # Syntax: <path>  <owner>. Later matches win, so keep these specific.
 
 # The agent skill — highest scrutiny, review every diff with a prompt-injection lens.
+# AGENTS.md / CLAUDE.md are loaded by agents before anything else, and .agents/skills/
+# holds the symlink to the skill: a PR re-pointing it would swap the skill for another.
 /.claude/skills/      @aalonx
+/.agents/             @aalonx
+/AGENTS.md            @aalonx
+/CLAUDE.md            @aalonx
 
 # CI, PR template, and this CODEOWNERS file — the protection machinery itself.
 /.github/             @aalonx

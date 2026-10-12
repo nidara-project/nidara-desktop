@@ -1,9 +1,10 @@
 # Contributing to Nidara
 
 Nidara is **AI-native by design**. It ships an agent skill inside the repo
-(`.claude/skills/nidara/`) so that anyone running [Claude Code](https://claude.com/claude-code)
-— or a similar coding agent — can extend, customize, and fix their own desktop, and propose
-globally-useful improvements back upstream. You don't need to be a git expert: your agent
+(`.claude/skills/nidara/`, also reachable as `.agents/skills/nidara/`) so that anyone running a
+coding agent — [Claude Code](https://claude.com/claude-code), Codex, Gemini, Cursor or another —
+can extend, customize, and fix their own desktop, and propose globally-useful improvements back
+upstream. Every agent starts from the same [`AGENTS.md`](AGENTS.md). You don't need to be a git expert: your agent
 can handle the mechanics, with your consent.
 
 You can of course also contribute the traditional way. Both paths are welcome.
@@ -81,7 +82,7 @@ updates in place whenever you edit the PR description or push commits:
 | Label | Meaning | What you should do |
 |---|---|---|
 | `agent-submitted` | Prepared with an AI coding agent (template checkbox or commit trailer) | Nothing — it's informational, applied for you |
-| `guardian-files` | The diff touches protected paths (`.claude/skills/`, `.github/`, `CONTRIBUTING.md`, `install.sh`, `scripts/`, `bin/`) | Nothing — just expect a closer, slower review |
+| `guardian-files` | The diff touches protected paths (`.claude/skills/`, `.agents/`, `AGENTS.md`, `CLAUDE.md`, `.github/`, `CONTRIBUTING.md`, `install.sh`, `scripts/`, `bin/`) | Nothing — just expect a closer, slower review |
 | `needs-evidence` | The PR template is incomplete (unticked classification boxes, missing hardware details on a compat fix, missing user approval on an agent PR) | Edit the PR **description** to complete the template — the label and the comment clear automatically |
 
 Complete the template honestly: never tick a box that isn't true. The triage comment is

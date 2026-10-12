@@ -722,7 +722,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: No repeated headings in .claude/skills (must succeed)
+      - name: No repeated headings in .claude/skills, and one copy of the skill (must succeed)
         run: node scripts/ci/skill-docs-check.mjs
       # A wrapping GtkLabel must FILL its column. The rule was written in
       # design-system.md and violated six times anyway, because the failure only
