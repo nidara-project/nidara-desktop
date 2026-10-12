@@ -168,6 +168,7 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         }
         Request::Lock => Reply::Ok(Response::Lock {
             locked: state.lock.is_locked(),
+            guard: state.lock.is_guarded(),
             surfaces: state.space.outputs().filter(|o| state.lock.surface_for(o).is_some()).map(|o| o.name()).collect(),
         }),
         Request::CursorPosition => {

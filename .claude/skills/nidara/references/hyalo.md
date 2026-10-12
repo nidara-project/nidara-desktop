@@ -1508,13 +1508,33 @@ What holds while locked, and where:
   client; a dead one is started again (`nidara-lock`, or `HYALO_LOCK_RELAUNCH`) at most 3 times
   in 30 s, then a key press tries once more. A new client may take over a dead client's lock; a
   second locker while a live one holds it is refused.
+- **A lock client that never asks still gets the session locked — the GUARD** (2026-10-12; an
+  outside review found the hole). When Hyalo itself wants the lock — sleep, idle, `loginctl
+  lock-session`, all through `lock_session` — it starts the client and waits for its REQUEST.
+  Until then the session was open: a client that failed to start (or hung before asking — a
+  frozen shell holds `nidara-lock` in `nidara-ipc hideForLock` for its 15 s timeout) let sleep go
+  after the grace, and the machine came back UNLOCKED. Now, `GUARD_AFTER` (5 s) after the ask —
+  before sleep, at `SLEEP_GRACE` (3 s) — Hyalo locks the session itself (`Mode::Guard`):
+  wallpaper alone, input to nobody, the client started again as for a dead one, `msg lock` says
+  `guard: true`. A client that asks later takes it over as an ordinary RELOCK (no hold: the
+  session is hidden already), and only a client can unlock. Before sleep the delay inhibitor goes
+  once the guard is on screen (or `GUARD_SHOWN`, 1 s, later: 4 s total, under logind's 5), and on
+  the way back an output is powered only over a locked session — guarded if it somehow is not.
+  ⚠️ A `nidara-lock` that HANGS keeps every relaunch out (its `pgrep -x` single-instance check):
+  the guard then holds until it moves — safe, not friendly; Ctrl+Alt+Backspace is the way out.
 - **The lock surface needs its frame callbacks** (`post_repaint`). Without them GTK's frame clock
   never ticks there and everything the lock fades in (the clock, the card) stays at its first
   frame: invisible. Found nested, 2026-10-02.
-- IPC: `nidara-hyalo msg lock` (`locked`, the outputs with a lock surface); event `lock_changed`.
+- IPC: `nidara-hyalo msg lock` (`locked`, `guard`, the outputs with a lock surface); event `lock_changed`.
 
 Tested by `scripts/ci/hyalo-lock-check.sh` in the Hyalo smoke (seven steps, the control last: after
-the unlock the window behind gets the keys). Step 0 times the hold from the probe's own clock: a
+the unlock the window behind gets the keys), and the guard by `scripts/ci/hyalo-lock-guard-check.sh`
+(a client that does not start, one that connects and hangs, each taken over by a working one; the
+control after). The smoke's `HYALO_LOCK_RELAUNCH` is `hyalo-lock-client.sh`, which starts the probe
+named in `$LOCK_LOG/client-mode` (`lock`, `none`, `hang`). Sleep itself cannot be had in a
+container, so the guard is reached through the idle lock — the same `lock_session`; the sleep
+side (`logind.rs`) is checked only on a real machine. Seen failing: with the guard's call removed
+the check stops at step 1. Step 0 times the hold from the probe's own clock: a
 client that draws 3 s late (`lock-slow`) hears `locked` at ~1000 ms, one that draws at once well
 under 800 ms; before the hold, the late one heard it at 11 ms. Hyalo must be started with `HYALO_LOCK_RELAUNCH`
 pointing at the check's probe, or its relaunch step fails.
@@ -1534,7 +1554,8 @@ lock.
 - Steps are independent and fire once per idle stretch; the first input powers the screens back
   on, the lock stays. `ext-idle-notify-v1` is offered to other programs from the same state.
 - **`logind.rs` runs only with `--session`**: a sleep *delay* inhibitor (`PrepareForSleep(true)`
-  → lock, the inhibitor released once the lock is CONFIRMED, or after 3 s), the session's
+  → lock, the inhibitor released once the lock is CONFIRMED; past 3 s without a request, the
+  GUARD and then sleep — see "The lock screen" above), the session's
   `Lock` signal (`loginctl lock-session`) and the ScreenSaver service on the session bus — a
   development Hyalo must not take the live session's. Suspend from idle also only with
   `--session`: a nested Hyalo must never put the machine to sleep.

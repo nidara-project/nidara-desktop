@@ -5,6 +5,8 @@
 //                                       once "ok" has been typed into it (then UNLOCKED, and exits)
 //   gjs -m hyalo-lock-probe.js lock-slow  the same, but its lock windows draw only 3 s after the
 //                                       request: a lock client slower than Hyalo's hold
+//   gjs -m hyalo-lock-probe.js hang     connects and never asks for the lock: prints HANGING and
+//                                       stays (a lock client stuck before its request)
 //   REQUESTED and LOCKED carry the monotonic clock in ms, so the check can time the gap.
 // Needs gtk4-layer-shell preloaded (it carries Gtk4SessionLock): LD_PRELOAD=…/libgtk4-layer-shell.so.
 
@@ -13,7 +15,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 
-const mode = ARGV[0] === "lock" || ARGV[0] === "lock-slow" ? "lock" : "victim"
+const mode = ARGV[0] === "lock" || ARGV[0] === "lock-slow" ? "lock" : ARGV[0] === "hang" ? "hang" : "victim"
 const slow = ARGV[0] === "lock-slow"
 const ms = () => Math.round(GLib.get_monotonic_time() / 1000)
 const say = (s) => { print(s); }
@@ -28,6 +30,11 @@ app.connect("activate", () => {
         entry.connect("changed", () => say(`VICTIM ${entry.get_text()}`))
         win.set_child(entry)
         win.present()
+        return
+    }
+    if (mode === "hang") {
+        app.hold()
+        say(`HANGING ${ms()}`)
         return
     }
     if (!Gtk4SessionLock.is_supported()) { say("UNSUPPORTED"); app.quit(); return }

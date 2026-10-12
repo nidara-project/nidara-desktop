@@ -162,7 +162,7 @@ impl Hyalo {
             self.idle.fired.lock = true;
             if !self.lock.is_locked() {
                 tracing::info!(secs = cfg.lock, "idle: locking");
-                crate::spawn(&crate::lock::lock_command());
+                self.lock_session();
             }
         }
         if due(cfg.suspend) && !self.idle.fired.suspend {
