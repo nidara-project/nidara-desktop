@@ -97,6 +97,8 @@ pub struct GlassInfo {
     pub compositor_paints: bool,
     /// Each shape's edge displacement, logical px (`set_lensing`): empty when blur only.
     pub refraction: Vec<f64>,
+    /// Each shape's shadow (`set_shadow`), [opacity, deviation] at its size: empty when none.
+    pub shadows: Vec<[f64; 2]>,
     /// The veils under the glass (add_veil_region): one per region holding a shape.
     pub scrims: Vec<ScrimInfo>,
     /// How many of its shapes carry a tone (`set_tone`).

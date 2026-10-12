@@ -408,7 +408,7 @@ mod tests {
     fn shape(x: f64, y: f64, blur: Option<material::Blur>) -> material::Shape {
         material::Shape {
             x, y, w: 200.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None, blur,
+            fusion: None, tone: None, ink_tone: None, blur, shadow: None,
         }
     }
 

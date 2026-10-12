@@ -108,8 +108,15 @@ export type GlassTone = {
  *  own two, each measured on its own. */
 export type GlassPiece = "control" | "panel" | "controlCenter" | "dock"
 
-/** A pane's tone, and the one it takes while its content is dark (the ink); null: the same. */
-export type PaneTone = { tone: GlassTone, inkTone: GlassTone | null }
+/** The shadow a pane casts outside its glass (nidara_material_v1.set_shadow): opacity and the
+ *  gaussian's deviation (logical px) on a pane whose shorter side is up to 64 px (`small`) and
+ *  from 160 (`large`), linearly between; `offset` down, logical px. */
+export type GlassShadow = { opacitySmall: number, opacityLarge: number, blurSmall: number, blurLarge: number,
+    offset: number }
+
+/** A pane's tone, and the one it takes while its content is dark (the ink); null: the same. And
+ *  the shadow it casts (null: none), which follows the same face. */
+export type PaneTone = { tone: GlassTone, inkTone: GlassTone | null, shadow?: GlassShadow | null }
 
 /** The ink measurement (nidara_material_v1.set_ink): WCAG luminances. A pane whose content
  *  turns dark takes its `inkTone`. */
@@ -188,6 +195,9 @@ type Shim = {
         washR: number, washG: number, washB: number, washA: number, ambient: number, ambientLift: number,
         ambientGain: number): void
     material_set_lensing?(surface: Gdk.Surface, sizeFraction: number): void
+    /** Since 2026-10-12 (`set_shadow`, inside v1): the library and Hyalo ship together. */
+    material_set_shadow?(surface: Gdk.Surface, opacitySmall: number, opacityLarge: number, blurSmall: number,
+        blurLarge: number, offset: number): void
     material_clear_glass(surface: Gdk.Surface): void
     material_has_ink?(): boolean
     material_add_ink_box?(surface: Gdk.Surface, id: number, x: number, y: number, w: number, h: number): void
@@ -906,6 +916,9 @@ function flush(native: Gtk.Native, st: NativeState) {
     // `set_tone` holds for the shapes added after it, until the next one (and resets the ink
     // tone, which follows it).
     let toning: PaneTone | undefined
+    // `set_shadow` holds for the shapes added after it, until the next one; `none` until a pane
+    // casts one (clear_shapes reset it).
+    let shadowing: GlassShadow | null = null
     // No `set_shape_blur`: where the compositor paints the glass its blur is the glass's, mixed
     // by each pane's size (references/hyalo.md → "The blur"); it blurs only a client's own glass.
     for (const s of placed) {
@@ -913,6 +926,12 @@ function flush(native: Gtk.Native, st: NativeState) {
             sendTone(shim.material_set_tone, surface, s.tone.tone)
             if (s.tone.inkTone && shim.material_set_ink_tone) sendTone(shim.material_set_ink_tone, surface, s.tone.inkTone)
             toning = s.tone
+        }
+        const shadow = paints ? s.tone?.shadow ?? null : null
+        if (shadow !== shadowing && shim.material_set_shadow) {
+            const z = shadow ?? { opacitySmall: 0, opacityLarge: 0, blurSmall: 0, blurLarge: 0, offset: 0 }
+            shim.material_set_shadow(surface, z.opacitySmall, z.opacityLarge, z.blurSmall, z.blurLarge, z.offset)
+            shadowing = shadow
         }
         // `set_fusion` holds for the shapes added after it, until the next one.
         const f = spacing > 0 ? s.fusion ?? 0 : 0

@@ -48,6 +48,27 @@ pub struct Shape {
     pub ink_tone: Option<Tone>,
     /// Its own blur (`set_shape_blur`). None: the surface's (`set_blur`).
     pub blur: Option<Blur>,
+    /// The shadow it casts outside the surface's shapes (`set_shadow`). None: none.
+    pub shadow: Option<ShadowLaw>,
+}
+
+/// The shadow a shape casts (`set_shadow`): black, a gaussian of `blur` deviation, moved
+/// `offset` down, only outside the surface's shapes; opacity and blur from their small values
+/// (shorter side ≤ 64 logical px) to their large ones (≥ 160), the ramp of the tone's ambient
+/// (render/glass_gl.rs `ToneGl::grown`). Logical px.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShadowLaw {
+    pub opacity: [f64; 2],
+    pub blur: [f64; 2],
+    pub offset: f64,
+}
+
+impl ShadowLaw {
+    /// Its opacity and deviation (logical px) on a shape whose shorter side is `side`.
+    pub fn at(&self, side: f64) -> (f64, f64) {
+        let t = crate::render::glass_gl::ToneGl::grown(side);
+        (self.opacity[0] + (self.opacity[1] - self.opacity[0]) * t, self.blur[0] + (self.blur[1] - self.blur[0]) * t)
+    }
 }
 
 /// A blur: the kawase offset (logical px) and the number of passes (`set_blur`,
@@ -185,6 +206,8 @@ pub struct MaterialState {
     pub ink_toning: Option<Tone>,
     /// What `set_shape_blur` last said: the blur the next shapes take.
     pub blurring: Option<Blur>,
+    /// What `set_shadow` last said: the shadow the next shapes cast.
+    pub shadowing: Option<ShadowLaw>,
     /// `set_drawn_region`: where the surface's content is drawn, surface-local logical
     /// rectangles that do not overlap. None: the whole surface.
     pub drawn: Option<Vec<Rectangle<i32, Logical>>>,
@@ -546,6 +569,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.toning = None;
                     m.ink_toning = None;
                     m.blurring = None;
+                    m.shadowing = None;
                 });
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
@@ -553,7 +577,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.shapes.push(Shape {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
                         pointer: None, fusion: m.fusing,
-                        tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring,
+                        tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing,
                     })
                 });
             }
@@ -571,7 +595,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
-                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring,
+                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing,
                         })
                     });
                 }
@@ -596,7 +620,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
                             fusion: if pointer.is_some() { None } else { m.fusing },
-                            tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring,
+                            tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing,
                         })
                     });
                 }
@@ -640,6 +664,14 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             } => {
                 let tone = Tone::new(saturation, ceiling, lift, gain, [wash_r, wash_g, wash_b, wash_a], ambient, ambient_lift, ambient_gain);
                 self.pending(|m| m.ink_toning = Some(tone));
+            }
+            Request::SetShadow { opacity_small, opacity_large, blur_small, blur_large, offset } => {
+                let law = ShadowLaw {
+                    opacity: [opacity_small.clamp(0.0, 1.0), opacity_large.clamp(0.0, 1.0)],
+                    blur: [blur_small.clamp(0.0, 200.0), blur_large.clamp(0.0, 200.0)],
+                    offset: offset.clamp(-200.0, 200.0),
+                };
+                self.pending(|m| m.shadowing = (law.opacity[0] > 0.0 || law.opacity[1] > 0.0).then_some(law));
             }
             Request::SetLensing { size_fraction } => {
                 self.pending(|m| m.lensing = size_fraction.clamp(0.0, 1.0));
@@ -745,7 +777,7 @@ mod tests {
     fn shape(x: f64, y: f64) -> Shape {
         Shape {
             x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None, blur: None,
+            fusion: None, tone: None, ink_tone: None, blur: None, shadow: None,
         }
     }
 

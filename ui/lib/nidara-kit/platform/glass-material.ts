@@ -5,7 +5,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import { GLASS_TINT } from "./tokens"
 import { SOLID_GLASS } from "./theme-tokens"
 import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, type GlassTone, type InkParams,
-    type PaneTone, type VeilParams } from "./material"
+    type PaneTone, type VeilParams, type GlassShadow } from "./material"
 
 /**
  * THE glass material (#684, #705 step 0): one material for everything Nidara draws as glass —
@@ -66,6 +66,7 @@ import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, t
  *   ink = off                                            the text stays white everywhere
  *   tone = off                                           every pane's tone neutral (A/B: the
  *                                                        blurred backdrop as it is)
+ *   shadow = off                                         no pane casts its shadow (A/B)
  *
  * The ink (owner, 2026-10-01, #684): the shell's text on Hyalo's glass is white and turns
  * dark only where even the DARKEST point under it is brighter than `inkDarkAbove` (WCAG
@@ -135,6 +136,29 @@ const TONES: Record<GlassPiece, { dark: GlassTone, light: GlassTone }> = {
     controlCenter: {
         dark: tone(1.3, 0.985, 0.125, 0.794),
         light: tone(1.3, 0.985, 0.125, 0.794),
+    },
+}
+
+/**
+ * The shadow each kind of pane casts outside its glass, dark and light face. Source: glass-probe
+ * `refraction-sizes` (run 38201914917, 2026-10-12): the reference's glass at rest, 80…400 pt, over
+ * a 0.9 grey, the darkening outside it read as a black layer on the sRGB value and fitted to a
+ * blurred rounded rectangle moved down — within 0.0012 at every size (`tools/shadow_fit.py`).
+ * The offset is 8 at every size; opacity and deviation grow from 80 to 160 and then hold, the
+ * ramp of the blur and the ambient: opacity 0.013 → 0.175 dark, 0.013 → 0.115 light (the fit at
+ * 80, 120 and 160 lies on those lines), deviation 2 → 17 (4.5 / 11 / 17 measured). There IS a
+ * shadow at rest: the 2026-10-08 runs that said none had their window inactive.
+ * Measured on the reference's floating glass, which is what `control` and `panel` are; the Dock
+ * and the Control Center were not measured, so they cast none.
+ */
+const SHADOWS: Partial<Record<GlassPiece, { dark: GlassShadow, light: GlassShadow }>> = {
+    control: {
+        dark: { opacitySmall: 0.013, opacityLarge: 0.175, blurSmall: 2, blurLarge: 17, offset: 8 },
+        light: { opacitySmall: 0.013, opacityLarge: 0.115, blurSmall: 2, blurLarge: 17, offset: 8 },
+    },
+    panel: {
+        dark: { opacitySmall: 0.013, opacityLarge: 0.175, blurSmall: 2, blurLarge: 17, offset: 8 },
+        light: { opacitySmall: 0.013, opacityLarge: 0.115, blurSmall: 2, blurLarge: 17, offset: 8 },
     },
 }
 
@@ -209,7 +233,7 @@ export const GLASS_MATERIAL_DEFAULTS: Readonly<typeof DEFAULTS> = DEFAULTS
 type Blur = { size: number, passes: number }
 type ToneTuning = Partial<Record<`${GlassPiece}.${"dark" | "light"}.${string}`, number>>
 type Tuning = Partial<typeof DEFAULTS> & { blur?: Blur, popoverBlur?: Blur, off?: boolean, inkOff?: boolean, toneOff?: boolean,
-    tones?: ToneTuning }
+    shadowOff?: boolean, tones?: ToneTuning }
 let tuning: Tuning = {}
 const listeners = new Set<() => void>()
 
@@ -270,7 +294,8 @@ function paneTone(piece: GlassPiece, light: boolean, side: number): PaneTone {
     const key = `${piece}:${lightMode}:${sized ?? ""}`
     let t = paneTones.get(key)
     if (!t) {
-        t = { tone: faceOf(piece, lightMode ? "light" : "dark", sized), inkTone: lightMode ? null : faceOf(piece, "light", sized) }
+        t = { tone: faceOf(piece, lightMode ? "light" : "dark", sized), inkTone: lightMode ? null : faceOf(piece, "light", sized),
+            shadow: tuning.off || tuning.shadowOff ? null : SHADOWS[piece]?.[lightMode ? "light" : "dark"] ?? null }
         paneTones.set(key, t)
     }
     return t
@@ -316,6 +341,8 @@ function parse(text: string): Tuning {
             out.inkOff = v === "off"
         } else if (k === "tone") {
             out.toneOff = v === "off"
+        } else if (k === "shadow") {
+            out.shadowOff = v === "off"
         } else if (k in DEFAULTS && Number.isFinite(Number(v))) {
             (out as Record<string, number>)[k] = Number(v)
         }

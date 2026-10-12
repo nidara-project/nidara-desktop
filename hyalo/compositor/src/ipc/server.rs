@@ -323,6 +323,16 @@ impl Hyalo {
                             } else {
                                 Vec::new()
                             },
+                            shadows: if m.state.glass.is_some() {
+                                m.state
+                                    .shapes
+                                    .iter()
+                                    .filter_map(|s| s.shadow.map(|l| l.at(s.w.min(s.h))))
+                                    .map(|(o, sg)| [(o * 1000.0).round() / 1000.0, (sg * 10.0).round() / 10.0])
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            },
                             scrims: m
                                 .state
                                 .veil_units()

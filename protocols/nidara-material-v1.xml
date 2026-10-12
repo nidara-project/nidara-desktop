@@ -352,5 +352,24 @@
       <arg name="size" type="fixed"/>
       <arg name="passes" type="uint"/>
     </request>
+    <request name="set_shadow">
+      <description summary="pending: the shadow of the shapes added from now on">
+        The shadow the shapes added after this request cast, until the next
+        set_shadow: black, blurred (a gaussian of the given deviation, logical
+        pixels), moved offset logical pixels down, and only OUTSIDE the
+        surface's shapes — never under a pane's own glass. Its opacity and
+        blur follow how large each shape is, from the small values for a
+        shorter side up to 64 logical px to the large ones from 160, linearly
+        between (the ramp of set_tone's ambient). Blended on the
+        sRGB-encoded colour. It fades with the shape's opacity. Reset to none
+        by clear_shapes; meaningful only while the compositor paints the
+        glass (set_glass). opacity_large 0 = none.
+      </description>
+      <arg name="opacity_small" type="fixed" summary="0..1"/>
+      <arg name="opacity_large" type="fixed" summary="0..1"/>
+      <arg name="blur_small" type="fixed" summary="the gaussian's deviation, logical px"/>
+      <arg name="blur_large" type="fixed" summary="the gaussian's deviation, logical px"/>
+      <arg name="offset" type="fixed" summary="down, logical px"/>
+    </request>
   </interface>
 </protocol>
