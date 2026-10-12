@@ -767,17 +767,26 @@ The Control Center and the Notification Center lie on a FIXED veil (`trackVeilRe
 Bar.tsx → `nidara_material_v1.add_veil_region`). Owner, 2026-10-09: "the shadow under it cannot
 define how the glass looks" — the measured shadow out. The veil is the reference's own, MEASURED
 on its real Control Center over known wallpapers (glass-probe `tools/cc_calib.py`, runs
-38119286883/38119289287): 0.078 black, even behind the tiles, falling from their edge as
-(1 − d/125)^1.5 (0.055 at 25 px, 0.035 at 50, 0.020 at 75, 0.008 at 100), the same in both modes.
+38119286883/38119289287), read ACROSS its edge, from deep in a gap between tiles to 140 px out:
+0.10 black between the tiles, falling in a straight line from 34 px INSIDE the box of the tiles over
+155 px — 0.082 at its edge, 0.055 at 40 px, 0.024 at 80, 0.008 at 117 — the same in both modes
+(2026-10-12; within 0.006 everywhere). It is always there: it takes ~10 % of the light behind, which
+shows on a light backdrop and hardly on a dark one. No shadow of each tile: the gaps are flat.
+⚠️ Until 2026-10-12 it was 0.078 (the median of the whole region) flat to 40 px OUTSIDE the box
+(its refraction margin), with the fall measured from the wrong edge: 0.016 rms off. The tiles'
+tone was fitted with the veil behind them, so it moved with it (controlCenter gain 0.794 → 0.809:
+0.125 / 0.431 / 0.729 on the real shell, the reference 0.125 / 0.430 / 0.729–0.733).
 Fixed: no measurement. A region holds the shapes whose centre lies in it (`veil_units`); its core
-is the panes' container plus their refraction (`placeVeilRegions`); the material's `veilStrength
-veilFalloff veilExponent` tune it, `veilStrength = 0` takes it away. `msg layers` lists it as
+is the box of its panes, `veilInset` inside it (`placeVeilRegions`); the material's `veilStrength
+veilFalloff veilExponent veilInset` tune it, `veilStrength = 0` takes it away. `msg layers` lists it as
 `kind: "veil"`; the smoke requires the CC's panes on one.
 - **Drawn** by `render/scrim.rs`: one pass, veils combined by their MAXIMUM, half-level dither.
   🔴 The shell's chrome (top and overlay layers) casts its veils onto ONE FLOOR under all of it,
   right above the windows (`render/mod.rs`, `chrome_scrims`): one element for the whole floor
   (its memo on the output), so two that overlap never darken a corner twice.
-- Measured on the real shell: white beside the tiles 0.92 (the reference 0.922).
+- Measured on the real shell (`shell-calib.sh`, 2026-10-12): 0.098 in the gaps, 0.078 / 0.067 /
+  0.051 / 0.039 / 0.027 / 0.012 at 0 / 20 / 40 / 60 / 80 / 100 px out (the reference 0.082 / 0.067 /
+  0.055 / 0.039 / 0.024 / 0.016).
 - To see it nested, the backdrop must be a REAL full-screen layer: `gjs bg.js` without
   `LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so` comes up as a window with a dark title bar and the
   clear colour around it, and the bar and dock then sit on a mixed backdrop whatever you painted.

@@ -49,7 +49,7 @@ import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, t
  *                                                        lift, gain, washR/G/B/A, ambient,
  *                                                        ambientLift, ambientGain
  *   inkDarkAbove inkLightBelow                           the ink's thresholds (see below)
- *   veilStrength veilFalloff veilExponent                the Control Center's veil (below)
+ *   veilStrength veilFalloff veilExponent veilInset      the Control Center's veil (below)
  *   fusion                                               how close two panes of one fusion
  *                                                        group join, logical px (0 = off)
  *   fusionHold                                           0..1: every fusion group held that far
@@ -75,8 +75,8 @@ import { inkFollowsMode, setMaterialSource, type GlassParams, type GlassPiece, t
  * light skin's tokens (`INK_DARK_CLASS`) and Hyalo gives it the light face of its tone.
  *
  * The Control Center and the Notification Center lie on a FIXED veil the size of the panel
- * (`trackVeilRegion` in Bar.tsx; `veilStrength veilFalloff veilExponent`, the reference's own,
- * measured 2026-10-11). Nothing else casts anything under its glass.
+ * (`trackVeilRegion` in Bar.tsx; `veilStrength veilFalloff veilExponent veilInset`, the
+ * reference's own, measured 2026-10-11, refitted across its edge 2026-10-12). Nothing else casts anything under its glass.
  */
 
 /** One tone, written as the protocol takes it (`GlassTone`), wash given as a colour and its
@@ -102,7 +102,9 @@ function tone(saturation: number, ceiling: number, lift: number, gain: number,
  *  - dock: FITTED to the real Dock over nine greys (run 38104320473): dark within 0.002, light
  *    within 0.001. Saturation is the controls' (unmeasured on it).
  *  - controlCenter: FITTED to the real Control Center's tiles over black, mid grey and white,
- *    behind them the fixed veil (cc_calib, 2026-10-11): exact on those three. One face: the
+ *    behind them the fixed veil (cc_calib, 2026-10-11): exact on those three. Gain 0.794 → 0.809
+ *    with the veil refitted (2026-10-12, 0.10 behind them, not 0.078), measured on the real shell
+ *    (shell-calib.sh): 0.125 / 0.431 / 0.729 against the reference's 0.125 / 0.430 / 0.729–0.733. One face: the
  *    reference's is the same in both modes, and ours too (owner). Saturation the controls'.
  */
 /**
@@ -134,8 +136,8 @@ const TONES: Record<GlassPiece, { dark: GlassTone, light: GlassTone }> = {
         light: tone(1.2, 1, 0.15, 0.899),
     },
     controlCenter: {
-        dark: tone(1.3, 0.985, 0.125, 0.794),
-        light: tone(1.3, 0.985, 0.125, 0.794),
+        dark: tone(1.3, 0.985, 0.125, 0.809),
+        light: tone(1.3, 0.985, 0.125, 0.809),
     },
 }
 
@@ -205,12 +207,17 @@ const DEFAULTS = {
     inkLightBelow: 0.25,
     // The VEIL the Control Center and the Notification Center lie on (`trackVeilRegion` in
     // Bar.tsx). The reference's, measured on its own Control Center over known wallpapers
-    // (2026-10-11, glass-probe cc_calib): 0.078 black, even behind the tiles, falling from their
-    // edge as (1 − d/125)^1.5 — 0.055 at 25 px, 0.035 at 50, 0.020 at 75, 0.008 at 100. Fixed:
-    // the backdrop does not change it.
-    veilStrength: 0.078,
-    veilFalloff: 125,
-    veilExponent: 1.5,
+    // (glass-probe, runs 38119286883/38119289287, the same in both modes), read across its edge
+    // from deep in a gap between tiles to 140 px outside: 0.10 between the tiles, falling in a
+    // straight line from 34 px INSIDE the box of the tiles over 155 px — 0.082 at its edge,
+    // 0.055 at 40 px, 0.024 at 80, 0.008 at 117 (fitted within 0.006 everywhere, 2026-10-12).
+    // Until then 0.078, flat to 40 px OUTSIDE the box, as (1 − d/125)^1.5: the median of the
+    // whole region, its fall measured from the wrong edge — 0.016 rms off, 6× this. Fixed: the
+    // backdrop does not change it.
+    veilStrength: 0.10,
+    veilFalloff: 155,
+    veilExponent: 1,
+    veilInset: 34,
     // Fusion (#705 step 2, `trackFusionGroup`): two panes of one group closer than this many
     // logical px are joined by a bridge, one silhouette. The island's chips' glass sits 8 px from
     // its capsule's (their boxes 4, the glass inset 2 a side): at 8 they were joined at rest by a thin neck whose rims nearly met (owner,
@@ -318,7 +325,7 @@ function inkParams(native: Gtk.Native | null = null): InkParams | null {
 function veilParams(): VeilParams | null {
     if (tuning.off || reduced()) return null
     const p = { ...DEFAULTS, ...tuning }
-    return { strength: p.veilStrength, falloff: p.veilFalloff, exponent: p.veilExponent }
+    return { strength: p.veilStrength, falloff: p.veilFalloff, exponent: p.veilExponent, inset: p.veilInset }
 }
 
 function parse(text: string): Tuning {
