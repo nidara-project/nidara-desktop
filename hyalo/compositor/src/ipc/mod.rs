@@ -234,7 +234,7 @@ pub enum Response {
     Layers { layers: Vec<LayerInfo> },
     CursorPosition { x: f64, y: f64 },
     Stats { stats: crate::render::stats::Stats },
-    Lock { locked: bool, surfaces: Vec<String> },
+    Lock { locked: bool, guard: bool, surfaces: Vec<String> },
     Idle { idle_secs: u64, inhibited: bool, config: crate::config::IdleConfig },
     Xwayland { display: Option<String>, ready: bool, scale: f64, overrides: usize },
     Config { config: Box<crate::config::Config> },

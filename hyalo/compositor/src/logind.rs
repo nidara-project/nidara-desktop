@@ -3,8 +3,11 @@
 //!
 //! - **The lock before sleep.** Hyalo holds a logind *delay* inhibitor on sleep. When logind
 //!   announces sleep (`PrepareForSleep(true)`) the session locks, and the inhibitor is let go
-//!   once the lock is CONFIRMED on screen (lock.rs) — or after SLEEP_GRACE, so a lock client
-//!   that does not start never keeps the machine awake. On the way back (`false`) the inhibitor
+//!   once the lock is CONFIRMED on screen (lock.rs). A lock client that has not asked for the
+//!   lock by SLEEP_GRACE does not keep the machine awake, and does not leave it open either:
+//!   Hyalo locks the session itself (lock.rs, the guard) and lets sleep go once that is on
+//!   screen, or GUARD_SHOWN later. And nothing comes back unlocked: on the way back an output
+//!   is powered only over a locked session. On the way back (`false`) the inhibitor
 //!   is taken again and the screens come on. (On Hyprland this was hypridle's
 //!   `before_sleep_cmd`.)
 //! - **`loginctl lock-session`** (the session's `Lock` signal) locks.
@@ -31,6 +34,9 @@ use crate::state::Hyalo;
 
 /// How long the lock may take before sleep goes ahead anyway (logind's own cap is 5 s).
 const SLEEP_GRACE: Duration = Duration::from_secs(3);
+/// After SLEEP_GRACE, how long the guard may take to reach the screen before sleep goes anyway
+/// (the two together stay under logind's 5 s; the session is locked either way).
+const GUARD_SHOWN: Duration = Duration::from_secs(1);
 
 pub enum LoginEvent {
     PrepareForSleep(bool),
@@ -219,12 +225,26 @@ impl Hyalo {
                 if let Some(l) = &mut self.login {
                     l.sleep_pending = true;
                 }
-                crate::spawn(&crate::lock::lock_command());
+                self.lock_session();
                 let _ = self.loop_handle.insert_source(Timer::from_duration(SLEEP_GRACE), |_, _, state| {
-                    if state.login.as_ref().is_some_and(|l| l.sleep_pending) {
-                        tracing::warn!("the lock did not confirm in time; the computer sleeps anyway");
-                        state.release_sleep_delay();
+                    if !state.login.as_ref().is_some_and(|l| l.sleep_pending) {
+                        return TimeoutAction::Drop;
                     }
+                    if state.lock.is_locked() {
+                        // Asked, not yet confirmed: the session is hidden already (lock.rs).
+                        tracing::warn!("the lock did not confirm in time; the computer sleeps locked");
+                        state.release_sleep_delay();
+                        return TimeoutAction::Drop;
+                    }
+                    // No client asked: the guard, and sleep once it is on screen (lock.rs).
+                    state.guard_session("no lock client asked for the lock before sleep");
+                    let _ = state.loop_handle.insert_source(Timer::from_duration(GUARD_SHOWN), |_, _, state| {
+                        if state.login.as_ref().is_some_and(|l| l.sleep_pending) {
+                            tracing::warn!("the guard did not reach the screen in time; the computer sleeps locked");
+                            state.release_sleep_delay();
+                        }
+                        TimeoutAction::Drop
+                    });
                     TimeoutAction::Drop
                 });
             }
@@ -234,12 +254,17 @@ impl Hyalo {
                     l.sleep_pending = false;
                 }
                 self.note_activity();
+                if !self.lock.is_locked() {
+                    // Every way to sleep above leaves it locked; this is the floor, should one
+                    // not have (a sleep with no PrepareForSleep(true) heard before it).
+                    self.guard_session("back from sleep with the session unlocked");
+                }
                 let _ = crate::outputs::set_power(self, None, true);
             }
             LoginEvent::LockSession => {
                 if !self.lock.is_locked() {
                     tracing::info!("logind asked for the lock");
-                    crate::spawn(&crate::lock::lock_command());
+                    self.lock_session();
                 }
             }
             LoginEvent::Inhibitors(n) => {

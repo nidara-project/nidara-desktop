@@ -28,6 +28,15 @@
 //! (a new client may lock a session whose locker is gone, as the protocol allows), at most
 //! RELAUNCH_LIMIT times in RELAUNCH_WINDOW; past that, a key press tries once more. Until a
 //! lock surface comes back the outputs show the wallpaper alone.
+//!
+//! **A lock client that never asks still gets the session locked.** When Hyalo itself wants
+//! the lock (sleep, idle, `loginctl lock-session`: `lock_session`) it starts the client and
+//! waits for its request; a client that does not start, or starts and never asks, would leave
+//! the session open — before sleep, open on the way back. So past GUARD_AFTER (before sleep,
+//! at logind.rs's SLEEP_GRACE) Hyalo locks the session ITSELF, the GUARD: everything a lock
+//! does but the lock surface — the wallpaper alone, input to nobody, the client started again
+//! as when it dies — until a lock client takes the lock over, which is then an ordinary
+//! relock. Only a client can unlock, so the guard ends only through one.
 
 use std::{
     sync::{
@@ -77,6 +86,10 @@ const WATCH_EVERY: Duration = Duration::from_secs(1);
 /// The longest a new lock keeps showing the session while its client draws its first frame;
 /// past it, an output without a lock surface shows the wallpaper alone.
 const HOLD_SESSION: Duration = Duration::from_secs(1);
+/// How long a lock client Hyalo started has to ask for the lock before Hyalo locks the session
+/// itself (the guard). Generous: a client that asks after it is not refused, only drawn without
+/// the hold — so a slow start costs a frame of bare wallpaper, never an open session.
+const GUARD_AFTER: Duration = Duration::from_secs(5);
 
 /// The role Smithay gives a lock surface (not exported by it).
 const LOCK_SURFACE_ROLE: &str = "ext_session_lock_surface_v1";
@@ -92,6 +105,10 @@ enum Mode {
     Pending { locker: SessionLocker, waiting: Vec<Output>, hold_until: Option<Instant> },
     /// Confirmed. `lock` is the client's object: when it is gone the client is gone.
     Locked { lock: ExtSessionLockV1 },
+    /// Locked by Hyalo itself: no client asked in time (`guard_session`). Drawn and reached
+    /// like a lock whose client died; `waiting` is what must show a locked frame before sleep
+    /// may go.
+    Guard { waiting: Vec<Output> },
 }
 
 pub struct LockState {
@@ -106,6 +123,11 @@ pub struct LockState {
     generation: u64,
     relaunches: Vec<Instant>,
     watch: Option<RegistrationToken>,
+    /// Bumped each time Hyalo starts a lock client of its own accord (`lock_session`); `awaiting`
+    /// holds it until a lock request arrives, so a late guard timer can tell its ask from a
+    /// later one.
+    asked: u64,
+    awaiting: Option<u64>,
 }
 
 /// The generation of the last frame rendered on an output (in its user data).
@@ -122,6 +144,8 @@ impl LockState {
             generation: 0,
             relaunches: Vec::new(),
             watch: None,
+            asked: 0,
+            awaiting: None,
         }
     }
 
@@ -138,13 +162,18 @@ impl LockState {
         !matches!(self.mode, Mode::Unlocked)
     }
 
+    /// Locked by Hyalo itself, with no lock client (the guard).
+    pub fn is_guarded(&self) -> bool {
+        matches!(self.mode, Mode::Guard { .. })
+    }
+
     /// Does `output` show a locked frame (the lock surface over the wallpaper) rather than the
     /// session? Once locked, always; while a new lock waits for its client, once the lock
     /// surface there has a buffer, or once the hold is over.
     pub fn draws_locked(&self, output: &Output) -> bool {
         match &self.mode {
             Mode::Unlocked => false,
-            Mode::Locked { .. } => true,
+            Mode::Locked { .. } | Mode::Guard { .. } => true,
             Mode::Pending { hold_until: None, .. } => true,
             Mode::Pending { hold_until: Some(until), .. } => {
                 Instant::now() >= *until
@@ -231,18 +260,98 @@ impl Hyalo {
     /// A locked frame of this lock is on screen on `output` (the tty backend's vblank, the
     /// winit backend's submit). Once every output it waits for has one, the client is told.
     pub fn lock_frame_shown(&mut self, output: &Output) {
-        let Mode::Pending { waiting, .. } = &mut self.lock.mode else { return };
         let generation = self.lock.generation;
         let shown = output
             .user_data()
             .get::<RenderedGeneration>()
             .is_some_and(|g| *g.0.lock().unwrap() == generation);
-        if shown {
-            waiting.retain(|o| o != output);
+        match &mut self.lock.mode {
+            Mode::Pending { waiting, .. } => {
+                if shown {
+                    waiting.retain(|o| o != output);
+                }
+                if waiting.is_empty() {
+                    self.confirm_lock();
+                }
+            }
+            // The guard has no client to tell; what waits for its frames is sleep.
+            Mode::Guard { waiting } if !waiting.is_empty() => {
+                if shown {
+                    waiting.retain(|o| o != output);
+                }
+                if waiting.is_empty() {
+                    tracing::info!("the guard is on screen");
+                    self.lock_confirmed_for_sleep();
+                }
+            }
+            _ => {}
         }
-        if waiting.is_empty() {
-            self.confirm_lock();
+    }
+
+    /// Hyalo wants the session locked (sleep, idle, `loginctl lock-session`): starts the lock
+    /// client, and locks the session itself (the guard) if no lock request comes within
+    /// GUARD_AFTER.
+    pub fn lock_session(&mut self) {
+        if self.lock.is_locked() {
+            return;
         }
+        self.lock.asked += 1;
+        let ask = self.lock.asked;
+        self.lock.awaiting = Some(ask);
+        crate::spawn(&lock_command());
+        let _ = self.loop_handle.insert_source(Timer::from_duration(GUARD_AFTER), move |_, _, state| {
+            if state.lock.awaiting == Some(ask) {
+                state.guard_session("the lock client did not ask for the lock in time");
+            }
+            TimeoutAction::Drop
+        });
+    }
+
+    /// Locks the session without a lock client: everything is hidden and nothing reachable, as
+    /// under a lock whose client died, and the client is started again until one takes over.
+    pub fn guard_session(&mut self, why: &str) {
+        self.lock.awaiting = None;
+        if self.lock.is_locked() {
+            return;
+        }
+        tracing::warn!(why, "Hyalo locks the session itself until a lock client takes it over");
+        self.lock.surfaces.clear();
+        self.lock.generation += 1;
+        let waiting: Vec<Output> =
+            self.space.outputs().filter(|o| self.backend.output_shows_frames(o)).cloned().collect();
+        let nothing_to_show = waiting.is_empty();
+        self.lock.mode = Mode::Guard { waiting };
+        self.lock.flag.store(true, Ordering::Release);
+        self.let_go_of_input();
+        self.ipc_broadcast_lock(true);
+        if nothing_to_show {
+            self.lock_confirmed_for_sleep();
+        }
+        // The client it waited for never came: start it again now, as for a lock whose client
+        // died (and the watch goes on from there).
+        self.relaunch_lock(false);
+        self.queue_redraw(None);
+    }
+
+    /// The session has just become locked (a new lock, or the guard): whatever held the input
+    /// lets go of it — a drag, a menu's grab, a panel's grab — and the watch starts.
+    fn let_go_of_input(&mut self) {
+        let serial = SERIAL_COUNTER.next_serial();
+        let pointer = self.seat.get_pointer().unwrap();
+        pointer.unset_grab(self, serial, smithay::backend::input::InputTime::now());
+        let keyboard = self.seat.get_keyboard().unwrap();
+        keyboard.unset_grab(self);
+        self.end_focus_grab(true);
+        self.set_keyboard_focus(None, serial);
+        let token = self.loop_handle.insert_source(Timer::from_duration(WATCH_EVERY), |_, _, state| {
+            if !state.lock.is_locked() {
+                state.lock.watch = None;
+                return TimeoutAction::Drop;
+            }
+            state.watch_lock();
+            TimeoutAction::ToDuration(WATCH_EVERY)
+        });
+        self.lock.watch = token.ok();
     }
 
     fn confirm_lock(&mut self) {
@@ -260,6 +369,7 @@ impl Hyalo {
         let dead = match &self.lock.mode {
             Mode::Locked { lock } => !lock.is_alive(),
             Mode::Pending { locker, .. } => !locker.ext_session_lock().is_alive(),
+            Mode::Guard { .. } => true,
             Mode::Unlocked => return,
         };
         if dead {
@@ -288,6 +398,7 @@ impl Hyalo {
     pub fn lock_client_gone(&self) -> bool {
         match &self.lock.mode {
             Mode::Locked { lock } => !lock.is_alive(),
+            Mode::Guard { .. } => true,
             _ => false,
         }
     }
@@ -299,10 +410,12 @@ impl SessionLockHandler for Hyalo {
     }
 
     fn lock(&mut self, confirmation: SessionLocker) {
+        // The client Hyalo was waiting for has asked (or another did): no guard for that ask.
+        self.lock.awaiting = None;
         let held_by_live_client = match &self.lock.mode {
             Mode::Locked { lock } => lock.is_alive(),
             Mode::Pending { locker, .. } => locker.ext_session_lock().is_alive(),
-            Mode::Unlocked => false,
+            Mode::Unlocked | Mode::Guard { .. } => false,
         };
         if held_by_live_client {
             // Dropping the locker tells this client it failed: the session is locked already.
@@ -320,23 +433,7 @@ impl SessionLockHandler for Hyalo {
         self.lock.flag.store(true, Ordering::Release);
 
         if !relock {
-            // Whatever held the input lets go of it: a drag, a menu's grab, a panel's grab.
-            let serial = SERIAL_COUNTER.next_serial();
-            let pointer = self.seat.get_pointer().unwrap();
-            pointer.unset_grab(self, serial, smithay::backend::input::InputTime::now());
-            let keyboard = self.seat.get_keyboard().unwrap();
-            keyboard.unset_grab(self);
-            self.end_focus_grab(true);
-            self.set_keyboard_focus(None, serial);
-            let token = self.loop_handle.insert_source(Timer::from_duration(WATCH_EVERY), |_, _, state| {
-                if !state.lock.is_locked() {
-                    state.lock.watch = None;
-                    return TimeoutAction::Drop;
-                }
-                state.watch_lock();
-                TimeoutAction::ToDuration(WATCH_EVERY)
-            });
-            self.lock.watch = token.ok();
+            self.let_go_of_input();
             // The hold's end must draw a frame even if nothing else asks for one: a lock client
             // that never draws still gets the session hidden, and `locked` said.
             let _ = self.loop_handle.insert_source(Timer::from_duration(HOLD_SESSION), |_, _, state| {
@@ -374,7 +471,7 @@ impl SessionLockHandler for Hyalo {
         let ours = match &self.lock.mode {
             Mode::Pending { locker, .. } => locker.ext_session_lock() == surface.ext_session_lock(),
             Mode::Locked { lock } => lock == surface.ext_session_lock(),
-            Mode::Unlocked => false,
+            Mode::Unlocked | Mode::Guard { .. } => false,
         };
         if !ours {
             return;

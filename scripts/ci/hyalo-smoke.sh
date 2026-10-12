@@ -212,8 +212,9 @@ phase_run() {
     export HYALO_CONTROL=/tmp/hyalo/control
     rm -f "$HYALO_CONTROL"; mkfifo "$HYALO_CONTROL"
     # The lock check (below) kills its lock client: Hyalo must start ITS probe again, not
-    # nidara-lock (lock.rs, HYALO_LOCK_RELAUNCH).
-    export HYALO_LOCK_RELAUNCH="LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so gjs -m $REPO/scripts/ci/hyalo-lock-probe.js lock >/tmp/hyalo/lock/relaunched.log 2>&1"
+    # nidara-lock (lock.rs, HYALO_LOCK_RELAUNCH). Which probe is the wrapper's choice: the guard
+    # check hands Hyalo one that never locks.
+    export HYALO_LOCK_RELAUNCH="LOCK_LOG=/tmp/hyalo/lock sh $REPO/scripts/ci/hyalo-lock-client.sh"
     mkdir -p /tmp/hyalo/lock
     HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
@@ -535,6 +536,13 @@ phase_run() {
         || { log "FAIL: idle"; cat /tmp/hyalo/idle.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "idle OK ($(grep -c '^ok' /tmp/hyalo/idle.log) steps: locked and dark, woken, held off, then locked)"
+    # The guard (#683): a lock client that does not start, or hangs before asking, still gets
+    # the session locked — by Hyalo itself — and a working one takes it over and unlocks.
+    # Before sleep, that is the session coming back locked rather than open (logind.rs).
+    LOCK_LOG=/tmp/hyalo/lock GUARD_LOG=/tmp/hyalo/guard "$REPO/scripts/ci/hyalo-lock-guard-check.sh" >/tmp/hyalo/guard.log 2>&1 \
+        || { log "FAIL: the lock guard"; cat /tmp/hyalo/guard.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "lock guard OK ($(grep -c '^ok' /tmp/hyalo/guard.log) steps: not started, taken over, hung, control)"
     # Capture and the clipboard (#683): grim (whole output, a region, UPRIGHT), grim | wl-copy
     # and back through wl-paste, wl-paste --watch (data-control, the clipboard history), and
     # wf-recorder (wlr-screencopy) with frames, upright too.
