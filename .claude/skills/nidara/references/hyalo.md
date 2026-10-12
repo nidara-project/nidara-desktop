@@ -142,11 +142,15 @@ arc W round inside a tighter corner and left the corner flat (the app grid: a 10
 turned its normal at once along the diagonal — a fold from each corner, "like a flap" on a wide
 bevel (owner, 2026-10-05). The price is a bevel up to √2 W deep along a corner's diagonal.
 W ≈ 4.3 × `refraction` (Snell's most displacement is 0.231 W), up to half the shorter side and
-never past `BEVEL_MAX` (80 px): beyond it a pane is flat glass inside, frosted, and only its
+never past `BEVEL_MAX` (30 px): beyond it a pane is flat glass inside, frosted, and only its
 edge bends — as in the reference material, where a large pane frosts more, not bends across.
-The profile and strength are the owner's from the glass lab (2026-10-05, preset "OK 2", #705):
-the quarter circle's height to the 5th power (the bend gathers at the edge) and three times
-Snell's displacement, no colour dispersion; the capture region is the blur's reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
+The cap is MEASURED (glass-probe `refraction-sizes`, run 38201914917, 2026-10-12): the
+reference's edge is the same on panes 80 to 240 tall (+20 px at 4 px in, +10 at 6, +5 at 10,
+nothing past 12–14), so the bend does NOT grow with the pane; until that day the cap was 80 and
+a large pane still bent 19 px at 20 px in. Strength from the glass lab (2026-10-05, preset
+"OK 2", #705), profile from the fit to the reference below: the quarter circle's height to the
+4th power (the bend gathers at the edge; "OK 2" had the 5th) and three times Snell's
+displacement, no colour dispersion; the capture region is the blur's reach alone. ⚠️ Two things that look like knobs and are not: thicker than 1.5 W the far side of
 the peak displaces faster than 1 px per px and the backdrop folds back mirrored, and 1.5 W
 already magnified the dock's icons under the app grid's edge four times their height (measured
 nested, 2026-10-02 — W thick is the one kept). Until that day the edge read from OUTSIDE,
@@ -509,7 +513,7 @@ method's constant offset):
 | Regular dark | target 0.183 hard clamp, `3:3` | `2.9:3`, tone knee 0.06 → ceiling 0.24 (lab[0..1]) | 0.024→0.025 · 6.5→1.0 |
 | Regular light | light veil 0.2 | veil 0.6 | 0.222→0.035 · 1.0→1.0 |
 | Clear (both modes) | no tint, `3:3` | `1.5:1` (the owner's pick by eye: σ 1.76 against 1.51), no tint, saturation 1.3, light veil 0.1 | dark 0.103 · 12.6→0.25 · 28.3→5.3; light 0.092→0.079 · 12.6→0.4 · 28.9→3.5 |
-| refraction (all) | bevel up to 80 px, exponent 5 | bevel 30 px (lab[12] −50), exponent 4 (lab[4] −1), strength ×3 | |
+| refraction (all) | bevel up to 80 px, exponent 5 | bevel 30 px, exponent 4, strength ×3 — the factory since 2026-10-12 | |
 
 The refraction was confirmed against the active Clear, which is nearly sharp and so the most
 reliable reading: from 0 to 12 px of the edge the reference displaces 47/26/17/11/6/1/−3, the lab

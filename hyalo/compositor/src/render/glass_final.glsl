@@ -7,7 +7,7 @@
 // compiled out. Every value 0 is the factory glass. A new layer to try goes here, behind a hook,
 // and becomes the factory's by changing the number the hook wraps (and the lab's neutral).
 //   lab[0..3] free: retired 2026-10-11 with the adaptive tint they tried variations of
-//   lab[4]  bevel profile: + to its exponent (5)                                      ADD
+//   lab[4]  bevel profile: + to its exponent (4)                                      ADD
 //   lab[5]  refraction: × (1 + it) on its strength (3 × Snell's)                      MUL
 //   lab[6]  dispersion: its spread, 1 = the fringe there was until 2026-10-05          block
 //   lab[7]  free: retired 2026-10-11 (the light veil of dark content is set_ink_tone's)
@@ -16,7 +16,7 @@
 //   lab[10] rim line: × (1 + it) on its width                                         MUL
 //   lab[11] bevel corners: × (1 + it) on how much rounder they get per px of depth;
 //           −1 = every contour keeps the corner's own radius (the fold, until 2026-10-05) MUL
-//   lab[12] bevel width cap: + to its 80 px                                           ADD
+//   lab[12] bevel width cap: + to its 30 px                                           ADD
 //   lab[13] rim, the side opposite the light: × (1 + it) on its echo (0.70)           MUL
 //   lab[14] rim, the line all round: + to its floor (0; 0.18 until 2026-10-05)           ADD
 //   lab[15] dark contour: a 1 px line along the outline, darkened by it, 0..1           block
@@ -141,7 +141,7 @@ float smin(float a, float b, float k) {
 }
 // How wide a shape's bevel is: as for one shape alone (main's lens_w).
 float bevel_width(vec4 r, float refr) {
-    return max(min(min(refr / 0.231, min(r.z, r.w) * 0.5), LAB_ADD(12, 80.0) * px_scale), 1.0);
+    return max(min(min(refr / 0.231, min(r.z, r.w) * 0.5), LAB_ADD(12, 30.0) * px_scale), 1.0);
 }
 // The group's silhouette moved inward: each member's outline moved `s` of its own bevel width
 // inward, corners rounder by as much (`inset_sdf`, member by member), all joined by the smooth
@@ -360,7 +360,11 @@ void main() {
     // And never wider than BEVEL_MAX: past it a pane is flat glass inside, as a slab is — the
     // centre of a large pane frosts, only its edge bends (owner, the glass lab, 2026-10-05:
     // with the bevel half the app grid's height the whole panel was one roof of four faces).
-    float bevel_max = LAB_ADD(12, 80.0) * px_scale;
+    // 30 px, MEASURED (glass-probe `refraction-sizes`, run 38201914917, 2026-10-12): the
+    // reference's edge is the same on panes 80 to 240 tall — +20 px at 4 px in, +10 at 6, +5 at
+    // 10, nothing past 12–14 — so the bend does not grow with the pane. 80 px bent a large
+    // pane 19 px still 20 px in.
+    float bevel_max = LAB_ADD(12, 30.0) * px_scale;
     float lens_w = max(min(min(refraction / 0.231, min(rect.z, rect.w) * 0.5), bevel_max), 1.0);
     // The bevel's contours are the OUTLINE moved inward, each corner rounder by the depth
     // (`inset_sdf`, `lens_depth`), so what bends follows the corner's curve at the edge and
@@ -389,10 +393,11 @@ void main() {
                   inset_sdf(v_out + vec2(0.0, 1.0), lens_in) - inset_sdf(v_out - vec2(0.0, 1.0), lens_in));
         ln = length(ln) > 0.0001 && lens_in < lens_w ? normalize(ln) : vec2(0.0);
     }
-    // The profile, then the strength, as the owner set them in the glass lab (2026-10-05,
-    // preset "OK 2"): the quarter circle's height to the 5th power — the bend gathers at the
-    // edge and the inside stays nearly flat — and three times Snell's displacement.
-    float v = pow(1.0 - clamp(lens_in / lens_w, 0.0, 1.0), LAB_ADD(4, 5.0));
+    // The profile, then the strength: the quarter circle's height to the 4th power — the bend
+    // gathers at the edge and the inside stays nearly flat — and three times Snell's
+    // displacement. The owner's preset "OK 2" (the glass lab, 2026-10-05) had the 5th; the 4th
+    // is the fit to the reference's edge, with the 30 px cap.
+    float v = pow(1.0 - clamp(lens_in / lens_w, 0.0, 1.0), LAB_ADD(4, 4.0));
     float q = max(1.0 - v * v, 1e-4);
     float theta = atan(v / sqrt(q));
     float bend = lens_w * sqrt(q) * tan(theta - asin(sin(theta) / 1.5));

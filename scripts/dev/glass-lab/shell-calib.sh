@@ -9,6 +9,7 @@
 # OUTDIR/<mode>-cc-<wall>.png       the same with the Control Center open (opened once, the
 #                                   wallpaper changed under it — as the probe does on the reference)
 # OUTDIR/<mode>-layers.json         Hyalo's `msg layers`
+# The wallpapers: the probe's grey levels and colours, and a grid (the refraction).
 # OUTDIR/shell.log, hyalo.log
 # --tuning   a glass-tuning.conf for the shell (dev mode reads it): the glass under test; without
 #            it, the shell's factory glass.
@@ -52,8 +53,19 @@ for v in ("0", "0.1", "0.2", "0.35", "0.5", "0.65", "0.8", "0.9", "1"):
     b = round(float(v) * 255); png(f"{d}/level-{v}.png", (b, b, b))
 for hx in ("E53935", "43A047", "1E88E5", "FDD835", "8E24AA", "00ACC1"):
     png(f"{d}/rgb-{hx}.png", (int(hx[0:2], 16), int(hx[2:4], 16), int(hx[4:6], 16)))
+# A grid — 2 px dark lines every 16 px on light grey: what a flat level cannot show, the
+# refraction (how far in a pane's edge bends the lines, and how hard).
+def grid(path):
+    line, light = bytes((40, 40, 40)) * W, b"".join(bytes((40, 40, 40) if x % 16 < 2 else (200, 200, 200)) for x in range(W))
+    raw = b"".join(b"\x00" + (line if y % 16 < 2 else light) for y in range(H))
+    def chunk(t, x): return struct.pack(">I", len(x)) + t + x + struct.pack(">I", zlib.crc32(t + x) & 0xffffffff)
+    open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0))
+                           + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+grid(f"{d}/grid.png")
 PY
-walls=$(cd "$sb/walls" && ls level-*.png rgb-*.png | sed 's/\.png$//' | sort -V | tr '\n' ' ')
+walls=$(cd "$sb/walls" && ls level-*.png rgb-*.png grid.png | sed 's/\.png$//' | sort -V | tr '\n' ' ')
+# SHELL_CALIB_WALLS="grid level-0.5": only those, for a quick look.
+[ -n "${SHELL_CALIB_WALLS:-}" ] && walls=$SHELL_CALIB_WALLS
 
 printf '[idle]\nscreen_off = 0\nlock = 0\nsuspend = 0\n' > "$sb/hyalo.toml"
 
