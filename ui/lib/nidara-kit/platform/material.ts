@@ -128,7 +128,9 @@ export type InkParams = {
 /** A fixed veil under a group of panes (nidara_material_v1.add_veil_region, `trackVeilRegion`):
  *  `strength` black, even under their container, falling over `falloff` logical px outside it
  *  as (1 − d/falloff)^`exponent`. Not measured: the backdrop does not change it. */
-export type VeilParams = { strength: number, falloff: number, exponent: number }
+/** A fixed veil: its strength under its core, how it falls outside it, and how far INSIDE the
+ *  box of its panes the core ends (logical px). */
+export type VeilParams = { strength: number, falloff: number, exponent: number, inset: number }
 
 /** The class a pane of glass carries while its content is dark. */
 export const INK_DARK_CLASS = "nidara-ink-dark"
@@ -517,12 +519,14 @@ function placeVeilRegions(native: Gtk.Native, veil: VeilParams, glass: GlassPara
             return cx >= box.x && cx < box.x + box.w && cy >= box.y && cy < box.y + box.h
         })
         if (!panes.length || veil.strength <= 0) continue
-        // How far each refracts is the compositor's rule (refraction_of).
-        const margin = Math.max(...panes.map(s => Math.max(glass.refraction, glass.lensing * Math.min(s.w, s.h))))
-        const x0 = Math.min(...panes.map(s => s.x)) - margin
-        const y0 = Math.min(...panes.map(s => s.y)) - margin
-        const x1 = Math.max(...panes.map(s => s.x + s.w)) + margin
-        const y1 = Math.max(...panes.map(s => s.y + s.h)) + margin
+        // The core: the box of its panes, `inset` inside it — where the reference's own veil
+        // starts to fall (glass-material.ts, veilInset). Until 2026-10-12 it reached the panes'
+        // refraction OUTSIDE the box, and the fall began 40 px late.
+        const x0 = Math.min(...panes.map(s => s.x)) + veil.inset
+        const y0 = Math.min(...panes.map(s => s.y)) + veil.inset
+        const x1 = Math.max(...panes.map(s => s.x + s.w)) - veil.inset
+        const y1 = Math.max(...panes.map(s => s.y + s.h)) - veil.inset
+        if (x1 <= x0 || y1 <= y0) continue
         out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
     }
     return out
