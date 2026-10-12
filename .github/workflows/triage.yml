@@ -106,7 +106,7 @@ jobs:
           while IFS= read -r f; do
             [ -n "$f" ] || continue
             case "$f" in
-              .claude/skills/*|.github/*|CONTRIBUTING.md|install.sh|scripts/*|bin/*)
+              .claude/skills/*|.agents/*|AGENTS.md|CLAUDE.md|.github/*|CONTRIBUTING.md|install.sh|scripts/*|bin/*)
                 guardian_files+="$f"$'\n' ;;
             esac
           done <<< "$files"
