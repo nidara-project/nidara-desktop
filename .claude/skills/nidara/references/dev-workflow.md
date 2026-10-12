@@ -46,6 +46,12 @@ Two modes:
 **Zero external Astal dependencies (since 2026-08-20).**
 All previous Astal services were absorbed into native TypeScript (`core/`), the application host and bundler are native (`ui/lib/nidara-kit/platform/host.ts`, `scripts/bundle.sh`), and PAM authentication is native C (`lib/nidara-auth/`, `gi://NidaraAuth`).
 
+⚠️ **The layer-shell preload goes to `gjs` alone, never `export`ed by a launcher.** The bundle
+`scripts/bundle.sh` writes and `scripts/run.sh` both put `LD_PRELOAD=libgtk4-layer-shell.so` on
+the `gjs` line itself. A launcher that exports it makes every child load GTK: measured 2026-10-12,
+`dirname` goes from 0 to 17 ms and `node -e 0` from 20 to 42 ms. `bin/nidara-lock` did, and
+Super+L took ~0.9 s to lock in dev mode, half of it that.
+
 ### Binary repo (`nidara-repo`) & packaging
 
 `github.com/nidara-project/nidara-repo` publishes `nidara` itself as a signed pacman package (`https://nidara-project.github.io/nidara-repo/$arch`). The PKGBUILD lives inside this repository (`packaging/nidara/PKGBUILD`), which compiles and packages the shell bundles, shims, assets, and both native C libraries (`libnidara-wl` and `libnidara-auth`).
