@@ -335,7 +335,8 @@ the factory's), GSettings in memory (ThemeManager writes keys), its own greeter-
   Both came from measuring the reference material's captures (the private glass-probe repo,
   `tools/blur_sigma.py`, self-tested against this kawase simulated): its regular glass blurs at
   σ ≈ 13–14 px — our `3:3` (σ 13.2); `regular` 2:2 is σ 4.6 — its refracting band is 20 px at
-  every size (our bevel cap is 80), and at rest it shows no rim of light, no shadow, and a dark
+  every size (our bevel cap is 80), and at rest it shows no rim of light, no shadow (⚠️ WRONG on the
+  shadow, those windows were inactive: see "Each pane's shadow"), and a dark
   contour line at ≈ 0.63 of the glass inside it. Starting point to judge, not a factory: frost 3:3,
   `lab[15]` 0.37. ⚠️ Not rim 0 either: the capture shows no rim of light, but it is one static frame
   from a 1× SDR VM over flat grey, and the reference's videos DO show a thin rim (2026-10-05) — keep
@@ -738,6 +739,27 @@ reference answers it: its filter is one, and the system sizes its inputs.
   at 0.407 for m 0.35 and 0.6 (measured 0.47 and 0.67), 0.35 and 0.6 at our harness's 0.5. So
   "the reference keeps 1.15–1.4× more contrast" was the two means, not the tone: compare slopes
   at the SAME backdrop level.
+
+### Each pane's shadow (2026-10-12)
+
+The reference's glass DOES cast a shadow at rest (glass-probe `refraction-sizes`, run 38201914917:
+Regular at 80…400 pt over a 0.9 grey, read outside the pane as a black layer on the sRGB value;
+`tools/shadow_fit.py`). A blurred rounded rectangle moved **8 down**, its opacity and gaussian
+deviation growing with the pane on the ramp of the blur and the ambient (`ToneGl::grown`, 64 → 160)
+and holding after: opacity 0.013 → **0.175** dark / 0.115 light, deviation 2 → **17** (within
+0.0012 of the captures at every size). The 2026-10-08 "no shadow at rest" came from inactive
+windows. Not the shadow UNDER the glass the owner took out on 2026-10-09 (that made up for a tint):
+this one is outside the glass only.
+- **Declared** per pane, like its tone (`nidara_material_v1.set_shadow`, inside v1 — lib + Hyalo
+  together): the kit's `SHADOWS` in `glass-material.ts`, by piece and face (the face the tone
+  takes). Only `control` and `panel` cast one: the Dock and the Control Center were not measured.
+  `shadow = off` in `glass-tuning.conf` takes them all away.
+- **Drawn** by `render/scrim.rs`, in the veils' pass (same floor, maximum, dither): Φ of the
+  rounded box's distance over the deviation, and **cut out of every shape that casts one** — the
+  tone was fitted to the reference's glass as it looks, so nothing may darken under a pane twice.
+- `msg layers` → `glass.shadows`: each shape's `[opacity, deviation]` at its size. Seen on the real
+  shell (`shell-calib.sh`, level 0.9): under a bar capsule 230 → 227–228 for 8 rows, gone by 10;
+  above it and inside it untouched. The large end is held to the captures by a unit test.
 
 ### The veil under the Control Center (2026-10-11)
 

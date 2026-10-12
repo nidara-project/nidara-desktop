@@ -537,6 +537,18 @@ nidara_wl_material_set_shape_blur (GdkSurface *surface, double size, guint passe
 }
 
 void
+nidara_wl_material_set_shadow (GdkSurface *surface, double opacity_small, double opacity_large,
+                               double blur_small, double blur_large, double offset)
+{
+  g_return_if_fail (GDK_IS_SURFACE (surface));
+  struct nidara_material_v1 *m = material_get (surface);
+  if (m)
+    nidara_material_v1_set_shadow (m, wl_fixed_from_double (opacity_small), wl_fixed_from_double (opacity_large),
+                                   wl_fixed_from_double (blur_small), wl_fixed_from_double (blur_large),
+                                   wl_fixed_from_double (offset));
+}
+
+void
 nidara_wl_material_set_lensing (GdkSurface *surface, double size_fraction)
 {
   g_return_if_fail (GDK_IS_SURFACE (surface));

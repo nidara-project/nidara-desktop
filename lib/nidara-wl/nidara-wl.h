@@ -546,6 +546,23 @@ void nidara_wl_material_set_ink_tone (GdkSurface *surface, double saturation, do
 void nidara_wl_material_set_shape_blur (GdkSurface *surface, double size, guint passes);
 
 /**
+ * nidara_wl_material_set_shadow:
+ * @surface: the #GdkSurface passed to nidara_wl_material_begin()
+ * @opacity_small: 0..1, on a shape whose shorter side is up to 64 logical px
+ * @opacity_large: 0..1, from 160; 0 = no shadow
+ * @blur_small: the gaussian's deviation, logical px, on a small shape
+ * @blur_large: the same on a large one
+ * @offset: how far down it falls, logical px
+ *
+ * The shadow the shapes added after it cast, until the next call: black, blurred, moved down,
+ * only outside the surface's shapes, by each shape's size between the two ends
+ * (nidara-material-v1.set_shadow). Pending until nidara_wl_material_commit(); cleared by
+ * nidara_wl_material_begin(). Ships with a Hyalo that knows the request: the protocol stays v1.
+ */
+void nidara_wl_material_set_shadow (GdkSurface *surface, double opacity_small, double opacity_large,
+                                    double blur_small, double blur_large, double offset);
+
+/**
  * nidara_wl_material_set_lensing:
  * @surface: the #GdkSurface
  * @size_fraction: of each shape's shorter side, 0..1; 0 = set_glass's refraction everywhere
