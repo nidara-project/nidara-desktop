@@ -313,22 +313,6 @@ export function registerConfigEntries() {
             presetUnit: "px",
         },
     })
-    registerConfig("dock.screenGap", {
-        desc: "Dock margin from screen edge in pixels.",
-        type: "number",
-        min: 4,
-        max: 32,
-        get: () => dockSettings.screenGap,
-        set: v => updateDockSettings({ screenGap: v as number }),
-        subscribe: (apply) => {
-            apply(dockSettings.screenGap)
-            return onDockSettingChanged("screenGap", apply)
-        },
-        ui: {
-            i18n: "settings.dock.bottom-margin",
-            slider: { unit: "px" },
-        },
-    })
     registerConfig("dock.magnification", {
         desc: "Magnify dock icons on hover.",
         type: "boolean",

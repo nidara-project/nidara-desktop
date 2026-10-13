@@ -3,7 +3,7 @@
  * Unified animation math: constants, magnification curve, spring stepping, and integer layout.
  */
 
-import { dockSettings } from "./state"
+import { dockSettings, DOCK_SCREEN_GAP } from "./state"
 import { reduceMotion } from "../../core/ReduceMotion"
 
 /**
@@ -29,13 +29,12 @@ function snapToTarget(ch: SpringChannel): boolean {
 // Values derived from dockSettings. Call syncConstants() before dock recreation.
 // FIXED values (gaps/paddings) stay constant. SCALED values derive from iconSize.
 
-function deriveConstants(iconSize: number, maxSize: number, magnification: boolean, screenGap: number) {
+function deriveConstants(iconSize: number, maxSize: number, magnification: boolean) {
     // All geometry must be integer: a fractional input (e.g. a slider that stored 8.19)
     // flows into EXCLUSIVE_ZONE and gets truncated by Cairo's int rectangles downstream,
     // which silently dropped the dock's outermost interactive pixel at the screen wall.
     iconSize  = Math.round(iconSize)
     maxSize   = Math.round(maxSize)
-    screenGap = Math.round(screenGap)
     // ── PROPORTIONAL RATIOS (Based on user-provided table) ──
     // V24000: SLIGHT GAP BOOST
     // External padding (22%) balanced with slightly wider gap (16%).
@@ -79,7 +78,7 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
 
         // WINDOW GEOMETRY
         PILL_HEIGHT: pillHeight,
-        EXCLUSIVE_ZONE: pillHeight + screenGap,
+        EXCLUSIVE_ZONE: pillHeight + DOCK_SCREEN_GAP,
     }
 }
 
@@ -87,7 +86,6 @@ export let DOCK_CONSTANTS = deriveConstants(
     dockSettings.iconSize,
     dockSettings.maxIconSize,
     dockSettings.magnification,
-    dockSettings.screenGap,
 )
 
 /** Re-derive constants from current dockSettings. Call before dock rebuild. */
@@ -96,7 +94,6 @@ export function syncConstants() {
         dockSettings.iconSize,
         dockSettings.maxIconSize,
         dockSettings.magnification,
-        dockSettings.screenGap,
     )
 }
 

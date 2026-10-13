@@ -408,7 +408,6 @@ export default {
     "settings.bar.icon-custom.desc": "Escolha uma imagem SVG ou PNG, ou restaure o logo do Nidara",
 
     "settings.dock.title": "Dock",
-    "settings.dock.bottom-margin.desc": "Distância até a borda da tela",
     "settings.dock.position.desc": "Onde o dock aparece na tela",
     "settings.dock.magnification.desc": "Efeito de zoom ao passar o cursor",
     "settings.dock.autohide.desc": "O dock se oculta quando o cursor se afasta",
@@ -416,7 +415,6 @@ export default {
     "settings.dock.indicators.desc": "Ponto abaixo dos ícones de apps em execução",
     "settings.dock.hide-delay.desc": "Tempo antes de o dock se ocultar",
     "settings.dock.magnification": "Ampliação",
-    "settings.dock.bottom-margin": "Margem inferior",
     "settings.dock.indicators": "Mostrar indicadores",
     "settings.dock.autohide": "Ocultar automaticamente",
     "settings.dock.position": "Posição do dock",

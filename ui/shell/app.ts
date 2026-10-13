@@ -1140,7 +1140,7 @@ app.start({
           })
         }
         // Only rebuild when layer-shell anchors/mode actually change.
-        // All other settings (iconSize, screenGap, magnification, etc.) are applied
+        // All other settings (iconSize, magnification, etc.) are applied
         // in-place by Dock.tsx's internal onDockSettingsChanged listener.
         let _prevPos = dockSettings.position
         let _prevAutoHide = dockSettings.autoHide

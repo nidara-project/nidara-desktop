@@ -408,7 +408,6 @@ export default {
     "settings.bar.icon-custom.desc": "Wybierz obraz SVG lub PNG albo przywróć logo Nidara",
 
     "settings.dock.title": "Dok",
-    "settings.dock.bottom-margin.desc": "Odległość od krawędzi ekranu",
     "settings.dock.position.desc": "Gdzie dok pojawia się na ekranie",
     "settings.dock.magnification.desc": "Efekt powiększenia po najechaniu",
     "settings.dock.autohide.desc": "Dok ukrywa się, gdy kursor się oddala",
@@ -416,7 +415,6 @@ export default {
     "settings.dock.indicators.desc": "Kropka pod ikonami uruchomionych aplikacji",
     "settings.dock.hide-delay.desc": "Czas przed ukryciem doku",
     "settings.dock.magnification": "Powiększenie",
-    "settings.dock.bottom-margin": "Dolny margines",
     "settings.dock.indicators": "Pokazuj wskaźniki",
     "settings.dock.autohide": "Automatyczne ukrywanie",
     "settings.dock.position": "Pozycja doku",

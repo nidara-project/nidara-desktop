@@ -408,7 +408,6 @@ export default {
     "settings.bar.icon-custom.desc": "选择 SVG 或 PNG 图片,或重置为 Nidara 徽标",
 
     "settings.dock.title": "程序坞",
-    "settings.dock.bottom-margin.desc": "与屏幕边缘的距离",
     "settings.dock.position.desc": "程序坞在屏幕上出现的位置",
     "settings.dock.magnification.desc": "悬停时的放大效果",
     "settings.dock.autohide.desc": "光标移开时程序坞自动隐藏",
@@ -416,7 +415,6 @@ export default {
     "settings.dock.indicators.desc": "正在运行应用图标下方的圆点",
     "settings.dock.hide-delay.desc": "程序坞隐藏前的等待时间",
     "settings.dock.magnification": "放大效果",
-    "settings.dock.bottom-margin": "底部边距",
     "settings.dock.indicators": "显示运行指示点",
     "settings.dock.autohide": "自动隐藏",
     "settings.dock.position": "程序坞位置",
