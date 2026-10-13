@@ -13,7 +13,7 @@
 // the install), not written to fit the patterns.
 
 import {
-  STALL_IDLE_BYTES, STALL_QUIET_MS, failedDownloading, looksStalled,
+  STALL_IDLE_BYTES, STALL_QUIET_MS, failedDownloading, failedWriting, looksStalled,
 } from "../../ui/installer/lib/stall"
 
 let failures = 0
@@ -62,6 +62,23 @@ check("a package conflict → not network",
   failedDownloading(["error: failed to commit transaction (conflicting files)", "nidara-release: /etc/os-release exists in filesystem"]), false)
 check("a traceback with no download in it → not network",
   failedDownloading(["Traceback (most recent call last):", "archinstall.lib.exceptions.DiskError: Partition /dev/vda2 not found"]), false)
+
+
+print("\nfailedWriting")
+// Copied from the run that found it (VM, 2026-10-13): the live medium's RAM overlay
+// full, the network up. pacman words it as a download failure; it is not one.
+const OVERLAY_FULL = [
+  "error: failed retrieving file 'extra.db' from losangeles.mirror.pkgbuild.com : Failure writing output to destination, passed 8192 returned 4096",
+  "error: failed retrieving file 'extra.db' from mirror.mra.sh : Failure writing output to destination, passed 16375 returned 4096",
+  "error: failed to synchronize all databases (download library error)",
+]
+check("the real full-overlay failure → out of space", failedWriting(OVERLAY_FULL), true)
+check("the real full-overlay failure → NOT the network", failedDownloading(OVERLAY_FULL), false)
+check("a disk with no room left → out of space",
+  failedWriting(["error: could not open file /mnt/var/cache/pacman/pkg/linux-6.17.pkg.tar.zst.part: No space left on device"]), true)
+check("pacman's own free-space check → out of space",
+  failedWriting(["error: Partition /mnt too full: 812345 blocks needed, 20480 blocks free", "error: not enough free disk space"]), true)
+check("the real link-cut failure → not out of space", failedWriting(LINK_CUT), false)
 
 print(failures === 0 ? "\nALL INVARIANTS HOLD" : `\n${failures} FAILURE(S)`)
 imports.system.exit(failures === 0 ? 0 : 1)

@@ -25,6 +25,7 @@
 
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import { exec } from "../../lib/process"
 
 export const TARGET_LOG = "/mnt/var/log/nidara-installer.log"
 
@@ -90,5 +91,30 @@ export function copyLogToTarget(arm: boolean, livePath: string, appendLog: (msg:
   } catch (e: any) {
     appendLog(`[WARN] Could not copy the log into the installed system: ${e.message || e}`)
     return false
+  }
+}
+
+/** archinstall's own log on the live medium. */
+export const ARCHINSTALL_LOG = "/var/log/archinstall/install.log"
+
+/**
+ * The last lines of archinstall's own log, for deciding what a failure was — never
+ * shown. Some failures reach it and not our page: when archinstall's FIRST sync dies
+ * (the live medium's overlay full, measured 2026-10-13), it prints only "Failed to
+ * sync Arch Linux package database" and keeps pacman's words — "Failure writing output
+ * to destination" — for this file. Read directly when it is readable, through
+ * `sudo -n` when it is not (archinstall runs as root); `[]` when neither works, so a
+ * failure to read it changes nothing.
+ */
+export function archinstallLogTail(lines = 200): string[] {
+  try {
+    const [ok, bytes] = GLib.file_get_contents(ARCHINSTALL_LOG)
+    if (ok) return new TextDecoder().decode(bytes).split("\n").slice(-lines)
+  } catch {}
+  try {
+    const cmd = ["tail", "-n", String(lines), ARCHINSTALL_LOG]
+    return exec(GLib.get_user_name() === "root" ? cmd : ["sudo", "-n", ...cmd]).split("\n")
+  } catch {
+    return []
   }
 }

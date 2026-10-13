@@ -99,7 +99,37 @@ const DOWNLOAD_FAILURE = [
   /Failed to connect to .* port \d+/,
 ]
 
-/** Whether a failed run's output shows it died downloading, not on something else. */
+/**
+ * The lines by which a failed install says it could not WRITE what it fetched — a
+ * local failure that pacman reports on the same line as a download one.
+ *
+ * Measured in a VM on 2026-10-13: with the live medium's RAM overlay full (archiso
+ * gives it 256 MiB), `pacman -Syy` died with
+ *   `error: failed retrieving file 'extra.db' from … : Failure writing output to
+ *   destination, passed 8192 returned 4096`
+ * — curl's error 23 inside pacman's "failed retrieving file", followed by "failed to
+ * synchronize all databases". Both match DOWNLOAD_FAILURE, so the page said the
+ * internet connection was lost while the network answered (a curl from the same
+ * medium got 200). Somebody told that goes and checks a Wi-Fi that works.
+ */
+const WRITE_FAILURE = [
+  /Failure writing output to destination/,
+  /No space left on device/,
+  /not enough free disk space/,
+  /too full: \d+ blocks needed/,
+]
+
+/** Whether a failed run's output shows it ran out of room to write, wherever the line came from. */
+export function failedWriting(lines: string[]): boolean {
+  return lines.some(l => WRITE_FAILURE.some(re => re.test(l)))
+}
+
+/**
+ * Whether a failed run's output shows it died downloading, not on something else.
+ * A run that could not WRITE is not a download failure, even though pacman prints
+ * "failed retrieving file" for it too: the space wins, or the network is blamed.
+ */
 export function failedDownloading(lines: string[]): boolean {
+  if (failedWriting(lines)) return false
   return lines.some(l => DOWNLOAD_FAILURE.some(re => re.test(l)))
 }

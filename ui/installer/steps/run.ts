@@ -15,11 +15,11 @@ import { applyRealName } from "../lib/real-name"
 import { writeSwapFstabEntries } from "../lib/swap"
 import { copyNetworkConnections } from "../lib/network-connections"
 import { releaseTargetDisks } from "../lib/release-target"
-import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
+import { archinstallLogTail, copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
 import { COMMAND_LOG, reportCommandLog } from "../lib/command-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
-import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
+import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, failedWriting, looksStalled } from "../lib/stall"
 import { measureMirrors, prepareLiveMirrorlist, restoreTargetMirrorlist } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose, formatDuration, formatLiveTimer } from "./common"
@@ -409,6 +409,11 @@ export function RunStep(): Step {
           // it could not download, say that, and what to do about it.
           desc.label = stoppedByUser
             ? t("runFailedStoppedProse")
+            // Space is asked of archinstall's own log too: its first sync keeps
+            // pacman's words there and prints only "Failed to sync" to us. The
+            // network is NOT — that log also holds mirror failures archinstall
+            // recovered from, which would blame the network for anything later.
+            : failedWriting(childTail) || failedWriting(archinstallLogTail()) ? t("runFailedSpaceProse")
             : failedDownloading(childTail) ? t("runFailedNetworkProse") : t("runFailedProse")
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")
