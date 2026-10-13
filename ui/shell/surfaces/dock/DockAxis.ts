@@ -17,7 +17,7 @@ import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
 import { setVisibleRect } from "../../common/VisibleRegion"
 import inputYield from "../../core/InputYield"
-import { dockSettings, dockSideState } from "./state"
+import { dockSettings, dockSideState, DOCK_SCREEN_GAP } from "./state"
 import type { AnimState } from "./state"
 import { cairoDraw } from "../../../lib/nidara-kit/platform/cairo-draw"
 import { trackGlass } from "../../../lib/nidara-kit/platform/material"
@@ -157,7 +157,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
     const reach = () =>
         Math.max(
             DOCK_CONSTANTS.EXCLUSIVE_ZONE,
-            dockSettings.screenGap + DOCK_CONSTANTS.PILL_PADDING + peakIconCross,
+            DOCK_SCREEN_GAP + DOCK_CONSTANTS.PILL_PADDING + peakIconCross,
         ) + CROSS_PAD
 
     // Skip redundant set_input_region calls — see the matching note in verticalAxis.
@@ -166,7 +166,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
     return {
         vertical: false,
         WIN_W, WIN_H, monMain,
-        get hideDistance() { return DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4 },
+        get hideDistance() { return DOCK_CONSTANTS.PILL_HEIGHT + DOCK_SCREEN_GAP + 4 },
 
         build(initialSmoothedMain: number): AxisWidgets {
             smoothedBarMain = initialSmoothedMain
@@ -198,7 +198,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 valign: Gtk.Align.END,
                 halign: Gtk.Align.START,
                 height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-                margin_bottom: dockSettings.screenGap,
+                margin_bottom: DOCK_SCREEN_GAP,
                 can_focus: false,
             })
             trackGlass(gloss, () => {
@@ -214,7 +214,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             shim = new Gtk.Box({
                 valign: Gtk.Align.END,
                 halign: Gtk.Align.START,
-                margin_bottom: dockSettings.screenGap,
+                margin_bottom: DOCK_SCREEN_GAP,
                 height_request: DOCK_CONSTANTS.PILL_HEIGHT,
                 vexpand: false,
                 overflow: Gtk.Overflow.VISIBLE,
@@ -444,8 +444,8 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
         onSettingsResize() {
             da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
             shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
-            da.margin_bottom = dockSettings.screenGap
-            shim.margin_bottom = dockSettings.screenGap
+            da.margin_bottom = DOCK_SCREEN_GAP
+            shim.margin_bottom = DOCK_SCREEN_GAP
         },
 
     }
@@ -482,7 +482,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
         const width = DOCK_CONSTANTS.PILL_HEIGHT
         const height = smoothedBarMain + DOCK_CONSTANTS.BASE_MARGIN * 2
         return {
-            x: position === 'right' ? w - DOCK_CONSTANTS.EXCLUSIVE_ZONE : dockSettings.screenGap,
+            x: position === 'right' ? w - DOCK_CONSTANTS.EXCLUSIVE_ZONE : DOCK_SCREEN_GAP,
             y: Math.max(0, Math.round(getGtkCenter(h) - height / 2)),
             width, height,
         }
@@ -502,7 +502,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
     const innerEdgeCross = () =>
         Math.max(
             DOCK_CONSTANTS.EXCLUSIVE_ZONE,
-            dockSettings.screenGap + DOCK_CONSTANTS.PILL_PADDING + peakIconCross,
+            DOCK_SCREEN_GAP + DOCK_CONSTANTS.PILL_PADDING + peakIconCross,
         ) + CROSS_PAD
 
     // The tick calls buildInputRegion every frame; re-applying an UNCHANGED region still
@@ -514,7 +514,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
     return {
         vertical: true,
         WIN_W, WIN_H, monMain,
-        get hideDistance() { return DOCK_CONSTANTS.EXCLUSIVE_ZONE + dockSettings.screenGap },
+        get hideDistance() { return DOCK_CONSTANTS.EXCLUSIVE_ZONE + DOCK_SCREEN_GAP },
 
         build(initialSmoothedMain: number): AxisWidgets {
             smoothedBarMain = initialSmoothedMain
@@ -574,8 +574,8 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 valign: Gtk.Align.START,
                 halign: edgeAlign,
                 margin_top: 0,
-                margin_start: position === 'left' ? dockSettings.screenGap : 0,
-                margin_end: position === 'right' ? dockSettings.screenGap : 0,
+                margin_start: position === 'left' ? DOCK_SCREEN_GAP : 0,
+                margin_end: position === 'right' ? DOCK_SCREEN_GAP : 0,
                 vexpand: false,
                 overflow: Gtk.Overflow.VISIBLE,
             })
@@ -792,7 +792,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             //
             // Width tracks the dock's current silhouette (pill at rest, pill+bulge on
             // hover). CRITICAL: the strip must reach the screen edge EXACTLY. Geometry can
-            // be fractional (e.g. EXCLUSIVE_ZONE = pillHeight + screenGap), and Cairo
+            // be fractional (e.g. EXCLUSIVE_ZONE = pillHeight + DOCK_SCREEN_GAP), and Cairo
             // truncates the rect to ints — so `x = WIN_W - pillW` (fractional) lost the
             // last pixel column, dropping the cursor out of the region at the very wall
             // (1px in worked, the wall didn't). Pin the outer edge to 0 / WIN_W with ints.
@@ -852,8 +852,8 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             Math.max(0, Math.round(getGtkCenter(realizedMain) - extent / 2)),
 
         onSettingsResize() {
-            if (position === 'left') shim.margin_start = dockSettings.screenGap
-            else shim.margin_end = dockSettings.screenGap
+            if (position === 'left') shim.margin_start = DOCK_SCREEN_GAP
+            else shim.margin_end = DOCK_SCREEN_GAP
             // The pill's X is computed inside the draw func from EXCLUSIVE_ZONE; nothing
             // about the da's own size/margin changes on a gap change, so it would keep the
             // stale position until the next forced redraw. Repaint it explicitly so the

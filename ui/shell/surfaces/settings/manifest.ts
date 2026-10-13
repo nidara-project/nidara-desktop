@@ -200,7 +200,6 @@ export const manifest = [
                 i18n: "settings.dock.group.geometry",
                 items: [
                     "dock.iconSize",
-                    "dock.screenGap",
                 ],
             },
             {

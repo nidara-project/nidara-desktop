@@ -39,7 +39,7 @@ import { trackGlassPiece, trackModeInk, trackNoInk, trackVeilRegion } from "../.
 import { t } from "../../core/i18n"
 import { formatFullDate } from "../../../lib/date-names"
 import { barSettings, onBarSettingsChanged, resolveLauncherIcon, LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "./barState"
-import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
+import { dockSideState, dockSettings, onDockSettingsChanged, DOCK_SCREEN_GAP } from "../dock/state"
 import { uiIcon } from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import compositor from "../../core/CompositorState"
@@ -371,7 +371,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // there it consumes horizontal space, handled by syncPanelMargins instead).
   const dockBottomFootprint = () =>
     dockSettings.position === 'bottom'
-      ? dockSettings.iconSize + dockSettings.screenGap + DOCK_VPAD
+      ? dockSettings.iconSize + DOCK_SCREEN_GAP + DOCK_VPAD
       : 0
 
   // Side gap: panels sit flush with the bar capsules (BAR_MARGIN from the screen

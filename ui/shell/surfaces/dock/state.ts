@@ -8,18 +8,21 @@ import { defineSettings, type ConfigValidators } from "../../core/configFile"
 
 // --- DOCK SETTINGS (Reactive, Persisted) ---
 
+/** From the dock's glass to the screen edge it sits on: the desktop's one edge gap — Hyalo's
+ *  `gaps_out` (config/hyalo/hyalo.toml) and the bar's (`BAR_MARGIN`), on the 4px rule. Fixed
+ *  (owner, 2026-10-13): it was a Settings slider, 4–32, default 8, from the Hyprland days. */
+export const DOCK_SCREEN_GAP = 4
+
 export type DockPosition = 'bottom' | 'left' | 'right'
 
 // Bounds are the ones the Settings sliders and `describeConfig` advertise
 // (config-entries.ts). They were written here as prose and had drifted: the
-// comment said iconSize defaulted to 48 when it defaults to 64, and capped
-// screenGap at 16 when the slider goes to 32.
+// comment said iconSize defaulted to 48 when it defaults to 64.
 export interface DockSettings {
     iconSize: number        // 32–96
     magnification: boolean
     maxIconSize: number     // 64–128 (128 = full magnification)
     showIndicators: boolean
-    screenGap: number       // 4–32
     autoHide: boolean       // hide dock when mouse leaves
     hideDelay: number       // 0–2000 ms before hiding after mouse leaves
     position: DockPosition  // dock anchor position
@@ -30,7 +33,6 @@ const DOCK_DEFAULTS: DockSettings = {
     magnification: true,
     maxIconSize: 128,
     showIndicators: true,
-    screenGap: 8,
     autoHide: false,
     hideDelay: 500,
     position: 'bottom',
@@ -44,7 +46,6 @@ const DOCK_VALIDATORS: ConfigValidators<DockSettings> = {
     position: v => DOCK_POSITIONS.includes(v),
     iconSize: inRange(32, 96),
     maxIconSize: inRange(64, 128),
-    screenGap: inRange(4, 32),
     hideDelay: inRange(0, 2000),
 }
 

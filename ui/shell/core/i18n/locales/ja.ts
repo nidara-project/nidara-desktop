@@ -408,7 +408,6 @@ export default {
     "settings.bar.icon-custom.desc": "SVG または PNG 画像を選択するか、Nidara のロゴにリセットします",
 
     "settings.dock.title": "Dock",
-    "settings.dock.bottom-margin.desc": "画面端からの距離",
     "settings.dock.position.desc": "画面上で Dock が表示される位置",
     "settings.dock.magnification.desc": "ホバー時の拡大効果",
     "settings.dock.autohide.desc": "カーソルが離れると Dock が非表示になります",
@@ -416,7 +415,6 @@ export default {
     "settings.dock.indicators.desc": "実行中のアプリのアイコン下に表示されるドット",
     "settings.dock.hide-delay.desc": "Dock が非表示になるまでの時間",
     "settings.dock.magnification": "拡大効果",
-    "settings.dock.bottom-margin": "下部の余白",
     "settings.dock.indicators": "インジケーターを表示",
     "settings.dock.autohide": "自動非表示",
     "settings.dock.position": "Dock の位置",

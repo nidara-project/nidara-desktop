@@ -179,7 +179,7 @@ window/workspace event, and resolution/rotation are user-driven through that pag
 dropdowns, so a mid-interaction rebuild would clobber the in-flight revert-dialog closure state.
 Any future reactive page should copy this **"subscribe broadly, rebuild on a narrow signature"**
 shape rather than rebuilding on raw `"changed"`.
-NB: the dock's bottom *screen* gap and rounding are its OWN (`dockSettings.screenGap`, fixed
+NB: the dock's bottom *screen* gap and rounding are its OWN (`DOCK_SCREEN_GAP`, 4 = Hyalo's `gaps_out` since 2026-10-13 — a Settings slider until then; fixed
 Cairo `DOCK_CONSTANTS` rounding) — independent of Hyprland's `gaps_out`/`rounding`. So
 `config-reloaded` as shipped exists for the input/monitor/vrr clobber fix, not for layout.
 **BUT effective `gaps_out` does have a real (not-yet-built) consumer:** the vertical dock's

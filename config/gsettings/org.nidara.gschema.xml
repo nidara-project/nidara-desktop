@@ -90,11 +90,8 @@
       <default>true</default>
       <summary>Show a dot under running applications</summary>
     </key>
-    <key name="screen-gap" type="i">
-      <range min="4" max="32"/>
-      <default>8</default>
-      <summary>Gap between the dock and the screen edge in pixels</summary>
-    </key>
+    <!-- `screen-gap` was here until 2026-10-13: the dock's gap is fixed at 4 (DOCK_SCREEN_GAP,
+         the windows' gaps_out). A value left in dconf is simply unread. -->
     <key name="auto-hide" type="b">
       <default>false</default>
       <summary>Hide the dock until the pointer reaches its edge</summary>

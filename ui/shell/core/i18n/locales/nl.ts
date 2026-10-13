@@ -408,7 +408,6 @@ export default {
     "settings.bar.icon-custom.desc": "Kies een SVG- of PNG-afbeelding, of zet terug naar het Nidara-logo",
 
     "settings.dock.title": "Dock",
-    "settings.dock.bottom-margin.desc": "Afstand tot de schermrand",
     "settings.dock.position.desc": "Waar het dock op het scherm verschijnt",
     "settings.dock.magnification.desc": "Zoomeffect bij aanwijzen",
     "settings.dock.autohide.desc": "Dock verbergt zich als de cursor weggaat",
@@ -416,7 +415,6 @@ export default {
     "settings.dock.indicators.desc": "Punt onder pictogrammen van actieve apps",
     "settings.dock.hide-delay.desc": "Tijd voordat het dock verbergt",
     "settings.dock.magnification": "Vergroting",
-    "settings.dock.bottom-margin": "Ondermarge",
     "settings.dock.indicators": "Indicatoren tonen",
     "settings.dock.autohide": "Automatisch verbergen",
     "settings.dock.position": "Dockpositie",
