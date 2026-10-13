@@ -1,0 +1,52 @@
+@use 'base' as *;
+
+/* ==========================================================================
+   SCREEN-SHARE PICKER
+   ==========================================================================
+
+   `surfaces/screenshare/ScreenShareService.ts`: a kit alert dialog
+   (`window.nidara-alert-dialog`, its glass and buttons in the kit's
+   _components.scss) with the picker's tiles as its content. Its own toplevel, so
+   the rules hang from its own window — no selector rooted at the bar reaches it.
+
+   A tile is a toggle in a group: one selected at a time, the accent marking it —
+   the accent is for the selected state only.
+   ========================================================================== */
+window.nidara-alert-dialog.nidara-share-picker {
+    .share-section-heading {
+        font-size: $fse-small;
+        font-weight: $fw-semibold;
+        color: var(--nidara-text-dim);
+    }
+
+    button.share-tile {
+        padding: 6px;
+        border-radius: $nidara-radius-sm;
+        border: none;
+        background: none;
+        box-shadow: none;
+        color: var(--nidara-text);
+
+        &:hover   { background: var(--nidara-state-hover); }
+        &:active  { background: var(--nidara-state-pressed); }
+        &:focus-visible { @include nidara-focus-ring; }
+
+        // The picture's frame: the same rounding as the tile minus its padding, so the
+        // two curves run parallel.
+        .share-tile-picture {
+            border-radius: $nidara-radius-xs;
+            background: var(--nidara-surface-back);
+        }
+
+        &:checked .share-tile-picture {
+            box-shadow: 0 0 0 2px $nidara-accent;
+        }
+
+        .share-tile-caption {
+            font-size: $fse-caption;
+            color: var(--nidara-text);
+        }
+
+        .share-tile-icon { -gtk-icon-shadow: none; }
+    }
+}

@@ -42,6 +42,10 @@ export interface AlertHandle {
  * `icon` shows who is asking above the heading, `choices` adds check boxes whose
  * state reaches `onResponse` as the third argument, and `parentWindow` takes the
  * portal's `wayland:<handle>` so the dialog sits on the requesting app's window.
+ *
+ * `content` is a widget of the caller's under the body (the screen-share picker's tiles),
+ * `width` widens the dialog for it, and `cssClasses` scope the caller's own rules to this
+ * window — it is its own toplevel, so no selector rooted at another window reaches it.
  */
 export function showNidaraAlert(opts: {
     parent?: Gtk.Window | null
@@ -62,8 +66,15 @@ export function showNidaraAlert(opts: {
     parentWindow?: string | null
     /** The Wayland app-id this dialog declares for itself (window rules, window lists). */
     appId?: string
+    /** A widget of the caller's, under the body and the choices. */
+    content?: Gtk.Widget
+    /** The dialog's width, when `content` needs more than the default 360. */
+    width?: number
+    /** Classes on the dialog's window, to scope the caller's own rules to it. */
+    cssClasses?: string[]
 }): AlertHandle {
-    const { parent, heading, body, responses, onResponse, countdown, entry, icon, choices, parentWindow, appId } = opts
+    const { parent, heading, body, responses, onResponse, countdown, entry, icon, choices, parentWindow, appId,
+        content, width, cssClasses = [] } = opts
 
     // ── Window ────────────────────────────────────────────────────────────────
     // transient_for is set post-construction: GJS rejects `undefined` in the
@@ -73,11 +84,11 @@ export function showNidaraAlert(opts: {
         modal: true,
         resizable: false,
         decorated: false,
-        default_width: 360,
+        default_width: width ?? 360,
         // The heading doubles as the window title: without one a screen reader and
         // the compositor's window list name the dialog after the process.
         title: heading,
-        css_classes: ["nidara-alert-dialog"],
+        css_classes: ["nidara-alert-dialog", ...cssClasses],
     })
     if (appId) setWindowAppId(dialog, appId)
     if (parent) dialog.transient_for = parent
@@ -170,6 +181,8 @@ export function showNidaraAlert(opts: {
         }
         root.append(box)
     }
+    if (content) root.append(content)
+
     const choiceState = (): Record<string, string> =>
         Object.fromEntries([...checks].map(([id, check]) => [id, check.active ? "true" : "false"]))
 

@@ -810,4 +810,10 @@ export default {
     // the frontend normally supplies its own, already translated.
     "consent.allow": "Разрешить",
     "consent.deny": "Запретить",
+    "share.title": "Выберите, чем поделиться",
+    "share.body": "Приложение видит это, пока вы не прекратите показ.",
+    "share.screens": "Экраны",
+    "share.windows": "Окна",
+    "share.cancel": "Отмена",
+    "share.share": "Поделиться",
 }

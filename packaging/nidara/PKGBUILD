@@ -106,6 +106,8 @@ depends=(
   # xdg-desktop-portal's Realtime interface asks for.
   rtkit
   xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
+  # The screen shared in a call, in the Nidara session (Hyalo): config/portal/nidara-portals.conf.
+  xdg-desktop-portal-wlr
   # tools the shell/keybinds shell out to
   brightnessctl pamixer playerctl jq curl slurp grim wf-recorder
   wl-clipboard cliphist wtype at-spi2-core python-gobject libnotify
@@ -303,6 +305,8 @@ package_nidara-desktop() {
   # and its LICENSE travels inside the theme directory.
   license=(GPL-3.0-or-later LGPL-3.0-or-later ISC MIT)
   backup=(etc/xdg-desktop-portal/hyprland-portals.conf
+          etc/xdg-desktop-portal/nidara-portals.conf
+          etc/xdg/xdg-desktop-portal-wlr/Nidara
           etc/pam.d/nidara-lock)
   # Installed by bin/nidara-language when the system language needs it (#703),
   # not by pacman for everybody — see the input-method note in depends.
@@ -335,7 +339,7 @@ package_nidara-desktop() {
   # /usr/bin — session launchers, helpers, agent toolkit (install.sh §5 list)
   local b
   for b in nidara nidara-ui nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
-           nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
+           nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal nidara-share-chooser \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click nidara-wm \
            nidara-hook nidara-update nidara-setup nidara-migrate nidara-language; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
@@ -428,6 +432,8 @@ package_nidara-desktop() {
   install -Dm644 config/portal/org.freedesktop.impl.portal.desktop.nidara.service \
     "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service"
   install -Dm644 config/portal/hyprland-portals.conf "$pkgdir/etc/xdg-desktop-portal/hyprland-portals.conf"
+  install -Dm644 config/portal/nidara-portals.conf "$pkgdir/etc/xdg-desktop-portal/nidara-portals.conf"
+  install -Dm644 config/portal/xdpw-nidara.conf "$pkgdir/etc/xdg/xdg-desktop-portal-wlr/Nidara"
 
   # ── the icon theme, as a SYSTEM DEFAULT rather than a per-user write ────────
   # GTK resolves every icon through gsettings, and it reads that value while the

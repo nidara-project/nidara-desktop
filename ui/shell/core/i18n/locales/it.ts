@@ -803,4 +803,10 @@ export default {
     // the frontend normally supplies its own, already translated.
     "consent.allow": "Consenti",
     "consent.deny": "Nega",
+    "share.title": "Scegli cosa condividere",
+    "share.body": "L'app lo vede finché non smetti di condividere.",
+    "share.screens": "Schermi",
+    "share.windows": "Finestre",
+    "share.cancel": "Annulla",
+    "share.share": "Condividi",
 }

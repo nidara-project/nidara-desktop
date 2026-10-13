@@ -63,6 +63,13 @@ match = { app_id = "^nidara-about$" }
 float = true
 center = true
 
+# What a call may share of the screen (ui/shell/surfaces/screenshare/): it has no parent
+# window to sit on — the portal's chooser is a process of its own — so it opens centred.
+[rules.share-picker]
+match = { app_id = "^nidara-share$" }
+float = true
+center = true
+
 [rules.installer]
 match = { app_id = "^(org\\.nidara\\.installer|nidara-installer)$" }
 center = true
