@@ -114,6 +114,28 @@ pub fn draw_into(
     sync.wait().map_err(|e| format!("{e:?}"))
 }
 
+/// The output upright, as `capture` draws it, straight into a client's dmabuf of the upright
+/// size — a screen being shared (capture.rs): drawn on the GPU, never read back.
+pub fn draw_upright_into(
+    renderer: &mut GlesRenderer,
+    scene: &render::Scene<'_>,
+    output: &Output,
+    dmabuf: &mut Dmabuf,
+    cursor: Option<&crate::cursor::CursorImage>,
+) -> Result<(), String> {
+    let geo = scene.space.output_geometry(output).ok_or("output not mapped")?;
+    let scale = output.current_scale().fractional_scale();
+    let size: Size<i32, Physical> = geo.size.to_f64().to_physical_precise_round(scale);
+    let elements = render::output_elements(scene, renderer, output, cursor);
+    let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
+    let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
+    let result = tracker
+        .render_output(renderer, &mut fb, 0, &elements, render::CLEAR_COLOR)
+        .map_err(|e| format!("{e:?}"))?;
+    // The client reads the buffer as soon as `ready` is sent.
+    result.sync.wait().map_err(|e| format!("{e:?}"))
+}
+
 /// The same picture UNCOMPRESSED, as a binary PPM (P6, RGB): what a caller that captures frame
 /// after frame asks for — the glass lab's videos. Measured 2026-10-05 at 1080×1920: the PNG cost
 /// 541 ms a frame, almost all of it compression, and the reader then spent more decompressing it.

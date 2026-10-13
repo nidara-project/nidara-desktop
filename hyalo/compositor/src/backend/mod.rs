@@ -203,6 +203,63 @@ pub fn draw_output_into(
     }
 }
 
+/// One output upright, as the screen shows it, drawn straight into a client's dmabuf
+/// (capture.rs, a screen being shared) — with the pointer when `pointer`.
+pub fn draw_upright_into(state: &mut Hyalo, output: &Output, dmabuf: &mut Dmabuf, pointer: bool) -> Result<(), String> {
+    let cursor = if pointer { pointer_for(state, output) } else { None };
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
+    match backend {
+        Backend::Winit(w) => crate::screenshot::draw_upright_into(w.renderer(), &scene, output, dmabuf, cursor.as_ref()),
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            crate::screenshot::draw_upright_into(renderer.as_mut(), &scene, output, dmabuf, cursor.as_ref())
+        }
+    }
+}
+
+/// One window alone, drawn straight into a client's dmabuf (capture.rs).
+pub fn draw_window_into(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64, dmabuf: &mut Dmabuf) -> Result<(), String> {
+    match &mut state.backend {
+        Backend::Winit(w) => crate::capture::draw_window_into(w.renderer(), window, scale, dmabuf),
+        Backend::Tty(t) => {
+            let mut renderer = t.primary_renderer()?;
+            crate::capture::draw_window_into(renderer.as_mut(), window, scale, dmabuf)
+        }
+    }
+}
+
+/// The GPU buffers a capture client may hand us (capture.rs): the render node it allocates on,
+/// and the modifiers our renderer draws XRGB/ARGB8888 into. None without a render node, and the
+/// client copies through shared memory instead.
+pub fn capture_dmabuf(state: &mut Hyalo) -> Option<smithay::wayland::image_copy_capture::DmabufConstraints> {
+    use smithay::backend::{allocator::Fourcc, drm::NodeType, egl::EGLDevice};
+    let (node, formats) = match &mut state.backend {
+        Backend::Winit(w) => {
+            let renderer = w.renderer();
+            let node = EGLDevice::device_for_display(renderer.egl_context().display())
+                .ok()?
+                .try_get_render_node()
+                .ok()
+                .flatten()?;
+            (node, renderer.egl_context().dmabuf_render_formats().clone())
+        }
+        Backend::Tty(t) => {
+            let gpu = t.primary_gpu();
+            let node = gpu.node_with_type(NodeType::Render).and_then(Result::ok).unwrap_or(gpu);
+            let mut renderer = t.primary_renderer().ok()?;
+            let formats = renderer.as_mut().egl_context().dmabuf_render_formats().clone();
+            (node, formats)
+        }
+    };
+    let formats: Vec<_> = [Fourcc::Xrgb8888, Fourcc::Argb8888]
+        .into_iter()
+        .map(|code| (code, formats.iter().filter(|f| f.code == code).map(|f| f.modifier).collect::<Vec<_>>()))
+        .filter(|(_, modifiers)| !modifiers.is_empty())
+        .collect();
+    (!formats.is_empty()).then_some(smithay::wayland::image_copy_capture::DmabufConstraints { node, formats })
+}
+
 /// One window alone, as RGBA rows (capture.rs).
 pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<(u32, u32, Vec<u8>), String> {
     match &mut state.backend {
@@ -383,8 +440,10 @@ pub fn post_repaint(
         with_surfaces_surface_tree(surface, |surface, s| update(surface, s));
         smithay::desktop::utils::send_frames_surface_tree(surface, output, time, throttle, surface_primary_scanout_output);
     }
-    // A recorder waiting for this output's next frame gets it (protocols/screencopy.rs).
+    // A recorder waiting for this output's next frame gets it (protocols/screencopy.rs), and so
+    // does a screen being shared (capture.rs).
     state.complete_screencopy(output);
+    state.complete_capture_output(output);
 }
 
 /// Marks a surface that has been offered the scan-out feedback once.
