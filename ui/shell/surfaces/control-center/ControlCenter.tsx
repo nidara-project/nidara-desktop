@@ -13,7 +13,7 @@ import { ccStatusBanner } from "../bar/StatusIndicators"
  * would have to be a panel, and a panel cannot have its content stuck to its top
  * edge") — from the panel's edge to the first thing in it, the privacy notice or a
  * tile. It equals the gap between tiles (CCLayoutManager GAP, also 16), so edge-to-tile
- * reads like tile-to-tile. The panel itself hangs `BAR_MARGIN` (= `gaps_out`) below the bar and from the
+ * reads like tile-to-tile. The panel itself hangs 8 below the bar's glass (Bar.tsx PANEL_HANG) and `BAR_MARGIN` (= `gaps_out`) from the
  * screen's edge, as a window would (Bar.tsx places it).
  */
 export const CC_PANEL_PAD = 16
