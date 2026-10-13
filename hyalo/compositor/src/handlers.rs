@@ -58,6 +58,8 @@ impl CompositorHandler for Hyalo {
             if let Some(window) = self.window_for_surface(&root) {
                 window.on_commit();
             }
+            // A window being shared waits for this (capture.rs).
+            self.complete_capture_window(&root);
         }
         material::on_commit(surface);
         crate::protocols::window_controls::on_commit(self, surface);

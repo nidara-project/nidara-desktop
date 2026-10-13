@@ -838,6 +838,7 @@ impl Hyalo {
         }
         let listed = self.wm.get_mut(id).and_then(|m| m.listed.take());
         self.unlist_window(listed);
+        self.stop_capture_window(id);
         self.wm.windows.retain(|m| m.id != id);
         self.wm.animations.retain(|a| a.id != id);
         self.wm.dirty_windows = true;

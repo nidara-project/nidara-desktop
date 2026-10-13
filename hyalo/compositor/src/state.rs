@@ -86,6 +86,9 @@ pub struct Hyalo {
     pub screencopy_pending: crate::protocols::screencopy::PendingCopies,
     /// Capture sessions a client holds open (capture.rs: dropping one stops it).
     pub capture_sessions: Vec<smithay::wayland::image_copy_capture::Session>,
+    /// Their frames waiting for something new to show: the output's next frame, the window's
+    /// next commit (capture.rs).
+    pub capture_pending: Vec<(smithay::wayland::image_copy_capture::SessionRef, smithay::wayland::image_copy_capture::Frame)>,
     /// xdg-activation (activation.rs).
     pub activation_state: smithay::wayland::xdg_activation::XdgActivationState,
     /// Every app's window controls (protocols/window_controls.rs): told the side again when
@@ -267,6 +270,7 @@ impl Hyalo {
             wlr_data_control,
             screencopy_pending: Default::default(),
             capture_sessions: Vec::new(),
+            capture_pending: Vec::new(),
             activation_state,
             kde_decoration_state,
             window_controls: Vec::new(),

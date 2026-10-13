@@ -19,7 +19,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`), minimizing (`minimize.rs`), opening and closing (`motion.rs`) |
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
 | `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
-| `hyalo/compositor/src/capture.rs` | window capture for the shell's thumbnails (ext-foreign-toplevel-list + ext-image-copy-capture) |
+| `hyalo/compositor/src/capture.rs` | capture of a window or an output (ext-foreign-toplevel-list + ext-image-copy-capture): the shell's thumbnails, grim, and a screen or window shared in a call |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
 | `hyalo/compositor/src/protocols/window_controls.rs`, `render/controls.rs` | a window's controls, Hyalo's: the protocol, and the capsule drawn over the app's header |
@@ -1734,8 +1734,8 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
   does) and `[cursor] recorded` lets it (default on; the recording widget's "Show the pointer",
   `recording.showPointer`, `caps.recordedPointer` — Hyprland has no such switch). Its image is
   the backend's themed one (`backend::pointer_for`; winit keeps a `Cursors` too, only so a
-  recording nested has one), and only on the output the pointer is on. Screenshots
-  (ext-image-copy-capture, `msg screenshot`) still never carry it.
+  recording nested has one), and only on the output the pointer is on. `msg screenshot` never
+  carries it; ext-image-copy-capture carries it when the session asks (`paint_cursors`, below).
 - **data-control**, both (`ext-` and `zwlr-`): `wl-paste --watch` → cliphist, the clipboard
   history, autostarted in `config/hyalo/hyalo.toml` (two watchers, one per type — why is there).
 - All four are privileged: hidden from sandboxed clients (the sandbox probe lists them), and
@@ -1748,6 +1748,50 @@ the screen capture protocol": the screenshot tile and Print put nothing on the c
   it). Controls seen failing nested: #718's Hyalo (no pointer), one ignoring the setting (107
   pixels still under it), #722's and the installed one (the GPU region black). Pixels are read by GTK's PNG loader (`Gdk.Texture`), never GdkPixbuf: GdkPixbuf hands
   PNGs to glycin, whose sandbox does not start in CI's container.
+
+### Sharing the screen (ext-image-copy-capture, #683, 2026-10-13)
+
+A screen or a window shared in a call goes through the portal's ScreenCast →
+`xdg-desktop-portal-wlr` (xdpw) → `ext-image-copy-capture` on Hyalo (xdpw prefers it over
+screencopy). Same `capture.rs` as the thumbnails and grim, with three things those never needed:
+
+- **A session's first frame is drawn at once; every later one WAITS** for something new — the
+  output's next frame (`complete_capture_output`, post_repaint, beside `complete_screencopy`)
+  or the window's next commit (`complete_capture_window`, `handlers.rs` commit). A thumbnail or
+  a screenshot asks for one frame and closes, so they are unchanged. Until this date every frame
+  was drawn on request: xdpw asks again as soon as it has a buffer, so a shared screen was drawn
+  offscreen and read back on the CPU as fast as it could, still or not — ≈ 25–30 frames/s at
+  1440p on the owner's machine, all of it on Hyalo's main loop. Measured nested since: a still
+  screen sends 0 frames in 4 s.
+- **dmabuf**: the session's constraints offer the primary GPU's render node and the
+  XRGB/ARGB8888 modifiers our renderer draws into (`backend::capture_dmabuf`); a dmabuf frame is
+  drawn straight into the client's buffer, upright (`screenshot::draw_upright_into`, a tracker
+  with `Transform::Normal` — the same picture `capture` reads back; a window,
+  `capture::draw_window_into`). shm stays for a client that does not take dmabuf. One size for
+  both (the protocol has one `buffer_size` per session), so the dmabuf is UPRIGHT like the shm
+  buffer, not in the output's orientation as screencopy's is.
+- **A session follows its source**: a source that changed size (a resized window, a new mode
+  or scale) gets the new constraints and its frame fails `buffer_constraints`, the protocol's
+  way of saying "ask again with this size"; a window that closes or an output that goes stops
+  its sessions (`stop_capture_window` from `window_destroyed`, `stop_capture_output` where tty
+  unmaps an output), so the call ends the share instead of waiting forever. The SESSIONS are
+  dropped first (that sends `stopped` and fails their frame "stopped"), their queued frames after.
+- **The pointer** is drawn when the session asks (`paint_cursors` — the portal's "embedded"
+  cursor mode), and only on the output it is on. Windows never carry it.
+
+Testing it, nested and without installing anything (2026-10-13): download xdpw's package and
+run its binary from a scratch directory (`-c <config>` with `chooser_type=simple`,
+`chooser_cmd=echo Monitor: winit`, or `chooser_type=dmenu` and a command that picks a
+`Window:` line), drive its `org.freedesktop.impl.portal.ScreenCast` directly
+(CreateSession → SelectSources `types` 1 screen / 2 window → Start → the PipeWire node), and
+pull frames with a PipeWire consumer. ⚠️ **gst-launch is the wrong consumer**: `pipewiresrc`
+could not negotiate xdpw's dmabuf offer (with or without `DMA_DRM` caps, "No supported formats
+found"), took shm sometimes and nothing at other times. A 150-line `pw_stream` consumer that
+asks for BGRx as shm or as a LINEAR dmabuf (mmap-able) settled it; count `frame.ready()` in
+xdpw's `WAYLAND_DEBUG` log for what Hyalo answered, not what the consumer kept (reading a
+LINEAR dmabuf from VRAM with mmap is slow: 4 buffers kept of 170 answered). ⚠️ `pipewiresrc
+target-object=` takes the node's `object.serial`, not its id (`path=` is the deprecated id).
+Not in CI: CI's container has no PipeWire session.
 
 ## Three config layers, and runtime changes over IPC
 

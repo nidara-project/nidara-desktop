@@ -209,6 +209,11 @@ impl TtyBackend {
     }
 
     /// The primary GPU's renderer, for work outside a frame (screenshots).
+    /// The GPU everything is drawn on.
+    pub fn primary_gpu(&self) -> DrmNode {
+        self.primary_gpu
+    }
+
     pub fn primary_renderer(&mut self) -> Result<render::UdevRenderer<'_>, String> {
         self.gpus.single_renderer(&self.primary_gpu).map_err(|e| e.to_string())
     }
@@ -773,6 +778,7 @@ fn connector_disconnected(state: &mut Hyalo, node: DrmNode, connector: connector
             }
         }
         state.space.unmap_output(&surface.output);
+        state.stop_capture_output(&surface.output.name());
         // Every surface leaves the output BEFORE its global goes: a client that sees the
         // global removed destroys its wl_output, and a leave naming it afterwards arrives
         // as leave(nil) — which killed kitty outright (measured, VM, two outputs).
