@@ -18,8 +18,11 @@ export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 
 // The bar's geometry, on the design system's 4px scale (owner, 2026-09-25; the
 // capsule and its pills redone 2026-10-06, "B" in the bar mockup), counted on the GLASS:
-//   6 above a capsule · 32 capsule (radius 16) · 2 to the bar's reserved strip ·
-//   8 between capsules · 6 at the two ends (BAR_MARGIN).
+//   4 above a capsule · 32 capsule (radius 16) · 4 to the windows below (the strip ends at
+//   the glass; the windows keep Hyalo's gaps_out, 4) · 8 between capsules · 4 at the two
+//   ends (BAR_MARGIN = gaps_out, so the bar's ends line up with the windows' edges).
+// 4 above, 4 below and 4 at the ends since 2026-10-13 (owner: the windows' gaps_out); 6 · 6
+// before, which the boxes' 2 px inset had hidden behind a written 4.
 // (Until #762, 2026-10-13, the capsules' boxes were 36 with the glass painted 2 px in, and
 // these numbers were counted on the boxes: 4 · 36 · 4 · 4. The pixels did not move.)
 // Inside a GROUP (barGroup below, 2026-09-26) ONE rhythm, BAR_PILL_EDGE = 4: the
@@ -34,12 +37,13 @@ export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 // The strip the bar reserves (its exclusive zone): the capsule plus the 4px above it.
 // The side dock's window height is the monitor minus this, so it lives here and not
 // in Bar.tsx. 40 until 2026-09-25 with the capsule 8px from the edge, 36 until
-// 2026-10-06 with a 32px capsule; 40 again for a 36px one 4px from the edge.
-export const BAR_H = 40
+// 2026-10-06 with a 32px capsule; 40 for a 36px box 4px from the edge (its glass 6 down,
+// 6 above the windows); 36 again since 2026-10-13, the glass 4 from the edge and 4 above.
+export const BAR_H = 36
 
 // A bar capsule's height. NOT set anywhere as a size: the row is BAR_H tall and
-// `.bar-centerbox` gives it `margin-top: 6px; margin-bottom: 2px`, which GTK takes out of the
-// row's own height_request — so what is left for the capsule is 32. It lives here for the ones
+// `.bar-centerbox` gives it `margin-top: 4px`, which GTK takes out of the row's own
+// height_request — so what is left for the capsule is 32. It lives here for the ones
 // that must MATCH it: the island's indicator chips are this wide so that `perfect`'s
 // h/2 radius makes them circles. Change BAR_H, the CSS margin and this together.
 export const BAR_CAPSULE_H = 32
@@ -49,11 +53,12 @@ export const BAR_CAPSULE_H = 32
 // stands next to another capsule. (8 until 2026-09-25; 4 between the boxes until #762.)
 export const BAR_GAP = 8
 
-// From the screen's left and right edges to the bar's glass at its two ends. The panels
-// hanging from the bar keep the same distance (Bar.tsx SIDE_GAP). 8 to the boxes until
-// 2026-09-29, when the owner tried the whole desktop tighter (Hyprland's gaps_out 4); 4 to
-// the boxes, 6 to the glass, until #762 made the box the glass.
-export const BAR_MARGIN = 6
+// From the screen's left and right edges to the bar's glass at its two ends: Hyalo's
+// gaps_out (config/hyalo/hyalo.toml), so the system menu lines up with the windows' left
+// edge and the clock with their right one — change both together. The panels hanging from
+// the bar keep the same distance (Bar.tsx SIDE_GAP). 8 to the boxes until 2026-09-29; 4 to
+// the boxes and 6 to the glass until 2026-10-13.
+export const BAR_MARGIN = 4
 
 // ── Groups and items (owner, 2026-09-26) ────────────────────────────────────
 // The bar is THREE pieces of glass, not one per icon: the left group (system menu +

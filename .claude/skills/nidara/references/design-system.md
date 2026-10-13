@@ -3938,9 +3938,10 @@ pill's curved ends, icons at three sizes):
 
 | | px | where |
 |---|---|---|
-| above a capsule's glass (screen edge) | 6 | `.bar-centerbox` `margin-top` (+ `margin-bottom` 2) |
+| above a capsule's glass (screen edge) | 4 | `.bar-centerbox` `margin-top` |
 | capsule height | 32 (radius 16) | `BAR_CAPSULE_H` (derived, see below) |
-| strip the bar reserves | 40 | `BAR_H` (exclusive zone) |
+| strip the bar reserves | 36 — it ends at the glass | `BAR_H` (exclusive zone) |
+| capsule's glass → windows below | 4 | Hyalo's `gaps_out` |
 | between two capsules' glass (only the island and its chips, since the groups) | 8 | `BAR_GAP` |
 | hover/open pill ↔ visible glass, every side, AND ↔ the next pill | 4 | `BAR_PILL_EDGE` — the group's one rhythm |
 | group glass → its first/last item | 4 | `BAR_GROUP_PAD` = `BAR_PILL_EDGE` |
@@ -3950,12 +3951,15 @@ pill's curved ends, icons at three sizes):
 | each side of an icon | 7 | `BAR_ITEM_PAD` → icon-only item and its pill 32 wide |
 | each side of text (title, clock, a revealed label) | 12 | `BAR_TEXT_PAD` = the pill's radius |
 | each side of a STANDALONE capsule's content (the island's compact forms) | 14 | `BAR_PILL_PAD` |
-| the two ends' glass (system menu, clock) | 6 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` |
+| the two ends' glass (system menu, clock) | 4 | `BAR_MARGIN` (`capsule.ts`) = `SIDE_GAP` = Hyalo's `gaps_out` |
+| capsules' glass → a panel's glass (menus, banners) · → the CC/NC panel | 12 · 8 | `PANEL_TOP` · `PANEL_HANG` (`Bar.tsx`) |
 | between the island's glass and a flank's | 20 | `ISLAND_GAP` (`Bar.tsx`) |
 
 Counted on the GLASS since #762 (2026-10-13). Until then the capsules' boxes were 36 with the glass
 painted 2 px inside (`GLASS_INSET`), and the table read 4 · 36 · 4 between capsules · 6 · 6 · 16 · 4
-· 16 — on the boxes. Not one pixel moved.
+· 16 — on the boxes. Not one pixel moved. Then (owner, 2026-10-13, the 4px rule and the
+windows' `gaps_out`) the glass came to 4 from the top and the ends and 4 above the windows: it had
+been 6 · 6 · 6, hidden behind a written 4.
 
 `BAR_H`, `BAR_CAPSULE_H`, `BAR_GAP`, `BAR_PILL_EDGE`, `BAR_GROUP_PAD`, `BAR_VEIL_INSET`,
 `BAR_ITEM_GAP` live in `surfaces/bar/capsule.ts`; `BAR_ITEM_PAD`, `BAR_TEXT_PAD`, `BAR_ICON_SIZE`

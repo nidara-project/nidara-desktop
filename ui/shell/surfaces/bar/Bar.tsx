@@ -362,8 +362,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   // Derived from the bar height and the dock's actual footprint (dock size is
   // user-configurable) instead of hardcoded magic numbers.
 
-  // Where a panel's glass starts below the bar: 12 under the capsules' glass (BAR_H − 2).
-  const PANEL_TOP = BAR_H + 10
+  // Where a panel's glass starts below the bar: 12 under the capsules' glass (which ends at BAR_H).
+  const PANEL_TOP = BAR_H + 12
   const SAFETY = 28
   const DOCK_VPAD = 20           // dock padding around its icons
 
@@ -380,11 +380,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const SIDE_GAP = BAR_MARGIN
 
   // The CC and the NC are panels with their own margin (ControlCenter.tsx, CC_PANEL_PAD):
-  // the PANEL hangs `BAR_MARGIN` below the bar's strip, and its content lands where the
-  // margin puts it. The other panels have no margin of their own, so their glass starts at
-  // PANEL_TOP.
-  cc.margin_top = BAR_H + BAR_MARGIN
-  nc.margin_top = BAR_H + BAR_MARGIN
+  // the PANEL hangs 8 below the capsules' glass, and its content lands where the margin puts
+  // it. The other panels have no margin of their own, so their glass starts at PANEL_TOP.
+  const PANEL_HANG = 8
+  cc.margin_top = BAR_H + PANEL_HANG
+  nc.margin_top = BAR_H + PANEL_HANG
   expansionCapsule.margin_top = PANEL_TOP   // its glass starts there: it has no panel margin
   systemMenu.margin_top = PANEL_TOP         // Bar owns the menu geometry (see syncPanelMargins)
   const syncPanelMargins = () => {

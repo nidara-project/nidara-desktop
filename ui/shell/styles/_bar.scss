@@ -50,8 +50,7 @@ window#nidara-bar-zone {
     .bar-centerbox {
         background-color: transparent;
         border: none;
-        margin-top: 6px;     // ⚠️ capsule height = BAR_H − these two; keep BAR_H/BAR_CAPSULE_H (capsule.ts) in step
-        margin-bottom: 2px;
+        margin-top: 4px;   // ⚠️ capsule height = BAR_H − this; keep BAR_H/BAR_CAPSULE_H (capsule.ts) in step
     }
 
     /* --- Widget labels ---
