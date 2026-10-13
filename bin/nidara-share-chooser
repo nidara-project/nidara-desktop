@@ -1,0 +1,41 @@
+#!/usr/bin/env -S gjs -m
+// ─────────────────────────────────────────────────────────────────────────────
+// nidara-share-chooser — what a call may see of the screen, asked of the user
+//
+// xdg-desktop-portal-wlr runs this as its chooser (`chooser_type = dmenu`,
+// config/portal/xdpw-nidara.conf, installed as
+// /etc/xdg/xdg-desktop-portal-wlr/Nidara so it applies to the Nidara session alone).
+// xdpw writes one line per screen or window it may share on stdin and takes back the
+// line the user picked; anything else, or nothing, is "declined".
+//
+// The question is drawn by the shell (ui/shell/surfaces/screenshare/), which this
+// asks over org.nidara.Shell.ScreenShare and which answers with the index of the
+// line picked. Shell down, or the picker closed: nothing is printed, nothing shared.
+// ─────────────────────────────────────────────────────────────────────────────
+import Gio from "gi://Gio"
+import GioUnix from "gi://GioUnix"
+import GLib from "gi://GLib"
+
+const stdin = new Gio.DataInputStream({ base_stream: new GioUnix.InputStream({ fd: 0, close_fd: false }) })
+const lines = []
+for (;;) {
+    const [line] = stdin.read_line_utf8(null)
+    if (line === null) break
+    if (line.trim()) lines.push(line)
+}
+
+let index = -1
+try {
+    const reply = Gio.DBus.session.call_sync(
+        "org.nidara.Shell", "/org/nidara/Shell/ScreenShare", "org.nidara.Shell.ScreenShare",
+        "Choose", new GLib.Variant("(as)", [lines]), new GLib.VariantType("(i)"),
+        // The user takes as long as they take: no timeout of ours. xdpw ends the
+        // request, and with it this process, if the app gives up first.
+        Gio.DBusCallFlags.NONE, GLib.MAXINT32, null,
+    )
+    index = reply.deepUnpack()[0]
+} catch (e) {
+    printerr(`nidara-share-chooser: the shell did not answer: ${e.message}`)
+}
+
+if (index >= 0 && index < lines.length) print(lines[index])

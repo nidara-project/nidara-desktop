@@ -803,4 +803,10 @@ export default {
     // the frontend normally supplies its own, already translated.
     "consent.allow": "允许",
     "consent.deny": "拒绝",
+    "share.title": "选择要共享的内容",
+    "share.body": "在你停止共享之前，应用都能看到它。",
+    "share.screens": "屏幕",
+    "share.windows": "窗口",
+    "share.cancel": "取消",
+    "share.share": "共享",
 }

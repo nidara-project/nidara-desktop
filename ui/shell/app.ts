@@ -23,6 +23,7 @@ import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue, setConfigLocations } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import { exportConsentService } from "./surfaces/consent/ConsentService"
+import { exportScreenShareService } from "./surfaces/screenshare/ScreenShareService"
 import { startWifiSecretsDialogs } from "./common/WifiSecretsAgent"
 import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
@@ -1049,6 +1050,9 @@ app.start({
     // The XDG portal's consent prompts (camera, microphone, location…), drawn here
     // on behalf of bin/nidara-portal. NOT an IPC command — see the file.
     exportConsentService()
+    // What a call may share of the screen, asked on behalf of xdg-desktop-portal-wlr
+    // (bin/nidara-share-chooser). NOT an IPC command either — see the file.
+    exportScreenShareService()
     // NetworkManager's secret agent + libnma's Wi-Fi dialogs, for the session.
     // Nothing may put a password on nmcli's command line — see core/NetworkAgent.ts.
     startWifiSecretsDialogs()

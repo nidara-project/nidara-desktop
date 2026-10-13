@@ -803,4 +803,10 @@ export default {
     // the frontend normally supplies its own, already translated.
     "consent.allow": "許可",
     "consent.deny": "拒否",
+    "share.title": "共有する内容を選択",
+    "share.body": "共有を停止するまで、アプリはこれを見ることができます。",
+    "share.screens": "画面",
+    "share.windows": "ウィンドウ",
+    "share.cancel": "キャンセル",
+    "share.share": "共有",
 }

@@ -937,6 +937,12 @@ export default {
     // the frontend normally supplies its own, already translated.
     "consent.allow": "Allow",
     "consent.deny": "Deny",
+    "share.title": "Choose what to share",
+    "share.body": "The app sees it until you stop sharing.",
+    "share.screens": "Screens",
+    "share.windows": "Windows",
+    "share.cancel": "Cancel",
+    "share.share": "Share",
 
     // Development mode: CRITICALs in the shell log (core/DevLogWatch.ts)
     "dev.log.critical.one": "A CRITICAL in the log",

@@ -166,6 +166,9 @@ const IGNORED_WIDGETS = new Set([
     "EventControllerScroll", "GestureClick", "GestureDrag", "GestureLongPress",
     "IconTheme", "ListStore", "SignalListItemFactory", "SizeGroup", "Snapshot",
     "StringList", "TextBuffer", "WidgetPaintable",
+    // A layout container like Box: it only sizes its child to a ratio and draws
+    // nothing of its own (the screen-share picker's thumbnails, surfaces/screenshare/).
+    "AspectFrame",
     // A paintable, not a widget: it has no CSS node. The Gtk.Image showing it
     // does, and is already here (common/StatefulIcon.ts).
     "Svg",

@@ -1894,6 +1894,41 @@ without the session bus and with `sync_gsettings_theme = false`), both asserting
   prompt maps centred on the requesting window (xdg-foreign), a foreign caller is refused, Close
   dismisses it; leaves `consent-dialog.png`.
 
+### Sharing the screen: xdpw asks, the shell draws the picker (2026-10-13, #683)
+
+A call that shares the screen asks the portal's ScreenCast. In the Nidara session (Hyalo,
+`XDG_CURRENT_DESKTOP=Nidara`) `config/portal/nidara-portals.conf` routes it, and Screenshot, to
+`xdg-desktop-portal-wlr` (a dependency of the package), which captures through Hyalo's
+`ext-image-copy-capture` (`references/hyalo.md` → "Sharing the screen"). What is shared, the user
+picks in NIDARA's picker:
+
+    app ─portal─▶ xdg-desktop-portal ─impl.ScreenCast─▶ xdpw ─chooser─▶ bin/nidara-share-chooser
+        ─org.nidara.Shell.ScreenShare─▶ ui/shell/surfaces/screenshare/ScreenShareService.ts
+
+- **xdpw's own chooser contract** (`config/portal/xdpw-nidara.conf`, installed as
+  `/etc/xdg/xdg-desktop-portal-wlr/Nidara` — xdpw's per-desktop file, so it applies to this session
+  alone): `chooser_type = dmenu`, so xdpw writes one line per source it may share on stdin —
+  `Monitor: <connector> <description>`, `Window: <title> (<identifier>)`, only the kinds the app asked
+  for — and accepts back only one of those lines; nothing printed = declined. The window identifier
+  is Hyalo's, i.e. the shell's ADDRESS for the window, so a tile gets the overview's thumbnail
+  (`captureWindow`). The title can hold parentheses: the identifier is the LAST group.
+- **The picker** is `showNidaraAlert` with `content` (the tiles), `width` and `cssClasses`
+  (`nidara-share-picker`, its rules in `ui/shell/styles/_screenshare.scss`). Tiles are grouped
+  `ToggleButton`s, the first screen selected; each picture sits in an `AspectFrame` at the
+  capture's own proportions (`WindowThumbnail` paints whatever bounds it is given, so without it
+  every window came out stretched to 160×100). A screen's picture is a grim capture taken BEFORE
+  the picker is shown, or the picture would contain the picker. The window list scrolls, and the
+  selected tile takes the focus: left to GTK, focus went to the LAST tile and scrolled the list to
+  its bottom (owner-seen). It declares app-id `nidara-share`; `[rules.share-picker]` in
+  `config/hyalo/hyalo.toml` centres it (it has no parent window: the chooser is its own process).
+- **Not an IPC command, never shares by default** — the consent prompt's rules. The chooser has no
+  bus name of its own to compare, so the caller is checked by its process ANCESTRY: a process up to
+  four levels above it must be `xdg-desktop-portal-wlr` (`/proc/<pid>/exe`); anyone else gets
+  `AccessDenied` (checked: the chooser run by hand is refused). Closing or Cancel answer -1 and the
+  portal returns 1 (cancelled by the user).
+- **Verified live, 2026-10-13**, xdpw 0.8.4 run from its package against the owner's session with
+  the repo's chooser: Share → a PipeWire stream of DP-1; Cancel → SelectSources answers 1.
+
 **Settings → Apps edits those decisions** through `ui/shell/core/PermissionStore.ts` (a D-Bus client of
 `org.freedesktop.impl.portal.PermissionStore`, no UI): three states as the store has them — no entry =
 *Ask*, `["yes"]` = *Allow*, `["no"]` = *Deny* — and *Ask* DELETES the entry rather than storing a third

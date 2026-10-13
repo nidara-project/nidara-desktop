@@ -102,13 +102,14 @@ for (const bundle of ["shell", "greeter", "lockscreen", "installer"]) {
 
 // STAMPED: the per-toplevel override applied at MAP, and the TITLES those windows
 // are born with. Only files that actually build a window are read — `appId:` is also
-// the dock's word for a dock slot, and a dock slot is not a window.
+// the dock's word for a dock slot, and a dock slot is not a window. `showNidaraAlert`
+// builds one and stamps the `appId:` it is given (nidara-kit/alert-dialog.ts).
 const STAMPED = new Map()   // class → Set of bundles ("lib" = a kit default, unattributable)
 const TITLES  = new Map()   // title literal → file that sets it
 for (const file of walk("ui")) {
     if (!/\.tsx?$/.test(file)) continue
     const src = readFileSync(file, "utf8")
-    if (!/setWindowAppId|NidaraWindow/.test(src)) continue
+    if (!/setWindowAppId|NidaraWindow|showNidaraAlert/.test(src)) continue
     if (file === "ui/lib/nidara-kit/platform/app-id.ts") continue   // the mechanism itself, not a caller
     const bundle = file.startsWith("ui/lib/") ? "lib" : file.split("/")[1]
     for (const re of [/setWindowAppId\([^)]*?"([^"]+)"/g, /\bappId:\s*"([^"]+)"/g])

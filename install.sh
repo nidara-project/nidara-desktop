@@ -606,6 +606,7 @@ sudo cp "$REPO_DIR/bin/nidara-after-sleep"  /usr/bin/nidara-after-sleep
 sudo cp "$REPO_DIR/bin/nidara-game-mode" /usr/bin/nidara-game-mode
 sudo cp "$REPO_DIR/bin/nidara-doctor" /usr/bin/nidara-doctor
 sudo cp "$REPO_DIR/bin/nidara-portal"    /usr/bin/nidara-portal
+sudo cp "$REPO_DIR/bin/nidara-share-chooser" /usr/bin/nidara-share-chooser
 sudo cp "$REPO_DIR/bin/nidara-mcp" /usr/bin/nidara-mcp
 sudo cp "$REPO_DIR/bin/nidara-agent" /usr/bin/nidara-agent
 sudo cp "$REPO_DIR/bin/nidara-a11y"      /usr/bin/nidara-a11y
@@ -624,7 +625,7 @@ sudo cp "$REPO_DIR/bin/nidara-language" /usr/bin/nidara-language
 sudo rm -rf /usr/share/nidara/migrations
 sudo mkdir -p /usr/share/nidara/migrations
 sudo cp "$REPO_DIR"/migrations/*.sh /usr/share/nidara/migrations/
-sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
+sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
 
 # Compile the IPC client (nidara-ipc): `Request(as) -> s` on the shell's D-Bus
 # name, and the thing every keybind in hyprland.lua runs. C rather than GJS for
@@ -747,6 +748,10 @@ sudo rm -f /usr/share/xdg-desktop-portal/portals/nidara.conf  # misplaced legacy
 sudo cp "$REPO_DIR/config/portal/nidara.portal" /usr/share/xdg-desktop-portal/portals/nidara.portal
 sudo cp "$REPO_DIR/config/portal/org.freedesktop.impl.portal.desktop.nidara.service" /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service
 sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/hyprland-portals.conf
+# The Nidara session (Hyalo, XDG_CURRENT_DESKTOP=Nidara) reads nidara-portals.conf; its
+# screen sharing is xdg-desktop-portal-wlr with Nidara's picker (bin/nidara-share-chooser).
+sudo cp "$REPO_DIR/config/portal/nidara-portals.conf" /etc/xdg-desktop-portal/nidara-portals.conf
+sudo install -Dm644 "$REPO_DIR/config/portal/xdpw-nidara.conf" /etc/xdg/xdg-desktop-portal-wlr/Nidara
 pkill -f nidara-portal 2>/dev/null || true
 systemctl --user restart xdg-desktop-portal 2>/dev/null || true
 
