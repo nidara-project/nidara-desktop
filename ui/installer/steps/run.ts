@@ -19,7 +19,7 @@ import { copyLogToTarget, openLiveLog, type LiveLog } from "../lib/install-log"
 import { COMMAND_LOG, reportCommandLog } from "../lib/command-log"
 import { stripAnsi } from "../lib/ansi"
 import { connectivity, isUsable } from "../lib/network"
-import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, looksStalled } from "../lib/stall"
+import { DOWNLOAD_DIRS, STALL_QUIET_MS, failedDownloading, failedWriting, looksStalled } from "../lib/stall"
 import { measureMirrors, prepareLiveMirrorlist, restoreTargetMirrorlist } from "../lib/mirrors"
 import { isPreview, previewSkip } from "../lib/preview"
 import { heading, prose, formatDuration, formatLiveTimer } from "./common"
@@ -409,6 +409,7 @@ export function RunStep(): Step {
           // it could not download, say that, and what to do about it.
           desc.label = stoppedByUser
             ? t("runFailedStoppedProse")
+            : failedWriting(childTail) ? t("runFailedSpaceProse")
             : failedDownloading(childTail) ? t("runFailedNetworkProse") : t("runFailedProse")
           desc.remove_css_class("installer-prose--dim")
           desc.add_css_class("installer-prose--warning")

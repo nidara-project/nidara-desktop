@@ -1144,6 +1144,14 @@ Measured in a VM (2026-09-17, `lib/stall.ts` has the detail):
 - **Link gone** (QMP `set_link n0 off`) → pacman fails within about a minute on `Could not resolve
   host`. The page now says the connection was lost (`failedDownloading`, matched on the CHILD's
   output) instead of "an error occurred" over a traceback asking to report it to archinstall.
+- ⚠️ **"failed retrieving file" is not always the network** (2026-10-13). With the live medium's
+  RAM overlay full (archiso gives it 256 MiB), pacman printed `failed retrieving file … : Failure
+  writing output to destination` (curl error 23) and `failed to synchronize all databases`, both
+  network words, while the network answered. The page said the connection was lost. `failedWriting`
+  now catches the local failures (that line, `No space left on device`, pacman's own free-space
+  check) and WINS: the page says the installer ran out of space and to restart from the medium.
+  `failedDownloading` returns false for them. `stall-probe.ts` holds the real lines, and CI deletes
+  each rule in turn and requires the probe to catch it.
 - **Link up, nothing arriving** (`iptables -I OUTPUT -p tcp -m multiport --dports 80,443 -j DROP`
   inside the Live medium — DNS keeps working) → `pacman -Sy` sat on "Synchronizing package
   databases" for 20 minutes with no output: pacman was walking the medium's 431-server mirrorlist,
