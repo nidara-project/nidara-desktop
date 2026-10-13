@@ -242,6 +242,18 @@ impl Hyalo {
             return;
         };
         let area = self.floating_area_of(&output);
+        if tiled_rect.is_some() {
+            // X11 has no "choose your size" configure. Remember its request before
+            // the first tile replaces it, for every later route into floating (#809).
+            let want = (x.last_configure() - x.frame_extents()).size;
+            let size: Size<i32, Logical> = Size::from((want.w.clamp(1, area.size.w.max(1)), want.h.clamp(1, area.size.h.max(1))));
+            let bar = self.wm.get(id).map_or(0, |m| m.bar());
+            let own = crate::wm::clamp_floating_with_bar(
+                crate::wm::without_bar(crate::wm::centered((size.w, size.h + bar).into(), area), bar), area, bar,
+            );
+            let og = self.space.output_geometry(&output).unwrap_or_default();
+            self.wm.get_mut(id).unwrap().float_rect = Some(Rectangle::new(own.loc - og.loc, own.size));
+        }
         let rect = match tiled_rect {
             Some(r) => r,
             None => {
