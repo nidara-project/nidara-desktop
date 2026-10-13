@@ -1287,6 +1287,20 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `clamp_floating`), and stepped off a window it would cover entirely (`cascade`, KWin's
   `cascadeIfCovering`). A dialog, or a window whose min size equals its max, floats even on a
   tiling workspace (`wants_floating`).
+- **A window born tiled has no Wayland floating box yet** (#809). Its initial configure is
+  the predicted tile, so `window_mapped` must not save that size as `float_rect`. On its first
+  `float`, `toggle-floating`, or move to a floating workspace, `arrange_workspace` sends
+  xdg-toplevel size `0×0` (the client chooses within the existing bounds). After the client
+  acks and commits, `window_committed` centres the size it actually drew and saves that box;
+  later tile → float cycles restore it (#742). X11 has no `0×0` request: before placing its
+  first tile, `x11_initial_configure` saves the pre-placement client request as its own box.
+  `pseudo` on a still-tiled Wayland window with no own box uses the tile size until it has
+  floated; its fallback is the tile, not a remembered preference. CI:
+  `scripts/ci/hyalo-float-size-check.sh` covers both kinds of client, workspace moves and
+  the saved-box regression. 🔴 Its Wayland probe needs `HYALO_PROBE_CHOOSE_SIZE=1`: the
+  ordinary `hyalo-window-controls-probe` draws a fixed buffer whatever configure says and
+  would let a size test pass for the wrong reason. Controls seen failing nested: unchanged
+  main `cb405718` (Wayland first float stayed at its 2550×1430 tile, with no `0×0` configure).
 - **A modal dialog keeps the focus from its parent** (xdg-dialog-v1; GTK marks a `modal` transient
   window with it). `focus_window` is the one door to the focus — a click, the keyboard, the IPC,
   the overview — and it hands the focus meant for a window to its open modal dialog

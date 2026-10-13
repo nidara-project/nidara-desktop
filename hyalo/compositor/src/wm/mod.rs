@@ -87,7 +87,8 @@ pub struct Managed {
     pub workspace: i32,
     pub floating: bool,
     /// The floating box (the client's own geometry, no border), relative to the origin of the
-    /// workspace's output. `None` until the window has been floating once.
+    /// workspace's output. `None` until Wayland has chosen a floating size; X11 keeps its
+    /// pre-placement request, since it cannot be asked to choose with a 0x0 configure.
     pub float_rect: Option<Rect>,
     pub fullscreen: Fullscreen,
     pub pseudo: bool,
@@ -797,7 +798,11 @@ impl Hyalo {
             m.initial_title = initial_title;
             m.mapped = true;
             m.floating = !tiled;
-            m.float_rect = Some(Rectangle::new(float.loc - og.loc, float.size));
+            // A Wayland tile is not a size the app chose. X11 may already have saved
+            // its pre-placement request (x11_initial_configure).
+            if !tiled {
+                m.float_rect = Some(Rectangle::new(float.loc - og.loc, float.size));
+            }
         }
         if tiled && let Some(w) = self.wm.workspaces.get_mut(&ws) {
             w.layout.insert(id, tiled_area, near, cursor);
@@ -871,14 +876,18 @@ impl Hyalo {
         }
         let (id, ws, bar) = (m.id, m.workspace, m.bar());
         let size = window.geometry().size;
-        let Some(fr) = m.float_rect else { return };
-        if fr.size == size {
+        let fr = m.float_rect;
+        if fr.is_some_and(|r| r.size == size) {
             return;
         }
         let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
         let og = self.space.output_geometry(&output).unwrap_or_default();
         let area = self.floating_area(&output);
-        let global = Rectangle::new(fr.loc + og.loc, size);
+        // First floating response to 0x0: centre what the app actually drew, even
+        // when it chose the same size it had tiled. Later commits keep its position.
+        let global = fr.map(|r| Rectangle::new(r.loc + og.loc, size)).unwrap_or_else(|| {
+            without_bar(centered((size.w, size.h + bar).into(), area), bar)
+        });
         let clamped = clamp_floating_with_bar(global, area, bar);
         let ask = m.clamp_ask;
         let m = self.wm.get_mut(id).unwrap();
@@ -931,8 +940,12 @@ impl Hyalo {
                     }
                 }
                 (Fullscreen::None, None) => {
-                    let fr = m.float_rect.unwrap_or_else(|| Rectangle::new((0, 0).into(), m.window.geometry().size));
-                    (Rectangle::new(fr.loc + og.loc, fr.size), Some(fr.size))
+                    match m.float_rect {
+                        Some(fr) => (Rectangle::new(fr.loc + og.loc, fr.size), Some(fr.size)),
+                        // No own box yet: send 0x0, keep the old box only until the
+                        // client commits its choice (window_committed centres it).
+                        None => (m.rect, None),
+                    }
                 }
             };
             m.rect = rect;
@@ -1277,9 +1290,11 @@ impl Hyalo {
                 let area = self.floating_area(o);
                 let m = self.wm.get_mut(id).unwrap();
                 let bar = m.bar();
-                let fr = m.float_rect.unwrap_or(Rectangle::new(m.rect.loc - og.loc, m.rect.size));
-                let fr = clamp_floating_with_bar(Rectangle::new(fr.loc + og.loc, fr.size), area, bar);
-                m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
+                if let Some(fr) = m.float_rect {
+                    let fr = clamp_floating_with_bar(Rectangle::new(fr.loc + og.loc, fr.size), area, bar);
+                    m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
+                }
+                // With no own box, arrange_workspace asks Wayland to choose (0x0).
             }
         }
         let m = self.wm.get_mut(id).unwrap();
@@ -1372,7 +1387,7 @@ impl Hyalo {
         if m.floating == floating {
             return;
         }
-        let (ws, rect) = (m.workspace, m.rect);
+        let ws = m.workspace;
         let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
         let og = self.space.output_geometry(&output).unwrap_or_default();
         if floating {
@@ -1382,10 +1397,12 @@ impl Hyalo {
             let area = self.floating_area(&output);
             let m = self.wm.get_mut(id).unwrap();
             let bar = m.bar();
-            // Back to its last floating box, else where it was tiled.
-            let fr = m.float_rect.map(|r| Rectangle::new(r.loc + og.loc, r.size)).unwrap_or(rect);
-            let fr = clamp_floating_with_bar(fr, area, bar);
-            m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
+            // Back to its own floating box; without one, ask the client to choose
+            // its size (0x0 in arrange_workspace), then centre its committed response.
+            if let Some(fr) = m.float_rect {
+                let fr = clamp_floating_with_bar(Rectangle::new(fr.loc + og.loc, fr.size), area, bar);
+                m.float_rect = Some(Rectangle::new(fr.loc - og.loc, fr.size));
+            }
             m.floating = true;
         } else {
             let area = inset(self.work_area(&output), self.config.layout.gaps_out);

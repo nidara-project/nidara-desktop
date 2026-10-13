@@ -19,6 +19,10 @@
  *          just exits, and its objects go in the order it made them (the surface first), as an
  *          app that is killed. For scripts/ci/hyalo-motion-check.sh.
  *
+ * HYALO_PROBE_CHOOSE_SIZE=1: obey configure dimensions, choosing the original 400x200
+ *          (dialog: 300x150) for zero dimensions. Print CONFIGURE w h and DRAW w h;
+ *          left press requests an xdg move. For hyalo-float-size-check.sh (#809).
+ *
  *   wayland-scanner client-header/private-code for xdg-shell and nidara-window-controls-v1
  *   (protocols/ at the repository root), then
  *   cc hyalo-window-controls-probe.c xdg-shell-protocol.c nidara-window-controls-v1-protocol.c \
@@ -51,6 +55,7 @@ static struct xdg_wm_base *wm_base;
 static struct wl_seat *seat;
 static struct nidara_window_controls_manager_v1 *controls_mgr;
 static int closed;
+static int choose_size;
 static volatile sig_atomic_t want;   /* the last signal, 0 none */
 static void on_signal(int sig) { want = sig; }
 
@@ -95,6 +100,12 @@ static const struct xdg_surface_listener xdg_surface_listener = { surface_config
 
 static void top_configure(void *d, struct xdg_toplevel *t, int32_t w, int32_t h, struct wl_array *states) {
     struct win *win = d;
+    if (choose_size) {
+        printf("%sCONFIGURE %d %d\n", win->tag, w, h);
+        win->w = w > 0 ? w : (win == &main_win ? 400 : 300);
+        win->h = h > 0 ? h : (win == &main_win ? 200 : 150);
+        win->pending_place = 1;
+    }
     int maximized = 0;
     uint32_t *s;
     wl_array_for_each(s, states) if (*s == XDG_TOPLEVEL_STATE_MAXIMIZED) maximized = 1;
@@ -128,6 +139,8 @@ static void p_leave(void *d, struct wl_pointer *p, uint32_t serial, struct wl_su
 }
 static void p_motion(void *d, struct wl_pointer *p, uint32_t t, wl_fixed_t x, wl_fixed_t y) {}
 static void p_button(void *d, struct wl_pointer *p, uint32_t serial, uint32_t t, uint32_t b, uint32_t st) {
+    if (choose_size && b == 272 && st == WL_POINTER_BUTTON_STATE_PRESSED)
+        xdg_toplevel_move(main_win.top, seat, serial);
     printf("BUTTON %u\n", st);
     fflush(stdout);
 }
@@ -152,6 +165,10 @@ static struct wl_buffer *solid_buffer(int w, int h, uint32_t colour) {
 static void place(struct win *win) {
     double x = win->side == NIDARA_WINDOW_CONTROLS_V1_SIDE_LEFT ? INSET : win->w - INSET - win->box_w;
     nidara_window_controls_v1_set_position(win->controls, wl_fixed_from_double(x), wl_fixed_from_double(INSET));
+    if (choose_size) {
+        xdg_surface_set_window_geometry(win->xs, 0, 0, win->w, win->h);
+        printf("%sDRAW %d %d\n", win->tag, win->w, win->h);
+    }
     wl_surface_attach(win->surface, solid_buffer(win->w, win->h, win->colour), 0, 0);
     wl_surface_damage(win->surface, 0, 0, win->w, win->h);
     wl_surface_commit(win->surface);
@@ -177,6 +194,8 @@ static void open_window(struct wl_display *d, struct win *win, const char *title
 }
 
 int main(void) {
+    const char *choose = getenv("HYALO_PROBE_CHOOSE_SIZE");
+    choose_size = choose && strcmp(choose, "1") == 0;
     struct wl_display *d = wl_display_connect(NULL);
     if (!d) { fprintf(stderr, "no Wayland display\n"); return 1; }
     struct wl_registry *reg = wl_display_get_registry(d);

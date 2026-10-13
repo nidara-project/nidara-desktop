@@ -610,6 +610,10 @@ phase_run() {
     X11_LOG=/tmp/hyalo/x11 "$REPO/scripts/ci/hyalo-x11-check.sh" >/tmp/hyalo/x11.log 2>&1 \
         || { log "FAIL: X11 apps"; cat /tmp/hyalo/x11.log; exit 1; }
     log "X11 apps OK ($(grep -c '^ok' /tmp/hyalo/x11.log) of 5: Xwayland, a window, keys, the clipboard, a menu)"
+    # First float of a window born tiled (#809), and the saved floating box (#742).
+    FLOAT_SIZE_LOG=/tmp/hyalo/float-size "$REPO/scripts/ci/hyalo-float-size-check.sh" >/tmp/hyalo/float-size.log 2>&1 \
+        || { log "FAIL: floating size"; cat /tmp/hyalo/float-size.log; exit 1; }
+    log "floating size OK (Wayland, X11, workspace moves, and saved boxes)"
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null
