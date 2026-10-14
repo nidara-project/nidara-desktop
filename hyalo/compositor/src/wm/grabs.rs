@@ -40,6 +40,37 @@ impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
     }
 }
 
+/// One shared resize target for every app, including undecorated GTK windows.
+/// The narrow inside strip avoids taking controls in the application's header.
+pub fn border_edges(rect: Rect, pos: Point<f64, Logical>) -> ResizeEdge {
+    let r = rect.to_f64();
+    let (x, y) = (pos.x - r.loc.x, pos.y - r.loc.y);
+    if x < -6.0 || y < -6.0 || x >= r.size.w + 6.0 || y >= r.size.h + 6.0 {
+        return ResizeEdge::empty();
+    }
+    let on_vertical = x < 3.0 || x >= r.size.w - 3.0;
+    let on_horizontal = y < 3.0 || y >= r.size.h - 3.0;
+    if !on_vertical && !on_horizontal { return ResizeEdge::empty(); }
+    let mut edges = ResizeEdge::empty();
+    if x < 16.0 { edges |= ResizeEdge::LEFT; }
+    else if x >= r.size.w - 16.0 { edges |= ResizeEdge::RIGHT; }
+    if y < 16.0 { edges |= ResizeEdge::TOP; }
+    else if y >= r.size.h - 16.0 { edges |= ResizeEdge::BOTTOM; }
+    edges
+}
+
+impl ResizeEdge {
+    pub fn cursor(self) -> smithay::input::pointer::CursorIcon {
+        use smithay::input::pointer::CursorIcon;
+        match self.bits() {
+            5 | 10 => CursorIcon::NwseResize,
+            9 | 6 => CursorIcon::NeswResize,
+            4 | 8 => CursorIcon::EwResize,
+            _ => CursorIcon::NsResize,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Move,
@@ -140,8 +171,11 @@ impl Hyalo {
                 }
             }
             (Kind::Resize(edges), true) => {
-                let step = location - last;
-                let (dx, dy) = (step.x.round() as i32, step.y.round() as i32);
+                // Round the accumulated displacement, not each subpixel event. A
+                // slow/high-DPI drag must move the split just as far as one large event.
+                let previous = last - start;
+                let (dx, dy) = ((delta.x.round() - previous.x.round()) as i32,
+                                (delta.y.round() - previous.y.round()) as i32);
                 let ws = m.workspace;
                 let Some(output) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) else { return };
                 let area = inset(self.work_area(&output), self.config.layout.gaps_out);
@@ -280,7 +314,7 @@ impl Hyalo {
 }
 
 /// The client's minimum and maximum size (0 = none).
-fn size_limits(window: &smithay::desktop::Window) -> (Size<i32, Logical>, Size<i32, Logical>) {
+pub(crate) fn size_limits(window: &smithay::desktop::Window) -> (Size<i32, Logical>, Size<i32, Logical>) {
     if let Some(x) = window.x11_surface() {
         return (x.min_size().unwrap_or_default(), x.max_size().unwrap_or_default());
     }
@@ -374,5 +408,22 @@ impl PointerGrab<Hyalo> for WindowGrab {
         // the compositor — measured, Super+drag).
         let (location, start) = (self.last, self.start_data.location);
         data.loop_handle.insert_idle(move |state| state.grab_released(location, start));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resize_strip_covers_both_sides_of_edge_but_not_header_controls() {
+        let r = Rect::new((100, 100).into(), (500, 300).into());
+        assert_eq!(border_edges(r, (99.0, 200.0).into()), ResizeEdge::LEFT);
+        assert_eq!(border_edges(r, (601.0, 200.0).into()), ResizeEdge::RIGHT);
+        assert_eq!(border_edges(r, (599.0, 399.0).into()), ResizeEdge::RIGHT | ResizeEdge::BOTTOM);
+        assert_eq!(border_edges(r, (101.0, 110.0).into()), ResizeEdge::LEFT | ResizeEdge::TOP);
+        assert!(border_edges(r, (550.0, 116.0).into()).is_empty());
+        assert!(border_edges(r, (607.0, 200.0).into()).is_empty());
+        assert!(border_edges(r, (350.0, 250.0).into()).is_empty());
     }
 }

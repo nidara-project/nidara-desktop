@@ -499,6 +499,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
     // A minimized window is out of the space: drawn where the model has it.
     let Some(at) = state.space.element_location(w).or_else(|| managed.map(|m| m.rect.loc)) else { return };
     let fullscreen = managed.is_some_and(|m| m.fullscreen == crate::wm::Fullscreen::Fullscreen);
+    let visible_size = managed.map_or_else(|| w.geometry().size, |m| m.visible_size());
     let bar = managed.filter(|_| !fullscreen).map_or(0, |m| m.bar());
     // Everything of the window is drawn from its surface's origin, its box and the
     // scale: moved and scaled together, its corners, line and shadow follow (decor.rs,
@@ -507,7 +508,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
     let (loc, geo, wscale, origin_of) = match place {
         None => {
             let loc = (at - w.geometry().loc - output_loc).to_f64().to_physical_precise_round(scale);
-            let geo = Rectangle::new(at - output_loc, w.geometry().size).to_f64().to_physical_precise_round(scale);
+            let geo = Rectangle::new(at - output_loc, visible_size).to_f64().to_physical_precise_round(scale);
             let origin = (at - w.geometry().loc - output_loc).to_f64();
             (loc, geo, scale, (origin, 1.0))
         }
@@ -517,7 +518,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             let gl = w.geometry().loc.to_f64();
             let surface = base + Point::<f64, Logical>::from((-gl.x, bar as f64 - gl.y)).upscale(k);
             let client = base + Point::<f64, Logical>::from((0.0, bar as f64)).upscale(k);
-            let geo = Rectangle::new(client.to_physical(scale), w.geometry().size.to_f64().upscale(k).to_physical(scale));
+            let geo = Rectangle::new(client.to_physical(scale), visible_size.to_f64().upscale(k).to_physical(scale));
             (surface.to_physical(scale).to_i32_round(), geo, Scale::from(scale.x * k), (surface, k))
         }
     };
@@ -557,7 +558,8 @@ pub(crate) fn push_window<R: HyaloRenderer>(
     // Its line and its shadow (decor.rs), focused or not: not on a fullscreen window, nor
     // where a rule took its corners (games).
     let decor = managed.filter(|m| !fullscreen && m.rounded).map(|m| state.wm.focused == Some(m.id));
-    window::push(out, renderer, w, look, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor, state.when);
+    let clip_to_cell = managed.is_some_and(|m| !m.floating && m.fullscreen == crate::wm::Fullscreen::None);
+    window::push(out, renderer, w, look, clip_to_cell, loc, geo, wscale, output_size, state.windows, controls, title_bar, decor, state.when);
 }
 
 /// The pointer: the client's own cursor surface, or our themed one.

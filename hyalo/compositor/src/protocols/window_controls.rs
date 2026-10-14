@@ -215,18 +215,29 @@ pub const BAR_MARGIN: f64 = 8.0;
 pub fn managed_rect(m: &crate::wm::Managed, cfg: &ControlsConfig) -> Option<(Rectangle<f64, Logical>, Buttons)> {
     let surface = crate::wm::surface_of(&m.window)?;
     let buttons = shown(&surface, m.controls, cfg);
+    let visible = m.visible_size().to_f64();
+    if visible.w < buttons.width() || visible.h + (m.bar() as f64) < BUTTON_H { return None; }
     let bar = m.bar() as f64;
     if bar > 0.0 {
         let geo = m.window.geometry().to_f64();
         let w = buttons.width();
         let x = match cfg.side {
-            ControlsSide::Right => geo.loc.x + geo.size.w - BAR_MARGIN - w,
+            ControlsSide::Right => geo.loc.x + visible.w - BAR_MARGIN - w,
             ControlsSide::Left => geo.loc.x + BAR_MARGIN,
         };
+        let x = x.clamp(geo.loc.x, geo.loc.x + visible.w - w);
         let y = geo.loc.y - bar + (bar - BUTTON_H) / 2.0;
         return Some((Rectangle::new((x, y).into(), (w, BUTTON_H).into()), buttons));
     }
-    Some((Rectangle::new(placed(&surface)?, buttons.size()), buttons))
+    let mut at = placed(&surface)?;
+    let geo = m.window.geometry().to_f64();
+    // Keep the capsule in the visible header when GTK allocated its minimum width
+    // beyond the tile. Preserve its requested gap from the chosen side.
+    let gap = (geo.loc.x + geo.size.w - at.x - buttons.width()).max(0.0);
+    if cfg.side == ControlsSide::Right { at.x = geo.loc.x + visible.w - gap - buttons.width(); }
+    at.x = at.x.clamp(geo.loc.x, geo.loc.x + visible.w - buttons.width());
+    if at.y < geo.loc.y || at.y + BUTTON_H > geo.loc.y + visible.h { return None; }
+    Some((Rectangle::new(at, buttons.size()), buttons))
 }
 
 /// The button at `local` in controls at `r` showing `buttons` (both surface-local logical px).
