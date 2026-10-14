@@ -32,7 +32,7 @@ import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import { bindInterfaceIconRefresh } from "./common/IconThemeRefresh"
 import compositor, { onHyalo, settings as compositorSettings } from "./core/CompositorState"
 import queryUI from "./core/UITree"
-import Wallpaper from "./core/WallpaperManager"
+import Wallpaper, { TRANSITIONS } from "./core/WallpaperManager"
 import workspaceModes, { type WorkspaceMode } from "./core/WorkspaceModes"
 import { startGameSession } from "./core/GameSession"
 import { startDevLogWatch } from "./core/DevLogWatch"
@@ -68,7 +68,9 @@ import { syncConstants } from "./surfaces/dock/DockPhysics"
 import { onDockSettingsChanged, dockSettings } from "./surfaces/dock/state"
 import Bar from "./surfaces/bar/Bar"
 import AgentPointer, { isAgentPointerActive } from "./surfaces/agent-pointer/AgentPointer"
-import Settings from "./surfaces/settings/Settings"
+import { requestSettings } from "./core/SettingsAppClient"
+import { settingsMonitorRequest, recoverSettingsDisplayPreviews } from "./core/SettingsMonitorService"
+import { takeUserCancel } from "./core/NetworkCancels"
 import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./surfaces/about/AboutWindow"
 import { setKitAppearance } from "../lib/nidara-kit"
@@ -76,7 +78,8 @@ import { safeDisconnect } from "./core/signals"
 import { setWidgetCatalog } from "./core/WidgetCatalog"
 // Last on purpose: by the time it evaluates, the registry and the CC grid already have
 // (through Settings and the bar), so adding the seam did not reorder the shell's boot.
-import { widgetCatalogSource } from "./core/WidgetCatalogSource"
+import { widgetCatalogSource, startWidgetCatalogNotifications } from "./core/WidgetCatalogSource"
+import { widgetCatalogRequest, CATALOG_SIGNAL } from "./core/WidgetCatalogWire"
 import { startShellGlass, shellGlassState, chromeIsDarkFor } from "./common/ShellGlass"
 
 // ── The kit's appearance seam ────────────────────────────────────────────────
@@ -115,6 +118,7 @@ function isSettingsClient(c: { class: string; title: string }): boolean {
 // service they start (#571). Same module-scope timing as the appearance seam above.
 // See core/WidgetCatalog.ts.
 setWidgetCatalog(widgetCatalogSource)
+shellActions.widgetCatalog = args => widgetCatalogRequest(widgetCatalogSource, args)
 
 // Minimal interface for windows managed by the shell
 interface ShellWindow {
@@ -155,7 +159,7 @@ interface IpcCommand {
   aliases?: string[]
   // May return a Promise — requestHandler awaits it before responding, so a
   // command can read authoritative async state (e.g. `hyprctl clients -j`).
-  run: (args: string[]) => string | void | Promise<string | void>
+  run: (args: string[], sender?: string) => string | void | Promise<string | void>
 }
 
 // Resolve a window argument to a live client. Accepts an exact address (`0x…`,
@@ -285,6 +289,32 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   settingsPage: {
     desc: "Open the Settings window on a specific page (e.g. `settingsPage bluetooth`)",
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
+  },
+  settingsMonitor: {
+    desc: "Settings' display confirmation and rollback control plane",
+    run: (args, sender) => settingsMonitorRequest(args, sender ?? ""),
+  },
+  takeNetworkCancel: {
+    desc: "Consume the network secret agent's cancelled outcome by connection UUID",
+    run: args => String(takeUserCancel(args[0] ?? "")),
+  },
+  settingsWallpaper: {
+    desc: "Settings' wallpaper control plane: set, transition or preview",
+    run: async args => {
+      const [verb, value, transition] = args
+      if (verb === "set" && args.length === 3 && TRANSITIONS.includes(transition as any)) {
+        if (!GLib.file_test(value, GLib.FileTest.IS_REGULAR)) throw Error("Wallpaper file is unavailable")
+        await Wallpaper.setWallpaper(value, transition as any, true)
+      } else if ((verb === "transition" || verb === "preview") && args.length === 2 && TRANSITIONS.includes(value as any)) {
+        if (verb === "preview") await Wallpaper.previewTransition(value as any, true)
+        else await Wallpaper.setTransition(value as any)
+      } else throw Error("Invalid wallpaper request")
+      return "ok"
+    },
+  },
+  widgetCatalog: {
+    desc: "Read the versioned widget catalogue or change placement: widgetCatalog [list | bar <id> <true|false> | cc <id> <true|false> | mode <id> <always|active> | editBarOrder]",
+    run: args => shellActions.widgetCatalog?.(args),
   },
   settingsApp: {
     desc: "Open the Settings window on one app's own page, by desktop id (e.g. `settingsApp firefox`) — what the window menu's \"App Settings…\" does",
@@ -888,7 +918,14 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "Read Nidara's OWN windows as JSON — bar, dock, Control Center, Assistant island, Settings — read-only, and the only way to see them: query_app cannot. " +
       "Optional selector: `.cssClass`, `#id`, `Type`, or `selector@window` " +
       "(e.g. `queryUI .bar-app-name`, `queryUI .nidara-menu-row@bar`)",
-    run: args => JSON.stringify(queryUI(args[0]), null, 2),
+    run: async args => {
+      const local = queryUI(args[0]) as any
+      const remote = await requestSettings(["queryUI", args[0] ?? ""], false).catch(() => null)
+      if (!remote) return JSON.stringify(local, null, 2)
+      const settings = JSON.parse(remote)
+      const nodes = [...(local.nodes ?? []), ...(settings.nodes ?? [])].slice(0, 500)
+      return JSON.stringify({ ...local, count: nodes.length, nodes }, null, 2)
+    },
   },
 }
 
@@ -915,7 +952,7 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
 // (`org.nidara.desktop`), and Settings names itself on top of it (ui/lib/nidara-kit/platform/app-id.ts).
 
 /** Runs one IPC command and hands the response to `res`. May answer async. */
-function dispatchRequest(argv: string[], res: (out: string) => void): void {
+function dispatchRequest(argv: string[], res: (out: string) => void, sender?: string): void {
   if (!argv || argv.length === 0) return res("ok")
   const cmd = argv[0].replace("()", "")
   const entry = IPC_COMMANDS[cmd] ?? IPC_COMMANDS[IPC_ALIASES[cmd]]
@@ -923,7 +960,7 @@ function dispatchRequest(argv: string[], res: (out: string) => void): void {
     console.warn(`[Handler] Unknown command: ${cmd}`)
     return res("unknown command — try `nidara-ipc listActions`")
   }
-  const out = entry.run(argv.slice(1))
+  const out = entry.run(argv.slice(1), sender)
   // A command may legitimately return nothing (it acted, there is no payload);
   // the wire always carries a string, so normalise rather than widen `res`.
   const text = (v: unknown): string => (typeof v === "string" ? v : "ok")
@@ -941,6 +978,7 @@ const NIDARA_BUS_PATH = "/org/nidara/Shell"
 const NIDARA_BUS_IFACE = `
 <node>
   <interface name="org.nidara.Shell">
+    <signal name="WidgetCatalogChanged"/>
     <method name="Request">
       <arg type="as" name="argv" direction="in"/>
       <arg type="s" name="response" direction="out"/>
@@ -962,7 +1000,7 @@ function exportShellBusName(): void {
     RequestAsync([argv]: [string[]], invocation: any) {
       try {
         dispatchRequest(argv ?? [], out =>
-          invocation.return_value(new GLib.Variant("(s)", [out ?? "ok"])))
+          invocation.return_value(new GLib.Variant("(s)", [out ?? "ok"])), invocation.get_sender())
       } catch (e) {
         // A throwing command must not leave the caller blocked until its D-Bus
         // timeout. Answered as a STRING, same shape as the async catch above, so
@@ -981,6 +1019,7 @@ function exportShellBusName(): void {
       (conn: Gio.DBusConnection) => {
         try {
           exported.export(conn, NIDARA_BUS_PATH)
+          startWidgetCatalogNotifications(() => exported.emit_signal(CATALOG_SIGNAL, null))
         } catch (e) {
           console.error(`[IPC] could not export ${NIDARA_BUS_PATH}:`, e)
         }
@@ -999,8 +1038,11 @@ app.start({
   // overwritten with AGS's own id; see ui/lib/nidara-kit/platform/host.ts.
   applicationId: "org.nidara.desktop",
   applicationName: "Nidara",
+  processName: "nidara-shell",
   logDomain: "nidara",
   main() {
+    // A shell restart during a display confirmation restores the previous mode.
+    try { recoverSettingsDisplayPreviews() } catch (e) { console.error("[SettingsDisplay] Recovery:", String(e)) }
     // The shell IS this desktop's notification server: `core/notifd.ts` owns
     // `org.freedesktop.Notifications`. Started HERE, explicitly, and not left to
     // whichever widget happens to ask first — the bar's bell was that widget, so
@@ -1074,7 +1116,6 @@ app.start({
     // duplicates and have been removed.
 
     const windows = new Set<ShellWindow>()
-    const settingsWindows: ShellWindow[] = []
 
     const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
       try {
@@ -1192,59 +1233,12 @@ app.start({
       })
       return r
     }
-    // Show + raise Settings. present()'s Wayland activation is IGNORED by Hyprland
-    // when the window sits on another workspace (misc:focus_on_activate=false), so
-    // after presenting we dispatch an explicit focus to the window — that switches
-    // to its workspace, exactly like clicking any running app in the dock. The
-    // window is a normal Hyprland client (class `nidara-settings`, which it
-    // declares for itself — see ui/lib/nidara-kit/platform/app-id.ts — and a title set by
-    // NidaraWindow); match both to disambiguate from the About window, which
-    // deliberately shares the class so both carry Settings' registry icon.
-    const raiseSettings = () => {
-      settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
-      const c = compositor.clients.find(isSettingsClient)
-      if (c?.address) compositor.focusWindow(c.address)
-    }
-    // Open/raise Settings — a normal window (NOT a toggle: re-invoking just
-    // raises it; it closes via its own close button). IPC alias: toggleSettings.
-    const openSettings = () => {
-      // Lazy init on first open
-      if (settingsWindows.length === 0) {
-        const display = Gdk.Display.get_default()
-        if (display) {
-          const monitors: any = display.get_monitors()
-          for (let i = 0; i < monitors.get_n_items(); i++) {
-            initWinGlobal(Settings, monitors.get_item(i), settingsWindows)
-          }
-        }
-      }
-      raiseSettings()
-    }
-    const openSettingsPage = (id: string): string => {
-      // Every failure hands back the valid ids. A bare "unknown page: AI" told an
-      // agent only that its guess was wrong, so it burned a step re-guessing
-      // (measured 2026-07-30) — and the ids are not derivable from the sidebar
-      // labels, which are translated.
-      const validPages = (): string =>
-        [...new Set(settingsWindows.flatMap(s => (s as any).pageIds ?? []))].join(", ")
-      if (!id) return `usage: settingsPage <pageId> — valid: ${validPages() || "bluetooth, network, appearance, …"}`
-      if (settingsWindows.length === 0) openSettings()   // lazy-create + raise
-      else raiseSettings()
-      let found = false
-      settingsWindows.forEach(s => {
-        if ((s as any).navigateToPage?.(id)) found = true
-      })
-      return found ? "ok" : `unknown page: ${id} — valid: ${validPages()}`
-    }
-    const openAppSettings = (appId: string): boolean => {
-      if (settingsWindows.length === 0) openSettings()   // lazy-create + raise
-      else raiseSettings()
-      let found = false
-      settingsWindows.forEach(s => {
-        if ((s as any).navigateToApp?.(appId)) found = true
-      })
-      return found
-    }
+    // Settings is a separate application; a crash cannot take down shell surfaces.
+    const openSettings = async () => { await requestSettings(["open"]) }
+    const openSettingsPage = async (id: string): Promise<string> =>
+      (await requestSettings(["page", id])) ?? "error: Settings unavailable"
+    const openAppSettings = async (id: string): Promise<string> =>
+      (await requestSettings(["app", id])) ?? "error: Settings unavailable"
     const toggleOverview = () => {
       status.toggleOverview()
     }
@@ -1359,9 +1353,8 @@ app.start({
     ipc.toggleAppGrid = toggleAppGrid
     ipc.agentPointer = agentPointer
     ipc.openSettings = openSettings
-    ipc.openAppSettings = (id: string) =>
-      !id ? "usage: settingsApp <desktop-id>" : openAppSettings(id) ? "ok" : `no page for app: ${id} — Settings shows the list of apps`
-    ipc.openSettingsPage = openSettingsPage as (...args: string[]) => string
+    ipc.openAppSettings = openAppSettings
+    ipc.openSettingsPage = openSettingsPage
     ipc.toggleOverview = toggleOverview
     ipc.toggleBarOverlay = toggleBarOverlay
     ipc.lockScreen = lockScreen

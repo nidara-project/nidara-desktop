@@ -268,6 +268,7 @@ for (const [c, file] of [...classes].sort()) {
 // Each bundle, the sheets it actually compiles, and the sources it builds from.
 // The greeter's sheet is the lockscreen's too — one file, two bundles.
 const BUNDLES = [
+    { name: "settings", src: ["ui/settings"], sheets: ["ui/settings/style.scss", "ui/shell/styles/_settings.scss", "ui/shell/styles/_components.scss"] },
     { name: "shell", src: ["ui/shell"], sheets: ["ui/shell/styles"] },
     { name: "installer", src: ["ui/installer"], sheets: ["ui/installer/style.scss"] },
     { name: "greeter", src: ["ui/greeter"], sheets: ["ui/greeter/style.scss"] },

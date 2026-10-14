@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "build": "../shell/node_modules/.bin/sass --no-charset style.scss style.css && ../../scripts/bundle.sh app.ts build/nidara-settings --kit-external=/usr/share/nidara-kit/js",
+    "typecheck": "npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json"
+  }
+}

@@ -243,6 +243,16 @@ case-insensitive: the ids are lowercase while the page NAMES are not, and the la
 translated, so neither the user nor an agent can derive an id from what is on screen. An error
 that only says "no" costs a whole step to re-guess — measured on `settings_page AI`, 2026-07-30.
 
+### Settings' widget catalogue (local control plane, #571)
+
+`widgetCatalog` reads a versioned snapshot or changes bar/CC placement and bar mode.
+Its verbs, validation, change signal and async client lifecycle are documented in
+`architecture.md` → "Widget catalogue over IPC". It goes through `ShellActions` and
+the existing `Request` door; it does not grant Assistant configuration-write permission.
+The Assistant's tool surface keeps using the gated `setConfig` path. Independent
+Settings also uses settingsWallpaper/settingsMonitor; its process lifecycle and
+lease ownership are in architecture.md → "Settings is its own application".
+
 ### Window & workspace management (ungated, the shell driving its own compositor)
 
 Hyprland **is** Nidara's compositor, so window-manager operations — switch

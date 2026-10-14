@@ -60,6 +60,7 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import { setConsoleLogDomain } from "console"
 import { exit } from "system"
+import { setProcessName } from "./process-name"
 
 // Before anything can construct a widget or touch the icon theme. See (1) above.
 Gtk.init()
@@ -81,12 +82,16 @@ export interface StartConfig {
    * listed every Nidara toplevel under an app called "gjs".
    */
   applicationName?: string
+  /** Linux process-monitor name (ASCII, at most 15 characters); optional for kit clients. */
+  processName?: string
   /** Log domain for `console.*` — the prefix in the shell's log. */
   logDomain?: string
   /** CSS file path, resource:// URI, or literal CSS, applied at startup. */
   css?: string
   /** Called once the application is running, with GTK initialised. */
   main?: () => void
+  /** A second invocation activates the existing application without rebuilding it. */
+  activate?: () => void
 }
 
 class NidaraApplication extends Gtk.Application {
@@ -95,6 +100,8 @@ class NidaraApplication extends Gtk.Application {
   }
 
   #main?: () => void
+  #activate?: () => void
+  #started = false
   #cssProviders: Gtk.CssProvider[] = []
 
   get #display(): Gdk.Display {
@@ -160,6 +167,8 @@ class NidaraApplication extends Gtk.Application {
   }
 
   vfunc_activate(): void {
+    if (this.#started) { this.#activate?.(); return }
+    this.#started = true
     // See (3) above. Released by `quit()` exiting the process.
     this.hold()
     this.#main?.()
@@ -167,9 +176,10 @@ class NidaraApplication extends Gtk.Application {
 
   /** Configure and run. Does not return until the application quits. */
   start(config: StartConfig): void {
-    const { applicationId, applicationName, logDomain, css, main } = config
+    const { applicationId, applicationName, processName, logDomain, css, main, activate } = config
 
     this.#main = main
+    this.#activate = activate
     this.applicationId = applicationId
 
     // Neither of these affects the Wayland app-id (measured: an explicit
@@ -179,6 +189,7 @@ class NidaraApplication extends Gtk.Application {
     GLib.set_prgname(applicationId)
     if (applicationName) GLib.set_application_name(applicationName)
     setConsoleLogDomain(logDomain ?? applicationName ?? applicationId)
+    if (processName) setProcessName(processName)
 
     // Before main(): the base sheet must be in place when the first widget is
     // measured, or the first frame lays out against GTK's defaults.

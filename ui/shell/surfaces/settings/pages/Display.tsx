@@ -1,3 +1,5 @@
+import { runSettingsAction } from "../SettingsErrors"
+import { isSettingsProcess } from "../../../core/SettingsProcess"
 import Gtk from "gi://Gtk?version=4.0"
 import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized, onPageShown } from "../SettingsHelpers"
 import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
@@ -65,7 +67,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
     scaleDrp.connect("notify::selected", () => {
         if (scaleApplying) return
         const v = scaleVals[scaleDrp.selected]
-        if (v != null) monitorConfig.setScale(name, parseFloat(v))
+        if (v != null) void runSettingsAction(() => monitorConfig.setScale(name, parseFloat(v)))
     })
     const rebuildScaleOptions = (w: number, h: number) => {
         scaleApplying = true
@@ -126,14 +128,14 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
             hzDrp.selected = idx >= 0 ? idx : 0
         }
 
-        const applyMode = () => {
+        const applyMode = async () => {
             if (modeApplying) return
             const r = resList[resDrp.selected]
             const hzs = hzForRes(resDrp.selected)
             const hz = hzs[hzDrp.selected] ?? hzs[0]
             const newMode = `${r.w}x${r.h}@${hz}`
             if (newMode === prevMode) return
-            monitorConfig.applyMode(name, newMode)
+            if (!await runSettingsAction(() => monitorConfig.applyMode(name, newMode))) return
             showNidaraAlert({
                 parent: box.get_root() as Gtk.Window,
                 heading: t("settings.display.confirm.title"),
@@ -145,15 +147,16 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
                     { id: "revert", label: t("settings.display.confirm.revert") },
                     { id: "keep", label: t("settings.display.confirm.keep"), suggested: true },
                 ],
-                onResponse: (id) => {
+                onResponse: (id) => { void runSettingsAction(async () => {
                     if (id === "keep") {
-                        prevMode = newMode
                         // The new resolution may invalidate the current scale.
-                        if (!isScaleValid(r.w, r.h, monitorConfig.getScale(name))) monitorConfig.setScale(name, 1.0)
-                        monitorConfig.commit()
+                        await monitorConfig.commit(name)
+                        prevMode = newMode
+                        if (!isScaleValid(r.w, r.h, monitorConfig.getScale(name))) await monitorConfig.setScale(name, 1.0)
                         rebuildScaleOptions(r.w, r.h)
                     } else {
-                        monitorConfig.applyMode(name, prevMode)
+                        if (isSettingsProcess) await monitorConfig.revert(name)
+                        else await monitorConfig.applyMode(name, prevMode)
                         const pm = prevMode.match(/^(\d+)x(\d+)@(\d+)/)
                         if (pm) {
                             modeApplying = true
@@ -162,7 +165,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
                             modeApplying = false
                         }
                     }
-                },
+                }) },
             })
         }
 
@@ -211,11 +214,11 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
     // same revert-safety dialog as the resolution change.
     let rotApplying = false
     let prevTransform = currentTransform
-    rotDrp.connect("notify::selected", () => {
+    rotDrp.connect("notify::selected", async () => {
         if (rotApplying) return
         const newT = TRANSFORM_MAP[ROTATIONS[rotDrp.selected]] ?? 0
         if (newT === prevTransform) return
-        monitorConfig.applyTransform(name, newT)
+        if (!await runSettingsAction(() => monitorConfig.applyTransform(name, newT))) return
         showNidaraAlert({
             parent: box.get_root() as Gtk.Window,
             heading: t("settings.display.confirm.title"),
@@ -227,17 +230,18 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
                 { id: "revert", label: t("settings.display.confirm.revert") },
                 { id: "keep", label: t("settings.display.confirm.keep"), suggested: true },
             ],
-            onResponse: (id) => {
+            onResponse: (id) => { void runSettingsAction(async () => {
                 if (id === "keep") {
+                    await monitorConfig.commit(name)
                     prevTransform = newT
-                    monitorConfig.commit()
                 } else {
-                    monitorConfig.applyTransform(name, prevTransform)
+                    if (isSettingsProcess) await monitorConfig.revert(name)
+                    else await monitorConfig.applyTransform(name, prevTransform)
                     rotApplying = true
                     rotDrp.selected = prevTransform < ROTATIONS.length ? prevTransform : 0
                     rotApplying = false
                 }
-            },
+            }) },
         })
     })
 
@@ -289,7 +293,7 @@ function buildGlobalSection(): Gtk.Widget {
     }
     vrrDrp.connect("notify::selected", () => {
         if (syncing) return
-        monitorConfig.setVrr(vrrDrp.selected)
+        void runSettingsAction(() => monitorConfig.setVrr(vrrDrp.selected))
     })
     // The page is cached and the window hides rather than closes, so this is a
     // question to re-ask on every visit: MonitorConfig re-reads the effective

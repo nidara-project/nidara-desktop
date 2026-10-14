@@ -1,3 +1,4 @@
+import { isSettingsProcess, settingsShellRequest } from "./SettingsProcess"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
@@ -85,6 +86,7 @@ class WallpaperManager extends GObject.Object {
         }, this)
     }
 
+    private _settingsMonitor: Gio.FileMonitor | null = null
     private _current: string = ""
     private _transition: TransitionType = "random"
     private _preview: any = null
@@ -98,7 +100,16 @@ class WallpaperManager extends GObject.Object {
     constructor() {
         super()
         this._loadSaved()
-        this._initGsettingsSync()
+        if (!isSettingsProcess) this._initGsettingsSync()
+        else {
+            const file = Gio.File.new_for_path(CONFIG_PATH)
+            try {
+                this._settingsMonitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
+                this._settingsMonitor.connect("changed", () => {
+                    this._loadSaved(); this.emit("changed")
+                })
+            } catch (e) { console.warn("[WallpaperManager]", String(e)) }
+        }
         this.pruneThumbnailCache()
     }
 
@@ -194,11 +205,18 @@ class WallpaperManager extends GObject.Object {
         writeFile(CONFIG_PATH, JSON.stringify({ ...existing, path: this._current, transition: this._transition }))
     }
 
-    async setWallpaper(path: string, transition?: TransitionType) {
+    async setWallpaper(path: string, transition?: TransitionType, strict = false) {
+        if (isSettingsProcess) {
+            await settingsShellRequest(["settingsWallpaper", "set", path, transition ?? this._transition])
+            this._loadSaved(); this.emit("changed")
+            return
+        }
         if (!GLib.file_test(path, GLib.FileTest.EXISTS)) {
+            if (strict) throw Error(`Wallpaper file not found: ${path}`)
             console.error(`[WallpaperManager] File not found: ${path}`)
             return
         }
+        const previous = { path: this._current, transition: this._transition }
         const t = transition ?? this._transition
         this._current = path
         this._transition = t
@@ -213,6 +231,11 @@ class WallpaperManager extends GObject.Object {
             this.warmPreview()
             console.log(`[WallpaperManager] Set: ${path} (${t})`)
         } catch (e) {
+            if (strict) {
+                this._current = previous.path; this._transition = previous.transition
+                this._save(); if (previous.path) this._syncToGsettings(previous.path)
+                throw e
+            }
             console.error("[WallpaperManager] awww error:", e)
         }
     }
@@ -243,13 +266,21 @@ class WallpaperManager extends GObject.Object {
         }
     }
 
-    setTransition(t: TransitionType) {
-        this._transition = t
-        this._save()
+    async setTransition(t: TransitionType) {
+        if (isSettingsProcess) {
+            await settingsShellRequest(["settingsWallpaper", "transition", t])
+            this._loadSaved(); this.emit("changed"); return
+        }
+        this._transition = t; this._save()
     }
 
     /** Preview a transition by clearing to black then re-applying current wallpaper. */
-    async previewTransition(t: TransitionType) {
+    async previewTransition(t: TransitionType, strict = false) {
+        if (isSettingsProcess) {
+            await settingsShellRequest(["settingsWallpaper", "preview", t])
+            this._loadSaved(); this.emit("changed")
+            return
+        }
         this._transition = t
         this._save()
         if (!this._current || !GLib.file_test(this._current, GLib.FileTest.EXISTS)) return
@@ -258,6 +289,7 @@ class WallpaperManager extends GObject.Object {
             await execAsync(["awww", "img", this._current, "--transition-type", t])
             this.emit("changed")
         } catch (e) {
+            if (strict) throw e
             console.error("[WallpaperManager] previewTransition error:", e)
         }
     }
@@ -479,6 +511,8 @@ class WallpaperManager extends GObject.Object {
     }
 
     async refreshFromDaemon() {
+        if (isSettingsProcess) { this._loadSaved(); return }
+
         if (!this._current) {
             const path = await this.queryCurrentFromDaemon()
             if (path) {

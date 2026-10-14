@@ -64,6 +64,25 @@ Two things came back with it:
   appeared at every boot no longer does.
 - **The app-id is ours**, and with it the seventh commandment (see below).
 
+### Linux process names
+
+The host's optional `processName` sets Linux's main-thread `comm` by opening
+`/proc/self/comm` directly through Gio (`platform/process-name.ts`). This is the
+name process monitors and `pgrep -x` see: `nidara-shell`, `nidara-settings`,
+`nidara-lock`, `nidara-greeter`, and `nidara-install`. Linux allows 15 bytes, so
+names are validated as ASCII and never silently truncated. The installer uses
+`nidara-install` because `nidara-installer` is too long.
+
+`GLib.set_prgname`, `GLib.set_application_name`, GApplication IDs, and per-window
+Wayland app-ids remain separate. The command line still says `gjs -m …`; changing
+`comm` does not replace the executable or change a child's identity after exec.
+Do not use atomic file replacement on procfs. If procfs is unavailable, the host
+logs a warning and continues. External kit applications may omit `processName`.
+The standalone `nidara-ui` launcher kills only the current user's `nidara-shell`,
+with a command-line fallback scoped to old shell bundles; other GJS services
+are left running. For stale shell processes use `killall nidara-shell`; old builds still use `gjs`,
+so identify those by PID instead of killing every GJS service in the session.
+
 ### The toolchain is ours too (2026-08-18, same day)
 
 Nothing of AGS is installed any more. What the CLI actually was, and what replaced it:
@@ -1304,7 +1323,7 @@ that can eat somebody's work. The reasoning sits in the file where the function 
 | `GameSession.ts` + `game-session-logic.ts` | ~160 + ~170 | SHELL-ONLY: game mode around a game, on both compositors (#682) — the artwork or an image as the wallpaper, the performance profile, notifications held back, the way back. The logic file is pure (no GTK, no compositor) so the CI probe drives it; `GameSession.ts` is the world it acts on. Started from `app.ts`. See "Game mode". |
 | `DevLogWatch.ts` | ~120 | SHELL-ONLY, DEVELOPMENT MODE ONLY (`.dev` marker present AND stderr is a regular file, i.e. nidara-ui is writing `nidara-ui.log`): a CRITICAL in the shell's own log becomes ONE critical notification per run (never expires, cuts through DND), replaced in place when a new KIND appears — never one per line. Monitors the file, scans only appended bytes, and asks the checkout's `bin/nidara-doctor --log` for the grouping (one implementation of "which kinds"). Its own failures are `console.warn`, never `console.error` — an error there is a CRITICAL in the file it watches and would wake it forever. It also hooks GLib's log handler for the toolkit domains (Gtk/Gdk/Gsk/GLib/GLib-GObject/GLib-GIO/Pango) so every CRITICAL is followed by `[DevLogWatch] <message> ← <JS frame>` plus the stack — a toolkit CRITICAL names only the C function that refused; "no JS on the stack" means GTK raised it from its own event/frame processing. GLib's own line is written unchanged first. The handler never throws (an exception inside a log handler is reported as recursion). Started from `app.ts` right after the notification server. |
 | `NotifConfig.ts` | ~90 | Popup auto-dismiss timeout **and Do Not Disturb** (GSettings `org.nidara.notifications`). DnD moved here on 2026-08-18 with `core/notifd.ts`: it was never daemon behaviour — AstalNotifd's own docs say the property "does not have any effect on its own; it is merely a value shared between the daemon process and proxies", and it sat in GSettings so several Astal processes could read one bit. Nidara is one process, and what consults the flag is the BANNER layer, which is UI policy. 🔑 Listeners are told WHICH key moved (`onChange(key => …)`): DnD has four faces watching it and the timeout slider one, so an untyped callback made every face repaint on the other's change. `setDoNotDisturb` is guarded on equality — the Settings switch and the CC tile both write on every interaction. What must NOT come back is a SECOND copy of the flag (the retired `dndDefault` was one). |
-| `RecordingConfig.ts` | ~250 | Screen-recording preferences (GSettings `org.nidara.recording`) **and the wf-recorder command they build** — `buildCaptureCommand({region, audio})` returns `{argv, outFile, audioDevice}` so the widget owns only screen-or-region and audio-on-or-off. Everything here was measured against wf-recorder 0.6.0, not assumed, because each one silently produces a plausible file instead of an error: **(1)** `--audio` with no device records the default PulseAudio **source** — a microphone, never the desktop — which is why `audioSource` exists and defaults to the `@system` sentinel (resolved at capture time to `<default sink>.monitor`). This was the "recording has no sound" bug: on a machine whose default source was a webcam's unconnected S/PDIF port, "include audio" meant "record silence". **(2)** The long option's argument is *optional* (getopt), so it only binds as `--audio=NAME`; `["--audio", name]` as two argv entries drops the device and falls back to the default source. **(3)** An unknown device name does **not** fail — pipewire-pulse substitutes the default source — so `resolveAudioDevice()` verifies a saved name is still on the bus before using it. **(4)** VAAPI encodes H.264 fine, but `vp9_vaapi` returns "Function not implemented" on Navi 10, so hardware encoding is offered for the H.264 containers only (`CODECS` table; webm is always software VP9). Quality presets are spelled out per encoder (x264/VP9 take `crf`, VAAPI takes `qp` — same polarity, different scales), and libvpx-vp9 needs `b=0` alongside `crf` or it ignores the crf entirely. Surfaced in Settings via `widgets/screenrecord.ts` `buildSettings`, and to agents as `recording.*` in `config-entries.ts`. |
+| `RecordingConfig.ts` | ~250 | Screen-recording preferences (GSettings `org.nidara.recording`) **and the wf-recorder command they build** — `buildCaptureCommand({region, audio})` returns `{argv, outFile, audioDevice}` so the widget owns only screen-or-region and audio-on-or-off. Everything here was measured against wf-recorder 0.6.0, not assumed, because each one silently produces a plausible file instead of an error: **(1)** `--audio` with no device records the default PulseAudio **source** — a microphone, never the desktop — which is why `audioSource` exists and defaults to the `@system` sentinel (resolved at capture time to `<default sink>.monitor`). This was the "recording has no sound" bug: on a machine whose default source was a webcam's unconnected S/PDIF port, "include audio" meant "record silence". **(2)** The long option's argument is *optional* (getopt), so it only binds as `--audio=NAME`; `["--audio", name]` as two argv entries drops the device and falls back to the default source. **(3)** An unknown device name does **not** fail — pipewire-pulse substitutes the default source — so `resolveAudioDevice()` verifies a saved name is still on the bus before using it. **(4)** VAAPI encodes H.264 fine, but `vp9_vaapi` returns "Function not implemented" on Navi 10, so hardware encoding is offered for the H.264 containers only (`CODECS` table; webm is always software VP9). Quality presets are spelled out per encoder (x264/VP9 take `crf`, VAAPI takes `qp` — same polarity, different scales), and libvpx-vp9 needs `b=0` alongside `crf` or it ignores the crf entirely. Surfaced in Settings via `surfaces/settings/pages/ScreenRecording.tsx`, and to agents as `recording.*` in `config-entries.ts`. |
 | `app-search.ts` | 268 | **How a typed query becomes a ranked list of apps** — pure functions, no GObject, called only by `AppService`. Replaced AstalApps' `fuzzy_query` on 2026-08-17. A query is scored against four fields (name, desktop id, executable BASENAME, keywords) and the app's score is the **best** field, not the sum, so three weak matches cannot beat one strong one. Five tiers — exact, prefix, word prefix, substring, acronym — and a sixth rescue tier for a query with a word too many ("GTK Widget Factory" for a .desktop called "Widget Factory"). Tiers never overlap: the length tie-break is <1 point. **Three rules that exist because a live run broke without them**, all measured 2026-08-17: (a) the executable is the BASENAME — AstalApps matched the whole `Exec=` line, and every Chrome web app's `--profile-directory=Default` spells f-i-r-e, so typing "fire" in the launcher returned five PWAs and nothing else; (b) the substring and acronym tiers need ≥2 characters — one character is a substring of almost everything (AstalApps returned 56 of 56 apps for "f", because its single-char branch dropped an app only at score exactly 0 and a total miss scores −30); (c) the field weights (name 1, id 0.85, exec 0.78, kw 0.65) are chosen so the 4×5 table has no collisions and two specific orderings hold — an id PREFIX cannot beat a name WORD_PREFIX (every PWA's id begins "chrome-", so at 0.9 the query "chrom" put Google Chrome SIXTH behind its own web apps), and a PARTIAL keyword cannot beat a match inside a name (Micro declares keyword "terminal" and was jumping XTerm). Matching is accent-folded, and `fold()` is deliberately 1:1 per character so word-start indices stay valid. Probe: `scripts/dev/apps-probe.ts`. |
 | `bluez.ts` | ~410 | **The shell's ONLY door to BlueZ**, and the layer under `BluetoothService`. Replaced AstalBluetooth on 2026-08-18: that was 681 Vala lines over `Gio.DBusObjectManagerClient` on `org.bluez`, and there is no library beneath it — same shape as MPRIS. One `GetManagedObjects` seed plus `InterfacesAdded`/`InterfacesRemoved`, a `Gio.DBusProxy` per adapter and per device (so property caching and `g-properties-changed` come free), and a name watcher so a bluetoothd restart empties and refills the roster instead of leaving dead proxies. Devices stay **GObjects with real properties** because consumers listen per object (`watchDevices` wires `notify::paired/connected/name` on each). Same snake_case-accessor rule as `mpris.ts` — declare the PAIR or the ParamSpec gets auto-generated storage and reads stale forever. **Three traps this file paid for, all found by RUNNING it, and all of them the same mistake in different clothes — a property whose setter has a side effect:** (1) `_sync` assigned `this.trusted = …` from `PropertiesChanged`, and that setter WRITES to BlueZ, so every notification echoed back onto the bus and the throw aborted the seed loop — the shell saw one adapter and zero devices. Reading from the bus needs its own internal path (`_setTrusted`), and `_add` now try/catches per object so one bad device cannot cost the roster. (2) `Gio.DBusProxy.call()` takes a METHOD name and speaks the proxy's own interface, so writing a property through it fails with "Expected an object of type GVariant for argument 'parameters'" — properties go through the CONNECTION (`setProp`), naming object, interface and method. (3) Seeding only from the name watcher looks right and is not: `appeared` arrives through the main loop, so anything reading `devices()` in the same tick as `get_default()` got an empty roster. Seed synchronously, guarded by `NameHasOwner` — that guard is also what stops a machine with no radio logging a CRITICAL at every boot. Probe: `scripts/dev/bluez-probe.ts`. |
 | `notifd.ts` | ~470 | **The shell's OWN notification server** — it owns `org.freedesktop.Notifications`, so every `notify-send`, browser toast and chat message on this desktop arrives here. Replaced AstalNotifd on 2026-08-18: same shape as `mpris.ts`/`bluez.ts` (a freedesktop spec with no library beneath it), and the Vala it replaces was a `Gio.DBusExportedObject` doing exactly this. Notifications are **plain objects, not GObjects** — no consumer listens to a single notification, they listen to the daemon (`onNotified`/`onResolved`) and re-read — which skips the ParamSpec accessor trap `mpris.ts` documents. 🔑 **`app.ts` starts it explicitly (`startNotifServer()`), not lazily**: the first caller used to be the bar's bell widget, so deleting or reordering that widget would have quietly stopped the desktop receiving notifications at all. Being the server is not a widget's responsibility. 🔑 **`GetCapabilities` is a PROMISE to the sender**, and AstalNotifd shipped the spec's example list wholesale — including `sound` (obliges the server to play `sound-file`; a client that believes it suppresses its OWN sound, so the notification just arrives silent), `body-hyperlinks` (the card strips tags, so an `<a href>` loses its URL whereas a sender told otherwise writes it out as text) and `action-icons`. Nidara answers only the six it honours. **Store and decoded images live in `~/.cache/nidara/notifd/`, NOT `~/.config/nidara/`, for privacy rather than tidiness**: the config dir is a READ ROOT of the assistant's file layer (`allowFileRead` defaults ON), so a notification store there would hand every chat message that ever popped up to the model by default. `image-data` (raw pixels) is decoded to a PNG named by content hash and re-hinted as `image-path`, so the card only ever reads one shape; the legacy `image_path` spelling is read too (Chrome sends BOTH, and AstalNotifd read only the modern one). `transient` is excluded from the store, per spec. What did NOT come across: `dont_disturb` (never daemon behaviour → `NotifConfig`), proxy mode (half of AstalNotifd exists so a second Astal process can client the first), and `ignore_timeout`/`default_timeout` (no UI ever set either). Probe: `scripts/dev/notifd-probe.ts`. |
@@ -1316,12 +1335,12 @@ that can eat somebody's work. The reasoning sits in the file where the function 
 | `BatteryService.ts` | ~95 | **The shell's ONLY door to UPower**, on `UPowerGlib` directly (the typelib ships with `upower`, already a dependency). Holds `present`/`fraction`/`charging`/`charged`/`timeToFull`/`timeToEmpty` over UPower's composite DisplayDevice, plus `watch` (any change) and `watchPresence` (`notify::is-present` only — the widget registry's hardware gate, narrow because it re-evaluates availability). **Two conversions you must not lose**: UPower's percentage is 0..100 and every consumer wants the 0..1 FRACTION; and Astal's `charging` was true at FULLY_CHARGED too, a conflation that hid a real bug (see dev-workflow.md). Consumed by `common/BatteryGlyph.ts`, `widgets/battery.ts` and the island's battery activity — none of which may import `gi://UPowerGlib` themselves. Never imports Gtk. |
 | `NotifService.ts` | ~95 | **Stateless facade** over TWO layers, and the split is the point: `core/notifd.ts` is the SERVER (receive, persist, expire) and `core/NotifConfig.ts` holds Do Not Disturb, because DnD suppresses BANNERS — the notification still arrives and still lands in the NC. `notifications()` (a SNAPSHOT — the clear-all cascade holds its list while rows fly out), `getNotification(id)`, `isCritical(n)`, the DnD trio (`dontDisturb`/`setDontDisturb`/`toggleDontDisturb`) and `watchDnd`/`watchNotified`/`watchResolved`. Added 2026-08-18; notifications were the last domain with NO facade at all — **sixteen** bare `AstalNotifd.get_default()` calls across the NC, the popups, the bar's bell, the focus tile, Settings → Notifications and `config-entries.ts`, each re-deriving the same three questions. 🔑 `watchDnd` is narrow (one key); the focus tile used to listen on bare `notify` — EVERY property of the daemon — to watch one boolean. Never imports Gtk. |
 | `AudioService.ts` | ~145 | **Stateless facade** over `core/wireplumber.ts` (PipeWire/WirePlumber; ours since 2026-08-18, it replaced AstalWp). `volumeIcon`/`targetVolumeIcon` (the volume-level icon ladder that used to live in FOUR copies), `streamIconName` (per-app stream icon), `setDefault` (`wpctl set-default`), `toggleMute`, endpoint/stream/default accessors, and `watchDevices`/`watchStreams`/`watchVolume`/**`watchDefaultSpeaker`**. Consumed by Settings → Audio + the CC volume tile/detail (`widgets/volume.ts`, `widgets/volume.ts`) + the bar volume widget. 🔑 **A widget that draws the CURRENT default output subscribes with `watchDefaultSpeaker`, never with `watchVolume(defaultSpeaker(), …)`** — the latter resolves the endpoint once, and four widgets wrote it by hand with three of them broken by it (see tech-debt, "CC widget capture"). Returns Gio icons via `core/Icons` (core→core); the volume *slider widget* is `makeVolumeSlider` in `nidara-kit/slider.ts` (UI layer). Never imports Gtk. |
-| `BluetoothService.ts` | ~330 | **Stateless facade** over the reactive singleton in `core/bluez.ts` (same pattern as NetworkService): power (`isPowered`/`setPowered`/`togglePower`), device categorisation (`pairedDevices`/`nearbyDevices`/`deviceName`), guarded command wrappers (`connectDevice`/`disconnectDevice`/`pairDevice`/`removeDevice`/`startDiscovery`/`stopDiscovery`), and `watchPower`/`watchDevices` notify helpers. `watchDevices` also wires each device's own `notify::paired/connected/name` (re-wiring on set change) — `notify::devices` alone misses in-place pairing/connection changes. Also owns the **BlueZ pairing agent** (`org.bluez.Agent1`, capability `KeyboardDisplay`, raw Gio D-Bus on the SYSTEM bus — no Bluetooth library offers agent support, which is why this half was ours long before the read half was): `registerPairingAgent(handler)`/`unregisterPairingAgent()`; the Settings → Bluetooth page supplies the dialog handler (`PairingPrompt` kinds: `confirm`/`display`/`enter-passkey`/`enter-pin`/`authorize`), so core stays UI-free. The agent registers when the page is built (first Settings open; effectively session-lifetime since Settings hides rather than closes). `pairDevice` sets `trusted=true` on successful pairing so reconnections skip authorization; `RequestAuthorization`/`AuthorizeService` auto-accept trusted/paired devices. **Testing gotcha:** D-Bus policy only lets root call `Agent1` methods, so exercise dialogs with `sudo busctl --system call <shell-unique-bus-name> /org/nidara/bluetooth/agent org.bluez.Agent1 RequestConfirmation ou /org/bluez/hci0/dev_00_11_22_33_44_55 123456` (find the bus name by matching the gjs PID in `busctl --system list`; the python-dbusmock bluez5 template never calls back into agents). Consumed by Settings → Bluetooth (full management: scan/pair/forget) + the bar/CC bt tile, whose
+| `BluetoothService.ts` | ~330 | **Stateless facade** over the reactive singleton in `core/bluez.ts` (same pattern as NetworkService): power (`isPowered`/`setPowered`/`togglePower`), device categorisation (`pairedDevices`/`nearbyDevices`/`deviceName`), guarded command wrappers (`connectDevice`/`disconnectDevice`/`pairDevice`/`removeDevice`/`startDiscovery`/`stopDiscovery`), and `watchPower`/`watchDevices` notify helpers. `watchDevices` also wires each device's own `notify::paired/connected/name` (re-wiring on set change) — `notify::devices` alone misses in-place pairing/connection changes. Also owns the **BlueZ pairing agent** (`org.bluez.Agent1`, capability `KeyboardDisplay`, raw Gio D-Bus on the SYSTEM bus — no Bluetooth library offers agent support, which is why this half was ours long before the read half was): `registerPairingAgent(handler)`/`unregisterPairingAgent()`; the Settings → Bluetooth page supplies the dialog handler (`PairingPrompt` kinds: `confirm`/`display`/`enter-passkey`/`enter-pin`/`authorize`), so core stays UI-free. The agent registers when the page is built, for the Settings application's lifetime; closing Settings releases its bus connection and cancels its pending pairing dialogs. `pairDevice` sets `trusted=true` on successful pairing so reconnections skip authorization; `RequestAuthorization`/`AuthorizeService` auto-accept trusted/paired devices. **Testing gotcha:** D-Bus policy only lets root call `Agent1` methods, so exercise dialogs with `sudo busctl --system call <shell-unique-bus-name> /org/nidara/bluetooth/agent org.bluez.Agent1 RequestConfirmation ou /org/bluez/hci0/dev_00_11_22_33_44_55 123456` (find the bus name by matching the gjs PID in `busctl --system list`; the python-dbusmock bluez5 template never calls back into agents). Consumed by Settings → Bluetooth (full management: scan/pair/forget) + the bar/CC bt tile, whose
 CC detail panel (`widgets/bluetooth.ts`, split-target capsule — see design-system.md) drives a
 compact paired-device connect/disconnect list with the same `pairedDevices`/`connectDevice`/
 `disconnectDevice`. **Gotcha:** `setPowered` drives `adapter.powered`, NOT the read-only `is_powered`. Never imports Gtk. |
 | `NetworkService.ts` | ~1240 | **The shell's ONLY door to NetworkManager**, and since 2026-08-17 it owns the read half directly on `libnm` (`gi://NM`) rather than through AstalNetwork — see tech-debt #71 for why the wrapper had to go (it resolved its devices once, in `construct`, so a hot-plugged adapter was invisible session-wide). Still a plain function module, not a GObject. It holds: the command vocabulary — joining/leaving/forgetting a Wi-Fi network on **libnm** since 2026-09-14 (`connectAp`/`disconnectWifi`/`forgetNetwork`/`savedWifiSsids`/`apLinkState`; saved profiles matched by SSID BYTES, never by profile name; `connectAp` passes NO password — NM asks `core/NetworkAgent.ts` for it; an enterprise AP (`needsSetupDialog`) or a hidden network gets libnma's form first and is joined with the connection it returns) and still `nmcli` for `rescan`/`setWifiEnabled`/`toggleWifi`/VPN, the NM-flag + frequency derivations (`isSecured`/`securityLabel`/`freqBand`/`freqChannel`), `apSsid` (an SSID arrives as `GLib.Bytes`, so it goes through NM's decoder — the one place NM is rawer than the old wrapper), `getIp`/`wiredConnected`/`wifiEnabled`/`available`, the `wifi()`/`wired()` handles (live getter views over the current NM device, null when absent), and the watchers. **Hardware presence is a subscription here, not a build-time fact**: `watchDevices` re-resolves on NM's `device-added`/`device-removed` and fires only when the SELECTION changed (NM emits device-added for every tun/bridge/veth — a VPN or Docker would otherwise re-arm the whole shell). Every other watcher — `watchWifi` (SSID+IP+speed+state), `watchWifiEnabled` (radio flag only, the bar-icon one), `watchWifiNetwork` (flag+SSID, no bitrate churn), `watchAccessPoints`, `watchWired` — re-arms itself across a hot-plug, so callers subscribe once. **Pick the narrowest watcher that covers what you redraw**; the old blunt `notify` cost the bar a full re-blur per frame during a scan. **The Ethernet switch** (`wiredEnabled`/`setWiredEnabled`/`wiredState`/`wiredStateText`, owner 2026-09-28: a switch as GNOME's Wired toggle) persists across a reboot, unlike GNOME's `nm_device_disconnect`, whose block lives in /run: off clears `autoconnect` on each profile that had it and MARKS it in NM's `user` setting (`org.nidara.wired-off`), on restores exactly the marked ones, so a profile the user set not to autoconnect stays that way. **IP and DNS of a profile** — the cable's and every saved Wi-Fi network's, macOS's TCP/IP + DNS tabs — go through an `IpTarget` (the profile, and the device it is live on): `ipForm` (what is saved), `ipLive` (what DHCP handed out), `applyIp`, `renewDhcp`. Every write clones the profile, `verify()`s the clone and sends it with `update2(TO_DISK)`, then NM's Reapply when the profile is up (no drop; re-activation only if Reapply refuses). A remote profile carries no secrets and NM keeps the stored ones on such an update — measured on a WPA-PSK profile. The form is `surfaces/settings/pages/network-ip.ts`. ⚠️ **Three GJS traps in libnm, all measured 2026-09-28:** `nm_device_filter_connections` is marshalled wrongly — it answers twice, then throws `Unhandled GType (null)` and leaves the client's profile objects finalized under JS (ask `connection_compatible` per profile instead); `nm_client_dbus_set_property` is NOT promisified — without its callback it throws; and **`NMDevice.get_path()` is NOT the D-Bus path** — NMDevice shadows NMObject's with the udev ID_PATH (`pci-0000:2a:00.0`), so a D-Bus call built on it makes GLib assert and its callback never runs (the Ethernet switch hung that way): use `NM.Object.prototype.get_path.call(dev)`. Consumed by Settings → Network, the CC wifi/ethernet tiles (`widgets/wifi.ts + widgets/ethernet.ts`) and the bar widgets (`widgets/wifi.ts`, `widgets/ethernet.ts`) — none of which may import `gi://NM` themselves. Never imports Gtk. |
-| `NetworkAgent.ts` | ~300 | **NetworkManager's secret agent** — the process NM asks for a Wi-Fi secret, over the system bus, when a connection needs one: first join, a refused key (flag REQUEST_NEW), a router whose password changed during autoconnect — and the keeper of "this user only" (AGENT_OWNED) secrets in the keyring, with gnome-shell's libsecret schema attribute for attribute so either desktop finds the other's. D-Bus + libsecret only; the dialogs are **libnma's** (`libnma-gtk4`, the library GNOME Settings uses), driven from `common/WifiSecretsAgent.ts` (the agent's prompts, shell-only, started from app.ts) and `common/WifiSecretsDialog.ts` (joining a network — Settings and the CC; takes a `beforePresent` hook instead of importing Status, #571) — personal, enterprise/802.1X, WEP, hidden networks ("Other network…"). Decided 2026-09-14: one set of upstream forms rather than ours for the common case; their LOOK is an open follow-up. ⚠️ **Never go back to `nmcli … password X`**: argv is readable by every local user, and nmcli cannot be re-asked, which is how a wrong password failed silently and left a key-less "saved" profile. ⚠️ **Raw D-Bus, not `NM.SecretAgentOld`** — GJS refuses that class's vfuncs ("accepts another callback as a parameter"). ⚠️ `GetSecrets` is callable by ANY process on the system bus (the path is fixed by NM), so it answers only NM's current UNIQUE name. ⚠️ **NM gives up on a `GetSecrets` after 120 s and does NOT send `CancelGetSecrets`** — the agent withdraws the request itself at that point, or one unanswered dialog blocks every later join (dev-workflow.md → Testing Wi-Fi). ⚠️ **libnma from GJS has three traps, the third crashes the SHELL** — read the header of `WifiSecretsDialog.ts` before calling anything on `NMA.WifiDialog`: `new_for_secrets` hints (string vs strv → SIGSEGV), non-nullable constructor args, and `get_connection()` returning its `device`/`ap` out-params BORROWED while the GIR says transfer full, so GJS over-unrefs the shell's own `NM.DeviceWifi` and libnm later dies on a finalized object (VM: 2 shell crashes in 6 rounds without the compensation, 0 in 18 with it). A cancelled dialog ends NM's activation with reason DEVICE_DISCONNECTED, not NO_SECRETS — `takeUserCancel(uuid)` (`core/NetworkCancels.ts`, a leaf so Settings does not import the agent) is how `connectAp` tells a cancel from a failure — ⚠️ in-process only: a Settings app joining a network would see the shell's cancel as a failure until the fact travels over D-Bus (#571/#574). |
+| `NetworkAgent.ts` | ~300 | **NetworkManager's secret agent** — the process NM asks for a Wi-Fi secret, over the system bus, when a connection needs one: first join, a refused key (flag REQUEST_NEW), a router whose password changed during autoconnect — and the keeper of "this user only" (AGENT_OWNED) secrets in the keyring, with gnome-shell's libsecret schema attribute for attribute so either desktop finds the other's. D-Bus + libsecret only; the dialogs are **libnma's** (`libnma-gtk4`, the library GNOME Settings uses), driven from `common/WifiSecretsAgent.ts` (the agent's prompts, shell-only, started from app.ts) and `common/WifiSecretsDialog.ts` (joining a network — Settings and the CC; takes a `beforePresent` hook instead of importing Status, #571) — personal, enterprise/802.1X, WEP, hidden networks ("Other network…"). Decided 2026-09-14: one set of upstream forms rather than ours for the common case; their LOOK is an open follow-up. ⚠️ **Never go back to `nmcli … password X`**: argv is readable by every local user, and nmcli cannot be re-asked, which is how a wrong password failed silently and left a key-less "saved" profile. ⚠️ **Raw D-Bus, not `NM.SecretAgentOld`** — GJS refuses that class's vfuncs ("accepts another callback as a parameter"). ⚠️ `GetSecrets` is callable by ANY process on the system bus (the path is fixed by NM), so it answers only NM's current UNIQUE name. ⚠️ **NM gives up on a `GetSecrets` after 120 s and does NOT send `CancelGetSecrets`** — the agent withdraws the request itself at that point, or one unanswered dialog blocks every later join (dev-workflow.md → Testing Wi-Fi). ⚠️ **libnma from GJS has three traps, the third crashes the SHELL** — read the header of `WifiSecretsDialog.ts` before calling anything on `NMA.WifiDialog`: `new_for_secrets` hints (string vs strv → SIGSEGV), non-nullable constructor args, and `get_connection()` returning its `device`/`ap` out-params BORROWED while the GIR says transfer full, so GJS over-unrefs the shell's own `NM.DeviceWifi` and libnm later dies on a finalized object (VM: 2 shell crashes in 6 rounds without the compensation, 0 in 18 with it). A cancelled dialog ends NM's activation with reason DEVICE_DISCONNECTED, not NO_SECRETS — `takeUserCancel(uuid)` (`core/NetworkCancels.ts`, a leaf so Settings does not import the agent) is how `connectAp` tells a cancel from a failure — The joining Settings process consumes the cancellation from the shell over D-Bus (`consumeUserCancel`, #571). |
 | `PowerManager.ts` | 43 | hypridle hooks (screen-off/lock/suspend). |
 | `SystemInfo.ts` | ~150 | **The ONE reader of "what is this computer"** — hostname, os-release `PRETTY_NAME`, CPU model, installed RAM, GPU, kernel, uptime, GTK/GJS versions, windowing system. Added 2026-08-25 with tech-debt #94: the About WINDOW and Settings → About each had their own copy of the same regexes over /proc and /etc, and the same machine reported **31 GB** in one and **31.3 GB** in the other. ⚠️ **A surface asks, it never reads — and FORMATTING lives here too**, because the duplication that produced 31 vs 31.3 was in the formatting, not in the file access. Unknown is the empty string, never a human word (a reader returning "Unknown" puts untranslated English on a translated page); the surfaces render `settings.about.unavailable`. Machine values are humanised at the source: lspci's 89-character device line → "AMD Radeon RX 5700 XT" (ask Intel BEFORE AMD and anchor with `\b` — an unanchored `/ati/` matches inside "Corpor**ati**on"), RAM ceilinged to the whole GiB so the desktop reports INSTALLED memory rather than what the kernel kept. `uptime()` is ours and synchronous (/proc/uptime + `Intl`), because `uptime -p` speaks the process's locale, not the desktop's. Never imports Gtk except for its version. |
 | `ShellActions.ts` | 21 | Typed action registry populated by `app.ts main()`; consumed by Dock/Bar/AppGrid (replaces `globalThis`). |
@@ -1392,10 +1411,10 @@ a daemon, pushing to the compositor, firing a user hook — must only be wired i
 `AppearanceSync`, `RegionSync` (plus `AppearanceHooks` for user hooks, and `GameSession`, which acts
 on game mode's keys when a game runs). The store's setters only
 write. The closure check forbids Settings from importing any of them. **Not split, on purpose:**
-`WallpaperManager.setWallpaper` and `MonitorConfig` are ACTIONS (`awww img`, a monitor mode) run
-once by whoever calls them; with one process there is no double, and splitting the wallpaper along
-the key would break re-picking the key's own path after something swapped `awww` behind it. When Settings leaves the shell, it asks the shell for those over `org.nidara.Shell` instead
-(its `WallpaperManager` must then not start the `picture-uri` listener, which calls `setWallpaper`).
+`WallpaperManager.setWallpaper` and `MonitorConfig` are ACTIONS. In the Settings application,
+wallpaper writes and display changes are requests to the shell; only the shell starts the
+`picture-uri` listener and applies the wallpaper. Re-picking the same path still applies it.
+The shell owns each temporary display change and its rollback — see "Settings is its own application".
 `WorkspaceModes` is no longer reached from Settings at all.
 
 🔑 **What a Settings process would import is checked, not remembered** (#571). A process runs the top
@@ -1405,7 +1424,7 @@ from `Bar.tsx`, and with it came the bar, the Control Centre, the island, Prism 
 server (the launcher-mark catalogue now lives in `bar/barState.ts`). `scripts/ci/settings-closure-check.mjs`
 walks the imports transitively and fails on any other surface's module, any `widgets/` module, or a
 module that makes a process THE shell (`Status`, `ShellActions`, `notifd`/`NotifService`, `tray`,
-`NetworkAgent`, `AgentService`). **Settings reaches none of them since #571's first PR** (114 modules);
+`NetworkAgent`, `AgentService`). **Settings reaches none of them since #571's first PR** (the count grows with Settings pages; 135 on 2026-10-14);
 `settings-closure-allowlist.txt` is empty, and a line added to it may only SHRINK away again — a listed module no longer reached fails too. `--print` gives the shortest import chain
 to each: cut its first edge, delete the line. A value Settings needs from a surface goes in that
 surface's store (`barState.ts`, `dock/state.ts` — both exempt), never imported from the window.
@@ -1416,10 +1435,121 @@ It now calls `widgetCatalog().list()` (id, name, icon, category, hardware presen
 the CC") and `setBar`/`setCc`; the shell registers the answer once in `app.ts`
 (`setWidgetCatalog(widgetCatalogSource)`, the same module-scope seam as `setKitAppearance`), and a
 Settings process will get the same interface over `org.nidara.Shell`. `WidgetCatalog.ts` must stay a
-leaf; `WidgetCatalogSource.ts` is shell-only. The one non-data field is `buildSettings` — see
-`writing-a-widget.md`. `scripts/dev/widgets-page-probe.sh` proves the catalogue equals the page's old
+leaf; `WidgetCatalogSource.ts` is shell-only. Configure builders live on Settings' side,
+in `surfaces/settings/widgetSettings.ts`, keyed by widget id; `pages/ScreenRecording.tsx`
+reads `RecordingConfig` without importing the capture widget. Both Widgets and Top bar
+resolve the same builder, and an unknown id has no Configure button. No GTK builder
+travels through the catalogue; the icon is still a `Gio.FileIcon` that a future wire
+adapter serializes with `Gio.Icon.to_string()` and reconstructs with `Gio.Icon.new_for_string()`.
+See `writing-a-widget.md`. `scripts/dev/widgets-page-probe.sh` proves the catalogue equals the page's old
 computation field for field, round-trips both switches, and screenshots the page in a nested
 Hyprland (every `hyprctl` lands on the nested instance; HOME/XDG/mirror dirs are scratch).
+
+### Widget catalogue over IPC (#571, 2026-10-14)
+
+`nidara-ipc widgetCatalog [list | bar <id> <true|false> | cc <id> <true|false> |
+mode <id> <always|active> | editBarOrder]` uses the existing `Request(as) → s`
+door and `ShellActions.widgetCatalog`. `WidgetCatalogWire.ts` owns the version-1
+snapshot and validation. The shell refuses unknown ids, malformed arguments,
+unsupported locations/modes, enabling absent hardware, removing fixed CC widgets
+and adding to a full grid before writing. It returns the full resulting catalogue
+and verifies the requested placement; a refusal follows Request's `error:` convention.
+Icons cross as strings, never GI objects. This is the local Settings control plane,
+like GSettings, not the Assistant's permission boundary; agent configuration writes
+continue through the gated `setConfig` door: `widgetCatalog` is hidden from the
+built-in Assistant's action resolver, and MCP's `run_action` requires
+`allow-config-write` for its mutating verbs (reads remain available). The agent-loop
+suite checks both routes with throwaway settings and an IPC stub.
+
+`startWidgetCatalogNotifications` watches placement, grid and availability for the
+shell lifetime and emits `WidgetCatalogChanged` on the existing interface/path.
+An idle coalesces the placement flag and grid-cell update, so clients read settled
+state. Hardware watches have the registry's existing session-lifetime contract.
+
+The Settings entry point calls `createRemoteWidgetCatalog()`, awaits `ready`,
+then registers it with `setWidgetCatalog`. `list()` reads a cache; all reads and writes
+on D-Bus are async, ordered and bounded to three seconds. Await mutations and handle
+rejections in the UI; `lastError` also exposes refusals. `watch()` returns a disposer
+for `bindWhileRealized`; `dispose()` releases the owner watch, signal subscription and
+pending calls. Bind page controls to changes without writing them back or rebuilding
+an active control mid-interaction. Widgets and Top bar bind their controls for each realized
+lifetime; placement changes update controls in place, topology changes rebuild the list.
+The shell retains its local source for its own configuration API.
+
+Owner loss clears the cache and marks it disconnected. Reconnection fetches fresh
+state. Each queued call captures a unique D-Bus owner and generation: a write queued
+for a dead shell cannot land on its replacement. Failed writes are never retried;
+a caller must read the fresh state before deciding what to do. A malformed snapshot
+keeps the last validated cache and records an error.
+
+`scripts/dev/widget-catalog-ipc-probe.sh` runs the real transport between fixture
+processes on a private bus, with no GTK, dconf or live shell. It covers icon round-trip,
+mutations, refusals, invalidation, malformed replies, restart without replay, queued
+writes and disposal. `CONTROL=1` removes the actual fixed-widget refusal from the
+bundled temporary copy and must fail at that assertion. Both runs are in `widgets-gen`.
+
+### Settings is its own application (#571, 2026-10-14)
+
+The fifth bundle is `ui/settings/app.ts`, launched by `bin/nidara-settings`. The launcher
+sets `NIDARA_SETTINGS_PROCESS=1` BEFORE GJS evaluates imports, pins GTK to Wayland and
+supplies the shell asset root plus the application's own CSS root. A bare invocation
+without the role is unsupported: shared services would run their shell paint path.
+`spawn()` strips this role from children, as it strips `GTK_THEME`; the launcher of
+another Nidara application owns its own role. The installed desktop entry executes the
+launcher. PKGBUILD, install.sh and both smoke harnesses build the fifth executable.
+
+The application is `org.nidara.Settings` (D-Bus); its window remains `nidara-settings`
+with title `Nidara Settings` (desktop identity). It exports `Request(as) → s` at
+`/org/nidara/Settings` for open, page/app navigation and queryUI. The shell's
+`SettingsAppClient` starts it on demand, under `uwsm app` when a user manager is present
+so a nidara.service restart does not kill it. Concurrent opens share a launch. Calls
+address the UNIQUE owner; only UnknownMethod during registration is retried, never a
+timeout or applied action. `openSettings`/`toggleSettings`, `settingsPage`, `settingsApp`
+keep their existing names and replies. `queryUI` merges the application's redacted tree
+with the shell's without starting a closed Settings instance. The kit host now runs main
+once, with an optional activate callback for later invocations. Settings exits on close,
+releasing its memory; its single window and cached pages last only for that process.
+
+`ThemeManager` remains a preference reader/writer, but in this role installs NO CSS
+providers, font provider, style watcher or Gtk mode override. `initAppearance()` paints
+through the Settings portal and registers the kit's own appearance source. Its setters
+write shared GSettings; AppearanceSync, RegionSync, NightLightSync and user hooks still
+run only in the shell. Delayed appearance persistence is flushed immediately in the
+application so closing it cannot discard the last choice. WorkspaceModes does not
+persist/reapply the workspace table at Settings startup. The configuration registry
+uses NotifConfig directly, never the notification server. The closure check starts at
+the fifth application's entry point, not just the Settings window factory.
+
+Wallpaper actions travel through `settingsWallpaper`; a file monitor updates Settings'
+preview from the shell's saved state. The application installs no background-key
+listener and fires no wallpaper hook. A strict failed apply returns an error and
+restores the previous saved preference. This preserves re-picking the same image.
+Network joins read the shell secret agent's cancellation outcome through
+`takeNetworkCancel`, consuming it once — no second empty process-local map.
+
+`settingsMonitor` applies monitor changes in the shell. Mode/rotation previews are
+leased to the calling connection, with a 15-second deadline (the confirmation dialog
+counts 12). Another client cannot confirm a lease. Client death, cancel or deadline
+restores the prior mode; commit persists only confirmed state. Other outputs' pending
+modes are excluded from saves. A private atomic runtime journal records the previous
+configuration BEFORE applying the preview, and the shell restores interrupted previews
+from it on startup. The journal is not user configuration and is removed on successful
+confirmation/revert. Scale/VRR writes respect outstanding previews. The application
+awaits the apply before showing its confirmation and reports failures on its page.
+Hyalo's monitor apply/VRR and save paths propagate compositor refusals (including
+unreachable IPC) instead of logging them and returning apparent success. Disconnected
+outputs need no runtime rollback; their persisted baseline was never changed.
+These Settings control-plane commands are hidden from the built-in Assistant; MCP
+mutations still require allow-config-write.
+
+Validation: `settings-process-check.sh` is called by both private compositor smoke
+sessions. It verifies distinct PIDs, single-instance navigation and queryUI, a Settings
+crash leaving the same shell alive, and reopening with the remote catalogue. The D-Bus
+fixture walk covers invalidation/reconnection without replay plus network cancellation;
+`display-lease-probe.ts` checks preview/commit, foreign-client refusal, timeout and death.
+The sandboxed-shell harness pins GDK_BACKEND=wayland (Hyalo also exports Xwayland's
+DISPLAY) and places greeter mirrors under its scratch HOME, so an appearance walk
+cannot write the real login screen's mirror.
 
 **Moving a store** is three parts in one change: its schema (defaults, and `<range>`/`<choices>`
 where the validator has them, so `gsettings set` refuses what the store would), the one-line switch,
@@ -2180,18 +2310,15 @@ came back showing the value they were BUILT with, contradicting the master right
 question that finds it is not *does this control have an external-sync hook?* but *does that hook
 answer the question, or only promise to?*
 
-⚠️ **`bindWhileRealized` is only half the answer, and the half it misses is the common one.** Realize
-tracks NAVIGATION between pages; it does **not** track the window's own show/hide. Hiding the Settings
-window leaves its pages REALIZED (measured 2026-08-16: close the window on Power, change the profile
-from a terminal, reopen → a realize-bound read does not run and the page still shows the old profile).
-Since Settings *hides* on close, closing and reopening is how a user returns to a page most of the
-time, so a re-read hung off realize misses precisely the case it exists for. The complement is
-**`onPageShown(read)`** (`SettingsHelpers.ts`): it registers the read against the page being built —
-the same `_pageCtx` seam `createRow` indexes through — runs it once immediately, and `Settings.tsx`
-re-runs it from BOTH triggers, `showPage` (navigation) and the window's `notify::visible` (reopen).
-The split between the two is what each one owns, not when it fires: **`bindWhileRealized` for a
-subscription whose lifetime must match the widget's — it has something to dispose; `onPageShown` for
-a question that has to be re-asked — it has nothing to dispose.**
+⚠️ **`bindWhileRealized` and `onPageShown` have different jobs.** The first tracks
+subscriptions across navigation (dispose on unrealize, re-arm on realize); the second
+re-asks values when a cached page is shown. Before #571, Settings hid on close and its
+pages stayed realized: close → change externally → reopen was the stale-value case.
+Settings now exits on close and reopening builds fresh pages, but navigation still
+uses the cache. `onPageShown(read)` remains the complement for one-shot questions,
+registered while a page is built and called by `showPage` plus `notify::visible`.
+Use `bindWhileRealized` when there is a subscription to dispose, and `onPageShown`
+when there is only a value to re-read.
 
 This distinction is the whole of a bug family found by the 2026-08-16 sweep, and the question that
 finds it is *what did this page have to GO AND ASK for?* An `execAsync`, a file read, a one-shot

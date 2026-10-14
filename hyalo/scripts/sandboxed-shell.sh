@@ -11,7 +11,10 @@ set -eu
 repo=$(realpath "${1:-${NIDARA_REPO:-$HOME/Dev/Distroia}}")
 real_home=$HOME
 box=${NIDARA_SANDBOX:-$(mktemp -d /tmp/nidara-hyalo-home.XXXXXX)}
-mkdir -p "$box/.config" "$box/.local/share"
+mkdir -p "$box/.config" "$box/.local/share" "$box/mirror"
+# Hyalo gives clients Xwayland's DISPLAY too. Our session launcher pins GTK to
+# Wayland; the test must do the same or the bar becomes an ordinary X11 window.
+export GDK_BACKEND=wayland NIDARA_GREETER_MIRROR_DIR="$box/mirror"
 # The user's Nidara config, without hooks (a hook is a user script: it could act on the live
 # session) and without its git history.
 cp -a "$real_home/.config/nidara" "$box/.config/" && rm -rf "$box/.config/nidara/hooks" "$box/.config/nidara/.git"

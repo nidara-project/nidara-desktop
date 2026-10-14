@@ -1,3 +1,4 @@
+import { isSettingsProcess } from "./SettingsProcess"
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
@@ -32,8 +33,9 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 // A change made by `gsettings set`, an agent or another process reaches this class
 // through `changed`, exactly like one made from Settings.
 //
-// ⚠️ This class is what ANY process needs to look like the desktop: the state, the
-// setters (which only write keys), and its own CSS/GTK settings. What the change does to
+// The Settings process uses this class for preferences, but its paint comes ONLY
+// from initAppearance's portal channel. Its process role suppresses CSS/GTK paint.
+// The shell uses the state, setters and CSS/GTK providers below. What the change does to
 // the rest of the desktop — settings.ini, the Xcursor default, Hyprland's cursor and
 // groupbar, the portal-gtk restart, the greeter's mirror, first-boot font seeds — is
 // core/AppearanceSync.ts, shell-only (#571). Do not add a file write, a subprocess or a
@@ -197,6 +199,7 @@ class ThemeManager extends GObject.Object {
     private styleMonitor: Gio.FileMonitor | null = null
 
     private setupStyleMonitor() {
+        if (isSettingsProcess) return // Settings paints through the appearance portal.
         const stylePath = `${SHELL_ROOT}/style.css`
         const file = Gio.File.new_for_path(stylePath)
         try {
@@ -239,6 +242,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private syncFont() {
+        if (isSettingsProcess) return // Settings paints through the appearance portal.
         this.syncFontMetrics()
         try {
             const fontName = this.interfaceSettings.get_string("font-name")
@@ -597,6 +601,13 @@ class ThemeManager extends GObject.Object {
      */
     private persistenceDebounceId = 0
     private schedulePersistence() {
+        if (isSettingsProcess) {
+            // An application exits on close: do not leave its last choice in a timer.
+            const patch: Partial<NidaraAppearance> = {}
+            for (const key of NIDARA_KEYS) (patch as Record<string, unknown>)[key] = this.fcConfig[key]
+            nidaraAppearance.update(patch)
+            return
+        }
         if (this.persistenceDebounceId > 0) GLib.source_remove(this.persistenceDebounceId)
         this.persistenceDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
             this.persistenceDebounceId = 0
@@ -611,7 +622,7 @@ class ThemeManager extends GObject.Object {
         this.fcConfig.accent = accent
         this.applyTokens()
         // Hyprland's groupbar follows the key — core/AppearanceSync.ts.
-        execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
+        this.interfaceSettings.set_string("accent-color", accent)
         this.schedulePersistence()
         this.emit("changed")
         // The user hook fires from the change itself, in the shell only —
@@ -646,6 +657,7 @@ class ThemeManager extends GObject.Object {
     // ── Internal Logic ───────────────────────────────────────────────
 
     private ensureProvidersLinked() {
+        if (isSettingsProcess) return // Settings paints through the appearance portal.
         if (this.providersLinked) return
         try {
             const display = Gdk.Display.get_default()
@@ -675,6 +687,7 @@ class ThemeManager extends GObject.Object {
 
     /** Regenerate + apply the Nidara token CSS (accent / opacities), deduped. */
     private applyTokens() {
+        if (isSettingsProcess) return // Settings paints through the appearance portal.
         this.ensureProvidersLinked()
         // The global block is the MODE's (Settings, About); the shell's windows wear
         // their own skin over it (`generateChromeTokenScope`), and a surface that follows the
@@ -704,7 +717,7 @@ class ThemeManager extends GObject.Object {
                     await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
                 }
             }
-            setPreferDark(this.state.isDark)
+            if (!isSettingsProcess) setPreferDark(this.state.isDark)
         } catch (e) { }
     }
 

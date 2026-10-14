@@ -18,7 +18,10 @@ LOG="${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log"
 # blind `killall -9 gjs` here would also nuke unrelated gjs apps and fight
 # systemd's lifecycle. INVOCATION_ID is set only when systemd runs us.
 if [ -z "$INVOCATION_ID" ]; then
-    killall -9 gjs 2>/dev/null || true
+    killall -u "$(id -un)" -9 nidara-shell 2>/dev/null || true
+    # Older builds still use gjs. Match only the shell's decoded bundle, not
+    # independent Settings, portal, MCP or other applications running on GJS.
+    pkill -u "$(id -u)" -9 -f '^gjs -m .*/nidara-([0-9a-f]+|run-app)\.js( |$)' 2>/dev/null || true
     sleep 0.2
 fi
 

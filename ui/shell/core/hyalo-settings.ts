@@ -29,10 +29,13 @@ function config(): any | null {
 
 /** A change to the settings layer. A refusal is said with "Hyalo refused", which the CI
  *  smoke looks for (scripts/ci/hyalo-smoke.sh). */
-function patch(what: string, p: object) {
+function patch(what: string, p: object, strict = false) {
     const reply = hyalo.request({ request: "settings", patch: p })
-    if (!reply) console.error(`[HyaloSettings] ${what}: Hyalo could not be reached`)
-    else if (reply.error) console.error(`[HyaloSettings] Hyalo refused ${what}: ${reply.error}`)
+    const error = !reply ? "Hyalo could not be reached" : reply.error
+    if (error) {
+        console.error(`[HyaloSettings] Hyalo refused ${what}: ${error}`)
+        if (strict) throw Error(`${what}: ${error}`)
+    }
 }
 
 /** Where each input setting lives in Hyalo's config. Hyprland's sensitivity and profile
@@ -102,14 +105,14 @@ export function createHyaloSettings(): CompositorSettings {
                 transform: TRANSFORM_NAMES[m.transform] ?? "normal",
                 ...(m.mode ? { mode: m.mode } : {}),
             })
-            if (err) console.error(`[HyaloSettings] Hyalo refused ${name}: ${err}`)
+            if (err) throw Error(`Hyalo refused ${name}: ${err}`)
         },
 
         // Per output, on those that have it (the rest would refuse).
         applyVrr(vrr) {
             for (const o of hyalo.getOutputs().filter(o => o.vrr_supported)) {
                 const err = hyalo.setOutput(o.name, { vrr: hyaloVrr(vrr) })
-                if (err) console.error(`[HyaloSettings] Hyalo refused VRR on ${o.name}: ${err}`)
+                if (err) throw Error(`Hyalo refused VRR on ${o.name}: ${err}`)
             }
         },
 
@@ -125,7 +128,7 @@ export function createHyaloSettings(): CompositorSettings {
                     vrr: vrrCapable.has(name) ? hyaloVrr(vrr) : false,
                 }
             }
-            patch("display", { outputs })
+            patch("display", { outputs }, true)
         },
 
         saveWorkspaceModes(defaultMode, overrides) {

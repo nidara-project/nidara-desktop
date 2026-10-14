@@ -1,0 +1,6 @@
+// Settings is an application; its window styles and shared shell primitives keep
+// their existing scopes. The kit's base/component sheet is loaded at runtime.
+@use '../shell/styles/base';
+@use '../shell/styles/reset';
+@use '../shell/styles/components';
+@use '../shell/styles/settings';

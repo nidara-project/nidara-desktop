@@ -1,3 +1,5 @@
+import { runSettingsAction } from "../SettingsErrors"
+import { widgetSettingsPage } from "../widgetSettings"
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
@@ -90,7 +92,7 @@ function modeDropDown(label: string, mode: "always" | "active", onPick: (m: "alw
 function configureButton(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.Button {
     const btn = NidaraButton({ label: t("settings.widgets.configure"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
     btn.connect("clicked", () => nav.pushSubpage({
-        id: `bar/${w.id}`, title: w.name, parentId: "bar", build: w.buildSettings!,
+        id: `bar/${w.id}`, title: w.name, parentId: "bar", build: widgetSettingsPage(w.id)!,
     }))
     return btn
 }
@@ -104,7 +106,7 @@ export const build = (ctx: PageCtx) => {
     const itemsGroup = (): Gtk.Widget => {
         const { box, listBox } = listGroup(t("settings.bar.group.items"))
         const reorder = NidaraButton({ label: t("settings.bar.reorder"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
-        reorder.connect("clicked", () => widgetCatalog().editBarOrder())
+        reorder.connect("clicked", () => { void runSettingsAction(() => widgetCatalog().editBarOrder()) })
         const actions = NidaraListActions(listBox, reorder)
 
         // The system menu's row updates in place when its icon changes. Its icon and
@@ -120,6 +122,8 @@ export const build = (ctx: PageCtx) => {
         }
 
         let signature = ""
+        let syncingCatalog = false
+        const liveControls = new Map<string, { check: Gtk.CheckButton; menu: Gtk.DropDown | null }>()
         const refresh = () => {
             // The right group, right to left, in the bar's own order. A control whose
             // hardware is missing is not listed — Wi-Fi on a machine without a radio no
@@ -132,10 +136,25 @@ export const build = (ctx: PageCtx) => {
                 .filter(k => k === SEARCH_KEY || k.startsWith("widget:"))
                 .reverse()
             const next = JSON.stringify([order, entries.map(w => [w.id, w.available])])
-            if (next === signature) return
+            const syncControls = () => {
+                syncingCatalog = true
+                for (const w of entries) {
+                    const controls = liveControls.get(w.id)
+                    if (!controls) continue
+                    controls.check.active = w.bar
+                    if (controls.menu) {
+                        controls.menu.selected = w.barMode === "active" ? 1 : 0
+                        controls.menu.sensitive = w.bar
+                    }
+                }
+                reorder.sensitive = widgetCatalog().connected !== false
+                syncingCatalog = false
+            }
+            if (next === signature) { syncControls(); return }
             signature = next
 
             clearRows(listBox)
+            liveControls.clear()
             const add = (row: Gtk.Widget) => listBox.append(row)
             const byId = new Map(entries.map(w => [w.id, w]))
 
@@ -168,17 +187,21 @@ export const build = (ctx: PageCtx) => {
                 // menu follows the check.
                 const trailing = new Gtk.Box({ valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
                 let menu: Gtk.DropDown | null = null
-                if (w.buildSettings && ctx.nav) {
+                if (widgetSettingsPage(w.id) && ctx.nav) {
                     trailing.append(configureButton(ctx.nav, w))
                 } else if (w.barMode !== null) {
-                    menu = modeDropDown(w.name, w.barMode, m => widgetCatalog().setBarMode(w.id, m))
+                    menu = modeDropDown(w.name, w.barMode, m => {
+                        if (!syncingCatalog) void runSettingsAction(() => widgetCatalog().setBarMode(w.id, m)).then(refresh)
+                    })
                     menu.sensitive = w.bar
                     trailing.append(menu)
                 }
                 const c = check(w.bar, true, w.name, on => {
-                    widgetCatalog().setBar(w.id, on)
+                    if (syncingCatalog) return
+                    void runSettingsAction(() => widgetCatalog().setBar(w.id, on)).then(refresh)
                     if (menu) menu.sensitive = on
                 })
+                liveControls.set(w.id, { check: c, menu })
                 add(createRow(w.name, "", trailing, undefined,
                     leading(c, rowIcon(currentUiIcon(w.icon) ?? uiIcon("nd-window-floating")))))
             }
@@ -198,6 +221,7 @@ export const build = (ctx: PageCtx) => {
             syncMenu()
             add(createRow(t("settings.bar.item.system-menu"), "", menuButtons, undefined, leading(null, menuIcon)))
 
+            syncControls()
             listBox.append(actions)   // the same actions row, last again
         }
 
@@ -206,7 +230,8 @@ export const build = (ctx: PageCtx) => {
             refresh()
             const offOrder = watchBarOrder(refresh)
             const offBar = onBarSettingsChanged(syncMenu)
-            return () => { offOrder(); offBar() }
+            const offCatalog = widgetCatalog().watch?.(refresh)
+            return () => { offOrder(); offBar(); offCatalog?.() }
         })
         return box
     }

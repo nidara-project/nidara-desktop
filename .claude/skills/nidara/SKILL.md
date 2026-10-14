@@ -1,6 +1,6 @@
 ---
 name: nidara
-description: "Authoritative reference for working on the Nidara desktop environment codebase — a full Wayland session for Arch Linux built with TypeScript/TSX → GJS on GTK4 + Hyprland (no AGS, no Astal). Use this skill whenever the user mentions Nidara, nidara-project, the shell bar, dock, control center, notification center, prism/search, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/nidara-kit/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `nidara-ipc` IPC, `Status.ts`, the three build bundles, or the Nidara design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
+description: "Authoritative reference for working on the Nidara desktop environment codebase — a full Wayland session for Arch Linux built with TypeScript/TSX → GJS on GTK4 + Hyprland (no AGS, no Astal). Use this skill whenever the user mentions Nidara, nidara-project, the shell bar, dock, control center, notification center, prism/search, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/nidara-kit/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `nidara-ipc` IPC, `Status.ts`, the five build bundles, or the Nidara design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
 ---
 
 # Nidara
@@ -46,20 +46,21 @@ The aesthetic is "Nidara literal": heavy-blur glass capsules with a 1px inner wh
 
 It is also **AI-native by design**: this skill ships *inside* the repo so that any user's agent — whichever it is: `AGENTS.md` is every agent's entry, `CLAUDE.md` only imports it, and `.agents/skills/nidara` is a symlink here; edit only `.claude/skills/nidara/` — can extend, customize, and fix their own desktop — and propose globally-useful improvements back upstream. If you're helping a user with their installed copy rather than the project itself, start at `references/agent-contribution.md`.
 
-## The repo is FOUR separate bundles, not one app
+## The repo is FIVE separate bundles, not one app
 
 This is the single most important fact to internalize before touching anything:
 
 | Bundle | Source | Output binary | Role |
 |---|---|---|---|
-| **Shell** | `ui/shell/` | `build/nidara` | Desktop: bar, dock, overlays, settings |
+| **Shell** | `ui/shell/` | `build/nidara` | Desktop: bar, dock, overlays |
+| **Settings** | `ui/settings/` | `build/nidara-settings` | Independent settings application (#571) |
 | **Greeter** | `ui/greeter/` | `build/nidara-greeter` | Login (greetd, spoken directly — no AstalGreet) |
 | **Lockscreen** | `ui/lockscreen/` | `build/nidara-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
 | **Installer** | `ui/installer/` | `build/nidara-installer` | The live medium's installer — a GTK4 front-end over `archinstall` |
 
 Each has its own `app.ts`, its own `package.json`, its own `scripts/bundle.sh` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
 
-⚠️ **The fourth one does not ship with the desktop.** `packaging/nidara/PKGBUILD` is a SPLIT
+⚠️ **The installer does not ship with the desktop.** `packaging/nidara/PKGBUILD` is a SPLIT
 package (since 2026-08-25): it builds `nidara-desktop`, `nidara-kit` (the platform library the
 desktop depends on and outside apps can too — since 2026-09-23, `architecture.md` → "The kit's own
 package") and `nidara-installer`, and only nidara-iso's `packages.x86_64` ever names the last — a
@@ -104,7 +105,7 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
    `_base.scss` tokens, the TWO `_components.scss` (`ui/lib/nidara-kit/styles/` = the kit's, shared with the
    other bundles; `ui/shell/styles/` = the shell's half), `_reset.scss`, `@keyframes`. Scope table and
    the two traps in `references/design-system.md`.
-3. **Kill zombies before debugging.** A stuck terminal or "styles won't refresh" almost always means a zombie GJS is still drawing the dead UI. Run `killall gjs` before changing code in a loop.
+3. **Kill zombies before debugging.** A stuck terminal or "styles won't refresh" almost always means a zombie GJS is still drawing the dead UI. Run `killall nidara-shell` before changing code in a loop.
 4. **`core/` never touches the UI.** All visibility changes flow through `Status.ts`. Widgets never flip each other directly.
 5. **Every panel lives inside the Bar's window** via `Gtk.Overlay` — the Control Center, the Notification Center, Prism, the system menu, the Activity Island (capsule, chips AND every mode) and the app grid. **No exceptions** since #708 point 3 (owner, 2026-10-06: the bar is the one surface every panel hangs from; the dock stays a surface of its own). Show/hide animations are GTK-side (`common/ScaleRevealer.ts`, `common/MorphRevealer.ts`); on Hyalo the compositor paints their glass from the shapes they declare.
    - **Why one surface.** Hyalo draws each surface's glass on its own, under ALL of that surface's content, so pieces can only melt into one silhouette (capsule ↔ panel morphs, fusion, #705) within one surface — and a panel on its own surface over the bar would be glass on glass, which the reference material avoids.
@@ -112,8 +113,8 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
    - **The app grid's old reason** (Hyprland charging a layer's blur by its BOX) does not exist on Hyalo, which charges per declared shape. Over a fullscreen window the grid still opens: the bar's surface rises to OVERLAY for as long as it is up, with the row hidden (`liftForGrid` in `Bar.tsx`).
    - A further surface of its own needs a reason of this kind, decided with the owner — not convenience. The agent pointer (a click-through cursor overlay, not a panel) is the one other shell layer. See `architecture.md`.
 6. **IPC goes through `nidara-ipc` + `core/ShellActions`** — never reintroduce `globalThis` coupling.
-7. **A window that is an APPLICATION window declares its own app-id.** The shell's regular windows (Settings, About, Settings' modal dialogs) call `setWindowAppId(win, "nidara-settings")` from `ui/lib/nidara-kit/platform/app-id.ts` — or pass `appId` to `NidaraWindow` — so Hyprland files them under a name the desktop registry actually has. Do NOT go back to remapping a class in `AppService`: that remap existed only because AGS forced the app-id to `io.Astal.ags`, and it is deleted. Two silent traps live in `app-id.ts` (the `GdkWayland` import, and `map` vs `realize`) — read its header before touching it. *(This commandment used to say the opposite; the AGS host went on 2026-08-18.)*
-8. **`AboutWindow` is create+destroy, not hide** (Settings is the opposite — it hides on close).
+7. **A window that is an APPLICATION window declares its own app-id.** Nidara's regular windows (Settings, About, Settings' modal dialogs) call `setWindowAppId(win, "nidara-settings")` from `ui/lib/nidara-kit/platform/app-id.ts` — or pass `appId` to `NidaraWindow` — so Hyprland files them under a name the desktop registry actually has. Do NOT go back to remapping a class in `AppService`: that remap existed only because AGS forced the app-id to `io.Astal.ags`, and it is deleted. Two silent traps live in `app-id.ts` (the `GdkWayland` import, and `map` vs `realize`) — read its header before touching it. *(This commandment used to say the opposite; the AGS host went on 2026-08-18.)*
+8. **`AboutWindow` is create+destroy, not hide. Settings exits on close** since #571: it is a separate application, relaunched on demand. Its page cache lives only while it is open.
 9. **No CSS `transform: scale` or `transform: translate` on clickable widgets.** GTK respects them but they break hit-testing. Use `margin`, scale in Cairo, or `common/ScaleRevealer.ts` for transient show/hide grow animations (snapshot-time, ends at identity — see `references/design-system.md`).
 10. **No hardcoded colors. No emoji as iconography.** Resolve against `--nidara-*` tokens; use SVGs in `assets/nidara/assets/scalable/` or the `nd-*-symbolic` icon set — interface icons are asked for ONLY by `nd-` names of the Nidara icon spec (`ui/shell/assets/icons/nidara/SPEC.md`), never by freedesktop names; those are for APP icons.
 
@@ -133,7 +134,7 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
     `spawn()` in `ui/lib/process.ts` (`exec`/`execAsync` use it), which leaves it behind;
     `scripts/ci/child-env-check.mjs` fails on any other way of starting one in the desktop
     bundles (`Gio.Subprocess.new`, `GLib.spawn_*`, `Gio.AppInfo.launch*`…).
-    ✅ **All four bundles are there since 2026-09-23** — the shell was the last (tech-debt #107
+    ✅ **The original four bundles are there since 2026-09-23** — the shell was the last (tech-debt #107
     step 5). What is under a node none of our classes reach is the **base layer**,
     `ui/lib/nidara-kit/styles/_base-layer.scss`: GTK's own GEOMETRY for each node (read out of libgtk's
     gresource) with OUR paint. Copy GTK's box, never invent one — shell widgets that declare
@@ -156,6 +157,7 @@ Before doing anything that touches code:
 
 - **Writing or changing a WIDGET** (a bar pill / CC tile) → `references/writing-a-widget.md` is the
   whole thing on one page: the file, the vocabulary, and the boundary CI enforces.
+- **Working on independent Settings** → `references/architecture.md` → "Settings is its own application" (process role, portal paint, IPC, rollback). Start it with `bin/nidara-settings`, not a bare `gjs` invocation.
 - **Editing TSX widgets, adding overlays, changing dock/bar/CC behaviour** → read `references/architecture.md` first, then `references/state-and-ipc.md`.
 - **Editing SCSS, restyling anything, working on the design tokens** → read `references/design-system.md`.
 - **Adding a new core service or modifying state** → read `references/architecture.md` (core/ section) and `references/state-and-ipc.md` (Status.ts).
@@ -180,7 +182,7 @@ Super+Shift+R                            # reload the UI (re-runs nidara-ui → 
 #    cd ui/shell && npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 #    (else the reload paints the OLD style.css and the change "did nothing" — owner-caught 2026-09-25)
 tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
-killall gjs                              # nuke stuck old UI when reload misbehaves
+killall nidara-shell                              # nuke stuck old UI when reload misbehaves
 cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
 cd ui/shell && npm run build            # SCSS compile + scripts/bundle.sh (needs the `esbuild` package)
 nidara-ipc listActions                  # discover the shell's IPC surface (JSON)
@@ -210,8 +212,8 @@ one with a `timeout-minutes`):
 
 | job | gates |
 |---|---|
-| `styles` | the SCSS of the shell, the greeter/lock sheet, the installer and the kit's own sheet (`kit.scss` → `kit.css`, loaded at runtime by the others: #108) compiles — **and the token contract holds in BOTH directions**: every bundle defines the `--nidara-*` its rules paint with (`token-contract-check.mjs`; an undefined custom property is silently dropped by GTK4, never an error), every token a bundle defines is read by something (`token-orphan-check.mjs`, with a control — an orphan is a value that drifts from the one on screen, which is how `--nidara-edge` was retuned in #600 and changed no pixel: tech-debt #106), and **the kit draws what the kit builds** (`style-ownership-check.mjs`, two controls — a kit component styled only in `ui/shell/styles/` is INVISIBLE in every other bundle, because those bundles load no GTK theme at all: tech-debt #59, commandment 11). **And the client-painted glass's model holds its numbers** (`scripts/dev/glass-legibility-probe.ts`, with a control that moves a tooltip floor — the least glass whose text reads 4.5:1 over any backdrop) |
-| `typecheck` | `tsc --noEmit` over all four bundles (installer, greeter and lock in full since 2026-09-22 — their one shim is `ui/lib/nidara-kit/gi-cairo.d.ts`, which must be FIRST in `include` or it is silently ignored), against a compressed `@girs/` snapshot pulled from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB generated; a maintainer refreshes the snapshot when it goes stale) |
+| `styles` | the SCSS of the shell, Settings, the greeter/lock sheet, the installer and the kit's own sheet (`kit.scss` → `kit.css`, loaded at runtime by the others: #108) compiles — **and the token contract holds in BOTH directions**: every bundle defines the `--nidara-*` its rules paint with (`token-contract-check.mjs`; an undefined custom property is silently dropped by GTK4, never an error), every token a bundle defines is read by something (`token-orphan-check.mjs`, with a control — an orphan is a value that drifts from the one on screen, which is how `--nidara-edge` was retuned in #600 and changed no pixel: tech-debt #106), and **the kit draws what the kit builds** (`style-ownership-check.mjs`, two controls — a kit component styled only in `ui/shell/styles/` is INVISIBLE in every other bundle, because those bundles load no GTK theme at all: tech-debt #59, commandment 11). **And the client-painted glass's model holds its numbers** (`scripts/dev/glass-legibility-probe.ts`, with a control that moves a tooltip floor — the least glass whose text reads 4.5:1 over any backdrop) |
+| `typecheck` | `tsc --noEmit` over all five bundles (installer, greeter and lock in full since 2026-09-22 — their one shim is `ui/lib/nidara-kit/gi-cairo.d.ts`, which must be FIRST in `include` or it is silently ignored), against a compressed `@girs/` snapshot pulled from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB generated; a maintainer refreshes the snapshot when it goes stale) |
 | `widgets-gen` | the generated widget registry matches `widgets/` — **and the widget boundary holds**: `widgets/` imports nothing from `surfaces/`, and `common/widget-kit/` stays a leaf. Neither is a compile error (28 widget→surface imports type-checked on 2026-09-01) and the second one crashes the shell at BOOT, which `tsc` cannot see. **Also the Settings import closure** (`settings-closure-check.mjs`, #571): what Settings.tsx reaches transitively may not include another surface, a widget or a shell-only module beyond a shrink-only allowlist. **And the kit is a package** (`kit-boundary-check.mjs`, #108): nothing under `ui/lib/nidara-kit/` imports from outside it — an app outside this repo has the kit and nothing else. **And a child process never inherits our `GTK_THEME=Empty`** (`child-env-check.mjs`, with a control: every process starts through `spawn()`, commandment 11) |
 | `smoke` | **a real headless boot** — official Arch packages in a container, build both C libraries (`libnidara-wl`, `libnidara-auth` + its eight signals), bundle the shell, boot it on real Hyprland over a virtual display (kernel vkms + llvmpipe); fails on death, silent IPC, JS errors or **a toolkit CRITICAL** (Gtk/Gdk/Gsk/GLib/Gjs — a failed assertion is a bug that draws nothing wrong on the spot; only a missing accessibility bus is exempt, that is the container), prints the grouped warning summary every run, and uploads screenshots as artifacts |
 | `i18n` | translation parity + the ledger (`scripts/ci/i18n-check.mjs --check`) — see `dev-workflow.md` |

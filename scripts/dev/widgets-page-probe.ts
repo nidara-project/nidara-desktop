@@ -29,7 +29,7 @@ const argv: string[] = (globalThis as any).ARGV ?? []
 const css = argv[0]
 let failures = 0
 
-// What Widgets.tsx computed before the seam, transcribed from the removed lines.
+// Registry-side answer, including the placement fields added since the seam.
 function legacy() {
     return registry.all().map(w => {
         const placement = widgetConfig.get(w.id)
@@ -37,6 +37,8 @@ function legacy() {
         return {
             id: w.id, name: w.name, category: w.category, barOrder: w.barOrder ?? 0,
             canBar: (w.locations?.includes("bar") ?? false) && w.buildBarContent != null,
+            barMode: widgetConfig.barModeChoosable(w.id) ? widgetConfig.barMode(w.id) : null,
+            ccFixed: canCc && widgetConfig.ccFixed(w.id),
             canCc, available: widgetAvailable(w), bar: placement.bar, cc: placement.cc,
             ccFits: canCc && (placement.cc || ccLayout.canAdd(w.id)),
             icon: w.icon?.to_string() ?? null,
@@ -45,7 +47,12 @@ function legacy() {
 }
 
 function current() {
-    return widgetCatalog().list().map(({ buildSettings: _b, icon, ...rest }) => ({ ...rest, icon: icon?.to_string() ?? null }))
+    return widgetCatalog().list().map(w => ({
+        id: w.id, name: w.name, category: w.category, barOrder: w.barOrder,
+        canBar: w.canBar, barMode: w.barMode, ccFixed: w.ccFixed,
+        canCc: w.canCc, available: w.available, bar: w.bar, cc: w.cc,
+        ccFits: w.ccFits, icon: w.icon?.to_string() ?? null,
+    }))
 }
 
 app.start({

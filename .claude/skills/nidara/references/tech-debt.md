@@ -1369,15 +1369,15 @@ These were paid down; the *rule* remains:
   (re-invoking just raises; it closes only via its own close button). Don't turn it into a
   toggle-hide. **Raising across workspaces:** `gtk_window_present()` alone does NOT jump to the
   window when it's on another workspace — its Wayland activation is ignored by Hyprland
-  (`misc:focus_on_activate=false`). So `raiseSettings()` (app.ts) present()s *and* dispatches an
+  (`misc:focus_on_activate=false`). So Settings' own `raise()` (`ui/settings/app.ts`) present()s *and* dispatches an
   explicit `hyprlandState.focusWindow(addr)` (found by class `nidara-settings` + title
   `Nidara Settings` — the class was AGS's `io.Astal.ags` until 2026-08-18), which switches to its workspace like clicking any running dock app.
   Same pattern applies to any normal (non-layer-shell) window the shell wants to summon.
   `toggleSettings` is kept as a **compat alias** (the `hyprland.lua` Super+S
   keybind / user scripts) — don't drop it without updating those. `dumpState.overlays.settings`
   is derived from Hyprland's clients with the same class+title predicate
-  (`isSettingsClient`, app.ts) — `status.settings_open` is gone since #571. There's deliberately **no IPC to CLOSE** Settings: restart
-  the shell to reset state in a verification run, and use `queryUI` (a `nidara-settings-window`
+  (`isSettingsClient`, app.ts) — `status.settings_open` is gone since #571. There's deliberately **no IPC to CLOSE** Settings: close its normal window to exit that application, reopen for a fresh
+  page cache (restarting the shell does not reset Settings since #571), and use `queryUI` (a `nidara-settings-window`
   toplevel present = open) as the ground truth.
 - **(was #10) Boot-time `g_list_store_remove` CRITICAL (astal-tray)** fixed upstream:
   Aylur/astal#451 merged 2026-06-12 (kotontrion's pending-items pattern, verified A/B/A on

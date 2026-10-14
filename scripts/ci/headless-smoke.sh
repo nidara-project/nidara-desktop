@@ -128,6 +128,8 @@ phase_bundle() {
     # same modules a release installs at /usr/share/nidara-kit/js.
     node "$REPO/scripts/bundle.mjs" kit "$REPO/ui/lib/nidara-kit/build/js"
     "$REPO/scripts/bundle.sh" app.ts build/nidara --kit-external="$REPO/ui/lib/nidara-kit/build/js"
+    npx sass --no-charset ../settings/style.scss ../settings/style.css
+    ( cd ../settings; mkdir -p build; "$REPO/scripts/bundle.sh" app.ts build/nidara-settings --kit-external="$REPO/ui/lib/nidara-kit/build/js" )
     log "bundle OK: $(du -h build/nidara | cut -f1)"
 }
 
@@ -248,6 +250,7 @@ phase_run() {
     # ── 3. The shell bundle, exactly as production runs it ────────────────────
     log "booting nidara bundle…"
     export GDK_BACKEND=wayland
+    export NIDARA_SETTINGS_ROOT="$REPO/ui/settings" NIDARA_SETTINGS_EXECUTABLE="$REPO/ui/settings/build/nidara-settings"
     export NIDARA_SHELL_ROOT="$REPO/ui/shell"
     cd "$REPO/ui/shell"
     ./build/nidara >"$shell_log" 2>&1 &
@@ -283,6 +286,8 @@ phase_run() {
         || { log "FAIL: shell never published org.nidara.Shell"; exit 1; }
 
     log "IPC OK — org.nidara.Shell answers"
+    NIDARA_SETTINGS_CHECK_ISOLATED=1 "$REPO/scripts/ci/settings-process-check.sh" /tmp/smoke/nidara-ipc /tmp/smoke
+
 
     # ── 5. Screenshots for human review (NOT a gate beyond grim succeeding) ───
     sleep 4                                   # let the first frames render

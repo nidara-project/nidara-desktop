@@ -217,7 +217,7 @@ build_local_nidara_pkg() {
     tar -C "$REPO_DIR" -czf "$pdir/nidara-desktop-$pkgver.tar.gz" \
         --exclude='./.git' \
         --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
-        --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
+        --exclude='./ui/settings/build' --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
         --exclude='./ui/greeter/node_modules' --exclude='./ui/lockscreen/build' \
         --exclude='./ui/lockscreen/node_modules' \
         --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \
@@ -464,6 +464,13 @@ if [ "$MODE" != "dev" ]; then
     echo "  [OK] Bundle: $REPO_DIR/ui/shell/build/nidara"
 fi
 
+echo "  Building Settings..."
+cd "$REPO_DIR/ui/shell"
+npx sass --no-charset ../settings/style.scss ../settings/style.css
+cd "$REPO_DIR/ui/settings"
+mkdir -p build
+"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-settings --kit-external=/usr/share/nidara-kit/js
+
 echo "  Building greeter..."
 # Use the shell bundle's sass installation for SCSS compilation
 cd "$REPO_DIR/ui/shell"
@@ -543,6 +550,9 @@ fi
 # Shell UI bundle + style
 # Migration: drop the pre-rename system tree (ui/ags-v3 → ui/shell, 2026-06)
 sudo rm -rf /usr/share/nidara/ui/ags-v3
+sudo mkdir -p /usr/share/nidara/ui/settings/build
+sudo cp "$REPO_DIR/ui/settings/build/nidara-settings" /usr/share/nidara/ui/settings/build/
+sudo cp "$REPO_DIR/ui/settings/style.css" /usr/share/nidara/ui/settings/
 sudo mkdir -p /usr/share/nidara/ui/shell/build
 if [ "$MODE" != "dev" ]; then
     sudo cp "$REPO_DIR/ui/shell/build/nidara" /usr/share/nidara/ui/shell/build/
@@ -599,6 +609,7 @@ sudo cp "$REPO_DIR/ui/lockscreen/build/nidara-lock" /usr/share/nidara/ui/lockscr
 # Session wrapper scripts
 sudo cp "$REPO_DIR/bin/nidara"     /usr/bin/nidara
 sudo cp "$REPO_DIR/bin/nidara-ui"  /usr/bin/nidara-ui
+sudo cp "$REPO_DIR/bin/nidara-settings" /usr/bin/nidara-settings
 sudo cp "$REPO_DIR/bin/nidara-greeter"   /usr/bin/nidara-greeter
 sudo cp "$REPO_DIR/bin/nidara-lock"      /usr/bin/nidara-lock
 sudo cp "$REPO_DIR/bin/nidara-before-sleep" /usr/bin/nidara-before-sleep
@@ -625,7 +636,7 @@ sudo cp "$REPO_DIR/bin/nidara-language" /usr/bin/nidara-language
 sudo rm -rf /usr/share/nidara/migrations
 sudo mkdir -p /usr/share/nidara/migrations
 sudo cp "$REPO_DIR"/migrations/*.sh /usr/share/nidara/migrations/
-sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
+sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-settings /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
 
 # Compile the IPC client (nidara-ipc): `Request(as) -> s` on the shell's D-Bus
 # name, and the thing every keybind in hyprland.lua runs. C rather than GJS for

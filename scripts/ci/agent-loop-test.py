@@ -158,13 +158,14 @@ class Mock(BaseHTTPRequestHandler):
             send(self._chunk(delta={"tool_calls": [{"index": 0, "function": {"arguments": args[half:]}}]}))
             send(self._chunk(finish="tool_calls"))
 
-        if Mock.mode == "hidden_action":
+        if Mock.mode in ("hidden_action", "hidden_catalog"):
             # The model reaches for a HIDDEN action by name. It cannot have read the
             # name off run_action's index (that is the other half of this scenario),
             # but a model that guesses — or one steered by a prompt injection in a
             # window title it just read — must still be stopped by the resolver.
             if tool_results == 0:
-                call_tool("run_action", '{"action":"agent_new_conversation"}', "call_hidden")
+                action = "widget_catalog" if Mock.mode == "hidden_catalog" else "agent_new_conversation"
+                call_tool("run_action", json.dumps({"action": action, "args": ["bar", "optional", "true"]}), "call_hidden")
             else:
                 send(self._chunk(delta={"role": "assistant", "content": FINAL[:1]}))
                 send(self._chunk(delta={"content": FINAL[1:]}))
@@ -226,7 +227,7 @@ def make_stub_ipc(bind: Path):
         "  listActions) printf '%s' "
         "'{\"toggleControlCenter\":{\"desc\":\"Toggle the control center\"},"
         "\"launchApp\":{\"desc\":\"Launch an app\"},"
-        "\"agentNewConversation\":{\"desc\":\"End the conversation and begin an empty one\"}}' ;;\n"
+        "\"agentNewConversation\":{\"desc\":\"End the conversation and begin an empty one\"},\"widgetCatalog\":{\"desc\":\"Settings catalogue control plane\"}}' ;;\n"
         "  describeConfig) printf '%s' "
         "'{\"appearance.accent\":{\"type\":\"string\",\"value\":\"purple\",\"writable\":true}}' ;;\n"
         "  dumpState) printf '%s' '{\"overlays\":{},\"dark\":false}' ;;\n"
@@ -505,6 +506,48 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def probe_catalog_mcp(grant: bool):
+    """Settings' IPC writes cannot bypass the MCP configuration grant."""
+    with tempfile.TemporaryDirectory(prefix="nidara-catalog-mcp-") as tmp_name:
+        tmp = Path(tmp_name)
+        write_ai_settings(tmp, {"allowMcp": True, "allowConfigWrite": grant})
+        bind = tmp / "bin"
+        bind.mkdir()
+        stub = bind / "nidara-ipc"
+        stub.write_text("#!/bin/sh\nprintf 'fixture catalogue'\n")
+        stub.chmod(0o755)
+        env = dict(os.environ, XDG_CONFIG_HOME=str(tmp), XDG_STATE_HOME=str(tmp / "state"),
+                   GSETTINGS_BACKEND="keyfile", GSETTINGS_SCHEMA_DIR=str(SCHEMA_DIR),
+                   PATH=f"{bind}:{os.environ.get('PATH', '')}")
+        calls = [
+            {"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {
+                "name": "run_action", "arguments": {"name": name, "args": args}}}
+            for i, (name, args) in enumerate([
+                ("widgetCatalog", ["list"]),
+                ("widgetCatalog", ["bar", "optional", "true"]),
+                ("widgetCatalog()", ["cc", "optional", "true"]),
+                ("settingsMonitor", ["mode", "DP-1", "1280x720@60"]),
+                ("settingsWallpaper", ["set", "/tmp/wallpaper.png", "fade"]),
+            ], 1)
+        ]
+        run = subprocess.run(["gjs", "-m", str(REPO / "bin" / "nidara-mcp")],
+                             input="".join(json.dumps(c) + "\n" for c in calls),
+                             text=True, capture_output=True, env=env, timeout=15)
+        replies = [json.loads(line) for line in run.stdout.splitlines() if line.startswith("{")]
+        problems = []
+        if run.returncode or len(replies) != 5:
+            problems.append(f"MCP returned {run.returncode}, {len(replies)} replies: {run.stderr}")
+        else:
+            for i, reply in enumerate(replies):
+                result = reply.get("result", {})
+                error = result.get("isError", False)
+                text = "".join(c.get("text", "") for c in result.get("content", []))
+                blocked = i > 0 and not grant
+                if error != blocked or ("config writes are disabled" if blocked else "fixture catalogue") not in text:
+                    problems.append(f"unexpected MCP result for call {i + 1}: {reply}")
+        return problems
+
+
 def main():
     if not DAEMON.exists():
         print(f"FAIL: daemon not found at {DAEMON}", file=sys.stderr)
@@ -532,6 +575,8 @@ def main():
             print(f"PASS: {name}")
 
     try:
+        for grant in (False, True):
+            report(f"MCP catalogue: config grant={grant}", probe_catalog_mcp(grant), [], [])
         # ── Scenario 1: tool-use loop, with a 503 that MUST be retried past ──
         Mock.reset("retry")
         events, stderr_lines = drive_daemon(port)
@@ -753,27 +798,31 @@ def main():
         # map built with the same filter. Both halves are asserted, because either
         # one alone is a false sense of safety — an unlisted-but-callable action is
         # exactly what a prompt injection in a window title would go looking for.
-        Mock.reset("hidden_action")
-        events, stderr_lines = drive_daemon(port, prompt="start a new conversation")
-        problems = []
-        run_action = next((t for t in Mock.last_tool_defs
-                           if t.get("function", {}).get("name") == "run_action"), None)
-        if not run_action:
-            problems.append("run_action was not offered at all — the index assertion below proves nothing")
-        else:
-            index = run_action["function"].get("description", "")
-            if "agent_new_conversation" in index or "agentNewConversation" in index:
-                problems.append("the hidden action is advertised in run_action's index")
-            # Guards the assertion above against passing on an EMPTY index (a
-            # listActions failure, which the daemon survives by design).
-            if "toggle_control_center" not in index:
-                problems.append("a visible action is missing from the index — the stub or the index broke")
-        results = [e for e in events if e.get("t") == "toolresult"]
-        if not results:
-            problems.append("the daemon never dispatched the call — nothing was resolved either way")
-        elif any(r.get("ok") for r in results):
-            problems.append("a hidden action RESOLVED and ran — the denylist is advisory, not enforcing")
-        report("hidden actions: unreachable, not just unlisted", problems, events, stderr_lines)
+        for hidden_mode, hidden_names in (
+            ("hidden_action", ("agent_new_conversation", "agentNewConversation")),
+            ("hidden_catalog", ("widget_catalog", "widgetCatalog")),
+        ):
+            Mock.reset(hidden_mode)
+            events, stderr_lines = drive_daemon(port, prompt="start a new conversation")
+            problems = []
+            run_action = next((t for t in Mock.last_tool_defs
+                               if t.get("function", {}).get("name") == "run_action"), None)
+            if not run_action:
+                problems.append("run_action was not offered at all — the index assertion below proves nothing")
+            else:
+                index = run_action["function"].get("description", "")
+                if any(name in index for name in hidden_names):
+                    problems.append("the hidden action is advertised in run_action's index")
+                # Guards the assertion above against passing on an EMPTY index (a
+                # listActions failure, which the daemon survives by design).
+                if "toggle_control_center" not in index:
+                    problems.append("a visible action is missing from the index — the stub or the index broke")
+            results = [e for e in events if e.get("t") == "toolresult"]
+            if not results:
+                problems.append("the daemon never dispatched the call — nothing was resolved either way")
+            elif any(r.get("ok") for r in results):
+                problems.append("a hidden action RESOLVED and ran — the denylist is advisory, not enforcing")
+            report(f"{hidden_mode}: unreachable, not just unlisted", problems, events, stderr_lines)
 
         Mock.reset("computer_use")
         argv_rec = Path(tempfile.mkdtemp(prefix="nidara-agent-argv-"))

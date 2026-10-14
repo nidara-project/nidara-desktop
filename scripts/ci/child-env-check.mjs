@@ -27,7 +27,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "fs"
 import { join, resolve, relative } from "path"
 
 const REPO = resolve(process.argv[2] ?? new URL("../..", import.meta.url).pathname)
-const ROOTS = ["ui/shell", "ui/greeter", "ui/lockscreen", "ui/lib"]
+const ROOTS = ["ui/settings", "ui/shell", "ui/greeter", "ui/lockscreen", "ui/lib"]
 const DOOR = "ui/lib/process.ts"
 const SKIP_DIRS = new Set(["node_modules", "@girs", "build"])
 

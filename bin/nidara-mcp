@@ -162,7 +162,15 @@ const TOOLS = [
             required: ["name"],
             additionalProperties: false,
         },
-        handler: ({ name, args = [] }) => okResult(agsRequest([name, ...args])),
+        handler: ({ name, args = [] }) => {
+            // Settings writes without the AI grant; an MCP passthrough must not
+            // turn that local control plane into a bypass of allowConfigWrite.
+            if ((["settingsMonitor", "settingsWallpaper"].includes(name.replace("()", ""))
+                || name.replace("()", "") === "widgetCatalog" && args.length > 0 && args[0] !== "list")
+                && aiSetting("allow-config-write") !== true)
+                return errResult("config writes are disabled — enable them in Settings → AI")
+            return okResult(agsRequest([name, ...args]))
+        },
     },
     {
         name: "list_apps",

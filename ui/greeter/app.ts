@@ -19,6 +19,7 @@ const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
 app.start({
   applicationId: "org.nidara.greeter",
   applicationName: "Nidara Greeter",
+  processName: "nidara-greeter",
   logDomain: "nidara-greeter",
   css: withKitSheet(cssPath),
 

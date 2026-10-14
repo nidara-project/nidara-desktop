@@ -147,7 +147,7 @@ the way the thing is turned on — that is the trap the rule exists for.
 and hiding its own switch while it is off would leave no way back.
 A missing adapter is not a mode: `isAvailable` false = the control does not exist on this machine
 (not in the bar, not listed in Settings → Top bar), and a dongle plugged in later brings it back.
-⚠️ **Not with `buildSettings`.** Settings → Top bar gives a row ONE trailing control, and Configure
+⚠️ **Not with a Configure page.** Settings → Top bar gives a row ONE trailing control, and Configure
 beats the mode menu — so a widget with a settings page AND a choosable mode has a mode nobody can
 change. Screen recording shipped that way in #651, defaulted to "When active": its icon (where a
 capture STARTS) never appeared, checked or not (owner, 2026-09-27).
@@ -190,10 +190,7 @@ states draws the ring around a focused child too — the current-network box tur
 curved end.
 
 Everything else on `AtomicWidget` is optional and documented at its field in
-`common/widget-kit/contract.ts`: `buildBarExpanded`, `buildCCDetail`, `buildSettings` (a
-Configure subpage — keep a widget's own options with the widget; ⚠️ it is the one field Settings
-cannot receive once it runs in its own process (#571), so put the options themselves in GSettings
-and keep the page a thin set of rows over them, as `screenrecord` does), `isAvailable`/`watchAvailable`
+`common/widget-kit/contract.ts`: `buildBarExpanded`, `buildCCDetail`, `isAvailable`/`watchAvailable`
 (a hardware gate: without it the widget stops existing for the user rather than showing
 broken), `getActive`/`watchActive` (the tile's on-state: a 1×1 turns white, a larger tile's icon
 circle does, the icon in the accent), `getFill` (the gauge variant), `barClick` (intercept the pill's
@@ -236,3 +233,13 @@ on a stale one, and runs the boundary check beside it.
 If you are extending your own installed copy rather than this repo, read
 `agent-contribution.md` first — it decides whether your change is personal, belongs in Settings,
 or is worth proposing upstream.
+
+## A widget's preferences page belongs to Settings
+
+A Configure page is registered by widget id in `surfaces/settings/widgetSettings.ts`.
+Both Settings → Widgets and Settings → Top bar resolve it there. The capture widget
+reads the same `core/RecordingConfig` store as `pages/ScreenRecording.tsx`; it never
+imports that page. Keep options in GSettings and the page a thin set of rows over them.
+`AtomicWidget` and `WidgetCatalogEntry` carry no GTK page builder: a function or a
+widget tree cannot travel to a separate Settings process (#571). An unknown widget id
+has no Configure button.

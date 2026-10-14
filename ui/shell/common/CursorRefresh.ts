@@ -130,7 +130,7 @@ export function bindCursorThemeRefresh(theme: any): () => void {
 
     const settings = Gtk.Settings.get_default()
     const ids = settings
-        ? ["notify::gtk-cursor-theme-size", "notify::gtk-cursor-theme-name"]
+        ? (["notify::gtk-cursor-theme-size", "notify::gtk-cursor-theme-name"] as const)
               .map((sig) => settings.connect(sig, refresh))
         : []
 

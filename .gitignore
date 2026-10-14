@@ -191,3 +191,7 @@ ui/installer/base.json
 # RELEASED version number while containing unreleased code — the last thing that
 # should ever be committed.
 out-pkg/
+
+# The independent Settings stylesheet is generated during build.
+ui/settings/style.css
+ui/settings/style.css.map

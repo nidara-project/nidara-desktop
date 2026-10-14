@@ -30,6 +30,7 @@ const ENGINE = "ui/lib/nidara-kit/platform/theme-tokens.ts"
 /** The bundles that compile a sheet of their own. The shell is deliberately absent:
  *  it OWNS the engine and its `styles/_base.scss` is where the static half lives. */
 const BUNDLES = [
+    { name: "settings", sheet: "ui/settings/style.scss", code: "ui/settings", sources: ["ui/shell/styles/_base.scss", "ui/shell/styles/_reset.scss", "ui/shell/styles/_components.scss", "ui/shell/styles/_settings.scss"] },
     { name: "installer", sheet: "ui/installer/style.scss", code: "ui/installer" },
     // The greeter's sheet is compiled by the lockscreen too — one file, two bundles.
     { name: "greeter+lock", sheet: "ui/greeter/style.scss", code: "ui/greeter" },
@@ -57,7 +58,7 @@ if (engineTokens.size === 0) {
 let failed = false
 
 for (const b of BUNDLES) {
-    const sheet = read(b.sheet)
+    const sheet = read(b.sheet) + (b.sources ?? []).map(read).join("\n")
     if (!sheet) {
         console.error(`token-contract-check: ${b.sheet} not found`)
         failed = true

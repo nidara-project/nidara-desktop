@@ -74,7 +74,7 @@ login; the switch happens in a single release, when nothing is missing.
 - **Notification Center**: Grouped notifications with inline actions.
 - **Clipboard history**: Recent copies — text *and* images — kept in a browsable panel, with per-entry delete.
 - **Screen recording**: Full screen or a region, MP4/MKV/WebM, with optional audio from desktop output or any microphone; a live indicator in the Activity Island while it runs.
-- **Settings**: Multi-page panel — Network, Bluetooth, Appearance, Display, Audio, Top Bar, Dock, Control Center, Gaming, Notifications, Accessibility, Apps, Devices, Power, Language & Region, Autostart, Users, AI, and About.
+- **Settings**: Independent application — a Settings crash leaves the bar and dock running. Multi-page panel — Network, Bluetooth, Appearance, Display, Audio, Top Bar, Dock, Control Center, Gaming, Notifications, Accessibility, Apps, Devices, Power, Language & Region, Autostart, Users, AI, and About.
 - **Nidara Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
 - **AI-native**: A built-in Assistant ships with the desktop, and an MCP server (`nidara-mcp`) lets any external coding agent perceive and drive the live desktop through the same official interface; an in-repo agent skill and a PR-based contribution model are built for AI-authored improvements. Built with AI, operable by AI, improved by AI — see [Using an AI agent](#using-an-ai-agent-with-your-desktop) and [Contributing](#contributing).
 - **Game Mode**: games (Steam's, or any that says it is one) move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), with optional library-art wallpaper, performance power profile and notifications held back while you play — the same on Hyprland and Hyalo; `Super + B` floats the bar above any fullscreen window.
@@ -439,12 +439,13 @@ nidara/
     ├── shell/                 # Main shell (TypeScript → GJS on GTK4)
     │   ├── app.ts             # Entry point + IPC request handler
     │   ├── core/              # State (Status), theme engine (NidaraTheme), services
-    │   ├── surfaces/          # Whole surfaces (Bar, Dock, AppGrid, Control Center, Settings…)
+    │   ├── surfaces/          # Shell surfaces + shared Settings page sources
     │   ├── widgets/           # Auto-registered atomic widgets (battery, wifi, media…)
     │   ├── common/            # Shared UI pieces (Slider, SquircleContainer, fade…)
     │   ├── styles/            # Modular SCSS (tokens, glass mixin, per-component)
     │   ├── style.css          # Compiled CSS — generated from styles/ (gitignored)
     │   └── build/nidara    # Bundle output from scripts/bundle.sh (gitignored)
+    ├── settings/              # Independent Settings entry point, styles and build
     ├── greeter/               # Login screen (greetd + AstalGreet)
     ├── lockscreen/            # Lock screen (ext-session-lock-v1, shares greeter CSS)
     └── lib/nidara-kit/        # GTK4 primitive widgets (no Adwaita): SplitView, Scrolled, Button…
