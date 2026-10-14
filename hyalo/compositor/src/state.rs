@@ -390,9 +390,15 @@ impl Hyalo {
             windows.iter().find_map(|window| {
                 // Where the surface is drawn: the geometry's origin less the decorations.
                 let location = self.space.element_location(window)? - window.geometry().loc;
-                window
-                    .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
-                    .map(|(s, p)| (s, (p + location).to_f64()))
+                let local = pos - location.to_f64();
+                let popup = window.surface_under(local, WindowSurfaceType::POPUP | WindowSurfaceType::SUBSURFACE);
+                let root = || {
+                    let m = self.wm.by_window(window)?;
+                    let cell = Rectangle::new(self.space.element_location(window)?, m.visible_size());
+                    if !cell.to_f64().contains(pos) { return None; }
+                    window.surface_under(local, WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE)
+                };
+                popup.or_else(root).map(|(s, p)| (s, (p + location).to_f64()))
             })
         };
         if let Some(h) = hit(&above) {
@@ -416,6 +422,7 @@ pub enum Chrome {
     Button(crate::protocols::window_controls::Button),
     /// The rest of its title bar (render/title_bar.rs): dragged, it moves the window.
     Bar,
+    Resize(crate::wm::grabs::ResizeEdge),
 }
 
 impl Hyalo {
@@ -444,6 +451,29 @@ impl Hyalo {
                 let origin = self.space.element_location(window)? - window.geometry().loc;
                 let local = pos - origin.to_f64();
                 let managed = self.wm.by_window(window)?;
+                if window.surface_under(local, WindowSurfaceType::POPUP | WindowSurfaceType::SUBSURFACE).is_some() {
+                    return Some(None);
+                }
+                if managed.fullscreen == crate::wm::Fullscreen::None {
+                    let mut edges = crate::wm::grabs::border_edges(managed.frame(), pos);
+                    if !managed.floating && let Some(ws) = self.wm.workspaces.get(&managed.workspace) {
+                        use crate::wm::{grabs::ResizeEdge, layout::Edge};
+                        for (bit, edge) in [(ResizeEdge::LEFT, Edge::Left), (ResizeEdge::RIGHT, Edge::Right),
+                                            (ResizeEdge::TOP, Edge::Top), (ResizeEdge::BOTTOM, Edge::Bottom)] {
+                            if !ws.layout.can_resize_edge(managed.id, edge) { edges.remove(bit); }
+                        }
+                    }
+                    let (min, max) = crate::wm::grabs::size_limits(window);
+                    if max.w > 0 && min.w == max.w {
+                        edges.remove(crate::wm::grabs::ResizeEdge::LEFT | crate::wm::grabs::ResizeEdge::RIGHT);
+                    }
+                    if max.h > 0 && min.h == max.h {
+                        edges.remove(crate::wm::grabs::ResizeEdge::TOP | crate::wm::grabs::ResizeEdge::BOTTOM);
+                    }
+                    if !edges.is_empty() {
+                        return Some(Some((managed.id, Chrome::Resize(edges))));
+                    }
+                }
                 if managed.fullscreen != crate::wm::Fullscreen::Fullscreen
                     && let Some((r, buttons)) = crate::protocols::window_controls::managed_rect(managed, cfg)
                     && let Some(b) = crate::protocols::window_controls::button_at(r, local, &buttons)
@@ -453,11 +483,13 @@ impl Hyalo {
                 let bar = managed.bar();
                 if bar > 0 {
                     let geo = window.geometry();
-                    let r = Rectangle::new((geo.loc.x, geo.loc.y - bar).into(), (geo.size.w, bar).into()).to_f64();
+                    let r = Rectangle::new((geo.loc.x, geo.loc.y - bar).into(), (managed.visible_size().w, bar).into()).to_f64();
                     if r.contains(local) {
                         return Some(Some((managed.id, Chrome::Bar)));
                     }
                 }
+                let cell = Rectangle::new(self.space.element_location(window)?, managed.visible_size());
+                if !cell.to_f64().contains(pos) { return None; }
                 window.surface_under(local, WindowSurfaceType::ALL).map(|_| None)
             })
         };
@@ -474,7 +506,7 @@ impl Hyalo {
     pub fn controls_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, crate::protocols::window_controls::Button)> {
         match self.chrome_under(pos)? {
             (id, Chrome::Button(b)) => Some((id, b)),
-            (_, Chrome::Bar) => None,
+            (_, Chrome::Bar | Chrome::Resize(_)) => None,
         }
     }
 
@@ -493,7 +525,14 @@ impl Hyalo {
             // Held only while still over the button it was pressed on.
             pressed: was.is_some_and(|h| h.pressed && h.window == window && h.button == button),
         });
-        if chrome.is_some() && !self.wm.over_chrome {
+        if let Some(crate::wm::grabs::Active { kind: crate::wm::grabs::Kind::Resize(edges), .. }) = self.wm.grab {
+            self.cursor_status = CursorImageStatus::Named(edges.cursor());
+        } else if let Some((_, chrome)) = chrome {
+            self.cursor_status = match chrome {
+                Chrome::Resize(edges) => CursorImageStatus::Named(edges.cursor()),
+                _ => CursorImageStatus::default_named(),
+            };
+        } else if self.wm.over_chrome {
             self.cursor_status = CursorImageStatus::default_named();
         }
         self.wm.over_chrome = chrome.is_some();

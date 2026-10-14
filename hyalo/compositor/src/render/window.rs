@@ -431,6 +431,7 @@ pub fn push<R: HyaloRenderer>(
     renderer: &mut R,
     window: &Window,
     look: Look,
+    clip_to_cell: bool,
     location: Point<i32, Physical>,
     geo: Rectangle<f64, Physical>,
     scale: Scale<f64>,
@@ -457,7 +458,7 @@ pub fn push<R: HyaloRenderer>(
     if let Some((rect, controls)) = controls {
         out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
     }
-    let radius = cfg.rounding * scale.x;
+    let radius = if look.rounded { cfg.rounding * scale.x } else { 0.0 };
     // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the
     // bar and the client together: the client's top corners are inside, not cut.
     let bar_px = title_bar.as_ref().map_or(0.0, |t| t.height * scale.x);
@@ -467,8 +468,10 @@ pub fn push<R: HyaloRenderer>(
     // (owner, 2026-10-04, over a ring of Hyalo's own: it stretched the client's edges, and what
     // touched them streaked). What lies in the corners' outer 4.7 px along the diagonal
     // (`rounding` 24, `rounding_power` 3.2) is not shown.
-    let clip = (!fits(window)).then_some(geo);
-    let program = look.rounded.then(|| rounded_program(renderer)).flatten();
+    // A client may keep its minimum-size buffer in a smaller tile. The layout's
+    // visible geometry, supplied by push_window, clips that buffer too.
+    let clip = (clip_to_cell || !fits(window)).then_some(geo);
+    let program = (look.rounded || clip_to_cell).then(|| rounded_program(renderer)).flatten();
     let at = out.len();
     match &program {
         Some(program) => {

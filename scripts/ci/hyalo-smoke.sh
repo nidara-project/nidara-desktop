@@ -619,6 +619,11 @@ phase_run() {
     FLOAT_SIZE_LOG=/tmp/hyalo/float-size "$REPO/scripts/ci/hyalo-float-size-check.sh" >/tmp/hyalo/float-size.log 2>&1 \
         || { log "FAIL: floating size"; cat /tmp/hyalo/float-size.log; exit 1; }
     log "floating size OK (Wayland, X11, workspace moves, and saved boxes)"
+    # Shared resize borders and tiles smaller than GTK's minimum: pixels and input
+    # must both stay inside the layout's cells, even with ten windows.
+    RESIZE_LOG=/tmp/hyalo/resize python "$REPO/scripts/ci/hyalo-resize-check.py" >/tmp/hyalo/resize.log 2>&1 \
+        || { log "FAIL: resize and small tiles"; cat /tmp/hyalo/resize.log; exit 1; }
+    log "resize and small tiles OK (borders, corners, shared split, pixels and input)"
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null

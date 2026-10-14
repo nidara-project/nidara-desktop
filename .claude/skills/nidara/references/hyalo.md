@@ -1287,6 +1287,27 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `clamp_floating`), and stepped off a window it would cover entirely (`cascade`, KWin's
   `cascadeIfCovering`). A dialog, or a window whose min size equals its max, floats even on a
   tiling workspace (`wants_floating`).
+- **Tiling keeps dividing, even below a client's minimum** (owner, 2026-10-14).
+  Do not float overflow windows or impose client minima on the layout. GTK can allocate its
+  minimum anyway: the committed geometry and buffer may then be LARGER than the cell.
+  `Managed::visible_size()` is the layout's client box for tiles, the committed geometry for
+  floating windows. Drawing, backdrop, corners, title bar, snapshots and hit-testing must use
+  that SAME visible box. `render/window.rs` clips the root surface tree to it even with
+  rounding disabled; popups keep their separate placement and input. Never use the oversized
+  root's input region to block the next tile (`surface_under`, `chrome_under`, `window_under`).
+  The controls capsule is clamped into the visible header (`managed_rect`), preserving its
+  side margin where it fits; a cell too small for the capsule shows none rather than painting
+  over its neighbour. CI: `hyalo-resize-check.py` opens ten GTK windows, compares their actual
+  pixels and clicks each cell in both stacking orders.
+- **Resize borders belong to Hyalo, for every resizable app** (2026-10-14).
+  An undecorated GTK window (Settings) has no GTK resize grips; relying only on the client's
+  xdg resize request made it impossible to grab its border while Chrome worked. `Chrome::Resize`
+  uses `border_edges`: 3 logical px inside, 6 outside, corner reach 16. It shares the ordinary
+  window grab path with client requests and Super+drag. Fullscreen/maximized windows have no
+  resize border; fixed dimensions have no matching edge. A tile offers only edges that move
+  a split (`Layout::can_resize_edge`), never its outer output boundary. Layers and popups keep
+  precedence. The cursor follows the edge and stays there during the grab. Tiled drag deltas
+  round the accumulated displacement, so subpixel pointer events are not lost.
 - **A window born tiled has no Wayland floating box yet** (#809). Its initial configure is
   the predicted tile, so `window_mapped` must not save that size as `float_rect`. On its first
   `float`, `toggle-floating`, or move to a floating workspace, `arrange_workspace` sends

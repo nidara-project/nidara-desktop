@@ -39,6 +39,8 @@ pub trait Layout: std::fmt::Debug {
     /// Moves one edge of a window by `delta` logical pixels (positive = right or down).
     /// False when that edge is the area's border and cannot move.
     fn resize_edge(&mut self, id: WindowId, edge: Edge, delta: i32, area: Rect) -> bool;
+    /// Whether this edge is a movable split; used for pointer hit-testing without mutation.
+    fn can_resize_edge(&self, id: WindowId, edge: Edge) -> bool;
     /// A tiled window dropped on another: it leaves its place and goes next to `target`, on
     /// the side the cursor is on.
     fn move_next_to(&mut self, id: WindowId, target: WindowId, area: Rect, cursor: Point<f64, Logical>);

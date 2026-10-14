@@ -436,6 +436,16 @@ impl Hyalo {
             pointer.frame(self);
             return;
         }
+        if button == crate::binds::BTN_LEFT && button_state == ButtonState::Pressed
+            && Mods::from(&keyboard.modifier_state()) == Mods::default()
+            && !pointer.is_grabbed()
+            && let Some((id, crate::state::Chrome::Resize(edges))) = self.chrome_under(pointer.current_location())
+        {
+            let start = PointerGrabStartData { focus: None, button, location: pointer.current_location() };
+            self.focus_window(Some(id));
+            self.start_window_grab(id, Kind::Resize(edges), start, button);
+            return;
+        }
         // Hyalo's title bar (render/title_bar.rs): a press focuses its window; the left button
         // drags it, and a double click maximizes it or gives it back its size. The app sees
         // none of it.

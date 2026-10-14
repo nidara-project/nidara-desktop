@@ -141,6 +141,13 @@ impl Managed {
         if self.has_title_bar && self.fullscreen != Fullscreen::Fullscreen { TITLE_BAR_H } else { 0 }
     }
 
+    /// The client box visible on screen. Tiling owns this size even when a client
+    /// cannot honour its configure (GTK's minimum) or has not committed it yet.
+    pub fn visible_size(&self) -> Size<i32, Logical> {
+        if !self.floating && self.fullscreen == Fullscreen::None { self.rect.size }
+        else { self.window.geometry().size }
+    }
+
     /// The window's whole box, its title bar included: what the user sees as the window.
     pub fn frame(&self) -> Rect {
         with_bar(self.rect, self.bar())
@@ -1527,8 +1534,9 @@ impl Hyalo {
         if let Some((id, _)) = self.chrome_under(pos) {
             return Some(id);
         }
-        let (w, _) = self.space.element_under(pos)?;
-        self.wm.by_window(w).map(|m| m.id)
+        let (surface, _) = self.surface_under(pos)?;
+        let root = crate::shell::root_surface(self, &surface);
+        self.wm.by_surface(&root).map(|m| m.id)
     }
 
     /// A window's app id (an X11 window's class) changed. A GTK window takes its real app id

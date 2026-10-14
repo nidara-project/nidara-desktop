@@ -148,6 +148,15 @@ impl Node {
         true
     }
 
+    fn can_resize_edge(&self, id: WindowId, edge: Edge) -> bool {
+        let Node::Split { side_by_side, a, b, .. } = self else { return false };
+        let in_a = a.contains(id);
+        let deeper = if in_a { a.can_resize_edge(id, edge) } else { b.can_resize_edge(id, edge) };
+        deeper || matches!((edge, *side_by_side, in_a),
+            (Edge::Right, true, true) | (Edge::Left, true, false) |
+            (Edge::Bottom, false, true) | (Edge::Top, false, false))
+    }
+
     fn rename(&mut self, from: WindowId, to: WindowId) {
         match self {
             Node::Leaf(w) if *w == from => *w = to,
@@ -240,6 +249,10 @@ impl Layout for Dwindle {
         }
     }
 
+    fn can_resize_edge(&self, id: WindowId, edge: Edge) -> bool {
+        self.root.as_ref().is_some_and(|r| r.contains(id) && r.can_resize_edge(id, edge))
+    }
+
     fn move_next_to(&mut self, id: WindowId, target: WindowId, area: Rect, cursor: Point<f64, Logical>) {
         if id == target || !self.contains(id) || !self.contains(target) {
             return;
@@ -325,6 +338,11 @@ mod tests {
         let mut d = Dwindle::default();
         d.insert(1, area(), None, None);
         d.insert(2, area(), Some(1), None);
+        assert!(d.can_resize_edge(1, Edge::Right));
+        assert!(d.can_resize_edge(2, Edge::Left));
+        assert!(!d.can_resize_edge(1, Edge::Left));
+        assert!(!d.can_resize_edge(2, Edge::Right));
+        assert!(!d.can_resize_edge(99, Edge::Left));
         // 1's right edge is the split: it moves.
         assert!(d.resize_edge(1, Edge::Right, 200, area()));
         assert_eq!(boxes(&d), vec![(1, (0, 0, 1200, 1000)), (2, (1200, 0, 800, 1000))]);
