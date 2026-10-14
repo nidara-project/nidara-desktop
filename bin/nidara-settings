@@ -16,7 +16,8 @@ elif [ -n "$repo" ] && [ -f "$repo/ui/settings/app.ts" ]; then
     "$repo/scripts/bundle.sh" --js "$repo/ui/settings/app.ts" "$out" --kit-external="$repo/ui/lib/nidara-kit/build/js"
     # Remove only our temporary bundle after this application exits.
     trap 'rm -f "$out"' EXIT
-    LD_PRELOAD="${NIDARA_GTK4_LAYER_SHELL:-/usr/lib/libgtk4-layer-shell.so}" gjs -m "$out" "$@"
+    "$repo/lib/nidara-host/build.sh"
+    LD_PRELOAD="${NIDARA_GTK4_LAYER_SHELL:-/usr/lib/libgtk4-layer-shell.so}" "$repo/lib/nidara-host/build/nidara-settings" "$out" "$@"
 else
     export NIDARA_SHELL_ROOT=/usr/share/nidara/ui/shell NIDARA_SETTINGS_ROOT=/usr/share/nidara/ui/settings
     exec /usr/share/nidara/ui/settings/build/nidara-settings "$@"

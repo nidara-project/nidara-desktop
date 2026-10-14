@@ -68,20 +68,60 @@ Two things came back with it:
 
 The host's optional `processName` sets Linux's main-thread `comm` by opening
 `/proc/self/comm` directly through Gio (`platform/process-name.ts`). This is the
-name process monitors and `pgrep -x` see: `nidara-shell`, `nidara-settings`,
+name `ps -o comm`, `pgrep -x`, and monitors that use `comm` see: `nidara-shell`, `nidara-settings`,
 `nidara-lock`, `nidara-greeter`, and `nidara-install`. Linux allows 15 bytes, so
 names are validated as ASCII and never silently truncated. The installer uses
 `nidara-install` because `nidara-installer` is too long.
 
 `GLib.set_prgname`, `GLib.set_application_name`, GApplication IDs, and per-window
-Wayland app-ids remain separate. The command line still says `gjs -m …`; changing
+Wayland app-ids remain separate. Changing
 `comm` does not replace the executable or change a child's identity after exec.
+Mission Center 1.2.0's process rows prefer the executable basename over `comm`
+(`src/table_view/models.rs` in its v1.2.0 source), so a GJS-console process shows
+`gjs-console` even after renaming `comm`. A script wrapper or
+changing `argv[0]` alone cannot change the executable basename it reads.
 Do not use atomic file replacement on procfs. If procfs is unavailable, the host
 logs a warning and continues. External kit applications may omit `processName`.
 The standalone `nidara-ui` launcher kills only the current user's `nidara-shell`,
 with a command-line fallback scoped to old shell bundles; other GJS services
 are left running. For stale shell processes use `killall nidara-shell`; old builds still use `gjs`,
 so identify those by PID instead of killing every GJS service in the session.
+
+### Shell and Settings have native executable identities
+
+`lib/nidara-host/nidara-host.c` embeds GJS through its public context API; it
+does not exec the GJS console. It accepts a local ESM file followed by application
+arguments, preserving module imports, ARGV, `system.programArgs`, and explicit
+`system.exit()` codes. It is not a replacement for the full GJS CLI (debugger,
+REPL and profiling flags). The TypeScript Gtk.Application host still owns GTK
+initialisation, application/window IDs, `comm`, appearance and child environments.
+
+`lib/nidara-host/build.sh` produces TWO ordinary files, `nidara-shell` and
+`nidara-settings`, from the same source. They are installed to `/usr/lib/nidara/`
+by both the package and the dev installer. Never replace them with symlinks to
+one shared binary: `/proc/PID/exe` would resolve to that shared filename, which
+would lose the identity Mission Center reads. Rebuilds replace changed files
+atomically and leave identical binaries in place, so opening Settings does not
+mark an unchanged running shell executable `(deleted)`. `gjs` remains a runtime dependency for
+libgjs, the other bundles and the helper scripts.
+
+Executable bundles keep their base64-carrying wrapper and hashed JS extraction.
+Shell/Settings opt in with `--native-host=nidara-shell` / `nidara-settings` on
+`scripts/bundle.sh`; those wrappers run the private host instead of `gjs -m`.
+`NIDARA_NATIVE_HOST_DIR` overrides the installed host directory for isolated
+tests and uninstalled builds. A missing host fails explicitly; no silent GJS
+fallback. Default bundles and `--js` output remain unchanged, so greeter,
+lockscreen and installer still use their existing GJS-console paths.
+
+In dev, `scripts/run.sh` selects the native shell ONLY for this checkout's
+`ui/shell/app.ts`; probes and other entrypoints retain GJS. `bin/nidara-settings`
+builds/runs the native Settings host and still cleans up its own temporary JS.
+Both paths compile the hosts from the checkout, without installing anything.
+The gtk4-layer-shell preload is retained in every path and removed by the
+TypeScript host before any child is launched. Native runner semantics and
+generated wrappers are checked by `scripts/ci/native-host-check.py`; both smoke
+harnesses install the hosts and the Settings lifecycle check asserts their
+actual `exe`/`comm` identities.
 
 ### The toolchain is ours too (2026-08-18, same day)
 
@@ -90,7 +130,7 @@ Nothing of AGS is installed any more. What the CLI actually was, and what replac
 | was | is | notes |
 |---|---|---|
 | `ags bundle app.ts out` | `scripts/bundle.sh app.ts out` | esbuild + a bash wrapper carrying the JS |
-| `ags run app.ts` | `scripts/run.sh app.ts` | bundles to `$XDG_RUNTIME_DIR`, execs `gjs` |
+| `ags run app.ts` | `scripts/run.sh app.ts` | bundles to `$XDG_RUNTIME_DIR`; shell → native libgjs host, other entries → `gjs` |
 | `ags types -d .` | `scripts/gen-types.sh` | `npx @ts-for-gir/cli generate '*'` — literally what it wrapped |
 | `ags request <cmd>` | `nidara-ipc <cmd>` | gone since #185; its bus name was served as a compat door until 2026-09-23 (closed, users' keybinds migrated) |
 

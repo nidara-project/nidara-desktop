@@ -2,13 +2,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # scripts/run.sh — run a bundle from source. Replaces `ags run` (2026-08-18).
 #
-#   scripts/run.sh <entry.ts> [gjs args…]
+#   scripts/run.sh <entry.ts> [application args…]
 #
 # The dev loop's engine: bin/nidara-ui calls this when ~/.config/nidara/.dev
 # exists, and `npm run dev` is the same thing by hand. It bundles the entry with
 # scripts/bundle.sh (same flags as a release build — dev and prod must not
-# diverge in the transform), drops the JS in $XDG_RUNTIME_DIR and execs gjs on
-# it, exactly as `ags run` did.
+# diverge in the transform), drops the JS in $XDG_RUNTIME_DIR and runs it.
+# The shell embeds libgjs in its private native host; other entries use gjs.
 #
 # ⚠️ LD_PRELOAD is set HERE for the same reason bundle.sh writes it into the
 # wrapper: without libgtk4-layer-shell the shell boots with no bar and no dock,
@@ -46,4 +46,8 @@ if [ -z "$layer_shell" ]; then
 fi
 
 cd "$entry_dir"
+if [ "$entry_abs" = "$(dirname "$here")/ui/shell/app.ts" ]; then
+    "$(dirname "$here")/lib/nidara-host/build.sh"
+    exec env LD_PRELOAD="$layer_shell" "$(dirname "$here")/lib/nidara-host/build/nidara-shell" "$out" "$@"
+fi
 exec env LD_PRELOAD="$layer_shell" gjs -m "$out" "$@"

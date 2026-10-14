@@ -21,6 +21,12 @@ wait_page() {
 wait_page .appearance-page@settings
 first=$(get_pid org.nidara.Settings); shell=$(get_pid org.nidara.Shell)
 [ -n "$first" ] && [ "$first" != "$shell" ]
+for item in "$shell:nidara-shell" "$first:nidara-settings"; do
+    pid=${item%%:*}; name=${item#*:}
+    [ "$(basename "$(readlink "/proc/$pid/exe")")" = "$name" ]
+    [ "$(cat "/proc/$pid/comm")" = "$name" ]
+done
+echo 'PASS shell and Settings use their own native executables'
 [ "$("$ipc" settingsPage widgets)" = ok ]
 wait_page .widgets-page@settings
 [ "$first" = "$(get_pid org.nidara.Settings)" ]

@@ -27,7 +27,7 @@ talks to the compositor still goes through `CompositorState`. Released packages 
 | was | is | what it actually was |
 |---|---|---|
 | `ags bundle` | `scripts/bundle.sh` | esbuild with a fixed flag set (the JS API, `scripts/bundle.mjs`, since #108 phase 3) + a bash wrapper around the JS. `--kit-external=<dir>` makes the app LOAD nidara-kit from `<dir>` instead of bundling it — the shell, greeter and lock ship that way (`architecture.md` → "The kit's CODE is loaded, not bundled") |
-| `ags run` | `scripts/run.sh` | the same bundle, executed by `gjs` |
+| `ags run` | `scripts/run.sh` | the same bundle; shell uses its native libgjs host, other entries use `gjs` |
 | `ags types -d .` | `scripts/gen-types.sh` | one `npx @ts-for-gir/cli generate` call |
 | `ags request` | `nidara-ipc` | a D-Bus call to `io.Astal.ags`, now `org.nidara.Shell` |
 
