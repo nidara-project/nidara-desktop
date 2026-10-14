@@ -1,3 +1,4 @@
+import GLib from "gi://GLib"
 import registry, { widgetAvailable } from "../widgets/index"
 import widgetConfig from "./WidgetConfig"
 import status from "./Status"
@@ -27,7 +28,6 @@ export const widgetCatalogSource: WidgetCatalog = {
             cc: placement.cc,
             ccFixed: canCc && widgetConfig.ccFixed(w.id),
             ccFits: canCc && (placement.cc || ccLayout.canAdd(w.id)),
-            buildSettings: w.buildSettings,
         }
     }),
     setBar: (id, on) => widgetConfig.setBar(id, on),
@@ -38,4 +38,24 @@ export const widgetCatalogSource: WidgetCatalog = {
         if (on) ccLayout.add(id)
         else ccLayout.remove(id)
     },
+}
+
+// Session-lifetime subscriptions, like the registry's watchAvailable contract.
+// Coalesce the placement flag and grid-cell changes into one settled snapshot.
+let notificationsStarted = false
+export function startWidgetCatalogNotifications(changed: () => void): void {
+    if (notificationsStarted) return
+    notificationsStarted = true
+    let pending = 0
+    const schedule = () => {
+        if (pending) return
+        pending = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            pending = 0
+            changed()
+            return GLib.SOURCE_REMOVE
+        })
+    }
+    widgetConfig.connect("changed", schedule)
+    ccLayout.connect("changed", schedule)
+    for (const w of registry.all()) w.watchAvailable?.(schedule)
 }

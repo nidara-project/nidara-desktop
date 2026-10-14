@@ -129,7 +129,11 @@ section "Idle wakeups (main thread, 4 s sample — healthy ≈ 0/s when idle)"
     # $XDG_RUNTIME_DIR/nidara-<hash>.js and scripts/run.sh nidara-run-app.js. (It was
     # `…/ags.js` until 2026-08-18 — a pattern that silently matched nothing after the
     # bundler changed, and this section would just print "shell process not found".)
-    SHELL_PID=$(pgrep -f "gjs -m .*/nidara.*\.js" | head -1)
+    SHELL_PID=$(pgrep -u "$(id -u)" -x nidara-shell | head -1)
+    if [ -z "${SHELL_PID:-}" ]; then
+        # Compatibility with older shells; exclude independent Settings bundles.
+        SHELL_PID=$(pgrep -u "$(id -u)" -f 'gjs -m .*/nidara-([0-9a-f]+|run-app)\.js' | head -1)
+    fi
     if [ -n "${SHELL_PID:-}" ]; then
         TS="/proc/$SHELL_PID/task/$SHELL_PID/status"
         W1=$(awk '/voluntary/{s+=$2} END{print s}' "$TS" 2>/dev/null)

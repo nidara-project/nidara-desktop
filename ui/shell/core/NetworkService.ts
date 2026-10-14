@@ -29,7 +29,7 @@ import { execAsync } from "../../lib/process"
 import GLib from "gi://GLib"
 import NM from "gi://NM?version=1.0"
 import { t, currentLocale } from "./i18n"
-import { takeUserCancel } from "./NetworkCancels"
+import { consumeUserCancel } from "./NetworkCancels"
 import { safeDisconnect } from "./signals"
 
 type Dispose = () => void
@@ -499,7 +499,7 @@ export function connectAp(ap: NM.AccessPoint | null, connection: NM.Connection |
             const check = (state: number) => {
                 if (state === NM.ActiveConnectionState.ACTIVATED) done(true)
                 else if (state === NM.ActiveConnectionState.DEACTIVATED)
-                    done(false, takeUserCancel(ac.get_uuid() ?? "") ? "cancelled" : "failed")
+                    void consumeUserCancel(ac.get_uuid() ?? "").then(cancelled => done(false, cancelled ? "cancelled" : "failed"))
             }
             id = ac.connect("state-changed", (_a: any, state: number) => check(state))
             check(ac.get_state())

@@ -1,3 +1,4 @@
+import { runSettingsAction } from "./SettingsErrors"
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
@@ -267,7 +268,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
     switch (control) {
         case "toggle": {
             const init = Boolean(entry.get())
-            const cb = (v: boolean) => { entry.set?.(v) }
+            const cb = (v: boolean) => { void runSettingsAction(() => entry.set?.(v)) }
             const onExt = entry.subscribe
                 ? (apply: (v: boolean) => void) => {
                     return entry.subscribe!((v) => apply(Boolean(v)))
@@ -297,7 +298,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
                     idx = labels.indexOf(_selectedLabel)
                 }
                 if (idx >= 0 && idx < values.length) {
-                    entry.set?.(values[idx])
+                    void runSettingsAction(() => entry.set?.(values[idx]))
                 }
             }
 
@@ -324,7 +325,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             const min = entry.min
             const max = entry.max
             const init = Number(entry.get())
-            const cb = (v: number) => { entry.set?.(v) }
+            const cb = (v: number) => { void runSettingsAction(() => entry.set?.(v)) }
             const opts: NidaraSliderRowOpts = { ...ui.slider }
             // Stored once at registration — see currentUiIcon.
             if (opts.icons) opts.icons = [currentUiIcon(opts.icons[0]), currentUiIcon(opts.icons[1])]
@@ -342,7 +343,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             }
             const unit = ui.presetUnit ?? ui.slider?.unit ?? ""
             const init = Number(entry.get())
-            const cb = (v: number) => { entry.set?.(v) }
+            const cb = (v: number) => { void runSettingsAction(() => entry.set?.(v)) }
             const onExt = entry.subscribe
                 ? (apply: (v: number) => void) => {
                     return entry.subscribe!((v) => apply(Number(v)))
@@ -363,7 +364,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             }
             const options = values.map(val => ({ label: getOptLabel(val), value: val }))
             const currentVal = String(entry.get())
-            const cb = (v: string) => { entry.set?.(v) }
+            const cb = (v: string) => { void runSettingsAction(() => entry.set?.(v)) }
             const onExt = entry.subscribe
                 ? (apply: (v: string) => void) => {
                     return entry.subscribe!((v) => apply(String(v)))

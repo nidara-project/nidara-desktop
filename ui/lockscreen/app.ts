@@ -36,6 +36,7 @@ function startFallback(display: Gdk.Display) {
 app.start({
   applicationId: "org.nidara.lock",
   applicationName: "Nidara Lock Screen",
+  processName: "nidara-lock",
   logDomain: "nidara-lock",
   css: withKitSheet(cssPath),
 

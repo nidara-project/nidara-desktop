@@ -1,3 +1,4 @@
+import { runSettingsAction } from "../SettingsErrors"
 import Gtk from "gi://Gtk?version=4.0"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
@@ -93,7 +94,7 @@ export const build = (ctx: PageCtx) => {
             })
             btn.set_child(thumbPic)
             btn.connect("clicked", () => {
-                Wallpaper.setWallpaper(wallPath)
+                void runSettingsAction(() => Wallpaper.setWallpaper(wallPath))
                 updatePreview(wallPath)
                 if (refreshThumbActive) refreshThumbActive(wallPath)
             })
@@ -155,7 +156,7 @@ export const build = (ctx: PageCtx) => {
                 const file = dialog.open_finish(result)
                 const path = file?.get_path()
                 if (path) {
-                    Wallpaper.setWallpaper(path)
+                    void runSettingsAction(() => Wallpaper.setWallpaper(path))
                     updatePreview(path)
                 }
             } catch (_) { /* user cancelled */ }

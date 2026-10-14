@@ -4,7 +4,7 @@
 // region, audio on or off); everything that is a PREFERENCE — which audio
 // source, what quality, what container, where files land — lives here and is
 // persisted, exactly like NotifConfig. The widget's Settings subpage
-// (screenrecord.ts buildSettings) is the UI over this module.
+// (surfaces/settings/pages/ScreenRecording.tsx) is the UI over this module.
 //
 // Everything below was measured against wf-recorder 0.6.0, not assumed:
 //   • `--audio` with NO device records the DEFAULT PulseAudio SOURCE — a

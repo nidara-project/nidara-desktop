@@ -1659,7 +1659,7 @@ function compactJson(s) {
 const HIDDEN_ACTIONS = new Set([
     "describeConfig", "getConfig", "setConfig", "dumpState", "listActions",
     "hideForLock", "showAfterLock", "notifyComputerAction", "agentPointer", "disableComputerControl",
-    "agentNewConversation",
+    "agentNewConversation", "widgetCatalog", "settingsMonitor", "settingsWallpaper", "takeNetworkCancel", // Settings control plane; model writes use set_config.
 ])
 
 

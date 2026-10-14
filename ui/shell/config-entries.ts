@@ -16,7 +16,8 @@ import { ACCENT_PALETTE, type AccentKey } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, TRANSITIONS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
-import { dontDisturb, setDontDisturb } from "./core/NotifService"
+const dontDisturb = () => notifConfig.doNotDisturb
+const setDontDisturb = (on: boolean) => notifConfig.setDoNotDisturb(on)
 import { reduceMotion, setReduceMotion, onReduceMotionChange } from "./core/ReduceMotion"
 import recordingConfig, {
     FORMATS, QUALITIES, type RecordFormat, type RecordQuality,

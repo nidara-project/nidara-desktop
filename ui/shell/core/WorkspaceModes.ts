@@ -1,3 +1,4 @@
+import { isSettingsProcess } from "./SettingsProcess"
 import GObject from "gi://GObject"
 import { defineSettings } from "./configFile"
 import compositor, { settings } from "./CompositorState"
@@ -48,13 +49,12 @@ class WorkspaceModeManager extends GObject.Object {
 
         // A config reload drops what was applied live: re-apply, writing nothing (a write
         // there could trigger the reload that called it).
-        compositor.connect("config-reloaded", () => {
+        if (!isSettingsProcess) compositor.connect("config-reloaded", () => {
             this.pushAll()
         })
 
         // On boot: persist the table in the compositor's layer and apply it.
-        this.save()
-        this.pushAll()
+        if (!isSettingsProcess) { this.save(); this.pushAll() }
     }
 
     get defaultMode(): WorkspaceMode {

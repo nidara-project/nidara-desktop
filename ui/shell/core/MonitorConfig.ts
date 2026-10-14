@@ -1,3 +1,4 @@
+import { isSettingsProcess, settingsShellRequest } from "./SettingsProcess"
 import GObject from "gi://GObject"
 import compositor, { settings, type MonitorSetting } from "./CompositorState"
 
@@ -20,6 +21,7 @@ class MonitorConfig extends GObject.Object {
 
     private state: Map<string, MonitorSetting> = new Map()
     private _vrr = 0
+    private previews = new Map<string, string>()
 
     constructor() {
         super()
@@ -51,7 +53,12 @@ class MonitorConfig extends GObject.Object {
         settings.applyMonitor(name, cfg)
     }
 
-    setScale(name: string, scale: number) {
+    async setScale(name: string, scale: number) {
+        if (isSettingsProcess) {
+            await settingsShellRequest(["settingsMonitor", "scale", name, String(scale)])
+            const cfg = this.state.get(name) ?? { scale: 1, transform: 0 }
+            cfg.scale = scale; this.state.set(name, cfg); return
+        }
         const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
         cfg.scale = scale
         this.state.set(name, cfg)
@@ -69,7 +76,13 @@ class MonitorConfig extends GObject.Object {
 
     /** Apply a resolution/refresh mode WITHOUT persisting — pair with commit() once
      *  the user confirms (so a bad mode can be reverted before it reaches the file). */
-    applyMode(name: string, mode: string) {
+    async applyMode(name: string, mode: string) {
+        if (isSettingsProcess) {
+            const token = await settingsShellRequest(["settingsMonitor", "mode", name, mode])
+            this.previews.set(name, token)
+            const cfg = this.state.get(name) ?? { scale: 1, transform: 0 }
+            cfg.mode = mode; this.state.set(name, cfg); return
+        }
         const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
         cfg.mode = mode
         this.state.set(name, cfg)
@@ -77,7 +90,13 @@ class MonitorConfig extends GObject.Object {
     }
 
     /** Apply a rotation WITHOUT persisting — pair with commit() (revert-safe). */
-    applyTransform(name: string, transform: number) {
+    async applyTransform(name: string, transform: number) {
+        if (isSettingsProcess) {
+            const token = await settingsShellRequest(["settingsMonitor", "transform", name, String(transform)])
+            this.previews.set(name, token)
+            const cfg = this.state.get(name) ?? { scale: 1, transform: 0 }
+            cfg.transform = transform; this.state.set(name, cfg); return
+        }
         const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
         cfg.transform = transform
         this.state.set(name, cfg)
@@ -85,9 +104,28 @@ class MonitorConfig extends GObject.Object {
     }
 
     /** Persist what is applied now (the confirm half of applyMode/applyTransform). */
-    commit() { this._save() }
+    async commit(output?: string) {
+        if (!isSettingsProcess) { this._save(); return }
+        if (!output) throw Error("Confirm one display preview at a time")
+        const token = this.previews.get(output)
+        if (!token) throw Error("Display preview is no longer pending")
+        await settingsShellRequest(["settingsMonitor", "commit", token])
+        this.previews.delete(output)
+    }
 
-    setVrr(val: number) {
+    async revert(name: string) {
+        const token = this.previews.get(name)
+        if (!token) return
+        try { await settingsShellRequest(["settingsMonitor", "revert", token]) }
+        catch (e) { if (!String(e).includes("expired")) throw e }
+        finally { this.previews.delete(name) }
+    }
+
+    async setVrr(val: number) {
+        if (isSettingsProcess) {
+            await settingsShellRequest(["settingsMonitor", "vrr", "all", String(val)])
+            this._vrr = val; return
+        }
         this._vrr = val
         settings.applyVrr(val)
         this._save()

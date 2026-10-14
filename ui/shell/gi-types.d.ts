@@ -29,6 +29,7 @@ declare global {
     export type Menu = GioMod.Gio.Menu;
     export type ListStore = GioMod.Gio.ListStore;
     export type ThemedIcon = GioMod.Gio.ThemedIcon;
+    export type DBusMethodInvocation = GioMod.Gio.DBusMethodInvocation;
     export type DBusConnection = GioMod.Gio.DBusConnection;
     export type DBusProxy = GioMod.Gio.DBusProxy;
     export type DBusProxyFlags = GioMod.Gio.DBusProxyFlags;

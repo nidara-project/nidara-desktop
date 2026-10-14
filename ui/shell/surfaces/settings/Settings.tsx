@@ -59,7 +59,7 @@ const _checkNoExtraBuilders: [ExtraBuilders] extends [never] ? true : { error: "
  * Pure GTK4 — no Adwaita dependency.
  */
 
-export default function Settings(monitor: Gdk.Monitor) {
+export default function Settings(monitor?: Gdk.Monitor) {
     clearSearchIndex()
 
     // The content pane's width — one number for all 18 pages, the search results
@@ -514,8 +514,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         // `start` is a ROW: the nav capsule then the breadcrumb, both in the same
         // spacing-8 box the toggle leads. The window prepends the toggle itself.
         header: { start: [navCapsule, breadcrumb], end: closeBtn },
-        // Reused across toggles: rebuilding the 21 eagerly-built pages on every
-        // open is visible.
+        // Pages are cached while this application is open. Its host observes
+        // the kit's close path and exits, releasing the process on close.
         closeMode: "hide",
         defaultHeight: 760,
     })

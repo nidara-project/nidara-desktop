@@ -182,7 +182,7 @@ resort for the missing-file case.
 # edit TSX/SCSS in ui/shell/
 Super+Shift+R                            # reload UI in a graphical session
 tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
-killall gjs                              # nuke stale GJS holding the old UI
+killall nidara-shell                              # nuke stale GJS holding the old UI
 ./scripts/gen-types.sh                  # (re)generate @girs/ typings — see below
 cd ui/shell && npm run typecheck        # needs @girs/
 cd ui/shell && npm run build            # SCSS + the kit's modules + scripts/bundle.sh --kit-external (needs the `esbuild` package)
@@ -1946,7 +1946,7 @@ scripts above.
 When a reload seems to do nothing or styles refuse to refresh, the cause is almost always a zombie `gjs` process still drawing the previous UI. Order of escalation:
 
 1. `Super+Shift+R` again.
-2. `killall gjs` — then `Super+Shift+R` once it's gone.
+2. `killall nidara-shell` — then `Super+Shift+R` once it's gone.
 3. `tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"` and re-trigger; look for stack traces.
 
 ### Finding CSS that can never reach its widget (`scripts/dev/scope-audit.mjs`)
@@ -3384,6 +3384,25 @@ FULLY_CHARGED *as well as* CHARGING. `widgets/battery.ts` read `bat.charged` any
 `BatteryService` keeps `charging()` and `charged()` strictly apart; callers that meant "not
 draining" (the critical-battery activity, and the glyph's bolt, which means *on AC*) ask for
 both explicitly.
+
+### Checking the independent Settings application
+
+`bin/nidara-settings` is the supported entry point: it sets the process role before
+imports and supplies the two resource roots. In dev mode it compiles its own stylesheet
+and a uniquely named temporary JS bundle, so it cannot overwrite the running shell's
+`app.ts` bundle. In a release it runs the packaged fifth executable with the shared kit.
+`NIDARA_SETTINGS_REPO` overrides the dev marker for an isolated source walk;
+`NIDARA_SETTINGS_EXECUTABLE` selects a prebuilt executable in the smoke containers,
+where the unprivileged desktop cannot compile into the root-owned checkout.
+
+Both compositor smokes invoke `settings-process-check.sh` with the private-session
+arming flag. It checks separate processes, navigation, queryUI, crash isolation and
+reopening. Never run its kill walk against the user's session. The nested shell bench
+pins GTK to Wayland even though Hyalo exports Xwayland's DISPLAY, and isolates the
+greeter mirrors. Its system-bus NetworkManager agent can conflict with the real
+user's existing agent; that known nested-session failure is not clean-smoke evidence.
+The runtime display journal is tested in a nested compositor, never on the user's
+monitor; see architecture.md → "Settings is its own application" for lease recovery.
 
 ### Testing the built-in Assistant (`nidara-agent`) without a key or network
 

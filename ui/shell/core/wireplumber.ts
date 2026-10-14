@@ -427,10 +427,12 @@ export class Audio extends GObject.Object {
                     // THE line. Without it every volume in the shell reads low.
                     plugin.set_property("scale", SCALE_CUBIC)
                     this._mixer = plugin
-                    plugin.connect("changed", (_m: any, id: number) => this._volumeChanged(id))
+                    // Concrete plugins add this signal at runtime; Wp.Plugin's GIR
+                    // cannot declare it. Use GObject's general signal API.
+                    GObject.Object.prototype.connect.call(plugin, "changed", (_m: any, id: number) => this._volumeChanged(id))
                 } else {
                     this._defaults = plugin
-                    plugin.connect("changed", () => this._defaultsChanged())
+                    GObject.Object.prototype.connect.call(plugin, "changed", () => this._defaultsChanged())
                 }
                 if (--this._pending === 0) this._core.install_object_manager(this._om)
             })

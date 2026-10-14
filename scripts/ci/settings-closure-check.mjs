@@ -39,7 +39,7 @@ import { dirname, join, relative, resolve } from "path"
 
 const ROOT = resolve(new URL("../..", import.meta.url).pathname)
 const SHELL = join(ROOT, "ui", "shell")
-const ENTRY = join(SHELL, "surfaces", "settings", "Settings.tsx")
+const ENTRY = join(ROOT, "ui", "settings", "app.ts")
 const ALLOWLIST = join(ROOT, "scripts", "ci", "settings-closure-allowlist.txt")
 
 // Modules whose presence makes a process the shell, whatever else it is.
@@ -58,6 +58,8 @@ const SHELL_ONLY = new Set([
     "core/AppearanceHooks.ts",     // fires the appearance user hooks
     "core/AppearanceSync.ts",      // settings.ini, cursor, portal-gtk, groupbar, greeter mirror
     "core/RegionSync.ts",          // the greeter's clock-format mirror
+    "core/SettingsMonitorService.ts", // shell-owned display rollback leases
+    "core/SettingsAppClient.ts", // launches/controls the application from the shell
     "core/WidgetCatalogSource.ts", // the registry + CC grid behind the catalogue seam
     "common/WifiSecretsAgent.ts",  // NetworkManager's secret prompts
 ])

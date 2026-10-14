@@ -97,7 +97,7 @@ export function watchPresence(cb: () => void): Dispose {
 
 function wire(signal: string, cb: () => void): Dispose {
     if (!device) return () => {}
-    const id = device.connect(signal, cb)
+    const id = GObject.Object.prototype.connect.call(device, signal, cb)
     // GObject.signal_handler_disconnect, never device.disconnect(): an
     // introspected method of that name would shadow GObject's, which is how
     // NM.Device once had its interface torn down by a cleanup call.

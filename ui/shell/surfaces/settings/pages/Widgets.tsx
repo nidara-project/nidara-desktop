@@ -1,25 +1,12 @@
+import { runSettingsAction } from "../SettingsErrors"
+import { widgetSettingsPage } from "../widgetSettings"
 import Gtk from "gi://Gtk?version=4.0"
 import { widgetCatalog, type WidgetCatalogEntry } from "../../../core/WidgetCatalog"
 import { CATEGORY_ORDER, type WidgetCategory } from "../../../common/widget-kit/contract"
-import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
+import { pageBox, listGroup, createRow, bindWhileRealized, type SettingsNav } from "../SettingsHelpers"
 import { NidaraButton, attachTooltip } from "../../../../lib/nidara-kit"
 import { t } from "../../../core/i18n"
 import { uiIcon, currentUiIcon } from "../../../core/Icons"
-
-// A compact labelled switch ("Bar" / "Center" + a Gtk.Switch), the unit the
-// widget row places to its right. The tooltip rides the (always-sensitive) group
-// box, not the switch — an insensitive switch receives no pointer events, so a
-// tooltip set on it would never show the "no hardware / no space" reason.
-function controlGroup(label: string, active: boolean, sensitive: boolean, tooltip: string, cb: (v: boolean) => void): Gtk.Box {
-    const group = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    if (tooltip) attachTooltip(group, tooltip, { chrome: false })
-    group.append(new Gtk.Label({ label, css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER }))
-    const sw = new Gtk.Switch({ active, sensitive, valign: Gtk.Align.CENTER })
-    sw.update_property([Gtk.AccessibleProperty.LABEL], [label])   // named like the kit's toggle row (#615)
-    sw.connect("notify::active", () => cb(sw.get_active()))   // connected AFTER initial active → no spurious fire
-    group.append(sw)
-    return group
-}
 
 // One row per widget: leading identity icon + name, then the Bar / Control Center
 // switches on the right — and NOTHING else in that trailing slot, which is what
@@ -29,7 +16,7 @@ function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow
     // Hardware gate: the row stays visible (so the user sees WHY it's off) but the
     // switches render off + disabled with a hint, and the icon dims. Placement
     // config is untouched — the saved state comes back with the hardware.
-    const available = w.available
+    let available = w.available
     const noHw = t("settings.widgets.tooltip.no-hardware")
 
     const leadingIcon = new Gtk.Image({
@@ -44,13 +31,32 @@ function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow
     // missing, when the grid is full and the widget isn't already in it, or when
     // the widget is one the CC always has (on, and it stays on).
     if (w.canCc) {
-        controls.append(controlGroup(
-            t("settings.widgets.col.cc"), available && w.cc, available && w.ccFits && !w.ccFixed,
-            !available ? noHw
-                : w.ccFixed ? t("settings.widgets.tooltip.cc-fixed")
-                : w.ccFits ? "" : t("settings.widgets.tooltip.no-space"),
-            (v) => widgetCatalog().setCc(w.id, v),
-        ))
+        let syncing = false
+        let tooltip = ""
+        const group = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+        group.append(new Gtk.Label({ label: t("settings.widgets.col.cc"), css_classes: ["nidara-row-subtitle"] }))
+        const sw = new Gtk.Switch({ valign: Gtk.Align.CENTER })
+        sw.update_property([Gtk.AccessibleProperty.LABEL], [t("settings.widgets.col.cc")])
+        group.append(sw)
+        attachTooltip(group, () => tooltip, { chrome: false })
+        const sync = () => {
+            const current = widgetCatalog().list().find(entry => entry.id === w.id)
+            const connected = widgetCatalog().connected !== false
+            syncing = true
+            available = current?.available ?? false
+            sw.active = available && (current?.cc ?? false)
+            sw.sensitive = connected && available && !!current?.ccFits && !current.ccFixed
+            leadingIcon.opacity = available ? 1 : 0.5
+            tooltip = !available ? noHw : current?.ccFixed ? t("settings.widgets.tooltip.cc-fixed")
+                : current?.ccFits ? "" : t("settings.widgets.tooltip.no-space")
+            syncing = false
+        }
+        sync()
+        sw.connect("notify::active", () => {
+            if (!syncing) void runSettingsAction(() => widgetCatalog().setCc(w.id, sw.active)).then(sync)
+        })
+        bindWhileRealized(group, () => { sync(); return widgetCatalog().watch?.(sync) })
+        controls.append(group)
     }
 
     // "Configure" goes on a SECOND LINE INSIDE this row, never in the trailing
@@ -66,7 +72,7 @@ function buildWidgetRow(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.ListBoxRow
     //      to the row above" when every row in a list looks alike.
     // Inside the row, the two lines share one cell and one hover, so ownership
     // is structural rather than a hint.
-    const footer = (w.buildSettings && available) ? configureButton(nav, w) : undefined
+    const footer = (widgetSettingsPage(w.id) && available) ? configureButton(nav, w) : undefined
     return createRow(w.name, "", controls, undefined, leadingIcon, footer)
 }
 
@@ -91,7 +97,7 @@ function configureButton(nav: SettingsNav, w: WidgetCatalogEntry): Gtk.Button {
     // knows how big its leading icon is.
     btn.margin_start = 34 - 10
     btn.connect("clicked", () => nav.pushSubpage({
-        id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
+        id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: widgetSettingsPage(w.id)!,
     }))
     return btn
 }
@@ -109,32 +115,27 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
         media: t("settings.widgets.category.media"),
     }
 
-    // Which categories actually render depends on what the machine has, so the
-    // groups are resolved before the loop — the reorder note rides as the LAST
-    // one's footer.
-    // The Control Center only: which widgets are in it. Where each one shows in the BAR
-    // is the Top bar page's (custom/bar.ts, 2026-09-27) — it used to be a second switch
-    // on every row here, beside the Top bar page that had almost nothing.
-    const all = widgetCatalog().list().filter(w => w.canCc)
-    const groups = CATEGORY_ORDER
-        .map(cat => ({
-            cat,
-            widgets: all
-                .filter(w => w.category === cat)
-                .sort((a, b) => a.barOrder - b.barOrder),
-        }))
-        .filter(g => g.widgets.length > 0)
-
-    groups.forEach(({ cat, widgets }, i) => {
-        // Reordering lives in the CC's own Edit mode, not here. It is the kit's
-        // group footer rather than a page-level label — same place on screen, but
-        // the kit owns the prose's shape, and a footnote that binds to a card is
-        // exactly what the group-footer idiom is for.
-        const isLast = i === groups.length - 1
-        const { box, listBox } = listGroup(catLabel[cat], isLast ? t("settings.widgets.reorder-note") : "")
-        for (const w of widgets) listBox.append(buildWidgetRow(nav, w))
-        page.append(box)
-    })
-
+    let signature = ""
+    const render = () => {
+        const all = widgetCatalog().list().filter(w => w.canCc)
+        const next = JSON.stringify(all.map(w => [w.id, w.category, w.barOrder]))
+        if (signature === next) return
+        signature = next
+        let child = page.get_first_child()
+        while (child) { const following = child.get_next_sibling(); page.remove(child); child = following }
+        if (widgetCatalog().connected === false) {
+            page.append(new Gtk.Label({ label: t("settings.page.load-error"), css_classes: ["settings-placeholder"] }))
+            return
+        }
+        const groups = CATEGORY_ORDER.map(cat => ({ cat, widgets: all.filter(w => w.category === cat)
+            .sort((a, b) => a.barOrder - b.barOrder) })).filter(g => g.widgets.length)
+        groups.forEach(({ cat, widgets }, i) => {
+            const { box, listBox } = listGroup(catLabel[cat], i === groups.length - 1 ? t("settings.widgets.reorder-note") : "")
+            for (const w of widgets) listBox.append(buildWidgetRow(nav, w))
+            page.append(box)
+        })
+    }
+    render()
+    bindWhileRealized(page, () => { signature = ""; render(); return widgetCatalog().watch?.(render) })
     return page
 }

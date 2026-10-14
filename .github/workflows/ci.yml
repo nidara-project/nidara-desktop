@@ -125,6 +125,8 @@ jobs:
         working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
 
+      - name: Settings SCSS compiles (must succeed)
+        run: npx --yes sass@1.97.3 --no-charset ui/settings/style.scss /tmp/settings.css
       # The kit's ONE sheet (tech-debt #108 phase 2): the shell, greeter and lock
       # load it at runtime ahead of their own, so it is no longer compiled as part
       # of any of them — a break in it would otherwise reach nobody's compile.
@@ -438,6 +440,8 @@ jobs:
       # as the first statement of its `map` handler — every login threw, the card
       # stayed at opacity 0 and the password field never took focus. A full check
       # catches that class too.)
+      - name: tsc --noEmit on independent Settings (must succeed)
+        run: npx --yes -p typescript@5.7.3 tsc --noEmit -p ui/settings/tsconfig.json
       - name: tsc --noEmit on installer / greeter / lockscreen (must succeed)
         run: |
           fail=0
@@ -559,8 +563,37 @@ jobs:
       # of everything it imports. On 2026-09-14 Settings.tsx alone reached 192 of the
       # shell's 216 modules. A ratchet: a forbidden module reached and not in the
       # allowlist fails, and so does a listed one that is no longer reached.
+      - name: Display preview rolls back on timeout and client loss
+        run: |
+          npx --yes esbuild@0.28.2 scripts/dev/display-lease-probe.ts --bundle --platform=node --format=esm --outfile=/tmp/display-lease-probe.mjs
+          node /tmp/display-lease-probe.mjs
+          node - /tmp/display-lease-probe.mjs <<'JS'
+          const fs = require("fs"), file = process.argv[2], src = fs.readFileSync(file, "utf8")
+          const rule = "world.apply(lease.name, lease.before);"
+          if (src.split(rule).length !== 2) throw Error("Display rollback control rule missing or ambiguous")
+          fs.writeFileSync(file, src.replace(rule, ""))
+          JS
+          if node /tmp/display-lease-probe.mjs > /tmp/display-lease-control.log 2>&1; then
+            echo "::error::the display probe passed without restoring the original display"
+            exit 1
+          fi
+          grep -q 'client death restores the display' /tmp/display-lease-control.log
       - name: Settings import closure (no shell surfaces, ratcheted)
         run: node scripts/ci/settings-closure-check.mjs
+      - name: Widget catalogue over private D-Bus (restart and refusals)
+        run: |
+          command -v gjs >/dev/null && command -v dbus-run-session >/dev/null || scripts/ci/apt.sh install gjs dbus
+          npx --yes esbuild@0.28.2 scripts/dev/widget-catalog-ipc-probe.ts --bundle \
+            --format=esm --platform=neutral --target=es2022 --external:gi://* --external:system \
+            --outfile=/tmp/widget-catalog-ipc-probe.js
+          CATALOG_PROBE_JS=/tmp/widget-catalog-ipc-probe.js scripts/dev/widget-catalog-ipc-probe.sh
+          if CONTROL=1 CATALOG_PROBE_JS=/tmp/widget-catalog-ipc-probe.js scripts/dev/widget-catalog-ipc-probe.sh > /tmp/catalog-control.log 2>&1; then
+            cat /tmp/catalog-control.log
+            echo "::error::the catalogue probe accepted removal of the fixed-widget refusal"
+            exit 1
+          fi
+          cat /tmp/catalog-control.log
+          grep -q 'Error: refused cc fixed false' /tmp/catalog-control.log
       # The shell runs on Hyprland and on Hyalo through ONE interface (#682): a surface
       # that imports HyprlandState or spawns hyprctl compiles, and does nothing on the
       # other session. No exceptions since #682 emptied its allowlist.

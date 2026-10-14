@@ -36,6 +36,7 @@ const cssPath = [
 app.start({
   applicationId: "org.nidara.installer",
   applicationName: "Nidara Installer",
+  processName: "nidara-install",
   logDomain: "nidara-installer",
   css: cssPath,
 

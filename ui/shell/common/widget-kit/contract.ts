@@ -117,10 +117,8 @@ export interface AtomicWidget {
      *  2026-09-28). `buildCCDetail` then leaves its own switch row out. A widget whose
      *  detail would be nothing but that switch has no detail at all (Do Not Disturb). */
     ccDetailSwitch?: () => Gtk.Widget
-    // Per-widget settings page. When present, the Settings → Widgets card shows a
-    // "Configure" row that pushes this as a subpage. Keep the widget's own options
-    // co-located with the widget (the "mini-app" contract). Omit if it has none.
-    buildSettings?: () => Gtk.Widget
+    // Preferences pages belong to Settings' widgetSettings registry, keyed by id.
+    // A Gtk builder cannot cross the process boundary (#571).
     // Hardware gate. When it returns false the widget does not exist for the user:
     // hidden from the bar and the CC, disabled (with a hint) in Settings → Widgets.
     // Omit for widgets with no hardware dependency (= always available). User

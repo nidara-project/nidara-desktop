@@ -38,7 +38,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 
 /** Variables of OUR process that a child must not inherit. */
-const PRIVATE_ENV = ["GTK_THEME"]
+const PRIVATE_ENV = ["GTK_THEME", "NIDARA_SETTINGS_PROCESS"]
 
 /**
  * Start a child process — the only door to one in the desktop bundles. Same

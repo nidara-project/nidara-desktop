@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Independent Settings application. No shell reload and no process-wide kill.
+set -euo pipefail
+export NIDARA_SETTINGS_PROCESS=1 GDK_BACKEND=wayland
+repo="${NIDARA_SETTINGS_REPO:-}"
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/nidara/.dev"
+if [ -z "$repo" ] && [ -f "$marker" ]; then repo=$(cat "$marker"); fi
+if [ -n "${NIDARA_SETTINGS_EXECUTABLE:-}" ]; then
+    exec "$NIDARA_SETTINGS_EXECUTABLE" "$@"
+elif [ -n "$repo" ] && [ -f "$repo/ui/settings/app.ts" ]; then
+    export NIDARA_SHELL_ROOT="$repo/ui/shell" NIDARA_SETTINGS_ROOT="$repo/ui/settings"
+    export NIDARA_KIT_DIR="$repo/ui/lib/nidara-kit"
+    "$repo/ui/shell/node_modules/.bin/sass" --no-charset "$repo/ui/settings/style.scss" "$repo/ui/settings/style.css"
+    node "$repo/scripts/bundle.mjs" kit "$repo/ui/lib/nidara-kit/build/js"
+    out=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/nidara-settings.XXXXXX.js")
+    "$repo/scripts/bundle.sh" --js "$repo/ui/settings/app.ts" "$out" --kit-external="$repo/ui/lib/nidara-kit/build/js"
+    # Remove only our temporary bundle after this application exits.
+    trap 'rm -f "$out"' EXIT
+    LD_PRELOAD="${NIDARA_GTK4_LAYER_SHELL:-/usr/lib/libgtk4-layer-shell.so}" gjs -m "$out" "$@"
+else
+    export NIDARA_SHELL_ROOT=/usr/share/nidara/ui/shell NIDARA_SETTINGS_ROOT=/usr/share/nidara/ui/settings
+    exec /usr/share/nidara/ui/settings/build/nidara-settings "$@"
+fi

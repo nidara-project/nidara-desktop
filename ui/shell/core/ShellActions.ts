@@ -16,14 +16,16 @@
 import type { WorkspaceMode } from "./WorkspaceModes"
 
 export interface ShellActionsMap {
+  /** Versioned widget catalogue and placement commands for Settings (#571). */
+  widgetCatalog?: (args: string[]) => Promise<string>
   toggleAppGrid?: () => void
   /** Open/raise the Settings window (a normal window — not a toggle). */
-  openSettings?: () => void
+  openSettings?: () => void | Promise<void>
   /** Open the Settings window directly on a page id (e.g. "bluetooth"). */
-  openSettingsPage?: (id: string) => string
+  openSettingsPage?: (id: string) => string | Promise<string>
   /** Open the Settings window on one app's own page, by desktop id. False when the app
    *  has no page there (Settings then shows the list of apps). */
-  openAppSettings?: (appId: string) => boolean
+  openAppSettings?: (appId: string) => boolean | Promise<string>
   toggleOverview?: () => void
   /** Promote the bar to the OVERLAY layer above a fullscreen window (toggle). */
   toggleBarOverlay?: () => void
