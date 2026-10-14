@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # scripts/bundle.sh — Nidara's bundler. Replaces `ags bundle` (2026-08-18).
 #
-#   scripts/bundle.sh <entry.ts> <outfile> [--kit-external=<dir>] [--alias:k=v …]
+#   scripts/bundle.sh <entry.ts> <outfile> [--native-host=nidara-shell|nidara-settings] [--kit-external=<dir>] [--alias:k=v …]
 #   scripts/bundle.sh --js <entry.ts> <out.js> [--kit-external=<dir>] [--alias:k=v …]
 #
 # `--kit-external=<dir>` (#108 phase 3): the app loads nidara-kit from <dir> at
@@ -10,10 +10,12 @@
 # copy. See scripts/bundle.mjs.
 #
 # Default output is a SELF-CONTAINED EXECUTABLE: a bash wrapper carrying the
-# bundled JS base64-encoded, which decodes it to $XDG_RUNTIME_DIR and runs gjs
+# bundled JS base64-encoded, which decodes it to $XDG_RUNTIME_DIR and runs GJS
 # on it. That shape is not a preference — every packaging site (install.sh,
 # packaging/nidara/PKGBUILD) installs ONE file per bundle, so a two-file output
-# would break them silently. `--js` emits the plain ESM instead (what run.sh and
+# would break them silently. Shell/Settings select a private libgjs host installed
+# separately in /usr/lib/nidara; other bundles still use the gjs console.
+# `--js` emits the plain ESM instead (what run.sh and
 # the offscreen probes want).
 #
 # WHY THE FLAGS BELOW ARE WHAT THEY ARE. They are not "what worked": they are
@@ -57,6 +59,20 @@ if [ $# -lt 2 ]; then
 fi
 
 entry="$1"; outfile="$2"; shift 2
+native_host=""
+bundle_args=()
+for arg in "$@"; do
+    case "$arg" in
+        --native-host=*)
+            native_host=${arg#*=}
+            case "$native_host" in
+                nidara-shell|nidara-settings) ;;
+                *) echo "bundle.sh: unsupported native host: $native_host" >&2; exit 2 ;;
+            esac ;;
+        *) bundle_args+=("$arg") ;;
+    esac
+done
+[ "$JS_ONLY" = no ] || [ -z "$native_host" ] || { echo 'bundle.sh: --native-host requires an executable wrapper' >&2; exit 2; }
 
 [ -f "$entry" ] || { echo "bundle.sh: no such entry file: $entry" >&2; exit 1; }
 
@@ -82,7 +98,7 @@ fi
 # the kit out of an app (loading the INSTALLED kit instead) takes a plugin, and
 # the CLI cannot take one. The tsconfig next to the entry is passed explicitly
 # there too, so a probe bundled from scripts/dev/ gets the same one the app does.
-node "$(dirname "$(realpath "$0")")/bundle.mjs" app "$entry_abs" "$js_out" "$@"
+node "$(dirname "$(realpath "$0")")/bundle.mjs" app "$entry_abs" "$js_out" "${bundle_args[@]}"
 
 [ "$JS_ONLY" = "yes" ] && exit 0
 
@@ -116,7 +132,13 @@ name="$(basename "$out_abs")"
     printf '    fi\n'
     printf '    mv -f "$tmp" "$js" || { echo "%s: could not install $js" >&2; exit 1; }\n' "$name"
     printf 'fi\n'
-    printf 'exec env LD_PRELOAD=%s %s -m "$js" "$@"\n' "$layer_shell" "$gjs_bin"
+    if [ -n "$native_host" ]; then
+        printf 'host="${NIDARA_NATIVE_HOST_DIR:-/usr/lib/nidara}/%s"\n' "$native_host"
+        printf '[ -x "$host" ] || { echo "Missing native host: $host — rebuild/install Nidara" >&2; exit 1; }\n'
+        printf 'exec env LD_PRELOAD=%q "$host" "$js" "$@"\n' "$layer_shell"
+    else
+        printf 'exec env LD_PRELOAD=%q %q -m "$js" "$@"\n' "$layer_shell" "$gjs_bin"
+    fi
 } > "$out_abs"
 
 chmod 755 "$out_abs"

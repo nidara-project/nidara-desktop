@@ -63,7 +63,7 @@ if [ -f "$DEV_FILE" ]; then
             node "$SOURCE_DIR/scripts/gen-widget-index.mjs" >> "$LOG" 2>&1 \
                 || echo "[$(date '+%H:%M:%S')] nidara-ui: WARN — widget codegen failed, running with committed widgets.gen.ts" | tee -a "$LOG"
         fi
-        # scripts/run.sh is Nidara's own bundler+runner (esbuild + gjs) since
+        # scripts/run.sh is Nidara's own bundler+runner (esbuild + libgjs) since
         # 2026-08-18. It is in the SOURCE tree, not in /usr/bin: dev mode is the
         # only mode that runs from source, so the repo is always at hand.
         exec "$SOURCE_DIR/scripts/run.sh" app.ts >> "$LOG" 2>&1

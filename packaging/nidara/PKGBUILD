@@ -227,6 +227,8 @@ prepare() {
 build() {
   cd "$srcdir/nidara-desktop-$pkgver"
 
+  lib/nidara-host/build.sh "$PWD/build/nidara-host"
+
   # Shell: SCSS → CSS, TSX → GJS bundle (mirrors install.sh §4).
   # `npm install`, not `npm ci`: the lockfile is deliberately NOT committed (see
   # the repo's .gitignore). Only sass + lucide-static resolve from the registry,
@@ -244,12 +246,12 @@ build() {
   # runtime from /usr/share/nidara-kit/js. The installer does NOT (below).
   node ../../scripts/bundle.mjs kit ../lib/nidara-kit/build/js
   mkdir -p build
-  ../../scripts/bundle.sh app.ts build/nidara --kit-external=/usr/share/nidara-kit/js
+  ../../scripts/bundle.sh app.ts build/nidara --native-host=nidara-shell --kit-external=/usr/share/nidara-kit/js
 
   # Settings is a separate application, sharing the kit at runtime.
   npx sass --no-charset ../settings/style.scss ../settings/style.css
   sed -i '/@charset/d' ../settings/style.css
-  ( cd ../settings; mkdir -p build; ../../scripts/bundle.sh app.ts build/nidara-settings --kit-external=/usr/share/nidara-kit/js )
+  ( cd ../settings; mkdir -p build; ../../scripts/bundle.sh app.ts build/nidara-settings --native-host=nidara-settings --kit-external=/usr/share/nidara-kit/js )
 
   # Greeter (reuses the shell's sass install; no npm tree of its own)
   npx sass --no-charset ../greeter/style.scss ../greeter/style.css
@@ -351,6 +353,9 @@ package_nidara-desktop() {
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"
   install -Dm755 build/nidara-ipc "$pkgdir/usr/bin/nidara-ipc"
+  for host in nidara-shell nidara-settings; do
+    install -Dm755 "build/nidara-host/$host" "$pkgdir/usr/lib/nidara/$host"
+  done
 
   # libnidara-wl + its typelib. The typelib MUST land on the default
   # girepository path: the three bundles import gi://NidaraWl with no

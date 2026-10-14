@@ -55,7 +55,7 @@ phase_deps() {
         gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
         libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
-        nodejs npm gjs \
+        nodejs npm gjs python \
         hyprland mesa dbus seatd systemd \
         wayland-protocols hyprland-protocols wlr-protocols \
         grim jq librsvg dconf \
@@ -114,6 +114,11 @@ phase_bundle() {
     done
     log "libnidara-auth OK (8 signals)"
 
+    "$REPO/lib/nidara-host/build.sh" "$REPO/build/nidara-host"
+    python "$REPO/scripts/ci/native-host-check.py" "$REPO/build/nidara-host"
+    for host in nidara-shell nidara-settings; do
+        install -Dm755 "$REPO/build/nidara-host/$host" "/usr/lib/nidara/$host"
+    done
     cd "$REPO/ui/shell"
     log "npm install…"
     npm install
@@ -127,9 +132,9 @@ phase_bundle() {
     # The kit is loaded at runtime (#108 phase 3), from the checkout here — the
     # same modules a release installs at /usr/share/nidara-kit/js.
     node "$REPO/scripts/bundle.mjs" kit "$REPO/ui/lib/nidara-kit/build/js"
-    "$REPO/scripts/bundle.sh" app.ts build/nidara --kit-external="$REPO/ui/lib/nidara-kit/build/js"
+    "$REPO/scripts/bundle.sh" app.ts build/nidara --native-host=nidara-shell --kit-external="$REPO/ui/lib/nidara-kit/build/js"
     npx sass --no-charset ../settings/style.scss ../settings/style.css
-    ( cd ../settings; mkdir -p build; "$REPO/scripts/bundle.sh" app.ts build/nidara-settings --kit-external="$REPO/ui/lib/nidara-kit/build/js" )
+    ( cd ../settings; mkdir -p build; "$REPO/scripts/bundle.sh" app.ts build/nidara-settings --native-host=nidara-settings --kit-external="$REPO/ui/lib/nidara-kit/build/js" )
     log "bundle OK: $(du -h build/nidara | cut -f1)"
 }
 

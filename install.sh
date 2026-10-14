@@ -216,6 +216,7 @@ build_local_nidara_pkg() {
     cp "$REPO_DIR/packaging/nidara/PKGBUILD" "$REPO_DIR/packaging/nidara/nidara.install" "$pdir/"
     tar -C "$REPO_DIR" -czf "$pdir/nidara-desktop-$pkgver.tar.gz" \
         --exclude='./.git' \
+        --exclude='./lib/nidara-host/build' --exclude='./build/nidara-host' \
         --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
         --exclude='./ui/settings/build' --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
         --exclude='./ui/greeter/node_modules' --exclude='./ui/lockscreen/build' \
@@ -460,7 +461,7 @@ fi
 if [ "$MODE" != "dev" ]; then
     echo "  Bundling shell UI..."
     mkdir -p build
-    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara --kit-external=/usr/share/nidara-kit/js
+    "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara --native-host=nidara-shell --kit-external=/usr/share/nidara-kit/js
     echo "  [OK] Bundle: $REPO_DIR/ui/shell/build/nidara"
 fi
 
@@ -469,7 +470,7 @@ cd "$REPO_DIR/ui/shell"
 npx sass --no-charset ../settings/style.scss ../settings/style.css
 cd "$REPO_DIR/ui/settings"
 mkdir -p build
-"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-settings --kit-external=/usr/share/nidara-kit/js
+"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-settings --native-host=nidara-settings --kit-external=/usr/share/nidara-kit/js
 
 echo "  Building greeter..."
 # Use the shell bundle's sass installation for SCSS compilation
@@ -637,6 +638,14 @@ sudo rm -rf /usr/share/nidara/migrations
 sudo mkdir -p /usr/share/nidara/migrations
 sudo cp "$REPO_DIR"/migrations/*.sh /usr/share/nidara/migrations/
 sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-settings /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
+
+# The private shell/Settings runners embed libgjs and keep executable identity.
+HOST_BUILD="$(mktemp -d)"
+"$REPO_DIR/lib/nidara-host/build.sh" "$HOST_BUILD"
+for host in nidara-shell nidara-settings; do
+    sudo install -Dm755 "$HOST_BUILD/$host" "/usr/lib/nidara/$host"
+done
+rm -rf "$HOST_BUILD"
 
 # Compile the IPC client (nidara-ipc): `Request(as) -> s` on the shell's D-Bus
 # name, and the thing every keybind in hyprland.lua runs. C rather than GJS for

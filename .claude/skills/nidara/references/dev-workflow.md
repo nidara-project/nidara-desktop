@@ -126,6 +126,13 @@ other way round from the outside** (`pacman -U` into a scratch root under `faker
 - `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper, plus the setup payloads `defaults/` (minus wallpaper) and `config/greetd/` that `nidara-setup` reads — same layout whether shipped by the package or by install.sh §5
 - **No GTK theme is installed, and that is the point** (commandment 11, 2026-09-20). Our processes call `useNoGtkTheme()` — `GTK_THEME=Empty`, which GTK resolves out of its own gresource — so there is no file to ship and none to go missing. install.sh instead `rm -rf`s two artefacts it used to install: `/usr/share/themes/nidara` (our old blank theme, pixel-identical to `Empty` but offered by every theme chooser on the system) and the pre-rename `crystal-shell` orphan. ⚠️ Do not "fix" a missing theme by naming one: a `GTK_THEME` that resolves to nothing silently loads GTK's FULL built-in theme, which is how the old arrangement could be broken without any symptom. See `ui/lib/nidara-kit/platform/gtk-theme.ts`.
 - `/usr/share/wayland-sessions/nidara.desktop`
+- `/usr/lib/nidara/{nidara-shell,nidara-settings}` — private native libgjs runners;
+  built by `lib/nidara-host/build.sh`. Package and dev install ship both files.
+  Dev UI reloads compile/run the checkout's hosts; no reinstall is needed for a
+  runner-source change in dev. An uninstalled executable bundle can use
+  `NIDARA_NATIVE_HOST_DIR=<checkout>/lib/nidara-host/build`. Greeter and lockscreen
+  still use their GJS-console bundles. See architecture.md → "Shell and Settings
+  have native executable identities".
 - `/usr/share/applications/`
 - XDG portal config
 

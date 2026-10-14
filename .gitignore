@@ -38,6 +38,8 @@ lib/nidara-wl/build/
 /build/nidara-wl/
 lib/nidara-auth/build/
 /build/nidara-auth/
+lib/nidara-host/build/
+/build/nidara-host/
 
 # Media & Recordings
 *.mkv
