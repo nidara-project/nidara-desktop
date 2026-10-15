@@ -204,9 +204,9 @@ corrected, closed — and the focus back on the button that opened it.
 | Piece | Who | Depends on |
 |---|---|---|
 | this contract, `nidara-layers-v1.xml` | Claude | — |
-| `nk-text` + corpus, both backends | GPT Sol (after #819) | only this contract |
+| `nk-text` + corpus | GPT Sol — ✅ #825, Parley | only this contract |
 | `nk-a11y`, both backends | Claude, or Sol once `nk-text` lands | `nk-text`'s `Editor` API (above) |
-| `nk-wayland`, `nk-render`, `phase0/` | Claude | the others' APIs as written here |
-| Hyalo's server half of the layers protocol | Claude | the XML |
+| `nk-wayland`, `nk-render`, `phase0/` (tests 1, 2, 4) | GPT Sol (#826) | the others' APIs as written here |
+| Hyalo's server half of the layers protocol | Claude — ✅ #823 | the XML |
 
 Different crates, different branches; the only shared file is this one, and it changes first.
