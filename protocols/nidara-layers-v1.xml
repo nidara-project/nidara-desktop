@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="nidara_layers_v1">
+  <copyright>
+    SPDX-License-Identifier: GPL-3.0-or-later
+  </copyright>
+  <description summary="layers the compositor animates for the client">
+    A layer is a wl_subsurface whose position, scale and opacity the
+    compositor animates on its own: the client says where the layer ends and
+    how it gets there, and the compositor moves it, frame by frame, whatever
+    the client is doing — also while it commits nothing at all.
+
+    Only what has to move by itself is a layer. A widget is not a surface:
+    static content is painted together into its parent's buffer.
+
+    The compositor owns the PRESENTED values (where a layer is on screen),
+    the client the MODEL values (where it ends). Input is delivered where a
+    layer is presented: the compositor hit-tests layers at their presented
+    transform and gives pointer coordinates in the layer's own space, and
+    maps a text-input cursor rectangle of the layer's surface the same way.
+
+    Phase 0 draft (#818, toolkit/CONTRACT.md). It stays at version 1 until it
+    is published: requests are appended, never versioned.
+  </description>
+
+  <interface name="nidara_layers_manager_v1" version="1">
+    <enum name="error">
+      <entry name="not_subsurface" value="0" summary="the surface has no wl_subsurface role"/>
+      <entry name="already_layer" value="1" summary="the surface already has a layer object"/>
+      <entry name="too_many_layers" value="2" summary="more than 64 layers under one toplevel"/>
+    </enum>
+
+    <request name="destroy" type="destructor"/>
+
+    <request name="get_layer">
+      <description summary="make a subsurface a layer">
+        The surface must have the wl_subsurface role. Its position as a
+        layer replaces wl_subsurface.set_position, which is ignored while
+        the layer object exists.
+      </description>
+      <arg name="id" type="new_id" interface="nidara_layer_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+
+  <interface name="nidara_layer_v1" version="1">
+    <description summary="one animated layer">
+      Every request is double-buffered and applied with the surface's
+      commit — for a subsurface in sync mode, with its parent's, so a
+      window's layers, their materials and its buffer change in one commit.
+    </description>
+
+    <enum name="property">
+      <entry name="position" value="0"/>
+      <entry name="scale" value="1"/>
+      <entry name="opacity" value="2"/>
+    </enum>
+
+    <enum name="error">
+      <entry name="invalid_value" value="0" summary="a non-finite, negative scale, opacity outside 0..1, or a curve that cannot end"/>
+    </enum>
+
+    <request name="destroy" type="destructor">
+      <description summary="the surface stops being a layer">
+        It stays where it was presented; its running transitions are
+        cancelled.
+      </description>
+    </request>
+
+    <request name="set_spring_transition">
+      <description summary="pending: the next change of a property moves on a spring">
+        Applies to the next set_position, set_scale or set_opacity of that
+        property only. A spring retargeted mid-flight keeps its presented
+        velocity; initial_velocity is used only when it starts from rest,
+        in the property's units per second.
+      </description>
+      <arg name="property" type="uint" enum="property"/>
+      <arg name="serial" type="uint" summary="echoed in done and cancelled"/>
+      <arg name="mass" type="fixed"/>
+      <arg name="stiffness" type="fixed"/>
+      <arg name="damping" type="fixed"/>
+      <arg name="initial_velocity" type="fixed"/>
+    </request>
+
+    <request name="set_curve_transition">
+      <description summary="pending: the next change of a property moves on a cubic Bézier">
+        A timing curve from (0,0) to (1,1) through (x1,y1) and (x2,y2),
+        over duration_ms. Retargeted mid-flight, it starts again from the
+        presented value.
+      </description>
+      <arg name="property" type="uint" enum="property"/>
+      <arg name="serial" type="uint" summary="echoed in done and cancelled"/>
+      <arg name="x1" type="fixed"/>
+      <arg name="y1" type="fixed"/>
+      <arg name="x2" type="fixed"/>
+      <arg name="y2" type="fixed"/>
+      <arg name="duration_ms" type="uint"/>
+    </request>
+
+    <request name="set_position">
+      <description summary="pending: the model position, relative to the parent surface">
+        Logical coordinates of the layer's top-left corner. With no
+        transition pending for position, the change is immediate.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+    </request>
+
+    <request name="set_scale">
+      <description summary="pending: the model scale, uniform, about an anchor">
+        anchor_x and anchor_y are layer-local logical coordinates; they
+        change at once, never animated.
+      </description>
+      <arg name="scale" type="fixed"/>
+      <arg name="anchor_x" type="fixed"/>
+      <arg name="anchor_y" type="fixed"/>
+    </request>
+
+    <request name="set_opacity">
+      <description summary="pending: the model opacity, 0..1"/>
+      <arg name="opacity" type="fixed"/>
+    </request>
+
+    <event name="done">
+      <description summary="a transition reached its model value">
+        tv_sec_hi, tv_sec_lo and tv_nsec are the presentation time of the
+        frame that showed its end, as in wp_presentation.
+      </description>
+      <arg name="serial" type="uint"/>
+      <arg name="tv_sec_hi" type="uint"/>
+      <arg name="tv_sec_lo" type="uint"/>
+      <arg name="tv_nsec" type="uint"/>
+    </event>
+
+    <event name="cancelled">
+      <description summary="a transition was replaced by a new model value before it ended"/>
+      <arg name="serial" type="uint"/>
+    </event>
+  </interface>
+</protocol>
