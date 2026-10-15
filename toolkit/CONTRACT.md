@@ -50,8 +50,8 @@ hyalo/compositor/src/protocols/layers.rs   its server half
   appears only when a piece of logic must be identical on both ends; none is in phase 0.
 - **Crate prefix `nk-`** (Nidara kit) is a working name. The public name is the owner's, later.
 - **License: LGPL-3.0-or-later**, as the TypeScript kit, so an app of any license can use it.
-  ⚠️ Our protocol XMLs say GPL-3.0-or-later, and the client code generated from them would be in
-  the kit. Open question for the owner (below).
+  Our protocol XMLs are **MIT** (owner, 2026-10-15), as upstream Wayland's are: the client code
+  generated from them goes into the kit, and into any toolkit that wants to speak to Hyalo.
 - **CI:** a `toolkit` job — `cargo build --locked`, clippy `-D warnings`, unit tests, the text
   corpus, then tests 4 and 5 headless on Hyalo. Not required while Hyalo is a preview. Every
   check is preceded by a step that breaks it and requires it to fail.
@@ -206,9 +206,3 @@ corrected, closed — and the focus back on the button that opened it.
 | Hyalo's server half of the layers protocol | Claude | the XML |
 
 Different crates, different branches; the only shared file is this one, and it changes first.
-
-## Open questions for the owner
-
-- **The protocols' license.** The kit is LGPL so any app can use it, but the client code it
-  generates from `protocols/*.xml` comes from files that say GPL. Upstream Wayland protocols are
-  MIT for exactly this reason. Relicense our three XMLs to MIT?

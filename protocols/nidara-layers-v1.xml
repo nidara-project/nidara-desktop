@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="nidara_layers_v1">
   <copyright>
-    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-License-Identifier: MIT
   </copyright>
   <description summary="layers the compositor animates for the client">
     A layer is a wl_subsurface whose position, scale and opacity the
