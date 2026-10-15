@@ -19,7 +19,7 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 | 2 | IME | our field completes the matrix (below) with fcitx5, as a text-input-v3 client |
 | 3 | Orca | the form (below) is completed with keyboard and Orca only. **Provider chosen: direct AT-SPI** (#834, 17/17 in CI driven through libatspi); the walk with real Orca is still to run |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
-| 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN |
+| 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN. **Passed** (#831/#837, CI at scale 1 and 1.25): `nk-phase0 --test5` blocks 1.5 s with 0.000 s of CPU while both layers move, the click lands where A is seen, in A's coordinates; three fault controls fail as they should. A retarget's kept velocity is proven by Hyalo's unit test, not by screenshots (they cannot date the retarget) |
 
 Not gates, measured in phase 0 because they decide something: the GPU path (experiment 6) and
 the cost of one window (start-up, memory) for #818's phase 1 comparison.
