@@ -42,7 +42,12 @@ Invalid byte offsets/ranges return an error. Upstream affinity means the trailin
 edge of the preceding grapheme; downstream means the leading edge of the next.
 At bidi boundaries distinct byte/affinity pairs may share the same physical stop.
 Native Pango trailing counts are converted immediately at the adapter edge; no
-character or UTF-16 offset is stored in the model or exposed by its API.
+character or UTF-16 offset is stored in the model or exposed by its API. For an
+upstream edge, the adapter asks about the native grapheme containing the last
+scalar before that byte offset. This matters when Pango and `unicode-segmentation`
+use different Unicode versions (Hindi on Pango 1.52). A native hit-test pair is
+passed unchanged to native visual movement rather than re-encoded through another
+version's grapheme boundaries.
 
 Font bytes are shared with `Arc`; face indices distinguish TTC members. Variations
 carry each axis tag and the actual shaper's normalized F2DOT14 coordinate (including

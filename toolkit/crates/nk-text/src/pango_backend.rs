@@ -12,7 +12,6 @@ use std::{
     ptr,
     sync::Arc,
 };
-use unicode_segmentation::UnicodeSegmentation;
 
 // gtk-rs does not wrap PangoFc's Fontconfig integration or the HarfBuzz font.
 // These narrow, documented C APIs expose the exact fonts/coordinates Pango used.
@@ -176,19 +175,20 @@ fn rect(value: &pango::Rectangle) -> Rect {
     }
 }
 impl PangoLayout {
-    fn native_position(&self, caret: Caret) -> (i32, i32) {
+    fn native_edge(&self, caret: Caret) -> (i32, bool) {
         if caret.offset > 0
             && (caret.affinity == Affinity::Upstream || caret.offset == self.text.len())
         {
-            let (offset, grapheme) = self.text[..caret.offset]
-                .grapheme_indices(true)
+            // Pango and unicode-segmentation may use different Unicode versions.
+            // Use the native grapheme containing the last scalar before this
+            // byte edge; the first byte of our preceding EGC can stop too early.
+            let (offset, _) = self.text[..caret.offset]
+                .char_indices()
                 .next_back()
                 .unwrap();
-            // Pango's native trailing count is immediately converted at this
-            // adapter edge; the crate's model stores only byte offsets.
-            (offset as i32, grapheme.chars().count() as i32)
+            (offset as i32, true)
         } else {
-            (caret.offset as i32, 0)
+            (caret.offset as i32, false)
         }
     }
     fn decode_native_position(&self, index: i32, trailing: i32) -> Caret {
@@ -349,8 +349,8 @@ impl LayoutEngine for PangoLayout {
         self.decode_native_position(index, trailing)
     }
     fn caret_rect(&self, caret: Caret) -> Rect {
-        let (index, trailing) = self.native_position(caret);
-        let (line, x) = self.native.index_to_line_x(index, trailing != 0);
+        let (index, trailing) = self.native_edge(caret);
+        let (line, x) = self.native.index_to_line_x(index, trailing);
         let bounds = self
             .lines
             .get(line as usize)
@@ -397,11 +397,13 @@ impl LayoutEngine for PangoLayout {
         // At paragraph start a weak run edge can have a different logical
         // spelling from cursor_pos(0)'s paragraph edge.
         let here = self.caret_rect(caret);
-        let canonical = self.hit_test(Point {
-            x: here.x,
-            y: here.center().y,
-        });
-        let (index, trailing) = self.native_position(canonical);
+        let (_, index, trailing) = self
+            .native
+            .xy_to_index(units(here.x), units(here.center().y));
+        let canonical = self.decode_native_position(index, trailing);
+        // Preserve the native pair rather than re-encoding it with another
+        // Unicode version's grapheme boundaries.
+
         // Pango moves its strong or weak cursor. Preserve which physical
         // cursor the public byte/affinity pair denotes, then translate its
         // resulting cursor back to our upstream/downstream run edge.

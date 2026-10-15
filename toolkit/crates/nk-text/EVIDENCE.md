@@ -1,6 +1,6 @@
 # nk-text corpus evidence
 
-Run UTC: 2026-10-15T05:35:43Z. CPU: AMD Ryzen 5 5600X 6-Core Processor.
+Run UTC: 2026-10-15T14:34:10Z. CPU: AMD Ryzen 5 5600X 6-Core Processor.
 
 Generated on Linux x86_64. `rustc 1.99.0 (b940084d7 2026-09-28) (Arch Linux rust 1:1.99.0-1)`; native Pango `1.58.2`.
 
@@ -47,8 +47,8 @@ Generated on Linux x86_64. `rustc 1.99.0 (b940084d7 2026-09-28) (Arch Linux rust
 
 | Backend | Layouts/pass | Cold corpus (ms) | Warm median (ms) | Warm min–max (ms), 50 passes | Peak RSS (KiB) | Baseline RSS (KiB) |
 |---|---:|---:|---:|---:|---:|---:|
-| parley | 53 | 1.660 | 0.869 | 0.835–1.600 | 52676 | 8196 |
-| pango | 53 | 10.830 | 1.378 | 1.363–1.435 | 75300 | 8104 |
+| parley | 53 | 1.445 | 0.865 | 0.846–1.062 | 52556 | 8076 |
+| pango | 53 | 12.305 | 1.439 | 1.382–2.219 | 75056 | 8028 |
 
 Each backend uses a fresh child process and the same files. Timing includes native layout and extraction of paint runs, excludes font discovery, backend initialisation and editing checks. All layouts for a pass are retained together. Peak RSS is Linux VmHWM after the cold + warm layout passes, before correctness checks; it includes the runtime, font bytes and native allocations. Baseline is VmRSS before loading fonts. Font caches/filesystem caches are not flushed. RSS and elapsed times are observations, not engine selection criteria on their own.
 
