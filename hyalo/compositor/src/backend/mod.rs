@@ -364,7 +364,10 @@ pub fn post_repaint(
     }
     // A window shrinking into the dock or growing out of it (wm/minimize.rs): every output,
     // since it may cross from one to another. At rest nothing ticks.
-    if state.step_animations() | state.step_motions() {
+    // Layers a client handed Hyalo to animate (protocols/layers.rs): their `done` goes out
+    // with the time this frame was finished.
+    let shown = Duration::from(state.clock.now());
+    if state.step_animations() | state.step_motions() | crate::protocols::layers::step(shown) {
         state.queue_redraw(None);
     }
     let time = state.start_time.elapsed();

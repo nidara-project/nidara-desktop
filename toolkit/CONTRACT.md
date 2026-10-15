@@ -148,7 +148,9 @@ moves it there and keeps moving it whatever the app is doing.
   follows it).
 - `done(serial)` event when a transition ends, with the presentation time; `cancelled(serial)`
   when a new value replaced it.
-- A layer's surface may have a `nidara_material_v1`: its glass moves with it.
+- A layer's own glass (a `nidara_material_v1` on the layer's surface) is NOT drawn yet: Hyalo
+  draws the glass of a window's or a layer-shell surface's root. It comes with the shell
+  (phase 2), the first thing that needs a moving pane of glass.
 - **Limits:** at most 64 layers per window (protocol error past that). Not offered to
   sandboxed clients, as the material (#818 triage, point 6 — opening it to Flatpak apps is the
   later review of the trust boundary).
@@ -157,12 +159,13 @@ moves it there and keeps moving it whatever the app is doing.
   under animation (a client that cannot repaint cannot change its text colour): phase 2, with
   the shell.
 
-**Test 5, exactly:** the window has layers A (a button) and B (a plain pane). The client sets a
-1 s spring transition on both positions, commits the new positions, then blocks for 500 ms
-committing nothing. Driven headless (`HYALO_CONTROL`): screenshots at +100, +250 and +400 ms
-show A and B at three different positions each; a click at A's presented position at +300 ms
-is received by A (the client reads it when it wakes) with coordinates inside A. The control
-step: a Hyalo built to hit-test at the MODEL position must fail it.
+**Test 5, exactly** (`scripts/ci/hyalo-layer-motion-check.py`, in the Hyalo smoke): the window
+has layers A (a button) and B (a plain pane). The client gives both a 2 s linear transition to
+x = 300, commits, then blocks for 1.5 s reading and committing nothing. Meanwhile, driven by
+`HYALO_CONTROL`: screenshots at about +250 and +550 ms show A and B further right each time; a
+click where A will END is not A's; a click where A is SEEN (found in a fresh screenshot) is A's,
+inside it. When the client wakes it reads both clicks, and later `done` for both. The control,
+seen failing: a Hyalo that hit-tests at the model position sends the first click to A.
 
 ## The test window (`phase0/`, binary `nk-phase0`)
 

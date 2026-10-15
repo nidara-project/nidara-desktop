@@ -189,21 +189,27 @@ fn push_surface<R: HyaloRenderer>(
     when: std::time::Instant,
 ) {
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
-        let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
-        // A surface that declared where it draws (#761) is drawn only there, and repainted where
-        // that changed.
-        match crate::protocols::material::drawn(s) {
-            None => out.extend(elements.into_iter().map(OutputElement::Surface)),
-            Some(d) => {
-                match &d.rects {
-                    None => out.extend(elements.into_iter().map(OutputElement::Surface)),
-                    Some(rects) => {
-                        let region = drawn::region_on_output(rects, loc, scale);
-                        out.extend(elements.into_iter().map(|inner| OutputElement::Drawn(drawn::Clipped { inner, region: region.clone() })));
+        // A tree with layers a client handed Hyalo to animate (protocols/layers.rs) is drawn
+        // where they are shown, whole: its drawn region (#761) describes the buffer at rest.
+        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, kind, when) {
+            out.extend(layered.into_iter().map(OutputElement::Scaled));
+        } else {
+            let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
+            // A surface that declared where it draws (#761) is drawn only there, and repainted where
+            // that changed.
+            match crate::protocols::material::drawn(s) {
+                None => out.extend(elements.into_iter().map(OutputElement::Surface)),
+                Some(d) => {
+                    match &d.rects {
+                        None => out.extend(elements.into_iter().map(OutputElement::Surface)),
+                        Some(rects) => {
+                            let region = drawn::region_on_output(rects, loc, scale);
+                            out.extend(elements.into_iter().map(|inner| OutputElement::Drawn(drawn::Clipped { inner, region: region.clone() })));
+                        }
                     }
+                    let tree = smithay::desktop::utils::bbox_from_surface_tree(s, (0, 0));
+                    out.push(OutputElement::DrawnChange(drawn::DrawnChange::new(d.id, d.changes, tree, loc, scale)));
                 }
-                let tree = smithay::desktop::utils::bbox_from_surface_tree(s, (0, 0));
-                out.push(OutputElement::DrawnChange(drawn::DrawnChange::new(d.id, d.changes, tree, loc, scale)));
             }
         }
         out.extend(GlassElement::for_surface(s, loc, scale, output_size).into_iter().map(OutputElement::Glass));
@@ -237,8 +243,13 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     kind: Kind,
     when: std::time::Instant,
 ) {
-    let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
-    out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));
+    match crate::protocols::layers::render_tree(renderer, surface, location, scale, kind, when) {
+        Some(layered) => out.extend(layered.into_iter().map(OutputElement::Scaled)),
+        None => {
+            let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
+            out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));
+        }
+    }
     push_material(out, surface, location, scale, output_size, when);
 }
 

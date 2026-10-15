@@ -23,6 +23,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
 | `hyalo/compositor/src/protocols/window_controls.rs`, `render/controls.rs` | a window's controls, Hyalo's: the protocol, and the capsule drawn over the app's header |
+| `hyalo/compositor/src/protocols/layers.rs` | layers an app hands Hyalo to animate (nidara-layers-v1, #818): their transitions, and the walks that draw and hit-test them where they are shown |
 | `hyalo/compositor/src/render/title_bar.rs` | Hyalo's title bar, for apps that leave their decorations to the compositor (kitty, Qt, Chrome's "system title bar") |
 | `hyalo/compositor/src/activation.rs` | an app bringing its window to the front (xdg-activation) |
 | `hyalo/compositor/src/xwayland.rs`, `hyalo/compositor/src/focus.rs` | X11 apps: Hyalo starts Xwayland and is its window manager (Smithay's `X11Wm`); what the keyboard can be given (a surface, or an X11 window) |
@@ -1161,6 +1162,46 @@ the `wp_presentation` feedback we send; this is the same rule for ours.
   frame already drew its end; one not over yet asks for another frame.
 - A frame begun too close to the next vblank to make it shows a refresh later than predicted —
   the error sampling at the build always had. `msg stats` counts those (below).
+
+## Layers an app hands Hyalo to animate (nidara-layers-v1, #818)
+
+`protocols/layers.rs`, protocol `protocols/nidara-layers-v1.xml`. Test 5 of the toolkit's phase 0
+(`toolkit/CONTRACT.md`): the app sets where a layer ENDS and how it gets there; Hyalo moves it
+every frame, also while the app is blocked. A layer is a `wl_subsurface`; position, scale (about
+an anchor) and opacity animate, on a spring (closed form: the same value at a given moment
+however the frames fall) or a cubic Bézier. A new value starts from where the layer is SHOWN,
+and a spring keeps its velocity. `done` goes out after the frame that showed the end, with that
+time on the monotonic clock; `cancelled` when a new value replaced a running transition.
+
+- **Smithay cannot move a subsurface between commits.** Where it draws and hit-tests a
+  subsurface is `SurfaceView::offset`, set at commit and private to it. So a tree holding a
+  layer is walked by Hyalo: `render_tree` (each surface at its presented transform, wrapped in
+  `AtScale` for its own scale) and `under_tree` (input). Every other tree goes through Smithay's
+  own walks: `tree_has_layer` is the switch, and with no layer alive (`LIVE`) it costs nothing.
+  The three render paths call it (`push_surface`, `push_tree`, the rounded window in
+  `render/window.rs`), and the hit-tests of windows (`window_under`, from `surface_under`) and of
+  layer-shell surfaces (`layer_surface_under`, from `layer_under`).
+- **Input goes where a layer is seen.** `under_tree` returns the origin the pointer must be
+  told so that `pointer − origin` is the point in the surface's OWN coordinates even while it is
+  scaled — Smithay computes the local point that way, fresh on every motion. A layer faded to
+  0 takes no input.
+- **The state is double-buffered through Smithay's cached state** (`Pending`): `commit` TAKES
+  what was pending and `merge_into` overrides field by field, so a sync subsurface's several
+  commits land together with its parent's. `on_commit` walks the committed surface's whole
+  tree, because a sync child's state is applied by its PARENT's commit.
+- **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
+  drop one): `alive` turns false and the surface is a plain subsurface again. A new
+  `get_layer` on it renews the entry.
+- Not drawn yet: a layer's OWN glass (only the root's is), the drawn region (#761) of a
+  layer-shell surface while it holds a layer (it is drawn whole), and capture shows layers at
+  their presented place like the screen. Not offered to sandboxed clients, like the material.
+- ⚠️ Locally, the headless `cage` harness draws NO frames with this Mesa (`msg stats` →
+  `frames_drawn: 0`; the winit surface fails with `BAD_ALLOC` at start), so `done` — sent after a
+  frame — never comes there, while screenshots (drawn on demand) and clicks work. The tty smoke
+  in CI draws frames and checks all four steps.
+- CI: `scripts/ci/hyalo-layer-motion-check.py` + `hyalo-layer-motion-probe.c` in the Hyalo
+  smoke. Its control is inside it: a click where A will END must not be A's. Seen failing
+  against a Hyalo that hit-tests at the model position (`under_tree` sampled 60 s ahead).
 
 ## Hyalo's title bar (#708 point 5, its second half, 2026-10-03)
 
