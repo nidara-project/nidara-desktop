@@ -16,7 +16,7 @@ autostart = [
   "uwsm finalize HYALO_SOCKET",
   # The shell, as a systemd user unit, so a crash restarts it rather than leaving a bare
   # compositor (bin/nidara.service).
-  "systemctl --user start nidara.service",
+  "systemctl --user start nidara-sessiond.service nidara.service",
   # The wallpaper: awww draws it; the user's choice is in ~/.config/nidara/wallpaper.
   "uwsm app -s b -- awww-daemon",
   "/usr/lib/nidara-hyalo/restore-wallpaper",

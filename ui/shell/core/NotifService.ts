@@ -8,9 +8,9 @@
 //
 // Two layers below it, not one, and the split is deliberate:
 //
-//   - `core/notifd.ts` is the SERVER — it owns `org.freedesktop.Notifications`,
-//     receives, persists and expires. Ours since 2026-08-18, when it replaced
-//     AstalNotifd.
+//   - `core/notifd.ts` is the CLIENT of `nidara-sessiond`, the Rust daemon that
+//     owns `org.freedesktop.Notifications`, receives, persists and expires.
+//     The client mirrors its live notifications and silently restores history.
 //   - `core/NotifConfig.ts` holds Do Not Disturb, because DnD is not something the
 //     server does. It suppresses BANNERS; the notification still arrives and still
 //     lands in the NC. (AstalNotifd kept it in GSettings only so its proxies could

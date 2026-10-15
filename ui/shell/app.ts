@@ -12,7 +12,7 @@ import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } 
 import inputYield from "./core/InputYield"
 import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
-import { startNotifServer } from "./core/notifd"
+import { startNotifClient } from "./core/notifd"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "../lib/nidara-kit/platform/file"
 import { exec, execAsync } from "../lib/process"
@@ -1043,14 +1043,11 @@ app.start({
   main() {
     // A shell restart during a display confirmation restores the previous mode.
     try { recoverSettingsDisplayPreviews() } catch (e) { console.error("[SettingsDisplay] Recovery:", String(e)) }
-    // The shell IS this desktop's notification server: `core/notifd.ts` owns
-    // `org.freedesktop.Notifications`. Started HERE, explicitly, and not left to
-    // whichever widget happens to ask first — the bar's bell was that widget, so
-    // deleting or reordering it would have quietly stopped the desktop receiving
-    // notifications at all, with no error anywhere.
-    startNotifServer()
+    // Connect to the independent session daemon even without a bell widget.
+    // Reconnected history is mirrored silently; only live arrivals get banners.
+    startNotifClient()
     // Development mode only: a CRITICAL in this shell's log becomes a critical
-    // notification (the server above has to exist first). See core/DevLogWatch.ts.
+    // notification (the client above has to exist first). See core/DevLogWatch.ts.
     startDevLogWatch()
 
     // Game mode around a game (wallpaper, power profile, notifications, the way back),

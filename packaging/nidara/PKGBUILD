@@ -198,11 +198,11 @@ depends=(
 # makedepends block ALONE, where the splice expands to nothing — deliberately: a dev install
 # runs the shell on Hyprland and never compiles Hyalo (hyalo/README.md builds it by hand).
 _hyalo_makedepends=(
-  rust libinput seatd libdisplay-info libxkbcommon mesa systemd-libs pango cairo
+  libinput seatd libdisplay-info libxkbcommon mesa systemd-libs pango cairo
 )
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
-  wayland gtk4 gobject-introspection pkgconf
+  wayland gtk4 gobject-introspection pkgconf rust
   "${_hyalo_makedepends[@]}"
 )
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
@@ -221,6 +221,8 @@ sha256sums=('SKIP')
 prepare() {
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
   export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+  cd "$srcdir/nidara-desktop-$pkgver/session"
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
@@ -297,6 +299,11 @@ build() {
   # libnidara-auth: PAM authentication for the lockscreen, reachable
   # from GJS via introspection (mirrors install.sh §5)
   lib/nidara-auth/build.sh "$srcdir/nidara-desktop-$pkgver/build/nidara-auth"
+
+  # Session daemon (package nidara-desktop). prepare() fetched its locked crates.
+  cd "$srcdir/nidara-desktop-$pkgver/session"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo build --release --locked --offline
 
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
@@ -441,6 +448,8 @@ package_nidara-desktop() {
   # systemd user unit (started by the Nidara Hyprland config, never enabled —
   # see the unit's NOTE)
   install -Dm644 bin/nidara.service "$pkgdir/usr/lib/systemd/user/nidara.service"
+  install -Dm644 bin/nidara-sessiond.service "$pkgdir/usr/lib/systemd/user/nidara-sessiond.service"
+  install -Dm755 session/target/release/nidara-sessiond "$pkgdir/usr/bin/nidara-sessiond"
 
   # XDG portal: Nidara's Settings backend (accent-color) + portal preferences
   install -Dm644 config/portal/nidara.portal "$pkgdir/usr/share/xdg-desktop-portal/portals/nidara.portal"
