@@ -3,6 +3,7 @@
 //! it too — one file per protocol, for both ends.
 
 pub mod focus_grab;
+pub mod layers;
 pub mod material;
 pub mod screencopy;
 pub mod virtual_pointer;
@@ -13,6 +14,7 @@ pub mod window_controls;
 // the two ends numbered the requests differently — the shell hung on its first message
 // (2026-10-01). `include_bytes!` makes each file a dependency of this crate.
 const _: &[u8] = include_bytes!("../../../../protocols/hyprland-focus-grab-v1.xml");
+const _: &[u8] = include_bytes!("../../../../protocols/nidara-layers-v1.xml");
 const _: &[u8] = include_bytes!("../../../../protocols/nidara-material-v1.xml");
 const _: &[u8] = include_bytes!("../../../../protocols/nidara-window-controls-v1.xml");
 
@@ -47,4 +49,15 @@ pub mod gen_window_controls {
     }
     use self::__interfaces::*;
     wayland_scanner::generate_server_code!("../../protocols/nidara-window-controls-v1.xml");
+}
+
+pub mod gen_layers {
+    use wayland_server;
+    use wayland_server::protocol::*;
+    pub mod __interfaces {
+        use wayland_server::protocol::__interfaces::*;
+        wayland_scanner::generate_interfaces!("../../protocols/nidara-layers-v1.xml");
+    }
+    use self::__interfaces::*;
+    wayland_scanner::generate_server_code!("../../protocols/nidara-layers-v1.xml");
 }

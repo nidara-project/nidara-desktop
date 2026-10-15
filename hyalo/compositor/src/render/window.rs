@@ -475,11 +475,19 @@ pub fn push<R: HyaloRenderer>(
     let at = out.len();
     match &program {
         Some(program) => {
-            let elements: Vec<WaylandSurfaceRenderElement<R>> =
-                render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified);
+            // Layers a client handed Hyalo to animate are drawn where they are shown
+            // (protocols/layers.rs), each at its own scale.
+            let elements: Vec<AtScale<WaylandSurfaceRenderElement<R>>> =
+                crate::protocols::layers::render_tree(renderer, &surface, location, scale, Kind::Unspecified, when)
+                    .unwrap_or_else(|| {
+                        render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
+                            .into_iter()
+                            .map(|inner| AtScale { inner, scale })
+                            .collect()
+                    });
             out.extend(elements.into_iter().map(|inner| {
                 OutputElement::Rounded(RoundedElement {
-                    inner: AtScale { inner, scale },
+                    inner,
                     program: program.clone(),
                     geo: frame,
                     radius,

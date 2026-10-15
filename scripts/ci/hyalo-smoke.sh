@@ -117,6 +117,17 @@ phase_build() {
     cc -O2 "$REPO/scripts/ci/hyalo-window-controls-probe.c" "$wc/xdg-shell-protocol.c" \
         "$wc/nidara-window-controls-v1-protocol.c" \
         -I"$wc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-window-controls-probe
+    # The layer-motion probe (layers Hyalo animates for their app, protocols/layers.rs: test 5
+    # of the toolkit's phase 0, #818).
+    local lm="$REPO/build/lm" lm_xml="$REPO/protocols/nidara-layers-v1.xml"
+    mkdir -p "$lm"
+    wayland-scanner client-header "$xs_xml" "$lm/xdg-shell-client-protocol.h"
+    wayland-scanner private-code  "$xs_xml" "$lm/xdg-shell-protocol.c"
+    wayland-scanner client-header "$lm_xml" "$lm/nidara-layers-v1-client-protocol.h"
+    wayland-scanner private-code  "$lm_xml" "$lm/nidara-layers-v1-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-layer-motion-probe.c" "$lm/xdg-shell-protocol.c" \
+        "$lm/nidara-layers-v1-protocol.c" \
+        -I"$lm" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-layer-motion-probe
     # The title-bar probe (an app that leaves its decorations to Hyalo, render/title_bar.rs).
     local tb="$REPO/build/tb"
     mkdir -p "$tb"
@@ -629,6 +640,12 @@ phase_run() {
     RESIZE_LOG=/tmp/hyalo/resize python "$REPO/scripts/ci/hyalo-resize-check.py" >/tmp/hyalo/resize.log 2>&1 \
         || { log "FAIL: resize and small tiles"; cat /tmp/hyalo/resize.log; exit 1; }
     log "resize and small tiles OK (borders, corners, shared split, pixels and input)"
+    # Layers Hyalo animates for their app (#818, test 5 of the toolkit's phase 0): they move
+    # while the app is blocked, a click reaches a layer where it is seen and not where it ends,
+    # and the app is told when each transition is done.
+    LAYER_MOTION_LOG=/tmp/hyalo/layer-motion python "$REPO/scripts/ci/hyalo-layer-motion-check.py" >/tmp/hyalo/layer-motion.log 2>&1 \
+        || { log "FAIL: layer motion"; cat /tmp/hyalo/layer-motion.log; exit 1; }
+    log "layer motion OK ($(grep -c '^ok' /tmp/hyalo/layer-motion.log) of 4: placed, moved while blocked, clicks where seen, done)"
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null

@@ -194,6 +194,7 @@ impl Hyalo {
             unrestricted,
         );
         material::init(&dh);
+        crate::protocols::layers::init(&dh);
         // Flatpak's way to say "this client is sandboxed" — offered only to clients that are not.
         smithay::wayland::security_context::SecurityContextState::new::<Self, _>(&dh, unrestricted);
         // An app asking for its window to come to the front (activation.rs).
@@ -391,14 +392,17 @@ impl Hyalo {
                 // Where the surface is drawn: the geometry's origin less the decorations.
                 let location = self.space.element_location(window)? - window.geometry().loc;
                 let local = pos - location.to_f64();
-                let popup = window.surface_under(local, WindowSurfaceType::POPUP | WindowSurfaceType::SUBSURFACE);
+                let popup = window.surface_under(local, WindowSurfaceType::POPUP | WindowSurfaceType::SUBSURFACE)
+                    .map(|(s, p)| (s, p.to_f64()));
                 let root = || {
                     let m = self.wm.by_window(window)?;
                     let cell = Rectangle::new(self.space.element_location(window)?, m.visible_size());
                     if !cell.to_f64().contains(pos) { return None; }
-                    window.surface_under(local, WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE)
+                    // Layers a client handed Hyalo to animate are hit where they are shown
+                    // (protocols/layers.rs).
+                    crate::protocols::layers::window_under(window, local, WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE)
                 };
-                popup.or_else(root).map(|(s, p)| (s, (p + location).to_f64()))
+                popup.or_else(root).map(|(s, p)| (s, p + location.to_f64()))
             })
         };
         if let Some(h) = hit(&above) {

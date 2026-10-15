@@ -165,8 +165,10 @@ impl Hyalo {
             for l in map.layers_on(*layer).rev() {
                 let Some(geo) = layer_geometry(&map, l) else { continue };
                 let origin = geo.loc + output_loc;
-                if let Some((s, p)) = l.surface_under(pos - origin.to_f64(), WindowSurfaceType::ALL) {
-                    return Some((l.clone(), s, (p + origin).to_f64()));
+                // Layers a client handed Hyalo to animate are hit where they are shown
+                // (protocols/layers.rs).
+                if let Some((s, p)) = crate::protocols::layers::layer_surface_under(l, pos - origin.to_f64()) {
+                    return Some((l.clone(), s, p + origin.to_f64()));
                 }
             }
         }
