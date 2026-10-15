@@ -523,6 +523,11 @@ jobs:
           restore-keys: |
             hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-
             hyalo-build-${{ runner.os }}-
+      - name: Restore toolkit test-window build cache
+        uses: actions/cache@v4
+        with:
+          path: toolkit/target
+          key: nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}
       - name: Build + boot (Arch container on vkms)
         run: |
           # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
@@ -844,7 +849,7 @@ jobs:
 
   # Not a required branch-protection check while the kit is experimental.
   toolkit:
-    name: Toolkit text (nk-text corpus)
+    name: Toolkit (Rust build, text and CPU render)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -857,20 +862,24 @@ jobs:
           key: toolkit-${{ runner.os }}-${{ hashFiles('toolkit/Cargo.lock') }}
       - name: Install the corpus fonts
         run: |
-          scripts/ci/apt.sh install fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-inter-variable
+          scripts/ci/apt.sh install fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-inter-variable libwayland-dev libxkbcommon-dev pkg-config
       - name: Required-font preflight (no silent substitutions)
         run: cargo run --manifest-path toolkit/Cargo.toml --locked --example corpus-report -- --check-fonts
       - name: Locked build and lint
         run: |
-          cargo fmt --manifest-path toolkit/Cargo.toml --check
-          cargo build --manifest-path toolkit/Cargo.toml --locked
-          cargo clippy --manifest-path toolkit/Cargo.toml --locked --all-targets -- -D warnings
+          cargo fmt --manifest-path toolkit/Cargo.toml --all --check
+          cargo build --manifest-path toolkit/Cargo.toml --locked --workspace
+          cargo clippy --manifest-path toolkit/Cargo.toml --locked --workspace --all-targets -- -D warnings
       - name: Corpus catches char backspace (must fail at combining-marks)
         run: |
           python3 scripts/ci/nk-text-control.py
           git diff --exit-code -- toolkit/crates/nk-text/src/editor.rs
+      - name: Pixel corpus catches a renderer that drops glyph runs (must fail)
+        run: |
+          python3 scripts/ci/nk-render-control.py
+          git diff --exit-code -- toolkit/crates/nk-render/src/lib.rs
       - name: Unit tests and the complete corpus
-        run: cargo test --manifest-path toolkit/Cargo.toml --locked -- --nocapture
+        run: cargo test --manifest-path toolkit/Cargo.toml --locked --workspace -- --nocapture
       - name: Case table, layout timing and isolated peak RSS
         if: ${{ !cancelled() }}
         shell: bash

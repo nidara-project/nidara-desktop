@@ -236,6 +236,7 @@ pub fn outputs_changed(state: &mut Hyalo) {
 
 impl Hyalo {
     pub fn window_infos(&self) -> Vec<super::WindowInfo> {
+        use smithay::wayland::seat::WaylandFocus;
         let dh = &self.display_handle;
         self.wm
             .windows
@@ -280,6 +281,10 @@ impl Hyalo {
                         m.backdrop,
                         &self.config.windows,
                     ),
+                    glass: m.window.wl_surface().and_then(|s| crate::protocols::material::current(&s)).map(|m| super::WindowGlassInfo {
+                        shapes: m.state.shapes.len(),
+                        compositor_paints: m.state.glass.is_some(),
+                    }),
                     title_bar: m.bar(),
                     controls: crate::protocols::window_controls::managed_rect(m, &self.config.windows.controls).map(|(r, _)| {
                         let origin = m.rect.loc.to_f64() - m.window.geometry().loc.to_f64();

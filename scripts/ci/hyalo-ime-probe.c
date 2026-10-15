@@ -13,6 +13,8 @@
  *                               (prints GRABBED / RELEASED) — for scripts/ci/hyalo-popup-check.sh
  */
 #include <stdio.h>
+#include <poll.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-client.h>
@@ -20,7 +22,7 @@
 
 static struct wl_seat *seat;
 static struct zwp_input_method_manager_v2 *manager;
-static int active, done_count, committed, hold;
+static int active, done_count, committed, hold, scripted;
 static const char *text;
 static struct zwp_input_method_keyboard_grab_v2 *grab;
 
@@ -48,10 +50,13 @@ static void hold_follow(struct zwp_input_method_v2 *im) {
     fflush(stdout);
 }
 static void im_surrounding(void *d, struct zwp_input_method_v2 *im, const char *t, uint32_t c, uint32_t a) {}
-static void im_cause(void *d, struct zwp_input_method_v2 *im, uint32_t cause) {}
+static void im_cause(void *d, struct zwp_input_method_v2 *im, uint32_t cause) {
+    if (scripted) { printf("CAUSE %u\n", cause); fflush(stdout); }
+}
 static void im_content_type(void *d, struct zwp_input_method_v2 *im, uint32_t hint, uint32_t purpose) {}
 static void im_done(void *d, struct zwp_input_method_v2 *im) {
     done_count++;
+    if (scripted) { printf("STATE %d %d\n", active, done_count); fflush(stdout); return; }
     if (hold) {
         hold_follow(im);
         return;
@@ -74,6 +79,7 @@ static const struct zwp_input_method_v2_listener im_listener = {
 };
 
 int main(int argc, char **argv) {
+    scripted = argc > 1 && strcmp(argv[1], "--script") == 0;
     hold = argc > 1 && strcmp(argv[1], "--hold") == 0;
     text = argc > 1 ? argv[1] : "hyalo-ime";
     struct wl_display *d = wl_display_connect(NULL);
@@ -86,7 +92,39 @@ int main(int argc, char **argv) {
     zwp_input_method_v2_add_listener(im, &im_listener, NULL);
     printf("READY\n");
     fflush(stdout);
-    while ((hold || !committed) && wl_display_dispatch(d) != -1) {}
+    /* Scripted IME reuses the real server bridge, with the test in charge of
+     * timing. Commands are acknowledged only after a protocol roundtrip. */
+    if (scripted) {
+        char line[4096];
+        wl_display_roundtrip(d);
+        while (1) {
+            wl_display_dispatch_pending(d);
+            wl_display_flush(d);
+            struct pollfd fds[] = {{wl_display_get_fd(d), POLLIN, 0}, {STDIN_FILENO, POLLIN, 0}};
+            if (poll(fds, 2, -1) < 0) break;
+            if (fds[0].revents & (POLLIN | POLLHUP | POLLERR)) {
+                if (wl_display_dispatch(d) < 0) break;
+            }
+            if (fds[1].revents & (POLLHUP | POLLERR)) break;
+            if (!(fds[1].revents & POLLIN)) continue;
+            if (!fgets(line, sizeof line, stdin)) break;
+            line[strcspn(line, "\n")] = 0;
+            if (!active) { fprintf(stderr, "no active field\n"); break; }
+            if (strncmp(line, "preedit ", 8) == 0) {
+                const char *s = line + 8;
+                zwp_input_method_v2_set_preedit_string(im, s, strlen(s), strlen(s));
+            } else if (strcmp(line, "cancel") == 0) {
+                zwp_input_method_v2_set_preedit_string(im, "", 0, 0);
+            } else if (strncmp(line, "commit ", 7) == 0) {
+                zwp_input_method_v2_commit_string(im, line + 7);
+            } else { fprintf(stderr, "bad IME command\n"); break; }
+            zwp_input_method_v2_commit(im, done_count);
+            wl_display_roundtrip(d);
+            printf("SENT %s\n", line); fflush(stdout);
+        }
+    } else {
+        while ((hold || !committed) && wl_display_dispatch(d) != -1) {}
+    }
     wl_display_roundtrip(d);
     return committed ? 0 : 1;
 }

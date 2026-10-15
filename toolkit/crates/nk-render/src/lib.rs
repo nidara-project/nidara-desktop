@@ -1,0 +1,193 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//! CPU painting only. Layout, glyph IDs, face index and normalized coordinates
+//! come unchanged from nk-text; this crate never shapes or discovers fonts.
+use nk_text::{GlyphRun, Layout, Rect};
+use std::sync::Arc;
+use vello_cpu::{
+    Glyph, Pixmap, RenderContext, Resources,
+    color::AlphaColor,
+    color::Srgb,
+    kurbo::{Affine, Rect as BoxRect, RoundedRect, Shape},
+    peniko::{Blob, FontData},
+};
+
+pub type Color = AlphaColor<Srgb>;
+pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
+    Color::from_rgba8(r, g, b, a)
+}
+
+pub struct Canvas {
+    context: RenderContext,
+    resources: Resources,
+    scale: f64,
+}
+impl Canvas {
+    pub fn new(width: u16, height: u16, scale: f64) -> Self {
+        let mut context = RenderContext::new(width, height);
+        context.set_transform(Affine::scale(scale));
+        Self {
+            context,
+            resources: Resources::new(),
+            scale,
+        }
+    }
+    pub fn rect(&mut self, r: Rect, color: Color) {
+        self.context.set_paint(color);
+        self.context.fill_rect(&rect(r));
+    }
+    pub fn rounded_rect(&mut self, r: Rect, radius: f64, color: Color) {
+        self.context.set_paint(color);
+        self.context
+            .fill_path(&RoundedRect::from_rect(rect(r), radius).to_path(0.1));
+    }
+    pub fn clip(&mut self, r: Rect) {
+        self.context.push_clip_rect(&rect(r));
+    }
+    pub fn pop_clip(&mut self) {
+        self.context.pop_clip();
+    }
+    pub fn caret(&mut self, mut r: Rect, color: Color) {
+        // Exactly one physical pixel at every fractional scale.
+        r.x = ((r.x as f64 * self.scale).round() / self.scale) as f32;
+        r.width = (1.0 / self.scale) as f32;
+        self.rect(r, color);
+    }
+    pub fn selection(&mut self, rects: &[Rect], origin: (f32, f32), color: Color) {
+        for r in rects {
+            self.rect(offset(*r, origin), color);
+        }
+    }
+    pub fn layout(
+        &mut self,
+        layout: &Layout,
+        origin: (f32, f32),
+        color: Color,
+    ) -> Result<(), String> {
+        for run in layout.glyph_runs() {
+            self.glyph_run(run, origin, color)?;
+        }
+        Ok(())
+    }
+    pub fn glyph_run(
+        &mut self,
+        run: &GlyphRun,
+        origin: (f32, f32),
+        color: Color,
+    ) -> Result<(), String> {
+        let font = FontData::new(Blob::new(Arc::new(run.font.data.clone())), run.font.index);
+        let coords: Vec<_> = run.font.variations.iter().map(|v| v.normalized).collect();
+        self.context.set_paint(color);
+        self.context
+            .glyph_run(&mut self.resources, &font)
+            .font_size(run.size)
+            .normalized_coords(&coords)
+            .fill_glyphs(run.glyphs.iter().map(|&(id, x, y)| Glyph {
+                id,
+                x: x + origin.0,
+                y: y + origin.1,
+            }))
+            .map_err(|e| format!("glyph rasterization: {e:?}"))
+    }
+    /// Native-endian wl_shm ARGB8888: premultiplied, sRGB encoded.
+    pub fn finish(mut self) -> Vec<u8> {
+        let mut target = Pixmap::new(self.context.width(), self.context.height());
+        self.context.flush();
+        self.context.render(&mut target, &mut self.resources);
+        target
+            .data()
+            .iter()
+            .flat_map(|p| u32::from_be_bytes([p.a, p.r, p.g, p.b]).to_ne_bytes())
+            .collect()
+    }
+}
+fn rect(r: Rect) -> BoxRect {
+    BoxRect::new(
+        r.x as f64,
+        r.y as f64,
+        (r.x + r.width) as f64,
+        (r.y + r.height) as f64,
+    )
+}
+pub fn offset(mut r: Rect, origin: (f32, f32)) -> Rect {
+    r.x += origin.0;
+    r.y += origin.1;
+    r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn alpha_and_caret_are_physical_pixels() {
+        let mut c = Canvas::new(16, 16, 1.25);
+        c.rect(
+            Rect {
+                x: 0.,
+                y: 0.,
+                width: 4.,
+                height: 4.,
+            },
+            rgba(255, 0, 0, 128),
+        );
+        c.caret(
+            Rect {
+                x: 8.,
+                y: 0.,
+                width: 20.,
+                height: 8.,
+            },
+            rgba(255, 255, 255, 255),
+        );
+        let p = c.finish();
+        let pixel = |x: usize, y: usize| {
+            u32::from_ne_bytes(
+                p[(y * 16 + x) * 4..(y * 16 + x + 1) * 4]
+                    .try_into()
+                    .unwrap(),
+            )
+        };
+        assert_eq!(pixel(1, 1), 0x80800000);
+        assert_eq!(pixel(10, 1), 0xffffffff);
+        assert_eq!(pixel(11, 1), 0);
+    }
+    #[test]
+    fn corpus_runs_paint_including_bitmap_color_emoji() {
+        use nk_text::{FontSet, ParleyBackend, TextBackend, corpus};
+        let fonts = Arc::new(FontSet::discover_required().expect("install corpus fonts"));
+        let mut backend = ParleyBackend::new(fonts.clone()).unwrap();
+        for case in corpus::cases().unwrap() {
+            let layout = backend
+                .layout(&case.text, &corpus::style(&case, &fonts), case.widths[0])
+                .unwrap();
+            let mut c = Canvas::new(1000, 1000, 1.);
+            c.layout(&layout, (8., 8.), rgba(255, 255, 255, 255))
+                .unwrap();
+            let p = c.finish();
+            if !case.text.trim().is_empty() {
+                assert!(
+                    p.as_chunks::<4>()
+                        .0
+                        .iter()
+                        .any(|b| u32::from_ne_bytes(*b) != 0),
+                    "{} is blank",
+                    case.id
+                );
+            }
+            // The font's family pictogram can be monochrome. Rainbow/flags
+            // specifically prove that bitmap strikes retain their colours.
+            if case.id == "zwj-rainbow" || case.id == "flags" {
+                assert!(
+                    p.as_chunks::<4>().0.iter().any(|b| {
+                        let v = u32::from_ne_bytes(*b);
+                        let r = (v >> 16) & 255;
+                        let g = (v >> 8) & 255;
+                        let b = v & 255;
+                        r.abs_diff(g) > 30 || g.abs_diff(b) > 30
+                    }),
+                    "{} lost color emoji",
+                    case.id
+                );
+            }
+        }
+    }
+}
