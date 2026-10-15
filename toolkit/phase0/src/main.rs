@@ -173,8 +173,8 @@ impl App {
             y += label.measured.height;
         }
         self.content_height = y + 32.;
-        if let Some(name) = self.initial_case.take()
-            && let Some(l) = self.labels.iter().find(|l| l.name == name)
+        if let Some(name) = self.initial_case.as_ref()
+            && let Some(l) = self.labels.iter().find(|l| l.name == *name)
         {
             self.scroll = l.bounds.y - 36.;
         }
@@ -368,6 +368,15 @@ impl App {
 }
 impl Application for App {
     fn event(&mut self, event: Event, w: &mut Window) -> Result<()> {
+        // Hyalo can constrain a floating window after its first buffer maps.
+        // Keep --case anchored through that resize; user input takes ownership
+        // of scrolling/focus and ends the initial anchor.
+        if matches!(
+            &event,
+            Event::Scroll(_) | Event::Key(_) | Event::Button { .. }
+        ) {
+            self.initial_case = None;
+        }
         match event {
             Event::Configure => {
                 let (width, height) = w.size();
@@ -537,6 +546,27 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn last_case_survives_the_post_map_viewport_constraint() {
+        let mut app = App::new(&["--case".into(), "zwj-rainbow".into()]).unwrap();
+        app.paint(Frame {
+            width: 960,
+            height: 720,
+            pixel_width: 960,
+            pixel_height: 720,
+            scale: 1.,
+        })
+        .unwrap();
+        app.height = 400.;
+        app.invalid.layout = true;
+        app.layout().unwrap();
+        let last = app.labels.last().unwrap();
+        assert_eq!(last.name, "zwj-rainbow");
+        assert!(
+            last.bounds.y - app.scroll + last.measured.height <= app.height - 16.,
+            "last case clipped after initial resize"
+        );
+    }
     #[test]
     fn ime_replacement_is_atomic_and_cancel_leaves_no_undo() {
         let mut app = App::new(&[]).unwrap();

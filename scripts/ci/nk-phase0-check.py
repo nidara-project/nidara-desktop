@@ -201,7 +201,13 @@ if __name__ == '__main__':
             try:
                 wait(window, f'{case} window absent')
                 time.sleep(1)
-                shot('corpus-'+case)
+                image=shot('corpus-'+case)
+                if case == 'zwj-rainbow':
+                    win=window()
+                    pixels=crop(image,win,(32,max(16,win['height']-180),win['width']-64,164))
+                    red=sum(pixels[i]>150 and pixels[i+1]<120 and pixels[i+2]<120 for i in range(0,len(pixels),3))
+                    blue=sum(pixels[i+2]>150 and pixels[i]<100 and pixels[i+1]<160 for i in range(0,len(pixels),3))
+                    assert red>3 and blue>3, 'corpus: final colour emoji is outside the visible viewport'
             finally:
                 app.terminate()
                 app.wait(timeout=5)

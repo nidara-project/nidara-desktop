@@ -130,3 +130,10 @@ Context updates caused by `done` use text-input-v3's `input_method` change cause
 keyboard/pointer changes use `other`. Marking the IME's own echo as external can
 make a real input method cancel the composition it just sent. The scripted
 probe reports that cause and the integration check requires the IME echo.
+
+The initial `--case` scroll target stays anchored through provisional layouts
+and the post-map viewport constraint, until user input takes over. Consuming it
+on the first paint clips the last case when Hyalo constrains the floating window
+only after seeing its first buffer. The
+CI gallery requires red and blue bitmap pixels of the final rainbow flag inside
+the visible pane, rather than just taking a screenshot of an empty scroll target.
