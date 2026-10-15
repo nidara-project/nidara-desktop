@@ -1,0 +1,1108 @@
+[
+  {
+    "type": "object:text-changed:insert",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 8,
+    "data": "日本🙂 word"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Name",
+    "detail1": 8,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:delete",
+    "name": "Name",
+    "detail1": 7,
+    "detail2": 1,
+    "data": "d"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Name",
+    "detail1": 7,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Name",
+    "detail1": 7,
+    "detail2": 1,
+    "data": "d"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Name",
+    "detail1": 8,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Name",
+    "detail1": 4,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Password",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Password",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:expanded",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:add",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f32680 (AtspiAccessible at 0x561ec16af020)>"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:add",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae28c31c0 (AtspiAccessible at 0x561ec16af020)>"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:add",
+    "name": "Language",
+    "detail1": 2,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f32f80 (AtspiAccessible at 0x561ec16af020)>"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:selected",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:selected",
+    "name": "Japanese",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:selected",
+    "name": "Chinese",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:expanded",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:remove",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f31e00 (AtspiAccessible at 0x561ec16f1c30)>"
+  },
+  {
+    "type": "object:children-changed:remove",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f323c0 (AtspiAccessible at 0x561ec16af020)>"
+  },
+  {
+    "type": "object:children-changed:remove",
+    "name": "Language",
+    "detail1": 2,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f32540 (AtspiAccessible at 0x561ec16af0c0)>"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:checked",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:add",
+    "name": "Nidara accessibility form",
+    "detail1": 24,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae28cbc00 (AtspiAccessible at 0x561ec16f1cd0)>"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Password",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Password",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:invalid-entry",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "?",
+    "detail1": 0,
+    "detail2": 5,
+    "data": "wrong"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "arabic-bidi",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "center",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "?",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:defunct",
+    "name": "?",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Save",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Save",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 5,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:delete",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 5,
+    "data": "wrong"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 1,
+    "data": "c"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 1,
+    "detail2": 1,
+    "data": "o"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 2,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 2,
+    "detail2": 1,
+    "data": "r"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 3,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 3,
+    "detail2": 1,
+    "data": "r"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 4,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 4,
+    "detail2": 1,
+    "data": "e"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 5,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 5,
+    "detail2": 1,
+    "data": "c"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 6,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:invalid-entry",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 6,
+    "detail2": 1,
+    "data": "t"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 7,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Save",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:remove",
+    "name": "Nidara accessibility form",
+    "detail1": 24,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f38a00 (AtspiAccessible at 0x561ec16af7c0)>"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Name",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Name",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Password",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Password",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "arabic-bidi",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "center",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Save",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:checked",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:add",
+    "name": "Nidara accessibility form",
+    "detail1": 24,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f38a00 (AtspiAccessible at 0x561ec16af7c0)>"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Password",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Password",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Language",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Remember me",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 7,
+    "data": "correct"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Confirmation",
+    "detail1": 7,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "arabic-bidi",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "center",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:children-changed:remove",
+    "name": "Nidara accessibility form",
+    "detail1": 24,
+    "detail2": 0,
+    "data": "<Atspi.Accessible object at 0x7fdae0f38a00 (AtspiAccessible at 0x561ec16af7c0)>"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Name",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Name",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Password",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Password",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Language",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Remember me",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:enabled",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:sensitive",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "arabic-bidi",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:showing",
+    "name": "center",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Confirmation",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:state-changed:focused",
+    "name": "Review",
+    "detail1": 1,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-changed:delete",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 8,
+    "data": "日本🙂 word"
+  },
+  {
+    "type": "object:text-changed:insert",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 6,
+    "data": "AT 日本🙂"
+  },
+  {
+    "type": "object:text-caret-moved",
+    "name": "Name",
+    "detail1": 6,
+    "detail2": 0,
+    "data": "0"
+  },
+  {
+    "type": "object:text-selection-changed",
+    "name": "Name",
+    "detail1": 0,
+    "detail2": 0,
+    "data": "0"
+  }
+]

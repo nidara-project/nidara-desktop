@@ -1,0 +1,244 @@
+[
+  {
+    "name": "Nidara accessibility form",
+    "role": "frame",
+    "states": [
+      "8",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "Name",
+    "role": "entry",
+    "states": [
+      "7",
+      "8",
+      "11",
+      "12",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "Password",
+    "role": "password text",
+    "states": [
+      "8",
+      "11",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "Language",
+    "role": "combo box",
+    "states": [
+      "8",
+      "9",
+      "11",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "Remember me",
+    "role": "check box",
+    "states": [
+      "8",
+      "11",
+      "24",
+      "25",
+      "30",
+      "41"
+    ]
+  },
+  {
+    "name": "Review",
+    "role": "button",
+    "states": [
+      "8",
+      "11",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "arabic-bidi",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "center",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "25",
+      "30"
+    ]
+  },
+  {
+    "name": "chinese",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "combining-marks",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "devanagari-conjunct",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "devanagari-matras",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "emoji-wrap",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "empty",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "fallback",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "flags",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "forced-ltr",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "forced-rtl",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "hebrew-bidi",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "japanese",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "korean",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "multiline",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "variable-font",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "zwj-family",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  },
+  {
+    "name": "zwj-rainbow",
+    "role": "label",
+    "states": [
+      "8",
+      "24",
+      "30"
+    ]
+  }
+]

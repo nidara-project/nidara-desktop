@@ -60,6 +60,12 @@ pub enum Event {
 }
 /// App callbacks run on the connection's thread; no callbacks survive run().
 pub trait Application {
+    fn idle(&mut self, _window: &mut Window) -> Result<()> {
+        Ok(())
+    }
+    fn poll_interval_ms(&self) -> u32 {
+        1000
+    }
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()>;
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>>;
     fn material(&self) -> Option<Material>;
@@ -87,6 +93,8 @@ struct Send {
 }
 /// Small phase-0 window host, not a general widget library.
 pub struct Window {
+    connection: Connection,
+    ignore_input_before: Option<u32>,
     globals: Vec<(u32, String, u32)>,
     surface: Option<wl_surface::WlSurface>,
     xdg: Option<xdg_surface::XdgSurface>,
@@ -131,6 +139,9 @@ pub struct Window {
     skip_material: bool,
 }
 impl Window {
+    pub fn close(&mut self) {
+        self.closed = true;
+    }
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
@@ -434,12 +445,46 @@ pub struct Options {
     pub material: bool,
     pub map: bool,
 }
-pub fn run(mut app: impl Application, options: Options, start: Instant) -> Result<()> {
-    let conn = Connection::connect_to_env().map_err(err)?;
+pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
+    run_inner(app, options, start, None).map(|_| ())
+}
+/// A modal xdg toplevel on the SAME connection; set_parent cannot name a
+/// surface from another connection. The parent event queue resumes on close.
+pub fn run_dialog(app: impl Application, parent: &mut Window) -> Result<()> {
+    let last_serial = run_inner(
+        app,
+        Options {
+            material: true,
+            map: true,
+        },
+        Instant::now(),
+        Some(parent),
+    )?;
+    // Each wl_keyboard on this connection receives the modal's key stream too.
+    // Those messages are queued on the parent's EventQueue; do not replay them
+    // into the form when its event loop resumes.
+    parent.ignore_input_before = Some(last_serial);
+    parent.keyboard.reset();
+    Ok(())
+}
+
+fn run_inner(
+    mut app: impl Application,
+    options: Options,
+    start: Instant,
+    parent: Option<&Window>,
+) -> Result<u32> {
+    let conn = if let Some(parent) = parent {
+        parent.connection.clone()
+    } else {
+        Connection::connect_to_env().map_err(err)?
+    };
     let mut queue = conn.new_event_queue::<Window>();
     let qh = queue.handle();
     let registry = conn.display().get_registry(&qh, ());
     let mut w = Window {
+        connection: conn.clone(),
+        ignore_input_before: None,
         globals: Vec::new(),
         surface: None,
         xdg: None,
@@ -464,8 +509,8 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
         events: Vec::new(),
         keyboard: Keyboard::new(),
         qh: qh.clone(),
-        width: 960,
-        height: 720,
+        width: if parent.is_some() { 500 } else { 960 },
+        height: if parent.is_some() { 300 } else { 720 },
         pending_size: None,
         scale: 120,
         configured: false,
@@ -516,6 +561,10 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
     top.set_app_id("nk-phase0".into());
     top.set_title("Nidara toolkit — phase 0".into());
     top.set_min_size(400, 300);
+    if let Some(parent) = parent {
+        top.set_parent(parent.toplevel.as_ref());
+        top.set_title("Correct error".into());
+    }
     w.material = Some(materials.get_material(&surface, &qh, ()));
     w.viewport = Some(viewporter.get_viewport(&surface, &qh, ()));
     let _fraction = fraction.get_fractional_scale(&surface, &qh, ());
@@ -576,6 +625,10 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
             app.event(event, &mut w)?;
             w.input_from_ime = false;
         }
+        app.idle(&mut w)?;
+        if w.closed {
+            break;
+        }
         w.paint(&mut app)?;
         conn.flush().map_err(err)?;
         if let Some(guard) = queue.prepare_read() {
@@ -585,7 +638,7 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
             let ms = if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
                 8
             } else {
-                1000
+                i64::from(app.poll_interval_ms().clamp(1, 1000))
             };
             let timeout = Timespec {
                 tv_sec: ms / 1000,
@@ -605,7 +658,38 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
             }
         }
     }
-    Ok(())
+    // Child windows share the parent's connection. Dropping a Rust proxy does
+    // not send Wayland destructor requests: destroy the role and surface now.
+    if let Some(t) = w.text.take() {
+        t.destroy();
+    }
+    if let Some(k) = w.keyboard_proxy.take() {
+        k.release();
+    }
+    if let Some(p) = w.pointer.take() {
+        p.release();
+    }
+    if let Some(d) = w.data.take() {
+        d.release();
+    }
+    if let Some(m) = w.material.take() {
+        m.destroy();
+    }
+    if let Some(v) = w.viewport.take() {
+        v.destroy();
+    }
+    _fraction.destroy();
+    if let Some(t) = w.toplevel.take() {
+        t.destroy();
+    }
+    if let Some(x) = w.xdg.take() {
+        x.destroy();
+    }
+    if let Some(s) = w.surface.take() {
+        s.destroy();
+    }
+    conn.flush().map_err(err)?;
+    Ok(w.serial)
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for Window {
@@ -846,6 +930,11 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
             wl_keyboard::Event::Key {
                 serial, key, state, ..
             } => {
+                if w.ignore_input_before
+                    .is_some_and(|before| serial.wrapping_sub(before) as i32 <= 0)
+                {
+                    return;
+                }
                 w.serial = serial;
                 if state == WEnum::Value(wl_keyboard::KeyState::Pressed) {
                     if let Some(k) = w.keyboard.press(key) {
@@ -901,6 +990,11 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 state,
                 ..
             } => {
+                if w.ignore_input_before
+                    .is_some_and(|before| serial.wrapping_sub(before) as i32 <= 0)
+                {
+                    return;
+                }
                 w.serial = serial;
                 w.events.push(Event::Button {
                     button,

@@ -1,0 +1,10 @@
+{
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (Arch Linux rust 1:1.99.0-1)",
+  "atspi": "2.62.1",
+  "binary": "/home/angel/.codex/worktrees/830-toolkit-a11y/Distroia/toolkit/target/release/nk-phase0",
+  "binary_sha256": "d9998d574735af313816ec5d640e8effb2e0d9c09a5acade49cdd80d513ab5be",
+  "source_base": "b12a87d913b32f888ab2c313dd9de412ed97767c",
+  "hyalo_binary": "/tmp/nk830-im/nidara-hyalo",
+  "hyalo_binary_sha256": "25778b18931180d3375ab011e45b2139bf3a95c23d3604cf0f90465a4b4d8c05",
+  "cargo_lock_sha256": "e747eee3aebf54c6e1dc1d7523cae262653b14291fa3a6793c1cc37d126bf774"
+}

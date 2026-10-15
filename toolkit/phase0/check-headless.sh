@@ -9,7 +9,7 @@ export NK_PHASE0_HARNESS="$here/check-headless.sh"
 case "${1:-}" in
     --driver)
         set +e
-        python3 "$repo/scripts/ci/nk-phase0-check.py" >"$NK_PHASE0_LOG/check.log" 2>&1
+        python3 "$repo/scripts/ci/${NK_PHASE0_CHECK:-nk-phase0-check.py}" >"$NK_PHASE0_LOG/check.log" 2>&1
         status=$?
         echo "$status" >"$NK_PHASE0_RUN/result"
         exit "$status"
@@ -21,7 +21,9 @@ case "${1:-}" in
         "$HYALO_BIN" --winit -c "\"$NK_PHASE0_HARNESS\" --driver" >"$NK_PHASE0_LOG/hyalo.log" 2>&1 &
         hyalo=$!
         trap 'kill "$hyalo" 2>/dev/null || true; wait "$hyalo" 2>/dev/null || true' EXIT
-        for _ in $(seq 1 600); do
+        local_ticks=600
+        if [ "${NK_PHASE0_CHECK:-}" = nk-a11y-check.py ]; then local_ticks=12000; fi
+        for _ in $(seq 1 "$local_ticks"); do
             if [ -f "$NK_PHASE0_RUN/result" ]; then exit "$(cat "$NK_PHASE0_RUN/result")"; fi
             kill -0 "$hyalo" || { echo 'Hyalo died'; exit 1; }
             sleep .1

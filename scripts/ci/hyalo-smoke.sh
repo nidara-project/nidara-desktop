@@ -41,7 +41,7 @@ phase_deps() {
         gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 pam \
         libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
-        nodejs npm gjs python \
+        nodejs npm gjs python python-gobject at-spi2-core \
         wayland-protocols hyprland-protocols wlr-protocols \
         jq librsvg dconf file procps-ng \
         grim slurp wl-clipboard wf-recorder ffmpeg xorg-xwayland \
@@ -725,6 +725,13 @@ phase_run() {
         > /tmp/hyalo/nk-phase0.log 2>&1 \
         || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
     cat /tmp/hyalo/nk-phase0.log
+
+    # Test 3: the direct AT-SPI provider, consumed through libatspi like Orca.
+    # Every oracle has a negative control.
+    NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-a11y-check.py" \
+        > /tmp/hyalo/nk-a11y.log 2>&1 \
+        || { cat /tmp/hyalo/nk-a11y.log; exit 1; }
+    cat /tmp/hyalo/nk-a11y.log
 
     # ── 4. The same log bar as the Hyprland smoke.
     kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died"; exit 1; }
