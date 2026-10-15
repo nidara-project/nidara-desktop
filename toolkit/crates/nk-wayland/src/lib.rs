@@ -3,13 +3,17 @@
 //! logical pixels; only Frame's buffer dimensions are physical pixels.
 mod ime;
 mod keyboard;
+mod layers;
+pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
 mod protocol;
 pub use ime::{ImeBatch, TextInput};
 pub use keyboard::Key;
 use keyboard::Keyboard;
+use material::send_material;
 pub use material::{Glass, Material, Pane, Shadow, Tone};
 use memmap2::MmapMut;
+use protocol::layers::{nidara_layer_v1, nidara_layers_manager_v1};
 use protocol::material::{nidara_material_manager_v1, nidara_material_v1};
 use std::{
     fs::File,
@@ -22,7 +26,7 @@ use wayland_client::{
     protocol::{
         wl_buffer, wl_callback, wl_compositor, wl_data_device, wl_data_device_manager,
         wl_data_offer, wl_data_source, wl_keyboard, wl_pointer, wl_registry, wl_seat, wl_shm,
-        wl_surface,
+        wl_subcompositor, wl_subsurface, wl_surface,
     },
 };
 use wayland_protocols::{
@@ -47,6 +51,7 @@ pub struct Frame {
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
+    Layer { id: LayerId, event: LayerEvent },
     FrameDone,
     Focus(bool),
     Key(Key),
@@ -94,6 +99,15 @@ struct Send {
 /// Small phase-0 window host, not a general widget library.
 pub struct Window {
     connection: Connection,
+    materials: Option<nidara_material_manager_v1::NidaraMaterialManagerV1>,
+    compositor: Option<wl_compositor::WlCompositor>,
+    subcompositor: Option<wl_subcompositor::WlSubcompositor>,
+    layers_manager: Option<nidara_layers_manager_v1::NidaraLayersManagerV1>,
+    viewporter: Option<wp_viewporter::WpViewporter>,
+    layers: Vec<layers::Layer>,
+    pointer_layer: Option<LayerId>,
+    pointer_inside: bool,
+    pointer_position: (f64, f64),
     ignore_input_before: Option<u32>,
     globals: Vec<(u32, String, u32)>,
     surface: Option<wl_surface::WlSurface>,
@@ -136,6 +150,8 @@ pub struct Window {
     input: TextInput,
     sent_input: Option<TextInput>,
     ime_pending: ImeBatch,
+    input_layer: Option<LayerId>,
+    cursor_pending: bool,
     skip_material: bool,
 }
 impl Window {
@@ -145,10 +161,15 @@ impl Window {
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
+    /// Physical pixels per logical pixel on the window's current output.
+    pub fn scale(&self) -> f64 {
+        f64::from(self.scale) / 120.
+    }
     pub fn redraw(&mut self) {
         self.dirty = true;
     }
     pub fn set_text_input(&mut self, input: TextInput) {
+        self.clear_layer_cursor();
         self.input = input;
         self.sync_ime();
     }
@@ -212,7 +233,11 @@ impl Window {
             ChangeCause::Other
         });
         let [x, y, w, h] = self.input.rect;
-        t.set_cursor_rectangle(x, y, w.max(1), h.max(1));
+        // The standard protocol remains root-local. Hyalo receives a layer's
+        // local rectangle through its explicit, parent-committed association.
+        if self.input_layer.is_none() {
+            t.set_cursor_rectangle(x, y, w.max(1), h.max(1));
+        }
         t.commit();
         self.ime_serial = self.ime_serial.wrapping_add(1);
         self.sent_input = Some(self.input.clone());
@@ -350,55 +375,27 @@ impl Window {
         }
         b.map.copy_from_slice(&bytes);
         b.busy = true;
-        let surface = self.surface.as_ref().unwrap();
+        let surface = self.surface.as_ref().unwrap().clone();
         if let Some(v) = &self.viewport {
             v.set_destination(self.width as i32, self.height as i32);
         }
         surface.set_buffer_scale(1);
         if let Some(m) = &self.material {
-            m.clear_shapes();
-            m.clear_glass();
-            if !self.skip_material
-                && let Some(material) = app.material()
-            {
-                let glass = material.glass;
-                // The protocol's old tint/alpha/saturation arguments are inert.
-                m.set_glass(0., 0., 0., 0., 0., 0., glass.refraction, glass.rim, 0.);
-                m.set_lensing(glass.lensing);
-                let tone = material.tone;
-                m.set_tone(
-                    tone.saturation,
-                    tone.ceiling,
-                    tone.lift,
-                    tone.gain,
-                    tone.wash[0],
-                    tone.wash[1],
-                    tone.wash[2],
-                    tone.wash[3],
-                    tone.ambient,
-                    tone.ambient_lift,
-                    tone.ambient_gain,
-                );
-                let shadow = material.shadow;
-                m.set_shadow(
-                    shadow.opacity_small,
-                    shadow.opacity_large,
-                    shadow.blur_small,
-                    shadow.blur_large,
-                    shadow.offset,
-                );
-                for p in material.shapes {
-                    m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
-                }
-            }
+            let material = if self.skip_material {
+                None
+            } else {
+                app.material()
+            };
+            send_material(m, material.as_ref());
         }
         surface.attach(Some(&b.proxy), 0, 0);
         surface.damage_buffer(0, 0, frame.pixel_width as i32, frame.pixel_height as i32);
         surface.frame(&self.qh, ());
         self.frame_pending = true;
         if let Some(p) = &self.presentation {
-            p.feedback(surface, &self.qh, ());
+            p.feedback(&surface, &self.qh, ());
         }
+        self.stage_layers();
         surface.commit();
         self.dirty = false;
         Ok(())
@@ -484,6 +481,15 @@ fn run_inner(
     let registry = conn.display().get_registry(&qh, ());
     let mut w = Window {
         connection: conn.clone(),
+        materials: None,
+        compositor: None,
+        subcompositor: None,
+        layers_manager: None,
+        viewporter: None,
+        layers: Vec::new(),
+        pointer_layer: None,
+        pointer_inside: false,
+        pointer_position: (0., 0.),
         ignore_input_before: None,
         globals: Vec::new(),
         surface: None,
@@ -526,6 +532,8 @@ fn run_inner(
         input: TextInput::default(),
         sent_input: None,
         ime_pending: ImeBatch::default(),
+        input_layer: None,
+        cursor_pending: false,
         skip_material: !options.material,
     };
     queue.roundtrip(&mut w).map_err(err)?;
@@ -547,6 +555,10 @@ fn run_inner(
         1
     )
     .ok_or("missing fractional-scale-v1")?;
+    w.subcompositor = bind!(wl_subcompositor::WlSubcompositor, 1);
+    w.layers_manager = bind!(nidara_layers_manager_v1::NidaraLayersManagerV1, 1);
+    w.compositor = Some(compositor.clone());
+    w.viewporter = Some(viewporter.clone());
     w.shm = bind!(wl_shm::WlShm, 1);
     if w.shm.is_none() {
         return Err("missing wl_shm".into());
@@ -565,6 +577,7 @@ fn run_inner(
         top.set_parent(parent.toplevel.as_ref());
         top.set_title("Correct error".into());
     }
+    w.materials = Some(materials.clone());
     w.material = Some(materials.get_material(&surface, &qh, ()));
     w.viewport = Some(viewporter.get_viewport(&surface, &qh, ()));
     let _fraction = fraction.get_fractional_scale(&surface, &qh, ());
@@ -630,7 +643,10 @@ fn run_inner(
             break;
         }
         w.paint(&mut app)?;
-        conn.flush().map_err(err)?;
+        if !w.dirty && (w.cursor_pending || w.layers.iter().any(|l| l.pending)) {
+            w.commit()?;
+        }
+        conn.flush().map_err(|e| format!("Wayland flush: {e}"))?;
         if let Some(guard) = queue.prepare_read() {
             use rustix::event::{PollFd, PollFlags, Timespec, poll};
             let fd = guard.connection_fd();
@@ -645,9 +661,12 @@ fn run_inner(
                 tv_nsec: (ms % 1000) * 1_000_000,
             };
             match poll(&mut fds, Some(&timeout)) {
-                Ok(_) if fds[0].revents().intersects(PollFlags::IN) => {
-                    guard.read().map_err(err)?;
-                }
+                Ok(_) if fds[0].revents().intersects(PollFlags::IN) => match guard.read() {
+                    Ok(_) => {}
+                    Err(wayland_client::backend::WaylandError::Io(e))
+                        if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                    Err(e) => return Err(format!("Wayland read: {e}")),
+                },
                 Ok(_) => {
                     drop(guard);
                 }
@@ -660,6 +679,9 @@ fn run_inner(
     }
     // Child windows share the parent's connection. Dropping a Rust proxy does
     // not send Wayland destructor requests: destroy the role and surface now.
+    for layer in w.layers.drain(..) {
+        layer.destroy();
+    }
     if let Some(t) = w.text.take() {
         t.destroy();
     }
@@ -688,7 +710,7 @@ fn run_inner(
     if let Some(s) = w.surface.take() {
         s.destroy();
     }
-    conn.flush().map_err(err)?;
+    conn.flush().map_err(|e| format!("Wayland flush: {e}"))?;
     Ok(w.serial)
 }
 
@@ -776,10 +798,16 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for Window {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let wl_buffer::Event::Release = e
-            && let Some(b) = w.buffers.iter_mut().find(|b| b.proxy == *p)
-        {
-            b.busy = false;
+        if let wl_buffer::Event::Release = e {
+            for b in w
+                .buffers
+                .iter_mut()
+                .chain(w.layers.iter_mut().flat_map(|l| l.buffers.iter_mut()))
+            {
+                if b.proxy == *p {
+                    b.busy = false;
+                }
+            }
         }
     }
 }
@@ -960,10 +988,26 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
         }
     }
 }
+impl Window {
+    fn pointer_motion(&mut self, x: f64, y: f64) {
+        self.pointer_position = (x, y);
+        if !self.pointer_inside {
+            return;
+        }
+        if let Some(id) = self.pointer_layer {
+            self.events.push(Event::Layer {
+                id,
+                event: LayerEvent::Motion(x, y),
+            });
+        } else {
+            self.events.push(Event::Motion(x, y));
+        }
+    }
+}
 impl Dispatch<wl_pointer::WlPointer, ()> for Window {
     fn event(
         w: &mut Self,
-        _p: &wl_pointer::WlPointer,
+        _: &wl_pointer::WlPointer,
         e: wl_pointer::Event,
         _: &(),
         _: &Connection,
@@ -972,40 +1016,73 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
         match e {
             wl_pointer::Event::Enter {
                 serial,
+                surface,
                 surface_x,
                 surface_y,
-                ..
             } => {
                 w.serial = serial;
-                w.events.push(Event::Motion(surface_x, surface_y));
+                w.pointer_layer = w.layers.iter().find(|l| l.surface == surface).map(|l| l.id);
+                w.pointer_inside =
+                    w.pointer_layer.is_some() || w.surface.as_ref() == Some(&surface);
+                w.pointer_motion(surface_x, surface_y);
+            }
+            wl_pointer::Event::Leave { .. } => {
+                if let Some(id) = w.pointer_layer.take() {
+                    w.events.push(Event::Layer {
+                        id,
+                        event: LayerEvent::Leave,
+                    });
+                }
+                w.pointer_inside = false;
             }
             wl_pointer::Event::Motion {
                 surface_x,
                 surface_y,
                 ..
-            } => w.events.push(Event::Motion(surface_x, surface_y)),
+            } => w.pointer_motion(surface_x, surface_y),
             wl_pointer::Event::Button {
                 serial,
                 button,
                 state,
                 ..
             } => {
-                if w.ignore_input_before
-                    .is_some_and(|before| serial.wrapping_sub(before) as i32 <= 0)
+                if !w.pointer_inside
+                    || w.ignore_input_before
+                        .is_some_and(|before| serial.wrapping_sub(before) as i32 <= 0)
                 {
                     return;
                 }
                 w.serial = serial;
-                w.events.push(Event::Button {
-                    button,
-                    pressed: state == WEnum::Value(wl_pointer::ButtonState::Pressed),
-                });
+                let pressed = state == WEnum::Value(wl_pointer::ButtonState::Pressed);
+                if let Some(id) = w.pointer_layer {
+                    let (x, y) = w.pointer_position;
+                    w.events.push(Event::Layer {
+                        id,
+                        event: LayerEvent::Button {
+                            button,
+                            pressed,
+                            x,
+                            y,
+                        },
+                    });
+                } else {
+                    w.events.push(Event::Button { button, pressed });
+                }
             }
             wl_pointer::Event::Axis {
                 axis: WEnum::Value(wl_pointer::Axis::VerticalScroll),
                 value,
                 ..
-            } => w.events.push(Event::Scroll(value)),
+            } => {
+                if let Some(id) = w.pointer_layer {
+                    w.events.push(Event::Layer {
+                        id,
+                        event: LayerEvent::Scroll(value),
+                    });
+                } else if w.pointer_inside {
+                    w.events.push(Event::Scroll(value));
+                }
+            }
             _ => {}
         }
     }

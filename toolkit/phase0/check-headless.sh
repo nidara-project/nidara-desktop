@@ -22,6 +22,7 @@ case "${1:-}" in
         hyalo=$!
         trap 'kill "$hyalo" 2>/dev/null || true; wait "$hyalo" 2>/dev/null || true' EXIT
         local_ticks=600
+        if [ "${NK_PHASE0_CHECK:-}" = nk-layer-motion-check.py ]; then local_ticks=1800; fi
         if [ "${NK_PHASE0_CHECK:-}" = nk-a11y-check.py ]; then local_ticks=12000; fi
         for _ in $(seq 1 "$local_ticks"); do
             if [ -f "$NK_PHASE0_RUN/result" ]; then exit "$(cat "$NK_PHASE0_RUN/result")"; fi

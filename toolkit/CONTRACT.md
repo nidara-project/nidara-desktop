@@ -152,6 +152,15 @@ moves it there and keeps moving it whatever the app is doing.
   so the client's own hit-testing inside a layer needs no knowledge of the animation. The text
   cursor rectangle of a field in a layer is mapped the same way (the IME's candidate window
   follows it).
+- **A cursor explicitly names its layer.** The keyboard/text-input-v3 focus stays on
+  the root. `nidara_layers_manager_v1.set_text_input_cursor_rectangle(root, layer,
+  x, y, width, height)` stages a layer-local cursor rectangle with the root's commit.
+  Hyalo maps it through the presented transform every frame, updating the input-method
+  popup and its rectangle event while the app is blocked. A null layer clears the
+  override, restoring the latest standard root-local rectangle. Destroying a layer
+  clears the association; a replacement object does not inherit it. The client clears
+  it when another field takes focus. Standard text-input-v3 never receives layer-local
+  coordinates. This request neither enables input nor sends surrounding text.
 - `done(serial)` event when a transition ends, with the presentation time; `cancelled(serial)`
   when a new value replaced it.
 - A layer's own glass (a `nidara_material_v1` on the layer's surface) is NOT drawn yet: Hyalo

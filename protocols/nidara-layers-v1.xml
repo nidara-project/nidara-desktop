@@ -27,6 +27,7 @@
       <entry name="not_subsurface" value="0" summary="the surface has no wl_subsurface role"/>
       <entry name="already_layer" value="1" summary="the surface already has a layer object"/>
       <entry name="too_many_layers" value="2" summary="more than 64 layers under one toplevel"/>
+      <entry name="invalid_cursor" value="3" summary="cursor layer is not under the root or rectangle has non-positive size"/>
     </enum>
 
     <request name="destroy" type="destructor"/>
@@ -39,6 +40,33 @@
       </description>
       <arg name="id" type="new_id" interface="nidara_layer_v1"/>
       <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+    <request name="set_text_input_cursor_rectangle">
+      <description summary="pending: associate a text cursor with an animated layer">
+        root is the text-input-v3 focused root surface, which has no subsurface
+        parent. layer must be a live layer below root, owned by the same client.
+        x, y, width and height describe the cursor in layer-local logical pixels;
+        width and height must be positive. The keyboard/text-input focus remains
+        on root. This does not enable text input or transmit surrounding text.
+
+        Applied with root's wl_surface.commit. While text input is active on
+        root, this rectangle overrides text-input-v3's cursor rectangle: Hyalo
+        maps it through the layer's presented transform every frame and updates
+        the input-method popup and its text_input_rectangle event accordingly.
+        The client must not send layer-local coordinates to text-input-v3.
+
+        A null layer clears the association (the rectangle arguments are ignored),
+        restoring text-input-v3's latest root-local rectangle. Destruction of the
+        layer also clears it; a replacement layer object does not inherit it.
+        The client clears it when focus changes to a field outside that layer.
+        Like the rest of this draft, clients and Hyalo must be updated together.
+      </description>
+      <arg name="root" type="object" interface="wl_surface"/>
+      <arg name="layer" type="object" interface="nidara_layer_v1" allow-null="true"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
     </request>
   </interface>
 

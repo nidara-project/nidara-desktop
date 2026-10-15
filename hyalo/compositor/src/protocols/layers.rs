@@ -11,6 +11,9 @@
 //! under the pointer (`under_tree`), with each layer at its presented transform. A tree with no
 //! layer goes through Smithay's own walks, untouched.
 
+mod cursor;
+pub use cursor::{prepare_input_popups, remember_input_popup};
+
 use std::{
     sync::{
         Mutex,
@@ -592,6 +595,10 @@ impl Dispatch2<NidaraLayersManagerV1, Hyalo> for LayersGlobal {
         use nidara_layers_manager_v1::{Error, Request};
         match request {
             Request::Destroy => {}
+            Request::SetTextInputCursorRectangle { root, layer, x, y, width, height } => {
+                cursor::set(resource, &root, layer,
+                    smithay::utils::Rectangle::new((x,y).into(),(width,height).into()));
+            }
             Request::GetLayer { id, surface } => {
                 if get_role(&surface) != Some(SUBSURFACE_ROLE) {
                     resource.post_error(Error::NotSubsurface, "the surface is not a subsurface");

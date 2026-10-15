@@ -179,3 +179,93 @@ The AT-SPI walk, fault controls, comparison and exact live Orca steps are in
 `crates/nk-a11y/README.md`. Run the private harness with
 `NK_PHASE0_CHECK=nk-a11y-check.py`; it reports and exits nonzero for **any**
 backend failure. A scripted pass does not declare the real Orca walk passed.
+
+## Test 5: Hyalo executes the animation (#831)
+
+```sh
+cargo build --manifest-path toolkit/Cargo.toml --release --locked -p nk-phase0
+toolkit/target/release/nk-phase0 --test5
+```
+
+This mode uses the same native `Window`, CPU renderer, buffer ownership and
+input dispatch as the corpus/form. It presents A (a button) and B (a plain pane)
+as synchronized subsurfaces, and paints the start button in the parent. Red and
+blue are diagnostic colours shared with `hyalo-layer-motion-probe.c` so the same
+pixel oracle can locate them. Click **Start test 5**: both get a 2-second linear
+transition from x=20 to x=300, one parent commit, then the client blocks for
+1.5 seconds without reading, painting or committing. Its log records `MOVED`,
+`AWAKE`, layer-local `PRESS`, and `DONE serial seconds nanoseconds` from Hyalo.
+
+For the separate spring retarget test, press **r**, then **t** mid-flight.
+The responsive client replaces the target while the layer is moving right.
+Hyalo preserves the presented position and velocity, reports `CANCELLED` for
+serials 1/2, then `DONE` for 3/4 when it settles back at x=20. The check asserts
+the position (no jump), the serials and the end; the velocity is proven by Hyalo's
+unit test `a_retargeted_spring_keeps_where_it_is_and_its_velocity`, because a
+screenshot cannot tell when Hyalo applied the retarget. Restart the window
+between tests. Layers repaint only at creation or output scale/size changes.
+
+```sh
+NK_PHASE0_CHECK=nk-layer-motion-check.py \
+  NK_PHASE0_LOG=/tmp/nk-layer-evidence toolkit/phase0/check-headless.sh
+```
+
+The isolated check and Hyalo's tty smoke run at scales **1 and 1.25**. They reuse
+`hyalo-layer-motion-check.py`'s screenshot spans and pointer driving: captures
+at about +250/+550 ms show both layers moving while the client sleeps; a click
+at A's final position misses it, and a click at its visible position reaches it
+inside its own coordinates. Both completion events must have presentation
+timestamps. The original C server probe and its model-position hit-test oracle
+remain in the smoke.
+
+After each baseline, `--control-no-parent-commit` commits just the synchronized
+children: the movement assertion must fail. `--control-client-motion` paints the
+movement in the parent from its frame loop: it cannot advance while blocked,
+so that same assertion must fail. A startup crash or an unrelated failure cannot
+satisfy either control. The retarget sequence checks bounded displacement across
+the new commit and continued forward motion against the new leftward target,
+then cancellation and final position for both layers. Creation also exercises
+64 live layers, rejection of the 65th, slot reclamation and stale-ID rejection.
+
+`report.json`, per-run client logs, PPM screenshot sequences and `cost.json`
+remain under the evidence directory (CI: `toolkit-layer-motion` in the Hyalo
+artifact). Client CPU is measured with `/proc/PID/stat` during the blocked
+interval, not inferred from frame callbacks; it must be near zero. Raw Hyalo
+`stats` retain CPU build/render timings, frame counts and renderer context.
+These isolated harness observations are not a hardware-session benchmark.
+
+Local evidence recorded 2026-10-16 (Arch, isolated cage → nested Hyalo):
+
+| Scale | Client CPU / blocked sample | Hyalo CPU build avg | Hyalo CPU render avg |
+| --- | --- | --- | --- |
+| 1 | 0.000 s / 0.573 s | 0.037 ms | 0.155 ms |
+| 1.25 | 0.000 s / 0.573 s | 0.035 ms | 0.143 ms |
+
+The Hyalo timings are its rolling one-second `stats` window sampled during
+motion (37 drawn frames in each sample), including the harness context. The
+native check passes both scales, both negative controls, retargeting, anchored
+scale, invisible-layer input, inverse coordinates and resize/buffer reuse.
+Repeated paints before the parent commit reuse the pending slot, which becomes
+busy only at the child's commit; an attachment replaced before its first commit
+will never receive a `wl_buffer.release`.
+
+The existing corpus/keyboard/IME pixel regression also passes both scales with
+all four fault controls. The old C probe locally passes placement/movement/input
+but still receives no `done` in this cage setup (the limitation recorded in the
+Hyalo skill); its complete tty run remains CI's evidence. The native window's
+completion events do pass locally. These observations do not claim a CI run.
+
+The cursor association is also checked with a real input-method-v2 popup:
+`hyalo-ime-probe --cursor` draws a diagnostic green candidate pane and records
+its rectangle events. In `--test5`, **o** selects a standard root-local cursor;
+**i** associates the cursor with A. Starting test 5 in this diagnostic mode also
+scales A about its centre. Captures prove the IME pane and its rectangle events
+follow A's presented transform while the client sleeps. **o** afterwards must
+restore the standard root-local rectangle. The control
+`--control-no-cursor-association` leaves the cursor at its old root position and
+must fail specifically at the cursor-following assertion. This is a protocol and
+position test; it does not replace the owner's live fcitx5 language matrix.
+
+The check needs the rebuilt `hyalo-ime-probe` in PATH (the Hyalo smoke builds it).
+`IME_PROBE_BIN` can name a local build. `NK_LAYER_CURSOR_ONLY=1` selects only the
+cursor checks for local iteration; CI runs the complete sequence.

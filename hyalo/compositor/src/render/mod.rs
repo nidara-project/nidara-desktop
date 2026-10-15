@@ -221,6 +221,7 @@ fn push_surface<R: HyaloRenderer>(
             out.extend(e.map(OutputElement::Scrim));
         }
     };
+    crate::protocols::layers::prepare_input_popups(surface, when);
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
         layer(out, popup.wl_surface(), location + offset, Kind::Unspecified);
@@ -271,6 +272,7 @@ pub(super) fn push_material<R: HyaloRenderer>(
 /// The veils a surface tree and its popups cast, for the chrome's floor.
 fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<scrim::ScrimPx> {
     let mut out = Vec::new();
+    crate::protocols::layers::prepare_input_popups(surface, now);
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
         out.extend(scrim::scrims_for(popup.wl_surface(), location + offset, scale, now));
