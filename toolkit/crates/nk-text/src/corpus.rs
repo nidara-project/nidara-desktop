@@ -101,28 +101,16 @@ pub fn load_cases(dir: &Path) -> Result<Vec<Case>> {
     Ok(cases)
 }
 pub fn backend_names() -> Vec<&'static str> {
-    [
-        if cfg!(feature = "parley") {
-            Some("parley")
-        } else {
-            None
-        },
-        if cfg!(feature = "pango") {
-            Some("pango")
-        } else {
-            None
-        },
-    ]
-    .into_iter()
-    .flatten()
-    .collect()
+    let mut names = Vec::new();
+    if cfg!(feature = "parley") {
+        names.push("parley");
+    }
+    names
 }
 pub fn backend(name: &str, fonts: Arc<FontSet>) -> Result<Box<dyn TextBackend>> {
     match name {
         #[cfg(feature = "parley")]
         "parley" => Ok(Box::new(ParleyBackend::new(fonts)?)),
-        #[cfg(feature = "pango")]
-        "pango" => Ok(Box::new(PangoBackend::new(fonts)?)),
         _ => Err(format!("backend feature not enabled: {name}")),
     }
 }

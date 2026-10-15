@@ -1,3 +1,6 @@
+> **Decision record.** Phase-0 comparison run that chose Parley (owner, 2026-10-15,
+> #824). The Pango adapter it measured was removed afterwards; see PR #825 at `ac16cdd7`.
+
 # nk-text corpus evidence
 
 Run UTC: 2026-10-15T14:44:28Z. CPU: AMD Ryzen 5 5600X 6-Core Processor.

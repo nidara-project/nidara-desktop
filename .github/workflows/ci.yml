@@ -54,8 +54,8 @@
 #     warnings, unit tests, then a boot on vkms through its tty backend with the real
 #     shell on it; screenshots via Hyalo's IPC. Not required while Hyalo is a preview.
 #     All logic lives in scripts/ci/hyalo-smoke.sh.
-#   - toolkit: one text corpus on both Parley and Pango, isolated timing/RSS and a
-#     char-backspace negative control. Phase-0 evidence, not a required check.
+#   - toolkit: nk-text's corpus on Parley (the engine phase 0 chose, #824), timing/RSS
+#     and a char-backspace negative control. Not a required check yet.
 #   - sessiond: locked Rust build, clippy and tests; a real private-bus notification
 #     round-trip and GJS client reconnect, preceded by a broken-replaces_id control.
 #   - agent-loop: drive the real Assistant daemon (bin/nidara-agent) through one
@@ -842,10 +842,9 @@ jobs:
       - name: Drive nidara-agent against a mock provider (must succeed)
         run: python3 scripts/ci/agent-loop-test.py
 
-  # Phase 0 produces evidence for the owner; no expected failures or selected engine.
-  # This job is not a required branch-protection check while the kit is experimental.
+  # Not a required branch-protection check while the kit is experimental.
   toolkit:
-    name: Toolkit text (Parley + Pango corpus)
+    name: Toolkit text (nk-text corpus)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -856,9 +855,9 @@ jobs:
             ~/.cargo/registry
             toolkit/target
           key: toolkit-${{ runner.os }}-${{ hashFiles('toolkit/Cargo.lock') }}
-      - name: Install Pango and the shared corpus fonts
+      - name: Install the corpus fonts
         run: |
-          scripts/ci/apt.sh install pkg-config libpango1.0-dev libfontconfig1-dev libharfbuzz-dev fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-inter-variable
+          scripts/ci/apt.sh install fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-inter-variable
       - name: Required-font preflight (no silent substitutions)
         run: cargo run --manifest-path toolkit/Cargo.toml --locked --example corpus-report -- --check-fonts
       - name: Locked build and lint
@@ -866,13 +865,11 @@ jobs:
           cargo fmt --manifest-path toolkit/Cargo.toml --check
           cargo build --manifest-path toolkit/Cargo.toml --locked
           cargo clippy --manifest-path toolkit/Cargo.toml --locked --all-targets -- -D warnings
-          cargo check --manifest-path toolkit/Cargo.toml --locked --no-default-features --features parley
-          cargo check --manifest-path toolkit/Cargo.toml --locked --no-default-features --features pango
       - name: Corpus catches char backspace (must fail at combining-marks)
         run: |
           python3 scripts/ci/nk-text-control.py
           git diff --exit-code -- toolkit/crates/nk-text/src/editor.rs
-      - name: Unit tests and the complete two-backend corpus
+      - name: Unit tests and the complete corpus
         run: cargo test --manifest-path toolkit/Cargo.toml --locked -- --nocapture
       - name: Case table, layout timing and isolated peak RSS
         if: ${{ !cancelled() }}

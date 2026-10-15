@@ -5,15 +5,11 @@
 pub mod corpus;
 mod editor;
 mod fonts;
-#[cfg(feature = "pango")]
-mod pango_backend;
 #[cfg(feature = "parley")]
 mod parley_backend;
 
 pub use editor::{Editor, Movement, Preedit};
 pub use fonts::{FontFile, FontSet};
-#[cfg(feature = "pango")]
-pub use pango_backend::PangoBackend;
 #[cfg(feature = "parley")]
 pub use parley_backend::ParleyBackend;
 use serde::{Deserialize, Serialize};

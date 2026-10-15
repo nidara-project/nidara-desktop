@@ -7,14 +7,11 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["parley", "pango"]
+default = ["parley"]
 parley = ["dep:parley"]
-pango = ["dep:pango", "dep:pangocairo"]
 
 [dependencies]
 parley = { version = "0.12", default-features = false, features = ["std", "complex-scripts"], optional = true }
-pango = { version = "0.21", features = ["v1_50"], optional = true }
-pangocairo = { version = "0.21", optional = true }
 unicode-segmentation = "1.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -1,3 +1,6 @@
+> **Decision record.** Phase-0 comparison run that chose Parley (owner, 2026-10-15,
+> #824). The Pango adapter it measured was removed afterwards; see PR #825 at `ac16cdd7`.
+
 Recorded GitHub Actions run for library/corpus commit `379df952`, before the
 runtime-version reporting and standalone native diagnostic were added. No corpus
 oracle changed. [Job and full control logs](https://github.com/nidara-project/nidara-desktop/actions/runs/38752747681/job/116483097617)

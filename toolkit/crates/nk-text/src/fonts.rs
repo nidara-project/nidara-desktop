@@ -94,20 +94,6 @@ impl FontSet {
         }
         names
     }
-    #[cfg(feature = "pango")]
-    pub(crate) fn resolve(&self, path: &Path, index: u32, coords: &[i16]) -> Result<Font> {
-        let data = self
-            .data
-            .get(path)
-            .ok_or_else(|| {
-                format!(
-                    "backend used a font outside the shared font set: {}",
-                    path.display()
-                )
-            })?
-            .clone();
-        Ok(font(data, index & 0xffff, coords))
-    }
     #[cfg(feature = "parley")]
     pub(crate) fn resolve_bytes(&self, bytes: &[u8], index: u32, coords: &[i16]) -> Result<Font> {
         let data = self

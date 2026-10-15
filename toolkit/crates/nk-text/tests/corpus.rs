@@ -6,7 +6,7 @@ fn corpus_both_backends() {
     let fonts = Arc::new(FontSet::discover_required().expect("required-font preflight failed"));
     let cases = corpus::cases().expect("invalid corpus");
     let names = corpus::backend_names();
-    assert!(!names.is_empty(), "enable parley and/or pango features");
+    assert!(!names.is_empty(), "enable the parley feature");
     let mut results = Vec::new();
     for case in &cases {
         for name in &names {
