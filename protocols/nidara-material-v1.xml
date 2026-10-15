@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="nidara_material_v1">
   <copyright>
-    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-License-Identifier: MIT
   </copyright>
   <description summary="compositor-side materials for Nidara's glass">
     A surface declares the shapes of its glass and how the compositor resolves

@@ -53,7 +53,8 @@ their own desktop — and propose globally useful improvements back upstream.
 | `ui/greeter/` | The login bundle → `build/nidara-greeter` |
 | `ui/lockscreen/` | The lock bundle → `build/nidara-lock` |
 | `ui/installer/` | The live medium's installer → `build/nidara-installer` (not shipped with the desktop) |
-| `ui/lib/` | Shared code + `nidara-kit/`, the reusable widget kit |
+| `ui/lib/` | Shared code + `nidara-kit/`, the reusable widget kit (frozen: #818) |
+| `toolkit/` | The new toolkit in Rust (#818) — phase 0; start at `toolkit/CONTRACT.md` |
 | `hyalo/` | Hyalo, the compositor (Rust) |
 | `lib/` | Our own C libraries with GIR typelibs (PAM auth, Wayland protocols) |
 | `bin/` | Session entry, CLI, IPC, agent, MCP server, portal backend, computer-use helpers |

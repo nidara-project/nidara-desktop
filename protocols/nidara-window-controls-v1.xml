@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <protocol name="nidara_window_controls_v1">
   <copyright>
-    SPDX-License-Identifier: GPL-3.0-or-later
+    SPDX-License-Identifier: MIT
   </copyright>
   <description summary="window controls drawn by the compositor over an app's header">
     A window's controls — close, minimize, maximize — are the compositor's:
