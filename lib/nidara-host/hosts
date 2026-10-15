@@ -1,0 +1,19 @@
+# One native GJS runner per name below; each is its own file in /usr/lib/nidara/
+# so /proc/PID/exe names the program. Read by build.sh, scripts/bundle.sh,
+# the packaging and scripts/ci/native-host-check.py — add a name HERE only.
+#
+# Bundles (scripts/bundle.sh --native-host=<name>):
+nidara-shell
+nidara-settings
+nidara-greeter
+nidara-lock
+nidara-installer
+# Helper scripts in bin/ (their shebang is #!/usr/lib/nidara/<name>):
+nidara-a11y
+nidara-act
+nidara-agent
+nidara-click
+nidara-mcp
+nidara-portal
+nidara-share-chooser
+nidara-type

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-click
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-click — synthetic POINTER click on a third-party app (Phase 2b-ii).
 // The smart half of the pointer: it gates, verifies focus, resolves WHERE to

@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-mcp
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-mcp — MCP (Model Context Protocol) server for Nidara
 // Installed to /usr/bin/nidara-mcp. Speaks MCP over stdio (newline-

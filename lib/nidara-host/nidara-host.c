@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Private module runner for shell and Settings. Embed GJS rather than exec its
+// Private module runner for every Nidara GJS program (./hosts). Embed GJS rather than exec its
 // console so /proc/PID/exe names the application. This is not the gjs CLI:
 // argv[1] is a local ESM file; remaining arguments belong to the application.
 #include <gjs/gjs.h>

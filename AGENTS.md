@@ -48,7 +48,8 @@ their own desktop — and propose globally useful improvements back upstream.
 
 | Path | What |
 |---|---|
-| `ui/shell/` | The desktop bundle → `build/nidara` (bar, dock, overlays, settings) |
+| `ui/shell/` | The desktop bundle → `build/nidara` (bar, dock, overlays) |
+| `ui/settings/` | Settings, its own process → `build/nidara-settings` |
 | `ui/greeter/` | The login bundle → `build/nidara-greeter` |
 | `ui/lockscreen/` | The lock bundle → `build/nidara-lock` |
 | `ui/installer/` | The live medium's installer → `build/nidara-installer` (not shipped with the desktop) |
@@ -58,7 +59,7 @@ their own desktop — and propose globally useful improvements back upstream.
 | `bin/` | Session entry, CLI, IPC, agent, MCP server, portal backend, computer-use helpers |
 | `config/`, `defaults/`, `packaging/` | Compositor config, seeded user state, the Arch package |
 
-**The four bundles are separate applications**, each with its own `app.ts`, `package.json` and
+**The five bundles are separate applications**, each with its own `app.ts`, `package.json` and
 build invocation. That is the first thing to internalize; the skill explains what follows from it.
 
 ## Two traps that waste real time

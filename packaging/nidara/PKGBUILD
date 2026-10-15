@@ -264,17 +264,17 @@ build() {
   sed -i '/@charset/d' ../installer/style.css
   cd ../greeter
   mkdir -p build
-  ../../scripts/bundle.sh app.ts build/nidara-greeter --kit-external=/usr/share/nidara-kit/js
+  ../../scripts/bundle.sh app.ts build/nidara-greeter --native-host=nidara-greeter --kit-external=/usr/share/nidara-kit/js
 
   # Lockscreen (shares the greeter's style.css)
   cd ../lockscreen
   mkdir -p build
-  ../../scripts/bundle.sh app.ts build/nidara-lock --kit-external=/usr/share/nidara-kit/js
+  ../../scripts/bundle.sh app.ts build/nidara-lock --native-host=nidara-lock --kit-external=/usr/share/nidara-kit/js
 
   # Installer (ISO-only package — see package_nidara-installer)
   cd ../installer
   mkdir -p build
-  ../../scripts/bundle.sh app.ts build/nidara-installer
+  ../../scripts/bundle.sh app.ts build/nidara-installer --native-host=nidara-installer
 
   # nidara-input: zwlr_virtual_pointer_v1 client for the computer-use pointer
   # (mirrors install.sh §5 — wayland-scanner generates the protocol glue)
@@ -353,8 +353,11 @@ package_nidara-desktop() {
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"
   install -Dm755 build/nidara-ipc "$pkgdir/usr/bin/nidara-ipc"
-  for host in nidara-shell nidara-settings; do
-    install -Dm755 "build/nidara-host/$host" "$pkgdir/usr/lib/nidara/$host"
+  # One private GJS runner per program (lib/nidara-host/hosts); the installer's
+  # ships with nidara-installer.
+  for host in build/nidara-host/nidara-*; do
+    [ "${host##*/}" = nidara-installer ] && continue
+    install -Dm755 "$host" "$pkgdir/usr/lib/nidara/${host##*/}"
   done
 
   # libnidara-wl + its typelib. The typelib MUST land on the default
@@ -568,6 +571,7 @@ package_nidara-installer() {
   # so it goes straight in /usr/bin — no bin/ launcher of its own, unlike the
   # shell, which needs one to find its assets.
   install -Dm755 ui/installer/build/nidara-installer "$pkgdir/usr/bin/nidara-installer"
+  install -Dm755 build/nidara-host/nidara-installer "$pkgdir/usr/lib/nidara/nidara-installer"
   install -Dm644 ui/installer/style.css "$pkgdir/usr/share/nidara/ui/installer/style.css"
   install -Dm644 packaging/nidara-installer/nidara-installer.desktop \
     "$pkgdir/usr/share/applications/nidara-installer.desktop"

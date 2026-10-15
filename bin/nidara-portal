@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-portal
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-portal — Nidara's xdg-desktop-portal Settings, Wallpaper & Access backend
 // Installed to /usr/bin/nidara-portal, D-Bus-activated as

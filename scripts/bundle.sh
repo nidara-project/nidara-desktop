@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # scripts/bundle.sh — Nidara's bundler. Replaces `ags bundle` (2026-08-18).
 #
-#   scripts/bundle.sh <entry.ts> <outfile> [--native-host=nidara-shell|nidara-settings] [--kit-external=<dir>] [--alias:k=v …]
+#   scripts/bundle.sh <entry.ts> <outfile> [--native-host=<name in lib/nidara-host/hosts>] [--kit-external=<dir>] [--alias:k=v …]
 #   scripts/bundle.sh --js <entry.ts> <out.js> [--kit-external=<dir>] [--alias:k=v …]
 #
 # `--kit-external=<dir>` (#108 phase 3): the app loads nidara-kit from <dir> at
@@ -13,8 +13,8 @@
 # bundled JS base64-encoded, which decodes it to $XDG_RUNTIME_DIR and runs GJS
 # on it. That shape is not a preference — every packaging site (install.sh,
 # packaging/nidara/PKGBUILD) installs ONE file per bundle, so a two-file output
-# would break them silently. Shell/Settings select a private libgjs host installed
-# separately in /usr/lib/nidara; other bundles still use the gjs console.
+# would break them silently. `--native-host` selects a private libgjs host installed
+# separately in /usr/lib/nidara; without it the wrapper runs the gjs console.
 # `--js` emits the plain ESM instead (what run.sh and
 # the offscreen probes want).
 #
@@ -65,10 +65,8 @@ for arg in "$@"; do
     case "$arg" in
         --native-host=*)
             native_host=${arg#*=}
-            case "$native_host" in
-                nidara-shell|nidara-settings) ;;
-                *) echo "bundle.sh: unsupported native host: $native_host" >&2; exit 2 ;;
-            esac ;;
+            grep -qx "$native_host" "$(dirname "$(realpath "$0")")/../lib/nidara-host/hosts" \
+                || { echo "bundle.sh: unsupported native host: $native_host" >&2; exit 2; } ;;
         *) bundle_args+=("$arg") ;;
     esac
 done
