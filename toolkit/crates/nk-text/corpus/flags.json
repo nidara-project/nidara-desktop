@@ -1,0 +1,25 @@
+{
+  "id": "flags",
+  "text": "🇪🇸🇯🇵",
+  "widths": [
+    28,
+    70,
+    200
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "graphemes": [
+      "🇪🇸",
+      "🇯🇵"
+    ],
+    "cluster_count": 2,
+    "require_wrap": true
+  }
+}

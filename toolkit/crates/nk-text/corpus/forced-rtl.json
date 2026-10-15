@@ -1,0 +1,20 @@
+{
+  "id": "forced-rtl",
+  "text": "abc שלום 12",
+  "widths": [
+    140,
+    320
+  ],
+  "style": {
+    "direction": "Rtl"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true
+  }
+}

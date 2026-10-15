@@ -1,0 +1,20 @@
+{
+  "id": "forced-ltr",
+  "text": "שלום abc 12",
+  "widths": [
+    140,
+    320
+  ],
+  "style": {
+    "direction": "Ltr"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "devanagari-matras",
+  "text": "हिन्दी",
+  "widths": [
+    30,
+    90,
+    320
+  ],
+  "style": {
+    "family": "Noto Sans Devanagari"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "graphemes": [
+      "हि",
+      "न्दी"
+    ]
+  }
+}

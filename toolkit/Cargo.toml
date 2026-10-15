@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["crates/nk-text"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "LGPL-3.0-or-later"
+publish = false
+
+[profile.release]
+debug = "line-tables-only"

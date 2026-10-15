@@ -1,0 +1,25 @@
+{
+  "id": "combining-marks",
+  "text": "é ä́",
+  "widths": [
+    20,
+    50,
+    160
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "graphemes": [
+      "é",
+      " ",
+      "ä́"
+    ],
+    "require_wrap": true
+  }
+}

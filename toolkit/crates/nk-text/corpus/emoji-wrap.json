@@ -1,0 +1,20 @@
+{
+  "id": "emoji-wrap",
+  "text": "Family 👨‍👩‍👧 Rainbow 🏳️‍🌈 Flags 🇪🇸🇯🇵",
+  "widths": [
+    95,
+    180,
+    480
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "require_wrap": true
+  }
+}

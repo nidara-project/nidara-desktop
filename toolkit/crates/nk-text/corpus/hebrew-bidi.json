@@ -1,0 +1,34 @@
+{
+  "id": "hebrew-bidi",
+  "text": "שלום 123 abc עולם",
+  "widths": [
+    90,
+    180,
+    480
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "visual_order": [
+      "עולם",
+      "abc",
+      "123",
+      "שלום"
+    ],
+    "visual_movement": true,
+    "selection": {
+      "range": [
+        0,
+        14
+      ],
+      "min_rects": 2
+    },
+    "require_wrap": true
+  }
+}

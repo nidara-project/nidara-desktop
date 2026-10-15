@@ -1,0 +1,19 @@
+{
+  "id": "multiline",
+  "text": "alpha\nשלום 12\n",
+  "widths": [
+    95,
+    180,
+    480
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true
+  }
+}
