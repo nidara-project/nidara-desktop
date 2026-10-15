@@ -133,15 +133,16 @@ def retarget_check(phys, ya, yb, scale):
     wait(lambda: 'RETARGETED' in m.lines(), 'no retarget')
     immediate = m.shot('retarget-immediate')
     t3 = time.monotonic()
-    time.sleep(.055)
-    continuing = m.shot('retarget-velocity')
+    # The kept VELOCITY is not asserted here: screenshots cannot date the moment Hyalo applied the
+    # retarget. On CI (2026-10-15) the key, the client and the capture took long enough for this
+    # spring to pass its peak and turn back before the first capture, so "still moving right"
+    # failed with Hyalo right. Hyalo's unit test a_retargeted_spring_keeps_where_it_is_and_its_velocity
+    # (protocols/layers.rs) proves it with no clock; this asserts the end-to-end path around it.
     for i,(y,c) in enumerate([(ya,m.RED),(yb,m.BLUE)]):
         at = m.span(immediate,y,c)
-        after = m.span(continuing,y,c)
-        assert at and after, 'retarget layer disappeared'
+        assert at, 'retarget layer disappeared'
         speed=(p2[i][0]-p1[i][0])/(t2-t1)
         assert abs(at[0]-p2[i][0]) <= max(12*scale, speed*(t3-t2)*1.8+4*scale), 'retarget jumped instead of starting at presentation'
-        assert after[0] > p2[i][0]+2*scale, 'spring lost forward velocity on retarget'
     wait(lambda: 'CANCELLED 1' in m.lines() and 'CANCELLED 2' in m.lines(), 'missing cancellations')
     wait(lambda: all(any(l.startswith(f'DONE {i} ') for l in m.lines()) for i in (3,4)), 'retarget never settled',seconds=10)
     assert not any(l.startswith('DONE 1 ') or l.startswith('DONE 2 ') for l in m.lines()), 'replaced transition completed'
@@ -149,7 +150,7 @@ def retarget_check(phys, ya, yb, scale):
     for y,c in [(ya,m.RED),(yb,m.BLUE)]:
         pos=m.span(end,y,c)
         assert pos and abs(pos[0]-phys(20))<=2, 'retarget missed final position'
-    print('PASS spring retarget: continuous position/forward velocity, cancelled old serials, done new serials',flush=True)
+    print('PASS spring retarget: continuous position, cancelled old serials, done new serials',flush=True)
     m.control('key 22')  # u: scale A about its centre; fade B out.
     wait(lambda: all(any(l.startswith(f'DONE {i} ') for l in m.lines()) for i in (5,6)), 'scale/opacity did not finish')
     transformed=m.shot('scale-opacity')

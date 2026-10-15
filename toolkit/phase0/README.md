@@ -199,7 +199,10 @@ transition from x=20 to x=300, one parent commit, then the client blocks for
 For the separate spring retarget test, press **r**, then **t** mid-flight.
 The responsive client replaces the target while the layer is moving right.
 Hyalo preserves the presented position and velocity, reports `CANCELLED` for
-serials 1/2, then `DONE` for 3/4 when it settles back at x=20. Restart the window
+serials 1/2, then `DONE` for 3/4 when it settles back at x=20. The check asserts
+the position (no jump), the serials and the end; the velocity is proven by Hyalo's
+unit test `a_retargeted_spring_keeps_where_it_is_and_its_velocity`, because a
+screenshot cannot tell when Hyalo applied the retarget. Restart the window
 between tests. Layers repaint only at creation or output scale/size changes.
 
 ```sh
