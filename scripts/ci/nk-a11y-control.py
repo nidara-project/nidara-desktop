@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Prove both providers' unit tests detect a broken shared privacy boundary."""
+"""Prove the provider's unit tests detect a broken shared privacy boundary."""
 from pathlib import Path
 import subprocess
 
@@ -16,8 +16,8 @@ try:
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     print(result.stdout)
     assert result.returncode != 0, 'password leak was not caught'
-    for backend in ['accesskit_backend', 'atspi_backend']:
+    for backend in ['atspi_backend']:
         assert any(backend in line and 'FAILED' in line for line in result.stdout.splitlines()), f'{backend} did not detect the password leak'
 finally:
     SOURCE.write_text(original)
-print('Both providers caught the broken password boundary; source restored.')
+print('The provider caught the broken password boundary; source restored.')

@@ -202,12 +202,10 @@ impl Form {
         let before = rss();
         let backend_start = Instant::now();
         form.backend = Some(match backend_name {
-            "accesskit" => Box::new(nk_a11y::accesskit_backend::Backend::new(tree, callback)?)
-                as Box<dyn A11yBackend>,
             "atspi" => Box::new(nk_a11y::atspi_backend::Backend::new(tree, callback)?)
                 as Box<dyn A11yBackend>,
             "none" => Box::new(NoBackend),
-            _ => return Err("--a11y must be accesskit, atspi or none (measurement)".into()),
+            _ => return Err("--a11y must be atspi or none (measurement)".into()),
         });
         eprintln!(
             "A11Y_INIT backend={backend_name} tree_build_us={build_us} rss_before_kib={before} rss_after_kib={} backend_init_us={}",

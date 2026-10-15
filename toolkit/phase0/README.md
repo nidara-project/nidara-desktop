@@ -146,7 +146,7 @@ a screenshot of an empty scroll target.
 
 ## The accessible form (test 3, #830)
 
-`--a11y accesskit` and `--a11y atspi` open the same concrete retained form,
+`--a11y atspi` opens the concrete retained form (`--a11y none` is the no-provider baseline for measurements),
 with the corpus below it (scroll that area). Name is the text-input-v3 field;
 Password uses a masked editor with no surrounding text or accessible content.
 Tab/Shift+Tab cycle Name → Password → Language → Remember me → Review. Space

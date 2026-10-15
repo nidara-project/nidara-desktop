@@ -306,7 +306,7 @@ def main():
         baseline.terminate();baseline.wait(timeout=5);pump(.2)
 
     controls=['tree','name','role','geometry','focus','text','caret','selection','password','expanded','dropdown','collapse','state','dialog','error','restore','action']
-    for backend in os.environ.get('NK_A11Y_BACKENDS','accesskit atspi').split():
+    for backend in os.environ.get('NK_A11Y_BACKENDS','atspi').split():
         report[backend]={'controls':{},'checks':{},'costs':{}}
         if os.environ.get('NK_A11Y_CONTROLS','1')!='0':
             for stage in controls:

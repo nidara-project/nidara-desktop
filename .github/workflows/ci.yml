@@ -873,7 +873,6 @@ jobs:
       - name: Accessibility feature isolation and password leak control
         run: |
           cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features
-          cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features --features accesskit
           cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features --features atspi
           python3 scripts/ci/nk-a11y-control.py
       - name: Corpus catches char backspace (must fail at combining-marks)

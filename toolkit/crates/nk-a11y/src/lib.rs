@@ -6,8 +6,6 @@ use std::{
     ops::Range,
     sync::Arc,
 };
-#[cfg(feature = "accesskit")]
-pub mod accesskit_backend;
 #[cfg(feature = "atspi")]
 pub mod atspi_backend;
 pub type Result<T> = std::result::Result<T, String>;

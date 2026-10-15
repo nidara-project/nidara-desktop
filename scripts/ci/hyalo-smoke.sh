@@ -726,8 +726,8 @@ phase_run() {
         || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
     cat /tmp/hyalo/nk-phase0.log
 
-    # Test 3: both a11y providers, consumed through libatspi like Orca. Every
-    # oracle has a negative control. Any backend failure stays a failing check.
+    # Test 3: the direct AT-SPI provider, consumed through libatspi like Orca.
+    # Every oracle has a negative control.
     NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-a11y-check.py" \
         > /tmp/hyalo/nk-a11y.log 2>&1 \
         || { cat /tmp/hyalo/nk-a11y.log; exit 1; }

@@ -1,4 +1,10 @@
-# nk-a11y — phase 0, test 3 (#830)
+# nk-a11y — the semantic tree and its AT-SPI provider
+
+Accessibility is a **direct AT-SPI provider over zbus** (owner, 2026-10-15, #830):
+phase 0 ran the same Orca-style walk against it and against AccessKit, it passed
+17/17 and AccessKit 15/17 (see [Why direct AT-SPI](#why-direct-at-spi)). The
+AccessKit adapter was removed once the choice was made; it is in PR #834's history
+at `44074fd0` if a comparison ever has to be rerun.
 
 The window owns a `Tree` of `Node`s: stable nonzero IDs, roles, labels,
 descriptions, states, allowed actions, model bounds and child IDs. IDs belong to
@@ -17,11 +23,9 @@ application thread. A caret request is a degenerate selection. The app checks
 that the control still exists, is enabled in the active modal context and allows
 the operation. Its editor enforces grapheme boundaries.
 
-Both default features, `accesskit` and `atspi`, implement `A11yBackend::update`:
+The `atspi` feature (default) implements `A11yBackend::update`; the trait stays
+so another provider can be measured against the same walk:
 
-- `accesskit_backend::Backend`: AccessKit 0.25.1, accesskit_unix 0.24.0; real
-  text-run children with UTF-8 character lengths, word starts, per-layout-line
-  runs and selection positions. AccessKit derives and sends platform events.
 - `atspi_backend::Backend`: independent zbus provider, Accessible, Application,
   Component, Action, Text and EditableText. It discovers the AT-SPI bus through
   `org.a11y.Bus`, embeds the application in the registry, serves current model
@@ -29,19 +33,17 @@ Both default features, `accesskit` and `atspi`, implement `A11yBackend::update`:
   The optional Cache endpoint returns an empty initial cache: consumers use
   Accessible queries. This prototype does not implement a cache optimization.
 
-Both redact a password's `TextInfo` **before** retaining a platform snapshot or
-computing events. The password has no value, runs, boundaries, caret, selection
-or length. The direct backend omits Text; AccessKit may expose a zero-length
-Text interface for its password role. Neither permits reading or editing a
-password via accessibility. Unit tests query both projections, including a
+The tree redacts a password's `TextInfo` **before** the provider retains a
+snapshot or computes events. The password has no value, runs, boundaries, caret,
+selection or length, and the provider omits Text for it: it cannot be read or
+edited through accessibility. Unit tests query the projection, including a
 malformed caller that supplies password text, and the mutation check removes the
-shared redaction and requires **both** tests to fail. Password content also stays
+shared redaction and requires the provider's test to fail. Password content also stays
 out of the IME's surrounding text and the clipboard copy/cut path.
 
 Bounds are logical model coordinates in the containing native window. Wayland
 does not supply global window origins; these are not claimed as desktop-screen
-coordinates. The direct provider explicitly refuses other coordinate frames;
-AccessKit receives no invented root-window screen position.
+coordinates. The provider explicitly refuses other coordinate frames.
 
 ## Checks
 
@@ -50,7 +52,6 @@ From the repository root:
 ```sh
 cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y
 cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features
-cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features --features accesskit
 cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features --features atspi
 python3 scripts/ci/nk-a11y-control.py
 ```
@@ -71,11 +72,11 @@ NK_PHASE0_CHECK=nk-a11y-check.py NK_PHASE0_LOG=/tmp/nk-a11y-evidence \
 `HYALO_BIN` and `NK_PHASE0_BIN` override the binaries. `hyalo-ime-probe` must be
 in PATH. The driver starts the registry explicitly inside the private bus
 instead of allowing a development machine's user systemd instance to activate
-it. `IsEnabled` activates AccessKit. Input enters through `HYALO_CONTROL` and
+it. It sets `IsEnabled`, as a running screen reader does. Input enters through `HYALO_CONTROL` and
 the existing input-method-v2 probe; the **oracle is libatspi**, as used by Orca,
 not the application's state or log. Do not run the driver against a live bus.
 
-The driver disables client caching for both providers, refreshes current queries
+The driver disables client caching, refreshes current queries
 and verifies events separately; this does not prove Orca cache behavior.
 
 The driver walks roles/names/states and Component model bounds, tabs the whole form, inserts `日本🙂 word`,
@@ -92,30 +93,36 @@ under `NK_PHASE0_LOG`; CI uploads them with `hyalo-artifacts`. A non-passing
 backend leaves the command and CI **failing**. There is no expected-failure list,
 no automatic backend choice and no claim that a scripted walk replaces Orca.
 
-`NK_A11Y_BACKENDS=atspi` can isolate a backend while investigating;
 `NK_A11Y_CONTROLS=0` isolates the baseline. Neither is used by CI. Costs compare
 mapped idle RSS to the identical `--a11y none` form, include tree-build and
 backend-initialization times, and count the platform events observed for one
-Backspace. AccessKit initialization is asynchronous, so its synchronous
-constructor time alone is not an activation-time comparison. The report records
+Backspace. The report records
 build mode and environment; nested/headless CPU figures are not GPU benchmarks.
 
-## Comparison
+## Why direct AT-SPI
 
-The committed `EVIDENCE.md` records the actual run, version/build details, one
-check-by-backend table and the measured costs. It records failures as failures.
-The owner chooses a backend after the live Orca walk below; this change does not
-choose one or declare test 3 passed.
+Phase 0's gate test 3 ran one walk, driven through libatspi as Orca consumes it,
+against both providers; [EVIDENCE.md](EVIDENCE.md) is the decision record.
 
-## Owner's live Orca walk (both backends)
+| | Direct AT-SPI | AccessKit 0.25 |
+|---|---|---|
+| Walk (17 checks, each with its control) | 17/17 | 15/17 |
+| RSS added to the window | 2.0 MiB | 3.1 MiB |
+
+AccessKit's two failures were the dropdown's **expanded** state and the error
+field's **invalid-entry** state. The adapter set both (`set_expanded`,
+`set_invalid`); the pinned `accesskit_atspi_common` did not project them to
+AT-SPI states. libatspi also rejected some of AccessKit's cache signals. The
+direct provider is also what lets the tree become the agents' projection later
+(#818) without a second translation layer.
+
+## Owner's live Orca walk
 
 Use a Hyalo session with Orca enabled, keyboard echo of characters and selection
 announcements enabled, and a terminal to launch each backend in turn:
 
 ```sh
 wl-copy '日本🙂 word'
-toolkit/target/release/nk-phase0 --a11y accesskit
-# Repeat the entire walk after closing the app:
 toolkit/target/release/nk-phase0 --a11y atspi
 ```
 

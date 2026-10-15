@@ -1,3 +1,7 @@
+> **Decision record.** Phase-0 comparison that chose the direct AT-SPI provider (owner,
+> 2026-10-15, #830). The AccessKit adapter it measured was removed afterwards; see PR #834 at
+> `44074fd0`. Its raw AccessKit event/tree dumps went with it.
+
 # Test 3 — measured evidence (#830)
 
 2026-10-15. Release `nk-phase0`, CPU/wl_shm, on Hyalo built from the branch base
