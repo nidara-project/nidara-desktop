@@ -3,10 +3,12 @@
 //! logical pixels; only Frame's buffer dimensions are physical pixels.
 mod ime;
 mod keyboard;
+mod material;
 mod protocol;
 pub use ime::{ImeBatch, TextInput};
 pub use keyboard::Key;
 use keyboard::Keyboard;
+pub use material::{Glass, Material, Pane, Shadow, Tone};
 use memmap2::MmapMut;
 use protocol::material::{nidara_material_manager_v1, nidara_material_v1};
 use std::{
@@ -60,15 +62,7 @@ pub enum Event {
 pub trait Application {
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()>;
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>>;
-    fn panes(&self) -> Vec<Pane>;
-}
-#[derive(Clone, Copy, Debug)]
-pub struct Pane {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
-    pub radius: f64,
+    fn material(&self) -> Option<Material>;
 }
 struct Buffer {
     proxy: wl_buffer::WlBuffer,
@@ -352,14 +346,38 @@ impl Window {
         surface.set_buffer_scale(1);
         if let Some(m) = &self.material {
             m.clear_shapes();
-            if !self.skip_material {
-                // Measured panel material: glass-material.ts TONES.panel.dark.
-                m.set_glass(0., 0., 0., 0., 0., 0., 40., 0.5, 0.);
-                m.set_lensing(0.);
-                m.set_tone(1.3, 0.35, 0.125, 1.125, 0., 0., 0., 0., 0.8, 0.125, 0.5);
-                m.set_shadow(0.013, 0.175, 2., 17., 8.);
-                for p in app.panes() {
-                    m.add_shape(p.x, p.y, p.width, p.height, p.radius, 2.);
+            m.clear_glass();
+            if !self.skip_material
+                && let Some(material) = app.material()
+            {
+                let glass = material.glass;
+                // The protocol's old tint/alpha/saturation arguments are inert.
+                m.set_glass(0., 0., 0., 0., 0., 0., glass.refraction, glass.rim, 0.);
+                m.set_lensing(glass.lensing);
+                let tone = material.tone;
+                m.set_tone(
+                    tone.saturation,
+                    tone.ceiling,
+                    tone.lift,
+                    tone.gain,
+                    tone.wash[0],
+                    tone.wash[1],
+                    tone.wash[2],
+                    tone.wash[3],
+                    tone.ambient,
+                    tone.ambient_lift,
+                    tone.ambient_gain,
+                );
+                let shadow = material.shadow;
+                m.set_shadow(
+                    shadow.opacity_small,
+                    shadow.opacity_large,
+                    shadow.blur_small,
+                    shadow.blur_large,
+                    shadow.offset,
+                );
+                for p in material.shapes {
+                    m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
                 }
             }
         }

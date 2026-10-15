@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Phase 0's retained tree: root -> field + corpus labels. IDs are allocated once,
 //! measure and place are separate, focus and pointer capture name one node.
+mod material;
 mod palette;
 use nk_render::{Canvas, offset};
 use nk_text::{
     Affinity, Caret, Editor, FontSet, Layout, Movement, ParleyBackend, Point, Rect, Size,
     TextBackend, TextStyle, corpus, grapheme_boundaries,
 };
-use nk_wayland::{Application, Event, Frame, ImeBatch, Key, Pane, TextInput, Window};
+use nk_wayland::{Application, Event, Frame, ImeBatch, Key, Material, TextInput, Window};
 use std::{sync::Arc, time::Instant};
 type Result<T> = std::result::Result<T, String>;
 type NodeId = u64;
@@ -511,14 +512,8 @@ impl Application for App {
         c.pop_clip();
         Ok(c.finish())
     }
-    fn panes(&self) -> Vec<Pane> {
-        vec![Pane {
-            x: 16.,
-            y: 8.,
-            width: (self.width - 32.) as f64,
-            height: (self.height - 16.) as f64,
-            radius: 24.,
-        }]
+    fn material(&self) -> Option<Material> {
+        Some(material::panel(self.width, self.height))
     }
 }
 fn contains(r: Rect, p: Point) -> bool {

@@ -102,6 +102,9 @@ Do not mark test 2 passed from the scripted CI probe alone. IBus is not promised
 
 ## Boundaries still ahead
 
+The toolkit does not own its tokens yet. Its own token source and appearance
+model belong to phase 1; the build-time shell token import is a phase-0 bridge.
+
 There is one normal editable field, no form, password UI, accessibility adapter,
 menus, dialogs, dropdowns, layer-animation client or GPU/dmabuf path. Those belong
 to later issues. `nk-wayland::TextInput` already enforces the password wire rule:
@@ -114,7 +117,10 @@ pointer until release (focus loss releases capture). There is no widget library.
 The CPU renderer takes font bytes, face index, normalized variations and glyph
 positions directly from `nk-text`, including Noto bitmap emoji. Buffers are native
 ARGB8888, premultiplied sRGB; only a released shm slot is written. Fractional scale
-changes buffer dimensions and viewport destination together; material shapes,
+changes buffer dimensions and viewport destination together. The app supplies
+`Material` (glass, tone, shadow and shapes) with its frame; `nk-wayland` only
+transmits it, without panel look defaults. Phase 0's measured panel values live
+in `src/material.rs`, referencing `glass-material.ts`. Material shapes,
 input and IME rectangles remain in logical pixels and land with the same commit.
 
 Keymap descriptors can share their file offset with the compositor and later
@@ -134,6 +140,6 @@ probe reports that cause and the integration check requires the IME echo.
 The initial `--case` scroll target stays anchored through provisional layouts
 and the post-map viewport constraint, until user input takes over. Consuming it
 on the first paint clips the last case when Hyalo constrains the floating window
-only after seeing its first buffer. The
-CI gallery requires red and blue bitmap pixels of the final rainbow flag inside
-the visible pane, rather than just taking a screenshot of an empty scroll target.
+only after seeing its first buffer. The CI gallery requires red and blue bitmap
+pixels of the final rainbow flag inside the visible pane, rather than just taking
+a screenshot of an empty scroll target.
