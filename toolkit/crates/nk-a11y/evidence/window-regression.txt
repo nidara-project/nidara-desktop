@@ -1,0 +1,19 @@
+PASS mapped, glass, keyboard, preedit/replace/cancel/commit, clipboard, undo/redo
+CONTROL PASS unmapped: mapped: nk-phase0 did not map
+CONTROL PASS no-material: glass: Hyalo has no committed panes
+CONTROL PASS no-keyboard: keyboard: typed glyphs did not appear
+CONTROL PASS no-preedit: preedit: composition did not appear
+PASS mapped, glass, keyboard, preedit/replace/cancel/commit, clipboard, undo/redo
+# One-window observations
+
+Client log lines include font discovery, layout and CPU paint.
+
+## baseline
+
+- `FIRST_FRAME_CALLBACK_MS=148.275 VmRSS:	   53924 kB`
+
+## scale125
+
+- `FIRST_FRAME_CALLBACK_MS=130.632 VmRSS:	   53912 kB`
+
+NK PHASE0 CHECK PASSED

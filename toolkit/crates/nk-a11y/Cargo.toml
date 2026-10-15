@@ -1,0 +1,18 @@
+[package]
+name = "nk-a11y"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["accesskit", "atspi"]
+accesskit = ["dep:accesskit", "dep:accesskit_unix"]
+atspi = ["dep:zbus", "dep:atspi-common"]
+
+[dependencies]
+accesskit = { version = "0.25.1", optional = true }
+accesskit_unix = { version = "0.24.0", optional = true }
+zbus = { version = "5.19", optional = true }
+atspi-common = { version = "0.14", optional = true }

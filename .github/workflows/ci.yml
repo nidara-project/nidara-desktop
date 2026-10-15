@@ -849,7 +849,7 @@ jobs:
 
   # Not a required branch-protection check while the kit is experimental.
   toolkit:
-    name: Toolkit (Rust build, text and CPU render)
+    name: Toolkit (Rust build, text, CPU render and a11y)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -870,6 +870,12 @@ jobs:
           cargo fmt --manifest-path toolkit/Cargo.toml --all --check
           cargo build --manifest-path toolkit/Cargo.toml --locked --workspace
           cargo clippy --manifest-path toolkit/Cargo.toml --locked --workspace --all-targets -- -D warnings
+      - name: Accessibility feature isolation and password leak control
+        run: |
+          cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features
+          cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features --features accesskit
+          cargo test --manifest-path toolkit/Cargo.toml --locked -p nk-a11y --no-default-features --features atspi
+          python3 scripts/ci/nk-a11y-control.py
       - name: Corpus catches char backspace (must fail at combining-marks)
         run: |
           python3 scripts/ci/nk-text-control.py

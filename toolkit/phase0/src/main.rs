@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Phase 0's retained tree: root -> field + corpus labels. IDs are allocated once,
 //! measure and place are separate, focus and pointer capture name one node.
+mod form;
 mod material;
 mod palette;
 use nk_render::{Canvas, offset};
@@ -522,6 +523,27 @@ fn contains(r: Rect, p: Point) -> bool {
 fn main() {
     let start = Instant::now();
     let args: Vec<_> = std::env::args().skip(1).collect();
+    let backend = args
+        .windows(2)
+        .find(|a| a[0] == "--a11y")
+        .map(|a| a[1].as_str());
+    if let Some(backend) = backend {
+        let result = form::Form::new(&args, backend).and_then(|app| {
+            nk_wayland::run(
+                app,
+                nk_wayland::Options {
+                    material: true,
+                    map: true,
+                },
+                start,
+            )
+        });
+        if let Err(e) = result {
+            eprintln!("nk-phase0: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let result = App::new(&args).and_then(|app| {
         nk_wayland::run(
             app,

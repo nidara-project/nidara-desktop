@@ -105,11 +105,11 @@ Do not mark test 2 passed from the scripted CI probe alone. IBus is not promised
 The toolkit does not own its tokens yet. Its own token source and appearance
 model belong to phase 1; the build-time shell token import is a phase-0 bridge.
 
-There is one normal editable field, no form, password UI, accessibility adapter,
-menus, dialogs, dropdowns, layer-animation client or GPU/dmabuf path. Those belong
-to later issues. `nk-wayland::TextInput` already enforces the password wire rule:
+The no-flag corpus/IME mode has one normal editable field. The test-3 form and
+its two accessibility adapters are available with `--a11y` (below). Menus, a
+layer-animation client and the GPU/dmabuf path remain in later issues. `nk-wayland::TextInput` already enforces the password wire rule:
 no surrounding text for password purpose, including resetting prior context on a
-purpose change. The UI's password/Orca evidence waits for test 3.
+purpose change. The test-3 form applies that password rule; its live Orca gate is still the owner's.
 
 The app retains stable node IDs and distinct layout/paint/semantics invalidation;
 measure precedes place, one node owns focus, and the pressed node captures the
@@ -143,3 +143,39 @@ on the first paint clips the last case when Hyalo constrains the floating window
 only after seeing its first buffer. The CI gallery requires red and blue bitmap
 pixels of the final rainbow flag inside the visible pane, rather than just taking
 a screenshot of an empty scroll target.
+
+## The accessible form (test 3, #830)
+
+`--a11y accesskit` and `--a11y atspi` open the same concrete retained form,
+with the corpus below it (scroll that area). Name is the text-input-v3 field;
+Password uses a masked editor with no surrounding text or accessible content.
+Tab/Shift+Tab cycle Name → Password → Language → Remember me → Review. Space
+and Enter activate controls; arrows choose an open dropdown, Enter commits and
+Escape closes it. Review opens a second **xdg toplevel on the same
+connection**, with `set_parent` naming the form's toplevel. It asks for `correct`
+to replace the initial invalid `wrong`; Save refuses the invalid value. Closing
+or Escape returns focus to Review. The modal tree disables the parent's controls.
+
+The test form has the same layout → placement and paint/semantics invalidation
+boundaries as the corpus window. Pointer capture belongs to the pressed control
+until release. Accessibility actions queue to the application's connection
+thread and use the same editing/focus/activation paths as input. Its prototype
+idle hook polls the request channel every 16 ms; that is not a phase-1 event-loop
+API or an idle-power target. The native host destroys a closed dialog's role
+and surface explicitly (dropping a Wayland Rust proxy does not do that).
+
+A modal event queue must discard the parent's copies of the dialog's keyboard
+stream: every `wl_keyboard` on the connection receives it. `run_dialog` records
+the ending serial so the parent's queue cannot replay the correction and Tab
+keys into the form after closing. This is tested by closing, restoring focus,
+opening a second dialog and closing it by Escape.
+
+The existing no-flag invocation keeps tests 1/2/4's pixel-probe layout stable.
+`--a11y none` paints the identical test-3 form without a platform adapter, solely
+for the comparison's RSS baseline. The two accessibility features remain enabled
+by default; selecting a runtime backend does not change that build coverage.
+
+The AT-SPI walk, fault controls, comparison and exact live Orca steps are in
+`crates/nk-a11y/README.md`. Run the private harness with
+`NK_PHASE0_CHECK=nk-a11y-check.py`; it reports and exits nonzero for **any**
+backend failure. A scripted pass does not declare the real Orca walk passed.

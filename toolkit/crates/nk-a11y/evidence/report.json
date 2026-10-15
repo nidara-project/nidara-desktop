@@ -1,0 +1,96 @@
+{
+  "accesskit": {
+    "controls": {
+      "tree": "caught",
+      "name": "caught",
+      "role": "caught",
+      "geometry": "caught",
+      "focus": "caught",
+      "text": "caught",
+      "caret": "caught",
+      "selection": "caught",
+      "password": "caught",
+      "expanded": "FAIL: baseline also fails; discrimination not proved",
+      "dropdown": "caught",
+      "collapse": "caught",
+      "state": "caught",
+      "dialog": "caught",
+      "error": "FAIL: baseline also fails; discrimination not proved",
+      "restore": "caught",
+      "action": "caught"
+    },
+    "checks": {
+      "tree": "PASS",
+      "name": "PASS",
+      "role": "PASS",
+      "geometry": "PASS",
+      "focus": "PASS",
+      "text": "PASS",
+      "caret": "PASS",
+      "selection": "PASS",
+      "password": "PASS",
+      "expanded": "FAIL",
+      "dropdown": "PASS",
+      "collapse": "PASS",
+      "state": "PASS",
+      "dialog": "PASS",
+      "error": "FAIL",
+      "restore": "PASS",
+      "action": "PASS"
+    },
+    "costs": {
+      "rss_kib": 59704,
+      "events_per_backspace": 2,
+      "init": "A11Y_INIT backend=accesskit tree_build_us=9 rss_before_kib=48976 rss_after_kib=49688 backend_init_us=118",
+      "no_backend_rss_kib": 56608,
+      "rss_added_kib": 3096
+    }
+  },
+  "atspi": {
+    "controls": {
+      "tree": "caught",
+      "name": "caught",
+      "role": "caught",
+      "geometry": "caught",
+      "focus": "caught",
+      "text": "caught",
+      "caret": "caught",
+      "selection": "caught",
+      "password": "caught",
+      "expanded": "caught",
+      "dropdown": "caught",
+      "collapse": "caught",
+      "state": "caught",
+      "dialog": "caught",
+      "error": "caught",
+      "restore": "caught",
+      "action": "caught"
+    },
+    "checks": {
+      "tree": "PASS",
+      "name": "PASS",
+      "role": "PASS",
+      "geometry": "PASS",
+      "focus": "PASS",
+      "text": "PASS",
+      "caret": "PASS",
+      "selection": "PASS",
+      "password": "PASS",
+      "expanded": "PASS",
+      "dropdown": "PASS",
+      "collapse": "PASS",
+      "state": "PASS",
+      "dialog": "PASS",
+      "error": "PASS",
+      "restore": "PASS",
+      "action": "PASS"
+    },
+    "costs": {
+      "rss_kib": 58688,
+      "events_per_backspace": 3,
+      "init": "A11Y_INIT backend=atspi tree_build_us=7 rss_before_kib=49048 rss_after_kib=51332 backend_init_us=5384",
+      "no_backend_rss_kib": 56608,
+      "rss_added_kib": 2080
+    }
+  }
+}
