@@ -67,6 +67,15 @@ pub struct WindowInfo {
     /// Where Hyalo draws its controls (protocols/window_controls.rs): x, y, width, height,
     /// global logical px; none when the app reserved no room for them and has no title bar.
     pub controls: Option<[f64; 4]>,
+    /// Material committed on this toplevel's root surface (toolkit phase 0).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub glass: Option<WindowGlassInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WindowGlassInfo {
+    pub shapes: usize,
+    pub compositor_paints: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

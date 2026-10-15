@@ -45,7 +45,7 @@ phase_deps() {
         wayland-protocols hyprland-protocols wlr-protocols \
         jq librsvg dconf file procps-ng \
         grim slurp wl-clipboard wf-recorder ffmpeg xorg-xwayland \
-        ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts-emoji
+        ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji
     ldconfig
 }
 
@@ -58,6 +58,10 @@ phase_build() {
     log "cargo test…"
     cargo test --locked
     install -Dm755 target/release/nidara-hyalo /usr/local/bin/nidara-hyalo
+
+    # The native toolkit client: its build/lint/tests are the toolkit job;
+    # its real input/material/IME pixel checks run below on this vkms Hyalo.
+    cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0
 
     # The shell, as the Hyprland smoke builds it (schemas, libnidara-wl, sheets, bundle).
     install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO"/config/gsettings/*.gschema.xml
@@ -202,6 +206,7 @@ phase_run() {
         for f in /tmp/hyalo/*/*.png; do
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
+        if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
             echo "─── hyalo.log (tail) ───"; tail -n 60 "$hyalo_log" 2>/dev/null || true
@@ -708,8 +713,18 @@ phase_run() {
     if /tmp/hyalo/nidara-ipc toggleControlCenter >/dev/null 2>&1; then
         sleep 2
         nidara-hyalo msg screenshot /tmp/hyalo/control-center.png >/dev/null || true
+        # Release its focus grab before the native toolkit's input checks.
+        /tmp/hyalo/nidara-ipc toggleControlCenter >/dev/null 2>&1 || true
     fi
     log "screenshots taken"
+
+    # Toolkit phase 0 tests 1, 2 and 4: real window, committed material,
+    # virtual keyboard, scripted input method, clipboard; each oracle is broken
+    # independently and must fail for its own reason. Screenshots join artifacts.
+    NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-phase0-check.py" \
+        > /tmp/hyalo/nk-phase0.log 2>&1 \
+        || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
+    cat /tmp/hyalo/nk-phase0.log
 
     # ── 4. The same log bar as the Hyprland smoke.
     kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died"; exit 1; }

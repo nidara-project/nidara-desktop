@@ -1,0 +1,12 @@
+[package]
+name = "nk-phase0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nk-text = { path = "../crates/nk-text" }
+nk-render = { path = "../crates/nk-render" }
+nk-wayland = { path = "../crates/nk-wayland" }
