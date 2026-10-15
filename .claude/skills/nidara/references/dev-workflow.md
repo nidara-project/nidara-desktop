@@ -44,7 +44,7 @@ Two modes:
 ### Upstream dependencies
 
 **Zero external Astal dependencies (since 2026-08-20).**
-All previous Astal services were absorbed into native TypeScript (`core/`), the application host and bundler are native (`ui/lib/nidara-kit/platform/host.ts`, `scripts/bundle.sh`), and PAM authentication is native C (`lib/nidara-auth/`, `gi://NidaraAuth`).
+Previous Astal services were absorbed into native TypeScript (`core/`); notifications now live in the Rust session daemon (`session/`, #819), the application host and bundler are native (`ui/lib/nidara-kit/platform/host.ts`, `scripts/bundle.sh`), and PAM authentication is native C (`lib/nidara-auth/`, `gi://NidaraAuth`).
 
 ⚠️ **The layer-shell preload goes to `gjs` alone, never `export`ed by a launcher.** The bundle
 `scripts/bundle.sh` writes and `scripts/run.sh` both put `LD_PRELOAD=libgtk4-layer-shell.so` on
@@ -121,6 +121,18 @@ other way round from the outside** (`pacman -U` into a scratch root under `faker
 - locale
 
 ### Install targets
+
+The independent session daemon is built in both dev installs and the PKGBUILD:
+`cd session && cargo build --release --locked` (the package first fetches crates in
+`prepare()` and adds `--offline` in `build()`). `rust` is a direct makedependency,
+so the dependency extraction in install.sh includes it without pulling Hyalo's
+extra build dependencies. Binary: `/usr/bin/nidara-sessiond`; unit:
+`/usr/lib/systemd/user/nidara-sessiond.service`, beside `nidara.service`, in
+`package_nidara-desktop()`. No enable step and no public D-Bus activation file.
+The two compositor configs start it explicitly; `Type=dbus` and shell ordering
+wait for the private name. Dev UI reloads do not rebuild or restart the daemon.
+After changing Rust, rebuild/install the binary and restart its unit deliberately.
+
 
 - `/usr/bin/{nidara, nidara-ui, nidara-greeter, nidara-lock, nidara-game-mode, nidara-setup, nidara-update, …}`
 - `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper, plus the setup payloads `defaults/` (minus wallpaper) and `config/greetd/` that `nidara-setup` reads — same layout whether shipped by the package or by install.sh §5
@@ -3049,53 +3061,47 @@ That is the exact case `watchDevices` exists for — `notify::devices` covers on
 add/remove, so an in-place pairing change would otherwise leave the device in the
 wrong list until a full rebuild.
 
-### Exercising the notification server (`core/notifd.ts`)
+### Exercising the session notification daemon (`session/`)
 
-The shell IS this desktop's notification daemon, so the probe has to BE the server
-too — it brings the module up and then talks to it over D-Bus exactly as
-`notify-send` does.
+The daemon and its GJS client are tested together on a **private bus with a
+throwaway cache**. `scripts/ci/sessiond-test.py` creates both with
+`dbus-run-session` / `TemporaryDirectory`; do not launch the new server on your
+normal session bus to test it. Needs cargo, dbus-run-session, notify-send, Python
+GObject (`python-gobject` on Arch; `python3-gi` on Ubuntu), GJS and esbuild.
 
 ```bash
-scripts/bundle.sh scripts/dev/notifd-probe.ts /tmp/notifd-probe
-XDG_CACHE_HOME=$(mktemp -d) dbus-run-session -- /tmp/notifd-probe    # 32 checks
+cargo build --manifest-path session/Cargo.toml --locked
+cargo clippy --manifest-path session/Cargo.toml --locked --all-targets -- -D warnings
+cargo test --manifest-path session/Cargo.toml --locked
+scripts/bundle.sh --js scripts/dev/notifd-probe.ts /tmp/notifd-client.js
+python3 scripts/ci/sessiond-test.py session/target/debug/nidara-sessiond --client /tmp/notifd-client.js
 ```
 
-⚠️ **Both wrappers are load-bearing and the probe refuses to run without them.**
-`dbus-run-session` gives it a private bus — on the real session bus the running
-shell owns `org.freedesktop.Notifications` and the probe would lose that race and
-test nothing. `XDG_CACHE_HOME` points the store somewhere disposable — without it
-the probe writes its test notifications into the user's own
-`~/.cache/nidara/notifd/state.json` and they appear in the NC.
+CI's `sessiond` job first **breaks adoption of replaces_id**, rebuilds, and requires
+this same integration to fail specifically at `replaces_id replaces the live entry`.
+It restores the source before the real build/lint/tests. A random startup error
+cannot count as the control catching the rule.
 
-Three controls, each failing on a DIFFERENT line (an empty roster looks identical
-in all of them, which is the whole reason they are separate):
+The integration sends a real `notify-send`, checks replacement (including a
+resolved id and the uint32 ceiling), public close/private dismiss signals and
+reasons, expiry/cancelled timers, resident actions, raw-image decoding,
+deduplication, privacy permissions and the 150-file cap. It seeds an old GJS
+serialize-shaped store and restarts the Rust process to verify history and
+transient exclusion. The GJS probe imports the **actual shell client**: it checks
+one warning/empty NC with no daemon, first connection, live callbacks, daemon
+loss/reconnect, and killing the client while notifications continue. Rehydrated
+history never emits banner callbacks; an already-open NC also refreshes through
+its unchanged roster subscription. Neither NotifService nor a surface is mocked
+or edited. The probe itself is now a stdin-controlled client, not a second server.
 
-```bash
-XDG_CACHE_HOME=$(mktemp -d) DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent /tmp/notifd-probe
-    # → "the session bus is reachable" fails
-XDG_CACHE_HOME=$(mktemp -d) /tmp/notifd-probe        # no dbus-run-session
-    # → "we own org.freedesktop.Notifications" fails: the shell holds it.
-    #   Same state a user gets with dunst or mako left running.
-dbus-run-session -- /tmp/notifd-probe                # no XDG_CACHE_HOME
-    # → refuses outright rather than writing into the real store
-```
-
-⚠️ **A probe that is also a server must call the bus ASYNCHRONOUSLY.** The first
-version used `call_sync` and deadlocked on its own first `Notify`: the call blocks
-the main loop that has to dispatch the method being called. ⚠️ And start `main()`
-from a `GLib.idle_add`, not directly — the precondition checks run before the
-first `await`, so a failing precondition called `loop.quit()` on a loop that had
-not started, and the probe hung instead of refusing.
-
-To watch the real thing instead, `notify-send` covers every branch:
+On a running installed session, ordinary `notify-send` still reaches the daemon:
 
 ```bash
-notify-send -a Discord -u critical "Critical" "never auto-expires"
-notify-send -t 3000 "Expires" "server-side timeout"                 # gone in 3 s
-notify-send "Transient" "banner only" --hint=int:transient:1        # no NC row
-notify-send "Hero" "" --hint=string:image-path:/path/to.png
-python3 -c '...'   # image-data: raw pixels, decoded to ~/.cache/nidara/notifd/images/
-cat ~/.cache/nidara/notifd/state.json | python3 -m json.tool
+notify-send -a Discord -u critical "Critical" "kept in the NC"
+notify-send -t 3000 "Expires" "sender timeout, gone in 3 seconds"
+notify-send "Transient" "banner only" --hint=int:transient:1
+systemctl --user status nidara-sessiond.service
+journalctl --user -u nidara-sessiond.service
 ```
 
 ### Exercising the application host (`ui/lib/nidara-kit/platform/host.ts` + `ui/lib/nidara-kit/platform/app-id.ts`)

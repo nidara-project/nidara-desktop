@@ -215,7 +215,7 @@ build_local_nidara_pkg() {
     mkdir -p "$pdir"
     cp "$REPO_DIR/packaging/nidara/PKGBUILD" "$REPO_DIR/packaging/nidara/nidara.install" "$pdir/"
     tar -C "$REPO_DIR" -czf "$pdir/nidara-desktop-$pkgver.tar.gz" \
-        --exclude='./.git' \
+        --exclude='./.git' --exclude='./session/target' \
         --exclude='./lib/nidara-host/build' --exclude='./build/nidara-host' \
         --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
         --exclude='./ui/settings/build' --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
@@ -726,12 +726,19 @@ fi
 sudo ldconfig
 rm -rf "$AUTH_BUILD"
 
+# The session daemon is always compiled, including --dev: it is a separate
+# service and UI reloads do not rebuild or restart it.
+echo "  Building nidara-sessiond..."
+(cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked)
+sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond
+
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/nidara.service). NOT enabled by target: it's
 # started explicitly from the Nidara Hyprland config so it can't leak into other
 # Hyprland sessions (see the unit's NOTE and the migration disable in step 7).
 sudo mkdir -p /usr/lib/systemd/user
 sudo cp "$REPO_DIR/bin/nidara.service" /usr/lib/systemd/user/nidara.service
+sudo cp "$REPO_DIR/bin/nidara-sessiond.service" /usr/lib/systemd/user/nidara-sessiond.service
 
 # Wayland session entry (shared file: config/wayland-sessions/, also shipped by
 # the nidara pacman package — keep ONE source, don't reintroduce a heredoc here)

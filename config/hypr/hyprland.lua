@@ -331,7 +331,7 @@ hl.on("hyprland.start", function()
     -- intentionally NOT enabled via graphical-session.target — that would leak the UI
     -- into every Hyprland session; see bin/nidara.service). `finalize`
     -- above has just activated graphical-session.target, which the unit orders After.
-    hl.exec_cmd("systemctl --user start nidara.service")
+    hl.exec_cmd("systemctl --user start nidara-sessiond.service nidara.service")
     -- Background daemons go in background-graphical.slice (-s b), not the foreground
     -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM
     -- killer targets them before real apps — correct for wallpaper/idle/clipboard helpers.
