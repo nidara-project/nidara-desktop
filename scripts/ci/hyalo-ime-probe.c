@@ -11,8 +11,12 @@
  *   ./hyalo-ime-probe --hold    commits nothing and runs until killed, holding the keyboard while a
  *                               field is active and letting go when it is not, as fcitx5 does
  *                               (prints GRABBED / RELEASED) — for scripts/ci/hyalo-popup-check.sh
+ *   ./hyalo-ime-probe --cursor  draws a green input-method-v2 popup and prints each
+ *                               RECT x y width height (nk-layer-motion-check.py)
  */
+#define _GNU_SOURCE
 #include <stdio.h>
+#include <sys/mman.h>
 #include <poll.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -22,13 +26,40 @@
 
 static struct wl_seat *seat;
 static struct zwp_input_method_manager_v2 *manager;
-static int active, done_count, committed, hold, scripted;
+static int active, done_count, committed, hold, scripted, cursor;
+static struct wl_compositor *compositor;
+static struct wl_shm *shm;
+static struct zwp_input_popup_surface_v2 *popup;
+static void cursor_rect(void *d, struct zwp_input_popup_surface_v2 *p,
+                        int32_t x, int32_t y, int32_t w, int32_t h) {
+    printf("RECT %d %d %d %d\n", x, y, w, h); fflush(stdout);
+}
+static const struct zwp_input_popup_surface_v2_listener popup_listener = { cursor_rect };
+static void cursor_popup(struct zwp_input_method_v2 *im) {
+    struct wl_surface *s = wl_compositor_create_surface(compositor);
+    popup = zwp_input_method_v2_get_input_popup_surface(im, s);
+    zwp_input_popup_surface_v2_add_listener(popup, &popup_listener, NULL);
+    int size = 100 * 24 * 4;
+    int fd = memfd_create("ime-cursor", 0);
+    if (fd < 0 || ftruncate(fd, size) < 0) exit(2);
+    uint32_t *pixels = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (pixels == MAP_FAILED) exit(2);
+    for (int i = 0; i < 100 * 24; i++) pixels[i] = 0xff20e060;
+    struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
+    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, 0, 100, 24, 400, WL_SHM_FORMAT_XRGB8888);
+    wl_shm_pool_destroy(pool); munmap(pixels, size); close(fd);
+    wl_surface_attach(s, buffer, 0, 0); wl_surface_damage(s, 0, 0, 100, 24); wl_surface_commit(s);
+}
 static const char *text;
 static struct zwp_input_method_keyboard_grab_v2 *grab;
 
 static void global(void *data, struct wl_registry *reg, uint32_t name, const char *iface, uint32_t version) {
     if (strcmp(iface, wl_seat_interface.name) == 0 && !seat)
         seat = wl_registry_bind(reg, name, &wl_seat_interface, 1);
+    else if (strcmp(iface, wl_compositor_interface.name) == 0)
+        compositor = wl_registry_bind(reg, name, &wl_compositor_interface, 4);
+    else if (strcmp(iface, wl_shm_interface.name) == 0)
+        shm = wl_registry_bind(reg, name, &wl_shm_interface, 1);
     else if (strcmp(iface, zwp_input_method_manager_v2_interface.name) == 0)
         manager = wl_registry_bind(reg, name, &zwp_input_method_manager_v2_interface, 1);
 }
@@ -56,6 +87,11 @@ static void im_cause(void *d, struct zwp_input_method_v2 *im, uint32_t cause) {
 static void im_content_type(void *d, struct zwp_input_method_v2 *im, uint32_t hint, uint32_t purpose) {}
 static void im_done(void *d, struct zwp_input_method_v2 *im) {
     done_count++;
+    if (cursor) {
+        printf("STATE %d %d\n", active, done_count); fflush(stdout);
+        if (active && !popup) cursor_popup(im);
+        return;
+    }
     if (scripted) { printf("STATE %d %d\n", active, done_count); fflush(stdout); return; }
     if (hold) {
         hold_follow(im);
@@ -80,6 +116,7 @@ static const struct zwp_input_method_v2_listener im_listener = {
 
 int main(int argc, char **argv) {
     scripted = argc > 1 && strcmp(argv[1], "--script") == 0;
+    cursor = argc > 1 && strcmp(argv[1], "--cursor") == 0;
     hold = argc > 1 && strcmp(argv[1], "--hold") == 0;
     text = argc > 1 ? argv[1] : "hyalo-ime";
     struct wl_display *d = wl_display_connect(NULL);
@@ -123,7 +160,7 @@ int main(int argc, char **argv) {
             printf("SENT %s\n", line); fflush(stdout);
         }
     } else {
-        while ((hold || !committed) && wl_display_dispatch(d) != -1) {}
+        while ((cursor || hold || !committed) && wl_display_dispatch(d) != -1) {}
     }
     wl_display_roundtrip(d);
     return committed ? 0 : 1;

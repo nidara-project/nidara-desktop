@@ -206,6 +206,7 @@ phase_run() {
         for f in /tmp/hyalo/*/*.png; do
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
+        if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi
         if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
@@ -651,6 +652,9 @@ phase_run() {
     LAYER_MOTION_LOG=/tmp/hyalo/layer-motion python "$REPO/scripts/ci/hyalo-layer-motion-check.py" >/tmp/hyalo/layer-motion.log 2>&1 \
         || { log "FAIL: layer motion"; cat /tmp/hyalo/layer-motion.log; exit 1; }
     log "layer motion OK ($(grep -c '^ok' /tmp/hyalo/layer-motion.log) of 4: placed, moved while blocked, clicks where seen, done)"
+    NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
+        || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }
+    log "native layer motion OK (scales 1/1.25, blocked client, click coordinates, retarget, fault controls)"
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null

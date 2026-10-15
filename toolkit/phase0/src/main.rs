@@ -3,6 +3,7 @@
 //! measure and place are separate, focus and pointer capture name one node.
 mod form;
 mod material;
+mod motion;
 mod palette;
 use nk_render::{Canvas, offset};
 use nk_text::{
@@ -523,6 +524,23 @@ fn contains(r: Rect, p: Point) -> bool {
 fn main() {
     let start = Instant::now();
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.iter().any(|s| s == "--test5") {
+        let result = motion::MotionApp::new(&args).and_then(|app| {
+            nk_wayland::run(
+                app,
+                nk_wayland::Options {
+                    material: true,
+                    map: true,
+                },
+                start,
+            )
+        });
+        if let Err(e) = result {
+            eprintln!("nk-phase0: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let backend = args
         .windows(2)
         .find(|a| a[0] == "--a11y")

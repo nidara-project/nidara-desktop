@@ -269,13 +269,21 @@ smithay::delegate_dispatch2!(Hyalo);
 // #503). The input method's candidate window is a popup of the surface being typed into, drawn
 // with that surface's popups (render/mod.rs).
 impl smithay::wayland::input_method::InputMethodHandler for Hyalo {
-    fn new_popup(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
+    fn new_popup(&mut self, mut surface: smithay::wayland::input_method::PopupSurface) {
+        crate::protocols::layers::remember_input_popup(&surface);
+        // Smithay initializes the rectangle but does not send the initial event
+        // when an IME creates its popup after the field's first commit.
+        let rect = surface.text_input_rectangle();
+        surface.set_text_input_rectangle(rect.loc.x, rect.loc.y, rect.size.w, rect.size.h);
         if let Err(err) = self.popups.track_popup(smithay::desktop::PopupKind::from(surface)) {
             tracing::warn!(?err, "input method popup not tracked");
         }
     }
 
-    fn popup_repositioned(&mut self, _surface: smithay::wayland::input_method::PopupSurface) {}
+    fn popup_repositioned(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
+        crate::protocols::layers::remember_input_popup(&surface);
+        self.queue_redraw(None);
+    }
 
     fn dismiss_popup(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
         if let Some(parent) = surface.get_parent().map(|p| p.surface.clone()) {

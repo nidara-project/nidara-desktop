@@ -1189,6 +1189,30 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   what was pending and `merge_into` overrides field by field, so a sync subsurface's several
   commits land together with its parent's. `on_commit` walks the committed surface's whole
   tree, because a sync child's state is applied by its PARENT's commit.
+- **The IME cursor names its layer explicitly** (#831, owner's authorization to amend
+  the draft): `nidara_layers_manager_v1.set_text_input_cursor_rectangle(root, layer,
+  x, y, width, height)` stages a layer-local rectangle with the ROOT's commit.
+  Keyboard/text-input-v3 focus stays on the root. `layers/cursor.rs` walks the same
+  presented transforms as the renderer, then updates the IME popup's location and
+  rectangle event before the popup walk, sampled at that frame's `when`. It keeps
+  the latest standard root-local rectangle separately: a null association or a
+  destroyed/replaced layer restores it; never map an already mapped rectangle again.
+  `nk-wayland::Window::set_layer_text_input` sends local coordinates only through
+  this association; `set_text_input` clears it and sends root-local coordinates.
+  A focused layer destroyed by the client disables its field. The new-popup handler
+  sends the initial rectangle through the public popup API: Smithay initializes it
+  internally but otherwise sends no initial event if the IME creates its popup after
+  the field's commit. No Smithay patch.
+- **The native client and evidence** (#831): `nk-wayland` generates the XML, owns
+  up to 64 synchronized subsurfaces and their released-slot shm buffers, and stages
+  children just before the parent commit. A pending, never-committed buffer stays
+  reusable (it will get no release); it becomes busy at the child's commit. Pointer
+  events carry a stable layer ID and already-inverted local coordinates. The crate
+  supplies no motion defaults. `nk-phase0 --test5` blocks for 1.5 s after submitting
+  two 2 s transitions; `scripts/ci/nk-layer-motion-check.py` checks movement, input,
+  completion, retargeting, buffers and a real IME popup at scales 1/1.25. Controls
+  omit the parent commit, animate in the client, or omit the cursor association,
+  and must fail at their own assertion. The original C server probe stays too.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
