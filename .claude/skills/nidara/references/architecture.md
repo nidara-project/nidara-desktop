@@ -910,8 +910,11 @@ The compatibility rules now live in `session/daemon/src/{model,store,main}.rs`:
 - Modern `image-data` RGB/RGBA pixels (8 bps, padded rowstride allowed) become
   `images/<first 32 SHA256 hex chars>.png` and an `image-path` hint. Deprecated raw
   `image_data`/`icon_data` are dropped; the legacy path hint `image_path` remains
-  readable. Decode errors keep the notification. The cache prunes oldest files to
-  150. Directories are created 0700, state files 0600. **Never move this into
+  readable. Encode into a temporary file inside `images/`, finish the PNG and
+  sync it before renaming to the hash filename: a failed write must never become
+  a permanent cache hit. Errors remove the temporary file and keep the notification,
+  so a later arrival can retry. The cache prunes oldest files to 150. Directories
+  are created 0700, state files 0600. **Never move this into
   config**: `~/.config/nidara` is a read root of the assistant's file layer and
   notification bodies contain private mail/chat/2FA codes.
 

@@ -116,18 +116,45 @@ impl Store {
         for y in 0..h as usize {
             pixels.extend_from_slice(&data[y * stride..y * stride + row]);
         }
-        let mut encoder = png::Encoder::new(fs::File::create(&path)?, w as u32, h as u32);
-        encoder.set_color(if alpha {
-            png::ColorType::Rgba
-        } else {
-            png::ColorType::Rgb
-        });
-        encoder.set_depth(png::BitDepth::Eight);
-        encoder.write_header()?.write_image_data(&pixels)?;
+        publish_image(&path, |file| {
+            let mut encoder = png::Encoder::new(file, w as u32, h as u32);
+            encoder.set_color(if alpha {
+                png::ColorType::Rgba
+            } else {
+                png::ColorType::Rgb
+            });
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header()?;
+            writer.write_image_data(&pixels)?;
+            // finish() reports errors writing IEND; Drop cannot report them.
+            writer.finish()?;
+            Ok(())
+        })?;
         prune(&dir)?;
         Ok(path)
     }
 }
+// A cache hit must always name a complete PNG. Keep a failed/partial encode
+// out of the hash namespace, and use the same directory so rename is atomic.
+fn publish_image(
+    path: &Path,
+    encode: impl FnOnce(&mut fs::File) -> Result<(), Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let tmp = path.with_extension("png.tmp");
+    let result = (|| {
+        let mut file = fs::File::create(&tmp)?;
+        encode(&mut file)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&tmp, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
 fn prune(dir: &Path) -> io::Result<()> {
     let mut files: Vec<_> = fs::read_dir(dir)?
         .filter_map(Result::ok)
@@ -144,8 +171,58 @@ fn prune(dir: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::BufReader;
+    use std::io::{BufReader, Write};
     use zbus::zvariant::Value as Variant;
+
+    #[test]
+    fn failed_image_write_never_publishes_the_hash_and_can_be_retried() {
+        let dir = std::env::temp_dir().join(format!(
+            "nidara-image-failure-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let store = Store { dir: dir.clone() };
+        let images = dir.join("images");
+        private_dir(&images).unwrap();
+        let data = vec![220u8, 64, 200];
+        let hash = format!("{:x}", Sha256::digest(&data));
+        let path = images.join(format!("{}.png", &hash[..32]));
+        let error = publish_image(&path, |file| {
+            file.write_all(b"partial PNG")?;
+            assert!(!path.exists(), "a partial image must not be a cache hit");
+            // Simulate ENOSPC after writing a prefix, without filling the disk.
+            Err(io::Error::from_raw_os_error(28).into())
+        })
+        .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<io::Error>().unwrap().raw_os_error(),
+            Some(28)
+        );
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read_dir(&images).unwrap().count(),
+            0,
+            "remove failed temporary files"
+        );
+        let hint = OwnedValue::try_from(Variant::from((1i32, 1i32, 3i32, false, 8i32, 3i32, data)))
+            .unwrap();
+        assert_eq!(store.decode_image(&hint).unwrap(), path);
+        let mut reader = png::Decoder::new(BufReader::new(fs::File::open(&path).unwrap()))
+            .read_info()
+            .unwrap();
+        let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut pixels).unwrap();
+        assert_eq!(&pixels[..info.buffer_size()], &[220, 64, 200]);
+        assert_eq!(
+            fs::read_dir(images).unwrap().count(),
+            1,
+            "only the complete PNG remains"
+        );
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn padded_rgb_and_rgba_match_the_original_pixbuf_decoder() {
