@@ -17,7 +17,7 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 |---|---|---|
 | 1 | Text | **Passed: Parley** (owner, 2026-10-15, #824/#825) — every case on Arch and Ubuntu, measuring and painting sharing one layout object. Pango failed one case on Arch (two on Ubuntu) and was removed |
 | 2 | IME | our field completes the matrix (below) with fcitx5, as a text-input-v3 client |
-| 3 | Orca | the form (below) is completed with keyboard and Orca only, for both a11y backends; the one we keep passes it all |
+| 3 | Orca | the form (below) is completed with keyboard and Orca only. **Provider chosen: direct AT-SPI** (#834, 17/17 in CI driven through libatspi); the walk with real Orca is still to run |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
 | 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN |
 
@@ -96,8 +96,10 @@ Owns everything between a string and positioned glyphs, and the editing model on
   `Editor`, and either crate can change engine without touching the other (#830).
 - Events, not just a snapshot: focus, name/state changes, text inserted/removed, caret moved,
   selection changed.
-- **Two backends behind features**, `accesskit` (accesskit_unix) and `atspi` (direct, over
-  zbus), implementing one `trait A11yBackend`. Test 3 decides which stays.
+- **One provider: direct AT-SPI over zbus** (feature `atspi`), behind `trait A11yBackend`
+  (owner, 2026-10-15, #830/#834): it passed the whole Orca-style walk; AccessKit failed the
+  expanded and invalid-entry states, which its AT-SPI layer did not project. The trait stays
+  so another provider can be measured on the same walk (`crates/nk-a11y/README.md`).
 - A password field: role `password text`, its text never exposed (not to AT-SPI, not to the
   agents' projection). The agents' projection itself is phase 1; the tree is designed so it
   can be filtered per reader (#818 triage, point 13).
