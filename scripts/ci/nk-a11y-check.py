@@ -288,7 +288,7 @@ def main():
     (LOG/'environment.json').write_text(json.dumps({
         'rustc':subprocess.check_output(['rustc','--version'],text=True).strip(),
         'atspi':subprocess.check_output(['pkg-config','--modversion','atspi-2'],text=True).strip(),
-        'binary':BIN, 'binary_sha256':hashlib.sha256(Path(BIN).read_bytes()).hexdigest(), 'source_base':subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
+        'binary':BIN, 'binary_sha256':hashlib.sha256(Path(BIN).read_bytes()).hexdigest(), 'source_base':subprocess.check_output(['git','-c','safe.directory=*','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
         'hyalo_binary':MSG[0],
         'hyalo_binary_sha256':hashlib.sha256(Path(MSG[0]).read_bytes()).hexdigest() if Path(MSG[0]).is_file() else 'see PATH',
         'cargo_lock_sha256':hashlib.sha256((ROOT/'toolkit/Cargo.lock').read_bytes()).hexdigest()
