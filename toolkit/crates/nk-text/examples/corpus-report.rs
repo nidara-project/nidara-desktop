@@ -79,6 +79,16 @@ fn worker(name: &str) -> Result<Worker> {
         results,
     })
 }
+fn pango_version() -> String {
+    #[cfg(feature = "pango")]
+    {
+        pango::version_string().to_string()
+    }
+    #[cfg(not(feature = "pango"))]
+    {
+        "feature disabled".into()
+    }
+}
 fn command(program: &str, args: &[&str]) -> String {
     Command::new(program)
         .args(args)
@@ -164,7 +174,7 @@ fn run() -> Result<bool> {
         "Generated on {}. `{}`; native Pango `{}`.\n",
         command("uname", &["-sm"]),
         command("rustc", &["--version"]),
-        command("pkg-config", &["--modversion", "pango"])
+        pango_version()
     );
     println!(
         "| Case | Backend | Result | Why | Width → lines / native clusters |\n|---|---|---|---|---|"

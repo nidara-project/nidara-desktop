@@ -160,13 +160,33 @@ loaded libraries and the runtime. Baseline **VmRSS** is sampled before loading t
 fonts; neither number is claimed to be allocator-only memory. Child isolation
 prevents the second backend inheriting the first one's high-water mark.
 
-See [EVIDENCE.md](EVIDENCE.md) for the recorded run and full table. On that host,
+See [EVIDENCE.md](EVIDENCE.md) for the recorded local run and full table, and
+[EVIDENCE-CI.md](EVIDENCE-CI.md) for the Ubuntu runner, its font hashes and failures. On that host,
 Pango 1.58.2 fails the additional `forced-rtl` editing case: in `日本 abc שלום 12`,
 forced RTL, native `move_cursor_visually(false, 0, 0, 1)` returns index -1 from the
 weak cursor at byte 0. Visual WordRight consequently stays at 0 despite text to
 its right. The report records FAIL and `cargo test` exits nonzero. This is evidence
 for the owner, not an exception that makes a failing engine pass. The engine
 choice remains with the owner.
+
+Ubuntu CI's Pango 1.52.1 additionally fails the Hindi `devanagari-matras` case:
+`get_cursor_pos(18)`'s weak cursor, fed directly into `xy_to_index`, yields byte 12
+inside the Unicode grapheme. This also reproduces with the same Arch fonts and
+only the native libraries changed to Ubuntu's official 1.52.1 packages. Native
+1.58.2 returns byte 18. The common corpus reports the failure; no Unicode or
+native-library version is exempted.
+
+For an independent reproduction of both failures, without any `nk-text` adapter:
+
+```sh
+cc scripts/dev/nk-text-pango-probe.c -o /tmp/nk-text-pango-probe $(pkg-config --cflags --libs pangocairo)
+/tmp/nk-text-pango-probe
+```
+
+The probe prints the runtime library version and raw cursor/hit/movement results,
+and exits nonzero for a failed check. It does not decide the common corpus's
+results or mark either failure as expected. The report also queries Pango's
+runtime version, so a library override is reported correctly.
 
 Native API references: [Parley](https://docs.rs/parley/0.12.0/parley/),
 [Pango visual movement](https://docs.gtk.org/Pango/method.Layout.move_cursor_visually.html),
