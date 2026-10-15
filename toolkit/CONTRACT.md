@@ -89,8 +89,11 @@ Owns everything between a string and positioned glyphs, and the editing model on
   reused within the window. `bounds` are window coordinates of the MODEL (the final values,
   not an animation's intermediate ones — as on the reference platform).
 - `TextInfo` gives what AT-SPI Text and EditableText need: the text, caret, selection, and
-  the boundaries (char/word/line) — taken from `nk-text`'s `Editor`, converted to character
-  offsets here.
+  the boundaries (char/word/line). It is **plain data in UTF-8 byte offsets**, filled by the
+  app from `nk-text`'s `Editor` (text, caret, selection, words) and `Layout` (lines);
+  `nk-a11y` converts it to character offsets, here and nowhere else. So `nk-a11y` does not
+  depend on `nk-text` (the rule above holds): it also serves text that never went through an
+  `Editor`, and either crate can change engine without touching the other (#830).
 - Events, not just a snapshot: focus, name/state changes, text inserted/removed, caret moved,
   selection changed.
 - **Two backends behind features**, `accesskit` (accesskit_unix) and `atspi` (direct, over
