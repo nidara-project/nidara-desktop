@@ -15,7 +15,7 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 
 | # | Test | Passes when |
 |---|---|---|
-| 1 | Text | Parley and Pango each run the corpus (below); the one we keep passes every case, with measuring and painting sharing one layout object |
+| 1 | Text | **Passed: Parley** (owner, 2026-10-15, #824/#825) — every case on Arch and Ubuntu, measuring and painting sharing one layout object. Pango failed one case on Arch (two on Ubuntu) and was removed |
 | 2 | IME | our field completes the matrix (below) with fcitx5, as a text-input-v3 client |
 | 3 | Orca | the form (below) is completed with keyboard and Orca only, for both a11y backends; the one we keep passes it all |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
@@ -64,9 +64,10 @@ Owns everything between a string and positioned glyphs, and the editing model on
   API takes and returns those; graphemes (`unicode-segmentation`), clusters and lines are
   ranges of them. text-input-v3 speaks byte offsets too, so the IME needs no conversion; AT-SPI
   speaks characters, converted at the edge in `nk-a11y`, never inside.
-- `trait TextBackend` with two implementations behind features, `parley` and `pango` (Pango
-  used without any GTK widget, as Hyalo's title bar already does). Both fed the same
-  `TextStyle` (family, size, weight, line height, alignment, direction) and the same font set.
+- `trait TextBackend`, implemented by **Parley** (feature `parley`, the chosen engine). It is
+  fed a `TextStyle` (family, size, weight, line height, alignment, direction) and a `FontSet`.
+  The trait stays so another engine can be measured against the same corpus; phase 0's Pango
+  adapter was removed after the decision (the comparison is in `crates/nk-text/README.md`).
 - `Layout` is the ONE object that is measured and painted: `size(max_width)`,
   `hit_test(point) → offset + affinity`, `caret_rect(offset, affinity)`,
   `selection_rects(range)`, `glyph_runs() → [GlyphRun { font, size, glyphs: [(id, x, y)] }]`.
@@ -78,8 +79,8 @@ Owns everything between a string and positioned glyphs, and the editing model on
 - **The corpus** (`crates/nk-text/corpus/`, one file per case, with what must hold): Arabic and
   Hebrew mixed with digits and Latin; Devanagari; Japanese, Chinese and Korean; combining
   marks; ZWJ emoji and flags; a font missing for one script (fallback); a variable font;
-  line breaking at several widths; caret and backspace through each. Run against both
-  backends; the report names which case each one fails.
+  line breaking at several widths; caret and backspace through each. The report names each
+  failing case and why, with layout time and peak memory.
 
 ## nk-a11y
 

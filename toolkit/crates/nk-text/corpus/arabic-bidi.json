@@ -1,0 +1,27 @@
+{
+  "id": "arabic-bidi",
+  "text": "مرحبا 123 abc عالم",
+  "widths": [
+    90,
+    180,
+    480
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "visual_order": [
+      "عالم",
+      "abc",
+      "123",
+      "مرحبا"
+    ],
+    "visual_movement": true,
+    "require_wrap": true
+  }
+}

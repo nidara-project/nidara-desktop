@@ -1,0 +1,23 @@
+{
+  "id": "japanese",
+  "text": "日本語（例）。文章を折り返します。次の行も読みます。",
+  "widths": [
+    95,
+    155,
+    340
+  ],
+  "style": {
+    "family": "Noto Sans CJK JP"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "no_line_start": "）】」、。！？",
+    "require_wrap": true
+  }
+}

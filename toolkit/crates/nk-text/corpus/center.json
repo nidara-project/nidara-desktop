@@ -1,0 +1,20 @@
+{
+  "id": "center",
+  "text": "Centered é 日本語",
+  "widths": [
+    140,
+    320
+  ],
+  "style": {
+    "alignment": "Center"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true
+  }
+}

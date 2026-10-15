@@ -1,0 +1,19 @@
+{
+  "id": "empty",
+  "text": "",
+  "widths": [
+    60,
+    200
+  ],
+  "style": {},
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "graphemes": []
+  }
+}

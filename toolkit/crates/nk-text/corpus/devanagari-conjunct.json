@@ -1,0 +1,27 @@
+{
+  "id": "devanagari-conjunct",
+  "text": "क्षत्रिय",
+  "widths": [
+    35,
+    90,
+    320
+  ],
+  "style": {
+    "family": "Noto Sans Devanagari"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "graphemes": [
+      "क्ष",
+      "त्रि",
+      "य"
+    ],
+    "cluster_count": 3
+  }
+}

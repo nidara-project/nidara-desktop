@@ -1,0 +1,22 @@
+{
+  "id": "variable-font",
+  "text": "Hamburgefonts 0123456789",
+  "widths": [
+    150,
+    260,
+    480
+  ],
+  "style": {
+    "family": "$variable"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "variable": true
+  }
+}

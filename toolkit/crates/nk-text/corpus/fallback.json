@@ -1,0 +1,25 @@
+{
+  "id": "fallback",
+  "text": "Latin 日本語 العربية",
+  "widths": [
+    95,
+    180,
+    480
+  ],
+  "style": {
+    "family": "$variable"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "fallback_for": [
+      "日",
+      "ع"
+    ]
+  }
+}

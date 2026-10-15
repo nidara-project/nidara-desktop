@@ -1,0 +1,23 @@
+{
+  "id": "korean",
+  "text": "한국어（예）。줄바꿈을확인합니다。닫는괄호와마침표。",
+  "widths": [
+    95,
+    155,
+    340
+  ],
+  "style": {
+    "family": "Noto Sans CJK KR"
+  },
+  "checks": {
+    "utf8": true,
+    "glyphs": true,
+    "caret": true,
+    "backspace": true,
+    "delete": true,
+    "editing": true,
+    "wrap": true,
+    "no_line_start": "）】」、。！？",
+    "require_wrap": true
+  }
+}
