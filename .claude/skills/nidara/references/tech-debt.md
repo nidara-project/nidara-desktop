@@ -3917,6 +3917,26 @@ ochre, 39 %), switches and sliders keeping the bright one; or leave it. The owne
 of every menu on the desktop. Either fix is one token (`--nidara-accent-fg`, or a new
 `--nidara-accent-under-text`) emitted by the token engine per accent.
 
+### 114. ⚠️ OPEN — Settings uses nearly as much memory as the shell: measure before optimising (2026-10-14)
+
+After switching shell and Settings to native libgjs runners, the owner confirmed
+their names in Mission Center and noticed Settings close to the shell in RAM.
+One live `smaps_rollup` snapshot: shell RSS/PSS 253.1/174.4 MiB, Settings
+224.5/144.8 MiB, Hyalo 178.8/110.3 MiB. PSS accounts proportionally for shared
+pages, so sharing alone does not explain the proximity. These are a snapshot,
+not evidence of a leak or a benchmark across sessions; no allocation profile
+has attributed the memory to runtime, services or widgets.
+
+`surfaces/settings/Settings.tsx` constructs every top-level category in
+`categories.forEach` and retains its widgets in `pageCache`, including hidden
+pages. This is a candidate to measure, not a quantified cause. The owner asked
+to record it and defer optimisation. Before changing it, measure a minimal
+GTK/GJS host, service initialisation and page construction separately. If pages
+become lazy, preserve global search (some indexing currently happens during
+construction), navigation/subpages, remote catalogues and teardown on close.
+The native runner still embeds GJS; changing executable identity does not remove
+the runtime's memory cost. No issue or optimisation is being opened by this note.
+
 ## Index of resolved items (bodies live in `tech-debt-resolved.md`)
 
 Kept here so that a cross-reference by number still resolves from this file, and so that a
