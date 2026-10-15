@@ -116,8 +116,8 @@ phase_bundle() {
 
     "$REPO/lib/nidara-host/build.sh" "$REPO/build/nidara-host"
     python "$REPO/scripts/ci/native-host-check.py" "$REPO/build/nidara-host"
-    for host in nidara-shell nidara-settings; do
-        install -Dm755 "$REPO/build/nidara-host/$host" "/usr/lib/nidara/$host"
+    for host in "$REPO"/build/nidara-host/nidara-*; do
+        install -Dm755 "$host" "/usr/lib/nidara/${host##*/}"
     done
     cd "$REPO/ui/shell"
     log "npm install…"

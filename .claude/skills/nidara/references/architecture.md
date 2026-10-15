@@ -87,41 +87,54 @@ with a command-line fallback scoped to old shell bundles; other GJS services
 are left running. For stale shell processes use `killall nidara-shell`; old builds still use `gjs`,
 so identify those by PID instead of killing every GJS service in the session.
 
-### Shell and Settings have native executable identities
+### Every GJS program has a native executable identity
 
 `lib/nidara-host/nidara-host.c` embeds GJS through its public context API; it
 does not exec the GJS console. It accepts a local ESM file followed by application
-arguments, preserving module imports, ARGV, `system.programArgs`, and explicit
-`system.exit()` codes. It is not a replacement for the full GJS CLI (debugger,
-REPL and profiling flags). The TypeScript Gtk.Application host still owns GTK
-initialisation, application/window IDs, `comm`, appearance and child environments.
+arguments, preserving module imports, ARGV, `system.programArgs`, `programPath`
+and explicit `system.exit()` codes. It is not a replacement for the full GJS CLI
+(debugger, REPL and profiling flags). In the bundles, the TypeScript
+Gtk.Application host still owns GTK initialisation, application/window IDs,
+`comm`, appearance and child environments.
 
-`lib/nidara-host/build.sh` produces TWO ordinary files, `nidara-shell` and
-`nidara-settings`, from the same source. They are installed to `/usr/lib/nidara/`
-by both the package and the dev installer. Never replace them with symlinks to
-one shared binary: `/proc/PID/exe` would resolve to that shared filename, which
-would lose the identity Mission Center reads. Rebuilds replace changed files
-atomically and leave identical binaries in place, so opening Settings does not
-mark an unchanged running shell executable `(deleted)`. `gjs` remains a runtime dependency for
-libgjs, the other bundles and the helper scripts.
+`lib/nidara-host/hosts` is THE list of runners — five bundles (shell, Settings,
+greeter, lock, installer) and the GJS helpers in `bin/` (a11y, act, agent, click,
+mcp, portal, share-chooser, type). `lib/nidara-host/build.sh` produces one ordinary
+file per name from the same source; `scripts/bundle.sh`, the package, `install.sh`
+and the smoke harnesses all read the list or the files it produced, so a new GJS
+program is one line there. They are installed to `/usr/lib/nidara/`; the
+installer's runner ships with the `nidara-installer` package and only there.
+Never replace them with symlinks to one shared binary: `/proc/PID/exe` would
+resolve to that shared filename, which would lose the identity Mission Center
+reads. Rebuilds replace changed files atomically and leave identical binaries in
+place, so opening Settings does not mark an unchanged running shell executable
+`(deleted)`. `gjs` remains a runtime dependency for libgjs, probes and dev paths.
 
 Executable bundles keep their base64-carrying wrapper and hashed JS extraction.
-Shell/Settings opt in with `--native-host=nidara-shell` / `nidara-settings` on
-`scripts/bundle.sh`; those wrappers run the private host instead of `gjs -m`.
-`NIDARA_NATIVE_HOST_DIR` overrides the installed host directory for isolated
-tests and uninstalled builds. A missing host fails explicitly; no silent GJS
-fallback. Default bundles and `--js` output remain unchanged, so greeter,
-lockscreen and installer still use their existing GJS-console paths.
+Each opts in with `--native-host=<name>` on `scripts/bundle.sh`; those wrappers run
+the private host instead of `gjs -m`. `NIDARA_NATIVE_HOST_DIR` overrides the
+installed host directory for isolated tests and uninstalled builds. A missing host
+fails explicitly; no silent GJS fallback. `--js` output is unchanged.
+
+The `bin/` helpers have no wrapper: their shebang IS the runner,
+`#!/usr/lib/nidara/<name>`. The kernel then starts the host with the script's path
+as its first argument, `exe` is the host and `comm` the script's name (truncated
+to 15 bytes: `nidara-share-ch`). ⚠️ Consequence: a checkout whose runners were never
+installed cannot start `./bin/nidara-mcp` directly ("bad interpreter") — run
+`install.sh` once, or `gjs -m bin/<name>`, which every probe and the agent-loop
+test do and which ignores the shebang. A new GJS helper with a `gjs` shebang
+fails `native-host-check.py`.
 
 In dev, `scripts/run.sh` selects the native shell ONLY for this checkout's
-`ui/shell/app.ts`; probes and other entrypoints retain GJS. `bin/nidara-settings`
-builds/runs the native Settings host and still cleans up its own temporary JS.
-Both paths compile the hosts from the checkout, without installing anything.
-The gtk4-layer-shell preload is retained in every path and removed by the
-TypeScript host before any child is launched. Native runner semantics and
-generated wrappers are checked by `scripts/ci/native-host-check.py`; both smoke
-harnesses install the hosts and the Settings lifecycle check asserts their
-actual `exe`/`comm` identities.
+`ui/shell/app.ts`; probes and other entrypoints (the lock in dev mode included)
+retain GJS. `bin/nidara-settings` builds/runs the native Settings host and still
+cleans up its own temporary JS. Both paths compile the hosts from the checkout,
+without installing anything. The gtk4-layer-shell preload is retained in every
+bundle path and removed by the TypeScript host before any child is launched.
+Native runner semantics, every listed host, the generated wrappers and the
+helpers' shebangs are checked by `scripts/ci/native-host-check.py`; both smoke
+harnesses install the hosts and the Settings lifecycle check asserts their actual
+`exe`/`comm` identities.
 
 ### The toolchain is ours too (2026-08-18, same day)
 

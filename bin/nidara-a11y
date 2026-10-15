@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-a11y
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-a11y — read-only perception of THIRD-PARTY apps for the computer-use
 // layer. Installed to /usr/bin/nidara-a11y. Prints, as JSON on stdout, the

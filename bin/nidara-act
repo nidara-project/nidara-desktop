@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-act
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-act — DETERMINISTIC action on third-party apps for the computer-use
 // layer (Phase 2a). Installed to /usr/bin/nidara-act. Invokes a NAMED AT-SPI

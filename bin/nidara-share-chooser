@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-share-chooser
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-share-chooser — what a call may see of the screen, asked of the user
 //

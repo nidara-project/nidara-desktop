@@ -478,13 +478,13 @@ cd "$REPO_DIR/ui/shell"
 npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css
 cd "$REPO_DIR/ui/greeter"
 mkdir -p build
-"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-greeter --kit-external=/usr/share/nidara-kit/js
+"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-greeter --native-host=nidara-greeter --kit-external=/usr/share/nidara-kit/js
 echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/nidara-greeter"
 
 echo "  Building lockscreen..."
 cd "$REPO_DIR/ui/lockscreen"
 mkdir -p build
-"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock --kit-external=/usr/share/nidara-kit/js
+"$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-lock --native-host=nidara-lock --kit-external=/usr/share/nidara-kit/js
 echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/nidara-lock"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -639,11 +639,13 @@ sudo mkdir -p /usr/share/nidara/migrations
 sudo cp "$REPO_DIR"/migrations/*.sh /usr/share/nidara/migrations/
 sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-settings /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
 
-# The private shell/Settings runners embed libgjs and keep executable identity.
+# The private runners embed libgjs and keep each program's executable identity
+# (lib/nidara-host/hosts). The installer's belongs to its own package, not here.
 HOST_BUILD="$(mktemp -d)"
 "$REPO_DIR/lib/nidara-host/build.sh" "$HOST_BUILD"
-for host in nidara-shell nidara-settings; do
-    sudo install -Dm755 "$HOST_BUILD/$host" "/usr/lib/nidara/$host"
+for host in "$HOST_BUILD"/nidara-*; do
+    [ "${host##*/}" = nidara-installer ] && continue
+    sudo install -Dm755 "$host" "/usr/lib/nidara/${host##*/}"
 done
 rm -rf "$HOST_BUILD"
 

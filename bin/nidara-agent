@@ -1,4 +1,4 @@
-#!/usr/bin/env -S gjs -m
+#!/usr/lib/nidara/nidara-agent
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-agent — the brain of Nidara's built-in Assistant.
 // Installed to /usr/bin/nidara-agent. NOT an MCP server and NOT invoked by the
