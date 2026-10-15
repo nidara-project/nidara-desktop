@@ -140,6 +140,7 @@ def run(label, flag=None, stop=None):
             time.sleep(.15)
         command('preedit 日本')
         pre = field('preedit', lambda p: differs(typed,p) > 150 and ink(p) > ink(typed)+80, 'preedit: composition did not appear')
+        wait(lambda: 'CAUSE 0' in (directory/'ime.log').read_text(), 'IME context echo was marked external')
         command('preedit 日本語')
         field('replaced', lambda p: differs(pre,p) > 80, 'preedit: composition was not replaced')
         command('cancel')

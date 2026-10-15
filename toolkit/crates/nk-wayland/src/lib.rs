@@ -130,6 +130,7 @@ pub struct Window {
     ime_entered: bool,
     ime_enabled: bool,
     ime_sync: bool,
+    input_from_ime: bool,
     input: TextInput,
     sent_input: Option<TextInput>,
     ime_pending: ImeBatch,
@@ -200,7 +201,11 @@ impl Window {
         } else if !self.input.password {
             t.set_surrounding_text(String::new(), 0, 0);
         }
-        t.set_text_change_cause(ChangeCause::Other);
+        t.set_text_change_cause(if self.input_from_ime {
+            ChangeCause::InputMethod
+        } else {
+            ChangeCause::Other
+        });
         let [x, y, w, h] = self.input.rect;
         t.set_cursor_rectangle(x, y, w.max(1), h.max(1));
         t.commit();
@@ -454,6 +459,7 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
         ime_entered: false,
         ime_enabled: false,
         ime_sync: true,
+        input_from_ime: false,
         input: TextInput::default(),
         sent_input: None,
         ime_pending: ImeBatch::default(),
@@ -546,7 +552,11 @@ pub fn run(mut app: impl Application, options: Options, start: Instant) -> Resul
                 );
                 first_callback = false;
             }
+            // An IME's own edit/caret echo must not look like an external
+            // change: fcitx5 uses this cause to decide whether to reset preedit.
+            w.input_from_ime = matches!(&event, Event::Ime(_));
             app.event(event, &mut w)?;
+            w.input_from_ime = false;
         }
         w.paint(&mut app)?;
         conn.flush().map_err(err)?;

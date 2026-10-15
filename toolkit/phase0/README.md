@@ -125,3 +125,8 @@ controls open several clients in sequence and also catch that regression.
 Phase 0's palette resolves the existing dark startup `--nidara-*` tokens from
 `ui/shell/styles/_base.scss` at build time. It is not a second colour table or a
 live appearance implementation; the portal and appearance model are phase 1.
+
+Context updates caused by `done` use text-input-v3's `input_method` change cause;
+keyboard/pointer changes use `other`. Marking the IME's own echo as external can
+make a real input method cancel the composition it just sent. The scripted
+probe reports that cause and the integration check requires the IME echo.

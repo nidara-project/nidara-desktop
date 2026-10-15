@@ -50,7 +50,9 @@ static void hold_follow(struct zwp_input_method_v2 *im) {
     fflush(stdout);
 }
 static void im_surrounding(void *d, struct zwp_input_method_v2 *im, const char *t, uint32_t c, uint32_t a) {}
-static void im_cause(void *d, struct zwp_input_method_v2 *im, uint32_t cause) {}
+static void im_cause(void *d, struct zwp_input_method_v2 *im, uint32_t cause) {
+    if (scripted) { printf("CAUSE %u\n", cause); fflush(stdout); }
+}
 static void im_content_type(void *d, struct zwp_input_method_v2 *im, uint32_t hint, uint32_t purpose) {}
 static void im_done(void *d, struct zwp_input_method_v2 *im) {
     done_count++;
