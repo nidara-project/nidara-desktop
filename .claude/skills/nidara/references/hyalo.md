@@ -1711,13 +1711,37 @@ keyboard focus change goes through `set_keyboard_focus` — so a layer surface t
 through a focus grab (the shell's search) gets the input method too. On Hyprland it never did (its
 grab path skipped the focus event the IME relay listens to: #679 #10, #503). The candidate window is
 a popup of the surface being typed into (`parent_geometry`: a window's geometry, or a layer
-surface's whole area), drawn with that surface's popups. input-method-v2 reads every key: hidden
-from sandboxed clients.
+surface's whole area), drawn with that surface's popups, **just below the caret**
+(`place_input_popup`, after every rectangle change). ⚠️ Smithay's `set_text_input_rectangle` also
+moves the popup to the rectangle's top-left — ONTO the caret, the one area input-method-v2 says not
+to cover; until #832's real-fcitx5 probe measured it, Mozc's and Pinyin's candidate panes hid the
+caret at every scale. Anything that sets the rectangle must call `place_input_popup` after it.
+input-method-v2 reads every key: hidden from sandboxed clients.
 - Verified nested with the real fcitx5 (private bus, throwaway config, `LANG=zh_CN.UTF-8`):
   Ctrl+Space, `nihao`, space → 你好 in a GTK window AND in the shell's search.
 - CI: `scripts/ci/hyalo-ime-check.sh` with `hyalo-ime-probe.c`, a stand-in input method that
   commits a fixed string when a field activates (fcitx5's Chinese engine would be ~540 MiB in the
   container). Its XML is not in wayland-protocols: it comes from the wayland-protocols-misc crate.
+
+### The screen reader's keyboard (`org.freedesktop.a11y.KeyboardMonitor`)
+
+`a11y.rs`. On Wayland a screen reader cannot see keys, so Orca hears a text change "with no cause"
+and stays silent (#835's real-Orca probe: zero key events, no speech while typing). libatspi
+asks the compositor, over the interface Mutter defined: `WatchKeyboard` / `GrabKeyboard` /
+`SetKeyGrabs`, and a `KeyEvent(released, state, keysym, unichar, keycode)` signal sent to that
+caller alone. Hyalo owns `org.freedesktop.a11y.Manager` in a session (`--session`), or with
+`HYALO_A11Y_MANAGER=1` for the headless checks; a development Hyalo never takes the live name.
+- **Who may call** is the security boundary (a watcher sees every password): only the current
+  owner of an allowed well-known name, `ALLOWED` = `org.gnome.Orca.KeyboardMonitor` — Mutter's
+  exact rule. A refusal is logged. A caller that leaves the bus loses its watch and grabs at once
+  (`NameOwnerChanged`), so a crashed reader cannot keep keys swallowed.
+- **What is consumed** is Mutter's `notify_clients`, ported: keys run through `Monitor::key`
+  BEFORE the bindings; a grabbed press and its release are consumed as a pair (by keycode — Shift
+  may be released in between); the reader's modifier pressed twice within the repeat delay goes
+  through as itself (Caps Lock still toggles); a consumed first press of it does not reach the
+  keymap state either (`skip_xkb`: `keyboard.input` is not called at all).
+- Libatspi's capability bits do NOT prove this works — its legacy fallback reports monitoring with
+  no key ever arriving. Count `KeyEvent`s.
 
 ### Menus: their grab, and where the keyboard goes when they close
 

@@ -96,6 +96,10 @@ Owns everything between a string and positioned glyphs, and the editing model on
   `Editor`, and either crate can change engine without touching the other (#830).
 - Events, not just a snapshot: focus, name/state changes, text inserted/removed, caret moved,
   selection changed.
+- A `Window`/`Dialog` node carries `states.active` while it holds the keyboard (the app sets it
+  from `nk-wayland`'s `Event::Focus`). The provider maps it to AT-SPI `active` and sends
+  `window:activate`/`deactivate` BEFORE any focus event of the same update: Orca ignores focus
+  inside a frame that is not active (#835, found with real Orca; libatspi alone never asks).
 - **One provider: direct AT-SPI over zbus** (feature `atspi`), behind `trait A11yBackend`
   (owner, 2026-10-15, #830/#834): it passed the whole Orca-style walk; AccessKit failed the
   expanded and invalid-entry states, which its AT-SPI layer did not project. The trait stays

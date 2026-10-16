@@ -6,6 +6,7 @@
 //!     nidara-hyalo -c CMD          also run CMD once the socket is up
 //!     nidara-hyalo msg …           talk to the running compositor (see `msg --help`)
 
+mod a11y;
 mod activation;
 mod backend;
 mod binds;
@@ -148,6 +149,7 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
     config::watch(state);
     // A real session listens to logind and serves org.freedesktop.ScreenSaver, and may suspend
     // when idle; a development Hyalo does none of that (logind.rs, idle.rs).
+    state.a11y = a11y::start(session);
     if session {
         state.idle.session = true;
         logind::start(state);

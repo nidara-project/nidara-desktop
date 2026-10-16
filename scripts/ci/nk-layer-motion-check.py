@@ -212,7 +212,9 @@ def cursor_check(label, flag=None):
             time.sleep(max(0.,delay-(time.monotonic()-t0)))
             image=m.shot(f'cursor-during-{index}')
             red=m.span(image,int((win['y']+45)*scale),m.RED)
-            green=m.span(image,int((win['y']+75)*scale),marker)
+            # The probe's popup is 24 px tall and sits BELOW the cursor rectangle (y 70-6s,
+            # height 12s, so its bottom is at most 80): this row is inside it, under the caret.
+            green=m.span(image,int((win['y']+90)*scale),marker)
             assert red and green,'cursor marker or layer missing'
             layer_scale=(red[1]-red[0]+1)/(80*scale)
             expected=red[0]+32*scale*layer_scale
@@ -231,7 +233,7 @@ def cursor_check(label, flag=None):
         wait(lambda:'RECT 220 120 2 12' in ime_lines()[before:],'root cursor was not restored after clearing layer')
         def root_popup():
             image=m.shot('cursor-cleared')
-            green=m.span(image,int((win['y']+125)*scale),marker)
+            green=m.span(image,int((win['y']+145)*scale),marker)  # below RECT 220 120 2 12
             return green and abs(green[0]-phys(220))<=2
         wait(root_popup,'cleared cursor popup still follows the layer')
         print(f'PASS {label}: real IME popup/event follow position and anchored scale while client blocked; root fallback restored',flush=True)

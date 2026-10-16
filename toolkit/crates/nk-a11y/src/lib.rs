@@ -31,6 +31,9 @@ pub struct Bounds {
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct States {
+    /// A `Window`/`Dialog` that is the active window (holds keyboard focus). A screen
+    /// reader ignores focus inside a window that is not active (#835).
+    pub active: bool,
     pub focused: bool,
     pub disabled: bool,
     pub checked: bool,
@@ -217,6 +220,7 @@ pub enum Event {
 }
 pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
     let mut out = vec![];
+    let mut activations = 0;
     for n in new.nodes.values() {
         let before = old.and_then(|t| t.nodes.get(&n.id));
         let s = before.map(|n| n.states.clone()).unwrap_or_default();
@@ -225,6 +229,12 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
         }
         if before.is_some_and(|b| b.name != n.name) {
             out.push(Event::Name(n.id, n.name.clone()));
+        }
+        if s.active != n.states.active {
+            // Before any focus event, wherever the node sits in the tree: a reader takes
+            // focus only inside the window it already knows is active.
+            out.insert(activations, Event::State(n.id, "active", n.states.active));
+            activations += 1;
         }
         for (key, a, b) in [
             ("checked", s.checked, n.states.checked),
@@ -331,5 +341,30 @@ mod tests {
         .filtered(|_| true);
         assert!(t.nodes[&1].text.is_none());
         assert!(diff(None, &t).unwrap().is_empty());
+    }
+    #[test]
+    fn window_activation_precedes_focus_whatever_the_ids() {
+        // The focused control has a LOWER id than its window, so the tree walks it first.
+        let mut window = Node::new(9, Role::Window, "Form");
+        let mut field = Node::new(1, Role::TextInput, "Name");
+        let tree = |active: bool, window: &Node, field: &mut Node| {
+            field.states.focused = active;
+            let mut w = window.clone();
+            w.states.active = active;
+            w.children = vec![1];
+            Tree {
+                root: 9,
+                nodes: BTreeMap::from([(1, field.clone()), (9, w)]),
+            }
+        };
+        let old = tree(false, &window, &mut field);
+        window.states.active = true;
+        let new = tree(true, &window, &mut field);
+        let events = diff(Some(&old), &new).unwrap();
+        assert!(
+            matches!(events[0], Event::State(9, "active", true)),
+            "{events:?}"
+        );
+        assert!(matches!(events[1], Event::Focus(1, true)), "{events:?}");
     }
 }

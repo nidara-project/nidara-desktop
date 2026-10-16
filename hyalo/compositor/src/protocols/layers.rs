@@ -12,7 +12,7 @@
 //! layer goes through Smithay's own walks, untouched.
 
 mod cursor;
-pub use cursor::{prepare_input_popups, remember_input_popup};
+pub use cursor::{place_input_popup, prepare_input_popups, remember_input_popup};
 
 use std::{
     sync::{

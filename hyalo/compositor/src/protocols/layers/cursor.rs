@@ -170,7 +170,16 @@ pub fn prepare_input_popups(root: &WlSurface, when: Instant) {
         {
             popup.set_text_input_rectangle(rect.loc.x, rect.loc.y, rect.size.w, rect.size.h);
         }
+        place_input_popup(&popup);
     }
+}
+
+/// The rectangle is what the popup must NOT cover (input-method-v2), yet Smithay's
+/// `set_text_input_rectangle` also moves the popup to the rectangle's top-left, onto the
+/// caret. Every caller sets the rectangle and then this: the candidates go just below it.
+pub fn place_input_popup(popup: &PopupSurface) {
+    let r = popup.text_input_rectangle();
+    popup.set_location((r.loc.x, r.loc.y + r.size.h).into());
 }
 
 #[cfg(test)]
