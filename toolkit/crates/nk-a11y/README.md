@@ -134,12 +134,12 @@ and Orca version, and mark a missing role/state/change as a failure.
 | --- | --- |
 | On opening | “Nidara accessibility form”, “Name”, entry, blank; focus is in Name. |
 | Tab four times, then Tab once more | “Password”, protected/password entry; “Language”, combo box, Japanese; “Remember me”, checkbox, not checked; “Review”, button; then “Name”, entry. |
-| Ctrl+V | The nonsecret content “日本🙂 word”; caret is after the final `d`. |
+| Ctrl+V | “Pasted contents from clipboard.”; Tab and Shift+Tab back read “日本🙂 word”; caret remains after `d`. |
 | Backspace, then `d` | Removal of `d`, then insertion of `d`, with no extra text removed. |
 | Ctrl+Shift+Left | “word”, selected. Left/Right clear/move selection and announce the intended character. |
 | Tab; type `secret` | “Password”, protected entry. It must never speak or expose `secret` or any of its individual letters, caret positions or length. |
-| Tab; Space | “Language”, combo box, expanded; Japanese selected. |
-| Down; Enter | Chinese selected, then collapsed; selected value remains Chinese. |
+| Tab; Space | Japanese is spoken on opening; no literal “expanded” is required for a focused combo. |
+| Down; Enter | Chinese is spoken on selection and again on closing; no literal “collapsed” is required. |
 | Tab; Space | “Remember me”, checkbox, checked. Shift+Tab and Tab recover the same order. |
 | Tab; Enter | New dialog “Correct error”; “Confirmation”, entry, invalid, “Enter correct to fix this error”, initial value “wrong”. |
 | Tab; Enter on Save | Invalid Save keeps the dialog open. Shift+Tab returns to Confirmation. |

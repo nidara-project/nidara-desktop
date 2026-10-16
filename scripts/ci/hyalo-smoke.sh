@@ -42,11 +42,16 @@ phase_deps() {
         libpulse networkmanager libnma-gtk4 bluez-libs upower libnotify \
         pipewire wireplumber libwireplumber \
         nodejs npm gjs python python-gobject at-spi2-core \
+        fcitx5 fcitx5-mozc fcitx5-chinese-addons fcitx5-hangul \
+        orca speech-dispatcher libao \
         wayland-protocols hyprland-protocols wlr-protocols \
         jq librsvg dconf file procps-ng \
         grim slurp wl-clipboard wf-recorder ffmpeg xorg-xwayland \
         ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono inter-font noto-fonts noto-fonts-cjk noto-fonts-emoji
     ldconfig
+    # Disposable CI container only: sd_dummy still initializes an audio driver.
+    # libao's null driver exercises the real speech server without an audio device.
+    echo 'default_driver=null' > /etc/libao.conf
 }
 
 phase_build() {
@@ -208,6 +213,9 @@ phase_run() {
         done
         if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi
         if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
+        if [ -d /tmp/ni ]; then cp -a /tmp/ni "$OUT/toolkit-fcitx5"; fi
+        if [ -d /tmp/no ]; then cp -a /tmp/no "$OUT/toolkit-orca"; fi
+        chmod -R a+rX "$OUT"
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
             echo "─── hyalo.log (tail) ───"; tail -n 60 "$hyalo_log" 2>/dev/null || true
@@ -240,7 +248,7 @@ phase_run() {
     # check hands Hyalo one that never locks.
     export HYALO_LOCK_RELAUNCH="LOCK_LOG=/tmp/hyalo/lock sh $REPO/scripts/ci/hyalo-lock-client.sh"
     mkdir -p /tmp/hyalo/lock
-    HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
+    HYALO_A11Y_MANAGER=1 HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
     for i in $(seq 1 30); do
@@ -736,6 +744,18 @@ phase_run() {
         > /tmp/hyalo/nk-a11y.log 2>&1 \
         || { cat /tmp/hyalo/nk-a11y.log; exit 1; }
     cat /tmp/hyalo/nk-a11y.log
+
+    # Tests 2/3: real engines and real Orca, on this same vkms/tty compositor.
+    # Run both even when one fails, so the two issue reports remain independent.
+    # Short paths are mandatory: speech-dispatcher uses Unix sockets (108 bytes).
+    local real_status=0
+    NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
+        > /tmp/hyalo/nk-fcitx5.log 2>&1 || real_status=1
+    cat /tmp/hyalo/nk-fcitx5.log
+    NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/no HYALO_LOG="$hyalo_log" python "$REPO/scripts/ci/nk-orca-check.py" \
+        > /tmp/hyalo/nk-orca.log 2>&1 || real_status=1
+    cat /tmp/hyalo/nk-orca.log
+    [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca gates; inspect toolkit-fcitx5 and toolkit-orca artifacts"; exit 1; }
 
     # ── 4. The same log bar as the Hyprland smoke.
     kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died"; exit 1; }

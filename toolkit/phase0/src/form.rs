@@ -63,6 +63,7 @@ pub struct Form {
     main_size: (f32, f32),
     invalid: Invalid,
     control: Option<String>,
+    fault_file: Option<String>,
     last_tree: Option<Tree>,
     backend_name: String,
 }
@@ -181,6 +182,7 @@ impl Form {
             control: args
                 .iter()
                 .find_map(|a| a.strip_prefix("--control-a11y=").map(String::from)),
+            fault_file: std::env::var("NK_ORCA_FAULT_FILE").ok(),
             last_tree: None,
             backend_name: backend_name.into(),
         };
@@ -213,6 +215,21 @@ impl Form {
             backend_start.elapsed().as_micros()
         );
         Ok(form)
+    }
+    fn refresh_fault(&mut self) {
+        if let Some(path) = &self.fault_file {
+            let value = std::fs::read_to_string(path).unwrap_or_default();
+            let control = if value.trim().is_empty() {
+                None
+            } else {
+                Some(value.trim().to_string())
+            };
+            if self.control != control {
+                self.control = control;
+                self.changed();
+                eprintln!("A11Y_FAULT {}", self.control.as_deref().unwrap_or("none"));
+            }
+        }
     }
     fn order(&self) -> Vec<NodeId> {
         if self.dialog {
@@ -358,6 +375,14 @@ impl Form {
                 // combo's value from the selected one either way (AT-SPI Selection).
                 n.children = (0..3).map(|i| ITEM + i).collect();
             }
+            if matches!(
+                (self.control.as_deref(), id),
+                (Some("role-password"), PASSWORD)
+                    | (Some("role-language"), DROPDOWN)
+                    | (Some("role-review"), OPEN)
+            ) {
+                n.role = Role::Label;
+            }
             if self.control.as_deref() == Some("geometry") && id == NAME {
                 n.bounds.x = 0.;
             }
@@ -502,7 +527,10 @@ impl Form {
     }
     fn activate(&mut self, id: NodeId, w: &mut Window) -> Result<()> {
         if self.dialog {
-            if id == CLOSE && self.fields[&ERROR].editor.text() == "correct" {
+            if id == CLOSE
+                && (self.fields[&ERROR].editor.text() == "correct"
+                    || self.control.as_deref() == Some("accept-invalid"))
+            {
                 w.close();
             }
             return Ok(());
@@ -584,6 +612,10 @@ impl Form {
         self.sync(w)
     }
     fn key(&mut self, k: Key, w: &mut Window) -> Result<()> {
+        if self.control.as_deref() == Some("ignore-edit") {
+            eprintln!("A11Y_FAULT_APPLIED ignore-edit");
+            return Ok(());
+        }
         if k.sym == 0xff1b {
             if self.expanded {
                 self.expanded = false;
@@ -721,6 +753,11 @@ impl Form {
         Ok(())
     }
     fn event_inner(&mut self, event: Event, w: &mut Window) -> Result<()> {
+        self.refresh_fault();
+        if self.control.as_deref() == Some("ignore-paste") && matches!(event, Event::Paste(_)) {
+            eprintln!("A11Y_FAULT_APPLIED ignore-paste");
+            return Ok(());
+        }
         match event {
             Event::Configure => {
                 let (width, height) = w.size();
@@ -965,6 +1002,7 @@ impl Application for Form {
         self.event_inner(e, w)
     }
     fn idle(&mut self, w: &mut Window) -> Result<()> {
+        self.refresh_fault();
         while let Ok(r) = self.requests.try_recv() {
             self.request(r, w)?;
         }

@@ -12,3 +12,4 @@ nk-render = { path = "../crates/nk-render" }
 nk-wayland = { path = "../crates/nk-wayland" }
 nk-a11y = { path = "../crates/nk-a11y" }
 unicode-segmentation = "1.12"
+serde_json = "1"

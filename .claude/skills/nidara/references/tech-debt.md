@@ -1297,6 +1297,15 @@ still in `/tmp`, and no window to say so. A confirmation dialog would be better 
 button — it could offer "abandon anyway" for a hung install — and it needs strings, so it needs
 twelve locales; that is why it is not there yet.
 
+### Toolkit phase-0 flat-review text geometry (2026-10-16)
+The real Orca walk (#835/#841) exposed missing AT-SPI `GetRangeExtents`: flat
+review finds the Unicode line but truncates its spoken presentation. This is
+outside the gate's keyboard/form walk; Claude will take it separately. #839
+fixed active-window/keyboard-monitor/candidate placement, and #842 fixed combo
+Selection and its event. Hangul Escape commits by engine policy, explicitly
+accepted in the contract; it is not toolkit debt. Current gate evidence and
+controls live in `toolkit/phase0/EVIDENCE-832-835.md`.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

@@ -1213,6 +1213,32 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   completion, retargeting, buffers and a real IME popup at scales 1/1.25. Controls
   omit the parent commit, animate in the client, or omit the cursor association,
   and must fail at their own assertion. The original C server probe stays too.
+  Cursor geometry rounds both endpoints outward in logical space. The screenshot
+  oracle carries the solid-colour span's physical-pixel sampling uncertainty into
+  those endpoint bounds; comparing integer height directly with `12 * scale`
+  spuriously fails around scale 7/6. Each capture records its measured spans,
+  rectangle and bounds in JSON, and the missing-association control still fails.
+  Real IME probes must wait for the client's new clipboard offer before seeding
+  text, and its received `keyup` before comparing release snapshots. On vkms a
+  fixed pause can read the previous offer or sample before key release delivery.
+  Startup, restart and focus return wait for the input-method activation/done
+  and the grab's keymap: activation and grab are separate protocol operations.
+  Missing activation fails the focus-return row, including its re-enable fault.
+  Read Editor after its diagnostic IME event counter
+  covers the done/leave events already received on the wire; a fixed sleep can
+  sample before a real Hangul flush or preedit update. These barriers observe
+  delivery/processing, never the desired text, so dropped-edit controls still fail.
+  `NK_IME_BARRIER_FILE` is an evidence-only snapshot nonce acknowledged at idle
+  after dispatch, including native Key callbacks; it never injects an event or
+  mutates Editor. Seed setup checks a fresh Paste callback, and copy checks the
+  new selection offer. Anchor repeat timing on the delivered key counter, not
+  the most recent unrelated snapshot's timestamp.
+  Reset each case's Editor timeline on rerun: its counters and timestamps start
+  from zero in each new process and cannot be mixed with an earlier run.
+  Chord barriers must cover modifier releases too: stopping fcitx after V-up
+  but before it forwards Ctrl-up leaves the client under Ctrl and breaks Compose
+  if the next settings request keeps the same keymap. Wait for each actual
+  release, then dispatch; do not force a rekey or synthesize another release.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
@@ -2164,6 +2190,17 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   frames with the overlay on than without it.
 
 ## Testing Hyalo
+
+The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
+`toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then
+the cage harness). Their acceptance decisions, fault controls and evidence are recorded in
+`toolkit/phase0/EVIDENCE-832-835.md`. Headless runs enable the keyboard manager
+with `HYALO_A11Y_MANAGER=1`; ordinary Atspi.Device listeners are denied on
+purpose, while Orca's key echo proves delivery. Never infer actual monitoring
+from capability bits. Keep log paths short (speech Unix sockets), exclude the
+caret from the adjacent candidate panel's pixel flood, and persist test output
+scale in the private settings layer when also changing the keyboard: applying
+keyboard settings reapplies configured outputs and resets a transient scale.
 
 - Never against the live session. `hyalo/scripts/headless-shot.sh` and `headless-shell.sh` run
   Hyalo in a window of a HEADLESS `cage` on the real GPU (the real shell sealed off by

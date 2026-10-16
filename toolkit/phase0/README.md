@@ -72,33 +72,81 @@ the frame callback (including font discovery/layout/rasterization). Nested Hyalo
 has no presentation feedback today: use the callback number there and label it
 as such. These are one-window observations, not GPU benchmarks.
 
-## Owner's live fcitx5 matrix
+## Real fcitx5 and Orca gates (#832, #835)
 
-Use a Hyalo session with fcitx5 running through Hyalo's input-method-v2 bridge;
-configure **Mozc**, **Pinyin** and **Hangul** in fcitx5's configuration UI. No GTK
-or Qt input-method plugin is needed by this client. Keep `nk-phase0`'s terminal
-log and screenshots with the result. Run these steps for each engine, first at
-output scale 1, then at 1.25 (Settings → Displays, or on a test compositor
-`nidara-hyalo msg output OUTPUT scale=1.25`). Restore your output scale afterwards.
+The `hyalo` job installs fcitx5, Mozc, Pinyin, Hangul, Orca and
+speech-dispatcher, then runs `scripts/ci/nk-fcitx5-check.py` and
+`scripts/ci/nk-orca-check.py` on its **vkms/tty Hyalo**. Both run even if one fails.
+Artifacts are `toolkit-fcitx5/` and `toolkit-orca/`; the assertion tables also
+appear in the job summary. The drivers require every baseline and its fault controls to pass; vkms CI is the final evidence.
+[EVIDENCE-832-835.md](EVIDENCE-832-835.md) records the new findings after #839,
+the acceptance decisions, controls and verification results. No expected failures
+or blanket success for an incomplete matrix are permitted.
 
-| Action | Expected result |
-| --- | --- |
-| Japanese/Mozc: type `nihongo`, cycle candidates, confirm `日本語`. | Underlined preedit changes as conversion changes; confirmation inserts it once, clears the underline and puts the caret at the end. |
-| Chinese/Pinyin: type `zhongwen`, cycle candidates, confirm `中文`. | Same behaviour, with the chosen Chinese text. |
-| Korean/Hangul: type the configured keyboard sequence for `한글`, then finish composition. | Jamo combine into syllables in the underlined preedit; only committed syllables enter the editable text. |
-| While composing, Backspace, type a replacement, then Escape. | Preedit shrinks/replaces; Escape removes it and restores the committed text exactly. Ctrl+Z must not resurrect cancelled preedit. |
-| Put committed text before and after the caret; move with arrows and replace a selection through the IME. | Surrounding context follows the caret/selection; the requested replacement affects the intended UTF-8 range and preserves neighbouring characters. |
-| Compose, Tab out of the field, Tab back; repeat while clicking outside the field. | Composition is cancelled on focus loss; no late commit enters a field that no longer has focus. Returning permits a fresh composition. |
-| Start a second `nk-phase0`; switch windows mid-composition and return. | Only the focused window receives IME text; there is no stale composition in the old one. The second-field version of this row waits for test 3's form. |
-| Restart fcitx5 using its normal restart action while the field is focused, then compose again. | The bridge reconnects and new preedit/commit reaches the same field without restarting the client. |
-| Compose near the right edge and after several lines; scroll the field/document while it remains visible. | The candidate window stays next to the visible caret, including wrapped lines and both scroll offsets. |
-| Repeat candidate placement at scale 1.25. | It follows logical surface coordinates, with no 1.25× displacement. |
-| Disable the engine; with a keyboard configured for a Compose key, type Compose, apostrophe, `e`. With a dead-key layout, type acute then `e`. | Each produces `é` once. Compose/dead-key prefixes insert no partial text; an invalid sequence can be cancelled. |
-| Hold a letter, then Backspace; release. | The configured delay/rate repeat; releasing, losing focus or removing the keyboard stops repetition immediately. |
+Run the same drivers locally in the private cage → Hyalo harness:
 
-Record pass/fail per engine, action and scale; include compositor/client revisions,
-fcitx5/engine versions, layout and screenshots showing candidates at the caret.
-Do not mark test 2 passed from the scripted CI probe alone. IBus is not promised.
+```sh
+# Arch: bwrap, cage, python-gobject, at-spi2-core, wl-clipboard, nidara-input,
+# fcitx5, fcitx5-mozc, fcitx5-chinese-addons, fcitx5-hangul,
+# orca, speech-dispatcher, libao. Build the two Rust binaries first.
+NK_PHASE0_LOG=/tmp/ni toolkit/phase0/check-prerequisites.sh ime
+NK_PHASE0_LOG=/tmp/no toolkit/phase0/check-prerequisites.sh orca
+```
+
+The launcher isolates network/IPC/PID namespaces (including Mozc's abstract
+socket), Wayland, D-Bus, preferences and audio. It selects libao's null driver
+and speech-dispatcher's real `sd_dummy` inside the sandbox. The headless
+compositor enables its accessibility manager with `HYALO_A11Y_MANAGER=1`.
+`NK_PREFLIGHT_SYSROOT` can name an extracted package root; an optional
+`NK_PREFLIGHT_PACKAGE_MANIFEST` records its package versions. No packages or
+preferences are written to the host. Keep `NK_PHASE0_LOG` **short**: Unix socket
+paths must fit in 108 bytes. Use a new evidence directory for each invocation.
+
+The fcitx5 baseline covers all three engines at scales **1 and 1.25**: underlined
+and changing preedit, confirmation, Backspace, Escape/undo, interior UTF-8
+surrounding context, selection replacement, second-window focus, daemon restart,
+Compose/dead acute, repeat delay/rate/release/focus loss, and candidate position
+under scrolling. Normal Hangul has no candidate list. `--ime-evidence` logs the
+actual Editor state and logical geometry in `IME_STATE` JSON (a separate file
+selected by `NK_IME_STATE_LOG`, so wire debug cannot interleave with records); screenshots
+independently measure underline ink and the candidate panel. The panel's flood
+fill excludes the caret, which can touch it on the next pixel row after #839.
+Every assertion has a targeted control: the test window reads a private fault
+file armed immediately before the action, and records that it applied the
+mutation. An unrelated setup failure or a crash cannot satisfy a control.
+Candidate controls also require vertical proximity, so a panel far below the
+caret cannot pass merely because it does not overlap it. Hangul follows the
+engine's policy: Escape commits `하`, clears preedit, and Ctrl+Z removes exactly
+that commit; its control deliberately drops the real commit and must fail.
+Mozc/Pinyin Escape cancel without inserting text.
+
+Compose/dead-key checks stop fcitx5 temporarily so its keyboard grab cannot
+implement composition instead of `nk-wayland`. The engine is restarted before
+the candidate/scroll checks. Output scale is written into the private settings
+layer: changing the keyboard reapplies output configuration, so a transient
+`msg output ... scale=...` would silently revert on the next keymap change.
+The script restores the keyboard, scale and workspace on exit.
+
+Orca's oracle is its final **`SPEECH OUTPUT`** debug records, adjacent to sending
+speech to the server. Each keyboard action has its own complete debug interval
+and screenshot. Paste must announce “Pasted contents from clipboard.”; moving to Password and back to Name separately reads `日本🙂 word` from the
+accessible field on focus.
+This also avoids flat review's dependency on text-range geometry (the provider does
+not implement `GetRangeExtents` yet). Ordinary keyboard listeners must be
+refused with `AccessDenied`; actual delivery is demonstrated by Orca's key and
+editing echo. Password silence has a speaking baseline and a leak control.
+On the focused combo, Space must speak Japanese, Down must speak Chinese,
+and Enter must speak Chinese. Orca does not use the literal words expanded and
+collapsed for this focused role. The `expanded`/`collapse` faults leave only the
+key echo, and must fail these value assertions. Dialog error, correction,
+save/Escape and return to Review are checked in speech. Controls cover the whole
+Tab order, edit/caret/selection, Unicode reading, password silence, dropdown,
+checkbox, rejected Save, correction and both close paths. The field's fault file
+is private to each run; installed applications do not use it.
+
+When the automated gates are green, the useful owner's check is one look at the
+candidate panel on real hardware and one listen to Orca's chosen voice. No
+manual reconfiguration matrix is needed to repeat the automated coverage.
 
 ## Boundaries still ahead
 
@@ -109,7 +157,7 @@ The no-flag corpus/IME mode has one normal editable field. The test-3 form and
 its two accessibility adapters are available with `--a11y` (below). Menus, a
 layer-animation client and the GPU/dmabuf path remain in later issues. `nk-wayland::TextInput` already enforces the password wire rule:
 no surrounding text for password purpose, including resetting prior context on a
-purpose change. The test-3 form applies that password rule; its live Orca gate is still the owner's.
+purpose change. The test-3 form applies that password rule; its real-Orca CI gate runs separately from the libatspi check.
 
 The app retains stable node IDs and distinct layout/paint/semantics invalidation;
 measure precedes place, one node owns focus, and the pressed node captures the
@@ -178,7 +226,7 @@ by default; selecting a runtime backend does not change that build coverage.
 The AT-SPI walk, fault controls, comparison and exact live Orca steps are in
 `crates/nk-a11y/README.md`. Run the private harness with
 `NK_PHASE0_CHECK=nk-a11y-check.py`; it reports and exits nonzero for **any**
-backend failure. A scripted pass does not declare the real Orca walk passed.
+backend failure. The separate real-Orca driver above must also pass; libatspi alone cannot pass test 3.
 
 ## Test 5: Hyalo executes the animation (#831)
 
