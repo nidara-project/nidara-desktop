@@ -215,6 +215,7 @@ phase_run() {
         if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
         if [ -d /tmp/ni ]; then cp -a /tmp/ni "$OUT/toolkit-fcitx5"; fi
         if [ -d /tmp/no ]; then cp -a /tmp/no "$OUT/toolkit-orca"; fi
+        chmod -R a+rX "$OUT"
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
             echo "─── hyalo.log (tail) ───"; tail -n 60 "$hyalo_log" 2>/dev/null || true

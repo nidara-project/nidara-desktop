@@ -16,7 +16,7 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 | # | Test | Passes when |
 |---|---|---|
 | 1 | Text | **Passed: Parley** (owner, 2026-10-15, #824/#825) — every case on Arch and Ubuntu, measuring and painting sharing one layout object. Pango failed one case on Arch (two on Ubuntu) and was removed |
-| 2 | IME | **Pending #832:** the real fcitx5 matrix (below), Mozc/Pinyin/Hangul at 1 and 1.25, including discriminating fault controls, must pass in the `hyalo` vkms job. The scripted input method alone cannot pass this gate |
+| 2 | IME | **Pending #832:** the real fcitx5 matrix (below), Mozc/Pinyin/Hangul at 1 and 1.25, including discriminating fault controls, must pass in the `hyalo` vkms job. Escape cancels for Mozc/Pinyin; Hangul commits its syllable and one Ctrl+Z undoes that commit. The scripted input method alone cannot pass this gate |
 | 3 | Orca | **Pending #835:** real Orca’s `SPEECH OUTPUT` must pass the form walk and its controls in the `hyalo` vkms job. **Provider chosen: direct AT-SPI** (#834; active windows added in #839). Selection support is provided by #842; open/closed state changes must present the current/final value, without requiring literal “expanded”/“collapsed” |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
 | 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN. **Passed** (#831/#837, CI at scale 1 and 1.25): `nk-phase0 --test5` blocks 1.5 s with 0.000 s of CPU while both layers move, the click lands where A is seen, in A's coordinates; three fault controls fail as they should. A retarget's kept velocity is proven by Hyalo's unit test, not by screenshots (they cannot date the retarget) |
@@ -210,7 +210,7 @@ captured by the node it pressed until release.
 ### The IME matrix (test 2)
 
 fcitx5 with Japanese (mozc), Chinese (pinyin) and Korean (hangul): preedit shown, replaced,
-cancelled with Escape, committed; surrounding text right after moving the caret; backspace
+cancelled with Escape for Mozc/Pinyin (Hangul flushes its composing syllable as a commit, undone once with Ctrl+Z), committed; surrounding text right after moving the caret; backspace
 during composition; focus moved to another field and to another window mid-composition; the
 IME restarted while the field is focused; the candidate window next to the caret, also with
 the field scrolled and at fractional scale 1.25. Compose and a dead key; key repeat. IBus only

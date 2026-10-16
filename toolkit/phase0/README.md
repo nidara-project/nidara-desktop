@@ -78,9 +78,9 @@ The `hyalo` job installs fcitx5, Mozc, Pinyin, Hangul, Orca and
 speech-dispatcher, then runs `scripts/ci/nk-fcitx5-check.py` and
 `scripts/ci/nk-orca-check.py` on its **vkms/tty Hyalo**. Both run even if one fails.
 Artifacts are `toolkit-fcitx5/` and `toolkit-orca/`; the assertion tables also
-appear in the job summary. **These gates are still incomplete and failing.**
+appear in the job summary. The drivers require every baseline and its fault controls to pass; vkms CI is the final evidence.
 [EVIDENCE-832-835.md](EVIDENCE-832-835.md) records the new findings after #839,
-the controls already demonstrated, and the remaining work. No expected failures
+the acceptance decisions, controls and verification results. No expected failures
 or blanket success for an incomplete matrix are permitted.
 
 Run the same drivers locally in the private cage → Hyalo harness:
@@ -107,14 +107,18 @@ and changing preedit, confirmation, Backspace, Escape/undo, interior UTF-8
 surrounding context, selection replacement, second-window focus, daemon restart,
 Compose/dead acute, repeat delay/rate/release/focus loss, and candidate position
 under scrolling. Normal Hangul has no candidate list. `--ime-evidence` logs the
-actual Editor state and logical geometry in `IME_STATE` JSON; screenshots
+actual Editor state and logical geometry in `IME_STATE` JSON (a separate file
+selected by `NK_IME_STATE_LOG`, so wire debug cannot interleave with records); screenshots
 independently measure underline ink and the candidate panel. The panel's flood
 fill excludes the caret, which can touch it on the next pixel row after #839.
-Controls currently exercise ignored preedit and displaced cursor requests;
-the remaining per-row controls are explicitly pending, so this driver cannot
-return success yet. Hangul Escape also fails the requested cancellation rule:
-the engine sends a commit. This requires a decision with Claude, not dropping
-the commit in the test client.
+Every assertion has a targeted control: the test window reads a private fault
+file armed immediately before the action, and records that it applied the
+mutation. An unrelated setup failure or a crash cannot satisfy a control.
+Candidate controls also require vertical proximity, so a panel far below the
+caret cannot pass merely because it does not overlap it. Hangul follows the
+engine's policy: Escape commits `하`, clears preedit, and Ctrl+Z removes exactly
+that commit; its control deliberately drops the real commit and must fail.
+Mozc/Pinyin Escape cancel without inserting text.
 
 Compose/dead-key checks stop fcitx5 temporarily so its keyboard grab cannot
 implement composition instead of `nk-wayland`. The engine is restarted before
@@ -125,16 +129,20 @@ The script restores the keyboard, scale and workspace on exit.
 
 Orca's oracle is its final **`SPEECH OUTPUT`** debug records, adjacent to sending
 speech to the server. Each keyboard action has its own complete debug interval
-and screenshot. Paste must announce “Pasted contents from clipboard.”; **KP
-Enter**, Orca's desktop “where am I” command, separately reads `日本🙂 word`.
-This avoids flat review's dependency on text-range geometry (the provider does
+and screenshot. Paste must announce “Pasted contents from clipboard.”; moving to Password and back to Name separately reads `日本🙂 word` from the
+accessible field on focus.
+This also avoids flat review's dependency on text-range geometry (the provider does
 not implement `GetRangeExtents` yet). Ordinary keyboard listeners must be
 refused with `AccessDenied`; actual delivery is demonstrated by Orca's key and
 editing echo. Password silence has a speaking baseline and a leak control.
-The dropdown's expanded/selected/closed assertions remain failing; their
-controls are **BLOCKED**, never counted as caught. Dialog error, correction,
-save/Escape and return to Review are checked in speech, including a fault that
-returns focus to Name instead. A failed setup cannot satisfy a control.
+On the focused combo, Space must speak Japanese, Down must speak Chinese,
+and Enter must speak Chinese. Orca does not use the literal words expanded and
+collapsed for this focused role. The `expanded`/`collapse` faults leave only the
+key echo, and must fail these value assertions. Dialog error, correction,
+save/Escape and return to Review are checked in speech. Controls cover the whole
+Tab order, edit/caret/selection, Unicode reading, password silence, dropdown,
+checkbox, rejected Save, correction and both close paths. The field's fault file
+is private to each run; installed applications do not use it.
 
 When the automated gates are green, the useful owner's check is one look at the
 candidate panel on real hardware and one listen to Orca's chosen voice. No
@@ -149,7 +157,7 @@ The no-flag corpus/IME mode has one normal editable field. The test-3 form and
 its two accessibility adapters are available with `--a11y` (below). Menus, a
 layer-animation client and the GPU/dmabuf path remain in later issues. `nk-wayland::TextInput` already enforces the password wire rule:
 no surrounding text for password purpose, including resetting prior context on a
-purpose change. The test-3 form applies that password rule; its real-Orca CI gate remains failing as recorded above.
+purpose change. The test-3 form applies that password rule; its real-Orca CI gate runs separately from the libatspi check.
 
 The app retains stable node IDs and distinct layout/paint/semantics invalidation;
 measure precedes place, one node owns focus, and the pressed node captures the

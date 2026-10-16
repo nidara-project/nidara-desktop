@@ -65,7 +65,9 @@ class Probe:
     def msg(self, *args):
         return json.loads(subprocess.check_output([*MSG, *map(str, args)], timeout=10))['ok']
 
-    def control(self, command, pause=.15):
+    def control(self, command, pause=None):
+        if pause is None:
+            pause = .4 if os.environ.get('NK_PHASE0_TEST') == 'vkms' else .15
         self.pipe.write(command + '\n')
         self.pipe.flush()
         time.sleep(pause)
@@ -101,9 +103,9 @@ class Probe:
         self.rows.append(dict(step=step, status=status, why=why, **details))
         print(f'{status} {step}: {why}', flush=True)
 
-    def save(self, pending):
+    def save(self, pending, complete=False):
         report = dict(environment=self.environment, rows=self.rows,
-                      not_run=pending, complete_matrix=False)
+                      not_run=pending, complete_matrix=complete)
         (self.log / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
         lines = ['| Baseline assertion | Result | Reason |', '| --- | --- | --- |']
         for row in self.rows:

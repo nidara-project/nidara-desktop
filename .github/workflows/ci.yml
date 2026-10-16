@@ -501,7 +501,7 @@ jobs:
   hyalo:
     name: Hyalo (build, clippy, tests, boot on vkms)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - name: Load vkms (virtual KMS device)

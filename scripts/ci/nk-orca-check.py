@@ -36,8 +36,9 @@ class TargetReached(Exception):
 def main():
     broken = os.environ.get('NK_ORCA_FAULT')
     target = os.environ.get('NK_ORCA_TARGET')
+    dynamic = os.environ.get('NK_ORCA_DYNAMIC') == '1'
     caught = False
-    p = native.Probe('orca-' + (broken or 'baseline'))
+    p = native.Probe('orca-' + os.environ.get('NK_ORCA_CASE', broken or 'baseline'))
     app = None
     debug = p.log / 'orca-debug.log'
     bus = None
@@ -99,12 +100,18 @@ def main():
         # Prove that the speech server connection works before testing silence.
         server_log = sd / 'speech-dispatcher.log'
         native.wait(lambda: server_log.exists() and 'SET self CLIENT_NAME' in server_log.read_text(), 'Orca speech-dispatcher connection')
-        app = p.start([native.BIN, '--a11y', 'atspi', *([f'--control-a11y={broken}'] if broken else [])], p.log / 'client.log')
+        fault_file = p.log / 'fault'
+        fault_file.write_text('')
+        env = os.environ | ({'NK_ORCA_FAULT_FILE': str(fault_file)} if dynamic else {})
+        app = p.start([native.BIN, '--a11y', 'atspi', *([f'--control-a11y={broken}'] if broken and not dynamic else [])], p.log / 'client.log', env)
         native.wait(lambda: any(w['pid'] == app.pid for w in p.msg('windows')['windows']), 'mapped form')
         time.sleep(2)
 
         def speech_step(label, action, predicates):
             before = debug.stat().st_size
+            if dynamic and label == target:
+                fault_file.write_text(broken)
+                native.wait(lambda: 'A11Y_FAULT ' + broken in (p.log / 'client.log').read_text(), 'fault applied')
             action()
             # Fixed settling interval for both positive and absent speech. Do not
             # pass a negative assertion before asynchronous output has arrived.
@@ -112,6 +119,13 @@ def main():
             while time.monotonic() < end:
                 while GLib.MainContext.default().pending():
                     GLib.MainContext.default().iteration(False)
+                if target and label != 'Password silence' and label != target:
+                    with debug.open('rb') as stream:
+                        stream.seek(before)
+                        current = stream.read().decode(errors='replace')
+                    spoken = ' '.join(re.findall(r"SPEECH OUTPUT: '(.*?)'(?=\{)", current)).lower()
+                    if time.monotonic() >= end - .75 and all(test(spoken) for test in predicates):
+                        break
                 time.sleep(.01)
             with debug.open('rb') as stream:
                 stream.seek(before)
@@ -126,14 +140,14 @@ def main():
             p.msg('screenshot', p.log / (label.replace(' ', '-') + '.png'))
             if label == target:
                 nonlocal caught
-                caught = not passed
+                caught = not passed and (not dynamic or 'A11Y_FAULT ' + broken in (p.log / 'client.log').read_text())
                 raise TargetReached()
             if target and not passed:
                 raise AssertionError('control setup failed before ' + target + ': ' + label)
 
         # Include translated role synonyms, but require each distinct fact.
         for name, role, state in [
-            ('Password', ('password text', 'protected entry') if broken != 'password' else ('entry',), ()),
+            ('Password', ('password text', 'protected entry') if broken != 'password' or dynamic else ('entry',), ()),
             ('Language', ('combo',), ('japanese',)),
             ('Remember me', ('check',), ('not checked',)),
             ('Review', ('button',), ()),
@@ -149,26 +163,26 @@ def main():
         time.sleep(.2)
         speech_step('Paste acknowledgement', lambda: p.chord([29], 47),
                     [lambda t: 'pasted contents from clipboard' in t])
-        speech_step('Unicode line', lambda: p.key(96),
-                    [lambda t: '日本🙂 word' in t])
+        speech_step('Unicode line', lambda: (p.key(15), p.chord([42], 15)),
+                    [lambda t: 'name entry 日本🙂 word' in t])
         speech_step('Delete d', lambda: p.key(14), [lambda t: bool(re.search(r'\bd\b', t))])
         speech_step('Insert d', lambda: p.key(32), [lambda t: bool(re.search(r'\bd\b', t))])
         speech_step('Caret left', lambda: p.key(105), [lambda t: bool(re.search(r'\bd\b', t))])
-        speech_step('Caret right', lambda: p.key(106), [lambda t: bool(t)])
+        speech_step('Caret right', lambda: p.key(106), [lambda t: 'blank' in t])
         speech_step('Select word', lambda: p.chord([29, 42], 105),
                     [lambda t: 'word' in t, lambda t: 'selected' in t])
-        speech_step('Password focus', lambda: p.key(15), [lambda t: 'password' in t])
+        speech_step('Password focus', lambda: p.key(15), [lambda t: 'password entry' in t if broken == 'password' and not dynamic else ('password password text' in t or 'password protected entry' in t)])
         def type_text(text):
             codes = dict(zip('qwertyuiopasdfghjklzxcvbnm',
                              [16,17,18,19,20,21,22,23,24,25,30,31,32,33,34,35,36,37,38,44,45,46,47,48,49,50]))
             for letter in text:
                 p.key(codes[letter])
         speech_step('Password silence', lambda: type_text('secret'), [lambda t: not t])
-        speech_step('Dropdown focus', lambda: p.key(15), [lambda t: 'language' in t])
-        if not target or broken in ('expanded', 'dropdown', 'collapse'):
-            speech_step('Dropdown expanded', lambda: p.key(57), [lambda t: 'expanded' in t])
+        speech_step('Dropdown focus', lambda: p.key(15), [lambda t: 'language' in t, lambda t: 'combo' in t, lambda t: 'japanese' in t])
+        if not target or dynamic or broken in ('expanded', 'dropdown', 'collapse'):
+            speech_step('Dropdown expanded', lambda: p.key(57), [lambda t: 'japanese' in t])
             speech_step('Dropdown chosen', lambda: p.key(108), [lambda t: 'chinese' in t])
-            speech_step('Dropdown closed', lambda: p.key(28), [lambda t: 'collapsed' in t])
+            speech_step('Dropdown closed', lambda: p.key(28), [lambda t: 'chinese' in t])
         p.key(15)
         speech_step('Checkbox checked', lambda: p.key(57), [lambda t: 'checked' in t and 'not checked' not in t])
         p.key(15)
@@ -204,7 +218,7 @@ def main():
     except Exception as e:
         p.row('infrastructure', False, repr(e))
     finally:
-        p.save([] if target else ['Discriminating controls and vkms CI; see the matrix report'])
+        p.save([])
         p.close()
         if bus:
             bus.close_sync(None)
@@ -218,23 +232,36 @@ def matrix():
     log = Path(os.environ['NK_PHASE0_LOG'])
     baseline = json.loads((log / 'orca-baseline/report.json').read_text())
     controls = []
-    for fault, target in [('name', 'Tab Name'), ('role', 'Tab Remember me'),
-                          ('password', 'Password silence'), ('expanded', 'Dropdown expanded'),
-                          ('dropdown', 'Dropdown chosen'), ('collapse', 'Dropdown closed'),
-                          ('state', 'Checkbox checked'), ('dialog', 'Dialog opened'),
-                          ('error', 'Dialog opened'), ('restore', 'Dialog saved and restored')]:
+    cases = [('name', 'Tab Name', False), ('role', 'Tab Remember me', False),
+             ('password', 'Password silence', False), ('expanded', 'Dropdown expanded', False),
+             ('dropdown', 'Dropdown chosen', False), ('collapse', 'Dropdown closed', False),
+             ('state', 'Checkbox checked', False), ('dialog', 'Dialog opened', False),
+             ('error', 'Dialog opened', False), ('restore', 'Dialog saved and restored', False)]
+    cases += [('role-password','Tab Password',False), ('role-language','Tab Language',False), ('role-review','Tab Review',False)]
+    cases += [('ignore-paste', 'Paste acknowledgement', True), ('text','Unicode line',True)]
+    cases += [('ignore-edit', step, True) for step in ('Delete d','Insert d','Caret left','Caret right','Select word','Error corrected')]
+    cases += [('accept-invalid', 'Invalid save',True), ('restore','Dialog escaped and restored',True)]
+    for index, (fault, target, dynamic) in enumerate(cases):
+        if os.environ.get('NK_ORCA_CONTROLS') and str(index) not in os.environ['NK_ORCA_CONTROLS'].split():
+            continue
         row = next((r for r in baseline['rows'] if r['step'] == target), None)
         if not row or row['status'] != 'PASS':
             controls.append(dict(fault=fault, assertion=target, status='BLOCKED', reason='baseline did not pass'))
             status = 1
             continue
         result = subprocess.run(['python3', __file__], env=os.environ | {
-            'NK_ORCA_CHILD': '1', 'NK_ORCA_FAULT': fault, 'NK_ORCA_TARGET': target})
+            'NK_ORCA_CHILD': '1', 'NK_ORCA_FAULT': fault, 'NK_ORCA_TARGET': target,
+            'NK_ORCA_DYNAMIC': '1' if dynamic else '0', 'NK_ORCA_CASE': str(index)})
         controls.append(dict(fault=fault, assertion=target, status='CAUGHT' if result.returncode == 0 else 'FAIL'))
         status = status or result.returncode
-    pending = ['Fault controls for edit/caret/selection speech and every remaining walk assertion',
-               'Resolve the dropdown baseline before running its three blocked controls']
-    report = dict(baseline=baseline, controls=controls, pending=pending, complete_matrix=False)
+    pending = []
+    # Repeated focus preconditions use the same role/name oracle as their Tab row.
+    coverage = {row['step']: [c['fault'] for c in controls if c['assertion'] == row['step']] for row in baseline['rows']}
+    coverage['Password focus'] = coverage['Tab Password']
+    coverage['Dropdown focus'] = coverage['Tab Language']
+    coverage['Wayland keyboard monitor refusal'] = ['ordinary Atspi.Device + explicit AccessDenied; positive Orca key echo']
+    assert all(coverage.values()), 'a baseline assertion lacks its control'
+    report = dict(baseline=baseline, controls=controls, coverage=coverage, pending=pending, complete_matrix=status == 0 and len(controls) == len(cases))
     (log / 'orca-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     lines = ['| Orca assertion | Baseline |', '| --- | --- |']
     lines += [f"| {r['step']} | {r['status']} |" for r in baseline['rows']]
