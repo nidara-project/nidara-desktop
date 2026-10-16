@@ -140,7 +140,11 @@ def main():
             p.msg('screenshot', p.log / (label.replace(' ', '-') + '.png'))
             if label == target:
                 nonlocal caught
-                caught = not passed and (not dynamic or 'A11Y_FAULT ' + broken in (p.log / 'client.log').read_text())
+                client_log = (p.log / 'client.log').read_text()
+                applied = (not dynamic or 'A11Y_FAULT ' + broken in client_log)
+                if broken in ('ignore-edit', 'ignore-paste'):
+                    applied = applied and 'A11Y_FAULT_APPLIED ' + broken in client_log
+                caught = not passed and applied
                 raise TargetReached()
             if target and not passed:
                 raise AssertionError('control setup failed before ' + target + ': ' + label)
