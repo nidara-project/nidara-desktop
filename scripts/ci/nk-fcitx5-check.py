@@ -120,6 +120,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
     fault_file.write_text('')
     barrier_file = directory / 'barrier'
     barrier_file.write_text('0')
+    (directory / 'state.jsonl').write_text('')
     barrier_nonce = 0
     env = os.environ | {'XDG_CONFIG_HOME': str(config.parent), 'WAYLAND_DEBUG': '1',
                         'NK_IME_STATE_LOG': str(directory / 'state.jsonl'), 'NK_IME_FAULT_FILE': str(fault_file),

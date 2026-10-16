@@ -1233,6 +1233,8 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   mutates Editor. Seed setup checks a fresh Paste callback, and copy checks the
   new selection offer. Anchor repeat timing on the delivered key counter, not
   the most recent unrelated snapshot's timestamp.
+  Reset each case's Editor timeline on rerun: its counters and timestamps start
+  from zero in each new process and cannot be mixed with an earlier run.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
