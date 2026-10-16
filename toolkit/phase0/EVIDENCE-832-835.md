@@ -1,8 +1,8 @@
 # Real fcitx5 and Orca evidence — #832 / #835
 
 The gates run in the `hyalo` job on vkms. Local nested results alone do not pass
-either gate. The current implementation includes a control for every assertion;
-CI verification is pending for this revision. Raw reports retain binary hashes,
+either gate. The implementation includes a control for every assertion;
+the generated CI reports are the authoritative pass/fail record for each revision. Raw reports retain binary hashes,
 versions, actual speech, wire traces, Editor state and screenshots.
 
 ## Acceptance decisions (Claude, #841; provider fix #842)
@@ -150,3 +150,15 @@ in the Nidara skill.
 and absent keyboard monitor. #842 resolved the combo Selection gap. Hangul's
 Escape behaviour is now an explicit accepted engine policy. Earlier reports and
 exact traces remain in this file's history and the #832/#835/#841 discussions.
+
+## Verification records
+
+The local post-#842 Orca run (`/tmp/p3/orca-report.json`) passes all **25/25**
+speech assertions and catches all **23/23** fault runs. `complete_matrix` is true
+and the coverage map accounts for every assertion. The full IME local run and
+vkms CI publish their row tables and exact environment in the same report format;
+consult the PR checks and uploaded artifacts for their current revision.
+
+Workspace fmt, clippy with `-D warnings`, unit/corpus tests, Python and shell
+syntax, skill-docs-check and diff checks pass. A clean build is not a substitute
+for either real-component integration report.

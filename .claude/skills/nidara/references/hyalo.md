@@ -2167,7 +2167,7 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 
 The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
 `toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then
-the cage harness). Their incomplete gates and current findings are recorded in
+the cage harness). Their acceptance decisions, fault controls and evidence are recorded in
 `toolkit/phase0/EVIDENCE-832-835.md`. Headless runs enable the keyboard manager
 with `HYALO_A11Y_MANAGER=1`; ordinary Atspi.Device listeners are denied on
 purpose, while Orca's key echo proves delivery. Never infer actual monitoring
