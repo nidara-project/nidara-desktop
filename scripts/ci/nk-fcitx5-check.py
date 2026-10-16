@@ -118,8 +118,12 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
         '[InputPanel/Highlight]\nColor=#0080ff\n')
     fault_file = directory / 'fault'
     fault_file.write_text('')
+    barrier_file = directory / 'barrier'
+    barrier_file.write_text('0')
+    barrier_nonce = 0
     env = os.environ | {'XDG_CONFIG_HOME': str(config.parent), 'WAYLAND_DEBUG': '1',
-                        'NK_IME_STATE_LOG': str(directory / 'state.jsonl'), 'NK_IME_FAULT_FILE': str(fault_file)}
+                        'NK_IME_STATE_LOG': str(directory / 'state.jsonl'), 'NK_IME_FAULT_FILE': str(fault_file),
+                        'NK_IME_BARRIER_FILE': str(barrier_file)}
     app = ime = None
     ime_log = directory / 'fcitx.log'
     try:
@@ -159,7 +163,9 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
         def activate():
             subprocess.run(['fcitx5-remote', '-s', engine], check=True, timeout=5)
             subprocess.run(['fcitx5-remote', '-o'], check=True, timeout=5)
-            native.wait(engine_ready, 'active input-method context and keyboard grab')
+            current = state(directory)
+            context = (current['text'], current['cursor'], current['anchor'])
+            native.wait(lambda: engine_ready(context=context), 'active context, current surrounding text and keyboard grab')
 
         def engine_ready(start=0, context=None):
             wire = ime_log.read_text()[start:]
@@ -168,12 +174,19 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             if not activations or (deactivations and deactivations[-1].start() > activations[-1].start()):
                 return False
             active = wire[activations[-1].end():]
+            # libwayland prints literal newlines inside C string arguments.
+            surrounding = re.findall(r'zwp_input_method_v2#\d+\.surrounding_text\(("(?:[^"\\]|\\.)*"), (\d+), (\d+)\)', active)
+            current = ((json.loads(surrounding[-1][0], strict=False), int(surrounding[-1][1]), int(surrounding[-1][2]))
+                       if surrounding else None)
+            matches_context = (context is None or (current is not None
+                               and (current[0] == context if isinstance(context, str) else current == context)))
             return ('.grab_keyboard(' in active
                     and re.search(r'zwp_input_method_v2#\d+\.done\(\)', active)
                     and re.search(r'zwp_input_method_keyboard_grab_v2#\d+\.keymap\(', active)
-                    and (context is None or f'.surrounding_text({json.dumps(context)},' in active))
+                    and matches_context)
 
         def drain_ime():
+            nonlocal barrier_nonce
             # Each done and leave queues exactly one Event::Ime in nk-wayland.
             # Wait for those events to reach Editor, regardless of their text or
             # whether a fault deliberately discards them. Never wait for the
@@ -183,6 +196,13 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                 received = len(re.findall(r'<- zwp_text_input_v3@\d+\.(?:done|leave),', wire))
                 return state(directory)['ime_count'] >= received
             native.wait(drained, 'received IME batches processed by Editor')
+            # A raw key release is logged before Application receives its
+            # queued native Key callback. Request a fresh evidence snapshot at
+            # idle after dispatch too, without inserting any synthetic input.
+            barrier_nonce += 1
+            barrier_file.write_text(str(barrier_nonce))
+            native.wait(lambda: state(directory)['barrier'] == str(barrier_nonce),
+                        'post-dispatch evidence snapshot')
 
         def key(code):
             start = len((directory / 'client.log').read_text())
@@ -190,6 +210,14 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             native.wait(lambda: re.search(
                 rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {code}, 0\)',
                 (directory / 'client.log').read_text()[start:]), 'key release delivered')
+            drain_ime()
+
+        def chord(modifiers, code):
+            start = len((directory / 'client.log').read_text())
+            p.chord(modifiers, code)
+            native.wait(lambda: re.search(
+                rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {code}, 0\)',
+                (directory / 'client.log').read_text()[start:]), 'chord key release delivered')
             drain_ime()
 
         def flush_hangul():
@@ -203,7 +231,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             if ime.poll() is None:
                 subprocess.run(['fcitx5-remote', '-c'], check=True, timeout=5)
                 time.sleep(.2)
-            p.chord([29], 30)
+            chord([29], 30)
             wire_start = len((directory / 'client.log').read_text())
             clip = p.start(['wl-copy', '--foreground', '--type', 'text/plain;charset=utf-8'],
                            directory / 'clipboard.log', stdin=subprocess.PIPE)
@@ -222,8 +250,10 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
                 return value.returncode == 0 and value.stdout == text.encode()
             native.wait(clipboard_ready, 'new clipboard offer with exact seed bytes')
-            p.chord([29], 47)
-            native.wait(lambda: state(directory)['text'] == text, 'seed text')
+            pasted = state(directory)['paste_count']
+            chord([29], 47)
+            native.wait(lambda: state(directory)['paste_count'] > pasted and state(directory)['text'] == text,
+                        'seed paste processed with exact text')
 
         def release(code):
             wire_start = len((directory / 'client.log').read_text())
@@ -314,11 +344,16 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                     flush_hangul()
                 else:
                     key(code)
-            p.chord([29], 30)
-            p.chord([29], 46)
+            chord([29], 30)
+            copy_start = len((directory / 'client.log').read_text())
+            chord([29], 46)
+            native.wait(lambda: re.search(r'<- wl_data_device@\d+\.selection, \(wl_data_offer@',
+                (directory / 'client.log').read_text()[copy_start:]), 'new copied selection offered')
             actual = subprocess.check_output(['wl-paste', '-n'], text=True, timeout=5)
             (directory / 'committed.txt').write_text(actual)
-            check('commit', actual == expected and state(directory)['preedit'] is None, f'expected {expected!r}; clipboard reads {actual!r}')
+            committed = state(directory)
+            check('commit', actual == expected and committed['text'] == expected and committed['preedit'] is None,
+                  f'expected {expected!r}; clipboard reads {actual!r}; Editor={committed}')
             p.msg('screenshot', directory / 'committed.png')
         def edit():
             seed('sentinel')
@@ -341,7 +376,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             cancelled = state(directory)
             check('escape', not cancelled['preedit'] and cancelled['text'] == ('base하' if engine == 'hangul' else 'base'), str(cancelled))
             arm('cancelled-undo')
-            p.chord([29], 44)
+            chord([29], 44)
             undone = state(directory)
             check('cancelled-undo', not undone['preedit'] and undone['text'] == ('base' if engine == 'hangul' else undo_target), str(undone))
         def context():
@@ -360,7 +395,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
         def selection():
             seed('日🙂尾')
             key(105)
-            p.chord([42], 105)
+            chord([42], 105)
             arm('selection-replacement')
             compose()
             commit()
@@ -451,7 +486,8 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             settled = state(directory)
             samples = [json.loads(row) for row in re.findall(r'^IME_STATE (.*)\n',
                        (directory / 'state.jsonl').read_text(), re.M)]
-            repeats = [row for row in samples if early['ms'] <= row['ms'] <= hold_end and re.fullmatch('a+', row['text'])]
+            repeats = [row for row in samples if row['key_count'] > count and row['ms'] <= hold_end
+                       and re.fullmatch('a+', row['text'])]
             repeated = []
             for sample in repeats:
                 if not repeated or sample['text'] != repeated[-1]['text']:

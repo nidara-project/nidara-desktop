@@ -1228,6 +1228,11 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   covers the done/leave events already received on the wire; a fixed sleep can
   sample before a real Hangul flush or preedit update. These barriers observe
   delivery/processing, never the desired text, so dropped-edit controls still fail.
+  `NK_IME_BARRIER_FILE` is an evidence-only snapshot nonce acknowledged at idle
+  after dispatch, including native Key callbacks; it never injects an event or
+  mutates Editor. Seed setup checks a fresh Paste callback, and copy checks the
+  new selection offer. Anchor repeat timing on the delivered key counter, not
+  the most recent unrelated snapshot's timestamp.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.

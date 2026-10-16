@@ -59,11 +59,14 @@ struct App {
     ime_evidence: bool,
     evidence_file: Option<std::fs::File>,
     fault_file: Option<String>,
+    barrier_file: Option<String>,
+    barrier: String,
     faults: Vec<String>,
     repeat_count: usize,
     key_count: usize,
     ime_count: usize,
     focus_count: usize,
+    paste_count: usize,
     wrong_ime_cursor: bool,
     evidence_start: Instant,
     initial_case: Option<String>,
@@ -159,11 +162,14 @@ impl App {
                 .transpose()
                 .map_err(|e| e.to_string())?,
             fault_file: std::env::var("NK_IME_FAULT_FILE").ok(),
+            barrier_file: std::env::var("NK_IME_BARRIER_FILE").ok(),
+            barrier: String::new(),
             faults: vec![],
             repeat_count: 0,
             key_count: 0,
             ime_count: 0,
             focus_count: 0,
+            paste_count: 0,
             wrong_ime_cursor: args.iter().any(|s| s == "--control-ime-cursor"),
             evidence_start: Instant::now(),
             initial_case: args
@@ -324,6 +330,8 @@ impl App {
                 "rect": [r.x, r.y, r.width, r.height], "underlines": underlines,
                 "faults": self.faults, "key_count": self.key_count,
                 "ime_count": self.ime_count, "focus_count": self.focus_count,
+                "paste_count": self.paste_count,
+                "barrier": self.barrier,
                 "field_scroll": self.field.scroll, "document_scroll": self.scroll,
             });
             let line = format!("IME_STATE {record}\n");
@@ -520,10 +528,24 @@ impl Application for App {
     }
     fn idle(&mut self, w: &mut Window) -> Result<()> {
         let fault = self.fault();
-        if fault == "repeat-release" || (fault == "repeat-focus-loss" && !self.active) {
+        let mutated = fault == "repeat-release" || (fault == "repeat-focus-loss" && !self.active);
+        if mutated {
             self.applied(&fault);
             self.field.editor.insert("a")?;
             self.invalid.paint = true;
+        }
+        // An evidence-only nonce acknowledges that the preceding event queue
+        // has reached the app. It never injects an event or changes Editor.
+        let barrier = self
+            .barrier_file
+            .as_ref()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .unwrap_or_default();
+        let requested = barrier != self.barrier;
+        if requested {
+            self.barrier = barrier;
+        }
+        if mutated || requested {
             self.sync(w)?;
         }
         Ok(())
@@ -617,6 +639,7 @@ impl Application for App {
                 self.ime(b)?;
             }
             Event::Paste(text) if self.focused == Some(FIELD) => {
+                self.paste_count += 1;
                 self.field.editor.paste(&text)?;
             }
             _ => return Ok(()),

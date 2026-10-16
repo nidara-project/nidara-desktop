@@ -176,6 +176,13 @@ The first #841 run exercised the drivers on vkms but was **not green**:
   assertion. Text expectations are unchanged and no action is retried. The
   original pre-activation interval remains reported to Claude for UX/latency
   review, with no claim that a compositor buffering bug has been fixed.
+- A snapshot nonce is acknowledged by the test window at idle after dispatch.
+  This makes native key/chord snapshots wait for their queued Application
+  callbacks too; it only reports state and never injects input or changes Editor.
+  Seed preparation also checks that a new Paste callback ran, even for an empty
+  seed. Copy waits for the new selection offer and checks both clipboard bytes
+  and Editor text. Repeat timing starts at the first delivered key's counter,
+  so unrelated evidence snapshots cannot shift the measured delay.
 
 ## Debt outside the gate: flat-review range geometry
 
