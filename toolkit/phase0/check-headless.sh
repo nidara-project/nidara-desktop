@@ -15,6 +15,7 @@ case "${1:-}" in
         exit "$status"
         ;;
     --inner)
+        export HYALO_A11Y_MANAGER=1
         export HYALO_CONTROL="$NK_PHASE0_RUN/control"
         mkfifo "$HYALO_CONTROL"
         export HYALO_CONFIG=/dev/null HYALO_SETTINGS="$NK_PHASE0_RUN/settings.toml"
@@ -22,6 +23,9 @@ case "${1:-}" in
         hyalo=$!
         trap 'kill "$hyalo" 2>/dev/null || true; wait "$hyalo" 2>/dev/null || true' EXIT
         local_ticks=600
+        case "${NK_PHASE0_CHECK:-}" in
+            nk-fcitx5-check.py|nk-orca-check.py) local_ticks=12000 ;;
+        esac
         if [ "${NK_PHASE0_CHECK:-}" = nk-layer-motion-check.py ]; then local_ticks=1800; fi
         if [ "${NK_PHASE0_CHECK:-}" = nk-a11y-check.py ]; then local_ticks=12000; fi
         for _ in $(seq 1 "$local_ticks"); do

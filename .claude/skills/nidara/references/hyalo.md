@@ -2165,6 +2165,17 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 
 ## Testing Hyalo
 
+The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
+`toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then
+the cage harness). Their incomplete gates and current findings are recorded in
+`toolkit/phase0/EVIDENCE-832-835.md`. Headless runs enable the keyboard manager
+with `HYALO_A11Y_MANAGER=1`; ordinary Atspi.Device listeners are denied on
+purpose, while Orca's key echo proves delivery. Never infer actual monitoring
+from capability bits. Keep log paths short (speech Unix sockets), exclude the
+caret from the adjacent candidate panel's pixel flood, and persist test output
+scale in the private settings layer when also changing the keyboard: applying
+keyboard settings reapplies configured outputs and resets a transient scale.
+
 - Never against the live session. `hyalo/scripts/headless-shot.sh` and `headless-shell.sh` run
   Hyalo in a window of a HEADLESS `cage` on the real GPU (the real shell sealed off by
   `sandboxed-shell.sh`), with `HYALO_CONTROL` for input and `nidara-hyalo msg screenshot` for

@@ -56,6 +56,9 @@ struct App {
     invalid: Invalid,
     no_keyboard: bool,
     no_preedit: bool,
+    ime_evidence: bool,
+    wrong_ime_cursor: bool,
+    evidence_start: Instant,
     initial_case: Option<String>,
 }
 impl App {
@@ -137,6 +140,9 @@ impl App {
             },
             no_keyboard: args.iter().any(|s| s == "--control-no-keyboard"),
             no_preedit: args.iter().any(|s| s == "--control-no-preedit"),
+            ime_evidence: args.iter().any(|s| s == "--ime-evidence"),
+            wrong_ime_cursor: args.iter().any(|s| s == "--control-ime-cursor"),
+            evidence_start: Instant::now(),
             initial_case: args
                 .windows(2)
                 .find(|a| a[0] == "--case")
@@ -222,6 +228,33 @@ impl App {
         self.layout()?;
         self.caret_visible()?;
         let r = offset(self.field.editor.caret_rect()?, self.text_origin());
+        if self.ime_evidence {
+            let e = &self.field.editor;
+            let underlines = if let Some(p) = e.preedit() {
+                e.layout()
+                    .selection_rects(p.range.start..p.range.start + p.text.len())?
+                    .into_iter()
+                    .map(|r| {
+                        let r = offset(r, self.text_origin());
+                        [r.x, r.y + r.height - 2., r.width, 1.]
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            };
+            eprintln!(
+                "IME_STATE {}",
+                serde_json::json!({
+                    "ms": self.evidence_start.elapsed().as_secs_f64() * 1000.,
+                    "text": e.text(), "display": e.display_text(),
+                    "cursor": e.caret().offset, "anchor": e.anchor().offset,
+                    "preedit": e.preedit().map(|p| &p.text),
+                    "active": self.active, "focused": self.focused == Some(FIELD),
+                    "rect": [r.x, r.y, r.width, r.height], "underlines": underlines,
+                    "field_scroll": self.field.scroll, "document_scroll": self.scroll,
+                })
+            );
+        }
         // Cursor rectangle is in logical surface coordinates, after both scrolls.
         // The compositor handles fractional scale; do not multiply it here.
         w.set_text_input(TextInput {
@@ -231,7 +264,7 @@ impl App {
             cursor: self.field.editor.caret().offset,
             anchor: self.field.editor.anchor().offset,
             rect: [
-                r.x.floor() as i32,
+                r.x.floor() as i32 + if self.wrong_ime_cursor { 80 } else { 0 },
                 r.y.floor() as i32,
                 r.width.ceil().max(1.) as i32,
                 r.height.ceil() as i32,

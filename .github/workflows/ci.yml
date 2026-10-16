@@ -544,6 +544,12 @@ jobs:
           name: hyalo-artifacts
           path: hyalo-out/
           if-no-files-found: ignore
+      - name: Real fcitx5 and Orca assertion tables
+        if: always()
+        run: |
+          for report in hyalo-out/toolkit-fcitx5/fcitx5-preflight/summary.md hyalo-out/toolkit-orca/orca-summary.md; do
+            if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
 
   widgets-gen:
     name: Widget registry freshness

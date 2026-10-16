@@ -1297,6 +1297,16 @@ still in `/tmp`, and no window to say so. A confirmation dialog would be better 
 button — it could offer "abandon anyway" for a hung install — and it needs strings, so it needs
 twelve locales; that is why it is not there yet.
 
+### Toolkit phase-0 real-component gates remain blocked (2026-10-16)
+Queue: #832 (fcitx5) and #835 (Orca). #839 fixed the original candidate,
+active-window and keyboard-monitor gaps. The expanded real-Orca walk now
+exposes an unspoken dropdown selection/state; flat review additionally lacks
+text-range geometry. Hangul sends a commit on Escape, conflicting with the
+matrix's cancellation requirement. `toolkit/phase0/EVIDENCE-832-835.md` has the
+wire/speech evidence and the handoff to Claude. The draft CI drivers preserve
+failures; remaining IME controls are explicitly pending. Neither gate is passed
+by a baseline without its controls or by the older scripted/libatspi checks.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
