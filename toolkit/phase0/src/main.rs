@@ -350,6 +350,9 @@ impl App {
         Ok(())
     }
     fn key(&mut self, mut k: Key, w: &mut Window) -> Result<()> {
+        if self.ime_evidence {
+            eprintln!("IME_KEY {k:?}");
+        }
         let fault = self.fault();
         if (fault == "undo" && k.ctrl && k.sym == 0x7a)
             || (fault == "backspace-repeat" && k.sym == 0xff08)

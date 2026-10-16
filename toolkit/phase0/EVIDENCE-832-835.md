@@ -183,6 +183,19 @@ The first #841 run exercised the drivers on vkms but was **not green**:
   seed. Copy waits for the new selection offer and checks both clipboard bytes
   and Editor text. Repeat timing starts at the first delivered key's counter,
   so unrelated evidence snapshots cannot shift the measured delay.
+- Run `38934095417` passes all 126 IME baseline assertions and 124 controls,
+  but two dead-acute controls fail their preceding Compose setup (Mozc/Hangul,
+  scale 1). They are failures, not caught controls. Orca remains complete at
+  25/25 speech assertions and 23/23 fault runs. In both failed client traces,
+  Ctrl+V has V-up but no Ctrl-up or clearing modifier event before Compose;
+  fcitx is terminated before forwarding that queued release. The last depressed
+  modifier mask is 4 (Ctrl). The successful Pinyin counterpart includes Ctrl-up
+  and a zero depressed mask before Compose. An inherited unchanged keymap makes
+  the stale client modifier visible; changing the map had incidentally reset it.
+  The chord barrier now requires release delivery for the key **and every
+  modifier**, then the existing dispatch snapshot, before teardown can proceed.
+  It sends no extra release, resets no keyboard state and retries no action.
+  Optional `IME_KEY` fixture diagnostics retain the actual mapped keys and flags.
 
 ## Debt outside the gate: flat-review range geometry
 

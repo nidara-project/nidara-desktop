@@ -216,9 +216,15 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
         def chord(modifiers, code):
             start = len((directory / 'client.log').read_text())
             p.chord(modifiers, code)
-            native.wait(lambda: re.search(
-                rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {code}, 0\)',
-                (directory / 'client.log').read_text()[start:]), 'chord key release delivered')
+            def released():
+                wire = (directory / 'client.log').read_text()[start:]
+                return all(re.search(
+                    rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {released_code}, 0\)', wire)
+                    for released_code in [code, *modifiers])
+            # The IME forwards releases asynchronously. Killing it after only
+            # V-up can discard the pending Ctrl-up, leaving native Compose
+            # under Ctrl even though the harness already wrote both releases.
+            native.wait(released, 'chord key and modifier releases delivered')
             drain_ime()
 
         def flush_hangul():

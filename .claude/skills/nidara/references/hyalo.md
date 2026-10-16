@@ -1235,6 +1235,10 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   the most recent unrelated snapshot's timestamp.
   Reset each case's Editor timeline on rerun: its counters and timestamps start
   from zero in each new process and cannot be mixed with an earlier run.
+  Chord barriers must cover modifier releases too: stopping fcitx after V-up
+  but before it forwards Ctrl-up leaves the client under Ctrl and breaks Compose
+  if the next settings request keeps the same keymap. Wait for each actual
+  release, then dispatch; do not force a rekey or synthesize another release.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
