@@ -121,9 +121,10 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
     env = os.environ | {'XDG_CONFIG_HOME': str(config.parent), 'WAYLAND_DEBUG': '1',
                         'NK_IME_STATE_LOG': str(directory / 'state.jsonl'), 'NK_IME_FAULT_FILE': str(fault_file)}
     app = ime = None
+    ime_log = directory / 'fcitx.log'
     try:
         ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin',
-                       '--verbose=key_trace=5'], directory / 'fcitx.log', env)
+                       '--verbose=key_trace=5'], ime_log, env)
         native.wait(lambda: b'true' in subprocess.check_output(
             ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus',
              '--object-path', '/org/freedesktop/DBus', '--method',
@@ -143,6 +144,8 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
 
         def check(step, predicate, why):
             assert app.poll() is None, 'client died during ' + step
+            if GROUP.get(step) != 'native_keys':
+                assert ime.poll() is None, 'fcitx5 died during ' + step
             if step == target:
                 fired = mutation in state(directory)['faults']
                 p.row(label + '/control-' + step, not predicate and fired, f'applied={fired}; {why}', observed=bool(predicate), applied=fired)
@@ -153,10 +156,49 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             p.msg('screenshot', directory / (step + '.png'))
             assert predicate, 'baseline/setup assertion failed: ' + step
 
-        def activate():
+        def activate(ready=True):
             subprocess.run(['fcitx5-remote', '-s', engine], check=True, timeout=5)
             subprocess.run(['fcitx5-remote', '-o'], check=True, timeout=5)
-            time.sleep(.2)
+            if ready:
+                native.wait(engine_ready, 'active input-method context and keyboard grab')
+            else:
+                time.sleep(.2)  # Original focus-return action timing; do not hide its first-key gap.
+
+        def engine_ready():
+            wire = ime_log.read_text()
+            activations = list(re.finditer(r'zwp_input_method_v2#\d+\.activate\(\)', wire))
+            deactivations = list(re.finditer(r'zwp_input_method_v2#\d+\.deactivate\(\)', wire))
+            if not activations or (deactivations and deactivations[-1].start() > activations[-1].start()):
+                return False
+            active = wire[activations[-1].end():]
+            return ('.grab_keyboard(' in active
+                    and re.search(r'zwp_input_method_keyboard_grab_v2#\d+\.keymap\(', active))
+
+        def drain_ime():
+            # Each done and leave queues exactly one Event::Ime in nk-wayland.
+            # Wait for those events to reach Editor, regardless of their text or
+            # whether a fault deliberately discards them. Never wait for the
+            # desired predicate to become true before checking a control.
+            def drained():
+                wire = (directory / 'client.log').read_text()
+                received = len(re.findall(r'<- zwp_text_input_v3@\d+\.(?:done|leave),', wire))
+                return state(directory)['ime_count'] >= received
+            native.wait(drained, 'received IME batches processed by Editor')
+
+        def key(code):
+            start = len((directory / 'client.log').read_text())
+            p.key(code)
+            native.wait(lambda: re.search(
+                rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {code}, 0\)',
+                (directory / 'client.log').read_text()[start:]), 'key release delivered')
+            drain_ime()
+
+        def flush_hangul():
+            start = len((directory / 'client.log').read_text())
+            subprocess.run(['fcitx5-remote', '-c'], check=True, timeout=5)
+            native.wait(lambda: re.search(r'commit_string,.*\n.*zwp_text_input_v3@\d+\.done,',
+                (directory / 'client.log').read_text()[start:]), 'Hangul flush received')
+            drain_ime()
 
         def seed(text):
             if ime.poll() is None:
@@ -190,35 +232,36 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             native.wait(lambda: re.search(
                 rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {code}, 0\)',
                 (directory / 'client.log').read_text()[wire_start:]), 'held key release delivered')
+            drain_ime()
             return state(directory)
 
-        def compose(text=sequence):
-            activate()
+        def compose(text=sequence, ready=True):
+            activate(ready)
             for char in text:
-                p.key(CODES[char])
+                key(CODES[char])
 
         def commit():
             if engine == 'mozc':
-                p.key(57)
-                p.key(28)
+                key(57)
+                key(28)
             elif engine == 'pinyin':
-                p.key(57)
+                key(57)
             else:
-                subprocess.run(['fcitx5-remote', '-c'], check=True, timeout=5)
-                time.sleep(.2)
+                flush_hangul()
 
         def initial():
             nonlocal ime, finish
-            p.key(CODES[sequence[0]])
+            activate()
+            key(CODES[sequence[0]])
             def first_preedit():
                 value = state(directory)
                 return value if value['preedit'] else None
             first_state = state(directory) if fault == '--control-no-preedit' else native.wait(first_preedit, 'first real preedit')
             for letter in sequence[1:]:
-                p.key(CODES[letter])
+                key(CODES[letter])
             if engine == 'mozc':
-                p.key(57)  # first Space converts; the second opens the candidate list
-                p.key(57)
+                key(57)  # first Space converts; the second opens the candidate list
+                key(57)
                 finish = [103, 28]  # select the first candidate (日本語) before confirming
             time.sleep(.3)
             p.msg('screenshot', directory / 'candidates.ppm')
@@ -269,10 +312,9 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             arm('commit')
             for code in finish:
                 if code == -1:
-                    subprocess.run(['fcitx5-remote', '-c'], check=True, timeout=5)
-                    time.sleep(.3)
+                    flush_hangul()
                 else:
-                    p.key(code)
+                    key(code)
             p.chord([29], 30)
             p.chord([29], 46)
             actual = subprocess.check_output(['wl-paste', '-n'], text=True, timeout=5)
@@ -286,17 +328,17 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             compose(sequence[:2])
             before = state(directory)
             arm('composition-backspace')
-            p.key(14)
+            key(14)
             after = state(directory)
             check('composition-backspace', bool(before['preedit']) and before['preedit'] != after['preedit']
                   and after['text'] == before['text'], f'before={before}; after={after}')
             arm('preedit-replacement')
-            p.key(CODES[sequence[1]])
+            key(CODES[sequence[1]])
             replaced = state(directory)
             check('preedit-replacement', bool(replaced['preedit']) and replaced['preedit'] != after['preedit']
                   and replaced['text'] == 'base', str(replaced))
             arm('escape')
-            p.key(1)
+            key(1)
             cancelled = state(directory)
             check('escape', not cancelled['preedit'] and cancelled['text'] == ('base하' if engine == 'hangul' else 'base'), str(cancelled))
             arm('cancelled-undo')
@@ -306,7 +348,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
         def context():
             seed('日🙂尾')
             arm('surrounding-utf8')
-            p.key(105)
+            key(105)
             middle = state(directory)
             wire = (directory / 'client.log').read_text()
             surrounding = re.findall(r'set_surrounding_text\((.*)\)', wire)[-1]
@@ -318,7 +360,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             check('interior-insertion', state(directory)['text'] == '日🙂' + expected + '尾', str(state(directory)))
         def selection():
             seed('日🙂尾')
-            p.key(105)
+            key(105)
             p.chord([42], 105)
             arm('selection-replacement')
             compose()
@@ -328,26 +370,32 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             seed('base')
             compose(sequence[:2])
             arm('focus-loss')
+            before_focus = state(directory)['focus_count']
             other = p.start([native.BIN], directory / 'second.log', env | {'NK_IME_STATE_LOG': str(directory / 'second-state.jsonl')})
             other_win = native.wait(lambda: next((w for w in p.msg('windows')['windows'] if w['pid'] == other.pid), None), 'second window')
             p.msg('do', 'focus-window ' + str(other_win['id']))
-            time.sleep(.4)
+            native.wait(lambda: state(directory)['focus_count'] > before_focus, 'focus loss processed by client')
+            drain_ime()
             lost = state(directory)
             check('focus-loss', not lost['active'] and not lost['preedit'] and lost['text'] == 'base', str(lost))
             arm('focus-return')
+            before_focus = state(directory)['focus_count']
             p.msg('do', 'focus-window ' + str(win['id']))
             time.sleep(.4)
-            p.stop(other)
-            compose()
+            native.wait(lambda: state(directory)['focus_count'] > before_focus, 'focus return processed by client')
+            ready_before = bool(engine_ready())
+            compose(ready=False)
             commit()
-            check('focus-return', state(directory)['text'] == 'base' + expected, str(state(directory)))
+            check('focus-return', state(directory)['text'] == 'base' + expected,
+                  f'context_ready_before={ready_before}; {state(directory)}')
+            p.stop(other)
         def restart():
-            nonlocal ime, finish
+            nonlocal ime, finish, ime_log
             seed('')
             p.stop(ime)
             time.sleep(.5)
-            ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin'],
-                          directory / 'fcitx-restart.log', env)
+            ime_log = directory / 'fcitx-restart.log'
+            ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin'], ime_log, env)
             native.wait(lambda: b'true' in subprocess.check_output(
                 ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus', '--object-path',
                  '/org/freedesktop/DBus', '--method', 'org.freedesktop.DBus.NameHasOwner', 'org.fcitx.Fcitx5']), 'restart controller')
@@ -366,11 +414,11 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                 'repeat_delay': 600, 'repeat_rate': 25}}}))
             time.sleep(.3)
             arm('compose')
-            p.key(100)  # Right Alt is Multi_key, configured on the actual seat.
+            key(100)  # Right Alt is Multi_key, configured on the actual seat.
             prefix = state(directory)
-            p.key(40)
+            key(40)
             accent_prefix = state(directory)
-            p.key(18)
+            key(18)
             composed = state(directory)
             check('compose', prefix['text'] == '' and accent_prefix['text'] == '' and composed['text'] == 'é', str(composed))
             seed('')
@@ -378,9 +426,9 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                 'layout': 'us', 'variant': 'intl', 'options': ''}}}))
             time.sleep(.3)
             arm('dead-acute')
-            p.key(40)
+            key(40)
             dead_prefix = state(directory)
-            p.key(18)
+            key(18)
             dead = state(directory)
             check('dead-acute', dead_prefix['text'] == '' and dead['text'] == 'é', str(dead))
             p.msg('settings', json.dumps({'input': {'keyboard': {
@@ -436,10 +484,11 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             p.msg('do', 'focus-window ' + str(win['id']))
             time.sleep(.3)
         def scroll():
-            nonlocal ime, finish
+            nonlocal ime, finish, ime_log
             p.stop(ime)
+            ime_log = directory / 'fcitx-scroll.log'
             ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin'],
-                          directory / 'fcitx-scroll.log', env)
+                          ime_log, env)
             native.wait(lambda: b'true' in subprocess.check_output(
                 ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus', '--object-path',
                  '/org/freedesktop/DBus', '--method', 'org.freedesktop.DBus.NameHasOwner', 'org.fcitx.Fcitx5']), 'scroll controller')
@@ -448,8 +497,8 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             arm('scrolled-candidates')
             compose()
             if engine == 'mozc':
-                p.key(57)
-                p.key(57)
+                key(57)
+                key(57)
             scrolled = state(directory)
             assert scrolled['field_scroll'] > 0, 'field did not scroll'
             p.msg('screenshot', directory / 'scrolled.ppm')

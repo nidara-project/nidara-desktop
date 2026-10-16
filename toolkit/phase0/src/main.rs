@@ -62,6 +62,8 @@ struct App {
     faults: Vec<String>,
     repeat_count: usize,
     key_count: usize,
+    ime_count: usize,
+    focus_count: usize,
     wrong_ime_cursor: bool,
     evidence_start: Instant,
     initial_case: Option<String>,
@@ -160,6 +162,8 @@ impl App {
             faults: vec![],
             repeat_count: 0,
             key_count: 0,
+            ime_count: 0,
+            focus_count: 0,
             wrong_ime_cursor: args.iter().any(|s| s == "--control-ime-cursor"),
             evidence_start: Instant::now(),
             initial_case: args
@@ -319,6 +323,7 @@ impl App {
                 "active": self.active, "focused": self.focused == Some(FIELD),
                 "rect": [r.x, r.y, r.width, r.height], "underlines": underlines,
                 "faults": self.faults, "key_count": self.key_count,
+                "ime_count": self.ime_count, "focus_count": self.focus_count,
                 "field_scroll": self.field.scroll, "document_scroll": self.scroll,
             });
             let line = format!("IME_STATE {record}\n");
@@ -542,6 +547,7 @@ impl Application for App {
                 self.invalid.layout = true;
             }
             Event::Focus(active) => {
+                self.focus_count += 1;
                 let fault = self.fault();
                 if (!active && fault == "focus-loss") || (active && fault == "focus-return") {
                     self.applied(&fault);
@@ -606,7 +612,10 @@ impl Application for App {
                 self.key_count += 1;
                 self.key(k, w)?;
             }
-            Event::Ime(b) => self.ime(b)?,
+            Event::Ime(b) => {
+                self.ime_count += 1;
+                self.ime(b)?;
+            }
             Event::Paste(text) if self.focused == Some(FIELD) => {
                 self.field.editor.paste(&text)?;
             }

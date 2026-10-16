@@ -1221,6 +1221,12 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   Real IME probes must wait for the client's new clipboard offer before seeding
   text, and its received `keyup` before comparing release snapshots. On vkms a
   fixed pause can read the previous offer or sample before key release delivery.
+  Startup/restart wait for the new input-method context and keyboard grab.
+  The focus-return row retains its original typing timing after receiving focus
+  so a lost first key during reactivation stays visible. Read Editor after its diagnostic IME event counter
+  covers the done/leave events already received on the wire; a fixed sleep can
+  sample before a real Hangul flush or preedit update. These barriers observe
+  delivery/processing, never the desired text, so dropped-edit controls still fail.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.

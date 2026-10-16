@@ -154,6 +154,24 @@ The first #841 run exercised the drivers on vkms but was **not green**:
   the new client offer plus an independent exact-byte clipboard read, then one
   real paste. Release snapshots wait for the client's real keyboard release
   event. Neither handshake retries the tested edit or relaxes its assertion.
+- Run `38920374708` then passed both complete matrices on vkms (IME 126/126
+  assertion/control pairs; Orca 25/25 assertions and 23/23 controls). Repeating
+  the final-head run `38923021229` still exposed asynchronous IME sampling:
+  Hangul's flush arrived after the snapshot and completed the correct text;
+  a Pinyin control sampled before its second preedit update; and Mozc's first
+  `n` after focus return preceded the new input-method activation/grab, reaching
+  the field as literal text (`basen異本語`). Those failures remain in the reports.
+  Orca stayed complete and green, including its stronger actual-application guard.
+- The IME driver now waits for the received key release and for all received
+  text-input done/leave events to be processed by Editor. The fixture records
+  independent event counters, incremented even when a fault discards a batch.
+  Hangul flush waits for a real commit batch, without checking its text. Startup
+  and restart wait for the new input-method context and keyboard grab. Focus
+  return deliberately retains its original action timing after the client has
+  received focus, without waiting out a missing IME grab: the first-key gap
+  remains a possible product finding for Claude. Both windows stay alive until
+  this assertion, and the report records whether the context was ready before
+  typing. No missing-activation failure is converted into a pass.
 
 ## Debt outside the gate: flat-review range geometry
 
