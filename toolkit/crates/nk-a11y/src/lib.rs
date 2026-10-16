@@ -216,7 +216,28 @@ pub enum Event {
     Remove(NodeId, usize, String),
     Caret(NodeId, usize),
     Selection(NodeId),
+    /// A selection container's set of selected children changed (AT-SPI Selection).
+    SelectionChanged(NodeId),
     Children(NodeId),
+}
+impl Role {
+    /// Whose children are chosen among: exposed through AT-SPI Selection. A reader asks a
+    /// combo box for its selected child to say its value, collapsed or open (#835).
+    pub fn is_selection_container(self) -> bool {
+        matches!(self, Role::ComboBox)
+    }
+}
+impl Tree {
+    /// The children of `id` that carry `selected`, in order.
+    pub fn selected_children(&self, id: NodeId) -> Vec<NodeId> {
+        self.nodes.get(&id).map_or(vec![], |n| {
+            n.children
+                .iter()
+                .copied()
+                .filter(|c| self.nodes.get(c).is_some_and(|c| c.states.selected))
+                .collect()
+        })
+    }
 }
 pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
     let mut out = vec![];
@@ -251,6 +272,12 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
         }
         if before.is_some_and(|b| b.children != n.children) {
             out.push(Event::Children(n.id));
+        }
+        if n.role.is_selection_container()
+            && let Some(old) = old.filter(|t| t.nodes.contains_key(&n.id))
+            && old.selected_children(n.id) != new.selected_children(n.id)
+        {
+            out.push(Event::SelectionChanged(n.id));
         }
         if n.role == Role::Password {
             continue;
@@ -366,5 +393,33 @@ mod tests {
             "{events:?}"
         );
         assert!(matches!(events[1], Event::Focus(1, true)), "{events:?}");
+    }
+    #[test]
+    fn a_combo_box_reports_a_changed_choice_once() {
+        let tree = |chosen: u64| {
+            let mut combo = Node::new(1, Role::ComboBox, "Language");
+            combo.children = vec![2, 3];
+            let mut nodes = BTreeMap::from([(1, combo)]);
+            for id in [2, 3] {
+                let mut o = Node::new(id, Role::Option, format!("o{id}"));
+                o.states.selected = id == chosen;
+                nodes.insert(id, o);
+            }
+            Tree { root: 1, nodes }
+        };
+        let (a, b) = (tree(2), tree(3));
+        assert_eq!(b.selected_children(1), vec![3]);
+        let events = diff(Some(&a), &b).unwrap();
+        let n = events
+            .iter()
+            .filter(|e| matches!(e, Event::SelectionChanged(1)))
+            .count();
+        assert_eq!(n, 1, "{events:?}");
+        assert!(
+            !diff(Some(&b), &b)
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, Event::SelectionChanged(_)))
+        );
     }
 }

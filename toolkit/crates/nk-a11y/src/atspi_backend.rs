@@ -252,6 +252,9 @@ impl Object {
                 if n.actions.contains(&Action::SetText) {
                     v.push("org.a11y.atspi.EditableText".into());
                 }
+                if n.role.is_selection_container() {
+                    v.push("org.a11y.atspi.Selection".into());
+                }
             }
         }
         v
@@ -358,6 +361,52 @@ impl Actions {
             && self
                 .0
                 .request(Action::Activate, Request::Activate(self.0.id))
+    }
+}
+/// Read from the tree; choosing goes through the app (`Request::Activate` on the option),
+/// like a click. Deselecting has no meaning for a single-choice combo box.
+struct Selection(Object);
+impl Selection {
+    fn selected(&self) -> Vec<NodeId> {
+        self.0.tree.lock().unwrap().selected_children(self.0.id)
+    }
+    fn child(&self, index: i32) -> Option<NodeId> {
+        let tree = self.0.tree.lock().unwrap();
+        let n = tree.nodes.get(&self.0.id)?;
+        n.children.get(usize::try_from(index).ok()?).copied()
+    }
+}
+#[interface(name = "org.a11y.atspi.Selection")]
+impl Selection {
+    #[zbus(property)]
+    fn n_selected_children(&self) -> i32 {
+        self.selected().len() as i32
+    }
+    fn get_selected_child(&self, index: i32) -> (Address,) {
+        let id = usize::try_from(index)
+            .ok()
+            .and_then(|i| self.selected().get(i).copied());
+        (id.map_or_else(|| self.0.null(), |id| self.0.address(id)),)
+    }
+    fn select_child(&self, index: i32) -> bool {
+        self.child(index)
+            .is_some_and(|id| self.0.request(Action::Activate, Request::Activate(id)))
+    }
+    fn deselect_selected_child(&self, _index: i32) -> bool {
+        false
+    }
+    fn is_child_selected(&self, index: i32) -> bool {
+        self.child(index)
+            .is_some_and(|id| self.selected().contains(&id))
+    }
+    fn select_all(&self) -> bool {
+        false
+    }
+    fn clear_selection(&self) -> bool {
+        false
+    }
+    fn deselect_child(&self, _index: i32) -> bool {
+        false
     }
 }
 struct Text(Object);
@@ -531,6 +580,9 @@ impl Backend {
             if n.text.is_some() {
                 s.at(p.clone(), Text(o.clone())).map_err(error)?;
             }
+            if n.role.is_selection_container() {
+                s.at(p.clone(), Selection(o.clone())).map_err(error)?;
+            }
             if n.actions.contains(&Action::SetText) {
                 s.at(p, Editable(o)).map_err(error)?;
             }
@@ -633,6 +685,9 @@ impl A11yBackend for Backend {
                 }
                 Event::Selection(id) => {
                     self.emit(id, "TextSelectionChanged", "", 0, 0, 0i32.into())?
+                }
+                Event::SelectionChanged(id) => {
+                    self.emit(id, "SelectionChanged", "", 0, 0, 0i32.into())?
                 }
                 Event::Children(id) => {
                     let before = self

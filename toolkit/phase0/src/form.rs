@@ -354,9 +354,9 @@ impl Form {
             }
             if id == DROPDOWN {
                 n.description = OPTIONS[self.chosen].into();
-                if self.expanded {
-                    n.children = (0..3).map(|i| ITEM + i).collect();
-                }
+                // Always its children, hidden while closed (as GTK's list): a reader reads the
+                // combo's value from the selected one either way (AT-SPI Selection).
+                n.children = (0..3).map(|i| ITEM + i).collect();
             }
             if self.control.as_deref() == Some("geometry") && id == NAME {
                 n.bounds.x = 0.;
@@ -401,20 +401,19 @@ impl Form {
             }
             nodes.insert(id, n);
         }
-        if self.expanded {
-            for (i, name) in OPTIONS.iter().enumerate() {
-                let mut n = Node::new(ITEM + i as u64, Role::Option, *name);
-                n.states.selected = i == self.chosen;
-                let r = self.option_bounds(i);
-                n.bounds = Bounds {
-                    x: r.x as f64,
-                    y: r.y as f64,
-                    width: r.width as f64,
-                    height: r.height as f64,
-                };
-                n.actions = vec![Action::Activate];
-                nodes.insert(n.id, n);
-            }
+        for (i, name) in OPTIONS.iter().enumerate() {
+            let mut n = Node::new(ITEM + i as u64, Role::Option, *name);
+            n.states.selected = i == self.chosen;
+            n.states.hidden = !self.expanded;
+            let r = self.option_bounds(i);
+            n.bounds = Bounds {
+                x: r.x as f64,
+                y: r.y as f64,
+                width: r.width as f64,
+                height: r.height as f64,
+            };
+            n.actions = vec![Action::Activate];
+            nodes.insert(n.id, n);
         }
         if self.dialog {
             let mut n = Node::new(DIALOG, Role::Dialog, "Correct error");
