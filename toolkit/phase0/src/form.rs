@@ -293,6 +293,9 @@ impl Form {
     fn tree(&self) -> Tree {
         let mut nodes = BTreeMap::new();
         let mut root = Node::new(ROOT, Role::Window, "Nidara accessibility form");
+        // While the dialog is up it holds the keyboard, and `active` follows it there.
+        root.states.active =
+            self.active && !self.dialog && self.control.as_deref() != Some("active");
         root.bounds = Bounds {
             x: 0.,
             y: 0.,
@@ -423,6 +426,7 @@ impl Form {
                 height: self.height as f64,
             };
             n.children = vec![ERROR, CLOSE];
+            n.states.active = self.active;
             nodes.insert(DIALOG, n);
         }
         if self.control.as_deref() == Some("tree") {

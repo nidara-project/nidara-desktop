@@ -267,7 +267,7 @@ smithay::delegate_dispatch2!(Hyalo);
 // the keyboard through a focus grab (the shell's search) gets the input method too. On Hyprland
 // it did not: its grab path never emitted the focus event the IME relay listens to (#679 #10,
 // #503). The input method's candidate window is a popup of the surface being typed into, drawn
-// with that surface's popups (render/mod.rs).
+// with that surface's popups (render/mod.rs), placed just below the caret (`place_input_popup`).
 impl smithay::wayland::input_method::InputMethodHandler for Hyalo {
     fn new_popup(&mut self, mut surface: smithay::wayland::input_method::PopupSurface) {
         crate::protocols::layers::remember_input_popup(&surface);
@@ -275,6 +275,7 @@ impl smithay::wayland::input_method::InputMethodHandler for Hyalo {
         // when an IME creates its popup after the field's first commit.
         let rect = surface.text_input_rectangle();
         surface.set_text_input_rectangle(rect.loc.x, rect.loc.y, rect.size.w, rect.size.h);
+        crate::protocols::layers::place_input_popup(&surface);
         if let Err(err) = self.popups.track_popup(smithay::desktop::PopupKind::from(surface)) {
             tracing::warn!(?err, "input method popup not tracked");
         }
@@ -282,6 +283,7 @@ impl smithay::wayland::input_method::InputMethodHandler for Hyalo {
 
     fn popup_repositioned(&mut self, surface: smithay::wayland::input_method::PopupSurface) {
         crate::protocols::layers::remember_input_popup(&surface);
+        crate::protocols::layers::place_input_popup(&surface);
         self.queue_redraw(None);
     }
 

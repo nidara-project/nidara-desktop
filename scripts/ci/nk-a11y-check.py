@@ -125,13 +125,14 @@ wait(lambda: private_bus.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus
 listener = Atspi.EventListener.new(event)
 for category in ['object:text-changed', 'object:text-caret-moved',
                  'object:text-selection-changed', 'object:state-changed',
-                 'object:children-changed', 'object:property-change']:
+                 'object:children-changed', 'object:property-change',
+                 'window:activate', 'window:deactivate']:
     assert listener.register(category), category
 session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.freedesktop.DBus.Properties',
                   'Set', GLib.Variant('(ssv)', ('org.a11y.Status', 'IsEnabled', GLib.Variant('b', True))),
                   None, Gio.DBusCallFlags.NONE, 5000, None)
 
-STAGES = ['tree', 'name', 'role', 'geometry', 'focus', 'text', 'caret', 'selection', 'password',
+STAGES = ['tree', 'name', 'role', 'geometry', 'active', 'focus', 'text', 'caret', 'selection', 'password',
           'expanded', 'dropdown', 'collapse', 'state', 'dialog', 'error', 'restore', 'action']
 
 
@@ -169,6 +170,10 @@ def run(backend, broken=None, stop=None):
             r=Atspi.Component.get_extents(named(root,'Name').get_component_iface(), Atspi.CoordType.WINDOW)
             return r.x==44 and r.y==56 and r.width>300 and r.height==54
         check('geometry',geometry)
+        # Orca rejects focus inside a frame that is not ACTIVE (#835), and learns it
+        # from window:activate, not only from a state it would have to poll.
+        check('active', lambda: root.get_state_set().contains(Atspi.StateType.ACTIVE)
+              and any(e['type']=='window:activate' for e in EVENTS))
         roles = [('Name', Atspi.Role.ENTRY), ('Password', Atspi.Role.PASSWORD_TEXT),
                  ('Language', Atspi.Role.COMBO_BOX), ('Remember me', Atspi.Role.CHECK_BOX), ('Review', Atspi.Role.PUSH_BUTTON)]
         # Password's control deliberately exposes ordinary text; test privacy,
@@ -305,7 +310,7 @@ def main():
     finally:
         baseline.terminate();baseline.wait(timeout=5);pump(.2)
 
-    controls=['tree','name','role','geometry','focus','text','caret','selection','password','expanded','dropdown','collapse','state','dialog','error','restore','action']
+    controls=['tree','name','role','geometry','active','focus','text','caret','selection','password','expanded','dropdown','collapse','state','dialog','error','restore','action']
     for backend in os.environ.get('NK_A11Y_BACKENDS','atspi').split():
         report[backend]={'controls':{},'checks':{},'costs':{}}
         if os.environ.get('NK_A11Y_CONTROLS','1')!='0':

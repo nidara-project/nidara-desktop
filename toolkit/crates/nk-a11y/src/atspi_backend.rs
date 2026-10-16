@@ -133,6 +133,7 @@ fn states(n: &Node) -> StateSet {
     let mut s = StateSet::empty();
     for (yes, state) in [
         (true, State::Visible),
+        (n.states.active, State::Active),
         (!n.states.hidden, State::Showing),
         (!n.states.disabled, State::Enabled),
         (!n.states.disabled, State::Sensitive),
@@ -545,11 +546,24 @@ impl Backend {
         b: i32,
         value: Value<'_>,
     ) -> Result<()> {
+        self.emit_on("org.a11y.atspi.Event.Object", id, member, kind, a, b, value)
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn emit_on(
+        &self,
+        interface: &str,
+        id: NodeId,
+        member: &str,
+        kind: &str,
+        a: i32,
+        b: i32,
+        value: Value<'_>,
+    ) -> Result<()> {
         self.connection
             .emit_signal(
                 None::<&str>,
                 path(id),
-                "org.a11y.atspi.Event.Object",
+                interface,
                 member,
                 &(kind, a, b, value, HashMap::<String, Value<'_>>::new()),
             )
@@ -570,7 +584,25 @@ impl A11yBackend for Backend {
                     self.emit(id, "StateChanged", "focused", i32::from(v), 0, 0i32.into())?
                 }
                 Event::State(id, s, v) => {
-                    self.emit(id, "StateChanged", s, i32::from(v), 0, 0i32.into())?
+                    self.emit(id, "StateChanged", s, i32::from(v), 0, 0i32.into())?;
+                    // window:activate / window:deactivate, as GTK sends with the state.
+                    if s == "active" {
+                        let member = if v { "Activate" } else { "Deactivate" };
+                        let name = tree
+                            .nodes
+                            .get(&id)
+                            .map(|n| n.name.clone())
+                            .unwrap_or_default();
+                        self.emit_on(
+                            "org.a11y.atspi.Event.Window",
+                            id,
+                            member,
+                            "",
+                            0,
+                            0,
+                            name.as_str().into(),
+                        )?;
+                    }
                 }
                 Event::Name(id, s) => self.emit(
                     id,

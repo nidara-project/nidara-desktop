@@ -107,6 +107,8 @@ pub struct Hyalo {
     pub idle: crate::idle::IdleState,
     /// logind and the ScreenSaver API, in a real session (logind.rs).
     pub login: Option<crate::logind::Login>,
+    /// The screen reader's keyboard, in a real session (a11y.rs).
+    pub a11y: Option<crate::a11y::A11y>,
     /// X11 apps: Xwayland and its window manager (xwayland.rs).
     pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
     pub x11: crate::xwayland::XState,
@@ -284,6 +286,7 @@ impl Hyalo {
             lock,
             idle: crate::idle::IdleState::new(&dh_for_idle, loop_handle_for_idle),
             login: None,
+            a11y: None,
             xwayland_shell_state,
             x11: Default::default(),
         }

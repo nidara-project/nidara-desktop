@@ -177,6 +177,37 @@ impl Hyalo {
             // The automatic relaunches ran out: a key press brings the lock screen back.
             self.relaunch_lock(true);
         }
+        // The screen reader hears the key first, and may keep it (a11y.rs).
+        if let Some(monitor) = self.a11y.as_ref().map(|a| a.monitor.clone())
+            && monitor.lock().unwrap().active()
+        {
+            let keysym = keyboard.with_xkb_state(self, |ctx| {
+                // SAFETY: read only; the state is not changed behind Smithay's back.
+                let xkb = ctx.xkb().lock().unwrap();
+                unsafe { xkb.state() }.key_get_one_sym(code)
+            });
+            let m = keyboard.modifier_state().serialized;
+            let key = crate::a11y::Key {
+                keycode: raw,
+                keysym: keysym.raw(),
+                unichar: smithay::input::keyboard::xkb::keysym_to_utf32(keysym),
+                mask: m.depressed | m.latched | m.locked,
+                pressed: state == KeyState::Pressed,
+                time_ms: time.millis(),
+            };
+            let delay = self.config.input.keyboard.repeat_delay.max(0) as u32;
+            let (to, outcome) = monitor.lock().unwrap().key(&key, delay);
+            if let Some(a) = &self.a11y {
+                a.send(to, key);
+            }
+            if outcome.skip_xkb {
+                return;
+            }
+            if outcome.consume {
+                keyboard.input::<(), _>(self, code, state, serial, time, |_, _, _| FilterResult::Intercept(()));
+                return;
+            }
+        }
         let action = keyboard.input::<KeyAction, _>(self, code, state, serial, time, |data, mods, handle| {
             let sym = handle.raw_latin_sym_or_raw_current_sym().unwrap_or_else(|| handle.modified_sym());
             if state == KeyState::Released {
