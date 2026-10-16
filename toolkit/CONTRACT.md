@@ -17,7 +17,7 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 |---|---|---|
 | 1 | Text | **Passed: Parley** (owner, 2026-10-15, #824/#825) — every case on Arch and Ubuntu, measuring and painting sharing one layout object. Pango failed one case on Arch (two on Ubuntu) and was removed |
 | 2 | IME | **Pending #832:** the real fcitx5 matrix (below), Mozc/Pinyin/Hangul at 1 and 1.25, including discriminating fault controls, must pass in the `hyalo` vkms job. The scripted input method alone cannot pass this gate |
-| 3 | Orca | **Pending #835:** real Orca’s `SPEECH OUTPUT` must pass the form walk and its controls in the `hyalo` vkms job. **Provider chosen: direct AT-SPI** (#834; active windows added in #839). Focus/editing speech works; the dropdown’s spoken selection remains under investigation |
+| 3 | Orca | **Pending #835:** real Orca’s `SPEECH OUTPUT` must pass the form walk and its controls in the `hyalo` vkms job. **Provider chosen: direct AT-SPI** (#834; active windows added in #839). Selection support is provided by #842; open/closed state changes must present the current/final value, without requiring literal “expanded”/“collapsed” |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
 | 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN. **Passed** (#831/#837, CI at scale 1 and 1.25): `nk-phase0 --test5` blocks 1.5 s with 0.000 s of CPU while both layers move, the click lands where A is seen, in A's coordinates; three fault controls fail as they should. A retarget's kept velocity is proven by Hyalo's unit test, not by screenshots (they cannot date the retarget) |
 
@@ -248,3 +248,21 @@ Test 3 uses real Orca with a silent speech-dispatcher module. Paste is expected
 to announce “Pasted contents from clipboard.”; reading the Unicode content is a
 separate keyboard action. Only Orca may monitor the keyboard: a denied ordinary
 listener is the access control’s negative case; Orca’s key echo proves delivery.
+
+## Real-engine acceptance decisions (Claude, #841, 2026-10-16)
+
+- Test 2: Mozc/Pinyin Escape cancels to `base`. Hangul Escape commits its
+  composing syllable to `base하`, clears preedit, and one Ctrl+Z removes exactly
+  that commit to `base`. The Hangul control drops the real engine commit and
+  must fail. This preserves Korean engine policy, not a toolkit workaround.
+- Test 3: on a focused combo Orca presents the selected value on its state
+  change: Space → `Japanese`, Enter → `Chinese`. Literal expanded/collapsed
+  words are not required (Orca emits those only for an ancestor combo). The
+  expanded/collapse controls must suppress that presentation and be caught.
+- Test-window-only fault files may arm one mutation immediately before an
+  action. This lets the same scenario exercise baseline and fault without
+  changing installed toolkit behaviour or sending artificial events to Orca.
+  Each fault must log its actual application; no application, timeout or crash
+  can count as a caught assertion. Editor JSON uses a separate file so concurrent
+  Wayland debug output cannot interleave with a record.
+- `GetRangeExtents` and flat review stay documented debt outside this gate.
