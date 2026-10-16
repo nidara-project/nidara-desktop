@@ -511,7 +511,7 @@ impl App {
 }
 impl Application for App {
     fn poll_interval_ms(&self) -> u32 {
-        if self.fault_file.is_some() { 50 } else { 0 }
+        if self.fault_file.is_some() { 50 } else { 1000 }
     }
     fn idle(&mut self, w: &mut Window) -> Result<()> {
         let fault = self.fault();

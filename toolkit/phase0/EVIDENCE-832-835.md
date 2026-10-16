@@ -171,12 +171,16 @@ exact traces remain in this file's history and the #832/#835/#841 discussions.
 ## Verification records
 
 The local post-#842 Orca run (`/tmp/p3/orca-report.json`) passes all **25/25**
-speech assertions and catches all **23/23** fault runs. `complete_matrix` is true
-and the coverage map accounts for every assertion. The full local IME run
-(`/tmp/m1/fcitx5-preflight/report.json`, driver revision `f8ff62ae`) passes all
-**126/126** assertions and catches all **126/126** controls across all three
-engines and both scales; `complete_matrix` is true. These local runs precede the
-final stricter no-preedit-applied marker and explicit Tab/Backspace echo checks.
+speech assertions and catches all **23/23** fault runs. The complete matrix is
+also green in both vkms runs listed above, including explicit Tab/Backspace
+echo. `complete_matrix` is true and coverage accounts for every assertion.
+The full local IME run (`/tmp/s3/fcitx5-preflight/report.json`, driver revision
+`3e602bed`) passes all **126/126** assertions and catches all **126/126** controls
+across all three engines and both scales; `complete_matrix` is true. It includes
+the stricter applied-preedit marker and the clipboard/release handshakes.
+
+Final review also restored the normal test window's original 1000 ms idle poll
+interval when no fault file is supplied; only fault-file runs poll at 50 ms.
 The vkms CI reports carry the exact tested revision and binary hashes; consult
 the PR checks and uploaded artifacts for the authoritative current result.
 
