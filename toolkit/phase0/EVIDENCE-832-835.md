@@ -165,13 +165,17 @@ The first #841 run exercised the drivers on vkms but was **not green**:
 - The IME driver now waits for the received key release and for all received
   text-input done/leave events to be processed by Editor. The fixture records
   independent event counters, incremented even when a fault discards a batch.
-  Hangul flush waits for a real commit batch, without checking its text. Startup
-  and restart wait for the new input-method context and keyboard grab. Focus
-  return deliberately retains its original action timing after the client has
-  received focus, without waiting out a missing IME grab: the first-key gap
-  remains a possible product finding for Claude. Both windows stay alive until
-  this assertion, and the report records whether the context was ready before
-  typing. No missing-activation failure is converted into a pass.
+  Hangul flush waits for a real commit batch, without checking its text.
+- The pinned input-method-v2 XML defines activation as double-buffered through
+  done, and keyboard grab as a separate request. The pre-grab `n` therefore does
+  not by itself establish a protocol violation. Startup, restart and focus
+  return wait for activation/done and the grab's keymap before composing; focus
+  return additionally identifies the fresh field by its seeded surrounding text.
+  If that context/grab never arrives, the focus-return assertion fails, including
+  the control that prevents re-enabling it. Both windows remain alive until the
+  assertion. Text expectations are unchanged and no action is retried. The
+  original pre-activation interval remains reported to Claude for UX/latency
+  review, with no claim that a compositor buffering bug has been fixed.
 
 ## Debt outside the gate: flat-review range geometry
 

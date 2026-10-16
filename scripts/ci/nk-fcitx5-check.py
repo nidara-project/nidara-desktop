@@ -156,23 +156,22 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             p.msg('screenshot', directory / (step + '.png'))
             assert predicate, 'baseline/setup assertion failed: ' + step
 
-        def activate(ready=True):
+        def activate():
             subprocess.run(['fcitx5-remote', '-s', engine], check=True, timeout=5)
             subprocess.run(['fcitx5-remote', '-o'], check=True, timeout=5)
-            if ready:
-                native.wait(engine_ready, 'active input-method context and keyboard grab')
-            else:
-                time.sleep(.2)  # Original focus-return action timing; do not hide its first-key gap.
+            native.wait(engine_ready, 'active input-method context and keyboard grab')
 
-        def engine_ready():
-            wire = ime_log.read_text()
+        def engine_ready(start=0, context=None):
+            wire = ime_log.read_text()[start:]
             activations = list(re.finditer(r'zwp_input_method_v2#\d+\.activate\(\)', wire))
             deactivations = list(re.finditer(r'zwp_input_method_v2#\d+\.deactivate\(\)', wire))
             if not activations or (deactivations and deactivations[-1].start() > activations[-1].start()):
                 return False
             active = wire[activations[-1].end():]
             return ('.grab_keyboard(' in active
-                    and re.search(r'zwp_input_method_keyboard_grab_v2#\d+\.keymap\(', active))
+                    and re.search(r'zwp_input_method_v2#\d+\.done\(\)', active)
+                    and re.search(r'zwp_input_method_keyboard_grab_v2#\d+\.keymap\(', active)
+                    and (context is None or f'.surrounding_text({json.dumps(context)},' in active))
 
         def drain_ime():
             # Each done and leave queues exactly one Event::Ime in nk-wayland.
@@ -235,8 +234,8 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             drain_ime()
             return state(directory)
 
-        def compose(text=sequence, ready=True):
-            activate(ready)
+        def compose(text=sequence):
+            activate()
             for char in text:
                 key(CODES[char])
 
@@ -380,14 +379,17 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             check('focus-loss', not lost['active'] and not lost['preedit'] and lost['text'] == 'base', str(lost))
             arm('focus-return')
             before_focus = state(directory)['focus_count']
+            context_start = len(ime_log.read_text())
             p.msg('do', 'focus-window ' + str(win['id']))
-            time.sleep(.4)
             native.wait(lambda: state(directory)['focus_count'] > before_focus, 'focus return processed by client')
-            ready_before = bool(engine_ready())
-            compose(ready=False)
+            try:
+                native.wait(lambda: engine_ready(context_start, 'base'), 'fresh field context and keyboard grab')
+            except AssertionError:
+                check('focus-return', False, 'fresh field context and keyboard grab never arrived')
+            compose()
             commit()
             check('focus-return', state(directory)['text'] == 'base' + expected,
-                  f'context_ready_before={ready_before}; {state(directory)}')
+                  f'fresh field context and grab confirmed; {state(directory)}')
             p.stop(other)
         def restart():
             nonlocal ime, finish, ime_log
