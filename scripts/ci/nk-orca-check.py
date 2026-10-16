@@ -202,7 +202,9 @@ def main():
         p.key(28)
         speech_step('Dialog escaped and restored', lambda: p.key(1),
                     [lambda t: 'review' in t, lambda t: 'button' in t])
-        p.row('Wayland keyboard monitor refusal', refused and not key_events,
+        tab_echo = any('tab' in r.get('speech', []) for r in p.rows if r['step'].startswith('Tab '))
+        delete_echo = any('backspace' in r.get('speech', []) for r in p.rows if r['step'] == 'Delete d')
+        p.row('Wayland keyboard monitor refusal', refused and not key_events and tab_echo and delete_echo,
               f'libatspi capabilities={int(caps)}, but observed key events={len(key_events)}; capabilities alone may describe a legacy fallback',
               key_events=key_events)
         p.msg('screenshot', p.log / 'form.png')

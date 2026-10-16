@@ -446,6 +446,13 @@ impl App {
         if !self.active || self.focused != Some(FIELD) {
             return Ok(());
         }
+        if self.no_preedit
+            && b.preedit
+                .as_ref()
+                .is_some_and(|(text, _, _)| !text.is_empty())
+        {
+            self.applied("no-preedit");
+        }
         let e = &mut self.field.editor;
         // done order: remove old preedit, delete around selection, commit, then
         // display the new preedit. A preedit never enters the committed buffer.

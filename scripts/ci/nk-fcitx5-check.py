@@ -215,7 +215,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             underlined = bool(first_state['preedit']) and bool(composing['preedit']) and first_state['preedit'] != composing['preedit'] and ink > 10*scale
             assert app.poll() is None, 'client died before preedit assertion'
             if fault == '--control-no-preedit':
-                p.row(label + '/control-underlined-preedit', not underlined and 'preedit_string, (Some("' in (directory / 'client.log').read_text(), 'ignored preedit must fail the underline assertion')
+                p.row(label + '/control-underlined-preedit', not underlined and 'no-preedit' in composing['faults'], 'ignored preedit must fail the underline assertion')
                 return
             if fault and not underlined:
                 raise AssertionError('cursor-control setup: underline baseline failed')
