@@ -16,8 +16,8 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 | # | Test | Passes when |
 |---|---|---|
 | 1 | Text | **Passed: Parley** (owner, 2026-10-15, #824/#825) — every case on Arch and Ubuntu, measuring and painting sharing one layout object. Pango failed one case on Arch (two on Ubuntu) and was removed |
-| 2 | IME | our field completes the matrix (below) with fcitx5, as a text-input-v3 client |
-| 3 | Orca | the form (below) is completed with keyboard and Orca only. **Provider chosen: direct AT-SPI** (#834, 17/17 in CI driven through libatspi); the walk with real Orca is still to run |
+| 2 | IME | **Pending #832:** the real fcitx5 matrix (below), Mozc/Pinyin/Hangul at 1 and 1.25, including discriminating fault controls, must pass in the `hyalo` vkms job. The scripted input method alone cannot pass this gate |
+| 3 | Orca | **Pending #835:** real Orca’s `SPEECH OUTPUT` must pass the form walk and its controls in the `hyalo` vkms job. **Provider chosen: direct AT-SPI** (#834; active windows added in #839). Focus/editing speech works; the dropdown’s spoken selection remains under investigation |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
 | 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN. **Passed** (#831/#837, CI at scale 1 and 1.25): `nk-phase0 --test5` blocks 1.5 s with 0.000 s of CPU while both layers move, the click lands where A is seen, in A's coordinates; three fault controls fail as they should. A retarget's kept velocity is proven by Hyalo's unit test, not by screenshots (they cannot date the retarget) |
 
@@ -228,3 +228,17 @@ corrected, closed — and the focus back on the button that opened it.
 | Hyalo's server half of the layers protocol | Claude — ✅ #823 | the XML |
 
 Different crates, different branches; the only shared file is this one, and it changes first.
+
+## Real-component evidence (#832, #835)
+
+Test 2 may enable `--ime-evidence` on the phase-0 window to log UTF-8 Editor
+state, preedit and logical cursor geometry. Pixel evidence independently checks
+the underline and candidate position; Wayland wire logs check surrounding text.
+These diagnostics belong to the test window, never password fields. Each fault
+control must fail the same assertion that passed on its baseline. An unrelated
+failure, or a broken baseline, cannot establish a discriminating control.
+
+Test 3 uses real Orca with a silent speech-dispatcher module. Paste is expected
+to announce “Pasted contents from clipboard.”; reading the Unicode content is a
+separate keyboard action. Only Orca may monitor the keyboard: a denied ordinary
+listener is the access control’s negative case; Orca’s key echo proves delivery.
