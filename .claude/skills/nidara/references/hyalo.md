@@ -1218,6 +1218,9 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   those endpoint bounds; comparing integer height directly with `12 * scale`
   spuriously fails around scale 7/6. Each capture records its measured spans,
   rectangle and bounds in JSON, and the missing-association control still fails.
+  Real IME probes must wait for the client's new clipboard offer before seeding
+  text, and its received `keyup` before comparing release snapshots. On vkms a
+  fixed pause can read the previous offer or sample before key release delivery.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.

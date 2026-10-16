@@ -146,6 +146,14 @@ The first #841 run exercised the drivers on vkms but was **not green**:
   rectangles. The full isolated native test-5 run (`/tmp/q5/check.log`) passes
   at both scales, including missing-association, missing-parent-commit and
   client-motion controls. The real missing-association control stays mandatory.
+- Runs `38851510725` and `38852370207` pass the entire Orca matrix on vkms
+  (**25/25** speech assertions, **23/23** fault runs). IME remains failed:
+  preparation sent Ctrl+V before the client's new clipboard offer arrived.
+  In the first run, one release snapshot also preceded the received `keyup`.
+  The wire shows no repeated edits after that release. Preparation now requires
+  the new client offer plus an independent exact-byte clipboard read, then one
+  real paste. Release snapshots wait for the client's real keyboard release
+  event. Neither handshake retries the tested edit or relaxes its assertion.
 
 ## Debt outside the gate: flat-review range geometry
 

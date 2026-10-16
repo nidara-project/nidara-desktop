@@ -163,13 +163,34 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                 subprocess.run(['fcitx5-remote', '-c'], check=True, timeout=5)
                 time.sleep(.2)
             p.chord([29], 30)
+            wire_start = len((directory / 'client.log').read_text())
             clip = p.start(['wl-copy', '--foreground', '--type', 'text/plain;charset=utf-8'],
                            directory / 'clipboard.log', stdin=subprocess.PIPE)
             clip.stdin.write(text.encode())
             clip.stdin.close()
-            time.sleep(.1)
+            # A fixed sleep can send Ctrl+V against the previous offer while
+            # wl-copy is still replacing it. Require the client's new offer,
+            # then independently read its bytes before the single real paste.
+            def clipboard_ready():
+                assert clip.poll() is None, 'clipboard source exited before seed'
+                wire = (directory / 'client.log').read_text()[wire_start:]
+                if not re.search(r'<- wl_data_device@\d+\.selection, \(wl_data_offer@', wire):
+                    return False
+                value = subprocess.run(['wl-paste', '--no-newline', '--type',
+                                        'text/plain;charset=utf-8'],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=3)
+                return value.returncode == 0 and value.stdout == text.encode()
+            native.wait(clipboard_ready, 'new clipboard offer with exact seed bytes')
             p.chord([29], 47)
             native.wait(lambda: state(directory)['text'] == text, 'seed text')
+
+        def release(code):
+            wire_start = len((directory / 'client.log').read_text())
+            p.control(f'keyup {code}', 0)
+            native.wait(lambda: re.search(
+                rf'<- wl_keyboard@\d+\.key, \(\d+, \d+, {code}, 0\)',
+                (directory / 'client.log').read_text()[wire_start:]), 'held key release delivered')
+            return state(directory)
 
         def compose(text=sequence):
             activate()
@@ -373,8 +394,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             time.sleep(.25)
             early = state(directory)
             time.sleep(.7)
-            p.control('keyup 30', .05)
-            released = state(directory)
+            released = release(30)
             hold_end = released['ms']
             arm('repeat-release')
             time.sleep(.3)
@@ -391,14 +411,14 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
                   and 500 <= repeated[1]['ms'] - repeated[0]['ms'] <= 780,
                   f'early={early}; intervals_ms={intervals}')
             check('repeat-rate', len(intervals) > 3 and all(25 <= dt <= 90 for dt in intervals[1:]) and 25 <= statistics.median(intervals[1:]) <= 55, str(intervals))
-            check('repeat-release', len(released['text']) > 2 and settled['text'] == released['text'], str(settled))
+            check('repeat-release', len(released['text']) > 2 and settled['text'] == released['text'],
+                  f'released={released}; settled={settled}')
             arm('repeat-backspace')
             count = state(directory)['key_count']
             p.control('keydown 14', 0)
             native.wait(lambda: state(directory)['key_count'] > count, 'held Backspace delivered')
             time.sleep(.8)
-            p.control('keyup 14', .05)
-            deleted = state(directory)
+            deleted = release(14)
             time.sleep(.2)
             check('repeat-backspace', len(deleted['text']) < len(released['text']) - 1
                   and state(directory)['text'] == deleted['text'], str(deleted))
