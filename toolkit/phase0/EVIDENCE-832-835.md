@@ -137,6 +137,15 @@ The first #841 run exercised the drivers on vkms but was **not green**:
   that CI run. Unicode readback uses normal keyboard focus return, which is part
   of the required walk. The separate keypad-command discrepancy is retained as
   an observation for follow-up, not a claimed keyboard-command pass.
+- The #842 main run failed the earlier test-5 cursor oracle: a 93-pixel solid
+  span estimated scale 1.1625, then rejected a correct outward-rounded cursor
+  rectangle `(144, 62, 4, 16)` by 0.05 pixels. Test 5 now carries the scanline's
+  physical-pixel uncertainty through the top/bottom rounding instead of treating
+  its integer span as exact scale. Captures include the numerical bounds. Replay
+  accepts both main captures and rejects unscaled, misplaced and wrong-height
+  rectangles. The full isolated native test-5 run (`/tmp/q5/check.log`) passes
+  at both scales, including missing-association, missing-parent-commit and
+  client-motion controls. The real missing-association control stays mandatory.
 
 ## Debt outside the gate: flat-review range geometry
 
@@ -155,9 +164,13 @@ exact traces remain in this file's history and the #832/#835/#841 discussions.
 
 The local post-#842 Orca run (`/tmp/p3/orca-report.json`) passes all **25/25**
 speech assertions and catches all **23/23** fault runs. `complete_matrix` is true
-and the coverage map accounts for every assertion. The full IME local run and
-vkms CI publish their row tables and exact environment in the same report format;
-consult the PR checks and uploaded artifacts for their current revision.
+and the coverage map accounts for every assertion. The full local IME run
+(`/tmp/m1/fcitx5-preflight/report.json`, driver revision `f8ff62ae`) passes all
+**126/126** assertions and catches all **126/126** controls across all three
+engines and both scales; `complete_matrix` is true. These local runs precede the
+final stricter no-preedit-applied marker and explicit Tab/Backspace echo checks.
+The vkms CI reports carry the exact tested revision and binary hashes; consult
+the PR checks and uploaded artifacts for the authoritative current result.
 
 Workspace fmt, clippy with `-D warnings`, unit/corpus tests, Python and shell
 syntax, skill-docs-check and diff checks pass. A clean build is not a substitute

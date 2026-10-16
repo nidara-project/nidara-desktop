@@ -1213,6 +1213,11 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   completion, retargeting, buffers and a real IME popup at scales 1/1.25. Controls
   omit the parent commit, animate in the client, or omit the cursor association,
   and must fail at their own assertion. The original C server probe stays too.
+  Cursor geometry rounds both endpoints outward in logical space. The screenshot
+  oracle carries the solid-colour span's physical-pixel sampling uncertainty into
+  those endpoint bounds; comparing integer height directly with `12 * scale`
+  spuriously fails around scale 7/6. Each capture records its measured spans,
+  rectangle and bounds in JSON, and the missing-association control still fails.
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.

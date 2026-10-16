@@ -5,6 +5,7 @@ Requires a TEST Hyalo with HYALO_CONTROL. Never drives the live desktop.
 """
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -17,6 +18,25 @@ spec.loader.exec_module(m)
 BASE = Path(os.environ.get('NK_PHASE0_LOG', '/tmp/hyalo/nk-layer-motion'))
 BIN = os.environ.get('NK_PHASE0_BIN', str(ROOT / 'toolkit/target/release/nk-phase0'))
 REPORT = []
+
+
+def cursor_vertical_bounds(solid_width, output_scale):
+    # A scanline counts pixel centres with almost the exact fill colour. Its
+    # integer span is not the geometric width: sampling/linear filtering can
+    # lose a boundary pixel on either side. Carry that physical-pixel
+    # uncertainty through the OUTWARD logical rounding used for cursor rects.
+    # Comparing height with 12*s directly counts both rounded edges as error
+    # and spuriously rejects the 14 -> 16 transition near s = 7/6.
+    low = (solid_width - 1) / (80 * output_scale)
+    high = (solid_width + 2) / (80 * output_scale)
+    return {'scale': [low, high],
+            'top': [math.floor(70 - 6 * high), math.floor(70 - 6 * low)],
+            'bottom': [math.ceil(70 + 6 * low), math.ceil(70 + 6 * high)]}
+
+
+def cursor_vertical_matches(rect, bounds):
+    return (bounds['top'][0] <= rect[1] <= bounds['top'][1]
+            and bounds['bottom'][0] <= rect[1] + rect[3] <= bounds['bottom'][1])
 
 
 def wait(test, label, seconds=7):
@@ -221,8 +241,12 @@ def cursor_check(label, flag=None):
             assert abs(green[0]-expected)<5*scale,'cursor follows: IME popup did not follow presented layer'
             rects=[list(map(int,l.split()[1:])) for l in ime_lines() if l.startswith('RECT')]
             last=rects[-1]
+            bounds=cursor_vertical_bounds(red[1]-red[0]+1,scale)
+            (m.LOG/f'cursor-during-{index}.json').write_text(json.dumps({
+                'output_scale':scale,'red_span':red,'popup_span':green,
+                'cursor_rect':last,'vertical_bounds':bounds},indent=2))
             assert abs(phys(last[0])-green[0])<8*scale,'cursor follows: IME event disagrees with rendered popup'
-            assert abs(last[1]-(70-6*layer_scale))<=2 and abs(last[3]-12*layer_scale)<=2,'cursor follows: anchor/scale not applied to rectangle'
+            assert cursor_vertical_matches(last,bounds),f'cursor follows: anchor/scale not applied to rectangle: {last}, {bounds}'
             assert not any(l.startswith('AWAKE') for l in m.lines()),'cursor sampled after client woke'
             positions.append(green[0])
         assert positions[1]>positions[0],'cursor follows: candidate did not move while client blocked'
