@@ -126,6 +126,7 @@ listener = Atspi.EventListener.new(event)
 for category in ['object:text-changed', 'object:text-caret-moved',
                  'object:text-selection-changed', 'object:state-changed',
                  'object:children-changed', 'object:property-change',
+                 'object:selection-changed',
                  'window:activate', 'window:deactivate']:
     assert listener.register(category), category
 session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.freedesktop.DBus.Properties',
@@ -239,9 +240,21 @@ def run(backend, broken=None, stop=None):
         check('expanded', lambda: named(root,'Language').get_state_set().contains(Atspi.StateType.EXPANDED))
         if not broken: subprocess.run([*MSG,'screenshot',str(directory/'dropdown.png')],check=True,stdout=subprocess.DEVNULL)
         key(108)
-        check('dropdown',lambda: named(root,'Chinese') and named(root,'Chinese').get_state_set().contains(Atspi.StateType.SELECTED))
+        # A reader reads the value through the combo's Selection, and hears a change from
+        # its selection-changed: focus stays on the combo, so the option's own events are
+        # not presented (#835, found with real Orca).
+        def chosen():
+            combo = named(root,'Language')
+            option = named(root,'Chinese')
+            pick = combo.get_selection_iface() and Atspi.Selection.get_selected_child(combo.get_selection_iface(), 0)
+            return (option and option.get_state_set().contains(Atspi.StateType.SELECTED)
+                    and pick is not None and pick.get_name()=='Chinese'
+                    and any(e['type']=='object:selection-changed' and e['name']=='Language' for e in EVENTS))
+        check('dropdown',chosen)
         key(28)
-        check('collapse', lambda: named(root,'Language').get_child_count()==0)
+        # Closed: not expanded, and its options are still there but not showing.
+        check('collapse', lambda: not named(root,'Language').get_state_set().contains(Atspi.StateType.EXPANDED)
+              and not named(root,'Chinese').get_state_set().contains(Atspi.StateType.SHOWING))
         key(15);key(57)
         check('state',lambda: named(root,'Remember me').get_state_set().contains(Atspi.StateType.CHECKED))
         key(15);key(28)

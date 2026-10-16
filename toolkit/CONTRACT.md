@@ -100,6 +100,12 @@ Owns everything between a string and positioned glyphs, and the editing model on
   from `nk-wayland`'s `Event::Focus`). The provider maps it to AT-SPI `active` and sends
   `window:activate`/`deactivate` BEFORE any focus event of the same update: Orca ignores focus
   inside a frame that is not active (#835, found with real Orca; libatspi alone never asks).
+- A `ComboBox` is a **selection container**: its options are ALWAYS its children (hidden while
+  closed, as GTK's list), and the provider serves AT-SPI `Selection` from their `selected` state
+  and sends `selection-changed` on the combo when the choice changes. Focus stays on the combo
+  while it is open, so a reader does not present the options' own events: it reads the value
+  through `Selection` and hears a change from `selection-changed` (#835, real Orca). Choosing
+  through `SelectChild` is an `Activate` request on the option; deselecting returns false.
 - **One provider: direct AT-SPI over zbus** (feature `atspi`), behind `trait A11yBackend`
   (owner, 2026-10-15, #830/#834): it passed the whole Orca-style walk; AccessKit failed the
   expanded and invalid-entry states, which its AT-SPI layer did not project. The trait stays
