@@ -150,6 +150,9 @@ export function registerConfigEntries() {
         enum: Object.keys(ACCENT_PALETTE),
         get: () => Theme.accentColor,
         set: v => void Theme.setAccentColor(v as AccentKey),
+        // Drawn by Settings' own `accentPicker`, so no `ui`; but org.nidara.Config1's
+        // `Changed` needs to hear it like every other key.
+        subscribe: onThemeCfg(() => Theme.accentColor),
     })
     registerConfig("appearance.windowTransparency", {
         desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the interface's glass. Ignored while accessibility.reduceTransparency is on.",

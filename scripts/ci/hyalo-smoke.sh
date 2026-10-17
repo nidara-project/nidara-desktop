@@ -440,6 +440,11 @@ phase_run() {
         log "FAIL: an invalid setting was accepted"; exit 1
     fi
     log "settings OK"
+    # The same registry for other processes (org.nidara.Config1, toolkit/PHASE1.md D1): the
+    # native Settings' only door to the settings. Describe/Get/Set/Changed, and the agent gate.
+    python "$REPO/scripts/ci/config-service-check.py" /tmp/hyalo/nidara-ipc >/tmp/hyalo/config-service.log 2>&1 \
+        || { log "FAIL: org.nidara.Config1"; cat /tmp/hyalo/config-service.log; exit 1; }
+    log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 6: describe, get, set, agent door, invalid, denied)"
 
     # Window capture (#682): the overview's thumbnails, through the standard protocols
     # (ext-foreign-toplevel-list + ext-image-copy-capture, hyalo/compositor/src/capture.rs),

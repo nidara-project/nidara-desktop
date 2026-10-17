@@ -851,6 +851,24 @@ Rules:
   desc only what the value cannot say: what the setting does, which other setting it implies,
   where a human flips it.
 
+### The same registry on the bus: `org.nidara.Config1`
+
+`core/ConfigService.ts` serves the registry to other processes under its own name,
+`org.nidara.Config` (`/org/nidara/Config`) — the native Settings of toolkit phase 1 is its
+client and carries no setting logic (`toolkit/PHASE1.md`, D1). `Describe() → s` is
+`describeConfig` plus each key's `ui` (translated title/subtitle, control, option labels,
+slider) and the WHOLE enum; `Get(as) → a{sv}` (empty = all); `Set(s, v)`; `Changed(a{sv})`.
+
+- `Changed` comes from each entry's `subscribe`, deduplicated against the last value sent. **A
+  key without `subscribe` never announces a change** — give every key the new Settings draws
+  one (the accent had none until this service).
+- `Set` from the owner of `org.nidara.Settings` is Settings' own path; from any other sender it
+  is an agent's `setConfig`: refused unless Settings → AI allows config writes. Read-only keys
+  are refused for every caller. Consent, not a security boundary (dconf is writable anyway).
+- Only the shell exports it; the Settings process registers the same entries and must not.
+- Checked in the Hyalo smoke by `scripts/ci/config-service-check.py` (6 assertions, the
+  denied write included).
+
 ### The MCP server: `nidara-mcp`
 
 The whole surface above is also served over MCP by `bin/nidara-mcp` (installed to
