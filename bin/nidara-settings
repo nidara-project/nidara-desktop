@@ -10,14 +10,32 @@ if [ -n "${NIDARA_SETTINGS_EXECUTABLE:-}" ]; then
 elif [ -n "$repo" ] && [ -f "$repo/ui/settings/app.ts" ]; then
     export NIDARA_SHELL_ROOT="$repo/ui/shell" NIDARA_SETTINGS_ROOT="$repo/ui/settings"
     export NIDARA_KIT_DIR="$repo/ui/lib/nidara-kit"
-    "$repo/ui/shell/node_modules/.bin/sass" --no-charset "$repo/ui/settings/style.scss" "$repo/ui/settings/style.css"
-    node "$repo/scripts/bundle.mjs" kit "$repo/ui/lib/nidara-kit/build/js"
-    out=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/nidara-settings.XXXXXX.js")
-    "$repo/scripts/bundle.sh" --js "$repo/ui/settings/app.ts" "$out" --kit-external="$repo/ui/lib/nidara-kit/build/js"
-    # Remove only our temporary bundle after this application exits.
-    trap 'rm -f "$out"' EXIT
-    "$repo/lib/nidara-host/build.sh"
-    LD_PRELOAD="${NIDARA_GTK4_LAYER_SHELL:-/usr/lib/libgtk4-layer-shell.so}" "$repo/lib/nidara-host/build/nidara-settings" "$out" "$@"
+    # Rebuilding everything cost ~580 ms on EVERY launch (measured 2026-10-17: sass 263,
+    # host 161, bundle 94, kit 60) — more than half of what Settings itself takes to open.
+    # Now only when something changed: a source newer than the stamp, or another commit.
+    # Directories count too, so a deleted or renamed file is seen. Generated sheets are not
+    # sources. NIDARA_SETTINGS_REBUILD=1 forces it.
+    cache="${XDG_CACHE_HOME:-$HOME/.cache}/nidara/dev-settings"
+    out="$cache/nidara-settings.js" stamp="$cache/stamp"
+    head=$(git -C "$repo" rev-parse HEAD 2>/dev/null || echo none)
+    if [ "${NIDARA_SETTINGS_REBUILD:-0}" = 1 ] || [ ! -f "$out" ] || [ ! -f "$stamp" ] \
+        || [ "$(cat "$stamp")" != "$head" ] || [ ! -x "$repo/lib/nidara-host/build/nidara-settings" ] \
+        || [ -n "$(find "$repo/ui" "$repo/scripts/bundle.mjs" "$repo/scripts/bundle.sh" "$repo/lib/nidara-host" \
+            \( -name node_modules -o -name @girs -o -name build \) -prune \
+            -o ! -name '*.css' ! -name '*.css.map' -newer "$stamp" -print -quit)" ]; then
+        mkdir -p "$cache"
+        # The stamp takes the time the build STARTS: an edit made during it is newer.
+        echo "$head" > "$stamp.next"
+        "$repo/ui/shell/node_modules/.bin/sass" --no-charset "$repo/ui/settings/style.scss" "$repo/ui/settings/style.css"
+        node "$repo/scripts/bundle.mjs" kit "$repo/ui/lib/nidara-kit/build/js"
+        # Written aside and moved in: a Settings already running keeps reading a whole file.
+        next=$(mktemp "$cache/.nidara-settings.XXXXXX.js")
+        "$repo/scripts/bundle.sh" --js "$repo/ui/settings/app.ts" "$next" --kit-external="$repo/ui/lib/nidara-kit/build/js"
+        mv -f "$next" "$out"
+        "$repo/lib/nidara-host/build.sh"
+        mv -f "$stamp.next" "$stamp"
+    fi
+    LD_PRELOAD="${NIDARA_GTK4_LAYER_SHELL:-/usr/lib/libgtk4-layer-shell.so}" exec "$repo/lib/nidara-host/build/nidara-settings" "$out" "$@"
 else
     export NIDARA_SHELL_ROOT=/usr/share/nidara/ui/shell NIDARA_SETTINGS_ROOT=/usr/share/nidara/ui/settings
     exec /usr/share/nidara/ui/settings/build/nidara-settings "$@"

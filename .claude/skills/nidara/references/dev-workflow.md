@@ -3403,8 +3403,12 @@ both explicitly.
 
 `bin/nidara-settings` is the supported entry point: it sets the process role before
 imports and supplies the two resource roots. In dev mode it compiles its own stylesheet
-and a uniquely named temporary JS bundle, so it cannot overwrite the running shell's
-`app.ts` bundle. In a release it runs the packaged fifth executable with the shared kit.
+and its own JS bundle (`~/.cache/nidara/dev-settings/`, never the running shell's), and
+**only when something changed**: a file under `ui/`, the bundler or `lib/nidara-host/`
+newer than the stamp (directories too, so deletions count; generated `*.css` do not), or
+another git HEAD. Rebuilding every launch cost ~580 ms of a ~1.5 s open (2026-10-17).
+`NIDARA_SETTINGS_REBUILD=1` forces it. In a release it runs the packaged fifth executable
+with the shared kit.
 `NIDARA_SETTINGS_REPO` overrides the dev marker for an isolated source walk;
 `NIDARA_SETTINGS_EXECUTABLE` selects a prebuilt executable in the smoke containers,
 where the unprivileged desktop cannot compile into the root-owned checkout.
