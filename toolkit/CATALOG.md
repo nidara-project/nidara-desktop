@@ -173,28 +173,38 @@ Nidara agent contract or speak Hyalo's protocols.
    node IDs gain app-scoped, developer-declared identifiers that survive view recycling and
    page reconstruction? Which lifetime, uniqueness and stale-target rejection rules should
    a porting agent rely on? No persistence across launches is decided here.
+   **Owner, 2026-10-17: open.** The options still need weighing; nothing is decided.
 2. **Owner question — declared effects and consent:** should every agent action declare typed
    arguments, preconditions, effect, risk, undo behavior and completion/error outcome? Who
    assigns and verifies risk, and how is a user's consent bound to the exact destructive
    target/action/value without reuse after the UI changes?
+   **Owner, 2026-10-17: probably yes, not final.** The owner's direction: bind `destructive`
+   actions to the permissions the user already grants in Settings → AI (the
+   `allowComputerControl` family of gates), so consent has one home. How it binds to an
+   exact target and value is still open.
 3. **Owner question — one tree, different readers:** how should screen-reader semantics be
    projected to agents while preserving the contract's password redaction, stable identity
    and event ordering? Should secret insertion require a separate user-mediated path, and
    what permitted metadata can an agent inspect? No secret readback is proposed.
+   **Owner, 2026-10-17: confirmed.** One semantic tree, two views: AT-SPI and agents. The
+   projection details above are still to be designed.
 4. **Owner question — Hyalo presentation:** how should app-level components declare glass,
    motion and anchors while preserving presented-position hit-testing and IME placement?
    Neither foreign class map is a specification for `nidara-material-v1`/`nidara-layers-v1`;
    their existing rules remain in [CONTRACT.md](CONTRACT.md) and the protocol XMLs.
+   **Owner, 2026-10-17: tentatively, as the shell does.** A component declares its shapes and
+   Hyalo paints the glass; the app never paints it. Not final.
 
-## Portability — proposal, owner to confirm
+## Portability — confirmed by the owner (2026-10-17)
 
-**Proposed principle: “works on any Wayland compositor; best on Hyalo.”** Where
+**Principle: “works on any Wayland compositor; best on Hyalo.”** Where
 `nidara-material-v1` is missing or unavailable, a pane would fall back to an **opaque
-material**, keeping text, contrast, focus indication and semantics usable. This is a proposal
-for the future kit, not current compatibility evidence: phase 0 targets Hyalo and its
-[native transport][transport] has not established that promise on other compositors.
+material**, keeping text, contrast, focus indication and semantics usable. The principle is
+confirmed for the future kit, but it is not current compatibility evidence: phase 0 targets
+Hyalo and its [native transport][transport] has not established that promise on other
+compositors.
 
-Owner to confirm the standard-protocol baseline and capability negotiation before this
+The standard-protocol baseline and capability negotiation still need deciding before this
 becomes a contract. Material fallback alone cannot replace Hyalo layer motion, private window
 controls, or shell anchoring; their fallback behavior or explicit unavailability needs a
 separate decision. No client animation implementation, alternative glass renderer or foreign
