@@ -85,8 +85,11 @@ No number or string is typed twice:
 - **Tokens:** phase 0 reads `--nidara-*` out of `ui/shell/styles/_base.scss` with
   `include_str!` (`phase0/src/palette.rs`). That file holds only the starting values: the
   accent changes at run time (`appearance.accent` → `ACCENT_PALETTE`, which `Config1` serves)
-  and radii/sizes live in `ui/lib/nidara-kit/platform/tokens.ts`. A separate piece maps the
-  whole token system before anything is exported; the token contract check covers both ends.
+  and radii/sizes live in `ui/lib/nidara-kit/platform/tokens.ts`. So `scripts/export-tokens.mjs`
+  (#856) runs the engine itself over all 72 of its inputs on top of `_base.scss` compiled, plus
+  `_tokens.scss`'s variables and `tokens.ts`'s data; the native Settings picks its colour set
+  from `Config1`'s values (accent, dark mode, reduce/window transparency) and repaints on
+  `Changed`.
 
 ### D5 — works on any Wayland compositor, best on Hyalo
 
