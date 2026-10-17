@@ -12,3 +12,11 @@ Base: `95da1139799c44d75902775e543404e90556c882`.
 The three older failures are not evidence of three new compositor defects. Their exact source revisions and pictures must be read together. No threshold is relaxed, no scale omitted, and no action retried.
 
 The issue remains open until five consecutive green `hyalo` job attempts at one head are linked, including all preceding red attempts. Diagnostics alone do not meet that gate.
+
+## Reproduction before the compositor correction
+
+On the same base, a private cage/Hyalo session with llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe LP_NUM_THREADS=2`) reproduces the exact visible-position assertion. `/tmp/n843-software2` captures A at root x=142..221; its centre x=181.5 is delivered to WINDOW. `CAPTURE_BEGIN` is CLOCK_MONOTONIC 183269.659979851, `CAPTURE_END` 183269.842890001, and `CONTROL_CLICK_BEGIN` 183270.015449112. The hit-test logs A's origin x=191.736108 at delivery: 355.469 ms after the image's sample, the layer has advanced about 50 px. The client still records `AWAKE PAINTS 3 3`.
+
+The FIFO delivery acknowledgment alone is insufficient: `/tmp/n843-barrier2` reproduces the same assertion at x=175.5. Its image sample is 183318.556917139, the write is 183318.751326332, and the delivered click is 183318.910880873. Waiting for delivery cannot make an old image current. The normal GPU matrix passes both scales and catches all six applied faults (`/tmp/n843-barrier/report.md`); that is not vkms stability evidence.
+
+There is a compositor defect as well as stale probe sampling: `under_tree` re-interpolates at dispatch-time `Instant::now()`, even when rendering has held the event loop for a frame. It never retains the layer transform of the last submitted/presented frame. A queue acknowledgment cannot repair that difference. The compositor correction belongs in a separate commit; it must preserve snapshots through retargeting and publish them only on a successful submit (winit) or actual vblank/frame submission (tty).

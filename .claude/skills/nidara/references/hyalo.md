@@ -2191,6 +2191,15 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 
 ## Testing Hyalo
 
+Test 5's control FIFO is read on a thread and dispatched later on calloop.
+A completed write is not seat delivery; independent screenshot IPC can overtake
+it. Send `barrier PATH` on the same FIFO and wait for its atomic acknowledgment
+before sampling an action's effects. This observes delivery, never the expected
+hit-test result. Keep capture/input timestamps and `delivery.jsonl` in artifacts;
+do not replace this barrier with a pause or poll for the desired pixels. Each
+layer-motion fault logs `LAYER_FAULT ... applied` at the omitted/altered operation,
+and the driver requires that record as well as the original failing assertion.
+
 The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
 `toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then
 the cage harness). Their acceptance decisions, fault controls and evidence are recorded in

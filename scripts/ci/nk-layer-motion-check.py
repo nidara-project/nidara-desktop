@@ -18,6 +18,36 @@ spec.loader.exec_module(m)
 BASE = Path(os.environ.get('NK_PHASE0_LOG', '/tmp/hyalo/nk-layer-motion'))
 BIN = os.environ.get('NK_PHASE0_BIN', str(ROOT / 'toolkit/target/release/nk-phase0'))
 REPORT = []
+CONTROL_SERIAL = 0
+send_control = m.control
+
+
+def delivered_control(line):
+    # The FIFO reader forwards lines to calloop on another thread. Returning
+    # from write() says nothing about seat delivery, and screenshot IPC can
+    # overtake it. Acknowledge that channel, never a hit-test outcome.
+    global CONTROL_SERIAL
+    CONTROL_SERIAL += 1
+    ack = m.LOG / f'control-{CONTROL_SERIAL}.ack'
+    ack.unlink(missing_ok=True)
+    sent = time.monotonic()
+    send_control(f'{line}\nbarrier {ack}')
+    wait(lambda: ack.exists(), f'control not delivered: {line}')
+    with (m.LOG / 'delivery.jsonl').open('a') as stream:
+        stream.write(json.dumps({'command': line, 'sent': sent,
+                                 'acknowledged': time.monotonic(),
+                                 'server_clock': ack.read_text().strip()}) + '\n')
+
+
+m.control = delivered_control
+
+
+def record(row):
+    REPORT.append(row)
+    (BASE / 'report.json').write_text(json.dumps(REPORT, indent=2))
+    table = ['| Scenario | Result | Fault applied |', '| --- | --- | --- |']
+    table += [f"| {r['test']} | {r.get('status', 'PASS')} | {r.get('applied', '—')} |" for r in REPORT]
+    (BASE / 'report.md').write_text('\n'.join(table) + '\n')
 
 
 def cursor_vertical_bounds(solid_width, output_scale):
@@ -83,7 +113,9 @@ def native(label, flag=None, retarget=False):
         wait(lambda: 'MOVED' in m.lines(), 'no transition committed')
         t0 = time.monotonic()
         if retarget:
-            return retarget_check(phys, ya, yb, scale)
+            retarget_check(phys, ya, yb, scale)
+            record({'test': label, 'status': 'PASS'})
+            return
         cpu0 = ticks(client.pid)
         # Stats distinguish the session's build/render CPU from this harness's captures.
         stats0 = m.msg('stats')
@@ -102,7 +134,6 @@ def native(label, flag=None, retarget=False):
         assert a2[0] < phys(300)-20, 'moving: no transition (jumped to end)'
         assert cpu1-cpu0 <= max(.02, elapsed*.03), f'client consumed {cpu1-cpu0}s while blocked'
         m.control(f"click {win['x']+340} {win['y']+70}")
-        time.sleep(.04)
         now = m.span(m.shot('during-3'), ya, m.RED)
         assert now, 'A missing before click'
         m.control(f'click {(now[0]+now[1])/2/scale} {ya/scale}')
@@ -128,7 +159,7 @@ def native(label, flag=None, retarget=False):
         # Include the raw stats; not a hardware benchmark or client CPU estimate.
         (m.LOG/'cost.json').write_text(json.dumps({'client_cpu_s':cpu1-cpu0,'blocked_sample_s':elapsed,
             'hyalo_stats_start':stats0,'hyalo_stats_during':stats_during,'hyalo_stats_end':m.msg('stats')},indent=2))
-        REPORT.append({'test':label,'client_cpu_s':cpu1-cpu0,'blocked_sample_s':elapsed,
+        record({'test':label,'client_cpu_s':cpu1-cpu0,'blocked_sample_s':elapsed,
                        'A':[a0[0],a1[0],a2[0]],'B':[b0[0],b1[0],b2[0]]})
         print(f'PASS {label}: independent movement while blocked, local clicks, both done; client CPU {cpu1-cpu0:.3f}s',flush=True)
     finally:
@@ -260,6 +291,7 @@ def cursor_check(label, flag=None):
             green=m.span(image,int((win['y']+145)*scale),marker)  # below RECT 220 120 2 12
             return green and abs(green[0]-phys(220))<=2
         wait(root_popup,'cleared cursor popup still follows the layer')
+        record({'test': label, 'status': 'PASS'})
         print(f'PASS {label}: real IME popup/event follow position and anchored scale while client blocked; root fallback restored',flush=True)
     finally:
         for process in (ime,client):
@@ -288,6 +320,8 @@ if __name__ == '__main__':
                     native(f'scale{scale}-{name}',flag)
                 except AssertionError as e:
                     assert str(e).startswith('moving: layers did not move'), f'wrong failure for {name}: {e}'
+                    assert any(l.startswith(f'LAYER_FAULT {name} applied:') for l in m.lines()), f'{name} never applied'
+                    record({'test': f'scale{scale}-{name}', 'status': 'CAUGHT', 'assertion': str(e), 'applied': True})
                     print(f'CONTROL PASS {name}: {e}',flush=True)
                 else:
                     raise AssertionError(f'control {name} unexpectedly passed')
@@ -297,6 +331,8 @@ if __name__ == '__main__':
                 cursor_check(f'scale{scale}-cursor-control','--control-no-cursor-association')
             except AssertionError as e:
                 assert str(e).startswith('cursor follows:'), f'wrong cursor control failure: {e}'
+                assert any(l.startswith('LAYER_FAULT cursor-association applied:') for l in m.lines()), 'cursor association fault never applied'
+                record({'test': f'scale{scale}-cursor-control', 'status': 'CAUGHT', 'assertion': str(e), 'applied': True})
                 print(f'CONTROL PASS cursor association: {e}',flush=True)
             else:
                 raise AssertionError('cursor association control unexpectedly passed')
