@@ -2224,7 +2224,11 @@ keyboard settings reapplies configured outputs and resets a transient scale.
 
 Orca's form walk also includes authentic flat review (#846): KP_Up (evdev 72) must
 speak the complete `日本🙂 word`, separately from the earlier focus announcement;
-KP_Subtract (74) leaves review before editing continues. The `text-extents` control
+KP_Subtract (74) leaves review before editing continues. The shared vkms settings
+check enables Num Lock: the Orca probe observes its real modifier with a harmless
+Shift release before mapping the app, toggles Num_Lock only if needed, verifies it
+is off, and restores the original state afterward. Keep `numlock-setup.log`; a
+KP_8 event inserts text and is not flat review. The `text-extents` control
 waits for wrong geometry to be **published**, not merely armed: require
 `A11Y_FAULT_APPLIED text-extents` and Orca's `AXText: Range ... has rect` diagnostic
 for the wrong response, then failure of the same speech assertion. Do not count
