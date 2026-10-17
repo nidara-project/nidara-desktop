@@ -21,6 +21,7 @@ import agentService from "./core/AgentService"
 import { initAgentGlow } from "./core/AgentGlow"
 import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue, setConfigLocations } from "./core/ConfigRegistry"
+import { exportConfigService } from "./core/ConfigService"
 import { registerConfigEntries } from "./config-entries"
 import { exportConsentService } from "./surfaces/consent/ConsentService"
 import { exportScreenShareService } from "./surfaces/screenshare/ScreenShareService"
@@ -1082,6 +1083,9 @@ app.start({
     // manifest. Injected here rather than imported by core/, which must not
     // import surfaces/ (the same reason `registerConfigEntries` lives outside it).
     setConfigLocations(configLocations())
+    // …and the same registry for other processes: org.nidara.Config1 (core/ConfigService.ts),
+    // which the native Settings of toolkit phase 1 is a client of.
+    exportConfigService()
 
     // The IPC door. Registered here rather than at module scope so the
     // commands it dispatches are wired first.
