@@ -17,7 +17,7 @@ Five tests, all on Hyalo. If one fails, the owner decides there (#818).
 |---|---|---|
 | 1 | Text | **Passed: Parley** (owner, 2026-10-15, #824/#825) — every case on Arch and Ubuntu, measuring and painting sharing one layout object. Pango failed one case on Arch (two on Ubuntu) and was removed |
 | 2 | IME | **Automated gate #832/#841 (126 assertion/control pairs):** the real fcitx5 matrix (below), Mozc/Pinyin/Hangul at 1 and 1.25, including discriminating fault controls, must pass in the `hyalo` vkms job. Escape cancels for Mozc/Pinyin; Hangul commits its syllable and one Ctrl+Z undoes that commit. The scripted input method alone cannot pass this gate |
-| 3 | Orca | **Automated gate #835/#841 (25 speech assertions, 23 fault runs plus the denied-listener control):** real Orca’s `SPEECH OUTPUT` must pass the form walk and its controls in the `hyalo` vkms job. **Provider chosen: direct AT-SPI** (#834; active windows added in #839). Selection support is provided by #842; open/closed state changes must present the current/final value, without requiring literal “expanded”/“collapsed” |
+| 3 | Orca | **Automated gate #835/#841/#846 (26 speech assertions, 24 fault runs plus the denied-listener control):** real Orca’s `SPEECH OUTPUT` must pass the form walk and its controls in the `hyalo` vkms job. **Provider chosen: direct AT-SPI** (#834; active windows added in #839). Selection support is provided by #842; open/closed state changes must present the current/final value, without requiring literal “expanded”/“collapsed” |
 | 4 | Glass | the window's panes are painted by Hyalo through `nidara-material-v1`, as the shell's are |
 | 5 | Animation | two layers animated by Hyalo while the client commits nothing for 500 ms; a click during the motion reaches the layer where it is SEEN. **Passed** (#831/#837, CI at scale 1 and 1.25): `nk-phase0 --test5` blocks 1.5 s with 0.000 s of CPU while both layers move, the click lands where A is seen, in A's coordinates; three fault controls fail as they should. A retarget's kept velocity is proven by Hyalo's unit test, not by screenshots (they cannot date the retarget) |
 
@@ -94,6 +94,20 @@ Owns everything between a string and positioned glyphs, and the editing model on
   `nk-a11y` converts it to character offsets, here and nowhere else. So `nk-a11y` does not
   depend on `nk-text` (the rule above holds): it also serves text that never went through an
   `Editor`, and either crate can change engine without touching the other (#830).
+- `TextInfo.geometry` optionally carries ordered UTF-8 cluster spans with real window-logical
+  rectangles and their leading caret rectangles, plus the final caret. The app takes these from
+  the **same retained Layout it paints**, adding the field's actual content origin (padding and
+  scrolling included). Shaping computes cluster boxes once per reflow; a provider never guesses
+  widths from character counts or substitutes the whole field's box. Scalars in one shaped
+  cluster share its box. Missing geometry is `NotSupported`, not a fabricated rectangle; a
+  committed buffer temporarily replaced by IME preedit is not described with stale layout data.
+  Password filtering removes the entire `TextInfo`, geometry included.
+- AT-SPI `GetRangeExtents` returns the union of intersecting cluster boxes for the requested
+  half-open character range; `GetCharacterExtents` returns its shaped cluster box. A collapsed
+  range uses the corresponding real caret, including the empty/end-of-text caret. UTF-8 to
+  scalar conversion stays at the provider edge. Integer protocol rectangles round outward.
+  Both use `WINDOW` coordinates, as real Orca does; unsupported coordinate systems and invalid
+  offsets return explicit errors. This does not invent a global Wayland origin.
 - Events, not just a snapshot: focus, name/state changes, text inserted/removed, caret moved,
   selection changed.
 - A `Window`/`Dialog` node carries `states.active` while it holds the keyboard (the app sets it
@@ -265,4 +279,9 @@ listener is the access control’s negative case; Orca’s key echo proves deliv
   Each fault must log its actual application; no application, timeout or crash
   can count as a caught assertion. Editor JSON uses a separate file so concurrent
   Wayland debug output cannot interleave with a record.
-- `GetRangeExtents` and flat review stay documented debt outside this gate.
+- #846 extends test 3 with authentic Orca flat review (KP_Up/current line): its
+  `SPEECH OUTPUT` must contain the complete `日本🙂 word` after a fresh review command.
+  The test-window `text-extents` control publishes wrong geometry, logs actual application,
+  and must fail that same assertion. Orca's returned-rectangle diagnostics establish that
+  the wrong geometry was consumed; a timeout, crash or unapplied fault cannot count.
+  Existing form-walk speech assertions and controls remain required.
