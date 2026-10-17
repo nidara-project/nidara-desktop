@@ -42,6 +42,7 @@ def main():
     app = None
     debug = p.log / 'orca-debug.log'
     bus = None
+    restore_numlock = False
     try:
         # An explicit guard prevents accidentally giving dummy a real sound device.
         assert re.search(r'^default_driver\s*=\s*null\s*$', Path('/etc/libao.conf').read_text(), re.M), \
@@ -100,6 +101,32 @@ def main():
         # Prove that the speech server connection works before testing silence.
         server_log = sd / 'speech-dispatcher.log'
         native.wait(lambda: server_log.exists() and 'SET self CLIENT_NAME' in server_log.read_text(), 'Orca speech-dispatcher connection')
+        # The shared vkms settings check enables Num Lock. Observe the actual
+        # lock modifier through Orca before the app exists; KP_8 would insert text
+        # instead of invoking KP_Up. No synthetic AT-SPI events or speech retry.
+        setup_start = debug.stat().st_size
+
+        def numlock_state():
+            before = debug.stat().st_size
+            p.key(42)  # harmless Shift_L press/release, through the real seat
+
+            def observed():
+                delta = debug.read_bytes()[before:].decode(errors='replace')
+                events = re.findall(
+                    r"KEYBOARD_EVENT:  type=ATSPI_KEY_RELEASED_EVENT\s+"
+                    r"id=\d+\s+hw_code=50\s+modifiers=(\d+)", delta)
+                return events[-1] if events else None
+
+            modifiers = int(native.wait(observed, 'Orca Shift release modifiers'))
+            return bool(modifiers & (1 << Atspi.ModifierType.NUMLOCK))
+
+        restore_numlock = numlock_state()
+        if restore_numlock:
+            p.key(69)  # Num_Lock, only if its observed state was on
+        normalized = numlock_state()
+        p.environment['numlock'] = dict(initial=restore_numlock, normalized=normalized)
+        (p.log / 'numlock-setup.log').write_bytes(debug.read_bytes()[setup_start:])
+        assert not normalized, 'Num Lock must be off for real Orca KP_Up flat review'
         fault_file = p.log / 'fault'
         fault_file.write_text('')
         env = os.environ | ({'NK_ORCA_FAULT_FILE': str(fault_file)} if dynamic else {})
@@ -239,6 +266,8 @@ def main():
     except Exception as e:
         p.row('infrastructure', False, repr(e))
     finally:
+        if restore_numlock:
+            p.key(69)  # restore the private compositor's original lock state
         p.save([])
         p.close()
         if bus:

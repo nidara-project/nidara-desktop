@@ -58,3 +58,25 @@ Focused evidence uses real Orca and speech-dispatcher's `sd_dummy` with libao's
 null backend in the private bwrap + cage + Hyalo harness on the AMD GPU. It does
 not operate the live desktop, and it does not claim tty/vkms presentation. The
 fixed #843 compositor is used. No merge or push to main is part of this change.
+
+## Preserved first CI failure: keypad lock state
+
+The first candidate CI run, 39001926759 at f5aecfff, failed the new assertion:
+Orca received `KP_8` with Num Lock modifier 16384 and spoke `8`, inserting it into
+the field. The earlier shared vkms settings check explicitly enables Num Lock;
+the isolated local compositor starts with it off. This was not a geometry pass
+or a caught fault. The red run and its reports remain linked in the PR.
+
+The probe now observes a real Shift release before mapping the application,
+disables Num Lock only when observed on, verifies it is off, and restores its
+initial state on exit. `numlock-setup.log` and the report's environment record
+retain the observation. Both original lock states use the same full-line speech
+assertion and wrong-extents control, without retrying either assertion.
+
+The preparation was exercised with Num Lock initially off and initially on in
+four isolated local sessions: each 26-row baseline passed, and each wrong-extents
+run caught the same `Flat review Unicode line` assertion with publication and
+consumed-response evidence. Both reports record `normalized: false`; the initially
+on sessions also log the final `num lock on` restoration. These focused runs used
+the unchanged final client binary and the modified probe before the follow-up
+commit; complete matrices at the published head are linked separately in the PR.
