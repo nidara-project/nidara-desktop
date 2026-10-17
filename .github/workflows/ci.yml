@@ -49,6 +49,9 @@
 #     pass for a required check — they are NOT filtered out by `paths:`, which
 #     would leave the queue waiting for a check that never reports. Any doubt
 #     (no base, failed fetch, empty diff, scope itself failing) runs everything.
+#     It also decides `gates`: the Hyalo job's real fcitx5/Orca matrices (~35 of its
+#     ~47 min) run only when the change touches something they use — skipped only for
+#     areas listed as unrelated (the shell, bin/, session/…), so a new path runs them.
 #     Logic and its self-test in scripts/ci/ci-scope.sh.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container install ONLY official Arch
@@ -136,6 +139,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       code: ${{ steps.scope.outputs.code }}
+      gates: ${{ steps.scope.outputs.gates }}
     steps:
       - uses: actions/checkout@v4
       - name: The classifier's own controls
@@ -563,6 +567,10 @@ jobs:
           path: toolkit/target
           key: nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}
       - name: Build + boot (Arch container on vkms)
+        env:
+          # The real fcitx5/Orca matrices (~35 min) only when the change touches what they
+          # use; empty (scope failed) counts as true. See scripts/ci/ci-scope.sh.
+          NK_REAL_GATES: ${{ needs.scope.outputs.gates || 'true' }}
         run: |
           # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
           # dev/test profiles (CI never debugs them): a cache several times smaller.
@@ -570,6 +578,7 @@ jobs:
             -v "$PWD:/repo" \
             -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
             -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
+            -e NK_REAL_GATES \
             archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
       - name: Upload screenshots + logs
         if: always()
@@ -581,7 +590,7 @@ jobs:
       - name: Real fcitx5 and Orca assertion tables
         if: always()
         run: |
-          for report in hyalo-out/toolkit-fcitx5/fcitx5-preflight/summary.md hyalo-out/toolkit-orca/orca-summary.md; do
+          for report in hyalo-out/real-gates-skipped.md hyalo-out/toolkit-fcitx5/fcitx5-preflight/summary.md hyalo-out/toolkit-orca/orca-summary.md; do
             if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
           done
 
