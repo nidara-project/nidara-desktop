@@ -2540,3 +2540,23 @@ Backlog of designed desktop enhancements to prioritize for upcoming iterations:
    - Automatic sunrise/sunset calculation or scheduled transitions for `hyprsunset` blue light filtering in `NightLightManager.ts` and `pages/Display.tsx`.
 5. **System Mime & Protocol Associations Manager**:
    - Deep two-way synchronization of protocol handlers (`mailto:`, `webcal:`, `tg:`, `magnet:`) and default mime associations in `DefaultApps.tsx`.
+
+
+## Native toolkit text geometry
+
+`nk-text::Layout::cluster_boxes` caches logical shaped-cluster bounds and leading
+caret edges in one visual pass per reflow, using the retained Parley runs that are painted.
+The app translates them by the actual content origin into `TextInfo.geometry`, a plain
+UTF-8 span partition; `nk-a11y` owns neither fonts nor layout. Scalars in one shaped cluster
+share its real box, including combining marks and emoji sequences. AT-SPI ranges convert
+scalar offsets to bytes only at the provider edge, then union the intersecting boxes and
+round outward for integer `GetRangeExtents` / `GetCharacterExtents` results. Collapsed ranges
+use the cluster's leading edge (AT-SPI has no affinity); the end uses the layout's final caret.
+
+The coordinate contract is WINDOW, the coordinate type real Orca requests. Missing geometry
+or other coordinate types return `NotSupported`; a field-wide fallback fabricates text bounds
+and breaks flat review. A committed buffer replaced by IME preedit has no matching geometry
+until it is painted again; never attach the replacement layout's byte ranges to the committed
+string. Password redaction removes the entire TextInfo, including geometry, before validation.
+The authentic KP_Up full-line speech assertion and wrong-extents control live in
+`scripts/ci/nk-orca-check.py`; evidence and scope are `toolkit/phase0/EVIDENCE-846.md` (#846).

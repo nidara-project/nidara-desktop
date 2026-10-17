@@ -137,6 +137,15 @@ pub struct Line {
     pub bounds: Rect,
 }
 
+/// Real shaped-cluster geometry, in layout logical pixels. Several scalars can
+/// occupy one cluster (combining marks/emoji/ligatures); never split it by width.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClusterBox {
+    pub range: Range<usize>,
+    pub bounds: Rect,
+    pub caret: Rect,
+}
+
 pub trait TextBackend {
     fn name(&self) -> &'static str;
     fn layout(&mut self, text: &str, style: &TextStyle, max_width: f32) -> Result<Layout>;
@@ -151,6 +160,7 @@ pub(crate) trait LayoutEngine {
     fn glyph_runs(&self) -> &[GlyphRun];
     fn lines(&self) -> &[Line];
     fn clusters(&self) -> &[Range<usize>];
+    fn cluster_boxes(&self) -> &[ClusterBox];
 }
 pub struct Layout {
     text: String,
@@ -220,6 +230,10 @@ impl Layout {
     }
     pub fn clusters(&self) -> &[Range<usize>] {
         self.engine.clusters()
+    }
+    /// Cached during reflow in one visual pass over the retained shaped runs.
+    pub fn cluster_boxes(&self) -> &[ClusterBox] {
+        self.engine.cluster_boxes()
     }
     pub fn move_visual(&self, caret: Caret, right: bool) -> Result<Caret> {
         self.validate_offset(caret.offset)?;

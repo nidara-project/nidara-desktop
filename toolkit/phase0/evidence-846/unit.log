@@ -1,0 +1,84 @@
+   Compiling nk-text v0.1.0 (/home/angel/.codex/worktrees/846-orca-text-extents/Distroia/toolkit/crates/nk-text)
+   Compiling nk-phase0 v0.1.0 (/home/angel/.codex/worktrees/846-orca-text-extents/Distroia/toolkit/phase0)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.94s
+     Running unittests src/lib.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/nk_a11y-dccfbdc715d31d9b)
+
+running 7 tests
+test atspi_backend::tests::extents_convert_scalar_offsets_union_clusters_and_round_outward ... ok
+test atspi_backend::tests::password_queries_have_no_content_or_length ... ok
+test geometry::tests::reject_stale_partial_and_nonfinite_geometry ... ok
+test tests::offsets_are_scalars_and_invalid_bytes_are_rejected ... ok
+test tests::password_redaction_precedes_snapshots_and_events ... ok
+test tests::a_combo_box_reports_a_changed_choice_once ... ok
+test tests::window_activation_precedes_focus_whatever_the_ids ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/nk_phase0-5bcd1f5f345231c1)
+
+running 2 tests
+test tests::ime_replacement_is_atomic_and_cancel_leaves_no_undo ... ok
+test tests::last_case_survives_the_post_map_viewport_constraint ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running unittests src/lib.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/nk_render-40c62a74ea0592ae)
+
+running 2 tests
+test tests::alpha_and_caret_are_physical_pixels ... ok
+test tests::corpus_runs_paint_including_bitmap_color_emoji ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running unittests src/lib.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/nk_text-9d89cdb8d77e29a1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/corpus.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/corpus-114b9d5211926d1c)
+
+running 1 test
+test corpus_both_backends ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/geometry.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/geometry-cf81a5a9fa57cdad)
+
+running 1 test
+test cached_cluster_boxes_match_native_selection_and_carets ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running unittests src/lib.rs (/home/angel/Nidara/ChatGPT/build-846-toolkit/release/deps/nk_wayland-49c0d46cd773e8cb)
+
+running 2 tests
+test ime::tests::surrounding_is_bounded_utf8_and_never_a_password ... ok
+test layers::tests::wire_values_and_fractional_buffers_are_checked_before_requests ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nk_a11y
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nk_render
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nk_text
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests nk_wayland
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

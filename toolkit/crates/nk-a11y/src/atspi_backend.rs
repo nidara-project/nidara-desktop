@@ -102,6 +102,42 @@ impl Object {
             Request::SetSelection(self.id, start..end),
         )
     }
+    fn text_extents(&self, start: i32, end: i32, coord: u32) -> fdo::Result<(i32, i32, i32, i32)> {
+        if coord != 1 {
+            return Err(fdo::Error::NotSupported(
+                "text geometry uses window coordinates".into(),
+            ));
+        }
+        let t = self
+            .node()?
+            .text
+            .ok_or_else(|| fdo::Error::NotSupported("no text geometry".into()))?;
+        let count = t.text.chars().count() as i32;
+        let end = if end == -1 { count } else { end };
+        if start < 0 || end < start || end > count {
+            return Err(fdo::Error::InvalidArgs("text geometry range".into()));
+        }
+        let start = byte_offset(&t.text, start as usize).map_err(fdo::Error::InvalidArgs)?;
+        let end = byte_offset(&t.text, end as usize).map_err(fdo::Error::InvalidArgs)?;
+        let geometry = t
+            .geometry
+            .ok_or_else(|| fdo::Error::NotSupported("no text layout geometry".into()))?;
+        let r = geometry
+            .extents(start..end, t.text.len())
+            .map_err(fdo::Error::InvalidArgs)?;
+        let (x, y) = (r.x.floor(), r.y.floor());
+        let (width, height) = ((r.x + r.width).ceil() - x, (r.y + r.height).ceil() - y);
+        if [x, y]
+            .iter()
+            .any(|v| *v < i32::MIN as f64 || *v > i32::MAX as f64)
+            || [width, height].iter().any(|v| *v > i32::MAX as f64)
+        {
+            return Err(fdo::Error::InvalidArgs(
+                "text geometry exceeds AT-SPI integer coordinates".into(),
+            ));
+        }
+        Ok((x as i32, y as i32, width as i32, height as i32))
+    }
     fn slice(&self, start: i32, end: i32) -> fdo::Result<String> {
         let t = self.text()?;
         let count = t.text.chars().count() as i32;
@@ -423,6 +459,24 @@ impl Text {
     fn get_text(&self, start: i32, end: i32) -> fdo::Result<String> {
         self.0.slice(start, end)
     }
+    fn get_range_extents(
+        &self,
+        start: i32,
+        end: i32,
+        coord_type: u32,
+    ) -> fdo::Result<(i32, i32, i32, i32)> {
+        self.0.text_extents(start, end, coord_type)
+    }
+    fn get_character_extents(
+        &self,
+        offset: i32,
+        coord_type: u32,
+    ) -> fdo::Result<(i32, i32, i32, i32)> {
+        let end = offset
+            .checked_add(1)
+            .ok_or_else(|| fdo::Error::InvalidArgs("character offset".into()))?;
+        self.0.text_extents(offset, end, coord_type)
+    }
     fn get_character_at_offset(&self, offset: i32) -> fdo::Result<i32> {
         Ok(self
             .0
@@ -737,10 +791,99 @@ impl A11yBackend for Backend {
 mod tests {
     use super::*;
     #[test]
+    fn extents_convert_scalar_offsets_union_clusters_and_round_outward() {
+        let spans = [(0..3, 10.25, 20.5), (3..7, 30.75, 29.25), (7..10, 60., 12.)]
+            .into_iter()
+            .map(|(range, x, width)| TextSpan {
+                range,
+                bounds: Bounds {
+                    x,
+                    y: 4.5,
+                    width,
+                    height: 12.25,
+                },
+                caret: Bounds {
+                    x,
+                    y: 4.5,
+                    width: 1.,
+                    height: 12.25,
+                },
+            })
+            .collect();
+        let mut n = Node::new(1, Role::TextInput, "Name");
+        n.text = Some(TextInfo {
+            text: "日🙂e\u{301}".into(),
+            geometry: Some(TextGeometry {
+                spans,
+                end_caret: Bounds {
+                    x: 72.,
+                    y: 4.5,
+                    width: 1.,
+                    height: 12.25,
+                },
+            }),
+            ..Default::default()
+        });
+        let tree = Tree {
+            root: 1,
+            nodes: BTreeMap::from([(1, n)]),
+        };
+        tree.validate().unwrap();
+        let object = Object {
+            id: 1,
+            tree: Arc::new(Mutex::new(tree)),
+            bus: ":1.1".into(),
+            callback: Arc::new(|_| {}),
+        };
+        let text = Text(object.clone());
+        assert_eq!(text.get_range_extents(0, 2, 1).unwrap(), (10, 4, 50, 13));
+        assert_eq!(text.get_character_extents(1, 1).unwrap(), (30, 4, 30, 13));
+        // Two scalars share a shaped combining cluster; no guessed half widths.
+        assert_eq!(
+            text.get_character_extents(2, 1).unwrap(),
+            text.get_character_extents(3, 1).unwrap()
+        );
+        assert_eq!(text.get_range_extents(4, 4, 1).unwrap(), (72, 4, 1, 13));
+        assert!(matches!(
+            text.get_range_extents(0, 2, 0),
+            Err(fdo::Error::NotSupported(_))
+        ));
+        assert!(matches!(
+            text.get_range_extents(-1, 2, 1),
+            Err(fdo::Error::InvalidArgs(_))
+        ));
+        assert!(text.get_range_extents(2, 1, 1).is_err());
+        assert!(text.get_character_extents(4, 1).is_err());
+        object
+            .tree
+            .lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .text
+            .as_mut()
+            .unwrap()
+            .geometry = None;
+        assert!(matches!(
+            text.get_range_extents(0, 1, 1),
+            Err(fdo::Error::NotSupported(_))
+        ));
+    }
+    #[test]
     fn password_queries_have_no_content_or_length() {
         let mut n = Node::new(1, Role::Password, "Password");
         n.text = Some(TextInfo {
             text: "secret日本🙂".into(),
+            geometry: Some(TextGeometry {
+                spans: vec![],
+                end_caret: Bounds {
+                    x: 42.,
+                    y: 42.,
+                    width: 1.,
+                    height: 22.,
+                },
+            }),
             ..Default::default()
         });
         let tree = Tree {
@@ -760,6 +903,10 @@ mod tests {
                 .any(|s| s == "org.a11y.atspi.Text")
         );
         assert_eq!(Text(o.clone()).character_count().unwrap(), 0);
+        assert!(matches!(
+            Text(o.clone()).get_range_extents(0, 0, 1),
+            Err(fdo::Error::NotSupported(_))
+        ));
         assert_eq!(Text(o).get_text(0, -1).unwrap(), "");
     }
 }
