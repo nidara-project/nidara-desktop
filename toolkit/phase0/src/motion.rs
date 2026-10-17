@@ -122,6 +122,9 @@ impl MotionApp {
             return Ok(());
         }
         self.started = true;
+        if self.client_motion {
+            println!("LAYER_FAULT client-motion applied: motion requires client paints");
+        }
         self.retarget = retarget;
         self.moving = Some(Instant::now());
         if let Some([a, b]) = self.layers {
@@ -140,6 +143,9 @@ impl MotionApp {
             }
             if self.no_parent {
                 w.control_commit_children_only()?;
+                println!(
+                    "LAYER_FAULT no-parent applied: synchronized children committed without parent"
+                );
             } else {
                 w.commit()?;
             }
@@ -237,6 +243,9 @@ impl Application for MotionApp {
                         ..Default::default()
                     };
                     if self.no_cursor {
+                        println!(
+                            "LAYER_FAULT cursor-association applied: root-local fallback instead of layer"
+                        );
                         w.set_text_input(TextInput {
                             rect: [52, 64, 2, 12],
                             ..input

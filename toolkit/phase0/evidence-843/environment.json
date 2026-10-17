@@ -1,0 +1,16 @@
+{
+  "backend": "private cage -> winit Hyalo",
+  "software_renderer": {
+    "LIBGL_ALWAYS_SOFTWARE": "1",
+    "GALLIUM_DRIVER": "llvmpipe",
+    "LP_NUM_THREADS": "2"
+  },
+  "gpu_matrix": "PASS: scales 1 and 1.25; all six controls caught with application records",
+  "software_matrix": "FAIL: scale 1 passed, including all three controls; scale 1.25 clicks after wake (original 1.4s deadline retained)",
+  "before": "scale 1 visible-position click missed A",
+  "after": "the same scale-1 click assertion passes; software full-matrix failure is retained, not counted as stability evidence",
+  "binaries": {
+    "nidara-hyalo": "cbd0d4ba86a56d286652e6f08c727cd24bb3aab85fbbf97eb9d2c52ecbc64544",
+    "nk-phase0": "281dd96df056478354da2c6cb1da60f86f594ff9cc9feacb3fe15ab88f03c287"
+  }
+}

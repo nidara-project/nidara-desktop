@@ -1184,7 +1184,13 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
 - **Input goes where a layer is seen.** `under_tree` returns the origin the pointer must be
   told so that `pointer − origin` is the point in the surface's OWN coordinates even while it is
   scaled — Smithay computes the local point that way, fresh on every motion. A layer faded to
-  0 takes no input.
+  0 takes no input. The sampled `Look` is retained per displayed output frame
+  (`layers/presentation.rs`), including across a retarget: interpolating again at input
+  dispatch can be a whole slow frame ahead of what the person sees. A successful DRM
+  queue only stages a snapshot; `frame_submitted` at vblank publishes it. Failed frames
+  keep the previous one. Winit publishes on successful submit, its available boundary
+  (the host compositor's presentation time remains unknown). Weak frame stamps reclaim
+  replaced snapshots while preserving different outputs' current frames.
 - **The state is double-buffered through Smithay's cached state** (`Pending`): `commit` TAKES
   what was pending and `merge_into` overrides field by field, so a sync subsurface's several
   commits land together with its parent's. `on_commit` walks the committed surface's whole
@@ -2190,6 +2196,20 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   frames with the overlay on than without it.
 
 ## Testing Hyalo
+
+Test 5's control FIFO is read on a thread and dispatched later on calloop.
+A completed write is not seat delivery; independent screenshot IPC can overtake
+it. Send `barrier PATH` on the same FIFO and wait for its atomic acknowledgment
+before sampling an action's effects. This observes delivery, never the expected
+hit-test result. Keep capture/input timestamps and `delivery.jsonl` in artifacts;
+do not replace this barrier with a pause or poll for the desired pixels. Each
+layer-motion fault logs `LAYER_FAULT ... applied` at the omitted/altered operation,
+and the driver requires that record as well as the original failing assertion.
+The capture's `.capture.json` records the actual IME rectangle event source; wait
+for that event in the IME's received log, then compare it with the pixels. A wrong
+rectangle also opens this delivery barrier. The last record at an arbitrary read
+may belong to an earlier or later frame. Encode PNG previews after the client
+stops, keeping evidence preparation outside capture-to-input timing.
 
 The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
 `toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then

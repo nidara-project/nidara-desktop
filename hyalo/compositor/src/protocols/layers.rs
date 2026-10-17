@@ -12,6 +12,7 @@
 //! layer goes through Smithay's own walks, untouched.
 
 mod cursor;
+pub mod presentation;
 pub use cursor::{place_input_popup, prepare_input_popups, remember_input_popup};
 
 use std::{
@@ -258,6 +259,7 @@ pub struct Layer {
     scale: Prop,
     anchor: [f64; 2],
     opacity: Prop,
+    shown: presentation::PresentedLook,
 }
 
 /// Where and how a layer is shown at a moment, in its parent's logical space.
@@ -441,7 +443,11 @@ struct Place {
 /// A surface's place from its parent's: a layer at its presented transform, anything else at
 /// its subsurface offset.
 fn place(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>, t: Instant) -> Place {
-    match look(states, t) {
+    place_look(parent, offset, look(states, t))
+}
+
+fn place_look(parent: Place, offset: Point<i32, Logical>, look: Option<Look>) -> Place {
+    match look {
         Some(l) => {
             let p = l.position.map_or(offset.to_f64(), |[x, y]| Point::from((x, y)));
             // Scaled about the anchor: the anchor stays where it is at scale 1.
@@ -450,6 +456,21 @@ fn place(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>, t: In
         }
         None => Place { at: parent.at + offset.to_f64().upscale(parent.scale), ..parent },
     }
+}
+
+/// A layer absent from an output's displayed frame cannot take input yet.
+fn place_shown(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>,
+               frame: Option<&std::sync::Arc<Instant>>, now: Instant) -> Place {
+    let look = states.data_map.get::<Mutex<Layer>>().and_then(|layer| {
+        let layer = layer.lock().unwrap();
+        layer.alive.then(|| match frame {
+            Some(frame) => layer.shown.get(frame).unwrap_or(Look {
+                position: None, scale: 1., anchor: [0., 0.], opacity: 0.,
+            }),
+            None => layer.look(now),
+        })
+    });
+    place_look(parent, offset, look)
 }
 
 /// `surface`'s tree as render elements, front to back, each layer at its presented transform
@@ -513,6 +534,7 @@ pub fn under_tree(
     surface: &WlSurface,
     point: Point<f64, Logical>,
     location: Point<i32, Logical>,
+    frame: Option<std::sync::Arc<Instant>>,
 ) -> Option<(WlSurface, Point<f64, Logical>)> {
     let now = Instant::now();
     let root = Place { at: location.to_f64(), scale: 1.0, alpha: 1.0 };
@@ -522,7 +544,7 @@ pub fn under_tree(
         root,
         |_, states, parent| match view(states) {
             Some(v) => {
-                let here = place(*parent, states, v.offset, now);
+                let here = place_shown(*parent, states, v.offset, frame.as_ref(), now);
                 // A layer faded out entirely takes no input: it is not there to be clicked.
                 if here.alpha <= 0.0 { TraversalAction::SkipChildren } else { TraversalAction::DoChildren(here) }
             }
@@ -530,9 +552,12 @@ pub fn under_tree(
         },
         |surface, states, parent| {
             let Some(v) = view(states) else { return };
-            let here = place(*parent, states, v.offset, now);
+            let here = place_shown(*parent, states, v.offset, frame.as_ref(), now);
             if here.alpha <= 0.0 || here.scale <= 0.0 {
                 return;
+            }
+            if std::env::var_os("HYALO_CONTROL").is_some() {
+                eprintln!("LAYER_HIT point={point:?} origin={:?} scale={} size={:?}", here.at, here.scale, v.dst);
             }
             let local = Point::<f64, Logical>::from(((point.x - here.at.x) / here.scale, (point.y - here.at.y) / here.scale));
             let mut attrs = states.cached_state.get::<SurfaceAttributes>();
@@ -627,6 +652,7 @@ impl Dispatch2<NidaraLayersManagerV1, Hyalo> for LayersGlobal {
                     scale: Prop::new(1.0),
                     anchor: [0.0, 0.0],
                     opacity: Prop::new(1.0),
+                    shown: presentation::PresentedLook::default(),
                 };
                 with_states(&surface, |s| {
                     // A surface that was a layer before keeps its entry: it is renewed.
@@ -733,6 +759,7 @@ pub fn window_under(
     window: &smithay::desktop::Window,
     local: Point<f64, Logical>,
     types: smithay::desktop::WindowSurfaceType,
+    frame: Option<std::sync::Arc<Instant>>,
 ) -> Option<(WlSurface, Point<f64, Logical>)> {
     use smithay::desktop::WindowSurfaceType;
     let toplevel = window.toplevel().map(|t| t.wl_surface().clone());
@@ -742,7 +769,7 @@ pub fn window_under(
         {
             return Some((s, p.to_f64()));
         }
-        return under_tree(&surface, local, (0, 0).into());
+        return under_tree(&surface, local, (0, 0).into(), frame);
     }
     window.surface_under(local, types).map(|(s, p)| (s, p.to_f64()))
 }
@@ -751,6 +778,7 @@ pub fn window_under(
 pub fn layer_surface_under(
     layer: &smithay::desktop::LayerSurface,
     local: Point<f64, Logical>,
+    frame: Option<std::sync::Arc<Instant>>,
 ) -> Option<(WlSurface, Point<f64, Logical>)> {
     use smithay::desktop::WindowSurfaceType;
     if !tree_has_layer(layer.wl_surface()) {
@@ -760,7 +788,7 @@ pub fn layer_surface_under(
     if let Some((s, p)) = layer.surface_under(local, WindowSurfaceType::POPUP | WindowSurfaceType::SUBSURFACE) {
         return Some((s, p.to_f64()));
     }
-    under_tree(layer.wl_surface(), local, (0, 0).into())
+    under_tree(layer.wl_surface(), local, (0, 0).into(), frame)
 }
 
 #[cfg(test)]

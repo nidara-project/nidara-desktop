@@ -54,19 +54,26 @@ def wait_line(test, label, tries=100):
     raise AssertionError(f'{label}; the probe said: {lines()}')
 
 
-def shot(name):
-    path = LOG / f'{name}.ppm'
-    msg('screenshot', str(path))
-    header, dims, depth, pixels = path.read_bytes().split(b'\n', 3)
-    assert header == b'P6' and depth == b'255', 'not a raw screenshot'
-    w, h = map(int, dims.split())
+def save_preview(path, image):
+    w, h, pixels = image
     def chunk(tag, data):
         return struct.pack('!I', len(data)) + tag + data + struct.pack('!I', zlib.crc32(tag + data))
     rows = b''.join(b'\0' + pixels[y*w*3:(y+1)*w*3] for y in range(h))
     path.with_suffix('.png').write_bytes(b'\x89PNG\r\n\x1a\n'
         + chunk(b'IHDR', struct.pack('!2I5B', w,h,8,2,0,0,0))
         + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b''))
-    return w, h, pixels
+
+
+def shot(name, preview=True):
+    path = LOG / f'{name}.ppm'
+    msg('screenshot', str(path))
+    header, dims, depth, pixels = path.read_bytes().split(b'\n', 3)
+    assert header == b'P6' and depth == b'255', 'not a raw screenshot'
+    w, h = map(int, dims.split())
+    image = w, h, pixels
+    if preview:
+        save_preview(path, image)
+    return image
 
 
 def span(image, y, colour):

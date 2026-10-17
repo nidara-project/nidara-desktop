@@ -1097,12 +1097,14 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     };
     render::stats::frame_done(&name, rendered, build, render_time, damage.as_deref());
     let feedback = surface.dmabuf_feedback.clone();
+    let layer_frame = rendered.then(|| crate::protocols::layers::presentation::sample(&scene, &output)).flatten();
     if rendered {
         let presentation = super::take_presentation_feedback(state, &output, &states);
         let Backend::Tty(tty) = &mut state.backend else { return };
         let Some(surface) = tty.devices.get_mut(&node).and_then(|d| d.surfaces.get_mut(&crtc)) else { return };
         match surface.drm_output.queue_frame(Some(presentation)) {
             Ok(()) => {
+                crate::protocols::layers::presentation::queued(&output, layer_frame);
                 surface.redraw = Redraw::WaitingForVBlank { redraw_needed: false };
                 surface.in_flight = Some((begun, when));
             }
@@ -1177,7 +1179,13 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
         }
     }
     let seq = metadata.as_ref().map(|m| m.sequence).unwrap_or(0);
-    match surface.drm_output.frame_submitted() {
+    let submitted = surface.drm_output.frame_submitted();
+    if submitted.is_ok() {
+        crate::protocols::layers::presentation::presented(&output);
+    } else {
+        crate::protocols::layers::presentation::discard(&output);
+    }
+    match submitted {
         Ok(Some(Some(mut feedback))) => {
             feedback.presented(clock, Refresh::fixed(frame_duration), seq as u64, flags);
         }

@@ -142,7 +142,8 @@ fn render(state: &mut Hyalo) {
     w.queued = false;
     let output = w.output.clone();
     // The host compositor's timing is not ours to know: animations at the build (render/timing.rs).
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
+    let when = std::time::Instant::now();
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, when);
     // Instrumented (render/stats.rs, #766) as on the tty backend.
     let name = output.name();
     let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);
@@ -169,10 +170,17 @@ fn render(state: &mut Hyalo) {
     };
     match result {
         Ok((damage, states)) => {
-            if let Err(err) = w.graphics.submit(damage.as_deref()) {
-                tracing::warn!(?err, "winit: submit failed");
-            }
+            let frame = crate::protocols::layers::presentation::sample(&scene, &output);
+            let submitted = w.graphics.submit(damage.as_deref());
             let rendered = damage.is_some();
+            match submitted {
+                Ok(()) if rendered => {
+                    crate::protocols::layers::presentation::queued(&output, frame);
+                    crate::protocols::layers::presentation::presented(&output);
+                }
+                Err(err) => tracing::warn!(?err, "winit: submit failed"),
+                _ => {}
+            }
             render::stats::frame_done(&name, rendered, build, render_time, damage.as_deref().or(rendered.then_some(&[])));
             state.lock_frame_shown(&output);
             super::post_repaint(state, &output, &states, None);
