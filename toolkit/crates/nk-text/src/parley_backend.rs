@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use crate::{
-    Affinity, Alignment, Caret, Direction, FontSet, GlyphRun, Layout, LayoutEngine, Line, Point,
-    Rect, Result, Size, TextBackend, TextStyle,
+    Affinity, Alignment, Caret, ClusterBox, Direction, FontSet, GlyphRun, Layout, LayoutEngine,
+    Line, Point, Rect, Result, Size, TextBackend, TextStyle,
 };
 use parley::{Cursor, FontContext, LayoutContext, PositionedLayoutItem, StyleProperty};
 use std::{borrow::Cow, ops::Range, sync::Arc};
@@ -78,6 +78,7 @@ impl TextBackend for ParleyBackend {
                 runs: Vec::new(),
                 lines: Vec::new(),
                 clusters: Vec::new(),
+                boxes: Vec::new(),
             }),
         )
     }
@@ -90,6 +91,7 @@ struct ParleyLayout {
     runs: Vec<GlyphRun>,
     lines: Vec<Line>,
     clusters: Vec<Range<usize>>,
+    boxes: Vec<ClusterBox>,
 }
 fn affinity(value: Affinity) -> parley::Affinity {
     match value {
@@ -129,6 +131,7 @@ impl LayoutEngine for ParleyLayout {
         self.runs.clear();
         self.lines.clear();
         self.clusters.clear();
+        self.boxes.clear();
         for (line_index, line) in self.native.lines().enumerate() {
             let m = line.metrics();
             self.lines.push(Line {
@@ -151,8 +154,32 @@ impl LayoutEngine for ParleyLayout {
             if self.empty {
                 continue;
             } // Parley shapes a synthetic space for empty-text caret metrics.
+            // This text backend creates no inline boxes. Runs and their visual
+            // clusters are exactly the sequence used by Parley's selection walk.
+            let mut x = m.offset + m.inline_min_coord;
+            let y = m.block_min_coord.min(m.content_block_min_coord);
+            let height = m.block_max_coord.max(m.content_block_max_coord) - y;
             for run in line.runs() {
                 self.clusters.extend(run.clusters().map(|c| c.text_range()));
+                for cluster in run.visual_clusters() {
+                    let width = cluster.advance();
+                    self.boxes.push(ClusterBox {
+                        range: cluster.text_range(),
+                        bounds: Rect {
+                            x,
+                            y,
+                            width,
+                            height,
+                        },
+                        caret: Rect {
+                            x: if cluster.is_rtl() { x + width } else { x },
+                            y,
+                            width: 1.,
+                            height,
+                        },
+                    });
+                    x += width;
+                }
             }
             for item in line.items() {
                 if let PositionedLayoutItem::GlyphRun(glyph_run) = item {
@@ -184,6 +211,7 @@ impl LayoutEngine for ParleyLayout {
         }
         self.clusters.sort_by_key(|r| r.start);
         self.clusters.dedup();
+        self.boxes.sort_by_key(|b| b.range.start);
         Ok(Size {
             width: if self.empty {
                 0.0
@@ -234,6 +262,9 @@ impl LayoutEngine for ParleyLayout {
     }
     fn lines(&self) -> &[Line] {
         &self.lines
+    }
+    fn cluster_boxes(&self) -> &[ClusterBox] {
+        &self.boxes
     }
     fn clusters(&self) -> &[Range<usize>] {
         &self.clusters

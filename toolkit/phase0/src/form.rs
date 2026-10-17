@@ -2,7 +2,8 @@
 //! The test-3 form, deliberately concrete rather than a widget library.
 use crate::{Invalid, Result, material, palette};
 use nk_a11y::{
-    A11yBackend, Action, Bounds, Callback, Node, NodeId, Request, Role, States, TextInfo, Tree,
+    A11yBackend, Action, Bounds, Callback, Node, NodeId, Request, Role, States, TextGeometry,
+    TextInfo, TextSpan, Tree,
 };
 use nk_render::{Canvas, offset};
 use nk_text::{
@@ -361,6 +362,36 @@ impl Form {
                             .map(|(i, w)| i..i + w.len())
                             .collect(),
                         lines: e.layout().lines().iter().map(|l| l.range.clone()).collect(),
+                        // An IME replacement has a separate display buffer; never
+                        // attach its byte geometry to the committed document.
+                        geometry: (e.preedit().is_none()).then(|| {
+                            let bounds = |r: Rect| {
+                                let r = offset(r, (f.bounds.x + 12., f.bounds.y + 12.));
+                                Bounds {
+                                    x: r.x as f64,
+                                    y: r.y as f64,
+                                    width: r.width as f64,
+                                    height: r.height as f64,
+                                }
+                            };
+                            TextGeometry {
+                                spans: e
+                                    .layout()
+                                    .cluster_boxes()
+                                    .iter()
+                                    .map(|b| TextSpan {
+                                        range: b.range.clone(),
+                                        bounds: bounds(b.bounds),
+                                        caret: bounds(b.caret),
+                                    })
+                                    .collect(),
+                                end_caret: bounds(
+                                    e.layout()
+                                        .caret_rect(e.text().len(), Affinity::Upstream)
+                                        .expect("document end is a valid layout boundary"),
+                                ),
+                            }
+                        }),
                     });
                 }
                 if id == ERROR {
@@ -382,6 +413,22 @@ impl Form {
                     | (Some("role-review"), OPEN)
             ) {
                 n.role = Role::Label;
+            }
+            if self.control.as_deref() == Some("text-extents")
+                && id == NAME
+                && let Some(g) = n.text.as_mut().and_then(|t| t.geometry.as_mut())
+            {
+                let wrong = Bounds {
+                    x: -10000.,
+                    y: -10000.,
+                    width: 0.,
+                    height: 0.,
+                };
+                for span in &mut g.spans {
+                    span.bounds = wrong;
+                    span.caret = wrong;
+                }
+                g.end_caret = wrong;
             }
             if self.control.as_deref() == Some("geometry") && id == NAME {
                 n.bounds.x = 0.;
@@ -507,7 +554,19 @@ impl Form {
         if self.invalid.semantics {
             let tree = self.tree();
             let events = nk_a11y::diff(self.last_tree.as_ref(), &tree)?.len();
+            let text_extents_applied = self.control.as_deref() == Some("text-extents")
+                && tree
+                    .nodes
+                    .get(&NAME)
+                    .and_then(|n| n.text.as_ref())
+                    .and_then(|t| t.geometry.as_ref())
+                    .is_some();
             self.backend.as_mut().unwrap().update(tree.clone())?;
+            if text_extents_applied {
+                eprintln!(
+                    "A11Y_FAULT_APPLIED text-extents node=2 rect=-10000,-10000,0,0 published"
+                );
+            }
             self.last_tree = Some(tree);
             self.invalid.semantics = false;
             eprintln!(

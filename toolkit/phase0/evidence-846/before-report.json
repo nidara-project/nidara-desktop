@@ -1,0 +1,260 @@
+{
+  "environment": {
+    "client_sha256": "281dd96df056478354da2c6cb1da60f86f594ff9cc9feacb3fe15ab88f03c287",
+    "compositor_sha256": "cbd0d4ba86a56d286652e6f08c727cd24bb3aab85fbbf97eb9d2c52ecbc64544",
+    "revision": "bec2c2e2a5d6022c0d35efb8b42dbbdc20257057",
+    "package_overlay": null,
+    "atspi": "2.62.1",
+    "packages": "error: package 'orca' was not found\nerror: package 'speech-dispatcher' was not found\nerror: package 'libao' was not found",
+    "device_capabilities": 5,
+    "orca": "06:03:39.633887 - DEBUGGING TOOLS MANAGER: Orca version 51.1 (rev 244bdadd9), AT-SPI2 version: 2.62.1, Session: wayland Nidara"
+  },
+  "rows": [
+    {
+      "step": "Tab Password",
+      "status": "PASS",
+      "why": "['tab', 'Password password text']",
+      "speech": [
+        "tab",
+        "Password password text"
+      ]
+    },
+    {
+      "step": "Tab Language",
+      "status": "PASS",
+      "why": "['tab', 'Language combo box Japanese', 'Japanese']",
+      "speech": [
+        "tab",
+        "Language combo box Japanese",
+        "Japanese"
+      ]
+    },
+    {
+      "step": "Tab Remember me",
+      "status": "PASS",
+      "why": "['tab', 'Remember me check box not checked']",
+      "speech": [
+        "tab",
+        "Remember me check box not checked"
+      ]
+    },
+    {
+      "step": "Tab Review",
+      "status": "PASS",
+      "why": "['tab', 'Review button']",
+      "speech": [
+        "tab",
+        "Review button"
+      ]
+    },
+    {
+      "step": "Tab Name",
+      "status": "PASS",
+      "why": "['tab', 'Name entry']",
+      "speech": [
+        "tab",
+        "Name entry"
+      ]
+    },
+    {
+      "step": "Paste acknowledgement",
+      "status": "PASS",
+      "why": "['left control', 'Pasted contents from clipboard.']",
+      "speech": [
+        "left control",
+        "Pasted contents from clipboard."
+      ]
+    },
+    {
+      "step": "Unicode line",
+      "status": "PASS",
+      "why": "['tab', 'Password password text', 'left shift', 'Name entry 日本🙂 word']",
+      "speech": [
+        "tab",
+        "Password password text",
+        "left shift",
+        "Name entry 日本🙂 word"
+      ]
+    },
+    {
+      "step": "Flat review Unicode line",
+      "status": "FAIL",
+      "why": "['日本🙂 ']",
+      "speech": [
+        "日本🙂 "
+      ]
+    },
+    {
+      "step": "Delete d",
+      "status": "PASS",
+      "why": "['backspace', 'd']",
+      "speech": [
+        "backspace",
+        "d"
+      ]
+    },
+    {
+      "step": "Insert d",
+      "status": "PASS",
+      "why": "['d']",
+      "speech": [
+        "d"
+      ]
+    },
+    {
+      "step": "Caret left",
+      "status": "PASS",
+      "why": "['d']",
+      "speech": [
+        "d"
+      ]
+    },
+    {
+      "step": "Caret right",
+      "status": "PASS",
+      "why": "['blank']",
+      "speech": [
+        "blank"
+      ]
+    },
+    {
+      "step": "Select word",
+      "status": "PASS",
+      "why": "['left control', 'word', 'selected']",
+      "speech": [
+        "left control",
+        "word",
+        "selected"
+      ]
+    },
+    {
+      "step": "Password focus",
+      "status": "PASS",
+      "why": "['tab', 'Password password text']",
+      "speech": [
+        "tab",
+        "Password password text"
+      ]
+    },
+    {
+      "step": "Password silence",
+      "status": "PASS",
+      "why": "[]",
+      "speech": []
+    },
+    {
+      "step": "Dropdown focus",
+      "status": "PASS",
+      "why": "['tab', 'Language combo box Japanese', 'Japanese']",
+      "speech": [
+        "tab",
+        "Language combo box Japanese",
+        "Japanese"
+      ]
+    },
+    {
+      "step": "Dropdown expanded",
+      "status": "PASS",
+      "why": "['space', 'Japanese']",
+      "speech": [
+        "space",
+        "Japanese"
+      ]
+    },
+    {
+      "step": "Dropdown chosen",
+      "status": "PASS",
+      "why": "['Chinese']",
+      "speech": [
+        "Chinese"
+      ]
+    },
+    {
+      "step": "Dropdown closed",
+      "status": "PASS",
+      "why": "['return', 'Chinese']",
+      "speech": [
+        "return",
+        "Chinese"
+      ]
+    },
+    {
+      "step": "Checkbox checked",
+      "status": "PASS",
+      "why": "['space', 'checked']",
+      "speech": [
+        "space",
+        "checked"
+      ]
+    },
+    {
+      "step": "Dialog opened",
+      "status": "PASS",
+      "why": "['return', 'Correct error dialog Enter correct to fix this error Enter correct to fix this error', 'Confirmation entry wrong', 'invalid entry', 'Enter correct to fix this error', 'invalid entry']",
+      "speech": [
+        "return",
+        "Correct error dialog Enter correct to fix this error Enter correct to fix this error",
+        "Confirmation entry wrong",
+        "invalid entry",
+        "Enter correct to fix this error",
+        "invalid entry"
+      ]
+    },
+    {
+      "step": "Invalid save",
+      "status": "PASS",
+      "why": "['return', 'left shift', 'Confirmation entry wrong', 'invalid entry', 'Enter correct to fix this error']",
+      "speech": [
+        "return",
+        "left shift",
+        "Confirmation entry wrong",
+        "invalid entry",
+        "Enter correct to fix this error"
+      ]
+    },
+    {
+      "step": "Error corrected",
+      "status": "PASS",
+      "why": "['left control', 'entire document selected', 'c', 'Text unselected.', 'o', 'r', 'r', 'e', 'c', 't', 'Entry valid.']",
+      "speech": [
+        "left control",
+        "entire document selected",
+        "c",
+        "Text unselected.",
+        "o",
+        "r",
+        "r",
+        "e",
+        "c",
+        "t",
+        "Entry valid."
+      ]
+    },
+    {
+      "step": "Dialog saved and restored",
+      "status": "PASS",
+      "why": "['return', 'Review button']",
+      "speech": [
+        "return",
+        "Review button"
+      ]
+    },
+    {
+      "step": "Dialog escaped and restored",
+      "status": "PASS",
+      "why": "['escape', 'Review button']",
+      "speech": [
+        "escape",
+        "Review button"
+      ]
+    },
+    {
+      "step": "Wayland keyboard monitor refusal",
+      "status": "PASS",
+      "why": "libatspi capabilities=5, but observed key events=0; capabilities alone may describe a legacy fallback",
+      "key_events": []
+    }
+  ],
+  "not_run": [],
+  "complete_matrix": false
+}

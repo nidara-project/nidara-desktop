@@ -149,3 +149,18 @@ and Orca version, and mark a missing role/state/change as a failure.
 Use Alt+F4 to close the main window. Preserve results separately for each
 backend, including any AT-SPI warnings. The `fcitx5` matrix remains its own owner
 gate; only the form's name field is used by the scripted Unicode test here.
+
+## Text geometry
+
+`TextInfo.geometry` is an optional partition into UTF-8 `TextSpan` clusters with
+window-logical bounds and leading carets, plus the final caret. Fill it from the same
+retained layout that is painted, adding its actual padding/scroll origin. The provider
+converts AT-SPI scalar offsets, unions intersecting cluster boxes and rounds outward.
+`GetRangeExtents` and `GetCharacterExtents` accept WINDOW coordinates; missing geometry
+and other coordinate systems return `NotSupported`. A shaped cluster can cover several
+scalars, which share its real rectangle. Password filtering drops geometry as well as text.
+
+Real Orca KP_Up must speak the whole `日本🙂 word`. The wrong-extents control is in the
+test window, with no installed-provider fault switch: it publishes wrong plain geometry,
+logs application after backend update, and must fail the same real speech assertion.
+See [phase-0 evidence](../../phase0/EVIDENCE-846.md).
