@@ -21,6 +21,25 @@ REPORT = []
 CONTROL_SERIAL = 0
 send_control = m.control
 
+PREVIEWS = []
+raw_shot = m.shot
+
+
+def shot(name):
+    # PNG encoding is evidence preparation, not part of capture -> input.
+    image = raw_shot(name, preview=False)
+    PREVIEWS.append((m.LOG / f'{name}.ppm', image))
+    return image
+
+
+def save_previews():
+    for path, image in PREVIEWS:
+        m.save_preview(path, image)
+    PREVIEWS.clear()
+
+
+m.shot = shot
+
 
 def delivered_control(line):
     # The FIFO reader forwards lines to calloop on another thread. Returning
@@ -166,6 +185,7 @@ def native(label, flag=None, retarget=False):
         if client.poll() is None:
             client.terminate()
             client.wait(timeout=5)
+        save_previews()
         wait(lambda: not any(w['app_id']=='nk-phase0' for w in m.msg('windows')['windows']), 'window did not close')
 
 
@@ -270,8 +290,11 @@ def cursor_check(label, flag=None):
             layer_scale=(red[1]-red[0]+1)/(80*scale)
             expected=red[0]+32*scale*layer_scale
             assert abs(green[0]-expected)<5*scale,'cursor follows: IME popup did not follow presented layer'
-            rects=[list(map(int,l.split()[1:])) for l in ime_lines() if l.startswith('RECT')]
-            last=rects[-1]
+            sent = json.loads((m.LOG/f'cursor-during-{index}.capture.json').read_text())['input_method_rectangles']
+            assert len(sent) == 1, f'capture has no unique IME event source: {sent}'
+            last = sent[0]
+            event = 'RECT ' + ' '.join(map(str, last))
+            wait(lambda: event in ime_lines(), 'capture cursor event not delivered')
             bounds=cursor_vertical_bounds(red[1]-red[0]+1,scale)
             (m.LOG/f'cursor-during-{index}.json').write_text(json.dumps({
                 'output_scale':scale,'red_span':red,'popup_span':green,
@@ -298,6 +321,7 @@ def cursor_check(label, flag=None):
             if process and process.poll() is None:
                 process.terminate()
                 process.wait(timeout=5)
+        save_previews()
         wait(lambda:not any(w['app_id']=='nk-phase0' for w in m.msg('windows')['windows']),'cursor window did not close')
 
 

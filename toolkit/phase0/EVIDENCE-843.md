@@ -20,3 +20,30 @@ On the same base, a private cage/Hyalo session with llvmpipe (`LIBGL_ALWAYS_SOFT
 The FIFO delivery acknowledgment alone is insufficient: `/tmp/n843-barrier2` reproduces the same assertion at x=175.5. Its image sample is 183318.556917139, the write is 183318.751326332, and the delivered click is 183318.910880873. Waiting for delivery cannot make an old image current. The normal GPU matrix passes both scales and catches all six applied faults (`/tmp/n843-barrier/report.md`); that is not vkms stability evidence.
 
 There is a compositor defect as well as stale probe sampling: `under_tree` re-interpolates at dispatch-time `Instant::now()`, even when rendering has held the event loop for a frame. It never retains the layer transform of the last submitted/presented frame. A queue acknowledgment cannot repair that difference. The compositor correction belongs in a separate commit; it must preserve snapshots through retargeting and publish them only on a successful submit (winit) or actual vblank/frame submission (tty).
+
+
+## Final local verification and limits
+
+The separate compositor commit retains immutable displayed transforms per output frame,
+using identity tokens rather than equal timestamps. The render path still evaluates the
+current curves; only hit-testing consumes displayed snapshots. Roots not mapped on that
+output do not acquire its displayed state. A retarget or destroyed/replaced protocol
+object cannot rewrite or inherit a queued snapshot.
+
+The probe now acknowledges FIFO delivery, waits for the actual IME event source recorded
+by the capture (even if the rectangle is wrong), and encodes PNG previews after the client
+stops. Capture delays, motion parameters, the 1.4 s click deadline, thresholds, scales and
+original fault assertions are unchanged. Each applied fault is mandatory evidence.
+
+| Local check | Result |
+| --- | --- |
+| Hyalo release unit suite | 92/92, including three presentation regressions |
+| Hyalo release clippy, all targets, `-D warnings` | Pass |
+| Test 5 on GPU, scales 1 and 1.25 | Pass; six controls caught with actual application records |
+| Original two-thread llvmpipe reproduction, scale 1 | The same visible-position assertion now passes, with all three controls caught |
+| Full two-thread llvmpipe matrix | **Fail** at scale 1.25: clicks after wake. The original deadline is preserved. This is not green evidence. |
+
+Literal timelines, client/check logs, pictures, binary hashes and report tables are in
+`evidence-843/`. None of these winit checks counts toward the five required vkms jobs.
+CI attempt links, including the diagnostic head and every red attempt, belong in the PR
+and issue comments so recording a result never changes the head under the stability gate.

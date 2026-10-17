@@ -1,0 +1,43 @@
+[
+  {
+    "test": "scale1",
+    "client_cpu_s": 0.0,
+    "blocked_sample_s": 0.9713043459923938,
+    "A": [
+      176,
+      189,
+      240
+    ],
+    "B": [
+      176,
+      189,
+      240
+    ]
+  },
+  {
+    "test": "scale1-no-parent",
+    "status": "CAUGHT",
+    "assertion": "moving: layers did not move while client blocked",
+    "applied": true
+  },
+  {
+    "test": "scale1-client-motion",
+    "status": "CAUGHT",
+    "assertion": "moving: layers did not move while client blocked",
+    "applied": true
+  },
+  {
+    "test": "scale1-retarget",
+    "status": "PASS"
+  },
+  {
+    "test": "scale1-cursor",
+    "status": "PASS"
+  },
+  {
+    "test": "scale1-cursor-control",
+    "status": "CAUGHT",
+    "assertion": "cursor follows: IME popup did not follow presented layer",
+    "applied": true
+  }
+]

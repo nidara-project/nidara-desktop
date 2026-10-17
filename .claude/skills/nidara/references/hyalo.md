@@ -2205,6 +2205,11 @@ hit-test result. Keep capture/input timestamps and `delivery.jsonl` in artifacts
 do not replace this barrier with a pause or poll for the desired pixels. Each
 layer-motion fault logs `LAYER_FAULT ... applied` at the omitted/altered operation,
 and the driver requires that record as well as the original failing assertion.
+The capture's `.capture.json` records the actual IME rectangle event source; wait
+for that event in the IME's received log, then compare it with the pixels. A wrong
+rectangle also opens this delivery barrier. The last record at an arbitrary read
+may belong to an earlier or later frame. Encode PNG previews after the client
+stops, keeping evidence preparation outside capture-to-input timing.
 
 The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
 `toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then
