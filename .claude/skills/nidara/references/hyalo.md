@@ -1184,7 +1184,13 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
 - **Input goes where a layer is seen.** `under_tree` returns the origin the pointer must be
   told so that `pointer − origin` is the point in the surface's OWN coordinates even while it is
   scaled — Smithay computes the local point that way, fresh on every motion. A layer faded to
-  0 takes no input.
+  0 takes no input. The sampled `Look` is retained per displayed output frame
+  (`layers/presentation.rs`), including across a retarget: interpolating again at input
+  dispatch can be a whole slow frame ahead of what the person sees. A successful DRM
+  queue only stages a snapshot; `frame_submitted` at vblank publishes it. Failed frames
+  keep the previous one. Winit publishes on successful submit, its available boundary
+  (the host compositor's presentation time remains unknown). Weak frame stamps reclaim
+  replaced snapshots while preserving different outputs' current frames.
 - **The state is double-buffered through Smithay's cached state** (`Pending`): `commit` TAKES
   what was pending and `merge_into` overrides field by field, so a sync subsurface's several
   commits land together with its parent's. `on_commit` walks the committed surface's whole
