@@ -1,0 +1,15 @@
+LAYER_PRESENT output=winit sampled=Instant { tv_sec: 184076, tv_nsec: 920591930 } delivered=Instant { tv_sec: 184076, tv_nsec: 925811664 }
+CAPTURE_BEGIN Time { tp: Timespec { tv_sec: 184076, tv_nsec: 925919394 }, kind: PhantomData<smithay::utils::clock::Monotonic> } /tmp/n843-final-sw/scale1/during-3.ppm
+CAPTURE_END Time { tp: Timespec { tv_sec: 184077, tv_nsec: 116796670 }, kind: PhantomData<smithay::utils::clock::Monotonic> } /tmp/n843-final-sw/scale1/during-3.ppm
+2026-10-17T00:52:44.867620Z ERROR smithay::backend::egl::ffi: [EGL] 0x300d (BAD_SURFACE) eglQuerySurface: eglQuerySurface
+LAYER_PRESENT output=winit sampled=Instant { tv_sec: 184077, tv_nsec: 119757075 } delivered=Instant { tv_sec: 184077, tv_nsec: 293076808 }
+CONTROL_CLICK_BEGIN Time { tp: Timespec { tv_sec: 184077, tv_nsec: 293185448 }, kind: PhantomData<smithay::utils::clock::Monotonic> } 331.5 75
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.48224688284694, y: 180.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.4835222854664, y: 40.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.48224688284694, y: 180.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.4835222854664, y: 40.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.48224688284694, y: 180.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.4835222854664, y: 40.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.48224688284694, y: 180.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+LAYER_HIT point=Point<smithay::utils::geometry::Logical> { x: 175.5, y: 70.0 } origin=Point<smithay::utils::geometry::Logical> { x: 163.4835222854664, y: 40.0 } scale=1 size=Size<smithay::utils::geometry::Logical> { w: 80, h: 60 }
+CONTROL_CLICK_END Time { tp: Timespec { tv_sec: 184077, tv_nsec: 293551666 }, kind: PhantomData<smithay::utils::clock::Monotonic> }

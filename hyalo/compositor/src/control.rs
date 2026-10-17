@@ -6,6 +6,7 @@
 //!
 //!   move X Y · click X Y · rclick X Y · press X Y BUTTON · release BUTTON
 //!   key KEYCODE · keydown KEYCODE · keyup KEYCODE      (evdev codes: 125 = Super, 42 = Shift)
+//!   barrier PATH                                       (acknowledge prior FIFO delivery)
 //!   pinch X Y SCALE                                    (two fingers, to SCALE in ten steps)
 //!
 //! Keys go through the same path as a keyboard's, bindings included.
@@ -45,13 +46,26 @@ impl Hyalo {
         let num = |i: usize| parts.get(i).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
         let time = InputTime::now();
         match parts.first().copied() {
+            Some("barrier") => {
+                if let Some(path) = parts.get(1) {
+                    let path = std::path::Path::new(path);
+                    let pending = path.with_extension("pending");
+                    let result = std::fs::write(&pending, format!("{:?}\n", self.clock.now()))
+                        .and_then(|()| std::fs::rename(&pending, path));
+                    if let Err(err) = result {
+                        eprintln!("[hyalo] control barrier: {err}");
+                    }
+                }
+            }
             Some("move") => self.control_move(num(1), num(2), time),
             Some(verb @ ("click" | "rclick")) => {
+                eprintln!("CONTROL_CLICK_BEGIN {:?} {} {}", self.clock.now(), num(1), num(2));
                 self.control_move(num(1), num(2), time);
                 let button = if verb == "click" { 0x110 } else { 0x111 };
                 for state in [ButtonState::Pressed, ButtonState::Released] {
                     self.pointer_button(button, state, time);
                 }
+                eprintln!("CONTROL_CLICK_END {:?}", self.clock.now());
             }
             Some("press") => {
                 self.control_move(num(1), num(2), time);

@@ -138,7 +138,27 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .find(|o| output.is_none_or(|n| o.name() == n))
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
+    if std::env::var_os("HYALO_CONTROL").is_some() {
+        eprintln!("CAPTURE_BEGIN {:?} {}", state.clock.now(), path.display());
+    }
     let (w, h, rgba) = capture_output(state, &output, false)?;
+    if std::env::var_os("HYALO_CONTROL").is_some() {
+        eprintln!("CAPTURE_END {:?} {}", state.clock.now(), path.display());
+        // A delivery barrier may observe the exact event this capture emitted,
+        // including a WRONG rectangle. Never poll for desired geometry.
+        let mut rectangles = Vec::new();
+        for window in state.space.elements_for_output(&output) {
+            let Some(root) = window.toplevel().map(|t| t.wl_surface()) else { continue };
+            for (popup, _) in smithay::desktop::PopupManager::popups_for_surface(root) {
+                if let smithay::desktop::PopupKind::InputMethod(popup) = popup {
+                    let r = popup.text_input_rectangle();
+                    rectangles.push([r.loc.x, r.loc.y, r.size.w, r.size.h]);
+                }
+            }
+        }
+        let metadata = serde_json::json!({"input_method_rectangles": rectangles});
+        std::fs::write(path.with_extension("capture.json"), metadata.to_string()).map_err(|e| e.to_string())?;
+    }
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ppm")) {
         crate::screenshot::write_ppm(path, w, h, &rgba)
     } else {

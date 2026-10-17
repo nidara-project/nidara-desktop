@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/angel/.codex/worktrees/843-layer-motion/Distroia/scripts/ci/nk-layer-motion-baseline-843.py", line 284, in <module>
+    native(f'scale{scale}')
+    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/angel/.codex/worktrees/843-layer-motion/Distroia/scripts/ci/nk-layer-motion-baseline-843.py", line 116, in native
+    assert p[1][1] == 'A', f'presented hit-test: visible-position click missed A: {p[1]}'
+           ^^^^^^^^^^^^^^
+AssertionError: presented hit-test: visible-position click missed A: ['PRESS', 'WINDOW', '181.500', '70.000']

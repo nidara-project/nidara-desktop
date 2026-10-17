@@ -403,7 +403,8 @@ impl Hyalo {
                     if !cell.to_f64().contains(pos) { return None; }
                     // Layers a client handed Hyalo to animate are hit where they are shown
                     // (protocols/layers.rs).
-                    crate::protocols::layers::window_under(window, local, WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE)
+                    crate::protocols::layers::window_under(window, local, WindowSurfaceType::TOPLEVEL | WindowSurfaceType::SUBSURFACE,
+                        output.as_ref().and_then(crate::protocols::layers::presentation::shown_frame))
                 };
                 popup.or_else(root).map(|(s, p)| (s, p + location.to_f64()))
             })

@@ -167,7 +167,8 @@ impl Hyalo {
                 let origin = geo.loc + output_loc;
                 // Layers a client handed Hyalo to animate are hit where they are shown
                 // (protocols/layers.rs).
-                if let Some((s, p)) = crate::protocols::layers::layer_surface_under(l, pos - origin.to_f64()) {
+                if let Some((s, p)) = crate::protocols::layers::layer_surface_under(l, pos - origin.to_f64(),
+                    crate::protocols::layers::presentation::shown_frame(output)) {
                     return Some((l.clone(), s, p + origin.to_f64()));
                 }
             }

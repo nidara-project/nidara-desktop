@@ -1,0 +1,15 @@
+PASS scale1: independent movement while blocked, local clicks, both done; client CPU 0.000s
+CONTROL PASS no-parent: moving: layers did not move while client blocked
+CONTROL PASS client-motion: moving: layers did not move while client blocked
+PASS spring retarget: continuous position, cancelled old serials, done new serials
+PASS anchored scale, transparent input, inverse pointer coordinates, released-buffer resize
+PASS scale1-cursor: real IME popup/event follow position and anchored scale while client blocked; root fallback restored
+CONTROL PASS cursor association: cursor follows: IME popup did not follow presented layer
+Traceback (most recent call last):
+  File "/home/angel/.codex/worktrees/843-layer-motion/Distroia/scripts/ci/nk-layer-motion-check.py", line 340, in <module>
+    native(f'scale{scale}')
+    ~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/angel/.codex/worktrees/843-layer-motion/Distroia/scripts/ci/nk-layer-motion-check.py", line 159, in native
+    assert time.monotonic()-t0 < 1.4 and not any(l.startswith('AWAKE') for l in m.lines()), 'clicks after wake'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: clicks after wake
