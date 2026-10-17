@@ -500,9 +500,21 @@ pub fn take_presentation_feedback(state: &Hyalo, output: &Output, states: &Rende
     let mut feedback = OutputPresentationFeedback::new(output);
     for window in state.space.elements() {
         if state.space.outputs_for_element(window).contains(output) {
-            window.take_presentation_feedback(&mut feedback, surface_primary_scanout_output, |surface, _| {
-                surface_presentation_feedback_flags_from_states(surface, None, states)
-            });
+            // A window opening is drawn as a picture of its surfaces taken this very frame
+            // (render/mod.rs, wm/motion.rs), so its content IS on screen — but its surfaces are
+            // not among the frame's elements, so their primary output stays unset and their
+            // feedback waited for the end of the animation: a new window was told its first
+            // frame was presented ~700 ms late (`[animations] open`), found by #852's timeline.
+            let opening = state.wm.by_window(window).is_some_and(|m| state.wm.openings.iter().any(|o| o.id == m.id));
+            if opening {
+                window.take_presentation_feedback(&mut feedback, |_, _| Some(output.clone()), |surface, _| {
+                    surface_presentation_feedback_flags_from_states(surface, None, states)
+                });
+            } else {
+                window.take_presentation_feedback(&mut feedback, surface_primary_scanout_output, |surface, _| {
+                    surface_presentation_feedback_flags_from_states(surface, None, states)
+                });
+            }
         }
     }
     for layer in layer_map_for_output(output).layers() {

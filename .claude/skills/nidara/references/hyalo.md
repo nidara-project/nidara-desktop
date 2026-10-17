@@ -1132,6 +1132,13 @@ expected 1.01 was wrong, not the curve).
   1, "'64 64 64': it opened at once"), one that never closes animated (step 2, "no picture of
   it"), one without the `destroyed` hook (step 3, killed: "no picture of it"), one that never
   slides (step 5, "workspace 1 did not slide out to the left").
+- 🔴 **An opening window's presentation feedback is taken with the picture** (`backend/mod.rs`
+  `take_presentation_feedback`): it is drawn as a snapshot of its surfaces, so they are not among
+  the frame's elements and their primary output was never set — every new window was told its
+  first frame was presented only when the 700 ms opening ended (main, CI: callback 133 ms,
+  presented 1056 ms; found 2026-10-18 by a `WAYLAND_DEBUG` timeline for #852). Any element
+  drawn by proxy (picture, texture of surfaces) must take its surfaces' feedback itself.
+  `nk-phase0-check.py` requires the gap under 350 ms on the vkms run.
 - 🔴 A check that compares against "what was there" waits for the windows the check before it
   closed to finish fading: CI's first run of this one compared against the minimize check's
   killed probe, still closing.
