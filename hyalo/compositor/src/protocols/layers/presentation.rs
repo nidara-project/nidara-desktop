@@ -111,7 +111,7 @@ pub fn presented(output: &Output) {
     // Drop this output's old stamp BEFORE pruning weak stamps in the layers.
     let stamp = Arc::new(frame.when);
     p.shown = Some(stamp.clone());
-    if std::env::var_os("HYALO_CONTROL").is_some() {
+    if crate::control::enabled() {
         eprintln!(
             "LAYER_PRESENT output={} sampled={:?} delivered={:?}",
             output.name(),

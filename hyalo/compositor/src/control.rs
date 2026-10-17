@@ -19,6 +19,12 @@ use smithay::{
 
 use crate::state::Hyalo;
 
+/// Whether the test channel is on. Read once: the hit-test asks on every pointer motion.
+pub fn enabled() -> bool {
+    static ON: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| std::env::var_os("HYALO_CONTROL").is_some());
+    *ON
+}
+
 pub fn init(event_loop: &mut EventLoop<Hyalo>) {
     let Some(path) = std::env::var_os("HYALO_CONTROL") else { return };
     let (tx, rx) = channel::channel::<String>();

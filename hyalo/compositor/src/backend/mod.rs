@@ -138,11 +138,11 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .find(|o| output.is_none_or(|n| o.name() == n))
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
-    if std::env::var_os("HYALO_CONTROL").is_some() {
+    if crate::control::enabled() {
         eprintln!("CAPTURE_BEGIN {:?} {}", state.clock.now(), path.display());
     }
     let (w, h, rgba) = capture_output(state, &output, false)?;
-    if std::env::var_os("HYALO_CONTROL").is_some() {
+    if crate::control::enabled() {
         eprintln!("CAPTURE_END {:?} {}", state.clock.now(), path.display());
         // A delivery barrier may observe the exact event this capture emitted,
         // including a WRONG rectangle. Never poll for desired geometry.
