@@ -1,6 +1,6 @@
-# The toolkit, phase 1 — the contract (DRAFT, revision 2)
+# The toolkit, phase 1 — the contract (revision 2)
 
-**Status: revision 2, after the architecture review (Astra, comment on #852, 2026-10-18: seven
+**Status: ACCEPTED by the owner on 2026-10-18.** Revision 2, after the architecture review (Astra, comment on #852, 2026-10-18: seven
 blocking findings, one non-blocking; each is answered below, marked `[A1]`…`[A8]`).** Phase 0's
 contract is [CONTRACT.md](CONTRACT.md): its five gates passed on 2026-10-17 (#818). This file
 does not amend it. Component names follow [CATALOG.md](CATALOG.md) and are still proposals;
