@@ -128,20 +128,38 @@ Each automated in the `hyalo` job (vkms, the shell running), each with a control
    - **Start-up: launch → first presented frame of the window, with Appearance drawn.** The
      owner (2026-10-17): since Settings became its own process (#813) it opens slower than
      Nautilus, and start-up must count. So the bar is **absolute, not only relative**: faster
-     than the current Settings AND faster than Nautilus (GTK4, measured the same way). Both
-     references are measured first and written here; no target number is guessed beforehand.
+     than the current Settings AND faster than Nautilus (GTK4, measured the same way). The
+     references, measured below, are the bar.
    - **Memory:** PSS after open and after visiting Appearance — lower than the current Settings.
    - **Smoothness:** frame times while scrolling Appearance and while dragging the night-light
      slider — no worse than the current Settings.
 5. **Live** — the owner uses it in their session and judges the look (warned first).
 
-## Start-up: what is already known
+## Start-up: the references (measured 2026-10-17)
 
-Phase 0's window, launched in the owner's session on 2026-10-17, logged
-`FIRST_FRAME_CALLBACK_MS=134` but `FIRST_FRAME_MS=840`: its first frame was ready at ~134 ms
-and presented ~700 ms later. **The first piece of work in phase 1 is to find where those
-~700 ms go** (font discovery, the first buffer, Hyalo's first presentation of a new toplevel,
-or the measurement itself) — with a timeline, not a guess — before anything is built on top.
+Owner's machine, live Hyalo session, 2560×1440. **Launch → the window's first buffer in
+Hyalo**, from Hyalo's own event stream (`msg events`: a window is listed only once mapped,
+`ipc/server.rs` `window_infos`); PSS 2 s after. Median of runs 2–6 (run 1 warms caches); every
+Nautilus run started with no Nautilus process left.
+
+| What | First buffer | PSS |
+|---|---|---|
+| Current Settings, **dev mode** (`~/.config/nidara/.dev`: sass + two bundles + the C host rebuilt on EVERY launch) | 1539 ms (1493–1612) | 165 MiB |
+| Current Settings, **installed** (`/usr/share/nidara/ui/settings/build/nidara-settings`) | 959 ms (916–974) | 157 MiB |
+| Nautilus, cold (`nautilus --new-window ~`) | 473 ms (470–491) | 77 MiB |
+| Phase 0's window (`nk-phase0`: corpus, form, fonts) | **133 ms** (127–142) | 50 MiB |
+
+- **The bar for test 4:** the new Settings with Appearance drawn below Nautilus's **473 ms**
+  (and so below the current Settings' 959 ms); PSS below 157 MiB. Phase 0's window already
+  maps in 133 ms with fonts and text, so the budget for Appearance's content is ~340 ms.
+- The owner's "slower than Nautilus" is half dev mode: ~580 ms of every dev launch is the
+  rebuild, not Settings. (A dev launcher that rebuilds only when sources changed is a separate
+  fix, outside the toolkit.)
+- **Phase 0's `FIRST_FRAME_MS=840` was not the user's wait:** the buffer is in Hyalo at
+  ~133 ms; what comes ~700 ms later is the `wp_presentation` feedback. Probably Hyalo delays
+  the feedback while the output is idle — **to check in Hyalo** (a timeline of commit,
+  render and feedback), since test 4's smoothness numbers rely on that feedback.
+
 Start-up costs are then budgeted per piece: font collection (fontique), the `Describe` round
 trip (D1: one call, cached schema), image decoding (off the first frame: the gallery appears
 when ready), SVG icons (only the visible ones).
