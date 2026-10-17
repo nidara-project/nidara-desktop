@@ -140,7 +140,9 @@ export function exportConfigService(): void {
 
     const impl = {
         Describe: () => JSON.stringify(describeForSettings()),
-        Get([keys]: [string[]]) {
+        // A sync method gets its in-args as separate parameters; an *Async one gets them as
+        // one array (SetAsync below). `Get([keys])` read the first KEY as the list.
+        Get(keys: string[]) {
             const out: Record<string, GLib.Variant> = {}
             for (const key of keys.length ? keys : configKeys()) {
                 const r = getConfigValue(key)
