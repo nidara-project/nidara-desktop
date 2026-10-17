@@ -74,13 +74,19 @@ daily use") without losing a page.
 ### D4 — one source for strings, icons and design tokens
 
 No number or string is typed twice:
-- **Translations:** the locale files (`ui/shell/core/i18n/locales/*.ts`, flat key → string)
-  become JSON, imported by the TypeScript side and read by the Rust side. Parity and the ledger
-  (`scripts/ci/i18n-check.mjs`) keep checking one set.
+- **Translations and pages:** exported from the same files, not converted —
+  `scripts/export-settings-data.mjs` writes `manifest.json` and `i18n/<locale>.json` from
+  `manifest.ts` and `locales/*.ts` (flat key → string). The translation workflow and its
+  ledger (`scripts/ci/i18n-check.mjs`) stay as they are; CI checks the export against an
+  independent reading of the sources (`scripts/ci/settings-data-check.py`, with a dropped-key
+  control). Converting the locales to JSON would change every translator's and agent's
+  workflow for no gain the export does not already give.
 - **Icons:** the same `nd-` SVGs (`ui/shell/assets/icons/nidara/`), rendered with `resvg`.
 - **Tokens:** phase 0 reads `--nidara-*` out of `ui/shell/styles/_base.scss` with
-  `include_str!` (`phase0/src/palette.rs`). Phase 1 keeps one source and generates what Rust
-  reads; the token contract check covers both ends.
+  `include_str!` (`phase0/src/palette.rs`). That file holds only the starting values: the
+  accent changes at run time (`appearance.accent` → `ACCENT_PALETTE`, which `Config1` serves)
+  and radii/sizes live in `ui/lib/nidara-kit/platform/tokens.ts`. A separate piece maps the
+  whole token system before anything is exported; the token contract check covers both ends.
 
 ### D5 — works on any Wayland compositor, best on Hyalo
 
