@@ -9,7 +9,12 @@
 // subset; grow it opportunistically as services gain setters.
 
 import Gtk from "gi://Gtk?version=4.0"
-import { registerConfig, type ConfigValue } from "./core/ConfigRegistry"
+import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+import Pango from "gi://Pango"
+import PangoCairo from "gi://PangoCairo"
+import { getBundledWallpapers } from "../lib/wallpaper"
+import { registerConfig, type ConfigValue, type ConfigResult } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
 import { ACCENT_PALETTE, type AccentKey } from "./core/NidaraTheme"
@@ -132,6 +137,35 @@ const onPowerCfg = (read: () => any) => (apply: (v: any) => void) => {
     return onIdleChanged(() => apply(read()))
 }
 
+// The picker's own types (custom/appearance.ts) — what awww is asked to show.
+const WALLPAPER_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]
+
+function validWallpaper(raw: string): ConfigResult {
+    let path = raw.trim()
+    if (path.startsWith("file://")) {
+        try { path = GLib.filename_from_uri(path)[0] } catch { return { ok: false, error: `not a local file URI: ${raw}` } }
+    }
+    if (!GLib.path_is_absolute(path)) return { ok: false, error: `expected an absolute path, got: ${raw}` }
+    if (!GLib.file_test(path, GLib.FileTest.IS_REGULAR)) return { ok: false, error: `no such file: ${path}` }
+    const [type] = Gio.content_type_guess(path, null)
+    const mime = Gio.content_type_get_mime_type(type) ?? type
+    if (!WALLPAPER_TYPES.includes(mime)) return { ok: false, error: `not a JPEG/PNG/GIF/WebP/AVIF image (${mime}): ${path}` }
+    return { ok: true, value: path }
+}
+
+let fontFamilies: Set<string> | null = null
+/** "Family [Style] Size": the size a positive number, the family one the system has. The
+ *  family list is read once per shell — a font installed meanwhile needs a reload, as GTK's
+ *  own chooser does. */
+function validFont(raw: string): ConfigResult {
+    const desc = Pango.FontDescription.from_string(raw.trim())
+    const family = desc.get_family()
+    if (!family || desc.get_size() <= 0) return { ok: false, error: `expected "Family Size" (points), got: ${raw}` }
+    fontFamilies ??= new Set(PangoCairo.FontMap.get_default().list_families().map(f => f.get_name().toLowerCase()))
+    if (!fontFamilies.has(family.toLowerCase())) return { ok: false, error: `no font family "${family}" on this system` }
+    return { ok: true, value: raw.trim() }
+}
+
 export function registerConfigEntries() {
     // ── Appearance ────────────────────────────────────────────────────────
     registerConfig("appearance.darkMode", {
@@ -212,7 +246,7 @@ export function registerConfigEntries() {
     registerConfig("appearance.gtkTheme", {
         desc: "GTK theme for THIRD-PARTY apps only — Nidara's own processes load no GTK theme (tech-debt #107).",
         type: "enum",
-        enum: Theme.getAvailableGtkThemes(),
+        enum: () => Theme.getAvailableGtkThemes(),
         get: () => Theme.themeFamily,
         set: v => Theme.setGtkTheme(v as string),
         subscribe: onThemeCfg(() => Theme.themeFamily),
@@ -224,7 +258,7 @@ export function registerConfigEntries() {
     registerConfig("appearance.iconTheme", {
         desc: "System icon theme.",
         type: "enum",
-        enum: Theme.getAvailableIconThemes(),
+        enum: () => Theme.getAvailableIconThemes(),
         get: () => Theme.iconTheme,
         set: v => Theme.setIconTheme(v as string),
         subscribe: onThemeCfg(() => Theme.iconTheme),
@@ -265,7 +299,7 @@ export function registerConfigEntries() {
     registerConfig("appearance.cursorTheme", {
         desc: "System cursor theme.",
         type: "enum",
-        enum: Theme.getAvailableCursorThemes(),
+        enum: () => Theme.getAvailableCursorThemes(),
         get: () => Theme.cursorTheme,
         set: v => Theme.setCursorTheme(v as string),
         subscribe: onThemeCfg(() => Theme.cursorTheme),
@@ -286,6 +320,44 @@ export function registerConfigEntries() {
             optI18n: k => TRANSITION_LABELS[k as TransitionType] ?? k,
         },
     })
+    // ── What Appearance's own controls change (toolkit/PHASE1.md D1 [A2]) ──────────
+    // They had no key: the GTK Settings' custom builders call the services directly, so the
+    // native Settings — which has no setting logic — could not reach them. No `ui`: each is
+    // drawn by a named custom builder of the manifest, not by a generic row.
+    registerConfig("wallpaper.current", {
+        desc: "The wallpaper image: an absolute path (or file:// URI) to a JPEG, PNG, GIF, WebP or AVIF file. The bundled wallpapers are offered in `catalogue`; any readable image of those types is accepted.",
+        type: "string",
+        catalogue: () => getBundledWallpapers().filter(p => !p.includes("wallpaper-greeter")),
+        validate: validWallpaper,
+        get: () => Wallpaper.current,
+        set: v => Wallpaper.setWallpaper(v as string, undefined, true),
+        subscribe: onWallpaperCfg(() => Wallpaper.current),
+    })
+    for (const [key, which] of [["nightlight.scheduleFrom", "From"], ["nightlight.scheduleTo", "To"]] as const) {
+        registerConfig(key, {
+            desc: `Night light schedule: when it turns ${which === "From" ? "on" : "off"}, as HH:MM (24 h). Used while nightlight.scheduleEnabled is on.`,
+            type: "string",
+            validate: raw => /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.trim())
+                ? { ok: true, value: raw.trim() }
+                : { ok: false, error: `expected a time as HH:MM (00:00–23:59), got: ${raw}` },
+            get: () => which === "From" ? NightLight.scheduleFrom : NightLight.scheduleTo,
+            set: v => which === "From" ? NightLight.setScheduleFrom(v as string) : NightLight.setScheduleTo(v as string),
+            subscribe: (apply) => {
+                apply(which === "From" ? NightLight.scheduleFrom : NightLight.scheduleTo)
+                return NightLight.subscribe(which === "From" ? "scheduleFrom" : "scheduleTo", apply)
+            },
+        })
+    }
+    for (const [key, mono] of [["appearance.interfaceFont", false], ["appearance.monoFont", true]] as const) {
+        registerConfig(key, {
+            desc: `The ${mono ? "monospace" : "interface"} font as a Pango description, "Family [Style] Size" in points (unscaled: the text scale applies on top), as org.gnome.desktop.interface stores it. A family the system does not have is refused.`,
+            type: "string",
+            validate: validFont,
+            get: () => mono ? Theme.monoFont : Theme.interfaceFont,
+            set: v => mono ? Theme.setMonoFont(v as string) : Theme.setFont(v as string),
+            subscribe: onThemeCfg(() => mono ? Theme.monoFont : Theme.interfaceFont),
+        })
+    }
 
     // ── Dock ──────────────────────────────────────────────────────────────
     registerConfig("dock.position", {

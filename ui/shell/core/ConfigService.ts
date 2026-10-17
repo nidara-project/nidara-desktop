@@ -1,7 +1,7 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import {
-    configKeys, getConfigEntry, getConfigValue, setConfigValue, describeConfig, type ConfigValue,
+    configKeys, enumOf, getConfigEntry, getConfigValue, setConfigValue, describeConfig, type ConfigValue,
 } from "./ConfigRegistry"
 import agentConfig from "./AgentConfig"
 import { t } from "./i18n"
@@ -12,32 +12,40 @@ import { t } from "./i18n"
  *
  * The registry agents already use (`describeConfig`/`getConfig`/`setConfig`, ConfigRegistry.ts),
  * served to other PROCESSES — first of all the native Settings of toolkit phase 1
- * (`toolkit/PHASE1.md`, D1), which carries no setting logic of its own: it draws what
- * `Describe` says and calls `Set`. Agents and Settings see the same keys.
+ * (`toolkit/PHASE1.md`, D1), which carries no setting logic of its own. Agents and Settings
+ * see the same keys.
  *
- *   Describe() → s          JSON: describeConfig() + `ui` (title, subtitle, control, options'
- *                           labels, slider) + the WHOLE enum (agents get a sample; Settings
- *                           needs every keyboard layout to draw the list)
- *   Get(as) → a{sv}         current values; an empty list = every key
- *   Set(s, v)               through the registry's own validation and setter
- *   Changed(a{sv})          a key's value changed, whoever changed it
+ *   Snapshot() → (t, t, s)  epoch, revision, and the schema WITH values at exactly that
+ *                           revision: describeConfig() + `ui` + the whole enum + `catalogue`
+ *                           + `available` (an unavailable key is listed as such, not omitted)
+ *   Apply(s, v) → (t, v)    validated and applied; answers the revision that includes it and
+ *                           the value IN FORCE after it (canonical: rounded, a URI made a path…)
+ *   Updated(t, t, a{sv})    every change, with its epoch and revision
+ *   Describe/Get/Set/Changed  the first members, kept as they are for their clients
+ *
+ * A client subscribes to `Updated`, then takes a `Snapshot`, and drops any `Updated` whose
+ * revision is not above the snapshot's; a new epoch means the server restarted: snapshot
+ * again, never replay (PHASE1.md [A3]). Members are only ever ADDED to v1.
  *
  * ── Rules this file keeps ───────────────────────────────────────────────────
  * - A well-known name of its own, `org.nidara.Config`, not the shell's: the service can move
  *   to nidara-sessiond (#574) later with no change to any client.
- * - `Set` from the owner of `org.nidara.Settings` is the Settings window's own path, as the
- *   in-process registry is today (read-only keys excepted: those stay the GTK window's). From ANY other sender it is an agent's `setConfig`: refused
- *   unless Settings → AI allows config writes. That is the user's consent, not a security
- *   boundary — a process of the same user can already write dconf — so this door may not be
- *   wider than the one it sits beside (`setConfig` in app.ts).
- * - `Changed` carries only real changes: a service's `subscribe` re-reads on every one of its
- *   own signals (ThemeManager's covers a dozen keys), so values are compared to the last sent.
+ * - Writes from the owner of `org.nidara.SettingsNative` are the native Settings' own path
+ *   (read-only keys excepted). From ANY other sender they are an agent's `setConfig`: refused
+ *   unless Settings → AI allows config writes. Cooperative consent, not a security boundary —
+ *   a process of the same user can claim that name or write dconf (owner, 2026-10-18; real
+ *   enforcement is #840's) — so this door is not wider than `setConfig` in app.ts. The owner
+ *   is followed with a name watch, not asked on every write (every slider step paid it).
+ * - Only real changes are announced: a service's `subscribe` re-reads on every one of its own
+ *   signals (ThemeManager's covers a dozen keys), so values are compared to the last sent.
+ *   Announcements are coalesced per idle, one revision per batch.
  * - Never exported by the Settings process, which registers the same entries: one server.
  */
 
 const NAME = "org.nidara.Config"
 const PATH = "/org/nidara/Config"
-const SETTINGS_NAME = "org.nidara.Settings"
+const SETTINGS_NAME = "org.nidara.SettingsNative"
+const SCHEMA_VERSION = 1
 
 const IFACE = `
 <node>
@@ -52,6 +60,22 @@ const IFACE = `
       <arg type="v" name="value" direction="in"/>
     </method>
     <signal name="Changed"><arg type="a{sv}" name="values"/></signal>
+    <method name="Snapshot">
+      <arg type="t" name="epoch" direction="out"/>
+      <arg type="t" name="revision" direction="out"/>
+      <arg type="s" name="schema" direction="out"/>
+    </method>
+    <method name="Apply">
+      <arg type="s" name="key" direction="in"/>
+      <arg type="v" name="value" direction="in"/>
+      <arg type="t" name="revision" direction="out"/>
+      <arg type="v" name="canonical" direction="out"/>
+    </method>
+    <signal name="Updated">
+      <arg type="t" name="epoch"/>
+      <arg type="t" name="revision"/>
+      <arg type="a{sv}" name="values"/>
+    </signal>
   </interface>
 </node>`
 
@@ -62,19 +86,10 @@ const variant = (v: ConfigValue): GLib.Variant =>
         : typeof v === "number" ? GLib.Variant.new_double(v)
         : GLib.Variant.new_string(String(v))
 
-function senderOwns(sender: string | null, name: string): boolean {
-    if (!sender) return false
-    try {
-        const reply = Gio.DBus.session.call_sync(
-            "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
-            "GetNameOwner", new GLib.Variant("(s)", [name]),
-            new GLib.VariantType("(s)"), Gio.DBusCallFlags.NONE, 1000, null,
-        )
-        return (reply.deepUnpack() as [string])[0] === sender
-    } catch {
-        return false
-    }
-}
+/** A slider's flanking icons by NAME (the file's own name): the client resolves them through
+ *  the interface icon theme the user chose, as the shell does (core/Icons.ts) — a path would
+ *  pin one theme's drawing (PHASE1.md [A6]). */
+const iconName = (icon: Gio.FileIcon) => icon.get_file().get_basename()?.replace(/\.svg$/, "")
 
 /** What Settings needs to draw a key without any setting logic of its own. */
 function uiOf(key: string): object | undefined {
@@ -86,32 +101,37 @@ function uiOf(key: string): object | undefined {
         return s === k ? undefined : s
     }
     const s = ui.slider
+    const values = enumOf(e)
     return {
         i18n: ui.i18n,
         title: label(ui.i18n),
         subtitle: label(`${ui.i18n}.desc`),
         control: ui.control ?? (e.type === "boolean" ? "toggle" : e.type === "enum" ? "dropdown" : e.type === "number" ? "slider" : undefined),
-        ...(e.enum && ui.optI18n ? { options: e.enum.map(value => ({ value, label: ui.optI18n!(value) })) } : {}),
+        ...(values && ui.optI18n ? { options: values.map(value => ({ value, label: ui.optI18n!(value) })) } : {}),
         ...(s ? {
             slider: {
                 unit: s.unit, pct: s.pct, decimals: s.decimals, step: s.step,
                 commitOnRelease: s.commitOnRelease, debounce: s.debounce,
-                icons: s.icons?.map(i => i.get_file().get_path()),
+                icons: s.icons?.map(iconName),
             },
         } : {}),
         ...(ui.presets ? { presets: ui.presets, presetUnit: ui.presetUnit } : {}),
     }
 }
 
+/** The schema with values, for Settings: every key of the registry, available or not. */
 export function describeForSettings(): Record<string, object> {
     const schema = describeConfig() as Record<string, Record<string, unknown>>
-    for (const key of Object.keys(schema)) {
+    for (const key of configKeys(true)) {
         const e = getConfigEntry(key)!
-        const entry = schema[key]
-        if (e.enum) {
-            entry.values = [...e.enum]
+        const entry = schema[key] ?? (schema[key] = { type: e.type, desc: e.desc })
+        entry.available = e.available?.() !== false
+        const values = enumOf(e)
+        if (values) {
+            entry.values = [...values]
             delete entry.valuesTotal
         }
+        if (e.catalogue) entry.catalogue = [...e.catalogue()]
         const ui = uiOf(key)
         if (ui) entry.ui = ui
     }
@@ -120,22 +140,53 @@ export function describeForSettings(): Record<string, object> {
 
 export function exportConfigService(): void {
     let exported: any = null
+    // The serving process's instance: a client that sees it change knows the server restarted.
+    // Microseconds of the wall clock fit a double exactly (< 2^53); two shells never start in
+    // the same microsecond and the same session.
+    const epoch = GLib.get_real_time()
+    let revision = 0
+    let settingsOwner: string | null = null
     const sent = new Map<string, ConfigValue>()
     const pending = new Map<string, ConfigValue>()
-    let flush = 0
+    let flushId = 0
+
+    const flush = () => {
+        if (flushId) GLib.source_remove(flushId)
+        flushId = 0
+        if (!pending.size) return
+        revision += 1
+        const values: Record<string, GLib.Variant> = {}
+        for (const [k, v] of pending) values[k] = variant(v)
+        pending.clear()
+        exported?.emit_signal("Changed", new GLib.Variant("(a{sv})", [values]))
+        exported?.emit_signal("Updated", new GLib.Variant("(tta{sv})", [epoch, revision, values]))
+    }
     const changed = (key: string, value: ConfigValue) => {
         if (sent.has(key) && sent.get(key) === value) return
         sent.set(key, value)
         pending.set(key, value)
-        // One signal per idle: a ThemeManager change re-reads a dozen keys in one go.
-        if (!flush) flush = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            flush = 0
-            const values: Record<string, GLib.Variant> = {}
-            for (const [k, v] of pending) values[k] = variant(v)
-            pending.clear()
-            exported?.emit_signal("Changed", new GLib.Variant("(a{sv})", [values]))
+        // One announcement per idle: a ThemeManager change re-reads a dozen keys in one go.
+        if (!flushId) flushId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            flushId = 0
+            flush()
             return GLib.SOURCE_REMOVE
         })
+    }
+
+    /** The gate, the registry's validation and setter; resolves with the error or null. */
+    const write = async (sender: string | null, key: string, value: GLib.Variant): Promise<[string, string] | null> => {
+        const fromSettings = !!sender && sender === settingsOwner
+        if (!fromSettings && !agentConfig.allowConfigWrite)
+            return [`${ERROR}.Denied`, "config writes are disabled — enable them in Settings → AI"]
+        // Read-only keys (the ai.* gate itself) are refused by the registry for every caller
+        // here; the Settings window that changes them is still the GTK one.
+        try {
+            const result = await setConfigValue(key, String(value.deepUnpack()))
+            // setConfigValue answers JSON on success and a sentence otherwise.
+            return result.startsWith("{") ? null : [`${ERROR}.Invalid`, result]
+        } catch (err) {
+            return [`${ERROR}.Failed`, String(err)]
+        }
     }
 
     const impl = {
@@ -151,19 +202,26 @@ export function exportConfigService(): void {
             }
             return out
         },
+        Snapshot() {
+            const schema = describeForSettings()
+            return [epoch, revision, JSON.stringify({ schemaVersion: SCHEMA_VERSION, keys: schema })]
+        },
         SetAsync([key, value]: [string, GLib.Variant], invocation: Gio.DBusMethodInvocation) {
-            const fromSettings = senderOwns(invocation.get_sender(), SETTINGS_NAME)
-            if (!fromSettings && !agentConfig.allowConfigWrite) {
-                invocation.return_dbus_error(`${ERROR}.Denied`, "config writes are disabled — enable them in Settings → AI")
-                return
-            }
-            // Read-only keys (the ai.* gate itself) are refused by the registry for every
-            // caller here; the Settings window that changes them is still the GTK one.
-            setConfigValue(key, String(value.deepUnpack())).then(result => {
-                // setConfigValue answers JSON on success and a sentence otherwise.
-                if (result.startsWith("{")) invocation.return_value(null)
-                else invocation.return_dbus_error(`${ERROR}.Invalid`, result)
-            }).catch(err => invocation.return_dbus_error(`${ERROR}.Failed`, String(err)))
+            write(invocation.get_sender(), key, value).then(error => {
+                if (error) invocation.return_dbus_error(...error)
+                else invocation.return_value(null)
+            })
+        },
+        ApplyAsync([key, value]: [string, GLib.Variant], invocation: Gio.DBusMethodInvocation) {
+            write(invocation.get_sender(), key, value).then(error => {
+                if (error) return invocation.return_dbus_error(...error)
+                // The change the setter caused is pending (its service announced it
+                // synchronously): send it now, so the revision answered includes it. A no-op
+                // answers the current revision and announces nothing.
+                flush()
+                const r = getConfigValue(key)
+                invocation.return_value(new GLib.Variant("(tv)", [revision, variant(r.value as ConfigValue)]))
+            })
         },
     }
 
@@ -173,13 +231,18 @@ export function exportConfigService(): void {
             Gio.BusType.SESSION, NAME, Gio.BusNameOwnerFlags.NONE,
             (conn: Gio.DBusConnection) => {
                 try {
-                    exported!.export(conn, PATH)
+                    exported.export(conn, PATH)
                 } catch (e) {
                     console.error(`[config] could not export ${PATH}:`, e)
                 }
             },
             () => console.log(`[config] serving ${NAME}`),
             () => console.warn(`[config] lost ${NAME} — another shell owns it?`),
+        )
+        Gio.bus_watch_name(
+            Gio.BusType.SESSION, SETTINGS_NAME, Gio.BusNameWatcherFlags.NONE,
+            (_c: Gio.DBusConnection, _n: string, owner: string) => { settingsOwner = owner },
+            () => { settingsOwner = null },
         )
         // Held for the life of the process: an unreferenced exported object is
         // collected and stops answering with no error.
@@ -188,9 +251,10 @@ export function exportConfigService(): void {
         console.error(`[config] could not export ${NAME}:`, e)
         return
     }
-    for (const key of configKeys()) {
+    for (const key of configKeys(true)) {
         const sub = getConfigEntry(key)!.subscribe
-        // The first call is the current value: it seeds `sent`, it is not a change.
+        // The contract of `subscribe` (PHASE1.md [A3]): its FIRST call is synchronous and is the
+        // current value. It seeds `sent`; it is not a change.
         sub?.(v => sent.has(key) ? changed(key, v) : void sent.set(key, v))
     }
 }

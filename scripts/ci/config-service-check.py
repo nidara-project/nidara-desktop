@@ -13,9 +13,15 @@ it proves; each fails if its piece is missing:
      this door is not wider than `setConfig`.
   7. The wallpaper transition and a window-blur change made by another process are announced
      (both were applied silently until #852's review).
+  8. The sync protocol: Snapshot (epoch, revision, versioned schema with `available` and the
+     bundled-wallpaper catalogue); Apply answers the canonical value and a higher revision that
+     an Updated carries; a no-op Apply answers the same revision and announces nothing.
+  9. Appearance's own keys: wallpaper/schedule/font validation, schedule and font applied.
+ 10. A GTK theme installed after the shell started is offered (enums re-read).
+ 11. The owner of org.nidara.SettingsNative writes while agent writes are off.
 Restores everything it changed.
 """
-import json, subprocess, sys
+import json, os, shutil, subprocess, sys
 import gi
 gi.require_version('Gio', '2.0')
 from gi.repository import Gio, GLib
@@ -118,12 +124,99 @@ fails_with('Error.Invalid', 'Set', GLib.Variant('(sv)', ['appearance.accent', GL
            'an invalid value')
 print('ok invalid value refused')
 
+# ── The sync protocol (PHASE1.md [A3]): Snapshot, Apply, Updated ──────────────
+updates = []
+proxy.connect('g-signal', lambda _p, _s, name, params:
+              name == 'Updated' and updates.append(params.unpack()))
+epoch, rev0, snap = call('Snapshot').unpack()
+snap = json.loads(snap)
+if not (epoch > 0 and snap.get('schemaVersion') == 1 and 'available' in snap['keys'].get('appearance.darkMode', {})):
+    sys.exit(f'FAIL: Snapshot: epoch {epoch}, version {snap.get("schemaVersion")}, no `available`')
+cat = snap['keys'].get('wallpaper.current', {}).get('catalogue', [])
+if not cat:
+    sys.exit('FAIL: Snapshot: wallpaper.current has no catalogue of bundled wallpapers')
+print(f'ok snapshot: epoch {epoch}, revision {rev0}, {len(snap["keys"])} keys, {len(cat)} bundled wallpapers')
+
+def apply(key, value):
+    return call('Apply', GLib.Variant('(sv)', [key, value])).unpack()
+
+def wait_updated(revision, key, what):
+    loop = GLib.MainLoop()
+    deadline = GLib.get_monotonic_time() + 5_000_000
+    hit = lambda: any(e == epoch and r == revision and key in v for e, r, v in updates)
+    GLib.timeout_add(20, lambda: (loop.quit(), False)[1] if hit() or GLib.get_monotonic_time() > deadline else True)
+    loop.run()
+    if not hit():
+        sys.exit(f'FAIL: {what}: no Updated({epoch}, {revision}) with {key} (got {updates})')
+
+temp0 = snap['keys']['nightlight.temperature']['value']
+target = 4321.6 if round(temp0) != 4322 else 4111.4
+rev, canon = apply('nightlight.temperature', GLib.Variant('d', target))
+if canon != round(target) or rev <= rev0:
+    sys.exit(f'FAIL: Apply: {target} answered {canon} at revision {rev} (snapshot {rev0})')
+wait_updated(rev, 'nightlight.temperature', 'Apply of the temperature')
+seen = len(updates)
+rev_same, canon_same = apply('nightlight.temperature', GLib.Variant('d', float(round(target))))
+settle = GLib.MainLoop()
+GLib.timeout_add(500, lambda: (settle.quit(), False)[1])
+settle.run()
+if rev_same != rev or canon_same != round(target) or len(updates) != seen:
+    sys.exit(f'FAIL: a no-op Apply moved the revision ({rev} → {rev_same}) or announced something')
+apply('nightlight.temperature', GLib.Variant('d', float(temp0)))
+print(f'ok apply: {target} → canonical {canon} at revision {rev}; a no-op answers it unchanged, silently')
+
+# ── The keys Appearance's own controls change (PHASE1.md [A2]) ──────────────────
+for key, raw in [('wallpaper.current', '/no/such/image.jpg'), ('wallpaper.current', '/etc/hostname'),
+                 ('nightlight.scheduleFrom', '25:00'), ('appearance.interfaceFont', 'NoSuchFamily 12'),
+                 ('appearance.interfaceFont', 'Inter')]:
+    fails_with('Error.Invalid', 'Apply', GLib.Variant('(sv)', [key, GLib.Variant('s', raw)]), f'{key} = {raw!r}')
+was_from = snap['keys']['nightlight.scheduleFrom']['value']
+new_from = '21:30' if was_from != '21:30' else '22:15'
+rev, canon = apply('nightlight.scheduleFrom', GLib.Variant('s', f' {new_from} '))
+if canon != new_from:
+    sys.exit(f'FAIL: scheduleFrom answered {canon!r}')
+wait_updated(rev, 'nightlight.scheduleFrom', 'Apply of the schedule')
+apply('nightlight.scheduleFrom', GLib.Variant('s', was_from))
+font0 = snap['keys']['appearance.interfaceFont']['value']
+new_font = 'Inter 13' if font0.strip() == 'Inter 12' else 'Inter 12'
+rev, canon = apply('appearance.interfaceFont', GLib.Variant('s', new_font))
+wait_updated(rev, 'appearance.interfaceFont', 'Apply of the interface font')
+apply('appearance.interfaceFont', GLib.Variant('s', font0))
+print('ok appearance keys: wallpaper/schedule/font validated, schedule and font applied and announced')
+
+# ── A catalogue installed meanwhile is current (enum re-read, [A6]) ───────────
+theme_dir = os.path.expanduser('~/.local/share/themes/NidaraCiTheme/gtk-4.0')
+os.makedirs(theme_dir, exist_ok=True)
+try:
+    values = json.loads(call('Snapshot').unpack()[2])['keys']['appearance.gtkTheme']['values']
+    if 'NidaraCiTheme' not in values:
+        sys.exit(f'FAIL: a GTK theme installed after the shell started is not offered ({values})')
+finally:
+    shutil.rmtree(os.path.expanduser('~/.local/share/themes/NidaraCiTheme'), ignore_errors=True)
+print('ok enum re-read: a theme installed meanwhile is offered')
+
+# ── The native Settings' path: the owner of org.nidara.SettingsNative ────────────
+native = Gio.DBusConnection.new_for_address_sync(
+    Gio.dbus_address_get_for_bus_sync(Gio.BusType.SESSION, None),
+    Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
+owned = native.call_sync('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'RequestName',
+                         GLib.Variant('(su)', ['org.nidara.SettingsNative', 4]), None, Gio.DBusCallFlags.NONE, 5000, None)
+if owned.unpack()[0] != 1:
+    sys.exit(f'FAIL: could not own org.nidara.SettingsNative ({owned.unpack()})')
+native_proxy = Gio.DBusProxy.new_sync(native, Gio.DBusProxyFlags.NONE, None,
+                                      'org.nidara.Config', '/org/nidara/Config', 'org.nidara.Config1')
+GLib.usleep(300_000)
+
 subprocess.run(['gsettings', 'set', 'org.nidara.ai', 'allow-config-write', 'false'], check=True)
 try:
     GLib.usleep(500_000)
     fails_with('Error.Denied', 'Set', GLib.Variant('(sv)', ['appearance.accent', GLib.Variant('s', accent)]),
                'a write with Settings → AI config writes off')
     print('ok denied while agent config writes are off')
+    # The same write from the native Settings' connection is its own path, not an agent's.
+    native_proxy.call_sync('Apply', GLib.Variant('(sv)', ['appearance.accent', GLib.Variant('s', other)]),
+                           Gio.DBusCallFlags.NONE, 5000, None)
+    print('ok the owner of org.nidara.SettingsNative writes with agent writes off')
 finally:
     subprocess.run(['gsettings', 'reset', 'org.nidara.ai', 'allow-config-write'], check=True)
     GLib.usleep(500_000)

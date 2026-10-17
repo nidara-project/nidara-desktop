@@ -30,8 +30,13 @@ export interface ConfigEntryUi {
 export interface ConfigEntry {
     desc: string
     type: "boolean" | "number" | "enum" | "string"
-    /** valid values when type === "enum" */
-    enum?: readonly string[]
+    /** valid values when type === "enum" — a function is re-read on every use, so a catalogue
+     *  that changes while the shell runs (an icon theme installed) is current (#852 [A6]) */
+    enum?: readonly string[] | (() => readonly string[])
+    /** string keys: values OFFERED, not enforced (the bundled wallpapers) — `Describe` serves it */
+    catalogue?: () => readonly string[]
+    /** string keys: validate and canonicalise the raw value (a `file://` URI → its path) */
+    validate?: (raw: string) => ConfigResult
     /** inclusive bounds when type === "number" */
     min?: number
     max?: number
@@ -58,6 +63,11 @@ export interface ConfigLocation {
 }
 
 const entries: Record<string, ConfigEntry> = {}
+
+/** An entry's enum as it is NOW. */
+export function enumOf(e: ConfigEntry): readonly string[] | undefined {
+    return typeof e.enum === "function" ? e.enum() : e.enum
+}
 const locations: Record<string, ConfigLocation> = {}
 
 export function registerConfig(key: string, entry: ConfigEntry) {
@@ -88,9 +98,10 @@ function live(key: string): ConfigEntry | undefined {
     return e && e.available?.() !== false ? e : undefined
 }
 
-/** The keys that exist here — an unavailable one is left out. */
-export function configKeys(): string[] {
-    return Object.keys(entries).filter(k => live(k)).sort()
+/** The keys that exist here — an unavailable one is left out, unless `all` (Config1 lists
+ *  those as `available: false`, so a client can hide a row on purpose). */
+export function configKeys(all = false): string[] {
+    return Object.keys(entries).filter(k => all || live(k)).sort()
 }
 
 /**
@@ -120,7 +131,7 @@ export function describeConfig() {
         out[key] = {
             desc: e.desc,
             type: e.type,
-            ...enumField(e.enum),
+            ...enumField(enumOf(e)),
             ...(e.min !== undefined ? { min: e.min } : {}),
             ...(e.max !== undefined ? { max: e.max } : {}),
             writable: e.writable !== false && !!e.set,
@@ -168,18 +179,19 @@ function parseValue(e: ConfigEntry, raw: string): ConfigResult {
             return { ok: true, value: n }
         }
         case "enum": {
-            if (!e.enum?.includes(raw)) {
+            const values = enumOf(e)
+            if (!values?.includes(raw)) {
                 // Same cap as describeConfig, and for the same reason: an error
                 // that prints 598 names is not more helpful than one that prints
                 // forty and says how many there are.
-                const shown = e.enum?.slice(0, ENUM_INLINE_MAX).join(", ")
-                const rest = (e.enum?.length ?? 0) > ENUM_INLINE_MAX ? ` … (${e.enum!.length} in total)` : ""
+                const shown = values?.slice(0, ENUM_INLINE_MAX).join(", ")
+                const rest = (values?.length ?? 0) > ENUM_INLINE_MAX ? ` … (${values!.length} in total)` : ""
                 return { ok: false, error: `invalid value: ${raw} — valid: ${shown}${rest}` }
             }
             return { ok: true, value: raw }
         }
         case "string":
-            return { ok: true, value: raw }
+            return e.validate ? e.validate(raw) : { ok: true, value: raw }
     }
 }
 

@@ -855,19 +855,31 @@ Rules:
 
 `core/ConfigService.ts` serves the registry to other processes under its own name,
 `org.nidara.Config` (`/org/nidara/Config`) — the native Settings of toolkit phase 1 is its
-client and carries no setting logic (`toolkit/PHASE1.md`, D1). `Describe() → s` is
-`describeConfig` plus each key's `ui` (translated title/subtitle, control, option labels,
-slider) and the WHOLE enum; `Get(as) → a{sv}` (empty = all); `Set(s, v)`; `Changed(a{sv})`.
+client and carries no setting logic (`toolkit/PHASE1.md`, D1). Members, only ever ADDED to v1:
 
-- `Changed` comes from each entry's `subscribe`, deduplicated against the last value sent. **A
-  key without `subscribe` never announces a change** — give every key the new Settings draws
-  one (the accent had none until this service).
-- `Set` from the owner of `org.nidara.Settings` is Settings' own path; from any other sender it
-  is an agent's `setConfig`: refused unless Settings → AI allows config writes. Read-only keys
-  are refused for every caller. Consent, not a security boundary (dconf is writable anyway).
+- `Snapshot() → (t epoch, t revision, s)` — `{schemaVersion, keys}`: `describeConfig` plus each
+  key's `ui` (translated title/subtitle, control, option labels, slider with icon NAMES), the
+  WHOLE enum, `catalogue` (values offered, not enforced) and `available` (an unavailable key is
+  listed as `false`, not omitted). `Apply(s, v) → (t revision, v canonical)` — the value in
+  force after it and the revision that includes it; a no-op answers the current revision and
+  announces nothing. `Updated(t epoch, t revision, a{sv})`. The older `Describe`/`Get`/`Set`/
+  `Changed` stay for their clients.
+- Client order: subscribe to `Updated`, then `Snapshot`, drop revisions not above it; a new
+  epoch = the shell restarted → snapshot again, never replay.
+- **A key without `subscribe` never announces a change, and a `subscribe` must hear EVERY
+  writer** (#857: the wallpaper transition's shell setter emitted nothing; the window blur heard
+  only its own process). Its first call is synchronous and is the current value.
+- `enum` may be a FUNCTION, re-read on every use (themes installed meanwhile); `enumOf(e)` reads
+  it. String keys may `validate` (canonicalise: a `file://` URI → path) and offer a `catalogue`.
+- Appearance's own controls have keys since #852 [A2]: `wallpaper.current`,
+  `nightlight.scheduleFrom`/`scheduleTo` (HH:MM), `appearance.interfaceFont`/`monoFont`
+  (Pango "Family [Style] Size", unknown family refused).
+- Writes from the owner of `org.nidara.SettingsNative` (followed with a name watch, not asked
+  per write) are the native Settings' path; any other sender is an agent's `setConfig`,
+  refused unless Settings → AI allows config writes. Read-only keys are refused for every
+  caller. Cooperative consent, not a security boundary (owner, 2026-10-18; #840).
 - Only the shell exports it; the Settings process registers the same entries and must not.
-- Checked in the Hyalo smoke by `scripts/ci/config-service-check.py` (6 assertions, the
-  denied write included).
+- Checked in the Hyalo smoke by `scripts/ci/config-service-check.py` (13 assertions).
 
 ### The MCP server: `nidara-mcp`
 
