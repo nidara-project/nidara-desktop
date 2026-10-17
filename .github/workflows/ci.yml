@@ -165,6 +165,18 @@ jobs:
 
       - name: Settings SCSS compiles (must succeed)
         run: npx --yes sass@1.97.3 --no-charset ui/settings/style.scss /tmp/settings.css
+      # The tokens the native Settings paints with (toolkit/PHASE1.md D4), computed by the
+      # same engine and sheets as this desktop: every token the Settings/kit sheets use must
+      # exist in every one of the engine's input sets; a copy with one dropped must fail.
+      - name: Settings token export is complete (must succeed)
+        run: |
+          node --experimental-strip-types scripts/export-tokens.mjs /tmp/settings-data
+          python3 scripts/ci/settings-tokens-check.py /tmp/settings-data
+          cp -r /tmp/settings-data /tmp/settings-tokens-control
+          python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['sets'][0]['tokens'].pop('--nidara-surface'); json.dump(d, open(p, 'w'))" /tmp/settings-tokens-control/tokens/colors.json
+          if python3 scripts/ci/settings-tokens-check.py /tmp/settings-tokens-control; then
+            echo "::error::settings-tokens-check passed an export with a used token missing"; exit 1
+          fi
       # The kit's ONE sheet (tech-debt #108 phase 2): the shell, greeter and lock
       # load it at runtime ahead of their own, so it is no longer compiled as part
       # of any of them — a break in it would otherwise reach nobody's compile.
