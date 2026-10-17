@@ -879,6 +879,18 @@ jobs:
       # zero (es out of sync with en, orphan keys, greeter/lock mini-catalogs).
       - name: Translation ledger is fresh + parity holds (must succeed)
         run: node scripts/ci/i18n-check.mjs --check
+      # What the native Settings reads of the current one (toolkit/PHASE1.md D2/D4): the page
+      # manifest and every locale, exported from the same files. Checked against a reading
+      # of the sources that does not import them; a copy with one key dropped must fail.
+      - name: Settings data export is complete (must succeed)
+        run: |
+          node --experimental-strip-types scripts/export-settings-data.mjs /tmp/settings-data
+          python3 scripts/ci/settings-data-check.py /tmp/settings-data
+          cp -r /tmp/settings-data /tmp/settings-data-control
+          python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop(next(iter(d))); json.dump(d, open(p, 'w'))" /tmp/settings-data-control/i18n/en.json
+          if python3 scripts/ci/settings-data-check.py /tmp/settings-data-control; then
+            echo "::error::settings-data-check passed an export with a key missing"; exit 1
+          fi
 
   agent-loop:
     name: Assistant loop (nidara-agent)

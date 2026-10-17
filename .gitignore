@@ -38,6 +38,8 @@ lib/nidara-wl/build/
 /build/nidara-wl/
 lib/nidara-auth/build/
 /build/nidara-auth/
+# What the native Settings reads, exported by scripts/export-settings-data.mjs.
+/build/settings-data/
 lib/nidara-host/build/
 /build/nidara-host/
 
