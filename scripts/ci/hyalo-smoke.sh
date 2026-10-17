@@ -192,6 +192,7 @@ phase_boot() {
     sleep 1
     mkdir -p "$OUT" /tmp/hyalo && chown ci /tmp/hyalo "$OUT"
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
+        NK_REAL_GATES="${NK_REAL_GATES:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
 
@@ -748,14 +749,21 @@ phase_run() {
     # Tests 2/3: real engines and real Orca, on this same vkms/tty compositor.
     # Run both even when one fails, so the two issue reports remain independent.
     # Short paths are mandatory: speech-dispatcher uses Unix sockets (108 bytes).
-    local real_status=0
-    NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
-        > /tmp/hyalo/nk-fcitx5.log 2>&1 || real_status=1
-    cat /tmp/hyalo/nk-fcitx5.log
-    NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/no HYALO_LOG="$hyalo_log" python "$REPO/scripts/ci/nk-orca-check.py" \
-        > /tmp/hyalo/nk-orca.log 2>&1 || real_status=1
-    cat /tmp/hyalo/nk-orca.log
-    [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca gates; inspect toolkit-fcitx5 and toolkit-orca artifacts"; exit 1; }
+    # Skipped ONLY when CI's scope says the change touches nothing they use
+    # (scripts/ci/ci-scope.sh, `gates`); unset — a local run, any doubt — runs them.
+    if [ "${NK_REAL_GATES:-true}" = false ]; then
+        log "real IME/Orca gates SKIPPED: nothing they use changed (ci-scope gates=false)"
+        echo "Real fcitx5 and Orca gates skipped: nothing they use changed (scripts/ci/ci-scope.sh)." > "$OUT/real-gates-skipped.md"
+    else
+        local real_status=0
+        NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
+            > /tmp/hyalo/nk-fcitx5.log 2>&1 || real_status=1
+        cat /tmp/hyalo/nk-fcitx5.log
+        NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/no HYALO_LOG="$hyalo_log" python "$REPO/scripts/ci/nk-orca-check.py" \
+            > /tmp/hyalo/nk-orca.log 2>&1 || real_status=1
+        cat /tmp/hyalo/nk-orca.log
+        [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca gates; inspect toolkit-fcitx5 and toolkit-orca artifacts"; exit 1; }
+    fi
 
     # ── 4. The same log bar as the Hyprland smoke.
     kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died"; exit 1; }

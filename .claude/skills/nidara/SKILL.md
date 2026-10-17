@@ -227,7 +227,13 @@ one with a `timeout-minutes`):
 | `installer-logic` | the installer's rules as pure functions — no disk, no window, no GTK. The `disk_config` it emits and the layouts `manualProblems` must REFUSE (`disk-config-probe.ts`); what the account form accepts and refuses (`account-rules-probe.ts`), whose rules are all that stand between a capitalised username and a `useradd` failure inside the chroot; and what we may touch on an EFI partition that is **not only ours** (`bootloader-rules-probe.ts`) — a shared ESP is the one case whose damage lands on somebody else's operating system, and it is unreachable from this repo. And what the run page COUNTS (`run-progress-probe.ts`), fed lines from a real install — a bar that fell back to the start would read as the install starting over. ⚠️ Each probe is preceded by a step that deletes one of its rules and requires the probe to CATCH it — a probe that has only ever printed "ok" has been run, not tested, and both of these exited 0 while printing `N FAILURE(S)` until 2026-09-05 |
 
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
-skip the *work* inside a job, never the job.
+skip the *work* inside a job, never the job. A job skipped by its `if:` DOES report (as a pass),
+which is how `scope` (`scripts/ci/ci-scope.sh`, its own self-test first) gates the long jobs:
+`code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond; `gates=false`
+(every path in an area the toolkit window does not use — a SKIP list, so a new directory runs
+them) skips only the Hyalo job's real fcitx5/Orca matrices, ~35 of its ~47 min. Adding a path
+the matrices read outside `toolkit/`, `hyalo/`, `protocols/`, `config/hyalo/` or their
+`scripts/ci/` files? Make sure `unrelated()` does not list it, and add a self-test line.
 
 ⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
 forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
