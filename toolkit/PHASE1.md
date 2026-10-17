@@ -138,7 +138,7 @@ Each automated in the `hyalo` job (vkms, the shell running), each with a control
 ## Start-up: the references (measured 2026-10-17)
 
 Owner's machine, live Hyalo session, 2560×1440. **Launch → the window's first buffer in
-Hyalo**, from Hyalo's own event stream (`msg events`: a window is listed only once mapped,
+Hyalo**, from Hyalo's own event stream (`scripts/dev/startup-probe.py` over `msg events`: a window is listed only once mapped,
 `ipc/server.rs` `window_infos`); PSS 2 s after. Median of runs 2–6 (run 1 warms caches); every
 Nautilus run started with no Nautilus process left.
 
