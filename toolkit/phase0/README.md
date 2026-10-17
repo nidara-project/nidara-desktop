@@ -131,8 +131,12 @@ Orca's oracle is its final **`SPEECH OUTPUT`** debug records, adjacent to sendin
 speech to the server. Each keyboard action has its own complete debug interval
 and screenshot. Paste must announce “Pasted contents from clipboard.”; moving to Password and back to Name separately reads `日本🙂 word` from the
 accessible field on focus.
-This also avoids flat review's dependency on text-range geometry (the provider does
-not implement `GetRangeExtents` yet). Ordinary keyboard listeners must be
+A separate real KP_Up flat-review command must now speak the complete `日本🙂 word`
+(#846). `GetRangeExtents` and `GetCharacterExtents` use actual painted-layout geometry.
+The `text-extents` control publishes wrong rectangles, logs application after provider
+update, and requires Orca's wrong-response diagnostic plus failure of that same speech
+assertion. KP_Subtract leaves review before the existing editing walk. The complete
+matrix has 26 baseline assertions and 24 fault runs. Ordinary keyboard listeners must be
 refused with `AccessDenied`; actual delivery is demonstrated by Orca's key and
 editing echo. Password silence has a speaking baseline and a leak control.
 On the focused combo, Space must speak Japanese, Down must speak Chinese,

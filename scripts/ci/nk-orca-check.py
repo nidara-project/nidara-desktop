@@ -112,6 +112,9 @@ def main():
             if dynamic and label == target:
                 fault_file.write_text(broken)
                 native.wait(lambda: 'A11Y_FAULT ' + broken in (p.log / 'client.log').read_text(), 'fault applied')
+                if broken == 'text-extents':
+                    native.wait(lambda: 'A11Y_FAULT_APPLIED text-extents' in (p.log / 'client.log').read_text(),
+                                'wrong extents published to provider')
             action()
             # Fixed settling interval for both positive and absent speech. Do not
             # pass a negative assertion before asynchronous output has arrived.
@@ -142,8 +145,15 @@ def main():
                 nonlocal caught
                 client_log = (p.log / 'client.log').read_text()
                 applied = (not dynamic or 'A11Y_FAULT ' + broken in client_log)
-                if broken in ('ignore-edit', 'ignore-paste'):
+                if broken in ('ignore-edit', 'ignore-paste', 'text-extents'):
                     applied = applied and 'A11Y_FAULT_APPLIED ' + broken in client_log
+                if broken == 'text-extents':
+                    # Orca's own diagnostic proves that its real query consumed
+                    # the wrong response; the speech predicate above stays the oracle.
+                    responses = [line for line in delta.splitlines() if re.search(
+                        r"AXText: Range .*?Name.*?has rect \(x:-10000, y:-10000, width:0, height:0\)", line)]
+                    applied = applied and bool(responses)
+                    p.rows[-1].update(fault=broken, applied=applied, geometry_response=responses)
                 caught = not passed and applied
                 raise TargetReached()
             if target and not passed:
@@ -169,6 +179,11 @@ def main():
                     [lambda t: 'pasted contents from clipboard' in t])
         speech_step('Unicode line', lambda: (p.key(15), p.chord([42], 15)),
                     [lambda t: 'name entry 日本🙂 word' in t])
+        # Real desktop-layout Orca command: KP_Up reads the current flat-review
+        # line. The speech slice starts after the preceding focus announcement.
+        speech_step('Flat review Unicode line', lambda: p.key(72),
+                    [lambda t: '日本🙂 word' in t])
+        p.key(74)  # KP_Subtract leaves flat review before the editing walk.
         speech_step('Delete d', lambda: p.key(14), [lambda t: bool(re.search(r'\bd\b', t))])
         speech_step('Insert d', lambda: p.key(32), [lambda t: bool(re.search(r'\bd\b', t))])
         speech_step('Caret left', lambda: p.key(105), [lambda t: bool(re.search(r'\bd\b', t))])
@@ -247,6 +262,7 @@ def matrix():
     cases += [('ignore-paste', 'Paste acknowledgement', True), ('text','Unicode line',True)]
     cases += [('ignore-edit', step, True) for step in ('Delete d','Insert d','Caret left','Caret right','Select word','Error corrected')]
     cases += [('accept-invalid', 'Invalid save',True), ('restore','Dialog escaped and restored',True)]
+    cases += [('text-extents', 'Flat review Unicode line', True)]
     for index, (fault, target, dynamic) in enumerate(cases):
         if os.environ.get('NK_ORCA_CONTROLS') and str(index) not in os.environ['NK_ORCA_CONTROLS'].split():
             continue

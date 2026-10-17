@@ -1,0 +1,29 @@
+[
+  {
+    "case": "before",
+    "assertion": "Flat review Unicode line",
+    "status": "FAIL",
+    "speech": [
+      "日本🙂 "
+    ],
+    "client_sha256": "281dd96df056478354da2c6cb1da60f86f594ff9cc9feacb3fe15ab88f03c287"
+  },
+  {
+    "case": "after",
+    "assertion": "Flat review Unicode line",
+    "status": "PASS",
+    "speech": [
+      "日本🙂 word"
+    ],
+    "client_sha256": "0be5245959ee2723a19b7c468079308c34f69c37108b22cacb9c2b9c47661ea6"
+  },
+  {
+    "case": "fault",
+    "assertion": "Flat review Unicode line",
+    "status": "FAIL",
+    "speech": [
+      "日本🙂 "
+    ],
+    "client_sha256": "ca1f91d7f8687d604de258f624488db02d466fc80b10d0e1e7359f14b170e2c6"
+  }
+]

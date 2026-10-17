@@ -2581,3 +2581,27 @@ treating a count in this log as a rate.
 ⛔ **Do not "fix" the chip-level half on the strength of the reasoning above.** The next step is a log
 line, not a patch: the mechanism explains the symptom but so did the `syncIslandGrab` CRITICAL, which
 turned out to be a false alarm (#67).
+
+### Toolkit phase-0 flat-review text geometry (2026-10-16)
+The real Orca walk (#835/#841) exposed missing AT-SPI `GetRangeExtents`: flat
+review finds the Unicode line but truncates its spoken presentation. This is
+outside the gate's keyboard/form walk; Claude will take it separately. #839
+fixed active-window/keyboard-monitor/candidate placement, and #842 fixed combo
+Selection and its event. Hangul Escape commits by engine policy, explicitly
+accepted in the contract; it is not toolkit debt. Current gate evidence and
+controls live in `toolkit/phase0/EVIDENCE-832-835.md`.
+
+**Resolution (#846, 2026-10-17):** `GetRangeExtents` and `GetCharacterExtents`
+consume window-logical shaped-cluster geometry supplied from the same retained Parley
+layout that is painted, with field padding applied. `nk-a11y` remains independent of
+shaping and Wayland, converts scalar offsets at its edge, rounds integer extents outward,
+and never substitutes a field box for missing text geometry. Password filtering removes
+geometry with all other text data. Uncommitted IME replacement geometry is not attached
+to a different committed buffer.
+
+The real Orca driver now requires KP_Up to speak the complete `日本🙂 word` in a fresh
+speech slice. Its test-window `text-extents` fault publishes wrong rectangles and logs
+application after provider update; Orca's own returned-rectangle diagnostic must confirm
+consumption, and the same full-line assertion must fail. The existing 25 form assertions
+and 23 controls remain required; the complete matrix is now 26 assertions / 24 controls.
+See `toolkit/phase0/EVIDENCE-846.md`; draft/CI status is recorded on #846's PR.
