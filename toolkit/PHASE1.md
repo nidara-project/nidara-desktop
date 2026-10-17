@@ -14,7 +14,8 @@ Arch's own repositories by the Non ToolKit).
 With the owner's rules (2026-10-15): a new piece replaces the old one **as soon as it covers
 daily use**; what is missing comes back later; a phase is never lengthened.
 
-**Daily use, decided by the owner (2026-10-17): Appearance first — it is the page used most.**
+**Daily use, decided by the owner (2026-10-17): Appearance first — it is the page used most.
+No other page is needed for the takeover (D3 accepted).**
 
 ## Decisions this draft proposes
 
@@ -63,7 +64,7 @@ both Settings until the old one is gone.
 
 ### D3 — replace the entry point when Appearance is done, page by page after that
 
-**Proposal:** the new Settings lists **every** page of the manifest in its sidebar from day one.
+**Accepted by the owner (2026-10-17).** the new Settings lists **every** page of the manifest in its sidebar from day one.
 A page it does not draw yet opens the current Settings on that page (the existing
 `org.nidara.Settings.Request(["page", id])`). So the new Settings can take over `nidara-settings`
 as soon as Appearance passes the gate below, and nothing is lost meanwhile: the rest move one
@@ -121,12 +122,29 @@ Each automated in the `hyalo` job (vkms, the shell running), each with a control
 2. **Keyboard + Orca** — the real-Orca harness of phase 0 walks Appearance: every control
    announced with role, name and value; the accent and the theme changed by keyboard alone.
 3. **Fallback** — an unported page opens the current Settings on that page.
-4. **Measured against the current Settings** — on the same machine, same session: start-up to
-   first presented frame, PSS after open and after visiting Appearance, frame times while
-   scrolling Appearance and while dragging the night-light slider. CI records them; the
-   decisive numbers are taken in the owner's live session (presentation feedback is real there,
-   not in nested Hyalo). Proposed bar: not worse on any of the three, better on memory.
+4. **Measured** — in the owner's live session (presentation feedback is real there, not in
+   nested Hyalo), same machine, warm caches, the median of several launches; CI records the
+   same numbers as a trend:
+   - **Start-up: launch → first presented frame of the window, with Appearance drawn.** The
+     owner (2026-10-17): since Settings became its own process (#813) it opens slower than
+     Nautilus, and start-up must count. So the bar is **absolute, not only relative**: faster
+     than the current Settings AND faster than Nautilus (GTK4, measured the same way). Both
+     references are measured first and written here; no target number is guessed beforehand.
+   - **Memory:** PSS after open and after visiting Appearance — lower than the current Settings.
+   - **Smoothness:** frame times while scrolling Appearance and while dragging the night-light
+     slider — no worse than the current Settings.
 5. **Live** — the owner uses it in their session and judges the look (warned first).
+
+## Start-up: what is already known
+
+Phase 0's window, launched in the owner's session on 2026-10-17, logged
+`FIRST_FRAME_CALLBACK_MS=134` but `FIRST_FRAME_MS=840`: its first frame was ready at ~134 ms
+and presented ~700 ms later. **The first piece of work in phase 1 is to find where those
+~700 ms go** (font discovery, the first buffer, Hyalo's first presentation of a new toplevel,
+or the measurement itself) — with a timeline, not a guess — before anything is built on top.
+Start-up costs are then budgeted per piece: font collection (fontique), the `Describe` round
+trip (D1: one call, cached schema), image decoding (off the first frame: the gallery appears
+when ready), SVG icons (only the visible ones).
 
 ## Out of phase 1, said so
 
@@ -141,10 +159,10 @@ GPU rendering beyond what phase 0 measured (experiment 6).
 - **GPT 6.1 Sol:** `nk-widgets` and the Settings app, one issue per closed piece.
 - **GPT 6 Astra:** reviews this contract before building (a design mistake here costs most).
 
-## Questions for the owner
+## The owner's answers (2026-10-17)
 
-1. **D3** — take over `nidara-settings` as soon as Appearance passes, with unported pages
-   opening the current Settings? (Recommended: yes.)
-2. **Daily use beyond Appearance** — with D3, nothing else is needed for the takeover. If you
-   want more pages in the first takeover anyway, which?
-3. **The bar in test 4** — "not worse on start-up and smoothness, better on memory": enough?
+1. D3: **yes** — take over `nidara-settings` once Appearance passes; unported pages open the
+   current Settings.
+2. Daily use: **Appearance only**; no other page for the takeover.
+3. The bar: **start-up must count** — the current Settings opens slower than Nautilus since it
+   became its own process. Test 4 now requires beating both (above).
