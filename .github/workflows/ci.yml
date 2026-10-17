@@ -42,6 +42,14 @@
 #     Wayland namespace — the pin selects by `window#<name>`. A surface that leaves the
 #     bar's window leaves the pin with it, and only a user who pinned the shell AGAINST
 #     their system mode ever sees the result. Logic in scripts/ci/chrome-scope-check.mjs.
+#   - scope: decides whether the change needs the four long jobs (smoke, hyalo,
+#     toolkit, sessiond). A change of `.md` files only does not: no long job reads
+#     one, and the Hyalo job alone is ~47 min, run twice (PR + queue). Those jobs
+#     still exist and report — skipped by their `if:`, which GitHub counts as a
+#     pass for a required check — they are NOT filtered out by `paths:`, which
+#     would leave the queue waiting for a check that never reports. Any doubt
+#     (no base, failed fetch, empty diff, scope itself failing) runs everything.
+#     Logic and its self-test in scripts/ci/ci-scope.sh.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container install ONLY official Arch
 #     packages, bundle the shell with scripts/bundle.sh (esbuild), boot Hyprland
@@ -115,7 +123,29 @@ on:
   # the queue runs the workflow as it exists on the base branch.
   merge_group:
 
+# A new push to a PR cancels that PR's run still in progress: only the newest commit
+# is ever merged. Never in the queue — each merge_group entry has its own ref anyway.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  scope:
+    name: Change scope (docs only?)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The classifier's own controls
+        run: scripts/ci/ci-scope.sh --self-test
+      - id: scope
+        name: Classify the change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: scripts/ci/ci-scope.sh "$BASE" >> "$GITHUB_OUTPUT"
+
   styles:
     name: Build styles (SCSS)
     runs-on: ubuntu-latest
@@ -457,6 +487,8 @@ jobs:
 
   smoke:
     name: Headless boot smoke
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -500,6 +532,8 @@ jobs:
   # for the desktop that ships. All logic in scripts/ci/hyalo-smoke.sh.
   hyalo:
     name: Hyalo (build, clippy, tests, boot on vkms)
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -856,6 +890,8 @@ jobs:
   # Not a required branch-protection check while the kit is experimental.
   toolkit:
     name: Toolkit (Rust build, text, CPU render and a11y)
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -908,6 +944,8 @@ jobs:
 
   sessiond:
     name: Session daemon (Rust + private D-Bus integration)
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
