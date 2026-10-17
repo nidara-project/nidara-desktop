@@ -11,6 +11,8 @@ it proves; each fails if its piece is missing:
   5. An invalid value is refused with Config1.Error.Invalid.
   6. With Settings → AI's config writes off, an ordinary sender is refused (Denied):
      this door is not wider than `setConfig`.
+  7. The wallpaper transition and a window-blur change made by another process are announced
+     (both were applied silently until #852's review).
 Restores everything it changed.
 """
 import json, subprocess, sys
@@ -89,6 +91,28 @@ wait_for('appearance.darkMode', not dark_was, 'a change through nidara-ipc')
 subprocess.run([IPC, 'setConfig', 'appearance.darkMode', str(dark_was).lower()], check=True,
                capture_output=True)
 print('ok changed from the agent door (nidara-ipc setConfig)')
+
+# Two changes that used to be applied and never announced (#852's review): the wallpaper
+# transition (the shell's setter emitted nothing), and the window blur written by ANOTHER
+# process — here straight into Hyalo's settings layer, as the Settings process does.
+transitions = schema['wallpaper.transition']['values']
+transition = schema['wallpaper.transition']['value']
+new_t = next(t for t in transitions if t != transition)
+call('Set', GLib.Variant('(sv)', ['wallpaper.transition', GLib.Variant('s', new_t)]))
+wait_for('wallpaper.transition', new_t, 'Set of wallpaper.transition')
+call('Set', GLib.Variant('(sv)', ['wallpaper.transition', GLib.Variant('s', transition)]))
+print(f'ok wallpaper transition announced ({new_t})')
+
+if 'appearance.windowBlur' in schema:
+    blur = schema['appearance.windowBlur']['value']
+    subprocess.run(['nidara-hyalo', 'msg', 'settings', json.dumps({'windows': {'backdrop': {'enabled': not blur}}})],
+                   check=True, capture_output=True)
+    wait_for('appearance.windowBlur', not blur, 'a window-blur change made by another process')
+    subprocess.run(['nidara-hyalo', 'msg', 'settings', json.dumps({'windows': {'backdrop': {'enabled': None}}})],
+                   check=True, capture_output=True)
+    print('ok window blur from another process announced')
+else:
+    sys.exit('FAIL: appearance.windowBlur unavailable on Hyalo')
 
 fails_with('Error.Invalid', 'Set', GLib.Variant('(sv)', ['appearance.accent', GLib.Variant('s', 'no-such-colour')]),
            'an invalid value')

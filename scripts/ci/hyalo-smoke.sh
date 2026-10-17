@@ -444,7 +444,7 @@ phase_run() {
     # native Settings' only door to the settings. Describe/Get/Set/Changed, and the agent gate.
     python "$REPO/scripts/ci/config-service-check.py" /tmp/hyalo/nidara-ipc >/tmp/hyalo/config-service.log 2>&1 \
         || { log "FAIL: org.nidara.Config1"; cat /tmp/hyalo/config-service.log; exit 1; }
-    log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 6: describe, get, set, agent door, invalid, denied)"
+    log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 8: describe, get, set, agent door, transition, blur from another process, invalid, denied)"
 
     # Window capture (#682): the overview's thumbnails, through the standard protocols
     # (ext-foreign-toplevel-list + ext-image-copy-capture, hyalo/compositor/src/capture.rs),
