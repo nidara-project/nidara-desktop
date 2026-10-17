@@ -1,0 +1,89 @@
+{
+  "environment": {
+    "client_sha256": "ca1f91d7f8687d604de258f624488db02d466fc80b10d0e1e7359f14b170e2c6",
+    "compositor_sha256": "cbd0d4ba86a56d286652e6f08c727cd24bb3aab85fbbf97eb9d2c52ecbc64544",
+    "revision": "bec2c2e2a5d6022c0d35efb8b42dbbdc20257057",
+    "package_overlay": null,
+    "atspi": "2.62.1",
+    "packages": "error: package 'orca' was not found\nerror: package 'speech-dispatcher' was not found\nerror: package 'libao' was not found",
+    "device_capabilities": 5
+  },
+  "rows": [
+    {
+      "step": "Tab Password",
+      "status": "PASS",
+      "why": "['tab', 'Password password text']",
+      "speech": [
+        "tab",
+        "Password password text"
+      ]
+    },
+    {
+      "step": "Tab Language",
+      "status": "PASS",
+      "why": "['tab', 'Language combo box Japanese', 'Japanese']",
+      "speech": [
+        "tab",
+        "Language combo box Japanese",
+        "Japanese"
+      ]
+    },
+    {
+      "step": "Tab Remember me",
+      "status": "PASS",
+      "why": "['tab', 'Remember me check box not checked']",
+      "speech": [
+        "tab",
+        "Remember me check box not checked"
+      ]
+    },
+    {
+      "step": "Tab Review",
+      "status": "PASS",
+      "why": "['tab', 'Review button']",
+      "speech": [
+        "tab",
+        "Review button"
+      ]
+    },
+    {
+      "step": "Tab Name",
+      "status": "PASS",
+      "why": "['tab', 'Name entry']",
+      "speech": [
+        "tab",
+        "Name entry"
+      ]
+    },
+    {
+      "step": "Paste acknowledgement",
+      "status": "PASS",
+      "why": "['left control', 'Pasted contents from clipboard.']",
+      "speech": [
+        "left control",
+        "Pasted contents from clipboard."
+      ]
+    },
+    {
+      "step": "Unicode line",
+      "status": "PASS",
+      "why": "['tab', 'Password password text', 'left shift', 'Name entry 日本🙂 word']",
+      "speech": [
+        "tab",
+        "Password password text",
+        "left shift",
+        "Name entry 日本🙂 word"
+      ]
+    },
+    {
+      "step": "Flat review Unicode line",
+      "status": "FAIL",
+      "why": "['日本🙂 ']",
+      "speech": [
+        "日本🙂 "
+      ]
+    }
+  ],
+  "not_run": [],
+  "complete_matrix": false
+}

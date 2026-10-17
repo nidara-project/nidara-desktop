@@ -1,0 +1,480 @@
+06:10:59.371788 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.371932 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.372033 - FOCUS MANAGER: Active window is [frame: 'Nidara accessibility form' (0x7f6d84175300)] <unknown>.<module>:402 > input_event_manager._on_key_pressed:116 > input_event_manager.process_keyboard_event:152 > focus_manager.get_active_window:391
+06:10:59.372970 - AXUtilities: [frame: 'Nidara accessibility form' (0x7f6d84175300)] from [application: 'nk-phase0' (0x7f6d842ead80)] can be active window
+06:10:59.373090 - FOCUS MANAGER: Locus of focus is [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.373193 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.373347 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.373441 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+
+KEYBOARD_EVENT:  type=ATSPI_KEY_PRESSED_EVENT
+                 id=65431
+                 hw_code=80
+                 modifiers=0
+                 text=''
+                 keyval_name='KP_Up'
+                 timestamp=1792210259.3716552
+                 clickCount=1
+
+vvvvv PROCESS ATSPI_KEY_PRESSED_EVENT:'KP_Up' (80) vvvvv
+06:10:59.373694 - SCRIPT: nk-phase0 (module=orca.scripts.default)
+06:10:59.373757 - WINDOW: [frame: 'Nidara accessibility form' (0x7f6d84175300)]
+06:10:59.373815 - LOCATION: [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.373895 - COMMAND: reviewCurrentLineHandler
+06:10:59.374001 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.374096 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.374124 - PRESENTATION MANAGER: Interrupting presentation
+06:10:59.374241 - SPEECH MANAGER: interrupt_speech. Script: None Event: None notify_user: False
+06:10:59.374563 - SPEECH MANAGER: Speech server is <orca.speechdispatcherfactory.SpeechServer object at 0x7f6d852901a0>
+06:10:59.374670 - BRAILLE: Kill flash message input_event._present:680 > presentation_manager.interrupt_presentation:94 > braille_presenter.kill_flash:1667 > braille.kill_flash:2402
+06:10:59.375503 - GSETTINGS REGISTRY: sleep-mode/apps using default value = []
+06:10:59.375581 - TYPING ECHO PRESENTER: should_echo_keyboard_event: 'up'?
+06:10:59.375650 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.375710 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.375730 - TYPING ECHO PRESENTER: Not character echoable, is not printable key.
+06:10:59.375789 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.375847 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.375917 - GSETTINGS REGISTRY: typing-echo/key-echo using default value = True
+06:10:59.375983 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.376040 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.376132 - TYPING ECHO PRESENTER: Echoing unknown keyboard event: False.
+06:10:59.376189 - TOTAL PROCESSING TIME: 0.0027
+^^^^^ PROCESS ATSPI_KEY_PRESSED_EVENT:'KP_Up' (80) ^^^^^
+
+06:10:59.376306 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.376363 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.376501 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.376564 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.376719 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.376779 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+
+KEYBOARD_EVENT:  type=ATSPI_KEY_RELEASED_EVENT
+                 id=65431
+                 hw_code=80
+                 modifiers=0
+                 text=''
+                 keyval_name='KP_Up'
+                 timestamp=1792210259.3764458
+                 clickCount=1
+
+vvvvv PROCESS ATSPI_KEY_RELEASED_EVENT:'KP_Up' (80) vvvvv
+06:10:59.376944 - SCRIPT: nk-phase0 (module=orca.scripts.default)
+06:10:59.376985 - WINDOW: [frame: 'Nidara accessibility form' (0x7f6d84175300)]
+06:10:59.377021 - LOCATION: [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.377064 - COMMAND: reviewCurrentLineHandler
+06:10:59.377126 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.377183 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+06:10:59.377267 - GSETTINGS REGISTRY: sleep-mode/apps using default value = []
+06:10:59.377312 - TOTAL PROCESSING TIME: 0.0005
+^^^^^ PROCESS ATSPI_KEY_RELEASED_EVENT:'KP_Up' (80) ^^^^^
+
+06:10:59.377424 - GSETTINGS REGISTRY: keybindings/keyboard-layout using default value = 'desktop'
+06:10:59.377479 - GSETTINGS REGISTRY: keybindings/desktop-modifier-keys using default value = ['Insert', 'KP_Insert']
+
+vvvvv HANDLE ATSPI_KEY_PRESSED_EVENT:'KP_Up' (80) vvvvv
+06:10:59.377666 - FLAT REVIEW PRESENTER: present_line. Script: nk-phase0 (module=orca.scripts.default) Event: KEYBOARD_EVENT:  type=ATSPI_KEY_PRESSED_EVENT
+                                   id=65431
+                                   hw_code=80
+                                   modifiers=0
+                                   text=''
+                                   keyval_name='KP_Up'
+                                   timestamp=1792210259.3716552
+                                   clickCount=1 notify_user: True
+06:10:59.377714 - FLAT REVIEW PRESENTER: Creating new context. Restrict: False
+06:10:59.377768 - FOCUS MANAGER: Locus of focus is [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.377894 - SCRIPT UTILITIES: [frame: 'Nidara accessibility form' (0x7f6d84175300)] is top-level object for: [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.378023 - SCRIPT UTILITIES: [entry: 'Name' (0x7f6d8402a900)] is in frame [frame: 'Nidara accessibility form' (0x7f6d84175300)] and dialog None
+06:10:59.378101 - FLAT REVIEW: Frame: [frame: 'Nidara accessibility form' (0x7f6d84175300)] Dialog: None. Top level: [frame: 'Nidara accessibility form' (0x7f6d84175300)]
+06:10:59.378681 - AXComponent: Rect of [frame: 'Nidara accessibility form' (0x7f6d84175300)] is (x:0, y:0, width:960, height:678)
+06:10:59.378832 - AXUtilities: Getting on-screen objects in [frame: 'Nidara accessibility form' (0x7f6d84175300)] (0x7f6d84175300)
+06:10:59.378936 - AXObject: Clearing AT-SPI cache on [frame: 'Nidara accessibility form' (0x7f6d84175300)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.379538 - AXUtilities: Checking if [frame: 'Nidara accessibility form' (0x7f6d84175300)] is showing and visible....
+06:10:59.379869 - AXUtilities: [frame: 'Nidara accessibility form' (0x7f6d84175300)] is showing and visible. Checking size and rect...
+06:10:59.380103 - AXComponent: Rect of [frame: 'Nidara accessibility form' (0x7f6d84175300)] is (x:0, y:0, width:960, height:678)
+06:10:59.380160 - AXUtilities: [frame: 'Nidara accessibility form' (0x7f6d84175300)] has size and a valid rect. Checking if off screen...
+06:10:59.380361 - AXComponent: Rect of [frame: 'Nidara accessibility form' (0x7f6d84175300)] is (x:0, y:0, width:960, height:678)
+06:10:59.380423 - AXComponent: [frame: 'Nidara accessibility form' (0x7f6d84175300)] is off-screen: False
+06:10:59.380486 - AXUtilities: [frame: 'Nidara accessibility form' (0x7f6d84175300)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.380679 - AXComponent: Rect of [frame: 'Nidara accessibility form' (0x7f6d84175300)] is (x:0, y:0, width:960, height:678)
+06:10:59.380771 - AXComponent: The intersection of (x:0, y:0, width:960, height:678) and (x:0, y:0, width:960, height:678) is: (x:0, y:0, width:960, height:678)
+06:10:59.380818 - AXUtilities: [frame: 'Nidara accessibility form' (0x7f6d84175300)] is believed to be on screen.
+06:10:59.381224 - AXUtilities: Child 0 is [entry: 'Name' (0x7f6d8402a900)] (0x7f6d8402a900)
+06:10:59.381289 - AXUtilities: Getting on-screen objects in [entry: 'Name' (0x7f6d8402a900)] (0x7f6d8402a900)
+06:10:59.381360 - AXObject: Clearing AT-SPI cache on [entry: 'Name' (0x7f6d8402a900)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.381812 - AXUtilities: Checking if [entry: 'Name' (0x7f6d8402a900)] is showing and visible....
+06:10:59.382096 - AXUtilities: [entry: 'Name' (0x7f6d8402a900)] is showing and visible. Checking size and rect...
+06:10:59.382299 - AXComponent: Rect of [entry: 'Name' (0x7f6d8402a900)] is (x:44, y:56, width:872, height:54)
+06:10:59.382352 - AXUtilities: [entry: 'Name' (0x7f6d8402a900)] has size and a valid rect. Checking if off screen...
+06:10:59.382549 - AXComponent: Rect of [entry: 'Name' (0x7f6d8402a900)] is (x:44, y:56, width:872, height:54)
+06:10:59.382611 - AXComponent: [entry: 'Name' (0x7f6d8402a900)] is off-screen: False
+06:10:59.382669 - AXUtilities: [entry: 'Name' (0x7f6d8402a900)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.382873 - AXComponent: Rect of [entry: 'Name' (0x7f6d8402a900)] is (x:44, y:56, width:872, height:54)
+06:10:59.382967 - AXComponent: The intersection of (x:44, y:56, width:872, height:54) and (x:0, y:0, width:960, height:678) is: (x:44, y:56, width:872, height:54)
+06:10:59.383012 - AXUtilities: [entry: 'Name' (0x7f6d8402a900)] is believed to be on screen.
+06:10:59.383286 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.383483 - AXText: Text of [entry: 'Name' (0x7f6d8402a900)]'日本🙂 word'
+06:10:59.383938 - AXUtilities: Child 1 is [password text: 'Password' (0x7f6d84069c00)] (0x7f6d84069c00)
+06:10:59.384003 - AXUtilities: Getting on-screen objects in [password text: 'Password' (0x7f6d84069c00)] (0x7f6d84069c00)
+06:10:59.384074 - AXObject: Clearing AT-SPI cache on [password text: 'Password' (0x7f6d84069c00)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.384491 - AXUtilities: Checking if [password text: 'Password' (0x7f6d84069c00)] is showing and visible....
+06:10:59.384735 - AXUtilities: [password text: 'Password' (0x7f6d84069c00)] is showing and visible. Checking size and rect...
+06:10:59.384967 - AXComponent: Rect of [password text: 'Password' (0x7f6d84069c00)] is (x:44, y:156, width:872, height:54)
+06:10:59.385022 - AXUtilities: [password text: 'Password' (0x7f6d84069c00)] has size and a valid rect. Checking if off screen...
+06:10:59.385278 - AXComponent: Rect of [password text: 'Password' (0x7f6d84069c00)] is (x:44, y:156, width:872, height:54)
+06:10:59.385400 - AXComponent: [password text: 'Password' (0x7f6d84069c00)] is off-screen: False
+06:10:59.385532 - AXUtilities: [password text: 'Password' (0x7f6d84069c00)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.385805 - AXComponent: Rect of [password text: 'Password' (0x7f6d84069c00)] is (x:44, y:156, width:872, height:54)
+06:10:59.385937 - AXComponent: The intersection of (x:44, y:156, width:872, height:54) and (x:0, y:0, width:960, height:678) is: (x:44, y:156, width:872, height:54)
+06:10:59.385993 - AXUtilities: [password text: 'Password' (0x7f6d84069c00)] is believed to be on screen.
+06:10:59.386702 - AXUtilities: Child 2 is [combo box: 'Language' (0x7f6d840679c0)] (0x7f6d840679c0)
+06:10:59.386810 - AXUtilities: Getting on-screen objects in [combo box: 'Language' (0x7f6d840679c0)] (0x7f6d840679c0)
+06:10:59.386917 - AXObject: Clearing AT-SPI cache on [combo box: 'Language' (0x7f6d840679c0)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.387200 - AXUtilities: Checking if [combo box: 'Language' (0x7f6d840679c0)] is showing and visible....
+06:10:59.387369 - AXUtilities: [combo box: 'Language' (0x7f6d840679c0)] is showing and visible. Checking size and rect...
+06:10:59.387552 - AXComponent: Rect of [combo box: 'Language' (0x7f6d840679c0)] is (x:44, y:256, width:872, height:54)
+06:10:59.387602 - AXUtilities: [combo box: 'Language' (0x7f6d840679c0)] has size and a valid rect. Checking if off screen...
+06:10:59.387778 - AXComponent: Rect of [combo box: 'Language' (0x7f6d840679c0)] is (x:44, y:256, width:872, height:54)
+06:10:59.387835 - AXComponent: [combo box: 'Language' (0x7f6d840679c0)] is off-screen: False
+06:10:59.387900 - AXUtilities: [combo box: 'Language' (0x7f6d840679c0)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.388079 - AXComponent: Rect of [combo box: 'Language' (0x7f6d840679c0)] is (x:44, y:256, width:872, height:54)
+06:10:59.388167 - AXComponent: The intersection of (x:44, y:256, width:872, height:54) and (x:0, y:0, width:960, height:678) is: (x:44, y:256, width:872, height:54)
+06:10:59.388214 - AXUtilities: [combo box: 'Language' (0x7f6d840679c0)] is believed to be on screen.
+06:10:59.388694 - AXUtilities: Child 3 is [check box: 'Remember me' (0x7f6d8406b500)] (0x7f6d8406b500)
+06:10:59.388756 - AXUtilities: Getting on-screen objects in [check box: 'Remember me' (0x7f6d8406b500)] (0x7f6d8406b500)
+06:10:59.388827 - AXObject: Clearing AT-SPI cache on [check box: 'Remember me' (0x7f6d8406b500)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.389095 - AXUtilities: Checking if [check box: 'Remember me' (0x7f6d8406b500)] is showing and visible....
+06:10:59.389263 - AXUtilities: [check box: 'Remember me' (0x7f6d8406b500)] is showing and visible. Checking size and rect...
+06:10:59.389452 - AXComponent: Rect of [check box: 'Remember me' (0x7f6d8406b500)] is (x:44, y:356, width:872, height:54)
+06:10:59.389501 - AXUtilities: [check box: 'Remember me' (0x7f6d8406b500)] has size and a valid rect. Checking if off screen...
+06:10:59.389687 - AXComponent: Rect of [check box: 'Remember me' (0x7f6d8406b500)] is (x:44, y:356, width:872, height:54)
+06:10:59.389743 - AXComponent: [check box: 'Remember me' (0x7f6d8406b500)] is off-screen: False
+06:10:59.389801 - AXUtilities: [check box: 'Remember me' (0x7f6d8406b500)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.390014 - AXComponent: Rect of [check box: 'Remember me' (0x7f6d8406b500)] is (x:44, y:356, width:872, height:54)
+06:10:59.390107 - AXComponent: The intersection of (x:44, y:356, width:872, height:54) and (x:0, y:0, width:960, height:678) is: (x:44, y:356, width:872, height:54)
+06:10:59.390151 - AXUtilities: [check box: 'Remember me' (0x7f6d8406b500)] is believed to be on screen.
+06:10:59.390215 - AXUtilitiesRole: [check box: 'Remember me' (0x7f6d8406b500)] has presentational children.
+06:10:59.390705 - AXUtilities: Child 4 is [button: 'Review' (0x7f6d84067d80)] (0x7f6d84067d80)
+06:10:59.390771 - AXUtilities: Getting on-screen objects in [button: 'Review' (0x7f6d84067d80)] (0x7f6d84067d80)
+06:10:59.390842 - AXObject: Clearing AT-SPI cache on [button: 'Review' (0x7f6d84067d80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.391109 - AXUtilities: Checking if [button: 'Review' (0x7f6d84067d80)] is showing and visible....
+06:10:59.391277 - AXUtilities: [button: 'Review' (0x7f6d84067d80)] is showing and visible. Checking size and rect...
+06:10:59.391468 - AXComponent: Rect of [button: 'Review' (0x7f6d84067d80)] is (x:44, y:456, width:872, height:54)
+06:10:59.391520 - AXUtilities: [button: 'Review' (0x7f6d84067d80)] has size and a valid rect. Checking if off screen...
+06:10:59.391706 - AXComponent: Rect of [button: 'Review' (0x7f6d84067d80)] is (x:44, y:456, width:872, height:54)
+06:10:59.391764 - AXComponent: [button: 'Review' (0x7f6d84067d80)] is off-screen: False
+06:10:59.391821 - AXUtilities: [button: 'Review' (0x7f6d84067d80)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.392014 - AXComponent: Rect of [button: 'Review' (0x7f6d84067d80)] is (x:44, y:456, width:872, height:54)
+06:10:59.392108 - AXComponent: The intersection of (x:44, y:456, width:872, height:54) and (x:0, y:0, width:960, height:678) is: (x:44, y:456, width:872, height:54)
+06:10:59.392152 - AXUtilities: [button: 'Review' (0x7f6d84067d80)] is believed to be on screen.
+06:10:59.392209 - AXUtilitiesRole: [button: 'Review' (0x7f6d84067d80)] has presentational children.
+06:10:59.392693 - AXUtilities: Child 5 is [label: 'arabic-bidi' (0x7f6d84087740)] (0x7f6d84087740)
+06:10:59.392758 - AXUtilities: Getting on-screen objects in [label: 'arabic-bidi' (0x7f6d84087740)] (0x7f6d84087740)
+06:10:59.392827 - AXObject: Clearing AT-SPI cache on [label: 'arabic-bidi' (0x7f6d84087740)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.393100 - AXUtilities: Checking if [label: 'arabic-bidi' (0x7f6d84087740)] is showing and visible....
+06:10:59.393279 - AXUtilities: [label: 'arabic-bidi' (0x7f6d84087740)] is showing and visible. Checking size and rect...
+06:10:59.393608 - AXComponent: Rect of [label: 'arabic-bidi' (0x7f6d84087740)] is (x:44, y:570, width:872, height:105)
+06:10:59.393662 - AXUtilities: [label: 'arabic-bidi' (0x7f6d84087740)] has size and a valid rect. Checking if off screen...
+06:10:59.393842 - AXComponent: Rect of [label: 'arabic-bidi' (0x7f6d84087740)] is (x:44, y:570, width:872, height:105)
+06:10:59.393911 - AXComponent: [label: 'arabic-bidi' (0x7f6d84087740)] is off-screen: False
+06:10:59.393968 - AXUtilities: [label: 'arabic-bidi' (0x7f6d84087740)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.394162 - AXComponent: Rect of [label: 'arabic-bidi' (0x7f6d84087740)] is (x:44, y:570, width:872, height:105)
+06:10:59.394252 - AXComponent: The intersection of (x:44, y:570, width:872, height:105) and (x:0, y:0, width:960, height:678) is: (x:44, y:570, width:872, height:105)
+06:10:59.394294 - AXUtilities: [label: 'arabic-bidi' (0x7f6d84087740)] is believed to be on screen.
+06:10:59.394767 - AXUtilities: Child 6 is [label: 'center' (0x7f6d8406bf80)] (0x7f6d8406bf80)
+06:10:59.394832 - AXUtilities: Getting on-screen objects in [label: 'center' (0x7f6d8406bf80)] (0x7f6d8406bf80)
+06:10:59.394908 - AXObject: Clearing AT-SPI cache on [label: 'center' (0x7f6d8406bf80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.395156 - AXUtilities: Checking if [label: 'center' (0x7f6d8406bf80)] is showing and visible....
+06:10:59.395338 - AXUtilities: [label: 'center' (0x7f6d8406bf80)] is showing and visible. Checking size and rect...
+06:10:59.395643 - AXComponent: Rect of [label: 'center' (0x7f6d8406bf80)] is (x:44, y:675, width:872, height:105)
+06:10:59.395694 - AXUtilities: [label: 'center' (0x7f6d8406bf80)] has size and a valid rect. Checking if off screen...
+06:10:59.395885 - AXComponent: Rect of [label: 'center' (0x7f6d8406bf80)] is (x:44, y:675, width:872, height:105)
+06:10:59.395947 - AXComponent: [label: 'center' (0x7f6d8406bf80)] is off-screen: False
+06:10:59.396010 - AXUtilities: [label: 'center' (0x7f6d8406bf80)] is not off screen. Checking (x:0, y:0, width:960, height:678) intersection...
+06:10:59.396194 - AXComponent: Rect of [label: 'center' (0x7f6d8406bf80)] is (x:44, y:675, width:872, height:105)
+06:10:59.396287 - AXComponent: The intersection of (x:44, y:675, width:872, height:105) and (x:0, y:0, width:960, height:678) is: (x:44, y:675, width:872, height:3)
+06:10:59.396332 - AXUtilities: [label: 'center' (0x7f6d8406bf80)] is believed to be on screen.
+06:10:59.396825 - AXUtilities: Child 7 is [label: 'chinese' (0x7f6d8406b600)] (0x7f6d8406b600)
+06:10:59.396901 - AXUtilities: Getting on-screen objects in [label: 'chinese' (0x7f6d8406b600)] (0x7f6d8406b600)
+06:10:59.396974 - AXObject: Clearing AT-SPI cache on [label: 'chinese' (0x7f6d8406b600)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.397230 - AXUtilities: Checking if [label: 'chinese' (0x7f6d8406b600)] is showing and visible....
+06:10:59.397402 - AXUtilities: [label: 'chinese' (0x7f6d8406b600)] is not showing and visible. Treating as off screen.
+06:10:59.397849 - AXUtilities: Child 8 is [label: 'combining-marks' (0x7f6d8406a080)] (0x7f6d8406a080)
+06:10:59.397924 - AXUtilities: Getting on-screen objects in [label: 'combining-marks' (0x7f6d8406a080)] (0x7f6d8406a080)
+06:10:59.398001 - AXObject: Clearing AT-SPI cache on [label: 'combining-marks' (0x7f6d8406a080)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.398314 - AXUtilities: Checking if [label: 'combining-marks' (0x7f6d8406a080)] is showing and visible....
+06:10:59.398510 - AXUtilities: [label: 'combining-marks' (0x7f6d8406a080)] is not showing and visible. Treating as off screen.
+06:10:59.398983 - AXUtilities: Child 9 is [label: 'devanagari-conjunct' (0x7f6d84077e00)] (0x7f6d84077e00)
+06:10:59.399049 - AXUtilities: Getting on-screen objects in [label: 'devanagari-conjunct' (0x7f6d84077e00)] (0x7f6d84077e00)
+06:10:59.399121 - AXObject: Clearing AT-SPI cache on [label: 'devanagari-conjunct' (0x7f6d84077e00)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.399384 - AXUtilities: Checking if [label: 'devanagari-conjunct' (0x7f6d84077e00)] is showing and visible....
+06:10:59.399553 - AXUtilities: [label: 'devanagari-conjunct' (0x7f6d84077e00)] is not showing and visible. Treating as off screen.
+06:10:59.400132 - AXUtilities: Child 10 is [label: 'devanagari-matras' (0x7f6d8406a7c0)] (0x7f6d8406a7c0)
+06:10:59.400216 - AXUtilities: Getting on-screen objects in [label: 'devanagari-matras' (0x7f6d8406a7c0)] (0x7f6d8406a7c0)
+06:10:59.400312 - AXObject: Clearing AT-SPI cache on [label: 'devanagari-matras' (0x7f6d8406a7c0)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.400582 - AXUtilities: Checking if [label: 'devanagari-matras' (0x7f6d8406a7c0)] is showing and visible....
+06:10:59.400745 - AXUtilities: [label: 'devanagari-matras' (0x7f6d8406a7c0)] is not showing and visible. Treating as off screen.
+06:10:59.401196 - AXUtilities: Child 11 is [label: 'emoji-wrap' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.401273 - AXUtilities: Getting on-screen objects in [label: 'emoji-wrap' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.401358 - AXObject: Clearing AT-SPI cache on [label: 'emoji-wrap' (0x7f6d84087b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.401625 - AXUtilities: Checking if [label: 'emoji-wrap' (0x7f6d84087b80)] is showing and visible....
+06:10:59.401791 - AXUtilities: [label: 'emoji-wrap' (0x7f6d84087b80)] is not showing and visible. Treating as off screen.
+06:10:59.402211 - AXUtilities: Child 12 is [label: 'empty' (0x7f6d8406bac0)] (0x7f6d8406bac0)
+06:10:59.402272 - AXUtilities: Getting on-screen objects in [label: 'empty' (0x7f6d8406bac0)] (0x7f6d8406bac0)
+06:10:59.402340 - AXObject: Clearing AT-SPI cache on [label: 'empty' (0x7f6d8406bac0)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.402562 - AXUtilities: Checking if [label: 'empty' (0x7f6d8406bac0)] is showing and visible....
+06:10:59.402707 - AXUtilities: [label: 'empty' (0x7f6d8406bac0)] is not showing and visible. Treating as off screen.
+06:10:59.403153 - AXUtilities: Child 13 is [label: 'fallback' (0x7f6d84067b80)] (0x7f6d84067b80)
+06:10:59.403216 - AXUtilities: Getting on-screen objects in [label: 'fallback' (0x7f6d84067b80)] (0x7f6d84067b80)
+06:10:59.403284 - AXObject: Clearing AT-SPI cache on [label: 'fallback' (0x7f6d84067b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.403516 - AXUtilities: Checking if [label: 'fallback' (0x7f6d84067b80)] is showing and visible....
+06:10:59.403659 - AXUtilities: [label: 'fallback' (0x7f6d84067b80)] is not showing and visible. Treating as off screen.
+06:10:59.404043 - AXUtilities: Child 14 is [label: 'flags' (0x7f6d84141100)] (0x7f6d84141100)
+06:10:59.404104 - AXUtilities: Getting on-screen objects in [label: 'flags' (0x7f6d84141100)] (0x7f6d84141100)
+06:10:59.404179 - AXObject: Clearing AT-SPI cache on [label: 'flags' (0x7f6d84141100)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.404428 - AXUtilities: Checking if [label: 'flags' (0x7f6d84141100)] is showing and visible....
+06:10:59.404582 - AXUtilities: [label: 'flags' (0x7f6d84141100)] is not showing and visible. Treating as off screen.
+06:10:59.404967 - AXUtilities: Child 15 is [label: 'forced-ltr' (0x7f6d84067b80)] (0x7f6d84067b80)
+06:10:59.405028 - AXUtilities: Getting on-screen objects in [label: 'forced-ltr' (0x7f6d84067b80)] (0x7f6d84067b80)
+06:10:59.405094 - AXObject: Clearing AT-SPI cache on [label: 'forced-ltr' (0x7f6d84067b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.405327 - AXUtilities: Checking if [label: 'forced-ltr' (0x7f6d84067b80)] is showing and visible....
+06:10:59.405475 - AXUtilities: [label: 'forced-ltr' (0x7f6d84067b80)] is not showing and visible. Treating as off screen.
+06:10:59.405881 - AXUtilities: Child 16 is [label: 'forced-rtl' (0x7f6d84069100)] (0x7f6d84069100)
+06:10:59.405945 - AXUtilities: Getting on-screen objects in [label: 'forced-rtl' (0x7f6d84069100)] (0x7f6d84069100)
+06:10:59.406020 - AXObject: Clearing AT-SPI cache on [label: 'forced-rtl' (0x7f6d84069100)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.406262 - AXUtilities: Checking if [label: 'forced-rtl' (0x7f6d84069100)] is showing and visible....
+06:10:59.406403 - AXUtilities: [label: 'forced-rtl' (0x7f6d84069100)] is not showing and visible. Treating as off screen.
+06:10:59.406770 - AXUtilities: Child 17 is [label: 'hebrew-bidi' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.406829 - AXUtilities: Getting on-screen objects in [label: 'hebrew-bidi' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.406903 - AXObject: Clearing AT-SPI cache on [label: 'hebrew-bidi' (0x7f6d84087b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.407135 - AXUtilities: Checking if [label: 'hebrew-bidi' (0x7f6d84087b80)] is showing and visible....
+06:10:59.407291 - AXUtilities: [label: 'hebrew-bidi' (0x7f6d84087b80)] is not showing and visible. Treating as off screen.
+06:10:59.407689 - AXUtilities: Child 18 is [label: 'japanese' (0x7f6d84069100)] (0x7f6d84069100)
+06:10:59.407747 - AXUtilities: Getting on-screen objects in [label: 'japanese' (0x7f6d84069100)] (0x7f6d84069100)
+06:10:59.407814 - AXObject: Clearing AT-SPI cache on [label: 'japanese' (0x7f6d84069100)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.408053 - AXUtilities: Checking if [label: 'japanese' (0x7f6d84069100)] is showing and visible....
+06:10:59.408201 - AXUtilities: [label: 'japanese' (0x7f6d84069100)] is not showing and visible. Treating as off screen.
+06:10:59.408588 - AXUtilities: Child 19 is [label: 'korean' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.408648 - AXUtilities: Getting on-screen objects in [label: 'korean' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.408714 - AXObject: Clearing AT-SPI cache on [label: 'korean' (0x7f6d84087b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.409041 - AXUtilities: Checking if [label: 'korean' (0x7f6d84087b80)] is showing and visible....
+06:10:59.409288 - AXUtilities: [label: 'korean' (0x7f6d84087b80)] is not showing and visible. Treating as off screen.
+06:10:59.409869 - AXUtilities: Child 20 is [label: 'multiline' (0x7f6d852d1100)] (0x7f6d852d1100)
+06:10:59.409965 - AXUtilities: Getting on-screen objects in [label: 'multiline' (0x7f6d852d1100)] (0x7f6d852d1100)
+06:10:59.410062 - AXObject: Clearing AT-SPI cache on [label: 'multiline' (0x7f6d852d1100)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.410348 - AXUtilities: Checking if [label: 'multiline' (0x7f6d852d1100)] is showing and visible....
+06:10:59.410525 - AXUtilities: [label: 'multiline' (0x7f6d852d1100)] is not showing and visible. Treating as off screen.
+06:10:59.410982 - AXUtilities: Child 21 is [label: 'variable-font' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.411065 - AXUtilities: Getting on-screen objects in [label: 'variable-font' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.411152 - AXObject: Clearing AT-SPI cache on [label: 'variable-font' (0x7f6d84087b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.411408 - AXUtilities: Checking if [label: 'variable-font' (0x7f6d84087b80)] is showing and visible....
+06:10:59.411586 - AXUtilities: [label: 'variable-font' (0x7f6d84087b80)] is not showing and visible. Treating as off screen.
+06:10:59.412041 - AXUtilities: Child 22 is [label: 'zwj-family' (0x7f6d84141100)] (0x7f6d84141100)
+06:10:59.412121 - AXUtilities: Getting on-screen objects in [label: 'zwj-family' (0x7f6d84141100)] (0x7f6d84141100)
+06:10:59.412208 - AXObject: Clearing AT-SPI cache on [label: 'zwj-family' (0x7f6d84141100)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.412459 - AXUtilities: Checking if [label: 'zwj-family' (0x7f6d84141100)] is showing and visible....
+06:10:59.412636 - AXUtilities: [label: 'zwj-family' (0x7f6d84141100)] is not showing and visible. Treating as off screen.
+06:10:59.413088 - AXUtilities: Child 23 is [label: 'zwj-rainbow' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.413174 - AXUtilities: Getting on-screen objects in [label: 'zwj-rainbow' (0x7f6d84087b80)] (0x7f6d84087b80)
+06:10:59.413260 - AXObject: Clearing AT-SPI cache on [label: 'zwj-rainbow' (0x7f6d84087b80)] Recursive: False. Reason: Updating to check if object is on screen.
+06:10:59.413559 - AXUtilities: Checking if [label: 'zwj-rainbow' (0x7f6d84087b80)] is showing and visible....
+06:10:59.413751 - AXUtilities: [label: 'zwj-rainbow' (0x7f6d84087b80)] is not showing and visible. Treating as off screen.
+06:10:59.413874 - AXUtilities: 8 onscreen objects found in [frame: 'Nidara accessibility form' (0x7f6d84175300)]
+06:10:59.413935 - FLAT REVIEW: 8 on-screen objects found for [frame: 'Nidara accessibility form' (0x7f6d84175300)]
+06:10:59.414023 - AXUtilitiesRelation: [frame: 'Nidara accessibility form' (0x7f6d84175300)] is label for: []
+06:10:59.414293 - AXComponent: Rect of [frame: 'Nidara accessibility form' (0x7f6d84175300)] is (x:0, y:0, width:960, height:678)
+06:10:59.414491 - GENERATOR: _generate_accessible_name: [Nidara accessibility form]
+06:10:59.414741 - SPEECH GENERATOR: default voice requested for [frame: 'Nidara accessibility form' (0x7f6d84175300)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.414841 - SPEECH GENERATOR: Reported locale of [frame: 'Nidara accessibility form' (0x7f6d84175300)] is en_US
+06:10:59.415013 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.415208 - SPEECH GENERATOR: _generate_accessible_name: [Nidara accessibility form, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.415296 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.415476 - AXUtilitiesRelation: [entry: 'Name' (0x7f6d8402a900)] is label for: []
+06:10:59.415737 - AXComponent: Rect of [entry: 'Name' (0x7f6d8402a900)] is (x:44, y:56, width:872, height:54)
+06:10:59.416029 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.416289 - AXText: Text of [entry: 'Name' (0x7f6d8402a900)]'日本🙂 word'
+06:10:59.416781 - FLAT REVIEW: Getting lines for [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.416899 - AXText: Getting visible lines for [entry: 'Name' (0x7f6d8402a900)] inside (x:0, y:0, width:960, height:678)
+06:10:59.417184 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.417464 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.417911 - AXText: Line at offset 4 in [entry: 'Name' (0x7f6d8402a900)]'日本🙂 word' (0 - 8)
+06:10:59.418090 - AXText: First visible line in [entry: 'Name' (0x7f6d8402a900)] is: '日本🙂 word' (0 - 8)
+06:10:59.418390 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.418814 - AXText: Line at offset 7 in [entry: 'Name' (0x7f6d8402a900)]'日本🙂 word' (0 - 8)
+06:10:59.419125 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.419556 - AXText: Line at offset 0 in [entry: 'Name' (0x7f6d8402a900)]'日本🙂 word' (0 - 8)
+06:10:59.419861 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.420040 - AXText: Last visible line in [entry: 'Name' (0x7f6d8402a900)] is: '日本🙂 word' (0 - 8)
+06:10:59.420150 - GSETTINGS REGISTRY: speech/speak-blank-lines using default value = True
+06:10:59.420238 - FLAT REVIEW: 1 lines found for [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.420712 - AXText: Range 0 - 8 in [entry: 'Name' (0x7f6d8402a900)] has rect (x:-10000, y:-10000, width:0, height:0)
+06:10:59.420938 - AXComponent: The intersection of (x:-10000, y:-10000, width:0, height:0) and (x:0, y:0, width:960, height:678) is: (x:0, y:0, width:0, height:0)
+06:10:59.421156 - GENERATOR: _generate_accessible_name: [Name]
+06:10:59.421391 - SPEECH GENERATOR: default voice requested for [entry: 'Name' (0x7f6d8402a900)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.421494 - SPEECH GENERATOR: Reported locale of [entry: 'Name' (0x7f6d8402a900)] is en_US
+06:10:59.421656 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.421841 - SPEECH GENERATOR: _generate_accessible_name: [Name, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.421903 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.422006 - AXUtilitiesRelation: [password text: 'Password' (0x7f6d84069c00)] is label for: []
+06:10:59.422210 - AXComponent: Rect of [password text: 'Password' (0x7f6d84069c00)] is (x:44, y:156, width:872, height:54)
+06:10:59.422303 - GENERATOR: _generate_accessible_name: [Password]
+06:10:59.422421 - SPEECH GENERATOR: default voice requested for [password text: 'Password' (0x7f6d84069c00)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.422474 - SPEECH GENERATOR: Reported locale of [password text: 'Password' (0x7f6d84069c00)] is en_US
+06:10:59.422554 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.422649 - SPEECH GENERATOR: _generate_accessible_name: [Password, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.422682 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.422761 - AXUtilitiesRelation: [combo box: 'Language' (0x7f6d840679c0)] is label for: []
+06:10:59.422947 - AXComponent: Rect of [combo box: 'Language' (0x7f6d840679c0)] is (x:44, y:256, width:872, height:54)
+06:10:59.423039 - GENERATOR: _generate_accessible_name: [Language]
+06:10:59.423158 - SPEECH GENERATOR: default voice requested for [combo box: 'Language' (0x7f6d840679c0)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.423328 - SPEECH GENERATOR: Reported locale of [combo box: 'Language' (0x7f6d840679c0)] is en_US
+06:10:59.423423 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.423520 - SPEECH GENERATOR: _generate_accessible_name: [Language, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.423552 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.423633 - AXUtilitiesRelation: [check box: 'Remember me' (0x7f6d8406b500)] is label for: []
+06:10:59.423808 - AXComponent: Rect of [check box: 'Remember me' (0x7f6d8406b500)] is (x:44, y:356, width:872, height:54)
+06:10:59.423906 - GENERATOR: _generate_accessible_name: [Remember me]
+06:10:59.424026 - SPEECH GENERATOR: default voice requested for [check box: 'Remember me' (0x7f6d8406b500)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.424191 - SPEECH GENERATOR: Reported locale of [check box: 'Remember me' (0x7f6d8406b500)] is en_US
+06:10:59.424279 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.424375 - SPEECH GENERATOR: _generate_accessible_name: [Remember me, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.424408 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.424498 - GENERATOR: _generate_state_checked: [not checked]
+06:10:59.424616 - SPEECH GENERATOR: state voice requested for [check box: 'Remember me' (0x7f6d8406b500)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.424667 - SPEECH GENERATOR: Reported locale of [check box: 'Remember me' (0x7f6d8406b500)] is en_US
+06:10:59.424733 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'system'}
+06:10:59.424824 - SPEECH GENERATOR: _generate_state_checked: [not checked, {'established': 'False', 'family': '{}', 'voice-type': 'system'}]
+06:10:59.424905 - AXUtilitiesRelation: [button: 'Review' (0x7f6d84067d80)] is label for: []
+06:10:59.425094 - AXComponent: Rect of [button: 'Review' (0x7f6d84067d80)] is (x:44, y:456, width:872, height:54)
+06:10:59.425185 - GENERATOR: _generate_accessible_name: [Review]
+06:10:59.425302 - SPEECH GENERATOR: default voice requested for [button: 'Review' (0x7f6d84067d80)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.425476 - SPEECH GENERATOR: Reported locale of [button: 'Review' (0x7f6d84067d80)] is en_US
+06:10:59.425564 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.425660 - SPEECH GENERATOR: _generate_accessible_name: [Review, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.425692 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.425899 - AXUtilitiesRelation: [label: 'arabic-bidi' (0x7f6d84087740)] is label for: []
+06:10:59.426082 - AXComponent: Rect of [label: 'arabic-bidi' (0x7f6d84087740)] is (x:44, y:570, width:872, height:105)
+06:10:59.426181 - GENERATOR: _generate_accessible_name: [arabic-bidi]
+06:10:59.426299 - SPEECH GENERATOR: default voice requested for [label: 'arabic-bidi' (0x7f6d84087740)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.426462 - SPEECH GENERATOR: Reported locale of [label: 'arabic-bidi' (0x7f6d84087740)] is en_US
+06:10:59.426686 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.426788 - SPEECH GENERATOR: _generate_accessible_name: [arabic-bidi, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.426821 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.427120 - AXUtilitiesRelation: [label: 'center' (0x7f6d8406bf80)] is label for: []
+06:10:59.427299 - AXComponent: Rect of [label: 'center' (0x7f6d8406bf80)] is (x:44, y:675, width:872, height:105)
+06:10:59.427396 - GENERATOR: _generate_accessible_name: [center]
+06:10:59.427515 - SPEECH GENERATOR: default voice requested for [label: 'center' (0x7f6d8406bf80)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.427695 - SPEECH GENERATOR: Reported locale of [label: 'center' (0x7f6d8406bf80)] is en_US
+06:10:59.427919 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.428021 - SPEECH GENERATOR: _generate_accessible_name: [center, {'established': 'False', 'family': '{}', 'voice-type': 'default'}]
+06:10:59.428054 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.428239 - FLAT REVIEW: 9 zones found for [frame: 'Nidara accessibility form' (0x7f6d84175300)]
+06:10:59.428440 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports caret offset of 8.
+06:10:59.428618 - AXText: [entry: 'Name' (0x7f6d8402a900)] reports 8 characters.
+06:10:59.428885 - FLAT REVIEW: Line 0 has ZONE: 'Nidara accessibility form' frame at (x:0, y:0, width:960, height:678)
+06:10:59.428961 - FLAT REVIEW: Line 1 has ZONE: 'Name' entry at (x:44, y:56, width:872, height:54)
+06:10:59.429029 - FLAT REVIEW: Line 2 has ZONE: 'Password' password text at (x:44, y:156, width:872, height:54)
+06:10:59.429097 - FLAT REVIEW: Line 3 has ZONE: 'Language' combo box at (x:44, y:256, width:872, height:54)
+06:10:59.429157 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.429242 - GENERATOR: _generate_state_checked: [not checked]
+06:10:59.429363 - SPEECH GENERATOR: state voice requested for [check box: 'Remember me' (0x7f6d8406b500)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.429416 - SPEECH GENERATOR: Reported locale of [check box: 'Remember me' (0x7f6d8406b500)] is en_US
+06:10:59.429485 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'system'}
+06:10:59.429580 - SPEECH GENERATOR: _generate_state_checked: [not checked, {'established': 'False', 'family': '{}', 'voice-type': 'system'}]
+06:10:59.429623 - FLAT REVIEW: Line 4 has STATE ZONE: 'not checked' check box at (x:44, y:356, width:872, height:54)
+06:10:59.429691 - FLAT REVIEW: Line 4 has ZONE: 'Remember me' check box at (x:44, y:356, width:872, height:54)
+06:10:59.429759 - FLAT REVIEW: Line 5 has ZONE: 'Review' button at (x:44, y:456, width:872, height:54)
+06:10:59.429825 - FLAT REVIEW: Line 6 has ZONE: 'arabic-bidi' label at (x:44, y:570, width:872, height:105)
+06:10:59.429903 - FLAT REVIEW: Line 7 has ZONE: 'center' label at (x:44, y:675, width:872, height:105)
+06:10:59.429940 - FLAT REVIEW: Zones clustered into 8 lines
+06:10:59.430019 - FLAT REVIEW: On line 1, zone 0 word 0, char 0
+06:10:59.430107 - FOCUS MANAGER: Switching mode from focus-tracking to flat-review
+06:10:59.430187 - FOCUS MANAGER: Region of interest: [entry: 'Name' (0x7f6d8402a900)] (0, 0)
+06:10:59.430907 - GSETTINGS REGISTRY: speech/only-speak-displayed-text using default value = False
+06:10:59.431008 - GSETTINGS REGISTRY: speech/speak-indentation using default value = False
+06:10:59.431087 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.431189 - FOCUS MANAGER: Active mode: flat-review Object of interest: [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.431279 - GSETTINGS REGISTRY: speech/enable using default value = True
+06:10:59.431366 - GSETTINGS REGISTRY: speech/verbosity-level using default value = 'verbose'
+06:10:59.431422 - FOCUS MANAGER: Locus of focus is [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.431470 - SCRIPT MANAGER: Active script is: nk-phase0 (module=orca.scripts.default)
+06:10:59.431556 - GSETTINGS REGISTRY: speech/auto-language-switching using default value = True
+06:10:59.431643 - GSETTINGS REGISTRY: speech/only-switch-configured-languages using default value = False
+06:10:59.436459 - GSETTINGS REGISTRY: speech/auto-language-switching-ui using default value = False
+06:10:59.436527 - GSETTINGS REGISTRY: speech/insert-pauses-between-utterances using default value = True
+06:10:59.436576 - GSETTINGS REGISTRY: speech/punctuation-level using default value = 'most'
+06:10:59.436681 - GSETTINGS REGISTRY: speech/only-speak-displayed-text using default value = False
+06:10:59.436729 - GSETTINGS REGISTRY: speech/speak-description using default value = True
+06:10:59.436774 - GSETTINGS REGISTRY: speech/speak-tutorial-messages using default value = True
+06:10:59.436818 - GSETTINGS REGISTRY: speech/speak-position-in-set using default value = False
+06:10:59.436868 - GSETTINGS REGISTRY: speech/speak-widget-mnemonic using default value = True
+06:10:59.436914 - GSETTINGS REGISTRY: speech/speak-blank-lines using default value = True
+06:10:59.436956 - GSETTINGS REGISTRY: speech/speak-indentation using default value = False
+06:10:59.436999 - GSETTINGS REGISTRY: speech/announce-cell-headers using default value = True
+06:10:59.437042 - GSETTINGS REGISTRY: speech/announce-cell-coordinates using default value = True
+06:10:59.437083 - GSETTINGS REGISTRY: speech/announce-spreadsheet-cell-coordinates using default value = True
+06:10:59.437125 - GSETTINGS REGISTRY: speech/announce-article using default value = True
+06:10:59.437166 - GSETTINGS REGISTRY: speech/announce-blockquote using default value = True
+06:10:59.437208 - GSETTINGS REGISTRY: speech/announce-code-block using default value = True
+06:10:59.437249 - GSETTINGS REGISTRY: speech/announce-document using default value = True
+06:10:59.437291 - GSETTINGS REGISTRY: speech/announce-form using default value = True
+06:10:59.437332 - GSETTINGS REGISTRY: speech/announce-grouping using default value = True
+06:10:59.437374 - GSETTINGS REGISTRY: speech/announce-landmark using default value = True
+06:10:59.437416 - GSETTINGS REGISTRY: speech/announce-list using default value = True
+06:10:59.437457 - GSETTINGS REGISTRY: speech/announce-table using default value = True
+06:10:59.437497 - GSETTINGS REGISTRY: speech/announce-tracked-changes using default value = True
+06:10:59.437540 - GSETTINGS REGISTRY: speech/speak-text-attribute-changes using default value = 'off'
+06:10:59.437590 - GSETTINGS REGISTRY: speech/speak-misspelled-indicator using default value = True
+06:10:59.437717 - AXText: Getting attributes for [entry: 'Name' (0x7f6d8402a900)] chars: 0 - 4
+06:10:59.438087 - AXText: Attributes for [entry: 'Name' (0x7f6d8402a900)] at offset 0: [{}, 0, 8]
+06:10:59.438276 - AXText: 1 attribute ranges found.
+06:10:59.438408 - SPEECH GENERATOR: system voice requested for None language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.438460 - SPEECH GENERATOR: Reported locale of None is 
+06:10:59.438525 - SPEECH GENERATOR: Updated to: '', ''
+06:10:59.438595 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'system'}
+06:10:59.438849 - AXText: Text of [entry: 'Name' (0x7f6d8402a900)] (0 - 4): '日本🙂 '
+06:10:59.438933 - SPEECH PRESENTER: Adjusting '日本🙂 ' from [entry: 'Name' (0x7f6d8402a900)] start_offset: 0
+06:10:59.439029 - AXUtilitiesHypertext: 0 hyperlinks found in [entry: 'Name' (0x7f6d8402a900)] between start: 0 and end: 4
+06:10:59.439084 - GSETTINGS REGISTRY: speech/speak-numbers-as-digits using default value = False
+06:10:59.439152 - GSETTINGS REGISTRY: speech/repeated-character-limit using default value = 4
+06:10:59.439261 - GSETTINGS REGISTRY: speech/use-pronunciation-dictionary using default value = True
+06:10:59.439309 - SPEECH PRESENTER: Adjusted text: '日本🙂 '
+06:10:59.439432 - SPEECH GENERATOR: None voice requested for [entry: 'Name' (0x7f6d8402a900)] language='', dialect=''Unmodified voice={'established': 'False'}
+06:10:59.439486 - SPEECH GENERATOR: Reported locale of [entry: 'Name' (0x7f6d8402a900)] is en_US
+06:10:59.439568 - SPEECH GENERATOR: Final voice is {'established': 'False', 'family': '{}', 'voice-type': 'default'}
+06:10:59.439671 - SPEECH: Speak [日本🙂, {'established': 'False', 'family': '{}', 'voice-type': 'default'}], acss: None
+06:10:59.439752 - SPEECH OUTPUT: '日本🙂 '{'established': 'False', 'voice-type': 'default'}
+06:10:59.439790 - SPEECH DISPATCHER: Speaking '日本🙂 ' as string
+06:10:59.440669 - SPEECH DISPATCHER: Speaking '<speak><mark name="0:3"/>日本🙂 </speak>' 
+                  ORCA rate 50, pitch 5.0, pitch-range 5.0, volume 10.0, language, punctuation: MOST
+                  SD rate 0, pitch 0, volume 100, language en-US
+06:10:59.441062 - FOCUS MANAGER: Region of interest: [entry: 'Name' (0x7f6d8402a900)] (0, 0)
+06:10:59.441241 - GSETTINGS REGISTRY: braille/enabled using default value = True
+06:10:59.441330 - FLAT REVIEW PRESENTER: No new input event since context was last validated.
+06:10:59.441390 - FLAT REVIEW PRESENTER: Using existing context. Restrict: False
+06:10:59.441482 - FOCUS MANAGER: Active mode: flat-review Object of interest: [entry: 'Name' (0x7f6d8402a900)]
+06:10:59.441706 - GSETTINGS SCHEMA HANDLE: flat-review / focus-tracking not set [app:nk-phase0, profile:default]
+06:10:59.441804 - GSETTINGS REGISTRY: flat-review/focus-tracking using default value = 'auto'
+06:10:59.441971 - BRAILLE: Not contracting 'Name' because contracted braille is not enabled.
+06:10:59.442064 - GSETTINGS REGISTRY: braille/end-of-line-indicator using default value = True
+06:10:59.442106 - BRAILLE: Not contracting '$l' because contracted braille is not enabled.
+06:10:59.442145 - BRAILLE: Not contracting 'Name' because contracted braille is not enabled.
+06:10:59.442261 - BRAILLE: Refresh. Pan: True target: 0
+06:10:59.442275 - BRAILLE: Kill flash message braille.display_line:1785 > braille.refresh:2304 > braille._prepare_refresh:2020 > braille.kill_flash:2402
+06:10:59.443144 - GSETTINGS REGISTRY: braille/enabled using default value = True
+06:10:59.443251 - BRAILLE: Last text object: [entry: 'Name' (0x7f6d8402a900)] [(Caret:, 8,, Line:, 0,, Cell:, 14,)]
+06:10:59.443340 - BRAILLE: Current text object: None [(Caret:, 0,, Line:, 0,). On same line:] False
+06:10:59.443431 - BRAILLE: Line 0: 'Name $l' focusOffset: 0 [[0, 7]]
+06:10:59.443460 - BRAILLE: Cursor offset in line string is: 0
+06:10:59.443501 - BRAILLE: display_size=32 monitor=0
+06:10:59.443534 - BRAILLE: Not adjusting offset 0. Cursor offset fits on display.
+06:10:59.443589 - BRAILLE: Current range: (0, 32). Target cell: 0
+06:10:59.443625 - BRAILLE LINE:  'Name $l'
+06:10:59.443665 -      VISIBLE:  'Name $l', cursor=1
+06:10:59.443695 - BRAILLE: Enabling braille. BrlAPI running: False
+06:10:59.443703 - BRAILLE: Need to initialize first.
+06:10:59.443729 - BRAILLE: Initializing. Callback: None
+06:10:59.443736 - BRAILLE: Initialization failed: BrlApi is not defined.
+06:10:59.443784 - TOTAL PROCESSING TIME: 0.0662
+^^^^^ HANDLE ATSPI_KEY_PRESSED_EVENT:'KP_Up' (80) ^^^^^
+
+06:10:59.727391 - AXCacheManager: Invalidating caches Generator.description, Generator.image-description, Generator.static-text, Generator.text-substring, Generator.text-line, Generator.text, Generator.text-expanding-eocs, Generator.descendants, Generator.nesting-level, Generator.tree-item-level, Generator.is-nameless-toggle, Generator.is-description-used-for-name, Generator.is-description-used-for-static-text Reason: Automatic interval-based clearing.

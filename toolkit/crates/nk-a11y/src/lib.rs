@@ -8,6 +8,8 @@ use std::{
 };
 #[cfg(feature = "atspi")]
 pub mod atspi_backend;
+mod geometry;
+pub use geometry::{TextGeometry, TextSpan};
 pub type Result<T> = std::result::Result<T, String>;
 pub type NodeId = u64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +59,7 @@ pub struct TextInfo {
     pub anchor: usize,
     pub words: Vec<Range<usize>>,
     pub lines: Vec<Range<usize>>,
+    pub geometry: Option<TextGeometry>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
@@ -159,6 +162,9 @@ pub fn byte_offset(text: &str, character: usize) -> Result<usize> {
 }
 impl TextInfo {
     pub fn characters(&self) -> Result<CharacterText> {
+        if let Some(g) = &self.geometry {
+            g.validate(&self.text)?;
+        }
         let range = |r: &Range<usize>| -> Result<Range<usize>> {
             if r.start > r.end {
                 return Err("reversed text range".into());
@@ -346,6 +352,7 @@ mod tests {
             anchor: 0,
             words: std::iter::once(11..15).collect(),
             lines: std::iter::once(0..15).collect(),
+            geometry: None,
         };
         let c = t.characters().unwrap();
         assert_eq!(c.caret, 2);

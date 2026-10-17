@@ -1297,14 +1297,6 @@ still in `/tmp`, and no window to say so. A confirmation dialog would be better 
 button — it could offer "abandon anyway" for a hung install — and it needs strings, so it needs
 twelve locales; that is why it is not there yet.
 
-### Toolkit phase-0 flat-review text geometry (2026-10-16)
-The real Orca walk (#835/#841) exposed missing AT-SPI `GetRangeExtents`: flat
-review finds the Unicode line but truncates its spoken presentation. This is
-outside the gate's keyboard/form walk; Claude will take it separately. #839
-fixed active-window/keyboard-monitor/candidate placement, and #842 fixed combo
-Selection and its event. Hangul Escape commits by engine policy, explicitly
-accepted in the contract; it is not toolkit debt. Current gate evidence and
-controls live in `toolkit/phase0/EVIDENCE-832-835.md`.
 
 ## Resolved — rules that still apply
 
@@ -4013,3 +4005,5 @@ number is never accidentally reused. 58 items; the split itself was 2026-08-23.
 - **#103** — ✅ RESOLVED 2026-09-14 — the icon / cursor / GTK theme have one home, and appearance.json is gone (#536 in #573) → `tech-debt-resolved.md`
 - **#106** — ✅ RESOLVED same day (2026-09-20) — the `material*` vocabulary and `--nidara-edge` were buried; the rim of light is Cairo's alone → `tech-debt-resolved.md`
 - **#109** — ✅ RESOLVED same day (2026-09-20) — Qt applications get our icon theme and font: `QT_QPA_PLATFORMTHEME=gtk3` → `tech-debt-resolved.md`
+
+- **Toolkit phase-0 flat-review text geometry (2026-10-16)** — implemented in #846; real Orca full-line assertion and applied wrong-extents control → `tech-debt-resolved.md`.
