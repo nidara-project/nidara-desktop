@@ -47,11 +47,13 @@ impl Hyalo {
         match parts.first().copied() {
             Some("move") => self.control_move(num(1), num(2), time),
             Some(verb @ ("click" | "rclick")) => {
+                eprintln!("CONTROL_CLICK_BEGIN {:?} {} {}", self.clock.now(), num(1), num(2));
                 self.control_move(num(1), num(2), time);
                 let button = if verb == "click" { 0x110 } else { 0x111 };
                 for state in [ButtonState::Pressed, ButtonState::Released] {
                     self.pointer_button(button, state, time);
                 }
+                eprintln!("CONTROL_CLICK_END {:?}", self.clock.now());
             }
             Some("press") => {
                 self.control_move(num(1), num(2), time);

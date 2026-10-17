@@ -138,7 +138,13 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
         .find(|o| output.is_none_or(|n| o.name() == n))
         .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
+    if std::env::var_os("HYALO_CONTROL").is_some() {
+        eprintln!("CAPTURE_BEGIN {:?} {}", state.clock.now(), path.display());
+    }
     let (w, h, rgba) = capture_output(state, &output, false)?;
+    if std::env::var_os("HYALO_CONTROL").is_some() {
+        eprintln!("CAPTURE_END {:?} {}", state.clock.now(), path.display());
+    }
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ppm")) {
         crate::screenshot::write_ppm(path, w, h, &rgba)
     } else {

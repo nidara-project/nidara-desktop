@@ -534,6 +534,9 @@ pub fn under_tree(
             if here.alpha <= 0.0 || here.scale <= 0.0 {
                 return;
             }
+            if std::env::var_os("HYALO_CONTROL").is_some() {
+                eprintln!("LAYER_HIT point={point:?} origin={:?} scale={} size={:?}", here.at, here.scale, v.dst);
+            }
             let local = Point::<f64, Logical>::from(((point.x - here.at.x) / here.scale, (point.y - here.at.y) / here.scale));
             let mut attrs = states.cached_state.get::<SurfaceAttributes>();
             if contains(v.dst, attrs.current(), local) {
