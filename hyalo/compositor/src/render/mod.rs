@@ -390,6 +390,24 @@ pub fn output_elements<R: HyaloRenderer>(
                         let at = place.map_or(m.frame().loc.to_f64(), |p| p.origin);
                         let frame = Rectangle::new(at - output_geo.loc.to_f64(), m.frame().size.to_f64()).to_physical(scale);
                         out.push(OutputElement::Snapshot(snapshot::SnapshotElement::new(&picture, frame, look.scale, look.alpha)));
+                        // What the picture leaves out, under it: the window's glass, the blur
+                        // behind it and its veils, drawn live at the picture's scale and formed
+                        // as far as it has faded in — or the window opened without them and
+                        // they appeared at once when it had (owner, 2026-10-18).
+                        let size = m.frame().size.to_f64();
+                        let origin = at + Point::from((size.w, size.h)).upscale((1.0 - look.scale) / 2.0);
+                        let mut live = Vec::new();
+                        let place = crate::wm::minimize::Placement { origin, scale: look.scale };
+                        push_window(&mut live, renderer, state, w, Some(place), output_geo.loc, scale, output_size);
+                        if let Some(surface) = crate::wm::surface_of(w) {
+                            with_states(&surface, |states| {
+                                out.extend(live.into_iter().filter_map(|e| match e {
+                                    OutputElement::Glass(g) => Some(OutputElement::Glass(g.forming(look.alpha as f32, &states.data_map))),
+                                    OutputElement::Scrim(v) => Some(OutputElement::Scrim(v.forming(look.alpha, &states.data_map))),
+                                    _ => None,
+                                }));
+                            });
+                        }
                         continue;
                     }
                     Err(err) => tracing::debug!(%err, id = m.id, "no picture of an opening window"),

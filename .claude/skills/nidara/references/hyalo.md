@@ -1146,6 +1146,12 @@ expected 1.01 was wrong, not the curve).
   (nk-settings-slice live: commit 4 at 775 ms, 2026-10-18). Smithay re-sends a scale only when
   it changes. `toolkit/settings-slice/check.py` asserts `PREFERRED_SCALE` arrives before the
   first content commit; failed against the Hyalo without it, passed nested with it.
+- 🔴 **An opening window's glass forms under its picture** (`render/mod.rs`, the opening
+  branch): the picture has no glass, blur or veils (`snapshot::take` drops them: they sample the
+  screen). They are drawn live under it, at its scale, through `GlassElement::forming` /
+  `ScrimElement::forming` with the fade's alpha — the #764 formation, not a cross-fade — each
+  under an id of its own while it forms. Without that a window opened transparent and its glass
+  appeared at once when the opening ended (owner, 2026-10-18; nested A/B, frames at 120/200/300 ms).
 - 🔴 **An animation that ends asks for one more frame** (`step_motions`, `step_animations`,
   `layers::step`): the frame just drawn sampled it short of its end. Without that frame an
   opened window stayed the opening's picture at ~99 % and was in no frame as itself — no

@@ -236,6 +236,18 @@ impl GlassElement {
 }
 
 impl GlassElement {
+    /// This glass `k` of the way formed (0..1), as a pane appearing forms (#764): a window
+    /// opening is drawn as a picture of itself (render/snapshot.rs), which has no glass, and its
+    /// glass forms under the picture as that fades in. `memo` is the window's surface data.
+    pub fn forming(mut self, k: f32, memo: &UserDataMap) -> Self {
+        for s in &mut self.shapes {
+            s.opacity *= k;
+        }
+        self.formed *= k;
+        (self.id, self.commit) = forming_id(memo, &self.id, self.commit, k);
+        self
+    }
+
     /// What its blur reads, output px (the debug overlay draws it: render/stats.rs).
     pub fn region(&self) -> Rectangle<i32, Physical> {
         self.region
@@ -290,6 +302,25 @@ impl<R: HyaloRenderer> RenderElement<R> for GlassElement {
     ) -> Result<(), R::Error> {
         self.capture_gles(R::gles_frame(frame), cache).map_err(R::from_gles_error)
     }
+}
+
+/// The ids a window's glass and veils are drawn with while it opens, by their own: what they
+/// draw changes every frame, and their own ids, once it has opened, are drawn afresh.
+#[derive(Default)]
+struct FormingIds(RefCell<std::collections::HashMap<Id, (Id, CommitCounter, CommitCounter, u32)>>);
+
+/// The id and commit an element `id` at `commit` is drawn with, formed `k` of the way: the
+/// commit moves when either does.
+pub(super) fn forming_id(memo: &UserDataMap, id: &Id, commit: CommitCounter, k: f32) -> (Id, CommitCounter) {
+    let memo = memo.get_or_insert(FormingIds::default);
+    let mut memo = memo.0.borrow_mut();
+    let entry = memo.entry(id.clone()).or_insert_with(|| (Id::new(), CommitCounter::default(), commit, k.to_bits()));
+    if entry.2 != commit || entry.3 != k.to_bits() {
+        entry.1.increment();
+        entry.2 = commit;
+        entry.3 = k.to_bits();
+    }
+    (entry.0.clone(), entry.1)
 }
 
 /// Two shapes formed this alike (#764) share a blur: an animation moves a pane's shapes together.
