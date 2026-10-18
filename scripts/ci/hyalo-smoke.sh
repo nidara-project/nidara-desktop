@@ -3,15 +3,17 @@
 # hyalo-smoke.sh — CI for Hyalo, the compositor of our own (hyalo/, #681).
 #
 # What it proves on every PR, in an Arch container on the runner's vkms:
-#   1. hyalo/ builds against the committed lock file (`cargo build --locked`), passes
-#      `clippy -D warnings`, and its unit tests pass.
-#   2. Hyalo BOOTS on real DRM/KMS — the tty backend, the one a session uses — through
+#   1. hyalo/ passes `clippy -D warnings` and its unit tests, against the committed lock file.
+#   2. The PACKAGE builds from this tree (packaging/nidara/PKGBUILD, makepkg) and installs with
+#      pacman: desktop, kit and Hyalo, dependencies from the repositories. Everything below
+#      runs the INSTALLED system — what a user gets — not the checkout.
+#   3. Hyalo BOOTS on real DRM/KMS — the tty backend, the one a session uses — through
 #      libseat (seatd) and udev, rendering in software (llvmpipe) on vkms.
-#   3. The REAL shell bundle boots on it, stays alive and answers its IPC; Hyalo's own IPC
-#      lists the output.
-#   4. A screenshot of the desktop is uploaded for a HUMAN to look at — through Hyalo's IPC
+#   4. The shell, started as the session does (nidara-ui), boots on it, stays alive and
+#      answers its IPC; Hyalo's own IPC lists the output.
+#   5. A screenshot of the desktop is uploaded for a HUMAN to look at — through Hyalo's IPC
 #      (grim works too since 2026-10-02: scripts/ci/hyalo-screen-capture-check.sh tests it).
-#   5. The shell log is held to the same bar as the Hyprland smoke: no JS errors and no
+#   6. The shell log is held to the same bar as the Hyprland smoke: no JS errors and no
 #      toolkit CRITICAL (an absent accessibility bus excepted, that is the container).
 #
 # The Hyprland smoke (headless-smoke.sh) stays the gate for the shell itself; this one is
@@ -56,34 +58,17 @@ phase_deps() {
 
 phase_build() {
     cd "$REPO/hyalo"
-    log "cargo build --locked --release…"
-    cargo build --locked --release
+    # The release build is the package's (phase_package); here what a package does not run.
     log "cargo clippy -D warnings…"
     cargo clippy --locked --all-targets -- -D warnings
     log "cargo test…"
     cargo test --locked
-    install -Dm755 target/release/nidara-hyalo /usr/local/bin/nidara-hyalo
 
     # The native toolkit client: its build/lint/tests are the toolkit job;
     # its real input/material/IME pixel checks run below on this vkms Hyalo.
     cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice
 
-    # The shell, as the Hyprland smoke builds it (schemas, libnidara-wl, sheets, bundle).
-    install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO"/config/gsettings/*.gschema.xml
-    glib-compile-schemas --strict /usr/share/glib-2.0/schemas
-    local wl_build="$REPO/build/nidara-wl"
-    "$REPO/lib/nidara-wl/build.sh" "$wl_build" >/dev/null
-    install -Dm755 "$wl_build/libnidara-wl.so.0.0.0" /usr/lib/libnidara-wl.so.0.0.0
-    ln -sf libnidara-wl.so.0.0.0 /usr/lib/libnidara-wl.so.0
-    install -Dm644 "$wl_build/NidaraWl-1.0.typelib" /usr/lib/girepository-1.0/NidaraWl-1.0.typelib
-    ldconfig
-    # nidara-input (the Assistant's virtual pointer), exactly as install.sh builds it.
-    local vp_xml=/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml vp="$REPO/build/vp"
-    mkdir -p "$vp"
-    wayland-scanner client-header "$vp_xml" "$vp/wlr-virtual-pointer-unstable-v1-client-protocol.h"
-    wayland-scanner private-code  "$vp_xml" "$vp/wlr-virtual-pointer-unstable-v1-protocol.c"
-    cc -O2 "$REPO/bin/nidara-input.c" "$vp/wlr-virtual-pointer-unstable-v1-protocol.c" \
-        -I"$vp" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/nidara-input
+    # The checks' own clients below; everything of the product comes from the package.
     # The sandbox probe (what a Flatpak app sees, hyalo/compositor/src/sandbox.rs).
     local sc_xml=/usr/share/wayland-protocols/staging/security-context/security-context-v1.xml sc="$REPO/build/sc"
     mkdir -p "$sc"
@@ -159,38 +144,39 @@ phase_build() {
     wayland-scanner private-code  "$im_xml" "$im/input-method-unstable-v2-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-ime-probe.c" "$im/input-method-unstable-v2-protocol.c" \
         -I"$im" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-ime-probe
-    "$REPO/lib/nidara-host/build.sh" "$REPO/build/nidara-host"
+    phase_package
+}
+
+# The product as a user gets it: packaging/nidara/PKGBUILD built by makepkg from THIS tree and
+# installed with pacman — every file where the package puts it, its dependencies from the
+# repositories, nothing copied by hand (a hand list here once lacked the wallpapers, then the
+# Settings portal: 2026-10-18). install.sh's local build takes the same recipe.
+#
+# Fast because nothing is unpacked or fetched twice: makepkg -e builds IN this checkout
+# (src/ is a link to it), so Hyalo's and the session daemon's release builds land in the
+# target dirs CI caches, and npm's tree is reused. The package is not compressed: it is
+# installed here and thrown away.
+phase_package() {
+    log "the package: makepkg, then pacman -U…"
+    id ci &>/dev/null || useradd -m -s /bin/bash ci
+    local pkgver b=/tmp/nidara-pkg
+    pkgver="$(sed -n 's/^pkgver=//p' "$REPO/packaging/nidara/PKGBUILD")"
+    rm -rf "$b" && mkdir -p "$b/src"
+    cp "$REPO/packaging/nidara/PKGBUILD" "$REPO/packaging/nidara/nidara.install" "$b/"
+    ln -s "$REPO" "$b/src/nidara-desktop-$pkgver"
+    # prepare() — the crates fetch — is what -e skips: done here, where the network is.
+    (cd "$REPO/hyalo" && cargo fetch --locked)
+    (cd "$REPO/session" && cargo fetch --locked)
+    # makepkg refuses root; it builds as the user the session runs as, and writes all over the
+    # tree it builds in. Not .git: the runner's own cleanup writes there after this job.
+    chown ci "$REPO" && chown -R ci "$b"
+    find "$REPO" -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ci {} +
+    runuser -u ci -- env CARGO_HOME="$CARGO_HOME" CARGO_INCREMENTAL=0 PKGEXT=.pkg.tar \
+        bash -c "cd '$b' && makepkg -e -f --nodeps --noconfirm --noprogressbar"
+    # The desktop, its kit and Hyalo; not the installer, which only a live medium carries.
+    pacman -U --noconfirm "$b"/nidara-{desktop,kit,hyalo}-"$pkgver"-*.pkg.tar
     python "$REPO/scripts/ci/native-host-check.py" "$REPO/build/nidara-host"
-    for host in "$REPO"/build/nidara-host/nidara-*; do
-        install -Dm755 "$host" "/usr/lib/nidara/${host##*/}"
-    done
-    # The bundled wallpapers where the package puts them (install.sh): Config1's catalogue of
-    # wallpaper.current lists them, and config-service-check.py requires it not empty.
-    install -Dm644 -t /usr/share/nidara/wallpapers "$REPO"/defaults/wallpaper/*.jpg
-    # Nidara's portal backend, registered as install.sh does: the Settings portal (accent,
-    # scheme, transparency) is what the native Settings draws from (toolkit/PHASE1.md). Without
-    # it xdg-desktop-portal has no Settings backend and publishes no Settings interface. The
-    # session here sets no XDG_CURRENT_DESKTOP, so the Nidara routing is also the default one.
-    install -Dm755 "$REPO/bin/nidara-portal" /usr/bin/nidara-portal
-    install -Dm644 -t /usr/share/xdg-desktop-portal/portals "$REPO/config/portal/nidara.portal"
-    install -Dm644 -t /usr/share/dbus-1/services "$REPO/config/portal/org.freedesktop.impl.portal.desktop.nidara.service"
-    install -Dm644 "$REPO/config/portal/nidara-portals.conf" /etc/xdg-desktop-portal/nidara-portals.conf
-    install -Dm644 "$REPO/config/portal/nidara-portals.conf" /etc/xdg-desktop-portal/portals.conf
-    cd "$REPO/ui/shell"
-    npm install
-    npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
-    npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
-    mkdir -p build
-    node "$REPO/scripts/bundle.mjs" kit "$REPO/ui/lib/nidara-kit/build/js"
-    "$REPO/scripts/bundle.sh" app.ts build/nidara --native-host=nidara-shell --kit-external="$REPO/ui/lib/nidara-kit/build/js"
-    npx sass --no-charset ../settings/style.scss ../settings/style.css
-    ( cd ../settings; mkdir -p build; "$REPO/scripts/bundle.sh" app.ts build/nidara-settings --native-host=nidara-settings --kit-external="$REPO/ui/lib/nidara-kit/build/js" )
-    # What the native Settings reads besides Config1 (toolkit/PHASE1.md D4): manifest, strings,
-    # tokens — for the start-up slice's check below.
-    node --experimental-strip-types "$REPO/scripts/export-settings-data.mjs" "$REPO/build/settings-data"
-    SASS="$REPO/ui/shell/node_modules/.bin/sass" \
-        node --experimental-strip-types "$REPO/scripts/export-tokens.mjs" "$REPO/build/settings-data"
-    log "shell bundle OK"
+    log "package OK ($(pacman -Q nidara-desktop nidara-kit nidara-hyalo | tr '\n' ' '))"
 }
 
 phase_boot() {
@@ -208,7 +194,10 @@ phase_boot() {
     usermod -aG seat,video,input ci
     sleep 1
     mkdir -p "$OUT" /tmp/hyalo && chown ci /tmp/hyalo "$OUT"
+    # XDG_CURRENT_DESKTOP as a real session has it (bin/nidara-hyalo-session: uwsm -D Nidara),
+    # before the bus starts: xdg-desktop-portal, started by it, picks nidara-portals.conf by it.
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
+        XDG_CURRENT_DESKTOP=Nidara \
         NK_REAL_GATES="${NK_REAL_GATES:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
@@ -216,7 +205,10 @@ phase_boot() {
 phase_run() {
     export LIBGL_ALWAYS_SOFTWARE=1 LANG=C.UTF-8 LIBSEAT_BACKEND=seatd
     hyalo_log=/tmp/hyalo/hyalo.log
-    shell_log=/tmp/hyalo/shell.log
+    # nidara-ui writes the shell's output there (bin/nidara-ui); the link puts it with the
+    # other logs, in the artifacts.
+    shell_log="$XDG_RUNTIME_DIR/nidara-ui.log"
+    ln -sf "$shell_log" /tmp/hyalo/shell.log
     hyalo_pid=""
     shell_pid=""
     finish() {
@@ -266,7 +258,7 @@ phase_run() {
     # check hands Hyalo one that never locks.
     export HYALO_LOCK_RELAUNCH="LOCK_LOG=/tmp/hyalo/lock sh $REPO/scripts/ci/hyalo-lock-client.sh"
     mkdir -p /tmp/hyalo/lock
-    HYALO_A11Y_MANAGER=1 HYALO_CONFIG="$REPO/config/hyalo/hyalo.toml" RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
+    HYALO_A11Y_MANAGER=1 HYALO_CONFIG=/usr/share/nidara/hyalo/hyalo.toml RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
     for i in $(seq 1 30); do
@@ -297,18 +289,16 @@ phase_run() {
     log "window manager OK"
 
     # ── 2. The shell, exactly as the Hyprland smoke runs it.
+    # As the session starts it: the installed nidara-ui, which runs the packaged bundle (no
+    # .dev marker for this user) and finds Settings through /usr/bin/nidara-settings.
     log "booting the shell…"
-    export NIDARA_SETTINGS_ROOT="$REPO/ui/settings" NIDARA_SETTINGS_EXECUTABLE="$REPO/ui/settings/build/nidara-settings"
-    export GDK_BACKEND=wayland NIDARA_SHELL_ROOT="$REPO/ui/shell"
-    cd "$REPO/ui/shell"
-    ./build/nidara >"$shell_log" 2>&1 &
+    nidara-ui &
     shell_pid=$!
-    cc -O2 "$REPO/bin/nidara-ipc.c" $(pkg-config --cflags --libs gio-2.0) -o /tmp/hyalo/nidara-ipc
     local ok=""
     for i in $(seq 1 40); do
         kill -0 "$shell_pid" 2>/dev/null || { log "FAIL: the shell died"; exit 1; }
         kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died with the shell on it"; exit 1; }
-        if /tmp/hyalo/nidara-ipc listActions >/tmp/hyalo/listActions.json 2>/dev/null; then ok=1; break; fi
+        if /usr/bin/nidara-ipc listActions >/tmp/hyalo/listActions.json 2>/dev/null; then ok=1; break; fi
         sleep 1
     done
     [ -n "$ok" ] || { log "FAIL: the shell never answered nidara-ipc"; exit 1; }
@@ -318,7 +308,7 @@ phase_run() {
     # and Hyalo paints it. The bar and the dock each declare theirs; opening the Control
     # Center adds its panes to the bar's, so the shapes follow what is on screen.
     #
-    NIDARA_SETTINGS_CHECK_ISOLATED=1 "$REPO/scripts/ci/settings-process-check.sh" /tmp/hyalo/nidara-ipc /tmp/hyalo
+    NIDARA_SETTINGS_CHECK_ISOLATED=1 "$REPO/scripts/ci/settings-process-check.sh" /usr/bin/nidara-ipc /tmp/hyalo
 
     # The bar is the ONE surface every panel hangs from (#708 point 3): the Activity Island
     # and the app grid are panels of it, not layers of their own. Its resting glass is
@@ -379,7 +369,7 @@ phase_run() {
             || { log "FAIL: $ns draws over $area of its $whole px (none declared: -1)"; nidara-hyalo msg layers; exit 1; }
     done
     bar_drawn="$(drawn_area nidara-bar)"
-    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    /usr/bin/nidara-ipc toggleCC >/dev/null
     sleep 2
     bar_cc="$(glass_shapes nidara-bar)"
     bar_drawn_cc="$(drawn_area nidara-bar)"
@@ -390,7 +380,7 @@ phase_run() {
     local cc_scrim
     cc_scrim="$(nidara-hyalo msg layers | jq -r \
         '[.ok.layers[] | select(.namespace == "nidara-bar") | .glass.scrims[]? | select(.kind == "veil") | .shapes] | max // 0')"
-    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    /usr/bin/nidara-ipc toggleCC >/dev/null
     sleep 1
     [ "$bar_cc" -gt "$bar_rest" ] \
         || { log "FAIL: the Control Center's panes never reached Hyalo ($bar_rest shapes closed, $bar_cc open)"; exit 1; }
@@ -399,10 +389,10 @@ phase_run() {
     [ "$bar_drawn_cc" -gt "$bar_drawn" ] \
         || { log "FAIL: the bar's drawn region did not grow with the Control Center open ($bar_drawn px closed, $bar_drawn_cc open) — the panel is not drawn"; exit 1; }
     # The app grid's glass lands on the bar's surface too.
-    /tmp/hyalo/nidara-ipc toggleAppGrid >/dev/null
+    /usr/bin/nidara-ipc toggleAppGrid >/dev/null
     sleep 2
     bar_grid="$(glass_shapes nidara-bar)"
-    /tmp/hyalo/nidara-ipc toggleAppGrid >/dev/null
+    /usr/bin/nidara-ipc toggleAppGrid >/dev/null
     sleep 1
     [ "$bar_grid" -gt "$bar_rest" ] \
         || { log "FAIL: the app grid's glass never reached the bar's surface ($bar_rest shapes closed, $bar_grid open)"; nidara-hyalo msg layers; exit 1; }
@@ -429,10 +419,10 @@ phase_run() {
     # carries the vblank it was predicted for, checked against the kernel's timestamp of its flip.
     # vkms times its vblanks, so frames drawn here must come back timed; how far off they land
     # depends on llvmpipe keeping up, so it is printed, not held to a number.
-    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    /usr/bin/nidara-ipc toggleCC >/dev/null
     sleep 0.6
     nidara-hyalo msg stats > /tmp/hyalo/presentation.json || true
-    /tmp/hyalo/nidara-ipc toggleCC >/dev/null
+    /usr/bin/nidara-ipc toggleCC >/dev/null
     sleep 1
     local timed
     timed="$(jq -r '[.ok.stats.outputs[].presentation.frames // 0] | max // 0' /tmp/hyalo/presentation.json)"
@@ -459,7 +449,7 @@ phase_run() {
     log "settings OK"
     # The same registry for other processes (org.nidara.Config1, toolkit/PHASE1.md D1): the
     # native Settings' only door to the settings. Describe/Get/Set/Changed, and the agent gate.
-    python "$REPO/scripts/ci/config-service-check.py" /tmp/hyalo/nidara-ipc >/tmp/hyalo/config-service.log 2>&1 \
+    python "$REPO/scripts/ci/config-service-check.py" /usr/bin/nidara-ipc >/tmp/hyalo/config-service.log 2>&1 \
         || { log "FAIL: org.nidara.Config1"; cat /tmp/hyalo/config-service.log; exit 1; }
     log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 13: describe, get, set, agent door, transition, blur from another process, snapshot, apply, appearance keys, enum re-read, invalid, denied, native path)"
 
@@ -481,7 +471,7 @@ for _ in range(50):
     time.sleep(.1)
 raise SystemExit(1)
 PY
-    NK_SETTINGS_DATA="$REPO/build/settings-data" \
+    NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
         python "$REPO/toolkit/settings-slice/check.py" "$REPO/toolkit/target/release/nk-settings-slice" \
         >/tmp/hyalo/settings-slice.log 2>&1 \
         || { log "FAIL: settings start-up slice"; cat /tmp/hyalo/settings-slice.log; exit 1; }
@@ -571,16 +561,16 @@ PY
     # built from Hyalo's IPC) and the virtual pointer nidara-input speaks: a move to a point
     # must leave the cursor exactly there.
     local mons w h
-    mons="$("$REPO/bin/nidara-wm" monitors)"
+    mons="$(nidara-wm monitors)"
     echo "$mons" | jq -e 'length > 0 and (.[0] | has("x") and has("y") and has("width") and has("scale") and has("focused"))' >/dev/null \
         || { log "FAIL: nidara-wm monitors is not in the shape the helpers read"; echo "$mons"; exit 1; }
-    "$REPO/bin/nidara-wm" clients | jq -e 'type == "array"' >/dev/null \
+    nidara-wm clients | jq -e 'type == "array"' >/dev/null \
         || { log "FAIL: nidara-wm clients is not a list"; exit 1; }
     w="$(echo "$mons" | jq '.[0].width / .[0].scale | floor')"; h="$(echo "$mons" | jq '.[0].height / .[0].scale | floor')"
     nidara-input move 123 77 "$w" "$h"
     sleep 0.3
-    "$REPO/bin/nidara-wm" cursorpos | jq -e '.x == 123 and .y == 77' >/dev/null \
-        || { log "FAIL: the virtual pointer did not land at 123,77 ($("$REPO/bin/nidara-wm" cursorpos | jq -c .))"; exit 1; }
+    nidara-wm cursorpos | jq -e '.x == 123 and .y == 77' >/dev/null \
+        || { log "FAIL: the virtual pointer did not land at 123,77 ($(nidara-wm cursorpos | jq -c .))"; exit 1; }
     log "computer use OK (nidara-wm, virtual pointer)"
 
     # pointer-gestures (#682): a touchpad pinch over a GTK window drives its zoom gesture. Without
@@ -729,13 +719,13 @@ PY
     # at all: Hyalo shows the session until the lock screen has drawn and then nothing of it
     # (lock.rs), so hiding them first only made the desktop change ~1 s before the lock screen.
     # Here: the lock's hide leaves both mapped, and they are where they were after its show.
-    /tmp/hyalo/nidara-ipc hideForLock >/dev/null
+    /usr/bin/nidara-ipc hideForLock >/dev/null
     sleep 1
     local placed
     placed="$(nidara-hyalo msg layers | jq -c '[.ok.layers[] | select(.namespace == "nidara-bar" or .namespace == "nidara-dock") | {namespace, y}]')"
     echo "$placed" | jq -e 'length == 2' >/dev/null \
         || { log "FAIL: on Hyalo the lock's hide unmapped the bar or the dock ($placed)"; exit 1; }
-    /tmp/hyalo/nidara-ipc showAfterLock >/dev/null
+    /usr/bin/nidara-ipc showAfterLock >/dev/null
     sleep 1
     placed="$(nidara-hyalo msg layers | jq -c '[.ok.layers[] | select(.namespace == "nidara-bar" or .namespace == "nidara-dock") | {namespace, y}]')"
     echo "$placed" | jq -e 'length == 2 and all(.y == 0)' >/dev/null \
@@ -770,11 +760,11 @@ PY
     nidara-hyalo msg screenshot /tmp/hyalo/desktop.png >/dev/null \
         || { log "FAIL: Hyalo's screenshot request failed"; exit 1; }
     file /tmp/hyalo/desktop.png | grep -q "PNG image" || { log "FAIL: no PNG"; exit 1; }
-    if /tmp/hyalo/nidara-ipc toggleControlCenter >/dev/null 2>&1; then
+    if /usr/bin/nidara-ipc toggleControlCenter >/dev/null 2>&1; then
         sleep 2
         nidara-hyalo msg screenshot /tmp/hyalo/control-center.png >/dev/null || true
         # Release its focus grab before the native toolkit's input checks.
-        /tmp/hyalo/nidara-ipc toggleControlCenter >/dev/null 2>&1 || true
+        /usr/bin/nidara-ipc toggleControlCenter >/dev/null 2>&1 || true
     fi
     log "screenshots taken"
 

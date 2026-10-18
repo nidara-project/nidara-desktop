@@ -568,10 +568,12 @@ jobs:
       - name: Restore the Rust build cache
         uses: actions/cache@v4
         with:
-          path: hyalo/target
-          key: hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-${{ github.run_id }}
+          path: |
+            hyalo/target
+            session/target
+          key: hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock', 'session/Cargo.lock') }}-${{ github.run_id }}
           restore-keys: |
-            hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock') }}-
+            hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock', 'session/Cargo.lock') }}-
             hyalo-build-${{ runner.os }}-
       - name: Restore toolkit test-window build cache
         uses: actions/cache@v4
@@ -920,6 +922,11 @@ jobs:
           PY
           if python3 scripts/ci/settings-data-check.py /tmp/settings-data-control; then
             echo "::error::settings-data-check passed an export with an Appearance predicate dropped"; exit 1
+          fi
+          rm -rf /tmp/settings-data-control && cp -r /tmp/settings-data /tmp/settings-data-control
+          rm /tmp/settings-data-control/version
+          if python3 scripts/ci/settings-data-check.py /tmp/settings-data-control; then
+            echo "::error::settings-data-check passed an export with no version file"; exit 1
           fi
 
   agent-loop:

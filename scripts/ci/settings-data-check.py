@@ -5,7 +5,8 @@ usage: settings-data-check.py OUT_DIR
 Compared against an INDEPENDENT reading of the sources — taken from the .ts text by pattern,
 not by importing it: the page ids in order; every key AND value of every locale (each value is
 one double-quoted line, read as a JSON string); Appearance's items, keys and predicates. CI also
-runs it on copies with a key removed, a value changed and a predicate dropped: each must fail.
+runs it on copies with a key removed, a value changed, a predicate dropped and the version
+file removed: each must fail.
 """
 import json, re, sys
 from pathlib import Path
@@ -13,6 +14,12 @@ from pathlib import Path
 repo = Path(__file__).resolve().parents[2]
 out = Path(sys.argv[1])
 fail = []
+
+# The format version both exporters write (scripts/settings-data-version.mjs, PHASE1.md D4).
+want_version = re.search(r'SETTINGS_DATA_VERSION = (\d+)', (repo / 'scripts/settings-data-version.mjs').read_text()).group(1)
+got_version = (out / 'version').read_text().strip() if (out / 'version').exists() else None
+if got_version != want_version:
+    fail.append(f'version: {got_version!r} != {want_version!r} (scripts/settings-data-version.mjs)')
 
 manifest = json.loads((out / 'manifest.json').read_text())
 src = (repo / 'ui/shell/surfaces/settings/manifest.ts').read_text()

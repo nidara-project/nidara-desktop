@@ -11,6 +11,7 @@
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { SETTINGS_DATA_VERSION } from "./settings-data-version.mjs"
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const out = resolve(process.argv[2] ?? join(repo, "build/settings-data"))
@@ -18,6 +19,9 @@ const write = (path, data) => {
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, JSON.stringify(data, null, 1) + "\n")
 }
+// Shared by both exporters: the same number, whichever ran last.
+mkdirSync(out, { recursive: true })
+writeFileSync(join(out, "version"), `${SETTINGS_DATA_VERSION}\n`)
 
 const { manifest } = await import(pathToFileURL(join(repo, "ui/shell/surfaces/settings/manifest.ts")).href)
 write(join(out, "manifest.json"), manifest)

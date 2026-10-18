@@ -471,6 +471,11 @@ npx sass --no-charset ../settings/style.scss ../settings/style.css
 cd "$REPO_DIR/ui/settings"
 mkdir -p build
 "$REPO_DIR/scripts/bundle.sh" app.ts build/nidara-settings --native-host=nidara-settings --kit-external=/usr/share/nidara-kit/js
+# What the native Settings reads besides Config1 (toolkit/PHASE1.md D4), as the PKGBUILD
+# exports it: pages, strings and tokens with their format version.
+node --experimental-strip-types "$REPO_DIR/scripts/export-settings-data.mjs" "$REPO_DIR/build/settings-data"
+SASS="$REPO_DIR/ui/shell/node_modules/.bin/sass" \
+    node --experimental-strip-types "$REPO_DIR/scripts/export-tokens.mjs" "$REPO_DIR/build/settings-data"
 
 echo "  Building greeter..."
 # Use the shell bundle's sass installation for SCSS compilation
@@ -554,6 +559,9 @@ sudo rm -rf /usr/share/nidara/ui/ags-v3
 sudo mkdir -p /usr/share/nidara/ui/settings/build
 sudo cp "$REPO_DIR/ui/settings/build/nidara-settings" /usr/share/nidara/ui/settings/build/
 sudo cp "$REPO_DIR/ui/settings/style.css" /usr/share/nidara/ui/settings/
+# Replaced whole, so a file the export no longer writes does not linger.
+sudo rm -rf /usr/share/nidara/settings-data
+sudo cp -r "$REPO_DIR/build/settings-data" /usr/share/nidara/settings-data
 sudo mkdir -p /usr/share/nidara/ui/shell/build
 if [ "$MODE" != "dev" ]; then
     sudo cp "$REPO_DIR/ui/shell/build/nidara" /usr/share/nidara/ui/shell/build/
