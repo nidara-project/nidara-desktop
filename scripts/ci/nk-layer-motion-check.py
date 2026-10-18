@@ -115,6 +115,11 @@ def native(label, flag=None, retarget=False):
             return 'READY' in m.lines()
         wait(ready, 'client never became ready')
         time.sleep(1.1)  # Past the window opening transition.
+        # The first frame that draws the window as itself, not as the opening's picture, gives
+        # it its preferred scale: its third paint. Hyalo once drew no frame after an opening
+        # ended, so that configure waited for any other repaint — and came with this click,
+        # leaving the parent dirty when the press committed the layers (2026-10-18).
+        wait(lambda: 'PAINT 3' in m.lines(), 'opened, but no frame drew the window as itself', seconds=2)
         win = next(w for w in m.msg('windows')['windows'] if w['app_id'] == 'nk-phase0')
         scale = m.msg('outputs')['outputs'][0]['scale']
         # Screenshots are physical pixels; HYALO_CONTROL takes logical coordinates.

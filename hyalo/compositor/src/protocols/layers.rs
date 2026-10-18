@@ -326,13 +326,17 @@ impl Layer {
     fn step(&mut self, t: Instant, shown: Duration) -> bool {
         let pos = self.x.as_mut().is_some_and(|x| x.step(t)) | self.y.as_mut().is_some_and(|y| y.step(t));
         let moving = [pos, self.scale.step(t), self.opacity.step(t)];
+        let mut ended = false;
         for (i, still) in moving.iter().enumerate() {
             if !still && let Some(serial) = self.running[i].take() {
                 let secs = shown.as_secs();
                 self.resource.done(serial, (secs >> 32) as u32, secs as u32, shown.subsec_nanos());
+                ended = true;
             }
         }
-        moving.iter().any(|m| *m)
+        // One that ended in this step still wants a frame: the one just drawn sampled it short
+        // of its end (step_motions, wm/motion.rs).
+        moving.iter().any(|m| *m) || ended
     }
 }
 

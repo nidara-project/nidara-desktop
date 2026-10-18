@@ -1139,6 +1139,11 @@ expected 1.01 was wrong, not the curve).
   presented 1056 ms; found 2026-10-18 by a `WAYLAND_DEBUG` timeline for #852). Any element
   drawn by proxy (picture, texture of surfaces) must take its surfaces' feedback itself.
   `nk-phase0-check.py` requires the gap under 350 ms on the vkms run.
+- 🔴 **An animation that ends asks for one more frame** (`step_motions`, `step_animations`,
+  `layers::step`): the frame just drawn sampled it short of its end. Without that frame an
+  opened window stayed the opening's picture at ~99 % and was in no frame as itself — no
+  preferred scale, no new content — until something else repainted; in CI the scale configure
+  arrived with the next click (`nk-layer-motion-check.py`, intermittent, 2026-10-18).
 - 🔴 A check that compares against "what was there" waits for the windows the check before it
   closed to finish fading: CI's first run of this one compared against the minimize check's
   killed probe, still closing.

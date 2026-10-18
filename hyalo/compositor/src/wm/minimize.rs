@@ -313,11 +313,14 @@ impl Hyalo {
         self.queue_redraw(None);
     }
 
-    /// After a frame: the animations that are over go; any still moving wants the next frame.
+    /// After a frame: the animations that are over go; any still moving wants the next frame,
+    /// and so does one that ended in this step — the frame just drawn showed it short of its
+    /// end (as step_motions, wm/motion.rs).
     pub fn step_animations(&mut self) -> bool {
         let now = Instant::now();
+        let before = self.wm.animations.len();
         self.wm.animations.retain(|a| !a.done(now));
-        !self.wm.animations.is_empty()
+        !self.wm.animations.is_empty() || self.wm.animations.len() < before
     }
 }
 
