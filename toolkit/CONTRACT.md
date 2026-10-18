@@ -146,7 +146,17 @@ Owns everything between a string and positioned glyphs, and the editing model on
   (never for a password field: `content_type` purpose password, no surrounding text),
   `set_cursor_rectangle` in the field's surface coordinates, preedit and commit applied through
   `Editor`, the `done` serial respected.
-- `nidara-material-v1`: the panes' shapes, sent with the buffer they describe (as `material.ts`).
+- `nidara-material-v1`: the panes' shapes, sent with the buffer they describe (as `material.ts`),
+  and the window's background colour (PHASE1.md D6, `Application::window_background`).
+- **Any compositor (PHASE1.md D5):** `capabilities()` reads the globals; `wl_compositor`,
+  `wl_shm`, `xdg_wm_base` and `wl_seat` are required (the start is refused, naming the missing
+  one); without viewporter + fractional-scale the buffer scale is the integer
+  `preferred_buffer_scale` (else the outputs'); without the material `Frame::material` is false
+  and the app paints an opaque base; layers need the material, viewporter and subcompositor. An
+  app that cannot live without Hyalo says so with `Options::require_material` (phase 0 does).
+- The app names its window (`Options`: app-id, title, initial size) and is told after each
+  frame's commit has been flushed (`Application::committed`, with the root commit's number —
+  the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
 
 ## The layers protocol — `nidara-layers-v1` (test 5)

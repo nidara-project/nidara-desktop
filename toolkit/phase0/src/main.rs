@@ -721,20 +721,22 @@ impl Application for App {
 fn contains(r: Rect, p: Point) -> bool {
     p.x >= r.x && p.x < r.x + r.width && p.y >= r.y && p.y < r.y + r.height
 }
+fn options(material: bool, map: bool) -> nk_wayland::Options {
+    nk_wayland::Options {
+        material,
+        map,
+        app_id: "nk-phase0",
+        title: "Nidara toolkit — phase 0",
+        size: (960, 720),
+        require_material: Some("nk-phase0 needs Hyalo (nidara-material-v1)"),
+    }
+}
 fn main() {
     let start = Instant::now();
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.iter().any(|s| s == "--test5") {
-        let result = motion::MotionApp::new(&args).and_then(|app| {
-            nk_wayland::run(
-                app,
-                nk_wayland::Options {
-                    material: true,
-                    map: true,
-                },
-                start,
-            )
-        });
+        let result = motion::MotionApp::new(&args)
+            .and_then(|app| nk_wayland::run(app, options(true, true), start));
         if let Err(e) = result {
             eprintln!("nk-phase0: {e}");
             std::process::exit(1);
@@ -746,16 +748,8 @@ fn main() {
         .find(|a| a[0] == "--a11y")
         .map(|a| a[1].as_str());
     if let Some(backend) = backend {
-        let result = form::Form::new(&args, backend).and_then(|app| {
-            nk_wayland::run(
-                app,
-                nk_wayland::Options {
-                    material: true,
-                    map: true,
-                },
-                start,
-            )
-        });
+        let result = form::Form::new(&args, backend)
+            .and_then(|app| nk_wayland::run(app, options(true, true), start));
         if let Err(e) = result {
             eprintln!("nk-phase0: {e}");
             std::process::exit(1);
@@ -765,10 +759,10 @@ fn main() {
     let result = App::new(&args).and_then(|app| {
         nk_wayland::run(
             app,
-            nk_wayland::Options {
-                material: !args.iter().any(|s| s == "--control-no-material"),
-                map: !args.iter().any(|s| s == "--control-unmapped"),
-            },
+            options(
+                !args.iter().any(|s| s == "--control-no-material"),
+                !args.iter().any(|s| s == "--control-unmapped"),
+            ),
             start,
         )
     });
@@ -790,6 +784,7 @@ mod tests {
             pixel_width: 960,
             pixel_height: 720,
             scale: 1.,
+            material: true,
         })
         .unwrap();
         app.height = 400.;

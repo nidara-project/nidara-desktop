@@ -884,18 +884,14 @@ name = "nk-settings-slice"
 version = "0.1.0"
 dependencies = [
  "fontique",
- "memmap2",
  "nk-a11y",
  "nk-render",
  "nk-text",
+ "nk-wayland",
  "parley",
  "resvg",
  "rustix",
  "serde_json",
- "wayland-backend",
- "wayland-client",
- "wayland-protocols",
- "wayland-scanner",
  "zbus",
 ]
 

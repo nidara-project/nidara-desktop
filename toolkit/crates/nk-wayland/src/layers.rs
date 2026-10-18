@@ -99,6 +99,7 @@ fn frame(size: (u32, u32), scale: u32) -> Result<Frame> {
         pixel_width: pw as u16,
         pixel_height: ph as u16,
         scale,
+        material: true,
     })
 }
 // Wayland fixed is signed 24.8. Reject overflow rather than silently wrapping.
@@ -114,7 +115,10 @@ fn fixed(values: &[f64]) -> Result<()> {
 }
 impl Window {
     pub fn supports_layers(&self) -> bool {
-        self.layers_manager.is_some() && self.subcompositor.is_some()
+        self.layers_manager.is_some()
+            && self.subcompositor.is_some()
+            && self.viewporter.is_some()
+            && self.materials.is_some()
     }
     /// Create an empty synchronized child. Paint its content before the parent commit.
     /// The 65th layer is refused before sending any request.
@@ -143,12 +147,12 @@ impl Window {
         let viewport = self
             .viewporter
             .as_ref()
-            .unwrap()
+            .ok_or("missing wp_viewporter")?
             .get_viewport(&surface, &self.qh, ());
         let material = self
             .materials
             .as_ref()
-            .unwrap()
+            .ok_or("missing nidara-material-v1")?
             .get_material(&surface, &self.qh, ());
         self.layers.push(Layer {
             id,

@@ -80,3 +80,33 @@ pub(super) fn send_material(
         m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
     }
 }
+
+/// A window's background (PHASE1.md D6): its colour, opaque, which Hyalo paints at the
+/// windows' style. An app may ask for a named level instead of the user's.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindowBackground {
+    /// sRGB red, green, blue, 0–1; no alpha: how much shows is Hyalo's.
+    pub color: [f64; 3],
+    pub level: Option<WindowLevel>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WindowLevel {
+    Opaque,
+    Tinted,
+    Translucent,
+}
+
+pub(super) fn send_background(
+    m: &crate::nidara_material_v1::NidaraMaterialV1,
+    b: WindowBackground,
+) {
+    use crate::nidara_material_v1::WindowBackgroundLevel as L;
+    m.set_window_background(b.color[0], b.color[1], b.color[2]);
+    if let Some(level) = b.level {
+        m.set_window_background_level(match level {
+            WindowLevel::Opaque => L::Opaque,
+            WindowLevel::Tinted => L::Tinted,
+            WindowLevel::Translucent => L::Translucent,
+        });
+    }
+}

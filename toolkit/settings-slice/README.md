@@ -36,15 +36,14 @@ cached/default values. The phase-0 direct AT-SPI provider runs off the first-fra
 path, with an explicit setup deadline; the tree is read-only and follows updates.
 This is not the full phase-1 widget/Orca acceptance tree.
 
-The slice has a small local Wayland host: phase 0's transport fixes the app-id and
-requires Hyalo's material, and exposes no callback after committing a buffer.
-Changing that crate is outside #862's file scope. This host gives the specimen its
-own app-id and logs readiness **after** its buffer commit and flush. With material,
-Hyalo draws the pane with a portal-selected base wash; without it, the client draws
-an opaque base from the same tokens. Row/state overlays keep their alpha. Both
-fractional-scale protocols are needed together; otherwise output integer scale is
-used. Buffers remain immutable until release. The host is deliberately local to
-this measurement; it is not a second public toolkit transport.
+The window is the toolkit's transport, `nk-wayland` (`src/host.rs` is only the
+`Application`): its own app-id and title through `Options`, readiness logged from
+`Application::committed`, i.e. **after** its buffer's commit and flush, and the
+window's background (D6) from `Application::window_background`. With material,
+Hyalo draws the window's background; without it (`Frame::material` false), the
+client draws an opaque base from the same tokens. Row/state overlays keep their
+alpha. Without viewporter + fractional-scale, `nk-wayland` falls back to integer
+buffer scale (D5). Buffers remain immutable until release.
 
 `TIMING` durations are milliseconds. `process_start_to_main` includes loader time,
 using `/proc/self/stat` and CLOCK_BOOTTIME (quantised to kernel clock ticks).

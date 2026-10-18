@@ -167,7 +167,7 @@ run):
 | Protocol | Without it |
 |---|---|
 | `wl_compositor`, `wl_shm`, `xdg_wm_base`, `wl_seat` | **required** — refuse to start, say which |
-| `wp_viewporter` + `wp_fractional_scale_v1` | integer `wl_surface.set_buffer_scale` (today both are REQUIRED in `nk-wayland`: becomes optional) |
+| `wp_viewporter` + `wp_fractional_scale_v1` | integer `wl_surface.set_buffer_scale` (`nk-wayland`, since the slice moved onto it) |
 | `nidara_material_v1` | **opaque base material** — the window and pane backgrounds forced to alpha 1 from the same tokens; hover/selection overlays keep their alpha; the user's transparency preference is not written back |
 | `nidara_layers_v1` | the client animates, with ONE timeline shared by paint, hit-testing, focus bounds and the IME cursor rectangle |
 | server-side window controls (Hyalo's) | client-drawn controls (close/minimise/maximise), keyboard reachable |
