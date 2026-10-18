@@ -164,6 +164,9 @@ phase_build() {
     for host in "$REPO"/build/nidara-host/nidara-*; do
         install -Dm755 "$host" "/usr/lib/nidara/${host##*/}"
     done
+    # The bundled wallpapers where the package puts them (install.sh): Config1's catalogue of
+    # wallpaper.current lists them, and config-service-check.py requires it not empty.
+    install -Dm644 -t /usr/share/nidara/wallpapers "$REPO"/defaults/wallpaper/*.jpg
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
