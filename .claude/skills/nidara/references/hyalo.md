@@ -1139,6 +1139,13 @@ expected 1.01 was wrong, not the curve).
   presented 1056 ms; found 2026-10-18 by a `WAYLAND_DEBUG` timeline for #852). Any element
   drawn by proxy (picture, texture of surfaces) must take its surfaces' feedback itself.
   `nk-phase0-check.py` requires the gap under 350 ms on the vkms run.
+- 🔴 **A surface is told its scale before its first configure** (`backend::tell_initial_scale`,
+  from `initial_configure` and the layer's first configure): the preferred scale otherwise
+  follows the primary scanout output, which an opening window (drawn by proxy, above) has only
+  once it has opened — its content was drawn at a guessed scale and again ~700 ms later
+  (nk-settings-slice live: commit 4 at 775 ms, 2026-10-18). Smithay re-sends a scale only when
+  it changes. `toolkit/settings-slice/check.py` asserts `PREFERRED_SCALE` arrives before the
+  first content commit; failed against the Hyalo without it, passed nested with it.
 - 🔴 **An animation that ends asks for one more frame** (`step_motions`, `step_animations`,
   `layers::step`): the frame just drawn sampled it short of its end. Without that frame an
   opened window stayed the opening's picture at ~99 % and was in no frame as itself — no

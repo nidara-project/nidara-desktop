@@ -57,6 +57,13 @@ def run(binary, control, folder):
             a11y |= line == 'A11Y_READY'
         if not ready or not a11y or frame is None:
             raise RuntimeError(f'missing ready/a11y/frame (setup failure): {seen}')
+        # The compositor told the scale before the first content commit, or that frame was
+        # drawn at a guessed one and drawn again once told (Hyalo, until the open animation
+        # ended: ~700 ms later).
+        content = int(next(s for s in seen if s.startswith('CONTENT_READY commit=')).split('=')[1])
+        told = [int(s.rsplit('=', 1)[1]) for s in seen if s.startswith('PREFERRED_SCALE ')]
+        if not told or told[0] >= content:
+            raise AssertionError(f'assert-scale: preferred scale after commits {told}, content is commit {content}')
         if control and 'CONTROL_APPLIED default-values' not in seen:
             raise RuntimeError('control was not applied')
         raw = Path(frame['path']).read_bytes()
@@ -113,6 +120,7 @@ def main():
         assert fault == DEFAULTS, f'control did not actually paint defaults: {fault}'
         print(f'PASS assert-values: pixels == Config1.Get {expected}')
         print(f'PASS control applied; assert-values rejected painted defaults {fault}')
+        print('PASS assert-scale: preferred scale told before the first content commit')
 
 
 if __name__ == '__main__':

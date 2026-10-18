@@ -436,9 +436,12 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, ()> for Host {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        // A scale it already draws at (re-sent, or the first one told) is no reason to repaint.
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = e {
-            h.scale = scale as f64 / 120.;
-            h.dirty = true;
+            eprintln!("PREFERRED_SCALE scale={} after_commit={}", scale as f64 / 120., h.commit);
+            let scale = scale as f64 / 120.;
+            h.dirty |= h.scale != scale;
+            h.scale = scale;
         }
     }
 }
@@ -453,8 +456,8 @@ impl Dispatch<wl_surface::WlSurface, ()> for Host {
     ) {
         match e {
             wl_surface::Event::PreferredBufferScale { factor } => {
+                h.dirty |= h.integer_scale != factor.max(1);
                 h.integer_scale = factor.max(1);
-                h.dirty = true;
             }
             wl_surface::Event::Enter { output } => {
                 h.entered.insert(output.id());
@@ -590,14 +593,15 @@ delegate_noop!(Host: ignore mat::NidaraMaterialV1);
 
 impl Host {
     fn output_scale(&mut self) {
-        self.integer_scale = self
+        let scale = self
             .entered
             .iter()
             .filter_map(|id| self.outputs.get(id))
             .copied()
             .max()
             .unwrap_or(1);
-        self.dirty = true;
+        self.dirty |= self.integer_scale != scale;
+        self.integer_scale = scale;
     }
 }
 impl Dispatch<wl_output::WlOutput, ()> for Host {
