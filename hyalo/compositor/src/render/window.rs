@@ -419,8 +419,22 @@ pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop
     // corners"): one that draws a frame with a shadow margin is cut to its box (`push`).
     let rounded = rule_rounded && !fullscreen && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
-    let backdrop = rule_backdrop && cfg.backdrop.enabled && cfg.backdrop.passes > 0 && translucent(&surface, geo, radius);
+    // A window that declares its background is as translucent as the windows' opacity; any
+    // other, as its opaque region says.
+    let see_through = match crate::protocols::material::window_background(&surface) {
+        Some(_) => cfg.background.opacity < 1.0,
+        None => translucent(&surface, geo, radius),
+    };
+    let backdrop = rule_backdrop && cfg.backdrop.enabled && cfg.backdrop.passes > 0 && see_through;
     Look { rounded, backdrop }
+}
+
+/// The background `surface` declared for its window (`set_window_background`), premultiplied, at
+/// the windows' opacity (`[windows.background]`).
+pub fn background(surface: &WlSurface, cfg: &WindowsConfig) -> Option<[f32; 4]> {
+    let c = crate::protocols::material::window_background(surface)?;
+    let a = cfg.background.opacity.clamp(0.0, 1.0);
+    Some([(c[0] * a) as f32, (c[1] * a) as f32, (c[2] * a) as f32, a as f32])
 }
 
 /// A window, front to back: its popups, its surfaces (cut to its corners), and the blur behind
@@ -527,9 +541,11 @@ pub fn push<R: HyaloRenderer>(
     // Its line and its shadow: outside its box, so under its popups where they reach past it —
     // and IN FRONT of its backdrop, which then does not see them: behind it, the blur took the
     // window's own shadow in at its edges and darkened its inside (measured: 103 → 96).
-    let decor = decor.and_then(|active| {
-        super::decor::DecorElement::new(&surface, geo, if look.rounded { radius } else { 0.0 }, active, cfg, scale)
-    });
+    // And inside its box, under its content, the background it declared (toolkit/PHASE1.md D6).
+    let fill = background(&surface, cfg);
+    let decor = (decor.is_some() || fill.is_some())
+        .then(|| super::decor::DecorElement::new(&surface, geo, if look.rounded { radius } else { 0.0 }, decor, fill, cfg, scale))
+        .flatten();
     out.extend(decor.map(OutputElement::Decor));
     if look.backdrop {
         let b = &cfg.backdrop;

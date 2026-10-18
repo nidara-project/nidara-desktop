@@ -291,6 +291,7 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         // One blur for windows and layers (`decoration:blur`): no switch of its own here.
         readWindowBackdrop: () => true,
         setWindowBackdrop() {},
+        setWindowBackgroundOpacity() {},
         setWindowControls() {},
         setWindowTitleFont() {},
         // wf-recorder asks for the pointer, and Hyprland has no setting against it.

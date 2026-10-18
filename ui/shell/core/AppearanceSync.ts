@@ -16,6 +16,8 @@
 //   accent-color                             Hyprland's groupbar accent
 //   font-name                                the family of the title Hyalo draws in its
 //                                              title bar (`windows.title_bar.font`)
+//   reduce-transparency, window-transparency  how much of a window's declared background
+//                                              Hyalo shows (`windows.background.opacity`)
 //   color-scheme, accent-color, gtk/icon/    the greeter's appearance mirror
 //     cursor theme, org.nidara.appearance
 //
@@ -36,10 +38,10 @@ import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import compositor, { settings } from "./CompositorState"
 import { initCompositorGlass } from "./CompositorGlass"
 import { startWindowButtonsSync } from "./WindowButtons"
-import { ACCENT_PALETTE, type AccentKey } from "./NidaraTheme"
+import { ACCENT_PALETTE, glassOpacities, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
 
-type Effect = "ini" | "cursor" | "groupbar" | "mirror" | "titleFont"
+type Effect = "ini" | "cursor" | "groupbar" | "mirror" | "titleFont" | "windowBackground"
 
 let started = false
 const keep: InstanceType<typeof Gio.Settings>[] = []
@@ -68,6 +70,7 @@ const EFFECTS: Record<Effect, () => void> = {
     groupbar: syncGroupbarAccent,
     mirror: writeGreeterMirror,
     titleFont: syncTitleFont,
+    windowBackground: syncWindowBackground,
 }
 
 /**
@@ -79,6 +82,18 @@ const EFFECTS: Record<Effect, () => void> = {
 function syncTitleFont(): void {
     const family = Pango.FontDescription.from_string(keep[0].get_string("font-name")).get_family()
     if (family) settings.setWindowTitleFont(family)
+}
+
+/**
+ * How much of the background a window of ours declares Hyalo shows (toolkit/PHASE1.md D6):
+ * the kit's window opacity for the two switches — the number GTK windows paint with
+ * themselves, so both kinds look the same. Hyalo's `windows.background.opacity`, a no-op on
+ * Hyprland; a patch that changes nothing writes nothing.
+ */
+function syncWindowBackground(): void {
+    const nidara = keep[1]
+    const { windowOpacity } = glassOpacities(nidara.get_boolean("reduce-transparency"), nidara.get_boolean("window-transparency"))
+    settings.setWindowBackgroundOpacity(windowOpacity)
 }
 
 /**
@@ -280,6 +295,8 @@ export function startAppearanceSync(): void {
         schedule("ini", "mirror")
     })
     nidara.connect("changed", () => schedule("mirror"))
+    nidara.connect("changed::reduce-transparency", () => schedule("windowBackground"))
+    nidara.connect("changed::window-transparency", () => schedule("windowBackground"))
 
     seedAndRepair(iface)
 
@@ -287,7 +304,7 @@ export function startAppearanceSync(): void {
     // `cursor` at start is what makes apps launched later (Steam…) inherit the cursor
     // instead of a stale default. No push INTO gsettings: the values are read from there
     // since #536 — pushing a copy over them at start is what reverted a theme set elsewhere.
-    schedule("ini", "cursor", "groupbar", "mirror", "titleFont")
+    schedule("ini", "cursor", "groupbar", "mirror", "titleFont", "windowBackground")
 
     // The glass's compositor half: on a compositor of our own, the whole glass (#684).
     initCompositorGlass()

@@ -125,6 +125,7 @@ pub struct WindowsConfig {
     /// The corner's curve: 2 is a circle, higher is a squircle (Hyprland's `rounding_power`).
     pub rounding_power: f64,
     pub backdrop: BackdropConfig,
+    pub background: BackgroundConfig,
     pub controls: ControlsConfig,
     pub title_bar: TitleBarConfig,
     pub border: BorderConfig,
@@ -137,11 +138,28 @@ impl Default for WindowsConfig {
             rounding: 24.0,
             rounding_power: 3.2,
             backdrop: BackdropConfig::default(),
+            background: BackgroundConfig::default(),
             controls: ControlsConfig::default(),
             title_bar: TitleBarConfig::default(),
             border: BorderConfig::default(),
             shadow: ShadowConfig::default(),
         }
+    }
+}
+
+/// The background a window declares (`nidara_material_v1.set_window_background`, toolkit/PHASE1.md
+/// D6): its colour is the app's, how much of it shows is this — the shell writes the kit's window
+/// opacity, or 1 for "Reduce transparency" and without "Window transparency". Below 1 the
+/// backdrop's blur is under it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct BackgroundConfig {
+    pub opacity: f64,
+}
+
+impl Default for BackgroundConfig {
+    fn default() -> Self {
+        Self { opacity: 0.8 }
     }
 }
 

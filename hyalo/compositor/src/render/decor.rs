@@ -5,7 +5,9 @@
 //! border` / `[windows] shadow` (config.rs), live.
 //!
 //! Neither reaches inside the box: a translucent window (kitty, our own) shows its backdrop
-//! there, not a shadow. The shadow is what an app that draws its own frame lost when Hyalo cut
+//! there, not a shadow. Inside it goes the background a window declares
+//! (`set_window_background`, toolkit/PHASE1.md D6), at the windows' opacity — drawn here, with
+//! the window, so it is in the pictures of its opening and closing (render/snapshot.rs). The shadow is what an app that draws its own frame lost when Hyalo cut
 //! that frame to its box (render/window.rs `push`, #728).
 
 use std::cell::RefCell;
@@ -39,6 +41,7 @@ uniform vec4 shadow;      // premultiplied; a 0 none
 uniform float range;      // output px
 uniform float offset;     // output px, down
 uniform float power;
+uniform vec4 fill;        // the window's background inside the box, premultiplied; a 0 none
 varying vec2 v_out;
 varying vec2 v_fb;
 float sdf(vec2 p, vec4 r) {
@@ -53,14 +56,14 @@ float sdf(vec2 p, vec4 r) {
 }
 void main() {
     float d = sdf(v_out, rect);
-    // Nothing inside the box.
+    // Inside the box only its background.
     float outside = clamp(0.5 + d, 0.0, 1.0);
-    if (outside <= 0.0) discard;
-    vec4 c = vec4(0.0);
-    if (shadow.a > 0.0 && range > 0.0) {
+    vec4 c = fill * (1.0 - outside);
+    if (outside <= 0.0 && c.a <= 0.0) discard;
+    if (shadow.a > 0.0 && range > 0.0 && outside > 0.0) {
         float ds = sdf(v_out, rect + vec4(0.0, offset, 0.0, 0.0));
         float t = clamp(ds / range, 0.0, 1.0);
-        c = shadow * pow(1.0 - t, power) * outside;
+        c += shadow * pow(1.0 - t, power) * outside;
     }
     if (border > 0.0) {
         float line = outside * clamp(border + 0.5 - d, 0.0, 1.0);
@@ -88,6 +91,7 @@ struct Look {
     range: f32,
     offset: f32,
     power: f32,
+    fill: [f32; 4],
 }
 
 #[derive(Debug, Clone)]
@@ -104,28 +108,33 @@ pub struct DecorElement {
 struct DecorMemo(RefCell<Option<(Id, CommitCounter, String)>>);
 
 impl DecorElement {
-    /// The decoration of the window whose box is `frame` (output px, its title bar included),
-    /// focused or not; None when the config draws neither line nor shadow.
+    /// The decoration of the window whose box is `frame` (output px, its title bar included):
+    /// its line and shadow, focused or not (`active`; None: neither — fullscreen, a rule took its
+    /// corners), and its declared background `fill` (premultiplied). None when it draws nothing.
     pub fn new(
         surface: &WlSurface,
         frame: Rectangle<f64, Physical>,
         radius: f64,
-        active: bool,
+        active: Option<bool>,
+        fill: Option<[f32; 4]>,
         cfg: &WindowsConfig,
         scale: Scale<f64>,
     ) -> Option<Self> {
         let s = scale.x;
         let b = &cfg.border;
-        let (c0, c1) = if active {
-            (parse_color(&b.active[0]), parse_color(&b.active[1]))
-        } else {
-            let c = parse_color(&b.inactive);
-            (c, c)
+        let (c0, c1) = match active {
+            Some(true) => (parse_color(&b.active[0]), parse_color(&b.active[1])),
+            Some(false) => {
+                let c = parse_color(&b.inactive);
+                (c, c)
+            }
+            None => (None, None),
         };
         let border = if b.width > 0.0 && c0.is_some() { (b.width * s) as f32 } else { 0.0 };
-        let sh = if active { &cfg.shadow.active } else { &cfg.shadow.inactive };
-        let shadow = parse_color(&sh.color).filter(|_| cfg.shadow.enabled && sh.range > 0.0).unwrap_or([0.0; 4]);
-        if border <= 0.0 && shadow[3] <= 0.0 {
+        let sh = if active == Some(true) { &cfg.shadow.active } else { &cfg.shadow.inactive };
+        let shadow = parse_color(&sh.color).filter(|_| active.is_some() && cfg.shadow.enabled && sh.range > 0.0).unwrap_or([0.0; 4]);
+        let fill = fill.unwrap_or([0.0; 4]);
+        if border <= 0.0 && shadow[3] <= 0.0 && fill[3] <= 0.0 {
             return None;
         }
         let angle = b.angle.to_radians();
@@ -141,6 +150,7 @@ impl DecorElement {
             range: (sh.range * s) as f32,
             offset: (sh.offset * s) as f32,
             power: cfg.shadow.power as f32,
+            fill,
         };
         let reach = border.max(if shadow[3] > 0.0 { look.range + look.offset.abs() } else { 0.0 }) as f64 + 1.0;
         let geometry = Rectangle::new(
@@ -203,13 +213,18 @@ impl DecorElement {
             gl.Uniform1f(p.loc(gl, c"range"), l.range);
             gl.Uniform1f(p.loc(gl, c"offset"), l.offset);
             gl.Uniform1f(p.loc(gl, c"power"), l.power);
-            // Never the inside of the box, where every pixel would be discarded: a video
-            // playing in the window damages it every frame.
+            gl.Uniform4f(p.loc(gl, c"fill"), l.fill[0], l.fill[1], l.fill[2], l.fill[3]);
+            // Never the inside of the box without a background, where every pixel would be
+            // discarded: a video playing in the window damages it every frame.
             let r = l.radius.ceil() as i32 + 1;
-            let inner = Rectangle::<i32, Physical>::new(
-                (rect[0].ceil() as i32 + 1, rect[1].ceil() as i32 + r).into(),
-                ((rect[2] as i32 - 2).max(0), (rect[3] as i32 - 2 * r).max(0)).into(),
-            );
+            let inner = if l.fill[3] > 0.0 {
+                Rectangle::<i32, Physical>::default()
+            } else {
+                Rectangle::<i32, Physical>::new(
+                    (rect[0].ceil() as i32 + 1, rect[1].ceil() as i32 + r).into(),
+                    ((rect[2] as i32 - 2).max(0), (rect[3] as i32 - 2 * r).max(0)).into(),
+                )
+            };
             for d in damage {
                 let q = Rectangle::new(d.loc + dst.loc, d.size);
                 for q in q.subtract_rect(inner) {

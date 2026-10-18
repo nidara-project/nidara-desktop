@@ -301,6 +301,11 @@ export interface CompositorSettings {
     readWindowBackdrop(): boolean
     setWindowBackdrop(on: boolean): void
 
+    /** How much of the background a window declares (`set_window_background`) shows, 0..1:
+     *  Hyalo's `[windows.background] opacity`, kept by AppearanceSync.ts. No-op on Hyprland,
+     *  where no window declares one. Persists and applies. */
+    setWindowBackgroundOpacity(opacity: number): void
+
     /** `caps.windowControls` only: the side the window controls go on and the buttons they may
      *  show (Hyalo's `[windows.controls]`). Kept equal to `button-layout` by WindowButtons.ts —
      *  set it there, not here. Persists and applies. */

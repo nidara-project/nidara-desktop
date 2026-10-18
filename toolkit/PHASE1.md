@@ -184,6 +184,33 @@ run):
 - Unit tests in the `toolkit` job build the capability set with each optional protocol missing
   and require the fallback above.
 
+## D6 — the window's background is Hyalo's (owner, 2026-10-18)
+
+A window is not glass (owner, 2026-09-30): it is translucent or not, and what shows through it
+is blurred or not. Until now the toolkit borrowed both from elsewhere — the colour from GTK's
+`--nidara-bg` with the 0.80 already mixed in, painted by Hyalo as a pane of the SHELL's glass
+(its blur, ignoring "Blur behind windows") — and the opening animation's picture had none of it.
+
+- **The client says one thing: its background colour, opaque** — `nidara_material_v1`
+  `set_window_background(r, g, b)` (added inside v1), on its toplevel's surface, from the token
+  set's `--nidara-bg` with its alpha dropped. It paints no background of its own and declares no
+  glass for it.
+- **Hyalo decides how it shows**, from the same switches as every window: `windows.background.opacity`
+  (how much of the colour; the shell writes the kit's `WINDOW_GLASS_OPACITY` or 1 from "Window
+  transparency" and "Reduce transparency", `AppearanceSync`) and `windows.backdrop` ("Blur behind
+  windows") under it when the opacity is below 1. Drawn with the window's own corners, behind its
+  content, in the same pass as its line and shadow — so it is in the window's opening and
+  closing pictures, screenshots and captures from the first frame.
+- One blur for windows (`windows.backdrop`), ours and foreign ones alike; the shell's glass stays
+  the shell's. A window that declares a background is translucent by its opacity, not guessed
+  from its opaque region.
+- Without `nidara_material_v1` the toolkit paints the same colour opaque itself (D5).
+- GTK windows (frozen kit) are unchanged: they paint `--nidara-bg` themselves, from the same
+  constant and the same 0.80, and look the same.
+- Acceptance: Hyalo reports the window's `background` (colour and opacity) from its first
+  configure-acked commit; the slice's check requires it and a `--control-no-background` run must
+  lose it.
+
 ## Foundations (`nk-widgets`) and their acceptance `[A7]`
 
 Promoted from phase 0's invariants (retained tree, stable ids, two-step layout, per-kind

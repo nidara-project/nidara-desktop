@@ -371,5 +371,23 @@
       <arg name="blur_large" type="fixed" summary="the gaussian's deviation, logical px"/>
       <arg name="offset" type="fixed" summary="down, logical px"/>
     </request>
+    <request name="set_window_background">
+      <description summary="pending: the window's background colour, opaque">
+        On a toplevel's surface: the colour of the window's background,
+        sRGB-encoded, 0..1, opaque — the client paints no background of its
+        own under its content. The compositor draws it behind the window's
+        content with the window's corners, at the opacity the user chose for
+        windows, and blurs what is behind it as it blurs any translucent
+        window. It is not glass: the shapes, tones and glass of this object
+        do not apply to it, and clear_shapes leaves it. Persists until
+        unset_window_background.
+      </description>
+      <arg name="r" type="fixed"/>
+      <arg name="g" type="fixed"/>
+      <arg name="b" type="fixed"/>
+    </request>
+    <request name="unset_window_background">
+      <description summary="pending: no window background (the client paints its own)"/>
+    </request>
   </interface>
 </protocol>
