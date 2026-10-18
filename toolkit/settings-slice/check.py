@@ -25,12 +25,11 @@ DEFAULTS = dict(zip(KEYS, (False, True, True, 'right')))
 
 def get_values():
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-    values = {}
-    for key in KEYS:
-        values[key] = bus.call_sync('org.nidara.Config', '/org/nidara/Config',
-            'org.nidara.Config1', 'Get', GLib.Variant('(s)', (key,)),
-            GLib.VariantType.new('(v)'), Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
-    return values
+    # Get(as keys) -> a{sv}, as ConfigService.ts serves it.
+    values = bus.call_sync('org.nidara.Config', '/org/nidara/Config',
+        'org.nidara.Config1', 'Get', GLib.Variant('(as)', (list(KEYS),)),
+        GLib.VariantType.new('(a{sv})'), Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+    return {key: values[key] for key in KEYS}
 
 
 def run(binary, control, folder):

@@ -880,6 +880,11 @@ client and carries no setting logic (`toolkit/PHASE1.md`, D1). Members, only eve
   caller. Cooperative consent, not a security boundary (owner, 2026-10-18; #840).
 - Only the shell exports it; the Settings process registers the same entries and must not.
 - Checked in the Hyalo smoke by `scripts/ci/config-service-check.py` (13 assertions).
+- 🔴 `Get` takes a LIST (`as`) and answers `a{sv}`. A fixture or client written from memory as
+  `Get(s) → v` passes against itself and fails against the shell (#862's first fixture did).
+  The start-up slice's `toolkit/settings-slice/check.py` runs right after it in the same smoke,
+  against the real Config1 and portal, with `windowControls` seeded to `left` through
+  `button-layout` so the default-values control can be told apart.
 
 ### The MCP server: `nidara-mcp`
 
