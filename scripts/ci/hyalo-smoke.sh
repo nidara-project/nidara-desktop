@@ -167,6 +167,15 @@ phase_build() {
     # The bundled wallpapers where the package puts them (install.sh): Config1's catalogue of
     # wallpaper.current lists them, and config-service-check.py requires it not empty.
     install -Dm644 -t /usr/share/nidara/wallpapers "$REPO"/defaults/wallpaper/*.jpg
+    # Nidara's portal backend, registered as install.sh does: the Settings portal (accent,
+    # scheme, transparency) is what the native Settings draws from (toolkit/PHASE1.md). Without
+    # it xdg-desktop-portal has no Settings backend and publishes no Settings interface. The
+    # session here sets no XDG_CURRENT_DESKTOP, so the Nidara routing is also the default one.
+    install -Dm755 "$REPO/bin/nidara-portal" /usr/bin/nidara-portal
+    install -Dm644 -t /usr/share/xdg-desktop-portal/portals "$REPO/config/portal/nidara.portal"
+    install -Dm644 -t /usr/share/dbus-1/services "$REPO/config/portal/org.freedesktop.impl.portal.desktop.nidara.service"
+    install -Dm644 "$REPO/config/portal/nidara-portals.conf" /etc/xdg-desktop-portal/nidara-portals.conf
+    install -Dm644 "$REPO/config/portal/nidara-portals.conf" /etc/xdg-desktop-portal/portals.conf
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
