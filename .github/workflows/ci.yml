@@ -903,6 +903,24 @@ jobs:
           if python3 scripts/ci/settings-data-check.py /tmp/settings-data-control; then
             echo "::error::settings-data-check passed an export with a key missing"; exit 1
           fi
+          # A value changed and an Appearance predicate dropped must fail too (#852 [A7]).
+          rm -rf /tmp/settings-data-control && cp -r /tmp/settings-data /tmp/settings-data-control
+          python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['settings.appearance.title'] += '!'; json.dump(d, open(p, 'w'))" /tmp/settings-data-control/i18n/es.json
+          if python3 scripts/ci/settings-data-check.py /tmp/settings-data-control; then
+            echo "::error::settings-data-check passed an export with a value changed"; exit 1
+          fi
+          rm -rf /tmp/settings-data-control && cp -r /tmp/settings-data /tmp/settings-data-control
+          python3 - /tmp/settings-data-control/manifest.json <<'PY'
+          import json, sys
+          m = json.load(open(sys.argv[1]))
+          page = next(p for p in m if p['id'] == 'appearance')
+          item = next(i for g in page['groups'] for i in g.get('items', []) if isinstance(i, dict) and 'sensitiveWhen' in i)
+          del item['sensitiveWhen']
+          json.dump(m, open(sys.argv[1], 'w'))
+          PY
+          if python3 scripts/ci/settings-data-check.py /tmp/settings-data-control; then
+            echo "::error::settings-data-check passed an export with an Appearance predicate dropped"; exit 1
+          fi
 
   agent-loop:
     name: Assistant loop (nidara-agent)
