@@ -1,0 +1,23 @@
+[package]
+name = "nk-settings-slice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+nk-text = { path = "../crates/nk-text" }
+nk-render = { path = "../crates/nk-render" }
+nk-a11y = { path = "../crates/nk-a11y" }
+parley = { version = "0.12", default-features = false, features = ["std", "complex-scripts", "system"] }
+fontique = { version = "0.12", default-features = false, features = ["fontconfig-dlopen"] }
+serde_json = "1"
+zbus = "5.19"
+resvg = { version = "0.45", default-features = false }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
+wayland-scanner = "0.31"
+wayland-backend = "0.3"
+memmap2 = "0.9"
+rustix = { version = "1", features = ["event", "fs", "time", "param"] }
