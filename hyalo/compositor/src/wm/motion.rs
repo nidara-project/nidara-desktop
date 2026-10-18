@@ -235,13 +235,18 @@ impl Hyalo {
         self.queue_redraw(None);
     }
 
-    /// Drops the openings, closings and workspace changes that are over; whether any is left.
+    /// Drops the openings, closings and workspace changes that are over; whether another frame
+    /// is wanted. One that ended in this step wants one more: the frame just drawn showed it
+    /// short of its end, and a window that has opened is in no frame as itself until one is
+    /// drawn — no preferred scale, nothing new on screen until something else repaints.
     pub fn step_motions(&mut self) -> bool {
         let now = Instant::now();
+        let count = |s: &Self| s.wm.openings.len() + s.wm.closing.len() + s.wm.slides.len();
+        let before = count(self);
         self.wm.openings.retain(|o| !o.motion.done(now));
         self.wm.closing.retain(|c| !c.motion.done(now));
         self.wm.slides.retain(|s| s.progress(now).is_some());
-        !self.wm.openings.is_empty() || !self.wm.closing.is_empty() || !self.wm.slides.is_empty()
+        count(self) > 0 || count(self) < before
     }
 }
 
