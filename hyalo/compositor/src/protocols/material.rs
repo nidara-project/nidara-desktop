@@ -211,6 +211,9 @@ pub struct MaterialState {
     /// `set_drawn_region`: where the surface's content is drawn, surface-local logical
     /// rectangles that do not overlap. None: the whole surface.
     pub drawn: Option<Vec<Rectangle<i32, Logical>>>,
+    /// `set_window_background`: the window's background colour, sRGB 0..1, opaque. Not glass:
+    /// drawn with the window (render/decor.rs) at the windows' opacity (toolkit/PHASE1.md D6).
+    pub window_background: Option<[f64; 3]>,
 }
 
 impl MaterialState {
@@ -393,7 +396,8 @@ pub fn on_commit(surface: &WlSurface) {
         }
         // The glass's counter moves only when the glass changed: a dock that re-declares its
         // drawn region on every frame of a hover does not redraw its glass for it.
-        let glass_changed = MaterialState { drawn: None, ..current.state.clone() } != MaterialState { drawn: None, ..committed.clone() };
+        let glass_changed = MaterialState { drawn: None, window_background: None, ..current.state.clone() }
+            != MaterialState { drawn: None, window_background: None, ..committed.clone() };
         // A new ink rule meets the last measurement now: nothing measures a still backdrop again.
         let new_rule = committed.ink.filter(|i| current.state.ink.as_ref() != Some(i));
         if current.state != committed {
@@ -494,6 +498,11 @@ pub fn current(surface: &WlSurface) -> Option<Current> {
         let m = &current.state;
         (m.shapes.iter().any(|s| m.blur_of(s).passes > 0)).then_some(current)
     })
+}
+
+/// The background colour `surface` declared for its window (`set_window_background`), if any.
+pub fn window_background(surface: &WlSurface) -> Option<[f64; 3]> {
+    with_states(surface, |states| states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().state.window_background)
 }
 
 pub struct MaterialGlobal;
@@ -675,6 +684,12 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::SetLensing { size_fraction } => {
                 self.pending(|m| m.lensing = size_fraction.clamp(0.0, 1.0));
+            }
+            Request::SetWindowBackground { r, g, b } => {
+                self.pending(|m| m.window_background = Some([r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0)]));
+            }
+            Request::UnsetWindowBackground => {
+                self.pending(|m| m.window_background = None);
             }
             Request::ClearGlass => {
                 self.pending(|m| m.glass = None);

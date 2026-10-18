@@ -368,6 +368,15 @@ fn poll_ink(state: &mut Hyalo) -> bool {
     pending
 }
 
+/// Before a surface's first configure: the scale of the output it will appear on, so its first
+/// frame is drawn at it. Otherwise it learns it only once a frame scans it out, and a window
+/// opening is in none until it has opened (it is drawn as a picture of itself, wm/motion.rs):
+/// its content drew twice, the second time ~700 ms late (nk-settings-slice, 2026-10-18).
+pub fn tell_initial_scale(surface: &WlSurface, output: &Output) {
+    let scale = output.current_scale().fractional_scale();
+    smithay::wayland::compositor::with_states(surface, |s| with_fractional_scale(s, |f| f.set_preferred_scale(scale)));
+}
+
 /// After a frame on `output`: which surfaces it scanned out, frame callbacks, dmabuf feedback.
 pub fn post_repaint(
     state: &mut Hyalo,

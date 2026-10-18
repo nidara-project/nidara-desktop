@@ -119,6 +119,12 @@ buttons = ["minimize", "maximize", "close"]
 [windows.title_bar]
 font = "Inter"
 
+# The background a window of ours declares (nidara-material-v1 `set_window_background`): its
+# colour is the app's, this is how much of it shows. The shell keeps it in step with Settings →
+# Appearance → Window transparency and Accessibility → Reduce transparency.
+[windows.background]
+opacity = 0.8
+
 [windows.backdrop]
 enabled = true
 size = 2

@@ -712,6 +712,7 @@ impl Hyalo {
         if let Some(o) = self.wm.workspaces.get(&ws).and_then(|w| self.output_named(&w.output)) {
             let bounds = self.floating_area(&o).size;
             t.with_pending_state(|s| s.bounds = Some(bounds));
+            crate::backend::tell_initial_scale(t.wl_surface(), &o);
         }
         t.send_configure();
     }

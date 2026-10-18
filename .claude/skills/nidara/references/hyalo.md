@@ -827,7 +827,16 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   only where `caps.windowBackdrop` (Hyalo): Hyprland's blur is one for windows and layers, and a
   switch there would do nothing — `available: false` hides the row, `describeConfig` and
   `setConfig` (ConfigRegistry).
-- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`).
+- **A window's declared background** (toolkit/PHASE1.md D6, owner 2026-10-18): a toolkit window
+  says only its colour, opaque (`nidara_material_v1.set_window_background`); Hyalo draws it inside
+  the box, under the content, in the DECOR pass (`decor.rs` `fill`, so it is in the opening and
+  closing pictures) at `[windows.background] opacity` — which the shell's `AppearanceSync`
+  writes from "Window transparency"/"Reduce transparency" (`glassOpacities(...).windowOpacity`,
+  the same 0.80 GTK windows paint themselves). Such a window is translucent by that opacity, not
+  by its opaque region (`look`), and gets the same backdrop blur as any window. It is NOT glass:
+  no tone, no shell blur. GTK windows keep painting `--nidara-bg` themselves (frozen kit).
+- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`) and
+  its `background` (`color`, `opacity`) when it declared one.
 - **Who draws the title bar** (`shell/decoration.rs`, 2026-10-03): Hyalo, as Hyprland did —
   `xdg-decoration` and KDE's `server-decoration` both answer server-side, by default, on request
   and on unset, whatever the client asked (Hyprland's `XDGDecoration.cpp`/`ServerDecorationKDE.cpp`),
@@ -1139,6 +1148,19 @@ expected 1.01 was wrong, not the curve).
   presented 1056 ms; found 2026-10-18 by a `WAYLAND_DEBUG` timeline for #852). Any element
   drawn by proxy (picture, texture of surfaces) must take its surfaces' feedback itself.
   `nk-phase0-check.py` requires the gap under 350 ms on the vkms run.
+- 🔴 **A surface is told its scale before its first configure** (`backend::tell_initial_scale`,
+  from `initial_configure` and the layer's first configure): the preferred scale otherwise
+  follows the primary scanout output, which an opening window (drawn by proxy, above) has only
+  once it has opened — its content was drawn at a guessed scale and again ~700 ms later
+  (nk-settings-slice live: commit 4 at 775 ms, 2026-10-18). Smithay re-sends a scale only when
+  it changes. `toolkit/settings-slice/check.py` asserts `PREFERRED_SCALE` arrives before the
+  first content commit; failed against the Hyalo without it, passed nested with it.
+- 🔴 **An opening window's glass forms under its picture** (`render/mod.rs`, the opening
+  branch): the picture has no glass, blur or veils (`snapshot::take` drops them: they sample the
+  screen). They are drawn live under it, at its scale, through `GlassElement::forming` /
+  `ScrimElement::forming` with the fade's alpha — the #764 formation, not a cross-fade — each
+  under an id of its own while it forms. Without that a window opened transparent and its glass
+  appeared at once when the opening ended (owner, 2026-10-18; nested A/B, frames at 120/200/300 ms).
 - 🔴 **An animation that ends asks for one more frame** (`step_motions`, `step_animations`,
   `layers::step`): the frame just drawn sampled it short of its end. Without that frame an
   opened window stayed the opening's picture at ~99 % and was in no frame as itself — no

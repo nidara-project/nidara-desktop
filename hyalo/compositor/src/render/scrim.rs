@@ -247,6 +247,15 @@ impl ScrimElement {
         Some(Self { id, commit, geometry, scrims })
     }
 
+    /// These veils `k` of the way formed, with the glass they lie under (`GlassElement::forming`).
+    pub fn forming(mut self, k: f64, memo: &UserDataMap) -> Self {
+        for s in &mut self.scrims {
+            s.alpha *= k;
+        }
+        (self.id, self.commit) = super::glass::forming_id(memo, &self.id, self.commit, k as f32);
+        self
+    }
+
     fn draw_gles(
         &self,
         frame: &mut smithay::backend::renderer::gles::GlesFrame<'_, '_>,

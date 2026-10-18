@@ -154,6 +154,10 @@ export function createHyaloSettings(): CompositorSettings {
         setWindowBackdrop(on) {
             patch("window backdrop", { windows: { backdrop: { enabled: on } } })
         },
+        // The background our windows declare (toolkit/PHASE1.md D6): the colour is the app's.
+        setWindowBackgroundOpacity(opacity) {
+            patch("window background", { windows: { background: { opacity } } })
+        },
 
         setWindowControls(side, buttons) {
             patch("window controls", { windows: { controls: { side, buttons } } })

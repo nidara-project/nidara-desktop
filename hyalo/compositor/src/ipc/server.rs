@@ -285,6 +285,9 @@ impl Hyalo {
                         shapes: m.state.shapes.len(),
                         compositor_paints: m.state.glass.is_some(),
                     }),
+                    background: m.window.wl_surface().and_then(|s| crate::protocols::material::window_background(&s)).map(|color| {
+                        super::WindowBackgroundInfo { color, opacity: self.config.windows.background.opacity.clamp(0.0, 1.0) }
+                    }),
                     title_bar: m.bar(),
                     controls: crate::protocols::window_controls::managed_rect(m, &self.config.windows.controls).map(|(r, _)| {
                         let origin = m.rect.loc.to_f64() - m.window.geometry().loc.to_f64();

@@ -70,6 +70,16 @@ pub struct WindowInfo {
     /// Material committed on this toplevel's root surface (toolkit phase 0).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub glass: Option<WindowGlassInfo>,
+    /// The background it declared (`set_window_background`) as Hyalo draws it: its colour and
+    /// the windows' opacity (toolkit/PHASE1.md D6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background: Option<WindowBackgroundInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WindowBackgroundInfo {
+    pub color: [f64; 3],
+    pub opacity: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]

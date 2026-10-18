@@ -129,6 +129,7 @@ impl Hyalo {
         let zone_changed = usable_zone(&output) != zone_before;
         let map = layer_map_for_output(&output);
         if !initial_configure_sent {
+            crate::backend::tell_initial_scale(surface, &output);
             map.layer_for_surface(surface, WindowSurfaceType::TOPLEVEL)
                 .unwrap()
                 .layer_surface()

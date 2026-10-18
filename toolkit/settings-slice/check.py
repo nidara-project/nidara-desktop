@@ -32,15 +32,34 @@ def get_values():
     return {key: values[key] for key in KEYS}
 
 
+def hyalo_windows():
+    out = subprocess.check_output([os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg', 'windows'])
+    return json.loads(out)['ok']['windows']
+
+
+def first_listing(pid, deadline):
+    """The window as Hyalo first lists it: mapped, so with its first content commit."""
+    while time.monotonic() < deadline:
+        for w in hyalo_windows():
+            if w.get('pid') == pid:
+                return w
+        time.sleep(.01)
+    raise RuntimeError('setup: Hyalo never listed the slice window')
+
+
 def run(binary, control, folder):
     env = dict(os.environ, NK_SLICE_FRAME=str(folder / ('fault.argb' if control else 'baseline.argb')))
-    proc = subprocess.Popen([binary] + (['--control-default-values'] if control else []),
+    # The control also declares no window background (toolkit/PHASE1.md D6).
+    proc = subprocess.Popen([binary] + (['--control-default-values', '--control-no-background'] if control else []),
                             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     lines = queue.Queue()
     threading.Thread(target=lambda: [lines.put(s.rstrip()) for s in proc.stderr], daemon=True).start()
     seen, frame, ready, a11y = [], None, False, False
     try:
         deadline = time.monotonic() + 6
+        # Hyalo draws the window's background from its first frame (D6): the first time it lists
+        # the window — mapped, so with that frame — it has it.
+        listed = first_listing(proc.pid, deadline)
         while time.monotonic() < deadline and not (ready and a11y):
             if proc.poll() is not None:
                 raise RuntimeError(f'process exited {proc.returncode}: {seen}')
@@ -57,8 +76,22 @@ def run(binary, control, folder):
             a11y |= line == 'A11Y_READY'
         if not ready or not a11y or frame is None:
             raise RuntimeError(f'missing ready/a11y/frame (setup failure): {seen}')
+        # The compositor told the scale before the first content commit, or that frame was
+        # drawn at a guessed one and drawn again once told (Hyalo, until the open animation
+        # ended: ~700 ms later).
+        content = int(next(s for s in seen if s.startswith('CONTENT_READY commit=')).split('=')[1])
+        told = [int(s.rsplit('=', 1)[1]) for s in seen if s.startswith('PREFERRED_SCALE ')]
+        if not told or told[0] >= content:
+            raise AssertionError(f'assert-scale: preferred scale after commits {told}, content is commit {content}')
         if control and 'CONTROL_APPLIED default-values' not in seen:
             raise RuntimeError('control was not applied')
+        if control and 'CONTROL_APPLIED no-background' not in seen:
+            raise RuntimeError('no-background control was not applied')
+        background = listed.get('background')
+        if not control and not (background and len(background['color']) == 3 and 0 < background['opacity'] <= 1):
+            raise AssertionError(f'assert-background: Hyalo listed the window without its background: {background}')
+        if control and background is not None:
+            raise AssertionError(f'assert-background: the no-background control still has one: {background}')
         raw = Path(frame['path']).read_bytes()
         assert len(raw) == frame['width'] * frame['height'] * 4
         def pixel(point):
@@ -84,7 +117,7 @@ def run(binary, control, folder):
                     raise RuntimeError(f'cannot read selected segment pixels: {strengths}')
                 values[key] = segments[strengths.index(max(strengths))]['value']
         (folder / ('fault.log' if control else 'baseline.log')).write_text('\n'.join(seen) + '\n')
-        return values
+        return values, background
     finally:
         proc.terminate()
         try:
@@ -101,11 +134,11 @@ def main():
         raise RuntimeError('setup: all values are defaults; seed a non-default value in disposable CI')
     with tempfile.TemporaryDirectory(prefix='nk-settings-slice-') as tmp:
         folder = Path(tmp)
-        baseline = run(binary, False, folder)
+        baseline, background = run(binary, False, folder)
         if get_values() != expected:
             raise RuntimeError('setup: settings changed during baseline')
         assert baseline == expected, f'assert-values: pixels {baseline} != Config1.Get {expected}'
-        fault = run(binary, True, folder)
+        fault, _ = run(binary, True, folder)
         if get_values() != expected:
             raise RuntimeError('setup: settings changed during control')
         if fault == expected:
@@ -113,6 +146,8 @@ def main():
         assert fault == DEFAULTS, f'control did not actually paint defaults: {fault}'
         print(f'PASS assert-values: pixels == Config1.Get {expected}')
         print(f'PASS control applied; assert-values rejected painted defaults {fault}')
+        print('PASS assert-scale: preferred scale told before the first content commit')
+        print(f'PASS assert-background: Hyalo draws the window background from its first frame {background}; the control has none')
 
 
 if __name__ == '__main__':

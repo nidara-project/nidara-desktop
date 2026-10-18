@@ -5,7 +5,8 @@
 //!
 //! What a picture leaves out: the blur behind a translucent window and the glass a client
 //! declares (`nidara-material-v1`), which sample what is behind them on the screen, and here
-//! there is nothing behind them.
+//! there is nothing behind them. An opening window's are drawn live under its picture, formed
+//! as it fades in (render/mod.rs); a closing one's go with it.
 //!
 //! Drawn with the GL renderer underneath (`HyaloRenderer::gles`, the GPU that renders), like a
 //! screenshot: on tty the surfaces are imported for it first (`import_surface_tree`), as for a

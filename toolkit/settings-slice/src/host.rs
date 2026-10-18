@@ -50,6 +50,8 @@ pub struct Host {
     top: Option<xdg_toplevel::XdgToplevel>,
     viewport: Option<wp_viewport::WpViewport>,
     material: Option<mat::NidaraMaterialV1>,
+    /// `--control-no-background`: no window background declared (the CI control).
+    no_background: bool,
     pub width: u32,
     pub height: u32,
     scale: f64,
@@ -83,6 +85,10 @@ impl Host {
             top: None,
             viewport: None,
             material: None,
+            no_background: std::env::args().any(|s| s == "--control-no-background") && {
+                eprintln!("CONTROL_APPLIED no-background");
+                true
+            },
             width,
             height,
             scale: 1.,
@@ -164,31 +170,16 @@ impl Host {
             s.set_buffer_scale(buffer_scale)
         }
         if let Some(m) = &self.material {
-            m.clear_shapes();
-            // Identity tone with the portal-selected base wash. Look stays app-owned.
-            let bg = view.token("--nidara-bg", false)?;
-            m.set_glass(0., 0., 0., 0., 0., 0., 0., 0., 0.);
-            m.set_tone(
-                1.,
-                1.,
-                0.,
-                1.,
-                bg[0] as f64 / 255.,
-                bg[1] as f64 / 255.,
-                bg[2] as f64 / 255.,
-                bg[3] as f64 / 255.,
-                0.,
-                0.,
-                1.,
-            );
-            m.add_shape(
-                0.,
-                0.,
-                self.width as f64,
-                self.height as f64,
-                view.exports.number("RADIUS", "lg")? as f64,
-                2.,
-            );
+            // The window's background is Hyalo's (toolkit/PHASE1.md D6): the colour only, opaque;
+            // how much of it shows, and the blur under it, are the windows' settings there.
+            if !self.no_background {
+                let bg = view.token("--nidara-bg", true)?;
+                m.set_window_background(
+                    bg[0] as f64 / 255.,
+                    bg[1] as f64 / 255.,
+                    bg[2] as f64 / 255.,
+                );
+            }
         }
         s.attach(Some(&buffer), 0, 0);
         s.damage_buffer(0, 0, pw, ph);
@@ -436,9 +427,16 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, ()> for Host {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        // A scale it already draws at (re-sent, or the first one told) is no reason to repaint.
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = e {
-            h.scale = scale as f64 / 120.;
-            h.dirty = true;
+            eprintln!(
+                "PREFERRED_SCALE scale={} after_commit={}",
+                scale as f64 / 120.,
+                h.commit
+            );
+            let scale = scale as f64 / 120.;
+            h.dirty |= h.scale != scale;
+            h.scale = scale;
         }
     }
 }
@@ -453,8 +451,8 @@ impl Dispatch<wl_surface::WlSurface, ()> for Host {
     ) {
         match e {
             wl_surface::Event::PreferredBufferScale { factor } => {
+                h.dirty |= h.integer_scale != factor.max(1);
                 h.integer_scale = factor.max(1);
-                h.dirty = true;
             }
             wl_surface::Event::Enter { output } => {
                 h.entered.insert(output.id());
@@ -590,14 +588,15 @@ delegate_noop!(Host: ignore mat::NidaraMaterialV1);
 
 impl Host {
     fn output_scale(&mut self) {
-        self.integer_scale = self
+        let scale = self
             .entered
             .iter()
             .filter_map(|id| self.outputs.get(id))
             .copied()
             .max()
             .unwrap_or(1);
-        self.dirty = true;
+        self.dirty |= self.integer_scale != scale;
+        self.integer_scale = scale;
     }
 }
 impl Dispatch<wl_output::WlOutput, ()> for Host {
