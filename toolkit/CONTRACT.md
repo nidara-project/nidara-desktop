@@ -198,8 +198,8 @@ moves it there and keeps moving it whatever the app is doing.
 - `done(serial)` event when a transition ends, with the presentation time; `cancelled(serial)`
   when a new value replaced it.
 - A layer's own glass (a `nidara_material_v1` on the layer's surface) is NOT drawn yet: Hyalo
-  draws the glass of a window's or a layer-shell surface's root. It comes with the shell
-  (phase 2), the first thing that needs a moving pane of glass.
+  draws the glass of a window's or a layer-shell surface's root. It comes in phase 1 with the
+  native window's sidebar and title bar (PHASE1.md D7), its backdrop including the parent's content.
 - **Limits:** at most 64 layers per window (protocol error past that). Not offered to
   sandboxed clients, as the material (#818 triage, point 6 — opening it to Flatpak apps is the
   later review of the trust boundary).
