@@ -254,6 +254,12 @@ build() {
   npx sass --no-charset ../settings/style.scss ../settings/style.css
   sed -i '/@charset/d' ../settings/style.css
   ( cd ../settings; mkdir -p build; ../../scripts/bundle.sh app.ts build/nidara-settings --native-host=nidara-settings --kit-external=/usr/share/nidara-kit/js )
+  # What the native Settings reads besides Config1 (toolkit/PHASE1.md D4): its pages, strings
+  # and tokens, exported from the same sources, with their format version. The tokens
+  # compile with the sass `npm install` just put here (no download inside build()).
+  node --experimental-strip-types ../../scripts/export-settings-data.mjs ../../build/settings-data
+  SASS="$PWD/node_modules/.bin/sass" \
+    node --experimental-strip-types ../../scripts/export-tokens.mjs ../../build/settings-data
 
   # Greeter (reuses the shell's sass install; no npm tree of its own)
   npx sass --no-charset ../greeter/style.scss ../greeter/style.css
@@ -404,6 +410,9 @@ package_nidara-desktop() {
   install -m644 defaults/wallpaper/*.jpg "$pkgdir/usr/share/nidara/wallpapers/"
   install -Dm755 ui/settings/build/nidara-settings "$pkgdir/usr/share/nidara/ui/settings/build/nidara-settings"
   install -Dm644 ui/settings/style.css "$pkgdir/usr/share/nidara/ui/settings/style.css"
+  # The native Settings' data (PHASE1.md D4), version file included.
+  install -dm755 "$pkgdir/usr/share/nidara/settings-data"
+  cp -r --no-preserve=mode build/settings-data/. "$pkgdir/usr/share/nidara/settings-data/"
   install -Dm755 ui/shell/build/nidara "$pkgdir/usr/share/nidara/ui/shell/build/nidara"
   install -Dm644 ui/shell/style.css "$pkgdir/usr/share/nidara/ui/shell/style.css"
   cp -r ui/shell/assets "$pkgdir/usr/share/nidara/ui/shell/assets"

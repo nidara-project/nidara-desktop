@@ -197,3 +197,10 @@ fn offscreen_svg_is_not_loaded_and_visible_svg_cache_includes_scale() {
     v.sidebar_scroll = 48. * 31.;
     assert!(v.paint(&mut fonts, 1100, 760, 1., true).is_err());
 }
+
+#[test]
+fn settings_data_of_another_version_or_none_is_refused() {
+    assert!(data::check_version(Some("1\n")).is_ok());
+    assert!(data::check_version(Some("2")).is_err());
+    assert!(data::check_version(None).is_err());
+}

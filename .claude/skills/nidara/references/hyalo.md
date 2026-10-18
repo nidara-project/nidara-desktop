@@ -2260,6 +2260,9 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   (the package cannot go there), and `measure-session.sh`, run once per session, gives the
   like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
   step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
-- CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) builds with the lock file, clippy `-D warnings`,
-  unit tests, then boots the tty backend on vkms with the real shell on it. NOT a required check
+- CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
+  builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
+  boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied
+  product file to the smoke: put it in the PKGBUILD, and the smoke gets it (a hand list here
+  lacked the wallpapers, then the Settings portal — 2026-10-18). NOT a required check
   while Hyalo is a preview: it must never hold the merge queue for the desktop that ships.

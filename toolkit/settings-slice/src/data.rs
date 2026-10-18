@@ -18,6 +18,19 @@ pub const KEYS: [&str; 4] = [
     "appearance.windowControls",
 ];
 pub const DEADLINE: Duration = Duration::from_secs(3);
+/// The settings-data format this build reads (scripts/settings-data-version.mjs).
+pub const DATA_VERSION: &str = "1";
+/// A directory of another format is a start-up error, never read as if it were this one
+/// (PHASE1.md D4).
+pub fn check_version(found: Option<&str>) -> Result<()> {
+    match found.map(str::trim) {
+        Some(DATA_VERSION) => Ok(()),
+        Some(v) => Err(format!(
+            "settings-data version {v}, this build reads {DATA_VERSION}"
+        )),
+        None => Err("settings-data has no version file".into()),
+    }
+}
 pub type Portal = HashMap<String, HashMap<String, OwnedValue>>;
 pub struct Services {
     pub schema: Value,
@@ -107,6 +120,11 @@ impl Exports {
         Self::load_from(&root)
     }
     pub fn load_from(root: &Path) -> Result<Self> {
+        check_version(
+            std::fs::read_to_string(root.join("version"))
+                .ok()
+                .as_deref(),
+        )?;
         let english = read(root.join("i18n/en.json"))?;
         let mut strings = english.clone();
         for l in session_languages() {
