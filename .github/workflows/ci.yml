@@ -42,6 +42,8 @@
 #     Wayland namespace — the pin selects by `window#<name>`. A surface that leaves the
 #     bar's window leaves the pin with it, and only a user who pinned the shell AGAINST
 #     their system mode ever sees the result. Logic in scripts/ci/chrome-scope-check.mjs.
+#   - nightly (schedule, 03:17 UTC): the whole workflow on main, gates included; a failure
+#     opens or updates the issue "Nightly CI failed" (`nightly-report`), success closes it.
 #   - scope: decides whether the change needs the four long jobs (smoke, hyalo,
 #     toolkit, sessiond). A change of `.md` files only does not: no long job reads
 #     one, and the Hyalo job alone is ~47 min, run twice (PR + queue). Those jobs
@@ -125,6 +127,13 @@ on:
   # This is also why the trigger has to be on main BEFORE the queue is turned on:
   # the queue runs the workflow as it exists on the base branch.
   merge_group:
+  # Every night, everything, on main: no base to diff against, so scope runs every job and
+  # every gate (the real fcitx5/Orca matrices a PR skips when it touches nothing they use,
+  # scripts/ci/ci-scope.sh). What a skip let through, or two queued changes that only break
+  # them together, shows here the next morning — and `nightly-report` says so in an issue.
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 # A new push to a PR cancels that PR's run still in progress: only the newest commit
 # is ever merged. Never in the queue — each merge_group entry has its own ref anyway.
@@ -1705,3 +1714,31 @@ jobs:
       # seconds, and it is the cheapest gate in this file.
       - name: The installer bundle builds (must succeed)
         run: ./scripts/bundle.sh ui/installer/app.ts /tmp/nidara-installer
+
+  # The nightly run's result, where the owner sees it: one issue, opened (or commented on)
+  # when the night fails, closed when it is green again. Only on the schedule.
+  nightly-report:
+    name: Nightly report
+    needs: [scope, styles, pkgbuild, typecheck, smoke, hyalo, widgets-gen, hypr-config, skill-docs, icons, agent-loop, toolkit, sessiond, installer-logic]
+    if: ${{ always() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+          SHA: ${{ github.sha }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly CI failed"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number -q '.[0].number')
+          if [ "$FAILED" = true ]; then
+            body="The nightly run on main (${SHA:0:8}) failed: $RUN"
+            if [ -n "$open" ]; then gh issue comment "$open" --body "$body"
+            else gh issue create --title "$title" --body "$body"; fi
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "Green again: $RUN"
+          fi
