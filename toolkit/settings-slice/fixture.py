@@ -17,7 +17,7 @@ if os.environ.get('DBUS_SESSION_BUS_ADDRESS') == os.environ.get('DBUS_STARTER_AD
 
 CONFIG = '''<node><interface name="org.nidara.Config1">
 <method name="Snapshot"><arg direction="out" type="t"/><arg direction="out" type="t"/><arg direction="out" type="s"/></method>
-<method name="Get"><arg direction="in" type="s"/><arg direction="out" type="v"/></method>
+<method name="Get"><arg direction="in" type="as"/><arg direction="out" type="a{sv}"/></method>
 <signal name="Updated"><arg type="t"/><arg type="t"/><arg type="a{sv}"/></signal>
 </interface></node>'''
 PORTAL = '''<node><interface name="org.freedesktop.portal.Settings">
@@ -58,7 +58,7 @@ def call(connection, sender, path, iface, method, params, invocation):
     elif method == 'Snapshot':
         invocation.return_value(GLib.Variant('(tts)', (42, 1, json.dumps(schema))))
     elif method == 'Get':
-        invocation.return_value(GLib.Variant('(v)', (variant(values[params.unpack()[0]]),)))
+        invocation.return_value(GLib.Variant('(a{sv})', ({k: variant(values[k]) for k in params.unpack()[0]},)))
     else:
         invocation.return_value(GLib.Variant('(a{sa{sv}})', ({
             'org.freedesktop.appearance': {'accent-color': GLib.Variant('(ddd)', (1., 0., 0.) if os.environ.get('NK_FIXTURE_UNKNOWN_ACCENT') else (0., 136/255, 1.)),

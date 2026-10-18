@@ -66,7 +66,7 @@ phase_build() {
 
     # The native toolkit client: its build/lint/tests are the toolkit job;
     # its real input/material/IME pixel checks run below on this vkms Hyalo.
-    cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0
+    cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice
 
     # The shell, as the Hyprland smoke builds it (schemas, libnidara-wl, sheets, bundle).
     install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO"/config/gsettings/*.gschema.xml
@@ -176,6 +176,11 @@ phase_build() {
     "$REPO/scripts/bundle.sh" app.ts build/nidara --native-host=nidara-shell --kit-external="$REPO/ui/lib/nidara-kit/build/js"
     npx sass --no-charset ../settings/style.scss ../settings/style.css
     ( cd ../settings; mkdir -p build; "$REPO/scripts/bundle.sh" app.ts build/nidara-settings --native-host=nidara-settings --kit-external="$REPO/ui/lib/nidara-kit/build/js" )
+    # What the native Settings reads besides Config1 (toolkit/PHASE1.md D4): manifest, strings,
+    # tokens — for the start-up slice's check below.
+    node --experimental-strip-types "$REPO/scripts/export-settings-data.mjs" "$REPO/build/settings-data"
+    SASS="$REPO/ui/shell/node_modules/.bin/sass" \
+        node --experimental-strip-types "$REPO/scripts/export-tokens.mjs" "$REPO/build/settings-data"
     log "shell bundle OK"
 }
 
@@ -448,6 +453,31 @@ phase_run() {
     python "$REPO/scripts/ci/config-service-check.py" /tmp/hyalo/nidara-ipc >/tmp/hyalo/config-service.log 2>&1 \
         || { log "FAIL: org.nidara.Config1"; cat /tmp/hyalo/config-service.log; exit 1; }
     log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 13: describe, get, set, agent door, transition, blur from another process, snapshot, apply, appearance keys, enum re-read, invalid, denied, native path)"
+
+    # The native Settings' start-up slice (#862) against THIS shell's Config1 and portal: the
+    # pixels it commits must be Config1.Get's values, and with --control-default-values they
+    # must not. The check refuses an all-default session, so one value is set first by a
+    # writer outside the shell — the GNOME key every titlebar reads — and awaited on Config1.
+    gsettings set org.gnome.desktop.wm.preferences button-layout 'close,maximize:'
+    python - <<'PY' || { log "FAIL: windowControls never became left on Config1"; exit 1; }
+import time
+from gi.repository import Gio, GLib
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+for _ in range(50):
+    v = bus.call_sync('org.nidara.Config', '/org/nidara/Config', 'org.nidara.Config1', 'Get',
+                      GLib.Variant('(as)', (['appearance.windowControls'],)), None,
+                      Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+    if v.get('appearance.windowControls') == 'left':
+        raise SystemExit(0)
+    time.sleep(.1)
+raise SystemExit(1)
+PY
+    NK_SETTINGS_DATA="$REPO/build/settings-data" \
+        python "$REPO/toolkit/settings-slice/check.py" "$REPO/toolkit/target/release/nk-settings-slice" \
+        >/tmp/hyalo/settings-slice.log 2>&1 \
+        || { log "FAIL: settings start-up slice"; cat /tmp/hyalo/settings-slice.log; exit 1; }
+    cat /tmp/hyalo/settings-slice.log
+    gsettings reset org.gnome.desktop.wm.preferences button-layout
 
     # Window capture (#682): the overview's thumbnails, through the standard protocols
     # (ext-foreign-toplevel-list + ext-image-copy-capture, hyalo/compositor/src/capture.rs),
