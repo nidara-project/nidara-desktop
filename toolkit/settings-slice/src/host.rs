@@ -628,18 +628,6 @@ fn frame_scale(viewporter: bool, fractional: bool, integer: i32, preferred: f64)
         (integer.max(1) as f64, integer.max(1))
     }
 }
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn integer_fallback_when_either_fractional_protocol_is_missing() {
-        assert_eq!(frame_scale(true, true, 2, 1.25), (1.25, 1));
-        for (v, f) in [(false, true), (true, false), (false, false)] {
-            assert_eq!(frame_scale(v, f, 2, 1.25), (2., 2));
-        }
-    }
-}
-
 /// `--window-level opaque|tinted|translucent`, announced like the controls.
 fn window_level_arg() -> Option<mat::WindowBackgroundLevel> {
     let args: Vec<String> = std::env::args().collect();
@@ -655,4 +643,16 @@ fn window_level_arg() -> Option<mat::WindowBackgroundLevel> {
     };
     eprintln!("WINDOW_LEVEL {value}");
     Some(level)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn integer_fallback_when_either_fractional_protocol_is_missing() {
+        assert_eq!(frame_scale(true, true, 2, 1.25), (1.25, 1));
+        for (v, f) in [(false, true), (true, false), (false, false)] {
+            assert_eq!(frame_scale(v, f, 2, 1.25), (2., 2));
+        }
+    }
 }
