@@ -5,7 +5,7 @@ input-method-v2. Every assertion observes IPC/pixels, never the app's text state
 Controls disable mapping, material, keyboard and preedit independently, and must
 fail at that exact assertion. No live session: HYALO_CONTROL is mandatory.
 """
-import json
+import re, json
 import os
 from pathlib import Path
 import struct
@@ -217,6 +217,20 @@ if __name__ == '__main__':
             lines = (LOG/name/'client.log').read_text().splitlines()
             costs += [f'## {name}', '', *[f'- `{line}`' for line in lines if line.startswith('FIRST_FRAME')], '']
         (LOG/'cost.md').write_text('\n'.join(costs))
+        # The first frame is PRESENTED when it is drawn, opening animation or not (#852's
+        # timeline): Hyalo draws an opening window as a picture of its surfaces, and used to
+        # hold their presentation feedback until the 700 ms animation ended — main measured
+        # callback 133 ms, presented 1056 ms. A few frames apart is right; 350 ms is half
+        # `[animations] open`, so the held feedback cannot pass.
+        # Only where Hyalo drives a real (here virtual) display: nested Hyalo has no
+        # presentation feedback (README), so check-headless.sh records none.
+        for name in ('baseline', 'scale125') if os.environ.get('HYALO_DRM_DEVICE') else ():
+            lines = (LOG/name/'client.log').read_text()
+            got = {k: float(v) for k, v in re.findall(r'^(FIRST_FRAME(?:_CALLBACK)?_MS)=([\d.]+)', lines, re.M)}
+            assert 'FIRST_FRAME_MS' in got and 'FIRST_FRAME_CALLBACK_MS' in got, f'{name}: no first-frame timings'
+            gap = got['FIRST_FRAME_MS'] - got['FIRST_FRAME_CALLBACK_MS']
+            assert gap < 350, f'presentation: {name} first frame presented {gap:.0f} ms after its callback'
+            print(f'ok presentation: {name} first frame presented {gap:.0f} ms after its callback', flush=True)
         print('\n'.join(costs), flush=True)
         print('NK PHASE0 CHECK PASSED', flush=True)
     finally:
