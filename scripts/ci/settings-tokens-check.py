@@ -32,8 +32,8 @@ if len(used) < 10:
 
 sets = colors['sets']
 accents = colors['accents']
-want = set(product(accents, [True, False], [False, True], [True, False]))
-got = [(s['accent'], s['dark'], s['reduceTransparency'], s['windowTransparency']) for s in sets]
+want = set(product(accents, [True, False], [False, True], ['opaque', 'tinted', 'translucent']))
+got = [(s['accent'], s['dark'], s['reduceTransparency'], s['windowBackground']) for s in sets]
 if set(got) != want or len(got) != len(want):
     fail.append(f'{len(got)} sets for {len(want)} engine inputs')
 
@@ -47,7 +47,7 @@ for s in sets:
         break
 
 pick = lambda dark: next(s['tokens'] for s in sets if s['accent'] == 'blue' and s['dark'] == dark
-                         and not s['reduceTransparency'] and s['windowTransparency'])
+                         and not s['reduceTransparency'] and s['windowBackground'] == 'translucent')
 if pick(True).get('--nidara-text') == pick(False).get('--nidara-text'):
     fail.append('dark and light sets have the same --nidara-text')
 

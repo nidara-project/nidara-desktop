@@ -5,7 +5,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use zbus::zvariant::{OwnedValue, Value as Variant};
 
-fn portal(rgb: (f64, f64, f64), scheme: u32, reduce: bool, transparent: bool) -> data::Portal {
+fn portal(rgb: (f64, f64, f64), scheme: u32, reduce: bool, background: &str) -> data::Portal {
     HashMap::from([
         (
             "org.freedesktop.appearance".into(),
@@ -21,7 +21,10 @@ fn portal(rgb: (f64, f64, f64), scheme: u32, reduce: bool, transparent: bool) ->
             "org.nidara.appearance".into(),
             HashMap::from([
                 ("reduce-transparency".into(), OwnedValue::from(reduce)),
-                ("window-transparency".into(), OwnedValue::from(transparent)),
+                (
+                    "window-background".into(),
+                    Variant::from(background).try_to_owned().unwrap(),
+                ),
             ]),
         ),
     ])
@@ -31,11 +34,11 @@ fn exports() -> Exports {
         pages: json!([{"id":"appearance","label":"title","icon":"nd-preferences-desktop-theme","groups":[
             {"i18n":"settings.appearance.group.base-style","items":["appearance.darkMode"]},
             {"i18n":"settings.appearance.group.windows","items":[
-                {"key":"appearance.windowTransparency","sensitiveWhen":{"key":"accessibility.reduceTransparency","in":["false"]}},
-                "appearance.windowBlur","appearance.windowControls"]}]}]),
+                {"key":"appearance.windowBackground","sensitiveWhen":{"key":"accessibility.reduceTransparency","in":["false"]}},
+                "appearance.windowControls"]}]}]),
         strings: json!({"title":"Appearance","settings.appearance.title":"Appearance","settings.appearance.group.base-style":"Base style","settings.appearance.group.windows":"Windows"}),
         english: json!({}),
-        colors: json!({"accents":{"blue":"#0088ff"},"sets":[{"accent":"blue","dark":true,"reduceTransparency":false,"windowTransparency":false,"tokens":{
+        colors: json!({"accents":{"blue":"#0088ff"},"sets":[{"accent":"blue","dark":true,"reduceTransparency":false,"windowBackground":"tinted","tokens":{
             "--nidara-text":"#ffffff","--nidara-text-secondary":"rgba(255,255,255,0.8)","--nidara-text-disabled":"rgba(255,255,255,0.3)","--nidara-bg":"rgba(22,22,34,0.8)",
             "--nidara-surface":"rgba(255,255,255,0.08)","--nidara-surface-back":"rgba(255,255,255,0.04)","--nidara-surface-raised":"rgba(255,255,255,0.2)",
             "--nidara-state-selected":"rgba(0,136,255,0.22)","--nidara-accent":"#0088ff","--nidara-thumb":"#ffffff"}}]}),
@@ -44,15 +47,18 @@ fn exports() -> Exports {
 }
 fn services() -> Services {
     let mut keys = serde_json::Map::new();
-    for (key, value) in
-        data::KEYS
-            .iter()
-            .zip([json!(true), json!(false), json!(false), json!("left")])
+    for (key, value) in data::KEYS
+        .iter()
+        .zip([json!(true), json!("tinted"), json!("left")])
     {
-        let ui = if value.is_boolean() {
-            json!({"title":key,"control":"toggle"})
-        } else {
-            json!({"title":key,"control":"segmented","options":[{"value":"left","label":"Left"},{"value":"right","label":"Right"}]})
+        let ui = match *key {
+            "appearance.darkMode" => json!({"title":key,"control":"toggle"}),
+            "appearance.windowBackground" => {
+                json!({"title":key,"control":"segmented","options":[{"value":"opaque","label":"Opaque"},{"value":"tinted","label":"Tinted"},{"value":"translucent","label":"Translucent"}]})
+            }
+            _ => {
+                json!({"title":key,"control":"segmented","options":[{"value":"left","label":"Left"},{"value":"right","label":"Right"}]})
+            }
         };
         keys.insert(
             (*key).into(),
@@ -73,7 +79,7 @@ fn services() -> Services {
     );
     Services {
         schema: json!({"schemaVersion":1,"keys":keys}),
-        portal: portal((0., 136. / 255., 1.), 1, false, false),
+        portal: portal((0., 136. / 255., 1.), 1, false, "tinted"),
         epoch: 42,
         revision: 1,
     }
@@ -85,8 +91,8 @@ fn every_portal_tuple_selects_exactly_one_set_and_unknowns_are_errors() {
     for accent in 0..9 {
         for dark in [false, true] {
             for reduce in [false, true] {
-                for transparent in [false, true] {
-                    sets.push(json!({"accent":accent.to_string(),"dark":dark,"reduceTransparency":reduce,"windowTransparency":transparent,"tokens":{"tuple":[accent,dark,reduce,transparent]}}));
+                for background in ["opaque", "tinted", "translucent"] {
+                    sets.push(json!({"accent":accent.to_string(),"dark":dark,"reduceTransparency":reduce,"windowBackground":background,"tokens":{"tuple":[accent,dark,reduce,background]}}));
                 }
             }
         }
@@ -95,24 +101,27 @@ fn every_portal_tuple_selects_exactly_one_set_and_unknowns_are_errors() {
     for accent in 0..9 {
         for dark in [false, true] {
             for reduce in [false, true] {
-                for transparent in [false, true] {
+                for background in ["opaque", "tinted", "translucent"] {
                     let p = portal(
                         (accent as f64 * 20. / 255., 136. / 255., 1.),
                         if dark { 1 } else { 2 },
                         reduce,
-                        transparent,
+                        background,
                     );
                     assert_eq!(
                         e.palette(&p).unwrap()["tuple"],
-                        json!([accent, dark, reduce, transparent])
+                        json!([accent, dark, reduce, background])
                     );
                 }
             }
         }
     }
-    assert!(e.palette(&portal((1., 0., 0.), 1, false, false)).is_err());
     assert!(
-        e.palette(&portal((0., 136. / 255., 1.), 0, false, false))
+        e.palette(&portal((1., 0., 0.), 1, false, "opaque"))
+            .is_err()
+    );
+    assert!(
+        e.palette(&portal((0., 136. / 255., 1.), 0, false, "opaque"))
             .is_err()
     );
     assert!(e.palette(&HashMap::new()).is_err());
@@ -142,7 +151,7 @@ fn submitted_pixels_change_under_default_values_control_at_both_scales() {
         assert_eq!(b.values, fault.evidence);
         assert_ne!(a.values, b.values);
         assert_ne!(a.pixels, b.pixels);
-        assert_eq!(a.samples.as_object().unwrap().len(), 4);
+        assert_eq!(a.samples.as_object().unwrap().len(), data::KEYS.len());
     }
 }
 #[test]

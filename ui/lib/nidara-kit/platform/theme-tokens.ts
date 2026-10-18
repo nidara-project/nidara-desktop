@@ -56,8 +56,9 @@ export interface NidaraThemeConfig {
   // What the user picks (#674): reduce transparency, from Accessibility. The material
   // choice is gone (2026-10-11): see `GLASS_FLOORS`.
   reduceTransparency: boolean
-  /** Settings → Appearance → Windows: Nidara's windows translucent (on) or solid. */
-  windowTransparency: boolean
+  /** Settings → Appearance → Windows: Nidara's windows opaque, tinted or translucent
+   *  (`WINDOW_BACKGROUNDS`). */
+  windowBackground: WindowBackground
   // ⚠️ DERIVED, never stored: the glass opacity per surface (higher = more opaque) that
   // the two above give, through `glassOpacities`. Whoever changes either of them calls
   // `withGlass` — the painters read these four and nothing else.
@@ -135,7 +136,7 @@ const shadowCss = (layers: ShadowLayer[]) =>
  * which carries no text, takes thinner glass than a panel full of it (tech-debt #83).
  * They are what glass a client paints itself wears (a control on a pane, the greeter on
  * Hyprland); on Hyalo the shell's panes are the compositor's. The windows are not in it:
- * `WINDOW_GLASS_OPACITY`.
+ * `WINDOW_BACKGROUNDS`.
  */
 export interface GlassFloors { bar: number; overlay: number; dock: number }
 
@@ -153,19 +154,29 @@ export const GLASS_FLOORS: GlassFloors = { bar: 0.32, overlay: 0.36, dock: GLASS
 export const GLASS_ROLE_FLOORS = { launcher: 0.42 }
 
 /**
- * Nidara's WINDOWS (Settings, About, the installer, their dialogs) are not glass material
- * and do not follow the material (owner's decision, 2026-09-30). The glass material is
- * for the interface's surfaces and controls; a window is only translucent or not — one
- * switch (`windowTransparency`), on by default, and one opacity: this, or solid. 0.80 is
- * the value the owner had set by hand.
+ * Nidara's WINDOWS are not glass material (owner, 2026-09-30): the glass is the interface's.
+ * A window is opaque, TINTED — the colour of what is behind it comes through, heavily
+ * blurred: subtle — or TRANSLUCENT — less opaque, less blurred: what is behind it shows
+ * (owner, 2026-10-18: one choice, opaque by default; a window that lets anything through is
+ * always blurred). Each is ONE pair, its opacity over the window's colour and the blur under
+ * it; Hyalo draws both (toolkit/PHASE1.md D6), the shell writes this table into its
+ * `[windows.background]` (AppearanceSync), and GTK windows paint the same opacity
+ * themselves. Another app's translucent window gets the translucent blur, whatever is
+ * chosen here: the tinted one is for the tint, not for seeing through.
  *
- * ⚠️ Named TRANSPARENCY, not "tinting" (macOS's "Allow wallpaper tinting in windows"),
- * on purpose: what shows through a window is shaped by the compositor's blur, and
- * Hyprland has ONE for everything (`GLASS_BLUR`). A "tint" of our own
- * would be a promise we cannot keep (owner, 2026-09-30). A compositor of our own would
- * lift that: `project_own_compositor_vision`.
+ * ⚠️ PROVISIONAL numbers (owner: not measured against the reference yet). The blur is the
+ * kawase offset (logical px) and passes, as `GLASS_BLUR`.
  */
-export const WINDOW_GLASS_OPACITY = 0.80
+export type WindowBackground = "opaque" | "tinted" | "translucent"
+export const WINDOW_BACKGROUNDS: Record<Exclude<WindowBackground, "opaque">, { opacity: number, blur: { size: number, passes: number } }> = {
+  tinted: { opacity: 0.92, blur: { size: 6, passes: 4 } },
+  translucent: { opacity: 0.78, blur: { size: 3, passes: 3 } },
+}
+
+/** A stored or served value as a window background: anything else is the default, opaque. */
+export function asWindowBackground(v: unknown): WindowBackground {
+  return v === "tinted" || v === "translucent" ? v : "opaque"
+}
 
 /** The white haze laid over the tint (`frostAt` in glass-legibility.ts). It gives way by
  *  itself as the glass thickens. Provisional. */
@@ -185,26 +196,26 @@ export const GLASS_BLUR = { size: 2, passes: 2 }
 export const SOLID_GLASS = 1
 
 /** The four opacities the two switches give. The ONE place the table is read. */
-export function glassOpacities(reduceTransparency: boolean, windowTransparency: boolean):
+export function glassOpacities(reduceTransparency: boolean, windowBackground: WindowBackground):
   Pick<NidaraThemeConfig, "glassFrost" | "barOpacity" | "overlayOpacity" | "dockOpacity" | "windowOpacity"> {
   if (reduceTransparency) {
     return { glassFrost: 0, barOpacity: SOLID_GLASS, overlayOpacity: SOLID_GLASS, dockOpacity: SOLID_GLASS, windowOpacity: SOLID_GLASS }
   }
   const f = GLASS_FLOORS
   return { glassFrost: GLASS_FROST, barOpacity: f.bar, overlayOpacity: f.overlay, dockOpacity: f.dock,
-           windowOpacity: windowTransparency ? WINDOW_GLASS_OPACITY : SOLID_GLASS }
+           windowOpacity: windowBackground === "opaque" ? SOLID_GLASS : WINDOW_BACKGROUNDS[windowBackground].opacity }
 }
 
-/** `c` with its four opacities re-derived from reduce transparency and window
- *  transparency. Call it after changing either. */
+/** `c` with its four opacities re-derived from reduce transparency and the window
+ *  background. Call it after changing either. */
 export function withGlass<T extends NidaraThemeConfig>(c: T): T {
-  return Object.assign(c, glassOpacities(c.reduceTransparency, c.windowTransparency))
+  return Object.assign(c, glassOpacities(c.reduceTransparency, c.windowBackground))
 }
 
 export const DEFAULT_CONFIG: NidaraThemeConfig = withGlass({
   accent: "blue",
   reduceTransparency: false,
-  windowTransparency: true,
+  windowBackground: "opaque",
   glassFrost: 0,
   barOpacity: 0, overlayOpacity: 0, dockOpacity: 0, windowOpacity: 0,
 })

@@ -821,22 +821,25 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   finished as Hyprland's `decoration:blur`, ITS formulas: contrast and brightness on what is
   read from the frame (first down-sample), vibrancy on each down-sample, noise and brightness
   after (`glass_gl::Finish`; `NEUTRAL` for the shell's glass, which has its own saturation and
-  tint). No tint of its own: a window's translucent background is its tint. Settings →
-  Appearance → Windows switches it (`appearance.windowBlur` → `[windows.backdrop] enabled` in the
-  settings layer); a rule's `backdrop = false` takes it from one app. The entry is `available`
-  only where `caps.windowBackdrop` (Hyalo): Hyprland's blur is one for windows and layers, and a
-  switch there would do nothing — `available: false` hides the row, `describeConfig` and
-  `setConfig` (ConfigRegistry).
+  tint). No tint of its own: a window's translucent background is its tint. How far it blurs is
+  the window background's LEVEL (`[windows.background]`, below); another app's translucent window
+  always gets the `translucent` level's blur. No switch in Settings any more (owner, 2026-10-18: a
+  window that lets anything through is blurred); `[windows.backdrop] enabled = false` still turns
+  it off everywhere, and a rule's `backdrop = false` for one app.
 - **A window's declared background** (toolkit/PHASE1.md D6, owner 2026-10-18): a toolkit window
   says only its colour, opaque (`nidara_material_v1.set_window_background`); Hyalo draws it inside
   the box, under the content, in the DECOR pass (`decor.rs` `fill`, so it is in the opening and
-  closing pictures) at `[windows.background] opacity` — which the shell's `AppearanceSync`
-  writes from "Window transparency"/"Reduce transparency" (`glassOpacities(...).windowOpacity`,
-  the same 0.80 GTK windows paint themselves). Such a window is translucent by that opacity, not
-  by its opaque region (`look`), and gets the same backdrop blur as any window. It is NOT glass:
-  no tone, no shell blur. GTK windows keep painting `--nidara-bg` themselves (frozen kit).
+  closing pictures). It shows at a LEVEL — `opaque`, `tinted` (heavily blurred, subtle) or
+  `translucent` (less opaque, less blurred) — the user's (`[windows.background] level`, from
+  Settings → Appearance → Windows "Window style") or the app's own
+  (`set_window_background_level`); `reduce_transparency` makes every one opaque. Each level is
+  one opacity + one blur (`tinted`/`translucent` tables). The shell's `AppearanceSync` writes all
+  of it from the kit's `WINDOW_BACKGROUNDS` (PROVISIONAL numbers, the same that GTK windows paint
+  their opacity with). Such a window is translucent by its level, not by its opaque region
+  (`look`, `blur_of`). It is NOT glass: no tone, no shell blur. GTK windows keep painting
+  `--nidara-bg` themselves (frozen kit).
 - What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`) and
-  its `background` (`color`, `opacity`) when it declared one.
+  its `background` (`color`, `level`, `own_level`, `opacity`) when it declared one.
 - **Who draws the title bar** (`shell/decoration.rs`, 2026-10-03): Hyalo, as Hyprland did —
   `xdg-decoration` and KDE's `server-decoration` both answer server-side, by default, on request
   and on unset, whatever the client asked (Hyprland's `XDGDecoration.cpp`/`ServerDecorationKDE.cpp`),

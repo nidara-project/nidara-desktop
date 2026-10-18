@@ -1391,7 +1391,7 @@ is to be decided anew — do not bring the three back. The key stays in the sche
 
 | control | key (`org.nidara.appearance`) | what it sets |
 |---|---|---|
-| Appearance → Windows: **Transparent windows** | `window-transparency` (on) | Nidara's WINDOWS: `WINDOW_GLASS_OPACITY` (0.80) or solid |
+| Appearance → Windows: **Window style** | `window-background` (`opaque`) | Nidara's WINDOWS: opaque, tinted or translucent — one opacity + one blur each (`WINDOW_BACKGROUNDS`, drawn by Hyalo, toolkit/PHASE1.md D6) |
 | Accessibility → Vision: **Reduce transparency** | `reduce-transparency` (off) | every glass surface SOLID (`SOLID_GLASS`), no haze |
 
 The glass itself is one set of values in `ui/lib/nidara-kit/platform/theme-tokens.ts`: per-surface

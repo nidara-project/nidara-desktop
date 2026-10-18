@@ -16,8 +16,8 @@
 //   accent-color                             Hyprland's groupbar accent
 //   font-name                                the family of the title Hyalo draws in its
 //                                              title bar (`windows.title_bar.font`)
-//   reduce-transparency, window-transparency  how much of a window's declared background
-//                                              Hyalo shows (`windows.background.opacity`)
+//   reduce-transparency, window-background   the window background Hyalo draws and the
+//                                              blur under it (`windows.background`)
 //   color-scheme, accent-color, gtk/icon/    the greeter's appearance mirror
 //     cursor theme, org.nidara.appearance
 //
@@ -38,7 +38,7 @@ import Theme, { TEXT_SCALE_MAX } from "./ThemeManager"
 import compositor, { settings } from "./CompositorState"
 import { initCompositorGlass } from "./CompositorGlass"
 import { startWindowButtonsSync } from "./WindowButtons"
-import { ACCENT_PALETTE, glassOpacities, type AccentKey } from "./NidaraTheme"
+import { ACCENT_PALETTE, WINDOW_BACKGROUNDS, asWindowBackground, type AccentKey } from "./NidaraTheme"
 import { GREETER_MIRROR_DIR } from "./Paths"
 
 type Effect = "ini" | "cursor" | "groupbar" | "mirror" | "titleFont" | "windowBackground"
@@ -85,15 +85,19 @@ function syncTitleFont(): void {
 }
 
 /**
- * How much of the background a window of ours declares Hyalo shows (toolkit/PHASE1.md D6):
- * the kit's window opacity for the two switches — the number GTK windows paint with
- * themselves, so both kinds look the same. Hyalo's `windows.background.opacity`, a no-op on
- * Hyprland; a patch that changes nothing writes nothing.
+ * The window background Hyalo draws (toolkit/PHASE1.md D6): the choice, reduce transparency
+ * (which beats an app that asks for its own), and the kit's table of what tinted and
+ * translucent are — the numbers GTK windows paint with themselves, so both kinds look the
+ * same. Hyalo's `windows.background`, a no-op on Hyprland; a patch that changes nothing
+ * writes nothing.
  */
 function syncWindowBackground(): void {
     const nidara = keep[1]
-    const { windowOpacity } = glassOpacities(nidara.get_boolean("reduce-transparency"), nidara.get_boolean("window-transparency"))
-    settings.setWindowBackgroundOpacity(windowOpacity)
+    settings.setWindowBackgrounds({
+        level: asWindowBackground(nidara.get_string("window-background")),
+        reduceTransparency: nidara.get_boolean("reduce-transparency"),
+        levels: WINDOW_BACKGROUNDS,
+    })
 }
 
 /**
@@ -296,7 +300,7 @@ export function startAppearanceSync(): void {
     })
     nidara.connect("changed", () => schedule("mirror"))
     nidara.connect("changed::reduce-transparency", () => schedule("windowBackground"))
-    nidara.connect("changed::window-transparency", () => schedule("windowBackground"))
+    nidara.connect("changed::window-background", () => schedule("windowBackground"))
 
     seedAndRepair(iface)
 

@@ -24,11 +24,11 @@ PORTAL = '''<node><interface name="org.freedesktop.portal.Settings">
 <method name="ReadAll"><arg direction="in" type="as"/><arg direction="out" type="a{sa{sv}}"/></method>
 <signal name="SettingChanged"><arg type="s"/><arg type="s"/><arg type="v"/></signal>
 </interface></node>'''
-values = {'appearance.darkMode': True, 'appearance.windowTransparency': False,
-          'appearance.windowBlur': False, 'appearance.windowControls': 'left',
+values = {'appearance.darkMode': True, 'appearance.windowBackground': 'tinted',
+          'appearance.windowControls': 'left',
           'appearance.interfaceFont': 'Noto Sans 11', 'appearance.interfaceIconTheme': 'nidara',
           'accessibility.reduceTransparency': False}
-titles = ['Dark mode', 'Window transparency', 'Window blur', 'Window controls']
+titles = ['Dark mode', 'Window style', 'Window controls']
 keys = list(values)
 schema = {'schemaVersion': 1, 'keys': {k: {'value': v, 'available': True} for k, v in values.items()}}
 for key, title in zip(keys, titles):
@@ -36,6 +36,8 @@ for key, title in zip(keys, titles):
                                'control': 'toggle' if isinstance(values[key], bool) else 'segmented'}
 schema['keys']['appearance.windowControls']['ui']['options'] = [
     {'value': 'left', 'label': 'Left'}, {'value': 'right', 'label': 'Right'}]
+schema['keys']['appearance.windowBackground']['ui']['options'] = [
+    {'value': v, 'label': v.capitalize()} for v in ('opaque', 'tinted', 'translucent')]
 
 bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 # Refuse an existing owner: this guard also makes an accidental live-bus invocation
@@ -64,7 +66,7 @@ def call(connection, sender, path, iface, method, params, invocation):
             'org.freedesktop.appearance': {'accent-color': GLib.Variant('(ddd)', (1., 0., 0.) if os.environ.get('NK_FIXTURE_UNKNOWN_ACCENT') else (0., 136/255, 1.)),
                                           'color-scheme': GLib.Variant('u', 1)},
             'org.nidara.appearance': {'reduce-transparency': GLib.Variant('b', False),
-                                      'window-transparency': GLib.Variant('b', False)}},)))
+                                      'window-background': GLib.Variant('s', 'tinted')}},)))
 
 
 for path, xml in [('/org/nidara/Config', CONFIG), ('/org/freedesktop/portal/desktop', PORTAL)]:

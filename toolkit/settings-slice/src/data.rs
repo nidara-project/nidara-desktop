@@ -11,10 +11,9 @@ use zbus::{
     zvariant::OwnedValue,
 };
 
-pub const KEYS: [&str; 4] = [
+pub const KEYS: [&str; 3] = [
     "appearance.darkMode",
-    "appearance.windowTransparency",
-    "appearance.windowBlur",
+    "appearance.windowBackground",
     "appearance.windowControls",
 ];
 pub const DEADLINE: Duration = Duration::from_secs(3);
@@ -185,8 +184,9 @@ impl Exports {
         };
         let reduce =
             bool::try_from(get("org.nidara.appearance", "reduce-transparency")?).map_err(err)?;
-        let transparent =
-            bool::try_from(get("org.nidara.appearance", "window-transparency")?).map_err(err)?;
+        let background: &str = get("org.nidara.appearance", "window-background")?
+            .downcast_ref()
+            .map_err(err)?;
         let accent = self.colors["accents"]
             .as_object()
             .ok_or("missing accents")?
@@ -207,7 +207,7 @@ impl Exports {
                 s["accent"] == *accent
                     && s["dark"] == dark
                     && s["reduceTransparency"] == reduce
-                    && s["windowTransparency"] == transparent
+                    && s["windowBackground"] == background
             })
             .ok_or("unknown portal combination")?;
         Ok(set["tokens"].clone())

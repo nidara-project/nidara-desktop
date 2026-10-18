@@ -199,10 +199,11 @@
     "settings.appearance.transition": "4ead496f",
     "settings.appearance.shell-opacity": "2532e87f",
     "settings.appearance.shell-opacity.desc": "65d97dbf",
-    "settings.appearance.window-transparency": "1545ef94",
-    "settings.appearance.window-transparency.desc": "0e75db56",
-    "settings.appearance.window-blur": "ca4058a0",
-    "settings.appearance.window-blur.desc": "3b1adf07",
+    "settings.appearance.window-background": "6625dbcb",
+    "settings.appearance.window-background.desc": "ef95a9ef",
+    "settings.appearance.window-background.opaque": "c637aebe",
+    "settings.appearance.window-background.tinted": "48cf6986",
+    "settings.appearance.window-background.translucent": "66c60f9a",
     "settings.appearance.window-controls": "b73cd2fc",
     "settings.appearance.window-controls.desc": "77b6de3c",
     "settings.appearance.window-controls.right": "954daa8b",
@@ -843,8 +844,8 @@
   },
   "locales": {
     "de": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -865,8 +866,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -969,14 +968,14 @@
       "stale": []
     },
     "es": {
-      "translated": 839,
-      "of": 839,
+      "translated": 840,
+      "of": 840,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -997,8 +996,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1101,8 +1098,8 @@
       "stale": []
     },
     "it": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1123,8 +1120,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1227,8 +1222,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1249,8 +1244,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1353,8 +1346,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1375,8 +1368,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1479,8 +1470,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1501,8 +1492,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1605,8 +1594,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1627,8 +1616,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1731,8 +1718,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1753,8 +1740,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1857,8 +1842,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1879,8 +1864,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",
@@ -1983,8 +1966,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 720,
-      "of": 839,
+      "translated": 723,
+      "of": 840,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2005,8 +1988,6 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
-        "settings.appearance.window-blur",
-        "settings.appearance.window-blur.desc",
         "settings.appearance.window-controls",
         "settings.appearance.window-controls.desc",
         "settings.appearance.window-controls.left",

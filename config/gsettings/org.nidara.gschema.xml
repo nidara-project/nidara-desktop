@@ -304,10 +304,15 @@
       <summary>Reduce transparency</summary>
       <description>Every glass surface becomes solid, whatever the glass material.</description>
     </key>
-    <key name="window-transparency" type="b">
-      <default>true</default>
-      <summary>Transparent windows</summary>
-      <description>Nidara's own windows let what is behind them show through, with the compositor's blur (one for the whole desktop). Off, they are solid. Not part of the glass material, which is for the interface's surfaces.</description>
+    <key name="window-background" type="s">
+      <choices>
+        <choice value="opaque"/>
+        <choice value="tinted"/>
+        <choice value="translucent"/>
+      </choices>
+      <default>'opaque'</default>
+      <summary>Window background</summary>
+      <description>Nidara's own windows: opaque; tinted (the colour of what is behind comes through, heavily blurred: subtle); or translucent (less opaque, less blurred). Each one opacity and one blur (WINDOW_BACKGROUNDS in the kit), drawn by the compositor. Not the interface's glass. Replaces window-transparency (2026-10-18).</description>
     </key>
     <!--
       RETIRED 2026-09-30 (#674): the four glass opacities the sliders wrote. Nothing

@@ -74,8 +74,7 @@ services**; only the door is new. Each row: the key, its type and validation, th
 | Accent (`accentPicker`) | `appearance.accent` | enum `ACCENT_PALETTE` | Theme `changed` (#854 added it) | enum + swatch colour from `ACCENT_HEX` |
 | Wallpaper image (`wallpaperPreview`, `wallpaperGallery`, `wallpaperPicker`) | **`wallpaper.current`** (new) | string: an absolute path to a readable JPEG/PNG/GIF/WebP/AVIF file (the formats the current picker accepts); a `file://` URI is accepted and canonicalised to the path | Wallpaper `changed` | **`catalogue`**: the bundled wallpapers (`getBundledWallpapers()`, greeter's excluded), offered, not enforced |
 | Transition | `wallpaper.transition` | enum | Wallpaper `changed` (#857 fixed the silent shell write) | enum |
-| Window transparency | `appearance.windowTransparency` | boolean; insensitive when `accessibility.reduceTransparency` | Theme `changed` | — |
-| Window blur | `appearance.windowBlur` | boolean; `available` only on Hyalo | own setter + the compositor's `config-reloaded` (#857: other processes' writes) | — |
+| Window style (D6) | `appearance.windowBackground` | enum `opaque`/`tinted`/`translucent`, **segmented**; insensitive when `accessibility.reduceTransparency` | Theme `changed` | enum |
 | Window controls | `appearance.windowControls` | enum `right`/`left`, **segmented** | WindowButtons change | enum |
 | Night light on / temperature / schedule | `nightlight.enabled`, `.temperature` (integer K, rounded → canonical), `.scheduleEnabled` | as registered | NightLight `changed` | — |
 | Schedule times (`nightScheduleTimes`) | **`nightlight.scheduleFrom`**, **`nightlight.scheduleTo`** (new) | string `HH:MM`, 24 h (the service's own `isTime`) | NightLight `changed` | — |
@@ -155,7 +154,7 @@ See [A1] for the identities and the routing.
   is a start-up error, never a silent fallback.
 - **Rendering authority `[A8]`:** the native Settings paints from the **Settings portal**, like
   every application (#534): `org.freedesktop.appearance` `accent-color`/`color-scheme` and
-  `org.nidara.appearance` `reduce-transparency`/`window-transparency` select one of the 72 sets,
+  `org.nidara.appearance` `reduce-transparency`/`window-background` select one of the 108 sets,
   all four from one `ReadAll`, re-selected on `SettingChanged`. `Config1` is for **editing**
   only. An unknown combination is an error shown, not a silent blue/dark. No file or `Config1`
   fallback for painting.
@@ -186,30 +185,38 @@ run):
 
 ## D6 — the window's background is Hyalo's (owner, 2026-10-18)
 
-A window is not glass (owner, 2026-09-30): it is translucent or not, and what shows through it
-is blurred or not. Until now the toolkit borrowed both from elsewhere — the colour from GTK's
-`--nidara-bg` with the 0.80 already mixed in, painted by Hyalo as a pane of the SHELL's glass
-(its blur, ignoring "Blur behind windows") — and the opening animation's picture had none of it.
+A window is not glass (owner, 2026-09-30). Until now the toolkit borrowed its background from
+elsewhere — the colour from GTK's `--nidara-bg` with the 0.80 already mixed in, painted by Hyalo as
+a pane of the SHELL's glass (its blur, ignoring "Blur behind windows") — and the opening animation's
+picture had none of it.
 
 - **The client says one thing: its background colour, opaque** — `nidara_material_v1`
   `set_window_background(r, g, b)` (added inside v1), on its toplevel's surface, from the token
   set's `--nidara-bg` with its alpha dropped. It paints no background of its own and declares no
   glass for it.
-- **Hyalo decides how it shows**, from the same switches as every window: `windows.background.opacity`
-  (how much of the colour; the shell writes the kit's `WINDOW_GLASS_OPACITY` or 1 from "Window
-  transparency" and "Reduce transparency", `AppearanceSync`) and `windows.backdrop` ("Blur behind
-  windows") under it when the opacity is below 1. Drawn with the window's own corners, behind its
-  content, in the same pass as its line and shadow — so it is in the window's opening and
+- **Hyalo decides how it shows: a LEVEL** (owner, 2026-10-18) — one choice in Settings →
+  Appearance → Windows, **opaque** (default), **tinted** (the colour of what is behind comes
+  through, heavily blurred: subtle) or **translucent** (less opaque, less blurred). Each level is
+  one opacity over the colour and one blur under it (the kit's `WINDOW_BACKGROUNDS`, provisional
+  numbers); a window that lets anything through is always blurred — the old transparency and
+  blur switches are gone. The shell writes the choice, reduce transparency and the table into
+  Hyalo's `[windows.background]` (`AppearanceSync`). Drawn with the window's own corners, behind
+  its content, in the same pass as its line and shadow — so it is in the window's opening and
   closing pictures, screenshots and captures from the first frame.
-- One blur for windows (`windows.backdrop`), ours and foreign ones alike; the shell's glass stays
-  the shell's. A window that declares a background is translucent by its opacity, not guessed
-  from its opaque region.
+- **An app may choose its own level** — `set_window_background_level` (follow, the default;
+  opaque; tinted; translucent): named levels, not numbers, so every window of the desktop stays
+  one family and Hyalo can retune a level without breaking an app. Reduce transparency beats it.
+- One blur for windows (`windows.backdrop`'s finishing, a level's size and passes); the shell's
+  glass stays the shell's. A window that declares a background is translucent by its level, not
+  guessed from its opaque region; any other translucent window gets the translucent level's blur
+  whatever is chosen (the tinted one is for the tint, not for seeing through).
 - Without `nidara_material_v1` the toolkit paints the same colour opaque itself (D5).
-- GTK windows (frozen kit) are unchanged: they paint `--nidara-bg` themselves, from the same
-  constant and the same 0.80, and look the same.
-- Acceptance: Hyalo reports the window's `background` (colour and opacity) from its first
+- GTK windows (frozen kit) paint `--nidara-bg` themselves at the chosen level's opacity, from the
+  same table; Hyalo blurs them as other apps' windows (translucent's blur).
+- Acceptance: Hyalo reports the window's `background` (colour, level, opacity) from its first
   configure-acked commit; the slice's check requires it and a `--control-no-background` run must
-  lose it.
+  lose it. The config service check writes the style from another process and requires Hyalo to
+  be told it and the kit's levels.
 
 ## Foundations (`nk-widgets`) and their acceptance `[A7]`
 

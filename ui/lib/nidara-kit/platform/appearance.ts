@@ -5,6 +5,7 @@ import { ACCENT_HEX, rgbToClosestAccent, type AccentKey } from "./accent"
 import {
   DEFAULT_CONFIG,
   withGlass,
+  asWindowBackground,
   type NidaraThemeConfig,
 } from "./theme-tokens"
 
@@ -115,7 +116,7 @@ function applyPortalKey(state: AppearanceState, ns: string, key: string, raw: un
     // The two switches; the four opacities every painter reads are derived from them
     // HERE, with the table in theme-tokens.ts, so an app and the shell cannot disagree.
     if (key === "reduce-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { reduceTransparency: v }))
-    else if (key === "window-transparency" && typeof v === "boolean") withGlass(Object.assign(state, { windowTransparency: v }))
+    else if (key === "window-background") withGlass(Object.assign(state, { windowBackground: asWindowBackground(v) }))
   }
   return JSON.stringify(state) !== before
 }
@@ -173,9 +174,8 @@ function readMirrorState(): AppearanceState | null {
       // look like a deliberate dark session.
       isDark: raw.isDark === true,
       reduceTransparency: raw.reduceTransparency === true,
-      // `!== false`: window transparency is ON by default, and a mirror written before the key
-      // existed must not turn it off.
-      windowTransparency: raw.windowTransparency !== false,
+      // Opaque unless the mirror says otherwise (an older mirror has no such key).
+      windowBackground: asWindowBackground(raw.windowBackground),
     })
   } catch (e) {
     // Not silent: an unreadable mirror is how #488 hid for a release (written 0600).

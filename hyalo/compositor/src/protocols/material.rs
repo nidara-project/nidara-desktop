@@ -214,6 +214,8 @@ pub struct MaterialState {
     /// `set_window_background`: the window's background colour, sRGB 0..1, opaque. Not glass:
     /// drawn with the window (render/decor.rs) at the windows' opacity (toolkit/PHASE1.md D6).
     pub window_background: Option<[f64; 3]>,
+    /// `set_window_background_level`: the level the app asked for; None: the user's.
+    pub window_background_level: Option<crate::config::BackgroundLevel>,
 }
 
 impl MaterialState {
@@ -396,8 +398,8 @@ pub fn on_commit(surface: &WlSurface) {
         }
         // The glass's counter moves only when the glass changed: a dock that re-declares its
         // drawn region on every frame of a hover does not redraw its glass for it.
-        let glass_changed = MaterialState { drawn: None, window_background: None, ..current.state.clone() }
-            != MaterialState { drawn: None, window_background: None, ..committed.clone() };
+        let not_glass = |m: &MaterialState| MaterialState { drawn: None, window_background: None, window_background_level: None, ..m.clone() };
+        let glass_changed = not_glass(&current.state) != not_glass(&committed);
         // A new ink rule meets the last measurement now: nothing measures a still backdrop again.
         let new_rule = committed.ink.filter(|i| current.state.ink.as_ref() != Some(i));
         if current.state != committed {
@@ -500,9 +502,13 @@ pub fn current(surface: &WlSurface) -> Option<Current> {
     })
 }
 
-/// The background colour `surface` declared for its window (`set_window_background`), if any.
-pub fn window_background(surface: &WlSurface) -> Option<[f64; 3]> {
-    with_states(surface, |states| states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().state.window_background)
+/// The background colour `surface` declared for its window (`set_window_background`), if any,
+/// and the level it asked for (`set_window_background_level`; None: the user's).
+pub fn window_background(surface: &WlSurface) -> Option<([f64; 3], Option<crate::config::BackgroundLevel>)> {
+    with_states(surface, |states| {
+        let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap();
+        current.state.window_background.map(|c| (c, current.state.window_background_level))
+    })
 }
 
 pub struct MaterialGlobal;
@@ -690,6 +696,18 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
             }
             Request::UnsetWindowBackground => {
                 self.pending(|m| m.window_background = None);
+            }
+            Request::SetWindowBackgroundLevel { level } => {
+                use crate::config::BackgroundLevel;
+                use nidara_material_v1::WindowBackgroundLevel as L;
+                let level = match level.into_result() {
+                    Ok(L::Opaque) => Some(BackgroundLevel::Opaque),
+                    Ok(L::Tinted) => Some(BackgroundLevel::Tinted),
+                    Ok(L::Translucent) => Some(BackgroundLevel::Translucent),
+                    // follow, or a value a newer client knows and this compositor does not.
+                    _ => None,
+                };
+                self.pending(|m| m.window_background_level = level);
             }
             Request::ClearGlass => {
                 self.pending(|m| m.glass = None);

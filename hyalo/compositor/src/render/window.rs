@@ -14,9 +14,11 @@
 //! - **Backdrop** (#708 point 1, "A, automatic"): the WINDOW material — blur and Hyprland's
 //!   finishing (contrast, vibrancy, noise), no refraction, no tint: a window's own translucent
 //!   background is its tint. Its own settings (`[windows.backdrop]`), apart from the shell's
-//!   glass. Under every window that is translucent: whose opaque region leaves some of its box
-//!   uncovered, beyond the corners' squares. Cut to the box and its corners — never the
-//!   client-side shadow margin, or a blurred halo would ring the window.
+//!   glass. Under every window that is translucent: one of ours whose background's level lets
+//!   anything through (`[windows.background]`, at that level's blur), any other whose opaque
+//!   region leaves some of its box uncovered beyond the corners' squares (at the translucent
+//!   level's blur). Cut to the box and its corners — never the client-side shadow margin, or a
+//!   blurred halo would ring the window.
 //! - A rule (`rounding = false`, `backdrop = false`) turns either off for an app.
 
 use std::cell::RefCell;
@@ -419,21 +421,36 @@ pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop
     // corners"): one that draws a frame with a shadow margin is cut to its box (`push`).
     let rounded = rule_rounded && !fullscreen && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
-    // A window that declares its background is as translucent as the windows' opacity; any
-    // other, as its opaque region says.
-    let see_through = match crate::protocols::material::window_background(&surface) {
-        Some(_) => cfg.background.opacity < 1.0,
-        None => translucent(&surface, geo, radius),
-    };
-    let backdrop = rule_backdrop && cfg.backdrop.enabled && cfg.backdrop.passes > 0 && see_through;
+    let backdrop = rule_backdrop && cfg.backdrop.enabled && blur_of(&surface, geo, radius, cfg).is_some();
     Look { rounded, backdrop }
 }
 
+/// The level of window background `surface` shows (toolkit/PHASE1.md D6): the one its app asked
+/// for, else the user's. None: it declared no background.
+pub fn background_level(surface: &WlSurface, cfg: &WindowsConfig) -> Option<crate::config::BackgroundLevel> {
+    let (_, asked) = crate::protocols::material::window_background(surface)?;
+    Some(asked.unwrap_or(cfg.background.level))
+}
+
+/// The blur under a window, kawase offset (logical px) and passes; None: it lets nothing
+/// through. One of ours: its background's level; any other that is translucent: the translucent
+/// level's — the tinted blur is for the tint, not for seeing through (owner, 2026-10-18).
+fn blur_of(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f64, cfg: &WindowsConfig) -> Option<(f64, u32)> {
+    let b = &cfg.background;
+    let look = match background_level(surface, cfg) {
+        Some(level) => b.look(level)?,
+        None if translucent(surface, geo, radius) => b.translucent,
+        None => return None,
+    };
+    (look.passes > 0).then_some((look.size, look.passes))
+}
+
 /// The background `surface` declared for its window (`set_window_background`), premultiplied, at
-/// the windows' opacity (`[windows.background]`).
+/// its level's opacity (`[windows.background]`; opaque: 1).
 pub fn background(surface: &WlSurface, cfg: &WindowsConfig) -> Option<[f32; 4]> {
-    let c = crate::protocols::material::window_background(surface)?;
-    let a = cfg.background.opacity.clamp(0.0, 1.0);
+    let (c, _) = crate::protocols::material::window_background(surface)?;
+    let level = background_level(surface, cfg)?;
+    let a = cfg.background.look(level).map_or(1.0, |l| l.opacity.clamp(0.0, 1.0));
     Some([(c[0] * a) as f32, (c[1] * a) as f32, (c[2] * a) as f32, a as f32])
 }
 
@@ -547,10 +564,11 @@ pub fn push<R: HyaloRenderer>(
         .then(|| super::decor::DecorElement::new(&surface, geo, if look.rounded { radius } else { 0.0 }, decor, fill, cfg, scale))
         .flatten();
     out.extend(decor.map(OutputElement::Decor));
-    if look.backdrop {
+    let blur = look.backdrop.then(|| blur_of(&surface, window.geometry(), if look.rounded { radius } else { 0.0 }, cfg)).flatten();
+    if let Some((size, passes)) = blur {
         let b = &cfg.backdrop;
         let radius = if look.rounded { radius } else { 0.0 };
-        let key = format!("{geo:?} {radius} {} {b:?} {}", cfg.rounding_power, scale.x);
+        let key = format!("{geo:?} {radius} {} {b:?} {size} {passes} {}", cfg.rounding_power, scale.x);
         let (id, commit) = with_states(&surface, |states| {
             let state = states.data_map.get_or_insert(BackdropState::default);
             let mut state = state.0.borrow_mut();
@@ -569,7 +587,7 @@ pub fn push<R: HyaloRenderer>(
             noise: b.noise as f32,
         };
         out.extend(
-            GlassElement::backdrop(id, commit, geo, radius, cfg.rounding_power, b.size * scale.x, b.passes, finish, output_size, &surface)
+            GlassElement::backdrop(id, commit, geo, radius, cfg.rounding_power, size * scale.x, passes, finish, output_size, &surface)
                 .map(OutputElement::Glass),
         );
     }

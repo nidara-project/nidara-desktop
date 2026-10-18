@@ -12,6 +12,8 @@ import {
     type AccentKey,
     DEFAULT_CONFIG,
     withGlass,
+    asWindowBackground,
+    type WindowBackground,
     ACCENT_PALETTE,
     generateTokensCss,
     generateSkinFlipScope,
@@ -43,17 +45,17 @@ import { withKitSheet } from "../../lib/nidara-kit/platform/kit-css"
 // (appearance.json was imported once by migrations/2026-09-14c-appearance-to-gsettings.sh.)
 interface NidaraAppearance {
     reduceTransparency: boolean
-    windowTransparency: boolean
+    windowBackground: WindowBackground
 }
 
 const nidaraAppearance = defineSettings<NidaraAppearance>("appearance", {
     reduceTransparency: DEFAULT_CONFIG.reduceTransparency,
-    windowTransparency: DEFAULT_CONFIG.windowTransparency,
+    windowBackground: DEFAULT_CONFIG.windowBackground,
 })
 
 /** The fields of `NidaraThemeConfig` that live in `org.nidara.appearance`. The four
  *  opacities are DERIVED from them (`withGlass`) and stored nowhere. */
-const NIDARA_KEYS = ["reduceTransparency", "windowTransparency"] as const
+const NIDARA_KEYS = ["reduceTransparency", "windowBackground"] as const
 
 // ── DARK/LIGHT in-process ────────────────────────────────────────────────────
 // Plain `Gtk.Settings`. This used to probe libadwaita first (loading its typelib
@@ -637,13 +639,13 @@ class ThemeManager extends GObject.Object {
         this.applyGlass()
     }
 
-    /** Settings → Appearance → Windows: Nidara's windows translucent or solid. Not the
-     *  interface's glass (`GLASS_FLOORS`): `WINDOW_GLASS_OPACITY` or solid. */
-    get windowTransparency(): boolean { return this.fcConfig.windowTransparency }
+    /** Settings → Appearance → Windows: Nidara's windows opaque, tinted or translucent. Not
+     *  the interface's glass (`GLASS_FLOORS`): `WINDOW_BACKGROUNDS`. */
+    get windowBackground(): WindowBackground { return asWindowBackground(this.fcConfig.windowBackground) }
     /** The glass's haze (derived; `GLASS_FROST`). */
     get glassFrost(): number { return this.fcConfig.glassFrost }
-    async setWindowTransparency(on: boolean) {
-        this.fcConfig.windowTransparency = on
+    async setWindowBackground(v: WindowBackground) {
+        this.fcConfig.windowBackground = asWindowBackground(v)
         this.applyGlass()
     }
 
@@ -723,12 +725,12 @@ class ThemeManager extends GObject.Object {
 
     /** What this process holds, for core/AppearanceSync.ts (settings.ini, the greeter's
      *  mirror). A copy: nothing outside writes Theme's state. */
-    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "reduceTransparency" | "windowTransparency"> {
+    snapshot(): ThemeState & Pick<NidaraThemeConfig, "accent" | "reduceTransparency" | "windowBackground"> {
         return {
             ...this.state,
             accent: this.fcConfig.accent,
             reduceTransparency: this.fcConfig.reduceTransparency,
-            windowTransparency: this.fcConfig.windowTransparency,
+            windowBackground: this.windowBackground,
         }
     }
 

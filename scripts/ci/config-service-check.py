@@ -11,8 +11,9 @@ it proves; each fails if its piece is missing:
   5. An invalid value is refused with Config1.Error.Invalid.
   6. With Settings → AI's config writes off, an ordinary sender is refused (Denied):
      this door is not wider than `setConfig`.
-  7. The wallpaper transition and a window-blur change made by another process are announced
-     (both were applied silently until #852's review).
+  7. The wallpaper transition is announced (it was applied silently until #852's review); a
+     window style written by another process is announced, and the shell carries it into
+     Hyalo's `[windows.background]` (toolkit/PHASE1.md D6) — with the kit's levels.
   8. The sync protocol: Snapshot (epoch, revision, versioned schema with `available` and the
      bundled-wallpaper catalogue); Apply answers the canonical value and a higher revision that
      an Updated carries; a no-op Apply answers the same revision and announces nothing.
@@ -98,9 +99,8 @@ subprocess.run([IPC, 'setConfig', 'appearance.darkMode', str(dark_was).lower()],
                capture_output=True)
 print('ok changed from the agent door (nidara-ipc setConfig)')
 
-# Two changes that used to be applied and never announced (#852's review): the wallpaper
-# transition (the shell's setter emitted nothing), and the window blur written by ANOTHER
-# process — here straight into Hyalo's settings layer, as the Settings process does.
+# The wallpaper transition, applied and never announced until #852's review (the shell's
+# setter emitted nothing).
 transitions = schema['wallpaper.transition']['values']
 transition = schema['wallpaper.transition']['value']
 new_t = next(t for t in transitions if t != transition)
@@ -109,16 +109,25 @@ wait_for('wallpaper.transition', new_t, 'Set of wallpaper.transition')
 call('Set', GLib.Variant('(sv)', ['wallpaper.transition', GLib.Variant('s', transition)]))
 print(f'ok wallpaper transition announced ({new_t})')
 
-if 'appearance.windowBlur' in schema:
-    blur = schema['appearance.windowBlur']['value']
-    subprocess.run(['nidara-hyalo', 'msg', 'settings', json.dumps({'windows': {'backdrop': {'enabled': not blur}}})],
-                   check=True, capture_output=True)
-    wait_for('appearance.windowBlur', not blur, 'a window-blur change made by another process')
-    subprocess.run(['nidara-hyalo', 'msg', 'settings', json.dumps({'windows': {'backdrop': {'enabled': None}}})],
-                   check=True, capture_output=True)
-    print('ok window blur from another process announced')
-else:
-    sys.exit('FAIL: appearance.windowBlur unavailable on Hyalo')
+# The window style written by ANOTHER process (gsettings, as Settings does): announced, and
+# Hyalo told the level and the kit's table (AppearanceSync → `[windows.background]`).
+def hyalo_background():
+    out = subprocess.run(['nidara-hyalo', 'msg', 'config'], check=True, capture_output=True, text=True).stdout
+    return json.loads(out)['ok']['config']['windows']['background']
+style_was = schema['appearance.windowBackground']['value']
+style = 'translucent' if style_was != 'translucent' else 'tinted'
+subprocess.run(['gsettings', 'set', 'org.nidara.appearance', 'window-background', style], check=True)
+wait_for('appearance.windowBackground', style, 'a window style written by another process')
+deadline = GLib.get_monotonic_time() + 5_000_000
+while hyalo_background()['level'] != style and GLib.get_monotonic_time() < deadline:
+    GLib.usleep(50_000)
+told = hyalo_background()
+if told['level'] != style:
+    sys.exit(f'FAIL: the window style {style} never reached Hyalo: {told}')
+if not (0 < told['translucent']['opacity'] < told['tinted']['opacity'] < 1):
+    sys.exit(f'FAIL: Hyalo was not told the kit\'s levels (translucent below tinted, both below 1): {told}')
+subprocess.run(['gsettings', 'set', 'org.nidara.appearance', 'window-background', style_was], check=True)
+print(f'ok window style from another process announced and carried into Hyalo ({style}: {told[style]})')
 
 fails_with('Error.Invalid', 'Set', GLib.Variant('(sv)', ['appearance.accent', GLib.Variant('s', 'no-such-colour')]),
            'an invalid value')

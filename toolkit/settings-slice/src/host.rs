@@ -52,6 +52,9 @@ pub struct Host {
     material: Option<mat::NidaraMaterialV1>,
     /// `--control-no-background`: no window background declared (the CI control).
     no_background: bool,
+    /// `--window-level LEVEL`: the app's own window background level (the CI check of
+    /// `set_window_background_level`); None: the user's.
+    window_level: Option<mat::WindowBackgroundLevel>,
     pub width: u32,
     pub height: u32,
     scale: f64,
@@ -85,6 +88,7 @@ impl Host {
             top: None,
             viewport: None,
             material: None,
+            window_level: window_level_arg(),
             no_background: std::env::args().any(|s| s == "--control-no-background") && {
                 eprintln!("CONTROL_APPLIED no-background");
                 true
@@ -179,6 +183,9 @@ impl Host {
                     bg[1] as f64 / 255.,
                     bg[2] as f64 / 255.,
                 );
+                if let Some(level) = self.window_level {
+                    m.set_window_background_level(level);
+                }
             }
         }
         s.attach(Some(&buffer), 0, 0);
@@ -631,4 +638,21 @@ mod tests {
             assert_eq!(frame_scale(v, f, 2, 1.25), (2., 2));
         }
     }
+}
+
+/// `--window-level opaque|tinted|translucent`, announced like the controls.
+fn window_level_arg() -> Option<mat::WindowBackgroundLevel> {
+    let args: Vec<String> = std::env::args().collect();
+    let value = args
+        .iter()
+        .position(|a| a == "--window-level")
+        .and_then(|i| args.get(i + 1))?;
+    let level = match value.as_str() {
+        "opaque" => mat::WindowBackgroundLevel::Opaque,
+        "tinted" => mat::WindowBackgroundLevel::Tinted,
+        "translucent" => mat::WindowBackgroundLevel::Translucent,
+        _ => return None,
+    };
+    eprintln!("WINDOW_LEVEL {value}");
+    Some(level)
 }
