@@ -23,6 +23,7 @@ daily use**; what is missing comes back later; a phase is never lengthened.
 | 2026-10-17 | **D3**: take over once Appearance passes; every other page opens the current Settings |
 | 2026-10-17 | Start-up must beat **Nautilus (473 ms)** and the current Settings (959 ms) |
 | 2026-10-17 | Any Wayland compositor, best on Hyalo (#848) |
+| 2026-10-19 | **The sidebar and the title bar float over the content** (D7): the sidebar always its own layer with the menus' glass; the title bar without a divider, content scrolling under it blurred |
 | 2026-10-18 | **Trust model: cooperative consent, as today** — `Config1` is not wider than `setConfig`, and is not a security boundary (a process of the same user can write dconf). Real enforcement goes with #840 (privacy and permissions) |
 | 2026-10-18 | **No non-Hyalo compositor run in CI in phase 1** — it would be paid on every PR. D5's fallbacks are specified and unit-tested, not run on a foreign compositor |
 | 2026-09-13 | Applications read the appearance **only from the Settings portal** (#534) — so does the native Settings ([A8]) |
@@ -218,6 +219,46 @@ picture had none of it.
   lose it. The config service check writes the style from another process and requires Hyalo to
   be told it and the kit's levels.
 
+## D7 — the sidebar and the title bar float over the content (owner, 2026-10-19)
+
+GTK never quite did this: its sidebar became a popover — and so got Hyprland's blur — only when
+it opened collapsed; otherwise it was part of the window. The native window does it always.
+
+- **The sidebar is always a surface of its own**: a layer (`nidara-layers-v1`, a synchronized
+  subsurface) **above** the content, collapsed or not, with **the shell's glass — the menus'**
+  (piece `panel` of `TONES`, `ui/lib/nidara-kit/platform/glass-material.ts`: tone, blur, rim,
+  shadow by size). Collapsing/expanding is that layer's transition, not a relayout of the window.
+- **The content spans the whole window**, under the sidebar and under the title bar. Its layout
+  gets a leading inset (the sidebar's width) and a top inset (the title bar's height), so at rest
+  nothing is hidden; but what scrolls **horizontally** (a strip of thumbnails, a wide row) passes
+  **under the sidebar**, and what scrolls **vertically** passes **under the title bar**, seen
+  through their glass.
+- **The title bar has no divider line.** It is a layer over the top of the content holding the
+  title and the window controls' room. At rest it shows only the window's background; content
+  that scrolls under it is blurred — **graded**: strongest at the window's top edge, none at the
+  title bar's bottom edge (a progressive blur), with the sidebar's glass as the alternative.
+  Which of the two, and its numbers, the owner decides live (A/B), not this file.
+- **Window controls** (Hyalo's, server side) **use the shell's glass** too. After the two above,
+  as their own piece.
+- **What is visible** for focus and AT-SPI is the content minus the insets: focus scrolls a
+  control out from under the sidebar/title bar, and a node entirely under them is not `SHOWING`
+  (it stays in the tree, like one scrolled away). One semantic tree: the sidebar is still the
+  `LIST` inside the `FRAME`.
+- **One source for the glass values:** `TONES` is exported with the tokens (#856's export), the
+  toolkit reads it; never a copy of the numbers in Rust.
+- **Without `nidara_material_v1` or `nidara_layers_v1`** (D5): sidebar and title bar are painted
+  by the app in the content's buffer with the opaque base, and the content is clipped to the
+  insets instead of passing under them.
+- **Hyalo (Claude):** (1) draw a layer's **own** material, with the backdrop being everything
+  under that layer — the parent window's content included — at the presented transform (today
+  only a root's glass is drawn, `CONTRACT.md` → layers); (2) a graded blur for a pane, added
+  **inside** `nidara-material-v1` (protocols stay v1). Each with a CI check and its control: a
+  sharp pattern in the parent's content under the sidebar comes out blurred (the control without
+  the layer's material: sharp); the graded pane's blur measured falling from top to bottom (the
+  control: uniform).
+- **Cost:** scrolling repaints the content's buffer only; the sidebar and title bar layers are
+  not repainted, Hyalo re-blurs. Held to gate 4's p95 frame interval like everything else.
+
 ## Foundations (`nk-widgets`) and their acceptance `[A7]`
 
 Promoted from phase 0's invariants (retained tree, stable ids, two-step layout, per-kind
@@ -225,7 +266,7 @@ invalidation, one focused node, pointer capture):
 
 | Component | Used by | AT-SPI acceptance |
 |---|---|---|
-| Window with sidebar + content | the app | `FRAME`; sidebar `LIST` of pages, selected state; content `SCROLL_PANE` |
+| Window with sidebar + content (D7: sidebar and title bar are layers over the content) | the app | `FRAME`; sidebar `LIST` of pages, selected state; content `SCROLL_PANE` |
 | Scroll region | content | `SCROLL_PANE`; focus scrolls into view; offscreen nodes stay in the tree (not hidden), `VISIBLE`/`SHOWING` correct |
 | Grouped list, row | every page | group = `PANEL` labelled by its header (label relation); row label relation to its control |
 | Switch, button | rows | `TOGGLE_BUTTON` (checked), `PUSH_BUTTON` |

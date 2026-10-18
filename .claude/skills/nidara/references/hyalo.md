@@ -1285,7 +1285,8 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
-- Not drawn yet: a layer's OWN glass (only the root's is), the drawn region (#761) of a
+- Not drawn yet: a layer's OWN glass (only the root's is; owed in phase 1 for the native window's
+  sidebar and title bar, `toolkit/PHASE1.md` D7, its backdrop including the parent's content), the drawn region (#761) of a
   layer-shell surface while it holds a layer (it is drawn whole), and capture shows layers at
   their presented place like the screen. Not offered to sandboxed clients, like the material.
 - ⚠️ Locally, the headless `cage` harness draws NO frames with this Mesa (`msg stats` →
