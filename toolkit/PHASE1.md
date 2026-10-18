@@ -244,9 +244,12 @@ Settings is held to more (below). Phase 0's 133 ms registered its fonts by file
   (from a `Snapshot`, never a cache). The native Settings logs `CONTENT_READY` with that frame's
   commit serial; Hyalo's presentation time for that commit is the end of the measurement. Image
   thumbnails may still be placeholders (named "Loading"), nothing else may.
-- The probe is fixed before it measures anything: it refuses an already-open matching window,
-  ties the window to the launched process (pid lineage), waits for its event subscription to be
-  live before launching, and cleans up only what it launched.
+- The probe is fixed (`scripts/dev/startup-probe.py`, 2026-10-18): it refuses an already-open
+  matching window, refuses a window that is not the launched process's or a descendant's
+  (an instance already running), waits for its event stream to answer before launching, and
+  closes only what it launched. `--ready REGEX` ends the measurement at the later of the first
+  buffer and the app's first stderr line matching REGEX: the native Settings prints
+  `CONTENT_READY commit=<serial>` there.
 - **Phase 0's 840 ms presentation-feedback gap** is explained first, in Hyalo (a timeline of
   commit, render, feedback), since the milestone depends on that feedback.
 
