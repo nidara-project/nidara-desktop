@@ -39,21 +39,37 @@ function gsettingsGet(schema: string, key: string): string {
     return new TextDecoder().decode(out).trim()
 }
 
-/** Change a key from ANOTHER process, then spin the loop until `until()` holds or
- *  the timeout passes — the store only hears it through the main loop. */
+/** Change a key from ANOTHER process, then spin the loop until `until()` holds — and keeps
+ *  holding for `QUIET_MS` — or the timeout passes: the store only hears it through the main
+ *  loop. Three things made a step flaky (CI, 2026-10-18: a CC layout reverted to the step
+ *  before's single tile, once in many runs): the `gsettings` process was not waited for, so
+ *  the next step's write could start while this one's was still landing; a condition seen
+ *  for one tick was taken as settled although a late change notification could still
+ *  reload the store over it; and a timeout went on silently, so the assertion after it
+ *  failed with nothing saying which write had not arrived. */
+const QUIET_MS = 200
 function gsettingsSetExternally(args: string, until: () => boolean, timeoutMs = 3000) {
     Gio.Settings.sync()
-    GLib.spawn_command_line_async(`gsettings ${args}`)
+    GLib.spawn_command_line_sync(`gsettings ${args}`)
     const loop = GLib.MainLoop.new(null, false)
     const started = Date.now()
+    let heldSince = 0
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 20, () => {
-        if (until() || Date.now() - started > timeoutMs) {
+        const now = Date.now()
+        if (!until()) heldSince = 0
+        else if (!heldSince) heldSince = now
+        const settled = heldSince && now - heldSince >= Math.min(QUIET_MS, timeoutMs)
+        if (settled || now - started > timeoutMs) {
             loop.quit()
             return GLib.SOURCE_REMOVE
         }
         return GLib.SOURCE_CONTINUE
     })
     loop.run()
+    // A probe step that waits on purpose (`() => false`) passes a short timeout; any other
+    // that ends here says so, before its assertion fails.
+    if (!until() && timeoutMs >= 1000)
+        printerr(`define-config-probe: \`gsettings ${args}\` not seen (or reverted) within ${timeoutMs} ms`)
 }
 
 async function run() {
