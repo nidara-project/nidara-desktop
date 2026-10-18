@@ -120,15 +120,20 @@ buttons = ["minimize", "maximize", "close"]
 font = "Inter"
 
 # The background a window of ours declares (nidara-material-v1 `set_window_background`): its
-# colour is the app's, this is how much of it shows. The shell keeps it in step with Settings →
-# Appearance → Window transparency and Accessibility → Reduce transparency.
+# colour is the app's; how it shows is a level — opaque, tinted (heavily blurred, subtle) or
+# translucent (less opaque, less blurred). The shell keeps all of it in step with Settings →
+# Appearance → Windows and Accessibility → Reduce transparency, from the kit's
+# WINDOW_BACKGROUNDS (provisional numbers). Another app's translucent window gets the
+# translucent blur. An app may ask for its own level.
 [windows.background]
-opacity = 0.8
+level = "opaque"
+reduce_transparency = false
+tinted = { opacity = 0.92, size = 6, passes = 4 }
+translucent = { opacity = 0.78, size = 3, passes = 3 }
 
+# The blur's finishing (Hyprland's `decoration:blur`); how far it blurs is the level's above.
 [windows.backdrop]
 enabled = true
-size = 2
-passes = 2
 contrast = 1.2
 brightness = 1.0
 vibrancy = 0.4

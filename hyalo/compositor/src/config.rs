@@ -46,8 +46,9 @@ pub struct Config {
     /// What happens when nobody touches the computer (idle.rs). Settings → Power writes it.
     pub idle: IdleConfig,
     pub render: RenderConfig,
-    /// How windows are drawn: their corners, and the blur behind a translucent one
-    /// (render/window.rs). Settings → Appearance → Windows writes `backdrop.enabled`.
+    /// How windows are drawn: their corners, the background our windows declare and the blur
+    /// behind a translucent one (render/window.rs). Settings → Appearance → Windows writes
+    /// `background` (the shell's AppearanceSync).
     pub windows: WindowsConfig,
     /// What Hyalo animates (wm/minimize.rs, wm/motion.rs). Settings → Accessibility → Reduce
     /// motion writes `enabled`.
@@ -148,19 +149,62 @@ impl Default for WindowsConfig {
 }
 
 /// The background a window declares (`nidara_material_v1.set_window_background`, toolkit/PHASE1.md
-/// D6): its colour is the app's, how much of it shows is this — the shell writes the kit's window
-/// opacity, or 1 for "Reduce transparency" and without "Window transparency". Below 1 the
-/// backdrop's blur is under it.
+/// D6): its colour is the app's; how it shows is a LEVEL — opaque, tinted (the colour of what is
+/// behind comes through, heavily blurred: subtle) or translucent (less opaque, less blurred) —
+/// the one chosen in Settings → Appearance → Windows, or the one the app asked for
+/// (`set_window_background_level`). Reduce transparency makes every one opaque. The shell writes
+/// all of it from the kit's `WINDOW_BACKGROUNDS` (AppearanceSync); these defaults are the same
+/// numbers. Another app's translucent window gets `translucent`'s blur.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BackgroundConfig {
-    pub opacity: f64,
+    pub level: BackgroundLevel,
+    pub reduce_transparency: bool,
+    pub tinted: BackgroundLook,
+    pub translucent: BackgroundLook,
 }
 
 impl Default for BackgroundConfig {
     fn default() -> Self {
-        Self { opacity: 0.8 }
+        Self {
+            level: BackgroundLevel::Opaque,
+            reduce_transparency: false,
+            tinted: BackgroundLook { opacity: 0.92, size: 6.0, passes: 4 },
+            translucent: BackgroundLook { opacity: 0.78, size: 3.0, passes: 3 },
+        }
     }
+}
+
+impl BackgroundConfig {
+    /// How a window background at `level` shows; None: opaque.
+    pub fn look(&self, level: BackgroundLevel) -> Option<BackgroundLook> {
+        match level {
+            _ if self.reduce_transparency => None,
+            BackgroundLevel::Opaque => None,
+            BackgroundLevel::Tinted => Some(self.tinted),
+            BackgroundLevel::Translucent => Some(self.translucent),
+        }
+    }
+}
+
+/// How a window's background shows (`[windows.background]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BackgroundLevel {
+    #[default]
+    Opaque,
+    Tinted,
+    Translucent,
+}
+
+/// One level of window background: how much of the window's colour (`opacity`, 0..1) and the
+/// blur under it — the kawase offset (logical px) and passes, as `GLASS_BLUR`'s numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BackgroundLook {
+    pub opacity: f64,
+    pub size: f64,
+    pub passes: u32,
 }
 
 /// The line around every window (render/decor.rs), outside its box and following its corners:
@@ -285,14 +329,14 @@ pub enum ControlsSide {
 
 /// The blur behind every translucent window: the WINDOW material (#708 point 1), apart from the
 /// shell's refractive glass — blur and Hyprland's finishing, no refraction, no tint of its own
-/// (a window's own translucent background is its tint). A rule turns it off for one app.
+/// (a window's own translucent background is its tint). How far it blurs is the window
+/// background's level (`[windows.background]`; another app's window: `translucent`). A rule
+/// turns it off for one app; `enabled = false` for all (no longer in Settings: a window that
+/// lets anything through is blurred, owner 2026-10-18).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BackdropConfig {
     pub enabled: bool,
-    /// The kawase blur, as `GLASS_BLUR`'s numbers: each pass's offset (logical px) and passes.
-    pub size: f64,
-    pub passes: u32,
     /// Hyprland's `decoration:blur` finishing, its numbers and its formulas: contrast before
     /// the blur, vibrancy in each down-sample, noise and brightness after.
     pub contrast: f64,
@@ -306,8 +350,6 @@ impl Default for BackdropConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            size: 2.0,
-            passes: 2,
             contrast: 1.2,
             brightness: 1.0,
             vibrancy: 0.4,

@@ -188,6 +188,7 @@ impl View {
                     match key.as_str() {
                         "appearance.darkMode" => json!(false),
                         "appearance.windowControls" => json!("right"),
+                        "appearance.windowBackground" => json!("opaque"),
                         _ => json!(true),
                     }
                 } else {

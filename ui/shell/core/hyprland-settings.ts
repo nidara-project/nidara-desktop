@@ -286,12 +286,10 @@ export function createHyprlandSettings(hs: HyprlandStateClass): CompositorSettin
         setNightLight: setNightLightHyprland,
         readIdle: parseHypridle,
         setIdle: writeHypridle,
-        caps: { animations: true, vrrOnDemand: "fullscreen", windowBackdrop: false, windowControls: false, recordedPointer: false },
+        caps: { animations: true, vrrOnDemand: "fullscreen", windowControls: false, recordedPointer: false },
 
         // One blur for windows and layers (`decoration:blur`): no switch of its own here.
-        readWindowBackdrop: () => true,
-        setWindowBackdrop() {},
-        setWindowBackgroundOpacity() {},
+        setWindowBackgrounds() {},
         setWindowControls() {},
         setWindowTitleFont() {},
         // wf-recorder asks for the pointer, and Hyprland has no setting against it.

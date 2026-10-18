@@ -74,15 +74,15 @@ const sets = []
 for (const accent of accents)
     for (const dark of [true, false])
         for (const reduceTransparency of [false, true])
-            for (const windowTransparency of [true, false]) {
-                const config = engine.withGlass({ ...engine.DEFAULT_CONFIG, accent, reduceTransparency, windowTransparency })
+            for (const windowBackground of ["opaque", "tinted", "translucent"]) {
+                const config = engine.withGlass({ ...engine.DEFAULT_CONFIG, accent, reduceTransparency, windowBackground })
                 const tokens = { ...starting, ...props(engine.nidaraVars(config, dark).join("\n")) }
-                sets.push({ accent, dark, reduceTransparency, windowTransparency, tokens })
+                sets.push({ accent, dark, reduceTransparency, windowBackground, tokens })
             }
 write(join(out, "tokens/colors.json"), {
     inputs: {
         accent: "appearance.accent", dark: "appearance.darkMode",
-        reduceTransparency: "accessibility.reduceTransparency", windowTransparency: "appearance.windowTransparency",
+        reduceTransparency: "accessibility.reduceTransparency", windowBackground: "appearance.windowBackground",
     },
     accents: Object.fromEntries(accents.map(k => [k, engine.ACCENT_PALETTE[k].color])),
     sets,

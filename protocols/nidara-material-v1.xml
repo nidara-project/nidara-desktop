@@ -389,5 +389,21 @@
     <request name="unset_window_background">
       <description summary="pending: no window background (the client paints its own)"/>
     </request>
+    <enum name="window_background_level">
+      <entry name="follow" value="0" summary="what the user chose for windows (the default)"/>
+      <entry name="opaque" value="1" summary="always opaque"/>
+      <entry name="tinted" value="2" summary="the colour of what is behind comes through, heavily blurred"/>
+      <entry name="translucent" value="3" summary="less opaque, less blurred: what is behind shows"/>
+    </enum>
+    <request name="set_window_background_level">
+      <description summary="pending: how this window's background shows">
+        By default a window's background (set_window_background) shows as
+        the user chose for windows. An app that wants its own look asks for
+        a level here; the compositor decides the opacity and the blur each
+        level has, and the user's reduce transparency still makes it
+        opaque. Persists until set again (follow to go back).
+      </description>
+      <arg name="level" type="uint" enum="window_background_level"/>
+    </request>
   </interface>
 </protocol>

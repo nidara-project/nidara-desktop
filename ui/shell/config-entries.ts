@@ -14,10 +14,10 @@ import Gio from "gi://Gio"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import { getBundledWallpapers } from "../lib/wallpaper"
-import { registerConfig, type ConfigValue, type ConfigResult } from "./core/ConfigRegistry"
+import { registerConfig, type ConfigResult } from "./core/ConfigRegistry"
 import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme, { TEXT_SCALE_MIN, TEXT_SCALE_MAX } from "./core/ThemeManager"
-import { ACCENT_PALETTE, type AccentKey } from "./core/NidaraTheme"
+import { ACCENT_PALETTE, type AccentKey, type WindowBackground } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, TRANSITIONS, type TransitionType } from "./core/WallpaperManager"
 import notifConfig from "./core/NotifConfig"
@@ -33,7 +33,7 @@ import { dockSettings, updateDockSettings, onDockSettingChanged, type DockPositi
 import { barConfig } from "./surfaces/bar/barState"
 import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onIdleChanged } from "./core/PowerConfig"
-import compositor, { settings as compositorSettings } from "./core/CompositorState"
+import { settings as compositorSettings } from "./core/CompositorState"
 import { readWindowButtons, setWindowButtonsSide, onWindowButtonsChanged } from "./core/WindowButtons"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
@@ -188,39 +188,21 @@ export function registerConfigEntries() {
         // `Changed` needs to hear it like every other key.
         subscribe: onThemeCfg(() => Theme.accentColor),
     })
-    registerConfig("appearance.windowTransparency", {
-        desc: "Whether Nidara's own windows (Settings, About, the installer) are translucent, with the compositor's blur behind them; off, they are solid. Separate from the interface's glass. Ignored while accessibility.reduceTransparency is on.",
-        type: "boolean",
-        get: () => Theme.windowTransparency,
-        set: v => void Theme.setWindowTransparency(v as boolean),
-        subscribe: onThemeCfg(() => Theme.windowTransparency),
+    // Nidara's windows (toolkit/PHASE1.md D6, owner 2026-10-18): one choice, opaque by default.
+    // The colour is the app's; the opacity and the blur under it are this level's
+    // (WINDOW_BACKGROUNDS), drawn by the compositor — AppearanceSync writes them into Hyalo.
+    registerConfig("appearance.windowBackground", {
+        desc: "Nidara's own windows (Settings, About, the installer and toolkit apps that follow the setting): opaque; tinted — the colour of what is behind comes through, heavily blurred, subtle; or translucent — less opaque and less blurred, what is behind shows. A window that lets anything through is always blurred. Separate from the interface's glass. Ignored (opaque) while accessibility.reduceTransparency is on. Other apps' translucent windows always get the translucent blur.",
+        type: "enum",
+        enum: ["opaque", "tinted", "translucent"],
+        get: () => Theme.windowBackground,
+        set: v => void Theme.setWindowBackground(v as WindowBackground),
+        subscribe: onThemeCfg(() => Theme.windowBackground),
         ui: {
-            i18n: "settings.appearance.window-transparency",
+            i18n: "settings.appearance.window-background",
+            control: "segmented",
+            optI18n: (v: string) => t(`settings.appearance.window-background.${v}` as any),
         },
-    })
-    // The blur behind translucent windows: the WINDOW material, apart from the interface's glass
-    // (#708 point 1). Only where the compositor has a switch for it (Hyalo); Hyprland's blur is
-    // one for windows and layers, so the entry is unavailable there and has no row.
-    const backdropListeners = new Set<(v: ConfigValue) => void>()
-    registerConfig("appearance.windowBlur", {
-        desc: "Whether windows that let the background through (a translucent terminal, Nidara's own windows) blur what is behind them. Separate from the interface's glass, and from appearance.windowTransparency, which decides whether Nidara's windows are translucent at all. A per-app rule in hyalo.toml (`backdrop = false`) turns it off for one app.",
-        type: "boolean",
-        available: () => compositorSettings.caps.windowBackdrop,
-        get: () => compositorSettings.readWindowBackdrop(),
-        set: v => {
-            compositorSettings.setWindowBackdrop(v as boolean)
-            backdropListeners.forEach(fn => fn(v))
-        },
-        // Also on the compositor's reload: the listeners above only hear THIS process's setter,
-        // and the Settings process registers entries of its own — its write reached Hyalo but
-        // never org.nidara.Config1's subscriber in the shell (found in #852's review).
-        subscribe: (apply) => {
-            apply(compositorSettings.readWindowBackdrop())
-            backdropListeners.add(apply)
-            const id = compositor.connect("config-reloaded", () => apply(compositorSettings.readWindowBackdrop()))
-            return () => { backdropListeners.delete(apply); safeDisconnect(compositor as any, id) }
-        },
-        ui: { i18n: "settings.appearance.window-blur" },
     })
     // Where the window controls go (#708 point 5): the compositor draws them over the app's
     // header, on this side; the apps that draw their own title bar put theirs there too. The

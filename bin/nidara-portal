@@ -111,7 +111,7 @@ const GNOME_NS = "org.gnome.desktop.interface"
 // table in the kit (theme-tokens.ts GLASS_FLOORS), and each reader derives the numbers
 // from it, so this daemon never has to know them. `glass-material` is no longer served:
 // the choice is gone (2026-10-11) and the schema keeps the key only for a migration.
-const NIDARA_KEYS = ["reduce-transparency", "window-transparency"]
+const NIDARA_KEYS = ["reduce-transparency", "window-background"]
 const BUS_NAME = "org.freedesktop.impl.portal.desktop.nidara"
 const OBJECT_PATH = "/org/freedesktop/portal/desktop"
 
@@ -330,7 +330,7 @@ try {
 
 const NIDARA_DEFAULTS = {
     "reduce-transparency": new GLib.Variant("b", false),
-    "window-transparency": new GLib.Variant("b", true),
+    "window-background": new GLib.Variant("s", "opaque"),
 }
 
 /**

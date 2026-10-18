@@ -18,9 +18,8 @@ import time
 from pathlib import Path
 from gi.repository import Gio, GLib
 
-KEYS = ('appearance.darkMode', 'appearance.windowTransparency',
-        'appearance.windowBlur', 'appearance.windowControls')
-DEFAULTS = dict(zip(KEYS, (False, True, True, 'right')))
+KEYS = ('appearance.darkMode', 'appearance.windowBackground', 'appearance.windowControls')
+DEFAULTS = dict(zip(KEYS, (False, 'opaque', 'right')))
 
 
 def get_values():
@@ -148,6 +147,17 @@ def main():
         print(f'PASS control applied; assert-values rejected painted defaults {fault}')
         print('PASS assert-scale: preferred scale told before the first content commit')
         print(f'PASS assert-background: Hyalo draws the window background from its first frame {background}; the control has none')
+        # An app's own level (set_window_background_level): the one Settings does not have.
+        own = next(l for l in ('opaque', 'tinted', 'translucent') if l != background['level'])
+        asked = subprocess.Popen([binary, '--window-level', own], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            listed = first_listing(asked.pid, time.monotonic() + 6).get('background') or {}
+        finally:
+            asked.terminate()
+            asked.wait(timeout=5)
+        if listed.get('level') != own or not listed.get('own_level'):
+            raise AssertionError(f'assert-own-level: asked for {own} over the user\'s {background["level"]}, Hyalo shows {listed}')
+        print(f'PASS assert-own-level: an app\'s own level ({own}) over the user\'s ({background["level"]})')
 
 
 if __name__ == '__main__':

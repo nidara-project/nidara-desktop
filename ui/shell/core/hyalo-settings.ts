@@ -71,7 +71,7 @@ function hyaloVrr(vrr: number): HyaloVrr {
 
 export function createHyaloSettings(): CompositorSettings {
     return {
-        caps: { animations: true, vrrOnDemand: "games", windowBackdrop: true, windowControls: true, recordedPointer: true },
+        caps: { animations: true, vrrOnDemand: "games", windowControls: true, recordedPointer: true },
 
         async readInput(current) {
             const input = config()?.input
@@ -147,16 +147,16 @@ export function createHyaloSettings(): CompositorSettings {
             else if (reply.error) console.error(`[HyaloSettings] Hyalo refused the night light: ${reply.error}`)
         },
 
-        // The window material (hyalo/compositor/src/render/window.rs): on its own switch.
-        readWindowBackdrop() {
-            return config()?.windows?.backdrop?.enabled ?? true
-        },
-        setWindowBackdrop(on) {
-            patch("window backdrop", { windows: { backdrop: { enabled: on } } })
-        },
-        // The background our windows declare (toolkit/PHASE1.md D6): the colour is the app's.
-        setWindowBackgroundOpacity(opacity) {
-            patch("window background", { windows: { background: { opacity } } })
+        // The background our windows declare (toolkit/PHASE1.md D6): the colour is the app's;
+        // the opacity and the blur under it, these. Another app's translucent window gets the
+        // translucent blur (hyalo/compositor/src/render/window.rs).
+        setWindowBackgrounds({ level, reduceTransparency, levels }) {
+            const pair = (l: { opacity: number, blur: { size: number, passes: number } }) =>
+                ({ opacity: l.opacity, size: l.blur.size, passes: l.blur.passes })
+            patch("window background", { windows: { background: {
+                level, reduce_transparency: reduceTransparency,
+                tinted: pair(levels.tinted), translucent: pair(levels.translucent),
+            } } })
         },
 
         setWindowControls(side, buttons) {

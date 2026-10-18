@@ -101,13 +101,9 @@ export const manifest = [
                 i18n: "settings.appearance.group.windows",
                 items: [
                     {
-                        key: "appearance.windowTransparency",
-                        note: "Windows are NOT part of the interface's glass (owner, 2026-09-30): Nidara's windows are only translucent or solid. Named transparency, not 'tinting': the blur behind them is the compositor's, so a tint of our own cannot be promised. On = WINDOW_GLASS_OPACITY, off = solid.",
+                        key: "appearance.windowBackground",
+                        note: "Windows are NOT part of the interface's glass (owner, 2026-09-30). One choice (owner, 2026-10-18): opaque (default), tinted, translucent — each one opacity and one blur (WINDOW_BACKGROUNDS), drawn by the compositor (toolkit/PHASE1.md D6). It replaced the transparency and blur switches: a window that lets anything through is always blurred. Solid while reduce transparency is on.",
                         sensitiveWhen: { key: "accessibility.reduceTransparency", in: ["false"] },
-                    },
-                    {
-                        key: "appearance.windowBlur",
-                        note: "The blur behind EVERY translucent window, ours and other apps' (#708 point 1, 'A, automatic'): the window material, on a switch of its own, apart from the interface's glass (owner's condition: windows and layers independent). Only where the compositor has the switch (Hyalo, `caps.windowBackdrop`): its entry's `available` hides the row elsewhere.",
                     },
                     {
                         key: "appearance.windowControls",

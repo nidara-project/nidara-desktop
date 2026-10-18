@@ -285,8 +285,12 @@ impl Hyalo {
                         shapes: m.state.shapes.len(),
                         compositor_paints: m.state.glass.is_some(),
                     }),
-                    background: m.window.wl_surface().and_then(|s| crate::protocols::material::window_background(&s)).map(|color| {
-                        super::WindowBackgroundInfo { color, opacity: self.config.windows.background.opacity.clamp(0.0, 1.0) }
+                    background: m.window.wl_surface().and_then(|s| {
+                        let (color, asked) = crate::protocols::material::window_background(&s)?;
+                        let cfg = &self.config.windows;
+                        let level = asked.unwrap_or(cfg.background.level);
+                        let opacity = cfg.background.look(level).map_or(1.0, |l| l.opacity.clamp(0.0, 1.0));
+                        Some(super::WindowBackgroundInfo { color, level, own_level: asked.is_some(), opacity })
                     }),
                     title_bar: m.bar(),
                     controls: crate::protocols::window_controls::managed_rect(m, &self.config.windows.controls).map(|(r, _)| {

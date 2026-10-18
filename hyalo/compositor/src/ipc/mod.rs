@@ -79,6 +79,10 @@ pub struct WindowInfo {
 #[derive(Debug, Clone, Serialize)]
 pub struct WindowBackgroundInfo {
     pub color: [f64; 3],
+    /// The level it shows at: the app's own, or the user's.
+    pub level: crate::config::BackgroundLevel,
+    /// Whether the app asked for that level (`set_window_background_level`).
+    pub own_level: bool,
     pub opacity: f64,
 }
 

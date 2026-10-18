@@ -2,6 +2,8 @@
 // from it so both backends can import them without importing each other. Read the header
 // of CompositorState.ts first.
 
+import type { WindowBackground, WINDOW_BACKGROUNDS } from "../../lib/nidara-kit/platform/theme-tokens"
+
 /** A window. `address` is bare hex (no `0x`) — compare with `bareAddr()` regardless. */
 export interface CompositorWindow {
     address: string
@@ -271,9 +273,6 @@ export interface SettingsCaps {
     /** What VRR's third choice (2) means: "fullscreen" = any fullscreen window (Hyprland's
      *  `misc:vrr = 2`); "games" = a game in fullscreen (Hyalo's `vrr = "games"`, per output). */
     vrrOnDemand: "fullscreen" | "games"
-    /** The blur behind translucent windows has a switch of its own, apart from the interface's
-     *  glass (Hyalo, #708 point 1). Hyprland's is one blur for windows and layers alike. */
-    windowBackdrop: boolean
     /** The compositor draws the window controls over an app's header, on the side the user
      *  chose (Hyalo, #708 point 5). Hyprland draws none: our windows keep their close button. */
     windowControls: boolean
@@ -296,15 +295,15 @@ export interface CompositorSettings {
      *  the schedule and the switch are the shell's (NightLightSync.ts). */
     setNightLight(kelvin: number | null): void
 
-    /** `caps.windowBackdrop` only: whether translucent windows are blurred behind (Hyalo's
-     *  `[windows.backdrop] enabled`). Persists and applies. */
-    readWindowBackdrop(): boolean
-    setWindowBackdrop(on: boolean): void
-
-    /** How much of the background a window declares (`set_window_background`) shows, 0..1:
-     *  Hyalo's `[windows.background] opacity`, kept by AppearanceSync.ts. No-op on Hyprland,
-     *  where no window declares one. Persists and applies. */
-    setWindowBackgroundOpacity(opacity: number): void
+    /** The window background the compositor draws (toolkit/PHASE1.md D6): the choice, reduce
+     *  transparency, and each level's opacity and blur — Hyalo's `[windows.background]`, kept
+     *  by AppearanceSync.ts. No-op on Hyprland, where no window declares one. Persists and
+     *  applies. */
+    setWindowBackgrounds(b: {
+        level: WindowBackground
+        reduceTransparency: boolean
+        levels: typeof WINDOW_BACKGROUNDS
+    }): void
 
     /** `caps.windowControls` only: the side the window controls go on and the buttons they may
      *  show (Hyalo's `[windows.controls]`). Kept equal to `button-layout` by WindowButtons.ts —
