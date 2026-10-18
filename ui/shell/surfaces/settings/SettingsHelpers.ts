@@ -5,7 +5,7 @@ import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton,
          NidaraToggleRow, NidaraDropDownRow, NidaraSliderRow, type NidaraSliderRowOpts,
          attachTooltip } from "../../../lib/nidara-kit"
 import { t } from "../../core/i18n"
-import { getConfigEntry } from "../../core/ConfigRegistry"
+import { enumOf, getConfigEntry } from "../../core/ConfigRegistry"
 import { currentUiIcon } from "../../core/Icons"
 import type { PageDecl, ItemDecl } from "./manifest"
 
@@ -277,7 +277,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             return toggleRow(label, subtitle, init, cb, onExt)
         }
         case "dropdown": {
-            const values = entry.enum ? [...entry.enum] : []
+            const values = [...(enumOf(entry) ?? [])]
             const getOptLabel = (val: string): string => {
                 if (ui.optI18n) return ui.optI18n(val)
                 const optKey = `${ui.i18n}.opt.${val}`
@@ -337,7 +337,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             return sliderRow(label, subtitle, init, min, max, cb, opts)
         }
         case "preset": {
-            const presets = ui.presets ?? (entry.enum ? entry.enum.map(Number) : [])
+            const presets = ui.presets ?? (enumOf(entry)?.map(Number) ?? [])
             if (!presets.length) {
                 throw new Error(`[settingRow] Preset setting "${key}" requires ui.presets in ConfigEntry`)
             }
@@ -352,7 +352,7 @@ export const settingRow = (key: string): Gtk.ListBoxRow => {
             return presetRow(label, subtitle, presets, init, unit, cb, onExt)
         }
         case "segmented": {
-            const values = entry.enum ? [...entry.enum] : []
+            const values = [...(enumOf(entry) ?? [])]
             const getOptLabel = (val: string): string => {
                 if (ui.optI18n) return ui.optI18n(val)
                 const optKey = `${ui.i18n}.opt.${val}`

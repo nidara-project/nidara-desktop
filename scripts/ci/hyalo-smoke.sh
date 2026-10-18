@@ -164,6 +164,9 @@ phase_build() {
     for host in "$REPO"/build/nidara-host/nidara-*; do
         install -Dm755 "$host" "/usr/lib/nidara/${host##*/}"
     done
+    # The bundled wallpapers where the package puts them (install.sh): Config1's catalogue of
+    # wallpaper.current lists them, and config-service-check.py requires it not empty.
+    install -Dm644 -t /usr/share/nidara/wallpapers "$REPO"/defaults/wallpaper/*.jpg
     cd "$REPO/ui/shell"
     npm install
     npx sass --no-charset ../lib/nidara-kit/styles/kit.scss ../lib/nidara-kit/kit.css && sed -i '/@charset/d' ../lib/nidara-kit/kit.css
@@ -444,7 +447,7 @@ phase_run() {
     # native Settings' only door to the settings. Describe/Get/Set/Changed, and the agent gate.
     python "$REPO/scripts/ci/config-service-check.py" /tmp/hyalo/nidara-ipc >/tmp/hyalo/config-service.log 2>&1 \
         || { log "FAIL: org.nidara.Config1"; cat /tmp/hyalo/config-service.log; exit 1; }
-    log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 8: describe, get, set, agent door, transition, blur from another process, invalid, denied)"
+    log "config service OK ($(grep -c '^ok' /tmp/hyalo/config-service.log) of 13: describe, get, set, agent door, transition, blur from another process, snapshot, apply, appearance keys, enum re-read, invalid, denied, native path)"
 
     # Window capture (#682): the overview's thumbnails, through the standard protocols
     # (ext-foreign-toplevel-list + ext-image-copy-capture, hyalo/compositor/src/capture.rs),
