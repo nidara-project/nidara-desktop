@@ -230,10 +230,15 @@ one with a `timeout-minutes`):
 skip the *work* inside a job, never the job. A job skipped by its `if:` DOES report (as a pass),
 which is how `scope` (`scripts/ci/ci-scope.sh`, its own self-test first) gates the long jobs:
 `code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond; `gates=false`
-(every path in an area the toolkit window does not use — a SKIP list, so a new directory runs
-them) skips only the Hyalo job's real fcitx5/Orca matrices, ~35 of its ~47 min. Adding a path
-the matrices read outside `toolkit/`, `hyalo/`, `protocols/`, `config/hyalo/` or their
-`scripts/ci/` files? Make sure `unrelated()` does not list it, and add a self-test line.
+(every path in an area the typing and screen-reader tests do not use — a SKIP list, so a new
+file runs them) skips only the Hyalo job's real fcitx5/Orca matrices, ~35 of its ~50 min. Inside
+`hyalo/` and `toolkit/` the list is by FILE (drawing, window management, capture, IPC, the
+Settings slice skip; input, focus, a11y, layers, backend, the toolkit crates run), and CI's own
+plumbing (`hyalo-smoke.sh`, `ci.yml`) skips too (2026-10-18: 19 of 25 PRs ran them, now 11).
+What a skip lets through, the **nightly** full run on main finds (`schedule`, no base, so
+everything runs); `nightly-report` opens/updates the issue "Nightly CI failed", and closes it
+when green. A file the matrices start depending on? Take it out of `unrelated()` and add a
+self-test line.
 
 ⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
 forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
