@@ -174,7 +174,11 @@ impl Host {
             // how much of it shows, and the blur under it, are the windows' settings there.
             if !self.no_background {
                 let bg = view.token("--nidara-bg", true)?;
-                m.set_window_background(bg[0] as f64 / 255., bg[1] as f64 / 255., bg[2] as f64 / 255.);
+                m.set_window_background(
+                    bg[0] as f64 / 255.,
+                    bg[1] as f64 / 255.,
+                    bg[2] as f64 / 255.,
+                );
             }
         }
         s.attach(Some(&buffer), 0, 0);
@@ -425,7 +429,11 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, ()> for Host {
     ) {
         // A scale it already draws at (re-sent, or the first one told) is no reason to repaint.
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = e {
-            eprintln!("PREFERRED_SCALE scale={} after_commit={}", scale as f64 / 120., h.commit);
+            eprintln!(
+                "PREFERRED_SCALE scale={} after_commit={}",
+                scale as f64 / 120.,
+                h.commit
+            );
             let scale = scale as f64 / 120.;
             h.dirty |= h.scale != scale;
             h.scale = scale;
