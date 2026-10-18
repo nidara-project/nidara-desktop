@@ -271,7 +271,9 @@ class WallpaperManager extends GObject.Object {
             await settingsShellRequest(["settingsWallpaper", "transition", t])
             this._loadSaved(); this.emit("changed"); return
         }
-        this._transition = t; this._save()
+        // Said like every other change: without it org.nidara.Config1 applied an agent's
+        // transition and never announced it (found in #852's review).
+        this._transition = t; this._save(); this.emit("changed")
     }
 
     /** Preview a transition by clearing to black then re-applying current wallpaper. */

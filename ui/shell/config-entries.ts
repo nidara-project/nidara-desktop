@@ -28,7 +28,7 @@ import { dockSettings, updateDockSettings, onDockSettingChanged, type DockPositi
 import { barConfig } from "./surfaces/bar/barState"
 import regionConfig, { type DateFormat, type TimeFormat } from "./core/RegionConfig"
 import { getIdleConfig, updateIdleConfig, onIdleChanged } from "./core/PowerConfig"
-import { settings as compositorSettings } from "./core/CompositorState"
+import compositor, { settings as compositorSettings } from "./core/CompositorState"
 import { readWindowButtons, setWindowButtonsSide, onWindowButtonsChanged } from "./core/WindowButtons"
 import inputConfig from "./core/InputConfig"
 import { allKeyboards, keyboardById, keyboardId, parseKeyboardId } from "../lib/keyboards"
@@ -177,10 +177,14 @@ export function registerConfigEntries() {
             compositorSettings.setWindowBackdrop(v as boolean)
             backdropListeners.forEach(fn => fn(v))
         },
+        // Also on the compositor's reload: the listeners above only hear THIS process's setter,
+        // and the Settings process registers entries of its own — its write reached Hyalo but
+        // never org.nidara.Config1's subscriber in the shell (found in #852's review).
         subscribe: (apply) => {
             apply(compositorSettings.readWindowBackdrop())
             backdropListeners.add(apply)
-            return () => { backdropListeners.delete(apply) }
+            const id = compositor.connect("config-reloaded", () => apply(compositorSettings.readWindowBackdrop()))
+            return () => { backdropListeners.delete(apply); safeDisconnect(compositor as any, id) }
         },
         ui: { i18n: "settings.appearance.window-blur" },
     })
