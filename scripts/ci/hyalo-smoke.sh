@@ -66,7 +66,7 @@ phase_build() {
 
     # The native toolkit client: its build/lint/tests are the toolkit job;
     # its real input/material/IME pixel checks run below on this vkms Hyalo.
-    cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice
+    cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice -p nk-widgets-demo
 
     # The checks' own clients below; everything of the product comes from the package.
     # The sandbox probe (what a Flatpak app sees, hyalo/compositor/src/sandbox.rs).
@@ -222,6 +222,7 @@ phase_run() {
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
         if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi
+        if [ -d "$REPO/toolkit/target/widgets-evidence" ]; then cp -a "$REPO/toolkit/target/widgets-evidence" "$OUT/toolkit-widgets"; fi
         if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
         if [ -d /tmp/ni ]; then cp -a /tmp/ni "$OUT/toolkit-fcitx5"; fi
         if [ -d /tmp/no ]; then cp -a /tmp/no "$OUT/toolkit-orca"; fi
@@ -801,6 +802,14 @@ PY
         cat /tmp/hyalo/nk-orca.log
         [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca gates; inspect toolkit-fcitx5 and toolkit-orca artifacts"; exit 1; }
     fi
+
+    # Phase 1 foundations beside phase 0. New evidence uses disk, not tmpfs.
+    mkdir -p "$REPO/toolkit/target/widgets-evidence"
+    NK_WIDGETS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
+        NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" env -u NK_WIDGETS_STAGES python "$REPO/scripts/ci/nk-widgets-check.py" \
+        > "$REPO/toolkit/target/widgets-evidence/check.log" 2>&1 \
+        || { cat "$REPO/toolkit/target/widgets-evidence/check.log"; exit 1; }
+    cat "$REPO/toolkit/target/widgets-evidence/check.log"
 
     # ── 4. The same log bar as the Hyprland smoke.
     kill -0 "$hyalo_pid" 2>/dev/null || { log "FAIL: Hyalo died"; exit 1; }

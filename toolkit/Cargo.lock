@@ -920,6 +920,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "nk-widgets"
+version = "0.1.0"
+dependencies = [
+ "nk-a11y",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
+]
+
+[[package]]
+name = "nk-widgets-demo"
+version = "0.1.0"
+dependencies = [
+ "nk-a11y",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
+ "nk-widgets",
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"

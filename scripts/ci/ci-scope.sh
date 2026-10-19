@@ -53,6 +53,7 @@ unrelated() {
         hyalo/compositor/src/protocols/material.rs|hyalo/compositor/src/protocols/virtual_pointer.rs|hyalo/compositor/src/protocols/window_controls.rs) return 0 ;;
         hyalo/compositor/src/shell/decoration.rs|hyalo/compositor/src/shell/layer.rs|hyalo/scripts/*|hyalo/session/*) return 0 ;;
         # The toolkit: the Settings slice is not in those tests; its crates and phase 0 are.
+        toolkit/crates/nk-widgets/*|toolkit/widgets-demo/*) return 1 ;;
         toolkit/settings-slice/*) return 0 ;;
         protocols/nidara-material-v1.xml) return 0 ;;
         ui/*|bin/*|defaults/*|config/*|lib/*|session/*|packaging/*|migrations/*|skills/*) return 0 ;;
@@ -123,6 +124,9 @@ if [ "${1:-}" = --self-test ]; then
     check_gates true hyalo/Cargo.lock
     check_gates true hyalo/compositor/src/newmodule.rs
     check_gates true toolkit/crates/nk-wayland/src/material.rs
+    check_gates true toolkit/crates/nk-widgets/src/lib.rs
+    check_gates true toolkit/widgets-demo/src/main.rs
+    check_gates true scripts/ci/nk-widgets-check.py
     check_gates true toolkit/phase0/src/main.rs
     check_gates true scripts/ci/nk-real-common.py
     check_gates true ui/shell/app.ts toolkit/crates/nk-text/src/lib.rs
