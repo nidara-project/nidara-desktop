@@ -255,7 +255,10 @@ the nightly run, not every PR.
 ⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
 forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
 Actions cancelled it, and the merge queue threw the entry out. The script sets apt's network
-timeouts, caps each attempt and tries three times. Details in `references/dev-workflow.md`.
+timeouts, caps each attempt and tries three times. Details in `references/dev-workflow.md`. vkms is loaded by `scripts/ci/load-vkms.sh`: the module if the kernel
+already has it, else `linux-modules-extra-$(uname -r)`, else a plain error — on 2026-10-19 some
+runners booted a kernel (7.0.0-1017-azure) with no such package in the archive at all, which
+apt.sh used to report as "the mirror is not answering" while every retry was doomed.
 
 ## When in doubt
 
