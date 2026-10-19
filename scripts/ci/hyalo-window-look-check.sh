@@ -52,8 +52,8 @@ wait_for look-glass
 sleep 1
 
 # 1. What Hyalo says of them.
-[ "$(look look-stripes)" = '{"rounded":true,"backdrop":false}' ] || fail "the opaque window: $(look look-stripes) (rounded, no backdrop expected)"
-[ "$(look look-glass)" = '{"rounded":true,"backdrop":true}' ] || fail "the translucent window: $(look look-glass) (rounded and blurred behind expected)"
+[ "$(look look-stripes)" = '{"rounded":true,"backdrop":false,"follow_level":false}' ] || fail "the opaque window: $(look look-stripes) (rounded, no backdrop expected)"
+[ "$(look look-glass)" = '{"rounded":true,"backdrop":true,"follow_level":false}' ] || fail "the translucent window: $(look look-glass) (rounded and blurred behind expected)"
 echo "ok    look: the opaque window is rounded, the translucent one rounded and blurred behind"
 
 set -- $(box look-stripes); sx=$1; sy=$2; sw=$3; sh=$4
@@ -80,14 +80,14 @@ echo "ok    backdrop: the stripes' spread under the glass is $under, beside it $
 # 4. Settings' switch.
 $MSG settings '{"windows":{"backdrop":{"enabled":false}}}' >/dev/null || fail "the settings layer refused the switch"
 sleep 0.5
-[ "$(look look-glass)" = '{"rounded":true,"backdrop":false}' ] || fail "switched off, the translucent window still says $(look look-glass)"
+[ "$(look look-glass)" = '{"rounded":true,"backdrop":false,"follow_level":false}' ] || fail "switched off, the translucent window still says $(look look-glass)"
 $MSG screenshot "$log/off.png" >/dev/null
 sharp=$(probe spread "$log/off.png" $((gx + 40)) $((gy + 40)) $((gw - 80)) $((gh - 80)))
 awk -v a="$sharp" -v b="$stripes" 'BEGIN { exit !(a > b / 2) }' \
     || fail "switched off, the stripes under the glass are still blurred: spread $sharp against $stripes"
 $MSG settings '{"windows":null}' >/dev/null
 sleep 0.5
-[ "$(look look-glass)" = '{"rounded":true,"backdrop":true}' ] || fail "switched back on, the translucent window says $(look look-glass)"
+[ "$(look look-glass)" = '{"rounded":true,"backdrop":true,"follow_level":false}' ] || fail "switched back on, the translucent window says $(look look-glass)"
 echo "ok    the switch: off, the stripes under the glass are sharp again (spread $sharp); back on"
 
 # 5. The line and the shadow, against both off.
