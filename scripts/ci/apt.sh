@@ -22,5 +22,5 @@ for i in 1 2 3; do
     echo "::warning::apt-get stalled or failed (attempt $i of 3)"
     sleep 5
 done
-echo "::error::apt-get failed three times — the Ubuntu mirror is not answering"
+echo "::error::apt-get failed three times — its own errors are above (a mirror not answering, or a package the archive does not have)"
 exit 1

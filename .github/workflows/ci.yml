@@ -531,10 +531,7 @@ jobs:
       # runner a VIRTUAL one: the kernel's vkms module. The Arch container
       # then gets /dev/dri via --privileged.
       - name: Load vkms (virtual KMS device)
-        run: |
-          scripts/ci/apt.sh install "linux-modules-extra-$(uname -r)"
-          sudo modprobe vkms
-          ls -l /dev/dri
+        run: scripts/ci/load-vkms.sh
       # No dependency cache any more (2026-08-18): the smoke used to build the
       # pinned Astal/AGS stack from source and cache the result as a tarball.
       # Nothing is built from source here now — every package comes from Arch's
@@ -572,10 +569,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Load vkms (virtual KMS device)
-        run: |
-          scripts/ci/apt.sh install "linux-modules-extra-$(uname -r)"
-          sudo modprobe vkms
-          ls -l /dev/dri
+        run: scripts/ci/load-vkms.sh
       # The Rust build is most of this job (≈ 6 of its 9 minutes on 2026-10-05: release 3m43s,
       # clippy 52s, tests 1m15s) and it was cold every time. Cargo's registry and target dir
       # live under hyalo/target (git-ignored) and are cached between runs. A PR can only
