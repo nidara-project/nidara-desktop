@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
-"""hyalo-controls-glass-check.py — the window controls use the shell's glass (toolkit/PHASE1.md
+"""hyalo-controls-glass-check.py — the window controls are the shell's glass (toolkit/PHASE1.md
 D7; hyalo/compositor/src/render/controls.rs `glass`, from the token export through
-render/glass_tokens.rs). Only inside a test Hyalo started with HYALO_CONTROL, with
-`hyalo-window-controls-probe` in PATH and the token export installed (or HYALO_GLASS_TOKENS
-pointing at it in Hyalo's environment).
+render/glass_tokens.rs): the bar capsules' glass, its tone, its ink tone and its ink, decided by
+what Hyalo measures under it — not by the app. Only inside a test Hyalo started with
+HYALO_CONTROL, with `hyalo-window-controls-probe` in PATH and the token export installed (or
+HYALO_GLASS_TOKENS pointing at it in Hyalo's environment).
 
-The probe's header is 4 px white and black columns (HYALO_PROBE_STRIPES); its controls sit on
-it. How sharp the columns are is their contrast along a row: the luminance's standard
-deviation, ≈ 127 sharp, near 0 blurred.
+The probe's header (its top 60 rows) is 4 px white and black columns (HYALO_PROBE_STRIPES), or
+the whole window one colour (HYALO_PROBE_HEADER); its controls sit on it. How sharp the columns are is their
+contrast along a row: the luminance's standard deviation, ≈ 127 sharp, near 0 blurred.
 
   1. inside the capsule the columns are blurred, beside it they are sharp;
-  2. the glass's face follows the app's ink: asking for dark ink (a light header) gives the
-     light face, brighter than the dark one;
-  3. the control: `[windows.controls] glass = false` in the settings layer, and the columns show
-     through the plain capsule — claim 1 must fail.
+  2. the ink is the glass's: over a light header the glyphs are dark, over a dark one white —
+     the app having said nothing about its header (no set_ink);
+  3. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
+     through the plain capsule (claim 1 must fail), and over the light header the glyphs stay
+     white, nothing measuring it (claim 2 must fail).
 Exits 1 on failure."""
 import json
 import os
-import signal
 import statistics
 import struct
 import subprocess
@@ -30,6 +31,7 @@ LOG.mkdir(parents=True, exist_ok=True)
 APP = 'hyalo-window-controls-probe'
 SHARP = 90
 BLURRED = 40
+LIGHT_HEADER, DARK_HEADER = 'f0f0f0', '303030'
 
 
 def msg(*args):
@@ -57,29 +59,51 @@ def shot(name):
     return w, h, pixels
 
 
-def row(image, y, x0, x1):
+def lum(image, x, y):
     w, _, px = image
-    return [0.2126 * px[(y * w + x) * 3] + 0.7152 * px[(y * w + x) * 3 + 1] + 0.0722 * px[(y * w + x) * 3 + 2]
-            for x in range(x0, x1)]
+    i = (y * w + x) * 3
+    return 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]
 
 
-def measure(name):
-    """The capsule's row and the header beside it."""
-    time.sleep(.6)
-    win = next(w for w in msg('windows')['windows'] if w['app_id'] == APP)
-    x, y, w, h = win['controls']
-    scale = msg('outputs')['outputs'][0]['scale']
-    image = shot(name)
-    p = lambda v: int(v * scale)
-    # 5 px under the capsule's top: above the glyphs (14 px, centred), clear of its round ends.
-    inside = row(image, p(y + 5), p(x + 16), p(x + w - 16))
-    beside = row(image, p(y + 5), p(win['x'] + 12), p(x - 12))
-    return {
-        'controls': [x, y, w, h],
-        'inside': statistics.pstdev(inside),
-        'inside_mean': statistics.fmean(inside),
-        'beside': statistics.pstdev(beside),
-    }
+def measure(name, env):
+    """Run the probe with `env` and measure its capsule and the header beside it."""
+    out = LOG / f'{name}.log'
+    with out.open('w') as stream:
+        probe = subprocess.Popen([APP], stdout=stream, stderr=stream, env={**os.environ, **env})
+    try:
+        for _ in range(80):
+            if 'PLACED' in out.read_text():
+                break
+            time.sleep(.1)
+        assert 'PLACED' in out.read_text(), f'the probe never placed its controls: {out.read_text()}'
+        time.sleep(1.5)  # past the window's opening
+        # The ink is measured on a drawing of the glass and applied when the GPU answers: a
+        # first capture is such a drawing where no frame is drawn (a headless harness).
+        shot(f'{name}-warm')
+        time.sleep(.5)
+        win = next(w for w in msg('windows')['windows'] if w['app_id'] == APP)
+        x, y, w, h = win['controls']
+        scale = msg('outputs')['outputs'][0]['scale']
+        image = shot(name)
+        p = lambda v: int(v * scale)
+        # 5 px under the capsule's top: above the glyphs (14 px, centred), clear of its round ends.
+        top = [lum(image, i, p(y + 5)) for i in range(p(x + 16), p(x + w - 16))]
+        beside = [lum(image, i, p(y + 5)) for i in range(p(win['x'] + 12), p(x - 12))]
+        # The glyphs' row: through their middle.
+        mid = [lum(image, i, p(y + h / 2)) for i in range(p(x + 6), p(x + w - 6))]
+        return {
+            'controls': [x, y, w, h],
+            'inside': statistics.pstdev(top),
+            'beside': statistics.pstdev(beside),
+            'glass': statistics.fmean(top),
+            'darkest': min(mid),
+            'brightest': max(mid),
+            'asked_ink': 'ASKED' in out.read_text(),
+        }
+    finally:
+        probe.terminate()
+        probe.wait()
+        time.sleep(.5)
 
 
 def blurred(m):
@@ -87,55 +111,51 @@ def blurred(m):
     assert m['inside'] < BLURRED, f'inside the capsule the header is sharp ({m["inside"]:.1f}): no glass under the controls'
 
 
+def inked(light, dark):
+    assert not light['asked_ink'] and not dark['asked_ink'], 'the probe asked for an ink: the check proves nothing'
+    assert light['darkest'] < 70, \
+        f'over a light header the glyphs are not dark (darkest {light["darkest"]:.0f}, glass {light["glass"]:.0f}): the glass did not take the ink'
+    assert dark['brightest'] > 170, \
+        f'over a dark header the glyphs are not white (brightest {dark["brightest"]:.0f}, glass {dark["glass"]:.0f})'
+
+
 def check():
     original = next(w['id'] for w in msg('workspaces')['workspaces'] if w['focused'])
-    out = LOG / 'probe.log'
-    probe = None
+    results = {}
     try:
         msg('do', 'workspace', 93)
         msg('do', 'set-workspace-mode', 93, 'floating')
-        with out.open('w') as stream:
-            probe = subprocess.Popen([APP], stdout=stream, stderr=stream, env={**os.environ, 'HYALO_PROBE_STRIPES': '1'})
-        for _ in range(80):
-            if 'PLACED' in out.read_text():
-                break
-            time.sleep(.1)
-        assert 'PLACED' in out.read_text(), f'the probe never placed its controls: {out.read_text()}'
-        time.sleep(1.0)  # past the window's opening
+        results['stripes'] = s = measure('stripes', {'HYALO_PROBE_STRIPES': '1'})
+        blurred(s)
+        print(f'ok    inside the capsule the header is blurred ({s["inside"]:.1f}), beside it sharp ({s["beside"]:.1f})', flush=True)
 
-        light = measure('glass')
-        blurred(light)
-        print(f'ok    inside the capsule the header is blurred ({light["inside"]:.1f}), beside it sharp ({light["beside"]:.1f})', flush=True)
-
-        asked = out.read_text().count('ASKED')
-        probe.send_signal(signal.SIGWINCH)
-        for _ in range(40):
-            if out.read_text().count('ASKED') > asked:
-                break
-            time.sleep(.1)
-        dark = measure('dark-ink')
-        blurred(dark)
-        assert dark['inside_mean'] > light['inside_mean'] + 10, \
-            f'dark ink asked, and the glass is no lighter ({dark["inside_mean"]:.1f} against {light["inside_mean"]:.1f}): its face does not follow the ink'
-        print(f'ok    the face follows the ink: light under dark glyphs ({dark["inside_mean"]:.1f}), dark under white ({light["inside_mean"]:.1f})', flush=True)
-        probe.send_signal(signal.SIGWINCH)
+        results['light'] = light = measure('light-header', {'HYALO_PROBE_HEADER': LIGHT_HEADER})
+        results['dark'] = dark = measure('dark-header', {'HYALO_PROBE_HEADER': DARK_HEADER})
+        inked(light, dark)
+        print(f'ok    the ink is the glass\'s: dark glyphs over a light header ({light["darkest"]:.0f}), '
+              f'white over a dark one ({dark["brightest"]:.0f}), the app saying nothing', flush=True)
 
         msg('settings', json.dumps({'windows': {'controls': {'glass': False}}}))
-        plain = measure('plain')
-        (LOG / 'measured.json').write_text(json.dumps({'glass': light, 'dark_ink': dark, 'plain': plain}, indent=2))
+        results['plain'] = plain = measure('plain', {'HYALO_PROBE_STRIPES': '1'})
         try:
             blurred(plain)
         except AssertionError as e:
             print(f'CAUGHT glass = false: {e}', flush=True)
         else:
             raise AssertionError(f'the control glass = false was not caught: {plain}')
+        # Without the glass nothing measures the header: the glyphs keep the app's ink, white.
+        results['plain_light'] = plain_light = measure('plain-light-header', {'HYALO_PROBE_HEADER': LIGHT_HEADER})
+        try:
+            inked(plain_light, dark)
+        except AssertionError as e:
+            print(f'CAUGHT glass = false (ink): {e}', flush=True)
+        else:
+            raise AssertionError(f'the control glass = false (ink) was not caught: {plain_light}')
         print('CONTROLS GLASS CHECK PASSED', flush=True)
     finally:
+        (LOG / 'measured.json').write_text(json.dumps(results, indent=2))
         subprocess.run([os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg', 'settings', json.dumps({'windows': None})],
                        capture_output=True)
-        if probe and probe.poll() is None:
-            probe.terminate()
-            probe.wait()
         msg('do', 'workspace', original)
 
 

@@ -664,11 +664,11 @@ PY
     nidara-hyalo msg do workspace 1 >/dev/null
     log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize, side, buttons, rule, close)"
     # The controls on the shell's glass (toolkit/PHASE1.md D7), read from the installed token
-    # export: the header blurred inside the capsule, the face following the ink; the control
-    # (glass = false) shows the header sharp through it.
+    # export: the header blurred inside the capsule, the ink decided by what is under it; the
+    # controls (glass = false) show the header sharp through it and keep white glyphs.
     CONTROLS_GLASS_LOG=/tmp/hyalo/controls-glass python "$REPO/scripts/ci/hyalo-controls-glass-check.py" >/tmp/hyalo/controls-glass.log 2>&1 \
         || { log "FAIL: controls glass"; cat /tmp/hyalo/controls-glass.log; exit 1; }
-    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 2, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) control caught)"
+    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 2, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 2 controls caught)"
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.

@@ -313,7 +313,7 @@ const MAX_INK_GROUPS: usize = 256;
 
 /// The ink rule with its hysteresis: a group whose darkest point under its content is `darkest`
 /// turns dark only above `dark_above`, and light again only below `light_below`. None: no change.
-fn next_ink(dark: bool, darkest: f64, ink: &Ink) -> Option<bool> {
+pub(crate) fn next_ink(dark: bool, darkest: f64, ink: &Ink) -> Option<bool> {
     if !dark && darkest > ink.dark_above {
         Some(true)
     } else if dark && darkest < ink.light_below {

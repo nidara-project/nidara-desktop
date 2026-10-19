@@ -491,12 +491,15 @@ pub fn push<R: HyaloRenderer>(
     // covers them).
     // With the shell's glass under them, right below their capsule: its backdrop is the header.
     if let Some((rect, controls)) = controls {
-        let glass = if cfg.controls.glass {
-            super::controls::glass(&surface, rect, scale, output_size, &controls, cfg.background.reduce_transparency)
+        let (glass, dark) = if cfg.controls.glass {
+            super::controls::glass(&surface, rect, geo, scale, output_size, cfg.background.reduce_transparency)
         } else {
-            Vec::new()
+            (Vec::new(), false)
         };
-        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, !glass.is_empty())));
+        // On the glass, its ink is the glass's; on the plain capsule, the app's (`set_ink`).
+        let under = !glass.is_empty();
+        let controls = if under { super::controls::Controls { dark, ..controls } } else { controls };
+        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, under)));
         out.extend(glass.into_iter().map(OutputElement::Glass));
     }
     let radius = if look.rounded { cfg.rounding * scale.x } else { 0.0 };

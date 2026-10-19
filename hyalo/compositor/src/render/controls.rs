@@ -214,30 +214,51 @@ impl ControlsElement {
     }
 }
 
-/// The id and commit of the controls' own material, kept on the window's surface: the commit
-/// moves when the material does.
+/// The commit of the controls' own material, kept on the window's surface: it moves when the
+/// material does.
 #[derive(Default)]
 struct GlassMemo(RefCell<Option<(CommitCounter, String)>>);
 
+/// The controls' ink, as the glass under them measured it (`ink_measured`): whether it is dark
+/// now, and the rule it was measured by.
+#[derive(Default)]
+struct InkMemo(RefCell<(bool, Option<crate::protocols::material::Ink>)>);
+
+/// The capsule's one ink group.
+const INK_GROUP: u32 = 1;
+
 /// The shell's glass under the capsule (toolkit/PHASE1.md D7: the window controls use the
-/// shell's glass): a `control` pane of the token export, on the face that goes with the ink —
-/// light under dark glyphs (the app said its header is light), dark under white ones. Empty
-/// without the export: the capsule paints its own fill then (`glass_under` false).
+/// shell's glass) — the glass of the bar's capsules, the same in every respect: a `control`
+/// pane of the token export, its tone and its ink tone, and the ink the shell's rule decides
+/// from what Hyalo measures under it (dark glyphs and the ink tone over a light header, white
+/// over a dark one), blurring only `window` (its box, output px). Empty without the export:
+/// the capsule paints its own fill then, and the app's `set_ink` says its ink. With it, the ink
+/// returned is the glass's.
 pub fn glass(
     surface: &WlSurface,
     rect: Rectangle<f64, Physical>,
+    window: Rectangle<f64, Physical>,
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
-    controls: &Controls,
     reduce_transparency: bool,
-) -> Vec<super::GlassElement> {
-    use crate::protocols::material::{Current, MaterialState, Shape};
-    let (w, h) = (rect.size.w / scale.x, rect.size.h / scale.y);
-    let Some(pane) = super::glass_tokens::pane("control", w.min(h), !controls.dark, reduce_transparency) else { return Vec::new() };
+) -> (Vec<super::GlassElement>, bool) {
+    use crate::protocols::material::{Current, InkBox, MaterialState, Shape};
+    let (x, y, w, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.w / scale.x, rect.size.h / scale.y);
+    // The bar's face: the shell's skin is dark whatever the mode, its ink measured.
+    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), false) };
+    let dark = with_states(surface, |states| {
+        let memo = states.data_map.get_or_insert(InkMemo::default);
+        let mut memo = memo.0.borrow_mut();
+        memo.1 = pane.ink;
+        if pane.ink.is_none() {
+            memo.0 = false;
+        }
+        memo.0
+    });
     let state = MaterialState {
         shapes: vec![Shape {
-            x: rect.loc.x / scale.x,
-            y: rect.loc.y / scale.y,
+            x,
+            y,
             w,
             h,
             radius: h / 2.0,
@@ -247,15 +268,17 @@ pub fn glass(
             pointer: None,
             fusion: None,
             tone: Some(pane.tone),
-            ink_tone: None,
+            ink_tone: pane.ink_tone,
             blur: None,
             shadow: None,
         }],
         glass: Some(pane.glass),
         lensing: pane.lensing,
+        ink: pane.ink,
+        ink_boxes: vec![InkBox { id: INK_GROUP, x, y, w, h }],
         ..Default::default()
     };
-    let key = format!("{state:?}");
+    let key = format!("{state:?} {dark}");
     let commit = with_states(surface, |states| {
         let memo = states.data_map.get_or_insert(GlassMemo::default);
         let mut memo = memo.0.borrow_mut();
@@ -266,8 +289,35 @@ pub fn glass(
         }
         entry.0
     });
-    let current = Current { state, commit, ..Default::default() };
-    super::GlassElement::for_material(surface, super::glass::Whose::Hyalo, &current, (0, 0).into(), scale, output_size)
+    let dark_ink = if dark { [INK_GROUP].into() } else { Default::default() };
+    let current = Current { state, commit, dark_ink, ..Default::default() };
+    // It reads its window only: past the window's edge the desktop would darken the header it
+    // measures its ink on (a capsule 12 px from the top, under a blur that reaches 64).
+    let bounds = window.to_i32_round();
+    let elements = super::GlassElement::for_material(surface, super::glass::Whose::Hyalo, &current, (0, 0).into(), scale, output_size)
+        .into_iter()
+        .filter_map(|g| g.within(bounds))
+        .collect();
+    (elements, dark)
+}
+
+/// A measurement of the glass under a window's controls came back (render/glass_gl.rs): the
+/// shell's rule, with its hysteresis, on the darkest point under the capsule. Whether the ink
+/// changed (the frame is redrawn).
+pub fn ink_measured(surface: &WlSurface, darkest: &[(u32, f32)]) -> bool {
+    let Some(&(_, l)) = darkest.iter().find(|(id, _)| *id == INK_GROUP) else { return false };
+    with_states(surface, |states| {
+        let Some(memo) = states.data_map.get::<InkMemo>() else { return false };
+        let mut memo = memo.0.borrow_mut();
+        let Some(ink) = memo.1 else { return false };
+        match crate::protocols::material::next_ink(memo.0, l as f64, &ink) {
+            Some(dark) => {
+                memo.0 = dark;
+                true
+            }
+            None => false,
+        }
+    })
 }
 
 impl Element for ControlsElement {

@@ -13,7 +13,7 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::protocols::material::{Glass, ShadowLaw, Tone};
+use crate::protocols::material::{Glass, Ink, ShadowLaw, Tone};
 
 /// Where the export is installed; `HYALO_GLASS_TOKENS` points elsewhere (a test, a checkout).
 const DEFAULT_PATH: &str = "/usr/share/nidara/settings-data/tokens/glass.json";
@@ -31,7 +31,17 @@ struct Variant {
     dark: bool,
     reduce_transparency: bool,
     glass: GlassJson,
+    /// The ink's thresholds; None: no ink (reduce transparency), or an export from before it.
+    #[serde(default)]
+    ink: Option<InkJson>,
     pieces: std::collections::BTreeMap<String, Vec<Step>>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InkJson {
+    dark_above: f64,
+    light_below: f64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -46,6 +56,9 @@ struct GlassJson {
 struct Step {
     from_side: f64,
     tone: ToneJson,
+    #[serde(default)]
+    ink_tone: Option<ToneJson>,
+    #[serde(default)]
     shadow: Option<ShadowJson>,
 }
 
@@ -86,6 +99,10 @@ pub struct Pane {
     pub glass: Glass,
     pub lensing: f64,
     pub tone: Tone,
+    /// Its tone while the ink under it is dark (the glass under a light backdrop), and the
+    /// thresholds the ink is measured with: the shell's own rule (`set_ink`, `set_ink_tone`).
+    pub ink_tone: Option<Tone>,
+    pub ink: Option<Ink>,
     pub shadow: Option<ShadowLaw>,
 }
 
@@ -138,13 +155,15 @@ fn pick(file: &File, piece: &str, side: f64, dark: bool, reduce_transparency: bo
     // The export's rule: the last step whose `fromSide` is at most the side rounded to a px.
     let side = side.round();
     let step = v.pieces.get(piece)?.iter().rev().find(|s| s.from_side <= side)?;
-    let t = step.tone;
+    let tone = |t: ToneJson| {
+        Tone::new(t.saturation, t.ceiling, t.lift, t.gain, [t.wash.r, t.wash.g, t.wash.b, t.wash.a], t.ambient, t.ambient_lift, t.ambient_gain)
+    };
     Some(Pane {
         glass: Glass { refraction: v.glass.refraction, rim: v.glass.rim },
         lensing: v.glass.lensing,
-        tone: Tone::new(
-            t.saturation, t.ceiling, t.lift, t.gain, [t.wash.r, t.wash.g, t.wash.b, t.wash.a], t.ambient, t.ambient_lift, t.ambient_gain,
-        ),
+        tone: tone(step.tone),
+        ink_tone: step.ink_tone.map(tone),
+        ink: v.ink.map(|i| Ink { dark_above: i.dark_above, light_below: i.light_below }),
         shadow: step.shadow.map(|s| ShadowLaw {
             opacity: [s.opacity_small, s.opacity_large],
             blur: [s.blur_small, s.blur_large],
@@ -159,9 +178,12 @@ mod tests {
 
     const SAMPLE: &str = r#"{"variants": [
         {"dark": true, "reduceTransparency": false, "glass": {"refraction": 40, "lensing": 0.15, "rim": 0.5},
+         "ink": {"darkAbove": 0.35, "lightBelow": 0.25},
          "pieces": {"control": [
             {"fromSide": 0, "tone": {"saturation": 1.3, "ceiling": 0.6, "lift": 0.125, "gain": 1.125,
-              "wash": {"r": 0, "g": 0, "b": 0, "a": 0}, "ambient": 0.8, "ambientLift": 0.125, "ambientGain": 0.5}},
+              "wash": {"r": 0, "g": 0, "b": 0, "a": 0}, "ambient": 0.8, "ambientLift": 0.125, "ambientGain": 0.5},
+             "inkTone": {"saturation": 1.2, "ceiling": 0.94, "lift": 0.4, "gain": 1.03,
+              "wash": {"r": 1, "g": 1, "b": 1, "a": 0.2}, "ambient": 0, "ambientLift": 0, "ambientGain": 1}},
             {"fromSide": 65, "tone": {"saturation": 1.3, "ceiling": 0.59, "lift": 0.125, "gain": 1.125,
               "wash": {"r": 0, "g": 0, "b": 0, "a": 0}, "ambient": 0.8, "ambientLift": 0.125, "ambientGain": 0.5}}]}},
         {"dark": false, "reduceTransparency": false, "glass": {"refraction": 40, "lensing": 0.15, "rim": 0.5},
@@ -176,6 +198,9 @@ mod tests {
         let small = pick(&f, "control", 32.0, true, false).unwrap();
         assert_eq!(small.tone.ceiling, 0.6);
         assert_eq!(small.glass.refraction, 40.0);
+        assert_eq!(small.ink_tone.unwrap().lift, 0.4, "its tone under dark ink");
+        assert_eq!(small.ink, Some(Ink { dark_above: 0.35, light_below: 0.25 }));
+        assert!(pick(&f, "control", 32.0, false, false).unwrap().ink.is_none(), "a variant without ink");
         assert_eq!(pick(&f, "control", 64.6, true, false).unwrap().tone.ceiling, 0.59, "65 rounded reaches the second step");
         assert_eq!(pick(&f, "control", 32.0, false, false).unwrap().tone.lift, 0.4, "the light face");
         assert!(pick(&f, "control", 32.0, true, true).is_none(), "no such variant");

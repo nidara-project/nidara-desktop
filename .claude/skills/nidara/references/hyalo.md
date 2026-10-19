@@ -968,22 +968,31 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   edge, the hovered button's fill, one glyph a button (`count`, 1 to 3) as distance fields, all anti-aliased at the
   output's scale), pushed over the window's own surfaces and under its popups; never on a
   fullscreen window. Hover and press live in `wm.controls_hover`.
-- **On the shell's glass** (toolkit/PHASE1.md D7, 2026-10-19): under the capsule over an app's
-  header Hyalo draws a `control` pane of the shell's glass — refraction, rim, lensing and tone
+- **On the shell's glass** (toolkit/PHASE1.md D7, owner 2026-10-19: "the button's look is the
+  glass's properties, as on the top bar; light or dark backdrop is the glass's, not the app's").
+  Under the capsule over an app's header Hyalo draws the bar capsules' glass, the same in every
+  respect: a `control` pane — refraction, rim, lensing, tone, ink tone and the ink's thresholds
   read from the token export (`render/glass_tokens.rs`: `tokens/glass.json`, installed under
   `/usr/share/nidara/settings-data/`, looked at again every 2 s; `HYALO_GLASS_TOKENS` points
-  elsewhere), never a copy of the numbers in Rust. A material Hyalo makes itself
-  (`controls::glass`), drawn by the same `GlassElement` as a client's (`for_material`,
-  `Whose::Hyalo`: its ids apart from the app's own material on that surface), right below the
-  capsule — its backdrop is the header. The FACE follows the ink: dark under white glyphs,
-  light when the app said its header is light (`set_ink` dark). The shader then draws only the
-  state and the glyphs (`glass_under`). `[windows.controls] glass = false` draws the plain
-  capsule (the A/B, and the check's control); without the export it is plain too. Not yet in
-  Hyalo's own title bar, whose capsule is drawn in the bar's pass and whose ink the shader
-  decides from the bar's colour. CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe
-  with `HYALO_PROBE_STRIPES`: header blurred inside the capsule, sharp beside it; the light
-  face brighter; `glass = false` must fail). `hyalo-window-controls-check.sh` checks the
-  glyphs' ink on the plain capsule.
+  elsewhere), never a copy of the numbers in Rust — on the shell's face (dark, whatever the
+  mode, as the bar). A material Hyalo makes itself (`controls::glass`), drawn by the same
+  `GlassElement` as a client's (`for_material`, `Whose::Hyalo`: its ids apart from the app's
+  own material on that surface), right below the capsule, reading only inside the window
+  (`within`: the desktop above a capsule 12 px from the top darkened what it measured to 0.32,
+  under the 0.35 that turns the ink). **The ink is measured, never the app's**: one ink box, the
+  capsule; the result comes back with `Whose::Hyalo` (`Measured::whose`) to
+  `controls::ink_measured`, the shell's rule with its hysteresis (`material::next_ink`) — dark
+  glyphs and the ink tone over a light header, white over a dark one. The app's `set_ink` only
+  says the ink of the PLAIN capsule: `[windows.controls] glass = false` (the A/B, and the
+  check's control), or no export. The shader draws only the state and the glyphs over the glass
+  (`glass_under`). Not yet in Hyalo's own title bar, whose capsule is drawn in the bar's pass.
+  CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe with `HYALO_PROBE_STRIPES`: header
+  blurred inside the capsule, sharp beside it; `HYALO_PROBE_HEADER`: dark glyphs over f0f0f0,
+  white over 303030, the app asking nothing; `glass = false` must fail both).
+  `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
+- **A capture collects the ink it measured** (`capture_output` arms the poll as a frame does): a
+  screenshot draws the glass too. Where no frame is drawn — the headless cage harness — only
+  captures measure, so a check takes one capture before the one it reads.
 - **Input**: `Hyalo::controls_under(pos)` walks the windows in drawing order (a layer or a window
   over the controls covers them); `surface_under` returns NONE there, so the app gets a leave and
   never the pointer over its controls; `update_controls_hover` runs after every pointer motion and

@@ -192,13 +192,19 @@ pub fn capture_output(state: &mut Hyalo, output: &Output, pointer: bool) -> Resu
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
     let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
-    match backend {
+    let captured = match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output, cursor.as_ref()),
         Backend::Tty(t) => {
             let mut renderer = t.primary_renderer()?;
             crate::screenshot::capture(renderer.as_mut(), &scene, output, cursor.as_ref())
         }
+    };
+    // A capture draws the glass too, and may measure its ink: its result is collected as a
+    // frame's is (where no frame is drawn — the headless harness — only a capture measures).
+    if crate::render::glass_gl::take_ink_issued() {
+        arm_ink_poll(state);
     }
+    captured
 }
 
 /// One output (or `area` of it) drawn into a client's dmabuf of `size` (screencopy.rs), with the
@@ -358,7 +364,10 @@ fn poll_ink(state: &mut Hyalo) -> bool {
         if let Ok(surface) = m.surface.upgrade()
             && !m.ink.is_empty()
         {
-            redraw |= crate::protocols::material::ink_measured(&surface, &m.ink);
+            redraw |= match m.whose {
+                crate::render::glass::Whose::Client => crate::protocols::material::ink_measured(&surface, &m.ink),
+                crate::render::glass::Whose::Hyalo => crate::render::controls::ink_measured(&surface, &m.ink),
+            };
         }
     }
     if redraw {

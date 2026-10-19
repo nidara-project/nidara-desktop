@@ -53,6 +53,8 @@ pub struct GlassElement {
     /// The glass's soft blur, output px (`glass_gl::BlurMix`): where the compositor paints the
     /// glass it mixes three blurs by each shape's size. None: the chain's blur alone.
     soft: Option<f32>,
+    /// Whose material it is: where its ink measurement goes.
+    whose: Whose,
 }
 
 /// One id per group of a surface's shapes, stable across frames: its own material's, and the
@@ -161,6 +163,7 @@ impl GlassElement {
                     glass,
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
+                    whose,
                     finish: glass_gl::Finish::NEUTRAL,
                     // The capture's three blurs: mixed by size where the compositor paints the
                     // glass, walked from sharp to full where a shape is graded.
@@ -217,6 +220,7 @@ impl GlassElement {
             ink_boxes: Vec::new(),
             ink_saturation: 1.0,
             surface: surface.downgrade(),
+            whose: Whose::Client,
             finish,
             soft: None,
         })
@@ -260,7 +264,7 @@ impl GlassElement {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
             if self.glass.is_some() {
-                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface);
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface, self.whose);
             }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish);
         })
@@ -285,7 +289,7 @@ impl GlassElement {
         self.region
     }
 
-    /// This glass reading nothing outside `bounds` (output px): a layer's glass blurs its own
+    /// This glass reading nothing outside `bounds` (output px): glass over a window blurs that
     /// window, whose edge repeats past it, never the desktop beside the window (toolkit/PHASE1.md
     /// D7). None when nothing of it is left.
     pub fn within(mut self, bounds: Rectangle<i32, Physical>) -> Option<Self> {
