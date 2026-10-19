@@ -170,7 +170,20 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
                 Some((m.id.to_string(), serde_json::json!([p.origin.x, p.origin.y, frame.size.w * p.scale, frame.size.h * p.scale])))
             })
             .collect();
-        let metadata = serde_json::json!({"input_method_rectangles": rectangles, "drawn": drawn});
+        // And each window opening, as its picture is drawn in it: its box scaled about its middle.
+        let opening: serde_json::Map<String, serde_json::Value> = state
+            .wm
+            .windows
+            .iter()
+            .filter_map(|m| {
+                let look = state.wm.opening(m.id, when)?;
+                let f = m.frame().to_f64();
+                let (w, h) = (f.size.w * look.scale, f.size.h * look.scale);
+                let (x, y) = (f.loc.x + (f.size.w - w) / 2.0, f.loc.y + (f.size.h - h) / 2.0);
+                Some((m.id.to_string(), serde_json::json!({"box": [x, y, w, h], "scale": look.scale, "alpha": look.alpha})))
+            })
+            .collect();
+        let metadata = serde_json::json!({"input_method_rectangles": rectangles, "drawn": drawn, "opening": opening});
         std::fs::write(path.with_extension("capture.json"), metadata.to_string()).map_err(|e| e.to_string())?;
     }
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ppm")) {

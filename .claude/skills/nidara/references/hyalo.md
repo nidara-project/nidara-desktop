@@ -996,7 +996,9 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
 - **A capture says where moving windows were in it** (with `HYALO_CONTROL`): `<shot>.capture.json`
   carries `drawn` — each window drawn at a place (into the dock, out of it), `{id: [x, y, w, h]}`
-  at the capture's own moment. A check that needs a moving window's position in a picture reads
+  at the capture's own moment — and `opening`, each window opening as its picture is drawn in
+  it, `{id: {box, scale, alpha}}` (`hyalo-motion-check.sh` picks its "near the edge" point from
+  it, clear of the picture and its 20 px shadow). A check that needs a moving window's position in a picture reads
   it there, never from `msg windows` polls before and after the capture: on CI's software GL a
   capture is slow enough that the two polls lie 63 px apart (`hyalo-minimize-check.sh`
   `over_dock`). And it reads a picture's pixels (a gjs process each) AFTER watching anything
