@@ -10,8 +10,8 @@ mod protocol;
 pub use ime::{ImeBatch, TextInput};
 pub use keyboard::Key;
 use keyboard::Keyboard;
-use material::send_material;
-pub use material::{Glass, Material, Pane, Shadow, Tone};
+pub use material::{Glass, Material, Pane, Shadow, Tone, WindowBackground, WindowLevel};
+use material::{send_background, send_material};
 use memmap2::MmapMut;
 use protocol::layers::{nidara_layer_v1, nidara_layers_manager_v1};
 use protocol::material::{nidara_material_manager_v1, nidara_material_v1};
@@ -25,8 +25,8 @@ use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, WEnum, delegate_noop,
     protocol::{
         wl_buffer, wl_callback, wl_compositor, wl_data_device, wl_data_device_manager,
-        wl_data_offer, wl_data_source, wl_keyboard, wl_pointer, wl_registry, wl_seat, wl_shm,
-        wl_subcompositor, wl_subsurface, wl_surface,
+        wl_data_offer, wl_data_source, wl_keyboard, wl_output, wl_pointer, wl_registry, wl_seat,
+        wl_shm, wl_subcompositor, wl_subsurface, wl_surface,
     },
 };
 use wayland_protocols::{
@@ -47,20 +47,36 @@ pub struct Frame {
     pub pixel_width: u16,
     pub pixel_height: u16,
     pub scale: f64,
+    /// The compositor draws the window's background and glass (`nidara-material-v1`).
+    /// Without it the app paints an opaque base itself (PHASE1.md D5).
+    pub material: bool,
 }
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
-    Layer { id: LayerId, event: LayerEvent },
+    Layer {
+        id: LayerId,
+        event: LayerEvent,
+    },
     FrameDone,
     Focus(bool),
     Key(Key),
     Motion(f64, f64),
-    Button { button: u32, pressed: bool },
+    Button {
+        button: u32,
+        pressed: bool,
+    },
     Scroll(f64),
     Ime(ImeBatch),
     Paste(String),
-    Presented { seconds: u64, nanoseconds: u32 },
+    /// Told every time, also when unchanged; a change also sends Configure.
+    PreferredScale(f64),
+    /// `commit` numbers the root surface's commits, the initial empty one being 1.
+    Presented {
+        commit: u64,
+        seconds: u64,
+        nanoseconds: u32,
+    },
     Error(String),
 }
 /// App callbacks run on the connection's thread; no callbacks survive run().
@@ -74,6 +90,12 @@ pub trait Application {
     fn event(&mut self, event: Event, window: &mut Window) -> Result<()>;
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>>;
     fn material(&self) -> Option<Material>;
+    /// The window's own background (D6), sent with every frame. Hyalo paints it.
+    fn window_background(&self) -> Option<WindowBackground> {
+        None
+    }
+    /// After a painted frame's root commit has been flushed to the compositor.
+    fn committed(&mut self, _commit: u64) {}
 }
 struct Buffer {
     proxy: wl_buffer::WlBuffer,
@@ -121,6 +143,13 @@ pub struct Window {
     text: Option<zwp_text_input_v3::ZwpTextInputV3>,
     material: Option<nidara_material_v1::NidaraMaterialV1>,
     viewport: Option<wp_viewport::WpViewport>,
+    fractional: Option<wp_fractional_scale_v1::WpFractionalScaleV1>,
+    /// Integer scale (without viewporter + fractional-scale): preferred_buffer_scale,
+    /// else the largest scale of the outputs the surface is on.
+    outputs: std::collections::HashMap<wayland_client::backend::ObjectId, i32>,
+    entered: std::collections::HashSet<wayland_client::backend::ObjectId>,
+    commits: u64,
+    app_id: &'static str,
     presentation: Option<wp_presentation::WpPresentation>,
     data_manager: Option<wl_data_device_manager::WlDataDeviceManager>,
     data: Option<wl_data_device::WlDataDevice>,
@@ -164,6 +193,10 @@ impl Window {
     /// Physical pixels per logical pixel on the window's current output.
     pub fn scale(&self) -> f64 {
         f64::from(self.scale) / 120.
+    }
+    /// Root surface commits so far, the initial empty one included.
+    pub fn commits(&self) -> u64 {
+        self.commits
     }
     pub fn redraw(&mut self) {
         self.dirty = true;
@@ -343,7 +376,31 @@ impl Window {
             pixel_width: pw as u16,
             pixel_height: ph as u16,
             scale,
+            material: self.material.is_some() && !self.skip_material,
         })
+    }
+    fn preferred_scale(&mut self, scale: u32) {
+        let scale = scale.max(1);
+        self.events
+            .push(Event::PreferredScale(f64::from(scale) / 120.));
+        if scale != self.scale {
+            self.scale = scale;
+            self.dirty = true;
+            self.events.push(Event::Configure);
+        }
+    }
+    fn output_scale(&mut self) {
+        if self.fractional.is_some() {
+            return;
+        }
+        let scale = self
+            .entered
+            .iter()
+            .filter_map(|id| self.outputs.get(id))
+            .copied()
+            .max()
+            .unwrap_or(1);
+        self.preferred_scale(scale as u32 * 120);
     }
     fn paint(&mut self, app: &mut impl Application) -> Result<()> {
         if !self.configured || !self.dirty || self.frame_pending {
@@ -378,8 +435,10 @@ impl Window {
         let surface = self.surface.as_ref().unwrap().clone();
         if let Some(v) = &self.viewport {
             v.set_destination(self.width as i32, self.height as i32);
+            surface.set_buffer_scale(1);
+        } else {
+            surface.set_buffer_scale((self.scale / 120) as i32);
         }
-        surface.set_buffer_scale(1);
         if let Some(m) = &self.material {
             let material = if self.skip_material {
                 None
@@ -387,17 +446,23 @@ impl Window {
                 app.material()
             };
             send_material(m, material.as_ref());
+            if let Some(b) = app.window_background() {
+                send_background(m, b);
+            }
         }
         surface.attach(Some(&b.proxy), 0, 0);
         surface.damage_buffer(0, 0, frame.pixel_width as i32, frame.pixel_height as i32);
         surface.frame(&self.qh, ());
         self.frame_pending = true;
+        self.commits += 1;
         if let Some(p) = &self.presentation {
-            p.feedback(&surface, &self.qh, ());
+            p.feedback(&surface, &self.qh, self.commits);
         }
         self.stage_layers();
         surface.commit();
         self.dirty = false;
+        self.connection.flush().map_err(err)?;
+        app.committed(self.commits);
         Ok(())
     }
     fn new_buffer(&self, frame: Frame) -> Result<Buffer> {
@@ -441,6 +506,46 @@ fn err(e: impl std::fmt::Display) -> String {
 pub struct Options {
     pub material: bool,
     pub map: bool,
+    pub app_id: &'static str,
+    pub title: &'static str,
+    /// Logical size until the compositor configures one.
+    pub size: (u32, u32),
+    /// Refuse to start without `nidara-material-v1` (Hyalo), with this message.
+    pub require_material: Option<&'static str>,
+}
+/// What the compositor offers, from its globals (PHASE1.md D5). The four required
+/// protocols refuse the start; every other one has a fallback.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Capabilities {
+    /// viewporter AND fractional-scale-v1; otherwise integer buffer scale.
+    pub fractional: bool,
+    /// nidara-material-v1; otherwise the app paints an opaque base.
+    pub material: bool,
+    /// nidara-layers-v1 (+ subcompositor, viewporter, material); otherwise the app animates.
+    pub layers: bool,
+    /// text-input-v3; otherwise typing works and composition does not.
+    pub text_input: bool,
+    /// wp_presentation; otherwise frame callbacks only.
+    pub presentation: bool,
+}
+const REQUIRED: [&str; 4] = ["wl_compositor", "wl_shm", "xdg_wm_base", "wl_seat"];
+pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Capabilities> {
+    let names: std::collections::HashSet<&str> = globals.into_iter().collect();
+    if let Some(missing) = REQUIRED.iter().find(|n| !names.contains(*n)) {
+        return Err(format!("required Wayland protocol missing: {missing}"));
+    }
+    let has = |n: &str| names.contains(n);
+    let material = has("nidara_material_manager_v1");
+    Ok(Capabilities {
+        fractional: has("wp_viewporter") && has("wp_fractional_scale_manager_v1"),
+        material,
+        layers: material
+            && has("wp_viewporter")
+            && has("wl_subcompositor")
+            && has("nidara_layers_manager_v1"),
+        text_input: has("zwp_text_input_manager_v3"),
+        presentation: has("wp_presentation"),
+    })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
     run_inner(app, options, start, None).map(|_| ())
@@ -453,6 +558,10 @@ pub fn run_dialog(app: impl Application, parent: &mut Window) -> Result<()> {
         Options {
             material: true,
             map: true,
+            app_id: parent.app_id,
+            title: "Correct error",
+            size: (500, 300),
+            require_material: None,
         },
         Instant::now(),
         Some(parent),
@@ -503,6 +612,11 @@ fn run_inner(
         text: None,
         material: None,
         viewport: None,
+        fractional: None,
+        outputs: Default::default(),
+        entered: Default::default(),
+        commits: 0,
+        app_id: options.app_id,
         presentation: None,
         data_manager: None,
         data: None,
@@ -515,8 +629,8 @@ fn run_inner(
         events: Vec::new(),
         keyboard: Keyboard::new(),
         qh: qh.clone(),
-        width: if parent.is_some() { 500 } else { 960 },
-        height: if parent.is_some() { 300 } else { 720 },
+        width: options.size.0,
+        height: options.size.1,
         pending_size: None,
         scale: 120,
         configured: false,
@@ -545,42 +659,50 @@ fn run_inner(
                 .map(|(id, _, v)| registry.bind::<$ty, _, _>(*id, (*v).min($version), &qh, ()))
         }};
     }
-    let compositor = bind!(wl_compositor::WlCompositor, 4).ok_or("missing wl_compositor")?;
-    let base = bind!(xdg_wm_base::XdgWmBase, 1).ok_or("missing xdg-shell")?;
-    let materials = bind!(nidara_material_manager_v1::NidaraMaterialManagerV1, 1)
-        .ok_or("nk-phase0 needs Hyalo (nidara-material-v1)")?;
-    let viewporter = bind!(wp_viewporter::WpViewporter, 1).ok_or("missing viewporter")?;
+    let caps = capabilities(w.globals.iter().map(|(_, n, _)| n.as_str()))?;
+    if let (Some(message), false) = (options.require_material, caps.material) {
+        return Err(message.into());
+    }
+    // v6: preferred_buffer_scale, the integer fallback's source.
+    let compositor = bind!(wl_compositor::WlCompositor, 6).unwrap();
+    let base = bind!(xdg_wm_base::XdgWmBase, 1).unwrap();
+    let materials = bind!(nidara_material_manager_v1::NidaraMaterialManagerV1, 1);
+    let viewporter = bind!(wp_viewporter::WpViewporter, 1);
     let fraction = bind!(
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
         1
-    )
-    .ok_or("missing fractional-scale-v1")?;
+    );
     w.subcompositor = bind!(wl_subcompositor::WlSubcompositor, 1);
     w.layers_manager = bind!(nidara_layers_manager_v1::NidaraLayersManagerV1, 1);
     w.compositor = Some(compositor.clone());
-    w.viewporter = Some(viewporter.clone());
+    w.viewporter = viewporter.clone();
     w.shm = bind!(wl_shm::WlShm, 1);
-    if w.shm.is_none() {
-        return Err("missing wl_shm".into());
-    }
     w.seat = bind!(wl_seat::WlSeat, 7);
+    for (id, _, v) in w.globals.iter().filter(|(_, n, _)| n == "wl_output") {
+        let output: wl_output::WlOutput = registry.bind(*id, (*v).min(4), &qh, ());
+        w.outputs.insert(output.id(), 1);
+    }
     w.text_manager = bind!(zwp_text_input_manager_v3::ZwpTextInputManagerV3, 1);
     w.data_manager = bind!(wl_data_device_manager::WlDataDeviceManager, 3);
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
     let surface = compositor.create_surface(&qh, ());
     let xdg = base.get_xdg_surface(&surface, &qh, ());
     let top = xdg.get_toplevel(&qh, ());
-    top.set_app_id("nk-phase0".into());
-    top.set_title("Nidara toolkit — phase 0".into());
+    top.set_app_id(options.app_id.into());
+    top.set_title(options.title.into());
     top.set_min_size(400, 300);
     if let Some(parent) = parent {
         top.set_parent(parent.toplevel.as_ref());
-        top.set_title("Correct error".into());
     }
-    w.materials = Some(materials.clone());
-    w.material = Some(materials.get_material(&surface, &qh, ()));
-    w.viewport = Some(viewporter.get_viewport(&surface, &qh, ()));
-    let _fraction = fraction.get_fractional_scale(&surface, &qh, ());
+    w.material = materials
+        .as_ref()
+        .map(|m| m.get_material(&surface, &qh, ()));
+    w.materials = materials;
+    // Both or neither: a fractional scale needs the viewport to say the logical size.
+    if let (Some(viewporter), Some(fraction)) = (&viewporter, &fraction) {
+        w.viewport = Some(viewporter.get_viewport(&surface, &qh, ()));
+        w.fractional = Some(fraction.get_fractional_scale(&surface, &qh, ()));
+    }
     w.surface = Some(surface);
     w.xdg = Some(xdg);
     w.toplevel = Some(top);
@@ -593,6 +715,7 @@ fn run_inner(
     }
     if options.map {
         w.surface.as_ref().unwrap().commit();
+        w.commits = 1;
     }
     let mut first = true;
     let mut first_callback = true;
@@ -700,7 +823,9 @@ fn run_inner(
     if let Some(v) = w.viewport.take() {
         v.destroy();
     }
-    _fraction.destroy();
+    if let Some(f) = w.fractional.take() {
+        f.destroy();
+    }
     if let Some(t) = w.toplevel.take() {
         t.destroy();
     }
@@ -717,11 +842,11 @@ fn run_inner(
 impl Dispatch<wl_registry::WlRegistry, ()> for Window {
     fn event(
         w: &mut Self,
-        _: &wl_registry::WlRegistry,
+        r: &wl_registry::WlRegistry,
         event: wl_registry::Event,
         _: &(),
         _: &Connection,
-        _: &QueueHandle<Self>,
+        q: &QueueHandle<Self>,
     ) {
         if let wl_registry::Event::Global {
             name,
@@ -729,6 +854,11 @@ impl Dispatch<wl_registry::WlRegistry, ()> for Window {
             version,
         } = event
         {
+            // An output plugged in later still counts for the integer scale.
+            if interface == "wl_output" && w.surface.is_some() {
+                let output: wl_output::WlOutput = r.bind(name, version.min(4), q, ());
+                w.outputs.insert(output.id(), 1);
+            }
             w.globals.push((name, interface, version));
         }
     }
@@ -833,19 +963,18 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, ()> for Window {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        // A scale it already draws at (re-sent, or the first one told) is no reason to repaint.
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = e {
-            w.scale = scale.max(1);
-            w.dirty = true;
-            w.events.push(Event::Configure);
+            w.preferred_scale(scale);
         }
     }
 }
-impl Dispatch<wp_presentation_feedback::WpPresentationFeedback, ()> for Window {
+impl Dispatch<wp_presentation_feedback::WpPresentationFeedback, u64> for Window {
     fn event(
         w: &mut Self,
         _: &wp_presentation_feedback::WpPresentationFeedback,
         e: wp_presentation_feedback::Event,
-        _: &(),
+        commit: &u64,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
@@ -857,6 +986,7 @@ impl Dispatch<wp_presentation_feedback::WpPresentationFeedback, ()> for Window {
         } = e
         {
             w.events.push(Event::Presented {
+                commit: *commit,
                 seconds: ((tv_sec_hi as u64) << 32) | tv_sec_lo as u64,
                 nanoseconds: tv_nsec,
             });
@@ -1214,7 +1344,50 @@ impl Dispatch<wl_data_source::WlDataSource, ()> for Window {
     }
 }
 delegate_noop!(Window: ignore wl_compositor::WlCompositor);
-delegate_noop!(Window: ignore wl_surface::WlSurface);
+impl Dispatch<wl_surface::WlSurface, ()> for Window {
+    fn event(
+        w: &mut Self,
+        s: &wl_surface::WlSurface,
+        e: wl_surface::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        // Only the root's scale counts; the fractional protocol, when bound, decides it.
+        if w.fractional.is_some() || w.surface.as_ref() != Some(s) {
+            return;
+        }
+        match e {
+            wl_surface::Event::PreferredBufferScale { factor } => {
+                w.preferred_scale(factor.max(1) as u32 * 120)
+            }
+            wl_surface::Event::Enter { output } => {
+                w.entered.insert(output.id());
+                w.output_scale();
+            }
+            wl_surface::Event::Leave { output } => {
+                w.entered.remove(&output.id());
+                w.output_scale();
+            }
+            _ => {}
+        }
+    }
+}
+impl Dispatch<wl_output::WlOutput, ()> for Window {
+    fn event(
+        w: &mut Self,
+        output: &wl_output::WlOutput,
+        e: wl_output::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        if let wl_output::Event::Scale { factor } = e {
+            w.outputs.insert(output.id(), factor.max(1));
+            w.output_scale();
+        }
+    }
+}
 delegate_noop!(Window: ignore wl_shm::WlShm);
 delegate_noop!(Window: ignore wayland_client::protocol::wl_shm_pool::WlShmPool);
 delegate_noop!(Window: ignore wp_viewporter::WpViewporter);
@@ -1225,3 +1398,55 @@ delegate_noop!(Window: ignore zwp_text_input_manager_v3::ZwpTextInputManagerV3);
 delegate_noop!(Window: ignore nidara_material_manager_v1::NidaraMaterialManagerV1);
 delegate_noop!(Window: ignore nidara_material_v1::NidaraMaterialV1);
 delegate_noop!(Window: ignore wl_data_device_manager::WlDataDeviceManager);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    const ALL: [&str; 11] = [
+        "wl_compositor",
+        "wl_shm",
+        "xdg_wm_base",
+        "wl_seat",
+        "wp_viewporter",
+        "wp_fractional_scale_manager_v1",
+        "nidara_material_manager_v1",
+        "wl_subcompositor",
+        "nidara_layers_manager_v1",
+        "zwp_text_input_manager_v3",
+        "wp_presentation",
+    ];
+    fn without(missing: &str) -> Result<Capabilities> {
+        capabilities(ALL.iter().copied().filter(|n| *n != missing))
+    }
+    #[test]
+    fn every_protocol_on_hyalo() {
+        let c = capabilities(ALL).unwrap();
+        assert!(c.fractional && c.material && c.layers && c.text_input && c.presentation);
+    }
+    #[test]
+    fn a_required_protocol_missing_refuses_and_names_it() {
+        for name in REQUIRED {
+            assert_eq!(
+                without(name),
+                Err(format!("required Wayland protocol missing: {name}"))
+            );
+        }
+    }
+    #[test]
+    fn each_optional_protocol_missing_takes_its_fallback() {
+        let c = without("wp_viewporter").unwrap();
+        assert!(!c.fractional && !c.layers && c.material);
+        let c = without("wp_fractional_scale_manager_v1").unwrap();
+        assert!(!c.fractional && c.layers);
+        let c = without("nidara_material_manager_v1").unwrap();
+        assert!(!c.material && !c.layers && c.fractional);
+        let c = without("nidara_layers_manager_v1").unwrap();
+        assert!(!c.layers && c.material);
+        let c = without("wl_subcompositor").unwrap();
+        assert!(!c.layers);
+        let c = without("zwp_text_input_manager_v3").unwrap();
+        assert!(!c.text_input && c.material);
+        let c = without("wp_presentation").unwrap();
+        assert!(!c.presentation && c.material);
+    }
+}
