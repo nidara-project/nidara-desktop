@@ -994,6 +994,13 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
   light glass, brighter than the bar, and dark glyphs; `glass = false` must fail all three).
   `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
+- **A capture says where moving windows were in it** (with `HYALO_CONTROL`): `<shot>.capture.json`
+  carries `drawn` — each window drawn at a place (into the dock, out of it), `{id: [x, y, w, h]}`
+  at the capture's own moment. A check that needs a moving window's position in a picture reads
+  it there, never from `msg windows` polls before and after the capture: on CI's software GL a
+  capture is slow enough that the two polls lie 63 px apart (`hyalo-minimize-check.sh`
+  `over_dock`). And it reads a picture's pixels (a gjs process each) AFTER watching anything
+  move, not while the animation runs.
 - **In flight the ink is kept** (`Controls::moving`, the window drawn at a `place`: into the
   dock, out of it, to another workspace): the glass is drawn with the ink it had and measures
   nothing (`GlassElement::measuring_nothing`) — what passes under a capsule on its way is not its

@@ -60,40 +60,43 @@ grey() { set -- $1; [ "$1" -ge 56 ] && [ "$1" -le 104 ] && [ $(($1 - $2)) -le 4 
 # inside the dock — a pixel just inside that edge is the window's own grey when the window is
 # over the glass; under it, the glass's blur smears the edge with what is beside it. (Not a
 # pixel deep inside the window: blurred, a uniform grey is still that grey.) The edge moves, so
-# the point is taken from where the window is drawn before AND after the screenshot. $1 names
+# the point is taken from where the window is drawn IN the screenshot: Hyalo writes it beside
+# the picture (`<shot>.capture.json`, `drawn`, at the capture's own moment) — never from polls
+# before and after it, which a slow capture leaves far apart (CI's software GL: 63 px). $1 names
 # the screenshot, $2 is its place (read before a click: the dock drops a restored window's place).
 over_dock() {
     shot=$1
     y=$(echo "$2" | jq '.[1] + 8')
     dx=$(echo "$dock" | jq '.[0]')
     inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60)'
+    seen=""
     for _ in $(seq 1 400); do
         drawn=$(win | jq -c .drawn)
-        # When each poll was, ms: a window that jumps between two polls says what was slow.
+        # When each poll was, ms: what was slow, if it fails.
         echo "$(($(date +%s%N) / 1000000)) $drawn" >>"$log/$shot-polled.log"
-        before=$(echo "$drawn" | jq -c --argjson y "$y" --argjson dx "$dx" "$inside")
-        [ -n "$before" ] || { sleep 0.02; continue; }
+        # Gone into the dock (or fully out of it) after it was seen moving: it will not cross now.
+        [ "$drawn" = null ] && [ -n "$seen" ] && break
+        [ "$drawn" != null ] && seen=1
+        [ -n "$(echo "$drawn" | jq -c --argjson y "$y" --argjson dx "$dx" "$inside")" ] || { sleep 0.02; continue; }
         t=$(date +%s%N)
         $MSG screenshot "$log/$shot-crossing.png" >/dev/null || fail "no screenshot"
-        echo "$(($(date +%s%N) / 1000000)) screenshot $(( ($(date +%s%N) - t) / 1000000 )) ms" >>"$log/$shot-polled.log"
-        after=$(win | jq -c --argjson y "$y" --argjson dx "$dx" ".drawn | $inside")
-        echo "$(($(date +%s%N) / 1000000)) after $(win | jq -c .drawn)" >>"$log/$shot-polled.log"
-        [ -n "$after" ] && break
+        at=$(jq -c --arg id "$id" --argjson y "$y" --argjson dx "$dx" ".drawn[\$id] | $inside" "$log/$shot-crossing.capture.json")
+        echo "$(($(date +%s%N) / 1000000)) screenshot $(( ($(date +%s%N) - t) / 1000000 )) ms, drawn in it: $(jq -c --arg id "$id" '.drawn[$id]' "$log/$shot-crossing.capture.json")" >>"$log/$shot-polled.log"
+        [ -n "$at" ] && break
     done
-    [ -n "$before" ] && [ -n "$after" ] || $MSG stats >>"$log/$shot-polled.log" 2>&1
-    [ -n "$before" ] && [ -n "$after" ] || fail "($shot) it never crossed the dock's glass (at y $y, the dock from x $dx; where it was drawn: $log/$shot-polled.log)"
-    px=$(jq -rn --argjson a "$before" --argjson b "$after" --argjson y "$y" --argjson s "$scale" \
-        '"\(([$a[0], $b[0]] | max) + 6 | . * $s | ceil) \($y * $s | floor)"')
+    [ -n "${at:-}" ] || $MSG stats >>"$log/$shot-polled.log" 2>&1
+    [ -n "${at:-}" ] || fail "($shot) no screenshot caught it crossing the dock's glass (at y $y, the dock from x $dx; where it was drawn: $log/$shot-polled.log)"
+    px=$(jq -rn --argjson a "$at" --argjson y "$y" --argjson s "$scale" '"\($a[0] + 6 | . * $s | ceil) \($y * $s | floor)"')
     got=$(probe_pixel "$log/$shot-crossing.png" $px)
-    # The window's grey or its dialog's (the edge moves while the screenshot is taken), each
-    # channel within 2: the glass's blur gives greys too, not neutral ones (measured '76 72 77').
+    # The window's grey or its dialog's, each channel within 2: the glass's blur gives greys
+    # too, not neutral ones (measured '76 72 77').
     set -- $got
     for g in 64 96; do
         ok=1
         for c in "$1" "$2" "$3"; do [ $((c - g)) -le 2 ] && [ $((g - c)) -le 2 ] || ok=0; done
         [ $ok = 1 ] && return 0
     done
-    fail "($shot) crossing the dock ($before → $after) the pixel at $px, just inside its edge, is '$got', not its own grey: the dock's glass is drawn over it"
+    fail "($shot) crossing the dock (drawn at $at in the screenshot) the pixel at $px, just inside its edge, is '$got', not its own grey: the dock's glass is drawn over it"
 }
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
 
@@ -156,6 +159,9 @@ $MSG screenshot "$log/shrinking.png" >/dev/null || fail "no screenshot"
 mid=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
 k=$(echo "$drawn" | jq -r '.[2] / 400 * 100 | floor')
 [ "$k" -lt 90 ] || fail "a second in, it is still ${k}% of its size"
+# While it moves, nothing but watching it cross the dock: the pixels of the picture taken a
+# second in are read after (a probe_pixel is a gjs process — seconds on CI, the animation's).
+over_dock shrinking "$target"
 grey "$(probe_pixel "$log/shrinking.png" $mid)" || fail "where it is drawn ($drawn) the pixel is $(probe_pixel "$log/shrinking.png" $mid), not its grey"
 grey "$(probe_pixel "$log/shrinking.png" $centre)" && fail "where it was, the pixel is still its grey"
 # Its dialog moves with it, in front of it: the dialog's own grey at its middle.
@@ -166,7 +172,6 @@ set -- $(probe_pixel "$log/shrinking.png" $dmid)
 # Beside the small window, inside the box it had at full size: what is there once it has gone.
 # A window whose surfaces kept their full size from the scaled origin drew that box too.
 beside=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] + 24) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
-over_dock shrinking "$target"
 for _ in $(seq 1 40); do [ "$(win | jq -c .drawn)" = null ] && break; sleep 0.25; done
 sleep 0.3
 $MSG screenshot "$log/gone.png" >/dev/null || fail "no screenshot"

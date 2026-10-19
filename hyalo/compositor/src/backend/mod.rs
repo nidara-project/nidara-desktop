@@ -141,7 +141,8 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
     if crate::control::enabled() {
         eprintln!("CAPTURE_BEGIN {:?} {}", state.clock.now(), path.display());
     }
-    let (w, h, rgba) = capture_output(state, &output, false)?;
+    let when = std::time::Instant::now();
+    let (w, h, rgba) = capture_output_at(state, &output, false, when)?;
     if crate::control::enabled() {
         eprintln!("CAPTURE_END {:?} {}", state.clock.now(), path.display());
         // A delivery barrier may observe the exact event this capture emitted,
@@ -156,7 +157,20 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
                 }
             }
         }
-        let metadata = serde_json::json!({"input_method_rectangles": rectangles});
+        // Where each window moving on its own was drawn in THIS picture (`drawn`, as `msg
+        // windows` reports it, at the capture's moment): a check reads a moving window's place
+        // from the picture itself, never from polls before and after it.
+        let drawn: serde_json::Map<String, serde_json::Value> = state
+            .wm
+            .windows
+            .iter()
+            .filter_map(|m| {
+                let p = state.wm.placement(m, when)?;
+                let frame = m.frame().to_f64();
+                Some((m.id.to_string(), serde_json::json!([p.origin.x, p.origin.y, frame.size.w * p.scale, frame.size.h * p.scale])))
+            })
+            .collect();
+        let metadata = serde_json::json!({"input_method_rectangles": rectangles, "drawn": drawn});
         std::fs::write(path.with_extension("capture.json"), metadata.to_string()).map_err(|e| e.to_string())?;
     }
     if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ppm")) {
@@ -189,9 +203,14 @@ fn pointer_for(state: &Hyalo, output: &Output) -> Option<crate::cursor::CursorIm
 /// One output, drawn again offscreen, as RGBA rows (the screenshot request, capture.rs; a
 /// recording on the CPU, protocols/screencopy.rs) — with the pointer when `pointer`.
 pub fn capture_output(state: &mut Hyalo, output: &Output, pointer: bool) -> Result<(u32, u32, Vec<u8>), String> {
+    capture_output_at(state, output, pointer, std::time::Instant::now())
+}
+
+/// `capture_output`, everything drawn as it is `when`.
+fn capture_output_at(state: &mut Hyalo, output: &Output, pointer: bool, when: std::time::Instant) -> Result<(u32, u32, Vec<u8>), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, when);
     let captured = match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output, cursor.as_ref()),
         Backend::Tty(t) => {
