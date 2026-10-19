@@ -500,7 +500,7 @@ pub fn push<R: HyaloRenderer>(
     let apart = title_bar.as_ref().and_then(|t| t.controls);
     if let Some((rect, controls)) = controls.or(apart) {
         let (glass, dark) = if cfg.controls.glass {
-            super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency)
+            super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency, controls.moving)
         } else {
             (Vec::new(), false)
         };

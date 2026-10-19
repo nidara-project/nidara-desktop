@@ -575,6 +575,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             pressed: hover.is_some_and(|h| h.pressed),
             active: state.wm.focused == Some(m.id),
             dark: crate::wm::surface_of(&m.window).is_some_and(|s| crate::protocols::window_controls::dark_ink(&s)),
+            moving: place.is_some(),
         };
         Some((rect, controls))
     });

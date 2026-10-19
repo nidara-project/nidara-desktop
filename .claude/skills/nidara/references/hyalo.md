@@ -994,6 +994,12 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
   light glass, brighter than the bar, and dark glyphs; `glass = false` must fail all three).
   `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
+- **In flight the ink is kept** (`Controls::moving`, the window drawn at a `place`: into the
+  dock, out of it, to another workspace): the glass is drawn with the ink it had and measures
+  nothing (`GlassElement::measuring_nothing`) — what passes under a capsule on its way is not its
+  header, and its ink must not flicker; and a measurement every frame of a moving capsule is a
+  readback and a redraw each (on the CI's software GL it slowed the minimize check's captures
+  until it missed the window crossing the dock).
 - **A capture collects the ink it measured** (`capture_output` arms the poll as a frame does): a
   screenshot draws the glass too. Where no frame is drawn — the headless cage harness — only
   captures measure, so a check takes one capture before the one it reads.

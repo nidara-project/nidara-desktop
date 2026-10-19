@@ -289,6 +289,13 @@ impl GlassElement {
         self.region
     }
 
+    /// This glass keeping the ink it has: drawn with it (its shapes' tones already are),
+    /// measuring nothing.
+    pub fn measuring_nothing(mut self) -> Self {
+        self.ink_boxes.clear();
+        self
+    }
+
     /// This glass reading nothing outside `bounds` (output px): glass over a window blurs that
     /// window, whose edge repeats past it, never the desktop beside the window (toolkit/PHASE1.md
     /// D7). None when nothing of it is left.

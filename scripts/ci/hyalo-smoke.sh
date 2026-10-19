@@ -236,9 +236,9 @@ phase_run() {
         [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
         [ -n "$hyalo_pid" ] && kill "$hyalo_pid" 2>/dev/null || true
         cp -f /tmp/hyalo/*.png /tmp/hyalo/*.log /tmp/hyalo/*.json "$OUT"/ 2>/dev/null || true
-        # A check's own screenshots (its *_LOG directory), named after it: what a pixel check
-        # saw is the first thing to look at when it fails.
-        for f in /tmp/hyalo/*/*.png; do
+        # A check's own screenshots and logs (its *_LOG directory), named after it: what a pixel
+        # check saw, and what it polled, are the first things to look at when it fails.
+        for f in /tmp/hyalo/*/*.png /tmp/hyalo/*/*.log; do
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
         if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi

@@ -126,6 +126,10 @@ pub struct Controls {
     /// Dark ink, over a light header: the app's `set_ink` (Hyalo's own title bar decides its
     /// ink from the bar's colour instead, and ignores this).
     pub dark: bool,
+    /// Its window is drawn moving (into the dock, out of it, to another workspace): the glass
+    /// keeps the ink it had, measuring nothing — what passes under a capsule in flight is not
+    /// its header, and its ink must not flicker on the way.
+    pub moving: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +245,7 @@ pub fn glass(
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
     reduce_transparency: bool,
+    moving: bool,
 ) -> (Vec<super::GlassElement>, bool) {
     use crate::protocols::material::{Current, InkBox, MaterialState, Shape};
     let (x, y, w, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.w / scale.x, rect.size.h / scale.y);
@@ -298,6 +303,7 @@ pub fn glass(
     let elements = super::GlassElement::for_material(surface, super::glass::Whose::Hyalo, &current, (0, 0).into(), scale, output_size)
         .into_iter()
         .filter_map(|g| g.within(bounds))
+        .map(|g| if moving { g.measuring_nothing() } else { g })
         .collect();
     (elements, dark)
 }
