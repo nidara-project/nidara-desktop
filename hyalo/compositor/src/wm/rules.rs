@@ -40,6 +40,7 @@ pub struct Effects {
     pub silent: bool,
     pub rounding: Option<bool>,
     pub backdrop: Option<bool>,
+    pub follow_level: Option<bool>,
     pub title_bar: Option<bool>,
     /// The bits of the buttons its controls may show (protocols/window_controls.rs).
     pub controls: Option<u32>,
@@ -67,6 +68,9 @@ impl Effects {
         }
         if later.backdrop.is_some() {
             self.backdrop = later.backdrop;
+        }
+        if later.follow_level.is_some() {
+            self.follow_level = later.follow_level;
         }
         if later.title_bar.is_some() {
             self.title_bar = later.title_bar;
@@ -138,6 +142,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
                 silent: r.silent,
                 rounding: r.rounding,
                 backdrop: r.backdrop,
+                follow_level: r.follow_level,
                 title_bar: r.title_bar,
                 controls: r.controls.as_deref().map(crate::protocols::window_controls::mask),
                 animate: r.animate,
@@ -152,7 +157,7 @@ pub fn compile(cfg: &BTreeMap<String, RuleConfig>) -> Result<Vec<Rule>, String> 
             return Err(format!("rules.{name}: matches nothing (give match.app_id, title, initial_app_id, initial_title or game)"));
         }
         if rule.effects.is_empty() {
-            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding, backdrop, title_bar, controls or animate)"));
+            return Err(format!("rules.{name}: does nothing (give float, center, workspace, rounding, backdrop, follow_level, title_bar, controls or animate)"));
         }
         if r.silent && r.workspace.is_none() {
             return Err(format!("rules.{name}: silent without a workspace"));
@@ -219,6 +224,9 @@ impl Hyalo {
         if let Some(b) = fx.backdrop {
             m.backdrop = b;
         }
+        if let Some(f) = fx.follow_level {
+            m.follow_level = f;
+        }
         if let Some(t) = fx.title_bar {
             m.title_bar = t;
         }
@@ -232,7 +240,7 @@ impl Hyalo {
             // Its app reserves a box of the new size.
             crate::protocols::window_controls::send_layouts(self);
         }
-        if fx.rounding.is_some() || fx.backdrop.is_some() || fx.title_bar.is_some() || fx.controls.is_some() {
+        if fx.rounding.is_some() || fx.backdrop.is_some() || fx.follow_level.is_some() || fx.title_bar.is_some() || fx.controls.is_some() {
             self.queue_redraw(None);
         }
     }
@@ -293,6 +301,23 @@ mod tests {
 
     fn subject<'a>(app_id: &'a str, title: &'a str) -> Subject<'a> {
         Subject { app_id, title, initial_app_id: "org.nidara.desktop", initial_title: title, game: false }
+    }
+
+    #[test]
+    fn the_shipped_rule_makes_our_apps_follow_the_level() {
+        #[derive(serde::Deserialize)]
+        struct T {
+            rules: BTreeMap<String, RuleConfig>,
+        }
+        let shipped: T = toml::from_str(include_str!("../../../../config/hyalo/hyalo.toml")).unwrap();
+        let r = compile(&shipped.rules).unwrap();
+        let follows = |app_id: &str| r.iter().filter(|r| r.matches(&subject(app_id, "x"))).any(|r| r.effects.follow_level == Some(true));
+        assert!(follows("nidara-settings"));
+        assert!(follows("nidara-about"));
+        assert!(follows("org.nidara.installer"));
+        assert!(!follows("kitty"), "another app keeps the translucent blur");
+        assert!(!follows("nk-settings-slice"), "a toolkit app declares its own background");
+        assert!(!follows("nidara"), "the prefix alone is not an app");
     }
 
     #[test]

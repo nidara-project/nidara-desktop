@@ -279,6 +279,7 @@ impl Hyalo {
                         m.fullscreen == crate::wm::Fullscreen::Fullscreen,
                         m.rounded,
                         m.backdrop,
+                        m.follow_level,
                         &self.config.windows,
                     ),
                     glass: m.window.wl_surface().and_then(|s| crate::protocols::material::current(&s)).map(|m| super::WindowGlassInfo {

@@ -823,7 +823,10 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   after (`glass_gl::Finish`; `NEUTRAL` for the shell's glass, which has its own saturation and
   tint). No tint of its own: a window's translucent background is its tint. How far it blurs is
   the window background's LEVEL (`[windows.background]`, below); another app's translucent window
-  always gets the `translucent` level's blur. No switch in Settings any more (owner, 2026-10-18: a
+  gets the `translucent` level's blur — except one a rule gives `follow_level = true`: the
+  shipped `nidara-apps` rule (each of our GTK windows by its app id — `hypr-rule-check.mjs` wants literals that exist) does it for our GTK apps, which
+  paint their opacity at the user's level but cannot declare it, so in Tinted they used to get
+  the light translucent blur (owner saw it live 2026-10-19). `BackgroundConfig::undeclared`. No switch in Settings any more (owner, 2026-10-18: a
   window that lets anything through is blurred); `[windows.backdrop] enabled = false` still turns
   it off everywhere, and a rule's `backdrop = false` for one app.
 - **A window's declared background** (toolkit/PHASE1.md D6, owner 2026-10-18): a toolkit window
@@ -838,7 +841,8 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   their opacity with). Such a window is translucent by its level, not by its opaque region
   (`look`, `blur_of`). It is NOT glass: no tone, no shell blur. GTK windows keep painting
   `--nidara-bg` themselves (frozen kit).
-- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`) and
+- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`,
+  `follow_level`) and
   its `background` (`color`, `level`, `own_level`, `opacity`) when it declared one; and its
   `layers` (`nidara-layers-v1`, when it has any): each one's box as shown now relative to the
   window's root surface (`x`, `y`, `width`, `height`, logical, its `scale` applied), `opacity`,
