@@ -152,7 +152,8 @@ See [A1] for the identities and the routing.
   run-time inputs with layout/paint invalidation `[A8]`.
 - **Glass:** the same script → `tokens/glass.json` (D7): the kit's material asked through its
   own source (`registerGlassMaterial`, a host saying the mode and reduce transparency) — for
-  each of dark/light × reduce transparency, its glass parameters (refraction, lensing, rim) and,
+  each of dark/light × reduce transparency, its glass parameters (refraction, lensing, rim), the
+  ink's thresholds (`ink`: `darkAbove`, `lightBelow`; null when there is no ink) and,
   per piece (`control`, `panel`, `dock`, `controlCenter`), the pane's `tone`, `inkTone` and
   `shadow` as **steps by its shorter side**: take the last step whose `fromSide` ≤ the side
   rounded to a whole px (the dark face of `control`/`panel` follows the size; the others have

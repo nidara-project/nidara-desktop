@@ -139,7 +139,9 @@ for (const dark of [true, false])
             if (steps.at(-1).side === SIDES) throw new Error(`glass: ${piece} still changes at ${SIDES} px`)
             pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer) }))
         }
-        variants.push({ dark, reduceTransparency, glass: source.glass(null), pieces })
+        // The ink: when a pane's text turns dark (Hyalo measures the darkest point under it, WCAG
+        // luminance), as the shell asks it — null with reduce transparency (no ink).
+        variants.push({ dark, reduceTransparency, glass: source.glass(null), ink: source.ink(null), pieces })
     }
 write(join(out, "tokens/glass.json"), {
     inputs: { dark: "appearance.darkMode", reduceTransparency: "accessibility.reduceTransparency" },

@@ -84,6 +84,11 @@ if all(variant(d, r) for d, r in product([True, False], [False, True])) and not 
         fail.append('glass: reduce transparency leaves the panel see-through')
     if panel(True, False)[-1]['tone'] == panel(False, False)[-1]['tone']:
         fail.append('glass: the light panel is the dark one')
+    ink = variant(True, False).get('ink') or {}
+    if not (0 < ink.get('lightBelow', -1) < ink.get('darkAbove', -1) <= 1):
+        fail.append(f"glass: no ink thresholds a reader can apply ({variant(True, False).get('ink')})")
+    if variant(True, True).get('ink') is not None:
+        fail.append('glass: reduce transparency still measures the ink')
 
 if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
