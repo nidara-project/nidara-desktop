@@ -134,7 +134,10 @@ impl GlassElement {
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
                     finish: glass_gl::Finish::NEUTRAL,
-                    soft: m.glass.is_some().then_some((glass_gl::BlurMix::SOFT * scale.x) as f32),
+                    // The capture's three blurs: mixed by size where the compositor paints the
+                    // glass, walked from sharp to full where a shape is graded.
+                    soft: (m.glass.is_some() || m.shapes.iter().any(|s| s.grade.is_some()))
+                        .then_some((glass_gl::BlurMix::SOFT * scale.x) as f32),
                 }
             })
             .collect()
@@ -177,6 +180,7 @@ impl GlassElement {
                 px_scale: 1.0,
                 fusion: None,
                 fusion_merge: 0.0,
+                grade: [1.0, 1.0],
             }],
             offset: offset as f32,
             passes: passes as usize,
@@ -251,6 +255,14 @@ impl GlassElement {
     /// What its blur reads, output px (the debug overlay draws it: render/stats.rs).
     pub fn region(&self) -> Rectangle<i32, Physical> {
         self.region
+    }
+
+    /// This glass reading nothing outside `bounds` (output px): a layer's glass blurs its own
+    /// window, whose edge repeats past it, never the desktop beside the window (toolkit/PHASE1.md
+    /// D7). None when nothing of it is left.
+    pub fn within(mut self, bounds: Rectangle<i32, Physical>) -> Option<Self> {
+        self.region = self.region.intersection(bounds).filter(|r| r.size.w >= 2 && r.size.h >= 2)?;
+        Some(self)
     }
 }
 
@@ -371,6 +383,7 @@ fn groups(
             px_scale: scale.x,
             fusion: s.fusion.map(|f| (f.group, 2.0 * f.spacing * scale.x)),
             fusion_merge: s.fusion.map_or(0.0, |f| f.merge),
+            grade: s.grade.map_or([1.0, 1.0], |g| [g[0] as f32, g[1] as f32]),
             pointer: s.pointer.and_then(|p| {
                 let at = |q: [f64; 2]| {
                     let o = location.to_f64() + Point::from((q[0] * scale.x, q[1] * scale.y));
@@ -439,7 +452,7 @@ mod tests {
     fn shape(x: f64, y: f64, blur: Option<material::Blur>) -> material::Shape {
         material::Shape {
             x, y, w: 200.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None, blur, shadow: None,
+            fusion: None, tone: None, ink_tone: None, blur, shadow: None, grade: None,
         }
     }
 

@@ -191,8 +191,8 @@ fn push_surface<R: HyaloRenderer>(
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
         // A tree with layers a client handed Hyalo to animate (protocols/layers.rs) is drawn
         // where they are shown, whole: its drawn region (#761) describes the buffer at rest.
-        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, kind, when) {
-            out.extend(layered.into_iter().map(OutputElement::Scaled));
+        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, output_size, kind, when) {
+            out.extend(layered.interleave(OutputElement::Scaled, OutputElement::Glass));
         } else {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
             // A surface that declared where it draws (#761) is drawn only there, and repainted where
@@ -244,8 +244,8 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     kind: Kind,
     when: std::time::Instant,
 ) {
-    match crate::protocols::layers::render_tree(renderer, surface, location, scale, kind, when) {
-        Some(layered) => out.extend(layered.into_iter().map(OutputElement::Scaled)),
+    match crate::protocols::layers::render_tree(renderer, surface, location, scale, output_size, kind, when) {
+        Some(layered) => out.extend(layered.interleave(OutputElement::Scaled, OutputElement::Glass)),
         None => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
             out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));

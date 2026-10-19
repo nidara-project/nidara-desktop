@@ -1293,10 +1293,33 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
-- Not drawn yet: a layer's OWN glass (only the root's is; owed in phase 1 for the native window's
-  sidebar and title bar, `toolkit/PHASE1.md` D7, its backdrop including the parent's content), the drawn region (#761) of a
-  layer-shell surface while it holds a layer (it is drawn whole), and capture shows layers at
-  their presented place like the screen. Not offered to sandboxed clients, like the material.
+- **A layer's own glass** (`toolkit/PHASE1.md` D7: the native window's sidebar and title bar).
+  `render_tree` returns a `LayeredTree`: the surfaces, and each layer's `GlassElement`s with the
+  index of the layer they lie right below; `interleave` puts them in the frame front to back. So
+  a layer's glass is a framebuffer effect like any other, and its backdrop is everything drawn
+  behind that layer — the window's own content, its background, the desktop — re-captured only
+  when that changes (scrolling the content re-blurs; the layers are not repainted). Two rules:
+  its glass reads only inside the root surface's box (`GlassElement::within`: the window's edge
+  repeats past it, measured necessary — without it the sidebar's and the title bar's outer edges
+  darkened with the desktop beside the window), and a layer fading in or out FORMS its glass
+  (`forming`, #764). Made after the walk: the walk holds each surface's states locked, and
+  `for_surface` takes them again.
+- **A graded blur** (`set_shape_grade(top, bottom)`, inside material v1 — lib + Hyalo together):
+  a shape's blur strength from its top edge to its bottom edge, 0..1. One blur cannot be graded,
+  so the shader (`graded` in `glass_final.glsl`) walks the capture's four as a ladder — sharp
+  (level 0), soft, middle, full (`BlurMix`'s copies) — and mixes the two rungs either side of
+  each pixel's strength. A graded shape makes its glass capture those copies even where the
+  client paints the glass (`soft` in `for_surface`); a window's backdrop is never graded. The
+  rungs are equally spaced in strength; the curve and the numbers are the owner's to decide
+  live (D7: "the owner decides live (A/B)").
+- CI: `scripts/ci/hyalo-layer-glass-check.py` + `hyalo-layer-glass-probe.c` in the Hyalo smoke —
+  4 px columns in a window under a transparent sidebar layer with a blur and a title-bar layer
+  with a graded blur, contrast measured along rows (≈ 127 sharp, under 40 blurred); controls
+  `--no-material` (the sidebar's columns stay sharp) and `--uniform` (the title bar as blurred
+  at its bottom as at its top) must each fail their claim.
+- Not drawn yet: the drawn region (#761) of a layer-shell surface while it holds a layer (it is
+  drawn whole); capture shows layers at their presented place like the screen. Not offered to
+  sandboxed clients, like the material.
 - ⚠️ Locally, the headless `cage` harness draws NO frames with this Mesa (`msg stats` →
   `frames_drawn: 0`; the winit surface fails with `BAD_ALLOC` at start), so `done` — sent after a
   frame — never comes there, while screenshots (drawn on demand) and clicks work. The tty smoke

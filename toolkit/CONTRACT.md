@@ -197,9 +197,12 @@ moves it there and keeps moving it whatever the app is doing.
   coordinates. This request neither enables input nor sends surrounding text.
 - `done(serial)` event when a transition ends, with the presentation time; `cancelled(serial)`
   when a new value replaced it.
-- A layer's own glass (a `nidara_material_v1` on the layer's surface) is NOT drawn yet: Hyalo
-  draws the glass of a window's or a layer-shell surface's root. It comes in phase 1 with the
-  native window's sidebar and title bar (PHASE1.md D7), its backdrop including the parent's content.
+- **A layer has its own glass** (PHASE1.md D7): a `nidara_material_v1` on the layer's surface is
+  drawn right below that layer, at the transform it is shown at, and its backdrop is everything
+  behind it — the window's own content included, read only inside the window (its edge repeats
+  past it, never the desktop beside it). A layer fading in or out forms its glass, it does not
+  fade it. A pane's blur may be graded from its top edge to its bottom edge
+  (`nidara_material_v1.set_shape_grade`, the title bar's progressive blur).
 - **Limits:** at most 64 layers per window (protocol error past that). Not offered to
   sandboxed clients, as the material (#818 triage, point 6 — opening it to Flatpak apps is the
   later review of the trust boundary).
