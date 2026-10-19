@@ -211,7 +211,7 @@ phase_boot() {
     # before the bus starts: xdg-desktop-portal, started by it, picks nidara-portals.conf by it.
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
         XDG_CURRENT_DESKTOP=Nidara \
-        NK_REAL_GATES="${NK_REAL_GATES:-true}" \
+        NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
 
@@ -811,6 +811,12 @@ PY
         echo "Real fcitx5 and Orca gates skipped: nothing they use changed (scripts/ci/ci-scope.sh)." > "$OUT/real-gates-skipped.md"
     else
         local real_status=0
+        # The baseline alone (scale 1, no controls) unless the checks or their faults changed
+        # (ci-scope `full`); the nightly run has everything.
+        if [ "${NK_REAL_FULL:-true}" = false ]; then
+            export NK_FCITX5_SCALES=1 NK_REAL_CONTROLS=0
+            log "real IME/Orca: baseline at scale 1 only, controls and scale 1.25 left to the nightly run (ci-scope full=false)"
+        fi
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
             > /tmp/hyalo/nk-fcitx5.log 2>&1 || real_status=1
         cat /tmp/hyalo/nk-fcitx5.log
