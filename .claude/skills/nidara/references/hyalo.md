@@ -985,10 +985,14 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   glyphs and the ink tone over a light header, white over a dark one. The app's `set_ink` only
   says the ink of the PLAIN capsule: `[windows.controls] glass = false` (the A/B, and the
   check's control), or no export. The shader draws only the state and the glyphs over the glass
-  (`glass_under`). Not yet in Hyalo's own title bar, whose capsule is drawn in the bar's pass.
-  CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe with `HYALO_PROBE_STRIPES`: header
+  (`glass_under`). **The same in Hyalo's own title bar** (owner: "it has to be the same as in
+  our apps"): with glass, its capsule is drawn apart — the `ControlsElement` and the glass in
+  front of the bar, whose own pass leaves the capsule out (`TitleBar::controls_apart`) but still
+  keeps its room for the title — so the glass's backdrop is the bar and its ink is measured on
+  it, never the bar pass's own colour guess. CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe with `HYALO_PROBE_STRIPES`: header
   blurred inside the capsule, sharp beside it; `HYALO_PROBE_HEADER`: dark glyphs over f0f0f0,
-  white over 303030, the app asking nothing; `glass = false` must fail both).
+  white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
+  light glass, brighter than the bar, and dark glyphs; `glass = false` must fail all three).
   `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
 - **A capture collects the ink it measured** (`capture_output` arms the poll as a frame does): a
   screenshot draws the glass too. Where no frame is drawn — the headless cage harness — only

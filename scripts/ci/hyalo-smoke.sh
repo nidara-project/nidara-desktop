@@ -668,7 +668,7 @@ PY
     # controls (glass = false) show the header sharp through it and keep white glyphs.
     CONTROLS_GLASS_LOG=/tmp/hyalo/controls-glass python "$REPO/scripts/ci/hyalo-controls-glass-check.py" >/tmp/hyalo/controls-glass.log 2>&1 \
         || { log "FAIL: controls glass"; cat /tmp/hyalo/controls-glass.log; exit 1; }
-    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 2, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 2 controls caught)"
+    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 3, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 3 controls caught)"
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.

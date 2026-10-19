@@ -585,6 +585,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             family: state.windows.title_bar.font.clone(),
             active: state.wm.focused == Some(m.id),
             controls,
+            controls_apart: false,
         })),
         None => (controls, None),
     };

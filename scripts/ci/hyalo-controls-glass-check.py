@@ -13,9 +13,12 @@ contrast along a row: the luminance's standard deviation, ≈ 127 sharp, near 0 
   1. inside the capsule the columns are blurred, beside it they are sharp;
   2. the ink is the glass's: over a light header the glyphs are dark, over a dark one white —
      the app having said nothing about its header (no set_ink);
-  3. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
-     through the plain capsule (claim 1 must fail), and over the light header the glyphs stay
-     white, nothing measuring it (claim 2 must fail).
+  3. in Hyalo's own title bar (an app that leaves its decorations to it) the same: over a light
+     bar, the glass's light face and dark glyphs;
+  4. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
+     through the plain capsule (claim 1 must fail), over the light header the glyphs stay
+     white, nothing measuring it (claim 2 must fail), and the bar's own capsule is darker than
+     the bar (claim 3 must fail).
 Exits 1 on failure."""
 import json
 import os
@@ -65,23 +68,23 @@ def lum(image, x, y):
     return 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]
 
 
-def measure(name, env):
-    """Run the probe with `env` and measure its capsule and the header beside it."""
+def measure(name, env, app=APP, ready='PLACED'):
+    """Run `app` with `env` and measure its capsule and the header beside it."""
     out = LOG / f'{name}.log'
     with out.open('w') as stream:
-        probe = subprocess.Popen([APP], stdout=stream, stderr=stream, env={**os.environ, **env})
+        probe = subprocess.Popen([app], stdout=stream, stderr=stream, env={**os.environ, **env})
     try:
         for _ in range(80):
-            if 'PLACED' in out.read_text():
+            if ready in out.read_text():
                 break
             time.sleep(.1)
-        assert 'PLACED' in out.read_text(), f'the probe never placed its controls: {out.read_text()}'
+        assert ready in out.read_text(), f'{app} never got ready: {out.read_text()}'
         time.sleep(1.5)  # past the window's opening
         # The ink is measured on a drawing of the glass and applied when the GPU answers: a
         # first capture is such a drawing where no frame is drawn (a headless harness).
         shot(f'{name}-warm')
         time.sleep(.5)
-        win = next(w for w in msg('windows')['windows'] if w['app_id'] == APP)
+        win = next(w for w in msg('windows')['windows'] if w['app_id'] == app)
         x, y, w, h = win['controls']
         scale = msg('outputs')['outputs'][0]['scale']
         image = shot(name)
@@ -89,6 +92,8 @@ def measure(name, env):
         # 5 px under the capsule's top: above the glyphs (14 px, centred), clear of its round ends.
         top = [lum(image, i, p(y + 5)) for i in range(p(x + 16), p(x + w - 16))]
         beside = [lum(image, i, p(y + 5)) for i in range(p(win['x'] + 12), p(x - 12))]
+        # The header (or bar) near the window's left edge: clear of a centred title.
+        edge = [lum(image, i, p(y + 5)) for i in range(p(win['x'] + 12), p(win['x'] + 60))]
         # The glyphs' row: through their middle.
         mid = [lum(image, i, p(y + h / 2)) for i in range(p(x + 6), p(x + w - 6))]
         return {
@@ -96,6 +101,7 @@ def measure(name, env):
             'inside': statistics.pstdev(top),
             'beside': statistics.pstdev(beside),
             'glass': statistics.fmean(top),
+            'header': statistics.fmean(edge),
             'darkest': min(mid),
             'brightest': max(mid),
             'asked_ink': 'ASKED' in out.read_text(),
@@ -119,6 +125,14 @@ def inked(light, dark):
         f'over a dark header the glyphs are not white (brightest {dark["brightest"]:.0f}, glass {dark["glass"]:.0f})'
 
 
+def bar_glass(m):
+    """Hyalo's title bar over a light app: the same capsule as over a light header — the
+    glass's light face over the bar, brighter than it, and dark glyphs."""
+    assert m['glass'] > m['header'] + 4, \
+        f'the capsule ({m["glass"]:.0f}) is not the light glass over the bar ({m["header"]:.0f})'
+    assert m['darkest'] < 70, f'the glyphs on the bar are not dark ({m["darkest"]:.0f})'
+
+
 def check():
     original = next(w['id'] for w in msg('workspaces')['workspaces'] if w['focused'])
     results = {}
@@ -134,6 +148,13 @@ def check():
         inked(light, dark)
         print(f'ok    the ink is the glass\'s: dark glyphs over a light header ({light["darkest"]:.0f}), '
               f'white over a dark one ({dark["brightest"]:.0f}), the app saying nothing', flush=True)
+
+        # Hyalo's own title bar (an app that left its decorations to it, light at its top): the
+        # same controls as over our apps' headers.
+        results['title_bar'] = tb = measure('title-bar', {}, app='hyalo-title-bar-probe', ready='SHOWN')
+        bar_glass(tb)
+        print(f'ok    in Hyalo\'s title bar the same glass: {tb["glass"]:.0f} over the bar\'s {tb["header"]:.0f}, '
+              f'dark glyphs ({tb["darkest"]:.0f})', flush=True)
 
         msg('settings', json.dumps({'windows': {'controls': {'glass': False}}}))
         results['plain'] = plain = measure('plain', {'HYALO_PROBE_STRIPES': '1'})
@@ -151,6 +172,13 @@ def check():
             print(f'CAUGHT glass = false (ink): {e}', flush=True)
         else:
             raise AssertionError(f'the control glass = false (ink) was not caught: {plain_light}')
+        results['plain_title_bar'] = plain_tb = measure('plain-title-bar', {}, app='hyalo-title-bar-probe', ready='SHOWN')
+        try:
+            bar_glass(plain_tb)
+        except AssertionError as e:
+            print(f'CAUGHT glass = false (title bar): {e}', flush=True)
+        else:
+            raise AssertionError(f'the control glass = false (title bar) was not caught: {plain_tb}')
         print('CONTROLS GLASS CHECK PASSED', flush=True)
     finally:
         (LOG / 'measured.json').write_text(json.dumps(results, indent=2))
