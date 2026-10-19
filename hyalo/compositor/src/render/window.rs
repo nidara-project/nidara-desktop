@@ -510,16 +510,8 @@ pub fn push<R: HyaloRenderer>(
     match &program {
         Some(program) => {
             // Layers a client handed Hyalo to animate are drawn where they are shown
-            // (protocols/layers.rs), each at its own scale.
-            let elements: Vec<AtScale<WaylandSurfaceRenderElement<R>>> =
-                crate::protocols::layers::render_tree(renderer, &surface, location, scale, Kind::Unspecified, when)
-                    .unwrap_or_else(|| {
-                        render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
-                            .into_iter()
-                            .map(|inner| AtScale { inner, scale })
-                            .collect()
-                    });
-            out.extend(elements.into_iter().map(|inner| {
+            // (protocols/layers.rs), each at its own scale, each with its own glass below it.
+            let rounded = |inner| {
                 OutputElement::Rounded(RoundedElement {
                     inner,
                     program: program.clone(),
@@ -528,7 +520,15 @@ pub fn push<R: HyaloRenderer>(
                     exponent: cfg.rounding_power,
                     clip,
                 })
-            }));
+            };
+            match crate::protocols::layers::render_tree(renderer, &surface, location, scale, output_size, Kind::Unspecified, when) {
+                Some(layered) => out.extend(layered.interleave(rounded, OutputElement::Glass)),
+                None => out.extend(
+                    render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
+                        .into_iter()
+                        .map(|inner| rounded(AtScale { inner, scale })),
+                ),
+            }
             super::push_material(out, &surface, location, scale, output_size, when);
         }
         None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate, when),

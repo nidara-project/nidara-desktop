@@ -32,7 +32,7 @@ use smithay::{
     reexports::wayland_server::{
         Client, DataInit, DisplayHandle, New, Resource, Weak, protocol::wl_surface::WlSurface,
     },
-    utils::{Logical, Physical, Point, Scale},
+    utils::{Logical, Physical, Point, Rectangle, Scale, Size},
     wayland::{
         Dispatch2, GlobalDispatch2,
         compositor::{
@@ -48,7 +48,7 @@ use crate::{
         nidara_layer_v1::{self, NidaraLayerV1},
         nidara_layers_manager_v1::{self, NidaraLayersManagerV1},
     },
-    render::window::AtScale,
+    render::{GlassElement, window::AtScale},
 };
 
 /// At most this many layers under one toplevel (the protocol's `too_many_layers`).
@@ -477,6 +477,40 @@ fn place_shown(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>,
     place_look(parent, offset, look)
 }
 
+/// A tree that holds a layer, as `render_tree` draws it.
+pub struct LayeredTree<R: Renderer> {
+    pub surfaces: Vec<AtScale<WaylandSurfaceRenderElement<R>>>,
+    /// Each layer's own glass (`nidara-material-v1` on the layer's surface, toolkit/PHASE1.md
+    /// D7), with the index of the surface it lies right below: everything behind that layer —
+    /// the window's own content included — is its backdrop, at the transform it is shown at.
+    pub glass: Vec<(usize, GlassElement)>,
+}
+
+impl<R: Renderer> LayeredTree<R> {
+    /// Surfaces and glass interleaved, front to back: each glass right after (below) its layer.
+    pub fn interleave<T>(self, mut surface: impl FnMut(AtScale<WaylandSurfaceRenderElement<R>>) -> T, mut glass: impl FnMut(GlassElement) -> T) -> Vec<T> {
+        let mut out = Vec::with_capacity(self.surfaces.len() + self.glass.len());
+        let mut pending = self.glass.into_iter().peekable();
+        for (i, s) in self.surfaces.into_iter().enumerate() {
+            out.push(surface(s));
+            while let Some((_, g)) = pending.next_if(|(at, _)| *at == i) {
+                out.push(glass(g));
+            }
+        }
+        out
+    }
+}
+
+/// A layer whose glass `render_tree` makes: where its surface element is in the list, and
+/// where and how it is shown.
+struct Glassy {
+    index: usize,
+    layer: WlSurface,
+    at: Point<i32, Physical>,
+    scale: Scale<f64>,
+    alpha: f64,
+}
+
 /// `surface`'s tree as render elements, front to back, each layer at its presented transform
 /// `when`. None when the tree holds no layer: the caller uses Smithay's own walk.
 pub fn render_tree<R>(
@@ -484,9 +518,10 @@ pub fn render_tree<R>(
     surface: &WlSurface,
     location: Point<i32, Physical>,
     scale: Scale<f64>,
+    output_size: Size<i32, Physical>,
     kind: Kind,
     when: Instant,
-) -> Option<Vec<AtScale<WaylandSurfaceRenderElement<R>>>>
+) -> Option<LayeredTree<R>>
 where
     R: Renderer + ImportAll,
     R::TextureId: Clone + 'static,
@@ -498,6 +533,9 @@ where
     let origin = location.to_f64().to_logical(scale);
     let root = Place { at: origin, scale: 1.0, alpha: 1.0 };
     let mut out = Vec::new();
+    // The layers that hold a material: their glass is made after the walk, which holds their
+    // states locked.
+    let mut glassy: Vec<Glassy> = Vec::new();
     with_surface_tree_downward(
         surface,
         root,
@@ -519,6 +557,9 @@ where
                 Ok(Some(inner)) => {
                     let s = Scale::from((scale.x * here.scale, scale.y * here.scale));
                     out.push(AtScale { inner, scale: s });
+                    if is_layer(states) && crate::protocols::material::glass_shapes(states) > 0 {
+                        glassy.push(Glassy { index: out.len() - 1, layer: surface.clone(), at: at.to_i32_round(), scale: s, alpha: here.alpha });
+                    }
                 }
                 Ok(None) => {}
                 Err(e) => tracing::warn!("layers: could not import a surface: {e}"),
@@ -526,7 +567,29 @@ where
         },
         |_, _, _| true,
     );
-    Some(out)
+    // What a layer's glass may read: its root surface's box (a window's whole buffer).
+    let bounds = with_states(surface, view).map(|v| {
+        let o = (origin + v.offset.to_f64()).to_physical(scale);
+        Rectangle::<f64, Physical>::new(o, v.dst.to_f64().to_physical(scale)).to_i32_round()
+    });
+    let glass = glassy
+        .into_iter()
+        .flat_map(|Glassy { index, layer, at, scale, alpha }| {
+            let elements = GlassElement::for_surface(&layer, at, scale, output_size);
+            let elements: Vec<GlassElement> = match bounds {
+                Some(b) => elements.into_iter().filter_map(|g| g.within(b)).collect(),
+                None => elements,
+            };
+            // A layer fading in or out: its glass forms with it, it never fades (#764).
+            let elements: Vec<GlassElement> = if alpha < 1.0 {
+                with_states(&layer, |states| elements.into_iter().map(|g| g.forming(alpha as f32, &states.data_map)).collect())
+            } else {
+                elements
+            };
+            elements.into_iter().map(move |g| (index, g))
+        })
+        .collect();
+    Some(LayeredTree { surfaces: out, glass })
 }
 
 /// `root`'s live layers as `msg windows` lists them, where each is shown at `when`, relative to

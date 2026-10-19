@@ -259,10 +259,10 @@ it opened collapsed; otherwise it was part of the window. The native window does
 - **Without `nidara_material_v1` or `nidara_layers_v1`** (D5): sidebar and title bar are painted
   by the app in the content's buffer with the opaque base, and the content is clipped to the
   insets instead of passing under them.
-- **Hyalo (Claude):** (1) draw a layer's **own** material, with the backdrop being everything
-  under that layer — the parent window's content included — at the presented transform (today
-  only a root's glass is drawn, `CONTRACT.md` → layers); (2) a graded blur for a pane, added
-  **inside** `nidara-material-v1` (protocols stay v1). Each with a CI check and its control: a
+- **Hyalo (Claude) — ✅ both, with their check (`scripts/ci/hyalo-layer-glass-check.py`):** (1) draw a layer's **own** material, with the backdrop being everything
+  under that layer — the parent window's content included — at the presented transform
+  (`CONTRACT.md` → layers); (2) a graded blur for a pane, added **inside** `nidara-material-v1`
+  (protocols stay v1): `set_shape_grade(top, bottom)`. Each with a CI check and its control: a
   sharp pattern in the parent's content under the sidebar comes out blurred (the control without
   the layer's material: sharp); the graded pane's blur measured falling from top to bottom (the
   control: uniform).

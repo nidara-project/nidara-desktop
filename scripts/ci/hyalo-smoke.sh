@@ -122,6 +122,19 @@ phase_build() {
     cc -O2 "$REPO/scripts/ci/hyalo-layer-motion-probe.c" "$lm/xdg-shell-protocol.c" \
         "$lm/nidara-layers-v1-protocol.c" \
         -I"$lm" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-layer-motion-probe
+    # The layer-glass probe (a layer's own material over its window's content, and a graded
+    # blur: toolkit/PHASE1.md D7).
+    local lg="$REPO/build/lg" mt_xml="$REPO/protocols/nidara-material-v1.xml"
+    mkdir -p "$lg"
+    wayland-scanner client-header "$xs_xml" "$lg/xdg-shell-client-protocol.h"
+    wayland-scanner private-code  "$xs_xml" "$lg/xdg-shell-protocol.c"
+    wayland-scanner client-header "$lm_xml" "$lg/nidara-layers-v1-client-protocol.h"
+    wayland-scanner private-code  "$lm_xml" "$lg/nidara-layers-v1-protocol.c"
+    wayland-scanner client-header "$mt_xml" "$lg/nidara-material-v1-client-protocol.h"
+    wayland-scanner private-code  "$mt_xml" "$lg/nidara-material-v1-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-layer-glass-probe.c" "$lg/xdg-shell-protocol.c" \
+        "$lg/nidara-layers-v1-protocol.c" "$lg/nidara-material-v1-protocol.c" \
+        -I"$lg" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-layer-glass-probe
     # The title-bar probe (an app that leaves its decorations to Hyalo, render/title_bar.rs).
     local tb="$REPO/build/tb"
     mkdir -p "$tb"
@@ -698,6 +711,11 @@ PY
     LAYER_MOTION_LOG=/tmp/hyalo/layer-motion python "$REPO/scripts/ci/hyalo-layer-motion-check.py" >/tmp/hyalo/layer-motion.log 2>&1 \
         || { log "FAIL: layer motion"; cat /tmp/hyalo/layer-motion.log; exit 1; }
     log "layer motion OK ($(grep -c '^ok' /tmp/hyalo/layer-motion.log) of 4: placed, moved while blocked, clicks where seen, done)"
+    # A layer's own glass (toolkit/PHASE1.md D7): the window's content under it comes out
+    # blurred, and a graded pane's blur falls from its top to its bottom; each with its control.
+    LAYER_GLASS_LOG=/tmp/hyalo/layer-glass python "$REPO/scripts/ci/hyalo-layer-glass-check.py" >/tmp/hyalo/layer-glass.log 2>&1 \
+        || { log "FAIL: layer glass"; cat /tmp/hyalo/layer-glass.log; exit 1; }
+    log "layer glass OK ($(grep -c '^ok' /tmp/hyalo/layer-glass.log) of 2, $(grep -c '^CAUGHT' /tmp/hyalo/layer-glass.log) of 2 controls caught)"
     NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
         || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }
     log "native layer motion OK (scales 1/1.25, blocked client, click coordinates, retarget, fault controls)"
