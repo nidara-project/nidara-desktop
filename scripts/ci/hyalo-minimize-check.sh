@@ -69,13 +69,18 @@ over_dock() {
     inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60)'
     for _ in $(seq 1 400); do
         drawn=$(win | jq -c .drawn)
-        echo "$drawn" >>"$log/$shot-polled.log"
+        # When each poll was, ms: a window that jumps between two polls says what was slow.
+        echo "$(($(date +%s%N) / 1000000)) $drawn" >>"$log/$shot-polled.log"
         before=$(echo "$drawn" | jq -c --argjson y "$y" --argjson dx "$dx" "$inside")
         [ -n "$before" ] || { sleep 0.02; continue; }
+        t=$(date +%s%N)
         $MSG screenshot "$log/$shot-crossing.png" >/dev/null || fail "no screenshot"
+        echo "$(($(date +%s%N) / 1000000)) screenshot $(( ($(date +%s%N) - t) / 1000000 )) ms" >>"$log/$shot-polled.log"
         after=$(win | jq -c --argjson y "$y" --argjson dx "$dx" ".drawn | $inside")
+        echo "$(($(date +%s%N) / 1000000)) after $(win | jq -c .drawn)" >>"$log/$shot-polled.log"
         [ -n "$after" ] && break
     done
+    [ -n "$before" ] && [ -n "$after" ] || $MSG stats >>"$log/$shot-polled.log" 2>&1
     [ -n "$before" ] && [ -n "$after" ] || fail "($shot) it never crossed the dock's glass (at y $y, the dock from x $dx; where it was drawn: $log/$shot-polled.log)"
     px=$(jq -rn --argjson a "$before" --argjson b "$after" --argjson y "$y" --argjson s "$scale" \
         '"\(([$a[0], $b[0]] | max) + 6 | . * $s | ceil) \($y * $s | floor)"')
