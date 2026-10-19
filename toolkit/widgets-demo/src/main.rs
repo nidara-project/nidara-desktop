@@ -23,6 +23,7 @@ struct Demo {
     applied: Cell<bool>,
     scroll: u64,
     group: u64,
+    wide: u64,
     width: u32,
     switch: u64,
     probe: (u64, u64),
@@ -128,7 +129,10 @@ impl Demo {
     fn sync(&mut self, window: &mut Window) -> Result<()> {
         let width = window.size().0;
         if width != self.width {
-            self.tree.set_min_width(self.group, width as f32)?;
+            self.tree.set_min_width(self.wide, width as f32)?;
+            if self.fault == "at-rest" {
+                self.tree.set_min_width(self.group, width as f32)?;
+            }
             self.width = width;
         }
         self.composition.sync(
@@ -139,6 +143,9 @@ impl Demo {
             &self.appearance.panel,
             self.fault != "layers",
         )?;
+        if self.fault == "at-rest" && !self.tree.showing(self.switch) {
+            self.applied("at-rest");
+        }
         if self.fault == "layers" && !window.capabilities().layers {
             return Err("layers control requires a baseline with layer support".into());
         }
@@ -403,7 +410,9 @@ fn run() -> Result<()> {
         )?;
         last = control;
     }
-    tree.set_min_width(group, appearance.size.0 as f32)?;
+    // Only this dedicated row is wider than the viewport. Normal controls must
+    // be visible at rest; the scroll extent still permits the D7 occlusion probe.
+    let (wide, _) = tree.row(group, "Wide content", Kind::Switch { checked: false })?;
     let fault = std::env::args()
         .find_map(|s| s.strip_prefix("--fault=").map(str::to_owned))
         .unwrap_or_default();
@@ -426,6 +435,7 @@ fn run() -> Result<()> {
             applied: Cell::new(false),
             scroll,
             group,
+            wide,
             width: 0,
             switch,
             probe: (probe_row, last),
