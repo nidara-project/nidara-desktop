@@ -2358,7 +2358,10 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
 - The tty backend — the one that matters — is tested in the VM (maintainer harness), as a session
   from the greeter or from a VT; QEMU's `virtio-gpu,max_outputs=2` gives two outputs.
 - On real hardware: `hyalo/scripts/install-preview.sh` installs the session on a dev install
-  (the package cannot go there), and `measure-session.sh`, run once per session, gives the
+  (the package cannot go there) — with the glass token export, which Hyalo's own glass needs
+  and only the package otherwise ships; it builds the checkout it is run from, so it warns
+  when that checkout is behind main (2026-10-20: one from before #884 installed controls
+  without their glass, and nothing said so) — and `measure-session.sh`, run once per session, gives the
   like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
   step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
