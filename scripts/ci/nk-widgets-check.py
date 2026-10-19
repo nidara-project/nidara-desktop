@@ -38,7 +38,7 @@ if LOG == Path('/tmp') or Path('/tmp') in LOG.parents:
     raise RuntimeError('nk-widgets evidence must not use /tmp')
 LOG.mkdir(parents=True, exist_ok=True)
 (LOG / 'environment.json').write_text(json.dumps({
-    'revision': subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
+    'revision': subprocess.check_output(['git', '-c', 'safe.directory=*', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip(),
     'demo_sha256': hashlib.sha256(Path(BIN).read_bytes()).hexdigest(),
     'compositor_sha256': hashlib.sha256(Path(MSG[0] if '/' in MSG[0] else shutil.which(MSG[0])).read_bytes()).hexdigest(),
     'runtime': os.environ['XDG_RUNTIME_DIR'],
