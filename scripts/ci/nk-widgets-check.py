@@ -331,6 +331,22 @@ def run(fault=None, stop=None):
 
 
 output = ipc('outputs')['outputs'][0]
+# The demo opens at sidebar + content floor, exactly the breakpoint. vkms's 1024×768 is 819
+# logical px at 1.25, and Hyalo fits a floating window in the usable area (gaps, border): 809,
+# below the breakpoint, so the sidebar collapses (D7) and the expanded stages cannot run. A
+# scale whose logical width cannot hold the demo gets the smallest mode that can.
+DEMO_ROOM = 1000
+
+
+def room_for(scale):
+    current = output['current_mode']
+    if current['width'] / scale >= DEMO_ROOM:
+        return [f"mode={current['width']}x{current['height']}"]
+    fits = sorted((m for m in output['modes'] if m['width'] / scale >= DEMO_ROOM), key=lambda m: m['width'] * m['height'])
+    if not fits:
+        raise InfrastructureError(f'no mode of {output["name"]} is {DEMO_ROOM} logical px wide at scale {scale}: {output["modes"]}')
+    return [f"mode={fits[0]['width']}x{fits[0]['height']}"]
+
 workspace = next(w['id'] for w in ipc('workspaces')['workspaces'] if w['focused'])
 try:
     ipc('do', 'workspace', 94)
@@ -338,7 +354,7 @@ try:
     selected = os.environ.get('NK_WIDGETS_STAGES', '').split()
     stages = selected or STAGES + NEW_STAGES
     for SCALE in (1, 1.25):
-        ipc('output', output['name'], f'scale={SCALE}')
+        ipc('output', output['name'], f'scale={SCALE}', *room_for(SCALE))
         if selected:
             for stage in stages:
                 run(stop=stage)
@@ -355,7 +371,8 @@ try:
                                               'controls': 'all caught'}, indent=2))
 finally:
     try:
-        ipc('output', output['name'], f"scale={output['scale']}")
+        current = output['current_mode']
+        ipc('output', output['name'], f"scale={output['scale']}", f"mode={current['width']}x{current['height']}")
         ipc('do', 'workspace', workspace)
     finally:
         registry.terminate()
