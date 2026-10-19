@@ -615,6 +615,9 @@ def main():
                     run(p, engine, scale)
                     baseline = {r['step'].split('/')[-1]: r['status'] for r in p.rows
                                 if r['step'].startswith(f'{engine}-{scale:g}/')}
+                    # NK_REAL_CONTROLS=0: the baseline alone (nk-orca-check.py says why).
+                    if os.environ.get('NK_REAL_CONTROLS', '1') == '0':
+                        continue
                     if baseline.get('underlined-preedit') == 'PASS':
                         run(p, engine, scale, '--control-no-preedit')
                     if engine != 'hangul' and baseline.get('candidate-placement') == 'PASS':

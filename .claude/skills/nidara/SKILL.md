@@ -229,16 +229,28 @@ one with a `timeout-minutes`):
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
 skip the *work* inside a job, never the job. A job skipped by its `if:` DOES report (as a pass),
 which is how `scope` (`scripts/ci/ci-scope.sh`, its own self-test first) gates the long jobs:
-`code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond; `gates=false`
-(every path in an area the typing and screen-reader tests do not use — a SKIP list, so a new
-file runs them) skips only the Hyalo job's real fcitx5/Orca matrices, ~35 of its ~50 min. Inside
-`hyalo/` and `toolkit/` the list is by FILE (drawing, window management, capture, IPC, the
-Settings slice skip; input, focus, a11y, layers, backend, the toolkit crates run), and CI's own
-plumbing (`hyalo-smoke.sh`, `ci.yml`) skips too (2026-10-18: 19 of 25 PRs ran them, now 11).
-What a skip lets through, the **nightly** full run on main finds (`schedule`, no base, so
-everything runs); `nightly-report` opens/updates the issue "Nightly CI failed", and closes it
-when green. A file the matrices start depending on? Take it out of `unrelated()` and add a
-self-test line.
+`code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond. `gates=true` runs
+the Hyalo job's real fcitx5/Orca matrices (~35 of its ~45 min) ONLY when a changed path is one
+they use — `needs_gates()`, a list of what RUNS them: Hyalo's input, focus, a11y, handlers,
+shortcuts, binds, control, layers and focus-grab files and its Cargo files; the toolkit (not the
+Settings slice); the layers protocol; Hyalo's config; the matrix checks. `full=true` adds their
+controls (each assertion re-run with a fault) and scale 1.25 — only when the checks or the test
+window's faults change (`needs_full()`; `NK_REAL_FULL=false` → `NK_FCITX5_SCALES=1
+NK_REAL_CONTROLS=0`). Until 2026-10-19 `gates` was a SKIP list and almost every Hyalo PR ran
+the 35 minutes (owner: "we can't lose an hour on tests that give the same result"). What a skip
+lets through, the **nightly** full run on main finds (`schedule`, no base, so everything runs);
+`nightly-report` opens/updates the issue "Nightly CI failed", and closes it when green. A file
+the matrices start depending on? Add it to `needs_gates()` with a self-test line.
+
+🔑 **The PR budget** (owner, 2026-10-19: "we keep adding tests and have more and more CI
+problems"). A PR's CI aims at **15 minutes**. A NEW check goes to the nightly run by default;
+it runs on PRs only scoped to the paths it can catch (a `ci-scope.sh` output with self-test
+lines), and only if its result does not depend on the runner's speed — CI's GL is software,
+and a check that races an animation, a capture or a `gjs` start against the clock fails on a
+correct change and teaches everyone to re-run. Such a check is fixed (read the moment from
+Hyalo — a capture's `capture.json` says where moving windows were in it) or removed, never
+retried. A check's CONTROLS prove it can fail: they belong with the check's own changes and
+the nightly run, not every PR.
 
 ⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
 forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
