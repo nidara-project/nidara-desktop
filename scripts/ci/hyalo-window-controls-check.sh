@@ -122,6 +122,11 @@ span() {
             s = 0 } }
         END { printf "%d %d\n", lo, hi }'
 }
+# The GLYPHS' ink, on the plain capsule: the shell's glass under it (on by default) takes the
+# light face under dark glyphs, brighter than the window by design — that face is
+# hyalo-controls-glass-check.py's to check.
+$MSG settings '{"windows":{"controls":{"glass":false}}}' >/dev/null
+sleep 0.3
 # The pointer on maximize: its glyph at full strength, whether the window has the focus or not.
 echo "move $(at 0.5)" >"$C"; sleep 0.4
 set -- $(span)
@@ -135,6 +140,7 @@ kill -WINCH "$pid"
 sleep 0.6
 set -- $(span)
 [ "$2" -gt 150 ] || fail "light ink again, and the brightest pixel is $2"
+$MSG settings '{"windows":null}' >/dev/null
 echo "ok    the app sets the controls' ink: white over its dark header, dark when it asks"
 
 # 6. A rule: a new window of the app gets close alone.

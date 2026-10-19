@@ -12,6 +12,7 @@ pub mod decor;
 pub mod drawn;
 pub mod glass;
 pub mod glass_gl;
+pub mod glass_tokens;
 pub mod scrim;
 pub mod snapshot;
 pub mod stats;

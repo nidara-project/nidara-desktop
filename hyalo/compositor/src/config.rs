@@ -319,12 +319,15 @@ pub struct ControlsConfig {
     /// The buttons the user wants; close is always shown. A window shows fewer when it cannot
     /// do one (window_controls.rs `shown`).
     pub buttons: Vec<crate::protocols::window_controls::Button>,
+    /// The capsule on the shell's glass (render/controls.rs `glass`, toolkit/PHASE1.md D7);
+    /// off, the plain capsule it was before — the A/B, and the check's control.
+    pub glass: bool,
 }
 
 impl Default for ControlsConfig {
     fn default() -> Self {
         use crate::protocols::window_controls::Button;
-        Self { side: ControlsSide::default(), buttons: vec![Button::Minimize, Button::Maximize, Button::Close] }
+        Self { side: ControlsSide::default(), buttons: vec![Button::Minimize, Button::Maximize, Button::Close], glass: true }
     }
 }
 

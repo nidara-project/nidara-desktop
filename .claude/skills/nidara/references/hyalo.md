@@ -968,6 +968,22 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   edge, the hovered button's fill, one glyph a button (`count`, 1 to 3) as distance fields, all anti-aliased at the
   output's scale), pushed over the window's own surfaces and under its popups; never on a
   fullscreen window. Hover and press live in `wm.controls_hover`.
+- **On the shell's glass** (toolkit/PHASE1.md D7, 2026-10-19): under the capsule over an app's
+  header Hyalo draws a `control` pane of the shell's glass — refraction, rim, lensing and tone
+  read from the token export (`render/glass_tokens.rs`: `tokens/glass.json`, installed under
+  `/usr/share/nidara/settings-data/`, looked at again every 2 s; `HYALO_GLASS_TOKENS` points
+  elsewhere), never a copy of the numbers in Rust. A material Hyalo makes itself
+  (`controls::glass`), drawn by the same `GlassElement` as a client's (`for_material`,
+  `Whose::Hyalo`: its ids apart from the app's own material on that surface), right below the
+  capsule — its backdrop is the header. The FACE follows the ink: dark under white glyphs,
+  light when the app said its header is light (`set_ink` dark). The shader then draws only the
+  state and the glyphs (`glass_under`). `[windows.controls] glass = false` draws the plain
+  capsule (the A/B, and the check's control); without the export it is plain too. Not yet in
+  Hyalo's own title bar, whose capsule is drawn in the bar's pass and whose ink the shader
+  decides from the bar's colour. CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe
+  with `HYALO_PROBE_STRIPES`: header blurred inside the capsule, sharp beside it; the light
+  face brighter; `glass = false` must fail). `hyalo-window-controls-check.sh` checks the
+  glyphs' ink on the plain capsule.
 - **Input**: `Hyalo::controls_under(pos)` walks the windows in drawing order (a layer or a window
   over the controls covers them); `surface_under` returns NONE there, so the app gets a leave and
   never the pointer over its controls; `update_controls_hover` runs after every pointer motion and

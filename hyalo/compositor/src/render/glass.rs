@@ -55,9 +55,20 @@ pub struct GlassElement {
     soft: Option<f32>,
 }
 
-/// One id per group of a surface's shapes, stable across frames.
+/// One id per group of a surface's shapes, stable across frames: its own material's, and the
+/// glass Hyalo paints for it (its window controls').
 #[derive(Default)]
 struct GlassIds(RefCell<Vec<Id>>);
+#[derive(Default)]
+struct OwnGlassIds(RefCell<Vec<Id>>);
+
+/// Whose glass a surface's elements are: the material its client declared, or glass Hyalo
+/// paints over it of its own (the window controls', render/controls.rs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Whose {
+    Client,
+    Hyalo,
+}
 
 impl GlassElement {
     /// The glass elements of `surface`, placed at `location` (its origin, output pixels):
@@ -69,15 +80,32 @@ impl GlassElement {
         output_size: smithay::utils::Size<i32, Physical>,
     ) -> Vec<GlassElement> {
         let Some(current) = material::current(surface) else { return Vec::new() };
+        Self::for_material(surface, Whose::Client, &current, location, scale, output_size)
+    }
+
+    /// The glass elements of `current`, a material of `surface`'s (its client's, or one Hyalo
+    /// made for it), placed at `location`.
+    pub fn for_material(
+        surface: &WlSurface,
+        whose: Whose,
+        current: &material::Current,
+        location: Point<i32, Physical>,
+        scale: Scale<f64>,
+        output_size: smithay::utils::Size<i32, Physical>,
+    ) -> Vec<GlassElement> {
         let m = &current.state;
         let groups = groups(output_size, scale, location, m);
         let ids: Vec<Id> = with_states(surface, |states| {
-            let ids = states.data_map.get_or_insert(GlassIds::default);
-            let mut ids = ids.0.borrow_mut();
-            while ids.len() < groups.len() {
-                ids.push(Id::new());
+            let grow = |ids: &mut Vec<Id>| {
+                while ids.len() < groups.len() {
+                    ids.push(Id::new());
+                }
+                ids[..groups.len()].to_vec()
+            };
+            match whose {
+                Whose::Client => grow(&mut states.data_map.get_or_insert(GlassIds::default).0.borrow_mut()),
+                Whose::Hyalo => grow(&mut states.data_map.get_or_insert(OwnGlassIds::default).0.borrow_mut()),
             }
-            ids[..groups.len()].to_vec()
         });
         let glass = m.glass.map(|g| glass_gl::Glass { rim: g.rim as f32 });
         // The ink is measured only where the compositor paints the glass: it is that glass's

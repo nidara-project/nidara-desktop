@@ -14,6 +14,8 @@
  *          does; a second one, light again.
  * HYALO_PROBE_DIALOG=1: it also opens a dialog of its window (xdg_toplevel.set_parent), which
  *          leaves room for its controls the same way.
+ * HYALO_PROBE_STRIPES=1: its header (the top 60 rows) is 4 px white and black columns, a sharp
+ *          pattern under its controls (hyalo-controls-glass-check.py).
  * HYALO_PROBE_TIDY=1: asked to close, it destroys its window before it exits — toplevel, xdg
  *          surface, surface, in that order, as a toolkit closing a window does. Without it, it
  *          just exits, and its objects go in the order it made them (the surface first), as an
@@ -152,7 +154,11 @@ static struct wl_buffer *solid_buffer(int w, int h, uint32_t colour) {
     int fd = memfd_create("probe", 0);
     if (fd < 0 || ftruncate(fd, size) < 0) return NULL;
     uint32_t *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    for (int i = 0; i < w * h; i++) px[i] = colour;
+    /* HYALO_PROBE_STRIPES: its header (the top 60 rows) 4 px white and black columns — a sharp
+     * pattern under the controls, for hyalo-controls-glass-check.py. */
+    int stripes = getenv("HYALO_PROBE_STRIPES") != NULL;
+    for (int i = 0; i < w * h; i++)
+        px[i] = stripes && i / w < 60 ? ((i % w / 4) % 2 ? 0xff000000 : 0xffffffff) : colour;
     munmap(px, size);
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
     struct wl_buffer *b = wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_XRGB8888);

@@ -489,8 +489,15 @@ pub fn push<R: HyaloRenderer>(
     }
     // Its controls: over its own surfaces, under its popups (a menu opened from the header
     // covers them).
+    // With the shell's glass under them, right below their capsule: its backdrop is the header.
     if let Some((rect, controls)) = controls {
-        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
+        let glass = if cfg.controls.glass {
+            super::controls::glass(&surface, rect, scale, output_size, &controls, cfg.background.reduce_transparency)
+        } else {
+            Vec::new()
+        };
+        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, !glass.is_empty())));
+        out.extend(glass.into_iter().map(OutputElement::Glass));
     }
     let radius = if look.rounded { cfg.rounding * scale.x } else { 0.0 };
     // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the

@@ -108,7 +108,7 @@ pub struct Tone {
 
 impl Tone {
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub(crate) fn new(
         saturation: f64, ceiling: f64, lift: f64, gain: f64,
         wash: [f64; 4], ambient: f64, ambient_lift: f64, ambient_gain: f64,
     ) -> Self {
