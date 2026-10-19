@@ -53,4 +53,4 @@ cargo test --manifest-path toolkit/Cargo.toml -p nk-widgets
 ```
 
 The [demo](../../widgets-demo/README.md) and
-[libatspi check](../../../../scripts/ci/nk-widgets-check.py) exercise the public APIs.
+[libatspi check](../../../scripts/ci/nk-widgets-check.py) exercise the public APIs.

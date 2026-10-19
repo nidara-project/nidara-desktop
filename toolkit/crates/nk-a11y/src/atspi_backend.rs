@@ -203,7 +203,12 @@ impl Object {
     #[zbus(property)]
     fn name(&self) -> String {
         if self.id == 0 {
-            "nk-phase0".into()
+            let tree = self.tree.lock().unwrap();
+            tree.nodes
+                .get(&tree.root)
+                .and_then(|n| n.attributes.get("application-name"))
+                .cloned()
+                .unwrap_or_else(|| "nk-phase0".into())
         } else {
             self.node().map(|n| n.name).unwrap_or_default()
         }
@@ -828,6 +833,8 @@ mod tests {
         node.relations = vec![Relation::LabelledBy(2)];
         label.relations = vec![Relation::LabelFor(1)];
         node.states.offscreen = true;
+        node.attributes
+            .insert("application-name".into(), "Widgets demo".into());
         let state = states(&node);
         assert!(state.contains(State::Visible) && state.contains(State::Checkable));
         assert!(!state.contains(State::Showing));
@@ -840,6 +847,9 @@ mod tests {
             bus: ":1.1".into(),
             callback: Arc::new(|_| {}),
         };
+        let mut app = object.clone();
+        app.id = 0;
+        assert_eq!(app.name(), "Widgets demo");
         let relations = object.get_relation_set();
         assert_eq!(
             relations[0].0,
