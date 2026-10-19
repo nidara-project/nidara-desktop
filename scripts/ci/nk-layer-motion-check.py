@@ -132,6 +132,13 @@ def native(label, flag=None, retarget=False):
         before = m.shot('before')
         a0, b0 = m.span(before, ya, m.RED), m.span(before, yb, m.BLUE)
         assert a0 and b0 and abs(a0[0]-phys(20)) <= 2 and abs(b0[0]-phys(20)) <= 2, 'placed: layers missing or misplaced'
+        # Hyalo lists the window's layers (msg windows → layers; PHASE1.md D7's acceptance reads
+        # it): A and B where the client put them; with client-side motion there are none.
+        listed = sorted((round(l['x']), round(l['y']), round(l['width']), round(l['height'])) for l in win.get('layers', []))
+        if flag == '--control-client-motion':
+            assert listed == [], f'listed: a window without layers lists {listed}'
+        elif not flag:
+            assert listed == [(20, 40, 80, 60), (20, 180, 80, 60)], f'listed: layers {listed}, not A and B'
         if not flag:
             assert 'LIMIT_OK' in m.lines(), 'app-side 64-layer limit/lifetime path not exercised'
         if retarget:

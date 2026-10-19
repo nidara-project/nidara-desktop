@@ -494,6 +494,15 @@ pub fn drawn(surface: &WlSurface) -> Option<Drawn> {
 }
 
 /// The material a surface has right now, if it has one worth resolving.
+/// How many of the shapes committed on a surface have a blur — `current`'s test, for a walk that
+/// already holds the surface's states.
+pub fn glass_shapes(states: &smithay::wayland::compositor::SurfaceData) -> usize {
+    states.data_map.get::<std::sync::Mutex<Current>>().map_or(0, |c| {
+        let m = &c.lock().unwrap().state;
+        m.shapes.iter().filter(|s| m.blur_of(s).passes > 0).count()
+    })
+}
+
 pub fn current(surface: &WlSurface) -> Option<Current> {
     with_states(surface, |states| {
         let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().clone();

@@ -839,7 +839,11 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   (`look`, `blur_of`). It is NOT glass: no tone, no shell blur. GTK windows keep painting
   `--nidara-bg` themselves (frozen kit).
 - What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`) and
-  its `background` (`color`, `level`, `own_level`, `opacity`) when it declared one.
+  its `background` (`color`, `level`, `own_level`, `opacity`) when it declared one; and its
+  `layers` (`nidara-layers-v1`, when it has any): each one's box as shown now relative to the
+  window's root surface (`x`, `y`, `width`, `height`, logical, its `scale` applied), `opacity`,
+  and `glass_shapes` of its own material (what D7's checks read; `nk-layer-motion-check.py`
+  asserts A and B there, and none with client-side motion).
 - **Who draws the title bar** (`shell/decoration.rs`, 2026-10-03): Hyalo, as Hyprland did —
   `xdg-decoration` and KDE's `server-decoration` both answer server-side, by default, on request
   and on unset, whatever the client asked (Hyprland's `XDGDecoration.cpp`/`ServerDecorationKDE.cpp`),
