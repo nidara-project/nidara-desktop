@@ -344,8 +344,13 @@ const NIDARA_DEFAULTS = {
  */
 function nidaraKeys() {
     const out = {}
+    // Key by key: a daemon started before an upgrade holds the OLD schema, and one key it
+    // lacks must not fail the whole ReadAll — xdg-desktop-portal then answers `{}` for
+    // every namespace asked with it (seen live 2026-10-19, after #870 added a key).
     for (const key of NIDARA_KEYS)
-        out[key] = nidaraSettings ? nidaraSettings.get_value(key) : NIDARA_DEFAULTS[key]
+        out[key] = nidaraSettings?.settings_schema.has_key(key)
+            ? nidaraSettings.get_value(key)
+            : NIDARA_DEFAULTS[key]
     return out
 }
 

@@ -2621,6 +2621,13 @@ backend**:
 Testing gotcha: `XDG_DESKTOP_PORTAL_DIR` redirects BOTH `.portal` discovery AND
 `portals.conf` lookup; GJS gotcha: a bare `v` out-arg needs the `*Async` + manual
 `invocation.return_value` pattern (auto-marshalling hangs the reply).
+Stale-daemon gotcha: being D-Bus activated, the portal OUTLIVES a session restart and keeps the
+GSettings schema it started with. `install.sh` restarts it only AFTER `glib-compile-schemas`
+(restarting xdg-desktop-portal re-activates it at once), and `nidaraKeys()` serves a key the
+old schema lacks as its default: one failing key used to fail the whole `ReadAll`, and
+xdg-desktop-portal then answered `{}` for EVERY namespace asked with it (2026-10-19, the
+settings slice died with `portal missing org.freedesktop.appearance.accent-color`). If an app
+says the portal is missing a key that `gsettings` has, `pkill -f nidara-portal` first.
 
 **`nidara-doctor`** (installed to `/usr/bin`) prints a Markdown diagnostic report:
 versions, hardware, `hyprctl monitors`, systemd unit state, `nidara-ipc dumpState`, recent
