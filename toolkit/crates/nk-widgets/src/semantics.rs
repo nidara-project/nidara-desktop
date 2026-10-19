@@ -19,6 +19,10 @@ impl Tree {
                 Kind::Button => Role::Button,
             };
             let mut n = Semantic::new(id, role, &widget.name);
+            if id == self.root {
+                n.attributes
+                    .insert("application-name".into(), widget.name.clone());
+            }
             n.attributes.insert("nidara-node-id".into(), id.to_string());
             n.attributes
                 .insert("nidara-tree-generation".into(), self.generation.to_string());
