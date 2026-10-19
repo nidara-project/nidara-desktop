@@ -177,6 +177,11 @@ fn d7_content_is_full_window_but_both_insets_exclude_showing_and_hit_testing() {
     layout(&mut t, &mut b, true);
     let r = t.node(scroll).unwrap().bounds();
     assert_eq!((r.x, r.y, r.width, r.height), (0., 0., 640., 360.));
+    let normal = t.node(rows[1].1).unwrap().bounds();
+    assert!(
+        normal.x + normal.width <= 640.,
+        "one wide row must not force every sibling control offscreen"
+    );
     let label = label_id(&t, rows[1].0);
     let before = t.node(label).unwrap().bounds();
     t.scroll_to(scroll, Point { x: 300., y: 0. }).unwrap();

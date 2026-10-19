@@ -23,7 +23,7 @@ LOG = Path(os.environ.get('NK_WIDGETS_LOG', ROOT / 'toolkit/target/widgets-evide
 BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/release/nk-widgets-demo'))
 MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
 STAGES = ['frame', 'sidebar', 'selected', 'scroll', 'group', 'group-label', 'row-label',
-          'switch-role', 'switch-name', 'button', 'hidden', 'tab', 'checked', 'offscreen',
+          'switch-role', 'switch-name', 'button', 'hidden', 'at-rest', 'tab', 'checked', 'offscreen',
           'reveal', 'under-sidebar', 'under-title', 'layers']
 if os.environ.get('NK_WIDGETS_TEST') == 'vkms':
     if os.environ.get('XDG_RUNTIME_DIR') != '/run/hyalo-smoke':
@@ -216,6 +216,8 @@ def run(fault=None, stop=None):
                            and state(n, Atspi.StateType.FOCUSABLE)), button)
             if check('button', button and button.get_role() == Atspi.Role.PUSH_BUTTON, 'push-button role/name'): return completed
             if check('hidden', find(root, 'Hidden feature') is None, 'hidden row remains in tree'): return completed
+            if check('at-rest', toggle and state(toggle, Atspi.StateType.SHOWING)
+                     and state(button, Atspi.StateType.SHOWING), 'normal controls are outside the viewport at rest'): return completed
             if stop is None or stop == 'tab':
                 order = [n for n in walk(root) if state(n, Atspi.StateType.FOCUSABLE)]
                 published(lambda: order[0].get_component_iface().grab_focus())
