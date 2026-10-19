@@ -529,6 +529,41 @@ where
     Some(out)
 }
 
+/// `root`'s live layers as `msg windows` lists them, where each is shown at `when`, relative to
+/// the root's origin.
+pub fn infos(root: &WlSurface, when: Instant) -> Vec<crate::ipc::WindowLayerInfo> {
+    if !tree_has_layer(root) {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    with_surface_tree_downward(
+        root,
+        Place { at: Point::from((0.0, 0.0)), scale: 1.0, alpha: 1.0 },
+        |_, states, parent| match view(states) {
+            Some(v) => TraversalAction::DoChildren(place(*parent, states, v.offset, when)),
+            None => TraversalAction::SkipChildren,
+        },
+        |_, states, parent| {
+            if !is_layer(states) {
+                return;
+            }
+            let Some(v) = view(states) else { return };
+            let here = place(*parent, states, v.offset, when);
+            out.push(crate::ipc::WindowLayerInfo {
+                x: here.at.x,
+                y: here.at.y,
+                width: v.dst.w as f64 * here.scale,
+                height: v.dst.h as f64 * here.scale,
+                scale: here.scale,
+                opacity: here.alpha,
+                glass_shapes: crate::protocols::material::glass_shapes(states),
+            });
+        },
+        |_, _, _| true,
+    );
+    out
+}
+
 /// What of `surface`'s tree is under `point` (both relative to the same origin as `location`),
 /// each layer where it is shown now. The point returned is the surface's origin as the pointer
 /// must be told it: `point` minus it is the position inside the surface, in the surface's own

@@ -74,6 +74,23 @@ pub struct WindowInfo {
     /// the windows' opacity (toolkit/PHASE1.md D6).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub background: Option<WindowBackgroundInfo>,
+    /// Its `nidara-layers-v1` layers, in the surface tree's order (protocols/layers.rs `infos`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<WindowLayerInfo>,
+}
+
+/// A layer as it is shown now: its box relative to the window's root surface, logical px, with
+/// the scale it is shown at already applied; and the glass declared on its own surface.
+#[derive(Debug, Clone, Serialize)]
+pub struct WindowLayerInfo {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub scale: f64,
+    pub opacity: f64,
+    /// Shapes of its own `nidara_material_v1` that have a blur; 0 when it declared none.
+    pub glass_shapes: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
