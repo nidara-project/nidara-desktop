@@ -23,6 +23,10 @@ pub enum Role {
     Option,
     CheckBox,
     Button,
+    ToggleButton,
+    Panel,
+    List,
+    ScrollPane,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Bounds {
@@ -43,6 +47,8 @@ pub struct States {
     pub selected: bool,
     pub invalid: bool,
     pub hidden: bool,
+    /// Retained and visible, but outside the unoccluded viewport.
+    pub offscreen: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -61,6 +67,11 @@ pub struct TextInfo {
     pub lines: Vec<Range<usize>>,
     pub geometry: Option<TextGeometry>,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Relation {
+    LabelledBy(NodeId),
+    LabelFor(NodeId),
+}
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub id: NodeId,
@@ -72,6 +83,8 @@ pub struct Node {
     pub bounds: Bounds,
     pub text: Option<TextInfo>,
     pub children: Vec<NodeId>,
+    pub relations: Vec<Relation>,
+    pub attributes: BTreeMap<String, String>,
 }
 impl Node {
     pub fn new(id: NodeId, role: Role, name: impl Into<String>) -> Self {
@@ -85,6 +98,8 @@ impl Node {
             bounds: Bounds::default(),
             text: None,
             children: vec![],
+            relations: vec![],
+            attributes: BTreeMap::new(),
         }
     }
 }
@@ -106,6 +121,10 @@ impl Tree {
         let ids: BTreeSet<_> = nodes.keys().copied().collect();
         for n in nodes.values_mut() {
             n.children.retain(|id| ids.contains(id));
+            n.relations.retain(|r| {
+                let (Relation::LabelledBy(id) | Relation::LabelFor(id)) = r;
+                ids.contains(id)
+            });
             if n.role == Role::Password {
                 n.text = None;
             }
@@ -126,6 +145,12 @@ impl Tree {
             let n = self.nodes.get(&id).ok_or("missing semantic child")?;
             if id != n.id {
                 return Err("semantic map key differs from id".into());
+            }
+            for relation in &n.relations {
+                let (Relation::LabelledBy(target) | Relation::LabelFor(target)) = relation;
+                if !self.nodes.contains_key(target) {
+                    return Err("missing relation target".into());
+                }
             }
             focus += usize::from(n.states.focused);
             if let Some(t) = &n.text {
@@ -270,7 +295,12 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
             ("invalid-entry", s.invalid, n.states.invalid),
             ("enabled", !s.disabled, !n.states.disabled),
             ("sensitive", !s.disabled, !n.states.disabled),
-            ("showing", !s.hidden, !n.states.hidden),
+            ("visible", !s.hidden, !n.states.hidden),
+            (
+                "showing",
+                !s.hidden && !s.offscreen,
+                !n.states.hidden && !n.states.offscreen,
+            ),
         ] {
             if a != b {
                 out.push(Event::State(n.id, key, b));
