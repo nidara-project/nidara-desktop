@@ -396,6 +396,8 @@ pub fn translucent(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f6
 pub struct Look {
     pub rounded: bool,
     pub backdrop: bool,
+    /// Translucent without a declared background, it blurs at the user's level (a rule).
+    pub follow_level: bool,
 }
 
 /// The size of a surface's buffer as it is shown, logical.
@@ -414,15 +416,15 @@ pub fn fits(window: &Window) -> bool {
 }
 
 /// What `cfg` and the window's rules make of it.
-pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, cfg: &WindowsConfig) -> Look {
+pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, follow_level: bool, cfg: &WindowsConfig) -> Look {
     let Some(surface) = crate::wm::surface_of(window) else { return Look::default() };
     let geo = window.geometry();
     // Every window, its own frame drawn or not (owner, 2026-10-04: "no window keeps square
     // corners"): one that draws a frame with a shadow margin is cut to its box (`push`).
     let rounded = rule_rounded && !fullscreen && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
-    let backdrop = rule_backdrop && cfg.backdrop.enabled && blur_of(&surface, geo, radius, cfg).is_some();
-    Look { rounded, backdrop }
+    let backdrop = rule_backdrop && cfg.backdrop.enabled && blur_of(&surface, geo, radius, follow_level, cfg).is_some();
+    Look { rounded, backdrop, follow_level }
 }
 
 /// The level of window background `surface` shows (toolkit/PHASE1.md D6): the one its app asked
@@ -433,13 +435,13 @@ pub fn background_level(surface: &WlSurface, cfg: &WindowsConfig) -> Option<crat
 }
 
 /// The blur under a window, kawase offset (logical px) and passes; None: it lets nothing
-/// through. One of ours: its background's level; any other that is translucent: the translucent
-/// level's — the tinted blur is for the tint, not for seeing through (owner, 2026-10-18).
-fn blur_of(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f64, cfg: &WindowsConfig) -> Option<(f64, u32)> {
+/// through. One that declared a background: its level's; any other that is translucent:
+/// `BackgroundConfig::undeclared` (the translucent level's, or the user's if a rule says so).
+fn blur_of(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f64, follow_level: bool, cfg: &WindowsConfig) -> Option<(f64, u32)> {
     let b = &cfg.background;
     let look = match background_level(surface, cfg) {
         Some(level) => b.look(level)?,
-        None if translucent(surface, geo, radius) => b.translucent,
+        None if translucent(surface, geo, radius) => b.undeclared(follow_level),
         None => return None,
     };
     (look.passes > 0).then_some((look.size, look.passes))
@@ -564,7 +566,7 @@ pub fn push<R: HyaloRenderer>(
         .then(|| super::decor::DecorElement::new(&surface, geo, if look.rounded { radius } else { 0.0 }, decor, fill, cfg, scale))
         .flatten();
     out.extend(decor.map(OutputElement::Decor));
-    let blur = look.backdrop.then(|| blur_of(&surface, window.geometry(), if look.rounded { radius } else { 0.0 }, cfg)).flatten();
+    let blur = look.backdrop.then(|| blur_of(&surface, window.geometry(), if look.rounded { radius } else { 0.0 }, look.follow_level, cfg)).flatten();
     if let Some((size, passes)) = blur {
         let b = &cfg.backdrop;
         let radius = if look.rounded { radius } else { 0.0 };

@@ -116,6 +116,9 @@ pub struct Managed {
     /// Rounded corners and the blur behind it, unless a rule said no (render/window.rs).
     pub rounded: bool,
     pub backdrop: bool,
+    /// Its blur, when it is translucent without a declared background, is the user's level
+    /// (a rule's `follow_level`; config.rs `BackgroundConfig::undeclared`).
+    pub follow_level: bool,
     /// Hyalo's title bar for it, unless a rule said no (render/title_bar.rs).
     pub title_bar: bool,
     /// It opens and closes animated, unless a rule said no (wm/motion.rs).
@@ -685,6 +688,7 @@ impl Hyalo {
             listed: None,
             rounded: true,
             backdrop: true,
+            follow_level: false,
             title_bar: true,
             animate: true,
             has_title_bar: false,

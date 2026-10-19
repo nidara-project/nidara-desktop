@@ -54,7 +54,7 @@ default_mode = "floating"
 # regexes searched in app_id / title / initial_app_id / initial_title, and `game = true`
 # for a game (wm/games.rs); effects: float, center, workspace ("3", "special:NAME" or
 # "name:NAME") with silent; rounding = false (square corners), backdrop = false (no blur
-# behind it), title_bar = false (no Hyalo title bar), controls = ["close"] (the only buttons
+# behind it), follow_level = true (its blur is the window style the user chose), title_bar = false (no Hyalo title bar), controls = ["close"] (the only buttons
 # its window controls may show) and animate = false (it opens and closes at once). Your
 # hyalo.toml can add a rule, replace one by its name, or switch one off with `enabled = false`.
 # (The rest of hyprland.lua's rules wait for XWayland, #683.)
@@ -69,6 +69,14 @@ center = true
 match = { app_id = "^nidara-share$" }
 float = true
 center = true
+
+# Our own GTK apps (Settings, About, the share picker…) make their window translucent at the
+# window style chosen in Settings → Appearance → Windows (the kit's WINDOW_BACKGROUNDS) but
+# cannot declare it to Hyalo the way a toolkit app does (nidara-material-v1): without this they
+# would get another app's blur, the translucent one, in Tinted too.
+[rules.nidara-apps]
+match = { app_id = "^(nidara-.+|org\\.nidara\\..+)$" }
+follow_level = true
 
 [rules.installer]
 match = { app_id = "^(org\\.nidara\\.installer|nidara-installer)$" }
@@ -124,7 +132,7 @@ font = "Inter"
 # translucent (less opaque, less blurred). The shell keeps all of it in step with Settings →
 # Appearance → Windows and Accessibility → Reduce transparency, from the kit's
 # WINDOW_BACKGROUNDS (provisional numbers). Another app's translucent window gets the
-# translucent blur. An app may ask for its own level.
+# translucent blur (ours too, unless a rule says `follow_level`). An app may ask for its own level.
 [windows.background]
 level = "opaque"
 reduce_transparency = false

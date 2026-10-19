@@ -154,7 +154,8 @@ impl Default for WindowsConfig {
 /// the one chosen in Settings → Appearance → Windows, or the one the app asked for
 /// (`set_window_background_level`). Reduce transparency makes every one opaque. The shell writes
 /// all of it from the kit's `WINDOW_BACKGROUNDS` (AppearanceSync); these defaults are the same
-/// numbers. Another app's translucent window gets `translucent`'s blur.
+/// numbers. Another app's translucent window gets `translucent`'s blur — unless a rule says it
+/// follows the level (`follow_level`, `undeclared`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BackgroundConfig {
@@ -184,6 +185,16 @@ impl BackgroundConfig {
             BackgroundLevel::Tinted => Some(self.tinted),
             BackgroundLevel::Translucent => Some(self.translucent),
         }
+    }
+
+    /// The blur under a translucent window that declared no background. Another app's: the
+    /// translucent level's — the tinted blur is for the tint, not for seeing through (owner,
+    /// 2026-10-18). One a rule says `follow_level` of (our GTK apps, which make their window
+    /// translucent at the level the user chose but cannot declare it): the user's level, so
+    /// Tinted blurs them as heavily as a window that declared it — and still the translucent
+    /// blur when that level is opaque, as a window that lets anything through is blurred.
+    pub fn undeclared(&self, follow_level: bool) -> BackgroundLook {
+        follow_level.then(|| self.look(self.level)).flatten().unwrap_or(self.translucent)
     }
 }
 
@@ -395,6 +406,9 @@ pub struct RuleConfig {
     pub rounding: Option<bool>,
     /// `false`: no blur behind it, translucent or not.
     pub backdrop: Option<bool>,
+    /// `true`: the blur behind it when it is translucent without declaring a background is the
+    /// level the user chose (`[windows.background]`), not the translucent one: our own GTK apps.
+    pub follow_level: Option<bool>,
     /// `false`: no title bar from Hyalo, for an app that asks for one (render/title_bar.rs).
     pub title_bar: Option<bool>,
     /// The only buttons its controls may show (`["close"]`); close is always kept
@@ -415,6 +429,7 @@ impl Default for RuleConfig {
             silent: false,
             rounding: None,
             backdrop: None,
+            follow_level: None,
             title_bar: None,
             controls: None,
             animate: None,
@@ -1082,6 +1097,18 @@ fn json_to_toml(v: serde_json::Value) -> Result<toml::Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_undeclared_window_follows_the_level_only_when_a_rule_says_so() {
+        let mut b = BackgroundConfig { level: BackgroundLevel::Tinted, ..Default::default() };
+        assert_eq!(b.undeclared(false), b.translucent, "another app's: the translucent blur, in Tinted too");
+        assert_eq!(b.undeclared(true), b.tinted, "ours: the level the user chose");
+        b.level = BackgroundLevel::Opaque;
+        assert_eq!(b.undeclared(true), b.translucent, "opaque chosen, yet it lets something through: still blurred");
+        b.level = BackgroundLevel::Tinted;
+        b.reduce_transparency = true;
+        assert_eq!(b.undeclared(true), b.translucent, "reduce transparency: no level, the translucent blur");
+    }
 
     fn write(dir: &Path, name: &str, text: &str) -> PathBuf {
         let p = dir.join(name);

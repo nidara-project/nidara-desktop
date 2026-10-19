@@ -558,6 +558,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
         fullscreen,
         managed.is_none_or(|m| m.rounded),
         managed.is_none_or(|m| m.backdrop),
+        managed.is_some_and(|m| m.follow_level),
         state.windows,
     );
     // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
