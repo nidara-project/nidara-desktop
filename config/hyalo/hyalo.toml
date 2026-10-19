@@ -114,10 +114,13 @@ rounding_power = 3.2
 # is always shown; a window that cannot do one does not show it — no minimize on a dialog, no
 # maximize on a window that cannot change size). The
 # shell keeps both equal to org.gnome.desktop.wm.preferences button-layout, which Settings →
-# Appearance → Windows writes and the apps that draw their own title bar read.
+# Appearance → Windows writes and the apps that draw their own title bar read. `glass`: the
+# capsule on the shell's glass (a `control` pane of the token export, the face following the
+# app's ink); false draws the plain capsule.
 [windows.controls]
 side = "right"
 buttons = ["minimize", "maximize", "close"]
+glass = true
 
 # The title bar Hyalo draws for an app that leaves its decorations to the compositor (kitty, Qt
 # apps, Chrome with "Use system title bar and borders"): one piece with the window — the colour

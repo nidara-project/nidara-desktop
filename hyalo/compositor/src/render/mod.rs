@@ -12,6 +12,7 @@ pub mod decor;
 pub mod drawn;
 pub mod glass;
 pub mod glass_gl;
+pub mod glass_tokens;
 pub mod scrim;
 pub mod snapshot;
 pub mod stats;
@@ -574,6 +575,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             pressed: hover.is_some_and(|h| h.pressed),
             active: state.wm.focused == Some(m.id),
             dark: crate::wm::surface_of(&m.window).is_some_and(|s| crate::protocols::window_controls::dark_ink(&s)),
+            moving: place.is_some(),
         };
         Some((rect, controls))
     });
@@ -584,6 +586,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             family: state.windows.title_bar.font.clone(),
             active: state.wm.focused == Some(m.id),
             controls,
+            controls_apart: false,
         })),
         None => (controls, None),
     };

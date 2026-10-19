@@ -968,6 +968,50 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   edge, the hovered button's fill, one glyph a button (`count`, 1 to 3) as distance fields, all anti-aliased at the
   output's scale), pushed over the window's own surfaces and under its popups; never on a
   fullscreen window. Hover and press live in `wm.controls_hover`.
+- **On the shell's glass** (toolkit/PHASE1.md D7, owner 2026-10-19: "the button's look is the
+  glass's properties, as on the top bar; light or dark backdrop is the glass's, not the app's").
+  Under the capsule over an app's header Hyalo draws the bar capsules' glass, the same in every
+  respect: a `control` pane — refraction, rim, lensing, tone, ink tone and the ink's thresholds
+  read from the token export (`render/glass_tokens.rs`: `tokens/glass.json`, installed under
+  `/usr/share/nidara/settings-data/`, looked at again every 2 s; `HYALO_GLASS_TOKENS` points
+  elsewhere), never a copy of the numbers in Rust — on the shell's face (dark, whatever the
+  mode, as the bar). A material Hyalo makes itself (`controls::glass`), drawn by the same
+  `GlassElement` as a client's (`for_material`, `Whose::Hyalo`: its ids apart from the app's
+  own material on that surface), right below the capsule, reading only inside the window
+  (`within`: the desktop above a capsule 12 px from the top darkened what it measured to 0.32,
+  under the 0.35 that turns the ink). **The ink is measured, never the app's**: one ink box, the
+  capsule; the result comes back with `Whose::Hyalo` (`Measured::whose`) to
+  `controls::ink_measured`, the shell's rule with its hysteresis (`material::next_ink`) — dark
+  glyphs and the ink tone over a light header, white over a dark one. The app's `set_ink` only
+  says the ink of the PLAIN capsule: `[windows.controls] glass = false` (the A/B, and the
+  check's control), or no export. The shader draws only the state and the glyphs over the glass
+  (`glass_under`). **The same in Hyalo's own title bar** (owner: "it has to be the same as in
+  our apps"): with glass, its capsule is drawn apart — the `ControlsElement` and the glass in
+  front of the bar, whose own pass leaves the capsule out (`TitleBar::controls_apart`) but still
+  keeps its room for the title — so the glass's backdrop is the bar and its ink is measured on
+  it, never the bar pass's own colour guess. CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe with `HYALO_PROBE_STRIPES`: header
+  blurred inside the capsule, sharp beside it; `HYALO_PROBE_HEADER`: dark glyphs over f0f0f0,
+  white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
+  light glass, brighter than the bar, and dark glyphs; `glass = false` must fail all three).
+  `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
+- **A capture says where moving windows were in it** (with `HYALO_CONTROL`): `<shot>.capture.json`
+  carries `drawn` — each window drawn at a place (into the dock, out of it), `{id: [x, y, w, h]}`
+  at the capture's own moment — and `opening`, each window opening as its picture is drawn in
+  it, `{id: {box, scale, alpha}}` (`hyalo-motion-check.sh` picks its "near the edge" point from
+  it, clear of the picture and its 20 px shadow). A check that needs a moving window's position in a picture reads
+  it there, never from `msg windows` polls before and after the capture: on CI's software GL a
+  capture is slow enough that the two polls lie 63 px apart (`hyalo-minimize-check.sh`
+  `over_dock`). And it reads a picture's pixels (a gjs process each) AFTER watching anything
+  move, not while the animation runs.
+- **In flight the ink is kept** (`Controls::moving`, the window drawn at a `place`: into the
+  dock, out of it, to another workspace): the glass is drawn with the ink it had and measures
+  nothing (`GlassElement::measuring_nothing`) — what passes under a capsule on its way is not its
+  header, and its ink must not flicker; and a measurement every frame of a moving capsule is a
+  readback and a redraw each (on the CI's software GL it slowed the minimize check's captures
+  until it missed the window crossing the dock).
+- **A capture collects the ink it measured** (`capture_output` arms the poll as a frame does): a
+  screenshot draws the glass too. Where no frame is drawn — the headless cage harness — only
+  captures measure, so a check takes one capture before the one it reads.
 - **Input**: `Hyalo::controls_under(pos)` walks the windows in drawing order (a layer or a window
   over the controls covers them); `surface_under` returns NONE there, so the app gets a leave and
   never the pointer over its controls; `update_controls_hover` runs after every pointer motion and

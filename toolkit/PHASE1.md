@@ -258,7 +258,8 @@ it opened collapsed; otherwise it was part of the window. The native window does
   title bar's bottom edge (a progressive blur), with the sidebar's glass as the alternative.
   Which of the two, and its numbers, the owner decides live (A/B), not this file.
 - **Window controls** (Hyalo's, server side) **use the shell's glass** too. After the two above,
-  as their own piece.
+  as their own piece. ✅ Over an app's header: a `control` pane read from the token export
+  (`scripts/ci/hyalo-controls-glass-check.py`).
 - **What is visible** for focus and AT-SPI is the content minus the insets: focus scrolls a
   control out from under the sidebar/title bar, and a node entirely under them is not `SHOWING`
   (it stays in the tree, like one scrolled away). One semantic tree: the sidebar is still the

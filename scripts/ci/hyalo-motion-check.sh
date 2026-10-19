@@ -64,15 +64,25 @@ $MSG screenshot "$log/was.png" >/dev/null || fail "no screenshot"
 $MSG settings '{"animations":{"open":30000,"fade":10000}}' >/dev/null || fail "Hyalo refused [animations] open/fade (a Hyalo that does not animate windows)"
 open_probe HYALO_PROBE_TIDY=1
 id=$(echo "$w" | jq -r .id)
-mid=$(point "$w" 0.5); edge=$(point "$w" 0.1)
-was_mid=$(probe_pixel "$log/was.png" $mid); was_edge=$(probe_pixel "$log/was.png" $edge)
+mid=$(point "$w" 0.5)
+was_mid=$(probe_pixel "$log/was.png" $mid)
 sleep 1
 $MSG screenshot "$log/opening.png" >/dev/null || fail "no screenshot"
 now=$(probe_pixel "$log/opening.png" $mid)
 near "$now" "$GREY" 3 && fail "a second into opening, its middle is already its grey ('$now'): it opened at once"
 near "$now" "$was_mid" 6 && fail "a second into opening, its middle is what was there ('$now'): it is not drawn"
+# Near its edge: a point inside its full box but clear of its picture AND that picture's shadow
+# (20 px) — where Hyalo says the picture was IN this screenshot (`opening.capture.json`), never
+# a fixed fraction of the box: how far a 30 s opening has grown a second in depends on the
+# runner (CI's software GL: 0.78, and the shadow of a picture that big reached the old 10 %).
+box=$(jq -c --arg id "$id" '.opening[$id].box // empty' "$log/opening.capture.json")
+[ -n "$box" ] || fail "a second into opening, Hyalo does not draw it opening (opening.capture.json: $(cat "$log/opening.capture.json"))"
+edge=$(echo "$w" | jq -r --argjson b "$box" --argjson s "$scale" \
+    '(($b[0] - .x) - 26) as $room | if $room < 2 then "none" else "\((.x + $room / 2) * $s | floor) \((.y + .height / 2) * $s | floor)" end')
+[ "$edge" != none ] || fail "a second into opening it is drawn at $box, as large as its box ($(echo "$w" | jq -c '[.x,.y,.width,.height]')): it did not grow from its middle"
+was_edge=$(probe_pixel "$log/was.png" $edge)
 now=$(probe_pixel "$log/opening.png" $edge)
-near "$now" "$was_edge" 6 || fail "a second into opening, near its edge ($edge) is '$now', not what was there ('$was_edge'): it did not grow from its middle"
+near "$now" "$was_edge" 6 || fail "a second into opening, near its edge ($edge, its picture at $box) is '$now', not what was there ('$was_edge'): something of it is drawn outside its picture"
 echo "ok    it opens: grown from its middle and fading in, a second in"
 
 # 2. Closing, its window destroyed by its app.

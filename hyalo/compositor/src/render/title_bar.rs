@@ -6,9 +6,12 @@
 //!   the app's top row — averaged on the GPU, alpha included, so a translucent kitty gets a
 //!   translucent bar with the window's blur behind it — and the window's top corners.
 //! - **The same capsule** as over our own apps' headers (render/controls.rs), on the side the
-//!   user chose, and the title centred in the interface font at the chrome's fixed 13 px.
+//!   user chose, and the title centred in the interface font at the chrome's fixed 13 px. On
+//!   the shell's glass it is drawn apart, in front of the bar (`controls_apart`); the bar draws
+//!   it in its own pass only where there is no glass (`glass = false`, no token export).
 //! - **Ink that reads.** White over a dark bar, dark over a light one — decided on the GPU from
-//!   the same average, where black beats white for contrast (the WCAG crossover).
+//!   the same average, where black beats white for contrast (the WCAG crossover). The title's;
+//!   the capsule on glass takes the glass's measured ink, as everywhere.
 //! - Dragged, it moves the window; a double click maximizes it (input.rs). The app sees no
 //!   pointer over it (state.rs `chrome_under`).
 //!
@@ -277,6 +280,9 @@ pub struct TitleBar {
     pub active: bool,
     /// The capsule, output px, and what it shows.
     pub controls: Option<(Rectangle<f64, Physical>, Controls)>,
+    /// The capsule is drawn apart, over the bar, on the shell's glass (render/controls.rs
+    /// `glass`, as over our apps' headers): the bar leaves its room and draws none.
+    pub controls_apart: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -295,6 +301,7 @@ pub struct TitleBarElement {
     client: Option<(GlesTexture, Rectangle<f64, BufferCoords>, Transform)>,
     title: Option<(Arc<Raster>, Rectangle<i32, Physical>)>,
     controls: Option<(Rectangle<f64, Physical>, Controls)>,
+    controls_apart: bool,
     active: bool,
 }
 
@@ -346,9 +353,10 @@ impl TitleBarElement {
             (r, at)
         });
         let key = format!(
-            "{bar_rect:?} {frame:?} {radius} {exponent} {} {:?} {:?} {client_commit:?} {}",
+            "{bar_rect:?} {frame:?} {radius} {exponent} {} {:?} {} {:?} {client_commit:?} {}",
             bar.active,
             bar.controls,
+            bar.controls_apart,
             title.as_ref().map(|(r, at)| (r.id, *at)),
             client.is_some(),
         );
@@ -375,6 +383,7 @@ impl TitleBarElement {
             client,
             title,
             controls: bar.controls,
+            controls_apart: bar.controls_apart,
             active: bar.active,
         }
     }
@@ -455,7 +464,7 @@ impl TitleBarElement {
             }
             gl.Uniform1f(p.loc(gl, c"active"), if self.active { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"px"), self.scale as f32);
-            match &self.controls {
+            match self.controls.as_ref().filter(|_| !self.controls_apart) {
                 Some((r, c)) => {
                     let r = shift(*r);
                     let (glyphs, count) = c.buttons.glyphs();

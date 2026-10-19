@@ -53,11 +53,24 @@ pub struct GlassElement {
     /// The glass's soft blur, output px (`glass_gl::BlurMix`): where the compositor paints the
     /// glass it mixes three blurs by each shape's size. None: the chain's blur alone.
     soft: Option<f32>,
+    /// Whose material it is: where its ink measurement goes.
+    whose: Whose,
 }
 
-/// One id per group of a surface's shapes, stable across frames.
+/// One id per group of a surface's shapes, stable across frames: its own material's, and the
+/// glass Hyalo paints for it (its window controls').
 #[derive(Default)]
 struct GlassIds(RefCell<Vec<Id>>);
+#[derive(Default)]
+struct OwnGlassIds(RefCell<Vec<Id>>);
+
+/// Whose glass a surface's elements are: the material its client declared, or glass Hyalo
+/// paints over it of its own (the window controls', render/controls.rs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Whose {
+    Client,
+    Hyalo,
+}
 
 impl GlassElement {
     /// The glass elements of `surface`, placed at `location` (its origin, output pixels):
@@ -69,15 +82,32 @@ impl GlassElement {
         output_size: smithay::utils::Size<i32, Physical>,
     ) -> Vec<GlassElement> {
         let Some(current) = material::current(surface) else { return Vec::new() };
+        Self::for_material(surface, Whose::Client, &current, location, scale, output_size)
+    }
+
+    /// The glass elements of `current`, a material of `surface`'s (its client's, or one Hyalo
+    /// made for it), placed at `location`.
+    pub fn for_material(
+        surface: &WlSurface,
+        whose: Whose,
+        current: &material::Current,
+        location: Point<i32, Physical>,
+        scale: Scale<f64>,
+        output_size: smithay::utils::Size<i32, Physical>,
+    ) -> Vec<GlassElement> {
         let m = &current.state;
         let groups = groups(output_size, scale, location, m);
         let ids: Vec<Id> = with_states(surface, |states| {
-            let ids = states.data_map.get_or_insert(GlassIds::default);
-            let mut ids = ids.0.borrow_mut();
-            while ids.len() < groups.len() {
-                ids.push(Id::new());
+            let grow = |ids: &mut Vec<Id>| {
+                while ids.len() < groups.len() {
+                    ids.push(Id::new());
+                }
+                ids[..groups.len()].to_vec()
+            };
+            match whose {
+                Whose::Client => grow(&mut states.data_map.get_or_insert(GlassIds::default).0.borrow_mut()),
+                Whose::Hyalo => grow(&mut states.data_map.get_or_insert(OwnGlassIds::default).0.borrow_mut()),
             }
-            ids[..groups.len()].to_vec()
         });
         let glass = m.glass.map(|g| glass_gl::Glass { rim: g.rim as f32 });
         // The ink is measured only where the compositor paints the glass: it is that glass's
@@ -133,6 +163,7 @@ impl GlassElement {
                     glass,
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
+                    whose,
                     finish: glass_gl::Finish::NEUTRAL,
                     // The capture's three blurs: mixed by size where the compositor paints the
                     // glass, walked from sharp to full where a shape is graded.
@@ -189,6 +220,7 @@ impl GlassElement {
             ink_boxes: Vec::new(),
             ink_saturation: 1.0,
             surface: surface.downgrade(),
+            whose: Whose::Client,
             finish,
             soft: None,
         })
@@ -232,7 +264,7 @@ impl GlassElement {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
             if self.glass.is_some() {
-                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface);
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface, self.whose);
             }
             glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish);
         })
@@ -257,7 +289,14 @@ impl GlassElement {
         self.region
     }
 
-    /// This glass reading nothing outside `bounds` (output px): a layer's glass blurs its own
+    /// This glass keeping the ink it has: drawn with it (its shapes' tones already are),
+    /// measuring nothing.
+    pub fn measuring_nothing(mut self) -> Self {
+        self.ink_boxes.clear();
+        self
+    }
+
+    /// This glass reading nothing outside `bounds` (output px): glass over a window blurs that
     /// window, whose edge repeats past it, never the desktop beside the window (toolkit/PHASE1.md
     /// D7). None when nothing of it is left.
     pub fn within(mut self, bounds: Rectangle<i32, Physical>) -> Option<Self> {

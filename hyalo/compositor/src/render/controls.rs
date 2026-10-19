@@ -37,6 +37,7 @@ uniform float count;    // how many slots: 1 to 3
 uniform float hover;    // the slot under the pointer, -1 none
 uniform float pressed;  // 1 while that button is held
 uniform float active;   // 1: the window has the focus
+uniform float glass_under; // 1: the shell's glass is drawn under the capsule
 float box(vec2 p, vec2 h, float r) {
     vec2 q = abs(p) - h + vec2(r);
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
@@ -72,9 +73,14 @@ vec4 controls(vec2 p_out, float dark) {
     vec2 centre = vec2(EDGE + HOVER_R + slot * PITCH, size.y * 0.5);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
     bool on = active > 0.5;
-    vec4 c = ink * (on ? 0.08 : 0.04);
-    // The inset edge: one physical pixel inside the rim.
-    c = over(ink * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
+    // Over the shell's glass (`glass_under`, render/controls.rs `glass`) the capsule is the
+    // glass's — its tone, its rim — and only the state and the glyphs are drawn here.
+    vec4 c = vec4(0.0);
+    if (glass_under < 0.5) {
+        c = ink * (on ? 0.08 : 0.04);
+        // The inset edge: one physical pixel inside the rim.
+        c = over(ink * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
+    }
     bool hov = abs(slot - hover) < 0.5;
     bool red = hov && g > 1.5;
     if (hov) {
@@ -120,6 +126,10 @@ pub struct Controls {
     /// Dark ink, over a light header: the app's `set_ink` (Hyalo's own title bar decides its
     /// ink from the bar's colour instead, and ignores this).
     pub dark: bool,
+    /// Its window is drawn moving (into the dock, out of it, to another workspace): the glass
+    /// keeps the ink it had, measuring nothing — what passes under a capsule in flight is not
+    /// its header, and its ink must not flicker on the way.
+    pub moving: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +141,8 @@ pub struct ControlsElement {
     geometry: Rectangle<i32, Physical>,
     scale: f64,
     controls: Controls,
+    /// The shell's glass is drawn under it (`glass`): no fill or edge of its own.
+    glass_under: bool,
 }
 
 /// The element's id and what it last drew, kept on the window's surface.
@@ -138,8 +150,8 @@ pub struct ControlsElement {
 struct ControlsMemo(RefCell<Option<(Id, CommitCounter, String)>>);
 
 impl ControlsElement {
-    pub fn new(surface: &WlSurface, rect: Rectangle<f64, Physical>, scale: Scale<f64>, controls: Controls) -> Self {
-        let key = format!("{rect:?} {controls:?}");
+    pub fn new(surface: &WlSurface, rect: Rectangle<f64, Physical>, scale: Scale<f64>, controls: Controls, glass_under: bool) -> Self {
+        let key = format!("{rect:?} {controls:?} {glass_under}");
         let (id, commit) = with_states(surface, |states| {
             let memo = states.data_map.get_or_insert(ControlsMemo::default);
             let mut memo = memo.0.borrow_mut();
@@ -151,7 +163,7 @@ impl ControlsElement {
             (entry.0.clone(), entry.1)
         });
         let geometry = rect.to_i32_up::<i32>();
-        Self { id, commit, rect, geometry, scale: scale.x, controls }
+        Self { id, commit, rect, geometry, scale: scale.x, controls, glass_under }
     }
 
     fn draw_gles(
@@ -193,6 +205,7 @@ impl ControlsElement {
             gl.Uniform1f(p.loc(gl, c"pressed"), if c.pressed { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"active"), if c.active { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"dark_ink"), if c.dark { 1.0 } else { 0.0 });
+            gl.Uniform1f(p.loc(gl, c"glass_under"), if self.glass_under { 1.0 } else { 0.0 });
             for d in damage {
                 let q = Rectangle::new(d.loc + dst.loc, d.size);
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -203,6 +216,115 @@ impl ControlsElement {
             gl.UseProgram(0);
         })
     }
+}
+
+/// The commit of the controls' own material, kept on the window's surface: it moves when the
+/// material does.
+#[derive(Default)]
+struct GlassMemo(RefCell<Option<(CommitCounter, String)>>);
+
+/// The controls' ink, as the glass under them measured it (`ink_measured`): whether it is dark
+/// now, and the rule it was measured by.
+#[derive(Default)]
+struct InkMemo(RefCell<(bool, Option<crate::protocols::material::Ink>)>);
+
+/// The capsule's one ink group.
+const INK_GROUP: u32 = 1;
+
+/// The shell's glass under the capsule (toolkit/PHASE1.md D7: the window controls use the
+/// shell's glass) — the glass of the bar's capsules, the same in every respect: a `control`
+/// pane of the token export, its tone and its ink tone, and the ink the shell's rule decides
+/// from what Hyalo measures under it (dark glyphs and the ink tone over a light header, white
+/// over a dark one), blurring only `window` (its box, output px). Empty without the export:
+/// the capsule paints its own fill then, and the app's `set_ink` says its ink. With it, the ink
+/// returned is the glass's.
+pub fn glass(
+    surface: &WlSurface,
+    rect: Rectangle<f64, Physical>,
+    window: Rectangle<f64, Physical>,
+    scale: Scale<f64>,
+    output_size: smithay::utils::Size<i32, Physical>,
+    reduce_transparency: bool,
+    moving: bool,
+) -> (Vec<super::GlassElement>, bool) {
+    use crate::protocols::material::{Current, InkBox, MaterialState, Shape};
+    let (x, y, w, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.w / scale.x, rect.size.h / scale.y);
+    // The bar's face: the shell's skin is dark whatever the mode, its ink measured.
+    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), false) };
+    let dark = with_states(surface, |states| {
+        let memo = states.data_map.get_or_insert(InkMemo::default);
+        let mut memo = memo.0.borrow_mut();
+        memo.1 = pane.ink;
+        if pane.ink.is_none() {
+            memo.0 = false;
+        }
+        memo.0
+    });
+    let state = MaterialState {
+        shapes: vec![Shape {
+            x,
+            y,
+            w,
+            h,
+            radius: h / 2.0,
+            exponent: 2.0,
+            opacity: 1.0,
+            clip: None,
+            pointer: None,
+            fusion: None,
+            tone: Some(pane.tone),
+            ink_tone: pane.ink_tone,
+            blur: None,
+            shadow: None,
+            grade: None,
+        }],
+        glass: Some(pane.glass),
+        lensing: pane.lensing,
+        ink: pane.ink,
+        ink_boxes: vec![InkBox { id: INK_GROUP, x, y, w, h }],
+        ..Default::default()
+    };
+    let key = format!("{state:?} {dark}");
+    let commit = with_states(surface, |states| {
+        let memo = states.data_map.get_or_insert(GlassMemo::default);
+        let mut memo = memo.0.borrow_mut();
+        let entry = memo.get_or_insert_with(|| (CommitCounter::default(), key.clone()));
+        if entry.1 != key {
+            entry.0.increment();
+            entry.1 = key;
+        }
+        entry.0
+    });
+    let dark_ink = if dark { [INK_GROUP].into() } else { Default::default() };
+    let current = Current { state, commit, dark_ink, ..Default::default() };
+    // It reads its window only: past the window's edge the desktop would darken the header it
+    // measures its ink on (a capsule 12 px from the top, under a blur that reaches 64).
+    let bounds = window.to_i32_round();
+    let elements = super::GlassElement::for_material(surface, super::glass::Whose::Hyalo, &current, (0, 0).into(), scale, output_size)
+        .into_iter()
+        .filter_map(|g| g.within(bounds))
+        .map(|g| if moving { g.measuring_nothing() } else { g })
+        .collect();
+    (elements, dark)
+}
+
+/// A measurement of the glass under a window's controls came back (render/glass_gl.rs): the
+/// shell's rule, with its hysteresis, on the darkest point under the capsule. Whether the ink
+/// changed (the frame is redrawn).
+pub fn ink_measured(surface: &WlSurface, darkest: &[(u32, f32)]) -> bool {
+    let Some(&(_, l)) = darkest.iter().find(|(id, _)| *id == INK_GROUP) else { return false };
+    with_states(surface, |states| {
+        let Some(memo) = states.data_map.get::<InkMemo>() else { return false };
+        let mut memo = memo.0.borrow_mut();
+        let Some(ink) = memo.1 else { return false };
+        match crate::protocols::material::next_ink(memo.0, l as f64, &ink) {
+            Some(dark) => {
+                memo.0 = dark;
+                true
+            }
+            None => false,
+        }
+    })
 }
 
 impl Element for ControlsElement {

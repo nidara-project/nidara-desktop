@@ -487,16 +487,35 @@ pub fn push<R: HyaloRenderer>(
         let offset = (geometry_loc + offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
         super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified, when);
     }
-    // Its controls: over its own surfaces, under its popups (a menu opened from the header
-    // covers them).
-    if let Some((rect, controls)) = controls {
-        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
-    }
     let radius = if look.rounded { cfg.rounding * scale.x } else { 0.0 };
     // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the
     // bar and the client together: the client's top corners are inside, not cut.
     let bar_px = title_bar.as_ref().map_or(0.0, |t| t.height * scale.x);
     let frame = Rectangle::new((geo.loc.x, geo.loc.y - bar_px).into(), (geo.size.w, geo.size.h + bar_px).into());
+    // Its controls: over its own surfaces, under its popups (a menu opened from the header
+    // covers them). On the shell's glass, right below their capsule, whose backdrop is what is
+    // under them — the app's header, or Hyalo's title bar, which then leaves the capsule to it:
+    // one look for the controls of every window.
+    let mut title_bar = title_bar;
+    let apart = title_bar.as_ref().and_then(|t| t.controls);
+    if let Some((rect, controls)) = controls.or(apart) {
+        let (glass, dark) = if cfg.controls.glass {
+            super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency, controls.moving)
+        } else {
+            (Vec::new(), false)
+        };
+        // On the glass, its ink is the glass's; on the plain capsule, the app's (`set_ink`) —
+        // or, in Hyalo's title bar, the bar's own pass draws it as before.
+        let under = !glass.is_empty();
+        if under || apart.is_none() {
+            let controls = if under { super::controls::Controls { dark, ..controls } } else { controls };
+            out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, under)));
+            out.extend(glass.into_iter().map(OutputElement::Glass));
+            if let Some(t) = title_bar.as_mut() {
+                t.controls_apart = true;
+            }
+        }
+    }
     // A client-side frame with a shadow margin (Chrome's web apps, Telegram) is cut to its box,
     // the margin dropped, and its corners to the window's — as every desktop rounds a web page
     // (owner, 2026-10-04, over a ring of Hyalo's own: it stretched the client's edges, and what

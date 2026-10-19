@@ -236,9 +236,9 @@ phase_run() {
         [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
         [ -n "$hyalo_pid" ] && kill "$hyalo_pid" 2>/dev/null || true
         cp -f /tmp/hyalo/*.png /tmp/hyalo/*.log /tmp/hyalo/*.json "$OUT"/ 2>/dev/null || true
-        # A check's own screenshots (its *_LOG directory), named after it: what a pixel check
-        # saw is the first thing to look at when it fails.
-        for f in /tmp/hyalo/*/*.png; do
+        # A check's own screenshots and logs (its *_LOG directory), named after it: what a pixel
+        # check saw, and what it polled, are the first things to look at when it fails.
+        for f in /tmp/hyalo/*/*.png /tmp/hyalo/*/*.log; do
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
         if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi
@@ -663,6 +663,12 @@ PY
         || { log "FAIL: window controls"; cat /tmp/hyalo/window-controls.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize, side, buttons, rule, close)"
+    # The controls on the shell's glass (toolkit/PHASE1.md D7), read from the installed token
+    # export: the header blurred inside the capsule, the ink decided by what is under it; the
+    # controls (glass = false) show the header sharp through it and keep white glyphs.
+    CONTROLS_GLASS_LOG=/tmp/hyalo/controls-glass python "$REPO/scripts/ci/hyalo-controls-glass-check.py" >/tmp/hyalo/controls-glass.log 2>&1 \
+        || { log "FAIL: controls glass"; cat /tmp/hyalo/controls-glass.log; exit 1; }
+    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 3, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 3 controls caught)"
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
