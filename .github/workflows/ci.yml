@@ -598,6 +598,9 @@ jobs:
           NK_REAL_GATES: ${{ needs.scope.outputs.gates || 'true' }}
           # Their controls and second scale only when the checks or their faults change.
           NK_REAL_FULL: ${{ needs.scope.outputs.full || 'true' }}
+          # The checks that watch an animation on screen race the runner's software GL: the
+          # nightly run (and a manual one) has them, a PR does not (scripts/ci/hyalo-smoke.sh).
+          HYALO_ANIMATION_CHECKS: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
           # dev/test profiles (CI never debugs them): a cache several times smaller.
@@ -605,7 +608,7 @@ jobs:
             -v "$PWD:/repo" \
             -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
             -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
-            -e NK_REAL_GATES -e NK_REAL_FULL \
+            -e NK_REAL_GATES -e NK_REAL_FULL -e HYALO_ANIMATION_CHECKS \
             archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
       - name: Upload screenshots + logs
         if: always()

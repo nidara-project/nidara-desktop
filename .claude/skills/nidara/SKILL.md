@@ -250,7 +250,11 @@ and a check that races an animation, a capture or a `gjs` start against the cloc
 correct change and teaches everyone to re-run. Such a check is fixed (read the moment from
 Hyalo — a capture's `capture.json` says where moving windows were in it) or removed, never
 retried. A check's CONTROLS prove it can fail: they belong with the check's own changes and
-the nightly run, not every PR.
+the nightly run, not every PR. **The checks that watch an animation on screen** — minimize, motion, layer
+motion (Hyalo's and the toolkit's) — run only nightly (`HYALO_ANIMATION_CHECKS`, true on
+`schedule`/`workflow_dispatch` and in a local run): CI's software GL draws a frame in 2-4 s at
+times, and they failed correct PRs for a whole day (owner: "I want to work on the project, not
+on the CI"). A PR touching animation is checked locally (the headless cage) and by the night.
 
 ⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
 forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
