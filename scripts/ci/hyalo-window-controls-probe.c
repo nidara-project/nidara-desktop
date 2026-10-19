@@ -228,8 +228,10 @@ int main(void) {
     while (!closed) {
         wl_display_flush(d);
         struct pollfd p = { wl_display_get_fd(d), POLLIN, 0 };
-        if (poll(&p, 1, 100) > 0) wl_display_dispatch(d);
-        else wl_display_dispatch_pending(d);
+        /* The compositor gone (the connection hung up), nothing will come: exit, never spin. */
+        if (poll(&p, 1, 100) > 0) {
+            if (wl_display_dispatch(d) == -1) return 0;
+        } else if (wl_display_dispatch_pending(d) == -1) return 0;
         if (want) {
             int sig = want;
             want = 0;
