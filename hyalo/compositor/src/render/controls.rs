@@ -271,6 +271,7 @@ pub fn glass(
             ink_tone: pane.ink_tone,
             blur: None,
             shadow: None,
+            grade: None,
         }],
         glass: Some(pane.glass),
         lensing: pane.lensing,
