@@ -1072,17 +1072,6 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         .render_frame(&mut renderer, &elements, render::CLEAR_COLOR, frame_flags);
     let render_time = rendering.elapsed();
     drop(renderer);
-    // TEMPORARY (#884's minimize stall in CI): what a frame that took long was made of.
-    if render_time > std::time::Duration::from_millis(500) {
-        let kinds: Vec<String> = elements
-            .iter()
-            .map(|e| match e {
-                render::OutputElement::Glass(g) => format!("Glass{:?}", g.region()),
-                other => format!("{other:?}").split(['(', ' ']).next().unwrap_or("?").to_string(),
-            })
-            .collect();
-        tracing::warn!(ms = render_time.as_millis() as u64, ?kinds, "SLOW FRAME");
-    }
 
     let (rendered, states, damage) = match result {
         Ok(r) => {
