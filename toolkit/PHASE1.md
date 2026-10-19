@@ -23,7 +23,7 @@ daily use**; what is missing comes back later; a phase is never lengthened.
 | 2026-10-17 | **D3**: take over once Appearance passes; every other page opens the current Settings |
 | 2026-10-17 | Start-up must beat **Nautilus (473 ms)** and the current Settings (959 ms) |
 | 2026-10-17 | Any Wayland compositor, best on Hyalo (#848) |
-| 2026-10-19 | **The sidebar and the title bar float over the content** (D7): the sidebar always its own layer with the menus' glass; the title bar without a divider, content scrolling under it blurred |
+| 2026-10-19 | **The sidebar and the title bar float over the content** (D7): the sidebar always its own layer with the menus' glass; the title bar without a divider, content scrolling under it blurred; collapsing (narrow window or the title bar's button, the same) gives the content its space back, animated |
 | 2026-10-18 | **Trust model: cooperative consent, as today** — `Config1` is not wider than `setConfig`, and is not a security boundary (a process of the same user can write dconf). Real enforcement goes with #840 (privacy and permissions) |
 | 2026-10-18 | **No non-Hyalo compositor run in CI in phase 1** — it would be paid on every PR. D5's fallbacks are specified and unit-tested, not run on a foreign compositor |
 | 2026-09-13 | Applications read the appearance **only from the Settings portal** (#534) — so does the native Settings ([A8]) |
@@ -227,7 +227,17 @@ it opened collapsed; otherwise it was part of the window. The native window does
 - **The sidebar is always a surface of its own**: a layer (`nidara-layers-v1`, a synchronized
   subsurface) **above** the content, collapsed or not, with **the shell's glass — the menus'**
   (piece `panel` of `TONES`, `ui/lib/nidara-kit/platform/glass-material.ts`: tone, blur, rim,
-  shadow by size). Collapsing/expanding is that layer's transition, not a relayout of the window.
+  shadow by size).
+- **Collapsing gives the space back** (owner, 2026-10-19): the sidebar layer slides out and the
+  content's leading inset goes to 0 **with it, on the same curve** — the content is laid out
+  again as the inset moves, so it stays centred in what the window has, never off to one side;
+  the title bar layer follows the same inset. Expanding is the same backwards. **It is one
+  behaviour whatever collapsed it:** the window narrowing below the breakpoint (`WINDOW_LAYOUT`:
+  sidebar + content, a property of the window, never of the page shown — the GTK kit's law,
+  `split-view.ts`), or the title bar's sidebar button. Collapsed in a narrow window, the button
+  shows the sidebar **over** the content (inset stays 0; the same glass; closed by a page chosen,
+  Escape or a click outside), as GTK's popover did; at or above the breakpoint it docks it back.
+  Without layers (D5) the client runs the same timeline for paint, hit-testing and focus.
 - **The content spans the whole window**, under the sidebar and under the title bar. Its layout
   gets a leading inset (the sidebar's width) and a top inset (the title bar's height), so at rest
   nothing is hidden; but what scrolls **horizontally** (a strip of thumbnails, a wide row) passes
