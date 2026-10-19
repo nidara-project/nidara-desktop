@@ -841,7 +841,8 @@ impl Tree {
                 width,
                 height: m
                     .titlebar
-                    .max(text.height.max(child_height) + 2. * m.padding),
+                    .max(text.height + 2. * m.padding)
+                    .max(child_height),
             };
             return Ok(n.measured);
         }

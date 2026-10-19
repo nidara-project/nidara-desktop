@@ -425,6 +425,11 @@ mod tests {
             &mut b,
         )
         .unwrap();
+        assert_eq!(
+            t.node(title).unwrap().bounds().height,
+            48.,
+            "button padding must not be added twice to title height"
+        );
         (t, b, sidebar, title, content)
     }
     #[test]
