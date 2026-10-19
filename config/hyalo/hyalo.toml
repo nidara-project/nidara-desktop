@@ -70,12 +70,12 @@ match = { app_id = "^nidara-share$" }
 float = true
 center = true
 
-# Our own GTK apps (Settings, About, the share picker…) make their window translucent at the
+# Our own GTK windows (Settings, About, consent, the share picker, the installer) make their window translucent at the
 # window style chosen in Settings → Appearance → Windows (the kit's WINDOW_BACKGROUNDS) but
 # cannot declare it to Hyalo the way a toolkit app does (nidara-material-v1): without this they
 # would get another app's blur, the translucent one, in Tinted too.
 [rules.nidara-apps]
-match = { app_id = "^(nidara-.+|org\\.nidara\\..+)$" }
+match = { app_id = "^(nidara-about|nidara-consent|nidara-installer|nidara-settings|nidara-share|org\\.nidara\\.installer)$" }
 follow_level = true
 
 [rules.installer]

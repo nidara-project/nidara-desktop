@@ -824,7 +824,7 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   tint). No tint of its own: a window's translucent background is its tint. How far it blurs is
   the window background's LEVEL (`[windows.background]`, below); another app's translucent window
   gets the `translucent` level's blur — except one a rule gives `follow_level = true`: the
-  shipped `nidara-apps` rule (`^(nidara-.+|org\.nidara\..+)$`) does it for our GTK apps, which
+  shipped `nidara-apps` rule (each of our GTK windows by its app id — `hypr-rule-check.mjs` wants literals that exist) does it for our GTK apps, which
   paint their opacity at the user's level but cannot declare it, so in Tinted they used to get
   the light translucent blur (owner saw it live 2026-10-19). `BackgroundConfig::undeclared`. No switch in Settings any more (owner, 2026-10-18: a
   window that lets anything through is blurred); `[windows.backdrop] enabled = false` still turns
