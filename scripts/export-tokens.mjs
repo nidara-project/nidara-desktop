@@ -10,6 +10,13 @@
 //                              In force = `_base.scss`'s compiled `*` block with the engine's
 //                              `nidaraVars` over it, which is what a GJS process loads.
 //                              A client picks its set from org.nidara.Config1's values.
+//   <out>/tokens/glass.json    the shell's glass as the kit's material answers it (toolkit/PHASE1.md
+//                              D7): each piece's tone, ink tone and shadow by the pane's shorter
+//                              side, dark/light × reduce transparency, its glass parameters and
+//                              blur. Asked of `registerGlassMaterial`'s own source with a host
+//                              that says the mode and the switch — the sizing, the solid face of
+//                              reduce transparency and the popover's extra pass are the kit's
+//                              code running, not numbers read off its tables.
 //
 // The engine (`platform/theme-tokens.ts`) imports Gio/GLib for its file helpers only; a loader
 // stubs `gi://` and resolves the kit's extension-less imports, so the kit (frozen, #818) is
@@ -38,7 +45,18 @@ register("data:text/javascript," + encodeURIComponent(`
     import { existsSync } from "node:fs"
     import { fileURLToPath } from "node:url"
     export async function resolve(spec, ctx, next) {
+        // GLib: the material's dev tuning file is looked for only under ~/.config/nidara/.dev,
+        // which this says is not there. Gtk: a Popover is all the material asks it (its blur).
+        const stub = body => ({ url: "data:text/javascript," + encodeURIComponent(body), shortCircuit: true })
+        if (spec.startsWith("gi://GLib"))
+            return stub("export default { get_home_dir: () => '/nonexistent', file_test: () => false, FileTest: { EXISTS: 16 } }")
+        if (spec.startsWith("gi://Gtk")) return stub("export default { Popover: class {} }")
         if (spec.startsWith("gi://")) return { url: "data:text/javascript,export default {}", shortCircuit: true }
+        // The material keeps the source it is given in material.ts, a GTK module; here it is
+        // handed to the exporter instead.
+        if (spec === "./material" && ctx.parentURL?.endsWith("/platform/glass-material.ts"))
+            return stub("export function setMaterialSource(s) { globalThis.__nidaraMaterialSource = s; return () => {} }; "
+                + "export function inkFollowsMode() { return false }")
         if (/^\\.\\.?\\//.test(spec) && !/\\.[cm]?[jt]s$/.test(spec) && ctx.parentURL?.startsWith("file:")) {
             const u = new URL(spec + ".ts", ctx.parentURL)
             if (existsSync(fileURLToPath(u))) return { url: u.href, shortCircuit: true }
@@ -87,5 +105,48 @@ write(join(out, "tokens/colors.json"), {
     accents: Object.fromEntries(accents.map(k => [k, engine.ACCENT_PALETTE[k].color])),
     sets,
 })
+// ── glass ────────────────────────────────────────────────────────────────
+// The shell's host in a Hyalo session (ui/shell/core/hyalo-settings.ts `blurBaseline`): the
+// material's own blur; the mode and reduce transparency are what each variant says.
+const material = await import(pathToFileURL(join(kit, "platform/glass-material.ts")).href)
+const state = { light: false, reduce: false }
+const changed = []
+material.registerGlassMaterial({
+    reduceTransparency: () => state.reduce,
+    panelBlur: () => ({ ...engine.GLASS_BLUR }),
+    lightMode: () => state.light,
+    onChange: cb => { changed.push(cb); return () => {} },
+})
+const source = globalThis.__nidaraMaterialSource
+source.onChange(() => {})   // hooks the material's cache of tones to `changed`
+const Gtk = (await import("gi://Gtk?version=4.0")).default
+// Every whole side from 0 to past the widest ramp the material sizes by; a step where the
+// answer changes, so a reader takes the last step at or under its pane's side (rounded, as the
+// material rounds it).
+const SIDES = 400
+const variants = []
+for (const dark of [true, false])
+    for (const reduceTransparency of [false, true]) {
+        Object.assign(state, { light: !dark, reduce: reduceTransparency })
+        for (const cb of changed) cb()
+        const pieces = {}
+        for (const piece of Object.keys(material.GLASS_TONES)) {
+            const steps = []
+            for (let side = 0; side <= SIDES; side++) {
+                const answer = JSON.stringify(source.tone(null, piece, !dark, side))
+                if (steps.at(-1)?.answer !== answer) steps.push({ side, answer })
+            }
+            if (steps.at(-1).side === SIDES) throw new Error(`glass: ${piece} still changes at ${SIDES} px`)
+            pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer) }))
+        }
+        variants.push({ dark, reduceTransparency, glass: source.glass(null), pieces })
+    }
+write(join(out, "tokens/glass.json"), {
+    inputs: { dark: "appearance.darkMode", reduceTransparency: "accessibility.reduceTransparency" },
+    blur: { panel: source.blur({}), popover: source.blur(new Gtk.Popover()) },
+    variants,
+})
+
 console.log(`export-tokens: ${Object.keys(scss).length} scss + ${Object.keys(ts).length} ts static, `
-    + `${sets.length} colour sets of ${Object.keys(sets[0].tokens).length} → ${out}/tokens`)
+    + `${sets.length} colour sets of ${Object.keys(sets[0].tokens).length}, `
+    + `${variants.length} glass variants of ${Object.keys(variants[0].pieces).length} pieces → ${out}/tokens`)

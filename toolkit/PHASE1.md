@@ -150,6 +150,14 @@ See [A1] for the identities and the routing.
   transparency), on `_base.scss` compiled, plus `_tokens.scss`'s variables and `tokens.ts`'s
   data. **Not extended** to fonts, text scale, output scale or animation state: those are
   run-time inputs with layout/paint invalidation `[A8]`.
+- **Glass:** the same script → `tokens/glass.json` (D7): the kit's material asked through its
+  own source (`registerGlassMaterial`, a host saying the mode and reduce transparency) — for
+  each of dark/light × reduce transparency, its glass parameters (refraction, lensing, rim) and,
+  per piece (`control`, `panel`, `dock`, `controlCenter`), the pane's `tone`, `inkTone` and
+  `shadow` as **steps by its shorter side**: take the last step whose `fromSide` ≤ the side
+  rounded to a whole px (the dark face of `control`/`panel` follows the size; the others have
+  one step). Plus `blur.panel` and `blur.popover`. Picked by the same portal values as the
+  colour set. Additive: no `version` bump.
 - **Installed** under `/usr/share/nidara/settings-data/` by `install.sh` and the PKGBUILD,
   with a `version` file shared by the three exports; a mismatch with the app's expected version
   is a start-up error, never a silent fallback.
@@ -254,8 +262,8 @@ it opened collapsed; otherwise it was part of the window. The native window does
   control out from under the sidebar/title bar, and a node entirely under them is not `SHOWING`
   (it stays in the tree, like one scrolled away). One semantic tree: the sidebar is still the
   `LIST` inside the `FRAME`.
-- **One source for the glass values:** `TONES` is exported with the tokens (#856's export), the
-  toolkit reads it; never a copy of the numbers in Rust.
+- **One source for the glass values:** `TONES` is exported with the tokens (`tokens/glass.json`,
+  above), the toolkit reads it; never a copy of the numbers in Rust.
 - **Without `nidara_material_v1` or `nidara_layers_v1`** (D5): sidebar and title bar are painted
   by the app in the content's buffer with the opaque base, and the content is clipped to the
   insets instead of passing under them.
