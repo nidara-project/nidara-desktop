@@ -259,7 +259,8 @@ timeouts, caps each attempt and tries three times. Details in `references/dev-wo
 
 The Rust structural layer is `toolkit/crates/nk-widgets` (#873): retained tree,
 measure/place, focus/capture and derived AT-SPI, with the D7 sidebar/title layers
-and D5 opaque fallback. Start at its README and `references/architecture.md` →
+and D5 opaque fallback. D7 collapse reflows the inset; narrow windows use an
+overlay, and the sidebar scrolls independently. Start at its README and `references/architecture.md` →
 "Native toolkit structural widgets" before building on it. Apps use nk-wayland;
 phase0 stays independent. The fixed-data demo and libatspi controls live in
 `toolkit/widgets-demo` and `scripts/ci/nk-widgets-check.py`. Builds, evidence and

@@ -9,6 +9,7 @@ fn fixture() -> (Tree, ParleyBackend, u64, Vec<(u64, u64)>) {
         "Window",
         Metrics {
             sidebar: 120.,
+            content: 400.,
             titlebar: 48.,
             padding: 8.,
             gap: 4.,

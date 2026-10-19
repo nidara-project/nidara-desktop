@@ -22,6 +22,7 @@ struct Demo {
     fault: String,
     applied: Cell<bool>,
     scroll: u64,
+    sidebar: u64,
     group: u64,
     wide: u64,
     width: u32,
@@ -30,6 +31,7 @@ struct Demo {
     optional: u64,
     buttons: Vec<(u64, &'static str)>,
     ready: bool,
+    layout_report: Option<(u32, u32, bool)>,
 }
 impl Demo {
     fn applied(&self, name: &str) {
@@ -135,6 +137,17 @@ impl Demo {
             }
             self.width = width;
         }
+        self.composition
+            .set_sidebar_transition((!self.appearance.reduce_motion).then_some((
+                1,
+                nk_wayland::Curve::Bezier {
+                    x1: 0.2,
+                    y1: 0.,
+                    x2: 0.2,
+                    y2: 1.,
+                    duration_ms: 180,
+                },
+            )));
         self.composition.sync(
             &mut self.tree,
             window,
@@ -143,6 +156,37 @@ impl Demo {
             &self.appearance.panel,
             self.fault != "layers",
         )?;
+        let inset = self.tree.content_viewport().x;
+        let width = window.size().0 as f32;
+        if (self.fault == "collapse" && !self.tree.sidebar_open() && inset < 1.)
+            || (self.fault == "overlay" && self.tree.sidebar_overlay() && inset < 1.)
+        {
+            // Actual wrong layout, not a fabricated accessibility rectangle.
+            self.tree
+                .set_leading_inset(self.appearance.metrics.sidebar)?;
+            self.tree.layout(
+                nk_text::Size {
+                    width,
+                    height: window.size().1 as f32,
+                },
+                self.fault != "layers" && window.capabilities().layers,
+                &mut self.text,
+            )?;
+            self.applied(&self.fault);
+        }
+        let report = (
+            window.size().0,
+            self.tree.content_viewport().x.to_bits(),
+            self.composition.at_rest(),
+        );
+        if self.layout_report != Some(report) {
+            eprintln!(
+                "LAYOUT width={width} inset={} resting={}",
+                self.tree.content_viewport().x,
+                self.composition.at_rest()
+            );
+            self.layout_report = Some(report);
+        }
         if self.fault == "at-rest" && !self.tree.showing(self.switch) {
             self.applied("at-rest");
         }
@@ -281,8 +325,16 @@ impl Application for Demo {
                 _ => continue,
             };
             let old = self.tree.node(self.scroll).unwrap().scroll();
+            let sidebar_old = self.tree.node(self.sidebar).unwrap().scroll();
             if let Ok(effect) = self.tree.dispatch(Target { id, generation }, command) {
                 self.keep_scroll_fault(old, command == Command::Focus)?;
+                if self.fault == "sidebar-reveal"
+                    && command == Command::Focus
+                    && self.tree.node(self.sidebar).unwrap().scroll() != sidebar_old
+                {
+                    self.tree.scroll_to(self.sidebar, sidebar_old)?;
+                    self.applied("sidebar-reveal");
+                }
                 self.effect(effect, window)?;
             }
         }
@@ -362,10 +414,29 @@ fn run() -> Result<()> {
         std::env::var_os("NK_SETTINGS_DATA").unwrap_or_else(|| "build/settings-data".into()),
     );
     let appearance_updates = appearance::watch(root);
-    let appearance = appearance_updates
+    let mut appearance = appearance_updates
         .recv_timeout(Duration::from_secs(5))
         .map_err(|e| e.to_string())??;
-    let size = appearance.size;
+    // Window geometry is an app property. The checker supplies the exported
+    // contentFloor so both scales fit the private output without changing pages.
+    if let Some(width) =
+        std::env::args().find_map(|a| a.strip_prefix("--content-width=").map(str::to_owned))
+    {
+        let width: f32 = width.parse().map_err(|e| format!("content width: {e}"))?;
+        if !width.is_finite() || width <= 0. {
+            return Err("invalid content width".into());
+        }
+        appearance.metrics.content = width;
+        appearance.size.0 = (appearance.metrics.sidebar + width) as u32;
+    }
+    let size = if std::env::args().any(|a| a == "--narrow") {
+        (
+            (appearance.metrics.sidebar + appearance.metrics.content - 1.) as u32,
+            appearance.size.1,
+        )
+    } else {
+        appearance.size
+    };
     let mut tree = Tree::new(
         "Nidara widgets demo",
         appearance.metrics,
@@ -375,7 +446,15 @@ fn run() -> Result<()> {
     let sidebar = tree.append(root, Kind::Sidebar, "Pages")?;
     tree.append(sidebar, Kind::Page { selected: true }, "Appearance")?;
     tree.append(sidebar, Kind::Page { selected: false }, "Accessibility")?;
-    tree.append(root, Kind::TitleBar, "Widget foundations")?;
+    for i in 2..20 {
+        tree.append(
+            sidebar,
+            Kind::Page { selected: false },
+            format!("Demo page {i:02}"),
+        )?;
+    }
+    let titlebar = tree.append(root, Kind::TitleBar, "Widget foundations")?;
+    tree.sidebar_button(titlebar, "Sidebar")?;
     let scroll = tree.append(root, Kind::Scroll, "Content")?;
     let group = tree.group(scroll, "General")?;
     let (_, switch) = tree.row(group, "Enable feature", Kind::Switch { checked: false })?;
@@ -434,6 +513,7 @@ fn run() -> Result<()> {
             fault,
             applied: Cell::new(false),
             scroll,
+            sidebar,
             group,
             wide,
             width: 0,
@@ -442,6 +522,7 @@ fn run() -> Result<()> {
             optional,
             buttons,
             ready: false,
+            layout_report: None,
         },
         Options {
             material: true,

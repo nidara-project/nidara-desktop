@@ -33,6 +33,21 @@ impl Tree {
         if surface == Surface::Content && !frame.material {
             canvas.rect(self.nodes[&self.root].bounds, opaque(palette.background));
         }
+        if surface == Surface::Content {
+            // D7 permits pixels underneath glass; D5 clips at the insets.
+            let clip = if self.layered {
+                self.nodes[&self.root].bounds
+            } else {
+                self.content_viewport()
+            };
+            canvas.clip(clip);
+            for &id in &self.nodes[&self.root].children {
+                if self.nodes[&id].kind == Kind::Scroll {
+                    self.paint_node(id, Point::default(), &mut canvas, palette, clip)?;
+                }
+            }
+            canvas.pop_clip();
+        }
         if surface != Surface::Content || !self.layered {
             let panes = match surface {
                 Surface::Content => vec![Kind::Sidebar, Kind::TitleBar],
@@ -67,21 +82,6 @@ impl Tree {
                     )?;
                 }
             }
-        }
-        if surface == Surface::Content {
-            // D7 permits pixels underneath glass; D5 clips at the insets.
-            let clip = if self.layered {
-                self.nodes[&self.root].bounds
-            } else {
-                self.content_viewport()
-            };
-            canvas.clip(clip);
-            for &id in &self.nodes[&self.root].children {
-                if self.nodes[&id].kind == Kind::Scroll {
-                    self.paint_node(id, Point::default(), &mut canvas, palette, clip)?;
-                }
-            }
-            canvas.pop_clip();
         }
         Ok(canvas.finish())
     }
@@ -160,7 +160,16 @@ impl Tree {
             && !matches!(n.kind, Kind::Switch { .. })
         {
             let padding = if matches!(n.kind, Kind::Button | Kind::Page { .. } | Kind::TitleBar) {
-                m.padding
+                if n.kind == Kind::TitleBar {
+                    m.padding
+                        + n.children
+                            .iter()
+                            .filter(|id| !self.is_hidden(**id))
+                            .map(|id| self.nodes[id].measured.width + m.gap)
+                            .sum::<f32>()
+                } else {
+                    m.padding
+                }
             } else {
                 0.
             };
@@ -213,8 +222,26 @@ impl Tree {
                 palette.focus,
             );
         }
-        for child in &n.children {
-            self.paint_node(*child, origin, canvas, palette, clip)?;
+        if n.kind == Kind::Sidebar {
+            let viewport = if self.layered {
+                Rect {
+                    x: 0.,
+                    y: self.content_viewport().y,
+                    width: r.width,
+                    height: (r.height - self.content_viewport().y).max(0.),
+                }
+            } else {
+                local(self.sidebar_viewport(), origin)
+            };
+            canvas.clip(viewport);
+            for child in &n.children {
+                self.paint_node(*child, origin, canvas, palette, viewport)?;
+            }
+            canvas.pop_clip();
+        } else {
+            for child in &n.children {
+                self.paint_node(*child, origin, canvas, palette, clip)?;
+            }
         }
         Ok(())
     }

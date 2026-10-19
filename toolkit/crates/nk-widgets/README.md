@@ -28,11 +28,23 @@ Layer events stay in their own local space: Hyalo has already inverse-transforme
 and clipped the presented layer. Clipping those again at its model endpoint would
 lose clicks during a transition. Capture records its space until release.
 `set_sidebar_open()` changes the layer's position with an optional transition and
-keeps the content layout unchanged. Without layers, one sampled client timeline
-places the sidebar for paint, pointer hit-testing and focus together; AT-SPI bounds
+releases/restores the leading inset on the same curve, remeasuring and placing the
+content and title pane as it moves. Set `set_sidebar_transition` for automatic
+resize changes too. `Metrics.content` is a window constant: the breakpoint is
+sidebar + content, independent of page contents. Below it the title sidebar button
+opens an overlay without an inset, closed by choosing a page, Escape or an outside
+click; crossing back docks it. `Tree::sidebar_button` registers the title button
+for this action; other title buttons remain application actions.
+Without layers, one sampled client timeline places sidebar/inset for paint,
+pointer hit-testing and focus together; sidebar AT-SPI bounds
 remain model values as required by CONTRACT.md. Reduced motion omits transitions. `invalidate_panes()` follows an appearance
 change. The application handles returned `Effect::Activated` for its buttons.
 There is no Wayland connection or alternate host here.
+
+The sidebar has its own vertical scroll offset, clamped to measured page extent
+minus the viewport below the title. Focusing a page reveals it. Vertical scroll
+on its layer scrolls pages; over the title it scrolls content. Horizontal gestures
+on either layer scroll content (`LayerEvent::HorizontalScroll` in nk-wayland).
 
 D7 has a full-window content buffer and independent sidebar/title layers. The
 content's paint clip is the whole window; its hit/focus/SHOWING viewport excludes

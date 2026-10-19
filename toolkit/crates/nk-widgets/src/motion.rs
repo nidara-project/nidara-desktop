@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! One scalar timeline for the D5 sidebar fallback. The sampled value is placed
+//! Scalar timeline for D7 inset reflow and the D5 sidebar fallback. Each sample is placed
 //! once in the widget tree, shared by painting, hit-testing and focus bounds.
 use crate::Result;
 use nk_wayland::Curve;
@@ -189,6 +189,7 @@ mod placement_tests {
             "Window",
             Metrics {
                 sidebar: 120.,
+                content: 400.,
                 titlebar: 48.,
                 padding: 8.,
                 gap: 4.,

@@ -22,9 +22,12 @@ ROOT = Path(__file__).resolve().parents[2]
 LOG = Path(os.environ.get('NK_WIDGETS_LOG', ROOT / 'toolkit/target/widgets-evidence')).resolve()
 BIN = os.environ.get('NK_WIDGETS_BIN', str(ROOT / 'toolkit/target/release/nk-widgets-demo'))
 MSG = [os.environ.get('HYALO_BIN', 'nidara-hyalo'), 'msg']
+DATA = Path(os.environ.get('NK_SETTINGS_DATA', ROOT / 'build/settings-data'))
+CONTENT_WIDTH = json.loads((DATA / 'tokens/static.json').read_text())['ts']['WINDOW_LAYOUT']['contentFloor']
 STAGES = ['frame', 'sidebar', 'selected', 'scroll', 'group', 'group-label', 'row-label',
           'switch-role', 'switch-name', 'button', 'hidden', 'at-rest', 'tab', 'checked', 'offscreen',
           'reveal', 'under-sidebar', 'under-title', 'layers']
+NEW_STAGES = ['sidebar-reveal', 'collapse', 'overlay']
 if os.environ.get('NK_WIDGETS_TEST') == 'vkms':
     if os.environ.get('XDG_RUNTIME_DIR') != '/run/hyalo-smoke':
         raise RuntimeError('private vkms runtime required')
@@ -141,11 +144,11 @@ SCALE = 1
 
 
 def run(fault=None, stop=None):
-    directory = LOG / f'scale{SCALE}' / (fault or 'baseline')
+    directory = LOG / f'scale{SCALE}' / (fault or (f'baseline-{stop}' if stop else 'baseline'))
     directory.mkdir(parents=True, exist_ok=True)
     log = directory / 'client.log'
     with log.open('w') as output:
-        process = subprocess.Popen([BIN, *([f'--fault={fault}'] if fault else [])], stdout=output, stderr=output)
+        process = subprocess.Popen([BIN, f'--content-width={CONTENT_WIDTH}', *(['--narrow'] if stop == 'overlay' else []), *([f'--fault={fault}'] if fault else [])], stdout=output, stderr=output)
         completed = []
         def text():
             if process.poll() is not None:
@@ -186,6 +189,45 @@ def run(fault=None, stop=None):
         try:
             barrier(lambda: 'CONTENT_READY' in text() and 'A11Y_READY' in text(), 'demo readiness', 15)
             root = barrier(app_tree, 'AT-SPI frame')
+            if stop in NEW_STAGES:
+                sidebar = find(root, 'Pages', Atspi.Role.LIST)
+                serialize = lambda r: {key: getattr(r, key) for key in ('x', 'y', 'width', 'height')}
+                rect = lambda node: node.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+                if stop == 'sidebar-reveal':
+                    last = find(root, 'Demo page 19')
+                    before = rect(last)
+                    published(lambda: last.get_component_iface().grab_focus())
+                    after = rect(last)
+                    top = rect(find(root, 'Widget foundations', Atspi.Role.LABEL)).height
+                    (directory / 'observations.json').write_text(json.dumps({'before': serialize(before), 'after': serialize(after), 'root': serialize(rect(root))}, indent=2))
+                    check(stop, before.y + before.height > rect(root).height
+                          and state(last, Atspi.StateType.FOCUSED) and state(last, Atspi.StateType.SHOWING)
+                          and after.y >= top and after.y + after.height <= rect(root).height,
+                          'last sidebar page was not revealed within the short window')
+                else:
+                    row = find(root, 'Enable feature', Atspi.Role.TOGGLE_BUTTON).get_parent()
+                    before = rect(row)
+                    initial_sidebar = state(sidebar, Atspi.StateType.SHOWING)
+                    reports = text().count('LAYOUT ')
+                    action('Sidebar')
+                    # Wait for the clock, never for the assertion's geometry.
+                    barrier(lambda: text().count('LAYOUT ') > reports
+                            and [line for line in text().splitlines() if line.startswith('LAYOUT ')][-1].endswith('resting=true'),
+                            'sidebar motion settled')
+                    pump(.1)
+                    after = rect(row)
+                    width = rect(root).width
+                    (directory / 'observations.json').write_text(json.dumps({'before': serialize(before), 'after': serialize(after), 'root': serialize(rect(root)), 'initial_sidebar': initial_sidebar, 'final_sidebar': state(sidebar, Atspi.StateType.SHOWING)}, indent=2))
+                    centred = abs(2 * after.x + after.width - width) <= 2
+                    if stop == 'collapse':
+                        check(stop, initial_sidebar and not state(sidebar, Atspi.StateType.SHOWING)
+                              and after.x < before.x and after.width > before.width and centred,
+                              'collapsed content did not reclaim its inset and reflow symmetrically')
+                    else:
+                        check(stop, not initial_sidebar and state(sidebar, Atspi.StateType.SHOWING)
+                              and centred and (before.x, before.width) == (after.x, after.width),
+                              'narrow overlay displaced content or did not open over it')
+                return completed
             nodes = walk(root)
             (directory / 'tree.json').write_text(json.dumps([
                 {'name': n.get_name(), 'role': n.get_role_name(),
@@ -294,7 +336,7 @@ try:
     ipc('do', 'workspace', 94)
     ipc('do', 'set-workspace-mode', 94, 'floating')
     selected = os.environ.get('NK_WIDGETS_STAGES', '').split()
-    stages = selected or STAGES
+    stages = selected or STAGES + NEW_STAGES
     for SCALE in (1, 1.25):
         ipc('output', output['name'], f'scale={SCALE}')
         if selected:
@@ -302,6 +344,8 @@ try:
                 run(stop=stage)
         else:
             run()
+            for stage in NEW_STAGES:
+                run(stop=stage)
         for stage in stages:
             result = run(fault=stage, stop=stage)
             if result != 'CAUGHT':

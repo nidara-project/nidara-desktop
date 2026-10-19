@@ -2579,7 +2579,16 @@ Layout measures into retained nk-text Layouts, then places; the renderer consume
 those same Layouts. Invalidation separates layout, paint and semantics. Font/text
 scale changes keep ids, focus and scroll. `window::Composition` uses the existing
 nk-wayland host, creates synchronized sidebar/title layers and repaints those only
-when the panes change. D7 content spans the whole window; focus/SHOWING excludes
+when the panes change. The sidebar scrolls independently below its header; focus
+reveals even the last page. Pane vertical scroll goes to sidebar/content for
+sidebar/title; horizontal scroll on either goes to content via nk-wayland.
+D7 collapse releases the leading inset on the pane curve, remeasuring content
+and moving/resizing the title pane. The fixed breakpoint is `Metrics.sidebar +
+Metrics.content` from WINDOW_LAYOUT, never page content. Narrow windows open an
+overlay (zero inset); page choice, Escape and outside click dismiss it. Crossing
+back to the breakpoint docks it again. `Tree::sidebar_button` registers its
+title button; other title buttons remain application actions.
+D7 content spans the whole window; focus/SHOWING excludes
 the leading/top insets. D5 (no material OR layers) paints opaque panes in the root
 and clips content to the insets. Its client animation has one sampled timeline
 shared by paint, hit-testing and focus; AT-SPI bounds stay model values. Reduced

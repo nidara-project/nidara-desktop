@@ -182,11 +182,21 @@ Phase 0 remains an independent client of those four crates.
   scrolls into that viewport. Groups and controls have explicit label relations.
 - D7: the root content buffer spans the whole window. Sidebar and title bar have independent
   synchronized layers above it; layout reserves leading/top insets. Content can scroll under
-  both. The title bar has no divider. Sidebar collapse changes the layer position, not layout.
+  both. The title bar has no divider. Collapse releases the leading inset on the pane's
+  curve; content is measured/placed again at each sample, with the title pane following
+  that inset. `Metrics.content` is the fixed WINDOW_LAYOUT content width: the breakpoint
+  is sidebar + content, never a page's natural size. Below it, the title's sidebar button
+  opens an overlay with zero inset; a page choice, Escape or outside click dismisses it.
+  At/above the breakpoint, it docks again. The title bar
+  exposes its sidebar action with `Tree::sidebar_button`; other buttons stay app actions.
   Missing material OR layers uses D5: opaque panes and content clipped to the insets.
   Missing material also paints an opaque root base; otherwise D6 still owns that background.
   The application supplies exported colours/measurements and the menus' panel Material.
-  Scrolling dirties root content, not the pane buffers. The no-layers fallback uses one
+  Content scrolling dirties root content, not the pane buffers. The sidebar has its own
+  clamped vertical offset and reveals focused pages below its fixed header. Vertical
+  layer scroll routes to sidebar/content for sidebar/title respectively; horizontal
+  layer scroll routes to content through nk-wayland::LayerEvent::HorizontalScroll.
+  The no-layers fallback uses one
   sampled client timeline for paint/hit-testing/focus, with AT-SPI bounds at model values;
   reduced motion omits the transition. Hyalo's layer glass is separate work.
 - `nk-a11y` projects panel/list/scroll-pane/toggle-button roles, label relations and separate

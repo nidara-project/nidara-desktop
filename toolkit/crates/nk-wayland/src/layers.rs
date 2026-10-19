@@ -51,6 +51,7 @@ pub enum LayerEvent {
         y: f64,
     },
     Scroll(f64),
+    HorizontalScroll(f64),
     Done {
         serial: u32,
         seconds: u64,

@@ -27,7 +27,13 @@ impl Tree {
             n.attributes
                 .insert("nidara-tree-generation".into(), self.generation.to_string());
             let mut r = widget.bounds;
-            if self.in_pane(id) && widget.kind != Kind::TitleBar {
+            let mut ancestor = Some(id);
+            let mut sidebar = false;
+            while let Some(p) = ancestor {
+                sidebar |= self.nodes[&p].kind == Kind::Sidebar;
+                ancestor = self.nodes[&p].parent;
+            }
+            if sidebar {
                 // AT-SPI bounds are model values (CONTRACT.md), even on the D5
                 // client timeline. Pointer/paint use the tree's sampled placement.
                 let model = if self.sidebar_open {

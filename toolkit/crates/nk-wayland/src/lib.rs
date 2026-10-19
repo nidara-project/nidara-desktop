@@ -1212,8 +1212,15 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 axis: WEnum::Value(wl_pointer::Axis::HorizontalScroll),
                 value,
                 ..
-            } if w.pointer_inside && w.pointer_layer.is_none() => {
-                w.events.push(Event::HorizontalScroll(value));
+            } => {
+                if let Some(id) = w.pointer_layer {
+                    w.events.push(Event::Layer {
+                        id,
+                        event: LayerEvent::HorizontalScroll(value),
+                    });
+                } else if w.pointer_inside {
+                    w.events.push(Event::HorizontalScroll(value));
+                }
             }
             wl_pointer::Event::Axis {
                 axis: WEnum::Value(wl_pointer::Axis::VerticalScroll),

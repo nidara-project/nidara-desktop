@@ -49,6 +49,8 @@ impl Invalid {
 #[derive(Clone, Copy, Debug)]
 pub struct Metrics {
     pub sidebar: f32,
+    /// Fixed content width in WINDOW_LAYOUT; breakpoint = sidebar + content.
+    pub content: f32,
     pub titlebar: f32,
     pub padding: f32,
     pub gap: f32,
@@ -150,6 +152,11 @@ pub struct Tree {
     pub(crate) layered: bool,
     pub(crate) sidebar_open: bool,
     pub(crate) sidebar_x: f32,
+    pub(crate) leading: f32,
+    pub(crate) narrow: bool,
+    sidebar_initialized: bool,
+    pub(crate) sidebar_request: Option<bool>,
+    sidebar_button: Option<NodeId>,
     invalid: Invalid,
     pub(crate) pane_epoch: u64,
 }
@@ -157,6 +164,7 @@ impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
         if [
             metrics.sidebar,
+            metrics.content,
             metrics.titlebar,
             metrics.padding,
             metrics.gap,
@@ -186,6 +194,11 @@ impl Tree {
             layered: false,
             sidebar_open: true,
             sidebar_x: 0.,
+            leading: metrics.sidebar,
+            narrow: false,
+            sidebar_initialized: false,
+            sidebar_request: None,
+            sidebar_button: None,
             invalid: Invalid::LAYOUT,
             pane_epoch: 0,
         };
@@ -269,6 +282,7 @@ impl Tree {
             (p.kind, kind),
             (Kind::Window, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
                 | (Kind::Sidebar, Kind::Page { .. })
+                | (Kind::TitleBar, Kind::Button)
                 | (Kind::Scroll, Kind::Group | Kind::Row)
                 | (Kind::Group, Kind::Label | Kind::Row)
                 | (Kind::Row, Kind::Label | Kind::Switch { .. } | Kind::Button)
@@ -300,6 +314,26 @@ impl Tree {
         if matches!(kind, Kind::Page { selected: true }) {
             self.select_page(id)?;
         }
+        Ok(id)
+    }
+    /// A regular button with the window's sidebar action; other title buttons
+    /// remain application actions. The tree derives its identity and semantics.
+    pub fn sidebar_button(&mut self, titlebar: NodeId, name: &str) -> Result<NodeId> {
+        if self
+            .nodes
+            .get(&titlebar)
+            .is_none_or(|n| n.kind != Kind::TitleBar)
+        {
+            return Err("sidebar button needs a title bar".into());
+        }
+        if self
+            .sidebar_button
+            .is_some_and(|id| self.nodes.contains_key(&id))
+        {
+            return Err("sidebar already has a toggle button".into());
+        }
+        let id = self.append(titlebar, Kind::Button, name)?;
+        self.sidebar_button = Some(id);
         Ok(id)
     }
     pub fn group(&mut self, parent: NodeId, header: &str) -> Result<NodeId> {
@@ -583,8 +617,18 @@ impl Tree {
         }
         match self.nodes[&id].kind {
             Kind::Switch { checked } => self.set_checked(id, !checked)?,
-            Kind::Page { .. } => self.select_page(id)?,
-            Kind::Button => self.invalidate(id, Invalid::STATE),
+            Kind::Page { .. } => {
+                self.select_page(id)?;
+                if self.narrow {
+                    self.sidebar_request = Some(false);
+                }
+            }
+            Kind::Button => {
+                if self.sidebar_button == Some(id) {
+                    self.sidebar_request = Some(!self.sidebar_open);
+                }
+                self.invalidate(id, Invalid::STATE);
+            }
             _ => return Err("widget has no activation".into()),
         }
         Ok(Effect::Activated(id))
@@ -614,8 +658,11 @@ impl Tree {
         };
         let mut ids = vec![];
         self.ordered(container, &mut ids);
+        let header = self.content_viewport().y;
+        let inside = self.nodes[&container].kind != Kind::Sidebar || local.y >= header;
         self.capture = ids.into_iter().rev().find(|id| {
-            self.available(*id)
+            inside
+                && self.available(*id)
                 && self.nodes[id].kind.focusable()
                 && contains(self.nodes[id].bounds, p)
         });
@@ -631,6 +678,11 @@ impl Tree {
             .get(&container)
             .ok_or("unknown input pane")?
             .bounds;
+        if self.nodes[&container].kind == Kind::Sidebar && local.y < self.content_viewport().y {
+            self.capture = None;
+            self.capture_space = None;
+            return Ok(Effect::None);
+        }
         self.release(
             Point {
                 x: local.x + origin.x,
@@ -659,6 +711,7 @@ impl Tree {
         // D5 sidebar; Tab order may already exclude its model-closed pages.
         let mut ids = vec![];
         self.ordered(self.root, &mut ids);
+        ids.sort_by_key(|id| self.in_pane(*id));
         ids.into_iter().rev().find(|id| {
             self.available(*id)
                 && self.nodes[id].kind.focusable()
@@ -679,6 +732,10 @@ impl Tree {
         {
             return Err("invalid window constraints".into());
         }
+        if self.adapt_sidebar(size.width) {
+            self.sidebar_x = self.sidebar_target();
+            self.leading = self.inset_target();
+        }
         if self.size != size || self.layered != layered {
             self.size = size;
             self.layered = layered;
@@ -687,6 +744,23 @@ impl Tree {
         }
         if self.invalid.layout {
             self.measure(self.root, size.width, backend)?;
+            let viewport = self.content_viewport();
+            let side = self.sidebar_viewport();
+            for n in self.nodes.values_mut() {
+                let clip = if n.kind == Kind::Sidebar {
+                    side
+                } else {
+                    viewport
+                };
+                if matches!(n.kind, Kind::Scroll | Kind::Sidebar) {
+                    n.scroll.y = n.scroll.y.min((n.measured.height - clip.height).max(0.));
+                    n.scroll.x = if n.kind == Kind::Sidebar {
+                        0.
+                    } else {
+                        n.scroll.x.min((n.measured.width - clip.width).max(0.))
+                    };
+                }
+            }
             self.place();
             self.invalid.layout = false;
             for n in self.nodes.values_mut() {
@@ -741,6 +815,36 @@ impl Tree {
             self.nodes.get_mut(&id).unwrap().measured = size;
             return Ok(size);
         }
+        if kind == Kind::TitleBar {
+            let mut reserved = 0.;
+            let mut child_height: f32 = 0.;
+            for child in self.nodes[&id].children.clone() {
+                if !self.is_hidden(child) {
+                    let measured = self.measure(child, (width / 2.).max(1.), backend)?;
+                    reserved += measured.width + m.gap;
+                    child_height = child_height.max(measured.height);
+                }
+            }
+            let label_width = (width - reserved - 3. * m.control - 2. * m.padding).max(1.);
+            let n = self.nodes.get_mut(&id).unwrap();
+            let text = if n.name.is_empty() {
+                Size::default()
+            } else if let Some(layout) = &mut n.layout {
+                layout.size(label_width)?
+            } else {
+                let layout = backend.layout(&n.name, &self.style, label_width)?;
+                let size = layout.measured_size();
+                n.layout = Some(layout);
+                size
+            };
+            n.measured = Size {
+                width,
+                height: m
+                    .titlebar
+                    .max(text.height.max(child_height) + 2. * m.padding),
+            };
+            return Ok(n.measured);
+        }
         let label_width = match kind {
             Kind::TitleBar => (width - 3. * m.control - 2. * m.padding).max(1.),
             Kind::Page { .. } | Kind::Button => (width - 2. * m.padding).max(1.),
@@ -765,8 +869,8 @@ impl Tree {
             let child_width = match kind {
                 Kind::Window => match self.nodes[&child].kind {
                     Kind::Sidebar => m.sidebar,
-                    Kind::Scroll => (width - m.sidebar).max(1.),
-                    Kind::TitleBar => (width - m.sidebar).max(1.),
+                    Kind::Scroll => (width - self.leading).max(1.),
+                    Kind::TitleBar => (width - self.leading).max(1.),
                     _ => width,
                 },
                 Kind::Row
@@ -789,7 +893,7 @@ impl Tree {
             Kind::Window => self.size,
             Kind::Sidebar => Size {
                 width: m.sidebar,
-                height: self.size.height,
+                height: sum + 2. * m.padding,
             },
             Kind::TitleBar => Size {
                 width,
@@ -827,8 +931,69 @@ impl Tree {
         self.nodes.get_mut(&id).unwrap().measured = size;
         Ok(size)
     }
+    /// Set the sampled leading inset for a coupled window relayout. Composition
+    /// normally drives this from the same curve as the pane's position.
+    pub fn set_leading_inset(&mut self, leading: f32) -> Result<()> {
+        if !leading.is_finite() || leading < 0. || leading > self.metrics.sidebar {
+            return Err("invalid leading inset".into());
+        }
+        if self.leading != leading {
+            self.leading = leading;
+            self.invalidate(self.root, Invalid::LAYOUT);
+            self.pane_epoch += 1;
+        }
+        Ok(())
+    }
+    pub fn sidebar_open(&self) -> bool {
+        self.sidebar_open
+    }
+    pub fn sidebar_overlay(&self) -> bool {
+        self.narrow && self.sidebar_open
+    }
+    pub(crate) fn sidebar_target(&self) -> f32 {
+        if self.sidebar_open {
+            0.
+        } else {
+            -self.metrics.sidebar
+        }
+    }
+    pub(crate) fn inset_target(&self) -> f32 {
+        if self.sidebar_open && !self.narrow {
+            self.metrics.sidebar
+        } else {
+            0.
+        }
+    }
+    pub(crate) fn adapt_sidebar(&mut self, width: f32) -> bool {
+        let narrow = width < self.metrics.sidebar + self.metrics.content;
+        if self.sidebar_initialized && self.narrow == narrow {
+            return false;
+        }
+        self.sidebar_initialized = true;
+        self.narrow = narrow;
+        self.change_sidebar(!narrow);
+        true
+    }
+    pub(crate) fn change_sidebar(&mut self, open: bool) {
+        self.sidebar_open = open;
+        self.generation += 1;
+        self.invalidate(self.root, Invalid::LAYOUT);
+    }
+    pub(crate) fn sidebar_viewport(&self) -> Rect {
+        let top = self.content_viewport().y;
+        let x = self.sidebar_x.max(0.);
+        Rect {
+            x,
+            y: top,
+            width: (self.sidebar_x + self.metrics.sidebar)
+                .min(self.size.width)
+                .max(x)
+                - x,
+            height: (self.size.height - top).max(0.),
+        }
+    }
     pub fn content_viewport(&self) -> Rect {
-        let leading = self.metrics.sidebar;
+        let leading = self.leading;
         let top = self
             .nodes
             .values()
@@ -885,7 +1050,7 @@ impl Tree {
         let mut y = r.y + m.padding;
         let mut x = r.x + m.padding;
         if kind == Kind::Sidebar {
-            y += inset.y;
+            y += inset.y - node.scroll.y;
         }
         if kind == Kind::Scroll {
             x = inset.x + m.padding - node.scroll.x;
@@ -897,7 +1062,14 @@ impl Tree {
             }
             let n = &self.nodes[&child];
             let s = n.measured;
-            let bounds = if kind == Kind::Row {
+            let bounds = if kind == Kind::TitleBar {
+                Rect {
+                    x,
+                    y: r.y + (r.height - s.height) / 2.,
+                    width: s.width,
+                    height: s.height,
+                }
+            } else if kind == Kind::Row {
                 let control = matches!(n.kind, Kind::Switch { .. } | Kind::Button);
                 Rect {
                     x: if control {
@@ -918,7 +1090,9 @@ impl Tree {
                 }
             };
             self.place_node(child, bounds);
-            if kind != Kind::Row {
+            if kind == Kind::TitleBar {
+                x += s.width + m.gap;
+            } else if kind != Kind::Row {
                 y += s.height + m.gap;
             }
         }
@@ -927,15 +1101,23 @@ impl Tree {
         if !offset.x.is_finite() || !offset.y.is_finite() {
             return Err("invalid scroll offset".into());
         }
-        let viewport = self.content_viewport();
+        let viewport = if self.nodes.get(&id).is_some_and(|n| n.kind == Kind::Sidebar) {
+            self.sidebar_viewport()
+        } else {
+            self.content_viewport()
+        };
         let n = self.nodes.get_mut(&id).ok_or("unknown scroll")?;
-        if n.kind != Kind::Scroll {
+        if !matches!(n.kind, Kind::Scroll | Kind::Sidebar) {
             return Err("widget is not scrollable".into());
         }
         let max_y = (n.measured.height - viewport.height).max(0.);
         // Horizontal content may be deliberately wider than the viewport. The
         // viewport width is excluded from the scrollable content extent.
-        let max_x = (n.measured.width - viewport.width).max(0.);
+        let max_x = if n.kind == Kind::Sidebar {
+            0.
+        } else {
+            (n.measured.width - viewport.width).max(0.)
+        };
         n.scroll = Point {
             x: offset.x.clamp(0., max_x),
             y: offset.y.clamp(0., max_y),
@@ -947,9 +1129,13 @@ impl Tree {
     fn reveal(&mut self, id: NodeId) {
         let mut parent = self.nodes[&id].parent;
         while let Some(p) = parent {
-            if self.nodes[&p].kind == Kind::Scroll {
+            if matches!(self.nodes[&p].kind, Kind::Scroll | Kind::Sidebar) {
                 let r = self.nodes[&id].bounds;
-                let clip = self.content_viewport();
+                let clip = if self.nodes[&p].kind == Kind::Sidebar {
+                    self.sidebar_viewport()
+                } else {
+                    self.visible_clip(id)
+                };
                 let delta = |start: f32, size: f32, low: f32, length: f32| {
                     if start < low {
                         start - low
@@ -973,20 +1159,28 @@ impl Tree {
     }
     pub(crate) fn visible_clip(&self, id: NodeId) -> Rect {
         if self.in_pane(id) {
-            if matches!(self.nodes[&id].kind, Kind::TitleBar) {
-                return self.nodes[&id].bounds;
+            let mut current = Some(id);
+            while let Some(p) = current {
+                if self.nodes[&p].kind == Kind::Sidebar {
+                    return self.sidebar_viewport();
+                }
+                if self.nodes[&p].kind == Kind::TitleBar {
+                    return self.nodes[&p].bounds;
+                }
+                current = self.nodes[&p].parent;
             }
-            return Rect {
-                x: 0.,
-                y: 0.,
-                width: self.size.width,
-                height: self.size.height,
-            };
         }
         let mut current = Some(id);
         while let Some(p) = current {
             if self.nodes[&p].kind == Kind::Scroll {
-                return self.content_viewport();
+                let mut clip = self.content_viewport();
+                if self.narrow && self.sidebar_open {
+                    let occlusion =
+                        (self.sidebar_x + self.metrics.sidebar).clamp(0., self.size.width);
+                    clip.width = (self.size.width - occlusion).max(0.);
+                    clip.x = occlusion;
+                }
+                return clip;
             }
             current = self.nodes[&p].parent;
         }
