@@ -165,7 +165,12 @@ def main():
             assert app.poll() is None and orca.poll() is None and speechd.poll() is None, \
                 'client, reader or speech server died during ' + label
             passed = all(test(text) for test in predicates)
-            p.row(label, passed, repr(utterances), speech=utterances)
+            # Keep Orca's attribution next to the speech result: a caret event
+            # overtaking KeyboardMonitor's key can be mistaken for prior typing.
+            # Diagnostics never replace the fresh SPEECH OUTPUT predicate.
+            causes = [line for line in delta.splitlines()
+                      if 'Reason for object:text-caret-moved' in line]
+            p.row(label, passed, repr(utterances), speech=utterances, caret_causes=causes)
             (p.log / (label.replace(' ', '-') + '.log')).write_text(delta)
             p.msg('screenshot', p.log / (label.replace(' ', '-') + '.png'))
             if label == target:
