@@ -499,10 +499,10 @@ pub fn push<R: HyaloRenderer>(
     let mut title_bar = title_bar;
     let apart = title_bar.as_ref().and_then(|t| t.controls);
     if let Some((rect, controls)) = controls.or(apart) {
-        let (glass, dark) = if cfg.controls.glass {
+        let (glass, dark, shadow) = if cfg.controls.glass {
             super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency, controls.moving)
         } else {
-            (Vec::new(), false)
+            (Vec::new(), false, None)
         };
         // On the glass, its ink is the glass's; on the plain capsule, the app's (`set_ink`) —
         // or, in Hyalo's title bar, the bar's own pass draws it as before.
@@ -511,6 +511,7 @@ pub fn push<R: HyaloRenderer>(
             let controls = if under { super::controls::Controls { dark, ..controls } } else { controls };
             out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, under)));
             out.extend(glass.into_iter().map(OutputElement::Glass));
+            out.extend(shadow.map(OutputElement::Scrim));
             if let Some(t) = title_bar.as_mut() {
                 t.controls_apart = true;
             }

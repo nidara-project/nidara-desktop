@@ -145,7 +145,12 @@ impl ScrimPx {
 /// times the opacity of its most opaque shape (it forms with them).
 pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, _now: std::time::Instant) -> Vec<ScrimPx> {
     let Some(current) = material::current(surface) else { return Vec::new() };
-    let m = &current.state;
+    scrims_of(&current.state, location, scale)
+}
+
+/// The veils and shadows of one material, wherever it comes from: a client's (`scrims_for`), or
+/// one Hyalo paints itself (the window controls' glass, render/controls.rs).
+pub fn scrims_of(m: &material::MaterialState, location: Point<i32, Physical>, scale: Scale<f64>) -> Vec<ScrimPx> {
     let mut out: Vec<ScrimPx> = Vec::new();
     for unit in m.veil_units() {
         let opacity = unit.members.iter().map(|&i| m.shapes[i].opacity).fold(0.0, f64::max);

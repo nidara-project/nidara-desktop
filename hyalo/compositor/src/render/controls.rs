@@ -233,7 +233,7 @@ const INK_GROUP: u32 = 1;
 
 /// The shell's glass under the capsule (toolkit/PHASE1.md D7: the window controls use the
 /// shell's glass) — the glass of the bar's capsules, the same in every respect: a `control`
-/// pane of the token export, its tone and its ink tone, and the ink the shell's rule decides
+/// pane of the token export, its tone, its ink tone and its shadow, and the ink the shell's rule decides
 /// from what Hyalo measures under it (dark glyphs and the ink tone over a light header, white
 /// over a dark one), blurring only `window` (its box, output px). Empty without the export:
 /// the capsule paints its own fill then, and the app's `set_ink` says its ink. With it, the ink
@@ -246,11 +246,11 @@ pub fn glass(
     output_size: smithay::utils::Size<i32, Physical>,
     reduce_transparency: bool,
     moving: bool,
-) -> (Vec<super::GlassElement>, bool) {
+) -> (Vec<super::GlassElement>, bool, Option<super::ScrimElement>) {
     use crate::protocols::material::{Current, InkBox, MaterialState, Shape};
     let (x, y, w, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.w / scale.x, rect.size.h / scale.y);
     // The bar's face: the shell's skin is dark whatever the mode, its ink measured.
-    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), false) };
+    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), false, None) };
     let dark = with_states(surface, |states| {
         let memo = states.data_map.get_or_insert(InkMemo::default);
         let mut memo = memo.0.borrow_mut();
@@ -275,7 +275,7 @@ pub fn glass(
             tone: Some(pane.tone),
             ink_tone: pane.ink_tone,
             blur: None,
-            shadow: None,
+            shadow: pane.shadow,
             grade: None,
         }],
         glass: Some(pane.glass),
@@ -305,8 +305,19 @@ pub fn glass(
         .filter_map(|g| g.within(bounds))
         .map(|g| if moving { g.measuring_nothing() } else { g })
         .collect();
-    (elements, dark)
+    // Its shadow, as the bar capsule's: drawn apart from the glass, under it (render/scrim.rs),
+    // remembered apart from the window's own material's.
+    let scrims = super::scrim::scrims_of(&current.state, (0, 0).into(), scale);
+    let shadow = with_states(surface, |states| {
+        let memo = states.data_map.get_or_insert(ShadowMemo::default);
+        super::ScrimElement::new(&memo.0, scrims, output_size)
+    });
+    (elements, dark, shadow)
 }
+
+/// The controls' shadow element's id and what it last drew, apart from the surface's own.
+#[derive(Default)]
+struct ShadowMemo(UserDataMap);
 
 /// A measurement of the glass under a window's controls came back (render/glass_gl.rs): the
 /// shell's rule, with its hysteresis, on the darkest point under the capsule. Whether the ink

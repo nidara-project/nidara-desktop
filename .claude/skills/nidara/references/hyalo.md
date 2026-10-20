@@ -979,7 +979,11 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   `GlassElement` as a client's (`for_material`, `Whose::Hyalo`: its ids apart from the app's
   own material on that surface), right below the capsule, reading only inside the window
   (`within`: the desktop above a capsule 12 px from the top darkened what it measured to 0.32,
-  under the 0.35 that turns the ink). **The ink is measured, never the app's**: one ink box, the
+  under the 0.35 that turns the ink). Its SHADOW is the piece's law too, but a shadow is not
+  the glass's to draw: it is the scrim pass's (`scrim::scrims_of`, the same as a client's
+  `scrims_for`), one `ScrimElement` right below the glass with a memo of its own (`ShadowMemo`,
+  apart from the window's own material's). A `shadow` on the shape alone draws nothing — that
+  was #884, seen identical with and without it (2026-10-20). **The ink is measured, never the app's**: one ink box, the
   capsule; the result comes back with `Whose::Hyalo` (`Measured::whose`) to
   `controls::ink_measured`, the shell's rule with its hysteresis (`material::next_ink`) — dark
   glyphs and the ink tone over a light header, white over a dark one. The app's `set_ink` only
