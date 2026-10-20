@@ -227,41 +227,99 @@ chosen the behaviour in #889; numeric visual values remain for the native demo.
   Wayland surfaces. The existing nk-wayland host and synchronized parent transaction
   remain the only transport. Material state, glyph content, placement and input
   bounds land together. A capsule inside a glass sidebar/title does not declare
-  another glass pane on that glass. D7's graded title background remains separate.
+  another glass pane on that glass. D7's provisional graded blur/background fade
+  is not a glass pane; whether a capsule over it looks right remains for the owner
+  to judge in the native demo.
 - **One material definition for native and server-side controls.** Extend the existing
   control piece of the token source/export with the state tints and backdrop-response
   law; Hyalo's third-party window controls consume the same definition. No duplicated
   numeric defaults in nk-widgets or render/controls.rs. The kit resolves the exact
   dark/reduce-transparency variant and size step from the installed export. Transport
   carries explicit data and no design defaults.
-- **The backdrop response is Hyalo's.** Measure mean luminance and variance over the
-  pane's visible silhouette, before its own tone, state tint or shadow; measurements
-  use the same presented transform and backdrop capture as its glass. The shadow
-  law grows on white and further on a white/text mixture. One continuous response
-  blends light/dark tone, glyph ink and shadow; clamp outside its defined range.
-  It must not toggle at next_ink's hysteresis thresholds or create a feedback loop
-  by sampling its own output. Old ink users keep their existing binary behaviour.
-- **Hover and press alter the glass itself.** The client declares per-button local
-  bounds, normal/destructive style and state; Hyalo resolves a tint within that
-  region, clipped to the capsule, in the material pass. Close's red remains glass
-  through which the backdrop responds. The old opaque hover/press disc is removed
-  for this component, and no second blurred surface or client fill covers it.
-- **Coherent glyph ink needs an explicit transport decision.** A continuous event to
-  a client that repaints later cannot guarantee that its glyphs and the glass agree
-  in the frame being presented. Proposed solution: the capsule's single buffer
-  provides monochrome glyph/focus coverage in declared non-overlapping button ink
-  rectangles; Hyalo colours that coverage with the same response as the material,
-  preserving alpha. Destructive hover/press can choose its exported contrasting
-  ink. Coloured app content outside these rectangles is untouched. The protocol
-  must define validation, clipping, lifetime/reset and double-buffering before code.
-  This is a narrow proposal for control capsules, not phase-2 recolouring of arbitrary
-  application text. No app event round-trip or CPU readback may gate presentation.
-- **Protocol stays v1.** Append requests to nidara-material-v1; keep existing request
-  opcodes and events intact. Before implementation, specify the exact requests for
-  response law, state regions and ink coverage and how a client detects support on
-  an older v1 server. Do not send new opcodes merely because a v1 global exists.
-  Existing material trust restrictions remain; no new pixel readback to clients.
-- **D5 and accessibility preferences:** absent support uses opaque exported base and
+- **Protocol stays v1 until publication.** Append requests without `since=` and
+  preserve existing opcodes/events. Kit and Hyalo are installed together. Another
+  compositor with no material global uses D5; an older Hyalo advertising v1 may
+  reject a new opcode with a protocol error, accepted until publication. There is
+  no per-request negotiation in this contract. If mixed versions must be supported
+  later, the owner decides a separate feature global then. Existing material trust
+  restrictions remain; no new pixel readback is exposed to clients.
+
+### Material requests for the capsule
+
+All requests below are appended to nidara-material-v1, staged until the surface's
+commit and reset by `clear_shapes`. Surface coordinates/distances are logical;
+RGBA and response parameters are fixed-point, durations are unsigned milliseconds.
+The synchronized capsule layer commits atomically with its parent.
+
+- **`set_response(luma_low, luma_high, contrast_low, contrast_high,
+  shadow_white, shadow_text, settle_ms)`** applies to shapes added after it, like
+  `set_tone`. Measure on the same backdrop capture and at the same presented
+  transform as the glass, before its own tone, tint or shadow. From the existing
+  12×12 sample grid over each shape's bounds take mean WCAG luminance `L` and
+  standard deviation `sigma`. Contrast is measured on the soft blur copy: the
+  full blur would erase the difference between a white page and text over white.
+  Compute `r = smoothstep(luma_low, luma_high, L)` and
+  `c = smoothstep(contrast_low, contrast_high, sigma)`, easing both towards new
+  values over `settle_ms` (0 = immediate, including reduced motion). Use the same
+  sampled `r` in the same frame for every tone stage (`set_tone` mixed towards
+  `set_ink_tone`) and for light-to-dark glyph ink. Multiply the existing size-law
+  shadow opacity by `1 + shadow_white*r + shadow_text*c`. Scrolling text under a
+  capsule must not make it pulse. Response shapes ignore `set_ink`'s binary switch;
+  groups without a response retain `next_ink`. Measurements use asynchronous
+  fences/pixel-pack buffers as the existing ink measurement does; presentation
+  never waits for GPU readback or a client repaint. Do not sample the pane's own
+  output into its response.
+- **`add_state_region(id, x, y, w, h, corner_radius, r, g, b, a, fade_ms)`** declares
+  a wash over the toned glass, within the rounded rectangle intersected with the
+  shapes. The kit selects normal/destructive hover/press colours from the export;
+  Hyalo owns no button state machine. A committed change of wash with the same
+  button id eases from the previous wash over `fade_ms`, so hover-in/out requires
+  one client commit each. State is redeclared after `clear_shapes`; the compositor
+  retains the presented wash for matching ids across that committed replacement,
+  without retaining regions absent from the new committed state. Reduced motion
+  sends 0. Close's red has alpha below 1 and remains glass; the opaque disc in
+  render/controls.rs is retired for these controls. The idle state is a zero-alpha
+  wash, so hover-out can keep the same region id while withdrawing its tint.
+- **`set_ink_colors(light_r, light_g, light_b, light_a,
+  dark_r, dark_g, dark_b, dark_a)`** supplies the endpoints for the response's ink
+  mix. **`add_ink_coverage(x, y, w, h, override_r, override_g, override_b,
+  override_a)`** identifies non-overlapping rectangles in the capsule's one buffer.
+  The client supplies premultiplied ARGB8888 coverage for glyphs/focus rings in any
+  opaque colour; Hyalo replaces colour with `ink.rgb * buffer.alpha`, preserving
+  the buffer alpha. Ink is light mixed towards dark by the response's `r`, except
+  when override alpha is greater than 0, selecting the exported contrasting ink
+  for destructive feedback. Coverage has the same response/material sample;
+  coloured app content outside the rectangles is untouched. Non-finite values,
+  width/height at most 0, or overlapping coverage rectangles produce protocol
+  error `invalid_region`; rectangles are clipped to the surface. Coverage is
+  double-buffered and cleared by `clear_shapes`. Rendering uses a custom texture
+  shader on the surface element, without a client round trip or CPU recolouring.
+
+Hyalo's server-side controls use these same response, state-region and ink-coverage
+paths for their own glyphs. They do not keep an independent hover-disc renderer.
+
+### Shared control token schema
+
+The frozen TypeScript kit receives no new feature. The new source is
+`toolkit/tokens/control.json`, merged by `scripts/export-tokens.mjs` into each
+`tokens/glass.json` variant's `pieces.control[]` size steps. It supplies these
+additional fields alongside the existing tone/inkTone/shadow data:
+
+- `response`: `lumaLow`, `lumaHigh`, `contrastLow`, `contrastHigh`, `shadowWhite`,
+  `shadowText`, `settleMs`;
+- `states`: `hover`, `press`, `destructiveHover`, `destructivePress`, each with
+  `wash: {r,g,b,a}`; destructive states may also carry contrasting
+  `ink: {r,g,b,a}` or null;
+- `ink`: `light: {r,g,b,a}` and `dark: {r,g,b,a}`.
+
+State-fade durations belong in this same source/export rather than kit or Hyalo
+constants; the exact duration-field placement is to be confirmed in final review.
+Values are provisional until the owner tunes them live. Both nk-widgets and
+Hyalo's glass_tokens.rs read this one export. The export checker gains a
+missing-field control alongside the existing glass-export controls. No values are
+copied into the frozen TypeScript material or given hidden defaults in transport.
+
+**D5 and accessibility preferences:** absent material uses opaque exported base and
   client-painted controls with the same geometry, keyboard and semantics. One client
   timeline drives paint/hit-testing/focus for any fallback motion. Reduce transparency
   uses the exported opaque variant, including its state feedback; reduce motion
@@ -282,10 +340,11 @@ synchronous GPU readback. New expensive visual controls belong to the scoped/nig
 path under the CI budget. Final numerical values and visual acceptance are the owner's
 in the native demo, with exact revisions and environment recorded.
 
-**To close before implementation:** Claude reviews the exact material requests and
-old-server capability negotiation, the glyph-coverage proposal and the shared token
-schema/response law; the agreed contract is merged before dependent code. The API
-must preserve the kit/compositor ownership above even if these wire details change.
+**Implementation boundary:** after this contract is reviewed and merged, Claude
+owns the Hyalo response/state/coverage implementation and token export, with its
+checks/controls. Sol builds the retained capsule and native demo on that transport.
+The state-fade token field remains for final review; visual numbers remain the
+owner's live decision. This PR supplies no implementation or visual acceptance.
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
