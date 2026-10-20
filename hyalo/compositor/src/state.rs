@@ -469,7 +469,12 @@ impl Hyalo {
                     return Some(None);
                 }
                 if managed.fullscreen == crate::wm::Fullscreen::None {
-                    let mut edges = crate::wm::grabs::border_edges(managed.frame(), pos);
+                    let inside = if window.x11_surface().is_some() {
+                        crate::wm::grabs::X11_INSIDE_STRIP
+                    } else {
+                        crate::wm::grabs::INSIDE_STRIP
+                    };
+                    let mut edges = crate::wm::grabs::border_edges(managed.frame(), pos, inside);
                     if !managed.floating && let Some(ws) = self.wm.workspaces.get(&managed.workspace) {
                         use crate::wm::{grabs::ResizeEdge, layout::Edge};
                         for (bit, edge) in [(ResizeEdge::LEFT, Edge::Left), (ResizeEdge::RIGHT, Edge::Right),
@@ -517,6 +522,11 @@ impl Hyalo {
     }
 
     /// The window control at `pos` (protocols/window_controls.rs).
+    /// Which ways window `id` can still be resized, for its edge's cursor.
+    fn resize_room(&self, id: crate::wm::WindowId) -> crate::wm::grabs::Room {
+        self.wm.get(id).map_or(crate::wm::grabs::Room::ANY, |m| crate::wm::grabs::Room::of_window(&m.window))
+    }
+
     pub fn controls_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, crate::protocols::window_controls::Button)> {
         match self.chrome_under(pos)? {
             (id, Chrome::Button(b)) => Some((id, b)),
@@ -543,10 +553,12 @@ impl Hyalo {
         // everywhere else. The client under a resize edge still has the pointer and sets its own,
         // which won: kitty showed its text cursor on its edge (owner, 2026-10-20).
         let ours = match (self.wm.grab, chrome) {
-            (Some(crate::wm::grabs::Active { kind: crate::wm::grabs::Kind::Resize(edges), tiled, .. }), _) => {
-                Some(CursorImageStatus::Named(edges.cursor(tiled)))
+            (Some(crate::wm::grabs::Active { id, kind: crate::wm::grabs::Kind::Resize(edges), tiled, .. }), _) => {
+                Some(CursorImageStatus::Named(edges.cursor(tiled, self.resize_room(id))))
             }
-            (_, Some((_, Chrome::Resize(edges, tiled)))) => Some(CursorImageStatus::Named(edges.cursor(tiled))),
+            (_, Some((id, Chrome::Resize(edges, tiled)))) => {
+                Some(CursorImageStatus::Named(edges.cursor(tiled, self.resize_room(id))))
+            }
             (_, Some(_)) => Some(CursorImageStatus::default_named()),
             (_, None) => None,
         };

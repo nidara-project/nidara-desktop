@@ -1516,7 +1516,9 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
 - **Resize borders belong to Hyalo, for every resizable app** (2026-10-14).
   An undecorated GTK window (Settings) has no GTK resize grips; relying only on the client's
   xdg resize request made it impossible to grab its border while Chrome worked. `Chrome::Resize`
-  uses `border_edges`: 3 logical px inside, 6 outside, corner reach 16. It shares the ordinary
+  uses `border_edges`: 3 logical px inside (5 for an X11 window, `X11_INSIDE_STRIP`: Chromium and
+  Electron keep a 5 px band of their own there with their own one-way cursors — measured on
+  ChatGPT with an XFixes probe, 2026-10-20 — so Hyalo takes all of it), 6 outside, corner reach 16. It shares the ordinary
   window grab path with client requests and Super+drag. Fullscreen/maximized windows have no
   resize border; fixed dimensions have no matching edge. A tile offers only edges that move
   a split (`Layout::can_resize_edge`), never its outer output boundary. Layers and popups keep
@@ -1529,7 +1531,10 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `update_controls_hover` puts it back when the pointer leaves the chrome or a resize ends. The
   SHAPE says what the drag does: a floating window's edge shows the arrows (`ew`/`ns`/diagonals),
   a tile's edge the separator (`col-resize`/`row-resize`) — it moves the line shared with a
-  neighbour (`ResizeEdge::cursor(tiled)`).
+  neighbour (`ResizeEdge::cursor(tiled, room)`). The third shape, the arrow against a bar
+  (`e-resize`, `se-resize`…), means "this edge can only go one way": a floating window at its
+  client's smallest or largest size on that axis (`Room`, from `size_limits`) shows it pointing
+  the way the edge can still go; a corner only when both its axes are one-way (owner, 2026-10-20).
 - **A resized tile is held by the side that did not move** (owner, 2026-10-20: "windows expand
   to the opposite side and snap together on release"). A client draws its new size frames after
   Hyalo lays the tile out; the grabbed tile was not placed at all until release, so one taken by

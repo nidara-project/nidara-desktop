@@ -40,16 +40,24 @@ impl From<xdg_toplevel::ResizeEdge> for ResizeEdge {
     }
 }
 
-/// One shared resize target for every app, including undecorated GTK windows.
-/// The narrow inside strip avoids taking controls in the application's header.
-pub fn border_edges(rect: Rect, pos: Point<f64, Logical>) -> ResizeEdge {
+/// How far inside a window its resize edge reaches: narrow, so it takes no control in the
+/// application's header.
+pub const INSIDE_STRIP: f64 = 3.0;
+/// The same for an X11 window. Chromium and Electron there keep a resize band of their own,
+/// 5 px inside, with their own one-way cursors: measured on ChatGPT (2026-10-20). Hyalo takes
+/// all of it, or theirs shows before ours.
+pub const X11_INSIDE_STRIP: f64 = 5.0;
+
+/// One shared resize target for every app, including undecorated GTK windows: `inside` px
+/// inside the edge (`INSIDE_STRIP`, `X11_INSIDE_STRIP`) and 6 px outside it.
+pub fn border_edges(rect: Rect, pos: Point<f64, Logical>, inside: f64) -> ResizeEdge {
     let r = rect.to_f64();
     let (x, y) = (pos.x - r.loc.x, pos.y - r.loc.y);
     if x < -6.0 || y < -6.0 || x >= r.size.w + 6.0 || y >= r.size.h + 6.0 {
         return ResizeEdge::empty();
     }
-    let on_vertical = x < 3.0 || x >= r.size.w - 3.0;
-    let on_horizontal = y < 3.0 || y >= r.size.h - 3.0;
+    let on_vertical = x < inside || x >= r.size.w - inside;
+    let on_horizontal = y < inside || y >= r.size.h - inside;
     if !on_vertical && !on_horizontal { return ResizeEdge::empty(); }
     let mut edges = ResizeEdge::empty();
     if x < 16.0 { edges |= ResizeEdge::LEFT; }
@@ -63,19 +71,73 @@ impl ResizeEdge {
     /// The pointer's shape over these edges: a floating window's own edges are resized (the
     /// arrows), a tiled window's are the line it shares with its neighbour, moved (the
     /// separator) — owner, 2026-10-20. A tiled corner moves two lines: the diagonal.
-    pub fn cursor(self, tiled: bool) -> smithay::input::pointer::CursorIcon {
+    ///
+    /// A floating edge that can only go one way — the window at its smallest or largest on that
+    /// axis (`room`) — shows the arrow against a bar, pointing the way it can still go; a corner
+    /// does when both of its axes can (owner, 2026-10-20).
+    pub fn cursor(self, tiled: bool, room: Room) -> smithay::input::pointer::CursorIcon {
         use smithay::input::pointer::CursorIcon;
         match (self.bits(), tiled) {
             (4 | 8, true) => return CursorIcon::ColResize,
             (1 | 2, true) => return CursorIcon::RowResize,
             _ => {}
         }
-        match self.bits() {
-            5 | 10 => CursorIcon::NwseResize,
-            9 | 6 => CursorIcon::NeswResize,
-            4 | 8 => CursorIcon::EwResize,
-            _ => CursorIcon::NsResize,
+        // Each axis's one way, if it has only one: +1 = right/down, -1 = left/up.
+        let way = |low: ResizeEdge, high: ResizeEdge, can_grow: bool, can_shrink: bool| -> Option<i8> {
+            let outward = if self.contains(low) { -1 } else if self.contains(high) { 1 } else { return None };
+            match (can_grow, can_shrink) {
+                (true, false) => Some(outward),
+                (false, true) => Some(-outward),
+                _ => None,
+            }
+        };
+        let x = way(ResizeEdge::LEFT, ResizeEdge::RIGHT, room.grow_w, room.shrink_w);
+        let y = way(ResizeEdge::TOP, ResizeEdge::BOTTOM, room.grow_h, room.shrink_h);
+        let corner = self.intersects(ResizeEdge::LEFT | ResizeEdge::RIGHT) && self.intersects(ResizeEdge::TOP | ResizeEdge::BOTTOM);
+        match (corner, x, y) {
+            (false, Some(1), _) => CursorIcon::EResize,
+            (false, Some(_), _) => CursorIcon::WResize,
+            (false, _, Some(1)) => CursorIcon::SResize,
+            (false, _, Some(_)) => CursorIcon::NResize,
+            (true, Some(1), Some(1)) => CursorIcon::SeResize,
+            (true, Some(1), Some(_)) => CursorIcon::NeResize,
+            (true, Some(_), Some(1)) => CursorIcon::SwResize,
+            (true, Some(_), Some(_)) => CursorIcon::NwResize,
+            _ => match self.bits() {
+                5 | 10 => CursorIcon::NwseResize,
+                9 | 6 => CursorIcon::NeswResize,
+                4 | 8 => CursorIcon::EwResize,
+                _ => CursorIcon::NsResize,
+            },
         }
+    }
+}
+
+/// Which ways a window's size can still go on each axis, against its client's limits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Room {
+    pub grow_w: bool,
+    pub shrink_w: bool,
+    pub grow_h: bool,
+    pub shrink_h: bool,
+}
+
+impl Room {
+    pub const ANY: Room = Room { grow_w: true, shrink_w: true, grow_h: true, shrink_h: true };
+
+    /// `size` against `min`/`max` (0 = no limit, as the protocols say).
+    pub fn of(size: Size<i32, Logical>, min: Size<i32, Logical>, max: Size<i32, Logical>) -> Room {
+        Room {
+            grow_w: max.w <= 0 || size.w < max.w,
+            shrink_w: size.w > min.w.max(1),
+            grow_h: max.h <= 0 || size.h < max.h,
+            shrink_h: size.h > min.h.max(1),
+        }
+    }
+
+    pub fn of_window(window: &smithay::desktop::Window) -> Room {
+        let (min, max) = size_limits(window);
+        Room::of(window.geometry().size, min, max)
     }
 }
 
@@ -481,22 +543,54 @@ mod tests {
     #[test]
     fn resize_strip_covers_both_sides_of_edge_but_not_header_controls() {
         let r = Rect::new((100, 100).into(), (500, 300).into());
-        assert_eq!(border_edges(r, (99.0, 200.0).into()), ResizeEdge::LEFT);
-        assert_eq!(border_edges(r, (601.0, 200.0).into()), ResizeEdge::RIGHT);
-        assert_eq!(border_edges(r, (599.0, 399.0).into()), ResizeEdge::RIGHT | ResizeEdge::BOTTOM);
-        assert_eq!(border_edges(r, (101.0, 110.0).into()), ResizeEdge::LEFT | ResizeEdge::TOP);
-        assert!(border_edges(r, (550.0, 116.0).into()).is_empty());
-        assert!(border_edges(r, (607.0, 200.0).into()).is_empty());
-        assert!(border_edges(r, (350.0, 250.0).into()).is_empty());
+        assert_eq!(border_edges(r, (99.0, 200.0).into(), INSIDE_STRIP), ResizeEdge::LEFT);
+        assert_eq!(border_edges(r, (601.0, 200.0).into(), INSIDE_STRIP), ResizeEdge::RIGHT);
+        assert_eq!(border_edges(r, (599.0, 399.0).into(), INSIDE_STRIP), ResizeEdge::RIGHT | ResizeEdge::BOTTOM);
+        assert_eq!(border_edges(r, (101.0, 110.0).into(), INSIDE_STRIP), ResizeEdge::LEFT | ResizeEdge::TOP);
+        assert!(border_edges(r, (550.0, 116.0).into(), INSIDE_STRIP).is_empty());
+        assert!(border_edges(r, (607.0, 200.0).into(), INSIDE_STRIP).is_empty());
+        assert!(border_edges(r, (350.0, 250.0).into(), INSIDE_STRIP).is_empty());
+        // 4 px inside: an X11 window's edge (Chromium's own band), not a Wayland one's.
+        assert!(border_edges(r, (596.0, 200.0).into(), INSIDE_STRIP).is_empty());
+        assert_eq!(border_edges(r, (596.0, 200.0).into(), X11_INSIDE_STRIP), ResizeEdge::RIGHT);
+        assert!(border_edges(r, (594.0, 200.0).into(), X11_INSIDE_STRIP).is_empty());
     }
 
     #[test]
     fn tiled_edges_show_the_separator_floating_ones_the_arrows() {
         use smithay::input::pointer::CursorIcon;
-        assert_eq!(ResizeEdge::RIGHT.cursor(true), CursorIcon::ColResize);
-        assert_eq!(ResizeEdge::TOP.cursor(true), CursorIcon::RowResize);
-        assert_eq!(ResizeEdge::RIGHT.cursor(false), CursorIcon::EwResize);
-        assert_eq!(ResizeEdge::BOTTOM.cursor(false), CursorIcon::NsResize);
-        assert_eq!((ResizeEdge::LEFT | ResizeEdge::TOP).cursor(true), CursorIcon::NwseResize);
+        let any = Room::ANY;
+        assert_eq!(ResizeEdge::RIGHT.cursor(true, any), CursorIcon::ColResize);
+        assert_eq!(ResizeEdge::TOP.cursor(true, any), CursorIcon::RowResize);
+        assert_eq!(ResizeEdge::RIGHT.cursor(false, any), CursorIcon::EwResize);
+        assert_eq!(ResizeEdge::BOTTOM.cursor(false, any), CursorIcon::NsResize);
+        assert_eq!((ResizeEdge::LEFT | ResizeEdge::TOP).cursor(true, any), CursorIcon::NwseResize);
+    }
+
+    #[test]
+    fn an_edge_that_can_only_go_one_way_points_that_way() {
+        use smithay::input::pointer::CursorIcon;
+        let size = |w, h| Size::<i32, Logical>::from((w, h));
+        let none = size(0, 0);
+        // At its smallest: every edge only grows, outward.
+        let smallest = Room::of(size(300, 200), size(300, 200), none);
+        assert_eq!(ResizeEdge::RIGHT.cursor(false, smallest), CursorIcon::EResize);
+        assert_eq!(ResizeEdge::LEFT.cursor(false, smallest), CursorIcon::WResize);
+        assert_eq!(ResizeEdge::TOP.cursor(false, smallest), CursorIcon::NResize);
+        assert_eq!(ResizeEdge::BOTTOM.cursor(false, smallest), CursorIcon::SResize);
+        assert_eq!((ResizeEdge::RIGHT | ResizeEdge::BOTTOM).cursor(false, smallest), CursorIcon::SeResize);
+        assert_eq!((ResizeEdge::LEFT | ResizeEdge::TOP).cursor(false, smallest), CursorIcon::NwResize);
+        // At its largest: every edge only shrinks, inward.
+        let largest = Room::of(size(800, 600), none, size(800, 600));
+        assert_eq!(ResizeEdge::RIGHT.cursor(false, largest), CursorIcon::WResize);
+        assert_eq!((ResizeEdge::RIGHT | ResizeEdge::TOP).cursor(false, largest), CursorIcon::SwResize);
+        // Smallest in width only: a side edge points out, a corner keeps both ways.
+        let narrow = Room::of(size(300, 500), size(300, 200), none);
+        assert_eq!(ResizeEdge::RIGHT.cursor(false, narrow), CursorIcon::EResize);
+        assert_eq!(ResizeEdge::BOTTOM.cursor(false, narrow), CursorIcon::NsResize);
+        assert_eq!((ResizeEdge::RIGHT | ResizeEdge::BOTTOM).cursor(false, narrow), CursorIcon::NwseResize);
+        // No limits at all: the two-way arrows; a tile keeps the separator at its smallest.
+        assert_eq!(ResizeEdge::RIGHT.cursor(false, Room::of(size(300, 200), none, none)), CursorIcon::EwResize);
+        assert_eq!(ResizeEdge::RIGHT.cursor(true, smallest), CursorIcon::ColResize);
     }
 }
