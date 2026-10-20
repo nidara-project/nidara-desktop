@@ -50,6 +50,9 @@ pub struct Shape {
     pub blur: Option<Blur>,
     /// The shadow it casts outside the surface's shapes (`set_shadow`). None: none.
     pub shadow: Option<ShadowLaw>,
+    /// Its blur's strength at its top and bottom edges (`set_shape_grade`), 0..1. None: its
+    /// whole blur everywhere.
+    pub grade: Option<[f64; 2]>,
 }
 
 /// The shadow a shape casts (`set_shadow`): black, a gaussian of `blur` deviation, moved
@@ -105,7 +108,7 @@ pub struct Tone {
 
 impl Tone {
     #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub(crate) fn new(
         saturation: f64, ceiling: f64, lift: f64, gain: f64,
         wash: [f64; 4], ambient: f64, ambient_lift: f64, ambient_gain: f64,
     ) -> Self {
@@ -208,6 +211,8 @@ pub struct MaterialState {
     pub blurring: Option<Blur>,
     /// What `set_shadow` last said: the shadow the next shapes cast.
     pub shadowing: Option<ShadowLaw>,
+    /// What `set_shape_grade` last said: how the next shapes' blur is graded.
+    pub grading: Option<[f64; 2]>,
     /// `set_drawn_region`: where the surface's content is drawn, surface-local logical
     /// rectangles that do not overlap. None: the whole surface.
     pub drawn: Option<Vec<Rectangle<i32, Logical>>>,
@@ -308,7 +313,7 @@ const MAX_INK_GROUPS: usize = 256;
 
 /// The ink rule with its hysteresis: a group whose darkest point under its content is `darkest`
 /// turns dark only above `dark_above`, and light again only below `light_below`. None: no change.
-fn next_ink(dark: bool, darkest: f64, ink: &Ink) -> Option<bool> {
+pub(crate) fn next_ink(dark: bool, darkest: f64, ink: &Ink) -> Option<bool> {
     if !dark && darkest > ink.dark_above {
         Some(true)
     } else if dark && darkest < ink.light_below {
@@ -494,6 +499,15 @@ pub fn drawn(surface: &WlSurface) -> Option<Drawn> {
 }
 
 /// The material a surface has right now, if it has one worth resolving.
+/// How many of the shapes committed on a surface have a blur — `current`'s test, for a walk that
+/// already holds the surface's states.
+pub fn glass_shapes(states: &smithay::wayland::compositor::SurfaceData) -> usize {
+    states.data_map.get::<std::sync::Mutex<Current>>().map_or(0, |c| {
+        let m = &c.lock().unwrap().state;
+        m.shapes.iter().filter(|s| m.blur_of(s).passes > 0).count()
+    })
+}
+
 pub fn current(surface: &WlSurface) -> Option<Current> {
     with_states(surface, |states| {
         let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().clone();
@@ -585,6 +599,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.ink_toning = None;
                     m.blurring = None;
                     m.shadowing = None;
+                    m.grading = None;
                 });
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
@@ -592,7 +607,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.shapes.push(Shape {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
                         pointer: None, fusion: m.fusing,
-                        tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing,
+                        tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing, grade: m.grading,
                     })
                 });
             }
@@ -610,7 +625,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     self.pending(|m| {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
-                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing,
+                            fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing, grade: m.grading,
                         })
                     });
                 }
@@ -635,7 +650,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
                             fusion: if pointer.is_some() { None } else { m.fusing },
-                            tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing,
+                            tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing, grade: m.grading,
                         })
                     });
                 }
@@ -687,6 +702,10 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     offset: offset.clamp(-200.0, 200.0),
                 };
                 self.pending(|m| m.shadowing = (law.opacity[0] > 0.0 || law.opacity[1] > 0.0).then_some(law));
+            }
+            Request::SetShapeGrade { top, bottom } => {
+                let (top, bottom) = (top.clamp(0.0, 1.0), bottom.clamp(0.0, 1.0));
+                self.pending(|m| m.grading = (top < 1.0 || bottom < 1.0).then_some([top, bottom]));
             }
             Request::SetLensing { size_fraction } => {
                 self.pending(|m| m.lensing = size_fraction.clamp(0.0, 1.0));
@@ -810,7 +829,7 @@ mod tests {
     fn shape(x: f64, y: f64) -> Shape {
         Shape {
             x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None, blur: None, shadow: None,
+            fusion: None, tone: None, ink_tone: None, blur: None, shadow: None, grade: None,
         }
     }
 

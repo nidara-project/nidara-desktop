@@ -12,6 +12,7 @@ pub mod decor;
 pub mod drawn;
 pub mod glass;
 pub mod glass_gl;
+pub mod glass_tokens;
 pub mod scrim;
 pub mod snapshot;
 pub mod stats;
@@ -191,8 +192,8 @@ fn push_surface<R: HyaloRenderer>(
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
         // A tree with layers a client handed Hyalo to animate (protocols/layers.rs) is drawn
         // where they are shown, whole: its drawn region (#761) describes the buffer at rest.
-        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, kind, when) {
-            out.extend(layered.into_iter().map(OutputElement::Scaled));
+        if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, output_size, kind, when) {
+            out.extend(layered.interleave(OutputElement::Scaled, OutputElement::Glass));
         } else {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
             // A surface that declared where it draws (#761) is drawn only there, and repainted where
@@ -244,8 +245,8 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     kind: Kind,
     when: std::time::Instant,
 ) {
-    match crate::protocols::layers::render_tree(renderer, surface, location, scale, kind, when) {
-        Some(layered) => out.extend(layered.into_iter().map(OutputElement::Scaled)),
+    match crate::protocols::layers::render_tree(renderer, surface, location, scale, output_size, kind, when) {
+        Some(layered) => out.extend(layered.interleave(OutputElement::Scaled, OutputElement::Glass)),
         None => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
             out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));
@@ -558,6 +559,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
         fullscreen,
         managed.is_none_or(|m| m.rounded),
         managed.is_none_or(|m| m.backdrop),
+        managed.is_some_and(|m| m.follow_level),
         state.windows,
     );
     // The controls over its header (protocols/window_controls.rs), or in Hyalo's title
@@ -573,6 +575,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             pressed: hover.is_some_and(|h| h.pressed),
             active: state.wm.focused == Some(m.id),
             dark: crate::wm::surface_of(&m.window).is_some_and(|s| crate::protocols::window_controls::dark_ink(&s)),
+            moving: place.is_some(),
         };
         Some((rect, controls))
     });
@@ -583,6 +586,7 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             family: state.windows.title_bar.font.clone(),
             active: state.wm.focused == Some(m.id),
             controls,
+            controls_apart: false,
         })),
         None => (controls, None),
     };

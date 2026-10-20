@@ -216,7 +216,7 @@ one with a `timeout-minutes`):
 | `typecheck` | `tsc --noEmit` over all five bundles (installer, greeter and lock in full since 2026-09-22 — their one shim is `ui/lib/nidara-kit/gi-cairo.d.ts`, which must be FIRST in `include` or it is silently ignored), against a compressed `@girs/` snapshot pulled from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB generated; a maintainer refreshes the snapshot when it goes stale) |
 | `widgets-gen` | the generated widget registry matches `widgets/` — **and the widget boundary holds**: `widgets/` imports nothing from `surfaces/`, and `common/widget-kit/` stays a leaf. Neither is a compile error (28 widget→surface imports type-checked on 2026-09-01) and the second one crashes the shell at BOOT, which `tsc` cannot see. **Also the Settings import closure** (`settings-closure-check.mjs`, #571): what Settings.tsx reaches transitively may not include another surface, a widget or a shell-only module beyond a shrink-only allowlist. **And the kit is a package** (`kit-boundary-check.mjs`, #108): nothing under `ui/lib/nidara-kit/` imports from outside it — an app outside this repo has the kit and nothing else. **And a child process never inherits our `GTK_THEME=Empty`** (`child-env-check.mjs`, with a control: every process starts through `spawn()`, commandment 11) |
 | `smoke` | **a real headless boot** — official Arch packages in a container, build both C libraries (`libnidara-wl`, `libnidara-auth` + its eight signals), bundle the shell, boot it on real Hyprland over a virtual display (kernel vkms + llvmpipe); fails on death, silent IPC, JS errors or **a toolkit CRITICAL** (Gtk/Gdk/Gsk/GLib/Gjs — a failed assertion is a bug that draws nothing wrong on the spot; only a missing accessibility bus is exempt, that is the container), prints the grouped warning summary every run, and uploads screenshots as artifacts |
-| `i18n` | translation parity + the ledger (`scripts/ci/i18n-check.mjs --check`) — see `dev-workflow.md` — **and the export the native Settings reads** — its tokens too: `scripts/export-tokens.mjs` (styles job) runs the token ENGINE itself over all 72 inputs (accent × mode × reduce/window transparency) over `_base.scss` COMPILED, plus `_tokens.scss`'s variables (`meta.module-variables`) and `tokens.ts`'s data; a `gi://` stub loader runs the frozen kit untouched; `settings-tokens-check.py` requires every `var(--nidara-*)` of the Settings/kit sheets in every set — (`scripts/export-settings-data.mjs` → `build/settings-data/{manifest.json,i18n/*.json}`, from the same `manifest.ts`/`locales/*.ts`; `settings-data-check.py` compares it with a pattern reading of the sources, and a dropped-key copy must fail). Locales stay `.ts`: edit them as always, never the JSON |
+| `i18n` | translation parity + the ledger (`scripts/ci/i18n-check.mjs --check`) — see `dev-workflow.md` — **and the export the native Settings reads** — its tokens too: `scripts/export-tokens.mjs` (styles job) runs the token ENGINE itself over all 72 inputs (accent × mode × reduce/window transparency) over `_base.scss` COMPILED, plus `_tokens.scss`'s variables (`meta.module-variables`) and `tokens.ts`'s data; a `gi://` stub loader runs the frozen kit untouched; `settings-tokens-check.py` requires every `var(--nidara-*)` of the Settings/kit sheets in every set; and `tokens/glass.json`, the kit's glass material ASKED through its own source (`registerGlassMaterial` with a stub host; `./material` and `gi://GLib`/`Gtk` stubbed in the loader): tone/ink/shadow by pane side as steps, per dark/light × reduce transparency (a dropped-`panel` copy must fail) — (`scripts/export-settings-data.mjs` → `build/settings-data/{manifest.json,i18n/*.json}`, from the same `manifest.ts`/`locales/*.ts`; `settings-data-check.py` compares it with a pattern reading of the sources, and a dropped-key copy must fail). Locales stay `.ts`: edit them as always, never the JSON |
 | `skill-docs` | seven prose/consistency checks: no repeated headings anywhere under `.claude/skills` (a duplicated section is how a reference comes to contradict itself) — and ONE copy of the skill: `.agents/skills/nidara` must be a symlink to it, `AGENTS.md` must exist and `CLAUDE.md` must only import it (`@AGENTS.md`), so every agent, Claude Code or not, starts from the same text (until 2026-10-12 another agent read a hand-made copy weeks behind); `wrapping-prose-check` (a wrapping `GtkLabel` must FILL its column — documented, then violated six times, because the failure only appears in someone else's locale), `same-app-check` (the four `bin/nidara-{a11y,act,click,type}` copies of `sameApp`/`nameTokens` must not drift from `core/app-search.ts`, or perception and action disagree about what an app is called), `blur-threshold-check`, `chrome-scope-check`, `hook-events-check` (the user-hook event table in `bin/nidara-hook` and the `fireHook(…)` call sites must be the same set — an event fired but undeclared is refused by the runner, one declared but never fired is a directory that can only stay empty), and `icon-registry-check` (every name in `core/Icons.ts` is an `nd-` name with its shipped drawing, no drawing is orphaned, and `ui/shell/assets/icons/nidara/SPEC.md` — the Nidara icon spec theme authors build against — lists exactly those names at the same spec version as the code and the theme generator; a missing glyph is never an error, just a hole on screen) |
 | `pkgbuild` | `bash -n` on the PKGBUILD + `depends=()` still sources as an array of ≥40 (v0.6.0 shipped with an unquoted `hyprland>=0.56` that bash read as a redirection and silently truncated the array) + **config migrations are valid bash, no-op on a fresh install and idempotent with the marker cleared** (`migrations-check.mjs`; a migration mutates a user's config once, on a machine nobody can inspect afterwards) |
 | `hypr-config` | `luac -p config/hypr/hyprland.lua` (one syntax error = the session boots with NO Nidara config at all) + **game mode's session is undone** (`scripts/dev/game-session-probe.ts` drives `core/game-session-logic.ts` against a fake world, with a control) + **every window rule names something the source declares** — Hyprland's and Hyalo's (`hypr-rule-check.mjs`: a rule is a string matched against a string a GTK window announces, and our windows change class at MAP — a STATIC effect sees only the birth class, a DYNAMIC one only the current one, and both traps are silent) + **the Lua the shell GENERATES parses** (`hypr-lua-check.mjs`: `nidara-settings.lua` and `nidara-monitor.lua` are built from TypeScript strings, so `tsc` sees a string and `luac` never sees what it produced — and `hyprland.lua` requires both at every login) |
@@ -229,21 +229,40 @@ one with a `timeout-minutes`):
 ⚠️ A REQUIRED check skipped by a path filter never reports, and that **stalls the merge queue** —
 skip the *work* inside a job, never the job. A job skipped by its `if:` DOES report (as a pass),
 which is how `scope` (`scripts/ci/ci-scope.sh`, its own self-test first) gates the long jobs:
-`code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond; `gates=false`
-(every path in an area the typing and screen-reader tests do not use — a SKIP list, so a new
-file runs them) skips only the Hyalo job's real fcitx5/Orca matrices, ~35 of its ~50 min. Inside
-`hyalo/` and `toolkit/` the list is by FILE (drawing, window management, capture, IPC, the
-Settings slice skip; input, focus, a11y, layers, backend, the toolkit crates run), and CI's own
-plumbing (`hyalo-smoke.sh`, `ci.yml`) skips too (2026-10-18: 19 of 25 PRs ran them, now 11).
-What a skip lets through, the **nightly** full run on main finds (`schedule`, no base, so
-everything runs); `nightly-report` opens/updates the issue "Nightly CI failed", and closes it
-when green. A file the matrices start depending on? Take it out of `unrelated()` and add a
-self-test line.
+`code=false` (every changed path a `.md`) skips smoke/hyalo/toolkit/sessiond. `gates=true` runs
+the Hyalo job's real fcitx5/Orca matrices (~35 of its ~45 min) ONLY when a changed path is one
+they use — `needs_gates()`, a list of what RUNS them: Hyalo's input, focus, a11y, handlers,
+shortcuts, binds, control, layers and focus-grab files and its Cargo files; the toolkit (not the
+Settings slice); the layers protocol; Hyalo's config; the matrix checks. `full=true` adds their
+controls (each assertion re-run with a fault) and scale 1.25 — only when the checks or the test
+window's faults change (`needs_full()`; `NK_REAL_FULL=false` → `NK_FCITX5_SCALES=1
+NK_REAL_CONTROLS=0`). Until 2026-10-19 `gates` was a SKIP list and almost every Hyalo PR ran
+the 35 minutes (owner: "we can't lose an hour on tests that give the same result"). What a skip
+lets through, the **nightly** full run on main finds (`schedule`, no base, so everything runs);
+`nightly-report` opens/updates the issue "Nightly CI failed", and closes it when green. A file
+the matrices start depending on? Add it to `needs_gates()` with a self-test line.
+
+🔑 **The PR budget** (owner, 2026-10-19: "we keep adding tests and have more and more CI
+problems"). A PR's CI aims at **15 minutes**. A NEW check goes to the nightly run by default;
+it runs on PRs only scoped to the paths it can catch (a `ci-scope.sh` output with self-test
+lines), and only if its result does not depend on the runner's speed — CI's GL is software,
+and a check that races an animation, a capture or a `gjs` start against the clock fails on a
+correct change and teaches everyone to re-run. Such a check is fixed (read the moment from
+Hyalo — a capture's `capture.json` says where moving windows were in it) or removed, never
+retried. A check's CONTROLS prove it can fail: they belong with the check's own changes and
+the nightly run, not every PR. **The checks that watch an animation on screen** — minimize, motion, layer
+motion (Hyalo's and the toolkit's) — run only nightly (`HYALO_ANIMATION_CHECKS`, true on
+`schedule`/`workflow_dispatch` and in a local run): CI's software GL draws a frame in 2-4 s at
+times, and they failed correct PRs for a whole day (owner: "I want to work on the project, not
+on the CI"). A PR touching animation is checked locally (the headless cage) and by the night.
 
 ⚠️ **`apt-get` in CI only through `scripts/ci/apt.sh install …`.** A bare `apt-get update` waits
 forever on a stalled Ubuntu mirror: twice on 2026-10-01 a job sat silent for 45 minutes until
 Actions cancelled it, and the merge queue threw the entry out. The script sets apt's network
-timeouts, caps each attempt and tries three times. Details in `references/dev-workflow.md`.
+timeouts, caps each attempt and tries three times. Details in `references/dev-workflow.md`. vkms is loaded by `scripts/ci/load-vkms.sh`: the module if the kernel
+already has it, else `linux-modules-extra-$(uname -r)`, else a plain error — on 2026-10-19 some
+runners booted a kernel (7.0.0-1017-azure) with no such package in the archive at all, which
+apt.sh used to report as "the mirror is not answering" while every retry was doomed.
 
 ## When in doubt
 

@@ -405,5 +405,20 @@
       </description>
       <arg name="level" type="uint" enum="window_background_level"/>
     </request>
+    <request name="set_shape_grade">
+      <description summary="pending: the blur of the shapes added from now on, graded top to bottom">
+        How strongly the shapes added after this request blur what is
+        behind them, from their top edge to their bottom edge, until the
+        next set_shape_grade: 1 = the shape's whole blur, 0 = what is
+        behind as it is, linear between (a progressive blur — a title bar
+        over content scrolling under it, blurred most at the window's top
+        and not at all at its own bottom edge). Only the blur is graded:
+        the tone, the rim and the refraction are not. top 1 and bottom 1 =
+        the shape's blur everywhere, the default; reset to it by
+        clear_shapes. Values are clamped to 0..1.
+      </description>
+      <arg name="top" type="fixed" summary="the blur's strength at the shape's top edge, 0..1"/>
+      <arg name="bottom" type="fixed" summary="the blur's strength at the shape's bottom edge, 0..1"/>
+    </request>
   </interface>
 </protocol>

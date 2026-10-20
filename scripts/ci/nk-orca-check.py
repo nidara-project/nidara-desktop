@@ -292,7 +292,13 @@ def matrix():
     cases += [('ignore-edit', step, True) for step in ('Delete d','Insert d','Caret left','Caret right','Select word','Error corrected')]
     cases += [('accept-invalid', 'Invalid save',True), ('restore','Dialog escaped and restored',True)]
     cases += [('text-extents', 'Flat review Unicode line', True)]
+    # NK_REAL_CONTROLS=0: the baseline alone. The controls prove the assertions can fail; they
+    # change only with these checks (or the faults they inject), so a PR that touches neither
+    # leaves them to the nightly run (scripts/ci/ci-scope.sh, `full`).
+    run_controls = os.environ.get('NK_REAL_CONTROLS', '1') != '0'
     for index, (fault, target, dynamic) in enumerate(cases):
+        if not run_controls:
+            break
         if os.environ.get('NK_ORCA_CONTROLS') and str(index) not in os.environ['NK_ORCA_CONTROLS'].split():
             continue
         row = next((r for r in baseline['rows'] if r['step'] == target), None)
@@ -311,7 +317,7 @@ def matrix():
     coverage['Password focus'] = coverage['Tab Password']
     coverage['Dropdown focus'] = coverage['Tab Language']
     coverage['Wayland keyboard monitor refusal'] = ['ordinary Atspi.Device + explicit AccessDenied; positive Orca key echo']
-    assert all(coverage.values()), 'a baseline assertion lacks its control'
+    assert not run_controls or all(coverage.values()), 'a baseline assertion lacks its control'
     report = dict(baseline=baseline, controls=controls, coverage=coverage, pending=pending, complete_matrix=status == 0 and len(controls) == len(cases))
     (log / 'orca-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     lines = ['| Orca assertion | Baseline |', '| --- | --- |']

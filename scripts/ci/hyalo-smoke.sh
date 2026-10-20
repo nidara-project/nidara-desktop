@@ -25,6 +25,12 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="${OUT:-${GITHUB_WORKSPACE:-$REPO}/hyalo-out}"
 
 log() { echo "[hyalo] $*"; }
+# The checks that watch an ANIMATION on screen (minimize, motion, layer motion) race CI's
+# software GL — a frame there can take 2-4 s — and failed correct PRs again and again
+# (owner, 2026-10-19: "I want to work on the project, not on the CI"). They run in the nightly
+# run on main (HYALO_ANIMATION_CHECKS=true from ci.yml on schedule), which opens an issue when
+# one fails, and in any local run (unset: true); on a PR, not.
+animations() { [ "${HYALO_ANIMATION_CHECKS:-true}" = true ]; }
 
 phase_deps() {
     log "pacman deps…"
@@ -122,6 +128,19 @@ phase_build() {
     cc -O2 "$REPO/scripts/ci/hyalo-layer-motion-probe.c" "$lm/xdg-shell-protocol.c" \
         "$lm/nidara-layers-v1-protocol.c" \
         -I"$lm" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-layer-motion-probe
+    # The layer-glass probe (a layer's own material over its window's content, and a graded
+    # blur: toolkit/PHASE1.md D7).
+    local lg="$REPO/build/lg" mt_xml="$REPO/protocols/nidara-material-v1.xml"
+    mkdir -p "$lg"
+    wayland-scanner client-header "$xs_xml" "$lg/xdg-shell-client-protocol.h"
+    wayland-scanner private-code  "$xs_xml" "$lg/xdg-shell-protocol.c"
+    wayland-scanner client-header "$lm_xml" "$lg/nidara-layers-v1-client-protocol.h"
+    wayland-scanner private-code  "$lm_xml" "$lg/nidara-layers-v1-protocol.c"
+    wayland-scanner client-header "$mt_xml" "$lg/nidara-material-v1-client-protocol.h"
+    wayland-scanner private-code  "$mt_xml" "$lg/nidara-material-v1-protocol.c"
+    cc -O2 "$REPO/scripts/ci/hyalo-layer-glass-probe.c" "$lg/xdg-shell-protocol.c" \
+        "$lg/nidara-layers-v1-protocol.c" "$lg/nidara-material-v1-protocol.c" \
+        -I"$lg" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-layer-glass-probe
     # The title-bar probe (an app that leaves its decorations to Hyalo, render/title_bar.rs).
     local tb="$REPO/build/tb"
     mkdir -p "$tb"
@@ -198,7 +217,8 @@ phase_boot() {
     # before the bus starts: xdg-desktop-portal, started by it, picks nidara-portals.conf by it.
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
         XDG_CURRENT_DESKTOP=Nidara \
-        NK_REAL_GATES="${NK_REAL_GATES:-true}" \
+        NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
+        HYALO_ANIMATION_CHECKS="${HYALO_ANIMATION_CHECKS:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
 
@@ -216,9 +236,9 @@ phase_run() {
         [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
         [ -n "$hyalo_pid" ] && kill "$hyalo_pid" 2>/dev/null || true
         cp -f /tmp/hyalo/*.png /tmp/hyalo/*.log /tmp/hyalo/*.json "$OUT"/ 2>/dev/null || true
-        # A check's own screenshots (its *_LOG directory), named after it: what a pixel check
-        # saw is the first thing to look at when it fails.
-        for f in /tmp/hyalo/*/*.png; do
+        # A check's own screenshots and logs (its *_LOG directory), named after it: what a pixel
+        # check saw, and what it polled, are the first things to look at when it fails.
+        for f in /tmp/hyalo/*/*.png /tmp/hyalo/*/*.log; do
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
         if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi
@@ -644,21 +664,35 @@ PY
         || { log "FAIL: window controls"; cat /tmp/hyalo/window-controls.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "window controls OK ($(grep -c '^ok' /tmp/hyalo/window-controls.log) steps: placed, pointer, maximize, side, buttons, rule, close)"
+    # The controls on the shell's glass (toolkit/PHASE1.md D7), read from the installed token
+    # export: the header blurred inside the capsule, the ink decided by what is under it; the
+    # controls (glass = false) show the header sharp through it and keep white glyphs.
+    CONTROLS_GLASS_LOG=/tmp/hyalo/controls-glass python "$REPO/scripts/ci/hyalo-controls-glass-check.py" >/tmp/hyalo/controls-glass.log 2>&1 \
+        || { log "FAIL: controls glass"; cat /tmp/hyalo/controls-glass.log; exit 1; }
+    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 3, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 3 controls caught)"
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
-    MINIMIZE_LOG=/tmp/hyalo/minimize "$REPO/scripts/ci/hyalo-minimize-check.sh" >/tmp/hyalo/minimize.log 2>&1 \
-        || { log "FAIL: minimize"; cat /tmp/hyalo/minimize.log; exit 1; }
-    nidara-hyalo msg do workspace 1 >/dev/null
-    log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
+    if animations; then
+        MINIMIZE_LOG=/tmp/hyalo/minimize "$REPO/scripts/ci/hyalo-minimize-check.sh" >/tmp/hyalo/minimize.log 2>&1 \
+            || { log "FAIL: minimize"; cat /tmp/hyalo/minimize.log; exit 1; }
+        nidara-hyalo msg do workspace 1 >/dev/null
+        log "minimize OK ($(grep -c '^ok' /tmp/hyalo/minimize.log) steps: button, dialog, hidden, place, drawn, back, own request, tiling, reduce motion, buttons)"
+    else
+        log "minimize SKIPPED on a PR: an animation check, nightly only (HYALO_ANIMATION_CHECKS)"
+    fi
     # Opening and closing (#684): a window grows out of its middle and fades in; closing — its
     # window destroyed by its app, or the app killed — a picture of it shrinks and fades where
     # it was; reduce motion and a rule's animate = false take both away; another workspace
     # slides in sideways. Pixels.
-    MOTION_LOG=/tmp/hyalo/motion "$REPO/scripts/ci/hyalo-motion-check.sh" >/tmp/hyalo/motion.log 2>&1 \
-        || { log "FAIL: motion"; cat /tmp/hyalo/motion.log; exit 1; }
-    nidara-hyalo msg do workspace 1 >/dev/null
-    log "motion OK ($(grep -c '^ok' /tmp/hyalo/motion.log) steps: opens, closes, killed + reduce motion, rule, workspace slide, back at once)"
+    if animations; then
+        MOTION_LOG=/tmp/hyalo/motion "$REPO/scripts/ci/hyalo-motion-check.sh" >/tmp/hyalo/motion.log 2>&1 \
+            || { log "FAIL: motion"; cat /tmp/hyalo/motion.log; exit 1; }
+        nidara-hyalo msg do workspace 1 >/dev/null
+        log "motion OK ($(grep -c '^ok' /tmp/hyalo/motion.log) steps: opens, closes, killed + reduce motion, rule, workspace slide, back at once)"
+    else
+        log "motion SKIPPED on a PR: an animation check, nightly only (HYALO_ANIMATION_CHECKS)"
+    fi
     # Hyalo's title bar (#708 point 5): an app that asks gets it, one piece with its top row
     # (the colour measured on screen, dark ink on light), the pointer Hyalo's, dragged to move,
     # a double click to maximize, gone and back as the app switches its frame, close in it.
@@ -696,12 +730,25 @@ PY
     # Layers Hyalo animates for their app (#818, test 5 of the toolkit's phase 0): they move
     # while the app is blocked, a click reaches a layer where it is seen and not where it ends,
     # and the app is told when each transition is done.
-    LAYER_MOTION_LOG=/tmp/hyalo/layer-motion python "$REPO/scripts/ci/hyalo-layer-motion-check.py" >/tmp/hyalo/layer-motion.log 2>&1 \
-        || { log "FAIL: layer motion"; cat /tmp/hyalo/layer-motion.log; exit 1; }
-    log "layer motion OK ($(grep -c '^ok' /tmp/hyalo/layer-motion.log) of 4: placed, moved while blocked, clicks where seen, done)"
-    NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
-        || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }
-    log "native layer motion OK (scales 1/1.25, blocked client, click coordinates, retarget, fault controls)"
+    if animations; then
+        LAYER_MOTION_LOG=/tmp/hyalo/layer-motion python "$REPO/scripts/ci/hyalo-layer-motion-check.py" >/tmp/hyalo/layer-motion.log 2>&1 \
+            || { log "FAIL: layer motion"; cat /tmp/hyalo/layer-motion.log; exit 1; }
+        log "layer motion OK ($(grep -c '^ok' /tmp/hyalo/layer-motion.log) of 4: placed, moved while blocked, clicks where seen, done)"
+    else
+        log "layer motion SKIPPED on a PR: an animation check, nightly only (HYALO_ANIMATION_CHECKS)"
+    fi
+    # A layer's own glass (toolkit/PHASE1.md D7): the window's content under it comes out
+    # blurred, and a graded pane's blur falls from its top to its bottom; each with its control.
+    LAYER_GLASS_LOG=/tmp/hyalo/layer-glass python "$REPO/scripts/ci/hyalo-layer-glass-check.py" >/tmp/hyalo/layer-glass.log 2>&1 \
+        || { log "FAIL: layer glass"; cat /tmp/hyalo/layer-glass.log; exit 1; }
+    log "layer glass OK ($(grep -c '^ok' /tmp/hyalo/layer-glass.log) of 2, $(grep -c '^CAUGHT' /tmp/hyalo/layer-glass.log) of 2 controls caught)"
+    if animations; then
+        NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
+            || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }
+        log "native layer motion OK (scales 1/1.25, blocked client, click coordinates, retarget, fault controls)"
+    else
+        log "native layer motion SKIPPED on a PR: an animation check, nightly only (HYALO_ANIMATION_CHECKS)"
+    fi
     # The cursor (#682): the shell's theme survives a reload. Set only in memory, the next
     # Settings change (a keyboard layout) put the file's cursor back (found 2026-10-02).
     nidara-hyalo msg do "set-cursor Adwaita 32" >/dev/null
@@ -794,6 +841,12 @@ PY
         echo "Real fcitx5 and Orca gates skipped: nothing they use changed (scripts/ci/ci-scope.sh)." > "$OUT/real-gates-skipped.md"
     else
         local real_status=0
+        # The baseline alone (scale 1, no controls) unless the checks or their faults changed
+        # (ci-scope `full`); the nightly run has everything.
+        if [ "${NK_REAL_FULL:-true}" = false ]; then
+            export NK_FCITX5_SCALES=1 NK_REAL_CONTROLS=0
+            log "real IME/Orca: baseline at scale 1 only, controls and scale 1.25 left to the nightly run (ci-scope full=false)"
+        fi
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
             > /tmp/hyalo/nk-fcitx5.log 2>&1 || real_status=1
         cat /tmp/hyalo/nk-fcitx5.log

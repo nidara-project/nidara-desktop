@@ -396,6 +396,8 @@ pub fn translucent(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f6
 pub struct Look {
     pub rounded: bool,
     pub backdrop: bool,
+    /// Translucent without a declared background, it blurs at the user's level (a rule).
+    pub follow_level: bool,
 }
 
 /// The size of a surface's buffer as it is shown, logical.
@@ -414,15 +416,15 @@ pub fn fits(window: &Window) -> bool {
 }
 
 /// What `cfg` and the window's rules make of it.
-pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, cfg: &WindowsConfig) -> Look {
+pub fn look(window: &Window, fullscreen: bool, rule_rounded: bool, rule_backdrop: bool, follow_level: bool, cfg: &WindowsConfig) -> Look {
     let Some(surface) = crate::wm::surface_of(window) else { return Look::default() };
     let geo = window.geometry();
     // Every window, its own frame drawn or not (owner, 2026-10-04: "no window keeps square
     // corners"): one that draws a frame with a shadow margin is cut to its box (`push`).
     let rounded = rule_rounded && !fullscreen && cfg.rounding > 0.0;
     let radius = if rounded { cfg.rounding } else { 0.0 };
-    let backdrop = rule_backdrop && cfg.backdrop.enabled && blur_of(&surface, geo, radius, cfg).is_some();
-    Look { rounded, backdrop }
+    let backdrop = rule_backdrop && cfg.backdrop.enabled && blur_of(&surface, geo, radius, follow_level, cfg).is_some();
+    Look { rounded, backdrop, follow_level }
 }
 
 /// The level of window background `surface` shows (toolkit/PHASE1.md D6): the one its app asked
@@ -433,13 +435,13 @@ pub fn background_level(surface: &WlSurface, cfg: &WindowsConfig) -> Option<crat
 }
 
 /// The blur under a window, kawase offset (logical px) and passes; None: it lets nothing
-/// through. One of ours: its background's level; any other that is translucent: the translucent
-/// level's — the tinted blur is for the tint, not for seeing through (owner, 2026-10-18).
-fn blur_of(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f64, cfg: &WindowsConfig) -> Option<(f64, u32)> {
+/// through. One that declared a background: its level's; any other that is translucent:
+/// `BackgroundConfig::undeclared` (the translucent level's, or the user's if a rule says so).
+fn blur_of(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f64, follow_level: bool, cfg: &WindowsConfig) -> Option<(f64, u32)> {
     let b = &cfg.background;
     let look = match background_level(surface, cfg) {
         Some(level) => b.look(level)?,
-        None if translucent(surface, geo, radius) => b.translucent,
+        None if translucent(surface, geo, radius) => b.undeclared(follow_level),
         None => return None,
     };
     (look.passes > 0).then_some((look.size, look.passes))
@@ -485,16 +487,36 @@ pub fn push<R: HyaloRenderer>(
         let offset = (geometry_loc + offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
         super::push_tree(out, renderer, popup.wl_surface(), location + offset, scale, output_size, Kind::Unspecified, when);
     }
-    // Its controls: over its own surfaces, under its popups (a menu opened from the header
-    // covers them).
-    if let Some((rect, controls)) = controls {
-        out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls)));
-    }
     let radius = if look.rounded { cfg.rounding * scale.x } else { 0.0 };
     // With Hyalo's title bar on top, the window's box — its corners, its backdrop — is the
     // bar and the client together: the client's top corners are inside, not cut.
     let bar_px = title_bar.as_ref().map_or(0.0, |t| t.height * scale.x);
     let frame = Rectangle::new((geo.loc.x, geo.loc.y - bar_px).into(), (geo.size.w, geo.size.h + bar_px).into());
+    // Its controls: over its own surfaces, under its popups (a menu opened from the header
+    // covers them). On the shell's glass, right below their capsule, whose backdrop is what is
+    // under them — the app's header, or Hyalo's title bar, which then leaves the capsule to it:
+    // one look for the controls of every window.
+    let mut title_bar = title_bar;
+    let apart = title_bar.as_ref().and_then(|t| t.controls);
+    if let Some((rect, controls)) = controls.or(apart) {
+        let (glass, dark, shadow) = if cfg.controls.glass {
+            super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency, controls.moving)
+        } else {
+            (Vec::new(), false, None)
+        };
+        // On the glass, its ink is the glass's; on the plain capsule, the app's (`set_ink`) —
+        // or, in Hyalo's title bar, the bar's own pass draws it as before.
+        let under = !glass.is_empty();
+        if under || apart.is_none() {
+            let controls = if under { super::controls::Controls { dark, ..controls } } else { controls };
+            out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, under)));
+            out.extend(glass.into_iter().map(OutputElement::Glass));
+            out.extend(shadow.map(OutputElement::Scrim));
+            if let Some(t) = title_bar.as_mut() {
+                t.controls_apart = true;
+            }
+        }
+    }
     // A client-side frame with a shadow margin (Chrome's web apps, Telegram) is cut to its box,
     // the margin dropped, and its corners to the window's — as every desktop rounds a web page
     // (owner, 2026-10-04, over a ring of Hyalo's own: it stretched the client's edges, and what
@@ -508,16 +530,8 @@ pub fn push<R: HyaloRenderer>(
     match &program {
         Some(program) => {
             // Layers a client handed Hyalo to animate are drawn where they are shown
-            // (protocols/layers.rs), each at its own scale.
-            let elements: Vec<AtScale<WaylandSurfaceRenderElement<R>>> =
-                crate::protocols::layers::render_tree(renderer, &surface, location, scale, Kind::Unspecified, when)
-                    .unwrap_or_else(|| {
-                        render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
-                            .into_iter()
-                            .map(|inner| AtScale { inner, scale })
-                            .collect()
-                    });
-            out.extend(elements.into_iter().map(|inner| {
+            // (protocols/layers.rs), each at its own scale, each with its own glass below it.
+            let rounded = |inner| {
                 OutputElement::Rounded(RoundedElement {
                     inner,
                     program: program.clone(),
@@ -526,7 +540,15 @@ pub fn push<R: HyaloRenderer>(
                     exponent: cfg.rounding_power,
                     clip,
                 })
-            }));
+            };
+            match crate::protocols::layers::render_tree(renderer, &surface, location, scale, output_size, Kind::Unspecified, when) {
+                Some(layered) => out.extend(layered.interleave(rounded, OutputElement::Glass)),
+                None => out.extend(
+                    render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
+                        .into_iter()
+                        .map(|inner| rounded(AtScale { inner, scale })),
+                ),
+            }
             super::push_material(out, &surface, location, scale, output_size, when);
         }
         None => super::push_tree(out, renderer, &surface, location, scale, output_size, Kind::ScanoutCandidate, when),
@@ -564,7 +586,7 @@ pub fn push<R: HyaloRenderer>(
         .then(|| super::decor::DecorElement::new(&surface, geo, if look.rounded { radius } else { 0.0 }, decor, fill, cfg, scale))
         .flatten();
     out.extend(decor.map(OutputElement::Decor));
-    let blur = look.backdrop.then(|| blur_of(&surface, window.geometry(), if look.rounded { radius } else { 0.0 }, cfg)).flatten();
+    let blur = look.backdrop.then(|| blur_of(&surface, window.geometry(), if look.rounded { radius } else { 0.0 }, look.follow_level, cfg)).flatten();
     if let Some((size, passes)) = blur {
         let b = &cfg.backdrop;
         let radius = if look.rounded { radius } else { 0.0 };

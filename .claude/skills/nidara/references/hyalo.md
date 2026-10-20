@@ -823,7 +823,10 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   after (`glass_gl::Finish`; `NEUTRAL` for the shell's glass, which has its own saturation and
   tint). No tint of its own: a window's translucent background is its tint. How far it blurs is
   the window background's LEVEL (`[windows.background]`, below); another app's translucent window
-  always gets the `translucent` level's blur. No switch in Settings any more (owner, 2026-10-18: a
+  gets the `translucent` level's blur — except one a rule gives `follow_level = true`: the
+  shipped `nidara-apps` rule (each of our GTK windows by its app id — `hypr-rule-check.mjs` wants literals that exist) does it for our GTK apps, which
+  paint their opacity at the user's level but cannot declare it, so in Tinted they used to get
+  the light translucent blur (owner saw it live 2026-10-19). `BackgroundConfig::undeclared`. No switch in Settings any more (owner, 2026-10-18: a
   window that lets anything through is blurred); `[windows.backdrop] enabled = false` still turns
   it off everywhere, and a rule's `backdrop = false` for one app.
 - **A window's declared background** (toolkit/PHASE1.md D6, owner 2026-10-18): a toolkit window
@@ -838,8 +841,13 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   their opacity with). Such a window is translucent by its level, not by its opaque region
   (`look`, `blur_of`). It is NOT glass: no tone, no shell blur. GTK windows keep painting
   `--nidara-bg` themselves (frozen kit).
-- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`) and
-  its `background` (`color`, `level`, `own_level`, `opacity`) when it declared one.
+- What the IPC says: `nidara-hyalo msg windows` → each window's `look` (`rounded`, `backdrop`,
+  `follow_level`) and
+  its `background` (`color`, `level`, `own_level`, `opacity`) when it declared one; and its
+  `layers` (`nidara-layers-v1`, when it has any): each one's box as shown now relative to the
+  window's root surface (`x`, `y`, `width`, `height`, logical, its `scale` applied), `opacity`,
+  and `glass_shapes` of its own material (what D7's checks read; `nk-layer-motion-check.py`
+  asserts A and B there, and none with client-side motion).
 - **Who draws the title bar** (`shell/decoration.rs`, 2026-10-03): Hyalo, as Hyprland did —
   `xdg-decoration` and KDE's `server-decoration` both answer server-side, by default, on request
   and on unset, whatever the client asked (Hyprland's `XDGDecoration.cpp`/`ServerDecorationKDE.cpp`),
@@ -960,6 +968,54 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   edge, the hovered button's fill, one glyph a button (`count`, 1 to 3) as distance fields, all anti-aliased at the
   output's scale), pushed over the window's own surfaces and under its popups; never on a
   fullscreen window. Hover and press live in `wm.controls_hover`.
+- **On the shell's glass** (toolkit/PHASE1.md D7, owner 2026-10-19: "the button's look is the
+  glass's properties, as on the top bar; light or dark backdrop is the glass's, not the app's").
+  Under the capsule over an app's header Hyalo draws the bar capsules' glass, the same in every
+  respect: a `control` pane — refraction, rim, lensing, tone, ink tone and the ink's thresholds
+  read from the token export (`render/glass_tokens.rs`: `tokens/glass.json`, installed under
+  `/usr/share/nidara/settings-data/`, looked at again every 2 s; `HYALO_GLASS_TOKENS` points
+  elsewhere), never a copy of the numbers in Rust — on the shell's face (dark, whatever the
+  mode, as the bar). A material Hyalo makes itself (`controls::glass`), drawn by the same
+  `GlassElement` as a client's (`for_material`, `Whose::Hyalo`: its ids apart from the app's
+  own material on that surface), right below the capsule, reading only inside the window
+  (`within`: the desktop above a capsule 12 px from the top darkened what it measured to 0.32,
+  under the 0.35 that turns the ink). Its SHADOW is the piece's law too, but a shadow is not
+  the glass's to draw: it is the scrim pass's (`scrim::scrims_of`, the same as a client's
+  `scrims_for`), one `ScrimElement` right below the glass with a memo of its own (`ShadowMemo`,
+  apart from the window's own material's). A `shadow` on the shape alone draws nothing — that
+  was #884, seen identical with and without it (2026-10-20). **The ink is measured, never the app's**: one ink box, the
+  capsule; the result comes back with `Whose::Hyalo` (`Measured::whose`) to
+  `controls::ink_measured`, the shell's rule with its hysteresis (`material::next_ink`) — dark
+  glyphs and the ink tone over a light header, white over a dark one. The app's `set_ink` only
+  says the ink of the PLAIN capsule: `[windows.controls] glass = false` (the A/B, and the
+  check's control), or no export. The shader draws only the state and the glyphs over the glass
+  (`glass_under`). **The same in Hyalo's own title bar** (owner: "it has to be the same as in
+  our apps"): with glass, its capsule is drawn apart — the `ControlsElement` and the glass in
+  front of the bar, whose own pass leaves the capsule out (`TitleBar::controls_apart`) but still
+  keeps its room for the title — so the glass's backdrop is the bar and its ink is measured on
+  it, never the bar pass's own colour guess. CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe with `HYALO_PROBE_STRIPES`: header
+  blurred inside the capsule, sharp beside it; `HYALO_PROBE_HEADER`: dark glyphs over f0f0f0,
+  white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
+  light glass, brighter than the bar, and dark glyphs; `glass = false` must fail all three).
+  `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
+- **A capture says where moving windows were in it** (with `HYALO_CONTROL`): `<shot>.capture.json`
+  carries `drawn` — each window drawn at a place (into the dock, out of it), `{id: [x, y, w, h]}`
+  at the capture's own moment — and `opening`, each window opening as its picture is drawn in
+  it, `{id: {box, scale, alpha}}` (`hyalo-motion-check.sh` picks its "near the edge" point from
+  it, clear of the picture and its 20 px shadow). A check that needs a moving window's position in a picture reads
+  it there, never from `msg windows` polls before and after the capture: on CI's software GL a
+  capture is slow enough that the two polls lie 63 px apart (`hyalo-minimize-check.sh`
+  `over_dock`). And it reads a picture's pixels (a gjs process each) AFTER watching anything
+  move, not while the animation runs.
+- **In flight the ink is kept** (`Controls::moving`, the window drawn at a `place`: into the
+  dock, out of it, to another workspace): the glass is drawn with the ink it had and measures
+  nothing (`GlassElement::measuring_nothing`) — what passes under a capsule on its way is not its
+  header, and its ink must not flicker; and a measurement every frame of a moving capsule is a
+  readback and a redraw each (on the CI's software GL it slowed the minimize check's captures
+  until it missed the window crossing the dock).
+- **A capture collects the ink it measured** (`capture_output` arms the poll as a frame does): a
+  screenshot draws the glass too. Where no frame is drawn — the headless cage harness — only
+  captures measure, so a check takes one capture before the one it reads.
 - **Input**: `Hyalo::controls_under(pos)` walks the windows in drawing order (a layer or a window
   over the controls covers them); `surface_under` returns NONE there, so the app gets a leave and
   never the pointer over its controls; `update_controls_hover` runs after every pointer motion and
@@ -1285,10 +1341,33 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
 - **A destroyed layer object leaves its entry** in the surface's data map (a data map cannot
   drop one): `alive` turns false and the surface is a plain subsurface again. A new
   `get_layer` on it renews the entry.
-- Not drawn yet: a layer's OWN glass (only the root's is; owed in phase 1 for the native window's
-  sidebar and title bar, `toolkit/PHASE1.md` D7, its backdrop including the parent's content), the drawn region (#761) of a
-  layer-shell surface while it holds a layer (it is drawn whole), and capture shows layers at
-  their presented place like the screen. Not offered to sandboxed clients, like the material.
+- **A layer's own glass** (`toolkit/PHASE1.md` D7: the native window's sidebar and title bar).
+  `render_tree` returns a `LayeredTree`: the surfaces, and each layer's `GlassElement`s with the
+  index of the layer they lie right below; `interleave` puts them in the frame front to back. So
+  a layer's glass is a framebuffer effect like any other, and its backdrop is everything drawn
+  behind that layer — the window's own content, its background, the desktop — re-captured only
+  when that changes (scrolling the content re-blurs; the layers are not repainted). Two rules:
+  its glass reads only inside the root surface's box (`GlassElement::within`: the window's edge
+  repeats past it, measured necessary — without it the sidebar's and the title bar's outer edges
+  darkened with the desktop beside the window), and a layer fading in or out FORMS its glass
+  (`forming`, #764). Made after the walk: the walk holds each surface's states locked, and
+  `for_surface` takes them again.
+- **A graded blur** (`set_shape_grade(top, bottom)`, inside material v1 — lib + Hyalo together):
+  a shape's blur strength from its top edge to its bottom edge, 0..1. One blur cannot be graded,
+  so the shader (`graded` in `glass_final.glsl`) walks the capture's four as a ladder — sharp
+  (level 0), soft, middle, full (`BlurMix`'s copies) — and mixes the two rungs either side of
+  each pixel's strength. A graded shape makes its glass capture those copies even where the
+  client paints the glass (`soft` in `for_surface`); a window's backdrop is never graded. The
+  rungs are equally spaced in strength; the curve and the numbers are the owner's to decide
+  live (D7: "the owner decides live (A/B)").
+- CI: `scripts/ci/hyalo-layer-glass-check.py` + `hyalo-layer-glass-probe.c` in the Hyalo smoke —
+  4 px columns in a window under a transparent sidebar layer with a blur and a title-bar layer
+  with a graded blur, contrast measured along rows (≈ 127 sharp, under 40 blurred); controls
+  `--no-material` (the sidebar's columns stay sharp) and `--uniform` (the title bar as blurred
+  at its bottom as at its top) must each fail their claim.
+- Not drawn yet: the drawn region (#761) of a layer-shell surface while it holds a layer (it is
+  drawn whole); capture shows layers at their presented place like the screen. Not offered to
+  sandboxed clients, like the material.
 - ⚠️ Locally, the headless `cage` harness draws NO frames with this Mesa (`msg stats` →
   `frames_drawn: 0`; the winit surface fails with `BAD_ALLOC` at start), so `done` — sent after a
   frame — never comes there, while screenshots (drawn on demand) and clicks work. The tty smoke
@@ -2283,7 +2362,10 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
 - The tty backend — the one that matters — is tested in the VM (maintainer harness), as a session
   from the greeter or from a VT; QEMU's `virtio-gpu,max_outputs=2` gives two outputs.
 - On real hardware: `hyalo/scripts/install-preview.sh` installs the session on a dev install
-  (the package cannot go there), and `measure-session.sh`, run once per session, gives the
+  (the package cannot go there) — with the glass token export, which Hyalo's own glass needs
+  and only the package otherwise ships; it builds the checkout it is run from, so it warns
+  when that checkout is behind main (2026-10-20: one from before #884 installed controls
+  without their glass, and nothing said so) — and `measure-session.sh`, run once per session, gives the
   like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
   step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,

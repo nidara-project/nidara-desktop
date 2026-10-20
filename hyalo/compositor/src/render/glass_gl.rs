@@ -385,6 +385,9 @@ pub struct Shape {
     pub fusion: Option<(u32, f64)>,
     /// How far its fusion group is drawn towards its envelope (`set_fusion_merge`), 0..1.
     pub fusion_merge: f64,
+    /// Its blur's strength at its top and bottom edges (`set_shape_grade`): [1, 1] is its whole
+    /// blur everywhere.
+    pub grade: [f32; 2],
 }
 
 impl Shape {
@@ -1284,6 +1287,10 @@ pub unsafe fn draw(
             gl.Uniform4fv(p.loc(gl, c"ambient"), 1, s.tone.ambient.as_ptr());
             let mix = if cache.mixed { s.blur_mix } else { BlurMix::FULL };
             gl.Uniform3f(p.loc(gl, c"blur_mix"), mix[0], mix[1], mix[2]);
+            // A graded shape walks the capture's blurs from sharp to full (the shader's `graded`);
+            // without them (a window's backdrop) it is not graded.
+            let grade = if cache.mixed { s.grade } else { [1.0, 1.0] };
+            gl.Uniform2f(p.loc(gl, c"grade"), grade[0], grade[1]);
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -1312,6 +1319,7 @@ struct Readback {
     /// The ink group of each box, in texel order.
     ids: Vec<u32>,
     surface: Weak<WlSurface>,
+    whose: super::glass::Whose,
 }
 
 /// The measurements in flight in one GL context (its user data).
@@ -1348,6 +1356,7 @@ pub unsafe fn measure_ink(
     boxes: &[InkBox],
     saturation: f32,
     surface: &Weak<WlSurface>,
+    whose: super::glass::Whose,
 ) {
     if !cache.valid || cache.passes == 0 || boxes.is_empty() || !can_measure(gl) {
         return;
@@ -1448,6 +1457,7 @@ pub unsafe fn measure_ink(
             pbo,
             ids: boxes.iter().map(|b| b.id).collect(),
             surface: surface.clone(),
+            whose,
         });
         INK_ISSUED.with(|f| f.set(true));
         super::stats::count(|c| c.measures += 1);
@@ -1470,6 +1480,8 @@ pub unsafe fn measure_ink(
 /// boxes).
 pub struct Measured {
     pub surface: Weak<WlSurface>,
+    /// Whose glass was measured: the client's material, or Hyalo's own (the window controls').
+    pub whose: super::glass::Whose,
     pub ink: Vec<(u32, f32)>,
 }
 
@@ -1510,7 +1522,7 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
             gl.DeleteBuffers(1, &rb.pbo);
         }
         if !darkest.is_empty() {
-            out.push(Measured { surface: rb.surface, ink: darkest });
+            out.push(Measured { surface: rb.surface, whose: rb.whose, ink: darkest });
         }
     }
     let pending = !keep.is_empty();
@@ -1620,6 +1632,7 @@ mod tests {
     fn a_fusion_group_is_one_draw_where_its_first_member_was() {
         let shape = |fusion: Option<(u32, f64)>| Shape {
             fusion_merge: 0.0,
+            grade: [1.0, 1.0],
             index: 0,
             rect: Rectangle::new((0.0, 0.0).into(), (10.0, 10.0).into()),
             radius: 5.0,
@@ -1661,6 +1674,7 @@ mod tests {
             px_scale: 1.0,
             fusion: Some((1, 4.0)),
             fusion_merge: 1.0,
+            grade: [1.0, 1.0],
         };
         // The island at rest: a capsule and a chip 8 px apart → one capsule over both.
         let capsule = shape(0.0, 100.0, 1.0, None);

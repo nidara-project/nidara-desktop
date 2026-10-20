@@ -789,9 +789,6 @@ sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/
 # screen sharing is xdg-desktop-portal-wlr with Nidara's picker (bin/nidara-share-chooser).
 sudo cp "$REPO_DIR/config/portal/nidara-portals.conf" /etc/xdg-desktop-portal/nidara-portals.conf
 sudo install -Dm644 "$REPO_DIR/config/portal/xdpw-nidara.conf" /etc/xdg/xdg-desktop-portal-wlr/Nidara
-pkill -f nidara-portal 2>/dev/null || true
-systemctl --user restart xdg-desktop-portal 2>/dev/null || true
-
 # System dconf defaults (icon theme, accent, colour scheme) — the same two files the
 # package installs, from the same generator, so a --dev machine is not the one place
 # where a new account starts on Adwaita and nidara-setup warns on every run.
@@ -807,6 +804,11 @@ sudo dconf update
 # editing config/gsettings/ — the shell reads the COMPILED schema, not the XML.
 sudo install -Dm644 -t /usr/share/glib-2.0/schemas "$REPO_DIR"/config/gsettings/*.gschema.xml
 sudo glib-compile-schemas /usr/share/glib-2.0/schemas
+# Only now restart the portals: restarting xdg-desktop-portal re-activates nidara-portal at
+# once, and one started before the schemas are compiled serves the OLD schema until it dies
+# (it is D-Bus activated, so it outlives a session restart — seen live 2026-10-19).
+pkill -f nidara-portal 2>/dev/null || true
+systemctl --user restart xdg-desktop-portal 2>/dev/null || true
 
 # fontconfig: per-language CJK variant. Arch's noto-fonts-cjk ships no
 # fontconfig rules and fontconfig's own 65-nonlatin.conf hardcodes the KR face,

@@ -279,6 +279,7 @@ impl Hyalo {
                         m.fullscreen == crate::wm::Fullscreen::Fullscreen,
                         m.rounded,
                         m.backdrop,
+                        m.follow_level,
                         &self.config.windows,
                     ),
                     glass: m.window.wl_surface().and_then(|s| crate::protocols::material::current(&s)).map(|m| super::WindowGlassInfo {
@@ -292,6 +293,7 @@ impl Hyalo {
                         let opacity = cfg.background.look(level).map_or(1.0, |l| l.opacity.clamp(0.0, 1.0));
                         Some(super::WindowBackgroundInfo { color, level, own_level: asked.is_some(), opacity })
                     }),
+                    layers: m.window.wl_surface().map(|s| crate::protocols::layers::infos(&s, std::time::Instant::now())).unwrap_or_default(),
                     title_bar: m.bar(),
                     controls: crate::protocols::window_controls::managed_rect(m, &self.config.windows.controls).map(|(r, _)| {
                         let origin = m.rect.loc.to_f64() - m.window.geometry().loc.to_f64();

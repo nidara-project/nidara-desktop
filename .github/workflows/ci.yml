@@ -52,8 +52,9 @@
 #     would leave the queue waiting for a check that never reports. Any doubt
 #     (no base, failed fetch, empty diff, scope itself failing) runs everything.
 #     It also decides `gates`: the Hyalo job's real fcitx5/Orca matrices (~35 of its
-#     ~47 min) run only when the change touches something they use — skipped only for
-#     areas listed as unrelated (the shell, bin/, session/…), so a new path runs them.
+#     ~45 min) run only when the change touches something they use (a list of what RUNS
+#     them: typing, focus, a11y, layers, the toolkit), and `full`: their controls and
+#     scale 1.25 only when the checks or their faults change. The nightly run has all.
 #     Logic and its self-test in scripts/ci/ci-scope.sh.
 #   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
 #     runner, then in a privileged Arch container install ONLY official Arch
@@ -149,6 +150,7 @@ jobs:
     outputs:
       code: ${{ steps.scope.outputs.code }}
       gates: ${{ steps.scope.outputs.gates }}
+      full: ${{ steps.scope.outputs.full }}
     steps:
       - uses: actions/checkout@v4
       - name: The classifier's own controls
@@ -176,7 +178,8 @@ jobs:
         run: npx --yes sass@1.97.3 --no-charset ui/settings/style.scss /tmp/settings.css
       # The tokens the native Settings paints with (toolkit/PHASE1.md D4), computed by the
       # same engine and sheets as this desktop: every token the Settings/kit sheets use must
-      # exist in every one of the engine's input sets; a copy with one dropped must fail.
+      # exist in every one of the engine's input sets; a copy with one dropped must fail. The
+      # glass (D7) the same: a copy with `panel` dropped from one variant must fail.
       - name: Settings token export is complete (must succeed)
         run: |
           node --experimental-strip-types scripts/export-tokens.mjs /tmp/settings-data
@@ -185,6 +188,11 @@ jobs:
           python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['sets'][0]['tokens'].pop('--nidara-surface'); json.dump(d, open(p, 'w'))" /tmp/settings-tokens-control/tokens/colors.json
           if python3 scripts/ci/settings-tokens-check.py /tmp/settings-tokens-control; then
             echo "::error::settings-tokens-check passed an export with a used token missing"; exit 1
+          fi
+          rm -rf /tmp/settings-glass-control && cp -r /tmp/settings-data /tmp/settings-glass-control
+          python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['variants'][0]['pieces'].pop('panel'); json.dump(d, open(p, 'w'))" /tmp/settings-glass-control/tokens/glass.json
+          if python3 scripts/ci/settings-tokens-check.py /tmp/settings-glass-control; then
+            echo "::error::settings-tokens-check passed a glass export with no panel"; exit 1
           fi
       # The kit's ONE sheet (tech-debt #108 phase 2): the shell, greeter and lock
       # load it at runtime ahead of their own, so it is no longer compiled as part
@@ -523,10 +531,7 @@ jobs:
       # runner a VIRTUAL one: the kernel's vkms module. The Arch container
       # then gets /dev/dri via --privileged.
       - name: Load vkms (virtual KMS device)
-        run: |
-          scripts/ci/apt.sh install "linux-modules-extra-$(uname -r)"
-          sudo modprobe vkms
-          ls -l /dev/dri
+        run: scripts/ci/load-vkms.sh
       # No dependency cache any more (2026-08-18): the smoke used to build the
       # pinned Astal/AGS stack from source and cache the result as a tarball.
       # Nothing is built from source here now — every package comes from Arch's
@@ -564,10 +569,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Load vkms (virtual KMS device)
-        run: |
-          scripts/ci/apt.sh install "linux-modules-extra-$(uname -r)"
-          sudo modprobe vkms
-          ls -l /dev/dri
+        run: scripts/ci/load-vkms.sh
       # The Rust build is most of this job (≈ 6 of its 9 minutes on 2026-10-05: release 3m43s,
       # clippy 52s, tests 1m15s) and it was cold every time. Cargo's registry and target dir
       # live under hyalo/target (git-ignored) and are cached between runs. A PR can only
@@ -594,6 +596,11 @@ jobs:
           # The real fcitx5/Orca matrices (~35 min) only when the change touches what they
           # use; empty (scope failed) counts as true. See scripts/ci/ci-scope.sh.
           NK_REAL_GATES: ${{ needs.scope.outputs.gates || 'true' }}
+          # Their controls and second scale only when the checks or their faults change.
+          NK_REAL_FULL: ${{ needs.scope.outputs.full || 'true' }}
+          # The checks that watch an animation on screen race the runner's software GL: the
+          # nightly run (and a manual one) has them, a PR does not (scripts/ci/hyalo-smoke.sh).
+          HYALO_ANIMATION_CHECKS: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           # CARGO_HOME inside the cached dir; no incremental state and no debuginfo in the
           # dev/test profiles (CI never debugs them): a cache several times smaller.
@@ -601,7 +608,7 @@ jobs:
             -v "$PWD:/repo" \
             -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
             -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
-            -e NK_REAL_GATES \
+            -e NK_REAL_GATES -e NK_REAL_FULL -e HYALO_ANIMATION_CHECKS \
             archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
       - name: Upload screenshots + logs
         if: always()

@@ -260,9 +260,25 @@ vec3 sharp_at(vec2 out_offset) {
     vec2 fb = v_fb + out_to_fb * out_offset;
     return texture2D(sharp, clamp((fb - region_fb.xy) / sharp_size, 0.5 / sharp_size, 1.0 - 0.5 / sharp_size)).rgb;
 }
+// ── A graded blur (set_shape_grade, toolkit/PHASE1.md D7) ───────────────────
+// The blur's strength falls (or rises) linearly from the shape's top edge to its bottom edge:
+// `grade` is it at each, 0..1. One blur cannot be graded, so the capture's four are walked as a
+// ladder — the sharp copy, the soft one, the middle one, the full one, each a step further
+// reach — and each pixel mixes the two rungs either side of its strength: a progressive blur,
+// sharp where the strength is 0. (1, 1): the shape's own blur, as `blurred` mixes it.
+uniform vec2 grade;
+vec3 graded(vec2 out_offset) {
+    if (grade.x >= 0.999 && grade.y >= 0.999) return blurred(out_offset);
+    float t = clamp((v_out.y - rect.y) / max(rect.w, 1.0), 0.0, 1.0);
+    float g = clamp(mix(grade.x, grade.y, t), 0.0, 1.0) * 3.0;
+    vec2 at = to_src(v_fb + out_to_fb * out_offset);
+    if (g < 1.0) return mix(sharp_at(out_offset), up_of(soft_tex, src_size, src_used, soft_offset, at).rgb, g);
+    if (g < 2.0) return mix(up_of(soft_tex, src_size, src_used, soft_offset, at).rgb, up_of(mid_tex, src_size, src_used, offset, at).rgb, g - 1.0);
+    return mix(up_of(mid_tex, src_size, src_used, offset, at).rgb, up(at).rgb, g - 2.0);
+}
 // The backdrop as glass formed `formed` of the way sees it.
 vec3 formed_backdrop(vec2 out_offset, float formed) {
-    vec3 b = blurred(out_offset);
+    vec3 b = graded(out_offset);
     float w = (1.0 - sharp_mix) * clamp(formed / max(blur_formed, 1e-4), 0.0, 1.0);
     return w >= 0.999 ? b : mix(sharp_at(out_offset), b, w);
 }
