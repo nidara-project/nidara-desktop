@@ -824,8 +824,12 @@ PY
     cat /tmp/hyalo/nk-phase0.log
 
     # Test 3: the direct AT-SPI provider, consumed through libatspi like Orca.
-    # Every oracle has a negative control.
-    NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-a11y-check.py" \
+    # Every oracle has a negative control; the controls (~2 of the check's ~3 min) run when
+    # the check or the test window's faults change and nightly (ci-scope full), not on
+    # every PR.
+    a11y_controls=1
+    [ "${NK_REAL_FULL:-true}" = false ] && { a11y_controls=0; log "AT-SPI controls left to the nightly run (ci-scope full=false)"; }
+    NK_A11Y_CONTROLS=$a11y_controls NK_PHASE0_LOG=/tmp/hyalo/nk-phase0 python "$REPO/scripts/ci/nk-a11y-check.py" \
         > /tmp/hyalo/nk-a11y.log 2>&1 \
         || { cat /tmp/hyalo/nk-a11y.log; exit 1; }
     cat /tmp/hyalo/nk-a11y.log
