@@ -143,19 +143,21 @@ def main():
                     native.wait(lambda: 'A11Y_FAULT_APPLIED text-extents' in (p.log / 'client.log').read_text(),
                                 'wrong extents published to provider')
             action()
-            # Fixed settling interval for both positive and absent speech. Do not
-            # pass a negative assertion before asynchronous output has arrived.
-            end = time.monotonic() + 1
+            # Await the actual speech, rather than clipping a correct utterance
+            # while software-GL CI is still generating it. Send the action once:
+            # a missing utterance still fails the identical predicate at the deadline.
+            # Keep the full settling interval for absence (password privacy).
+            started = time.monotonic()
+            end = started + 8
             while time.monotonic() < end:
                 while GLib.MainContext.default().pending():
                     GLib.MainContext.default().iteration(False)
-                if target and label != 'Password silence' and label != target:
-                    with debug.open('rb') as stream:
-                        stream.seek(before)
-                        current = stream.read().decode(errors='replace')
-                    spoken = ' '.join(re.findall(r"SPEECH OUTPUT: '(.*?)'(?=\{)", current)).lower()
-                    if time.monotonic() >= end - .75 and all(test(spoken) for test in predicates):
-                        break
+                with debug.open('rb') as stream:
+                    stream.seek(before)
+                    current = stream.read().decode(errors='replace')
+                spoken = ' '.join(re.findall(r"SPEECH OUTPUT: '(.*?)'(?=\{)", current)).lower()
+                if time.monotonic() >= started + 1 and all(test(spoken) for test in predicates):
+                    break
                 time.sleep(.01)
             with debug.open('rb') as stream:
                 stream.seek(before)
@@ -250,7 +252,12 @@ def main():
         p.key(15)
         speech_step('Dialog saved and restored', lambda: p.key(28),
                     [lambda t: 'review' in t, lambda t: 'button' in t])
+        reopened = debug.stat().st_size
         p.key(28)
+        native.wait(lambda: 'correct error dialog' in ' '.join(re.findall(
+            r"SPEECH OUTPUT: '(.*?)'(?=\{)",
+            debug.read_bytes()[reopened:].decode(errors='replace'))).lower(),
+            'Orca announced reopened dialog before Escape')
         speech_step('Dialog escaped and restored', lambda: p.key(1),
                     [lambda t: 'review' in t, lambda t: 'button' in t])
         tab_echo = any('tab' in r.get('speech', []) for r in p.rows if r['step'].startswith('Tab '))

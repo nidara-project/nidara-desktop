@@ -1895,6 +1895,10 @@ caller alone. Hyalo owns `org.freedesktop.a11y.Manager` in a session (`--session
   silent (run 39281384872, #878's `collapse` control). The write waits for neither Orca's
   reply nor speech. `nk-orca-check.py` retains Orca's caret-cause diagnostics alongside
   each unchanged fresh-speech assertion; delays/retries cannot repair inverted causality.
+  The checker sends each action once and awaits the fresh speech predicate (up to 8 seconds,
+  with the existing 1-second absence interval), instead of clipping an utterance while Orca
+  is still generating it on software GL. Before testing Escape it observes Orca announce the
+  reopened dialog, so the opening focus event cannot arrive after the escape's restoration.
 - Libatspi's capability bits do NOT prove this works — its legacy fallback reports monitoring with
   no key ever arriving. Count `KeyEvent`s.
 
