@@ -207,6 +207,86 @@ Phase 0 remains an independent client of those four crates.
   AT-SPI provider and Hyalo's layer listing; faults belong only to the demo. Each oracle
   requires a logged applied mutation and a failed assertion (never a crash or timeout).
 
+## Floating control capsule — proposal for #889
+
+**Draft, not an implemented API or a closed contract.** This section closes the
+kit/compositor boundary before implementation, following #818. The owner has
+chosen the behaviour in #889; numeric visual values remain for the native demo.
+
+- **One retained component in nk-widgets**, containing ordered existing button
+  nodes: window controls, sidebar/navigation controls and arbitrary toolbar actions.
+  Each button has a stable id, accessible name, enabled state, action and optional
+  destructive style. The capsule is a labelled PANEL, its children PUSH_BUTTONs;
+  its own glass is not a separate accessibility node. Keyboard focus, activation,
+  stale-target refusal and pointer capture use the same Tree paths as other buttons.
+  Enter/Space and AT-SPI Activate execute the same action as release on the captured
+  button; leaving it before release cancels. Disabled buttons cannot hover/press or
+  activate, and hiding/removing a captured button cancels capture.
+- **One pane over content**, positioned by the app in its header or over its page.
+  The capsule's layer owns the material and content; individual buttons are not
+  Wayland surfaces. The existing nk-wayland host and synchronized parent transaction
+  remain the only transport. Material state, glyph content, placement and input
+  bounds land together. A capsule inside a glass sidebar/title does not declare
+  another glass pane on that glass. D7's graded title background remains separate.
+- **One material definition for native and server-side controls.** Extend the existing
+  control piece of the token source/export with the state tints and backdrop-response
+  law; Hyalo's third-party window controls consume the same definition. No duplicated
+  numeric defaults in nk-widgets or render/controls.rs. The kit resolves the exact
+  dark/reduce-transparency variant and size step from the installed export. Transport
+  carries explicit data and no design defaults.
+- **The backdrop response is Hyalo's.** Measure mean luminance and variance over the
+  pane's visible silhouette, before its own tone, state tint or shadow; measurements
+  use the same presented transform and backdrop capture as its glass. The shadow
+  law grows on white and further on a white/text mixture. One continuous response
+  blends light/dark tone, glyph ink and shadow; clamp outside its defined range.
+  It must not toggle at next_ink's hysteresis thresholds or create a feedback loop
+  by sampling its own output. Old ink users keep their existing binary behaviour.
+- **Hover and press alter the glass itself.** The client declares per-button local
+  bounds, normal/destructive style and state; Hyalo resolves a tint within that
+  region, clipped to the capsule, in the material pass. Close's red remains glass
+  through which the backdrop responds. The old opaque hover/press disc is removed
+  for this component, and no second blurred surface or client fill covers it.
+- **Coherent glyph ink needs an explicit transport decision.** A continuous event to
+  a client that repaints later cannot guarantee that its glyphs and the glass agree
+  in the frame being presented. Proposed solution: the capsule's single buffer
+  provides monochrome glyph/focus coverage in declared non-overlapping button ink
+  rectangles; Hyalo colours that coverage with the same response as the material,
+  preserving alpha. Destructive hover/press can choose its exported contrasting
+  ink. Coloured app content outside these rectangles is untouched. The protocol
+  must define validation, clipping, lifetime/reset and double-buffering before code.
+  This is a narrow proposal for control capsules, not phase-2 recolouring of arbitrary
+  application text. No app event round-trip or CPU readback may gate presentation.
+- **Protocol stays v1.** Append requests to nidara-material-v1; keep existing request
+  opcodes and events intact. Before implementation, specify the exact requests for
+  response law, state regions and ink coverage and how a client detects support on
+  an older v1 server. Do not send new opcodes merely because a v1 global exists.
+  Existing material trust restrictions remain; no new pixel readback to clients.
+- **D5 and accessibility preferences:** absent support uses opaque exported base and
+  client-painted controls with the same geometry, keyboard and semantics. One client
+  timeline drives paint/hit-testing/focus for any fallback motion. Reduce transparency
+  uses the exported opaque variant, including its state feedback; reduce motion
+  omits timed interpolation independently. Neither preference is written back.
+
+Acceptance is developed in widgets-demo, with a fixed white page, black text over
+white, a dark page and a continuous dark-to-white backdrop sweep under a stationary
+capsule. Repeat native and server-side controls at scales 1 and 1.25. Assert shadow
+strength ordering, continuous/coherent tone and ink, visible backdrop through both
+normal and destructive hover/press, identical shared-token response, captured-release
+cancellation, keyboard/AT-SPI actions and missing-capability fallbacks. Also move the
+backdrop while the capsule client produces no commits: material and glyph response
+must remain together. Each visual oracle gets its own logged fault disabling that
+part of the response; a crash, timeout or absent frame cannot count as caught.
+Captures must identify presented state rather than race wall-clock sleeps. Record
+idle damage/CPU and scrolling frame intervals; do not add a permanent animation or
+synchronous GPU readback. New expensive visual controls belong to the scoped/nightly
+path under the CI budget. Final numerical values and visual acceptance are the owner's
+in the native demo, with exact revisions and environment recorded.
+
+**To close before implementation:** Claude reviews the exact material requests and
+old-server capability negotiation, the glyph-coverage proposal and the shared token
+schema/response law; the agreed contract is merged before dependent code. The API
+must preserve the kit/compositor ownership above even if these wire details change.
+
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
 The model is the reference platform's: the app says where a layer **ends**; the compositor

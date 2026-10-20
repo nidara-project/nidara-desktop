@@ -285,6 +285,11 @@ it opened collapsed; otherwise it was part of the window. The native window does
 - **Cost:** scrolling repaints the content's buffer only; the sidebar and title bar layers are
   not repainted, Hyalo re-blurs. Held to gate 4's p95 frame interval like everything else.
 
+#889's reusable floating control capsule is the next independent component. Its
+kit/material boundary is proposed in CONTRACT.md, “Floating control capsule”; it
+is not yet a closed API or implemented behaviour. It shares the control material
+with Hyalo's server-side controls; final visual values are chosen in the native demo.
+
 ## Foundations (`nk-widgets`) and their acceptance `[A7]`
 
 Promoted from phase 0's invariants (retained tree, stable ids, two-step layout, per-kind
