@@ -1007,6 +1007,10 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   capture is slow enough that the two polls lie 63 px apart (`hyalo-minimize-check.sh`
   `over_dock`). And it reads a picture's pixels (a gjs process each) AFTER watching anything
   move, not while the animation runs.
+  🔴 **A check that captures while something moves writes `.ppm`, not `.png`**: on CI a PNG
+  took 4.2 s to write (nightly of 2026-10-20, #891 — the 6 s minimize was over before the
+  check began watching it cross the dock), a PPM 0.02 s. `hyalo-window-look-probe.js` reads
+  both (`pixel FILE X Y`).
 - **In flight the ink is kept** (`Controls::moving`, the window drawn at a `place`: into the
   dock, out of it, to another workspace): the glass is drawn with the ink it had and measures
   nothing (`GlassElement::measuring_nothing`) — what passes under a capsule on its way is not its
