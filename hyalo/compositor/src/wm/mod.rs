@@ -232,8 +232,9 @@ pub struct Wm {
     pub focused: Option<WindowId>,
     /// The window control under the pointer, drawn hovered (render/controls.rs).
     pub controls_hover: Option<ControlsHover>,
-    /// The pointer is over Hyalo's chrome of a window (a control, a title bar).
-    pub over_chrome: bool,
+    /// The pointer shows Hyalo's own cursor: over its chrome of a window (a control, a title
+    /// bar, a resize edge) or in a resize. A client's cursor waits meanwhile (`client_cursor`).
+    pub chrome_cursor: bool,
     /// The last left press on a title bar, for a double click (input.rs).
     pub last_bar_press: Option<(WindowId, u32)>,
     /// The output the user is on: the focused window's, or the pointer's.
@@ -250,6 +251,11 @@ pub struct Wm {
     pub announced_focus: Option<Option<WindowId>>,
     /// A window being moved or resized with the pointer.
     pub grab: Option<grabs::Active>,
+    /// A tiled resize's boxes when it began, by window (wm/grabs.rs).
+    pub resize_from: HashMap<WindowId, Rect>,
+    /// Tiled windows held by the side of their box that did not move — (right, bottom) — until
+    /// their client draws their new size (`Hyalo::anchored_loc`).
+    pub resize_anchors: HashMap<WindowId, (bool, bool)>,
     /// The real pointer is not drawn (input is unaffected): the shell's agent pointer draws
     /// its own, and a hardware cursor plane would always be on top of it.
     pub cursor_hidden: bool,
@@ -875,6 +881,11 @@ impl Hyalo {
     pub fn window_committed(&mut self, window: &Window) {
         self.update_title_bar(window);
         let Some(m) = self.wm.by_window(window) else { return };
+        let id = m.id;
+        if self.resize_anchor_commit(id) {
+            return;
+        }
+        let Some(m) = self.wm.get(id) else { return };
         if self.wm.grab.is_some_and(|g| g.id == m.id) {
             let id = m.id;
             self.grab_commit(id);
@@ -1062,8 +1073,11 @@ impl Hyalo {
             let window = m.window.clone();
             // A space element's location is its GEOMETRY's origin; Smithay subtracts the
             // client's decoration offset itself where it draws and hit-tests.
-            let loc = m.rect.loc;
-            if self.wm.grab.is_none_or(|g| g.id != id) {
+            let loc = self.anchored_loc(m);
+            // The window being dragged is placed by its grab, unless it is a tile being resized:
+            // the layout places those, every one of them, held by a side (`anchored_loc`).
+            let placed_by_layout = self.wm.grab.is_none_or(|g| g.id != id || (g.tiled && matches!(g.kind, grabs::Kind::Resize(_))));
+            if placed_by_layout {
                 self.space.map_element(window.clone(), loc, false);
                 if let Some(x) = window.x11_surface() {
                     self.configure_x11(x, m.rect);
