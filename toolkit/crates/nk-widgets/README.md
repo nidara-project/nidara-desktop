@@ -55,7 +55,9 @@ and reserves a trailing box for window controls. The alternative panel material
 is used for the title pending the owner's graded-blur A/B decision.
 
 Colours, measurements and pane Material are explicit inputs, resolved by the app
-from the exports/appearance portal. No palette or glass constants live here.
+from the exports/appearance portal. `Composition::sync` asks its material resolver
+for each pane's actual shorter side, so a title and sidebar use their own size step
+and resolve again on resize. No palette or glass constants live here.
 There are no fields yet: phase-0 Editor/IME behavior is unchanged.
 
 Run tests without a compositor:

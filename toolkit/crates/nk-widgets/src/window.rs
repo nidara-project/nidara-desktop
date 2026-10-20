@@ -35,7 +35,7 @@ impl Composition {
         window: &mut Window,
         backend: &mut impl TextBackend,
         palette: Palette,
-        panel: &Material,
+        panel: impl Fn(f64) -> Result<Material>,
         layers_allowed: bool,
     ) -> Result<()> {
         let (w, h) = window.size();
@@ -90,7 +90,7 @@ impl Composition {
                 window.set_layer_size(sidebar, sidebar_size)?;
                 window.set_layer_size(titlebar, titlebar_size)?;
                 for (layer, size) in [(sidebar, sidebar_size), (titlebar, titlebar_size)] {
-                    let mut material = panel.clone();
+                    let mut material = panel(f64::from(size.0.min(size.1)))?;
                     material.shapes = vec![nk_wayland::Pane {
                         x: 0.,
                         y: 0.,

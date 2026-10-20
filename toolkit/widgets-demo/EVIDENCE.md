@@ -95,3 +95,30 @@ ramp/export (the fixed dark ceiling is right for the sidebar, not a 48px title p
 Hyalo's layer glass and the graded-title A/B decision; none is claimed fixed here.
 Builds/evidence/logs stay in target/; private runtime sockets live under
 ~/Nidara/ChatGPT/ and are removed on exit. Nothing new is built or logged in /tmp.
+
+
+## Glass export schema correction (2026-10-20)
+
+CI run 39368240534 reached the widget checker but the demo exited before readiness:
+`missing panel material field`. The installed #881 export uses `variants` and
+`pieces.panel` size steps, not the retired stub's TONES/SHADOWS/DEFAULTS keys.
+The reader now requires the installed export, selects dark/reduce-transparency
+from the portal, and resolves the rounded short-side step independently for each
+pane on resize. The switch measurement stub remains; no visual constants were added.
+
+Validation of the local correction on top of 3520011a:
+- `cargo test --locked --manifest-path toolkit/Cargo.toml -p nk-widgets-demo -p nk-widgets`:
+  23 passed, none failed or ignored. The real exported panel fixture covers all four
+  variants, title/sidebar sizes, ramp boundaries and malformed/stub rejection.
+- The same packages' clippy (`--all-targets -- -D warnings`), workspace fmt,
+  skill-docs and whitespace checks pass.
+- Private bwrap + Cage + installed `/usr/bin/nidara-hyalo`, software GL,
+  `NK_SETTINGS_DATA=/usr/share/nidara/settings-data NK_WIDGETS_STAGES=frame`:
+  frame baseline PASS and applied frame control CAUGHT at both 1 and 1.25.
+  All four clients published CONTENT_READY and A11Y_READY.
+  Evidence: `toolkit/target/glass-export-evidence` (environment, hashes and logs).
+
+This is a targeted local startup/AT-SPI check, not a rerun of the full vkms,
+widgets, real-Orca or fcitx5 matrices. CI has not been relaunched for this change.
+The demo's existing compositor-painted panes still do not request adaptive ink
+or client-painted blur; this correction does not implement #889.

@@ -2,6 +2,7 @@
 //! Fixed structural-widget demo, deliberately independent of Settings/Config1.
 mod accessibility;
 mod appearance;
+mod panel;
 use appearance::Appearance;
 use nk_a11y::{Request, Role};
 use nk_text::{FontSet, ParleyBackend, Point};
@@ -153,7 +154,7 @@ impl Demo {
             window,
             &mut self.text,
             self.appearance.palette,
-            &self.appearance.panel,
+            |side| self.appearance.panel.at(side),
             self.fault != "layers",
         )?;
         let inset = self.tree.content_viewport().x;

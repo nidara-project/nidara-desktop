@@ -189,6 +189,8 @@ Phase 0 remains an independent client of those four crates.
   opens an overlay with zero inset; a page choice, Escape or outside click dismisses it.
   At/above the breakpoint, it docks again. The title bar
   exposes its sidebar action with `Tree::sidebar_button`; other buttons stay app actions.
+  Pane materials are resolved separately at their actual shorter side on resize,
+  from the portal-selected glass export variant and its size steps.
   Missing material OR layers uses D5: opaque panes and content clipped to the insets.
   Missing material also paints an opaque root base; otherwise D6 still owns that background.
   The application supplies exported colours/measurements and the menus' panel Material.

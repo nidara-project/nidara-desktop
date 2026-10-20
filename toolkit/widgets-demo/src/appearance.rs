@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Demo data is fixed; appearance is selected from the Settings portal, never Config1.
+use crate::panel::PanelMaterial;
 use nk_render::{Color, rgba};
-use nk_wayland::{Glass, Material, Shadow, Tone};
 use nk_widgets::{Metrics, Palette, Result};
 use serde_json::Value;
 use std::{collections::HashMap, path::Path, sync::mpsc};
@@ -13,7 +13,7 @@ type Settings = HashMap<String, HashMap<String, OwnedValue>>;
 pub struct Appearance {
     pub palette: Palette,
     pub metrics: Metrics,
-    pub panel: Material,
+    pub panel: PanelMaterial,
     pub style: nk_text::TextStyle,
     pub size: (u32, u32),
     pub reduce_motion: bool,
@@ -130,65 +130,12 @@ impl Appearance {
             thumb: token("--nidara-thumb")?,
             focus: token("--nidara-accent")?,
         };
-        // These two switch measurements are absent from #856's export. Named stub
-        // from _components.scss until Claude exports them with the panel material.
+        // Only the switch measurements still need the named _components.scss stub.
+        // Panel material always comes from the real, installed export.
         let stub: Value =
             serde_json::from_str(include_str!("../panel-stub.json")).map_err(|e| e.to_string())?;
-        let glass=read(root.join("tokens/glass.json")).or_else(|e| {
-            if root.join("tokens/glass.json").exists() { Err(e) } else {
-                eprintln!("PANEL_MATERIAL_STUB source=ui/lib/nidara-kit/platform/glass-material.ts piece=panel"); Ok(stub.clone())
-            }
-        })?;
-        let face = if scheme == 1 { "dark" } else { "light" };
-        let tone = &glass["TONES"]["panel"][face];
-        let shadow = &glass["SHADOWS"]["panel"][face];
-        let val = |v: &Value| -> Result<f64> {
-            v.as_f64()
-                .ok_or_else(|| "missing panel material field".into())
-        };
-        let mut panel = Material {
-            glass: Glass {
-                refraction: val(&glass["DEFAULTS"]["refraction"])?,
-                rim: val(&glass["DEFAULTS"]["rim"])?,
-                lensing: val(&glass["DEFAULTS"]["lensing"])?,
-            },
-            tone: Tone {
-                saturation: val(&tone["saturation"])?,
-                ceiling: val(&tone["ceiling"])?,
-                lift: val(&tone["lift"])?,
-                gain: val(&tone["gain"])?,
-                wash: [
-                    val(&tone["wash"][0])?,
-                    val(&tone["wash"][1])?,
-                    val(&tone["wash"][2])?,
-                    val(&tone["wash"][3])?,
-                ],
-                ambient: val(&tone["ambient"])?,
-                ambient_lift: val(&tone["ambientLift"])?,
-                ambient_gain: val(&tone["ambientGain"])?,
-            },
-            shadow: Shadow {
-                opacity_small: val(&shadow["opacitySmall"])?,
-                opacity_large: val(&shadow["opacityLarge"])?,
-                blur_small: val(&shadow["blurSmall"])?,
-                blur_large: val(&shadow["blurLarge"])?,
-                offset: val(&shadow["offset"])?,
-            },
-            shapes: vec![],
-        };
-        if reduce {
-            let bg = palette.background.components;
-            panel.tone = Tone {
-                saturation: 1.,
-                ceiling: 1.,
-                lift: 0.,
-                gain: 1.,
-                wash: [bg[0] as f64, bg[1] as f64, bg[2] as f64, 1.],
-                ambient: 0.,
-                ambient_lift: 0.,
-                ambient_gain: 1.,
-            };
-        }
+        let panel =
+            PanelMaterial::load(read(root.join("tokens/glass.json"))?, scheme == 1, reduce)?;
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,

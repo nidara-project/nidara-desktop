@@ -22,13 +22,16 @@ selects the exact exported accent/mode/reduce-transparency/window-background set
 an unknown or missing set is an error. Interface font and text scale come from
 `org.gnome.desktop.interface`. Neither Config1 nor a guessed palette is a fallback.
 
-`panel-stub.json` is the explicitly permitted D7 stub: named `TONES.panel`,
-`SHADOWS.panel`, `DEFAULTS` from `platform/glass-material.ts` and the switch's
-measurements from `_components.scss`, with source/date recorded. It is used only
-while `tokens/glass.json` is absent and logs `PANEL_MATERIAL_STUB`. Claude owns that
-export; its eventual schema should replace the stub reader together with the
-export. No glass numbers are copied into Rust. Hyalo's layer-glass rendering is
-separate work; the demo declares materials without claiming to validate the blur.
+`tokens/glass.json` is required. The portal's dark mode and reduce-transparency
+select one `variants[]` entry. Each sidebar/title pane selects the last
+`pieces.panel[]` step whose `fromSide` is at most its rounded shorter side, every
+time its size changes. Glass, tone (including the object-shaped wash) and shadow
+come from that entry; reduce transparency uses the exported variant directly.
+`panel-stub.json` now supplies only the two still-unexported switch measurements.
+The demo does not yet enable backdrop-driven ink; `ink`/`inkTone` and the
+client-painted blur settings are not used by its compositor-painted panes.
+`fixtures/glass.json` is the real #881 export with unrelated pieces removed;
+tests cover all four variants, the size ramp and malformed/stub input.
 
 Local checks run in a private headless cage/Hyalo and portal fixture:
 
