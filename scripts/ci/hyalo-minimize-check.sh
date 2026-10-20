@@ -79,7 +79,7 @@ over_dock() {
         [ "$drawn" != null ] && seen=1
         [ -n "$(echo "$drawn" | jq -c --argjson y "$y" --argjson dx "$dx" "$inside")" ] || { sleep 0.02; continue; }
         t=$(date +%s%N)
-        $MSG screenshot "$log/$shot-crossing.png" >/dev/null || fail "no screenshot"
+        $MSG screenshot "$log/$shot-crossing.ppm" >/dev/null || fail "no screenshot"
         at=$(jq -c --arg id "$id" --argjson y "$y" --argjson dx "$dx" ".drawn[\$id] | $inside" "$log/$shot-crossing.capture.json")
         echo "$(($(date +%s%N) / 1000000)) screenshot $(( ($(date +%s%N) - t) / 1000000 )) ms, drawn in it: $(jq -c --arg id "$id" '.drawn[$id]' "$log/$shot-crossing.capture.json")" >>"$log/$shot-polled.log"
         [ -n "$at" ] && break
@@ -87,7 +87,7 @@ over_dock() {
     [ -n "${at:-}" ] || $MSG stats >>"$log/$shot-polled.log" 2>&1
     [ -n "${at:-}" ] || fail "($shot) no screenshot caught it crossing the dock's glass (at y $y, the dock from x $dx; where it was drawn: $log/$shot-polled.log)"
     px=$(jq -rn --argjson a "$at" --argjson y "$y" --argjson s "$scale" '"\($a[0] + 6 | . * $s | ceil) \($y * $s | floor)"')
-    got=$(probe_pixel "$log/$shot-crossing.png" $px)
+    got=$(probe_pixel "$log/$shot-crossing.ppm" $px)
     # The window's grey or its dialog's, each channel within 2: the glass's blur gives greys
     # too, not neutral ones (measured '76 72 77').
     set -- $got
@@ -154,28 +154,30 @@ echo "ok    the dock gives it a place, inside the dock (listed after ${ms} ms, t
 sleep 0.85
 drawn=$(win | jq -c .drawn)
 ddrawn=$(dialog | jq -c .drawn)
-$MSG screenshot "$log/shrinking.png" >/dev/null || fail "no screenshot"
+$MSG screenshot "$log/shrinking.ppm" >/dev/null || fail "no screenshot"
 [ "$drawn" != null ] || fail "a second in, it is not drawn moving"
 mid=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
 k=$(echo "$drawn" | jq -r '.[2] / 400 * 100 | floor')
 [ "$k" -lt 90 ] || fail "a second in, it is still ${k}% of its size"
+# Captures are raw PPMs: a PNG took 4 s to write on CI, which is most of this
+# animation — the nightly of 2026-10-20 (#891) began watching it cross the dock once it was in.
 # While it moves, nothing but watching it cross the dock: the pixels of the picture taken a
 # second in are read after (a probe_pixel is a gjs process — seconds on CI, the animation's).
 over_dock shrinking "$target"
-grey "$(probe_pixel "$log/shrinking.png" $mid)" || fail "where it is drawn ($drawn) the pixel is $(probe_pixel "$log/shrinking.png" $mid), not its grey"
-grey "$(probe_pixel "$log/shrinking.png" $centre)" && fail "where it was, the pixel is still its grey"
+grey "$(probe_pixel "$log/shrinking.ppm" $mid)" || fail "where it is drawn ($drawn) the pixel is $(probe_pixel "$log/shrinking.ppm" $mid), not its grey"
+grey "$(probe_pixel "$log/shrinking.ppm" $centre)" && fail "where it was, the pixel is still its grey"
 # Its dialog moves with it, in front of it: the dialog's own grey at its middle.
 [ "$ddrawn" != null ] || fail "a second in, its dialog is not drawn moving"
 dmid=$(echo "$ddrawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
-set -- $(probe_pixel "$log/shrinking.png" $dmid)
+set -- $(probe_pixel "$log/shrinking.ppm" $dmid)
 [ "$1" -ge 92 ] && [ "$1" -le 100 ] && grey "$1 $2 $3" || fail "where its dialog is drawn ($ddrawn) the pixel is '$*', not the dialog's grey (96): the dialog is not in front"
 # Beside the small window, inside the box it had at full size: what is there once it has gone.
 # A window whose surfaces kept their full size from the scaled origin drew that box too.
 beside=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] + 24) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
 for _ in $(seq 1 40); do [ "$(win | jq -c .drawn)" = null ] && break; sleep 0.25; done
 sleep 0.3
-$MSG screenshot "$log/gone.png" >/dev/null || fail "no screenshot"
-now=$(probe_pixel "$log/shrinking.png" $beside); then=$(probe_pixel "$log/gone.png" $beside)
+$MSG screenshot "$log/gone.ppm" >/dev/null || fail "no screenshot"
+now=$(probe_pixel "$log/shrinking.ppm" $beside); then=$(probe_pixel "$log/gone.ppm" $beside)
 set -- $now $then
 [ $(($1 - $4)) -le 6 ] && [ $(($4 - $1)) -le 6 ] && [ $(($2 - $5)) -le 6 ] && [ $(($5 - $2)) -le 6 ] \
     || fail "beside the small window ($beside) the pixel is '$now' while it shrinks and '$then' once it has gone: its full-size box is drawn too"

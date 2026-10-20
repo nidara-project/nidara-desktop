@@ -14,11 +14,26 @@
 //
 // No decoration (decorated: false), so a window's surface IS its box: Hyalo rounds it.
 // PNGs are read by GTK's own loader (Gdk.Texture), never GdkPixbuf (glycin's sandbox does not
-// start in CI's container).
+// start in CI's container). A FILE ending in .ppm is Hyalo's raw capture ("P6\nW H\n255\n",
+// then RGB), read here: it is written in 0.02 s where a PNG takes 4 s to encode on CI.
+import GLib from "gi://GLib"
 import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 
 const pixels = (file) => {
+    if (file.endsWith(".ppm")) {
+        const [, data] = GLib.file_get_contents(file)
+        const header = new TextDecoder().decode(data.subarray(0, 32)).match(/^P6\n(\d+) (\d+)\n255\n/)
+        if (!header) throw new Error(`${file}: not a P6 PPM`)
+        const [w, h] = [Number(header[1]), Number(header[2])]
+        const rgb = data.subarray(header[0].length)
+        const px = new Uint8Array(w * h * 4)
+        for (let i = 0; i < w * h; i++) {
+            px.set(rgb.subarray(i * 3, i * 3 + 3), i * 4)
+            px[i * 4 + 3] = 255
+        }
+        return { px, stride: w * 4 }
+    }
     const texture = Gdk.Texture.new_from_filename(file)
     const d = Gdk.TextureDownloader.new(texture)
     d.set_format(Gdk.MemoryFormat.R8G8B8A8)
