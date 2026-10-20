@@ -2560,3 +2560,49 @@ until it is painted again; never attach the replacement layout's byte ranges to 
 string. Password redaction removes the entire TextInfo, including geometry, before validation.
 The authentic KP_Up full-line speech assertion and wrong-extents control live in
 `scripts/ci/nk-orca-check.py`; evidence and scope are `toolkit/phase0/EVIDENCE-846.md` (#846).
+
+
+## Native toolkit structural widgets (#873)
+
+`toolkit/crates/nk-widgets` is the retained structural layer over `nk-text`,
+`nk-render`, `nk-a11y` and `nk-wayland`; phase0 remains beside it. `Tree::group` and
+`row` create headers/labels and controls in one tree. Semantics, label relations,
+focus order, hit-testing and paint derive from it. Never build a parallel AT-SPI
+hierarchy in an app. Hidden rows leave semantics; scrolled-away rows remain VISIBLE
+but not SHOWING. Targets include the tree generation; stale/hidden/disabled actions
+are rejected on the app thread. Pointer release belongs to the pressed node and its coordinate space. A layer's
+input is already inverse-transformed by Hyalo at its presented position; never
+clip it again at its model endpoint. The public AT-SPI attributes
+`nidara-node-id`/`nidara-tree-generation` identify each snapshot's targets.
+
+Layout measures into retained nk-text Layouts, then places; the renderer consumes
+those same Layouts. Invalidation separates layout, paint and semantics. Font/text
+scale changes keep ids, focus and scroll. `window::Composition` uses the existing
+nk-wayland host, creates synchronized sidebar/title layers and repaints those only
+when the panes change. The sidebar scrolls independently below its header; focus
+reveals even the last page. Pane vertical scroll goes to sidebar/content for
+sidebar/title; horizontal scroll on either goes to content via nk-wayland.
+D7 collapse releases the leading inset on the pane curve, remeasuring content
+and moving/resizing the title pane. The fixed breakpoint is `Metrics.sidebar +
+Metrics.content` from WINDOW_LAYOUT, never page content. Narrow windows open an
+overlay (zero inset); page choice, Escape and outside click dismiss it. Crossing
+back to the breakpoint docks it again. `Tree::sidebar_button` registers its
+title button; other title buttons remain application actions.
+D7 content spans the whole window; focus/SHOWING excludes
+the leading/top insets. D5 (no material OR layers) paints opaque panes in the root
+and clips content to the insets. Its client animation has one sampled timeline
+shared by paint, hit-testing and focus; AT-SPI bounds stay model values. Reduced
+motion omits the transition independently of transparency. Never add another
+app-owned Wayland host.
+
+The demo is `toolkit/widgets-demo`, not Settings. Its palette is selected only from
+the appearance portal and exported tokens. `tokens/glass.json` is required: select
+`variants[]` by `dark`/`reduceTransparency`, then the last `pieces.panel[]` step
+with `fromSide` at or below each pane's rounded shorter side. The composition
+resolves material separately for sidebar/title on resize; the export's wash is an
+object, not an array. `panel-stub.json` supplies only switch measurements. Hyalo's own
+layer glass and its window-layer IPC listing are Claude's separate work. The
+libatspi acceptance is `scripts/ci/nk-widgets-check.py`; each assertion has its own
+logged, applied fault, and timeouts/crashes never count as caught controls. New
+builds/logs/evidence use target/ or ~/Nidara/ChatGPT/, never /tmp. nk-widgets and its
+demo trigger the full fcitx5/Orca matrices in ci-scope.sh.

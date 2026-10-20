@@ -163,20 +163,27 @@ fn role(n: &Node) -> AtRole {
         Role::Option => AtRole::ListItem,
         Role::CheckBox => AtRole::CheckBox,
         Role::Button => AtRole::Button,
+        Role::ToggleButton => AtRole::ToggleButton,
+        Role::Panel => AtRole::Panel,
+        Role::List => AtRole::List,
+        Role::ScrollPane => AtRole::ScrollPane,
     }
 }
 fn states(n: &Node) -> StateSet {
     let mut s = StateSet::empty();
     for (yes, state) in [
-        (true, State::Visible),
+        (!n.states.hidden, State::Visible),
         (n.states.active, State::Active),
-        (!n.states.hidden, State::Showing),
+        (!n.states.hidden && !n.states.offscreen, State::Showing),
         (!n.states.disabled, State::Enabled),
         (!n.states.disabled, State::Sensitive),
         (n.actions.contains(&Action::Focus), State::Focusable),
         (n.states.focused, State::Focused),
         (n.states.checked, State::Checked),
-        (n.role == Role::CheckBox, State::Checkable),
+        (
+            matches!(n.role, Role::CheckBox | Role::ToggleButton),
+            State::Checkable,
+        ),
         (n.states.expanded, State::Expanded),
         (n.role == Role::ComboBox, State::Expandable),
         (n.states.selected, State::Selected),
@@ -196,7 +203,12 @@ impl Object {
     #[zbus(property)]
     fn name(&self) -> String {
         if self.id == 0 {
-            "nk-phase0".into()
+            let tree = self.tree.lock().unwrap();
+            tree.nodes
+                .get(&tree.root)
+                .and_then(|n| n.attributes.get("application-name"))
+                .cloned()
+                .unwrap_or_else(|| "nk-phase0".into())
         } else {
             self.node().map(|n| n.name).unwrap_or_default()
         }
@@ -264,10 +276,25 @@ impl Object {
         self.node().map(|n| states(&n)).unwrap_or_default()
     }
     fn get_attributes(&self) -> HashMap<String, String> {
-        HashMap::new()
+        self.node()
+            .map(|n| n.attributes.into_iter().collect())
+            .unwrap_or_default()
     }
     fn get_relation_set(&self) -> Vec<(u32, Vec<Address>)> {
-        vec![]
+        let mut relations: BTreeMap<u32, Vec<Address>> = BTreeMap::new();
+        if let Ok(n) = self.node() {
+            for r in n.relations {
+                let (kind, target) = match r {
+                    Relation::LabelledBy(id) => (atspi_common::RelationType::LabelledBy, id),
+                    Relation::LabelFor(id) => (atspi_common::RelationType::LabelFor, id),
+                };
+                relations
+                    .entry(kind as u32)
+                    .or_default()
+                    .push(self.address(target));
+            }
+        }
+        relations.into_iter().collect()
     }
     fn get_application(&self) -> (Address,) {
         (self.address(0),)
@@ -790,6 +817,51 @@ impl A11yBackend for Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn structural_roles_relations_and_offscreen_states_project_without_a_bus() {
+        for (input, expected) in [
+            (Role::ToggleButton, AtRole::ToggleButton),
+            (Role::Panel, AtRole::Panel),
+            (Role::List, AtRole::List),
+            (Role::ScrollPane, AtRole::ScrollPane),
+        ] {
+            assert_eq!(role(&Node::new(1, input, "node")), expected);
+        }
+        let mut label = Node::new(2, Role::Label, "Label");
+        let mut node = Node::new(1, Role::ToggleButton, "Control");
+        node.children = vec![2];
+        node.relations = vec![Relation::LabelledBy(2)];
+        label.relations = vec![Relation::LabelFor(1)];
+        node.states.offscreen = true;
+        node.attributes
+            .insert("application-name".into(), "Widgets demo".into());
+        let state = states(&node);
+        assert!(state.contains(State::Visible) && state.contains(State::Checkable));
+        assert!(!state.contains(State::Showing));
+        let object = Object {
+            id: 1,
+            tree: Arc::new(Mutex::new(Tree {
+                root: 1,
+                nodes: BTreeMap::from([(1, node.clone()), (2, label)]),
+            })),
+            bus: ":1.1".into(),
+            callback: Arc::new(|_| {}),
+        };
+        let mut app = object.clone();
+        app.id = 0;
+        assert_eq!(app.name(), "Widgets demo");
+        let relations = object.get_relation_set();
+        assert_eq!(
+            relations[0].0,
+            atspi_common::RelationType::LabelledBy as u32
+        );
+        assert_eq!(
+            relations[0].1[0].1.as_str(),
+            "/org/a11y/atspi/accessible/n2"
+        );
+        node.states.hidden = true;
+        assert!(!states(&node).contains(State::Visible));
+    }
     #[test]
     fn extents_convert_scalar_offsets_union_clusters_and_round_outward() {
         let spans = [(0..3, 10.25, 20.5), (3..7, 30.75, 29.25), (7..10, 60., 12.)]

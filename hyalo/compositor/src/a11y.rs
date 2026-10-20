@@ -23,7 +23,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 /// Well-known names whose owner may watch the keyboard: `<app-id>.KeyboardMonitor`, which
@@ -147,13 +147,21 @@ impl Monitor {
 /// What the compositor holds: the shared state and the way to the bus.
 pub struct A11y {
     pub monitor: Arc<Mutex<Monitor>>,
-    events: mpsc::Sender<(String, Key)>,
+    connection: Arc<OnceLock<zbus::blocking::Connection>>,
 }
 
 impl A11y {
     pub fn send(&self, to: Vec<String>, key: Key) {
+        let Some(conn) = self.connection.get() else { return };
         for name in to {
-            let _ = self.events.send((name, key));
+            let args = (!key.pressed, key.mask, key.keysym, key.unichar, key.keycode as u16);
+            // Write the signal before input.rs delivers the key to the Wayland client.
+            // A worker queue lets the client's AT-SPI caret event overtake its cause:
+            // Orca then treats Left as the previous printable key and stays silent.
+            // This waits only for the bus write, never for the reader to reply.
+            if let Err(err) = conn.emit_signal(Some(name.as_str()), PATH, INTERFACE, "KeyEvent", &args) {
+                tracing::debug!(%err, "a11y: KeyEvent not sent");
+            }
         }
     }
 }
@@ -250,38 +258,31 @@ pub fn start(session: bool) -> Option<A11y> {
         return None;
     }
     let monitor = Arc::new(Mutex::new(Monitor::default()));
-    let (events, rx) = mpsc::channel::<(String, Key)>();
+    let connection = Arc::new(OnceLock::new());
+    let emitter = connection.clone();
     let shared = monitor.clone();
     std::thread::Builder::new()
         .name("hyalo-a11y".into())
         .spawn(move || {
-            if let Err(err) = serve(shared, rx) {
+            if let Err(err) = serve(shared, emitter) {
                 tracing::warn!(%err, "org.freedesktop.a11y.Manager not served; a screen reader hears no keys");
             }
         })
         .ok()?;
-    Some(A11y { monitor, events })
+    Some(A11y { monitor, connection })
 }
 
-fn serve(monitor: Arc<Mutex<Monitor>>, rx: mpsc::Receiver<(String, Key)>) -> zbus::Result<()> {
-    let conn = zbus::blocking::connection::Builder::session()?
-        .name("org.freedesktop.a11y.Manager")?
-        .serve_at(PATH, Service(monitor.clone()))?
-        .build()?;
+fn serve(
+    monitor: Arc<Mutex<Monitor>>,
+    connection: Arc<OnceLock<zbus::blocking::Connection>>,
+) -> zbus::Result<()> {
+    let conn = zbus::blocking::connection::Builder::session()?.build()?;
     // The signal goes from THIS connection, the name's owner: libatspi's proxy drops a signal
     // from anyone else.
-    let emitter = conn.clone();
-    std::thread::Builder::new()
-        .name("hyalo-a11y-keys".into())
-        .spawn(move || {
-            for (to, k) in rx {
-                let args = (!k.pressed, k.mask, k.keysym, k.unichar, k.keycode as u16);
-                if let Err(err) = emitter.emit_signal(Some(to.as_str()), PATH, INTERFACE, "KeyEvent", &args) {
-                    tracing::debug!(%err, "a11y: KeyEvent not sent");
-                }
-            }
-        })
-        .map_err(|e| zbus::Error::Failure(e.to_string()))?;
+    let _ = connection.set(conn.clone());
+    // Publish the callable service only after input.rs can use its connection.
+    conn.object_server().at(PATH, Service(monitor.clone()))?;
+    conn.request_name("org.freedesktop.a11y.Manager")?;
     let dbus = zbus::blocking::fdo::DBusProxy::new(&conn)?;
     for change in dbus.receive_name_owner_changed()? {
         let Ok(args) = change.args() else { continue };

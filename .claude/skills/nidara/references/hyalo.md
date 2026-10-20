@@ -1918,6 +1918,16 @@ caller alone. Hyalo owns `org.freedesktop.a11y.Manager` in a session (`--session
   may be released in between); the reader's modifier pressed twice within the repeat delay goes
   through as itself (Caps Lock still toggles); a consumed first press of it does not reach the
   keymap state either (`skip_xkb`: `keyboard.input` is not called at all).
+- `KeyEvent` is written on the manager's D-Bus connection before the key is delivered to
+  the Wayland client. Never put that write on a worker queue: the app's AT-SPI caret event
+  can overtake it, and Orca then attributes Left to the previous printable key and stays
+  silent (run 39281384872, #878's `collapse` control). The write waits for neither Orca's
+  reply nor speech. `nk-orca-check.py` retains Orca's caret-cause diagnostics alongside
+  each unchanged fresh-speech assertion; delays/retries cannot repair inverted causality.
+  The checker sends each action once and awaits the fresh speech predicate (up to 8 seconds,
+  with the existing 1-second absence interval), instead of clipping an utterance while Orca
+  is still generating it on software GL. Before testing Escape it observes Orca announce the
+  reopened dialog, so the opening focus event cannot arrive after the escape's restoration.
 - Libatspi's capability bits do NOT prove this works — its legacy fallback reports monitoring with
   no key ever arriving. Count `KeyEvent`s.
 

@@ -67,6 +67,7 @@ pub enum Event {
         pressed: bool,
     },
     Scroll(f64),
+    HorizontalScroll(f64),
     Ime(ImeBatch),
     Paste(String),
     /// Told every time, also when unchanged; a change also sends Configure.
@@ -182,8 +183,12 @@ pub struct Window {
     input_layer: Option<LayerId>,
     cursor_pending: bool,
     skip_material: bool,
+    capabilities: Capabilities,
 }
 impl Window {
+    pub fn capabilities(&self) -> Capabilities {
+        self.capabilities
+    }
     pub fn close(&mut self) {
         self.closed = true;
     }
@@ -515,7 +520,7 @@ pub struct Options {
 }
 /// What the compositor offers, from its globals (PHASE1.md D5). The four required
 /// protocols refuse the start; every other one has a fallback.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Capabilities {
     /// viewporter AND fractional-scale-v1; otherwise integer buffer scale.
     pub fractional: bool,
@@ -649,6 +654,7 @@ fn run_inner(
         input_layer: None,
         cursor_pending: false,
         skip_material: !options.material,
+        capabilities: Capabilities::default(),
     };
     queue.roundtrip(&mut w).map_err(err)?;
     macro_rules! bind {
@@ -660,6 +666,9 @@ fn run_inner(
         }};
     }
     let caps = capabilities(w.globals.iter().map(|(_, n, _)| n.as_str()))?;
+    w.capabilities = caps;
+    w.capabilities.material &= options.material;
+    w.capabilities.layers &= w.capabilities.material;
     if let (Some(message), false) = (options.require_material, caps.material) {
         return Err(message.into());
     }
@@ -1197,6 +1206,20 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                     });
                 } else {
                     w.events.push(Event::Button { button, pressed });
+                }
+            }
+            wl_pointer::Event::Axis {
+                axis: WEnum::Value(wl_pointer::Axis::HorizontalScroll),
+                value,
+                ..
+            } => {
+                if let Some(id) = w.pointer_layer {
+                    w.events.push(Event::Layer {
+                        id,
+                        event: LayerEvent::HorizontalScroll(value),
+                    });
+                } else if w.pointer_inside {
+                    w.events.push(Event::HorizontalScroll(value));
                 }
             }
             wl_pointer::Event::Axis {

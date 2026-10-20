@@ -50,7 +50,7 @@ needs_gates() {
         toolkit/settings-slice/*) return 1 ;;
         toolkit/*) return 0 ;;
         protocols/nidara-layers-v1.xml|config/hyalo/*) return 0 ;;
-        scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py) return 0 ;;
+        scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py|scripts/ci/nk-widgets-check.py) return 0 ;;
         scripts/ci/nk-a11y-check.py) return 0 ;;
     esac
     return 1
@@ -135,6 +135,9 @@ if [ "${1:-}" = --self-test ]; then
     check_gates true hyalo/compositor/src/protocols/layers/presentation.rs
     check_gates true hyalo/Cargo.lock
     check_gates true toolkit/crates/nk-wayland/src/material.rs
+    check_gates true toolkit/crates/nk-widgets/src/lib.rs
+    check_gates true toolkit/widgets-demo/src/main.rs
+    check_gates true scripts/ci/nk-widgets-check.py
     check_gates true toolkit/crates/nk-newcrate/src/lib.rs
     check_gates true toolkit/phase0/src/main.rs
     check_gates true scripts/ci/nk-real-common.py

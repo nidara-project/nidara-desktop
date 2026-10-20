@@ -35,14 +35,18 @@ toolkit/                     its own Cargo workspace, like hyalo/ and session/ (
     nk-a11y/                 the semantic tree + its AT-SPI projection     (pure, no Wayland)
     nk-render/               rasterises a frame into pixels                (no Wayland)
     nk-wayland/              the connection: window, buffers, input, IME, our protocols
+    nk-widgets/              retained structural widgets, derived semantics (phase 1)
   phase0/                    the test window (a binary, nk-phase0), and its checks
+  widgets-demo/              the fixed-data structural-widget demo (phase 1)
 protocols/
   nidara-layers-v1.xml       NEW, the layers protocol (below) — both ends, like the others
 hyalo/compositor/src/protocols/layers.rs   its server half
 ```
 
 - **Dependencies point one way:** `phase0 → nk-wayland, nk-render, nk-a11y, nk-text`;
-  `nk-render → nk-text` (it paints glyph runs); nothing else. `nk-text` and `nk-a11y` never
+  `nk-render → nk-text` (it paints glyph runs); phase 1 adds
+  `nk-widgets → nk-text, nk-render, nk-a11y, nk-wayland` and `widgets-demo → nk-widgets`
+  (the demo also uses the transport/provider/text public APIs). `nk-text` and `nk-a11y` never
   import Wayland or each other, so they are built and tested with no compositor.
 - **One workspace for the toolkit, separate from Hyalo's.** Nothing Rust is shared with Hyalo in
   phase 0: what both ends share is the protocol XML in `protocols/`, which each end generates
@@ -158,6 +162,50 @@ Owns everything between a string and positioned glyphs, and the editing model on
   frame's commit has been flushed (`Application::committed`, with the root commit's number —
   the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
+
+## nk-widgets (phase 1, #873)
+
+Dependencies point one way: `nk-widgets → nk-text, nk-render, nk-a11y, nk-wayland`.
+Applications use `nk-wayland::Application`; no widget or demo owns a Wayland connection.
+Phase 0 remains an independent client of those four crates.
+
+- A retained, window-owned tree allocates monotonically increasing ids, never reused.
+  Targets pair an id with the tree generation; stale, hidden and disabled actions fail.
+  Semantics, label relations, painting and hit-testing all derive from this tree.
+- Layout measures under constraints, retaining the `nk-text::Layout` it paints, then places.
+  Layout, paint and semantics invalidations are distinct. Font/text scale changes remeasure
+  while keeping ids, focus and scroll offsets. There is one focus and one pointer capture;
+  Tab order follows tree order, and release belongs to the node that was pressed.
+- Window, sidebar/page list, title bar, scroll region, group/header/row, switch and button
+  are the phase-1 foundations. Hidden subtrees leave semantics; offscreen subtrees remain
+  VISIBLE, with SHOWING determined by intersection with the unoccluded viewport. Focus
+  scrolls into that viewport. Groups and controls have explicit label relations.
+- D7: the root content buffer spans the whole window. Sidebar and title bar have independent
+  synchronized layers above it; layout reserves leading/top insets. Content can scroll under
+  both. The title bar has no divider. Collapse releases the leading inset on the pane's
+  curve; content is measured/placed again at each sample, with the title pane following
+  that inset. `Metrics.content` is the fixed WINDOW_LAYOUT content width: the breakpoint
+  is sidebar + content, never a page's natural size. Below it, the title's sidebar button
+  opens an overlay with zero inset; a page choice, Escape or outside click dismisses it.
+  At/above the breakpoint, it docks again. The title bar
+  exposes its sidebar action with `Tree::sidebar_button`; other buttons stay app actions.
+  Pane materials are resolved separately at their actual shorter side on resize,
+  from the portal-selected glass export variant and its size steps.
+  Missing material OR layers uses D5: opaque panes and content clipped to the insets.
+  Missing material also paints an opaque root base; otherwise D6 still owns that background.
+  The application supplies exported colours/measurements and the menus' panel Material.
+  Content scrolling dirties root content, not the pane buffers. The sidebar has its own
+  clamped vertical offset and reveals focused pages below its fixed header. Vertical
+  layer scroll routes to sidebar/content for sidebar/title respectively; horizontal
+  layer scroll routes to content through nk-wayland::LayerEvent::HorizontalScroll.
+  The no-layers fallback uses one
+  sampled client timeline for paint/hit-testing/focus, with AT-SPI bounds at model values;
+  reduced motion omits the transition. Hyalo's layer glass is separate work.
+- `nk-a11y` projects panel/list/scroll-pane/toggle-button roles, label relations and separate
+  hidden/offscreen state. Its existing phase-0 roles and hidden-state semantics remain valid.
+- `widgets-demo` and `scripts/ci/nk-widgets-check.py` exercise the tree through the public
+  AT-SPI provider and Hyalo's layer listing; faults belong only to the demo. Each oracle
+  requires a logged applied mutation and a failed assertion (never a crash or timeout).
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
