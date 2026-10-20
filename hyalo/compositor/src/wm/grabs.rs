@@ -60,8 +60,16 @@ pub fn border_edges(rect: Rect, pos: Point<f64, Logical>) -> ResizeEdge {
 }
 
 impl ResizeEdge {
-    pub fn cursor(self) -> smithay::input::pointer::CursorIcon {
+    /// The pointer's shape over these edges: a floating window's own edges are resized (the
+    /// arrows), a tiled window's are the line it shares with its neighbour, moved (the
+    /// separator) — owner, 2026-10-20. A tiled corner moves two lines: the diagonal.
+    pub fn cursor(self, tiled: bool) -> smithay::input::pointer::CursorIcon {
         use smithay::input::pointer::CursorIcon;
+        match (self.bits(), tiled) {
+            (4 | 8, true) => return CursorIcon::ColResize,
+            (1 | 2, true) => return CursorIcon::RowResize,
+            _ => {}
+        }
         match self.bits() {
             5 | 10 => CursorIcon::NwseResize,
             9 | 6 => CursorIcon::NeswResize,
@@ -103,9 +111,15 @@ impl Hyalo {
         }
         let tiled = !m.floating;
         let initial = m.rect;
+        let ws = m.workspace;
         if let (Kind::Resize(_), Some(t)) = (kind, m.window.toplevel()) {
             t.with_pending_state(|s| s.states.set(xdg_toplevel::State::Resizing));
             t.send_pending_configure();
+        }
+        self.wm.resize_anchors.clear();
+        self.wm.resize_from.clear();
+        if tiled && matches!(kind, Kind::Resize(_)) {
+            self.wm.resize_from = self.wm.windows.iter().filter(|w| w.workspace == ws && !w.floating).map(|w| (w.id, w.rect)).collect();
         }
         self.wm.grab = Some(Active { id, kind, initial, tiled });
         let last = start_data.location;
@@ -189,6 +203,14 @@ impl Hyalo {
                     w.layout.resize_edge(g.id, e, dy, area);
                 }
                 self.arrange_workspace(ws);
+                // Which side of each tile moved since the grab began: until its client draws
+                // the new size, a window is held by the side that did NOT move.
+                for m in self.wm.windows.iter().filter(|m| m.workspace == ws) {
+                    if let Some(from) = self.wm.resize_from.get(&m.id) {
+                        let anchor = (m.rect.loc.x != from.loc.x, m.rect.loc.y != from.loc.y);
+                        self.wm.resize_anchors.insert(m.id, anchor);
+                    }
+                }
                 self.sync_space();
             }
         }
@@ -217,9 +239,50 @@ impl Hyalo {
         self.space.map_element(window.clone(), loc, false);
     }
 
+    /// Where a tiled window is drawn while its client catches up with a resize (`resize_anchors`):
+    /// its box's far side kept still, wherever its committed size reaches. Placed at its box's
+    /// origin instead, a window taken by its left edge grew to the RIGHT, over its neighbour,
+    /// and jumped back on release (owner, 2026-10-20). Only until the client has answered the
+    /// last size it was given: what it draws then is its answer — larger than a small cell, at
+    /// GTK's minimum, it is clipped from the origin like any tile; held by its far side it slid
+    /// over its neighbour and took its clicks (hyalo-resize-check).
+    pub(crate) fn anchored_loc(&self, m: &super::Managed) -> Point<i32, Logical> {
+        let Some(&(right, bottom)) = self.wm.resize_anchors.get(&m.id) else { return m.rect.loc };
+        if !super::awaits_configure(&m.window) {
+            return m.rect.loc;
+        }
+        let size = m.window.geometry().size;
+        let t = m.rect;
+        let x = if right { t.loc.x + t.size.w - size.w } else { t.loc.x };
+        let y = if bottom { t.loc.y + t.size.h - size.h } else { t.loc.y };
+        (x, y).into()
+    }
+
+    /// A commit of a tiled window held by a side (`anchored_loc`): drawn there, and let go once
+    /// it has the size of its box. Whether it was one.
+    pub fn resize_anchor_commit(&mut self, id: WindowId) -> bool {
+        let Some(m) = self.wm.get(id) else { return false };
+        if !self.wm.resize_anchors.contains_key(&id) {
+            return false;
+        }
+        let done = !super::awaits_configure(&m.window) || m.window.geometry().size == m.rect.size;
+        let (window, loc) = (m.window.clone(), self.anchored_loc(m));
+        if done && self.wm.grab.is_none() {
+            self.wm.resize_anchors.remove(&id);
+        }
+        self.space.map_element(window, loc, false);
+        self.queue_redraw(None);
+        true
+    }
+
     /// The pointer let go: a moved window settles where it was dropped.
     fn grab_released(&mut self, location: Point<f64, Logical>, start: Point<f64, Logical>) {
         let Some(g) = self.wm.grab.take() else { return };
+        // A resized tile stays held by its side until its client draws the size it was given.
+        self.wm.resize_from.clear();
+        self.wm.resize_anchors.retain(|id, _| {
+            self.wm.windows.iter().any(|m| m.id == *id && super::awaits_configure(&m.window) && m.window.geometry().size != m.rect.size)
+        });
         let Some(m) = self.wm.get(g.id) else { return };
         let window = m.window.clone();
         let from_ws = m.workspace;
@@ -425,5 +488,15 @@ mod tests {
         assert!(border_edges(r, (550.0, 116.0).into()).is_empty());
         assert!(border_edges(r, (607.0, 200.0).into()).is_empty());
         assert!(border_edges(r, (350.0, 250.0).into()).is_empty());
+    }
+
+    #[test]
+    fn tiled_edges_show_the_separator_floating_ones_the_arrows() {
+        use smithay::input::pointer::CursorIcon;
+        assert_eq!(ResizeEdge::RIGHT.cursor(true), CursorIcon::ColResize);
+        assert_eq!(ResizeEdge::TOP.cursor(true), CursorIcon::RowResize);
+        assert_eq!(ResizeEdge::RIGHT.cursor(false), CursorIcon::EwResize);
+        assert_eq!(ResizeEdge::BOTTOM.cursor(false), CursorIcon::NsResize);
+        assert_eq!((ResizeEdge::LEFT | ResizeEdge::TOP).cursor(true), CursorIcon::NwseResize);
     }
 }

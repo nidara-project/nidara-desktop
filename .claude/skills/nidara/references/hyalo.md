@@ -1522,6 +1522,26 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   a split (`Layout::can_resize_edge`), never its outer output boundary. Layers and popups keep
   precedence. The cursor follows the edge and stays there during the grab. Tiled drag deltas
   round the accumulated displacement, so subpixel pointer events are not lost.
+- **The cursor over chrome is Hyalo's, not the client's** (owner, 2026-10-20). The client under a
+  resize edge still has the pointer (the 3 px inside are its surface) and sets its own cursor,
+  which used to win: kitty showed its text cursor on its edge. `cursor_image` now keeps the
+  client's request in `client_cursor` and shows it only while `wm.chrome_cursor` is false;
+  `update_controls_hover` puts it back when the pointer leaves the chrome or a resize ends. The
+  SHAPE says what the drag does: a floating window's edge shows the arrows (`ew`/`ns`/diagonals),
+  a tile's edge the separator (`col-resize`/`row-resize`) — it moves the line shared with a
+  neighbour (`ResizeEdge::cursor(tiled)`).
+- **A resized tile is held by the side that did not move** (owner, 2026-10-20: "windows expand
+  to the opposite side and snap together on release"). A client draws its new size frames after
+  Hyalo lays the tile out; the grabbed tile was not placed at all until release, so one taken by
+  its LEFT edge grew to the right, over its neighbour, and snapped back when let go.
+  `resize_from` keeps each tile's box at grab start; after every layout step `resize_anchors`
+  records which side moved, and `anchored_loc` draws the window against the OTHER side,
+  wherever its committed size reaches (`sync_space`, and each commit via
+  `resize_anchor_commit`) — only while the client has NOT yet acked its last configure: once it
+  answers, what it drew is its answer (a cell below GTK's minimum draws larger and is clipped from
+  the origin; held by its far side it slid over its neighbour and stole its clicks —
+  `hyalo-resize-check.py` caught it). Checked
+  nested with the client SIGSTOPped mid-drag and resumed before release, against main.
 - **A window born tiled has no Wayland floating box yet** (#809). Its initial configure is
   the predicted tile, so `window_mapped` must not save that size as `float_rect`. On its first
   `float`, `toggle-floating`, or move to a floating workspace, `arrange_workspace` sends
