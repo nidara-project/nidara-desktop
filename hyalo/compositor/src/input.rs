@@ -470,7 +470,7 @@ impl Hyalo {
         if button == crate::binds::BTN_LEFT && button_state == ButtonState::Pressed
             && Mods::from(&keyboard.modifier_state()) == Mods::default()
             && !pointer.is_grabbed()
-            && let Some((id, crate::state::Chrome::Resize(edges))) = self.chrome_under(pointer.current_location())
+            && let Some((id, crate::state::Chrome::Resize(edges, _))) = self.chrome_under(pointer.current_location())
         {
             let start = PointerGrabStartData { focus: None, button, location: pointer.current_location() };
             self.focus_window(Some(id));

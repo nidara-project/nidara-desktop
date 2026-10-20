@@ -234,7 +234,8 @@ the Hyalo job's real fcitx5/Orca matrices (~35 of its ~45 min) ONLY when a chang
 they use — `needs_gates()`, a list of what RUNS them: Hyalo's input, focus, a11y, handlers,
 shortcuts, binds, control, layers and focus-grab files and its Cargo files; the toolkit (not the
 Settings slice); the layers protocol; Hyalo's config; the matrix checks. `full=true` adds their
-controls (each assertion re-run with a fault) and scale 1.25 — only when the checks or the test
+controls (each assertion re-run with a fault) and scale 1.25, and the AT-SPI check's controls
+(`nk-a11y-check.py`, ~2 of its ~3 min; `NK_A11Y_CONTROLS=0` otherwise) — only when the checks or the test
 window's faults change (`needs_full()`; `NK_REAL_FULL=false` → `NK_FCITX5_SCALES=1
 NK_REAL_CONTROLS=0`). Until 2026-10-19 `gates` was a SKIP list and almost every Hyalo PR ran
 the 35 minutes (owner: "we can't lose an hour on tests that give the same result"). What a skip

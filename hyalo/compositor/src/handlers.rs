@@ -107,8 +107,12 @@ impl SeatHandler for Hyalo {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-        self.cursor_status = image;
-        self.queue_redraw(None);
+        // Kept, but not shown while the cursor is Hyalo's (`update_controls_hover`).
+        self.client_cursor = image.clone();
+        if !self.wm.chrome_cursor {
+            self.cursor_status = image;
+            self.queue_redraw(None);
+        }
     }
 
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&crate::focus::KeyboardFocus>) {

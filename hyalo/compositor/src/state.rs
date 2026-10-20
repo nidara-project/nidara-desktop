@@ -66,6 +66,9 @@ pub struct Hyalo {
 
     pub seat: Seat<Self>,
     pub cursor_status: CursorImageStatus,
+    /// The cursor the client under the pointer last asked for, kept while Hyalo shows its own
+    /// (`WindowManager::chrome_cursor`).
+    pub client_cursor: CursorImageStatus,
     pub focus_grab: Option<focus_grab::ActiveGrab>,
     /// Set when a frame has to be drawn on some output soon (see `queue_redraw`).
     pub redraw_idle_queued: bool,
@@ -260,6 +263,7 @@ impl Hyalo {
             presentation_state,
             seat,
             cursor_status: CursorImageStatus::default_named(),
+            client_cursor: CursorImageStatus::default_named(),
             focus_grab: None,
             redraw_idle_queued: false,
             ipc: IpcState::default(),
@@ -430,7 +434,9 @@ pub enum Chrome {
     Button(crate::protocols::window_controls::Button),
     /// The rest of its title bar (render/title_bar.rs): dragged, it moves the window.
     Bar,
-    Resize(crate::wm::grabs::ResizeEdge),
+    /// Its edges, and whether the window is tiled (its edge is then a line shared with its
+    /// neighbour).
+    Resize(crate::wm::grabs::ResizeEdge, bool),
 }
 
 impl Hyalo {
@@ -463,7 +469,12 @@ impl Hyalo {
                     return Some(None);
                 }
                 if managed.fullscreen == crate::wm::Fullscreen::None {
-                    let mut edges = crate::wm::grabs::border_edges(managed.frame(), pos);
+                    let inside = if window.x11_surface().is_some() {
+                        crate::wm::grabs::X11_INSIDE_STRIP
+                    } else {
+                        crate::wm::grabs::INSIDE_STRIP
+                    };
+                    let mut edges = crate::wm::grabs::border_edges(managed.frame(), pos, inside);
                     if !managed.floating && let Some(ws) = self.wm.workspaces.get(&managed.workspace) {
                         use crate::wm::{grabs::ResizeEdge, layout::Edge};
                         for (bit, edge) in [(ResizeEdge::LEFT, Edge::Left), (ResizeEdge::RIGHT, Edge::Right),
@@ -479,7 +490,7 @@ impl Hyalo {
                         edges.remove(crate::wm::grabs::ResizeEdge::TOP | crate::wm::grabs::ResizeEdge::BOTTOM);
                     }
                     if !edges.is_empty() {
-                        return Some(Some((managed.id, Chrome::Resize(edges))));
+                        return Some(Some((managed.id, Chrome::Resize(edges, !managed.floating))));
                     }
                 }
                 if managed.fullscreen != crate::wm::Fullscreen::Fullscreen
@@ -511,10 +522,15 @@ impl Hyalo {
     }
 
     /// The window control at `pos` (protocols/window_controls.rs).
+    /// Which ways window `id` can still be resized, for its edge's cursor.
+    fn resize_room(&self, id: crate::wm::WindowId) -> crate::wm::grabs::Room {
+        self.wm.get(id).map_or(crate::wm::grabs::Room::ANY, |m| crate::wm::grabs::Room::of_window(&m.window))
+    }
+
     pub fn controls_under(&self, pos: Point<f64, Logical>) -> Option<(crate::wm::WindowId, crate::protocols::window_controls::Button)> {
         match self.chrome_under(pos)? {
             (id, Chrome::Button(b)) => Some((id, b)),
-            (_, Chrome::Bar | Chrome::Resize(_)) => None,
+            (_, Chrome::Bar | Chrome::Resize(..)) => None,
         }
     }
 
@@ -533,17 +549,30 @@ impl Hyalo {
             // Held only while still over the button it was pressed on.
             pressed: was.is_some_and(|h| h.pressed && h.window == window && h.button == button),
         });
-        if let Some(crate::wm::grabs::Active { kind: crate::wm::grabs::Kind::Resize(edges), .. }) = self.wm.grab {
-            self.cursor_status = CursorImageStatus::Named(edges.cursor());
-        } else if let Some((_, chrome)) = chrome {
-            self.cursor_status = match chrome {
-                Chrome::Resize(edges) => CursorImageStatus::Named(edges.cursor()),
-                _ => CursorImageStatus::default_named(),
-            };
-        } else if self.wm.over_chrome {
-            self.cursor_status = CursorImageStatus::default_named();
+        // Hyalo's cursor over its chrome and through a resize; the client's (`client_cursor`)
+        // everywhere else. The client under a resize edge still has the pointer and sets its own,
+        // which won: kitty showed its text cursor on its edge (owner, 2026-10-20).
+        let ours = match (self.wm.grab, chrome) {
+            (Some(crate::wm::grabs::Active { id, kind: crate::wm::grabs::Kind::Resize(edges), tiled, .. }), _) => {
+                Some(CursorImageStatus::Named(edges.cursor(tiled, self.resize_room(id))))
+            }
+            (_, Some((id, Chrome::Resize(edges, tiled)))) => {
+                Some(CursorImageStatus::Named(edges.cursor(tiled, self.resize_room(id))))
+            }
+            (_, Some(_)) => Some(CursorImageStatus::default_named()),
+            (_, None) => None,
+        };
+        match ours {
+            Some(cursor) => {
+                self.cursor_status = cursor;
+                self.wm.chrome_cursor = true;
+            }
+            None if self.wm.chrome_cursor => {
+                self.cursor_status = self.client_cursor.clone();
+                self.wm.chrome_cursor = false;
+            }
+            None => {}
         }
-        self.wm.over_chrome = chrome.is_some();
         if now != was {
             self.wm.controls_hover = now;
             self.queue_redraw(None);

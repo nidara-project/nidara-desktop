@@ -1007,6 +1007,10 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   capture is slow enough that the two polls lie 63 px apart (`hyalo-minimize-check.sh`
   `over_dock`). And it reads a picture's pixels (a gjs process each) AFTER watching anything
   move, not while the animation runs.
+  🔴 **A check that captures while something moves writes `.ppm`, not `.png`**: on CI a PNG
+  took 4.2 s to write (nightly of 2026-10-20, #891 — the 6 s minimize was over before the
+  check began watching it cross the dock), a PPM 0.02 s. `hyalo-window-look-probe.js` reads
+  both (`pixel FILE X Y`).
 - **In flight the ink is kept** (`Controls::moving`, the window drawn at a `place`: into the
   dock, out of it, to another workspace): the glass is drawn with the ink it had and measures
   nothing (`GlassElement::measuring_nothing`) — what passes under a capsule on its way is not its
@@ -1516,12 +1520,37 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
 - **Resize borders belong to Hyalo, for every resizable app** (2026-10-14).
   An undecorated GTK window (Settings) has no GTK resize grips; relying only on the client's
   xdg resize request made it impossible to grab its border while Chrome worked. `Chrome::Resize`
-  uses `border_edges`: 3 logical px inside, 6 outside, corner reach 16. It shares the ordinary
+  uses `border_edges`: 3 logical px inside (5 for an X11 window, `X11_INSIDE_STRIP`: Chromium and
+  Electron keep a 5 px band of their own there with their own one-way cursors — measured on
+  ChatGPT with an XFixes probe, 2026-10-20 — so Hyalo takes all of it), 6 outside, corner reach 16. It shares the ordinary
   window grab path with client requests and Super+drag. Fullscreen/maximized windows have no
   resize border; fixed dimensions have no matching edge. A tile offers only edges that move
   a split (`Layout::can_resize_edge`), never its outer output boundary. Layers and popups keep
   precedence. The cursor follows the edge and stays there during the grab. Tiled drag deltas
   round the accumulated displacement, so subpixel pointer events are not lost.
+- **The cursor over chrome is Hyalo's, not the client's** (owner, 2026-10-20). The client under a
+  resize edge still has the pointer (the 3 px inside are its surface) and sets its own cursor,
+  which used to win: kitty showed its text cursor on its edge. `cursor_image` now keeps the
+  client's request in `client_cursor` and shows it only while `wm.chrome_cursor` is false;
+  `update_controls_hover` puts it back when the pointer leaves the chrome or a resize ends. The
+  SHAPE says what the drag does: a floating window's edge shows the arrows (`ew`/`ns`/diagonals),
+  a tile's edge the separator (`col-resize`/`row-resize`) — it moves the line shared with a
+  neighbour (`ResizeEdge::cursor(tiled, room)`). The third shape, the arrow against a bar
+  (`e-resize`, `se-resize`…), means "this edge can only go one way": a floating window at its
+  client's smallest or largest size on that axis (`Room`, from `size_limits`) shows it pointing
+  the way the edge can still go; a corner only when both its axes are one-way (owner, 2026-10-20).
+- **A resized tile is held by the side that did not move** (owner, 2026-10-20: "windows expand
+  to the opposite side and snap together on release"). A client draws its new size frames after
+  Hyalo lays the tile out; the grabbed tile was not placed at all until release, so one taken by
+  its LEFT edge grew to the right, over its neighbour, and snapped back when let go.
+  `resize_from` keeps each tile's box at grab start; after every layout step `resize_anchors`
+  records which side moved, and `anchored_loc` draws the window against the OTHER side,
+  wherever its committed size reaches (`sync_space`, and each commit via
+  `resize_anchor_commit`) — only while the client has NOT yet acked its last configure: once it
+  answers, what it drew is its answer (a cell below GTK's minimum draws larger and is clipped from
+  the origin; held by its far side it slid over its neighbour and stole its clicks —
+  `hyalo-resize-check.py` caught it). Checked
+  nested with the client SIGSTOPped mid-drag and resumed before release, against main.
 - **A window born tiled has no Wayland floating box yet** (#809). Its initial configure is
   the predicted tile, so `window_mapped` must not save that size as `float_rect`. On its first
   `float`, `toggle-floating`, or move to a floating workspace, `arrange_workspace` sends
