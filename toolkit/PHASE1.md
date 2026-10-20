@@ -257,6 +257,12 @@ it opened collapsed; otherwise it was part of the window. The native window does
   that scrolls under it is blurred — **graded**: strongest at the window's top edge, none at the
   title bar's bottom edge (a progressive blur), with the sidebar's glass as the alternative.
   Which of the two, and its numbers, the owner decides live (A/B), not this file.
+  **Provisional (owner, 2026-10-20, on `scripts/dev/titlebar-grade-demo.c`)**: the graded blur,
+  not the sidebar's glass; a zone 20 px taller than the title bar (72 for 52), the blur whole over
+  its top half and falling linearly to none at its bottom (`curve 1 1 0.5 0`: bands, each a shape
+  with its own `set_shape_grade`), and the window's background laid over it from 85 % at the top
+  to none at the bottom, so the title always reads. Linear 1→0 over the bar alone left content
+  sharp under the title. Curve and strength to be reviewed with the real window.
 - **Window controls** (Hyalo's, server side) **use the shell's glass** too. After the two above,
   as their own piece. ✅ Over an app's header: a `control` pane read from the token export
   (`scripts/ci/hyalo-controls-glass-check.py`).
