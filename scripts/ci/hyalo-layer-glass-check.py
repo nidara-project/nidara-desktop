@@ -12,7 +12,11 @@ near 0 blurred. Each claim is checked, and then its control must break it:
   1. under the sidebar the columns are blurred, beside it they are sharp —
      control `--no-material`: the layer has no material, and they are sharp under it too;
   2. under the title bar the blur falls from its top edge to its bottom edge —
-     control `--uniform`: not graded, as blurred at the bottom as at the top.
+     control `--uniform`: not graded, as blurred at the bottom as at the top;
+  3. the layers' glass shows nothing past the window's rounded corners (both layers reach the
+     window's top corners): the pixel one px in from each top corner is what lies beside the
+     window, not glass — control: a rule with `rounding = false` for the probe, whose square
+     corners then show the glass there (as every layer's glass did before it was cut).
 Exits 1 on failure."""
 import json
 import os
@@ -63,6 +67,11 @@ def contrast(image, y, x0, x1):
     return statistics.pstdev(lum)
 
 
+def pixel(image, x, y):
+    w, _, px = image
+    return tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3])
+
+
 def measure(name, *args):
     """Run the probe with `args` and measure its rows."""
     out = LOG / f'{name}.log'
@@ -90,6 +99,11 @@ def measure(name, *args):
             'beside': contrast(image, y(150), x(200), x(380)),
             'title_top': contrast(image, y(4), x(150), x(370)),
             'title_bottom': contrast(image, y(57), x(150), x(370)),
+            # One px in from the top corners, and the same row just beside the window.
+            'corner_left': pixel(image, x(1), y(1)),
+            'corner_right': pixel(image, x(win['width'] - 2), y(1)),
+            'beside_left': pixel(image, x(-6), y(1)),
+            'beside_right': pixel(image, x(win['width'] + 5), y(1)),
         }
     finally:
         probe.terminate()
@@ -105,6 +119,14 @@ def sidebar_blurred(m):
 def title_graded(m):
     assert m['title_top'] < BLURRED, f'the title bar is not blurred at its top edge ({m["title_top"]:.1f})'
     assert m['title_bottom'] > SHARP, f'the title bar is blurred at its bottom edge ({m["title_bottom"]:.1f}): not graded'
+
+
+def corners_cut(m):
+    near = lambda a, b: all(abs(p - q) <= 12 for p, q in zip(a, b))
+    for side in ('left', 'right'):
+        corner, beside = m[f'corner_{side}'], m[f'beside_{side}']
+        assert near(corner, beside), \
+            f'the {side} top corner shows {corner}, not what lies beside the window {beside}: the layers\' glass reaches past its rounded corner'
 
 
 def caught(label, claim, m):
@@ -129,6 +151,8 @@ def check():
         print(f'ok    under the sidebar the window\'s columns are blurred ({m["sidebar"]:.1f}), beside it sharp ({m["beside"]:.1f})', flush=True)
         title_graded(m)
         print(f'ok    under the title bar the blur falls from its top ({m["title_top"]:.1f}) to its bottom ({m["title_bottom"]:.1f})', flush=True)
+        corners_cut(m)
+        print(f'ok    the layers\' glass stops at the window\'s rounded corners ({m["corner_left"]} beside {m["beside_left"]}, {m["corner_right"]} beside {m["beside_right"]})', flush=True)
 
         bare = measure('no-material', '--no-material')
         (LOG / 'no-material.json').write_text(json.dumps(bare, indent=2))
@@ -136,6 +160,13 @@ def check():
         uniform = measure('uniform', '--uniform')
         (LOG / 'uniform.json').write_text(json.dumps(uniform, indent=2))
         caught('--uniform', title_graded, uniform)
+        msg('settings', json.dumps({'rules': {'layer-glass-square': {'match': {'app_id': f'^{APP}$'}, 'rounding': False}}}))
+        try:
+            square = measure('square')
+        finally:
+            msg('settings', json.dumps({'rules': {'layer-glass-square': None}}))
+        (LOG / 'square.json').write_text(json.dumps(square, indent=2))
+        caught('rounding = false', corners_cut, square)
         print('LAYER GLASS CHECK PASSED', flush=True)
     finally:
         msg('do', 'workspace', original)

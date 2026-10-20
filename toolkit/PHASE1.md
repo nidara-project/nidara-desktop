@@ -263,6 +263,11 @@ it opened collapsed; otherwise it was part of the window. The native window does
   with its own `set_shape_grade`), and the window's background laid over it from 85 % at the top
   to none at the bottom, so the title always reads. Linear 1→0 over the bar alone left content
   sharp under the title. Curve and strength to be reviewed with the real window.
+- **Seen live on nk-widgets-demo (owner, 2026-10-20):** the title bar is **only the blur** above
+  (no tone, no rim: not the menus' glass); the buttons in it are glass, its background is not.
+  **The sidebar floats**: inset from the window's edges, with rounded corners of its own — its
+  inset and radius to be set with the owner live. Nothing a layer draws, glass included, shows
+  past the window's rounded corners (Hyalo, `GlassElement::rounded_to`).
 - **Window controls** (Hyalo's, server side) **use the shell's glass** too. After the two above,
   as their own piece. ✅ Over an app's header: a `control` pane read from the token export
   (`scripts/ci/hyalo-controls-glass-check.py`).
