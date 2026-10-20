@@ -1537,7 +1537,10 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   `resize_from` keeps each tile's box at grab start; after every layout step `resize_anchors`
   records which side moved, and `anchored_loc` draws the window against the OTHER side,
   wherever its committed size reaches (`sync_space`, and each commit via
-  `resize_anchor_commit`). An anchor goes when its window has drawn the size of its box. Checked
+  `resize_anchor_commit`) — only while the client has NOT yet acked its last configure: once it
+  answers, what it drew is its answer (a cell below GTK's minimum draws larger and is clipped from
+  the origin; held by its far side it slid over its neighbour and stole its clicks —
+  `hyalo-resize-check.py` caught it). Checked
   nested with the client SIGSTOPped mid-drag and resumed before release, against main.
 - **A window born tiled has no Wayland floating box yet** (#809). Its initial configure is
   the predicted tile, so `window_mapped` must not save that size as `float_rect`. On its first

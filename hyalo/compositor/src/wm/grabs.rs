@@ -242,9 +242,15 @@ impl Hyalo {
     /// Where a tiled window is drawn while its client catches up with a resize (`resize_anchors`):
     /// its box's far side kept still, wherever its committed size reaches. Placed at its box's
     /// origin instead, a window taken by its left edge grew to the RIGHT, over its neighbour,
-    /// and jumped back on release (owner, 2026-10-20).
+    /// and jumped back on release (owner, 2026-10-20). Only until the client has answered the
+    /// last size it was given: what it draws then is its answer — larger than a small cell, at
+    /// GTK's minimum, it is clipped from the origin like any tile; held by its far side it slid
+    /// over its neighbour and took its clicks (hyalo-resize-check).
     pub(crate) fn anchored_loc(&self, m: &super::Managed) -> Point<i32, Logical> {
         let Some(&(right, bottom)) = self.wm.resize_anchors.get(&m.id) else { return m.rect.loc };
+        if !super::awaits_configure(&m.window) {
+            return m.rect.loc;
+        }
         let size = m.window.geometry().size;
         let t = m.rect;
         let x = if right { t.loc.x + t.size.w - size.w } else { t.loc.x };
@@ -259,7 +265,8 @@ impl Hyalo {
         if !self.wm.resize_anchors.contains_key(&id) {
             return false;
         }
-        let (window, loc, done) = (m.window.clone(), self.anchored_loc(m), m.window.geometry().size == m.rect.size);
+        let done = !super::awaits_configure(&m.window) || m.window.geometry().size == m.rect.size;
+        let (window, loc) = (m.window.clone(), self.anchored_loc(m));
         if done && self.wm.grab.is_none() {
             self.wm.resize_anchors.remove(&id);
         }
@@ -274,7 +281,7 @@ impl Hyalo {
         // A resized tile stays held by its side until its client draws the size it was given.
         self.wm.resize_from.clear();
         self.wm.resize_anchors.retain(|id, _| {
-            self.wm.windows.iter().any(|m| m.id == *id && m.window.geometry().size != m.rect.size)
+            self.wm.windows.iter().any(|m| m.id == *id && super::awaits_configure(&m.window) && m.window.geometry().size != m.rect.size)
         });
         let Some(m) = self.wm.get(g.id) else { return };
         let window = m.window.clone();
