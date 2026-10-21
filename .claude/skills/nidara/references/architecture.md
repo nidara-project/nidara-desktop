@@ -2700,3 +2700,11 @@ arguments are truncated by wayland-scanner at 1/256 logical pixel, so float-only
 non-overlap/positive-size checks are insufficient; touching float rectangles can
 overlap on the wire. `ControlMaterial` checks wire geometry and sends response
 and ink tone before the capsule shape, in the same synchronized transaction.
+
+#889's retained ControlCapsule owns ordered existing button nodes; captions
+(glyphs) and accessible names are separate. Never add per-button surfaces or
+parallel focus/action machinery. Placement and metric changes preserve node IDs;
+visible bounds are clipped to the window. Capsule geometry is a component export
+(capsule.json), not glass material; pitch derives from button + edge. Hyalo will
+retain a usable layout mirror checked against that source, so close works even
+without exported data.

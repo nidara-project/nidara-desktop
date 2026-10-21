@@ -127,3 +127,12 @@ Range controls (#882): `Tree::slider` and `Tree::fields` (spin buttons, the time
 `control_key` (keys), `range_drag` (press/drag, wired in `Composition::event`) and
 `request_value` (AT-SPI SetValue) all clamp and step the same way and report
 `Effect::Changed(id)`. A spin button's clock wraps (`ValueRange::wrap`); a slider never does.
+
+The #889 retained foundation is `control_capsule(name, position, CapsuleMetrics)`
+and `capsule_button(panel, accessible_name, glyph, destructive)`. It is one named
+Panel of existing Buttons, with glyph captions independent of accessible names.
+Measures, focus/actions, capture cancellation, hidden/disabled state and removal
+use the normal retained Tree. Metrics/position can change without replacing IDs.
+Geometry is supplied explicitly; the proposed common export is capsule.json →
+components.json, with server layout mirrored and checked separately by Hyalo.
+This foundation does not yet wire capsule layer material/coverage or the demo.

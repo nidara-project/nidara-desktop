@@ -2,6 +2,9 @@
 //! Retained structural widgets. The tree is the source for layout, pixels,
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
+
+mod capsule;
+pub use capsule::CapsuleMetrics;
 mod motion;
 mod paint;
 mod ranges;
@@ -91,6 +94,7 @@ pub enum Kind {
     TitleBar,
     Scroll,
     Group,
+    ControlCapsule,
     Row,
     Label,
     Switch {
@@ -157,6 +161,8 @@ pub struct Node {
     pub(crate) kind: Kind,
     pub(crate) button_shape: ButtonShape,
     pub(crate) name: String,
+    pub(crate) caption: Option<String>,
+    pub(crate) destructive: bool,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
     pub(crate) hidden: bool,
@@ -228,6 +234,7 @@ pub struct Tree {
     pub(crate) focus_visible: bool,
     pub(crate) hovered: Option<NodeId>,
     page_width: PageWidth,
+    pub(crate) capsules: BTreeMap<NodeId, capsule::Capsule>,
     capture: Option<NodeId>,
     capture_space: Option<NodeId>,
     pub(crate) active: bool,
@@ -292,6 +299,7 @@ impl Tree {
             focus_visible: false,
             hovered: None,
             page_width: PageWidth::None,
+            capsules: BTreeMap::new(),
             capture: None,
             capture_space: None,
             active: false,
@@ -330,6 +338,8 @@ impl Tree {
                 kind,
                 button_shape: ButtonShape::Rounded,
                 name,
+                caption: None,
+                destructive: false,
                 parent,
                 children: vec![],
                 hidden: false,
@@ -413,7 +423,7 @@ impl Tree {
             (p.kind, kind),
             (Kind::Window, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
                 | (Kind::Sidebar, Kind::Page { .. })
-                | (Kind::TitleBar, Kind::Button)
+                | (Kind::TitleBar | Kind::ControlCapsule, Kind::Button)
                 | (Kind::Scroll, Kind::Group | Kind::Row)
                 | (
                     Kind::Group,
@@ -548,7 +558,10 @@ impl Tree {
         let mut current = Some(id);
         while let Some(id) = current {
             let n = &self.nodes[&id];
-            if matches!(n.kind, Kind::Sidebar | Kind::TitleBar) {
+            if matches!(
+                n.kind,
+                Kind::Sidebar | Kind::TitleBar | Kind::ControlCapsule
+            ) {
                 return true;
             }
             current = n.parent;
@@ -665,6 +678,7 @@ impl Tree {
         self.set_hidden(id, true)?;
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
+            tree.capsules.remove(&id);
             let node = tree.nodes.remove(&id).unwrap();
             for child in node.children {
                 erase(tree, child);
@@ -890,7 +904,10 @@ impl Tree {
             .get(&container)
             .ok_or("unknown input pane")?
             .bounds;
-        if !matches!(self.nodes[&container].kind, Kind::Sidebar | Kind::TitleBar) {
+        if !matches!(
+            self.nodes[&container].kind,
+            Kind::Sidebar | Kind::TitleBar | Kind::ControlCapsule
+        ) {
             return Err("input space is not a pane".into());
         }
         let p = Point {
@@ -1038,6 +1055,42 @@ impl Tree {
         if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
             return self.measure_range(id, backend);
         }
+        if kind == Kind::Button
+            && let Some(capsule) = self.capsule_for_button(id)
+        {
+            let metrics = capsule.metrics;
+            let n = self.nodes.get_mut(&id).unwrap();
+            let caption = n.caption.as_deref().unwrap_or(&n.name);
+            let layout = backend.layout(caption, &self.style, width.max(1.))?;
+            let text = layout.measured_size();
+            n.measured = Size {
+                width: metrics.button_min.max(text.width),
+                height: metrics.button_min.max(text.height),
+            };
+            n.layout = Some(layout);
+            return Ok(n.measured);
+        }
+        if kind == Kind::ControlCapsule {
+            let metrics = self.capsules[&id].metrics;
+            let mut count = 0;
+            let mut sum = 0.;
+            let mut height: f32 = 0.;
+            for child in self.nodes[&id].children.clone() {
+                let size = self.measure(child, width, backend)?;
+                if self.is_hidden(child) {
+                    continue;
+                }
+                count += 1;
+                sum += size.width;
+                height = height.max(size.height);
+            }
+            let size = Size {
+                width: 2. * metrics.padding + sum + metrics.gap * (count as f32 - 1.).max(0.),
+                height: metrics.height_min.max(2. * metrics.padding + height),
+            };
+            self.nodes.get_mut(&id).unwrap().measured = size;
+            return Ok(size);
+        }
         if matches!(kind, Kind::Row | Kind::Disclosure { .. }) {
             let children = self.nodes[&id].children.clone();
             let mut control_width: f32 = match kind {
@@ -1171,6 +1224,7 @@ impl Tree {
             max_w = max_w.max(s.width);
         }
         let size = match kind {
+            Kind::ControlCapsule => unreachable!("capsule measured above"),
             Kind::Window => self.size,
             Kind::Sidebar => Size {
                 width,
@@ -1359,6 +1413,16 @@ impl Tree {
                     width: viewport.width,
                     height: viewport.y,
                 },
+                Kind::ControlCapsule => {
+                    let capsule = self.capsules[&child];
+                    let size = self.nodes[&child].measured;
+                    Rect {
+                        x: capsule.position.x,
+                        y: capsule.position.y,
+                        width: size.width,
+                        height: size.height,
+                    }
+                }
                 Kind::Scroll => Rect {
                     x: 0.,
                     y: 0.,
@@ -1384,6 +1448,27 @@ impl Tree {
         }
         let children = node.children.clone();
         let m = self.metrics;
+        if kind == Kind::ControlCapsule {
+            let metrics = self.capsules[&id].metrics;
+            let mut x = r.x + metrics.padding;
+            for child in children {
+                if self.is_hidden(child) {
+                    continue;
+                }
+                let size = self.nodes[&child].measured;
+                self.place_node(
+                    child,
+                    Rect {
+                        x,
+                        y: r.y + (r.height - size.height) / 2.,
+                        width: size.width,
+                        height: size.height,
+                    },
+                );
+                x += size.width + metrics.gap;
+            }
+            return;
+        }
         let inset = self.content_viewport();
         let mut y = r.y + m.padding;
         let mut x = r.x + m.padding;
@@ -1553,6 +1638,17 @@ impl Tree {
             while let Some(p) = current {
                 if self.nodes[&p].kind == Kind::Sidebar {
                     return self.sidebar_viewport();
+                }
+                if self.nodes[&p].kind == Kind::ControlCapsule {
+                    let r = self.nodes[&p].bounds;
+                    let x = r.x.max(0.);
+                    let y = r.y.max(0.);
+                    return Rect {
+                        x,
+                        y,
+                        width: (r.x + r.width).min(self.size.width).max(x) - x,
+                        height: (r.y + r.height).min(self.size.height).max(y) - y,
+                    };
                 }
                 if self.nodes[&p].kind == Kind::TitleBar {
                     return self.nodes[&p].bounds;

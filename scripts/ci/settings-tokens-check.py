@@ -187,6 +187,12 @@ for variant in component_variants:
             fail.append(f"{where}: missing rows colour token {part.get('color')}")
     if segmented.get('fontSize') not in static['scss']:
         fail.append(f"{where}: choices font size {segmented.get('fontSize')} is not a static scss token")
+
+    capsule = variant.get('capsule') or {}
+    if not (positive_number(capsule.get('height')) and positive_number(capsule.get('button'))
+            and positive_number(capsule.get('edge'), True)
+            and capsule['height'] >= capsule['button'] + 2 * capsule['edge']):
+        fail.append(f'{where}: missing or invalid capsule geometry')
     common = variant.get('common') or {}
     widths = variant.get('widths') or {}
     form = widths.get('form') or {}
