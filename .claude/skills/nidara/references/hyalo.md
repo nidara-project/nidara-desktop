@@ -1292,7 +1292,9 @@ expected 1.01 was wrong, not the curve).
   first frame was presented only when the 700 ms opening ended (main, CI: callback 133 ms,
   presented 1056 ms; found 2026-10-18 by a `WAYLAND_DEBUG` timeline for #852). Any element
   drawn by proxy (picture, texture of surfaces) must take its surfaces' feedback itself.
-  `nk-phase0-check.py` requires the gap under 350 ms on the vkms run.
+  `nk-phase0-check.py` requires the gap under the opening animation in force (`msg config`,
+  `animations.open`) on the vkms run: held feedback is at least that long by construction. A
+  fixed 350 ms (half of it) failed a correct Hyalo at 355 ms on CI's software GL (2026-10-21).
 - 🔴 **A surface is told its scale before its first configure** (`backend::tell_initial_scale`,
   from `initial_configure` and the layer's first configure): the preferred scale otherwise
   follows the primary scanout output, which an opening window (drawn by proxy, above) has only
