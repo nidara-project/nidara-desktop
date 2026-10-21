@@ -28,9 +28,9 @@ pub(crate) struct Fallback {
     pub active: bool,
 }
 impl Fallback {
-    pub fn update(&mut self, tree: &mut Tree, now: Duration, reduced: bool, enabled: bool) -> bool {
+    pub fn update(&mut self, tree: &mut Tree, now: Duration, reduced: bool, opaque: bool) -> bool {
         let mut targets = BTreeMap::new();
-        if enabled {
+        if opaque {
             for id in tree.capsule_ids().filter(|id| !tree.is_hidden(*id)) {
                 if let Some(style) = tree.capsule_styles.get(&id) {
                     for button in &tree.nodes[&id].children {

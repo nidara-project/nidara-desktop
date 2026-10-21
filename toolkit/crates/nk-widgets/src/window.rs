@@ -1852,6 +1852,11 @@ mod tests {
         );
         fade.update(&mut tree, ms(61.5), false, true);
         assert!((tree.capsule_washes[&normal][3] - 0.05).abs() < 1e-9);
+        assert_eq!(
+            &tree.capsule_washes[&normal][..3],
+            &[1., 1., 1.],
+            "D5 midpoint lost hover RGB"
+        );
         let middle_pixel = pixel(&tree);
         fade.update(&mut tree, ms(123.), false, true);
         let end_pixel = pixel(&tree);
