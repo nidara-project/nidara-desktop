@@ -244,7 +244,15 @@ struct GlassMemo(RefCell<Option<(CommitCounter, String)>>);
 /// The controls' answer to their backdrop and their washes as they ease (protocols/material.rs
 /// `Presenting`), and the response they were drawn with — kept on the window's surface.
 #[derive(Default)]
-struct PresentMemo(RefCell<(crate::protocols::material::Presenting, Option<crate::protocols::material::Response>)>);
+struct PresentMemo(RefCell<PresentState>);
+
+#[derive(Default)]
+struct PresentState {
+    presenting: crate::protocols::material::Presenting,
+    response: Option<crate::protocols::material::Response>,
+    /// The material last drawn, as committed (before `present`): what `answers_info` reads.
+    state: crate::protocols::material::MaterialState,
+}
 
 /// The capsule's one shape.
 const SHAPE: usize = 0;
@@ -325,9 +333,10 @@ pub fn glass(
     let (easing, _) = with_states(surface, |states| {
         let memo = states.data_map.get_or_insert(PresentMemo::default);
         let mut memo = memo.0.borrow_mut();
-        memo.1 = look.response;
-        memo.0.committed(&state, when);
-        memo.0.present(&mut state, when)
+        memo.response = look.response;
+        memo.state = state.clone();
+        memo.presenting.committed(&state, when);
+        memo.presenting.present(&mut state, when)
     });
     if easing {
         crate::protocols::material::mark_easing();
@@ -384,8 +393,18 @@ pub fn response_measured(surface: &WlSurface, answers: &[(usize, f32, f32)]) -> 
     with_states(surface, |states| {
         let Some(memo) = states.data_map.get::<PresentMemo>() else { return false };
         let mut memo = memo.0.borrow_mut();
-        let Some(response) = memo.1 else { return false };
-        memo.0.measured(SHAPE, &response, mean as f64, sigma as f64, std::time::Instant::now())
+        let Some(response) = memo.response else { return false };
+        memo.presenting.measured(SHAPE, &response, mean as f64, sigma as f64, std::time::Instant::now())
+    })
+}
+
+/// What the glass under a window's controls shows now of its answer and its washes, for
+/// `msg windows`. None before it was first drawn on the glass.
+pub fn answers_info(surface: &WlSurface, now: std::time::Instant) -> Option<crate::ipc::AnswersInfo> {
+    with_states(surface, |states| {
+        let memo = states.data_map.get::<PresentMemo>()?;
+        let memo = memo.0.borrow();
+        memo.response.map(|_| memo.presenting.info(&memo.state, now))
     })
 }
 

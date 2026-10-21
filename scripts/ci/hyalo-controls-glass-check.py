@@ -18,11 +18,13 @@ contrast along a row: the luminance's standard deviation, ≈ 127 sharp, near 0 
   4. the hovered close button is a red WASH in the glass (toolkit/CONTRACT.md, "Floating control
      capsule": the same state regions as the toolkit's controls), not a disc over it: red, and
      the header shows through it — it differs over the light and the dark header;
-  5. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
+  5. Hyalo reports the answer its controls' glass shows (`msg windows`, `controls_answers`): r ≈ 1
+     over the light header, ≈ 0 over the dark one;
+  6. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
      through the plain capsule (claim 1 must fail), over the light header the glyphs stay
      white, nothing measuring it (claim 2 must fail), the bar's own capsule is darker than
-     the bar (claim 3 must fail), and the plain capsule's hover is its opaque disc, the same
-     over both headers (claim 4 must fail).
+     the bar (claim 3 must fail), the plain capsule's hover is its opaque disc, the same
+     over both headers (claim 4 must fail), and nothing is reported for it (claim 5 must fail).
 Exits 1 on failure."""
 import json
 import os
@@ -123,6 +125,8 @@ def measure(name, env, app=APP, ready='PLACED', hover=False):
             'darkest': min(mid),
             'brightest': max(mid),
             'asked_ink': 'ASKED' in out.read_text(),
+            # What Hyalo reports its glass shows (`msg windows`, `controls_answers`).
+            'answers': win.get('controls_answers'),
             # Inside the close button's circle, clear of its glyph (a 6 px cross).
             'close_wash': pixel(image, p(close[0] + 7), p(close[1] - 6)),
         }
@@ -143,6 +147,16 @@ def inked(light, dark):
         f'over a light header the glyphs are not dark (darkest {light["darkest"]:.0f}, glass {light["glass"]:.0f}): the glass did not take the ink'
     assert dark['brightest'] > 170, \
         f'over a dark header the glyphs are not white (brightest {dark["brightest"]:.0f}, glass {dark["glass"]:.0f})'
+
+
+def controls_reported(light, dark):
+    """Hyalo reports the answer its controls' glass shows: measured, r ≈ 1 over the light header
+    and ≈ 0 over the dark one."""
+    def r(m):
+        shapes = (m['answers'] or {}).get('shapes', [])
+        assert shapes and shapes[0]['measured'], f'Hyalo reports no measured answer for the controls: {m["answers"]}'
+        return shapes[0]['r']
+    assert r(light) > 0.9 and r(dark) < 0.1, f'Hyalo reports r {r(light):.2f} over the light header, {r(dark):.2f} over the dark one'
 
 
 def hover_washed(light, dark):
@@ -178,6 +192,9 @@ def check():
         inked(light, dark)
         print(f'ok    the ink is the glass\'s: dark glyphs over a light header ({light["darkest"]:.0f}), '
               f'white over a dark one ({dark["brightest"]:.0f}), the app saying nothing', flush=True)
+        controls_reported(light, dark)
+        print(f'ok    Hyalo reports the answer its controls show (msg windows): r {light["answers"]["shapes"][0]["r"]:.2f} '
+              f'over the light header, {dark["answers"]["shapes"][0]["r"]:.2f} over the dark one', flush=True)
 
         results['hover_light'] = hl = measure('hover-light', {'HYALO_PROBE_HEADER': LIGHT_HEADER}, hover=True)
         results['hover_dark'] = hd = measure('hover-dark', {'HYALO_PROBE_HEADER': DARK_HEADER}, hover=True)
@@ -208,6 +225,12 @@ def check():
             print(f'CAUGHT glass = false (ink): {e}', flush=True)
         else:
             raise AssertionError(f'the control glass = false (ink) was not caught: {plain_light}')
+        try:
+            controls_reported(plain_light, dark)
+        except AssertionError as e:
+            print(f'CAUGHT glass = false (report): {e}', flush=True)
+        else:
+            raise AssertionError(f'the control glass = false (report) was not caught: {plain_light}')
         results['plain_title_bar'] = plain_tb = measure('plain-title-bar', {}, app='hyalo-title-bar-probe', ready='SHOWN')
         try:
             bar_glass(plain_tb)

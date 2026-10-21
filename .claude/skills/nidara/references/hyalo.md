@@ -798,6 +798,10 @@ controls and Hyalo's own window controls on the same paths:
 - ⚠️ **`inked_surfaces` reads each surface from the walk's own `states`**
   (`material::has_coverage(states)`): `with_states` again inside `with_surface_tree_downward`
   locks the surface twice and Hyalo hangs at its first frame (seen headless, 2026-10-21).
+- **What shows is reported** (`msg windows`): each layer's `answers` and the window's
+  `controls_answers` — per answering shape `measured`, `r`, `c`, `settled`, `shadow_gain`, per
+  wash its colour now and `settled` (`Presenting::info`). A check waits for `measured && settled`
+  instead of sleeping before its capture; the checks below do.
 - A **layer's panes cast their shadow** (`LayeredTree`'s `LayerPaint::Shadow`, right below its
   glass, cut to the root's box): before #889 a layer's `set_shadow` drew nothing.
 - Values: `toolkit/tokens/control.json`, merged into every control step of `tokens/glass.json`

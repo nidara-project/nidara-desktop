@@ -502,6 +502,52 @@ impl Presenting {
     }
 }
 
+impl Presenting {
+    /// What it shows at `now`, for `msg windows` (a check waits on `settled` instead of a sleep):
+    /// each answering shape of `state` — measured or not yet — and each wash.
+    pub fn info(&self, state: &MaterialState, now: std::time::Instant) -> crate::ipc::AnswersInfo {
+        let shapes = state
+            .shapes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| {
+                let response = s.response?;
+                let e = self.answers.get(&i);
+                let [r, c] = e.map_or([0.0, 0.0], |e| e.at(now));
+                Some(crate::ipc::ShapeAnswerInfo {
+                    shape: i,
+                    measured: e.is_some(),
+                    r,
+                    c,
+                    settled: e.is_none_or(|e| e.settled(now)),
+                    shadow_gain: response.shadow_gain([r, c]),
+                })
+            })
+            .collect();
+        let washes = state
+            .state_regions
+            .iter()
+            .map(|reg| {
+                let e = self.washes.get(&reg.id);
+                crate::ipc::WashInfo {
+                    id: reg.id,
+                    wash: e.map_or(reg.wash, |e| e.at(now)),
+                    settled: e.is_none_or(|e| e.settled(now)),
+                }
+            })
+            .collect();
+        crate::ipc::AnswersInfo { shapes, washes }
+    }
+}
+
+/// What a surface's material shows at `now` (`Presenting::info`), for a walk that already holds
+/// its states. None when it answers nothing and has no washes.
+pub fn answers_info(states: &smithay::wayland::compositor::SurfaceData, now: std::time::Instant) -> Option<crate::ipc::AnswersInfo> {
+    let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap();
+    let info = current.presenting.info(&current.state, now);
+    (!info.shapes.is_empty() || !info.washes.is_empty()).then_some(info)
+}
+
 thread_local! {
     /// Something drawn is still easing (`Presenting::present`): the backend draws another frame.
     static EASING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
@@ -1264,6 +1310,23 @@ mod tests {
         let mut gone = MaterialState::default();
         p.committed(&gone, ms(80));
         assert!(!p.present(&mut gone, ms(80)).0, "an id gone is gone at once");
+    }
+
+    #[test]
+    fn the_report_says_what_shows_and_whether_it_settled() {
+        let r = Response { luma: [0.25, 0.35], contrast: [0.02, 0.10], shadow_white: 1.0, shadow_text: 0.0, settle_ms: 200 };
+        let t0 = std::time::Instant::now();
+        let ms = |n: u64| t0 + std::time::Duration::from_millis(n);
+        let m = MaterialState { shapes: vec![Shape { response: Some(r), ..shape(0.0, 0.0) }], ..Default::default() };
+        let mut p = Presenting::default();
+        let info = p.info(&m, t0);
+        assert_eq!((info.shapes.len(), info.shapes[0].measured), (1, false), "an answering shape, not measured yet");
+        p.measured(0, &r, 0.9, 0.0, t0);
+        p.measured(0, &r, 0.0, 0.0, ms(0));
+        let info = p.info(&m, ms(100));
+        let a = &info.shapes[0];
+        assert!(a.measured && !a.settled && (a.r - 0.5).abs() < 1e-9 && (a.shadow_gain - 1.5).abs() < 1e-9, "{a:?}");
+        assert!(p.info(&m, ms(300)).shapes[0].settled);
     }
 
     #[test]

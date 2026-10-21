@@ -21,7 +21,10 @@ checked, and then a control — the probe dropping that one part — must break 
   5. the wash: inside its rectangle the glass is redder than beside it, and the backdrop still
      shows through it (it differs between the white and the black page) — control `--no-state`;
   6. overlapping coverage is the protocol error invalid_region — control: the probe without the
-     overlap gets no error (every run above).
+     overlap gets no error (every run above);
+  7. Hyalo reports the answer it shows (`msg windows`, the layer's `answers`): measured, settled,
+     r ≈ 1 over the white page and ≈ 0 over the black one — control `--no-response` (none).
+     Every capture waits for that report, never on a sleep.
 CONTROL_MATERIAL_CONTROLS=0 leaves the five probe controls (seven runs) out: a PR that touches
 nothing they check (scripts/ci/ci-scope.sh `full`); the nightly run has them.
 Exits 1 on failure."""
@@ -92,8 +95,17 @@ def run(name, *args):
         # measures its backdrop — the answer is applied when the GPU hands it back.
         time.sleep(1.5)
         shot(f'{name}-warm')
-        time.sleep(.5)
-        win = next(w for w in msg('windows')['windows'] if w['app_id'] == APP)
+        # Until Hyalo says the answer it shows is measured and settled (`msg windows`, the layer's
+        # `answers`) — not a sleep: a capture before it would see the glass before its answer.
+        answers = None
+        for _ in range(50):
+            win = next(w for w in msg('windows')['windows'] if w['app_id'] == APP)
+            answers = next((l.get('answers') for l in win.get('layers', []) if l.get('answers')), None)
+            shapes = (answers or {}).get('shapes', [])
+            if not shapes or all(a['measured'] and a['settled'] for a in shapes):
+                break
+            shot(f'{name}-warm')
+            time.sleep(.1)
         scale = msg('outputs')['outputs'][0]['scale']
         image = shot(name)
         at = lambda x, y: pixel(image, int((win['x'] + X + x) * scale), int((win['y'] + Y + y) * scale))
@@ -106,6 +118,7 @@ def run(name, *args):
             'wash': at(76, 20),
             # 3 px under the capsule's bottom edge: inside its shadow (6 px down, 4 px blur).
             'shadow': at(80, 43),
+            'answers': answers,
         }
     finally:
         probe.terminate()
@@ -144,6 +157,16 @@ def washed(white, black):
         f'the wash is the same over the white page {white["wash"]} and the black one {black["wash"]}: the backdrop does not show through'
 
 
+def reported(white, black):
+    def answer(m):
+        shapes = (m['answers'] or {}).get('shapes', [])
+        assert shapes and all(a['measured'] and a['settled'] for a in shapes), \
+            f'Hyalo reports no measured, settled answer: {m["answers"]}'
+        return shapes[0]['r']
+    assert answer(white) > 0.9 and answer(black) < 0.1, \
+        f'Hyalo reports r {answer(white):.2f} over the white page and {answer(black):.2f} over the black one'
+
+
 def protocol_error(m):
     assert 'ERROR nidara_material_v1 0' in m['log'], f'no invalid_region error: {m["log"]!r}'
 
@@ -177,28 +200,33 @@ def check():
         print(f'ok    the shadow answers it: {white["shadow"]} under the capsule over white', flush=True)
         washed(white, black)
         print(f'ok    the wash is in the glass: {white["wash"]} beside {white["glass"]}, {black["wash"]} over black', flush=True)
+        reported(white, black)
+        print(f'ok    Hyalo reports the answer it shows (msg windows): r {white["answers"]["shapes"][0]["r"]:.2f} over white, '
+              f'{black["answers"]["shapes"][0]["r"]:.2f} over black, settled', flush=True)
         results['overlap'] = overlap = run('overlap', '--overlap')
         protocol_error(overlap)
         print('ok    overlapping coverage is invalid_region', flush=True)
 
         if os.environ.get('CONTROL_MATERIAL_CONTROLS', '1') == '0':
             caught('no overlap', protocol_error, white)
+            caught('--no-response (report)', reported, *[run(f'no-response-{p}', '--no-response', '--page', p) for p in ('white', 'black')])
             print('controls left to the nightly run (CONTROL_MATERIAL_CONTROLS=0)', flush=True)
             print('CONTROL MATERIAL CHECK PASSED', flush=True)
             return
-        for flag, claim, pages in (
-                ('--no-ink', lambda w: coverage_inked(w), ('white',)),
-                ('--no-response', lambda w, b: ink_answers(w, b), ('white', 'black')),
-                ('--no-ink-tone', lambda w: tone_answers(w), ('white',)),
-                ('--no-shadow-gain', lambda w: shadow_answers(w), ('white',)),
-                ('--no-state', lambda w, b: washed(w, b), ('white', 'black'))):
+        for flag, pages, claims in (
+                ('--no-ink', ('white',), [('--no-ink', coverage_inked)]),
+                ('--no-response', ('white', 'black'), [('--no-response', ink_answers), ('--no-response (report)', reported)]),
+                ('--no-ink-tone', ('white',), [('--no-ink-tone', tone_answers)]),
+                ('--no-shadow-gain', ('white',), [('--no-shadow-gain', shadow_answers)]),
+                ('--no-state', ('white', 'black'), [('--no-state', washed)])):
             ms = []
             for page in pages:
                 name = f'{flag[2:]}-{page}'
                 results[name] = m = run(name, flag, '--page', page)
                 assert 'glyph_a' in m, f'the probe never got ready ({flag}): {m["log"]!r}'
                 ms.append(m)
-            caught(flag, claim, *ms)
+            for label, claim in claims:
+                caught(label, claim, *ms)
         caught('no overlap', protocol_error, white)
         print('CONTROL MATERIAL CHECK PASSED', flush=True)
     finally:
