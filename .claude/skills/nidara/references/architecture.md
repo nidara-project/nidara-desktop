@@ -2634,3 +2634,9 @@ not compute a separate focus radius or draw a ring on the full row bounds.
 Rows holding controls do not hover as a whole. Separators use visible neighbors
 and text origins. Root pointer leave is forwarded by nk-wayland just like layer
 leave, so retained hover cannot remain after the pointer exits the surface.
+
+D8 page width is a named policy on the retained content region (`set_page_width`),
+not a number picked by each page. Form aliases WINDOW_LAYOUT's existing preferred
+width and floor. Apply the policy before the measure-cache key is recorded;
+changing the named kind must not reuse a wider/narrower stale layout. Centre in
+the current content viewport (after the sampled sidebar inset), not the window.

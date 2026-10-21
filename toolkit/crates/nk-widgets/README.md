@@ -96,3 +96,11 @@ motion set retained hover; pointer leave and hiding/disabling its ancestor clear
 it. Separators start at the label, follow visible neighbors, skip the last row
 and disappear beside selected/hovered pages. Colour, inset, opacity and physical
 separator thickness are explicit appearance inputs from provisional list tokens.
+
+D8 content width is selected once with `Tree::set_page_width(PageWidth::Form)`
+(or `None` for an unconstrained page). The app names a category. The appearance
+seam supplies form width/floor from WINDOW_LAYOUT.content/contentFloor, not page
+literals. Scroll children measure inside that column, centred in the viewport
+beside the sidebar; the same sampled inset drives recentering during collapse.
+Below the floor the column remains horizontally scrollable. `Reading` returns
+an explicit error until a real reading page establishes its measured tokens.

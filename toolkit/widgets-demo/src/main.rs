@@ -493,6 +493,7 @@ fn run() -> Result<()> {
         tree.window_controls(titlebar, ["Minimize", "Maximize", "Close"])?
     };
     let scroll = tree.append(root, Kind::Scroll, "Content")?;
+    tree.set_page_width(nk_widgets::PageWidth::Form)?;
     let group = tree.group(scroll, "General")?;
     let (_, switch) = tree.row(group, "Enable feature", Kind::Switch { checked: false })?;
     let mut buttons = vec![];

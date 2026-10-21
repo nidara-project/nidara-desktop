@@ -525,6 +525,8 @@ mod tests {
             Metrics {
                 sidebar: 120.,
                 content: 400.,
+                form_width: 400.,
+                content_floor: 280.,
                 titlebar: 48.,
                 padding: 8.,
                 gap: 4.,
@@ -1006,6 +1008,105 @@ mod tests {
         tree.layout(tree.size, true, &mut backend).unwrap();
         let (track, track_radius) = tree.highlight_shape(switch.1);
         assert_eq!(track_radius, track.height / 2.);
+    }
+    #[test]
+    fn form_width_is_constant_then_yields_to_its_floor_and_centers_beside_sidebar() {
+        for layered in [false, true] {
+            let (mut tree, mut backend, _, _, scroll) = fixture();
+            let wide = *tree.nodes[&scroll].children.last().unwrap();
+            tree.remove(wide).unwrap();
+            tree.metrics.form_width = 800.;
+            tree.metrics.content_floor = 560.;
+            tree.set_page_width(PageWidth::Form).unwrap();
+            let row = tree.nodes[&scroll].children[0];
+            for width in [1400., 800., 700., 650.] {
+                tree.layout(
+                    Size {
+                        width,
+                        height: 480.,
+                    },
+                    layered,
+                    &mut backend,
+                )
+                .unwrap();
+                let viewport = tree.content_viewport();
+                let bounds = tree.nodes[&row].bounds;
+                let column = bounds.width + 2. * tree.metrics.padding;
+                assert_eq!(
+                    column,
+                    if width == 1400. {
+                        800.
+                    } else if width == 650. {
+                        560.
+                    } else {
+                        width - 120.
+                    }
+                );
+                assert!(
+                    (bounds.x
+                        - (viewport.x
+                            + (viewport.width - column).max(0.) / 2.
+                            + tree.metrics.padding))
+                        .abs()
+                        < 0.001,
+                    "column centered in whole window, not beside sidebar"
+                );
+            }
+            tree.scroll_to(scroll, Point { x: 1000., y: 0. }).unwrap();
+            assert_eq!(
+                tree.nodes[&scroll].scroll.x, 30.,
+                "floor must remain horizontally reachable"
+            );
+            tree.layout(
+                Size {
+                    width: 1400.,
+                    height: 480.,
+                },
+                layered,
+                &mut backend,
+            )
+            .unwrap();
+            assert_eq!(tree.nodes[&scroll].scroll.x, 0.);
+            tree.set_page_width(PageWidth::None).unwrap();
+            tree.layout(tree.size, layered, &mut backend).unwrap();
+            assert_eq!(
+                tree.nodes[&row].bounds.width + 2. * tree.metrics.padding,
+                1280.,
+                "named-width change reused stale measure"
+            );
+            assert!(tree.set_page_width(PageWidth::Reading).is_err());
+            tree.set_page_width(PageWidth::Form).unwrap();
+            tree.layout(tree.size, layered, &mut backend).unwrap();
+            tree.sidebar_open = false;
+            let mut composition = Composition::default();
+            composition
+                .start_motion(
+                    &mut tree,
+                    Some((
+                        1,
+                        Curve::Bezier {
+                            x1: 0.,
+                            y1: 0.,
+                            x2: 1.,
+                            y2: 1.,
+                            duration_ms: 1000,
+                        },
+                    )),
+                )
+                .unwrap();
+            for seconds in [0., 0.25, 0.5, 0.75, 1.] {
+                composition.sample(&mut tree, Some(seconds));
+                tree.layout(tree.size, layered, &mut backend).unwrap();
+                let viewport = tree.content_viewport();
+                let bounds = tree.nodes[&row].bounds;
+                assert!(
+                    (bounds.x - (viewport.x + (viewport.width - 800.) / 2. + tree.metrics.padding))
+                        .abs()
+                        < 0.01,
+                    "centering does not follow collapse timeline"
+                );
+            }
+        }
     }
     #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {

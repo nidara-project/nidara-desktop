@@ -213,3 +213,15 @@ control-only row labels without hover, and capsule/track geometry. Removing only
 the hover fill is CAUGHT at its own pixel assertion (target/list-hover-control.log).
 The focused total is now 35 tests. Named content widths remain pending. This
 change has not had live owner validation or a new full private libatspi matrix.
+
+## D8 named form width
+
+The demo chooses `PageWidth::Form`; the appearance seam supplies existing
+WINDOW_LAYOUT preferred/floor tokens (800/560). Unit geometry covers both D5/D7,
+wide/contracted/floor overflow, horizontal reachability, changing the named kind
+without stale measurement, and five collapse timeline samples. Centring against
+the whole window instead of the space beside the sidebar is CAUGHT at its own
+assertion (`target/content-width-control.log`). `Reading` has an explicit missing
+tokens error rather than an invented width. The focused total is now 36 tests.
+List-token export and combined live/private acceptance remain separate pending
+work; these unit results do not certify those paths.

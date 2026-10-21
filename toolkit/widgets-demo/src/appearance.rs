@@ -178,6 +178,8 @@ impl Appearance {
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
+            form_width: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
+            content_floor: number(&sizes["ts"]["WINDOW_LAYOUT"]["contentFloor"])?,
             titlebar: scss(&sizes["scss"]["space-10"])? + scss(&sizes["scss"]["space-2"])?,
             padding: scss(&sizes["scss"]["space-3"])?,
             gap: scss(&sizes["scss"]["space-1"])?,

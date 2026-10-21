@@ -51,6 +51,8 @@ pub struct Metrics {
     pub sidebar: f32,
     /// Fixed content width in WINDOW_LAYOUT; breakpoint = sidebar + content.
     pub content: f32,
+    pub form_width: f32,
+    pub content_floor: f32,
     pub titlebar: f32,
     pub padding: f32,
     pub gap: f32,
@@ -63,6 +65,13 @@ pub struct Metrics {
     pub highlight_inset: f32,
     pub hover_opacity: f32,
     pub separator_width: f32,
+}
+/// The application names a page category, never a width in pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PageWidth {
+    Form,
+    Reading,
+    None,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -149,6 +158,7 @@ pub struct Tree {
     pub(crate) focused: Option<NodeId>,
     pub(crate) focus_visible: bool,
     pub(crate) hovered: Option<NodeId>,
+    page_width: PageWidth,
     capture: Option<NodeId>,
     capture_space: Option<NodeId>,
     pub(crate) active: bool,
@@ -175,6 +185,8 @@ impl Tree {
         if [
             metrics.sidebar,
             metrics.content,
+            metrics.form_width,
+            metrics.content_floor,
             metrics.titlebar,
             metrics.padding,
             metrics.gap,
@@ -193,6 +205,9 @@ impl Tree {
         {
             return Err("non-finite or negative widget measurement".into());
         }
+        if metrics.content_floor <= 0. || metrics.form_width < metrics.content_floor {
+            return Err("invalid content width tokens".into());
+        }
         let mut tree = Self {
             nodes: BTreeMap::new(),
             root: 1,
@@ -201,6 +216,7 @@ impl Tree {
             focused: None,
             focus_visible: false,
             hovered: None,
+            page_width: PageWidth::None,
             capture: None,
             capture_space: None,
             active: false,
@@ -893,6 +909,11 @@ impl Tree {
             .unwrap_or(width)
             .max(self.nodes[&id].min_width)
             .max(1.);
+        let width = if kind == Kind::Scroll {
+            self.content_column_width(width)
+        } else {
+            width
+        };
         if !self.nodes[&id].dirty.layout && self.nodes[&id].constraint == width {
             return Ok(self.nodes[&id].measured);
         }
@@ -1099,6 +1120,24 @@ impl Tree {
             height: (self.size.height - 2. * margin).max(1.),
         }
     }
+    /// Reading is intentionally unavailable until a real reading page measures its tokens.
+    pub fn set_page_width(&mut self, kind: PageWidth) -> Result<()> {
+        if kind == PageWidth::Reading {
+            return Err("reading width tokens not defined".into());
+        }
+        if self.page_width != kind {
+            self.page_width = kind;
+            self.invalidate(self.root, Invalid::LAYOUT);
+        }
+        Ok(())
+    }
+    fn content_column_width(&self, available: f32) -> f32 {
+        match self.page_width {
+            PageWidth::Form => available.clamp(self.metrics.content_floor, self.metrics.form_width),
+            PageWidth::None => available,
+            PageWidth::Reading => unreachable!("reading tokens required by setter"),
+        }
+    }
     pub fn sidebar_open(&self) -> bool {
         self.sidebar_open
     }
@@ -1202,7 +1241,8 @@ impl Tree {
             y += inset.y - node.scroll.y;
         }
         if kind == Kind::Scroll {
-            x = inset.x + m.padding - node.scroll.x;
+            let column = self.content_column_width(inset.width);
+            x = inset.x + (inset.width - column).max(0.) / 2. + m.padding - node.scroll.x;
             y = inset.y + m.padding - node.scroll.y;
         }
         let trailing_width = if kind == Kind::TitleBar {
