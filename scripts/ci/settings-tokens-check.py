@@ -16,9 +16,10 @@ usage: settings-tokens-check.py OUT_DIR
 - Every step of every variant's `control` piece carries what toolkit/tokens/control.json adds
   (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
-- Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour.
+- Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour,
+  and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font.
 CI also runs it on a copy with one used token dropped from one set, on one with `panel`
-dropped from one glass variant, a control step's `states` dropped, and one variant's list highlight dropped; all must fail.
+dropped from one glass variant, a control step's `states` dropped, one variant's list highlight dropped, and one variant's swatch dropped; all must fail.
 """
 import json, math, re, sys
 from itertools import product
@@ -144,6 +145,18 @@ for variant in component_variants:
     key = separator.get('color')
     if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
         fail.append(f'{where}: missing separator colour token {key}')
+    choices = variant.get('choices') or {}
+    segmented = choices.get('segmented') or {}
+    swatch = choices.get('swatch') or {}
+    if not (all(positive_number(segmented.get(k), True) for k in ('paddingX', 'paddingY', 'border'))
+            and all(positive_number(swatch.get(k)) for k in ('diameter', 'border', 'ring', 'gap'))):
+        fail.append(f'{where}: incomplete or invalid choices (segmented/swatch)')
+    for key in (segmented.get('borderColor'), segmented.get('selectedColor'), segmented.get('selectedText'),
+                swatch.get('selectedColor'), swatch.get('hoverColor')):
+        if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
+            fail.append(f'{where}: missing choices colour token {key}')
+    if segmented.get('fontSize') not in static['scss']:
+        fail.append(f"{where}: choices font size {segmented.get('fontSize')} is not a static scss token")
     common = variant.get('common') or {}
     widths = variant.get('widths') or {}
     form = widths.get('form') or {}
@@ -157,4 +170,4 @@ if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls and lists complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists and choices complete')

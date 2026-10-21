@@ -114,3 +114,10 @@ height. D7 coordinates are converted from the title layer to Tree coordinates.
 The application supplies the double-click interval explicitly through
 set_titlebar_double_click_ms; the demo currently uses Hyalo's existing400ms policy.
 Double click invokes the same ToggleMaximize action as the maximize button.
+
+Radio groups (#882): `Tree::choices` builds a row whose control holds one `Choice` per option;
+`ChoiceKind` picks the look (segmented, swatch), `set_choice_style` hands over the exported
+`ChoiceStyle` (no defaults: measuring without it is an error), `set_swatch` gives a sample its
+colour, `set_choice` updates from the model. One Tab stop per group (its chosen option); the
+arrows/Home/End move focus and choice together (`control_key`, wired in `Composition::event`).
+A choice's keyboard ring sits outside its shape so it shows on the accent segment.

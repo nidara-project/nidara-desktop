@@ -19,6 +19,10 @@ pub struct Appearance {
     pub size: (u32, u32),
     pub reduce_motion: bool,
     pub titlebar_double_click_ms: u32,
+    /// The radio groups' look (components.json `choices`, #882).
+    pub choices: nk_widgets::ChoiceStyle,
+    /// The accent palette by name (colors.json `accents`).
+    pub accents: Vec<(String, Color)>,
 }
 fn read(path: impl AsRef<Path>) -> Result<Value> {
     serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
@@ -167,6 +171,64 @@ impl Appearance {
                     .ok_or("missing list separator colour")?,
             )?,
         };
+        let choices = &component["choices"];
+        let em = |key: &str| -> Result<f32> {
+            let text = sizes["scss"][key]
+                .as_str()
+                .ok_or("missing choices font size")?;
+            text.strip_suffix("em")
+                .ok_or("choices font size is not relative")?
+                .parse::<f32>()
+                .map_err(|e| e.to_string())
+        };
+        let choices = nk_widgets::ChoiceStyle {
+            segment_padding_x: number(&choices["segmented"]["paddingX"])?,
+            segment_padding_y: number(&choices["segmented"]["paddingY"])?,
+            segment_border: number(&choices["segmented"]["border"])?,
+            segment_text_scale: em(choices["segmented"]["fontSize"]
+                .as_str()
+                .ok_or("missing choices font size")?)?,
+            segment_border_color: token(
+                choices["segmented"]["borderColor"]
+                    .as_str()
+                    .ok_or("missing segment border colour")?,
+            )?,
+            segment_selected: token(
+                choices["segmented"]["selectedColor"]
+                    .as_str()
+                    .ok_or("missing segment colour")?,
+            )?,
+            segment_selected_text: token(
+                choices["segmented"]["selectedText"]
+                    .as_str()
+                    .ok_or("missing segment text colour")?,
+            )?,
+            swatch_diameter: number(&choices["swatch"]["diameter"])?,
+            swatch_border: number(&choices["swatch"]["border"])?,
+            swatch_ring: number(&choices["swatch"]["ring"])?,
+            swatch_gap: number(&choices["swatch"]["gap"])?,
+            swatch_selected: token(
+                choices["swatch"]["selectedColor"]
+                    .as_str()
+                    .ok_or("missing swatch ring colour")?,
+            )?,
+            swatch_hover: token(
+                choices["swatch"]["hoverColor"]
+                    .as_str()
+                    .ok_or("missing swatch hover colour")?,
+            )?,
+        };
+        let accents = colors["accents"]
+            .as_object()
+            .ok_or("missing accent palette")?
+            .iter()
+            .map(|(name, value)| {
+                Ok((
+                    name.clone(),
+                    color(value.as_str().ok_or("invalid accent colour")?)?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
         // Only the switch measurements still need the named _components.scss stub.
         // Panel material always comes from the real, installed export.
         let stub: Value =
@@ -242,6 +304,8 @@ impl Appearance {
             style,
             size,
             reduce_motion,
+            choices,
+            accents,
             titlebar_double_click_ms: recipe["doubleClickMs"]
                 .as_u64()
                 .and_then(|v| u32::try_from(v).ok())

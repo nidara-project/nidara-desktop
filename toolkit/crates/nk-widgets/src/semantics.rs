@@ -14,9 +14,10 @@ impl Tree {
                 Kind::TitleBar | Kind::Label => Role::Label,
                 Kind::Page { .. } => Role::Option,
                 Kind::Scroll => Role::ScrollPane,
-                Kind::Group | Kind::Row => Role::Panel,
+                Kind::Group | Kind::Row | Kind::Choices { .. } => Role::Panel,
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
+                Kind::Choice { .. } => Role::RadioButton,
             };
             let mut n = Semantic::new(id, role, &widget.name);
             if id == self.root {
@@ -53,7 +54,10 @@ impl Tree {
                 active: id == self.root && self.active,
                 focused: self.focused == Some(id),
                 disabled: !self.available(id),
-                checked: matches!(widget.kind, Kind::Switch { checked: true }),
+                checked: matches!(
+                    widget.kind,
+                    Kind::Switch { checked: true } | Kind::Choice { checked: true }
+                ),
                 selected: matches!(widget.kind, Kind::Page { selected: true }),
                 offscreen: !intersects(r, self.visible_clip(id)),
                 ..Default::default()
@@ -76,7 +80,7 @@ impl Tree {
                 n.relations.push(Relation::LabelledBy(*label));
                 n.name = self.nodes[label].name.clone();
             }
-            if matches!(widget.kind, Kind::Switch { .. } | Kind::Button)
+            if widget.kind.row_control()
                 && let Some(parent) = widget.parent
                 && let Some(label) = self.nodes[&parent]
                     .children

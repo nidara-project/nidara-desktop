@@ -225,6 +225,22 @@ Phase 0 remains an independent client of those four crates.
   The no-layers fallback uses one
   sampled client timeline for paint/hit-testing/focus, with AT-SPI bounds at model values;
   reduced motion omits the transition. Hyalo's layer glass is separate work.
+- **Radio groups (#882)**: `Tree::choices(group, label, ChoiceKind, options, selected)` makes a
+  row whose control is a `Choices` holding one `Choice` per option, one always chosen. The
+  segmented choice (also the preset choice) and the swatch choice are ONE component with two
+  looks (`ChoiceKind`); the look's numbers and colours come from `toolkit/tokens/choices.json`
+  through `components.json`'s `choices` (taken from the current Settings, provisional until the
+  owner's review), handed over as `ChoiceStyle` — measuring a group without it is an error.
+  Keyboard as a radio group: ONE Tab stop per group, its chosen option; the arrows, Home and End
+  move the focus AND the choice, wrapping and passing over disabled options
+  (`Tree::control_key`, called by `Composition::event` before Tab/activation). A click or
+  Space/Enter chooses; `set_choice` updates from the model without activating. AT-SPI: the group
+  is a `Panel` named and labelled by its row, each option a `RadioButton` with its own name and
+  `checked`. The keyboard ring of a choice goes OUTSIDE its shape (the kit's
+  `nidara-focus-ring` offset): on the chosen segment, the accent, an inner ring would not show.
+  `scripts/ci/nk-choices-check.py` drives the demo's `--choices` mode through libatspi with a
+  control per assertion (two chosen, an unnamed swatch, a swatch that is not a radio, arrows
+  ignored).
 - `nk-a11y` projects panel/list/scroll-pane/toggle-button roles, label relations and separate
   hidden/offscreen state. Its existing phase-0 roles and hidden-state semantics remain valid.
 - `widgets-demo` and `scripts/ci/nk-widgets-check.py` exercise the tree through the public

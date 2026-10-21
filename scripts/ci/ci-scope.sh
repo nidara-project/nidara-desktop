@@ -52,7 +52,7 @@ needs_gates() {
         toolkit/*) return 0 ;;
         protocols/nidara-layers-v1.xml|config/hyalo/*) return 0 ;;
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py|scripts/ci/nk-widgets-check.py) return 0 ;;
-        scripts/ci/nk-a11y-check.py) return 0 ;;
+        scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py) return 0 ;;
     esac
     return 1
 }
@@ -63,7 +63,7 @@ needs_gates() {
 needs_full() {
     case "$1" in
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py) return 0 ;;
-        scripts/ci/nk-a11y-check.py) return 0 ;;
+        scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py|toolkit/widgets-demo/src/choices.rs) return 0 ;;
         scripts/ci/hyalo-control-material-check.py|scripts/ci/hyalo-control-material-probe.c) return 0 ;;
         toolkit/phase0/*) return 0 ;;
     esac
@@ -140,6 +140,7 @@ if [ "${1:-}" = --self-test ]; then
     check_gates true toolkit/crates/nk-widgets/src/lib.rs
     check_gates true toolkit/widgets-demo/src/main.rs
     check_gates true scripts/ci/nk-widgets-check.py
+    check_gates true scripts/ci/nk-choices-check.py
     check_gates true toolkit/crates/nk-newcrate/src/lib.rs
     check_gates true toolkit/phase0/src/main.rs
     check_gates true scripts/ci/nk-real-common.py
@@ -153,6 +154,9 @@ if [ "${1:-}" = --self-test ]; then
     check_full false ui/shell/app.ts
     check_full true scripts/ci/nk-fcitx5-check.py
     check_full true scripts/ci/nk-a11y-check.py
+    check_full true scripts/ci/nk-choices-check.py
+    check_full true toolkit/widgets-demo/src/choices.rs
+    check_full false toolkit/widgets-demo/src/main.rs
     check_full true scripts/ci/hyalo-control-material-check.py
     check_full false toolkit/crates/nk-a11y/src/lib.rs
     check_full true toolkit/phase0/src/main.rs

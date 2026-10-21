@@ -514,6 +514,11 @@ impl Composition {
         if matches!(event, Event::Key(_)) {
             tree.set_focus_visible(true);
         }
+        if let Event::Key(key) = event
+            && let Some(effect) = tree.control_key(key.sym)?
+        {
+            return Ok(effect);
+        }
         match event {
             Event::Key(key) if key.sym == 0xff1b && tree.sidebar_overlay() => {
                 tree.sidebar_request = Some(false);

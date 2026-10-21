@@ -2551,6 +2551,20 @@ the value: `CurrentValue` set from outside becomes `Request::SetValue`, offered 
 A tree with a value outside its range fails `validate()`, so a widget bug surfaces as a refused
 publication, not as a reader saying a number the control cannot show (#882, toolkit/CONTRACT.md).
 
+## Native toolkit radio groups
+
+One component, two looks (#882): the segmented/preset choice and the accent swatches are both
+`Kind::Choices` holding `Kind::Choice`s, built by `Tree::choices` as a row's control. What
+differs is only `ChoiceKind` and the exported `ChoiceStyle` (`toolkit/tokens/choices.json` →
+`components.json` `choices`, read by the app; no compiled defaults). Keyboard semantics are the
+radio group's: one Tab stop (the chosen option, `tab_stop` in `focus_order`), arrows/Home/End
+move focus AND choice (`Tree::control_key`, called first in `Composition::event`; later range
+controls hook their keys there too). AT-SPI: the group is a Panel labelled by its row, each
+option a RadioButton. Trap found building it: the keyboard ring drawn ON a shape is invisible
+on the chosen segment (accent on accent); a choice's ring is offset outside it
+(`choice_focus_shape`), as the kit's `nidara-focus-ring` is. Its libatspi gate is
+`scripts/ci/nk-choices-check.py` (demo `--choices`), run in the hyalo job's real-gates block.
+
 ## Native toolkit text geometry
 
 `nk-text::Layout::cluster_boxes` caches logical shaped-cluster bounds and leading
