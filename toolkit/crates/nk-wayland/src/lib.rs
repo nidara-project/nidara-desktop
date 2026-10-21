@@ -67,6 +67,7 @@ pub enum Event {
     Focus(bool),
     Key(Key),
     Motion(f64, f64),
+    PointerLeave,
     Button {
         button: u32,
         pressed: bool,
@@ -1200,6 +1201,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                     });
                 }
                 w.pointer_inside = false;
+                w.events.push(Event::PointerLeave);
             }
             wl_pointer::Event::Motion {
                 surface_x,

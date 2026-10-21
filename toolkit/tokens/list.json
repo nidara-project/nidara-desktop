@@ -1,4 +1,16 @@
 {
   "source": "Provisional D8 list/focus tokens; focus width follows nidara-focus-ring in ui/lib/nidara-kit/styles/_tokens.scss. Final values require owner live review.",
-  "focus": { "width": 2 }
+  "focus": {
+    "width": 2
+  },
+  "highlight": {
+    "inset": 4,
+    "hoverOpacity": 0.08,
+    "source": "Provisional inset from space-1; neutral hover 8% from D8. Final geometry live with owner."
+  },
+  "separator": {
+    "physicalPixels": 1,
+    "color": "--nidara-border",
+    "source": "Provisional hairline from existing kit border; final appearance live with owner."
+  }
 }

@@ -382,6 +382,7 @@ impl Composition {
             Event::Key(key) if key.sym == 0xff1b && tree.sidebar_overlay() => {
                 tree.sidebar_request = Some(false);
             }
+            Event::PointerLeave => tree.pointer_leave(),
             Event::Focus(active) => tree.set_active(*active),
             Event::Key(key) if key.sym == 0xff09 || key.sym == 0xfe20 => {
                 tree.tab(key.shift || key.sym == 0xfe20)?
@@ -395,7 +396,8 @@ impl Composition {
                 self.pointer = Point {
                     x: *x as f32,
                     y: *y as f32,
-                }
+                };
+                tree.pointer_motion(self.pointer);
             }
             Event::Button {
                 button: 272,
@@ -449,7 +451,14 @@ impl Composition {
                         self.pointer = Point {
                             x: origin.x + *x as f32,
                             y: origin.y + *y as f32,
-                        }
+                        };
+                        tree.pointer_motion_in(
+                            container,
+                            Point {
+                                x: *x as f32,
+                                y: *y as f32,
+                            },
+                        )?;
                     }
                     LayerEvent::Button {
                         button: 272,
@@ -461,6 +470,13 @@ impl Composition {
                             x: origin.x + *x as f32,
                             y: origin.y + *y as f32,
                         };
+                        tree.pointer_motion_in(
+                            container,
+                            Point {
+                                x: *x as f32,
+                                y: *y as f32,
+                            },
+                        )?;
                         let local = Point {
                             x: *x as f32,
                             y: *y as f32,
@@ -480,6 +496,7 @@ impl Composition {
                             return tree.pointer_release_in(container, local);
                         }
                     }
+                    LayerEvent::Leave => tree.pointer_leave(),
                     LayerEvent::Done { .. }
                         if !tree.sidebar_open
                             && tree.focused.is_some_and(|id| {
@@ -517,6 +534,9 @@ mod tests {
                 radius: 8.,
                 group_radius: 12.,
                 focus_width: 2.,
+                highlight_inset: 4.,
+                hover_opacity: 0.08,
+                separator_width: 1.,
             },
             TextStyle::default(),
         )
@@ -710,6 +730,7 @@ mod tests {
             track: rgba(60, 70, 80, 255),
             thumb: rgba(255, 255, 255, 255),
             focus: rgba(0, 100, 255, 255),
+            separator: rgba(99, 88, 77, 255),
         }
     }
     #[test]
@@ -880,6 +901,111 @@ mod tests {
                 assert!(baseline == tree.paint(frame, surface, test_palette()).unwrap());
             }
         }
+    }
+    #[test]
+    fn list_hover_uses_the_shared_inset_shape_and_visible_neighbors() {
+        let (mut tree, mut backend, sidebar, _, content) = fixture();
+        let pages = tree.nodes[&sidebar].children.clone();
+        for id in &pages[5..] {
+            tree.set_hidden(*id, true).unwrap();
+        }
+        tree.layout(tree.size, true, &mut backend).unwrap();
+        let baseline_lines = tree.list_separators(sidebar);
+        assert_eq!(baseline_lines.len(), 3); // No line beside selected first or below last.
+        assert!(
+            baseline_lines
+                .iter()
+                .all(|line| line.x == tree.nodes[&pages[1]].bounds.x + tree.metrics.padding)
+        );
+        let bounds = tree.nodes[&pages[2]].bounds;
+        let (shape, radius) = tree.highlight_shape(pages[2]);
+        assert!(shape.x > bounds.x && shape.y > bounds.y);
+        assert!(shape.width < bounds.width && shape.height < bounds.height);
+        assert_eq!(radius, tree.metrics.radius);
+        for scale in [1., 1.25] {
+            let frame = nk_wayland::Frame {
+                width: 120,
+                height: 480,
+                pixel_width: (120. * scale) as u16,
+                pixel_height: (480. * scale) as u16,
+                scale,
+                material: true,
+            };
+            tree.pointer_leave();
+            let before = tree.paint(frame, Surface::Sidebar, test_palette()).unwrap();
+            tree.acknowledge();
+            tree.pointer_motion_in(
+                sidebar,
+                Point {
+                    x: bounds.x + bounds.width / 2.,
+                    y: bounds.y + bounds.height / 2.,
+                },
+            )
+            .unwrap();
+            assert_eq!(tree.hovered, Some(pages[2]));
+            assert!(
+                tree.invalidation().paint
+                    && !tree.invalidation().layout
+                    && !tree.invalidation().semantics
+            );
+            let hovered = tree.paint(frame, Surface::Sidebar, test_palette()).unwrap();
+            let sample = |x: f32, y: f32| {
+                let x = (x as f64 * scale).round() as usize;
+                let y = (y as f64 * scale).round() as usize;
+                (y * frame.pixel_width as usize + x) * 4
+            };
+            let inside = sample(shape.x + shape.width / 2., shape.y + shape.height - 3.);
+            assert_ne!(
+                &before[inside..inside + 4],
+                &hovered[inside..inside + 4],
+                "hover fill missing inside inset shape"
+            );
+            let separator = baseline_lines[0];
+            let edge = sample(separator.x + 1., separator.y);
+            assert_eq!(before[edge + 3], 255, "separator not painted");
+            assert_eq!(hovered[edge + 3], 0, "separator cuts hovered highlight");
+            assert_eq!(
+                tree.list_separators(sidebar).len(),
+                1,
+                "separators cut hovered highlight"
+            );
+            tree.pointer_leave();
+            assert!(
+                before == tree.paint(frame, Surface::Sidebar, test_palette()).unwrap(),
+                "hover survives pointer leave"
+            );
+        }
+        tree.pointer_motion(Point {
+            x: bounds.x + 10.,
+            y: bounds.y + 10.,
+        });
+        tree.set_hidden(pages[2], true).unwrap();
+        assert_eq!(tree.hovered, None);
+        tree.layout(tree.size, true, &mut backend).unwrap();
+        assert_eq!(tree.list_separators(sidebar).len(), 2);
+        for id in &pages[1..5] {
+            tree.set_hidden(*id, true).unwrap();
+        }
+        assert!(tree.list_separators(sidebar).is_empty());
+        let row = tree.nodes[&content].children[0];
+        let label = tree.nodes[&row].children[0];
+        let control = tree.nodes[&row].children[1];
+        let point = |r: Rect| Point {
+            x: r.x + r.width / 2.,
+            y: r.y + r.height / 2.,
+        };
+        tree.pointer_motion(point(tree.nodes[&label].bounds));
+        assert_eq!(tree.hovered, None, "control-only row has whole-row hover");
+        tree.pointer_motion(point(tree.nodes[&control].bounds));
+        assert_eq!(tree.hovered, Some(control));
+        let (button, button_radius) = tree.highlight_shape(control);
+        assert_eq!(button_radius, button.height / 2.);
+        let switch = tree
+            .row(content, "Switch", Kind::Switch { checked: false })
+            .unwrap();
+        tree.layout(tree.size, true, &mut backend).unwrap();
+        let (track, track_radius) = tree.highlight_shape(switch.1);
+        assert_eq!(track_radius, track.height / 2.);
     }
     #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {

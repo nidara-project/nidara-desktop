@@ -62,6 +62,12 @@ impl Canvas {
     pub fn pop_clip(&mut self) {
         self.context.pop_clip();
     }
+    /// Horizontal separator thickness is specified in physical pixels.
+    pub fn horizontal_rule(&mut self, mut r: Rect, pixels: f64, color: Color) {
+        r.y = ((r.y as f64 * self.scale).round() / self.scale) as f32;
+        r.height = (pixels / self.scale) as f32;
+        self.rect(r, color);
+    }
     pub fn caret(&mut self, mut r: Rect, color: Color) {
         // Exactly one physical pixel at every fractional scale.
         r.x = ((r.x as f64 * self.scale).round() / self.scale) as f32;

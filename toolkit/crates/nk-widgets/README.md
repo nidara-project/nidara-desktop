@@ -88,3 +88,11 @@ input restores it. Programmatic focus/reveal and automatic recovery preserve the
 modality. The ring follows the page/button radius or the switch track, with its
 width supplied in Metrics from tokens. Focus and selected state do not depend on
 whether the ring is visible.
+
+D8 selection, hover and focus use one `highlight_shape`: inset rounded pages,
+capsule buttons and switch tracks. Hit bounds remain unchanged. Only actionable
+nodes accept hover; a control-only Row/Label does not. Root and presented-layer
+motion set retained hover; pointer leave and hiding/disabling its ancestor clear
+it. Separators start at the label, follow visible neighbors, skip the last row
+and disappear beside selected/hovered pages. Colour, inset, opacity and physical
+separator thickness are explicit appearance inputs from provisional list tokens.

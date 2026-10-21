@@ -13,6 +13,7 @@ pub struct Palette {
     pub track: Color,
     pub thumb: Color,
     pub focus: Color,
+    pub separator: Color,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Surface {
@@ -21,6 +22,64 @@ pub enum Surface {
     TitleBar,
 }
 impl Tree {
+    /// One silhouette for selection, hover and keyboard focus; never changes hit bounds.
+    pub(crate) fn highlight_shape(&self, id: NodeId) -> (Rect, f32) {
+        let n = &self.nodes[&id];
+        let mut bounds = n.bounds;
+        let radius = match n.kind {
+            Kind::Page { .. } => {
+                let inset = self
+                    .metrics
+                    .highlight_inset
+                    .min(bounds.width.min(bounds.height) / 2.);
+                bounds.x += inset;
+                bounds.y += inset;
+                bounds.width -= 2. * inset;
+                bounds.height -= 2. * inset;
+                self.metrics.radius
+            }
+            Kind::Button | Kind::Switch { .. } => bounds.height / 2.,
+            _ => 0.,
+        };
+        (bounds, radius)
+    }
+
+    pub(crate) fn list_separators(&self, parent: NodeId) -> Vec<Rect> {
+        let children: Vec<_> = self.nodes[&parent]
+            .children
+            .iter()
+            .copied()
+            .filter(|id| {
+                !self.is_hidden(*id) && matches!(self.nodes[id].kind, Kind::Page { .. } | Kind::Row)
+            })
+            .collect();
+        children
+            .windows(2)
+            .filter_map(|pair| {
+                let highlighted = |id: NodeId| {
+                    self.hovered == Some(id)
+                        || matches!(self.nodes[&id].kind, Kind::Page { selected: true })
+                };
+                if pair.iter().any(|id| highlighted(*id)) {
+                    return None;
+                }
+                let a = &self.nodes[&pair[0]];
+                let b = &self.nodes[&pair[1]];
+                let text_x = a
+                    .children
+                    .iter()
+                    .map(|id| &self.nodes[id])
+                    .find(|n| n.kind == Kind::Label && !n.hidden)
+                    .map_or(a.bounds.x + self.metrics.padding, |n| n.bounds.x);
+                Some(Rect {
+                    x: text_x,
+                    y: (a.bounds.y + a.bounds.height + b.bounds.y) / 2.,
+                    width: (a.bounds.x + a.bounds.width - self.metrics.padding - text_x).max(0.),
+                    height: 0.,
+                })
+            })
+            .collect()
+    }
     /// Paint the retained Layouts measured by layout(). Independent pane buffers
     /// have local coordinates; D5 paints both panes into the root with an opaque base.
     pub fn paint(
@@ -155,6 +214,8 @@ impl Tree {
         } else {
             palette.disabled
         };
+        let (highlight, radius) = self.highlight_shape(id);
+        let highlight = local(highlight, origin);
         match n.kind {
             Kind::Group => {
                 // The header labels the card from outside it, as NidaraList does.
@@ -172,9 +233,9 @@ impl Tree {
                 canvas.rounded_rect(card, m.group_radius as f64, palette.surface);
             }
             Kind::Page { selected: true } => {
-                canvas.rounded_rect(r, m.radius as f64, palette.selected)
+                canvas.rounded_rect(highlight, radius as f64, palette.selected)
             }
-            Kind::Button => canvas.rounded_rect(r, m.radius as f64, palette.surface),
+            Kind::Button => canvas.rounded_rect(highlight, radius as f64, palette.surface),
             Kind::Switch { checked } => {
                 canvas.rounded_rect(
                     r,
@@ -203,6 +264,15 @@ impl Tree {
                 );
             }
             _ => {}
+        }
+        if self.hovered == Some(id)
+            && self.available(id)
+            && n.kind.focusable()
+            && !matches!(n.kind, Kind::Page { selected: true })
+        {
+            let mut hover = palette.text;
+            hover.components[3] = m.hover_opacity;
+            canvas.rounded_rect(highlight, radius as f64, hover);
         }
         if let Some(layout) = &n.layout
             && matches!(
@@ -238,12 +308,12 @@ impl Tree {
             )?;
         }
         if self.focus_visible && self.focused == Some(id) {
-            let radius = if matches!(n.kind, Kind::Switch { .. }) {
-                r.height / 2.
-            } else {
-                m.radius
-            };
-            canvas.rounded_ring(r, radius as f64, m.focus_width as f64, palette.focus);
+            canvas.rounded_ring(
+                highlight,
+                radius as f64,
+                m.focus_width as f64,
+                palette.focus,
+            );
         }
         if n.kind == Kind::Sidebar {
             let viewport = if self.layered {
@@ -260,10 +330,26 @@ impl Tree {
             for child in &n.children {
                 self.paint_node(*child, origin, canvas, palette, viewport)?;
             }
+            for separator in self.list_separators(id) {
+                canvas.horizontal_rule(
+                    local(separator, origin),
+                    m.separator_width as f64,
+                    palette.separator,
+                );
+            }
             canvas.pop_clip();
         } else {
             for child in &n.children {
                 self.paint_node(*child, origin, canvas, palette, clip)?;
+            }
+            if n.kind == Kind::Group {
+                for separator in self.list_separators(id) {
+                    canvas.horizontal_rule(
+                        local(separator, origin),
+                        m.separator_width as f64,
+                        palette.separator,
+                    );
+                }
             }
         }
         Ok(())

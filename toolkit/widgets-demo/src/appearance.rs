@@ -130,6 +130,7 @@ impl Appearance {
             track: token("--nidara-surface")?,
             thumb: token("--nidara-thumb")?,
             focus: token("--nidara-accent")?,
+            separator: token("--nidara-border")?,
         };
         // Only the switch measurements still need the named _components.scss stub.
         // Panel material always comes from the real, installed export.
@@ -186,6 +187,9 @@ impl Appearance {
             radius: number(&sizes["ts"]["RADIUS"]["sm"])?,
             group_radius: number(&sizes["ts"]["RADIUS"]["md"])?,
             focus_width: number(&list["focus"]["width"])?,
+            highlight_inset: number(&list["highlight"]["inset"])?,
+            hover_opacity: number(&list["highlight"]["hoverOpacity"])?,
+            separator_width: number(&list["separator"]["physicalPixels"])?,
         };
         let description = <&str>::try_from(get("org.gnome.desktop.interface", "font-name")?)
             .map_err(|e| e.to_string())?;

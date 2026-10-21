@@ -60,6 +60,9 @@ pub struct Metrics {
     pub radius: f32,
     pub group_radius: f32,
     pub focus_width: f32,
+    pub highlight_inset: f32,
+    pub hover_opacity: f32,
+    pub separator_width: f32,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -145,6 +148,7 @@ pub struct Tree {
     generation: u64,
     pub(crate) focused: Option<NodeId>,
     pub(crate) focus_visible: bool,
+    pub(crate) hovered: Option<NodeId>,
     capture: Option<NodeId>,
     capture_space: Option<NodeId>,
     pub(crate) active: bool,
@@ -180,6 +184,9 @@ impl Tree {
             metrics.radius,
             metrics.group_radius,
             metrics.focus_width,
+            metrics.highlight_inset,
+            metrics.hover_opacity,
+            metrics.separator_width,
         ]
         .iter()
         .any(|n| !n.is_finite() || *n < 0.)
@@ -193,6 +200,7 @@ impl Tree {
             generation: 0,
             focused: None,
             focus_visible: false,
+            hovered: None,
             capture: None,
             capture_space: None,
             active: false,
@@ -513,6 +521,9 @@ impl Tree {
                 Invalid::LAYOUT
             },
         );
+        if self.hovered.is_some_and(|id| !self.available(id)) {
+            self.set_hovered(None);
+        }
         if self.capture.is_some_and(|id| !self.available(id)) {
             self.capture = None;
             self.capture_space = None;
@@ -701,10 +712,34 @@ impl Tree {
         }
         Ok(Effect::Activated(id))
     }
+    pub fn pointer_leave(&mut self) {
+        self.set_hovered(None);
+    }
+    fn set_hovered(&mut self, id: Option<NodeId>) {
+        if self.hovered != id {
+            let previous = self.hovered;
+            self.hovered = id;
+            for id in previous.into_iter().chain(id) {
+                self.invalidate(id, Invalid::PAINT);
+            }
+        }
+    }
+    pub fn pointer_motion(&mut self, point: Point) {
+        self.set_hovered(self.hit_test(point));
+    }
+    pub fn pointer_motion_in(&mut self, container: NodeId, local: Point) -> Result<()> {
+        let id = self.hit_test_in(container, local)?;
+        self.set_hovered(id);
+        Ok(())
+    }
     pub fn pointer_press(&mut self, p: Point) -> Result<()> {
         self.set_focus_visible(false);
         self.capture_space = None;
         self.capture = self.hit_test(p);
+        self.set_hovered(self.capture);
+        if let Some(id) = self.capture {
+            self.invalidate(id, Invalid::PAINT);
+        }
         if let Some(id) = self.capture {
             self.focus(id)?;
         }
@@ -714,6 +749,15 @@ impl Tree {
     /// compositor at its PRESENTED position. Never clip it at the model endpoint.
     pub fn pointer_press_in(&mut self, container: NodeId, local: Point) -> Result<()> {
         self.set_focus_visible(false);
+        self.capture = self.hit_test_in(container, local)?;
+        self.set_hovered(self.capture);
+        self.capture_space = Some(container);
+        if let Some(id) = self.capture {
+            self.focus_node(id);
+        }
+        Ok(())
+    }
+    fn hit_test_in(&self, container: NodeId, local: Point) -> Result<Option<NodeId>> {
         let origin = self
             .nodes
             .get(&container)
@@ -730,17 +774,12 @@ impl Tree {
         self.ordered(container, &mut ids);
         let header = self.content_viewport().y;
         let inside = self.nodes[&container].kind != Kind::Sidebar || local.y >= header;
-        self.capture = ids.into_iter().rev().find(|id| {
+        Ok(ids.into_iter().rev().find(|id| {
             inside
                 && self.available(*id)
                 && self.nodes[id].kind.focusable()
                 && contains(self.nodes[id].bounds, p)
-        });
-        self.capture_space = Some(container);
-        if let Some(id) = self.capture {
-            self.focus_node(id);
-        }
-        Ok(())
+        }))
     }
     pub fn pointer_release_in(&mut self, container: NodeId, local: Point) -> Result<Effect> {
         let origin = self
@@ -766,6 +805,9 @@ impl Tree {
     }
     fn release(&mut self, p: Point, space: Option<NodeId>) -> Result<Effect> {
         let capture = self.capture.take();
+        if let Some(id) = capture {
+            self.invalidate(id, Invalid::PAINT);
+        }
         let same_space = self.capture_space.take() == space;
         if same_space
             && let Some(id) = capture.filter(|id| self.available(*id))

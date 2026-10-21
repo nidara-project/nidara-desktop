@@ -199,6 +199,9 @@ mod placement_tests {
                 radius: 8.,
                 group_radius: 12.,
                 focus_width: 2.,
+                highlight_inset: 4.,
+                hover_opacity: 0.08,
+                separator_width: 1.,
             },
             TextStyle::default(),
         )

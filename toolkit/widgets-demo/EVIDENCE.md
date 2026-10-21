@@ -200,3 +200,16 @@ in `toolkit/tokens/list.json`, from the current kit's focus-ring measurement;
 final visual values remain for the owner live. This is not a new live/AT-SPI
 matrix result. Hover/separators and the named-width component from D8 are still
 pending; this commit does not claim all of D8.
+
+## D8 list highlight/separators follow-up
+
+Claude's review of the first focus change required one shared inset silhouette.
+Selection, hover and ring now use that function; buttons/switches use their
+capsule/track radius. Provisional list-token data supplies inset/opacity and
+separator thickness, while separator colour comes from exported --nidara-border.
+A new test checks actual hover-fill and separator pixels at 1 and 1.25, pointer
+leave, hidden hovered nodes, selected/hidden neighbors, no last separator,
+control-only row labels without hover, and capsule/track geometry. Removing only
+the hover fill is CAUGHT at its own pixel assertion (target/list-hover-control.log).
+The focused total is now 35 tests. Named content widths remain pending. This
+change has not had live owner validation or a new full private libatspi matrix.

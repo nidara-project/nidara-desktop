@@ -19,6 +19,9 @@ fn fixture() -> (Tree, ParleyBackend, u64, Vec<(u64, u64)>) {
             radius: 8.,
             group_radius: 12.,
             focus_width: 2.,
+            highlight_inset: 4.,
+            hover_opacity: 0.08,
+            separator_width: 1.,
         },
         TextStyle {
             size: 14.,
@@ -263,6 +266,7 @@ fn d5_paints_opaque_base_and_d7_keeps_pane_buffers_separate() {
         track: rgba(30, 40, 50, 255),
         thumb: rgba(255, 255, 255, 255),
         focus: rgba(0, 100, 255, 255),
+        separator: rgba(99, 88, 77, 255),
     };
     let (mut t, mut b, scroll, _) = fixture();
     layout(&mut t, &mut b, true);
@@ -411,6 +415,7 @@ fn container_accessible_names_never_become_visible_labels() {
         track: rgba(30, 40, 50, 255),
         thumb: rgba(255, 255, 255, 255),
         focus: rgba(0, 100, 255, 255),
+        separator: rgba(99, 88, 77, 255),
     };
     for layered in [true, false] {
         let (mut tree, mut backend, scroll, _) = fixture();

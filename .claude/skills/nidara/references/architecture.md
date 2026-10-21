@@ -2628,3 +2628,9 @@ D8's `focus_visible` is input modality, not semantic focus. Do not use `tab()` f
 automatic focus recovery: it marks keyboard input; internal recovery traverses
 without changing modality. Pointer input in root or layer coordinates hides the
 ring even on empty space. The retained focused node and selection remain intact.
+
+D8 `highlight_shape` is the single source for selection/hover/focus geometry; do
+not compute a separate focus radius or draw a ring on the full row bounds.
+Rows holding controls do not hover as a whole. Separators use visible neighbors
+and text origins. Root pointer leave is forwarded by nk-wayland just like layer
+leave, so retained hover cannot remain after the pointer exits the surface.
