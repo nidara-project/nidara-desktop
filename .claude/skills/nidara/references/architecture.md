@@ -2694,3 +2694,9 @@ serial after draining input. nk-wayland owns xdg_toplevel.move and its seat.
 Blank title excludes controls even when disabled, server reservations and the
 blur-only region below the title. The application supplies double-click policy
 (the demo mirrors Hyalo's existing400ms); maximize/restore stays WindowAction.
+
+The native #889 material payload is validated before Wayland mutation. Fixed
+arguments are truncated by wayland-scanner at 1/256 logical pixel, so float-only
+non-overlap/positive-size checks are insufficient; touching float rectangles can
+overlap on the wire. `ControlMaterial` checks wire geometry and sends response
+and ink tone before the capsule shape, in the same synchronized transaction.

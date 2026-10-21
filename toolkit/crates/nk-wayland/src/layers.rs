@@ -106,7 +106,7 @@ fn frame(size: (u32, u32), scale: u32) -> Result<Frame> {
     })
 }
 // Wayland fixed is signed 24.8. Reject overflow rather than silently wrapping.
-fn fixed(values: &[f64]) -> Result<()> {
+pub(super) fn fixed(values: &[f64]) -> Result<()> {
     if values
         .iter()
         .all(|v| v.is_finite() && *v >= -8_388_608. && *v <= 8_388_607.996_093_75)
@@ -417,6 +417,18 @@ impl Window {
         let l = self.layer(id)?;
         super::send_material(&l.material, material);
         l.pending = true;
+        Ok(())
+    }
+    /// A validated capsule payload staged with its synchronized layer and parent commit.
+    pub fn set_layer_control_material(
+        &mut self,
+        id: LayerId,
+        material: &ControlMaterial,
+    ) -> Result<()> {
+        material.validate()?;
+        let layer = self.layer(id)?;
+        material.send(&layer.material);
+        layer.pending = true;
         Ok(())
     }
     pub(super) fn stage_layers(&mut self) {

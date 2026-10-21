@@ -107,3 +107,13 @@ including when several events are drained before application dispatch.
 `Window::move_from_pointer_press(serial)` sends standard xdg_toplevel.move with
 that press serial and the window's seat; the general last serial is unsuitable
 for an interactive grab. Existing close/minimize/maximize actions are unchanged.
+
+#889's `ControlMaterial` is an explicit capsule transaction: base material/blur,
+ink tone, optional backdrop response, ink endpoints, stable state regions and
+non-overlapping coverage. `set_layer_control_material` validates the entire
+payload before sending requests and stages it with the synchronized parent. It
+sets response/ink tone before adding the pane. No visual defaults are supplied.
+Validation uses the wire's truncating fixed-point conversion for nonempty bounds,
+threshold ordering and coverage overlap; adjacent wire rectangles remain legal.
+The limits are eight washes and sixteen coverage rectangles. Keep zero-alpha
+exit regions with their stable IDs for compositor fading.
