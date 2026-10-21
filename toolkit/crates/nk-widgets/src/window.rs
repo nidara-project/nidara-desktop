@@ -26,14 +26,23 @@ impl TitlebarStyle {
         }
         Ok(())
     }
-    pub fn panes(&self, width: f64, height: f64) -> Vec<nk_wayland::GradedPane> {
+    fn panes(&self, width: f64, height: f64, scale: f64) -> Vec<nk_wayland::GradedPane> {
         let count = self.curve.len() - 1;
         self.curve
             .windows(2)
             .enumerate()
             .map(|(i, values)| {
-                let y = height * i as f64 / count as f64;
-                let bottom = height * (i + 1) as f64 / count as f64;
+                // Shared interior edges must fall on a physical pixel. Otherwise two
+                // antialiased half-coverages expose sharp content between blur bands.
+                let edge = |index: usize| {
+                    if index == count {
+                        height
+                    } else {
+                        (height * index as f64 / count as f64 * scale).round() / scale
+                    }
+                };
+                let y = edge(i);
+                let bottom = edge(i + 1);
                 nk_wayland::GradedPane {
                     pane: nk_wayland::Pane {
                         x: 0.,
@@ -192,7 +201,11 @@ impl Composition {
                     window.set_layer_blur(
                         titlebar,
                         style.blur,
-                        &style.panes(titlebar_size.0 as f64, titlebar_size.1 as f64),
+                        &style.panes(
+                            titlebar_size.0 as f64,
+                            titlebar_size.1 as f64,
+                            window.scale(),
+                        ),
                     )?;
                 } else {
                     window.set_layer_material(titlebar, None)?;
@@ -744,7 +757,7 @@ mod tests {
             opaque: false,
         };
         style.validate().unwrap();
-        let panes = style.panes(520., 72.);
+        let panes = style.panes(520., 72., 1.);
         assert_eq!(panes.len(), 3);
         assert_eq!((panes[0].top, panes[0].bottom), (1., 1.));
         assert_eq!((panes[2].top, panes[2].bottom), (0.5, 0.));
@@ -786,6 +799,37 @@ mod tests {
         }
         style.curve[1] = f64::NAN;
         assert!(style.validate().is_err());
+    }
+    #[test]
+    fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {
+        let style = TitlebarStyle {
+            blur: nk_wayland::Blur {
+                size: 2.,
+                passes: 2,
+            },
+            height: 72.,
+            curve: vec![1., 1., 0.5, 0.],
+            background_opacity: 0.85,
+            opaque: false,
+        };
+        for height in [71., 72., 101.] {
+            for scale in [1., 1.25, 1.5, 1.75, 2.] {
+                let panes = style.panes(520., height, scale);
+                assert_eq!(panes[0].pane.y, 0.);
+                let last = panes.last().unwrap().pane;
+                assert!((last.y + last.height - height).abs() < 1e-9);
+                for pair in panes.windows(2) {
+                    let edge = pair[0].pane.y + pair[0].pane.height;
+                    assert!((edge - pair[1].pane.y).abs() < 1e-9);
+                    let physical = edge * scale;
+                    assert!(
+                        (physical - physical.round()).abs() < 1e-9,
+                        "blur boundary inside a physical pixel: height={height} scale={scale}"
+                    );
+                    assert_eq!(pair[0].bottom, pair[1].top);
+                }
+            }
+        }
     }
     #[test]
     fn server_controls_reserve_the_chosen_side_and_fallbacks_keep_the_same_actions() {

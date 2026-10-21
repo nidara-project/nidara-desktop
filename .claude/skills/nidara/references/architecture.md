@@ -2619,3 +2619,7 @@ libatspi acceptance is `scripts/ci/nk-widgets-check.py`; each assertion has its 
 logged, applied fault, and timeouts/crashes never count as caught controls. New
 builds/logs/evidence use target/ or ~/Nidara/ChatGPT/, never /tmp. nk-widgets and its
 demo trigger the full fcitx5/Orca matrices in ci-scope.sh.
+
+D7 graded-title bands share edges snapped to physical pixels at the current output
+scale: separate antialiased shapes meeting inside a pixel can expose sharp content
+between them. Keep these edges shared when changing title height or scale.

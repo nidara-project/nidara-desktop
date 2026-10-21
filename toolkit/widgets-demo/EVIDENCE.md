@@ -154,8 +154,10 @@ Private Cage/Hyalo with bwrap and software GL completed 23 libatspi oracles at
 scales 1 and 1.25; all 46 applied controls failed their own assertions. This first
 full run (`target/d7-full`) overlapped a rebuild for the app-supplied fallback
 labels, so it is not evidence of a single immutable final executable. A separate
-`target/d7-final` run uses a fixed executable copy; its result must be checked
-before citing it as final acceptance.
+`target/d7-final` run used a fixed executable copy and also completed all 23
+oracles at both scales with all 46 applied controls caught (result.json).
+This certifies be80702c; the subsequent physical-band snapping correction is
+covered separately below, not by that executable.
 
 Fixed demo SHA-256: `a27b3f08fe45e3bdd4ff7b06f87141ad4b10ecbf30f010c9478b801f5e4a44d6`.
 Installed Hyalo SHA-256: `d8109f29f5fd15873a0b3709059f436fbb64652aaf33398d54c7e56ed60a1fdd`.
@@ -174,3 +176,15 @@ escapes the window edge while glass is clipped. Composition sends the layer's
 Position transition to Hyalo. Claude owns the compositor correction; pane-local
 pixel stability is not presented as a fix for that bug. Final appearance, margin/
 radius choices and real-session acceptance remain with the owner live.
+
+Review follow-up: Claude found no blocking composition/reservation issues. Interior
+blur-band edges are now snapped to shared physical-pixel boundaries; the previous
+unrounded edges could split one pixel between antialiased shapes at other heights/
+scales. A regression covers heights 71/72/101 at scales 1/1.25/1.5/1.75/2, including
+contiguity and grade continuity. This is a geometry oracle, not a new rendered
+compositor seam measurement. The 72px recipe at scales 1 and 1.25 is unchanged.
+
+The unrounded formula was restored as an applied control and was caught by that
+new assertion (`blur boundary inside a physical pixel`). The corrected formula
+passes; the focused Rust total is now 33 tests, and clippy remains clean.
+Control evidence: `target/blur-band-control.log`.
