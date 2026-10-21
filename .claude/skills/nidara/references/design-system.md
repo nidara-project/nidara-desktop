@@ -1539,7 +1539,7 @@ values of its KIND, never values of its own.
 | `control` | bar capsules, island, window buttons, toolkit controls | measured, by size | measured law, by size (2026-10-12) | none |
 | `panel` | menus, popovers, Prism, system menu, app grid, toolkit sidebars | measured, by size | measured law, by size (2026-10-12) | none |
 | `dock` | the dock | measured | none — measured (2026-10-08: a 1 px outline only) | none |
-| `controlCenter` | the CC's tiles and the notifications (same veil, owner 2026-10-21) | measured | none — measured (2026-10-08) | ≈10 % black, measured (2026-10-11) |
+| `controlCenter` | the CC's tiles and the notifications, in their panel and as they come up (owner 2026-10-21) | measured | none — measured (2026-10-08) | ≈10 % black, measured (2026-10-11) |
 
 A value with no source does not exist: "none" means measured none, never "not measured". The
 2026-10-08 run's "no shadow at rest" for an app's glass was wrong — that window was inactive

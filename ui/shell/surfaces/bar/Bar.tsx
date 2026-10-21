@@ -168,6 +168,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   const prism = Prism()
   trackGlassPiece(prism, "panel")
   const popups = NotificationPopupsWidget()
+  // The notifications that come up on their own are the notifications too (owner, 2026-10-21).
+  trackGlassPiece(popups, "controlCenter")
   // White text ALWAYS in the Control Center and the notifications, whatever is behind them
   // (owner, 2026-10-08): the reference's Control Center keeps white text in both modes and
   // over every wallpaper (glass-probe, `macos` set). Their legibility is their tone's.
