@@ -43,6 +43,10 @@ impl Canvas {
     pub fn clip(&mut self, r: Rect) {
         self.context.push_clip_rect(&rect(r));
     }
+    pub fn clip_rounded_rect(&mut self, r: Rect, radius: f64) {
+        self.context
+            .push_clip_path(&RoundedRect::from_rect(rect(r), radius).to_path(0.1));
+    }
     pub fn pop_clip(&mut self) {
         self.context.pop_clip();
     }

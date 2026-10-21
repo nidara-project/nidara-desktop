@@ -29,6 +29,15 @@ impl Tree {
         surface: Surface,
         palette: Palette,
     ) -> Result<Vec<u8>> {
+        self.paint_with_titlebar(frame, surface, palette, None)
+    }
+    pub(crate) fn paint_with_titlebar(
+        &self,
+        frame: nk_wayland::Frame,
+        surface: Surface,
+        palette: Palette,
+        title_style: Option<&crate::window::TitlebarStyle>,
+    ) -> Result<Vec<u8>> {
         let mut canvas = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
         if surface == Surface::Content && !frame.material {
             canvas.rect(self.nodes[&self.root].bounds, opaque(palette.background));
@@ -48,6 +57,30 @@ impl Tree {
             }
             canvas.pop_clip();
         }
+        if surface == Surface::TitleBar
+            && self.layered
+            && let Some(style) = title_style
+        {
+            // Fade only the window background. The compositor supplies the graded blur.
+            for row in 0..frame.pixel_height {
+                let y = row as f32 / frame.scale as f32;
+                let mut color = opaque(palette.background);
+                color.components[3] = if style.opaque {
+                    1.
+                } else {
+                    style.background_opacity * (1. - y / frame.height as f32)
+                };
+                canvas.rect(
+                    Rect {
+                        x: 0.,
+                        y,
+                        width: frame.width as f32,
+                        height: 1. / frame.scale as f32,
+                    },
+                    color,
+                );
+            }
+        }
         if surface != Surface::Content || !self.layered {
             let panes = match surface {
                 Surface::Content => vec![Kind::Sidebar, Kind::TitleBar],
@@ -66,7 +99,19 @@ impl Tree {
                         }
                     };
                     if !self.layered {
-                        canvas.rect(local(n.bounds, origin), opaque(palette.background));
+                        canvas.rounded_rect(
+                            local(n.bounds, origin),
+                            if kind == Kind::Sidebar {
+                                self.sidebar_radius as f64
+                            } else {
+                                0.
+                            },
+                            opaque(palette.background),
+                        );
+                    }
+                    if kind == Kind::Sidebar {
+                        canvas
+                            .clip_rounded_rect(local(n.bounds, origin), self.sidebar_radius as f64);
                     }
                     self.paint_node(
                         id,
@@ -80,6 +125,9 @@ impl Tree {
                             height: frame.height as f32,
                         },
                     )?;
+                    if kind == Kind::Sidebar {
+                        canvas.pop_clip();
+                    }
                 }
             }
         }
@@ -165,9 +213,13 @@ impl Tree {
             let padding = if matches!(n.kind, Kind::Button | Kind::Page { .. } | Kind::TitleBar) {
                 if n.kind == Kind::TitleBar {
                     m.padding
+                        + self.title_leading_controls()
                         + n.children
                             .iter()
-                            .filter(|id| !self.is_hidden(**id))
+                            .filter(|id| {
+                                !self.is_hidden(**id)
+                                    && !self.window_buttons.is_some_and(|ids| ids.contains(id))
+                            })
                             .map(|id| self.nodes[id].measured.width + m.gap)
                             .sum::<f32>()
                 } else {

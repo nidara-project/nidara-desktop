@@ -14,6 +14,7 @@ pub struct Appearance {
     pub palette: Palette,
     pub metrics: Metrics,
     pub panel: PanelMaterial,
+    pub titlebar: nk_widgets::window::TitlebarStyle,
     pub style: nk_text::TextStyle,
     pub size: (u32, u32),
     pub reduce_motion: bool,
@@ -134,8 +135,43 @@ impl Appearance {
         // Panel material always comes from the real, installed export.
         let stub: Value =
             serde_json::from_str(include_str!("../panel-stub.json")).map_err(|e| e.to_string())?;
-        let panel =
-            PanelMaterial::load(read(root.join("tokens/glass.json"))?, scheme == 1, reduce)?;
+        let glass = read(root.join("tokens/glass.json"))?;
+        let panel = PanelMaterial::load(glass.clone(), scheme == 1, reduce)?;
+        let recipe: Value = serde_json::from_str(include_str!("../titlebar-provisional.json"))
+            .map_err(|e| e.to_string())?;
+        let titlebar = nk_widgets::window::TitlebarStyle {
+            blur: nk_wayland::Blur {
+                size: number(&glass["blur"]["panel"]["size"])? as f64,
+                passes: if reduce {
+                    0
+                } else {
+                    u32::try_from(
+                        glass["blur"]["panel"]["passes"]
+                            .as_u64()
+                            .ok_or("missing panel blur passes")?,
+                    )
+                    .map_err(|e| e.to_string())?
+                },
+            },
+            height: if reduce {
+                scss(&sizes["scss"]["space-10"])? + scss(&sizes["scss"]["space-2"])?
+            } else {
+                number(&recipe["height"])?
+            },
+            curve: recipe["curve"]
+                .as_array()
+                .ok_or("missing title curve")?
+                .iter()
+                .map(|v| v.as_f64().ok_or("invalid title curve".into()))
+                .collect::<Result<_>>()?,
+            opaque: reduce,
+            background_opacity: if reduce {
+                1.
+            } else {
+                number(&recipe["backgroundOpacity"])?
+            },
+        };
+        titlebar.validate()?;
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
@@ -161,6 +197,7 @@ impl Appearance {
             palette,
             metrics,
             panel,
+            titlebar,
             style,
             size,
             reduce_motion,

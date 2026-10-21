@@ -48,11 +48,22 @@ on either layer scroll content (`LayerEvent::HorizontalScroll` in nk-wayland).
 
 D7 has a full-window content buffer and independent sidebar/title layers. The
 content's paint clip is the whole window; its hit/focus/SHOWING viewport excludes
-the leading/top insets. D5 (missing material OR layers) paints opaque panes in the root, clipping
-content at the insets. Only missing material paints an opaque root base; when
-material is available, D6 keeps the window background in the compositor. The title has no divider
-and reserves a trailing box for window controls. The alternative panel material
-is used for the title pending the owner's graded-blur A/B decision.
+the leading/top insets. `Tree::set_sidebar_frame` supplies the floating pane's
+margin/radius from app tokens, preserving the sidebar's width law. Children,
+paint/input and AT-SPI share those bounds; layer pixels remain local under motion.
+The header uses `Composition::set_titlebar_style`: explicit blur, graded curve,
+zone height and background fade. It sends blur-only material, without glass tone,
+refraction or rim. Reduced transparency supplies an opaque, unblurred header.
+D5 (missing material OR layers) paints opaque panes in the root and clips content
+at the insets. With material, D6 keeps the window background in the compositor.
+
+`Tree::window_controls(titlebar, names)` registers three retained fallback buttons
+(minimize, maximize, close), with names supplied by the app for translation.
+Composition opts into Hyalo's existing control protocol and uses its real layout
+and side to reserve space before text placement. With server layout those fallback
+nodes leave the semantic/focus tree; without it they remain keyboard/AT-SPI buttons. Their normal
+activation effects belong to the app, which calls `Window::window_action`. Apps
+opt into `Application::window_controls` for layout before their first frame.
 
 Colours, measurements and pane Material are explicit inputs, resolved by the app
 from the exports/appearance portal. `Composition::sync` asks its material resolver

@@ -2595,6 +2595,15 @@ shared by paint, hit-testing and focus; AT-SPI bounds stay model values. Reduced
 motion omits the transition independently of transparency. Never add another
 app-owned Wayland host.
 
+D7's native title uses an explicit `TitlebarStyle` (blur-only graded bands and a
+client background fade); it does not reuse the sidebar's panel glass. The demo's
+provisional recipe is identified in `titlebar-provisional.json`, not in transport.
+The sidebar's margin/radius come from `Tree::set_sidebar_frame` with app tokens.
+Native apps register `Tree::window_controls` fallback buttons and opt into
+`Application::window_controls` for server layout before configure; composition
+reserves the reported side/size and hides fallback nodes only when layout arrives.
+The existing protocol is bound in nk-wayland, never in a second app host.
+
 Container accessible names are not visual labels: the native Sidebar/Scroll names
 stay in AT-SPI; visible text needs a Label, Page, Button or TitleBar. Painting a
 container name centres it over its children (the misplaced “Pages” in #898).

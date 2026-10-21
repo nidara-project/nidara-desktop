@@ -3,8 +3,56 @@
 //! repaints them; resize, font, appearance or pane state changes do.
 use crate::*;
 use nk_wayland::{Curve, Event, LayerEvent, LayerId, Material, Property, Window};
+/// Explicit provisional D7 title recipe supplied by the application, never transport defaults.
+#[derive(Clone, Debug)]
+pub struct TitlebarStyle {
+    pub blur: nk_wayland::Blur,
+    pub height: f32,
+    pub curve: Vec<f64>,
+    pub background_opacity: f32,
+    pub opaque: bool,
+}
+impl TitlebarStyle {
+    pub fn validate(&self) -> Result<()> {
+        if !self.height.is_finite()
+            || self.height <= 0.
+            || self.curve.len() < 2
+            || self.curve.iter().any(|v| !(0. ..=1.).contains(v))
+            || !(0. ..=1.).contains(&self.background_opacity)
+            || !self.blur.size.is_finite()
+            || self.blur.size < 0.
+        {
+            return Err("invalid titlebar style".into());
+        }
+        Ok(())
+    }
+    pub fn panes(&self, width: f64, height: f64) -> Vec<nk_wayland::GradedPane> {
+        let count = self.curve.len() - 1;
+        self.curve
+            .windows(2)
+            .enumerate()
+            .map(|(i, values)| {
+                let y = height * i as f64 / count as f64;
+                let bottom = height * (i + 1) as f64 / count as f64;
+                nk_wayland::GradedPane {
+                    pane: nk_wayland::Pane {
+                        x: 0.,
+                        y,
+                        width,
+                        height: bottom - y,
+                        radius: 0.,
+                        exponent: 2.,
+                    },
+                    top: values[0],
+                    bottom: values[1],
+                }
+            })
+            .collect()
+    }
+}
 #[derive(Default)]
 pub struct Composition {
+    title_style: Option<TitlebarStyle>,
     sidebar: Option<LayerId>,
     titlebar: Option<LayerId>,
     painted: Option<(u32, u32, u64, u64)>,
@@ -17,6 +65,12 @@ pub struct Composition {
     transition: Option<(u32, Curve)>,
 }
 impl Composition {
+    pub fn set_titlebar_style(&mut self, style: TitlebarStyle) -> Result<()> {
+        style.validate()?;
+        self.title_style = Some(style);
+        self.invalidate_panes();
+        Ok(())
+    }
     pub fn at_rest(&self) -> bool {
         self.motion.is_none()
     }
@@ -38,6 +92,10 @@ impl Composition {
         panel: impl Fn(f64) -> Result<Material>,
         layers_allowed: bool,
     ) -> Result<()> {
+        if tree.window_buttons.is_some() {
+            window.request_window_controls();
+        }
+        tree.set_server_controls(window.window_controls_layout())?;
         let (w, h) = window.size();
         let initialized = tree.sidebar_initialized;
         let adapted = tree.adapt_sidebar(w as f32);
@@ -61,12 +119,36 @@ impl Composition {
             layered,
             backend,
         )?;
+        if let Some(controls) = window.window_controls_layout() {
+            let inset = tree.content_viewport();
+            let x = match controls.side {
+                nk_wayland::ControlsSide::Left => inset.x + tree.metrics.padding,
+                nk_wayland::ControlsSide::Right => {
+                    tree.size.width - tree.metrics.padding - controls.width as f32
+                }
+            };
+            let c = palette.text.components;
+            let dark = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 0.5;
+            window.place_window_controls(
+                x as f64,
+                ((inset.y - controls.height as f32) / 2.).max(0.) as f64,
+                dark,
+            )?;
+        }
         if layered {
             let inset = tree.content_viewport();
-            let sidebar_size = (tree.metrics.sidebar.ceil().max(1.) as u32, h);
+            let side_rect = tree.sidebar_rect();
+            let sidebar_size = (
+                side_rect.width.ceil().max(1.) as u32,
+                side_rect.height.ceil().max(1.) as u32,
+            );
             let titlebar_size = (
                 inset.width.ceil().max(1.) as u32,
-                inset.y.ceil().max(1.) as u32,
+                self.title_style
+                    .as_ref()
+                    .map_or(inset.y, |s| s.height.max(inset.y))
+                    .ceil()
+                    .max(1.) as u32,
             );
             if self.sidebar.is_none() {
                 self.sidebar = Some(window.create_layer(sidebar_size)?);
@@ -74,11 +156,11 @@ impl Composition {
                 window.set_position(
                     self.sidebar.unwrap(),
                     if tree.sidebar_open {
-                        0.
+                        tree.sidebar_margin as f64
                     } else {
-                        -f64::from(tree.metrics.sidebar)
+                        f64::from(tree.sidebar_margin - tree.metrics.sidebar)
                     },
-                    0.,
+                    tree.sidebar_margin as f64,
                 )?;
                 window.set_position(self.titlebar.unwrap(), inset.x as f64, 0.)?;
             }
@@ -87,24 +169,44 @@ impl Composition {
                 let sidebar = self.sidebar.unwrap();
                 let titlebar = self.titlebar.unwrap();
                 window.set_position(titlebar, inset.x as f64, 0.)?;
+                if self.motion.is_none() {
+                    window.set_position(
+                        sidebar,
+                        (tree.sidebar_target() + tree.sidebar_margin) as f64,
+                        side_rect.y as f64,
+                    )?;
+                }
                 window.set_layer_size(sidebar, sidebar_size)?;
                 window.set_layer_size(titlebar, titlebar_size)?;
-                for (layer, size) in [(sidebar, sidebar_size), (titlebar, titlebar_size)] {
-                    let mut material = panel(f64::from(size.0.min(size.1)))?;
-                    material.shapes = vec![nk_wayland::Pane {
-                        x: 0.,
-                        y: 0.,
-                        width: size.0 as f64,
-                        height: size.1 as f64,
-                        radius: 0.,
-                        exponent: 2.,
-                    }];
-                    window.set_layer_material(layer, Some(&material))?;
+                let mut material = panel(f64::from(sidebar_size.0.min(sidebar_size.1)))?;
+                material.shapes = vec![nk_wayland::Pane {
+                    x: 0.,
+                    y: 0.,
+                    width: sidebar_size.0 as f64,
+                    height: sidebar_size.1 as f64,
+                    radius: tree.sidebar_radius as f64,
+                    exponent: 2.,
+                }];
+                window.set_layer_material(sidebar, Some(&material))?;
+                if let Some(style) = &self.title_style {
+                    window.set_layer_blur(
+                        titlebar,
+                        style.blur,
+                        &style.panes(titlebar_size.0 as f64, titlebar_size.1 as f64),
+                    )?;
+                } else {
+                    window.set_layer_material(titlebar, None)?;
                 }
                 let a =
                     window.paint_layer(sidebar, |f| tree.paint(f, Surface::Sidebar, palette))?;
-                let b =
-                    window.paint_layer(titlebar, |f| tree.paint(f, Surface::TitleBar, palette))?;
+                let b = window.paint_layer(titlebar, |f| {
+                    tree.paint_with_titlebar(
+                        f,
+                        Surface::TitleBar,
+                        palette,
+                        self.title_style.as_ref(),
+                    )
+                })?;
                 if a && b {
                     self.painted = Some(signature);
                 }
@@ -140,7 +242,11 @@ impl Composition {
             if let Some((serial, curve)) = transition {
                 window.set_transition(id, Property::Position, serial, curve)?;
             }
-            window.set_position(id, tree.sidebar_target() as f64, 0.)?;
+            window.set_position(
+                id,
+                (tree.sidebar_target() + tree.sidebar_margin) as f64,
+                tree.sidebar_margin as f64,
+            )?;
         }
         window.redraw();
         Ok(())
@@ -574,5 +680,156 @@ mod tests {
         )
         .unwrap();
         assert!(t.sidebar_open && !t.narrow && t.content_viewport().x == 120.);
+    }
+    fn test_palette() -> Palette {
+        use nk_render::rgba;
+        Palette {
+            background: rgba(20, 30, 40, 255),
+            surface: rgba(50, 60, 70, 255),
+            text: rgba(255, 255, 255, 255),
+            disabled: rgba(100, 100, 100, 255),
+            selected: rgba(70, 80, 90, 255),
+            accent: rgba(0, 100, 255, 255),
+            track: rgba(60, 70, 80, 255),
+            thumb: rgba(255, 255, 255, 255),
+            focus: rgba(0, 100, 255, 255),
+        }
+    }
+    #[test]
+    fn floating_sidebar_pixels_stay_local_while_the_layer_moves() {
+        for scale in [1., 1.25] {
+            let (mut tree, mut backend, sidebar, _, _) = fixture();
+            tree.set_sidebar_frame(8., 12.).unwrap();
+            tree.layout(tree.size, true, &mut backend).unwrap();
+            let bounds = tree.node(sidebar).unwrap().bounds();
+            assert_eq!(
+                (bounds.x, bounds.y, bounds.width, bounds.height),
+                (8., 8., 104., 344.)
+            );
+            let frame = nk_wayland::Frame {
+                width: 104,
+                height: 344,
+                pixel_width: (104. * scale) as u16,
+                pixel_height: (344. * scale) as u16,
+                scale,
+                material: true,
+            };
+            let reference = tree.paint(frame, Surface::Sidebar, test_palette()).unwrap();
+            // Both directions, including fractional layer positions. Only the layer moves.
+            for x in [-15.25, -60., -119.5, -60., -15.25, 0.] {
+                tree.sidebar_x = x;
+                tree.leading = 120. + x;
+                tree.invalidate(tree.root, Invalid::LAYOUT);
+                tree.layout(tree.size, true, &mut backend).unwrap();
+                assert!(
+                    reference == tree.paint(frame, Surface::Sidebar, test_palette()).unwrap(),
+                    "sidebar pixels shifted inside the pane at x={x} scale={scale}"
+                );
+            }
+            assert_eq!(reference[3], 0, "rounded corner has no painted pixel");
+        }
+    }
+    #[test]
+    fn titlebar_recipe_has_contiguous_graded_bands_and_only_a_background_fade() {
+        let (mut tree, mut backend, _, _, _) = fixture();
+        tree.layout(tree.size, true, &mut backend).unwrap();
+        let mut style = TitlebarStyle {
+            blur: nk_wayland::Blur {
+                size: 2.,
+                passes: 2,
+            },
+            height: 72.,
+            curve: vec![1., 1., 0.5, 0.],
+            background_opacity: 0.85,
+            opaque: false,
+        };
+        style.validate().unwrap();
+        let panes = style.panes(520., 72.);
+        assert_eq!(panes.len(), 3);
+        assert_eq!((panes[0].top, panes[0].bottom), (1., 1.));
+        assert_eq!((panes[2].top, panes[2].bottom), (0.5, 0.));
+        assert_eq!(panes[0].pane.y, 0.);
+        assert_eq!(panes[2].pane.y + panes[2].pane.height, 72.);
+        for pair in panes.windows(2) {
+            assert_eq!(pair[0].pane.y + pair[0].pane.height, pair[1].pane.y);
+            assert_eq!(pair[0].bottom, pair[1].top);
+        }
+        for scale in [1., 1.25] {
+            let frame = nk_wayland::Frame {
+                width: 520,
+                height: 72,
+                pixel_width: (520. * scale) as u16,
+                pixel_height: (72. * scale) as u16,
+                scale,
+                material: true,
+            };
+            let pixels = tree
+                .paint_with_titlebar(frame, Surface::TitleBar, test_palette(), Some(&style))
+                .unwrap();
+            let alpha = |data: &[u8], y: usize| {
+                data[(y * frame.pixel_width as usize + frame.pixel_width as usize - 1) * 4 + 3]
+            };
+            assert!((alpha(&pixels, 0) as i32 - 217).abs() <= 2);
+            assert!(alpha(&pixels, frame.pixel_height as usize - 1) < 5);
+            for row in 1..frame.pixel_height as usize {
+                assert!(
+                    alpha(&pixels, row) <= alpha(&pixels, row - 1),
+                    "fade has a divider/band"
+                );
+            }
+            style.opaque = true;
+            let opaque = tree
+                .paint_with_titlebar(frame, Surface::TitleBar, test_palette(), Some(&style))
+                .unwrap();
+            assert_eq!(alpha(&opaque, frame.pixel_height as usize - 1), 255);
+            style.opaque = false;
+        }
+        style.curve[1] = f64::NAN;
+        assert!(style.validate().is_err());
+    }
+    #[test]
+    fn server_controls_reserve_the_chosen_side_and_fallbacks_keep_the_same_actions() {
+        let (mut tree, mut backend, _, title, _) = fixture();
+        let ids = tree
+            .window_controls(title, ["Minimize", "Maximize", "Close"])
+            .unwrap();
+        tree.layout(tree.size, true, &mut backend).unwrap();
+        let normal = tree.node(title).unwrap().children()[0];
+        assert!(tree.node(normal).unwrap().bounds().x < tree.node(ids[0]).unwrap().bounds().x);
+        for id in ids {
+            assert!(tree.focus_order().contains(&id));
+            assert_eq!(
+                tree.dispatch(tree.target(id), Command::Activate).unwrap(),
+                Effect::Activated(id)
+            );
+            assert_eq!(tree.semantics().nodes[&id].role, nk_a11y::Role::Button);
+        }
+        for side in [
+            nk_wayland::ControlsSide::Right,
+            nk_wayland::ControlsSide::Left,
+        ] {
+            tree.set_server_controls(Some(nk_wayland::ControlsLayout {
+                side,
+                width: 88.,
+                height: 32.,
+            }))
+            .unwrap();
+            tree.layout(tree.size, true, &mut backend).unwrap();
+            assert!(
+                ids.iter()
+                    .all(|id| !tree.semantics().nodes.contains_key(id))
+            );
+            let bounds = tree.node(normal).unwrap().bounds();
+            let bar = tree.node(title).unwrap().bounds();
+            if side == nk_wayland::ControlsSide::Left {
+                assert!(bounds.x >= bar.x + 88.);
+            } else {
+                assert!(bounds.x + bounds.width < bar.x + bar.width - 88.);
+            }
+        }
+        tree.set_server_controls(None).unwrap();
+        tree.layout(tree.size, false, &mut backend).unwrap();
+        assert!(ids.iter().all(|id| tree.focus_order().contains(id)));
+        assert_eq!(tree.node(ids[2]).unwrap().name(), "Close");
     }
 }

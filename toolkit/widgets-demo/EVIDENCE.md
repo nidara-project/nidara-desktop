@@ -122,3 +122,55 @@ This is a targeted local startup/AT-SPI check, not a rerun of the full vkms,
 widgets, real-Orca or fcitx5 matrices. CI has not been relaunched for this change.
 The demo's existing compositor-painted panes still do not request adaptive ink
 or client-painted blur; this correction does not implement #889.
+
+
+## D7 live-review corrections (#898, 2026-10-21)
+
+Local work builds on main `6b252faa`, including #897 and the #896 contract.
+These changes do not implement #889 or change a protocol XML.
+
+- Structural container names remain semantic but are not painted as labels. The
+  pixel regression compares buffers with changed container names in D7 and D5,
+  while changing an actual Page label must change pixels. Restoring the previous
+  implementation failed its own assertion (`container name painted as text`).
+- Floating sidebar bounds use exported padding/group-radius provisionally.
+  Pixel tests at scales 1 and 1.25 preserve layer-local content through sampled
+  transitions in both directions and check transparent rounded corners. This
+  does **not** establish window-bound clipping during compositor animation.
+- Header blur has contiguous C bands and a monotone background fade with no
+  divider; opaque/reduced-transparency paint is covered. The owner's provisional
+  recipe is JSON data, not a final visual calibration.
+- Server controls reserve their actual left/right layout. Retained fallback
+  buttons preserve keyboard/AT-SPI activation and return when no server layout
+  is present. Unit tests do not prove live minimize/maximize/close interaction.
+
+32 focused Rust tests pass (nk-wayland, nk-widgets and the demo), with no ignored
+tests. Clippy for those packages plus nk-render with all targets and warnings
+denied passes. Workspace formatting, skill-docs, ci-scope self-test, Python syntax
+and whitespace checks pass. The full workspace, real Orca/fcitx5 and vkms have
+not been rerun locally.
+
+Private Cage/Hyalo with bwrap and software GL completed 23 libatspi oracles at
+scales 1 and 1.25; all 46 applied controls failed their own assertions. This first
+full run (`target/d7-full`) overlapped a rebuild for the app-supplied fallback
+labels, so it is not evidence of a single immutable final executable. A separate
+`target/d7-final` run uses a fixed executable copy; its result must be checked
+before citing it as final acceptance.
+
+Fixed demo SHA-256: `a27b3f08fe45e3bdd4ff7b06f87141ad4b10ecbf30f010c9478b801f5e4a44d6`.
+Installed Hyalo SHA-256: `d8109f29f5fd15873a0b3709059f436fbb64652aaf33398d54c7e56ed60a1fdd`.
+The compositor is the installed binary, not a fresh build of the current main;
+this run cannot certify #897's final source or Claude's pending buffer clipping.
+Preview images are in `target/d7-preview/scale{1,1.25}/baseline-window-controls/`.
+
+At scale 1 the IPC shows sidebar `(12,12,226,456)`, header `(250,0,560,72)`
+with three blur bands, and server controls `(710,8,88,32)` root-local. The initial
+occlusion fixture failed because its old row width no longer fitted inside the
+floating pane; narrowing the fixture to its new inner width fixed the setup
+without weakening the assertion. Earlier failed runs are not counted as passes.
+
+Claude clarified the reported slide: text and glass move together, but content
+escapes the window edge while glass is clipped. Composition sends the layer's
+Position transition to Hyalo. Claude owns the compositor correction; pane-local
+pixel stability is not presented as a fix for that bug. Final appearance, margin/
+radius choices and real-session acceptance remain with the owner live.

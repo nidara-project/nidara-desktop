@@ -110,3 +110,17 @@ pub(super) fn send_background(
         });
     }
 }
+
+/// Client-painted material's backdrop blur, in logical pixels.
+#[derive(Clone, Copy, Debug)]
+pub struct Blur {
+    pub size: f64,
+    pub passes: u32,
+}
+/// A pane whose blur changes linearly from its top to its bottom.
+#[derive(Clone, Copy, Debug)]
+pub struct GradedPane {
+    pub pane: Pane,
+    pub top: f64,
+    pub bottom: f64,
+}

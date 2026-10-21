@@ -152,11 +152,15 @@ pub struct Tree {
     pub(crate) layered: bool,
     pub(crate) sidebar_open: bool,
     pub(crate) sidebar_x: f32,
+    pub(crate) sidebar_margin: f32,
+    pub(crate) sidebar_radius: f32,
     pub(crate) leading: f32,
     pub(crate) narrow: bool,
     sidebar_initialized: bool,
     pub(crate) sidebar_request: Option<bool>,
     sidebar_button: Option<NodeId>,
+    pub(crate) window_buttons: Option<[NodeId; 3]>,
+    pub(crate) server_controls: Option<nk_wayland::ControlsLayout>,
     invalid: Invalid,
     pub(crate) pane_epoch: u64,
 }
@@ -194,11 +198,15 @@ impl Tree {
             layered: false,
             sidebar_open: true,
             sidebar_x: 0.,
+            sidebar_margin: 0.,
+            sidebar_radius: 0.,
             leading: metrics.sidebar,
             narrow: false,
             sidebar_initialized: false,
             sidebar_request: None,
             sidebar_button: None,
+            window_buttons: None,
+            server_controls: None,
             invalid: Invalid::LAYOUT,
             pane_epoch: 0,
         };
@@ -335,6 +343,47 @@ impl Tree {
         let id = self.append(titlebar, Kind::Button, name)?;
         self.sidebar_button = Some(id);
         Ok(id)
+    }
+    /// Keyboard/AT-SPI reachable fallback controls. Composition hides them after server layout.
+    pub fn window_controls(&mut self, titlebar: NodeId, names: [&str; 3]) -> Result<[NodeId; 3]> {
+        if self.window_buttons.is_some() {
+            return Err("duplicate window controls".into());
+        }
+        if self
+            .nodes
+            .get(&titlebar)
+            .is_none_or(|n| n.kind != Kind::TitleBar)
+        {
+            return Err("window controls need a titlebar".into());
+        }
+        let ids = [
+            self.append(titlebar, Kind::Button, names[0])?,
+            self.append(titlebar, Kind::Button, names[1])?,
+            self.append(titlebar, Kind::Button, names[2])?,
+        ];
+        self.window_buttons = Some(ids);
+        Ok(ids)
+    }
+    pub(crate) fn set_server_controls(
+        &mut self,
+        layout: Option<nk_wayland::ControlsLayout>,
+    ) -> Result<()> {
+        if self.server_controls != layout {
+            self.server_controls = layout;
+            if let Some(ids) = self.window_buttons {
+                for id in ids {
+                    self.set_hidden(id, layout.is_some())?;
+                }
+            }
+            self.pane_epoch += 1;
+            self.invalidate(self.root, Invalid::LAYOUT);
+        }
+        Ok(())
+    }
+    pub(crate) fn title_leading_controls(&self) -> f32 {
+        self.server_controls
+            .filter(|v| v.side == nk_wayland::ControlsSide::Left)
+            .map_or(0., |v| v.width as f32 + self.metrics.gap)
     }
     pub fn group(&mut self, parent: NodeId, header: &str) -> Result<NodeId> {
         let id = self.append(parent, Kind::Group, "")?;
@@ -825,7 +874,14 @@ impl Tree {
                     child_height = child_height.max(measured.height);
                 }
             }
-            let label_width = (width - reserved - 3. * m.control - 2. * m.padding).max(1.);
+            let server_reserved = self.server_controls.map_or(0., |v| v.width as f32 + m.gap);
+            let legacy_reserved = if self.window_buttons.is_none() {
+                3. * m.control
+            } else {
+                0.
+            };
+            let label_width =
+                (width - reserved - server_reserved - legacy_reserved - 2. * m.padding).max(1.);
             let n = self.nodes.get_mut(&id).unwrap();
             let text = if n.name.is_empty() {
                 Size::default()
@@ -842,7 +898,11 @@ impl Tree {
                 height: m
                     .titlebar
                     .max(text.height + 2. * m.padding)
-                    .max(child_height),
+                    .max(child_height)
+                    .max(
+                        self.server_controls
+                            .map_or(0., |v| v.height as f32 + 2. * m.gap),
+                    ),
             };
             return Ok(n.measured);
         }
@@ -871,7 +931,7 @@ impl Tree {
         for child in children {
             let child_width = match kind {
                 Kind::Window => match self.nodes[&child].kind {
-                    Kind::Sidebar => m.sidebar,
+                    Kind::Sidebar => m.sidebar - 2. * self.sidebar_margin,
                     Kind::Scroll => (width - self.leading).max(1.),
                     Kind::TitleBar => (width - self.leading).max(1.),
                     _ => width,
@@ -895,7 +955,7 @@ impl Tree {
         let size = match kind {
             Kind::Window => self.size,
             Kind::Sidebar => Size {
-                width: m.sidebar,
+                width,
                 height: sum + 2. * m.padding,
             },
             Kind::TitleBar => Size {
@@ -947,6 +1007,35 @@ impl Tree {
         }
         Ok(())
     }
+    /// The sidebar's floating frame, from application tokens; the width law keeps its room.
+    pub fn set_sidebar_frame(&mut self, margin: f32, radius: f32) -> Result<()> {
+        if !margin.is_finite()
+            || !radius.is_finite()
+            || margin < 0.
+            || radius < 0.
+            || 2. * margin >= self.metrics.sidebar
+        {
+            return Err("invalid sidebar frame".into());
+        }
+        if self.sidebar_margin != margin || self.sidebar_radius != radius {
+            self.sidebar_margin = margin;
+            self.sidebar_radius = radius;
+            self.pane_epoch += 1;
+            self.invalidate(self.root, Invalid::LAYOUT);
+        }
+        Ok(())
+    }
+    pub(crate) fn sidebar_rect(&self) -> Rect {
+        let margin = self
+            .sidebar_margin
+            .min((self.size.height - 1.).max(0.) / 2.);
+        Rect {
+            x: self.sidebar_x + self.sidebar_margin,
+            y: margin,
+            width: self.metrics.sidebar - 2. * self.sidebar_margin,
+            height: (self.size.height - 2. * margin).max(1.),
+        }
+    }
     pub fn sidebar_open(&self) -> bool {
         self.sidebar_open
     }
@@ -983,16 +1072,15 @@ impl Tree {
         self.invalidate(self.root, Invalid::LAYOUT);
     }
     pub(crate) fn sidebar_viewport(&self) -> Rect {
-        let top = self.content_viewport().y;
-        let x = self.sidebar_x.max(0.);
+        let pane = self.sidebar_rect();
+        let top = (pane.y + self.content_viewport().y).min(pane.y + pane.height);
+        let left = pane.x.max(0.);
+        let right = (pane.x + pane.width).min(self.size.width).max(left);
         Rect {
-            x,
+            x: left,
             y: top,
-            width: (self.sidebar_x + self.metrics.sidebar)
-                .min(self.size.width)
-                .max(x)
-                - x,
-            height: (self.size.height - top).max(0.),
+            width: right - left,
+            height: (pane.y + pane.height - top).max(0.),
         }
     }
     pub fn content_viewport(&self) -> Rect {
@@ -1020,12 +1108,7 @@ impl Tree {
         let viewport = self.content_viewport();
         for child in self.nodes[&self.root].children.clone() {
             let r = match self.nodes[&child].kind {
-                Kind::Sidebar => Rect {
-                    x: self.sidebar_x,
-                    y: 0.,
-                    width: self.metrics.sidebar,
-                    height: size.height,
-                },
+                Kind::Sidebar => self.sidebar_rect(),
                 Kind::TitleBar => Rect {
                     x: viewport.x,
                     y: 0.,
@@ -1059,15 +1142,30 @@ impl Tree {
             x = inset.x + m.padding - node.scroll.x;
             y = inset.y + m.padding - node.scroll.y;
         }
+        let trailing_width = if kind == Kind::TitleBar {
+            self.window_buttons.map_or(0., |ids| {
+                ids.iter()
+                    .filter(|id| !self.is_hidden(**id))
+                    .map(|id| self.nodes[id].measured.width + m.gap)
+                    .sum::<f32>()
+            })
+        } else {
+            0.
+        };
+        let mut trailing_x = r.x + r.width - m.padding - trailing_width;
+        if kind == Kind::TitleBar {
+            x += self.title_leading_controls();
+        }
         for child in children {
             if self.is_hidden(child) {
                 continue;
             }
             let n = &self.nodes[&child];
             let s = n.measured;
+            let fallback = self.window_buttons.is_some_and(|ids| ids.contains(&child));
             let bounds = if kind == Kind::TitleBar {
                 Rect {
-                    x,
+                    x: if fallback { trailing_x } else { x },
                     y: r.y + (r.height - s.height) / 2.,
                     width: s.width,
                     height: s.height,
@@ -1094,7 +1192,11 @@ impl Tree {
             };
             self.place_node(child, bounds);
             if kind == Kind::TitleBar {
-                x += s.width + m.gap;
+                if fallback {
+                    trailing_x += s.width + m.gap;
+                } else {
+                    x += s.width + m.gap;
+                }
             } else if kind != Kind::Row {
                 y += s.height + m.gap;
             }

@@ -194,6 +194,14 @@ Phase 0 remains an independent client of those four crates.
   Missing material OR layers uses D5: opaque panes and content clipped to the insets.
   Missing material also paints an opaque root base; otherwise D6 still owns that background.
   The application supplies exported colours/measurements and the menus' panel Material.
+  `Tree::set_sidebar_frame` supplies the floating margin/radius. The title uses
+  `TitlebarStyle` and `nk-wayland::set_layer_blur` with explicit `Blur`/`GradedPane`
+  bands, no glass tone/rim. The app supplies its background fade; reduced transparency
+  makes it opaque and unblurred. The provisional recipe remains the owner's D7 choice.
+  `Tree::window_controls` supplies retained client buttons; a server layout replaces
+  them and reserves its actual side/size. The app opts in before configure with
+  `Application::window_controls`, places the root-local box, and sends fallback
+  actions through `Window::window_action` from the same activation path.
   Content scrolling dirties root content, not the pane buffers. The sidebar has its own
   clamped vertical offset and reveals focused pages below its fixed header. Vertical
   layer scroll routes to sidebar/content for sidebar/title respectively; horizontal

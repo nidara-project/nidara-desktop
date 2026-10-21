@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! One thread owns the connection, input and buffers. All sizes and input are
 //! logical pixels; only Frame's buffer dimensions are physical pixels.
+mod controls;
+pub use controls::{ControlsLayout, ControlsSide, WindowAction};
 mod ime;
 mod keyboard;
 mod layers;
@@ -10,7 +12,9 @@ mod protocol;
 pub use ime::{ImeBatch, TextInput};
 pub use keyboard::Key;
 use keyboard::Keyboard;
-pub use material::{Glass, Material, Pane, Shadow, Tone, WindowBackground, WindowLevel};
+pub use material::{
+    Blur, Glass, GradedPane, Material, Pane, Shadow, Tone, WindowBackground, WindowLevel,
+};
 use material::{send_background, send_material};
 use memmap2::MmapMut;
 use protocol::layers::{nidara_layer_v1, nidara_layers_manager_v1};
@@ -54,6 +58,7 @@ pub struct Frame {
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
+    ControlsLayout(ControlsLayout),
     Layer {
         id: LayerId,
         event: LayerEvent,
@@ -82,6 +87,10 @@ pub enum Event {
 }
 /// App callbacks run on the connection's thread; no callbacks survive run().
 pub trait Application {
+    /// Request server control layout before the first configure (fallback if absent).
+    fn window_controls(&self) -> bool {
+        false
+    }
     fn idle(&mut self, _window: &mut Window) -> Result<()> {
         Ok(())
     }
@@ -122,6 +131,8 @@ struct Send {
 /// Small phase-0 window host, not a general widget library.
 pub struct Window {
     connection: Connection,
+    controls: controls::Controls,
+    maximized: bool,
     materials: Option<nidara_material_manager_v1::NidaraMaterialManagerV1>,
     compositor: Option<wl_compositor::WlCompositor>,
     subcompositor: Option<wl_subcompositor::WlSubcompositor>,
@@ -595,6 +606,8 @@ fn run_inner(
     let registry = conn.display().get_registry(&qh, ());
     let mut w = Window {
         connection: conn.clone(),
+        controls: controls::Controls::default(),
+        maximized: false,
         materials: None,
         compositor: None,
         subcompositor: None,
@@ -683,6 +696,10 @@ fn run_inner(
     );
     w.subcompositor = bind!(wl_subcompositor::WlSubcompositor, 1);
     w.layers_manager = bind!(nidara_layers_manager_v1::NidaraLayersManagerV1, 1);
+    w.controls.manager = bind!(
+        controls::nidara_window_controls_manager_v1::NidaraWindowControlsManagerV1,
+        1
+    );
     w.compositor = Some(compositor.clone());
     w.viewporter = viewporter.clone();
     w.shm = bind!(wl_shm::WlShm, 1);
@@ -715,6 +732,9 @@ fn run_inner(
     w.surface = Some(surface);
     w.xdg = Some(xdg);
     w.toplevel = Some(top);
+    if app.window_controls() {
+        w.request_window_controls();
+    }
     // Seat and manager order in registry is unspecified.
     if let (Some(m), Some(s)) = (&w.text_manager, &w.seat) {
         w.text = Some(m.get_text_input(s, &qh, ()));
@@ -917,7 +937,14 @@ impl Dispatch<xdg_toplevel::XdgToplevel, ()> for Window {
         _: &QueueHandle<Self>,
     ) {
         match e {
-            xdg_toplevel::Event::Configure { width, height, .. } => {
+            xdg_toplevel::Event::Configure {
+                width,
+                height,
+                states,
+            } => {
+                w.maximized = states.as_chunks::<4>().0.iter().any(|value| {
+                    u32::from_ne_bytes(*value) == xdg_toplevel::State::Maximized as u32
+                });
                 w.pending_size = Some((
                     if width > 0 { width as u32 } else { w.width },
                     if height > 0 { height as u32 } else { w.height },
