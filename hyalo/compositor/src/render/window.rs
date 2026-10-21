@@ -524,8 +524,12 @@ pub fn push<R: HyaloRenderer>(
     // (`rounding` 24, `rounding_power` 3.2) is not shown.
     // A client may keep its minimum-size buffer in a smaller tile. The layout's
     // visible geometry, supplied by push_window, clips that buffer too.
-    let clip = (clip_to_cell || !fits(window)).then_some(geo);
-    let program = (look.rounded || clip_to_cell).then(|| rounded_program(renderer)).flatten();
+    // A window whose layers Hyalo animates (protocols/layers.rs) shows them only inside its box:
+    // a sidebar sliding out of it is cut at its edge, its content as its glass (`Outer`) — the
+    // text went on past the window while the glass stopped (owner, 2026-10-21).
+    let layered = crate::protocols::layers::tree_has_layer(&surface);
+    let clip = (clip_to_cell || !fits(window)).then_some(geo).or(layered.then_some(frame));
+    let program = (look.rounded || clip_to_cell || layered).then(|| rounded_program(renderer)).flatten();
     let at = out.len();
     match &program {
         Some(program) => {

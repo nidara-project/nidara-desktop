@@ -1360,6 +1360,10 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   (`GlassElement::rounded_to`, the shader's `outer`): before 2026-10-20 only the surfaces went
   through the rounded program, and a title bar or sidebar reaching the window's corners drew its
   glass square past them (owner, live on nk-widgets-demo).
+  Its CONTENT is cut at the window's box too: a window whose tree holds a layer is always drawn
+  through the rounded program with the clip set to its box (`push` in render/window.rs,
+  `tree_has_layer`) — a sidebar sliding out of the window (collapsing, D7) showed its text past
+  the window's edge while its glass stopped there (owner, live on nk-widgets-demo, 2026-10-21).
 - **A graded blur** (`set_shape_grade(top, bottom)`, inside material v1 — lib + Hyalo together):
   a shape's blur strength from its top edge to its bottom edge, 0..1. One blur cannot be graded,
   so the shader (`graded` in `glass_final.glsl`) walks the capture's four as a ladder — sharp
@@ -1373,7 +1377,9 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   with a graded blur, contrast measured along rows (≈ 127 sharp, under 40 blurred); controls
   `--no-material` (the sidebar's columns stay sharp) and `--uniform` (the title bar as blurred
   at its bottom as at its top) must each fail their claim; and the pixel one px in from each top
-  corner must be what lies beside the window (control: a `rounding = false` rule for the probe).
+  corner must be what lies beside the window (control: a `rounding = false` rule for the probe);
+  of an opaque red layer half outside the window's left edge nothing may show beside the window
+  (control: the same test on its half inside, which must be red).
 - Not drawn yet: the drawn region (#761) of a layer-shell surface while it holds a layer (it is
   drawn whole); capture shows layers at their presented place like the screen. Not offered to
   sandboxed clients, like the material.
