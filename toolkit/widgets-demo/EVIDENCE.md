@@ -467,3 +467,21 @@ unchanged exporter tokens symlinked from gap-repair export. Initial local full
 suite lacked the legacy build/settings-data path (2Settings failures); adding
 that path to the same complete data matches CI, without skipping/relaxing tests.
 Published heads untouched; local repair branch awaits owner review/publication.
+
+### #889 capsule composition integration (local)
+
+CapsuleComposition stages one layer per panel, coverage-only buffers and explicit
+state/ink payloads together with placement. Stable idle state IDs preserve
+compositor fade-out; frame signatures suppress unchanged capsule repaints.
+Appearance now loads control and opaque fallback variants plus capsule geometry.
+The opt-in --capsules demo provides window controls and an action toolbar.
+D5 draws the exported opaque base and immediate state feedback. Timed D5 state
+fading, backdrop fixtures, compositor visual oracles and idle/performance remain
+pending; no completion or live acceptance is claimed.
+
+The new unit oracle covers monochrome coverage/no background, unchanged coverage
+pixels on hover, normal/destructive state payloads, idle IDs, reduced-motion
+duration0, disabled/hidden handling, layer input capture/cancel/activation and
+opaque D5 base at scales1/1.25. A client-painted coverage background is CAUGHT by
+its own assertion (toolkit/target/capsule-coverage-control.log). Total46 focused
+tests and clippy pass. This is CPU/payload/input evidence, not GPU presentation.

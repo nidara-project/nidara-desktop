@@ -4,7 +4,8 @@
 mod choices;
 
 mod capsule;
-pub use capsule::CapsuleMetrics;
+pub use capsule::{CapsuleMetrics, CapsuleStateStyle, CapsuleStyle};
+pub mod capsule_composition;
 mod motion;
 mod paint;
 mod ranges;
@@ -235,6 +236,7 @@ pub struct Tree {
     pub(crate) hovered: Option<NodeId>,
     page_width: PageWidth,
     pub(crate) capsules: BTreeMap<NodeId, capsule::Capsule>,
+    pub(crate) capsule_styles: BTreeMap<NodeId, CapsuleStyle>,
     capture: Option<NodeId>,
     capture_space: Option<NodeId>,
     pub(crate) active: bool,
@@ -300,6 +302,7 @@ impl Tree {
             hovered: None,
             page_width: PageWidth::None,
             capsules: BTreeMap::new(),
+            capsule_styles: BTreeMap::new(),
             capture: None,
             capture_space: None,
             active: false,
@@ -679,6 +682,7 @@ impl Tree {
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.capsules.remove(&id);
+            tree.capsule_styles.remove(&id);
             let node = tree.nodes.remove(&id).unwrap();
             for child in node.children {
                 erase(tree, child);
