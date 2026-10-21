@@ -1,0 +1,28 @@
+{
+  "$comment": [
+    "Radio groups of the native toolkit (#882): the segmented choice (also the preset choice) and the swatch choice. Taken from the current Settings, which is the spec (ui/shell/styles/_settings.scss): button.settings-preset-btn and button.accent-circle-btn. Final values require owner live review.",
+    "Default applies to every dark/reduceTransparency variant; variants override whole fields like list.json. Exported once as choices in each components.json mode variant."
+  ],
+  "default": {
+    "segmented": {
+      "paddingX": 14,
+      "paddingY": 5,
+      "border": 1,
+      "borderColor": "--nidara-border",
+      "fontSize": "fse-small",
+      "selectedColor": "--nidara-accent",
+      "selectedText": "--nidara-accent-fg",
+      "source": "button.settings-preset-btn: padding 5px 14px, 1px border var(--nidara-border), font-size $fse-small, radius $nidara-radius-sm (components common.radius); selected = .nidara-btn--primary, the accent with accent-fg text."
+    },
+    "swatch": {
+      "diameter": 30,
+      "border": 3,
+      "ring": 2,
+      "gap": 8,
+      "selectedColor": "--nidara-text",
+      "hoverColor": "--nidara-text-dim",
+      "source": "button.accent-circle-btn: min 30px, 3px border, selected = border and a 2px outer ring of --nidara-text, hover border --nidara-text-dim. Gap: space-2 between swatches (provisional)."
+    }
+  },
+  "variants": []
+}

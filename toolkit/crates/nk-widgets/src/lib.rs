@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Retained structural widgets. The tree is the source for layout, pixels,
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
+mod choices;
 mod motion;
 mod paint;
 mod semantics;
 pub mod window;
+pub use choices::{ChoiceKind, ChoiceStyle};
 pub use nk_a11y::NodeId;
 use nk_text::{Layout, Point, Rect, Size, TextBackend, TextStyle};
 pub use paint::{Palette, Surface};
@@ -77,18 +79,39 @@ pub enum PageWidth {
 pub enum Kind {
     Window,
     Sidebar,
-    Page { selected: bool },
+    Page {
+        selected: bool,
+    },
     TitleBar,
     Scroll,
     Group,
     Row,
     Label,
-    Switch { checked: bool },
+    Switch {
+        checked: bool,
+    },
     Button,
+    /// A radio group: a row's control holding its `Choice`s (#882).
+    Choices {
+        kind: ChoiceKind,
+    },
+    Choice {
+        checked: bool,
+    },
 }
 impl Kind {
     fn focusable(self) -> bool {
-        matches!(self, Self::Page { .. } | Self::Switch { .. } | Self::Button)
+        matches!(
+            self,
+            Self::Page { .. } | Self::Switch { .. } | Self::Button | Self::Choice { .. }
+        )
+    }
+    /// What a row holds beside its label: one of these.
+    pub(crate) fn row_control(self) -> bool {
+        matches!(
+            self,
+            Self::Switch { .. } | Self::Button | Self::Choices { .. }
+        )
     }
 }
 /// The button owns its silhouette; interaction feedback follows it.
@@ -112,7 +135,8 @@ pub struct Node {
     pub(crate) scroll: Point,
     pub(crate) min_width: f32,
     width: Option<f32>,
-    constraint: f32,
+    pub(crate) constraint: f32,
+    pub(crate) swatch: Option<nk_render::Color>,
 }
 impl Node {
     pub fn kind(&self) -> Kind {
@@ -186,6 +210,7 @@ pub struct Tree {
     pub(crate) server_controls: Option<nk_wayland::ControlsLayout>,
     invalid: Invalid,
     pub(crate) pane_epoch: u64,
+    pub(crate) choice_style: Option<ChoiceStyle>,
 }
 impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
@@ -244,6 +269,7 @@ impl Tree {
             server_controls: None,
             invalid: Invalid::LAYOUT,
             pane_epoch: 0,
+            choice_style: None,
         };
         tree.allocate(None, Kind::Window, title.into());
         Ok(tree)
@@ -269,6 +295,7 @@ impl Tree {
                 min_width: 0.,
                 width: None,
                 constraint: 0.,
+                swatch: None,
             },
         );
         if let Some(p) = parent {
@@ -341,6 +368,8 @@ impl Tree {
                 | (Kind::Scroll, Kind::Group | Kind::Row)
                 | (Kind::Group, Kind::Label | Kind::Row)
                 | (Kind::Row, Kind::Label | Kind::Switch { .. } | Kind::Button)
+                | (Kind::Row, Kind::Choices { .. })
+                | (Kind::Choices { .. }, Kind::Choice { .. })
         );
         if !valid {
             return Err("invalid structural widget parent".into());
@@ -358,10 +387,10 @@ impl Tree {
             return Err("duplicate structural label".into());
         }
         if p.kind == Kind::Row
-            && matches!(kind, Kind::Switch { .. } | Kind::Button)
+            && kind.row_control()
             && p.children
                 .iter()
-                .any(|id| matches!(self.nodes[id].kind, Kind::Switch { .. } | Kind::Button))
+                .any(|id| self.nodes[id].kind.row_control())
         {
             return Err("a row has one control".into());
         }
@@ -511,6 +540,7 @@ impl Tree {
             .filter(|id| {
                 self.nodes[id].kind.focusable()
                     && self.available(*id)
+                    && self.tab_stop(*id)
                     && (self.sidebar_open
                         || !self.in_pane(*id)
                         || !matches!(self.nodes[id].kind, Kind::Page { .. }))
@@ -732,6 +762,7 @@ impl Tree {
         }
         match self.nodes[&id].kind {
             Kind::Switch { checked } => self.set_checked(id, !checked)?,
+            Kind::Choice { .. } => self.set_choice(id)?,
             Kind::Page { .. } => {
                 self.select_page(id)?;
                 if self.narrow {
@@ -938,14 +969,15 @@ impl Tree {
             return Ok(self.nodes[&id].measured);
         }
         self.nodes.get_mut(&id).unwrap().constraint = width;
+        if let Kind::Choices { kind } = kind {
+            return self.measure_choices(id, kind, width, backend);
+        }
         if kind == Kind::Row {
             let children = self.nodes[&id].children.clone();
             let mut control_width: f32 = 0.;
             let mut height: f32 = 0.;
             for child in &children {
-                if !self.is_hidden(*child)
-                    && matches!(self.nodes[child].kind, Kind::Switch { .. } | Kind::Button)
-                {
+                if !self.is_hidden(*child) && self.nodes[child].kind.row_control() {
                     let size = self.measure(*child, (width / 2.).max(1.), backend)?;
                     control_width = control_width.max(size.width);
                     height = height.max(size.height);
@@ -1040,11 +1072,7 @@ impl Tree {
                     Kind::TitleBar => (width - self.leading).max(1.),
                     _ => width,
                 },
-                Kind::Row
-                    if matches!(self.nodes[&child].kind, Kind::Switch { .. } | Kind::Button) =>
-                {
-                    m.control
-                }
+                Kind::Row if self.nodes[&child].kind.row_control() => m.control,
                 Kind::Row => label_width,
                 _ => (width - 2. * m.padding).max(1.),
             };
@@ -1094,6 +1122,8 @@ impl Tree {
                 width: text.width,
                 height: text.height,
             },
+            // Measured with their group (measure_choices).
+            Kind::Choices { .. } | Kind::Choice { .. } => self.nodes[&id].measured,
         };
         self.nodes.get_mut(&id).unwrap().measured = size;
         Ok(size)
@@ -1252,6 +1282,10 @@ impl Tree {
         self.nodes.get_mut(&id).unwrap().bounds = r;
         let node = &self.nodes[&id];
         let kind = node.kind;
+        if matches!(kind, Kind::Choices { .. }) {
+            self.place_choices(id, r);
+            return;
+        }
         let children = node.children.clone();
         let m = self.metrics;
         let inset = self.content_viewport();
@@ -1294,7 +1328,7 @@ impl Tree {
                     height: s.height,
                 }
             } else if kind == Kind::Row {
-                let control = matches!(n.kind, Kind::Switch { .. } | Kind::Button);
+                let control = n.kind.row_control();
                 Rect {
                     x: if control {
                         r.x + r.width - m.padding - s.width

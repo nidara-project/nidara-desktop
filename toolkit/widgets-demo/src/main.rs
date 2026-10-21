@@ -2,6 +2,7 @@
 //! Fixed structural-widget demo, deliberately independent of Settings/Config1.
 mod accessibility;
 mod appearance;
+mod choices;
 mod panel;
 use appearance::Appearance;
 use nk_a11y::{Request, Role};
@@ -34,6 +35,7 @@ struct Demo {
     window_buttons: [u64; 3],
     ready: bool,
     layout_report: Option<(u32, u32, bool)>,
+    choices: Option<choices::Fixture>,
 }
 impl Demo {
     fn applied(&self, name: &str) {
@@ -67,6 +69,11 @@ impl Demo {
         };
         if let Some((id, role)) = change {
             tree.nodes.get_mut(&id).unwrap().role = role;
+            self.applied(&self.fault);
+        }
+        if let Some(choices) = &self.choices
+            && choices.fault(&self.fault, &mut tree)
+        {
             self.applied(&self.fault);
         }
         match self.fault.as_str() {
@@ -335,6 +342,7 @@ impl Application for Demo {
                 self.tree.set_text_style(appearance.style.clone());
             }
             self.appearance = appearance;
+            self.tree.set_choice_style(self.appearance.choices)?;
             self.tree
                 .invalidate(self.tree.root(), nk_widgets::Invalid::PAINT);
             self.composition
@@ -379,6 +387,13 @@ impl Application for Demo {
         if self.fault == "tab" && matches!(&event,Event::Key(key) if key.sym==0xff09) {
             self.tree.tab(false)?;
             self.applied("tab");
+        }
+        // The arrows' control: a radio group that ignores them.
+        if self.fault == "arrows"
+            && matches!(&event, Event::Key(key) if choices::group_key(key.sym))
+        {
+            self.applied("arrows");
+            return self.sync(window);
         }
         let old = self.tree.node(self.scroll).unwrap().scroll();
         let focused = self.tree.focused();
@@ -500,6 +515,12 @@ fn run() -> Result<()> {
     };
     let scroll = tree.append(root, Kind::Scroll, "Content")?;
     tree.set_page_width(nk_widgets::PageWidth::Form)?;
+    tree.set_choice_style(appearance.choices)?;
+    let choices = if std::env::args().any(|a| a == "--choices") {
+        Some(choices::build(&mut tree, scroll, &appearance)?)
+    } else {
+        None
+    };
     let group = tree.group(scroll, "General")?;
     let (_, switch) = tree.row(group, "Enable feature", Kind::Switch { checked: false })?;
     let mut buttons = vec![];
@@ -567,6 +588,7 @@ fn run() -> Result<()> {
             window_buttons,
             ready: false,
             layout_report: None,
+            choices,
         },
         Options {
             material: true,

@@ -871,7 +871,7 @@ PY
         # The baseline alone (scale 1, no controls) unless the checks or their faults changed
         # (ci-scope `full`); the nightly run has everything.
         if [ "${NK_REAL_FULL:-true}" = false ]; then
-            export NK_FCITX5_SCALES=1 NK_REAL_CONTROLS=0
+            export NK_FCITX5_SCALES=1 NK_CHOICES_SCALES=1 NK_REAL_CONTROLS=0
             log "real IME/Orca: baseline at scale 1 only, controls and scale 1.25 left to the nightly run (ci-scope full=false)"
         fi
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/ni python "$REPO/scripts/ci/nk-fcitx5-check.py" \
@@ -880,7 +880,14 @@ PY
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/no HYALO_LOG="$hyalo_log" python "$REPO/scripts/ci/nk-orca-check.py" \
             > /tmp/hyalo/nk-orca.log 2>&1 || real_status=1
         cat /tmp/hyalo/nk-orca.log
-        [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca gates; inspect toolkit-fcitx5 and toolkit-orca artifacts"; exit 1; }
+        # The radio groups (#882) through libatspi, in the demo's --choices mode. Its evidence
+        # goes beside the widgets' (disk, not tmpfs).
+        mkdir -p "$REPO/toolkit/target/widgets-evidence"
+        NK_WIDGETS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
+            NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" python "$REPO/scripts/ci/nk-choices-check.py" \
+            > "$REPO/toolkit/target/widgets-evidence/choices-check.log" 2>&1 || real_status=1
+        cat "$REPO/toolkit/target/widgets-evidence/choices-check.log"
+        [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca/choices gates; inspect toolkit-fcitx5, toolkit-orca and widgets-evidence artifacts"; exit 1; }
     fi
 
     # Phase 1 foundations beside phase 0. New evidence uses disk, not tmpfs.

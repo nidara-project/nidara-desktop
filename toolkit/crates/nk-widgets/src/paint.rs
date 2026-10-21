@@ -43,6 +43,7 @@ impl Tree {
                 ButtonShape::Capsule => bounds.height / 2.,
             },
             Kind::Switch { .. } => bounds.height / 2.,
+            Kind::Choice { .. } => return self.choice_shape(id),
             _ => 0.,
         };
         (bounds, radius)
@@ -240,6 +241,7 @@ impl Tree {
                 canvas.rounded_rect(highlight, radius as f64, palette.selected)
             }
             Kind::Button => canvas.rounded_rect(highlight, radius as f64, palette.surface),
+            Kind::Choices { .. } => self.paint_choices(id, r, origin, canvas, palette),
             Kind::Switch { checked } => {
                 canvas.rounded_rect(
                     r,
@@ -273,6 +275,8 @@ impl Tree {
             && self.available(id)
             && n.kind.focusable()
             && !matches!(n.kind, Kind::Page { selected: true })
+            // A sample shows its hover as its ring (paint_choices).
+            && self.choice_kind(id) != Some(ChoiceKind::Swatch)
         {
             let mut hover = palette.text;
             hover.components[3] = m.hover_opacity;
@@ -281,7 +285,11 @@ impl Tree {
         if let Some(layout) = &n.layout
             && matches!(
                 n.kind,
-                Kind::Label | Kind::Page { .. } | Kind::Button | Kind::TitleBar
+                Kind::Label
+                    | Kind::Page { .. }
+                    | Kind::Button
+                    | Kind::TitleBar
+                    | Kind::Choice { .. }
             )
         {
             let padding = if matches!(n.kind, Kind::Button | Kind::Page { .. } | Kind::TitleBar) {
@@ -302,16 +310,25 @@ impl Tree {
             } else {
                 0.
             };
+            // A segment centres its text; everything else starts at its padding.
+            let x = if matches!(n.kind, Kind::Choice { .. }) {
+                r.x + (r.width - layout.measured_size().width) / 2.
+            } else {
+                r.x + padding
+            };
             canvas.layout(
                 layout,
-                (
-                    r.x + padding,
-                    r.y + (r.height - layout.measured_size().height) / 2.,
-                ),
-                ink,
+                (x, r.y + (r.height - layout.measured_size().height) / 2.),
+                self.choice_ink(id, ink),
             )?;
         }
         if self.focus_visible && self.focused == Some(id) {
+            let (highlight, radius) = if matches!(n.kind, Kind::Choice { .. }) {
+                let (ring, radius) = self.choice_focus_shape(id);
+                (local(ring, origin), radius)
+            } else {
+                (highlight, radius)
+            };
             canvas.rounded_ring(
                 highlight,
                 radius as f64,

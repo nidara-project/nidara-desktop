@@ -80,3 +80,10 @@ contains list appearance, common padding/gap/radii and named content widths.
 The geometry/width values alias the current kit exports; `reading` and `none`
 have no invented width. Group + rows applies the shared list behavior once.
 `tokens/glass.json` carries only material, including the control response/washes.
+
+`--choices` adds a "Choices" group above the foundations' content: two segmented radio groups
+(window controls, dock size) and the accent swatches, coloured from colors.json's `accents`
+(#882). `scripts/ci/nk-choices-check.py` drives it, run with
+`NK_WIDGETS_CHECK=nk-choices-check.py toolkit/widgets-demo/check-headless.sh`; its faults
+(`two-checked`, `swatch-name`, `radio-role`, `arrows`) live in `src/choices.rs`. The radio
+groups' look comes from `toolkit/tokens/choices.json` through `components.json`'s `choices`.
