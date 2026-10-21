@@ -1034,7 +1034,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         Some(last) if !vrr => render::timing::next_vblank(last, period, begun),
         _ => begun,
     };
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, when);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,

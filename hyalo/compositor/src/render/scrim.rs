@@ -143,8 +143,8 @@ impl ScrimPx {
 
 /// The veils of `surface` placed at `location` (its origin, output pixels), each at its strength
 /// times the opacity of its most opaque shape (it forms with them).
-pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, _now: std::time::Instant) -> Vec<ScrimPx> {
-    let Some(current) = material::current(surface) else { return Vec::new() };
+pub fn scrims_for(surface: &WlSurface, location: Point<i32, Physical>, scale: Scale<f64>, now: std::time::Instant) -> Vec<ScrimPx> {
+    let Some(current) = material::presented(surface, now) else { return Vec::new() };
     scrims_of(&current.state, location, scale)
 }
 
@@ -188,7 +188,9 @@ pub fn scrims_of(m: &material::MaterialState, location: Point<i32, Physical>, sc
                 continue;
             }
             let (opacity, sigma) = law.at(s.w.min(s.h));
-            let alpha = opacity * s.opacity.clamp(0.0, 1.0);
+            // A pane answering its backdrop casts more over a light one, and over a busy one.
+            let gain = s.response.map_or(1.0, |r| r.shadow_gain(s.answer.unwrap_or([0.0, 0.0])));
+            let alpha = (opacity * gain).min(1.0) * s.opacity.clamp(0.0, 1.0);
             if alpha < 0.5 / 255.0 || sigma <= 0.0 {
                 continue;
             }
@@ -250,6 +252,13 @@ impl ScrimElement {
             (id, commit)
         };
         Some(Self { id, commit, geometry, scrims })
+    }
+
+    /// These veils drawn only inside `bounds` (output px): a layer's shadow within its window.
+    /// None when nothing of them is left.
+    pub fn within(mut self, bounds: Rectangle<i32, Physical>) -> Option<Self> {
+        self.geometry = self.geometry.intersection(bounds)?;
+        Some(self)
     }
 
     /// These veils `k` of the way formed, with the glass they lie under (`GlassElement::forming`).

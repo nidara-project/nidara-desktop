@@ -13,7 +13,7 @@ use std::{
 
 use serde::Deserialize;
 
-use crate::protocols::material::{Glass, Ink, ShadowLaw, Tone};
+use crate::protocols::material::{Glass, Ink, Response, ShadowLaw, Tone};
 
 /// Where the export is installed; `HYALO_GLASS_TOKENS` points elsewhere (a test, a checkout).
 const DEFAULT_PATH: &str = "/usr/share/nidara/settings-data/tokens/glass.json";
@@ -60,6 +60,50 @@ struct Step {
     ink_tone: Option<ToneJson>,
     #[serde(default)]
     shadow: Option<ShadowJson>,
+    /// A control's answer to its backdrop, its states and its inks (`toolkit/tokens/control.json`,
+    /// merged into the control piece's steps). `response` null: it does not answer (the opaque
+    /// face of reduce transparency).
+    #[serde(default)]
+    response: Option<ResponseJson>,
+    #[serde(default)]
+    states: Option<StatesJson>,
+    #[serde(default)]
+    ink: Option<InksJson>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResponseJson {
+    luma_low: f64,
+    luma_high: f64,
+    contrast_low: f64,
+    contrast_high: f64,
+    shadow_white: f64,
+    shadow_text: f64,
+    settle_ms: u32,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StatesJson {
+    fade_ms: u32,
+    hover: StateJson,
+    press: StateJson,
+    destructive_hover: StateJson,
+    destructive_press: StateJson,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct StateJson {
+    wash: Rgba,
+    #[serde(default)]
+    ink: Option<Rgba>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct InksJson {
+    light: Rgba,
+    dark: Rgba,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -104,6 +148,29 @@ pub struct Pane {
     pub ink_tone: Option<Tone>,
     pub ink: Option<Ink>,
     pub shadow: Option<ShadowLaw>,
+    /// What a control on it does (the control piece's answer, states and inks). None: an export
+    /// from before them, or another piece.
+    pub control: Option<ControlLook>,
+}
+
+/// A control's answer to its backdrop, the washes of its states and its inks, as exported.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ControlLook {
+    pub response: Option<Response>,
+    pub fade_ms: u32,
+    pub hover: State,
+    pub press: State,
+    pub destructive_hover: State,
+    pub destructive_press: State,
+    /// Over a dark backdrop, over a light one.
+    pub ink: [[f64; 4]; 2],
+}
+
+/// One state's wash over the glass, and the ink it takes instead of the mix (destructive ones).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct State {
+    pub wash: [f64; 4],
+    pub ink: Option<[f64; 4]>,
 }
 
 struct Loaded {
@@ -169,6 +236,31 @@ fn pick(file: &File, piece: &str, side: f64, dark: bool, reduce_transparency: bo
             blur: [s.blur_small, s.blur_large],
             offset: s.offset,
         }),
+        control: control(step),
+    })
+}
+
+fn rgba(c: Rgba) -> [f64; 4] {
+    [c.r, c.g, c.b, c.a]
+}
+
+fn control(step: &Step) -> Option<ControlLook> {
+    let (states, ink) = (step.states?, step.ink?);
+    let state = |s: StateJson| State { wash: rgba(s.wash), ink: s.ink.map(rgba) };
+    Some(ControlLook {
+        response: step.response.map(|r| Response {
+            luma: [r.luma_low, r.luma_high],
+            contrast: [r.contrast_low, r.contrast_high],
+            shadow_white: r.shadow_white,
+            shadow_text: r.shadow_text,
+            settle_ms: r.settle_ms,
+        }),
+        fade_ms: states.fade_ms,
+        hover: state(states.hover),
+        press: state(states.press),
+        destructive_hover: state(states.destructive_hover),
+        destructive_press: state(states.destructive_press),
+        ink: [rgba(ink.light), rgba(ink.dark)],
     })
 }
 
@@ -183,7 +275,14 @@ mod tests {
             {"fromSide": 0, "tone": {"saturation": 1.3, "ceiling": 0.6, "lift": 0.125, "gain": 1.125,
               "wash": {"r": 0, "g": 0, "b": 0, "a": 0}, "ambient": 0.8, "ambientLift": 0.125, "ambientGain": 0.5},
              "inkTone": {"saturation": 1.2, "ceiling": 0.94, "lift": 0.4, "gain": 1.03,
-              "wash": {"r": 1, "g": 1, "b": 1, "a": 0.2}, "ambient": 0, "ambientLift": 0, "ambientGain": 1}},
+              "wash": {"r": 1, "g": 1, "b": 1, "a": 0.2}, "ambient": 0, "ambientLift": 0, "ambientGain": 1},
+             "response": {"lumaLow": 0.25, "lumaHigh": 0.35, "contrastLow": 0.02, "contrastHigh": 0.1,
+              "shadowWhite": 1, "shadowText": 0.5, "settleMs": 200},
+             "states": {"fadeMs": 150, "hover": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.08}},
+              "press": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.2}},
+              "destructiveHover": {"wash": {"r": 0.82, "g": 0.2, "b": 0.22, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}},
+              "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}}},
+             "ink": {"light": {"r": 1, "g": 1, "b": 1, "a": 1}, "dark": {"r": 0, "g": 0, "b": 0, "a": 1}}},
             {"fromSide": 65, "tone": {"saturation": 1.3, "ceiling": 0.59, "lift": 0.125, "gain": 1.125,
               "wash": {"r": 0, "g": 0, "b": 0, "a": 0}, "ambient": 0.8, "ambientLift": 0.125, "ambientGain": 0.5}}]}},
         {"dark": false, "reduceTransparency": false, "glass": {"refraction": 40, "lensing": 0.15, "rim": 0.5},
@@ -205,5 +304,18 @@ mod tests {
         assert_eq!(pick(&f, "control", 32.0, false, false).unwrap().tone.lift, 0.4, "the light face");
         assert!(pick(&f, "control", 32.0, true, true).is_none(), "no such variant");
         assert!(pick(&f, "dock", 32.0, true, false).is_none(), "no such piece");
+    }
+
+    #[test]
+    fn a_control_step_carries_its_answer_states_and_inks_and_an_older_one_none() {
+        let f: File = serde_json::from_str(SAMPLE).unwrap();
+        let c = pick(&f, "control", 32.0, true, false).unwrap().control.expect("the control's look");
+        assert_eq!(c.response.unwrap().luma, [0.25, 0.35]);
+        assert_eq!(c.fade_ms, 150);
+        assert_eq!(c.hover.wash, [1.0, 1.0, 1.0, 0.08]);
+        assert_eq!(c.destructive_hover.ink, Some([1.0; 4]), "its contrasting ink");
+        assert_eq!(c.destructive_press.ink, None);
+        assert_eq!(c.ink, [[1.0; 4], [0.0, 0.0, 0.0, 1.0]]);
+        assert!(pick(&f, "control", 80.0, true, false).unwrap().control.is_none(), "a step without them: none, no defaults");
     }
 }

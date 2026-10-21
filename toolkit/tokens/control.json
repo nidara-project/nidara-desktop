@@ -1,0 +1,51 @@
+{
+  "$comment": [
+    "A control on glass (toolkit/CONTRACT.md, 'Floating control capsule'): how it answers its",
+    "backdrop, the washes of its states and the inks of its glyphs. scripts/export-tokens.mjs merges",
+    "it into every step of the control piece of each tokens/glass.json variant; nk-widgets and",
+    "Hyalo's window controls read it there, and nowhere else. 'default' applies to every variant;",
+    "each entry of 'variants' then to those whose dark/reduceTransparency it names.",
+    "Every number is PROVISIONAL until the owner tunes it live in the native demo. Where each one",
+    "starts from: response.lumaLow/lumaHigh = the shell's ink thresholds (glass.json ink",
+    "lightBelow/darkAbove), the band the binary ink used to switch in; hover/press washes = the",
+    "kit's GLASS_STATE_MIX (hover 0.08/0.06, open 0.20/0.14); the destructive reds and the inks =",
+    "the window controls' own until now (render/controls.rs). The contrast band, the shadow's",
+    "gains and the two durations have no source yet."
+  ],
+  "default": {
+    "response": {
+      "lumaLow": 0.25, "lumaHigh": 0.35,
+      "contrastLow": 0.02, "contrastHigh": 0.10,
+      "shadowWhite": 1.0, "shadowText": 0.5,
+      "settleMs": 200
+    },
+    "states": {
+      "fadeMs": 150,
+      "hover": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.08}},
+      "press": {"wash": {"r": 1, "g": 1, "b": 1, "a": 0.20}},
+      "destructiveHover": {"wash": {"r": 0.82, "g": 0.20, "b": 0.22, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}},
+      "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}}
+    },
+    "ink": {
+      "light": {"r": 1, "g": 1, "b": 1, "a": 1},
+      "dark": {"r": 0, "g": 0, "b": 0, "a": 1}
+    }
+  },
+  "variants": [
+    {
+      "dark": false,
+      "states": {
+        "fadeMs": 150,
+        "hover": {"wash": {"r": 0, "g": 0, "b": 0, "a": 0.06}},
+        "press": {"wash": {"r": 0, "g": 0, "b": 0, "a": 0.14}},
+        "destructiveHover": {"wash": {"r": 0.82, "g": 0.20, "b": 0.22, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}},
+        "destructivePress": {"wash": {"r": 0.69, "g": 0.16, "b": 0.18, "a": 0.9}, "ink": {"r": 1, "g": 1, "b": 1, "a": 1}}
+      },
+      "ink": {
+        "light": {"r": 0, "g": 0, "b": 0, "a": 1},
+        "dark": {"r": 0, "g": 0, "b": 0, "a": 1}
+      }
+    },
+    {"reduceTransparency": true, "response": null}
+  ]
+}

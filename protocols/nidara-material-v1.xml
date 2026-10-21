@@ -31,7 +31,9 @@
       <description summary="pending: no shapes (no material)">
         The ink boxes (add_ink_box) and veil regions (add_veil_region) go
         with them, the tones (set_tone, set_ink_tone) are reset to none, and
-        the shapes' blur (set_shape_blur) to the surface's.
+        the shapes' blur (set_shape_blur) to the surface's. So do the
+        response (set_response), the state regions (add_state_region), the
+        inks (set_ink_colors) and the ink coverage (add_ink_coverage).
       </description>
     </request>
     <request name="add_shape">
@@ -419,6 +421,114 @@
       </description>
       <arg name="top" type="fixed" summary="the blur's strength at the shape's top edge, 0..1"/>
       <arg name="bottom" type="fixed" summary="the blur's strength at the shape's bottom edge, 0..1"/>
+    </request>
+    <enum name="error">
+      <entry name="invalid_region" value="0" summary="add_ink_coverage: not finite, empty, or overlapping another"/>
+    </enum>
+    <request name="set_response">
+      <description summary="pending: the shapes added from now on answer their backdrop">
+        Applies to the shapes added after this request, like set_tone, until
+        the next set_response; reset to none by clear_shapes. All 0 = none.
+
+        The compositor measures each such shape's backdrop on the capture it
+        draws the glass from, before the glass's tone: the mean WCAG relative
+        luminance L over the shape's bounds (on the blur the ink is measured
+        on), and its standard deviation sigma on the soft blur — the full one
+        would erase the difference between a white page and text on white.
+        It takes r = smoothstep(luma_low, luma_high, L) and
+        c = smoothstep(contrast_low, contrast_high, sigma), each easing to a
+        new value over settle_ms milliseconds (0: at once).
+
+        The shape's tone is then set_tone's mixed towards set_ink_tone's by
+        r, every stage (none set: set_tone's alone); its shadow's opacity
+        (set_shadow) is multiplied by 1 + shadow_white·r + shadow_text·c;
+        and the ink of the coverage over it (add_ink_coverage) is
+        set_ink_colors' light mixed towards its dark by the same r, in the
+        same frame. A shape that answers its backdrop ignores set_ink's
+        decision; the measurement never waits for the GPU, and the pane's
+        own output is never part of it.
+      </description>
+      <arg name="luma_low" type="fixed" summary="WCAG luminance where r starts rising from 0"/>
+      <arg name="luma_high" type="fixed" summary="where r reaches 1"/>
+      <arg name="contrast_low" type="fixed" summary="the deviation where c starts rising from 0"/>
+      <arg name="contrast_high" type="fixed" summary="where c reaches 1"/>
+      <arg name="shadow_white" type="fixed" summary="the shadow's gain over a light backdrop (r)"/>
+      <arg name="shadow_text" type="fixed" summary="its gain over a busy one (c)"/>
+      <arg name="settle_ms" type="uint" summary="how long r and c take to reach a new value"/>
+    </request>
+    <request name="add_state_region">
+      <description summary="pending: a wash over the toned glass, within a rounded rectangle">
+        Surface-local, logical coordinates: the colour r, g, b (sRGB, 0..1)
+        laid over the glass at opacity a, inside the rectangle with circular
+        corners of corner_radius, and only where there is glass (the shapes).
+        It is what a button's hover or press is over glass: the backdrop
+        still shows through it.
+
+        id is the client's (a button's). When a committed state changes the
+        wash of an id the compositor drew, the wash eases from what was shown
+        to the new one over fade_ms milliseconds (0: at once) — so an id the
+        client keeps declaring at alpha 0 fades its wash out. An id absent
+        from the committed state is gone at once. Cleared by clear_shapes,
+        so it is declared again with the shapes; meaningful only while the
+        compositor paints the glass (set_glass).
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="corner_radius" type="fixed"/>
+      <arg name="r" type="fixed"/>
+      <arg name="g" type="fixed"/>
+      <arg name="b" type="fixed"/>
+      <arg name="a" type="fixed"/>
+      <arg name="fade_ms" type="uint"/>
+    </request>
+    <request name="set_ink_colors">
+      <description summary="pending: the two inks the coverage is drawn in">
+        sRGB, 0..1: the ink over a dark backdrop (light) and over a light one
+        (dark). The coverage (add_ink_coverage) is drawn in light mixed
+        towards dark by the r of the shape under it (set_response). Until it
+        is set, and after clear_shapes, there is no ink: the coverage is
+        drawn as the client painted it.
+      </description>
+      <arg name="light_r" type="fixed"/>
+      <arg name="light_g" type="fixed"/>
+      <arg name="light_b" type="fixed"/>
+      <arg name="light_a" type="fixed"/>
+      <arg name="dark_r" type="fixed"/>
+      <arg name="dark_g" type="fixed"/>
+      <arg name="dark_b" type="fixed"/>
+      <arg name="dark_a" type="fixed"/>
+    </request>
+    <request name="add_ink_coverage">
+      <description summary="pending: where the surface's buffer is ink, recoloured by the compositor">
+        Surface-local, logical coordinates: inside this rectangle the
+        surface's own buffer is coverage — glyphs, symbolic icons, a focus
+        ring, painted premultiplied in any opaque colour — and the
+        compositor draws it in the ink (set_ink_colors) instead: each pixel
+        becomes the ink's colour at the ink's alpha times the buffer's
+        alpha. So the glyphs follow the backdrop with the glass under them,
+        in the same frame, with no repaint by the client.
+
+        When override_a is above 0 the rectangle takes the override's colour
+        instead of the mix: the contrasting ink of a destructive button's
+        feedback (the client passes its exported ink there).
+
+        Rectangles must not overlap; outside them the buffer is drawn as it
+        is. A value that is not finite, a width or height at most 0, or a
+        rectangle overlapping one already added is the protocol error
+        invalid_region; rectangles are clipped to the surface. Cleared by
+        clear_shapes.
+      </description>
+      <arg name="x" type="fixed"/>
+      <arg name="y" type="fixed"/>
+      <arg name="width" type="fixed"/>
+      <arg name="height" type="fixed"/>
+      <arg name="override_r" type="fixed"/>
+      <arg name="override_g" type="fixed"/>
+      <arg name="override_b" type="fixed"/>
+      <arg name="override_a" type="fixed"/>
     </request>
   </interface>
 </protocol>

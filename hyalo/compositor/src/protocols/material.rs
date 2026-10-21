@@ -53,6 +53,70 @@ pub struct Shape {
     /// Its blur's strength at its top and bottom edges (`set_shape_grade`), 0..1. None: its
     /// whole blur everywhere.
     pub grade: Option<[f64; 2]>,
+    /// How it answers its backdrop (`set_response`). None: it does not.
+    pub response: Option<Response>,
+    /// Its answer as it is shown now, r and c (0..1): filled when it is drawn (`presented`),
+    /// from what was last measured under it, eased. None: not measured yet, or no response.
+    pub answer: Option<[f64; 2]>,
+}
+
+/// How a shape answers its backdrop (`set_response`): r from the mean luminance under it, c from
+/// how much that luminance varies, each a smoothstep between its two bounds, easing to a new value
+/// over `settle_ms`; the shadow's gains by each.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Response {
+    pub luma: [f64; 2],
+    pub contrast: [f64; 2],
+    pub shadow_white: f64,
+    pub shadow_text: f64,
+    pub settle_ms: u32,
+}
+
+impl Response {
+    /// r and c for a backdrop of mean luminance `mean` and deviation `sigma`.
+    pub fn answer(&self, mean: f64, sigma: f64) -> [f64; 2] {
+        [smoothstep(self.luma, mean), smoothstep(self.contrast, sigma)]
+    }
+
+    /// How much its shadow's opacity is multiplied by, at `answer`.
+    pub fn shadow_gain(&self, answer: [f64; 2]) -> f64 {
+        (1.0 + self.shadow_white * answer[0] + self.shadow_text * answer[1]).max(0.0)
+    }
+}
+
+/// GLSL's smoothstep between `edges`: 0 below the first, 1 above the second; a step where they meet.
+fn smoothstep(edges: [f64; 2], x: f64) -> f64 {
+    if edges[1] <= edges[0] {
+        return if x < edges[0] { 0.0 } else { 1.0 };
+    }
+    let t = ((x - edges[0]) / (edges[1] - edges[0])).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// A wash over the toned glass (`add_state_region`), surface-local logical px: a button's hover or
+/// press. `wash` is straight sRGB with its opacity; when it is drawn (`presented`) it is the wash
+/// as it is shown, eased from the last one of the same `id`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StateRegion {
+    pub id: u32,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub radius: f64,
+    pub wash: [f64; 4],
+    pub fade_ms: u32,
+}
+
+/// Where the surface's buffer is ink (`add_ink_coverage`), surface-local logical px; `over`: the
+/// colour it takes instead of the mix (a destructive button's feedback).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Coverage {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub over: Option<[f64; 4]>,
 }
 
 /// The shadow a shape casts (`set_shadow`): black, a gaussian of `blur` deviation, moved
@@ -107,6 +171,21 @@ pub struct Tone {
 }
 
 impl Tone {
+    /// This tone `t` of the way (0..1) to `other`, every stage (`set_response`).
+    pub fn mix(&self, other: &Tone, t: f64) -> Tone {
+        let m = |a: f64, b: f64| a + (b - a) * t;
+        Tone {
+            saturation: m(self.saturation, other.saturation),
+            ceiling: m(self.ceiling, other.ceiling),
+            lift: m(self.lift, other.lift),
+            gain: m(self.gain, other.gain),
+            wash: std::array::from_fn(|i| m(self.wash[i], other.wash[i])),
+            ambient: m(self.ambient, other.ambient),
+            ambient_lift: m(self.ambient_lift, other.ambient_lift),
+            ambient_gain: m(self.ambient_gain, other.ambient_gain),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         saturation: f64, ceiling: f64, lift: f64, gain: f64,
@@ -221,6 +300,15 @@ pub struct MaterialState {
     pub window_background: Option<[f64; 3]>,
     /// `set_window_background_level`: the level the app asked for; None: the user's.
     pub window_background_level: Option<crate::config::BackgroundLevel>,
+    /// What `set_response` last said: how the next shapes answer their backdrop.
+    pub responding: Option<Response>,
+    /// The washes over the glass (`add_state_region`).
+    pub state_regions: Vec<StateRegion>,
+    /// The inks the coverage is drawn in (`set_ink_colors`): over a dark backdrop, over a light
+    /// one. None: the coverage is drawn as the client painted it.
+    pub ink_colors: Option<[[f64; 4]; 2]>,
+    /// Where the buffer is ink (`add_ink_coverage`), rectangles that do not overlap.
+    pub coverage: Vec<Coverage>,
 }
 
 impl MaterialState {
@@ -280,6 +368,154 @@ impl MaterialState {
     }
 }
 
+impl MaterialState {
+    /// The ink `c` is drawn in, straight sRGB with its alpha: its override, else the inks mixed
+    /// by the answer of the topmost answering shape under its centre (the first answering shape
+    /// where none is under it; r 0 before anything was measured). None without inks.
+    pub fn ink_of(&self, c: &Coverage) -> Option<[f64; 4]> {
+        if let Some(o) = c.over {
+            return Some(o);
+        }
+        let [light, dark] = self.ink_colors?;
+        let (cx, cy) = (c.x + c.w / 2.0, c.y + c.h / 2.0);
+        let answering = || self.shapes.iter().filter(|s| s.response.is_some());
+        let under = answering().rev().find(|s| cx >= s.x && cx < s.x + s.w && cy >= s.y && cy < s.y + s.h);
+        let r = under.or_else(|| answering().next()).and_then(|s| s.answer).map_or(0.0, |a| a[0]);
+        Some(std::array::from_fn(|i| light[i] + (dark[i] - light[i]) * r))
+    }
+}
+
+/// A value easing from `from` to `to` over `ms` from `start`, linearly in time.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Ease<const N: usize> {
+    from: [f64; N],
+    to: [f64; N],
+    start: std::time::Instant,
+    ms: u32,
+}
+
+impl<const N: usize> Ease<N> {
+    fn at_once(v: [f64; N], now: std::time::Instant) -> Self {
+        Self { from: v, to: v, start: now, ms: 0 }
+    }
+
+    fn at(&self, now: std::time::Instant) -> [f64; N] {
+        let t = if self.ms == 0 {
+            1.0
+        } else {
+            (now.saturating_duration_since(self.start).as_secs_f64() * 1000.0 / self.ms as f64).clamp(0.0, 1.0)
+        };
+        std::array::from_fn(|i| self.from[i] + (self.to[i] - self.from[i]) * t)
+    }
+
+    fn settled(&self, now: std::time::Instant) -> bool {
+        self.ms == 0 || now.saturating_duration_since(self.start).as_secs_f64() * 1000.0 >= self.ms as f64
+    }
+
+    /// Towards `to` from where it is `now`, over `ms`.
+    fn retarget(&mut self, to: [f64; N], ms: u32, now: std::time::Instant) {
+        if self.to != to {
+            *self = Self { from: self.at(now), to, start: now, ms };
+        }
+    }
+}
+
+/// An answer moves on only past this: a measurement's noise does not restart its easing.
+const ANSWER_STEP: f64 = 1.0 / 512.0;
+
+/// What a material shows over time (`set_response`, `add_state_region`): each answering shape's
+/// answer and each state region's wash, eased. Shared by a client's material and the glass Hyalo
+/// paints itself (render/controls.rs).
+#[derive(Debug, Clone, Default)]
+pub struct Presenting {
+    /// By the shape's index.
+    answers: std::collections::BTreeMap<usize, Ease<2>>,
+    /// By the region's id.
+    washes: std::collections::BTreeMap<u32, Ease<4>>,
+    /// What was last drawn, to move the commit when that changes.
+    shown: Vec<u64>,
+}
+
+impl Presenting {
+    /// A measurement under shape `index`: its mean luminance and its deviation. Its first answer
+    /// is taken at once (a pane appearing does not fade in from a dark backdrop it never had);
+    /// after it, it eases over the response's `settle_ms`. Whether anything changed.
+    pub fn measured(&mut self, index: usize, response: &Response, mean: f64, sigma: f64, now: std::time::Instant) -> bool {
+        let to = response.answer(mean, sigma);
+        match self.answers.get_mut(&index) {
+            None => {
+                self.answers.insert(index, Ease::at_once(to, now));
+                true
+            }
+            Some(e) if (e.to[0] - to[0]).abs() > ANSWER_STEP || (e.to[1] - to[1]).abs() > ANSWER_STEP => {
+                e.retarget(to, response.settle_ms, now);
+                true
+            }
+            Some(_) => false,
+        }
+    }
+
+    /// A state committed: each region's wash eases from what it showed over its `fade_ms`; a new
+    /// id shows its wash at once, an id gone is forgotten. Answers of shapes no longer answering
+    /// are forgotten too.
+    pub fn committed(&mut self, state: &MaterialState, now: std::time::Instant) {
+        let mut washes = std::collections::BTreeMap::new();
+        for r in &state.state_regions {
+            let e = match self.washes.remove(&r.id) {
+                Some(mut e) => {
+                    e.retarget(r.wash, r.fade_ms, now);
+                    e
+                }
+                None => Ease::at_once(r.wash, now),
+            };
+            washes.insert(r.id, e);
+        }
+        self.washes = washes;
+        self.answers.retain(|&i, _| state.shapes.get(i).is_some_and(|s| s.response.is_some()));
+    }
+
+    /// `state` as it shows at `now`: the answers and washes filled in. Whether it is still easing
+    /// (another frame is due), and whether it shows differently than when last asked.
+    pub fn present(&mut self, state: &mut MaterialState, now: std::time::Instant) -> (bool, bool) {
+        let mut easing = false;
+        let mut shown = Vec::new();
+        for (i, s) in state.shapes.iter_mut().enumerate() {
+            if s.response.is_none() {
+                continue;
+            }
+            s.answer = self.answers.get(&i).map(|e| {
+                easing |= !e.settled(now);
+                e.at(now)
+            });
+            shown.extend(s.answer.iter().flatten().map(|v| v.to_bits()));
+        }
+        for r in &mut state.state_regions {
+            if let Some(e) = self.washes.get(&r.id) {
+                easing |= !e.settled(now);
+                r.wash = e.at(now);
+            }
+            shown.extend(r.wash.iter().map(|v| v.to_bits()));
+        }
+        let changed = shown != self.shown;
+        self.shown = shown;
+        (easing, changed)
+    }
+}
+
+thread_local! {
+    /// Something drawn is still easing (`Presenting::present`): the backend draws another frame.
+    static EASING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Whether anything drawn since the last call is still easing.
+pub fn take_easing() -> bool {
+    EASING.with(|e| e.replace(false))
+}
+
+pub(crate) fn mark_easing() {
+    EASING.with(|e| e.set(true));
+}
+
 impl Cacheable for MaterialState {
     fn commit(&mut self, _dh: &DisplayHandle) -> Self {
         self.clone()
@@ -302,6 +538,8 @@ pub struct Current {
     /// it at once, as the backdrop under a still surface is not measured again (the bar's ink
     /// following the mode, 2026-10-09: it turned only when something moved behind it).
     pub ink_darkest: std::collections::BTreeMap<u32, f64>,
+    /// The answers and washes as they ease (`set_response`, `add_state_region`).
+    pub presenting: Presenting,
 }
 
 /// The surface's material object, for the ink event.
@@ -384,6 +622,44 @@ fn send_ink(states: &smithay::wayland::compositor::SurfaceData, changed: Vec<(u3
     true
 }
 
+/// A measurement of the answering shapes came back (render/glass_gl.rs): per shape index, the
+/// mean luminance under it and its deviation. Whether the glass must be redrawn.
+pub fn response_measured(surface: &WlSurface, measured: &[(usize, f32, f32)]) -> bool {
+    with_states(surface, |states| {
+        let Some(current) = states.data_map.get::<std::sync::Mutex<Current>>() else { return false };
+        let mut current = current.lock().unwrap();
+        let now = std::time::Instant::now();
+        let Current { state, presenting, .. } = &mut *current;
+        let mut changed = false;
+        for &(i, mean, sigma) in measured {
+            if let Some(r) = state.shapes.get(i).and_then(|s| s.response) {
+                changed |= presenting.measured(i, &r, mean as f64, sigma as f64, now);
+            }
+        }
+        changed
+    })
+}
+
+/// The material `surface` shows at `when`, as `current` — its answers and washes eased to then
+/// (`Presenting`); its commit moves when what it shows does.
+pub fn presented(surface: &WlSurface, when: std::time::Instant) -> Option<Current> {
+    with_states(surface, |states| {
+        let mut current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap();
+        if !current.state.shapes.iter().any(|s| current.state.blur_of(s).passes > 0) {
+            return None;
+        }
+        let mut state = current.state.clone();
+        let (easing, changed) = current.presenting.present(&mut state, when);
+        if easing {
+            mark_easing();
+        }
+        if changed {
+            current.commit.increment();
+        }
+        Some(Current { state, ..current.clone() })
+    })
+}
+
 /// Called after every surface commit: keeps `Current` in step with the committed state.
 pub fn on_commit(surface: &WlSurface) {
     with_states(surface, |states| {
@@ -412,6 +688,8 @@ pub fn on_commit(surface: &WlSurface) {
             if glass_changed {
                 current.commit.increment();
             }
+            let Current { state, presenting, .. } = &mut *current;
+            presenting.committed(state, std::time::Instant::now());
         }
         if let Some(ink) = new_rule {
             let darkest: Vec<(u32, f64)> = current.ink_darkest.iter().map(|(&id, &l)| (id, l)).collect();
@@ -508,6 +786,20 @@ pub fn glass_shapes(states: &smithay::wayland::compositor::SurfaceData) -> usize
     })
 }
 
+/// The state `surface` committed, glass or not (its ink coverage needs no glass).
+pub fn current_state(surface: &WlSurface) -> Option<MaterialState> {
+    with_states(surface, |states| Some(states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().state.clone()))
+}
+
+/// Whether a surface (its `states`, for a walk that already holds them) declared ink coverage
+/// with something to draw it in.
+pub fn has_coverage(states: &smithay::wayland::compositor::SurfaceData) -> bool {
+    states.data_map.get::<std::sync::Mutex<Current>>().is_some_and(|c| {
+        let m = &c.lock().unwrap().state;
+        !m.coverage.is_empty() && (m.ink_colors.is_some() || m.coverage.iter().any(|c| c.over.is_some()))
+    })
+}
+
 pub fn current(surface: &WlSurface) -> Option<Current> {
     with_states(surface, |states| {
         let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap().clone();
@@ -582,7 +874,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
         &self,
         _state: &mut Hyalo,
         _client: &Client,
-        _resource: &NidaraMaterialV1,
+        resource: &NidaraMaterialV1,
         request: nidara_material_v1::Request,
         _dh: &DisplayHandle,
         _data_init: &mut DataInit<'_, Hyalo>,
@@ -600,6 +892,10 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                     m.blurring = None;
                     m.shadowing = None;
                     m.grading = None;
+                    m.responding = None;
+                    m.state_regions.clear();
+                    m.ink_colors = None;
+                    m.coverage.clear();
                 });
             }
             Request::AddShape { x, y, width, height, corner_radius, exponent } => {
@@ -608,6 +904,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         x, y, w: width, h: height, radius: corner_radius, exponent, opacity: 1.0, clip: None,
                         pointer: None, fusion: m.fusing,
                         tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing, grade: m.grading,
+                        response: m.responding, answer: None,
                     })
                 });
             }
@@ -626,6 +923,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                         m.shapes.push(Shape {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer: None,
                             fusion: m.fusing, tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing, grade: m.grading,
+                        response: m.responding, answer: None,
                         })
                     });
                 }
@@ -651,6 +949,7 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                             x, y, w: width, h: height, radius: corner_radius, exponent, opacity, clip, pointer,
                             fusion: if pointer.is_some() { None } else { m.fusing },
                             tone: m.toning, ink_tone: m.ink_toning, blur: m.blurring, shadow: m.shadowing, grade: m.grading,
+                        response: m.responding, answer: None,
                         })
                     });
                 }
@@ -758,6 +1057,57 @@ impl Dispatch2<NidaraMaterialV1, Hyalo> for MaterialData {
                 let rects = region.map(|r| flatten(&get_region_attributes(&r)));
                 self.pending(|m| m.drawn = rects);
             }
+            Request::SetResponse { luma_low, luma_high, contrast_low, contrast_high, shadow_white, shadow_text, settle_ms } => {
+                let response = Response {
+                    luma: [luma_low, luma_high],
+                    contrast: [contrast_low, contrast_high],
+                    shadow_white: shadow_white.clamp(-1.0, 16.0),
+                    shadow_text: shadow_text.clamp(-1.0, 16.0),
+                    settle_ms: settle_ms.min(10_000),
+                };
+                let none = [luma_low, luma_high, contrast_low, contrast_high, shadow_white, shadow_text].iter().all(|v| *v == 0.0)
+                    && settle_ms == 0;
+                let finite = [luma_low, luma_high, contrast_low, contrast_high, shadow_white, shadow_text].iter().all(|v| v.is_finite());
+                self.pending(|m| m.responding = (!none && finite).then_some(response));
+            }
+            Request::AddStateRegion { id, x, y, width, height, corner_radius, r, g, b, a, fade_ms } => {
+                let ok = [x, y, width, height, corner_radius, r, g, b, a].iter().all(|v| v.is_finite());
+                if ok && width > 0.0 && height > 0.0 {
+                    let wash = [r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0), a.clamp(0.0, 1.0)];
+                    let region = StateRegion { id, x, y, w: width, h: height, radius: corner_radius.max(0.0), wash, fade_ms: fade_ms.min(10_000) };
+                    self.pending(|m| {
+                        // One wash per id: a second declaration of it replaces the first.
+                        m.state_regions.retain(|s| s.id != id);
+                        m.state_regions.push(region);
+                    });
+                }
+            }
+            Request::SetInkColors { light_r, light_g, light_b, light_a, dark_r, dark_g, dark_b, dark_a } => {
+                let c = |v: f64| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 };
+                let inks = [[c(light_r), c(light_g), c(light_b), c(light_a)], [c(dark_r), c(dark_g), c(dark_b), c(dark_a)]];
+                self.pending(|m| m.ink_colors = Some(inks));
+            }
+            Request::AddInkCoverage { x, y, width, height, override_r, override_g, override_b, override_a } => {
+                let values = [x, y, width, height, override_r, override_g, override_b, override_a];
+                if !values.iter().all(|v| v.is_finite()) || width <= 0.0 || height <= 0.0 {
+                    resource.post_error(nidara_material_v1::Error::InvalidRegion, "add_ink_coverage: not finite, or empty");
+                    return;
+                }
+                let c = |v: f64| v.clamp(0.0, 1.0);
+                let over = (override_a > 0.0).then(|| [c(override_r), c(override_g), c(override_b), c(override_a)]);
+                let coverage = Coverage { x, y, w: width, h: height, over };
+                let overlaps = |o: &Coverage| x < o.x + o.w && o.x < x + width && y < o.y + o.h && o.y < y + height;
+                let added = self.pending(|m| {
+                    if m.coverage.iter().any(overlaps) {
+                        return false;
+                    }
+                    m.coverage.push(coverage);
+                    true
+                });
+                if added == Some(false) {
+                    resource.post_error(nidara_material_v1::Error::InvalidRegion, "add_ink_coverage: overlaps a rectangle already added");
+                }
+            }
             Request::Destroy => {
                 self.pending(|m| *m = MaterialState::default());
             }
@@ -829,7 +1179,7 @@ mod tests {
     fn shape(x: f64, y: f64) -> Shape {
         Shape {
             x, y, w: 100.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None, blur: None, shadow: None, grade: None,
+            fusion: None, tone: None, ink_tone: None, blur: None, shadow: None, grade: None, response: None, answer: None,
         }
     }
 
@@ -867,6 +1217,74 @@ mod tests {
         add(&mut m);
         assert_eq!((m.shapes[0].tone, m.shapes[0].ink_tone), (Some(dark), Some(light)));
         assert_eq!((m.shapes[1].tone, m.shapes[1].ink_tone), (None, None), "after a reset: none");
+    }
+
+    #[test]
+    fn an_answer_is_a_smoothstep_of_the_backdrop_and_eases_after_the_first() {
+        let r = Response { luma: [0.25, 0.35], contrast: [0.02, 0.10], shadow_white: 1.0, shadow_text: 0.5, settle_ms: 200 };
+        assert_eq!(r.answer(0.1, 0.0), [0.0, 0.0], "dark and flat");
+        assert_eq!(r.answer(0.9, 0.5), [1.0, 1.0], "white and busy");
+        assert!((r.answer(0.30, 0.06)[0] - 0.5).abs() < 1e-9 && (r.answer(0.30, 0.06)[1] - 0.5).abs() < 1e-9, "half way: half");
+        assert_eq!(r.shadow_gain([1.0, 1.0]), 2.5, "1 + white + text");
+        let t0 = std::time::Instant::now();
+        let ms = |n: u64| t0 + std::time::Duration::from_millis(n);
+        let mut p = Presenting::default();
+        let mut m = MaterialState { shapes: vec![Shape { response: Some(r), ..shape(0.0, 0.0) }], ..Default::default() };
+        assert!(p.measured(0, &r, 0.9, 0.0, t0));
+        assert!(!p.present(&mut m, t0).0, "the first answer at once: nothing to ease");
+        assert_eq!(m.shapes[0].answer, Some([1.0, 0.0]));
+        assert!(!p.measured(0, &r, 0.9001, 0.0, ms(10)), "noise does not restart it");
+        assert!(p.measured(0, &r, 0.0, 0.0, ms(0)), "a dark page scrolls in");
+        let (easing, changed) = p.present(&mut m, ms(100));
+        assert!(easing && changed);
+        assert!((m.shapes[0].answer.unwrap()[0] - 0.5).abs() < 1e-9, "half way through settle_ms: half way");
+        assert!(!p.present(&mut m, ms(250)).0, "settled");
+        assert_eq!(m.shapes[0].answer, Some([0.0, 0.0]));
+        assert!(!p.present(&mut m, ms(300)).1, "unchanged since: no new commit");
+    }
+
+    #[test]
+    fn a_wash_fades_from_what_it_showed_and_a_new_id_shows_at_once() {
+        let region = |id, a| StateRegion { id, x: 0.0, y: 0.0, w: 24.0, h: 24.0, radius: 12.0, wash: [1.0, 1.0, 1.0, a], fade_ms: 100 };
+        let t0 = std::time::Instant::now();
+        let ms = |n: u64| t0 + std::time::Duration::from_millis(n);
+        let mut p = Presenting::default();
+        let mut m = MaterialState { state_regions: vec![region(1, 0.2)], ..Default::default() };
+        p.committed(&m, t0);
+        assert_eq!(p.present(&mut m, t0), (false, true), "new: at once");
+        assert_eq!(m.state_regions[0].wash[3], 0.2);
+        let mut m = MaterialState { state_regions: vec![region(1, 0.0)], ..Default::default() };
+        p.committed(&m, ms(0));
+        assert!(p.present(&mut m, ms(50)).0, "hover-out eases");
+        assert!((m.state_regions[0].wash[3] - 0.1).abs() < 1e-9);
+        // Committed again mid-fade with the same target: it keeps fading, it does not restart.
+        p.committed(&MaterialState { state_regions: vec![region(1, 0.0)], ..Default::default() }, ms(50));
+        p.present(&mut m, ms(75));
+        assert!((m.state_regions[0].wash[3] - 0.05).abs() < 1e-9, "{}", m.state_regions[0].wash[3]);
+        let mut gone = MaterialState::default();
+        p.committed(&gone, ms(80));
+        assert!(!p.present(&mut gone, ms(80)).0, "an id gone is gone at once");
+    }
+
+    #[test]
+    fn coverage_is_inked_by_the_answer_of_the_shape_under_it_or_its_override() {
+        let r = Response { luma: [0.25, 0.35], contrast: [0.02, 0.10], shadow_white: 0.0, shadow_text: 0.0, settle_ms: 0 };
+        let white = [1.0, 1.0, 1.0, 1.0];
+        let black = [0.0, 0.0, 0.0, 1.0];
+        let mut m = MaterialState {
+            shapes: vec![
+                Shape { response: Some(r), answer: Some([1.0, 0.0]), ..shape(0.0, 0.0) },
+                Shape { response: Some(r), answer: Some([0.0, 0.0]), ..shape(200.0, 0.0) },
+            ],
+            ink_colors: Some([white, black]),
+            ..Default::default()
+        };
+        let cov = |x: f64, over| Coverage { x, y: 10.0, w: 16.0, h: 16.0, over };
+        assert_eq!(m.ink_of(&cov(10.0, None)), Some(black), "over a white backdrop: the dark ink");
+        assert_eq!(m.ink_of(&cov(210.0, None)), Some(white), "over a dark one: the light ink");
+        assert_eq!(m.ink_of(&cov(10.0, Some([1.0, 0.0, 0.0, 1.0]))), Some([1.0, 0.0, 0.0, 1.0]), "its override");
+        m.ink_colors = None;
+        assert_eq!(m.ink_of(&cov(10.0, None)), None, "no inks: drawn as painted");
     }
 
     #[test]

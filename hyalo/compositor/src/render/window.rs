@@ -70,6 +70,11 @@ uniform vec4 geo;         // the window's box, output pixels
 uniform float radius;
 uniform float exponent;
 uniform vec4 clip;        // nothing is drawn outside it, output pixels: a client's shadow margin
+// The ink coverage (nidara-material-v1 `add_ink_coverage`): two per matrix — a rectangle (output
+// px) in one column, its ink (straight sRGB, alpha) in the next. Inside one, the buffer is ink.
+#define INK_MAT 8
+uniform mat4 ink[INK_MAT];
+uniform float ink_count;
 
 void main() {
     vec4 color = texture2D(tex, v_coords);
@@ -79,9 +84,20 @@ void main() {
     color = color * alpha;
 #endif
 
+    vec2 p = (fb_to_out * vec3(gl_FragCoord.xy, 1.0)).xy;
+    // Coverage: the client's pixels are only how much ink there is; the colour is the ink's.
+    for (int i = 0; i < INK_MAT; i++) {
+        if (float(2 * i) >= ink_count) break;
+        for (int k = 0; k < 2; k++) {
+            if (float(2 * i + k) >= ink_count) break;
+            vec4 r = k == 0 ? ink[i][0] : ink[i][2];
+            vec4 c = k == 0 ? ink[i][1] : ink[i][3];
+            if (p.x >= r.x && p.y >= r.y && p.x < r.x + r.z && p.y < r.y + r.w) color = vec4(c.rgb, 1.0) * c.a * color.a;
+        }
+    }
+
     // Only inside the corner squares: the superellipse of the glass (glass_gl.rs `sdf_box`),
     // anti-aliased over one pixel.
-    vec2 p = (fb_to_out * vec3(gl_FragCoord.xy, 1.0)).xy;
     if (p.x < clip.x || p.y < clip.y || p.x >= clip.x + clip.z || p.y >= clip.y + clip.w) discard;
     vec2 h = geo.zw * 0.5;
     vec2 q = abs(p - geo.xy - h);
@@ -182,6 +198,8 @@ fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram>
                 UniformName::new("radius", UniformType::_1f),
                 UniformName::new("exponent", UniformType::_1f),
                 UniformName::new("clip", UniformType::_4f),
+                UniformName::new("ink", UniformType::Matrix4x4),
+                UniformName::new("ink_count", UniformType::_1f),
             ],
         )
         .map_err(|err| tracing::error!(?err, "the rounded-corner shader did not compile: windows stay square"))
@@ -201,6 +219,103 @@ pub struct RoundedElement<R: smithay::backend::renderer::Renderer> {
     /// Where the surface may draw, output pixels: the client's box when it draws a frame with a
     /// shadow margin (`push`), else anywhere.
     clip: Option<Rectangle<f64, Physical>>,
+    /// Its ink coverage (`ink_coverage`): surface-local logical rectangles and their ink.
+    ink: Inked,
+    /// Its surface, when it has ink coverage (the ink's memo lives there).
+    surface: Option<WlSurface>,
+}
+
+/// What a surface's ink coverage draws this frame: its rectangles (surface-local logical) with
+/// the ink of each, and the commit the element is drawn with — it moves when the ink does.
+#[derive(Debug, Clone, Default)]
+pub struct Inked {
+    coverage: Vec<([f64; 4], [f32; 4])>,
+    /// Ours: it moves when the surface's own commit or the ink does (`InkMemo`).
+    commit: Option<CommitCounter>,
+}
+
+/// The most coverage rectangles one surface's ink is drawn in (the shader's `ink`, two per mat4).
+const INK_MAX: usize = 16;
+
+/// A surface's coverage over time: our commit, and what each of ours stood for — the surface's
+/// own commit and the ink drawn (oldest first).
+#[derive(Default)]
+struct InkMemo(RefCell<InkHistory>);
+
+#[derive(Default)]
+struct InkHistory {
+    ours: CommitCounter,
+    stood_for: Vec<(CommitCounter, CommitCounter, String)>,
+}
+
+/// The ink coverage of `surface` as it shows at `when` (nidara-material-v1 `add_ink_coverage`):
+/// empty without inks. `inner` is its surface element's commit.
+fn ink_coverage(surface: &WlSurface, inner: CommitCounter, when: std::time::Instant) -> Inked {
+    let state = crate::protocols::material::presented(surface, when)
+        .map(|c| c.state)
+        .or_else(|| crate::protocols::material::current_state(surface));
+    let Some(state) = state.filter(|m| m.ink_colors.is_some() || m.coverage.iter().any(|c| c.over.is_some())) else {
+        return Inked::default();
+    };
+    let coverage: Vec<([f64; 4], [f32; 4])> = state
+        .coverage
+        .iter()
+        .take(INK_MAX)
+        .filter_map(|c| state.ink_of(c).map(|ink| ([c.x, c.y, c.w, c.h], ink.map(|v| v as f32))))
+        .collect();
+    if coverage.is_empty() {
+        return Inked::default();
+    }
+    let key = format!("{coverage:?}");
+    let commit = with_states(surface, |states| {
+        let memo = states.data_map.get_or_insert(InkMemo::default);
+        let mut memo = memo.0.borrow_mut();
+        let InkHistory { ours, stood_for } = &mut *memo;
+        if stood_for.last().is_none_or(|(_, i, k)| *i != inner || *k != key) {
+            ours.increment();
+            stood_for.push((*ours, inner, key.clone()));
+            if stood_for.len() > 32 {
+                stood_for.remove(0);
+            }
+        }
+        *ours
+    });
+    Inked { coverage, commit: Some(commit) }
+}
+
+impl Inked {
+    /// The damage since our `commit`: the surface's own while the ink is unchanged, else all of it.
+    fn damage_since<E: Element>(&self, inner: &E, surface_key: Option<&WlSurface>, scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
+        let (Some(now), Some(commit), Some(surface)) = (self.commit, commit, surface_key) else {
+            return inner.damage_since(scale, commit);
+        };
+        let then = with_states(surface, |states| {
+            let memo = states.data_map.get::<InkMemo>()?;
+            let memo = memo.0.borrow();
+            let key_now = memo.stood_for.iter().find(|(o, _, _)| *o == now).map(|(_, _, k)| k.clone())?;
+            memo.stood_for.iter().find(|(o, _, _)| *o == commit).filter(|(_, _, k)| *k == key_now).map(|(_, i, _)| *i)
+        });
+        match then {
+            Some(inner_then) => inner.damage_since(scale, Some(inner_then)),
+            None => DamageSet::from_slice(&[Rectangle::from_size(inner.geometry(scale).size)]),
+        }
+    }
+
+    /// The `ink` uniforms for a surface drawn at `dst` (output px) from a view `view` logical px wide.
+    fn uniforms(&self, dst: Rectangle<i32, Physical>, view: Size<i32, Logical>) -> Vec<Uniform<'static>> {
+        let (sx, sy) = (dst.size.w as f64 / view.w.max(1) as f64, dst.size.h as f64 / view.h.max(1) as f64);
+        let mut mats = vec![[0f32; 16]; INK_MAX / 2];
+        for (i, ([x, y, w, h], ink)) in self.coverage.iter().enumerate() {
+            let col = (i % 2) * 8;
+            let m = &mut mats[i / 2];
+            m[col..col + 4].copy_from_slice(&[(dst.loc.x as f64 + x * sx) as f32, (dst.loc.y as f64 + y * sy) as f32, (w * sx) as f32, (h * sy) as f32]);
+            m[col + 4..col + 8].copy_from_slice(ink);
+        }
+        vec![
+            Uniform::new("ink", smithay::backend::renderer::gles::UniformValue::Matrix4x4 { matrices: mats, transpose: false }),
+            Uniform::new("ink_count", self.coverage.len() as f32),
+        ]
+    }
 }
 
 /// The rounded shader's uniforms for a box `geo` with its corners, drawing only inside `clip`.
@@ -247,7 +362,7 @@ impl<R: HyaloRenderer> Element for RoundedElement<R> {
         self.inner.id()
     }
     fn current_commit(&self) -> CommitCounter {
-        self.inner.current_commit()
+        self.ink.commit.unwrap_or_else(|| self.inner.current_commit())
     }
     fn location(&self, scale: Scale<f64>) -> Point<i32, Physical> {
         self.inner.location(scale)
@@ -262,7 +377,7 @@ impl<R: HyaloRenderer> Element for RoundedElement<R> {
         self.inner.geometry(scale)
     }
     fn damage_since(&self, scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
-        self.inner.damage_since(scale, commit)
+        self.ink.damage_since(&self.inner, self.surface.as_ref(), scale, commit)
     }
     /// The surface's own, without the cut corners and inside the clip: what lies behind them
     /// must still be drawn.
@@ -308,10 +423,9 @@ impl<R: HyaloRenderer> RenderElement<R> for RoundedElement<R> {
             let projection = *gles.projection();
             // Safety: only reads the viewport Smithay set for this frame.
             let fb = gles.with_context(|gl| unsafe { glass_gl::fb_size(gl) }).map_err(R::from_gles_error)?;
-            gles.override_default_tex_program(
-                self.program.clone(),
-                rounded_uniforms(&projection, fb, self.geo, self.radius, self.exponent, self.clip),
-            );
+            let mut uniforms = rounded_uniforms(&projection, fb, self.geo, self.radius, self.exponent, self.clip);
+            uniforms.extend(self.ink.uniforms(dst, self.inner.inner.view().dst));
+            gles.override_default_tex_program(self.program.clone(), uniforms);
         }
         let drawn = self.inner.draw(frame, src, dst, damage, opaque_regions, cache);
         R::gles_frame(frame).clear_tex_program_override();
@@ -362,6 +476,50 @@ fn fb_to_out(projection: &[f32; 9], fb: (i32, i32)) -> [f32; 9] {
         }
     }
     out
+}
+
+/// The surfaces of `root`'s tree that declared ink coverage, with their element ids.
+pub(super) fn inked_surfaces(root: &WlSurface) -> Vec<(Id, WlSurface)> {
+    let mut out = Vec::new();
+    smithay::wayland::compositor::with_surface_tree_downward(
+        root,
+        (),
+        |_, _, _| smithay::wayland::compositor::TraversalAction::DoChildren(()),
+        // The walk holds each surface's states: they are read from it, never taken again.
+        |s, states, _| {
+            if crate::protocols::material::has_coverage(states) {
+                out.push((Id::from_wayland_resource(s), s.clone()));
+            }
+        },
+        |_, _, _| true,
+    );
+    out
+}
+
+/// A surface element drawn through the rounded shader for its ink alone: no corners, no clip.
+pub(super) fn inked_element<R: HyaloRenderer>(
+    renderer: &mut R,
+    inked: &[(Id, WlSurface)],
+    inner: AtScale<WaylandSurfaceRenderElement<R>>,
+    when: std::time::Instant,
+) -> OutputElement<R> {
+    let s = inked.iter().find(|(id, _)| id == inner.id()).map(|(_, s)| s.clone());
+    match (s, rounded_program(renderer)) {
+        (Some(s), Some(program)) => {
+            let ink = ink_coverage(&s, inner.current_commit(), when);
+            OutputElement::Rounded(RoundedElement {
+                inner,
+                program,
+                geo: Rectangle::default(),
+                radius: 0.0,
+                exponent: 2.0,
+                clip: None,
+                ink,
+                surface: Some(s),
+            })
+        }
+        _ => OutputElement::Scaled(inner),
+    }
 }
 
 /// The backdrop's element id and what it was last drawn as, kept on the window's surface: the
@@ -499,16 +657,16 @@ pub fn push<R: HyaloRenderer>(
     let mut title_bar = title_bar;
     let apart = title_bar.as_ref().and_then(|t| t.controls);
     if let Some((rect, controls)) = controls.or(apart) {
-        let (glass, dark, shadow) = if cfg.controls.glass {
-            super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency, controls.moving)
+        let (glass, ink, shadow) = if cfg.controls.glass {
+            super::controls::glass(&surface, rect, frame, scale, output_size, cfg.background.reduce_transparency, &controls, when)
         } else {
-            (Vec::new(), false, None)
+            (Vec::new(), None, None)
         };
         // On the glass, its ink is the glass's; on the plain capsule, the app's (`set_ink`) —
         // or, in Hyalo's title bar, the bar's own pass draws it as before.
         let under = !glass.is_empty();
         if under || apart.is_none() {
-            let controls = if under { super::controls::Controls { dark, ..controls } } else { controls };
+            let controls = if under { super::controls::Controls { ink, ..controls } } else { controls };
             out.push(OutputElement::Controls(super::controls::ControlsElement::new(&surface, rect, scale, controls, under)));
             out.extend(glass.into_iter().map(OutputElement::Glass));
             out.extend(shadow.map(OutputElement::Scrim));
@@ -529,13 +687,18 @@ pub fn push<R: HyaloRenderer>(
     // text went on past the window while the glass stopped (owner, 2026-10-21).
     let layered = crate::protocols::layers::tree_has_layer(&surface);
     let clip = (clip_to_cell || !fits(window)).then_some(geo).or(layered.then_some(frame));
-    let program = (look.rounded || clip_to_cell || layered).then(|| rounded_program(renderer)).flatten();
+    // The surfaces of its tree whose buffer is partly ink (nidara-material-v1 `add_ink_coverage`):
+    // drawn through the same shader, which recolours it.
+    let inked = inked_surfaces(&surface);
+    let program = (look.rounded || clip_to_cell || layered || !inked.is_empty()).then(|| rounded_program(renderer)).flatten();
     let at = out.len();
     match &program {
         Some(program) => {
             // Layers a client handed Hyalo to animate are drawn where they are shown
             // (protocols/layers.rs), each at its own scale, each with its own glass below it.
-            let rounded = |inner| {
+            let rounded = |inner: AtScale<WaylandSurfaceRenderElement<R>>| {
+                let s = inked.iter().find(|(id, _)| id == inner.id()).map(|(_, s)| s.clone());
+                let ink = s.as_ref().map_or_else(Inked::default, |s| ink_coverage(s, inner.current_commit(), when));
                 OutputElement::Rounded(RoundedElement {
                     inner,
                     program: program.clone(),
@@ -543,6 +706,8 @@ pub fn push<R: HyaloRenderer>(
                     radius,
                     exponent: cfg.rounding_power,
                     clip,
+                    ink,
+                    surface: s,
                 })
             };
             match crate::protocols::layers::render_tree(renderer, &surface, location, scale, output_size, Kind::Unspecified, when) {
@@ -550,7 +715,10 @@ pub fn push<R: HyaloRenderer>(
                     // Each layer's glass cut to the window's corners like its surface: a title
                     // bar or a sidebar that reaches them shows nothing past them.
                     let outer = super::glass_gl::Outer { rect: frame, radius, exponent: cfg.rounding_power };
-                    out.extend(layered.interleave(rounded, |g| OutputElement::Glass(g.rounded_to(outer))))
+                    out.extend(layered.interleave(rounded, |p| match p {
+                        crate::protocols::layers::LayerPaint::Glass(g) => OutputElement::Glass(g.rounded_to(outer)),
+                        p => super::layer_paint(p),
+                    }))
                 }
                 None => out.extend(
                     render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)

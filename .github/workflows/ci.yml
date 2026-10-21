@@ -179,7 +179,8 @@ jobs:
       # The tokens the native Settings paints with (toolkit/PHASE1.md D4), computed by the
       # same engine and sheets as this desktop: every token the Settings/kit sheets use must
       # exist in every one of the engine's input sets; a copy with one dropped must fail. The
-      # glass (D7) the same: a copy with `panel` dropped from one variant must fail.
+      # glass (D7) the same: a copy with `panel` dropped from one variant must fail, and one with
+      # a control step's `states` dropped (toolkit/tokens/control.json, #889).
       - name: Settings token export is complete (must succeed)
         run: |
           node --experimental-strip-types scripts/export-tokens.mjs /tmp/settings-data
@@ -193,6 +194,11 @@ jobs:
           python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['variants'][0]['pieces'].pop('panel'); json.dump(d, open(p, 'w'))" /tmp/settings-glass-control/tokens/glass.json
           if python3 scripts/ci/settings-tokens-check.py /tmp/settings-glass-control; then
             echo "::error::settings-tokens-check passed a glass export with no panel"; exit 1
+          fi
+          rm -rf /tmp/settings-control-control && cp -r /tmp/settings-data /tmp/settings-control-control
+          python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['variants'][0]['pieces']['control'][0].pop('states'); json.dump(d, open(p, 'w'))" /tmp/settings-control-control/tokens/glass.json
+          if python3 scripts/ci/settings-tokens-check.py /tmp/settings-control-control; then
+            echo "::error::settings-tokens-check passed a control step with no states"; exit 1
           fi
       # The kit's ONE sheet (tech-debt #108 phase 2): the shell, greeter and lock
       # load it at runtime ahead of their own, so it is no longer compiled as part

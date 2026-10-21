@@ -141,6 +141,11 @@ phase_build() {
     cc -O2 "$REPO/scripts/ci/hyalo-layer-glass-probe.c" "$lg/xdg-shell-protocol.c" \
         "$lg/nidara-layers-v1-protocol.c" "$lg/nidara-material-v1-protocol.c" \
         -I"$lg" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-layer-glass-probe
+    # The control-material probe (a control on glass answering its backdrop: toolkit/CONTRACT.md,
+    # "Floating control capsule", #889) — the same protocols as the layer-glass probe.
+    cc -O2 "$REPO/scripts/ci/hyalo-control-material-probe.c" "$lg/xdg-shell-protocol.c" \
+        "$lg/nidara-layers-v1-protocol.c" "$lg/nidara-material-v1-protocol.c" \
+        -I"$lg" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-control-material-probe
     # The title-bar probe (an app that leaves its decorations to Hyalo, render/title_bar.rs).
     local tb="$REPO/build/tb"
     mkdir -p "$tb"
@@ -669,7 +674,7 @@ PY
     # controls (glass = false) show the header sharp through it and keep white glyphs.
     CONTROLS_GLASS_LOG=/tmp/hyalo/controls-glass python "$REPO/scripts/ci/hyalo-controls-glass-check.py" >/tmp/hyalo/controls-glass.log 2>&1 \
         || { log "FAIL: controls glass"; cat /tmp/hyalo/controls-glass.log; exit 1; }
-    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 3, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 3 controls caught)"
+    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 4, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 4 controls caught)"
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
@@ -742,6 +747,15 @@ PY
     LAYER_GLASS_LOG=/tmp/hyalo/layer-glass python "$REPO/scripts/ci/hyalo-layer-glass-check.py" >/tmp/hyalo/layer-glass.log 2>&1 \
         || { log "FAIL: layer glass"; cat /tmp/hyalo/layer-glass.log; exit 1; }
     log "layer glass OK ($(grep -c '^ok' /tmp/hyalo/layer-glass.log) of 4, $(grep -c '^CAUGHT' /tmp/hyalo/layer-glass.log) of 4 controls caught)"
+    # A control on glass answers its backdrop (#889): its ink, tone and shadow, its wash, its ink
+    # coverage and the coverage's protocol error; each claim with the probe dropping that part.
+    # Its five probe controls only where they can fail differently (ci-scope `full`), as the
+    # AT-SPI controls; the nightly run has them.
+    local cm_controls=1
+    [ "${NK_REAL_FULL:-true}" = false ] && cm_controls=0
+    CONTROL_MATERIAL_CONTROLS=$cm_controls CONTROL_MATERIAL_LOG=/tmp/hyalo/control-material python "$REPO/scripts/ci/hyalo-control-material-check.py" >/tmp/hyalo/control-material.log 2>&1 \
+        || { log "FAIL: control material"; cat /tmp/hyalo/control-material.log; exit 1; }
+    log "control material OK ($(grep -c '^ok' /tmp/hyalo/control-material.log) of 6, $(grep -c '^CAUGHT' /tmp/hyalo/control-material.log) of $([ $cm_controls = 1 ] && echo 6 || echo '1 (5 left to the nightly run)') controls caught)"
     if animations; then
         NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
             || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }

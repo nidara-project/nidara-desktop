@@ -223,7 +223,7 @@ pub fn capture_output(state: &mut Hyalo, output: &Output, pointer: bool) -> Resu
 fn capture_output_at(state: &mut Hyalo, output: &Output, pointer: bool, when: std::time::Instant) -> Result<(u32, u32, Vec<u8>), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, when);
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when);
     let captured = match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -251,7 +251,7 @@ pub fn draw_output_into(
 ) -> Result<(), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now());
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -266,7 +266,7 @@ pub fn draw_output_into(
 pub fn draw_upright_into(state: &mut Hyalo, output: &Output, dmabuf: &mut Dmabuf, pointer: bool) -> Result<(), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now());
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_upright_into(w.renderer(), &scene, output, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -332,7 +332,7 @@ pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scal
 /// A picture of `window` as it is now, at `scale`, to draw after it is gone (render/snapshot.rs).
 pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<crate::render::snapshot::Snapshot, String> {
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now());
     match backend {
         Backend::Winit(w) => crate::render::snapshot::take(w.renderer(), &scene, window, scale),
         Backend::Tty(t) => {
@@ -393,12 +393,18 @@ fn poll_ink(state: &mut Hyalo) -> bool {
     let Some((results, pending)) = polled else { return false };
     let mut redraw = false;
     for m in results {
-        if let Ok(surface) = m.surface.upgrade()
-            && !m.ink.is_empty()
-        {
+        let Ok(surface) = m.surface.upgrade() else { continue };
+        if !m.ink.is_empty() {
             redraw |= match m.whose {
                 crate::render::glass::Whose::Client => crate::protocols::material::ink_measured(&surface, &m.ink),
-                crate::render::glass::Whose::Hyalo => crate::render::controls::ink_measured(&surface, &m.ink),
+                // The window controls answer their backdrop instead (render/controls.rs).
+                crate::render::glass::Whose::Hyalo => false,
+            };
+        }
+        if !m.answers.is_empty() {
+            redraw |= match m.whose {
+                crate::render::glass::Whose::Client => crate::protocols::material::response_measured(&surface, &m.answers),
+                crate::render::glass::Whose::Hyalo => crate::render::controls::response_measured(&surface, &m.answers),
             };
         }
     }
@@ -431,6 +437,11 @@ pub fn post_repaint(
     // The debug overlay is fading a flash or a damage outline out (render/stats.rs).
     if crate::render::stats::overlay_animating(&output.name()) {
         state.queue_redraw(Some(output));
+    }
+    // Glass easing to its backdrop's answer, or a button's wash fading (protocols/material.rs
+    // `Presenting`): a frame until it settles, none after.
+    if crate::protocols::material::take_easing() {
+        state.queue_redraw(None);
     }
     // A window shrinking into the dock or growing out of it (wm/minimize.rs): every output,
     // since it may cross from one to another. At rest nothing ticks.
