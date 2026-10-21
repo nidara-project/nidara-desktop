@@ -1536,10 +1536,10 @@ values of its KIND, never values of its own.
 
 | kind | what | tone | shadow | veil behind |
 |---|---|---|---|---|
-| `control` | bar capsules, island, notifications, window buttons, toolkit controls | measured, by size | measured law, by size (2026-10-12) | none |
+| `control` | bar capsules, island, window buttons, toolkit controls | measured, by size | measured law, by size (2026-10-12) | none |
 | `panel` | menus, popovers, Prism, system menu, app grid, toolkit sidebars | measured, by size | measured law, by size (2026-10-12) | none |
 | `dock` | the dock | measured | none — measured (2026-10-08: a 1 px outline only) | none |
-| `controlCenter` | the CC's tiles | measured | none — measured (2026-10-08) | ≈10 % black, measured (2026-10-11) |
+| `controlCenter` | the CC's tiles and the notifications (same veil, owner 2026-10-21) | measured | none — measured (2026-10-08) | ≈10 % black, measured (2026-10-11) |
 
 A value with no source does not exist: "none" means measured none, never "not measured". The
 2026-10-08 run's "no shadow at rest" for an app's glass was wrong — that window was inactive
@@ -1555,6 +1555,14 @@ surfaces, not an app's window, so that cause does not apply to them. They were n
 4. **States**: hover and press as washes in the glass, faded over the export's duration; the
    destructive button its own colours.
 
+**There is no older path** (owner, 2026-10-21): a piece that behaves differently does so as a
+declared case below, through the same mechanism — never on code left over from before the base.
+
+**Special case: the bar's capsules** (owner, 2026-10-21). By design they are a case of their own
+— their grouping, their separation, their behaviour — and how the top bar behaves is still to be
+redefined. Until it is, what they do is what is listed under the exceptions; whatever it becomes
+is written here, and it goes through the base's mechanism.
+
 **Exceptions — the owner's, dated; nothing else departs from the base:**
 - The bar's capsules take their ink from the system MODE, not from the backdrop (2026-10-09).
   Provisional: how the top bar behaves may change.
@@ -1562,14 +1570,15 @@ surfaces, not an app's window, so that cause does not apply to them. They were n
 - The dock follows the system mode (`trackModeGlass`, `skinFromMode`).
 
 **Where the code still departs (to be removed, not new exceptions):**
-- The bar's capsules (TypeScript kit) still run the older path — the binary ink and a fixed
-  shadow — instead of the base's answer for tone and shadow. The kit is frozen (#818): moving
-  them is part of the shell's move onto the toolkit, unless the owner asks for it sooner.
-- The notifications are not marked as any kind (`Bar.tsx`), so they fall to `control` by
-  default while lying on the Control Center's veil; whether they are `controlCenter` is open.
-- Menus and large panels take `panel`, the reference's floating glass (2026-10-12). The
-  2026-10-08 run also measured the reference's menus (`0 4 15`, α .23/.27) and large panels
-  (`0 18 38`, α .39/.68), which were then opaque. Which source a menu's shadow follows is open.
+- The bar's capsules (TypeScript kit) run the older path — the binary ink and a fixed shadow.
+  It goes when their special case above is defined; the kit is frozen (#818), and the owner has
+  ruled that no older path may stay.
+
+**Settled sources:** menus and large panels are glass (owner, 2026-10-10: the large ones are the
+same glass, thicker — not a solid panel), so they take the reference's glass law (2026-10-12).
+The 2026-10-08 run's menu (`0 4 15`, α .23/.27) and large-panel (`0 18 38`, α .39/.68) shadows
+are of the reference's OPAQUE menus and panels (98–100 % fill): a different object, which
+Nidara does not have.
 
 ## The shell's glass, as a painter asks for it (`common/ShellGlass.ts`)
 

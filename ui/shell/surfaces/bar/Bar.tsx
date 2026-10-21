@@ -160,9 +160,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor, gridPeers: () => Gtk.Window
   trackVeilRegion(cc)
   trackVeilRegion(nc)
   // Each kind of pane takes its own tone (the glass material's `TONES`): the Control Center's
-  // tiles their measured own; the large panels the reference's large floating glass; the rest —
-  // the bar's capsules, the island, the notifications — a control's.
+  // tiles and the notifications — on the same veil, white text both — their measured own (owner,
+  // 2026-10-21); the large panels the reference's large floating glass; the rest — the bar's
+  // capsules, the island — a control's. design-system.md, "The glass material".
   trackGlassPiece(cc, "controlCenter")
+  trackGlassPiece(nc, "controlCenter")
   const prism = Prism()
   trackGlassPiece(prism, "panel")
   const popups = NotificationPopupsWidget()
