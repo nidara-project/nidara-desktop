@@ -10,6 +10,8 @@ fn fixture() -> (Tree, ParleyBackend, u64, Vec<(u64, u64)>) {
         Metrics {
             sidebar: 120.,
             content: 400.,
+            form_width: 400.,
+            content_floor: 280.,
             titlebar: 48.,
             padding: 8.,
             gap: 4.,
@@ -18,6 +20,10 @@ fn fixture() -> (Tree, ParleyBackend, u64, Vec<(u64, u64)>) {
             switch_width: 44.,
             radius: 8.,
             group_radius: 12.,
+            focus_width: 2.,
+            highlight_inset: 4.,
+            hover_opacity: 0.08,
+            separator_width: 1.,
         },
         TextStyle {
             size: 14.,
@@ -262,6 +268,7 @@ fn d5_paints_opaque_base_and_d7_keeps_pane_buffers_separate() {
         track: rgba(30, 40, 50, 255),
         thumb: rgba(255, 255, 255, 255),
         focus: rgba(0, 100, 255, 255),
+        separator: rgba(99, 88, 77, 255),
     };
     let (mut t, mut b, scroll, _) = fixture();
     layout(&mut t, &mut b, true);
@@ -394,4 +401,68 @@ fn layer_capture_is_local_and_cannot_be_consumed_by_a_root_release() {
         s.nodes[&pages[1]].attributes["nidara-tree-generation"],
         t.generation().to_string()
     );
+}
+
+#[test]
+fn container_accessible_names_never_become_visible_labels() {
+    use nk_render::rgba;
+    use nk_widgets::{Palette, Surface};
+    let palette = Palette {
+        background: rgba(10, 20, 30, 255),
+        surface: rgba(60, 70, 80, 255),
+        text: rgba(255, 255, 255, 255),
+        disabled: rgba(120, 120, 120, 255),
+        selected: rgba(20, 30, 40, 255),
+        accent: rgba(0, 100, 255, 255),
+        track: rgba(30, 40, 50, 255),
+        thumb: rgba(255, 255, 255, 255),
+        focus: rgba(0, 100, 255, 255),
+        separator: rgba(99, 88, 77, 255),
+    };
+    for layered in [true, false] {
+        let (mut tree, mut backend, scroll, _) = fixture();
+        let sidebar = tree.node(tree.root()).unwrap().children()[0];
+        let page = tree.node(sidebar).unwrap().children()[0];
+        layout(&mut tree, &mut backend, layered);
+        let frames = [(Surface::Content, 640), (Surface::Sidebar, 120)];
+        for (surface, width) in frames {
+            let frame = nk_wayland::Frame {
+                width,
+                height: 360,
+                pixel_width: width as u16,
+                pixel_height: 360,
+                scale: 1.,
+                material: true,
+            };
+            let before = tree.paint(frame, surface, palette).unwrap();
+            tree.set_name(sidebar, "A different semantic sidebar name")
+                .unwrap();
+            tree.set_name(scroll, "A different semantic scroll name")
+                .unwrap();
+            layout(&mut tree, &mut backend, layered);
+            let after = tree.paint(frame, surface, palette).unwrap();
+            assert!(
+                before == after,
+                "container name painted as text on {surface:?}"
+            );
+            let semantics = tree.semantics();
+            assert_eq!(
+                semantics.nodes[&sidebar].name,
+                "A different semantic sidebar name"
+            );
+            assert_eq!(
+                semantics.nodes[&scroll].name,
+                "A different semantic scroll name"
+            );
+            // Positive control: changing a visible page label changes sidebar pixels.
+            if surface == Surface::Sidebar {
+                tree.set_name(page, "Different page").unwrap();
+                layout(&mut tree, &mut backend, layered);
+                assert!(after != tree.paint(frame, surface, palette).unwrap());
+            }
+            tree.set_name(sidebar, "Pages").unwrap();
+            tree.set_name(scroll, "Content").unwrap();
+            layout(&mut tree, &mut backend, layered);
+        }
+    }
 }

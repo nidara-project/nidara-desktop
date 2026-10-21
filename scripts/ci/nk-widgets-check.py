@@ -26,7 +26,7 @@ DATA = Path(os.environ.get('NK_SETTINGS_DATA', ROOT / 'build/settings-data'))
 CONTENT_WIDTH = json.loads((DATA / 'tokens/static.json').read_text())['ts']['WINDOW_LAYOUT']['contentFloor']
 STAGES = ['frame', 'sidebar', 'selected', 'scroll', 'group', 'group-label', 'row-label',
           'switch-role', 'switch-name', 'button', 'hidden', 'at-rest', 'tab', 'checked', 'offscreen',
-          'reveal', 'under-sidebar', 'under-title', 'layers']
+          'reveal', 'under-sidebar', 'under-title', 'layers', 'window-controls']
 NEW_STAGES = ['sidebar-reveal', 'collapse', 'overlay']
 if os.environ.get('NK_WIDGETS_TEST') == 'vkms':
     if os.environ.get('XDG_RUNTIME_DIR') != '/run/hyalo-smoke':
@@ -290,9 +290,14 @@ def run(fault=None, stop=None):
                 probe = find(root, 'Probe', Atspi.Role.TOGGLE_BUTTON).get_parent()
                 bounds = probe.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
                 sidebar_bounds = sidebar.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+                (directory / 'observations.json').write_text(json.dumps({
+                    'probe': {key: getattr(bounds, key) for key in ('x','y','width','height')},
+                    'sidebar': {key: getattr(sidebar_bounds, key) for key in ('x','y','width','height')},
+                    'visible': state(probe, Atspi.StateType.VISIBLE),
+                    'showing': state(probe, Atspi.StateType.SHOWING)}, indent=2))
                 if check('under-sidebar', state(probe, Atspi.StateType.VISIBLE)
                          and not state(probe, Atspi.StateType.SHOWING)
-                         and bounds.x + bounds.width <= sidebar_bounds.width,
+                         and bounds.x + bounds.width <= sidebar_bounds.x + sidebar_bounds.width,
                          'row under sidebar reported SHOWING or fixture not occluded'): return completed
             if stop is None or stop == 'under-title':
                 action('Under title')
@@ -306,10 +311,28 @@ def run(fault=None, stop=None):
             layers = window.get('layers', [])
             panes = [sidebar.get_component_iface().get_extents(Atspi.CoordType.WINDOW),
                      find(root, 'Widget foundations', Atspi.Role.LABEL).get_component_iface().get_extents(Atspi.CoordType.WINDOW)]
-            matches = lambda layer, pane: all(abs(layer.get(key, -100000) - getattr(pane, key)) <= 1
-                                             for key in ('x', 'y', 'width', 'height')) and layer.get('glass_shapes', 0) > 0
-            if check('layers', len(layers) == 2 and all(any(matches(layer, pane) for layer in layers) for pane in panes),
-                     'sidebar/titlebar are not two committed material layers at their widget bounds'): return completed
+            recipe = json.loads((ROOT / 'toolkit/widgets-demo/titlebar-provisional.json').read_text())
+            def matches(layer, pane, title=False):
+                expected = {key: getattr(pane, key) for key in ('x', 'y', 'width', 'height')}
+                if title:
+                    expected['height'] = max(expected['height'], recipe['height'])
+                return all(abs(layer.get(key, -100000) - value) <= 1 for key, value in expected.items()) \
+                    and layer.get('glass_shapes', 0) > 0
+            if check('layers', len(layers) == 2
+                     and any(matches(layer, panes[0]) for layer in layers)
+                     and any(matches(layer, panes[1], title=True) for layer in layers),
+                     'floating sidebar/graded title are not committed layers at the expected bounds'): return completed
+            controls = window.get('controls')
+            title = panes[1]
+            within = controls is not None and len(controls) == 4 and all(v > 0 for v in controls[2:]) \
+                and controls[0] >= window['x'] + title.x - 1 \
+                and controls[1] >= window['y'] + title.y - 1 \
+                and controls[0] + controls[2] <= window['x'] + title.x + title.width + 1 \
+                and controls[1] + controls[3] <= window['y'] + title.y + title.height + 1
+            if not fault and os.environ.get('NK_WIDGETS_SCREENSHOTS') == '1':
+                ipc('screenshot', directory / 'demo.png')
+            if check('window-controls', within,
+                     'server window controls absent or outside their reserved title bounds'): return completed
             return completed
         except OracleFailure as error:
             if not fault or error.stage != stop:

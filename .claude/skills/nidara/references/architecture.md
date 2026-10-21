@@ -2595,6 +2595,19 @@ shared by paint, hit-testing and focus; AT-SPI bounds stay model values. Reduced
 motion omits the transition independently of transparency. Never add another
 app-owned Wayland host.
 
+D7's native title uses an explicit `TitlebarStyle` (blur-only graded bands and a
+client background fade); it does not reuse the sidebar's panel glass. The demo's
+provisional recipe is identified in `titlebar-provisional.json`, not in transport.
+The sidebar's margin/radius come from `Tree::set_sidebar_frame` with app tokens.
+Native apps register `Tree::window_controls` fallback buttons and opt into
+`Application::window_controls` for server layout before configure; composition
+reserves the reported side/size and hides fallback nodes only when layout arrives.
+The existing protocol is bound in nk-wayland, never in a second app host.
+
+Container accessible names are not visual labels: the native Sidebar/Scroll names
+stay in AT-SPI; visible text needs a Label, Page, Button or TitleBar. Painting a
+container name centres it over its children (the misplaced “Pages” in #898).
+
 The demo is `toolkit/widgets-demo`, not Settings. Its palette is selected only from
 the appearance portal and exported tokens. `tokens/glass.json` is required: select
 `variants[]` by `dark`/`reduceTransparency`, then the last `pieces.panel[]` step
@@ -2606,3 +2619,48 @@ libatspi acceptance is `scripts/ci/nk-widgets-check.py`; each assertion has its 
 logged, applied fault, and timeouts/crashes never count as caught controls. New
 builds/logs/evidence use target/ or ~/Nidara/ChatGPT/, never /tmp. nk-widgets and its
 demo trigger the full fcitx5/Orca matrices in ci-scope.sh.
+
+D7 graded-title bands share edges snapped to physical pixels at the current output
+scale: separate antialiased shapes meeting inside a pixel can expose sharp content
+between them. Keep these edges shared when changing title height or scale.
+
+D8's `focus_visible` is input modality, not semantic focus. Do not use `tab()` for
+automatic focus recovery: it marks keyboard input; internal recovery traverses
+without changing modality. Pointer input in root or layer coordinates hides the
+ring even on empty space. The retained focused node and selection remain intact.
+
+D8 `highlight_shape` is the single source for selection/hover/focus geometry; do
+not compute a separate focus radius or draw a ring on the full row bounds.
+Ordinary buttons keep Metrics.radius; only an explicit ButtonShape::Capsule uses
+half-height rounding. Base, hover and ring all follow that declared shape.
+Rows holding controls do not hover as a whole. Separators use visible neighbors
+and text origins. Root pointer leave is forwarded by nk-wayland just like layer
+leave, so retained hover cannot remain after the pointer exits the surface.
+
+D8 page width is a named policy on the retained content region (`set_page_width`),
+not a number picked by each page. A Group card is placed at its constraint width;
+its measured width may include an explicitly wide child for scroll extent and
+must not expand the card. Form aliases WINDOW_LAYOUT's existing preferred
+width and floor. Apply the policy before the measure-cache key is recorded;
+changing the named kind must not reuse a wider/narrower stale layout. Centre in
+the current content viewport (after the sampled sidebar inset), not the window.
+
+D8's provisional list source is `toolkit/tokens/list.json` (`default` plus whole
+field `variants`, like control.json). The exporter attaches the resolved `list`
+object to each components.json mode variant. Native readers select the portal variant from the
+installed export; never compile fallback visual numbers into an application.
+settings-tokens-check requires each field and its CI control removes highlight
+from one mode variant. Form width still aliases the existing WINDOW_LAYOUT tokens.
+
+Keep material and component exports separate (owner, 2026-10-21): glass.json is
+only glass/tone/blur/shadow/backdrop response, including control.json. Common
+geometry, focus/hover/separators and named content widths are components.json
+mode variants. Lists apply on ordinary window backgrounds too, not only panels.
+
+For native client title dragging, use Composition::event_with_window rather than
+reconstructing pointer coordinates in an app. Root/layer Button events carry the
+serial and millisecond timestamp of that event; do not use Window's general last
+serial after draining input. nk-wayland owns xdg_toplevel.move and its seat.
+Blank title excludes controls even when disabled, server reservations and the
+blur-only region below the title. The application supplies double-click policy
+(the demo mirrors Hyalo's existing400ms); maximize/restore stays WindowAction.

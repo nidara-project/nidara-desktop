@@ -122,3 +122,214 @@ This is a targeted local startup/AT-SPI check, not a rerun of the full vkms,
 widgets, real-Orca or fcitx5 matrices. CI has not been relaunched for this change.
 The demo's existing compositor-painted panes still do not request adaptive ink
 or client-painted blur; this correction does not implement #889.
+
+
+## D7 live-review corrections (#898, 2026-10-21)
+
+Local work builds on main `6b252faa`, including #897 and the #896 contract.
+These changes do not implement #889 or change a protocol XML.
+
+- Structural container names remain semantic but are not painted as labels. The
+  pixel regression compares buffers with changed container names in D7 and D5,
+  while changing an actual Page label must change pixels. Restoring the previous
+  implementation failed its own assertion (`container name painted as text`).
+- Floating sidebar bounds use exported padding/group-radius provisionally.
+  Pixel tests at scales 1 and 1.25 preserve layer-local content through sampled
+  transitions in both directions and check transparent rounded corners. This
+  does **not** establish window-bound clipping during compositor animation.
+- Header blur has contiguous C bands and a monotone background fade with no
+  divider; opaque/reduced-transparency paint is covered. The owner's provisional
+  recipe is JSON data, not a final visual calibration.
+- Server controls reserve their actual left/right layout. Retained fallback
+  buttons preserve keyboard/AT-SPI activation and return when no server layout
+  is present. Unit tests do not prove live minimize/maximize/close interaction.
+
+32 focused Rust tests pass (nk-wayland, nk-widgets and the demo), with no ignored
+tests. Clippy for those packages plus nk-render with all targets and warnings
+denied passes. Workspace formatting, skill-docs, ci-scope self-test, Python syntax
+and whitespace checks pass. The full workspace, real Orca/fcitx5 and vkms have
+not been rerun locally.
+
+Private Cage/Hyalo with bwrap and software GL completed 23 libatspi oracles at
+scales 1 and 1.25; all 46 applied controls failed their own assertions. This first
+full run (`target/d7-full`) overlapped a rebuild for the app-supplied fallback
+labels, so it is not evidence of a single immutable final executable. A separate
+`target/d7-final` run used a fixed executable copy and also completed all 23
+oracles at both scales with all 46 applied controls caught (result.json).
+This certifies be80702c; the subsequent physical-band snapping correction is
+covered separately below, not by that executable.
+
+Fixed demo SHA-256: `a27b3f08fe45e3bdd4ff7b06f87141ad4b10ecbf30f010c9478b801f5e4a44d6`.
+Installed Hyalo SHA-256: `d8109f29f5fd15873a0b3709059f436fbb64652aaf33398d54c7e56ed60a1fdd`.
+The compositor is the installed binary, not a fresh build of the current main;
+this run cannot certify #897's final source or Claude's pending buffer clipping.
+Preview images are in `target/d7-preview/scale{1,1.25}/baseline-window-controls/`.
+
+At scale 1 the IPC shows sidebar `(12,12,226,456)`, header `(250,0,560,72)`
+with three blur bands, and server controls `(710,8,88,32)` root-local. The initial
+occlusion fixture failed because its old row width no longer fitted inside the
+floating pane; narrowing the fixture to its new inner width fixed the setup
+without weakening the assertion. Earlier failed runs are not counted as passes.
+
+Claude clarified the reported slide: text and glass move together, but content
+escapes the window edge while glass is clipped. Composition sends the layer's
+Position transition to Hyalo. Claude owns the compositor correction; pane-local
+pixel stability is not presented as a fix for that bug. Final appearance, margin/
+radius choices and real-session acceptance remain with the owner live.
+
+Review follow-up: Claude found no blocking composition/reservation issues. Interior
+blur-band edges are now snapped to shared physical-pixel boundaries; the previous
+unrounded edges could split one pixel between antialiased shapes at other heights/
+scales. A regression covers heights 71/72/101 at scales 1/1.25/1.5/1.75/2, including
+contiguity and grade continuity. This is a geometry oracle, not a new rendered
+compositor seam measurement. The 72px recipe at scales 1 and 1.25 is unchanged.
+
+The unrounded formula was restored as an applied control and was caught by that
+new assertion (`blur boundary inside a physical pixel`). The corrected formula
+passes; the focused Rust total is now 33 tests, and clippy remains clean.
+Control evidence: `target/blur-band-control.log`.
+
+## D8 focus modality (after #901 integration, 2026-10-21)
+
+Pointer/root and presented-layer focus now preserve semantics/selection without
+a ring; keyboard navigation paints a rounded ring. A pixel test covers both D5
+and D7 at scales 1 and 1.25, including clicking outside a target and rounded
+corners. Forcing unconditional ring painting is CAUGHT by its pixel assertion
+(`target/focus-visible-control.log`). Focus width is explicit provisional data
+in `toolkit/tokens/list.json`, from the current kit's focus-ring measurement;
+final visual values remain for the owner live. This is not a new live/AT-SPI
+matrix result. Hover/separators and the named-width component from D8 are still
+pending; this commit does not claim all of D8.
+
+## D8 list highlight/separators follow-up
+
+Claude's review of the first focus change required one shared inset silhouette.
+Selection, hover and ring now use that function; buttons/switches use their
+capsule/track radius. Provisional list-token data supplies inset/opacity and
+separator thickness, while separator colour comes from exported --nidara-border.
+A new test checks actual hover-fill and separator pixels at 1 and 1.25, pointer
+leave, hidden hovered nodes, selected/hidden neighbors, no last separator,
+control-only row labels without hover, and capsule/track geometry. Removing only
+the hover fill is CAUGHT at its own pixel assertion (target/list-hover-control.log).
+The focused total is now 35 tests. Named content widths remain pending. This
+change has not had live owner validation or a new full private libatspi matrix.
+
+## D8 named form width
+
+The demo chooses `PageWidth::Form`; the appearance seam supplies existing
+WINDOW_LAYOUT preferred/floor tokens (800/560). Unit geometry covers both D5/D7,
+wide/contracted/floor overflow, horizontal reachability, changing the named kind
+without stale measurement, and five collapse timeline samples. Centring against
+the whole window instead of the space beside the sidebar is CAUGHT at its own
+assertion (`target/content-width-control.log`). `Reading` has an explicit missing
+tokens error rather than an invented width. The focused total is now 36 tests.
+List-token export and combined live/private acceptance remain separate pending
+work; these unit results do not certify those paths.
+
+## Combined D8 private acceptance — 216ed5e4
+
+The complete existing libatspi matrix passes with the combined focus, shared
+highlights/separators and form-width changes: **23 oracles at scales 1 and 1.25,
+all 46 applied controls CAUGHT**, no subset. `target/d8-combined/result.json`
+records the result; each scale/stage retains its tree, observations and control
+logs. The fixed executable in target/d8-bin/nk-widgets-demo has SHA-256
+`c8a89711b34aa502012d792cda3fd5918cec390b61a993054812461e644255ad`.
+The new D8 visual/geometry claims remain covered by the focused unit pixel and
+geometry oracles above; they are not new claims in the libatspi matrix.
+
+This used the installed Hyalo and software GL inside the private bwrap/Cage
+harness with an isolated portal fixture. It does not establish current-source
+#899 clipping, #900 integration, real Orca/fcitx5, vkms, frame timing or the
+owner's live visual acceptance. The list-token export/installed-data reader
+remains pending #900 integration; no new CI run or publication was performed.
+
+## Installed list export after #900 integration
+
+Main #900 is integrated before editing its exporter. `list.json` now uses the
+shared default/variants mechanism and is exported as `list` in every panel step.
+The demo reads the exact installed portal variant; absent/invalid fields fail.
+No list visual values are compiled into the application.
+
+- Real export with local Sass and settings-tokens-check: PASS (108 colour sets,
+  four glass variants, every panel step complete). A temporary light-only
+  highlight override affects every light panel step and no dark step; defaults
+  remain intact. The source is restored after that check.
+- Dropping highlight from one exported panel step: CAUGHT at the list completeness
+  assertion (`target/list-export-control.log`); CI has the same discriminating
+  control in the existing export step, with no extra job.
+- 37 focused Rust tests and clippy pass. The new reader test covers four portal
+  combinations and missing/out-of-range/inconsistent data.
+- Private startup against `target/list-export`, installed Hyalo/software GL:
+  frame baseline PASS and applied frame control CAUGHT at scales 1 and 1.25
+  (`target/list-export-startup`). This targeted repeat checks the new reader,
+  not another full matrix or current-source Hyalo acceptance.
+
+Formatting, skill-docs, ci-scope self-test, Python checker syntax and whitespace
+checks pass. No live visual acceptance or new vkms/Orca/fcitx5 run is claimed.
+
+## Final export boundary — owner decision through Claude #46
+
+This supersedes the earlier per-panel/per-glass-variant placement of list data.
+`tokens/glass.json` is material-only. `tokens/components.json` has four mode
+variants containing `list`, common padding/gap/radii and named widths. These
+common/form values alias the existing kit measurements; no new visual numbers
+were chosen. Reading width stays unmeasured. Group + rows applies D8 once.
+
+Real export and completeness checker pass; the export contains no list objects
+in glass.json. Removing components.variants[0].list.highlight is CAUGHT by its
+own completeness assertion (`target/components-control.log`). A temporary
+light-only list override changes light variants and preserves dark defaults.
+The four demo tests and demo all-target clippy pass after changing the reader.
+Private startup with `target/components-export` passes frame baseline/control
+at 1 and 1.25 (`target/components-startup`). This checks the final file boundary;
+it does not repeat or extend the full matrix/live evidence above.
+
+### #904 button silhouette review correction
+
+Ordinary buttons retain Metrics.radius. ButtonShape::Capsule is explicit; base,
+hover and focus use the same resolved silhouette. Switch tracks remain capsules.
+The shared-shape regression checks ordinary/explicit-capsule/restored-rounded
+buttons and rejects shape assignment to a label. Reinstating the original
+half-height radius for ordinary buttons fails its own assertion
+(`target/button-shape-control.log`: CAUGHT). All 28 nk-widgets tests, clippy,
+formatting, skill-docs and diff checks pass. This does not add a live visual
+acceptance claim or repeat the historical compositor matrices.
+
+### #904 form card overflow reported in live review
+
+The demo's deliberately wide probe row makes Group.measured.width include
+its overflow. Placement previously used that width for the card, although the
+ordinary rows were measured within the form column. The card now uses the
+group's constraint; measured overflow remains available to horizontal scroll.
+The regression checks D5/D7 at widths1262/900/650, normal row alignment, scroll
+extent and pixels at scales1/1.25. A deliberately oversized painted card is
+CAUGHT by its own pixel assertion (toolkit/target/group-card-control.log).
+All29 nk-widgets tests pass. This is source-level geometry/CPU-pixel evidence;
+the owner's live screenshot reported the problem, not acceptance of this fix.
+
+### #904 interactive title dragging and double click
+
+Root and layer button events retain their own wl_pointer serial/time. Blank-title
+presses request xdg_toplevel.move using that serial; double click uses the same
+ToggleMaximize as the existing button. The explicit demo interval400ms is sourced
+from Hyalo's existing GTK policy. Unit tests cover exact serials, interval boundary
+and wrap, controls including disabled ones, server reservations, hidden titles,
+content below the title and overlay dismissal priority. Removing the exclusion
+of controls is CAUGHT by its own assertion (toolkit/target/title-drag-control.log).
+39 focused tests pass; workspace check/clippy, fmt, skill-docs and diff pass.
+
+The final private bwrap/Cage/software-GL run is toolkit/target/title-drag-accept
+with driver toolkit/target/title-drag-accept.py. It compares the move request's
+serial to the initiating button event's trace, checks the released window's
+changed position, then maximizes/restores using double click with compositor
+state/geometry assertions. Setup waits for commit and a compositor capture before
+clicking changed geometry. This is not a wp_presentation timing oracle: this winit
+backend did not supply presented feedback. Early driver attempts had an event
+log-parser mismatch, inspected model position during a grab, or clicked before
+the new geometry committed; none is counted as a discriminating control.
+
+All four final combinations D5/D7×1/1.25 PASS, including restore.
+Demo SHA256 bc7c455bd4ca5d7af763f36197cbed979b302a5b7233f115e5c91d12c9d0ceff.
+Hyalo SHA256 3e264d3d0aba3a731f44e707fa0713361f09e0c57c71cf2c53057f9ef1dad3fa
+(the preserved cc39b569/#899/#900 build supplied by Claude). No live session
+acceptance or compositor timing claim is made.

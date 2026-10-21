@@ -47,6 +47,8 @@ pub enum LayerEvent {
     Button {
         button: u32,
         pressed: bool,
+        serial: u32,
+        time: u32,
         x: f64,
         y: f64,
     },
@@ -246,6 +248,46 @@ impl Window {
         );
         l.pending = true;
         Ok(true)
+    }
+    /// Blur-only material: no glass tone, lensing or rim. Existing material-v1 requests.
+    pub fn set_layer_blur(&mut self, id: LayerId, blur: Blur, panes: &[GradedPane]) -> Result<()> {
+        fixed(&[blur.size])?;
+        if blur.size < 0. {
+            return Err("invalid blur".into());
+        }
+        for graded in panes {
+            let p = graded.pane;
+            fixed(&[
+                p.x,
+                p.y,
+                p.width,
+                p.height,
+                p.radius,
+                p.exponent,
+                graded.top,
+                graded.bottom,
+            ])?;
+            if p.width <= 0.
+                || p.height <= 0.
+                || p.radius < 0.
+                || !(0. ..=1.).contains(&graded.top)
+                || !(0. ..=1.).contains(&graded.bottom)
+            {
+                return Err("invalid graded pane".into());
+            }
+        }
+        let layer = self.layer(id)?;
+        let m = &layer.material;
+        m.clear_shapes();
+        m.clear_glass();
+        m.set_blur(blur.size, blur.passes);
+        for graded in panes {
+            let p = graded.pane;
+            m.set_shape_grade(graded.top, graded.bottom);
+            m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
+        }
+        layer.pending = true;
+        Ok(())
     }
     pub fn set_position(&mut self, id: LayerId, x: f64, y: f64) -> Result<()> {
         fixed(&[x, y])?;

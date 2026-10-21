@@ -190,6 +190,8 @@ mod placement_tests {
             Metrics {
                 sidebar: 120.,
                 content: 400.,
+                form_width: 400.,
+                content_floor: 280.,
                 titlebar: 48.,
                 padding: 8.,
                 gap: 4.,
@@ -198,6 +200,10 @@ mod placement_tests {
                 switch_width: 44.,
                 radius: 8.,
                 group_radius: 12.,
+                focus_width: 2.,
+                highlight_inset: 4.,
+                hover_opacity: 0.08,
+                separator_width: 1.,
             },
             TextStyle::default(),
         )

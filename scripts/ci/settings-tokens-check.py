@@ -16,10 +16,11 @@ usage: settings-tokens-check.py OUT_DIR
 - Every step of every variant's `control` piece carries what toolkit/tokens/control.json adds
   (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
+- Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour.
 CI also runs it on a copy with one used token dropped from one set, on one with `panel`
-dropped from one glass variant, and on one with a control step's `states` dropped; all must fail.
+dropped from one glass variant, a control step's `states` dropped, and one variant's list highlight dropped; all must fail.
 """
-import json, re, sys
+import json, math, re, sys
 from itertools import product
 from pathlib import Path
 
@@ -28,6 +29,7 @@ out = Path(sys.argv[1]) / 'tokens'
 colors = json.loads((out / 'colors.json').read_text())
 static = json.loads((out / 'static.json').read_text())
 glass = json.loads((out / 'glass.json').read_text())
+components = json.loads((out / 'components.json').read_text())
 fail = []
 
 sheets = ['ui/settings/style.scss', 'ui/shell/styles/_settings.scss', 'ui/shell/styles/_components.scss',
@@ -116,8 +118,43 @@ for v in variants:
         if any(f.startswith(where) for f in fail):
             break
 
+# D8 list tokens belong to the mode variant, independent of panel sizes/material.
+def positive_number(value, allow_zero=False):
+    return type(value) in (int, float) and math.isfinite(value) and (value >= 0 if allow_zero else value > 0)
+
+component_variants = components.get('variants', [])
+component_modes = [(v.get('dark'), v.get('reduceTransparency')) for v in component_variants]
+if len(component_modes) != 4 or set(component_modes) != set(product([True, False], repeat=2)):
+    fail.append('components: incomplete or duplicate mode variants')
+for variant in variants:
+    if 'list' in variant or any('list' in step for steps in variant['pieces'].values() for step in steps):
+        fail.append('glass: non-material list data must be in components.json')
+for variant in component_variants:
+    where = f"components: list (dark={variant['dark']}, reduce={variant['reduceTransparency']})"
+    listing = variant.get('list') or {}
+    focus = listing.get('focus') or {}
+    highlight = listing.get('highlight') or {}
+    separator = listing.get('separator') or {}
+    opacity = highlight.get('hoverOpacity')
+    if not (positive_number(focus.get('width'))
+            and positive_number(highlight.get('inset'), True)
+            and positive_number(opacity, True) and opacity <= 1
+            and positive_number(separator.get('physicalPixels'))):
+        fail.append(f'{where}: incomplete or invalid focus/highlight/separator')
+    key = separator.get('color')
+    if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
+        fail.append(f'{where}: missing separator colour token {key}')
+    common = variant.get('common') or {}
+    widths = variant.get('widths') or {}
+    form = widths.get('form') or {}
+    if not all(positive_number(common.get(k), True) for k in ('padding', 'gap', 'radius', 'groupRadius')):
+        fail.append(f'{where}: missing common geometry')
+    if not (positive_number(form.get('preferred')) and positive_number(form.get('floor'))
+            and form['preferred'] >= form['floor'] and 'reading' in widths and 'none' in widths):
+        fail.append(f'{where}: missing named content widths')
+
 if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls and lists complete')

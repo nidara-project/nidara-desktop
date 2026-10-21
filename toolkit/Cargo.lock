@@ -910,6 +910,7 @@ dependencies = [
 name = "nk-wayland"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.13.2",
  "memmap2",
  "rustix",
  "wayland-backend",

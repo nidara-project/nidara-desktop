@@ -872,6 +872,7 @@ impl Form {
             Event::Button {
                 button: 0x110,
                 pressed,
+                ..
             } => {
                 if pressed {
                     let option = if self.expanded {

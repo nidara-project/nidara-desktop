@@ -23,15 +23,23 @@ an unknown or missing set is an error. Interface font and text scale come from
 `org.gnome.desktop.interface`. Neither Config1 nor a guessed palette is a fallback.
 
 `tokens/glass.json` is required. The portal's dark mode and reduce-transparency
-select one `variants[]` entry. Each sidebar/title pane selects the last
+select one `variants[]` entry. The sidebar selects the last
 `pieces.panel[]` step whose `fromSide` is at most its rounded shorter side, every
 time its size changes. Glass, tone (including the object-shaped wash) and shadow
 come from that entry; reduce transparency uses the exported variant directly.
 `panel-stub.json` now supplies only the two still-unexported switch measurements.
-The demo does not yet enable backdrop-driven ink; `ink`/`inkTone` and the
-client-painted blur settings are not used by its compositor-painted panes.
+The demo does not yet enable backdrop-driven `ink`/`inkTone`. The header reads
+`blur.panel` for its blur-only material.
 `fixtures/glass.json` is the real #881 export with unrelated pieces removed;
 tests cover all four variants, the size ramp and malformed/stub input.
+
+The header uses the owner's provisional curve C in `titlebar-provisional.json`:
+a 72px zone, curve 1/1/0.5/0 and background fade 85%→0, without glass tone/rim.
+It grows if the accessible title needs more height. Reduce transparency uses an
+opaque header without blur/extension. The floating sidebar currently uses exported
+padding/group radius as provisional margin/radius, pending the owner's live tuning.
+The server controls use the real layout from `nidara-window-controls-v1`; without
+that protocol the title has retained Minimize/Maximize/Close buttons.
 
 Local checks run in a private headless cage/Hyalo and portal fixture:
 
@@ -56,7 +64,19 @@ fault. The new walks record before/after geometry in observations.json. The tree
 baseline and every control run at scales 1 and 1.25, on their own private floating
 workspace; the original output scale and workspace are restored.
 
-D7's final IPC assertion uses #875's `windows[].layers`: two committed material
-panes at the widget sidebar/title bounds (`x`, `y`, `width`, `height`, `glass_shapes`).
+D7's final IPC assertion uses #875's `windows[].layers`: two committed blur/material
+panes at the floating sidebar bounds and title zone (`x`, `y`, `width`, `height`, `glass_shapes`).
 It requires that Hyalo revision; the earlier IPC listed only layer-shell. `NK_WIDGETS_STAGES='frame … under-title'` allows
 local subsets during that work; the CI invocation has no subset and stays strict.
+
+D8 list tokens originate in provisional shared `toolkit/tokens/list.json`.
+The exporter resolves default/variants into `components.json` at `variants[i].list`; the demo
+reads the portal-selected installed variant, without compiled fallback values.
+Pointer focus has no ring, keyboard focus uses the element's own shape, and
+selection stays independent. These numbers still require live owner review.
+
+`tokens/components.json` is independent of glass material. Its mode variant
+contains list appearance, common padding/gap/radii and named content widths.
+The geometry/width values alias the current kit exports; `reading` and `none`
+have no invented width. Group + rows applies the shared list behavior once.
+`tokens/glass.json` carries only material, including the control response/washes.

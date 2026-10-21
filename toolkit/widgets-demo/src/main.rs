@@ -31,6 +31,7 @@ struct Demo {
     probe: (u64, u64),
     optional: u64,
     buttons: Vec<(u64, &'static str)>,
+    window_buttons: [u64; 3],
     ready: bool,
     layout_report: Option<(u32, u32, bool)>,
 }
@@ -130,6 +131,10 @@ impl Demo {
         tree
     }
     fn sync(&mut self, window: &mut Window) -> Result<()> {
+        self.tree.set_sidebar_frame(
+            self.appearance.metrics.padding,
+            self.appearance.metrics.group_radius,
+        )?;
         let width = window.size().0;
         if width != self.width {
             self.tree.set_min_width(self.wide, width as f32)?;
@@ -149,6 +154,13 @@ impl Demo {
                     duration_ms: 180,
                 },
             )));
+        // Appearance changes already invalidate panes; do not dirty them every frame.
+        if !self.ready {
+            self.composition
+                .set_titlebar_style(self.appearance.titlebar.clone())?;
+            self.composition
+                .set_titlebar_double_click_ms(self.appearance.titlebar_double_click_ms)?;
+        }
         self.composition.sync(
             &mut self.tree,
             window,
@@ -209,6 +221,17 @@ impl Demo {
         let Effect::Activated(id) = effect else {
             return Ok(());
         };
+        if let Some(index) = self.window_buttons.iter().position(|button| *button == id) {
+            window.window_action(
+                [
+                    nk_wayland::WindowAction::Minimize,
+                    nk_wayland::WindowAction::ToggleMaximize,
+                    nk_wayland::WindowAction::Close,
+                ][index],
+            );
+            return Ok(());
+        }
+
         let Some((_, action)) = self.buttons.iter().find(|(button, _)| *button == id) else {
             return Ok(());
         };
@@ -219,7 +242,8 @@ impl Demo {
             "Under sidebar" => {
                 self.tree.scroll_to(self.scroll, Point { x: 0., y: 0. })?;
                 let r = self.tree.node(self.probe.0).unwrap().bounds();
-                let leading = self.tree.content_viewport().x;
+                let pane = self.tree.node(self.sidebar).unwrap().bounds();
+                let leading = pane.x + pane.width;
                 self.tree.scroll_to(
                     self.scroll,
                     Point {
@@ -291,6 +315,9 @@ impl Demo {
     }
 }
 impl Application for Demo {
+    fn window_controls(&self) -> bool {
+        self.fault != "window-controls"
+    }
     fn poll_interval_ms(&self) -> u32 {
         16
     }
@@ -310,6 +337,10 @@ impl Application for Demo {
             self.appearance = appearance;
             self.tree
                 .invalidate(self.tree.root(), nk_widgets::Invalid::PAINT);
+            self.composition
+                .set_titlebar_style(self.appearance.titlebar.clone())?;
+            self.composition
+                .set_titlebar_double_click_ms(self.appearance.titlebar_double_click_ms)?;
             self.composition.invalidate_panes();
         }
         if let Some(a11y) = &self.a11y {
@@ -351,7 +382,9 @@ impl Application for Demo {
         }
         let old = self.tree.node(self.scroll).unwrap().scroll();
         let focused = self.tree.focused();
-        let effect = self.composition.event(&mut self.tree, &event)?;
+        let effect = self
+            .composition
+            .event_with_window(&mut self.tree, &event, window)?;
         self.keep_scroll_fault(old, self.tree.focused() != focused)?;
         self.effect(effect, window)?;
         self.sync(window)
@@ -411,6 +444,9 @@ fn text_backend(style: &nk_text::TextStyle) -> Result<ParleyBackend> {
 }
 fn run() -> Result<()> {
     let start = Instant::now();
+    let fault = std::env::args()
+        .find_map(|s| s.strip_prefix("--fault=").map(str::to_owned))
+        .unwrap_or_default();
     let root = std::path::PathBuf::from(
         std::env::var_os("NK_SETTINGS_DATA").unwrap_or_else(|| "build/settings-data".into()),
     );
@@ -456,7 +492,14 @@ fn run() -> Result<()> {
     }
     let titlebar = tree.append(root, Kind::TitleBar, "Widget foundations")?;
     tree.sidebar_button(titlebar, "Sidebar")?;
+    let window_buttons = if fault == "window-controls" {
+        eprintln!("CONTROL_APPLIED window-controls");
+        [0; 3] // Deliberately omit both protocol opt-in and retained control registration.
+    } else {
+        tree.window_controls(titlebar, ["Minimize", "Maximize", "Close"])?
+    };
     let scroll = tree.append(root, Kind::Scroll, "Content")?;
+    tree.set_page_width(nk_widgets::PageWidth::Form)?;
     let group = tree.group(scroll, "General")?;
     let (_, switch) = tree.row(group, "Enable feature", Kind::Switch { checked: false })?;
     let mut buttons = vec![];
@@ -477,7 +520,8 @@ fn run() -> Result<()> {
     let (probe_row, _) = tree.row(group, "Probe", Kind::Switch { checked: false })?;
     tree.set_width(
         probe_row,
-        appearance.metrics.sidebar - 2. * appearance.metrics.padding,
+        // Match the floating sidebar's inner width (outer margin + inner padding).
+        appearance.metrics.sidebar - 4. * appearance.metrics.padding,
     )?;
     let (optional, _) = tree.row(group, "Optional feature", Kind::Switch { checked: false })?;
     let (hidden, _) = tree.row(group, "Hidden feature", Kind::Switch { checked: false })?;
@@ -493,9 +537,7 @@ fn run() -> Result<()> {
     // Only this dedicated row is wider than the viewport. Normal controls must
     // be visible at rest; the scroll extent still permits the D7 occlusion probe.
     let (wide, _) = tree.row(group, "Wide content", Kind::Switch { checked: false })?;
-    let fault = std::env::args()
-        .find_map(|s| s.strip_prefix("--fault=").map(str::to_owned))
-        .unwrap_or_default();
+
     tree.set_hidden(hidden, true)?;
     if fault == "hidden" {
         tree.set_hidden(hidden, false)?;
@@ -522,6 +564,7 @@ fn run() -> Result<()> {
             probe: (probe_row, last),
             optional,
             buttons,
+            window_buttons,
             ready: false,
             layout_report: None,
         },

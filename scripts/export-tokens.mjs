@@ -20,6 +20,8 @@
 //                              control piece also carries `toolkit/tokens/control.json` — how a
 //                              control answers its backdrop, its states' washes, its inks — for
 //                              the variant it is in: the native kit's own source, not the kit's.
+//   <out>/tokens/components.json common geometry, named content widths and D8 list data,
+//                              per dark/light × reduce transparency, separate from material.
 //
 // The engine (`platform/theme-tokens.ts`) imports Gio/GLib for its file helpers only; a loader
 // stubs `gi://` and resolves the kit's extension-less imports, so the kit (frozen, #818) is
@@ -130,14 +132,17 @@ const SIDES = 400
 // A control on glass (toolkit/CONTRACT.md, "Floating control capsule"): `default`, then every
 // entry of `variants` whose dark/reduceTransparency match, field by field.
 const control = JSON.parse(readFileSync(join(repo, "toolkit/tokens/control.json"), "utf8"))
+const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "utf8"))
+const variantFor = (recipe, dark, reduceTransparency) => recipe.variants
+    .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
+    .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
+        recipe.default)
 const controlFor = (dark, reduceTransparency) => {
-    const { response, states, ink } = control.variants
-        .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
-        .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
-            control.default)
+    const { response, states, ink } = variantFor(control, dark, reduceTransparency)
     return { response, states, ink }
 }
 const variants = []
+const componentVariants = []
 for (const dark of [true, false])
     for (const reduceTransparency of [false, true]) {
         Object.assign(state, { light: !dark, reduce: reduceTransparency })
@@ -156,6 +161,18 @@ for (const dark of [true, false])
         // The ink: when a pane's text turns dark (Hyalo measures the darkest point under it, WCAG
         // luminance), as the shell asks it — null with reduce transparency (no ink).
         variants.push({ dark, reduceTransparency, glass: source.glass(null), ink: source.ink(null), pieces })
+        const pixels = key => {
+            const value = Number.parseFloat(scss[key])
+            if (!Number.isFinite(value)) throw new Error(`missing component geometry: ${key}`)
+            return value
+        }
+        componentVariants.push({ dark, reduceTransparency,
+            list: variantFor(list, dark, reduceTransparency),
+            common: { padding: pixels("space-3"), gap: pixels("space-1"),
+                radius: ts.RADIUS.sm, groupRadius: ts.RADIUS.md },
+            widths: { form: { preferred: ts.WINDOW_LAYOUT.content, floor: ts.WINDOW_LAYOUT.contentFloor },
+                reading: null, none: null },
+        })
     }
 write(join(out, "tokens/glass.json"), {
     inputs: { dark: "appearance.darkMode", reduceTransparency: "accessibility.reduceTransparency" },
@@ -163,6 +180,12 @@ write(join(out, "tokens/glass.json"), {
     variants,
 })
 
+write(join(out, "tokens/components.json"), {
+    inputs: { dark: "appearance.darkMode", reduceTransparency: "accessibility.reduceTransparency" },
+    variants: componentVariants,
+})
+
 console.log(`export-tokens: ${Object.keys(scss).length} scss + ${Object.keys(ts).length} ts static, `
     + `${sets.length} colour sets of ${Object.keys(sets[0].tokens).length}, `
-    + `${variants.length} glass variants of ${Object.keys(variants[0].pieces).length} pieces → ${out}/tokens`)
+    + `${variants.length} glass variants of ${Object.keys(variants[0].pieces).length} pieces, `
+    + `${componentVariants.length} component variants → ${out}/tokens`)

@@ -48,16 +48,29 @@ on either layer scroll content (`LayerEvent::HorizontalScroll` in nk-wayland).
 
 D7 has a full-window content buffer and independent sidebar/title layers. The
 content's paint clip is the whole window; its hit/focus/SHOWING viewport excludes
-the leading/top insets. D5 (missing material OR layers) paints opaque panes in the root, clipping
-content at the insets. Only missing material paints an opaque root base; when
-material is available, D6 keeps the window background in the compositor. The title has no divider
-and reserves a trailing box for window controls. The alternative panel material
-is used for the title pending the owner's graded-blur A/B decision.
+the leading/top insets. `Tree::set_sidebar_frame` supplies the floating pane's
+margin/radius from app tokens, preserving the sidebar's width law. Children,
+paint/input and AT-SPI share those bounds; layer pixels remain local under motion.
+The header uses `Composition::set_titlebar_style`: explicit blur, graded curve,
+zone height and background fade. It sends blur-only material, without glass tone,
+refraction or rim. Reduced transparency supplies an opaque, unblurred header.
+D5 (missing material OR layers) paints opaque panes in the root and clips content
+at the insets. With material, D6 keeps the window background in the compositor.
+
+`Tree::window_controls(titlebar, names)` registers three retained fallback buttons
+(minimize, maximize, close), with names supplied by the app for translation.
+Composition opts into Hyalo's existing control protocol and uses its real layout
+and side to reserve space before text placement. With server layout those fallback
+nodes leave the semantic/focus tree; without it they remain keyboard/AT-SPI buttons. Their normal
+activation effects belong to the app, which calls `Window::window_action`. Apps
+opt into `Application::window_controls` for layout before their first frame.
 
 Colours, measurements and pane Material are explicit inputs, resolved by the app
 from the exports/appearance portal. `Composition::sync` asks its material resolver
 for each pane's actual shorter side, so a title and sidebar use their own size step
-and resolve again on resize. No palette or glass constants live here.
+and resolve again on resize. Container names (Window, Sidebar, Scroll, Group and Row) are semantic names,
+not painted labels. Add an explicit Label child for visible text; Page/Button and
+TitleBar keep their visible labels. No palette or glass constants live here.
 There are no fields yet: phase-0 Editor/IME behavior is unchanged.
 
 Run tests without a compositor:
@@ -68,3 +81,36 @@ cargo test --manifest-path toolkit/Cargo.toml -p nk-widgets
 
 The [demo](../../widgets-demo/README.md) and
 [libatspi check](../../../scripts/ci/nk-widgets-check.py) exercise the public APIs.
+
+D8 keeps focus modality separate from the semantic focused node. Pointer presses
+(including empty space and presented layer coordinates) hide the ring; Tab/key
+input restores it. Programmatic focus/reveal and automatic recovery preserve the
+modality. The ring follows the page/button radius or the switch track, with its
+width supplied in Metrics from tokens. Focus and selected state do not depend on
+whether the ring is visible.
+
+D8 selection, hover and focus use one `highlight_shape`: inset rounded pages,
+buttons with their declared shape and switch tracks. Ordinary buttons retain
+Metrics.radius; `set_button_shape(ButtonShape::Capsule)` explicitly opts into
+half-height rounding for base, hover and ring. Hit bounds remain unchanged. Only actionable
+nodes accept hover; a control-only Row/Label does not. Root and presented-layer
+motion set retained hover; pointer leave and hiding/disabling its ancestor clear
+it. Separators start at the label, follow visible neighbors, skip the last row
+and disappear beside selected/hovered pages. Colour, inset, opacity and physical
+separator thickness are explicit appearance inputs from provisional list tokens.
+
+D8 content width is selected once with `Tree::set_page_width(PageWidth::Form)`
+(or `None` for an unconstrained page). The app names a category. The appearance
+seam supplies form width/floor from WINDOW_LAYOUT.content/contentFloor, not page
+literals. Scroll children measure inside that column, centred in the viewport
+beside the sidebar; the same sampled inset drives recentering during collapse.
+Below the floor the column remains horizontally scrollable. `Reading` returns
+an explicit error until a real reading page establishes its measured tokens.
+
+`Composition::event_with_window` routes blank title presses to the existing host's
+standard move request. It excludes visible controls (including disabled ones),
+server control reservations, hidden titles and content below the actual title
+height. D7 coordinates are converted from the title layer to Tree coordinates.
+The application supplies the double-click interval explicitly through
+set_titlebar_double_click_ms; the demo currently uses Hyalo's existing400ms policy.
+Double click invokes the same ToggleMaximize action as the maximize button.

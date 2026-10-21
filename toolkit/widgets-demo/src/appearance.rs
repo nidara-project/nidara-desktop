@@ -14,9 +14,11 @@ pub struct Appearance {
     pub palette: Palette,
     pub metrics: Metrics,
     pub panel: PanelMaterial,
+    pub titlebar: nk_widgets::window::TitlebarStyle,
     pub style: nk_text::TextStyle,
     pub size: (u32, u32),
     pub reduce_motion: bool,
+    pub titlebar_double_click_ms: u32,
 }
 fn read(path: impl AsRef<Path>) -> Result<Value> {
     serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
@@ -56,6 +58,32 @@ fn color(text: &str) -> Result<Color> {
         }
     }
     Err(format!("unsupported exported colour {text}"))
+}
+fn component_variant(export: &Value, dark: bool, reduce: bool) -> Result<&Value> {
+    export["variants"]
+        .as_array()
+        .ok_or("missing components variants")?
+        .iter()
+        .find(|v| v["dark"] == dark && v["reduceTransparency"] == reduce)
+        .ok_or_else(|| "missing components portal variant".into())
+}
+fn list_tokens(export: &Value, dark: bool, reduce: bool) -> Result<Value> {
+    let variant = component_variant(export, dark, reduce)?;
+    let list = variant["list"].clone();
+    let width = number(&list["focus"]["width"])?;
+    let inset = number(&list["highlight"]["inset"])?;
+    let opacity = number(&list["highlight"]["hoverOpacity"])?;
+    let line = number(&list["separator"]["physicalPixels"])?;
+    if ![width, inset, opacity, line].iter().all(|n| n.is_finite())
+        || width <= 0.
+        || inset < 0.
+        || !(0. ..=1.).contains(&opacity)
+        || line <= 0.
+        || list["separator"]["color"].as_str().is_none()
+    {
+        return Err("invalid installed list tokens".into());
+    }
+    Ok(list)
 }
 impl Appearance {
     fn load(root: &Path, settings: &Settings) -> Result<Self> {
@@ -119,6 +147,10 @@ impl Appearance {
                     .ok_or_else(|| format!("missing {key}"))?,
             )
         };
+        let glass = read(root.join("tokens/glass.json"))?;
+        let components = read(root.join("tokens/components.json"))?;
+        let component = component_variant(&components, scheme == 1, reduce)?;
+        let list = list_tokens(&components, scheme == 1, reduce)?;
         let palette = Palette {
             background: token("--nidara-bg")?,
             surface: token("--nidara-surface")?,
@@ -129,24 +161,69 @@ impl Appearance {
             track: token("--nidara-surface")?,
             thumb: token("--nidara-thumb")?,
             focus: token("--nidara-accent")?,
+            separator: token(
+                list["separator"]["color"]
+                    .as_str()
+                    .ok_or("missing list separator colour")?,
+            )?,
         };
         // Only the switch measurements still need the named _components.scss stub.
         // Panel material always comes from the real, installed export.
         let stub: Value =
             serde_json::from_str(include_str!("../panel-stub.json")).map_err(|e| e.to_string())?;
-        let panel =
-            PanelMaterial::load(read(root.join("tokens/glass.json"))?, scheme == 1, reduce)?;
+        let panel = PanelMaterial::load(glass.clone(), scheme == 1, reduce)?;
+        let recipe: Value = serde_json::from_str(include_str!("../titlebar-provisional.json"))
+            .map_err(|e| e.to_string())?;
+        let titlebar = nk_widgets::window::TitlebarStyle {
+            blur: nk_wayland::Blur {
+                size: number(&glass["blur"]["panel"]["size"])? as f64,
+                passes: if reduce {
+                    0
+                } else {
+                    u32::try_from(
+                        glass["blur"]["panel"]["passes"]
+                            .as_u64()
+                            .ok_or("missing panel blur passes")?,
+                    )
+                    .map_err(|e| e.to_string())?
+                },
+            },
+            height: if reduce {
+                scss(&sizes["scss"]["space-10"])? + scss(&sizes["scss"]["space-2"])?
+            } else {
+                number(&recipe["height"])?
+            },
+            curve: recipe["curve"]
+                .as_array()
+                .ok_or("missing title curve")?
+                .iter()
+                .map(|v| v.as_f64().ok_or("invalid title curve".into()))
+                .collect::<Result<_>>()?,
+            opaque: reduce,
+            background_opacity: if reduce {
+                1.
+            } else {
+                number(&recipe["backgroundOpacity"])?
+            },
+        };
+        titlebar.validate()?;
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
+            form_width: number(&component["widths"]["form"]["preferred"])?,
+            content_floor: number(&component["widths"]["form"]["floor"])?,
             titlebar: scss(&sizes["scss"]["space-10"])? + scss(&sizes["scss"]["space-2"])?,
-            padding: scss(&sizes["scss"]["space-3"])?,
-            gap: scss(&sizes["scss"]["space-1"])?,
+            padding: number(&component["common"]["padding"])?,
+            gap: number(&component["common"]["gap"])?,
             row: number(&sizes["ts"]["ROW_HEIGHT"]["single"])?,
             control: number(&stub["SWITCH"]["minHeight"])?,
             switch_width: number(&stub["SWITCH"]["minWidth"])?,
-            radius: number(&sizes["ts"]["RADIUS"]["sm"])?,
-            group_radius: number(&sizes["ts"]["RADIUS"]["md"])?,
+            radius: number(&component["common"]["radius"])?,
+            group_radius: number(&component["common"]["groupRadius"])?,
+            focus_width: number(&list["focus"]["width"])?,
+            highlight_inset: number(&list["highlight"]["inset"])?,
+            hover_opacity: number(&list["highlight"]["hoverOpacity"])?,
+            separator_width: number(&list["separator"]["physicalPixels"])?,
         };
         let description = <&str>::try_from(get("org.gnome.desktop.interface", "font-name")?)
             .map_err(|e| e.to_string())?;
@@ -161,9 +238,15 @@ impl Appearance {
             palette,
             metrics,
             panel,
+            titlebar,
             style,
             size,
             reduce_motion,
+            titlebar_double_click_ms: recipe["doubleClickMs"]
+                .as_u64()
+                .and_then(|v| u32::try_from(v).ok())
+                .filter(|v| *v > 0)
+                .ok_or("invalid title double click policy")?,
         })
     }
 }
@@ -244,6 +327,46 @@ fn font_style(description: &str, scale: f64, line_height: f32) -> Result<nk_text
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn installed_list_tokens_select_the_portal_variant_and_refuse_missing_fields() {
+        let recipe: Value = serde_json::from_str(include_str!("../../tokens/list.json")).unwrap();
+        let mut variants = Vec::new();
+        for dark in [false, true] {
+            for reduce in [false, true] {
+                let mut listing = recipe["default"].clone();
+                listing["focus"]["width"] =
+                    serde_json::json!(2 + i32::from(dark) + 2 * i32::from(reduce));
+                variants.push(serde_json::json!({"dark":dark,"reduceTransparency":reduce,
+                    "list":listing}));
+            }
+        }
+        let export = serde_json::json!({"variants":variants});
+        for dark in [false, true] {
+            for reduce in [false, true] {
+                let list = list_tokens(&export, dark, reduce).unwrap();
+                assert_eq!(
+                    list["focus"]["width"],
+                    2 + i32::from(dark) + 2 * i32::from(reduce)
+                );
+            }
+        }
+        let mut missing = export.clone();
+        missing["variants"][0]["list"]
+            .as_object_mut()
+            .unwrap()
+            .remove("highlight");
+        assert!(list_tokens(&missing, false, false).is_err());
+        let mut invalid = export.clone();
+        invalid["variants"][0]["list"]["highlight"]["hoverOpacity"] = serde_json::json!(1.5);
+        assert!(list_tokens(&invalid, false, false).is_err());
+        let mut unrelated_panel = export.clone();
+        unrelated_panel["variants"][0]["pieces"] =
+            serde_json::json!({"panel":[{"fromSide":0,"list":{}}]});
+        assert_eq!(
+            list_tokens(&unrelated_panel, false, false).unwrap(),
+            list_tokens(&export, false, false).unwrap()
+        );
+    }
     #[test]
     fn portal_fonts_are_points_and_scale_is_live_input() {
         let style = font_style("Noto Sans Hebrew Bold 12", 1.5, 1.3).unwrap();

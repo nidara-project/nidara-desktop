@@ -89,3 +89,21 @@ standard root-local rectangle.
 
 This extends the unpublished v1 draft. Update Hyalo and the client together;
 there is no compatibility claim with a Hyalo built from an older copy of v1.
+
+
+D7 uses `Window::set_layer_blur(Blur, GradedPane[])` for a title whose backdrop is
+blurred without glass tone/rim; the same existing material-v1 requests carry each
+band's gradient. `Application::window_controls()` opts into the existing
+nidara-window-controls-v1 before configure. Its layout arrives as
+`Event::ControlsLayout`, queried through `window_controls_layout`; the app places
+the box in root coordinates with `place_window_controls`, atomically with its next
+root commit. `window_action` supplies standard xdg fallback actions. No visual
+geometry, text or colour defaults live in the transport.
+
+## Client title interaction
+
+Root and layer Button events preserve the exact wl_pointer serial and timestamp,
+including when several events are drained before application dispatch.
+`Window::move_from_pointer_press(serial)` sends standard xdg_toplevel.move with
+that press serial and the window's seat; the general last serial is unsuitable
+for an interactive grab. Existing close/minimize/maximize actions are unchanged.

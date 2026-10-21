@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+bitflags = "2"
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable", "staging"] }
 wayland-scanner = "0.31"
