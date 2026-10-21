@@ -2595,6 +2595,10 @@ shared by paint, hit-testing and focus; AT-SPI bounds stay model values. Reduced
 motion omits the transition independently of transparency. Never add another
 app-owned Wayland host.
 
+Container accessible names are not visual labels: the native Sidebar/Scroll names
+stay in AT-SPI; visible text needs a Label, Page, Button or TitleBar. Painting a
+container name centres it over its children (the misplaced “Pages” in #898).
+
 The demo is `toolkit/widgets-demo`, not Settings. Its palette is selected only from
 the appearance portal and exported tokens. `tokens/glass.json` is required: select
 `variants[]` by `dark`/`reduceTransparency`, then the last `pieces.panel[]` step

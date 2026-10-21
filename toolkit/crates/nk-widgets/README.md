@@ -57,7 +57,9 @@ is used for the title pending the owner's graded-blur A/B decision.
 Colours, measurements and pane Material are explicit inputs, resolved by the app
 from the exports/appearance portal. `Composition::sync` asks its material resolver
 for each pane's actual shorter side, so a title and sidebar use their own size step
-and resolve again on resize. No palette or glass constants live here.
+and resolve again on resize. Container names (Window, Sidebar, Scroll, Group and Row) are semantic names,
+not painted labels. Add an explicit Label child for visible text; Page/Button and
+TitleBar keep their visible labels. No palette or glass constants live here.
 There are no fields yet: phase-0 Editor/IME behavior is unchanged.
 
 Run tests without a compositor:

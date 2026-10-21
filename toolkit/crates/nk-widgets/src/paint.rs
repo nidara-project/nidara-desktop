@@ -157,7 +157,10 @@ impl Tree {
             _ => {}
         }
         if let Some(layout) = &n.layout
-            && !matches!(n.kind, Kind::Switch { .. })
+            && matches!(
+                n.kind,
+                Kind::Label | Kind::Page { .. } | Kind::Button | Kind::TitleBar
+            )
         {
             let padding = if matches!(n.kind, Kind::Button | Kind::Page { .. } | Kind::TitleBar) {
                 if n.kind == Kind::TitleBar {

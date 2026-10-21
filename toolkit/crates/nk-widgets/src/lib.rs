@@ -852,7 +852,9 @@ impl Tree {
             _ => width,
         };
         let mut text = Size::default();
-        if !self.nodes[&id].name.is_empty() && !matches!(kind, Kind::Switch { .. } | Kind::Window) {
+        if !self.nodes[&id].name.is_empty()
+            && matches!(kind, Kind::Label | Kind::Page { .. } | Kind::Button)
+        {
             let n = self.nodes.get_mut(&id).unwrap();
             if let Some(layout) = &mut n.layout {
                 text = layout.size(label_width)?;
