@@ -225,3 +225,20 @@ assertion (`target/content-width-control.log`). `Reading` has an explicit missin
 tokens error rather than an invented width. The focused total is now 36 tests.
 List-token export and combined live/private acceptance remain separate pending
 work; these unit results do not certify those paths.
+
+## Combined D8 private acceptance — 216ed5e4
+
+The complete existing libatspi matrix passes with the combined focus, shared
+highlights/separators and form-width changes: **23 oracles at scales 1 and 1.25,
+all 46 applied controls CAUGHT**, no subset. `target/d8-combined/result.json`
+records the result; each scale/stage retains its tree, observations and control
+logs. The fixed executable in target/d8-bin/nk-widgets-demo has SHA-256
+`c8a89711b34aa502012d792cda3fd5918cec390b61a993054812461e644255ad`.
+The new D8 visual/geometry claims remain covered by the focused unit pixel and
+geometry oracles above; they are not new claims in the libatspi matrix.
+
+This used the installed Hyalo and software GL inside the private bwrap/Cage
+harness with an isolated portal fixture. It does not establish current-source
+#899 clipping, #900 integration, real Orca/fcitx5, vkms, frame timing or the
+owner's live visual acceptance. The list-token export/installed-data reader
+remains pending #900 integration; no new CI run or publication was performed.
