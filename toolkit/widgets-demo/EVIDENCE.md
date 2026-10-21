@@ -402,3 +402,22 @@ checker PASS; deleting edge or gap fails own capsule-geometry assertion. Logs
 in repair worktree toolkit/target/gap-repair-*.log. No new live/pixel acceptance
 or change to #921 visual values. Original published branch remains untouched;
 correction is prepared on codex/889-retained-capsule-repair for review.
+
+### #889 installed control reader (historical source evidence)
+
+The following results belong to the original private source, not this rebuilt cut.
+
+The real export fixture retains every control step and portal variant. Three new
+tests cover exact dark/transparency variants, rounded integer-side step selection,
+state washes/inks, reduced-motion durations, null inkTone meaning the base tone,
+and refusal of missing/ambiguous/invalid data without defaults. Geometry comes
+from components.json separately. Removing side rounding is CAUGHT by the size
+assertion (`toolkit/target/control-reader-size-control.log`). The focused suite
+now passes 44 tests (8 wayland, 14 widget unit, 15 foundations, 7 demo), plus clippy,
+fmt, skill-docs and diff checks. An initial test exposed the explicit null inkTone
+in light mode; its interpretation now matches Hyalo's Shape.
+
+The reader is not yet connected to Appearance or a capsule layer. There is no
+new compositor, D5 feedback, idle/performance or live visual acceptance claim.
+Shared target artifacts from #898 initially hid #889's exported transport types;
+cleaning only nk-wayland artifacts and rebuilding resolved that cache mismatch.
