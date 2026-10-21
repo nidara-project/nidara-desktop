@@ -525,6 +525,26 @@ pub fn output_elements<R: HyaloRenderer>(
     with_overlay(out, output)
 }
 
+/// Everything on `output` as `output_elements` has it, for a picture drawn again offscreen
+/// (screenshot.rs: `msg screenshot`, screencopy, a screen shared): the glass as it shows, measuring
+/// nothing. A picture captures the backdrop again, its region rounded its own way, and its
+/// readback fed the same answers and ink the screen shows: while a check took pictures, a
+/// capsule's answer flipped with each one and never settled (#889, 2026-10-21).
+pub fn picture_elements<R: HyaloRenderer>(
+    state: &Scene<'_>,
+    renderer: &mut R,
+    output: &Output,
+    cursor: Option<&crate::cursor::CursorImage>,
+) -> Vec<OutputElement<R>> {
+    output_elements(state, renderer, output, cursor)
+        .into_iter()
+        .map(|e| match e {
+            OutputElement::Glass(g) => OutputElement::Glass(g.measuring_nothing()),
+            e => e,
+        })
+        .collect()
+}
+
 /// The debug overlay over everything (stats.rs, #766): where each glass element samples.
 fn with_overlay<R: HyaloRenderer>(mut out: Vec<OutputElement<R>>, output: &Output) -> Vec<OutputElement<R>> {
     if !stats::overlay_enabled() {

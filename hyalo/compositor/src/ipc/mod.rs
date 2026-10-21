@@ -103,6 +103,11 @@ pub struct WindowLayerInfo {
 /// `Presenting`): a check waits until every one is `settled` instead of sleeping.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct AnswersInfo {
+    /// Moves with every state of the material Hyalo takes in, changed or not: a client's commit
+    /// applied (a layer's lands with its parent's), or for the window controls a hover, a press
+    /// or a material Hyalo drew differently. A check reads it, acts, and waits for it to move
+    /// before it reads `settled` — settled alone can still describe the state before (#889).
+    pub revision: u64,
     pub shapes: Vec<ShapeAnswerInfo>,
     pub washes: Vec<WashInfo>,
 }

@@ -36,7 +36,7 @@ pub fn capture(
     let mut texture: GlesTexture = renderer
         .create_buffer(Fourcc::Abgr8888, (size.w, size.h).into())
         .map_err(|e| e.to_string())?;
-    let elements = render::output_elements(scene, renderer, output, cursor);
+    let elements = render::picture_elements(scene, renderer, output, cursor);
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     {
         let mut fb = renderer.bind(&mut texture).map_err(|e| e.to_string())?;
@@ -83,7 +83,7 @@ pub fn draw_into(
 ) -> Result<(), String> {
     let scale = output.current_scale().fractional_scale();
     let transform = output.current_transform();
-    let elements = render::output_elements(scene, renderer, output, cursor);
+    let elements = render::picture_elements(scene, renderer, output, cursor);
     let Some(area) = area else {
         let mut tracker = OutputDamageTracker::new(size, scale, transform);
         let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
@@ -126,7 +126,7 @@ pub fn draw_upright_into(
     let geo = scene.space.output_geometry(output).ok_or("output not mapped")?;
     let scale = output.current_scale().fractional_scale();
     let size: Size<i32, Physical> = geo.size.to_f64().to_physical_precise_round(scale);
-    let elements = render::output_elements(scene, renderer, output, cursor);
+    let elements = render::picture_elements(scene, renderer, output, cursor);
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
     let result = tracker
