@@ -38,7 +38,11 @@ impl Tree {
                 bounds.height -= 2. * inset;
                 self.metrics.radius
             }
-            Kind::Button | Kind::Switch { .. } => bounds.height / 2.,
+            Kind::Button => match n.button_shape {
+                ButtonShape::Rounded => self.metrics.radius,
+                ButtonShape::Capsule => bounds.height / 2.,
+            },
+            Kind::Switch { .. } => bounds.height / 2.,
             _ => 0.,
         };
         (bounds, radius)

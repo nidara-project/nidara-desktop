@@ -90,7 +90,9 @@ width supplied in Metrics from tokens. Focus and selected state do not depend on
 whether the ring is visible.
 
 D8 selection, hover and focus use one `highlight_shape`: inset rounded pages,
-capsule buttons and switch tracks. Hit bounds remain unchanged. Only actionable
+buttons with their declared shape and switch tracks. Ordinary buttons retain
+Metrics.radius; `set_button_shape(ButtonShape::Capsule)` explicitly opts into
+half-height rounding for base, hover and ring. Hit bounds remain unchanged. Only actionable
 nodes accept hover; a control-only Row/Label does not. Root and presented-layer
 motion set retained hover; pointer leave and hiding/disabling its ancestor clear
 it. Separators start at the label, follow visible neighbors, skip the last row

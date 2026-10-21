@@ -283,3 +283,14 @@ The four demo tests and demo all-target clippy pass after changing the reader.
 Private startup with `target/components-export` passes frame baseline/control
 at 1 and 1.25 (`target/components-startup`). This checks the final file boundary;
 it does not repeat or extend the full matrix/live evidence above.
+
+### #904 button silhouette review correction
+
+Ordinary buttons retain Metrics.radius. ButtonShape::Capsule is explicit; base,
+hover and focus use the same resolved silhouette. Switch tracks remain capsules.
+The shared-shape regression checks ordinary/explicit-capsule/restored-rounded
+buttons and rejects shape assignment to a label. Reinstating the original
+half-height radius for ordinary buttons fails its own assertion
+(`target/button-shape-control.log`: CAUGHT). All 28 nk-widgets tests, clippy,
+formatting, skill-docs and diff checks pass. This does not add a live visual
+acceptance claim or repeat the historical compositor matrices.

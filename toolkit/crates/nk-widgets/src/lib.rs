@@ -91,8 +91,15 @@ impl Kind {
         matches!(self, Self::Page { .. } | Self::Switch { .. } | Self::Button)
     }
 }
+/// The button owns its silhouette; interaction feedback follows it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonShape {
+    Rounded,
+    Capsule,
+}
 pub struct Node {
     pub(crate) kind: Kind,
+    pub(crate) button_shape: ButtonShape,
     pub(crate) name: String,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
@@ -248,6 +255,7 @@ impl Tree {
             id,
             Node {
                 kind,
+                button_shape: ButtonShape::Rounded,
                 name,
                 parent,
                 children: vec![],
@@ -591,6 +599,18 @@ impl Tree {
         node.layout = None;
         node.constraint = 0.;
         self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
+    }
+    /// Ordinary buttons use Metrics.radius; capsules explicitly opt into half-height.
+    pub fn set_button_shape(&mut self, id: NodeId, shape: ButtonShape) -> Result<()> {
+        let node = self.nodes.get_mut(&id).ok_or("unknown widget")?;
+        if node.kind != Kind::Button {
+            return Err("button shape requires a button".into());
+        }
+        if node.button_shape != shape {
+            node.button_shape = shape;
+            self.invalidate(id, Invalid::PAINT);
+        }
         Ok(())
     }
     pub fn set_text_style(&mut self, style: TextStyle) {

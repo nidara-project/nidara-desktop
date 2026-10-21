@@ -1001,7 +1001,18 @@ mod tests {
         tree.pointer_motion(point(tree.nodes[&control].bounds));
         assert_eq!(tree.hovered, Some(control));
         let (button, button_radius) = tree.highlight_shape(control);
-        assert_eq!(button_radius, button.height / 2.);
+        assert_eq!(
+            button_radius, tree.metrics.radius,
+            "ordinary button changed silhouette"
+        );
+        assert_ne!(button_radius, button.height / 2.);
+        tree.set_button_shape(control, ButtonShape::Capsule)
+            .unwrap();
+        assert_eq!(tree.highlight_shape(control), (button, button.height / 2.));
+        tree.set_button_shape(control, ButtonShape::Rounded)
+            .unwrap();
+        assert_eq!(tree.highlight_shape(control), (button, tree.metrics.radius));
+        assert!(tree.set_button_shape(label, ButtonShape::Capsule).is_err());
         let switch = tree
             .row(content, "Switch", Kind::Switch { checked: false })
             .unwrap();
