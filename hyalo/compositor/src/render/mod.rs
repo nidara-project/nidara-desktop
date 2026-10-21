@@ -190,19 +190,29 @@ fn push_surface<R: HyaloRenderer>(
     when: std::time::Instant,
 ) {
     let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
+        // Surfaces whose buffer is partly ink (nidara-material-v1 `add_ink_coverage`) are drawn
+        // through the shader that recolours it.
+        let inked = window::inked_surfaces(s);
         // A tree with layers a client handed Hyalo to animate (protocols/layers.rs) is drawn
         // where they are shown, whole: its drawn region (#761) describes the buffer at rest.
         if let Some(layered) = crate::protocols::layers::render_tree(renderer, s, loc, scale, output_size, kind, when) {
-            out.extend(layered.interleave(OutputElement::Scaled, OutputElement::Glass));
+            out.extend(layered.interleave(|e| window::inked_element(renderer, &inked, e, when), layer_paint));
         } else {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, s, loc, scale, 1.0, kind);
             // A surface that declared where it draws (#761) is drawn only there, and repainted where
-            // that changed.
+            // that changed. (Its ink coverage is not drawn: the drawn region's own element draws it.)
+            let plain = |inner: WaylandSurfaceRenderElement<R>, renderer: &mut R| {
+                if inked.iter().any(|(id, _)| id == smithay::backend::renderer::element::Element::id(&inner)) {
+                    window::inked_element(renderer, &inked, window::AtScale { inner, scale }, when)
+                } else {
+                    OutputElement::Surface(inner)
+                }
+            };
             match crate::protocols::material::drawn(s) {
-                None => out.extend(elements.into_iter().map(OutputElement::Surface)),
+                None => out.extend(elements.into_iter().map(|e| plain(e, renderer))),
                 Some(d) => {
                     match &d.rects {
-                        None => out.extend(elements.into_iter().map(OutputElement::Surface)),
+                        None => out.extend(elements.into_iter().map(|e| plain(e, renderer))),
                         Some(rects) => {
                             let region = drawn::region_on_output(rects, loc, scale);
                             out.extend(elements.into_iter().map(|inner| OutputElement::Drawn(drawn::Clipped { inner, region: region.clone() })));
@@ -213,7 +223,7 @@ fn push_surface<R: HyaloRenderer>(
                 }
             }
         }
-        out.extend(GlassElement::for_surface(s, loc, scale, output_size).into_iter().map(OutputElement::Glass));
+        out.extend(GlassElement::for_surface(s, loc, scale, output_size, when).into_iter().map(OutputElement::Glass));
         // The veils under the shell's glass are its floor's (one element for all of them);
         // anything else draws its own.
         if !floor {
@@ -245,14 +255,23 @@ pub(super) fn push_tree<R: HyaloRenderer>(
     kind: Kind,
     when: std::time::Instant,
 ) {
+    let inked = window::inked_surfaces(surface);
     match crate::protocols::layers::render_tree(renderer, surface, location, scale, output_size, kind, when) {
-        Some(layered) => out.extend(layered.interleave(OutputElement::Scaled, OutputElement::Glass)),
+        Some(layered) => out.extend(layered.interleave(|e| window::inked_element(renderer, &inked, e, when), layer_paint)),
         None => {
             let elements: Vec<WaylandSurfaceRenderElement<R>> = render_elements_from_surface_tree(renderer, surface, location, scale, 1.0, kind);
-            out.extend(elements.into_iter().map(|inner| OutputElement::Scaled(window::AtScale { inner, scale })));
+            out.extend(elements.into_iter().map(|inner| window::inked_element(renderer, &inked, window::AtScale { inner, scale }, when)));
         }
     }
     push_material(out, surface, location, scale, output_size, when);
+}
+
+/// What lies under a layer (protocols/layers.rs `LayerPaint`) as an element of the frame.
+pub(super) fn layer_paint<R: HyaloRenderer>(p: crate::protocols::layers::LayerPaint) -> OutputElement<R> {
+    match p {
+        crate::protocols::layers::LayerPaint::Glass(g) => OutputElement::Glass(*g),
+        crate::protocols::layers::LayerPaint::Shadow(s) => OutputElement::Scrim(s),
+    }
 }
 
 /// A surface's declared glass (`nidara-material-v1`) and the veil under it, as it is `when`.
@@ -264,7 +283,7 @@ pub(super) fn push_material<R: HyaloRenderer>(
     output_size: smithay::utils::Size<i32, Physical>,
     when: std::time::Instant,
 ) {
-    out.extend(GlassElement::for_surface(surface, location, scale, output_size).into_iter().map(OutputElement::Glass));
+    out.extend(GlassElement::for_surface(surface, location, scale, output_size, when).into_iter().map(OutputElement::Glass));
     let veils = scrim::scrims_for(surface, location, scale, when);
     let e = with_states(surface, |states| ScrimElement::new(&states.data_map, veils, output_size));
     out.extend(e.map(OutputElement::Scrim));
@@ -294,9 +313,12 @@ pub struct Scene<'a> {
     pub windows: &'a crate::config::WindowsConfig,
     /// The moment the frame shows: what Hyalo's own animations are drawn at (render/timing.rs).
     pub when: std::time::Instant,
+    /// Reduce motion (`[animations] enabled = false`): what Hyalo eases itself shows at once.
+    pub reduce_motion: bool,
 }
 
 impl<'a> Scene<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         space: &'a Space<Window>,
         wm: &'a crate::wm::Wm,
@@ -304,9 +326,11 @@ impl<'a> Scene<'a> {
         cursor_status: &'a CursorImageStatus,
         lock: &'a crate::lock::LockState,
         windows: &'a crate::config::WindowsConfig,
+        animations: bool,
         when: std::time::Instant,
     ) -> Self {
-        Self { space, wm, pointer: seat.get_pointer().unwrap().current_location(), cursor_status, lock, windows, when }
+        let pointer = seat.get_pointer().unwrap().current_location();
+        Self { space, wm, pointer, cursor_status, lock, windows, when, reduce_motion: !animations }
     }
 }
 
@@ -576,6 +600,8 @@ pub(crate) fn push_window<R: HyaloRenderer>(
             active: state.wm.focused == Some(m.id),
             dark: crate::wm::surface_of(&m.window).is_some_and(|s| crate::protocols::window_controls::dark_ink(&s)),
             moving: place.is_some(),
+            ink: None,
+            reduce_motion: state.reduce_motion,
         };
         Some((rect, controls))
     });

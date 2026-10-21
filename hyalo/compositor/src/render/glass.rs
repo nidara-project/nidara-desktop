@@ -57,6 +57,10 @@ pub struct GlassElement {
     whose: Whose,
     /// The rounded window it lies in, for a layer's glass: nothing past its corners.
     outer: Option<glass_gl::Outer>,
+    /// Its answering shapes (`set_response`), measured with the ink boxes.
+    answers: Vec<glass_gl::AnswerBox>,
+    /// The washes over its glass (`add_state_region`), as they show now.
+    states: Vec<glass_gl::StatePx>,
 }
 
 /// One id per group of a surface's shapes, stable across frames: its own material's, and the
@@ -82,8 +86,9 @@ impl GlassElement {
         location: Point<i32, Physical>,
         scale: Scale<f64>,
         output_size: smithay::utils::Size<i32, Physical>,
+        when: std::time::Instant,
     ) -> Vec<GlassElement> {
-        let Some(current) = material::current(surface) else { return Vec::new() };
+        let Some(current) = material::presented(surface, when) else { return Vec::new() };
         Self::for_material(surface, Whose::Client, &current, location, scale, output_size)
     }
 
@@ -129,6 +134,23 @@ impl GlassElement {
             Vec::new()
         };
         let surface_weak = surface.downgrade();
+        let px = |x: f64, y: f64, w: f64, h: f64| {
+            Rectangle::<f64, Physical>::new(location.to_f64() + Point::from((x * scale.x, y * scale.y)), (w * scale.x, h * scale.y).into())
+        };
+        // The washes over the glass, as they show now (`material::presented`): only where the
+        // compositor paints it.
+        let states: Vec<glass_gl::StatePx> = if glass.is_some() {
+            m.state_regions
+                .iter()
+                .map(|r| glass_gl::StatePx {
+                    rect: px(r.x, r.y, r.w, r.h),
+                    radius: r.radius * scale.x,
+                    wash: r.wash.map(|v| v as f32),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         groups
             .into_iter()
             .zip(ids)
@@ -142,12 +164,29 @@ impl GlassElement {
                     .copied()
                     .collect();
                 // A dark group's content sits on the topmost shape holding one of its boxes:
-                // that shape takes its ink tone.
+                // that shape takes its ink tone — unless it answers its backdrop, which decides
+                // its tone itself.
+                let answers_backdrop = |s: &glass_gl::Shape| m.shapes.get(s.index).is_some_and(|ms| ms.response.is_some());
                 for b in mine.iter().filter(|b| current.dark_ink.contains(&b.id)) {
                     if let Some(s) = shapes.iter_mut().rev().find(|s| s.rect.contains(center(b))) {
+                        if answers_backdrop(s) {
+                            continue;
+                        }
                         s.ink_dark = true;
                         if let Some(t) = m.shapes.get(s.index).and_then(|ms| ms.ink_tone) {
                             s.tone = glass_gl::ToneGl::new(&t, m.shapes[s.index].w.min(m.shapes[s.index].h), scale.x);
+                        }
+                    }
+                }
+                // An answering shape: its tone mixed towards its ink tone by its answer's r.
+                let mut answers = Vec::new();
+                if glass.is_some() {
+                    for s in shapes.iter_mut() {
+                        let Some(ms) = m.shapes.get(s.index).filter(|ms| ms.response.is_some()) else { continue };
+                        answers.push(glass_gl::AnswerBox { index: s.index, rect: s.rect });
+                        if let (Some(t), Some([r, _])) = (ms.tone, ms.answer) {
+                            let t = t.mix(&ms.ink_tone.unwrap_or(t), r);
+                            s.tone = glass_gl::ToneGl::new(&t, ms.w.min(ms.h), scale.x);
                         }
                     }
                 }
@@ -167,6 +206,8 @@ impl GlassElement {
                     surface: surface_weak.clone(),
                     whose,
                     outer: None,
+                    answers,
+                    states: states.clone(),
                     finish: glass_gl::Finish::NEUTRAL,
                     // The capture's three blurs: mixed by size where the compositor paints the
                     // glass, walked from sharp to full where a shape is graded.
@@ -225,6 +266,8 @@ impl GlassElement {
             surface: surface.downgrade(),
             whose: Whose::Client,
             outer: None,
+            answers: Vec::new(),
+            states: Vec::new(),
             finish,
             soft: None,
         })
@@ -240,7 +283,7 @@ impl GlassElement {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
             // Measured on the full blur while it forms: there is something to measure.
-            let measure_full = self.glass.is_some() && !self.ink_boxes.is_empty();
+            let measure_full = self.glass.is_some() && !(self.ink_boxes.is_empty() && self.answers.is_empty());
             glass_gl::capture(
                 gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, self.soft, &self.finish, &mut c,
             );
@@ -268,9 +311,9 @@ impl GlassElement {
             let user_data = &*user_data;
             let map = glass_gl::FrameMap { projection, fb_size: glass_gl::fb_size(gl) };
             if self.glass.is_some() {
-                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface, self.whose);
+                glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, &self.answers, self.ink_saturation, &self.surface, self.whose);
             }
-            glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish, self.outer);
+            glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish, self.outer, &self.states);
         })
     }
 }
@@ -297,6 +340,7 @@ impl GlassElement {
     /// measuring nothing.
     pub fn measuring_nothing(mut self) -> Self {
         self.ink_boxes.clear();
+        self.answers.clear();
         self
     }
 
@@ -502,7 +546,7 @@ mod tests {
     fn shape(x: f64, y: f64, blur: Option<material::Blur>) -> material::Shape {
         material::Shape {
             x, y, w: 200.0, h: 40.0, radius: 12.0, exponent: 2.0, opacity: 1.0, clip: None, pointer: None,
-            fusion: None, tone: None, ink_tone: None, blur, shadow: None, grade: None,
+            fusion: None, tone: None, ink_tone: None, blur, shadow: None, grade: None, response: None, answer: None,
         }
     }
 

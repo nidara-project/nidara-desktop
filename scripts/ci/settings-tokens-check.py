@@ -13,8 +13,11 @@ usage: settings-tokens-check.py OUT_DIR
   same pieces, `panel` among them; each piece's steps start at side 0 and grow; the sized
   pieces really follow the size in the dark face, reduce transparency really makes them solid,
   and the light face is not the dark one.
-CI also runs it on a copy with one used token dropped from one set, and on one with `panel`
-dropped from one glass variant; both must fail.
+- Every step of every variant's `control` piece carries what toolkit/tokens/control.json adds
+  (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
+  transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
+CI also runs it on a copy with one used token dropped from one set, on one with `panel`
+dropped from one glass variant, and on one with a control step's `states` dropped; all must fail.
 """
 import json, re, sys
 from itertools import product
@@ -90,8 +93,31 @@ if all(variant(d, r) for d, r in product([True, False], [False, True])) and not 
     if variant(True, True).get('ink') is not None:
         fail.append('glass: reduce transparency still measures the ink')
 
+rgba = lambda c: isinstance(c, dict) and all(isinstance(c.get(k), (int, float)) for k in 'rgba')
+for v in variants:
+    for st in v['pieces'].get('control', []):
+        where = f"glass: control (dark={v['dark']}, reduce={v['reduceTransparency']}) from {st.get('fromSide')}"
+        r = st.get('response', 'absent')
+        if r is None:
+            if not v['reduceTransparency']:
+                fail.append(f'{where}: no response on see-through glass')
+        elif not (isinstance(r, dict) and r.get('lumaLow', 1) < r.get('lumaHigh', 0)
+                  and r.get('contrastLow', 1) < r.get('contrastHigh', 0)
+                  and all(isinstance(r.get(k), (int, float)) for k in ('shadowWhite', 'shadowText'))
+                  and isinstance(r.get('settleMs'), int)):
+            fail.append(f'{where}: response {r}')
+        states = st.get('states') or {}
+        if not isinstance(states.get('fadeMs'), int) or not all(
+                rgba((states.get(k) or {}).get('wash')) for k in ('hover', 'press', 'destructiveHover', 'destructivePress')):
+            fail.append(f'{where}: states {states or "absent"}')
+        ink = st.get('ink') or {}
+        if not (rgba(ink.get('light')) and rgba(ink.get('dark'))):
+            fail.append(f'{where}: ink {ink or "absent"}')
+        if any(f.startswith(where) for f in fail):
+            break
+
 if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls complete')
