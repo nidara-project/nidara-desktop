@@ -242,3 +242,27 @@ harness with an isolated portal fixture. It does not establish current-source
 #899 clipping, #900 integration, real Orca/fcitx5, vkms, frame timing or the
 owner's live visual acceptance. The list-token export/installed-data reader
 remains pending #900 integration; no new CI run or publication was performed.
+
+## Installed list export after #900 integration
+
+Main #900 is integrated before editing its exporter. `list.json` now uses the
+shared default/variants mechanism and is exported as `list` in every panel step.
+The demo reads the exact installed portal variant; absent/invalid fields fail.
+No list visual values are compiled into the application.
+
+- Real export with local Sass and settings-tokens-check: PASS (108 colour sets,
+  four glass variants, every panel step complete). A temporary light-only
+  highlight override affects every light panel step and no dark step; defaults
+  remain intact. The source is restored after that check.
+- Dropping highlight from one exported panel step: CAUGHT at the list completeness
+  assertion (`target/list-export-control.log`); CI has the same discriminating
+  control in the existing export step, with no extra job.
+- 37 focused Rust tests and clippy pass. The new reader test covers four portal
+  combinations and missing/out-of-range/inconsistent data.
+- Private startup against `target/list-export`, installed Hyalo/software GL:
+  frame baseline PASS and applied frame control CAUGHT at scales 1 and 1.25
+  (`target/list-export-startup`). This targeted repeat checks the new reader,
+  not another full matrix or current-source Hyalo acceptance.
+
+Formatting, skill-docs, ci-scope self-test, Python checker syntax and whitespace
+checks pass. No live visual acceptance or new vkms/Orca/fcitx5 run is claimed.

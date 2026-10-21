@@ -16,10 +16,11 @@ usage: settings-tokens-check.py OUT_DIR
 - Every step of every variant's `control` piece carries what toolkit/tokens/control.json adds
   (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
+- Every panel step carries D8 list focus/highlight/separator tokens with a resolvable colour.
 CI also runs it on a copy with one used token dropped from one set, on one with `panel`
-dropped from one glass variant, and on one with a control step's `states` dropped; all must fail.
+dropped from one glass variant, a control step's `states` dropped, and one panel step's list highlight dropped; all must fail.
 """
-import json, re, sys
+import json, math, re, sys
 from itertools import product
 from pathlib import Path
 
@@ -116,8 +117,29 @@ for v in variants:
         if any(f.startswith(where) for f in fail):
             break
 
+# D8's list tokens must be complete in every panel step, not guessed by readers.
+def positive_number(value, allow_zero=False):
+    return type(value) in (int, float) and math.isfinite(value) and (value >= 0 if allow_zero else value > 0)
+
+for variant in variants:
+    for step in variant['pieces'].get('panel', []):
+        where = f"glass: list (dark={variant['dark']}, reduce={variant['reduceTransparency']}) from {step.get('fromSide')}"
+        listing = step.get('list') or {}
+        focus = listing.get('focus') or {}
+        highlight = listing.get('highlight') or {}
+        separator = listing.get('separator') or {}
+        opacity = highlight.get('hoverOpacity')
+        if not (positive_number(focus.get('width'))
+                and positive_number(highlight.get('inset'), True)
+                and positive_number(opacity, True) and opacity <= 1
+                and positive_number(separator.get('physicalPixels'))):
+            fail.append(f'{where}: incomplete or invalid focus/highlight/separator')
+        key = separator.get('color')
+        if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
+            fail.append(f'{where}: missing separator colour token {key}')
+
 if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls and lists complete')

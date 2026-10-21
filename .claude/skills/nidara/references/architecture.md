@@ -2640,3 +2640,10 @@ not a number picked by each page. Form aliases WINDOW_LAYOUT's existing preferre
 width and floor. Apply the policy before the measure-cache key is recorded;
 changing the named kind must not reuse a wider/narrower stale layout. Centre in
 the current content viewport (after the sampled sidebar inset), not the window.
+
+D8's provisional list source is `toolkit/tokens/list.json` (`default` plus whole
+field `variants`, like control.json). The exporter attaches the resolved `list`
+object to every panel step. Native readers select the portal variant from the
+installed export; never compile fallback visual numbers into an application.
+settings-tokens-check requires each field and its CI control removes highlight
+from one panel step. Form width still aliases the existing WINDOW_LAYOUT tokens.

@@ -69,7 +69,8 @@ panes at the floating sidebar bounds and title zone (`x`, `y`, `width`, `height`
 It requires that Hyalo revision; the earlier IPC listed only layer-shell. `NK_WIDGETS_STAGES='frame … under-title'` allows
 local subsets during that work; the CI invocation has no subset and stays strict.
 
-D8 focus width comes from provisional shared `toolkit/tokens/list.json`; it is
-compiled into this demo while the new list-token export is pending. Pointer
-focus has no ring, keyboard focus uses the element's own rounded shape, and
+D8 list tokens originate in provisional shared `toolkit/tokens/list.json`.
+The exporter resolves default/variants into `list` on every panel step; the demo
+reads the portal-selected installed variant, without compiled fallback values.
+Pointer focus has no ring, keyboard focus uses the element's own shape, and
 selection stays independent. These numbers still require live owner review.

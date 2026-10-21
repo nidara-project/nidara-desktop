@@ -20,6 +20,7 @@
 //                              control piece also carries `toolkit/tokens/control.json` — how a
 //                              control answers its backdrop, its states' washes, its inks — for
 //                              the variant it is in: the native kit's own source, not the kit's.
+//                              Panel steps carry list.json's focus/highlight/separator data (D8).
 //
 // The engine (`platform/theme-tokens.ts`) imports Gio/GLib for its file helpers only; a loader
 // stubs `gi://` and resolves the kit's extension-less imports, so the kit (frozen, #818) is
@@ -130,11 +131,13 @@ const SIDES = 400
 // A control on glass (toolkit/CONTRACT.md, "Floating control capsule"): `default`, then every
 // entry of `variants` whose dark/reduceTransparency match, field by field.
 const control = JSON.parse(readFileSync(join(repo, "toolkit/tokens/control.json"), "utf8"))
+const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "utf8"))
+const variantFor = (recipe, dark, reduceTransparency) => recipe.variants
+    .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
+    .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
+        recipe.default)
 const controlFor = (dark, reduceTransparency) => {
-    const { response, states, ink } = control.variants
-        .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
-        .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
-            control.default)
+    const { response, states, ink } = variantFor(control, dark, reduceTransparency)
     return { response, states, ink }
 }
 const variants = []
@@ -150,7 +153,8 @@ for (const dark of [true, false])
                 if (steps.at(-1)?.answer !== answer) steps.push({ side, answer })
             }
             if (steps.at(-1).side === SIDES) throw new Error(`glass: ${piece} still changes at ${SIDES} px`)
-            const extra = piece === "control" ? controlFor(dark, reduceTransparency) : {}
+            const extra = piece === "control" ? controlFor(dark, reduceTransparency)
+                : piece === "panel" ? { list: variantFor(list, dark, reduceTransparency) } : {}
             pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer), ...extra }))
         }
         // The ink: when a pane's text turns dark (Hyalo measures the darkest point under it, WCAG

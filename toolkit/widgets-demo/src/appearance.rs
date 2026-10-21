@@ -58,6 +58,35 @@ fn color(text: &str) -> Result<Color> {
     }
     Err(format!("unsupported exported colour {text}"))
 }
+fn list_tokens(export: &Value, dark: bool, reduce: bool) -> Result<Value> {
+    let variant = export["variants"]
+        .as_array()
+        .ok_or("missing glass variants")?
+        .iter()
+        .find(|v| v["dark"] == dark && v["reduceTransparency"] == reduce)
+        .ok_or("missing list portal variant")?;
+    let steps = variant["pieces"]["panel"]
+        .as_array()
+        .ok_or("missing panel list steps")?;
+    let list = steps.first().ok_or("missing panel list step")?["list"].clone();
+    if steps.iter().any(|step| step["list"] != list) {
+        return Err("inconsistent list tokens within a panel variant".into());
+    }
+    let width = number(&list["focus"]["width"])?;
+    let inset = number(&list["highlight"]["inset"])?;
+    let opacity = number(&list["highlight"]["hoverOpacity"])?;
+    let line = number(&list["separator"]["physicalPixels"])?;
+    if ![width, inset, opacity, line].iter().all(|n| n.is_finite())
+        || width <= 0.
+        || inset < 0.
+        || !(0. ..=1.).contains(&opacity)
+        || line <= 0.
+        || list["separator"]["color"].as_str().is_none()
+    {
+        return Err("invalid installed list tokens".into());
+    }
+    Ok(list)
+}
 impl Appearance {
     fn load(root: &Path, settings: &Settings) -> Result<Self> {
         if std::fs::read_to_string(root.join("version"))
@@ -120,6 +149,8 @@ impl Appearance {
                     .ok_or_else(|| format!("missing {key}"))?,
             )
         };
+        let glass = read(root.join("tokens/glass.json"))?;
+        let list = list_tokens(&glass, scheme == 1, reduce)?;
         let palette = Palette {
             background: token("--nidara-bg")?,
             surface: token("--nidara-surface")?,
@@ -130,13 +161,16 @@ impl Appearance {
             track: token("--nidara-surface")?,
             thumb: token("--nidara-thumb")?,
             focus: token("--nidara-accent")?,
-            separator: token("--nidara-border")?,
+            separator: token(
+                list["separator"]["color"]
+                    .as_str()
+                    .ok_or("missing list separator colour")?,
+            )?,
         };
         // Only the switch measurements still need the named _components.scss stub.
         // Panel material always comes from the real, installed export.
         let stub: Value =
             serde_json::from_str(include_str!("../panel-stub.json")).map_err(|e| e.to_string())?;
-        let glass = read(root.join("tokens/glass.json"))?;
         let panel = PanelMaterial::load(glass.clone(), scheme == 1, reduce)?;
         let recipe: Value = serde_json::from_str(include_str!("../titlebar-provisional.json"))
             .map_err(|e| e.to_string())?;
@@ -173,8 +207,6 @@ impl Appearance {
             },
         };
         titlebar.validate()?;
-        let list: Value = serde_json::from_str(include_str!("../../tokens/list.json"))
-            .map_err(|e| e.to_string())?;
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
@@ -290,6 +322,45 @@ fn font_style(description: &str, scale: f64, line_height: f32) -> Result<nk_text
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn installed_list_tokens_select_the_portal_variant_and_refuse_missing_fields() {
+        let recipe: Value = serde_json::from_str(include_str!("../../tokens/list.json")).unwrap();
+        let mut variants = Vec::new();
+        for dark in [false, true] {
+            for reduce in [false, true] {
+                let mut listing = recipe["default"].clone();
+                listing["focus"]["width"] =
+                    serde_json::json!(2 + i32::from(dark) + 2 * i32::from(reduce));
+                variants.push(serde_json::json!({"dark":dark,"reduceTransparency":reduce,
+                    "pieces":{"panel":[{"fromSide":0,"list":listing}]}}));
+            }
+        }
+        let export = serde_json::json!({"variants":variants});
+        for dark in [false, true] {
+            for reduce in [false, true] {
+                let list = list_tokens(&export, dark, reduce).unwrap();
+                assert_eq!(
+                    list["focus"]["width"],
+                    2 + i32::from(dark) + 2 * i32::from(reduce)
+                );
+            }
+        }
+        let mut missing = export.clone();
+        missing["variants"][0]["pieces"]["panel"][0]["list"]
+            .as_object_mut()
+            .unwrap()
+            .remove("highlight");
+        assert!(list_tokens(&missing, false, false).is_err());
+        let mut invalid = export.clone();
+        invalid["variants"][0]["pieces"]["panel"][0]["list"]["highlight"]["hoverOpacity"] =
+            serde_json::json!(1.5);
+        assert!(list_tokens(&invalid, false, false).is_err());
+        invalid["variants"][0]["pieces"]["panel"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({"fromSide":10,"list":{}}));
+        assert!(list_tokens(&invalid, false, false).is_err());
+    }
     #[test]
     fn portal_fonts_are_points_and_scale_is_live_input() {
         let style = font_style("Noto Sans Hebrew Bold 12", 1.5, 1.3).unwrap();

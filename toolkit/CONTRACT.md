@@ -202,6 +202,13 @@ Phase 0 remains an independent client of those four crates.
   them and reserves its actual side/size. The app opts in before configure with
   `Application::window_controls`, places the root-local box, and sends fallback
   actions through `Window::window_action` from the same activation path.
+  D8: `highlight_shape` is shared by selection, hover and keyboard-only focus.
+  Lists take inset/opacity, focus width and separator thickness/colour from
+  `toolkit/tokens/list.json` via every panel step's exported `list` object. Readers
+  select the portal variant and reject absent fields rather than guessing defaults.
+  `Tree::set_page_width` names Form/None; Reading requires measured tokens first.
+  Form aliases WINDOW_LAYOUT.content/contentFloor and centres in the sampled
+  content viewport beside the sidebar, preserving horizontal access below its floor.
   Content scrolling dirties root content, not the pane buffers. The sidebar has its own
   clamped vertical offset and reveals focused pages below its fixed header. Vertical
   layer scroll routes to sidebar/content for sidebar/title respectively; horizontal
