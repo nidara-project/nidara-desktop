@@ -769,6 +769,9 @@ this one is outside the glass only.
 
 ### A control answers its backdrop (#889, toolkit/CONTRACT.md "Floating control capsule")
 
+How a control BEHAVES — the base every control follows and the owner's exceptions — is
+design-system.md, "The glass material"; this section is how Hyalo paints it.
+
 Four requests inside material v1 (lib + Hyalo together; appended, no `since`), the toolkit's
 controls and Hyalo's own window controls on the same paths:
 - **`set_response`** (`material::Response`): the shapes after it measure their backdrop — the

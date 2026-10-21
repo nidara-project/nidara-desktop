@@ -150,8 +150,10 @@ const TONES: Record<GlassPiece, { dark: GlassTone, light: GlassTone }> = {
  * ramp of the blur and the ambient: opacity 0.013 → 0.175 dark, 0.013 → 0.115 light (the fit at
  * 80, 120 and 160 lies on those lines), deviation 2 → 17 (4.5 / 11 / 17 measured). There IS a
  * shadow at rest: the 2026-10-08 runs that said none had their window inactive.
- * Measured on the reference's floating glass, which is what `control` and `panel` are; the Dock
- * and the Control Center were not measured, so they cast none.
+ * Measured on the reference's floating glass, which is what `control` and `panel` are. The Dock
+ * and the Control Center cast none because the reference's cast none: measured on the system's
+ * own Dock and Control Center, 2026-10-08 (the Dock a 1 px outline; the CC's tiles none, a veil
+ * behind them). Which kind casts what: design-system.md, "The glass material".
  */
 const SHADOWS: Partial<Record<GlassPiece, { dark: GlassShadow, light: GlassShadow }>> = {
     control: {
