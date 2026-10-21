@@ -24,6 +24,7 @@ daily use**; what is missing comes back later; a phase is never lengthened.
 | 2026-10-17 | Start-up must beat **Nautilus (473 ms)** and the current Settings (959 ms) |
 | 2026-10-17 | Any Wayland compositor, best on Hyalo (#848) |
 | 2026-10-19 | **The sidebar and the title bar float over the content** (D7): the sidebar always its own layer with the menus' glass; the title bar without a divider, content scrolling under it blurred; collapsing (narrow window or the title bar's button, the same) gives the content its space back, animated |
+| 2026-10-21 | **Lists and focus** (D8): a row has hover only when it navigates or acts — a row that only holds a control leaves the hover to the control; the hover is one inset rounded rectangle, the same in every row; separators start at the text and hide beside a hovered or selected row; the focus ring is drawn only for keyboard focus, with the focused element's own shape. **Content width** (D8): one width component, a few named widths in the tokens, each app naming the KIND of page, measured and centred in the space beside the sidebar |
 | 2026-10-18 | **Trust model: cooperative consent, as today** — `Config1` is not wider than `setConfig`, and is not a security boundary (a process of the same user can write dconf). Real enforcement goes with #840 (privacy and permissions) |
 | 2026-10-18 | **No non-Hyalo compositor run in CI in phase 1** — it would be paid on every PR. D5's fallbacks are specified and unit-tested, not run on a foreign compositor |
 | 2026-09-13 | Applications read the appearance **only from the Settings portal** (#534) — so does the native Settings ([A8]) |
@@ -294,6 +295,40 @@ it opened collapsed; otherwise it was part of the window. The native window does
 kit/material boundary is proposed in CONTRACT.md, “Floating control capsule”; it
 is not yet a closed API or implemented behaviour. It shares the control material
 with Hyalo's server-side controls; final visual values are chosen in the native demo.
+
+## D8 — lists, and the focus ring (owner, 2026-10-21)
+
+Seen on nk-widgets-demo: options with no separation between them, and a selected sidebar item
+that drew a rectangular ring when clicked. Decided:
+
+- **Hover by what the row does, not on every row.** A row that navigates (opens a sub-page) or
+  acts (selects an item, runs a command) has hover and press. A row that only holds a control —
+  a switch, a dropdown, a slider — has none: the hover is the control's. A row that only
+  informs has nothing.
+- **One shape: an inset rounded rectangle**, the same in the first, the middle and the last row,
+  as the menus' and the sidebar's highlight — never a fill that follows the group's corners at
+  its ends and goes square in between (three shapes by position, and wrong for a group of one
+  or with rows hidden). The neutral hover of the rest of the desktop (one hover, 8 %).
+- **Separators**: a hairline between rows, starting where the row's text starts (not at the
+  group's edge), none under the last row, and hidden beside a hovered or selected row so the
+  highlight is never cut by one.
+- **The focus ring is keyboard focus only** (focus-visible): never drawn by a click or a pointer
+  press. It takes the focused element's own shape — the selection's rounded rectangle, a
+  capsule's capsule, a switch's track — never a rectangle round its bounds. The selection
+  itself (the accent, opaque in the sidebar) is not the ring and does not need one.
+- Its numbers (insets, radii, the separator's colour) come with the tokens, decided in the demo.
+- **Content width: one component, named widths, the app names the kind of page.** The content
+  is held by one toolkit component to a width the tokens name — `form` (Settings, dialogs),
+  `reading`, `none` (grids, documents, tables) — and an app says which kind a page is, never a
+  number; so every app is the same and the numbers live in one place. The width and the centring
+  are measured in the space BESIDE the floating sidebar (D7), not the window's whole background:
+  collapsing the sidebar widens that space and the content recentres on the same timeline.
+  `form` starts from the current kit's law, measured (`WINDOW_LAYOUT` in
+  `ui/lib/nidara-kit/platform/tokens.ts`): a CONSTANT 800 — the widest trailing control is 388
+  (Accent colour), and at 800 its row keeps ~40 characters of title, enough for every shipped
+  locale — yielding below it only down to a 560 floor, then scrolling sideways. Not GNOME's 600
+  (`AdwClamp`'s default), which breaks titles there. `reading` and `none` are decided when a page
+  needs them.
 
 ## Foundations (`nk-widgets`) and their acceptance `[A7]`
 
