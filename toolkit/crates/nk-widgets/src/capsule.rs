@@ -62,6 +62,10 @@ impl Tree {
         let capsule = self.capsules.get_mut(&id).ok_or("unknown capsule")?;
         if capsule.metrics != metrics {
             capsule.metrics = metrics;
+            // Child constraints may be unchanged while their minimum size changed.
+            for child in self.nodes[&id].children.clone() {
+                self.invalidate(child, Invalid::LAYOUT);
+            }
             self.invalidate(id, Invalid::LAYOUT);
         }
         Ok(())
