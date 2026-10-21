@@ -767,6 +767,49 @@ this one is outside the glass only.
   shell (`shell-calib.sh`, level 0.9): under a bar capsule 230 → 227–228 for 8 rows, gone by 10;
   above it and inside it untouched. The large end is held to the captures by a unit test.
 
+### A control answers its backdrop (#889, toolkit/CONTRACT.md "Floating control capsule")
+
+Four requests inside material v1 (lib + Hyalo together; appended, no `since`), the toolkit's
+controls and Hyalo's own window controls on the same paths:
+- **`set_response`** (`material::Response`): the shapes after it measure their backdrop — the
+  mean WCAG luminance on the blur the ink uses, the deviation on the SOFT blur — in the same
+  readback as the ink boxes (`FS_INK` `mode` 1; `glass_gl::AnswerBox`, after the ink boxes in
+  the target, at most 16). r and c are smoothsteps of them; a shape's tone is its `set_tone`
+  mixed towards its `set_ink_tone` by r, every stage (`Tone::mix`), its shadow's opacity times
+  `1 + shadow_white·r + shadow_text·c` (`scrim::scrims_of`), and an answering shape ignores the
+  binary ink. Nothing waits: the measurement is the ink's fence/PBO.
+- **`add_state_region`**: a wash over the toned glass, in a rounded rectangle and only where there
+  is glass (`glass_gl::StatePx`, the shader's `s_*`, at most 8 per draw), under the rim.
+- **Easing** (`material::Presenting`, in `Current`): each answer by shape index, each wash by id.
+  A first answer and a new id show at once; a change eases linearly over `settle_ms` / `fade_ms`
+  from what was SHOWN; an id gone is gone. `presented(surface, when)` fills the state as it
+  shows at the frame's time and moves the commit when that changed; while anything eases it
+  marks `take_easing`, and `post_repaint` asks for one more frame — at rest nothing ticks.
+- **`set_ink_colors` + `add_ink_coverage`**: inside each rectangle the surface's own buffer is
+  coverage, redrawn as `ink.rgb · ink.a · buffer.a` by the window's texture shader
+  (`FS_ROUNDED`'s `ink`, two rectangles per mat4, at most 16: smithay's custom uniforms take no
+  vec4 arrays). The ink is the inks mixed by the r of the answering shape under the rectangle's
+  centre (`MaterialState::ink_of`), or its override. A surface with coverage is drawn through
+  that program even unrounded (`window::inked_element`, every path: window, tree, popups, a
+  layer-shell surface — not a surface's drawn region). The element's commit is OURS
+  (`InkMemo`): it moves with the ink, and its damage is the surface's own while the ink is the
+  same, all of it when it changed. Overlapping, empty or non-finite coverage is the protocol
+  error `invalid_region`.
+- ⚠️ **`inked_surfaces` reads each surface from the walk's own `states`**
+  (`material::has_coverage(states)`): `with_states` again inside `with_surface_tree_downward`
+  locks the surface twice and Hyalo hangs at its first frame (seen headless, 2026-10-21).
+- A **layer's panes cast their shadow** (`LayeredTree`'s `LayerPaint::Shadow`, right below its
+  glass, cut to the root's box): before #889 a layer's `set_shadow` drew nothing.
+- Values: `toolkit/tokens/control.json`, merged into every control step of `tokens/glass.json`
+  by `scripts/export-tokens.mjs` (per variant: `default`, then matching `variants`; null response
+  with reduce transparency); `settings-tokens-check.py` fails a step without them.
+- CI: `scripts/ci/hyalo-control-material-check.py` + `hyalo-control-material-probe.c` in the
+  smoke: a capsule layer over a white or black page — its coverage inked (B outside it as
+  painted), its ink and tone and shadow answering, its red wash translucent, overlapping coverage
+  the protocol error; each with the probe dropping that part (`--no-ink`, `--no-response`,
+  `--no-ink-tone`, `--no-shadow-gain`, `--no-state`). The five controls run where they can fail
+  differently (ci-scope `full`) and nightly. Easing is unit-tested (`Presenting`), not timed.
+
 ### The veil under the Control Center (2026-10-11)
 
 The Control Center and the Notification Center lie on a FIXED veil (`trackVeilRegion(widget)` in
@@ -983,20 +1026,30 @@ minimize and close (60×32), a dialog maximize and close or close alone, About c
   the glass's to draw: it is the scrim pass's (`scrim::scrims_of`, the same as a client's
   `scrims_for`), one `ScrimElement` right below the glass with a memo of its own (`ShadowMemo`,
   apart from the window's own material's). A `shadow` on the shape alone draws nothing — that
-  was #884, seen identical with and without it (2026-10-20). **The ink is measured, never the app's**: one ink box, the
-  capsule; the result comes back with `Whose::Hyalo` (`Measured::whose`) to
-  `controls::ink_measured`, the shell's rule with its hysteresis (`material::next_ink`) — dark
-  glyphs and the ink tone over a light header, white over a dark one. The app's `set_ink` only
-  says the ink of the PLAIN capsule: `[windows.controls] glass = false` (the A/B, and the
-  check's control), or no export. The shader draws only the state and the glyphs over the glass
-  (`glass_under`). **The same in Hyalo's own title bar** (owner: "it has to be the same as in
+  was #884, seen identical with and without it (2026-10-20). **The ink is the glass's answer to
+  the backdrop, never the app's** (#889, toolkit/CONTRACT.md "Floating control capsule"): the
+  control piece's `response`, `states` and `ink` from the export (`glass_tokens::ControlLook`;
+  an export without them is no export here — the plain capsule, never a default), the capsule
+  one answering shape whose measurement comes back with `Whose::Hyalo` to
+  `controls::response_measured`, eased in a `Presenting` kept on the window's surface
+  (`PresentMemo`). Its tone mixes towards the ink tone, its shadow grows, and the glyphs' ink
+  (`Controls::ink`, the shader's `ink_rgba`) is the export's light ink mixed towards its dark one
+  by the same r — the destructive state's own ink over a hovered close. The hover and the press
+  are WASHES in the glass, one state region per button (its circle, `HOVER_R`), the hovered
+  one's at the export's hover/press (destructive for close), the others at alpha 0 so they fade
+  out over `states.fadeMs` (0 with reduce motion, `Scene::reduce_motion`): the opaque disc is
+  the plain capsule's alone. The app's `set_ink` only says the ink of the PLAIN capsule:
+  `[windows.controls] glass = false` (the A/B, and the check's control), or no export. The
+  shader draws only the glyphs over the glass (`glass_under`). **The same in Hyalo's own title bar** (owner: "it has to be the same as in
   our apps"): with glass, its capsule is drawn apart — the `ControlsElement` and the glass in
   front of the bar, whose own pass leaves the capsule out (`TitleBar::controls_apart`) but still
   keeps its room for the title — so the glass's backdrop is the bar and its ink is measured on
   it, never the bar pass's own colour guess. CI: `scripts/ci/hyalo-controls-glass-check.py` (the probe with `HYALO_PROBE_STRIPES`: header
   blurred inside the capsule, sharp beside it; `HYALO_PROBE_HEADER`: dark glyphs over f0f0f0,
   white over 303030, the app asking nothing; `hyalo-title-bar-probe`: over its light bar the
-  light glass, brighter than the bar, and dark glyphs; `glass = false` must fail all three).
+  light glass, brighter than the bar, and dark glyphs; the pointer over close (`move` on
+  HYALO_CONTROL): a red wash that differs over the light and the dark header; `glass = false`
+  must fail all four — its hover is the opaque disc, the same over both).
   `hyalo-window-controls-check.sh` checks the app's ink on the plain capsule.
 - **A capture says where moving windows were in it** (with `HYALO_CONTROL`): `<shot>.capture.json`
   carries `drawn` — each window drawn at a place (into the dock, out of it), `{id: [x, y, w, h]}`

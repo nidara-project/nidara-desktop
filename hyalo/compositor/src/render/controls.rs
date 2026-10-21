@@ -38,6 +38,7 @@ uniform float hover;    // the slot under the pointer, -1 none
 uniform float pressed;  // 1 while that button is held
 uniform float active;   // 1: the window has the focus
 uniform float glass_under; // 1: the shell's glass is drawn under the capsule
+uniform vec4 ink_rgba;    // over that glass: the glyphs' ink, straight (render/controls.rs `glass`)
 float box(vec2 p, vec2 h, float r) {
     vec2 q = abs(p) - h + vec2(r);
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
@@ -69,6 +70,9 @@ vec4 controls(vec2 p_out, float dark) {
     float inside = clamp(0.5 - d * px, 0.0, 1.0);
     if (inside <= 0.0) return vec4(0.0);
     vec4 ink = dark > 0.5 ? vec4(0.0, 0.0, 0.0, 1.0) : vec4(1.0);
+    // Over the glass the glyphs take the ink its answer to the backdrop mixes, and the hover and
+    // the press are washes in the glass itself (render/glass_gl.rs `StatePx`): no disc here.
+    if (glass_under > 0.5) ink = vec4(ink_rgba.rgb * ink_rgba.a, ink_rgba.a);
     float slot = clamp(floor((p.x - EDGE * 0.5) / PITCH), 0.0, count - 1.0);
     vec2 centre = vec2(EDGE + HOVER_R + slot * PITCH, size.y * 0.5);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
@@ -82,8 +86,8 @@ vec4 controls(vec2 p_out, float dark) {
         c = over(ink * 0.07 * clamp(1.0 - abs(d * px + 0.5), 0.0, 1.0), c);
     }
     bool hov = abs(slot - hover) < 0.5;
-    bool red = hov && g > 1.5;
-    if (hov) {
+    bool red = hov && g > 1.5 && glass_under < 0.5;
+    if (hov && glass_under < 0.5) {
         float a = pressed > 0.5 ? (dark > 0.5 ? PRESS_A.y : PRESS_A.x) : (dark > 0.5 ? HOVER_A.y : HOVER_A.x);
         vec4 fill = ink * a;
         if (red) fill = pressed > 0.5 ? vec4(0.69, 0.16, 0.18, 1.0) : vec4(0.82, 0.20, 0.22, 1.0);
@@ -130,6 +134,10 @@ pub struct Controls {
     /// keeps the ink it had, measuring nothing — what passes under a capsule in flight is not
     /// its header, and its ink must not flicker on the way.
     pub moving: bool,
+    /// Over the shell's glass: the glyphs' ink, straight sRGB and alpha (`glass`). None: `dark`.
+    pub ink: Option<[f32; 4]>,
+    /// Reduce motion: the washes change at once.
+    pub reduce_motion: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +214,8 @@ impl ControlsElement {
             gl.Uniform1f(p.loc(gl, c"active"), if c.active { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"dark_ink"), if c.dark { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"glass_under"), if self.glass_under { 1.0 } else { 0.0 });
+            let ink = c.ink.unwrap_or([1.0; 4]);
+            gl.Uniform4f(p.loc(gl, c"ink_rgba"), ink[0], ink[1], ink[2], ink[3]);
             for d in damage {
                 let q = Rectangle::new(d.loc + dst.loc, d.size);
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -223,21 +233,29 @@ impl ControlsElement {
 #[derive(Default)]
 struct GlassMemo(RefCell<Option<(CommitCounter, String)>>);
 
-/// The controls' ink, as the glass under them measured it (`ink_measured`): whether it is dark
-/// now, and the rule it was measured by.
+/// The controls' answer to their backdrop and their washes as they ease (protocols/material.rs
+/// `Presenting`), and the response they were drawn with — kept on the window's surface.
 #[derive(Default)]
-struct InkMemo(RefCell<(bool, Option<crate::protocols::material::Ink>)>);
+struct PresentMemo(RefCell<(crate::protocols::material::Presenting, Option<crate::protocols::material::Response>)>);
 
-/// The capsule's one ink group.
-const INK_GROUP: u32 = 1;
+/// The capsule's one shape.
+const SHAPE: usize = 0;
+
+/// window_controls::{HOVER_D, EDGE, PITCH}, as the shader's: each button a circle HOVER_D across,
+/// EDGE from the capsule's edge and from the next one — where its wash lies.
+const HOVER_R: f64 = 12.0;
+const EDGE: f64 = 4.0;
+const PITCH: f64 = 28.0;
 
 /// The shell's glass under the capsule (toolkit/PHASE1.md D7: the window controls use the
-/// shell's glass) — the glass of the bar's capsules, the same in every respect: a `control`
-/// pane of the token export, its tone, its ink tone and its shadow, and the ink the shell's rule decides
-/// from what Hyalo measures under it (dark glyphs and the ink tone over a light header, white
-/// over a dark one), blurring only `window` (its box, output px). Empty without the export:
-/// the capsule paints its own fill then, and the app's `set_ink` says its ink. With it, the ink
-/// returned is the glass's.
+/// shell's glass) — the glass of a `control` pane of the token export, the same in every respect
+/// as the toolkit's controls (toolkit/CONTRACT.md, "Floating control capsule"): its tone mixed
+/// towards its ink tone by its answer to the backdrop, its shadow growing with that answer, the
+/// hovered or pressed button a wash in the glass, and the glyphs' ink mixed by the same answer.
+/// It blurs only `window` (its box, output px). Empty without an export that has the control's
+/// answer, states and inks: the capsule paints its own fill then, and the app's `set_ink` says
+/// its ink. With it, the glyphs' ink is returned.
+#[allow(clippy::too_many_arguments)]
 pub fn glass(
     surface: &WlSurface,
     rect: Rectangle<f64, Physical>,
@@ -245,22 +263,33 @@ pub fn glass(
     scale: Scale<f64>,
     output_size: smithay::utils::Size<i32, Physical>,
     reduce_transparency: bool,
-    moving: bool,
-) -> (Vec<super::GlassElement>, bool, Option<super::ScrimElement>) {
-    use crate::protocols::material::{Current, InkBox, MaterialState, Shape};
+    controls: &Controls,
+    when: std::time::Instant,
+) -> (Vec<super::GlassElement>, Option<[f32; 4]>, Option<super::ScrimElement>) {
+    use crate::protocols::material::{Current, MaterialState, Shape, StateRegion};
     let (x, y, w, h) = (rect.loc.x / scale.x, rect.loc.y / scale.y, rect.size.w / scale.x, rect.size.h / scale.y);
-    // The bar's face: the shell's skin is dark whatever the mode, its ink measured.
-    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), false, None) };
-    let dark = with_states(surface, |states| {
-        let memo = states.data_map.get_or_insert(InkMemo::default);
-        let mut memo = memo.0.borrow_mut();
-        memo.1 = pane.ink;
-        if pane.ink.is_none() {
-            memo.0 = false;
-        }
-        memo.0
-    });
-    let state = MaterialState {
+    // The bar's face: the shell's skin is dark whatever the mode.
+    let Some(pane) = super::glass_tokens::pane("control", w.min(h), true, reduce_transparency) else { return (Vec::new(), None, None) };
+    let Some(look) = pane.control else { return (Vec::new(), None, None) };
+    let (glyphs, count) = controls.buttons.glyphs();
+    let fade_ms = if controls.reduce_motion { 0 } else { look.fade_ms };
+    // A wash per button, where its circle is: the hovered one's state, the others' none — at
+    // their own colour, so one fading out keeps its hue.
+    let state_regions: Vec<StateRegion> = (0..count as usize)
+        .map(|i| {
+            let close = glyphs[i] > 1.5;
+            let (hover, press) = if close { (look.destructive_hover, look.destructive_press) } else { (look.hover, look.press) };
+            let on = controls.hover == Some(i);
+            let mut wash = if on && controls.pressed { press.wash } else { hover.wash };
+            if !on {
+                wash[3] = 0.0;
+            }
+            let cx = x + EDGE + HOVER_R + i as f64 * PITCH;
+            let cy = y + h / 2.0;
+            StateRegion { id: i as u32, x: cx - HOVER_R, y: cy - HOVER_R, w: 2.0 * HOVER_R, h: 2.0 * HOVER_R, radius: HOVER_R, wash, fade_ms }
+        })
+        .collect();
+    let mut state = MaterialState {
         shapes: vec![Shape {
             x,
             y,
@@ -277,14 +306,35 @@ pub fn glass(
             blur: None,
             shadow: pane.shadow,
             grade: None,
+            response: look.response,
+            answer: None,
         }],
         glass: Some(pane.glass),
         lensing: pane.lensing,
-        ink: pane.ink,
-        ink_boxes: vec![InkBox { id: INK_GROUP, x, y, w, h }],
+        state_regions,
+        ink_colors: Some(look.ink),
         ..Default::default()
     };
-    let key = format!("{state:?} {dark}");
+    let (easing, _) = with_states(surface, |states| {
+        let memo = states.data_map.get_or_insert(PresentMemo::default);
+        let mut memo = memo.0.borrow_mut();
+        memo.1 = look.response;
+        memo.0.committed(&state, when);
+        memo.0.present(&mut state, when)
+    });
+    if easing {
+        crate::protocols::material::mark_easing();
+    }
+    // The glyphs' ink: the hovered destructive button's own, else the mix by the answer.
+    let hovered_close = controls.hover.is_some_and(|i| glyphs.get(i).is_some_and(|g| *g > 1.5));
+    let destructive_ink = if controls.pressed { look.destructive_press.ink } else { look.destructive_hover.ink };
+    let r = state.shapes[SHAPE].answer.map_or(0.0, |a| a[0]);
+    let ink = match destructive_ink.filter(|_| hovered_close) {
+        Some(i) => i,
+        None => std::array::from_fn(|k| look.ink[0][k] + (look.ink[1][k] - look.ink[0][k]) * r),
+    };
+    // Its commit moves when what it shows does: the answers and washes are in the state.
+    let key = format!("{state:?}");
     let commit = with_states(surface, |states| {
         let memo = states.data_map.get_or_insert(GlassMemo::default);
         let mut memo = memo.0.borrow_mut();
@@ -295,15 +345,16 @@ pub fn glass(
         }
         entry.0
     });
-    let dark_ink = if dark { [INK_GROUP].into() } else { Default::default() };
-    let current = Current { state, commit, dark_ink, ..Default::default() };
+    let current = Current { state, commit, ..Default::default() };
     // It reads its window only: past the window's edge the desktop would darken the header it
-    // measures its ink on (a capsule 12 px from the top, under a blur that reaches 64).
+    // answers to (a capsule 12 px from the top, under a blur that reaches 64).
     let bounds = window.to_i32_round();
     let elements = super::GlassElement::for_material(surface, super::glass::Whose::Hyalo, &current, (0, 0).into(), scale, output_size)
         .into_iter()
         .filter_map(|g| g.within(bounds))
-        .map(|g| if moving { g.measuring_nothing() } else { g })
+        // In flight (into the dock, to another workspace) it keeps the answer it had: what passes
+        // under a capsule on the way is not its header.
+        .map(|g| if controls.moving { g.measuring_nothing() } else { g })
         .collect();
     // Its shadow, as the bar capsule's: drawn apart from the glass, under it (render/scrim.rs),
     // remembered apart from the window's own material's.
@@ -312,29 +363,22 @@ pub fn glass(
         let memo = states.data_map.get_or_insert(ShadowMemo::default);
         super::ScrimElement::new(&memo.0, scrims, output_size)
     });
-    (elements, dark, shadow)
+    (elements, Some(ink.map(|v| v as f32)), shadow)
 }
 
 /// The controls' shadow element's id and what it last drew, apart from the surface's own.
 #[derive(Default)]
 struct ShadowMemo(UserDataMap);
 
-/// A measurement of the glass under a window's controls came back (render/glass_gl.rs): the
-/// shell's rule, with its hysteresis, on the darkest point under the capsule. Whether the ink
-/// changed (the frame is redrawn).
-pub fn ink_measured(surface: &WlSurface, darkest: &[(u32, f32)]) -> bool {
-    let Some(&(_, l)) = darkest.iter().find(|(id, _)| *id == INK_GROUP) else { return false };
+/// A measurement of the glass under a window's controls came back (render/glass_gl.rs): their
+/// answer to the backdrop moves on. Whether it changed (the frame is redrawn).
+pub fn response_measured(surface: &WlSurface, answers: &[(usize, f32, f32)]) -> bool {
+    let Some(&(_, mean, sigma)) = answers.iter().find(|(i, _, _)| *i == SHAPE) else { return false };
     with_states(surface, |states| {
-        let Some(memo) = states.data_map.get::<InkMemo>() else { return false };
+        let Some(memo) = states.data_map.get::<PresentMemo>() else { return false };
         let mut memo = memo.0.borrow_mut();
-        let Some(ink) = memo.1 else { return false };
-        match crate::protocols::material::next_ink(memo.0, l as f64, &ink) {
-            Some(dark) => {
-                memo.0 = dark;
-                true
-            }
-            None => false,
-        }
+        let Some(response) = memo.1 else { return false };
+        memo.0.measured(SHAPE, &response, mean as f64, sigma as f64, std::time::Instant::now())
     })
 }
 

@@ -481,14 +481,23 @@ fn place_shown(parent: Place, states: &SurfaceData, offset: Point<i32, Logical>,
 pub struct LayeredTree<R: Renderer> {
     pub surfaces: Vec<AtScale<WaylandSurfaceRenderElement<R>>>,
     /// Each layer's own glass (`nidara-material-v1` on the layer's surface, toolkit/PHASE1.md
-    /// D7), with the index of the surface it lies right below: everything behind that layer —
-    /// the window's own content included — is its backdrop, at the transform it is shown at.
-    pub glass: Vec<(usize, GlassElement)>,
+    /// D7) and the shadow its panes cast, with the index of the surface they lie right below:
+    /// everything behind that layer — the window's own content included — is its backdrop, at
+    /// the transform it is shown at.
+    pub glass: Vec<(usize, LayerPaint)>,
+}
+
+/// What Hyalo paints under a layer: its glass, and below that its panes' shadow (`set_shadow`).
+#[derive(Debug)]
+pub enum LayerPaint {
+    Glass(Box<GlassElement>),
+    Shadow(crate::render::ScrimElement),
 }
 
 impl<R: Renderer> LayeredTree<R> {
-    /// Surfaces and glass interleaved, front to back: each glass right after (below) its layer.
-    pub fn interleave<T>(self, mut surface: impl FnMut(AtScale<WaylandSurfaceRenderElement<R>>) -> T, mut glass: impl FnMut(GlassElement) -> T) -> Vec<T> {
+    /// Surfaces and what lies under each layer interleaved, front to back: each layer's glass
+    /// right after (below) it, its shadow after that.
+    pub fn interleave<T>(self, mut surface: impl FnMut(AtScale<WaylandSurfaceRenderElement<R>>) -> T, mut glass: impl FnMut(LayerPaint) -> T) -> Vec<T> {
         let mut out = Vec::with_capacity(self.surfaces.len() + self.glass.len());
         let mut pending = self.glass.into_iter().peekable();
         for (i, s) in self.surfaces.into_iter().enumerate() {
@@ -575,7 +584,7 @@ where
     let glass = glassy
         .into_iter()
         .flat_map(|Glassy { index, layer, at, scale, alpha }| {
-            let elements = GlassElement::for_surface(&layer, at, scale, output_size);
+            let elements = GlassElement::for_surface(&layer, at, scale, output_size, when);
             let elements: Vec<GlassElement> = match bounds {
                 Some(b) => elements.into_iter().filter_map(|g| g.within(b)).collect(),
                 None => elements,
@@ -586,7 +595,18 @@ where
             } else {
                 elements
             };
-            elements.into_iter().map(move |g| (index, g))
+            // Its panes' shadow, under its glass and inside the same box: a control on a layer
+            // casts it as a capsule in the bar does (it was not drawn at all before #889).
+            let scrims = crate::render::scrim::scrims_for(&layer, at, scale, when);
+            let shadow = with_states(&layer, |states| {
+                crate::render::ScrimElement::new(&states.data_map, scrims, output_size)
+                    .and_then(|e| match bounds {
+                        Some(b) => e.within(b),
+                        None => Some(e),
+                    })
+                    .map(|e| if alpha < 1.0 { e.forming(alpha, &states.data_map) } else { e })
+            });
+            elements.into_iter().map(|g| LayerPaint::Glass(Box::new(g))).chain(shadow.map(LayerPaint::Shadow)).map(move |g| (index, g)).collect::<Vec<_>>()
         })
         .collect();
     Some(LayeredTree { surfaces: out, glass })

@@ -13,7 +13,8 @@
 #   of what RUNS them (owner, 2026-10-19; it was a list of what skipped them until then, and
 #   nearly every Hyalo PR ran the 35 minutes).
 # full: the matrices' controls (each assertion re-run with a fault) and their second scale
-#   (1.25), and the AT-SPI check's controls (nk-a11y-check.py, ~2 of its ~3 min): true only
+#   (1.25), the AT-SPI check's controls (nk-a11y-check.py, ~2 of its ~3 min) and the control
+#   material check's (hyalo-control-material-check.py, seven of its ten runs): true only
 #   when the checks or the test window's faults change (`needs_full`).
 # What a skip lets through — and two queued changes that only break together — the nightly
 # full run on main finds (`schedule` in ci.yml: no base, so everything runs) and reports.
@@ -63,6 +64,7 @@ needs_full() {
     case "$1" in
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py) return 0 ;;
         scripts/ci/nk-a11y-check.py) return 0 ;;
+        scripts/ci/hyalo-control-material-check.py|scripts/ci/hyalo-control-material-probe.c) return 0 ;;
         toolkit/phase0/*) return 0 ;;
     esac
     return 1
@@ -151,6 +153,7 @@ if [ "${1:-}" = --self-test ]; then
     check_full false ui/shell/app.ts
     check_full true scripts/ci/nk-fcitx5-check.py
     check_full true scripts/ci/nk-a11y-check.py
+    check_full true scripts/ci/hyalo-control-material-check.py
     check_full false toolkit/crates/nk-a11y/src/lib.rs
     check_full true toolkit/phase0/src/main.rs
     check_full true ''

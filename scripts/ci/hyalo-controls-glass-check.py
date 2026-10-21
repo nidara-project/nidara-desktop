@@ -15,10 +15,14 @@ contrast along a row: the luminance's standard deviation, ≈ 127 sharp, near 0 
      the app having said nothing about its header (no set_ink);
   3. in Hyalo's own title bar (an app that leaves its decorations to it) the same: over a light
      bar, the glass's light face and dark glyphs;
-  4. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
+  4. the hovered close button is a red WASH in the glass (toolkit/CONTRACT.md, "Floating control
+     capsule": the same state regions as the toolkit's controls), not a disc over it: red, and
+     the header shows through it — it differs over the light and the dark header;
+  5. the controls: `[windows.controls] glass = false` in the settings layer — the columns show
      through the plain capsule (claim 1 must fail), over the light header the glyphs stay
-     white, nothing measuring it (claim 2 must fail), and the bar's own capsule is darker than
-     the bar (claim 3 must fail).
+     white, nothing measuring it (claim 2 must fail), the bar's own capsule is darker than
+     the bar (claim 3 must fail), and the plain capsule's hover is its opaque disc, the same
+     over both headers (claim 4 must fail).
 Exits 1 on failure."""
 import json
 import os
@@ -62,14 +66,20 @@ def shot(name):
     return w, h, pixels
 
 
+def pixel(image, x, y):
+    w, _, px = image
+    return tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3])
+
+
 def lum(image, x, y):
     w, _, px = image
     i = (y * w + x) * 3
     return 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]
 
 
-def measure(name, env, app=APP, ready='PLACED'):
-    """Run `app` with `env` and measure its capsule and the header beside it."""
+def measure(name, env, app=APP, ready='PLACED', hover=False):
+    """Run `app` with `env` and measure its capsule and the header beside it; with `hover`, the
+    pointer over its close button."""
     out = LOG / f'{name}.log'
     with out.open('w') as stream:
         probe = subprocess.Popen([app], stdout=stream, stderr=stream, env={**os.environ, **env})
@@ -87,6 +97,14 @@ def measure(name, env, app=APP, ready='PLACED'):
         win = next(w for w in msg('windows')['windows'] if w['app_id'] == app)
         x, y, w, h = win['controls']
         scale = msg('outputs')['outputs'][0]['scale']
+        # The close button: the rightmost of the capsule's circles, 24 across, 4 from its end
+        # (render/controls.rs HOVER_R, EDGE).
+        close = (x + w - 4 - 12, y + h / 2)
+        if hover:
+            Path(os.environ['HYALO_CONTROL']).write_text(f'move {close[0]} {close[1]}\n')
+            time.sleep(.8)
+            shot(f'{name}-hover-warm')
+            time.sleep(.3)
         image = shot(name)
         p = lambda v: int(v * scale)
         # 5 px under the capsule's top: above the glyphs (14 px, centred), clear of its round ends.
@@ -105,6 +123,8 @@ def measure(name, env, app=APP, ready='PLACED'):
             'darkest': min(mid),
             'brightest': max(mid),
             'asked_ink': 'ASKED' in out.read_text(),
+            # Inside the close button's circle, clear of its glyph (a 6 px cross).
+            'close_wash': pixel(image, p(close[0] + 7), p(close[1] - 6)),
         }
     finally:
         probe.terminate()
@@ -123,6 +143,16 @@ def inked(light, dark):
         f'over a light header the glyphs are not dark (darkest {light["darkest"]:.0f}, glass {light["glass"]:.0f}): the glass did not take the ink'
     assert dark['brightest'] > 170, \
         f'over a dark header the glyphs are not white (brightest {dark["brightest"]:.0f}, glass {dark["glass"]:.0f})'
+
+
+def hover_washed(light, dark):
+    """The hovered close button over a light and a dark header: red, and not the same."""
+    for m in (light, dark):
+        r, g, b = m['close_wash']
+        assert r > 120 and r - g > 60, f'the hovered close button is {m["close_wash"]}: not red'
+    l = lambda c: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    assert abs(l(light['close_wash']) - l(dark['close_wash'])) > 6, \
+        f'the hovered close button is {light["close_wash"]} over a light header and {dark["close_wash"]} over a dark one: opaque, not a wash in the glass'
 
 
 def bar_glass(m):
@@ -148,6 +178,12 @@ def check():
         inked(light, dark)
         print(f'ok    the ink is the glass\'s: dark glyphs over a light header ({light["darkest"]:.0f}), '
               f'white over a dark one ({dark["brightest"]:.0f}), the app saying nothing', flush=True)
+
+        results['hover_light'] = hl = measure('hover-light', {'HYALO_PROBE_HEADER': LIGHT_HEADER}, hover=True)
+        results['hover_dark'] = hd = measure('hover-dark', {'HYALO_PROBE_HEADER': DARK_HEADER}, hover=True)
+        hover_washed(hl, hd)
+        print(f'ok    the hovered close button is a wash in the glass: {hl["close_wash"]} over a light header, '
+              f'{hd["close_wash"]} over a dark one', flush=True)
 
         # Hyalo's own title bar (an app that left its decorations to it, light at its top): the
         # same controls as over our apps' headers.
@@ -179,6 +215,14 @@ def check():
             print(f'CAUGHT glass = false (title bar): {e}', flush=True)
         else:
             raise AssertionError(f'the control glass = false (title bar) was not caught: {plain_tb}')
+        results['plain_hover_light'] = phl = measure('plain-hover-light', {'HYALO_PROBE_HEADER': LIGHT_HEADER}, hover=True)
+        results['plain_hover_dark'] = phd = measure('plain-hover-dark', {'HYALO_PROBE_HEADER': DARK_HEADER}, hover=True)
+        try:
+            hover_washed(phl, phd)
+        except AssertionError as e:
+            print(f'CAUGHT glass = false (hover): {e}', flush=True)
+        else:
+            raise AssertionError(f'the control glass = false (hover) was not caught: {phl} {phd}')
         print('CONTROLS GLASS CHECK PASSED', flush=True)
     finally:
         (LOG / 'measured.json').write_text(json.dumps(results, indent=2))

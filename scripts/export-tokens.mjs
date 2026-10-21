@@ -16,7 +16,10 @@
 //                              blur. Asked of `registerGlassMaterial`'s own source with a host
 //                              that says the mode and the switch — the sizing, the solid face of
 //                              reduce transparency and the popover's extra pass are the kit's
-//                              code running, not numbers read off its tables.
+//                              code running, not numbers read off its tables. Each step of the
+//                              control piece also carries `toolkit/tokens/control.json` — how a
+//                              control answers its backdrop, its states' washes, its inks — for
+//                              the variant it is in: the native kit's own source, not the kit's.
 //
 // The engine (`platform/theme-tokens.ts`) imports Gio/GLib for its file helpers only; a loader
 // stubs `gi://` and resolves the kit's extension-less imports, so the kit (frozen, #818) is
@@ -24,7 +27,7 @@
 // usage: node --experimental-strip-types scripts/export-tokens.mjs [OUT]   (default build/settings-data)
 //        SASS="…" overrides the compiler (default: npx --yes sass@1.97.3, as the styles job)
 import { execSync } from "node:child_process"
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { register } from "node:module"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -124,6 +127,16 @@ const Gtk = (await import("gi://Gtk?version=4.0")).default
 // answer changes, so a reader takes the last step at or under its pane's side (rounded, as the
 // material rounds it).
 const SIDES = 400
+// A control on glass (toolkit/CONTRACT.md, "Floating control capsule"): `default`, then every
+// entry of `variants` whose dark/reduceTransparency match, field by field.
+const control = JSON.parse(readFileSync(join(repo, "toolkit/tokens/control.json"), "utf8"))
+const controlFor = (dark, reduceTransparency) => {
+    const { response, states, ink } = control.variants
+        .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
+        .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
+            control.default)
+    return { response, states, ink }
+}
 const variants = []
 for (const dark of [true, false])
     for (const reduceTransparency of [false, true]) {
@@ -137,7 +150,8 @@ for (const dark of [true, false])
                 if (steps.at(-1)?.answer !== answer) steps.push({ side, answer })
             }
             if (steps.at(-1).side === SIDES) throw new Error(`glass: ${piece} still changes at ${SIDES} px`)
-            pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer) }))
+            const extra = piece === "control" ? controlFor(dark, reduceTransparency) : {}
+            pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer), ...extra }))
         }
         // The ink: when a pane's text turns dark (Hyalo measures the darkest point under it, WCAG
         // luminance), as the shell asks it — null with reduce transparency (no ink).

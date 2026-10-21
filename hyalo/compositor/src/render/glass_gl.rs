@@ -225,38 +225,58 @@ float lab(int i) {
 #define LAB_MUL(i, x) ((x) * (1.0 + lab(i)))
 "#;
 
-/// The darkest and brightest WCAG luminance under one box (`nidara-material-v1`), from
-/// the blurred backdrop as the glass treats it before its tone: blurred and saturated. A grid
-/// of samples is enough because the backdrop is blurred: nothing narrower than the blur
-/// survives it. Each is written as two bytes (high, low) so 8-bit readback keeps ~16 bits of
-/// it: the darkest in red and green, the brightest in blue and alpha.
+/// What the glass reads of its backdrop under one box (`nidara-material-v1`), WCAG luminance on a
+/// 12×12 grid of samples — enough because the backdrop is blurred: nothing narrower than the blur
+/// survives it. Each value is written as two bytes (high, low) so 8-bit readback keeps ~16 bits:
+/// - `mode` 0, an ink box: the darkest and the brightest point of the blurred backdrop as the glass
+///   treats it before its tone (blurred and saturated), in red-green and blue-alpha;
+/// - `mode` 1, an answering shape (`set_response`): the mean luminance of that blur, and the
+///   deviation of the luminance on the SOFT blur (doubled: it is at most a half) — the full one
+///   would erase the difference between a white page and text on white.
 const FS_INK: &str = r#"#version 100
 precision highp float;
 uniform sampler2D tex;
+uniform sampler2D soft_tex;
 uniform vec2 src_size;
 uniform vec2 src_used;
 uniform vec4 box_src;       // the box in the blurred texture's pixels: x0, y0, x1, y1
 uniform float saturation;
+uniform float mode;
 varying vec2 v_px;
 float to_linear(float v) { return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4); }
 float luminance(vec3 c) {
     return 0.2126 * to_linear(c.r) + 0.7152 * to_linear(c.g) + 0.0722 * to_linear(c.b);
 }
+vec2 two(float v) { return vec2(floor(v * 255.0) / 255.0, fract(v * 255.0)); }
 void main() {
     float m = 1.0;
     float n = 0.0;
+    float sum = 0.0;
+    float soft_sum = 0.0;
+    float soft_sq = 0.0;
     for (int j = 0; j < 12; j++) {
         for (int i = 0; i < 12; i++) {
             vec2 p = mix(box_src.xy, box_src.zw, (vec2(float(i), float(j)) + 0.5) / 12.0);
-            vec3 c = texture2D(tex, clamp(p / src_size, 0.5 / src_size, (src_used - 0.5) / src_size)).rgb;
+            vec2 uv = clamp(p / src_size, 0.5 / src_size, (src_used - 0.5) / src_size);
+            vec3 c = texture2D(tex, uv).rgb;
             float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
             c = clamp(mix(vec3(l), c, saturation), 0.0, 1.0);
             float y = luminance(c);
             m = min(m, y);
             n = max(n, y);
+            sum += y;
+            float ys = luminance(texture2D(soft_tex, uv).rgb);
+            soft_sum += ys;
+            soft_sq += ys * ys;
         }
     }
-    gl_FragColor = vec4(floor(m * 255.0) / 255.0, fract(m * 255.0), floor(n * 255.0) / 255.0, fract(n * 255.0));
+    if (mode < 0.5) {
+        gl_FragColor = vec4(two(m), two(n));
+    } else {
+        float mean = soft_sum / 144.0;
+        float sigma = sqrt(max(soft_sq / 144.0 - mean * mean, 0.0));
+        gl_FragColor = vec4(two(clamp(sum / 144.0, 0.0, 1.0)), two(clamp(sigma * 2.0, 0.0, 1.0)));
+    }
 }
 "#;
 
@@ -267,9 +287,32 @@ pub struct InkBox {
     pub rect: Rectangle<f64, Physical>,
 }
 
-/// The most ink boxes measured in one glass at once: the width of the measurement's target.
+/// An answering shape (`set_response`) to measure, output pixels: its bounds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AnswerBox {
+    /// The shape's index in its material.
+    pub index: usize,
+    pub rect: Rectangle<f64, Physical>,
+}
+
+/// The most ink boxes measured in one glass at once, and answering shapes after them: the width
+/// of the measurement's target.
 pub const MAX_INK_BOXES: usize = 64;
-const MEASURE_WIDTH: usize = MAX_INK_BOXES;
+pub const MAX_ANSWER_BOXES: usize = 16;
+const MEASURE_WIDTH: usize = MAX_INK_BOXES + MAX_ANSWER_BOXES;
+
+/// A wash over the toned glass (`add_state_region`), output pixels, as it shows now.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StatePx {
+    pub rect: Rectangle<f64, Physical>,
+    pub radius: f64,
+    /// Straight sRGB and its opacity.
+    pub wash: [f32; 4],
+}
+
+/// The most washes one draw lays over its glass (the shader's arrays); past it the rest are not
+/// drawn.
+pub const STATE_MAX: usize = 8;
 
 /// A shape's tone (`set_tone`) as the shader takes it, its ambient already sized for the shape.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -773,8 +816,9 @@ pub struct Cache {
     trash: Option<Trash>,
     /// Moves at every capture: a measurement is of one capture.
     generation: u64,
-    /// What the last measurement was of: the capture, the boxes, the saturation.
-    measured: Option<(u64, Vec<InkBox>, f32)>,
+    /// What the last measurement was of: the capture, the boxes, the answering shapes, the
+    /// saturation.
+    measured: Option<(u64, Vec<InkBox>, Vec<AnswerBox>, f32)>,
     /// How formed the glass this capture is for, 0..1 (`formed_blur`): what `draw` blends by.
     formed: f32,
     /// Under one pass of blur, how much of the sharp copy (level 0) `draw` mixes in.
@@ -1137,6 +1181,7 @@ pub unsafe fn draw(
     glass: Option<&Glass>,
     finish: &Finish,
     outer: Option<Outer>,
+    states: &[StatePx],
 ) {
     if !cache.valid || cache.passes == 0 {
         return;
@@ -1308,6 +1353,23 @@ pub unsafe fn draw(
             // without them (a window's backdrop) it is not graded.
             let grade = if cache.mixed { s.grade } else { [1.0, 1.0] };
             gl.Uniform2f(p.loc(gl, c"grade"), grade[0], grade[1]);
+            // The washes over this draw's glass: those that reach its bounds.
+            let mut rects = [0f32; 4 * STATE_MAX];
+            let mut washes = [0f32; 4 * STATE_MAX];
+            let mut radii = [0f32; STATE_MAX];
+            let mut n = 0;
+            for w in states.iter().filter(|w| w.wash[3] > 0.0 && w.rect.overlaps(sr)).take(STATE_MAX) {
+                rects[4 * n..4 * n + 4].copy_from_slice(&[w.rect.loc.x as f32, w.rect.loc.y as f32, w.rect.size.w as f32, w.rect.size.h as f32]);
+                washes[4 * n..4 * n + 4].copy_from_slice(&w.wash);
+                radii[n] = w.radius as f32;
+                n += 1;
+            }
+            gl.Uniform1f(p.loc(gl, c"s_count"), n as f32);
+            if n > 0 {
+                gl.Uniform4fv(p.loc(gl, c"s_rect"), STATE_MAX as i32, rects.as_ptr());
+                gl.Uniform4fv(p.loc(gl, c"s_wash"), STATE_MAX as i32, washes.as_ptr());
+                gl.Uniform1fv(p.loc(gl, c"s_radius"), STATE_MAX as i32, radii.as_ptr());
+            }
             for c in clip {
                 let Some(q) = bounds.intersection(*c) else { continue };
                 gl.Uniform4f(p.loc(gl, c"dst_rect"), q.loc.x as f32, q.loc.y as f32, q.size.w as f32, q.size.h as f32);
@@ -1333,8 +1395,9 @@ pub unsafe fn draw(
 struct Readback {
     fence: ffi::types::GLsync,
     pbo: u32,
-    /// The ink group of each box, in texel order.
+    /// The ink group of each box, in texel order; the answering shapes' indices after them.
     ids: Vec<u32>,
+    answers: Vec<usize>,
     surface: Weak<WlSurface>,
     whose: super::glass::Whose,
 }
@@ -1361,9 +1424,9 @@ fn can_measure(gl: &Gles2) -> bool {
     gl.FenceSync.is_loaded() && gl.MapBufferRange.is_loaded() && gl.ClientWaitSync.is_loaded()
 }
 
-/// Measure the darkest point under each ink box, if the capture or the boxes changed since
-/// the last measurement. Called from `draw`'s context, inside the frame; leaves the GL state as
-/// it found it.
+/// Measure the darkest point under each ink box, and the backdrop under each answering shape
+/// (`set_response`), if the capture or the boxes changed since the last measurement. Called from
+/// `draw`'s context, inside the frame; leaves the GL state as it found it.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn measure_ink(
     gl: &Gles2,
@@ -1371,18 +1434,20 @@ pub unsafe fn measure_ink(
     map: FrameMap,
     cache: &mut Cache,
     boxes: &[InkBox],
+    answers: &[AnswerBox],
     saturation: f32,
     surface: &Weak<WlSurface>,
     whose: super::glass::Whose,
 ) {
-    if !cache.valid || cache.passes == 0 || boxes.is_empty() || !can_measure(gl) {
+    if !cache.valid || cache.passes == 0 || (boxes.is_empty() && answers.is_empty()) || !can_measure(gl) {
         return;
     }
     let boxes = &boxes[..boxes.len().min(MAX_INK_BOXES)];
-    if cache.measured.as_ref().is_some_and(|(g, b, s)| *g == cache.generation && b == boxes && *s == saturation) {
+    let answers = &answers[..answers.len().min(MAX_ANSWER_BOXES)];
+    if cache.measured.as_ref().is_some_and(|(g, b, a, s)| *g == cache.generation && b == boxes && a == answers && *s == saturation) {
         return;
     }
-    cache.measured = Some((cache.generation, boxes.to_vec(), saturation));
+    cache.measured = Some((cache.generation, boxes.to_vec(), answers.to_vec(), saturation));
     unsafe {
         // The frame's framebuffer, read before the target below is made: making it binds it,
         // and restoring that at the end would leave the rest of the frame drawing into it.
@@ -1434,12 +1499,27 @@ pub unsafe fn measure_ink(
         gl.ActiveTexture(ffi::TEXTURE0);
         gl.BindTexture(ffi::TEXTURE_2D, l1.tex);
         gl.Uniform1i(p.loc(gl, c"tex"), 0);
+        // The soft blur, for the answers' deviation (level-1 sized like the chain's); without it
+        // (a capture that does not mix) the chain's own.
+        let soft = cache.soft.as_ref().filter(|_| cache.mixed).unwrap_or(&cache.levels[1]);
+        gl.ActiveTexture(ffi::TEXTURE1);
+        gl.BindTexture(ffi::TEXTURE_2D, soft.tex);
+        gl.Uniform1i(p.loc(gl, c"soft_tex"), 1);
+        gl.ActiveTexture(ffi::TEXTURE0);
         gl.Uniform2f(p.loc(gl, c"src_size"), l1.w as f32, l1.h as f32);
         gl.Uniform2f(p.loc(gl, c"src_used"), used1.0 as f32, used1.1 as f32);
-        gl.Uniform1f(p.loc(gl, c"saturation"), saturation);
         gl.Uniform2f(p.loc(gl, c"target_size"), MEASURE_WIDTH as f32, 1.0);
         let r = cache.region_fb;
-        for (i, q) in boxes.iter().map(|b| b.rect).enumerate() {
+        // The ink boxes, then the answering shapes: those measured on the backdrop as it is,
+        // before the glass's tone (its saturation is part of it).
+        let rects: Vec<(Rectangle<f64, Physical>, f32, f32)> = boxes
+            .iter()
+            .map(|b| (b.rect, 0.0, saturation))
+            .chain(answers.iter().map(|a| (a.rect, 1.0, 1.0)))
+            .collect();
+        for (i, (q, mode, sat)) in rects.into_iter().enumerate() {
+            gl.Uniform1f(p.loc(gl, c"mode"), mode);
+            gl.Uniform1f(p.loc(gl, c"saturation"), sat);
             // The box in framebuffer pixels (follows the output's transform), then in the
             // blurred copy's: relative to the captured region, at half size.
             let (ax, ay) = map.map_point(q.loc.x, q.loc.y);
@@ -1457,7 +1537,7 @@ pub unsafe fn measure_ink(
         let mut pbo = 0;
         gl.GenBuffers(1, &mut pbo);
         gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, pbo);
-        let texels = boxes.len();
+        let texels = boxes.len() + answers.len();
         gl.BufferData(ffi::PIXEL_PACK_BUFFER, (texels * 4) as isize, std::ptr::null(), ffi::STREAM_READ);
         gl.ReadPixels(0, 0, texels as i32, 1, ffi::RGBA, ffi::UNSIGNED_BYTE, std::ptr::null_mut());
         gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, 0);
@@ -1473,6 +1553,7 @@ pub unsafe fn measure_ink(
             fence,
             pbo,
             ids: boxes.iter().map(|b| b.id).collect(),
+            answers: answers.iter().map(|a| a.index).collect(),
             surface: surface.clone(),
             whose,
         });
@@ -1488,6 +1569,9 @@ pub unsafe fn measure_ink(
             gl.Enable(ffi::BLEND);
         }
         gl.BindBuffer(ffi::ARRAY_BUFFER, 0);
+        gl.ActiveTexture(ffi::TEXTURE1);
+        gl.BindTexture(ffi::TEXTURE_2D, 0);
+        gl.ActiveTexture(ffi::TEXTURE0);
         gl.BindTexture(ffi::TEXTURE_2D, 0);
         gl.UseProgram(0);
     }
@@ -1500,6 +1584,8 @@ pub struct Measured {
     /// Whose glass was measured: the client's material, or Hyalo's own (the window controls').
     pub whose: super::glass::Whose,
     pub ink: Vec<(u32, f32)>,
+    /// Per answering shape (its index): the mean luminance under it, and its deviation.
+    pub answers: Vec<(usize, f32, f32)>,
 }
 
 /// The measurements the GPU has finished, without waiting for any, and whether any is still
@@ -1516,10 +1602,11 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
             continue;
         }
         let mut darkest: Vec<(u32, f32)> = Vec::new();
+        let mut answers: Vec<(usize, f32, f32)> = Vec::new();
         unsafe {
             if status != ffi::WAIT_FAILED {
                 gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, rb.pbo);
-                let len = rb.ids.len() * 4;
+                let len = (rb.ids.len() + rb.answers.len()) * 4;
                 let ptr = gl.MapBufferRange(ffi::PIXEL_PACK_BUFFER, 0, len as isize, ffi::MAP_READ_BIT) as *const u8;
                 if !ptr.is_null() {
                     let bytes = std::slice::from_raw_parts(ptr, len);
@@ -1531,6 +1618,10 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
                             None => darkest.push((id, l)),
                         }
                     }
+                    for (k, &index) in rb.answers.iter().enumerate() {
+                        let at = (rb.ids.len() + k) * 4;
+                        answers.push((index, two(at), two(at + 2) / 2.0));
+                    }
                     gl.UnmapBuffer(ffi::PIXEL_PACK_BUFFER);
                 }
                 gl.BindBuffer(ffi::PIXEL_PACK_BUFFER, 0);
@@ -1538,8 +1629,8 @@ pub unsafe fn poll_ink(gl: &Gles2, user_data: &smithay::utils::user_data::UserDa
             gl.DeleteSync(rb.fence);
             gl.DeleteBuffers(1, &rb.pbo);
         }
-        if !darkest.is_empty() {
-            out.push(Measured { surface: rb.surface, whose: rb.whose, ink: darkest });
+        if !darkest.is_empty() || !answers.is_empty() {
+            out.push(Measured { surface: rb.surface, whose: rb.whose, ink: darkest, answers });
         }
     }
     let pending = !keep.is_empty();

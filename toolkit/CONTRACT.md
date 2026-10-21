@@ -209,9 +209,11 @@ Phase 0 remains an independent client of those four crates.
 
 ## Floating control capsule — proposal for #889
 
-**Draft, not an implemented API or a closed contract.** This section closes the
-kit/compositor boundary before implementation, following #818. The owner has
-chosen the behaviour in #889; numeric visual values remain for the native demo.
+**The compositor side is implemented; the kit's capsule is not yet.** This section
+closes the kit/compositor boundary, following #818. The owner has chosen the
+behaviour in #889; numeric visual values remain for the native demo. Hyalo's side —
+the four requests, the token export and Hyalo's own window controls on them, with
+their checks — is in place (the skill's hyalo.md, "A control answers its backdrop").
 
 - **One retained component in nk-widgets**, containing ordered existing button
   nodes: window controls, sidebar/navigation controls and arbitrary toolbar actions.
@@ -285,8 +287,8 @@ The synchronized capsule layer commits atomically with its parent.
   mix. **`add_ink_coverage(x, y, w, h, override_r, override_g, override_b,
   override_a)`** identifies non-overlapping rectangles in the capsule's one buffer.
   The client supplies premultiplied ARGB8888 coverage for glyphs/focus rings in any
-  opaque colour; Hyalo replaces colour with `ink.rgb * buffer.alpha`, preserving
-  the buffer alpha. Ink is light mixed towards dark by the response's `r`.
+  opaque colour; Hyalo draws each pixel as `ink.rgb · ink.a · buffer.alpha` at
+  alpha `ink.a · buffer.alpha` — an opaque ink preserves the buffer alpha. Ink is light mixed towards dark by the response's `r`.
   When override alpha is greater than 0, Hyalo uses the override colour instead
   of the mix; the kit passes the exported destructive ink there. Coverage has the
   same response/material sample;
@@ -348,8 +350,8 @@ in the native demo, with exact revisions and environment recorded.
 owns the Hyalo response/state/coverage implementation and token export, with its
 checks/controls. Sol builds the retained capsule and native demo on that transport.
 The wire and token schema above incorporate the Hyalo-side review; visual numbers
-remain the owner's live decision. This PR supplies no implementation or visual
-acceptance. Final review and merge still precede dependent code.
+remain the owner's live decision. Visual acceptance is still the owner's, in the
+native demo.
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
