@@ -27,6 +27,8 @@ uniform float radius;
 uniform float exponent;
 uniform float opacity;      // how FORMED the glass is in this shape, 0..1 (#764): not a coverage
 uniform vec4 clip;          // what of the shape may show, output px: x, y, w, h
+uniform vec4 outer;         // the window a layer's glass lies in, output px (w 0 = none)
+uniform vec2 outer_par;     // its corners: radius (output px), exponent
 uniform float glass;        // 1: refractive glass — the compositor paints the whole glass
 uniform float refraction;   // output px
 uniform float px_scale;     // output px per logical px: the widths below are logical
@@ -341,6 +343,11 @@ void main() {
     // Coverage is the silhouette and the clip only; how formed the glass is, is `formed`.
     float formed = fb.y;
     float cov = clamp(0.5 - d, 0.0, 1.0) * clipped;
+    // A layer's glass inside a rounded window: nothing past the window's own corners.
+    if (outer.z > 0.0) {
+        float od = box_sdf(v_out, outer.xy + outer.zw * 0.5, outer.zw * 0.5, outer_par.x, outer_par.y);
+        cov *= clamp(0.5 - od, 0.0, 1.0);
+    }
     if (cov <= 0.0 || formed <= 0.0) discard;
     if (glass < 0.5) {
         vec3 c = formed_backdrop(vec2(0.0), formed);
