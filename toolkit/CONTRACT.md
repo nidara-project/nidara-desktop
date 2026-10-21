@@ -286,9 +286,10 @@ The synchronized capsule layer commits atomically with its parent.
   override_a)`** identifies non-overlapping rectangles in the capsule's one buffer.
   The client supplies premultiplied ARGB8888 coverage for glyphs/focus rings in any
   opaque colour; Hyalo replaces colour with `ink.rgb * buffer.alpha`, preserving
-  the buffer alpha. Ink is light mixed towards dark by the response's `r`, except
-  when override alpha is greater than 0, selecting the exported contrasting ink
-  for destructive feedback. Coverage has the same response/material sample;
+  the buffer alpha. Ink is light mixed towards dark by the response's `r`.
+  When override alpha is greater than 0, Hyalo uses the override colour instead
+  of the mix; the kit passes the exported destructive ink there. Coverage has the
+  same response/material sample;
   coloured app content outside the rectangles is untouched. Non-finite values,
   width/height at most 0, or overlapping coverage rectangles produce protocol
   error `invalid_region`; rectangles are clipped to the surface. Coverage is
