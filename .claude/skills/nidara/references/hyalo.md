@@ -2024,6 +2024,18 @@ passed through and GTK closes the popover itself.
   right-click menu, and `hyalo-ime-probe --hold`, a stand-in input method that grabs the
   keyboard like fcitx5). Each step was seen to fail on its own: the keyboard's return against the
   Hyalo before, the click in another app against a build with only the return fixed.
+- **An application's menu, as the toolkit's dropdown opens it** (#882): an xdg_popup of a
+  toplevel, NOT a layer — a layer is cut at the window's box (#899) and exists only on Hyalo,
+  while a popup may leave the window and works on any compositor (D5). Hyalo already does all of
+  it: `unconstrain_popup` honours the positioner's flip/slide on the output, `grab` takes the
+  keyboard and dismisses on a click outside, and the popup's own material is drawn by the
+  window's `push` (its popups go through `push_tree` → `push_material`: glass, shadow, the #889
+  answer and ink coverage), not cut to the window. CI: `scripts/ci/hyalo-popup-glass-check.py` +
+  `hyalo-popup-glass-probe.c` — a popup with no room under its window flips above its anchor and
+  stays on the output, its white-washed glass shows past the window's edge and blurs the window
+  under it, the keyboard enters it and a click outside sends `popup_done`; controls `--no-flip`,
+  `--no-material`, `--no-grab`. It passed against the Hyalo installed when it was written
+  (2026-10-21): it guards what the dropdown relies on, it fixed nothing.
 
 ## Night light: Hyalo's gamma ramps
 

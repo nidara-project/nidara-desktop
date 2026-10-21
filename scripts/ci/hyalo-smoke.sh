@@ -146,6 +146,10 @@ phase_build() {
     cc -O2 "$REPO/scripts/ci/hyalo-control-material-probe.c" "$lg/xdg-shell-protocol.c" \
         "$lg/nidara-layers-v1-protocol.c" "$lg/nidara-material-v1-protocol.c" \
         -I"$lg" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-control-material-probe
+    # The popup-glass probe (a toplevel's xdg_popup with its own material, #882).
+    cc -O2 "$REPO/scripts/ci/hyalo-popup-glass-probe.c" "$lg/xdg-shell-protocol.c" \
+        "$lg/nidara-material-v1-protocol.c" \
+        -I"$lg" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-popup-glass-probe
     # The title-bar probe (an app that leaves its decorations to Hyalo, render/title_bar.rs).
     local tb="$REPO/build/tb"
     mkdir -p "$tb"
@@ -717,6 +721,11 @@ PY
         || { log "FAIL: menus"; cat /tmp/hyalo/popup.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "menus OK ($(grep -c '^ok' /tmp/hyalo/popup.log) of 2: the keyboard back, closed under an input method)"
+    # An application's menu as the toolkit's dropdown opens it (#882): a toplevel's xdg_popup,
+    # flipped onto the output, its own glass past the window's edge, its grab; each with a control.
+    POPUP_GLASS_LOG=/tmp/hyalo/popup-glass python "$REPO/scripts/ci/hyalo-popup-glass-check.py" >/tmp/hyalo/popup-glass.log 2>&1 \
+        || { log "FAIL: popup glass"; cat /tmp/hyalo/popup-glass.log; exit 1; }
+    log "popup glass OK ($(grep -c '^ok' /tmp/hyalo/popup-glass.log) of 3, $(grep -c '^CAUGHT' /tmp/hyalo/popup-glass.log) of 3 controls caught)"
     # X11 apps (#683): Hyalo's own Xwayland, Hyalo its window manager. A window with its own
     # pid, the keyboard, the clipboard both ways, and an X11 menu that keeps drawing.
     nidara-hyalo msg do workspace 1 >/dev/null
