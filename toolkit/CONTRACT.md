@@ -307,13 +307,16 @@ additional fields alongside the existing tone/inkTone/shadow data:
 
 - `response`: `lumaLow`, `lumaHigh`, `contrastLow`, `contrastHigh`, `shadowWhite`,
   `shadowText`, `settleMs`;
-- `states`: `hover`, `press`, `destructiveHover`, `destructivePress`, each with
+- `states`: `fadeMs` (one unsigned millisecond duration shared by all state
+  regions), plus `hover`, `press`, `destructiveHover`, `destructivePress`, each with
   `wash: {r,g,b,a}`; destructive states may also carry contrasting
   `ink: {r,g,b,a}` or null;
 - `ink`: `light: {r,g,b,a}` and `dark: {r,g,b,a}`.
 
-State-fade durations belong in this same source/export rather than kit or Hyalo
-constants; the exact duration-field placement is to be confirmed in final review.
+The kit copies `states.fadeMs` into each region's `fade_ms`, including hover-out
+to idle; reduced motion sends 0. The server-side controls use the same value.
+No separate duration constants live in the kit or Hyalo. Per-state durations are
+out of scope unless the owner asks for different hover/press timing.
 Values are provisional until the owner tunes them live. Both nk-widgets and
 Hyalo's glass_tokens.rs read this one export. The export checker gains a
 missing-field control alongside the existing glass-export controls. No values are
@@ -343,8 +346,9 @@ in the native demo, with exact revisions and environment recorded.
 **Implementation boundary:** after this contract is reviewed and merged, Claude
 owns the Hyalo response/state/coverage implementation and token export, with its
 checks/controls. Sol builds the retained capsule and native demo on that transport.
-The state-fade token field remains for final review; visual numbers remain the
-owner's live decision. This PR supplies no implementation or visual acceptance.
+The wire and token schema above incorporate the Hyalo-side review; visual numbers
+remain the owner's live decision. This PR supplies no implementation or visual
+acceptance. Final review and merge still precede dependent code.
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
