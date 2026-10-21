@@ -167,6 +167,9 @@ fn role(n: &Node) -> AtRole {
         Role::Panel => AtRole::Panel,
         Role::List => AtRole::List,
         Role::ScrollPane => AtRole::ScrollPane,
+        Role::RadioButton => AtRole::RadioButton,
+        Role::Slider => AtRole::Slider,
+        Role::SpinButton => AtRole::SpinButton,
     }
 }
 fn states(n: &Node) -> StateSet {
@@ -181,9 +184,13 @@ fn states(n: &Node) -> StateSet {
         (n.states.focused, State::Focused),
         (n.states.checked, State::Checked),
         (
-            matches!(n.role, Role::CheckBox | Role::ToggleButton),
+            matches!(
+                n.role,
+                Role::CheckBox | Role::ToggleButton | Role::RadioButton
+            ),
             State::Checkable,
         ),
+        (n.role == Role::Slider, State::Horizontal),
         (n.states.expanded, State::Expanded),
         (n.role == Role::ComboBox, State::Expandable),
         (n.states.selected, State::Selected),
@@ -317,6 +324,9 @@ impl Object {
                 }
                 if n.role.is_selection_container() {
                     v.push("org.a11y.atspi.Selection".into());
+                }
+                if n.value.is_some() {
+                    v.push("org.a11y.atspi.Value".into());
                 }
             }
         }
@@ -470,6 +480,51 @@ impl Selection {
     }
     fn deselect_child(&self, _index: i32) -> bool {
         false
+    }
+}
+/// Read from the tree; a value set from outside goes through the app (`Request::SetValue`),
+/// which clamps and steps it as its keys do — never written here.
+struct ValueIface(Object);
+impl ValueIface {
+    fn value(&self) -> fdo::Result<ValueInfo> {
+        self.0
+            .node()?
+            .value
+            .ok_or_else(|| fdo::Error::NotSupported("no value".into()))
+    }
+}
+#[interface(name = "org.a11y.atspi.Value")]
+impl ValueIface {
+    #[zbus(property)]
+    fn minimum_value(&self) -> fdo::Result<f64> {
+        Ok(self.value()?.min)
+    }
+    #[zbus(property)]
+    fn maximum_value(&self) -> fdo::Result<f64> {
+        Ok(self.value()?.max)
+    }
+    #[zbus(property)]
+    fn minimum_increment(&self) -> fdo::Result<f64> {
+        Ok(self.value()?.step)
+    }
+    #[zbus(property)]
+    fn current_value(&self) -> fdo::Result<f64> {
+        Ok(self.value()?.current)
+    }
+    #[zbus(property)]
+    fn set_current_value(&self, value: f64) -> zbus::Result<()> {
+        if !value.is_finite()
+            || !self
+                .0
+                .request(Action::SetValue, Request::SetValue(self.0.id, value))
+        {
+            return Err(fdo::Error::AccessDenied("value cannot be set".into()).into());
+        }
+        Ok(())
+    }
+    #[zbus(property)]
+    fn text(&self) -> fdo::Result<String> {
+        Ok(self.value()?.text)
     }
 }
 struct Text(Object);
@@ -664,6 +719,9 @@ impl Backend {
             if n.role.is_selection_container() {
                 s.at(p.clone(), Selection(o.clone())).map_err(error)?;
             }
+            if n.value.is_some() {
+                s.at(p.clone(), ValueIface(o.clone())).map_err(error)?;
+            }
             if n.actions.contains(&Action::SetText) {
                 s.at(p, Editable(o)).map_err(error)?;
             }
@@ -769,6 +827,21 @@ impl A11yBackend for Backend {
                 }
                 Event::SelectionChanged(id) => {
                     self.emit(id, "SelectionChanged", "", 0, 0, 0i32.into())?
+                }
+                Event::Value(id) => {
+                    let current = tree
+                        .nodes
+                        .get(&id)
+                        .and_then(|n| n.value.as_ref())
+                        .map_or(0., |v| v.current);
+                    self.emit(
+                        id,
+                        "PropertyChange",
+                        "accessible-value",
+                        0,
+                        0,
+                        current.into(),
+                    )?
                 }
                 Event::Children(id) => {
                     let before = self
@@ -941,6 +1014,72 @@ mod tests {
             text.get_range_extents(0, 1, 1),
             Err(fdo::Error::NotSupported(_))
         ));
+    }
+    #[test]
+    fn a_value_is_read_from_the_tree_and_set_only_through_the_app() {
+        let mut n = Node::new(1, Role::Slider, "Temperature");
+        n.value = Some(ValueInfo {
+            min: 1000.,
+            max: 6500.,
+            current: 4500.,
+            step: 100.,
+            text: "4500 K".into(),
+        });
+        let asked = Arc::new(Mutex::new(vec![]));
+        let seen = asked.clone();
+        let object = Object {
+            id: 1,
+            tree: Arc::new(Mutex::new(Tree {
+                root: 1,
+                nodes: BTreeMap::from([(1, n)]),
+            })),
+            bus: ":1.1".into(),
+            callback: Arc::new(move |r| seen.lock().unwrap().push(r)),
+        };
+        assert!(
+            object
+                .get_interfaces()
+                .iter()
+                .any(|s| s == "org.a11y.atspi.Value")
+        );
+        assert_eq!(role(&object.node().unwrap()), AtRole::Slider);
+        assert!(states(&object.node().unwrap()).contains(State::Horizontal));
+        let v = ValueIface(object.clone());
+        assert_eq!(
+            (
+                v.minimum_value().unwrap(),
+                v.maximum_value().unwrap(),
+                v.current_value().unwrap()
+            ),
+            (1000., 6500., 4500.)
+        );
+        assert_eq!(
+            (v.minimum_increment().unwrap(), v.text().unwrap()),
+            (100., "4500 K".into())
+        );
+        // Without the action the app did not offer, nothing is asked.
+        assert!(v.set_current_value(5000.).is_err());
+        assert!(asked.lock().unwrap().is_empty());
+        object
+            .tree
+            .lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .actions = vec![Action::SetValue];
+        assert!(v.set_current_value(9000.).is_ok());
+        assert!(v.set_current_value(f64::NAN).is_err());
+        assert_eq!(*asked.lock().unwrap(), vec![Request::SetValue(1, 9000.)]);
+        // The tree is not written here: the app clamps and publishes.
+        assert_eq!(v.current_value().unwrap(), 4500.);
+        let radio = Node::new(2, Role::RadioButton, "Blue");
+        assert!(states(&radio).contains(State::Checkable));
+        assert_eq!(role(&radio), AtRole::RadioButton);
+        assert_eq!(
+            role(&Node::new(3, Role::SpinButton, "From hour")),
+            AtRole::SpinButton
+        );
     }
     #[test]
     fn password_queries_have_no_content_or_length() {

@@ -2542,6 +2542,15 @@ Backlog of designed desktop enhancements to prioritize for upcoming iterations:
    - Deep two-way synchronization of protocol handlers (`mailto:`, `webcal:`, `tg:`, `magnet:`) and default mime associations in `DefaultApps.tsx`.
 
 
+## Native toolkit range values
+
+A range control (`Slider`, `SpinButton`) publishes `nk_a11y::ValueInfo` (min, max, current,
+step, the spoken text) and the provider serves AT-SPI `Value` from it. The provider NEVER writes
+the value: `CurrentValue` set from outside becomes `Request::SetValue`, offered only with
+`Action::SetValue`, and the app clamps and steps it exactly as its keys do before publishing.
+A tree with a value outside its range fails `validate()`, so a widget bug surfaces as a refused
+publication, not as a reader saying a number the control cannot show (#882, toolkit/CONTRACT.md).
+
 ## Native toolkit text geometry
 
 `nk-text::Layout::cluster_boxes` caches logical shaped-cluster bounds and leading

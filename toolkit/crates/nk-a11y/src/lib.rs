@@ -27,6 +27,12 @@ pub enum Role {
     Panel,
     List,
     ScrollPane,
+    /// One of a group's choices; the group is a `Panel` holding them. `checked` is the choice.
+    RadioButton,
+    /// A value on a range, moved by steps: carries `Node::value`.
+    Slider,
+    /// A number typed or stepped: carries `Node::value`.
+    SpinButton,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Bounds {
@@ -56,6 +62,34 @@ pub enum Action {
     Activate,
     SetText,
     SetSelection,
+    /// The node's value may be set from outside (AT-SPI `Value.CurrentValue`).
+    SetValue,
+}
+/// A range control's value, in the control's own units (`Slider`, `SpinButton`). The text is
+/// what a reader says for it ("4500 K"); without one it says the number.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ValueInfo {
+    pub min: f64,
+    pub max: f64,
+    pub current: f64,
+    /// The smallest change the control makes; 0: continuous.
+    pub step: f64,
+    pub text: String,
+}
+impl ValueInfo {
+    pub fn validate(&self) -> Result<()> {
+        if ![self.min, self.max, self.current, self.step]
+            .iter()
+            .all(|v| v.is_finite())
+            || self.min > self.max
+            || self.step < 0.
+            || self.current < self.min
+            || self.current > self.max
+        {
+            return Err("value outside its range, or a range that is not one".into());
+        }
+        Ok(())
+    }
 }
 /// Plain app-supplied data. `lines` includes soft wraps from the painted layout.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -82,6 +116,7 @@ pub struct Node {
     pub actions: Vec<Action>,
     pub bounds: Bounds,
     pub text: Option<TextInfo>,
+    pub value: Option<ValueInfo>,
     pub children: Vec<NodeId>,
     pub relations: Vec<Relation>,
     pub attributes: BTreeMap<String, String>,
@@ -97,6 +132,7 @@ impl Node {
             actions: vec![],
             bounds: Bounds::default(),
             text: None,
+            value: None,
             children: vec![],
             relations: vec![],
             attributes: BTreeMap::new(),
@@ -156,6 +192,9 @@ impl Tree {
             if let Some(t) = &n.text {
                 t.characters()?;
             }
+            if let Some(v) = &n.value {
+                v.validate()?;
+            }
             todo.extend(&n.children);
         }
         if seen.len() != self.nodes.len() || focus > 1 {
@@ -211,6 +250,8 @@ pub enum Request {
     Activate(NodeId),
     SetText(NodeId, String),
     SetSelection(NodeId, Range<usize>),
+    /// A value asked from outside, unclamped: the app clamps and steps it as a key would.
+    SetValue(NodeId, f64),
 }
 /// Returned selection ranges are bytes again. The callback queues work to the
 /// app thread; neither backend mutates the application's model on a D-Bus thread.
@@ -249,6 +290,8 @@ pub enum Event {
     Selection(NodeId),
     /// A selection container's set of selected children changed (AT-SPI Selection).
     SelectionChanged(NodeId),
+    /// A range control's current value changed.
+    Value(NodeId),
     Children(NodeId),
 }
 impl Role {
@@ -308,6 +351,12 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
         }
         if before.is_some_and(|b| b.children != n.children) {
             out.push(Event::Children(n.id));
+        }
+        if let Some(b) = before
+            && b.value.as_ref().map(|v| (v.current, &v.text))
+                != n.value.as_ref().map(|v| (v.current, &v.text))
+        {
+            out.push(Event::Value(n.id));
         }
         if n.role.is_selection_container()
             && let Some(old) = old.filter(|t| t.nodes.contains_key(&n.id))
@@ -430,6 +479,42 @@ mod tests {
             "{events:?}"
         );
         assert!(matches!(events[1], Event::Focus(1, true)), "{events:?}");
+    }
+    #[test]
+    fn a_value_out_of_its_range_is_refused_and_a_change_is_reported_once() {
+        let tree = |current: f64, text: &str| {
+            let mut n = Node::new(1, Role::Slider, "Temperature");
+            n.value = Some(ValueInfo {
+                min: 1000.,
+                max: 6500.,
+                current,
+                step: 100.,
+                text: text.into(),
+            });
+            Tree {
+                root: 1,
+                nodes: BTreeMap::from([(1, n)]),
+            }
+        };
+        assert!(tree(4500., "4500 K").validate().is_ok());
+        assert!(tree(7000., "7000 K").validate().is_err());
+        assert!(tree(f64::NAN, "").validate().is_err());
+        let (a, b) = (tree(4500., "4500 K"), tree(4600., "4600 K"));
+        let events = diff(Some(&a), &b).unwrap();
+        assert_eq!(
+            events
+                .iter()
+                .filter(|e| matches!(e, Event::Value(1)))
+                .count(),
+            1,
+            "{events:?}"
+        );
+        assert!(
+            !diff(Some(&b), &b)
+                .unwrap()
+                .iter()
+                .any(|e| matches!(e, Event::Value(_)))
+        );
     }
     #[test]
     fn a_combo_box_reports_a_changed_choice_once() {

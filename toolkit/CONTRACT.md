@@ -124,6 +124,13 @@ Owns everything between a string and positioned glyphs, and the editing model on
   while it is open, so a reader does not present the options' own events: it reads the value
   through `Selection` and hears a change from `selection-changed` (#835, real Orca). Choosing
   through `SelectChild` is an `Activate` request on the option; deselecting returns false.
+- A **range control** (`Slider`, `SpinButton`) carries `value: Option<ValueInfo>` — min, max,
+  current, step (0 = continuous) and the text a reader says ("4500 K"); a tree whose value lies
+  outside its range is refused. The provider serves AT-SPI `Value` from it, read-only on its
+  side: a `CurrentValue` set from outside is a `Request::SetValue` to the app (offered only with
+  `Action::SetValue`), which clamps and steps it as its keys do and publishes the result. A
+  change of current value or text sends `property-change:accessible-value`. A `RadioButton` is
+  one choice of a group: the group is a `Panel` holding them, and the choice is `checked` (#882).
 - **One provider: direct AT-SPI over zbus** (feature `atspi`), behind `trait A11yBackend`
   (owner, 2026-10-15, #830/#834): it passed the whole Orca-style walk; AccessKit failed the
   expanded and invalid-entry states, which its AT-SPI layer did not project. The trait stays
