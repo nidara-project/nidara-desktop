@@ -249,7 +249,9 @@ their checks — is in place (the skill's hyalo.md, "A control answers its backd
   another glass pane on that glass. D7's provisional graded blur/background fade
   is not a glass pane; whether a capsule over it looks right remains for the owner
   to judge in the native demo.
-- **One material definition for native and server-side controls.** Extend the existing
+- **One material definition for native and server-side controls.** What a control does — its
+  base and the owner's exceptions — is defined once, in the skill's design-system.md, "The glass
+  material"; this contract only carries it. Extend the existing
   control piece of the token source/export with the state tints and backdrop-response
   law; Hyalo's third-party window controls consume the same definition. No duplicated
   numeric defaults in nk-widgets or render/controls.rs. The kit resolves the exact

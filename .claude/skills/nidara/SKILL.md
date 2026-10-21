@@ -160,6 +160,7 @@ Before doing anything that touches code:
 - **Working on independent Settings** → `references/architecture.md` → "Settings is its own application" (process role, portal paint, IPC, rollback). Start it with `bin/nidara-settings`, not a bare `gjs` invocation.
 - **Editing TSX widgets, adding overlays, changing dock/bar/CC behaviour** → read `references/architecture.md` first, then `references/state-and-ipc.md`.
 - **Editing SCSS, restyling anything, working on the design tokens** → read `references/design-system.md`.
+- **Anything about how the glass behaves** (its kinds, shadows, veil, a control's answer to its backdrop) → `references/design-system.md` → "The glass material": the ONE base and its exceptions. Do not give a piece behaviour of its own.
 - **Adding a new core service or modifying state** → read `references/architecture.md` (core/ section) and `references/state-and-ipc.md` (Status.ts).
 - **Working on the installer, build, or session boot** → read `references/dev-workflow.md`.
 - **Touching the Assistant** (`bin/nidara-agent`, a wire lane, or what it can perceive) → read `references/dev-workflow.md`: the fake-brain walk, the wire-lane re-sync procedure, and the terminal bench for perception claims (a model that answers from a stale read looks identical in the island — only the log tells you).

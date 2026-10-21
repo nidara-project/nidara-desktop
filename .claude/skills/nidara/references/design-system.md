@@ -1512,6 +1512,65 @@ supply); making it coherent is a policy decision, deferred — see tech-debt #24
 icons match every other bar icon. The click→window-focus wiring (PID-first match, `is_menu`,
 `activate` fallback) lives in architecture.md under `bar/Tray.tsx`.
 
+## The glass material: one base per kind, then the exceptions (owner, 2026-10-21)
+
+🔑 **This is the ONE definition of how the glass behaves.** Everything else — the kit, the
+toolkit (`toolkit/CONTRACT.md`), Hyalo (`references/hyalo.md`) — implements it and points here;
+none of them defines a behaviour of its own. Owner: "a common behaviour, then the exceptions,
+if any — never different paths; the bases may not differ." It may change (the top bar's
+behaviour is the first candidate); when it does, it changes HERE first.
+
+**What is glass.** The topmost layer of the interface — the bar and its capsules, the panels,
+menus and popovers, the dock, the Control Center, the notifications — and the elements of a
+window that float over its content: buttons, control capsules, sidebars. **A window is not
+glass**: its shadow and its backdrop blur are the window's decoration (`references/hyalo.md`,
+the window's look), outside this section.
+
+**The mechanics are the same for every piece** (Hyalo paints them all): its kind's tone over
+the blurred backdrop; its shadow, if its kind casts one, outside its shape and cut out of it,
+and never seen by its own glass (#908); a veil behind it where its kind has one; hover and press
+as a wash inside the glass, faded; it materializes rather than fades (#764). A piece takes the
+values of its KIND, never values of its own.
+
+**The kinds** (`GlassPiece`; values in `glass-material.ts`, exported to `tokens/glass.json`):
+
+| kind | what | tone | shadow | veil behind |
+|---|---|---|---|---|
+| `control` | bar capsules, island, notifications, window buttons, toolkit controls | measured, by size | measured law, by size (2026-10-12) | none |
+| `panel` | menus, popovers, Prism, system menu, app grid, toolkit sidebars | measured, by size | measured law, by size (2026-10-12) | none |
+| `dock` | the dock | measured | none — measured (2026-10-08: a 1 px outline only) | none |
+| `controlCenter` | the CC's tiles | measured | none — measured (2026-10-08) | ≈10 % black, measured (2026-10-11) |
+
+A value with no source does not exist: "none" means measured none, never "not measured". The
+2026-10-08 run's "no shadow at rest" for an app's glass was wrong — that window was inactive
+(corrected 2026-10-12, the `control`/`panel` law); the Dock and the CC are the system's own
+surfaces, not an app's window, so that cause does not apply to them. They were not re-measured.
+
+**The base of `control`** — every control, whoever draws it:
+1. **Tone**: the control's, mixed towards its ink tone by its answer to the backdrop it stands on
+   (r from the measured luminance, c from its deviation: `set_response`).
+2. **Ink** (glyphs and text): mixed by the same answer.
+3. **Shadow**: the measured law by size, its opacity growing with the same answer
+   (`shadow_white`, `shadow_text`).
+4. **States**: hover and press as washes in the glass, faded over the export's duration; the
+   destructive button its own colours.
+
+**Exceptions — the owner's, dated; nothing else departs from the base:**
+- The bar's capsules take their ink from the system MODE, not from the backdrop (2026-10-09).
+  Provisional: how the top bar behaves may change.
+- The Control Center and the notifications keep white text always (2026-10-08).
+- The dock follows the system mode (`trackModeGlass`, `skinFromMode`).
+
+**Where the code still departs (to be removed, not new exceptions):**
+- The bar's capsules (TypeScript kit) still run the older path — the binary ink and a fixed
+  shadow — instead of the base's answer for tone and shadow. The kit is frozen (#818): moving
+  them is part of the shell's move onto the toolkit, unless the owner asks for it sooner.
+- The notifications are not marked as any kind (`Bar.tsx`), so they fall to `control` by
+  default while lying on the Control Center's veil; whether they are `controlCenter` is open.
+- Menus and large panels take `panel`, the reference's floating glass (2026-10-12). The
+  2026-10-08 run also measured the reference's menus (`0 4 15`, α .23/.27) and large panels
+  (`0 18 38`, α .39/.68), which were then opaque. Which source a menu's shadow follows is open.
+
 ## The shell's glass, as a painter asks for it (`common/ShellGlass.ts`)
 
 On Hyalo the shell's panes are the compositor's glass (references/hyalo.md). What a Cairo painter on
