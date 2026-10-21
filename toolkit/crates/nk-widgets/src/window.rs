@@ -1120,6 +1120,82 @@ mod tests {
         }
     }
     #[test]
+    fn group_card_keeps_form_column_while_wide_child_retains_scroll_extent() {
+        for layered in [false, true] {
+            let (mut tree, mut backend, _, _, scroll) = fixture();
+            for child in tree.nodes[&scroll].children.clone() {
+                tree.remove(child).unwrap();
+            }
+            tree.metrics.form_width = 800.;
+            tree.metrics.content_floor = 560.;
+            tree.set_page_width(PageWidth::Form).unwrap();
+            let group = tree.group(scroll, "Group").unwrap();
+            let normal = tree.row(group, "Normal", Kind::Button).unwrap().0;
+            let wide = tree.row(group, "Wide probe", Kind::Button).unwrap().0;
+            for width in [1262., 900., 650.] {
+                tree.set_min_width(wide, width).unwrap();
+                tree.layout(
+                    Size {
+                        width,
+                        height: 480.,
+                    },
+                    layered,
+                    &mut backend,
+                )
+                .unwrap();
+                let column = tree.content_column_width(tree.content_viewport().width);
+                let card = tree.nodes[&group].bounds;
+                assert_eq!(
+                    card.width,
+                    column - 2. * tree.metrics.padding,
+                    "group card follows overflow instead of form column"
+                );
+                assert_eq!(
+                    tree.nodes[&normal].bounds.width,
+                    card.width - 2. * tree.metrics.padding
+                );
+                assert!(
+                    tree.nodes[&scroll].measured.width >= width,
+                    "wide probe lost scroll extent"
+                );
+                if width == 1262. {
+                    for scale in [1., 1.25] {
+                        let frame = nk_wayland::Frame {
+                            width: width as u32,
+                            height: 480,
+                            pixel_width: (width as f64 * scale).ceil() as u16,
+                            pixel_height: (480. * scale) as u16,
+                            scale,
+                            material: layered,
+                        };
+                        let pixels = tree.paint(frame, Surface::Content, test_palette()).unwrap();
+                        let pixel = |x: f32, y: f32| {
+                            let at = (((y as f64 * scale).floor() as usize)
+                                * frame.pixel_width as usize
+                                + (x as f64 * scale).floor() as usize)
+                                * 4;
+                            &pixels[at..at + 4]
+                        };
+                        let y = card.y + card.height - 3.;
+                        let outside = pixel(card.x + card.width + 20., y);
+                        if layered {
+                            assert_eq!(outside[3], 0, "group card paints beyond form column");
+                        } else {
+                            assert_ne!(
+                                outside,
+                                pixel(card.x + card.width / 2., y),
+                                "group card paints beyond form column"
+                            );
+                        }
+                    }
+                }
+                tree.scroll_to(scroll, Point { x: 10000., y: 0. }).unwrap();
+                assert!(tree.nodes[&scroll].scroll.x > 0.);
+                tree.scroll_to(scroll, Point::default()).unwrap();
+            }
+        }
+    }
+    #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {
         let style = TitlebarStyle {
             blur: nk_wayland::Blur {

@@ -1309,7 +1309,13 @@ impl Tree {
                 Rect {
                     x,
                     y,
-                    width: s.width,
+                    // A group's measured width includes overflow for the enclosing
+                    // scroll extent. Its card occupies its constrained column.
+                    width: if n.kind == Kind::Group {
+                        n.constraint
+                    } else {
+                        s.width
+                    },
                     height: s.height,
                 }
             };

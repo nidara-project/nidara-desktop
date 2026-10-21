@@ -294,3 +294,15 @@ half-height radius for ordinary buttons fails its own assertion
 (`target/button-shape-control.log`: CAUGHT). All 28 nk-widgets tests, clippy,
 formatting, skill-docs and diff checks pass. This does not add a live visual
 acceptance claim or repeat the historical compositor matrices.
+
+### #904 form card overflow reported in live review
+
+The demo's deliberately wide probe row makes Group.measured.width include
+its overflow. Placement previously used that width for the card, although the
+ordinary rows were measured within the form column. The card now uses the
+group's constraint; measured overflow remains available to horizontal scroll.
+The regression checks D5/D7 at widths1262/900/650, normal row alignment, scroll
+extent and pixels at scales1/1.25. A deliberately oversized painted card is
+CAUGHT by its own pixel assertion (toolkit/target/group-card-control.log).
+All29 nk-widgets tests pass. This is source-level geometry/CPU-pixel evidence;
+the owner's live screenshot reported the problem, not acceptance of this fix.

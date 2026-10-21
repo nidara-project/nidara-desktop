@@ -2638,7 +2638,9 @@ and text origins. Root pointer leave is forwarded by nk-wayland just like layer
 leave, so retained hover cannot remain after the pointer exits the surface.
 
 D8 page width is a named policy on the retained content region (`set_page_width`),
-not a number picked by each page. Form aliases WINDOW_LAYOUT's existing preferred
+not a number picked by each page. A Group card is placed at its constraint width;
+its measured width may include an explicitly wide child for scroll extent and
+must not expand the card. Form aliases WINDOW_LAYOUT's existing preferred
 width and floor. Apply the policy before the measure-cache key is recorded;
 changing the named kind must not reuse a wider/narrower stale layout. Centre in
 the current content viewport (after the sampled sidebar inset), not the window.
