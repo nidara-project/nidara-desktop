@@ -112,6 +112,10 @@ interface State {
     /** "Según fondo": to dark content above this backdrop luminance, back below the other. */
     autoInk: { darkAbove: number, lightBelow: number }
     pieces: Record<PieceId, Piece>
+    /** A dimming layer behind the bar (owner, 2026-10-21: white text always, Clear glass and a
+     *  dimming layer): black at `alpha` from the screen's top edge down to `reach`, then fading
+     *  to nothing over `fade` px. Painted on the backdrop, so the glass sees it as what is behind. */
+    barDim: { on: boolean, alpha: number, reach: number, fade: number }
 }
 const PIECE_NAMES: Record<PieceId, string> = { barra: "Barra", menu: "Menú", cc: "Centro de Control", dock: "Dock",
     promo: "Círculo promo" }
@@ -142,6 +146,7 @@ const factory = (): State => ({
         dock: { glass: "regular", tone: shipped("dock"), aspect: "modo", shadow: noShadow() },
         promo: { glass: "clear", tone: shipped("promo"), aspect: "fondo", shadow: noShadow() },
     },
+    barDim: { on: false, alpha: 0.3, reach: 44, fade: 60 },
 })
 let state = factory()
 let presetName = ""        // the preset loaded or last saved; "" = none
@@ -250,6 +255,20 @@ function paintSynthetic(cr: any, w: number, h: number) {
         }
     } else fill(1, 1, 1)
 }
+/** The bar's dimming layer, over the backdrop: flat to `reach`, then a smooth fall to 0. */
+function paintBarDim(snap: Gtk.Snapshot, w: number) {
+    const d = state.barDim
+    if (!d.on || d.alpha <= 0) return
+    const h = d.reach + d.fade
+    const cr = snap.append_cairo(rect(0, 0, w, h))
+    try {
+        for (let y = 0; y < h; y++) {
+            const t = y < d.reach ? 0 : (y - d.reach) / Math.max(d.fade, 1)
+            const a = d.alpha * (1 - t * t * (3 - 2 * t))
+            cr.setSourceRGBA(0, 0, 0, a); cr.rectangle(0, y, w, 1); cr.fill()
+        }
+    } finally { cr.$dispose() }
+}
 const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget {
     vfunc_snapshot(snap: Gtk.Snapshot): void {
         const w = this.get_width(), h = this.get_height()
@@ -258,6 +277,7 @@ const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget
         if (!path) {
             const cr = snap.append_cairo(rect(0, 0, w, h))
             try { paintSynthetic(cr, w, h) } finally { cr.$dispose() }
+            paintBarDim(snap, w)
             return
         }
         let tex = textures.get(path)
@@ -270,6 +290,7 @@ const BackdropView = GObject.registerClass(class BackdropView extends Gtk.Widget
         snap.append_scaled_texture(tex, Gsk.ScalingFilter.LINEAR,
             rect(-photoSlack.x * state.offset.x, -photoSlack.y * state.offset.y, dw, dh))
         snap.pop()
+        paintBarDim(snap, w)
     }
 })
 
@@ -476,7 +497,7 @@ function loadPreset(name: string): boolean {
             ({ frost: l?.frost ?? from.frost, passes: l?.passes ?? from.passes, rim: l?.rim ?? from.rim })
         state = { ...f, ...loaded, regular: glassOf(f.regular, loaded.regular), clear: glassOf(f.clear, loaded.clear),
             clearTone: { ...f.clearTone, ...loaded.clearTone },
-            common: { ...f.common, ...loaded.common }, autoInk: { ...f.autoInk, ...loaded.autoInk },
+            common: { ...f.common, ...loaded.common }, barDim: { ...f.barDim, ...loaded.barDim }, autoInk: { ...f.autoInk, ...loaded.autoInk },
             pieces: Object.fromEntries((Object.keys(f.pieces) as PieceId[]).map(id => {
                 const { thick: _thick, ...lp } = loaded.pieces?.[id] ?? {}
                 return [id, { ...f.pieces[id], ...lp, shadow: { ...f.pieces[id].shadow, ...lp.shadow },
@@ -793,6 +814,15 @@ function fillBody() {
         page.append(slider("  opacidad", () => p.shadow.alpha, x => { p.shadow.alpha = x }, 0, 0.8, 2))
         page.append(slider("  desenfoque (px)", () => p.shadow.blur, x => { p.shadow.blur = x }, 0, 40, 0))
         page.append(slider("  desplazamiento abajo (px)", () => p.shadow.dy, x => { p.shadow.dy = x }, 0, 20, 0))
+        if (id === "barra") {
+            const d = state.barDim
+            page.append(note("Capa de atenuación: negro detrás de la barra, desde el borde de arriba de la pantalla; "
+                + "plana hasta «alcance» y luego se desvanece."))
+            page.append(toggle("Capa de atenuación", () => d.on, x => { d.on = x }))
+            page.append(slider("  opacidad", () => d.alpha, x => { d.alpha = x }, 0, 0.8, 2))
+            page.append(slider("  alcance (px)", () => d.reach, x => { d.reach = x }, 0, 120, 0))
+            page.append(slider("  difuminado (px)", () => d.fade, x => { d.fade = x }, 0, 200, 0))
+        }
     }
     const reset = new Gtk.Button({ label: "Volver a los valores de partida", margin_top: 18 })
     reset.connect("clicked", () => { const keep = state.backdrop; state = factory(); state.backdrop = keep; presetName = ""; touched(); buildScene(); fillAll() })

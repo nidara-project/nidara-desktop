@@ -268,6 +268,10 @@ SOURCE itself (`setMaterialSource` after `registerGlassMaterial`): per-surface `
 tones from its state, no glass-tuning.conf; what is global in Hyalo (bevel width, profile, strength: lab[12], lab[4], lab[5]) is
 one section, "Refracción (común)". A fixed header (preset shown by name, Guardar / Guardar como, mode,
 scene, backdrop) over a scrolling column; presets in `glass-lab/maqueta/`, whole state.
+The bar's section also has a DIMMING LAYER behind the bar (`barDim`: opacity, a flat reach from
+the screen's top edge, then a fade), painted on the backdrop so the glass sees it as what is
+behind — for the owner's 2026-10-21 trial of white text on Clear glass. Provisional and lab-only:
+nothing in the shell has it.
 `install-desktop.sh` puts it in the app grid. `--classic` opens the older bench (lab.ts, below — the
 promo exports, the readings, `--batch`); `GLASS_LAB_WITH_CONTROLS=1` keeps the column in a headless
 capture.
