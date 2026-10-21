@@ -187,4 +187,5 @@ write(join(out, "tokens/components.json"), {
 
 console.log(`export-tokens: ${Object.keys(scss).length} scss + ${Object.keys(ts).length} ts static, `
     + `${sets.length} colour sets of ${Object.keys(sets[0].tokens).length}, `
-    + `${variants.length} glass variants of ${Object.keys(variants[0].pieces).length} pieces → ${out}/tokens`)
+    + `${variants.length} glass variants of ${Object.keys(variants[0].pieces).length} pieces, `
+    + `${componentVariants.length} component variants → ${out}/tokens`)
