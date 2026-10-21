@@ -17,9 +17,10 @@ usage: settings-tokens-check.py OUT_DIR
   (toolkit/CONTRACT.md, "Floating control capsule"): its response (null only with reduce
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
 - Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour,
-  and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font.
+  and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font,
+  and the range controls' slider and spin (toolkit/tokens/range.json, #882).
 CI also runs it on a copy with one used token dropped from one set, on one with `panel`
-dropped from one glass variant, a control step's `states` dropped, one variant's list highlight dropped, and one variant's swatch dropped; all must fail.
+dropped from one glass variant, a control step's `states` dropped, one variant's list highlight dropped, and one variant's swatch dropped, and one variant's slider dropped; all must fail.
 """
 import json, math, re, sys
 from itertools import product
@@ -155,6 +156,15 @@ for variant in component_variants:
                 swatch.get('selectedColor'), swatch.get('hoverColor')):
         if not isinstance(key, str) or not all(key in color_set['tokens'] for color_set in sets):
             fail.append(f'{where}: missing choices colour token {key}')
+    ranged = variant.get('range') or {}
+    slider = ranged.get('slider') or {}
+    spin = ranged.get('spin') or {}
+    if not (all(positive_number(slider.get(k)) for k in ('width', 'track', 'thumbRadius', 'valueGap', 'fillOpacity', 'pageSteps'))
+            and slider['fillOpacity'] <= 1 and slider['thumbRadius'] * 2 >= slider['track']
+            and all(positive_number(spin.get(k)) for k in ('height', 'textWidth', 'buttonWidth', 'border', 'gap'))):
+        fail.append(f'{where}: incomplete or invalid range (slider/spin)')
+    if not isinstance(spin.get('borderColor'), str) or not all(spin['borderColor'] in s['tokens'] for s in sets):
+        fail.append(f"{where}: missing range colour token {spin.get('borderColor')}")
     if segmented.get('fontSize') not in static['scss']:
         fail.append(f"{where}: choices font size {segmented.get('fontSize')} is not a static scss token")
     common = variant.get('common') or {}
@@ -170,4 +180,4 @@ if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists and choices complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices and ranges complete')

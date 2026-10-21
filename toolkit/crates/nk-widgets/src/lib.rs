@@ -4,12 +4,14 @@
 mod choices;
 mod motion;
 mod paint;
+mod ranges;
 mod semantics;
 pub mod window;
 pub use choices::{ChoiceKind, ChoiceStyle};
 pub use nk_a11y::NodeId;
 use nk_text::{Layout, Point, Rect, Size, TextBackend, TextStyle};
 pub use paint::{Palette, Surface};
+pub use ranges::{RangeStyle, ValueRange};
 use std::collections::BTreeMap;
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -98,19 +100,37 @@ pub enum Kind {
     Choice {
         checked: bool,
     },
+    /// A value on a range, moved by steps (#882); its range is the node's `range`.
+    Slider {
+        value: f32,
+    },
+    /// A row's control holding spin buttons (the time fields).
+    Fields,
+    Spin {
+        value: f32,
+    },
 }
 impl Kind {
     fn focusable(self) -> bool {
         matches!(
             self,
-            Self::Page { .. } | Self::Switch { .. } | Self::Button | Self::Choice { .. }
+            Self::Page { .. }
+                | Self::Switch { .. }
+                | Self::Button
+                | Self::Choice { .. }
+                | Self::Slider { .. }
+                | Self::Spin { .. }
         )
     }
     /// What a row holds beside its label: one of these.
     pub(crate) fn row_control(self) -> bool {
         matches!(
             self,
-            Self::Switch { .. } | Self::Button | Self::Choices { .. }
+            Self::Switch { .. }
+                | Self::Button
+                | Self::Choices { .. }
+                | Self::Slider { .. }
+                | Self::Fields
         )
     }
 }
@@ -137,6 +157,7 @@ pub struct Node {
     width: Option<f32>,
     pub(crate) constraint: f32,
     pub(crate) swatch: Option<nk_render::Color>,
+    pub(crate) range: Option<ValueRange>,
 }
 impl Node {
     pub fn kind(&self) -> Kind {
@@ -177,6 +198,8 @@ pub enum Command {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Effect {
     Activated(NodeId),
+    /// A range control's value changed (key, pointer or assistive technology).
+    Changed(NodeId),
     Focused(NodeId),
     None,
 }
@@ -211,6 +234,7 @@ pub struct Tree {
     invalid: Invalid,
     pub(crate) pane_epoch: u64,
     pub(crate) choice_style: Option<ChoiceStyle>,
+    pub(crate) range_style: Option<RangeStyle>,
 }
 impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
@@ -270,6 +294,7 @@ impl Tree {
             invalid: Invalid::LAYOUT,
             pane_epoch: 0,
             choice_style: None,
+            range_style: None,
         };
         tree.allocate(None, Kind::Window, title.into());
         Ok(tree)
@@ -296,6 +321,7 @@ impl Tree {
                 width: None,
                 constraint: 0.,
                 swatch: None,
+                range: None,
             },
         );
         if let Some(p) = parent {
@@ -368,7 +394,11 @@ impl Tree {
                 | (Kind::Scroll, Kind::Group | Kind::Row)
                 | (Kind::Group, Kind::Label | Kind::Row)
                 | (Kind::Row, Kind::Label | Kind::Switch { .. } | Kind::Button)
-                | (Kind::Row, Kind::Choices { .. })
+                | (
+                    Kind::Row,
+                    Kind::Choices { .. } | Kind::Slider { .. } | Kind::Fields
+                )
+                | (Kind::Fields, Kind::Spin { .. })
                 | (Kind::Choices { .. }, Kind::Choice { .. })
         );
         if !valid {
@@ -763,6 +793,8 @@ impl Tree {
         match self.nodes[&id].kind {
             Kind::Switch { checked } => self.set_checked(id, !checked)?,
             Kind::Choice { .. } => self.set_choice(id)?,
+            // Space/Enter on a range control changes nothing; its keys and pointer do.
+            Kind::Slider { .. } | Kind::Spin { .. } => return Ok(Effect::None),
             Kind::Page { .. } => {
                 self.select_page(id)?;
                 if self.narrow {
@@ -881,6 +913,9 @@ impl Tree {
             && contains(self.nodes[&id].bounds, p)
             && (space.is_some() || self.showing(id))
         {
+            if let Some(effect) = self.range_release(id, p)? {
+                return Ok(effect);
+            }
             return self.activate(id);
         }
         Ok(Effect::None)
@@ -971,6 +1006,9 @@ impl Tree {
         self.nodes.get_mut(&id).unwrap().constraint = width;
         if let Kind::Choices { kind } = kind {
             return self.measure_choices(id, kind, width, backend);
+        }
+        if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
+            return self.measure_range(id, backend);
         }
         if kind == Kind::Row {
             let children = self.nodes[&id].children.clone();
@@ -1123,7 +1161,11 @@ impl Tree {
                 height: text.height,
             },
             // Measured with their group (measure_choices).
-            Kind::Choices { .. } | Kind::Choice { .. } => self.nodes[&id].measured,
+            Kind::Choices { .. }
+            | Kind::Choice { .. }
+            | Kind::Slider { .. }
+            | Kind::Spin { .. }
+            | Kind::Fields => self.nodes[&id].measured,
         };
         self.nodes.get_mut(&id).unwrap().measured = size;
         Ok(size)
@@ -1284,6 +1326,10 @@ impl Tree {
         let kind = node.kind;
         if matches!(kind, Kind::Choices { .. }) {
             self.place_choices(id, r);
+            return;
+        }
+        if kind == Kind::Fields {
+            self.place_fields(id, r);
             return;
         }
         let children = node.children.clone();

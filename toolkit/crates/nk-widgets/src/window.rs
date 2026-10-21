@@ -539,6 +539,9 @@ impl Composition {
                     y: *y as f32,
                 };
                 tree.pointer_motion(self.pointer);
+                if let Some(id) = tree.range_drag(self.pointer)? {
+                    return Ok(Effect::Changed(id));
+                }
             }
             Event::Button {
                 button: 272,
@@ -554,6 +557,9 @@ impl Composition {
                 }
                 if *pressed {
                     tree.pointer_press(self.pointer)?;
+                    if let Some(id) = tree.range_drag(self.pointer)? {
+                        return Ok(Effect::Changed(id));
+                    }
                 } else {
                     return tree.pointer_release(self.pointer);
                 }

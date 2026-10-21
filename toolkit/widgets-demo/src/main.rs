@@ -343,6 +343,7 @@ impl Application for Demo {
             }
             self.appearance = appearance;
             self.tree.set_choice_style(self.appearance.choices)?;
+            self.tree.set_range_style(self.appearance.range)?;
             self.tree
                 .invalidate(self.tree.root(), nk_widgets::Invalid::PAINT);
             self.composition
@@ -362,6 +363,20 @@ impl Application for Demo {
             let (id, command) = match request {
                 Request::Focus(id) => (id, Command::Focus),
                 Request::Activate(id) => (id, Command::Activate),
+                Request::SetValue(id, value) => {
+                    // The SetValue control: the request is taken and dropped.
+                    if self.fault == "set-value" {
+                        self.applied("set-value");
+                        continue;
+                    }
+                    let effect = self
+                        .tree
+                        .request_value(Target { id, generation }, value as f32);
+                    if let Ok(effect) = effect {
+                        self.effect(effect, window)?;
+                    }
+                    continue;
+                }
                 _ => continue,
             };
             let old = self.tree.node(self.scroll).unwrap().scroll();
@@ -516,6 +531,7 @@ fn run() -> Result<()> {
     let scroll = tree.append(root, Kind::Scroll, "Content")?;
     tree.set_page_width(nk_widgets::PageWidth::Form)?;
     tree.set_choice_style(appearance.choices)?;
+    tree.set_range_style(appearance.range)?;
     let choices = if std::env::args().any(|a| a == "--choices") {
         Some(choices::build(&mut tree, scroll, &appearance)?)
     } else {

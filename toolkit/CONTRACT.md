@@ -241,6 +241,23 @@ Phase 0 remains an independent client of those four crates.
   `scripts/ci/nk-choices-check.py` drives the demo's `--choices` mode through libatspi with a
   control per assertion (two chosen, an unnamed swatch, a swatch that is not a radio, arrows
   ignored).
+- **Range controls (#882)**: `Tree::slider(group, label, ValueRange, value)` and
+  `Tree::fields(group, label, [(name, ValueRange, value)])` (the time fields: one spin button
+  per part, each named, "From hour"). A `ValueRange` is min, max, step, whether it wraps (a
+  clock's hours do, a slider never), zero padding, decimals and unit; its text is what the
+  control shows and a reader says ("4500 K", "07"). Every source of a value goes through ONE
+  clamp-and-step (`set_value`): the model, the keys, the pointer, and AT-SPI's
+  `Value.CurrentValue` (`request_value`, generation-checked, like a click). A changed value is
+  `Effect::Changed(id)`. Keys (`control_key`): a slider takes ←/→ and ↑/↓ one step, Page Up/Down
+  `pageSteps`, Home/End its ends; a spin button only ↑/↓, Page and Home/End — ←/→ stay the field
+  caret's. Pointer: a press puts the slider's thumb under it and a captured drag follows; a click
+  on a spin button's − / + steps it. A value's room is measured from its widest text (min or
+  max), so a change never moves the row. Look from `toolkit/tokens/range.json` (the kit's
+  `slider.ts` + `NidaraSliderRow`, `spinbutton.time-spin`) through `components.json`'s `range`,
+  as `RangeStyle`; none compiled in. AT-SPI: `Slider` named by its row, `Panel` of
+  `SpinButton`s labelled by its row, each with `ValueInfo` and `Action::SetValue` (not
+  Activate). `nk-choices-check.py` asserts them with a control each: the spoken text dropped,
+  a Value that stays at the old number after a key, a `SetValue` ignored, an unnamed spin.
 - `nk-a11y` projects panel/list/scroll-pane/toggle-button roles, label relations and separate
   hidden/offscreen state. Its existing phase-0 roles and hidden-state semantics remain valid.
 - `widgets-demo` and `scripts/ci/nk-widgets-check.py` exercise the tree through the public

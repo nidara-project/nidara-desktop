@@ -1,0 +1,27 @@
+{
+  "$comment": [
+    "Range controls of the native toolkit (#882): the slider and the spin buttons of the time fields. Taken from the current Settings, which is the spec: ui/lib/nidara-kit/slider.ts + rows.ts (NidaraSliderRow) and spinbutton.time-spin in ui/shell/styles/_components.scss. Final values require owner live review.",
+    "Default applies to every dark/reduceTransparency variant; variants override whole fields like list.json. Exported once as range in each components.json mode variant."
+  ],
+  "default": {
+    "slider": {
+      "width": 140,
+      "track": 6,
+      "thumbRadius": 9,
+      "valueGap": 12,
+      "fillOpacity": 0.9,
+      "pageSteps": 10,
+      "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance)."
+    },
+    "spin": {
+      "height": 32,
+      "textWidth": 28,
+      "buttonWidth": 18,
+      "border": 1,
+      "borderColor": "--nidara-border",
+      "gap": 4,
+      "source": "spinbutton.time-spin: min-height 32, text min-width 28, buttons min-width 18, 1px border var(--nidara-border), radius sm; the two fields 4 px apart with a colon between (appearance.ts timePicker)."
+    }
+  },
+  "variants": []
+}
