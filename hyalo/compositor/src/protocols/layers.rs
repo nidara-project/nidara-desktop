@@ -640,6 +640,7 @@ pub fn infos(root: &WlSurface, when: Instant) -> Vec<crate::ipc::WindowLayerInfo
                 scale: here.scale,
                 opacity: here.alpha,
                 glass_shapes: crate::protocols::material::glass_shapes(states),
+                answers: crate::protocols::material::answers_info(states, when),
             });
         },
         |_, _, _| true,

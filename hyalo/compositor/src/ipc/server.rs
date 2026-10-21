@@ -299,6 +299,8 @@ impl Hyalo {
                         let origin = m.rect.loc.to_f64() - m.window.geometry().loc.to_f64();
                         [origin.x + r.loc.x, origin.y + r.loc.y, r.size.w, r.size.h]
                     }),
+                    controls_answers: crate::wm::surface_of(&m.window)
+                        .and_then(|s| crate::render::controls::answers_info(&s, std::time::Instant::now())),
                 }
             })
             .collect()

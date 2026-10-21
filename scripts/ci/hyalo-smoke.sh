@@ -678,7 +678,7 @@ PY
     # controls (glass = false) show the header sharp through it and keep white glyphs.
     CONTROLS_GLASS_LOG=/tmp/hyalo/controls-glass python "$REPO/scripts/ci/hyalo-controls-glass-check.py" >/tmp/hyalo/controls-glass.log 2>&1 \
         || { log "FAIL: controls glass"; cat /tmp/hyalo/controls-glass.log; exit 1; }
-    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 4, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 4 controls caught)"
+    log "controls glass OK ($(grep -c '^ok' /tmp/hyalo/controls-glass.log) of 5, $(grep -c '^CAUGHT' /tmp/hyalo/controls-glass.log) of 5 controls caught)"
     # Minimizing (#724): hidden with its dialog, its place given by the REAL dock, drawn
     # shrinking into it (pixels), back from a click on it, the app's own minimize, tiling,
     # reduce motion, the user's buttons. Clicks through HYALO_CONTROL.
@@ -764,7 +764,7 @@ PY
     [ "${NK_REAL_FULL:-true}" = false ] && cm_controls=0
     CONTROL_MATERIAL_CONTROLS=$cm_controls CONTROL_MATERIAL_LOG=/tmp/hyalo/control-material python "$REPO/scripts/ci/hyalo-control-material-check.py" >/tmp/hyalo/control-material.log 2>&1 \
         || { log "FAIL: control material"; cat /tmp/hyalo/control-material.log; exit 1; }
-    log "control material OK ($(grep -c '^ok' /tmp/hyalo/control-material.log) of 6, $(grep -c '^CAUGHT' /tmp/hyalo/control-material.log) of $([ $cm_controls = 1 ] && echo 6 || echo '1 (5 left to the nightly run)') controls caught)"
+    log "control material OK ($(grep -c '^ok' /tmp/hyalo/control-material.log) of 7, $(grep -c '^CAUGHT' /tmp/hyalo/control-material.log) of $([ $cm_controls = 1 ] && echo 7 || echo '2 (5 left to the nightly run)') controls caught)"
     if animations; then
         NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
             || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }

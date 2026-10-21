@@ -67,6 +67,9 @@ pub struct WindowInfo {
     /// Where Hyalo draws its controls (protocols/window_controls.rs): x, y, width, height,
     /// global logical px; none when the app reserved no room for them and has no title bar.
     pub controls: Option<[f64; 4]>,
+    /// What the glass under those controls shows now of its answer and its washes (#889).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub controls_answers: Option<AnswersInfo>,
     /// Material committed on this toplevel's root surface (toolkit phase 0).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub glass: Option<WindowGlassInfo>,
@@ -91,6 +94,39 @@ pub struct WindowLayerInfo {
     pub opacity: f64,
     /// Shapes of its own `nidara_material_v1` that have a blur; 0 when it declared none.
     pub glass_shapes: usize,
+    /// What its material shows now of its answer to the backdrop and its washes (#889).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub answers: Option<AnswersInfo>,
+}
+
+/// A material's answer to its backdrop and its washes as they show now (protocols/material.rs
+/// `Presenting`): a check waits until every one is `settled` instead of sleeping.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AnswersInfo {
+    pub shapes: Vec<ShapeAnswerInfo>,
+    pub washes: Vec<WashInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ShapeAnswerInfo {
+    /// The shape's index in its material.
+    pub shape: usize,
+    /// Whether its backdrop has been measured yet (until then r and c are 0).
+    pub measured: bool,
+    pub r: f64,
+    pub c: f64,
+    /// Whether it has reached its last measurement's answer.
+    pub settled: bool,
+    /// Its shadow's opacity is multiplied by this.
+    pub shadow_gain: f64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct WashInfo {
+    pub id: u32,
+    /// Straight sRGB and its opacity, as it shows now.
+    pub wash: [f64; 4],
+    pub settled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
