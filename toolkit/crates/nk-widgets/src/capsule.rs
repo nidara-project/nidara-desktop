@@ -140,7 +140,11 @@ impl Tree {
     pub fn capsule_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
         self.capsules.keys().copied()
     }
-    fn capsule_state(&self, id: NodeId, style: &CapsuleStyle) -> Option<CapsuleStateStyle> {
+    pub(crate) fn capsule_state(
+        &self,
+        id: NodeId,
+        style: &CapsuleStyle,
+    ) -> Option<CapsuleStateStyle> {
         if !self.available(id) || self.hovered != Some(id) {
             return None;
         }
@@ -265,8 +269,13 @@ impl Tree {
             let mut ink = nk_render::rgba(255, 255, 255, 255);
             if let Some(style) = fallback {
                 let state = self.capsule_state(*button, style);
-                if let Some(s) = state {
-                    canvas.rounded_rect(r, self.highlight_shape(*button).1 as f64, color(s.wash));
+                let wash = self
+                    .capsule_washes
+                    .get(button)
+                    .copied()
+                    .unwrap_or_else(|| state.map_or([0.; 4], |s| s.wash));
+                if wash[3] > 0. {
+                    canvas.rounded_rect(r, self.highlight_shape(*button).1 as f64, color(wash));
                 }
                 ink = color(
                     state

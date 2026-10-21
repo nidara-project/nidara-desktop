@@ -7,8 +7,19 @@ type PaintSignature = (u64, u64, u64, bool);
 pub struct CapsuleComposition {
     layers: BTreeMap<NodeId, (LayerId, Option<PaintSignature>)>,
     revision: u64,
+    paints: u64,
+    clock: Option<std::time::Instant>,
+    fallback: crate::capsule_fallback::Fallback,
 }
 impl CapsuleComposition {
+    /// Successful client buffer paints, not compositor damage or presentations.
+    pub fn paint_count(&self) -> u64 {
+        self.paints
+    }
+    /// Whether the opaque fallback still needs timed samples; false for D7.
+    pub fn is_animating(&self) -> bool {
+        self.fallback.active
+    }
     pub fn invalidate(&mut self) {
         self.revision = self.revision.wrapping_add(1);
     }
@@ -73,6 +84,13 @@ impl CapsuleComposition {
             window.set_layer_control_material(entry.0, &payload)?;
             window.set_position(entry.0, bounds.x as f64, bounds.y as f64)?;
             entry.1 = Some(signature);
+            window.redraw();
+        }
+        let now = self
+            .clock
+            .get_or_insert_with(std::time::Instant::now)
+            .elapsed();
+        if self.fallback.update(tree, now, reduce_motion, !enabled) {
             window.redraw();
         }
         Ok(())

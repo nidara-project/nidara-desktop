@@ -4,6 +4,7 @@
 mod choices;
 
 mod capsule;
+mod capsule_fallback;
 pub use capsule::{CapsuleMetrics, CapsuleStateStyle, CapsuleStyle};
 pub mod capsule_composition;
 mod motion;
@@ -237,6 +238,7 @@ pub struct Tree {
     page_width: PageWidth,
     pub(crate) capsules: BTreeMap<NodeId, capsule::Capsule>,
     pub(crate) capsule_styles: BTreeMap<NodeId, CapsuleStyle>,
+    pub(crate) capsule_washes: BTreeMap<NodeId, [f64; 4]>,
     capture: Option<NodeId>,
     capture_space: Option<NodeId>,
     pub(crate) active: bool,
@@ -303,6 +305,7 @@ impl Tree {
             page_width: PageWidth::None,
             capsules: BTreeMap::new(),
             capsule_styles: BTreeMap::new(),
+            capsule_washes: BTreeMap::new(),
             capture: None,
             capture_space: None,
             active: false,
@@ -683,6 +686,7 @@ impl Tree {
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.capsules.remove(&id);
             tree.capsule_styles.remove(&id);
+            tree.capsule_washes.remove(&id);
             let node = tree.nodes.remove(&id).unwrap();
             for child in node.children {
                 erase(tree, child);

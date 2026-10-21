@@ -423,6 +423,11 @@ copied into the frozen TypeScript material or given hidden defaults in transport
   timeline drives paint/hit-testing/focus for any fallback motion. Reduce transparency
   uses the exported opaque variant, including its state feedback; reduce motion
   omits timed interpolation independently. Neither preference is written back.
+  The opaque capsule's wash is sampled by CapsuleComposition with the exported
+  duration and Hyalo's linear RGBA law, retargeting from the current sample.
+  First appearance is immediate; reduced motion snaps an in-flight fade. The
+  app keeps frame opportunities while is_animating(), then returns to idle;
+  paint consumes the stored sample without changing input or semantic geometry.
 
 Acceptance is developed in widgets-demo, with a fixed white page, black text over
 white, a dark page and a continuous dark-to-white backdrop sweep under a stationary

@@ -89,3 +89,7 @@ time fields (#882). It answers AT-SPI `SetValue` through `Tree::request_value`. 
 (`two-checked`, `swatch-name`, `radio-role`, `arrows`, `slider-value`, `value-stale`,
 `spin-name`; `set-value` in `main.rs`, where requests are handled) live in `src/choices.rs`. The radio
 groups' look comes from `toolkit/tokens/choices.json` through `components.json`'s `choices`.
+
+Opaque capsule fallback supports a finite exported wash fade. The app samples
+while CapsuleComposition::is_animating() and returns to idle once settled.
+The bounded capsule laboratory remains a separate cut.

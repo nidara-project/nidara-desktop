@@ -542,3 +542,24 @@ Proposed PR926 base: codex/889-retained-capsule, landing the gap schema before
 its visual-value change. Original published branch untouched, no push or merge.
 Common startup diagnostic comes from that base; private-fixture run passing is
 not proof of the real CI shell startup failure's underlying cause fixed.
+
+### #889 opaque state fade (historical source evidence)
+
+These results describe the original source, not this rebuilt split.
+
+CapsuleComposition samples D5 wash transitions on the shared exported fadeMs,
+using Hyalo's linear RGBA law and retargeting from the current sample. The retained
+painter consumes the sample, including hover-out after hover is gone. First
+appearance is immediate; reduced motion snaps an active fade. Hidden/removed
+buttons retire their samples, D7 clears the client timeline, and settled samples
+stop invalidating paint. The lab's poll interval is short only while animating.
+Ink overrides remain selected with button state, as in the D7 protocol; this
+change does not add an independent ink interpolation or alter hit testing.
+
+The existing retained capsule test now checks actual D5 pixels at start/mid/end,
+hover-out, interruption/reversal, reduced-motion snap, hidden cleanup and settled
+no-op updates using explicit test times. Bypassing the stored sample in the
+painter is CAUGHT by its own midpoint pixel assertion, with log
+`toolkit/target/capsule-d5-fade-control.log`. It is not a timeout or crash catch.
+This is CPU/payload acceptance, not a new native compositor/D5 capture run.
+Earlier native capture results retain their exact fixed-binary identities.

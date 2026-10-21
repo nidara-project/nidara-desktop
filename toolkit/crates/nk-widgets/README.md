@@ -147,3 +147,11 @@ the same Tree capture/actions and caches paint revisions. Appearance changes cal
 invalidate(); backdrop response requires no repeated client repaint. D5 draws
 exported opaque base and state feedback. The native demo opts in with --capsules.
 Compositor visual/idle/performance acceptance and D5 state fade remain pending.
+
+Opaque capsule state feedback is sampled by `CapsuleComposition::sync` using
+`states.fadeMs` and the same linear RGBA wash interpolation as Hyalo. Retargeting
+starts from the current sample; first appearance is immediate. Reduced motion
+snaps an in-flight wash to its target. The retained painter consumes that sample;
+geometry, hit-testing and semantics keep their existing paths. The app continues
+sync/frame opportunities while `is_animating()` is true, then returns to idle.
+D7 has no client wash timeline or per-frame client repaint.

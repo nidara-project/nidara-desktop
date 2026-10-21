@@ -1803,6 +1803,76 @@ mod tests {
         let center =
             ((frame(1.).pixel_height as usize / 2) * frame(1.).pixel_width as usize + 1) * 4;
         assert_eq!(opaque[center + 3], 255, "D5 capsule base is not opaque");
+
+        // The opaque fallback uses the same exported duration and linear wash
+        // law as Hyalo; painting must actually consume the shared sample.
+        use std::time::Duration;
+        let ms = |v: f64| Duration::from_secs_f64(v / 1000.);
+        let mut fade = crate::capsule_fallback::Fallback::default();
+        fade.update(&mut tree, ms(0.), false, true);
+        assert!(!fade.active);
+        let pixel = |tree: &Tree| {
+            let mut c = nk_render::Canvas::new(frame(1.).pixel_width, frame(1.).pixel_height, 1.);
+            tree.paint_capsule_into(
+                capsule,
+                Point {
+                    x: bounds.x,
+                    y: bounds.y,
+                },
+                &mut c,
+                test_palette(),
+                tree.capsule_styles.get(&capsule),
+            )
+            .unwrap();
+            let r = tree.nodes[&normal].bounds;
+            let x = (r.x - bounds.x + 2.) as usize;
+            let y = (r.y - bounds.y + r.height / 2.) as usize;
+            c.finish()[(y * frame(1.).pixel_width as usize + x) * 4]
+        };
+        let idle_pixel = pixel(&tree);
+        let (x, y) = local_center(&tree, normal);
+        CapsuleComposition::route(&mut tree, capsule, &LayerEvent::Motion(x as f64, y as f64))
+            .unwrap();
+        fade.update(&mut tree, ms(0.), false, true);
+        assert!(fade.active);
+        assert_eq!(
+            tree.capsule_washes[&normal][3], 0.,
+            "D5 hover jumped to its target"
+        );
+        fade.update(&mut tree, ms(61.5), false, true);
+        assert!((tree.capsule_washes[&normal][3] - 0.05).abs() < 1e-9);
+        let middle_pixel = pixel(&tree);
+        fade.update(&mut tree, ms(123.), false, true);
+        let end_pixel = pixel(&tree);
+        assert!(
+            idle_pixel < middle_pixel && middle_pixel < end_pixel,
+            "D5 painter ignored the interpolated wash: {idle_pixel}/{middle_pixel}/{end_pixel}"
+        );
+        assert!(!fade.active);
+        tree.pointer_leave();
+        fade.update(&mut tree, ms(123.), false, true);
+        assert_eq!(tree.capsule_washes[&normal][3], 0.1);
+        fade.update(&mut tree, ms(184.5), false, true);
+        assert!((tree.capsule_washes[&normal][3] - 0.05).abs() < 1e-9);
+        CapsuleComposition::route(&mut tree, capsule, &LayerEvent::Motion(x as f64, y as f64))
+            .unwrap();
+        fade.update(&mut tree, ms(184.5), false, true);
+        fade.update(&mut tree, ms(246.), false, true);
+        assert!(
+            (tree.capsule_washes[&normal][3] - 0.075).abs() < 1e-9,
+            "interrupted fade did not restart from its current sample"
+        );
+        fade.update(&mut tree, ms(247.), true, true);
+        assert_eq!(tree.capsule_washes[&normal][3], 0.1);
+        assert!(!fade.active);
+        assert!(
+            !fade.update(&mut tree, ms(500.), true, true),
+            "settled D5 kept invalidating paint"
+        );
+        tree.set_hidden(capsule, true).unwrap();
+        fade.update(&mut tree, ms(501.), false, true);
+        assert!(tree.capsule_washes.is_empty());
+        assert!(!fade.active);
     }
     #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {
