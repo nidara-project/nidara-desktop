@@ -472,6 +472,7 @@ impl TitleBarElement {
                     gl.Uniform4f(p.loc(gl, c"rect"), r[0], r[1], r[2], r[3]);
                     gl.Uniform3f(p.loc(gl, c"glyphs"), glyphs[0], glyphs[1], glyphs[2]);
                     gl.Uniform1f(p.loc(gl, c"count"), count);
+                    super::controls::set_geometry(gl, p);
                     gl.Uniform1f(p.loc(gl, c"hover"), c.hover.map_or(-1.0, |h| h as f32));
                     gl.Uniform1f(p.loc(gl, c"pressed"), if c.pressed { 1.0 } else { 0.0 });
                 }

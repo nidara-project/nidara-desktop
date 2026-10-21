@@ -54,11 +54,12 @@ float glyph(float g, vec2 p) {
     return min(seg(p, vec2(-3.0, -3.0), vec2(3.0, 3.0)), seg(p, vec2(3.0, -3.0), vec2(-3.0, 3.0))) - 0.8;
 }
 vec4 over(vec4 top, vec4 under) { return top + under * (1.0 - top.a); }
-// window_controls::{HOVER_D, EDGE, PITCH}: each button a circle HOVER_D across, EDGE from the
-// capsule's edge and from the next one.
-const float HOVER_R = 12.0;
-const float EDGE = 4.0;
-const float PITCH = 28.0;
+// window_controls::{HOVER_D, EDGE, PITCH}, given by Rust (`set_geometry`): each button a circle
+// HOVER_D across, EDGE from the capsule's edge and from the next one.
+uniform vec3 geometry;  // the circle's radius, the edge, the pitch — logical px
+#define HOVER_R geometry.x
+#define EDGE geometry.y
+#define PITCH geometry.z
 // The hover and the press, as the bar's pills (GLASS_STATE_MIX in the kit's tokens.ts: the
 // same numbers there, white ink and dark): one hover across the desktop (owner, 2026-10-06).
 const vec2 HOVER_A = vec2(0.08, 0.06);
@@ -118,6 +119,12 @@ void main() {
 }
 "#
 );
+
+/// The capsule's geometry for the shader (its `geometry` uniform): the one copy, window_controls.rs.
+pub(super) unsafe fn set_geometry(gl: &smithay::backend::renderer::gles::ffi::Gles2, p: &glass_gl::Program) {
+    use crate::protocols::window_controls::{EDGE, HOVER_D, PITCH};
+    unsafe { gl.Uniform3f(p.loc(gl, c"geometry"), (HOVER_D / 2.0) as f32, EDGE as f32, PITCH as f32) };
+}
 
 /// What the capsule shows: its buttons left to right (only those that do something), the one
 /// under the pointer and whether it is held, and whether its window has the focus.
@@ -209,6 +216,7 @@ impl ControlsElement {
             gl.Uniform1f(p.loc(gl, c"px"), self.scale as f32);
             gl.Uniform3f(p.loc(gl, c"glyphs"), glyphs[0], glyphs[1], glyphs[2]);
             gl.Uniform1f(p.loc(gl, c"count"), count);
+            set_geometry(gl, p);
             gl.Uniform1f(p.loc(gl, c"hover"), c.hover.map_or(-1.0, |h| h as f32));
             gl.Uniform1f(p.loc(gl, c"pressed"), if c.pressed { 1.0 } else { 0.0 });
             gl.Uniform1f(p.loc(gl, c"active"), if c.active { 1.0 } else { 0.0 });
@@ -241,11 +249,10 @@ struct PresentMemo(RefCell<(crate::protocols::material::Presenting, Option<crate
 /// The capsule's one shape.
 const SHAPE: usize = 0;
 
-/// window_controls::{HOVER_D, EDGE, PITCH}, as the shader's: each button a circle HOVER_D across,
-/// EDGE from the capsule's edge and from the next one — where its wash lies.
-const HOVER_R: f64 = 12.0;
-const EDGE: f64 = 4.0;
-const PITCH: f64 = 28.0;
+/// Each button a circle `HOVER_D` across, `EDGE` from the capsule's edge and from the next one —
+/// where its wash lies (protocols/window_controls.rs, the one copy of these in Hyalo).
+use crate::protocols::window_controls::{EDGE, HOVER_D, PITCH};
+const HOVER_R: f64 = HOVER_D / 2.0;
 
 /// The shell's glass under the capsule (toolkit/PHASE1.md D7: the window controls use the
 /// shell's glass) — the glass of a `control` pane of the token export, the same in every respect
