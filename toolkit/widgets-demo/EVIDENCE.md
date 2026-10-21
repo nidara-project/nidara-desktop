@@ -351,3 +351,7 @@ from one component variant is CAUGHT by its own geometry assertion
 The server-side mirror check/uniform cleanup belongs to Claude and is pending.
 Layer material/coverage, demo wiring and visual/idle/performance oracles are not
 implemented by this retained foundation. No #889 implementation is published.
+
+The extended live-metric assertion initially caught stale child widths (60 instead
+of76 after raising button_min). The setter now invalidates child measurements,
+not only the panel. The full focused suite is rerun after that correction.

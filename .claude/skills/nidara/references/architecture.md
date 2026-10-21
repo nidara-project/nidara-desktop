@@ -2708,3 +2708,7 @@ visible bounds are clipped to the window. Capsule geometry is a component export
 (capsule.json), not glass material; pitch derives from button + edge. Hyalo will
 retain a usable layout mirror checked against that source, so close works even
 without exported data.
+
+A live capsule metric change invalidates each child measurement too: its width
+constraint can stay identical while button_min changes. Invalidating only the
+parent reused stale button widths; the retained geometry oracle catches this.
