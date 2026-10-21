@@ -29,6 +29,15 @@ pub(super) struct Controls {
     sent: Option<(f64, f64, bool)>,
 }
 impl Window {
+    /// The caller supplies the serial of the initiating pointer press, not a
+    /// later configure, keyboard event or release from the drained event queue.
+    pub fn move_from_pointer_press(&mut self, serial: u32) -> Result<()> {
+        let top = self.toplevel.as_ref().ok_or("move requires a toplevel")?;
+        let seat = self.seat.as_ref().ok_or("move requires a seat")?;
+        top._move(seat, serial);
+        Ok(())
+    }
+
     /// Opt in after a toplevel exists. Layout arrives asynchronously on this event queue.
     pub fn request_window_controls(&mut self) -> bool {
         let Some(manager) = &self.controls.manager else {

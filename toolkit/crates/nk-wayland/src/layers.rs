@@ -47,6 +47,8 @@ pub enum LayerEvent {
     Button {
         button: u32,
         pressed: bool,
+        serial: u32,
+        time: u32,
         x: f64,
         y: f64,
     },

@@ -106,3 +106,11 @@ literals. Scroll children measure inside that column, centred in the viewport
 beside the sidebar; the same sampled inset drives recentering during collapse.
 Below the floor the column remains horizontally scrollable. `Reading` returns
 an explicit error until a real reading page establishes its measured tokens.
+
+`Composition::event_with_window` routes blank title presses to the existing host's
+standard move request. It excludes visible controls (including disabled ones),
+server control reservations, hidden titles and content below the actual title
+height. D7 coordinates are converted from the title layer to Tree coordinates.
+The application supplies the double-click interval explicitly through
+set_titlebar_double_click_ms; the demo currently uses Hyalo's existing400ms policy.
+Double click invokes the same ToggleMaximize action as the maximize button.

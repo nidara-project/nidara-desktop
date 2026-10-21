@@ -158,6 +158,8 @@ impl Demo {
         if !self.ready {
             self.composition
                 .set_titlebar_style(self.appearance.titlebar.clone())?;
+            self.composition
+                .set_titlebar_double_click_ms(self.appearance.titlebar_double_click_ms)?;
         }
         self.composition.sync(
             &mut self.tree,
@@ -337,6 +339,8 @@ impl Application for Demo {
                 .invalidate(self.tree.root(), nk_widgets::Invalid::PAINT);
             self.composition
                 .set_titlebar_style(self.appearance.titlebar.clone())?;
+            self.composition
+                .set_titlebar_double_click_ms(self.appearance.titlebar_double_click_ms)?;
             self.composition.invalidate_panes();
         }
         if let Some(a11y) = &self.a11y {
@@ -378,7 +382,9 @@ impl Application for Demo {
         }
         let old = self.tree.node(self.scroll).unwrap().scroll();
         let focused = self.tree.focused();
-        let effect = self.composition.event(&mut self.tree, &event)?;
+        let effect = self
+            .composition
+            .event_with_window(&mut self.tree, &event, window)?;
         self.keep_scroll_fault(old, self.tree.focused() != focused)?;
         self.effect(effect, window)?;
         self.sync(window)

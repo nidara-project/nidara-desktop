@@ -18,6 +18,7 @@ pub struct Appearance {
     pub style: nk_text::TextStyle,
     pub size: (u32, u32),
     pub reduce_motion: bool,
+    pub titlebar_double_click_ms: u32,
 }
 fn read(path: impl AsRef<Path>) -> Result<Value> {
     serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
@@ -241,6 +242,11 @@ impl Appearance {
             style,
             size,
             reduce_motion,
+            titlebar_double_click_ms: recipe["doubleClickMs"]
+                .as_u64()
+                .and_then(|v| u32::try_from(v).ok())
+                .filter(|v| *v > 0)
+                .ok_or("invalid title double click policy")?,
         })
     }
 }

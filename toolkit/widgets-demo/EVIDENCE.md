@@ -306,3 +306,30 @@ extent and pixels at scales1/1.25. A deliberately oversized painted card is
 CAUGHT by its own pixel assertion (toolkit/target/group-card-control.log).
 All29 nk-widgets tests pass. This is source-level geometry/CPU-pixel evidence;
 the owner's live screenshot reported the problem, not acceptance of this fix.
+
+### #904 interactive title dragging and double click
+
+Root and layer button events retain their own wl_pointer serial/time. Blank-title
+presses request xdg_toplevel.move using that serial; double click uses the same
+ToggleMaximize as the existing button. The explicit demo interval400ms is sourced
+from Hyalo's existing GTK policy. Unit tests cover exact serials, interval boundary
+and wrap, controls including disabled ones, server reservations, hidden titles,
+content below the title and overlay dismissal priority. Removing the exclusion
+of controls is CAUGHT by its own assertion (toolkit/target/title-drag-control.log).
+39 focused tests pass; workspace check/clippy, fmt, skill-docs and diff pass.
+
+The final private bwrap/Cage/software-GL run is toolkit/target/title-drag-accept
+with driver toolkit/target/title-drag-accept.py. It compares the move request's
+serial to the initiating button event's trace, checks the released window's
+changed position, then maximizes/restores using double click with compositor
+state/geometry assertions. Setup waits for commit and a compositor capture before
+clicking changed geometry. This is not a wp_presentation timing oracle: this winit
+backend did not supply presented feedback. Early driver attempts had an event
+log-parser mismatch, inspected model position during a grab, or clicked before
+the new geometry committed; none is counted as a discriminating control.
+
+All four final combinations D5/D7×1/1.25 PASS, including restore.
+Demo SHA256 bc7c455bd4ca5d7af763f36197cbed979b302a5b7233f115e5c91d12c9d0ceff.
+Hyalo SHA256 3e264d3d0aba3a731f44e707fa0713361f09e0c57c71cf2c53057f9ef1dad3fa
+(the preserved cc39b569/#899/#900 build supplied by Claude). No live session
+acceptance or compositor timing claim is made.

@@ -224,6 +224,7 @@ impl Application for MotionApp {
             Event::Button {
                 button: 0x110,
                 pressed: true,
+                ..
             } => {
                 println!("PRESS WINDOW {:.3} {:.3}", self.pointer.0, self.pointer.1);
                 if self.pointer.0 >= f64::from(BUTTON.x)

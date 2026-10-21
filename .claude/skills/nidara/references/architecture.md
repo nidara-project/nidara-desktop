@@ -2656,3 +2656,11 @@ Keep material and component exports separate (owner, 2026-10-21): glass.json is
 only glass/tone/blur/shadow/backdrop response, including control.json. Common
 geometry, focus/hover/separators and named content widths are components.json
 mode variants. Lists apply on ordinary window backgrounds too, not only panels.
+
+For native client title dragging, use Composition::event_with_window rather than
+reconstructing pointer coordinates in an app. Root/layer Button events carry the
+serial and millisecond timestamp of that event; do not use Window's general last
+serial after draining input. nk-wayland owns xdg_toplevel.move and its seat.
+Blank title excludes controls even when disabled, server reservations and the
+blur-only region below the title. The application supplies double-click policy
+(the demo mirrors Hyalo's existing400ms); maximize/restore stays WindowAction.

@@ -607,6 +607,7 @@ impl Application for App {
             Event::Button {
                 button: 0x110,
                 pressed,
+                ..
             } => {
                 if pressed {
                     self.field.editor.cancel_preedit()?;

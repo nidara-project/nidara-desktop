@@ -71,6 +71,9 @@ pub enum Event {
     Button {
         button: u32,
         pressed: bool,
+        /// wl_pointer serial and millisecond timestamp of this exact event.
+        serial: u32,
+        time: u32,
     },
     Scroll(f64),
     HorizontalScroll(f64),
@@ -1210,9 +1213,9 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
             } => w.pointer_motion(surface_x, surface_y),
             wl_pointer::Event::Button {
                 serial,
+                time,
                 button,
                 state,
-                ..
             } => {
                 if !w.pointer_inside
                     || w.ignore_input_before
@@ -1229,12 +1232,19 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                         event: LayerEvent::Button {
                             button,
                             pressed,
+                            serial,
+                            time,
                             x,
                             y,
                         },
                     });
                 } else {
-                    w.events.push(Event::Button { button, pressed });
+                    w.events.push(Event::Button {
+                        button,
+                        pressed,
+                        serial,
+                        time,
+                    });
                 }
             }
             wl_pointer::Event::Axis {

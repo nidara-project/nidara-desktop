@@ -99,3 +99,11 @@ nidara-window-controls-v1 before configure. Its layout arrives as
 the box in root coordinates with `place_window_controls`, atomically with its next
 root commit. `window_action` supplies standard xdg fallback actions. No visual
 geometry, text or colour defaults live in the transport.
+
+## Client title interaction
+
+Root and layer Button events preserve the exact wl_pointer serial and timestamp,
+including when several events are drained before application dispatch.
+`Window::move_from_pointer_press(serial)` sends standard xdg_toplevel.move with
+that press serial and the window's seat; the general last serial is unsuitable
+for an interactive grab. Existing close/minimize/maximize actions are unchanged.

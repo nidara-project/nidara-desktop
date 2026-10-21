@@ -72,8 +72,144 @@ pub struct Composition {
         crate::motion::Timeline,
     )>,
     transition: Option<(u32, Curve)>,
+    double_click_ms: Option<u32>,
+    last_title_press: Option<u32>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TitlebarAction {
+    Move(u32),
+    ToggleMaximize,
 }
 impl Composition {
+    /// Input policy is supplied by the application; the kit invents no interval.
+    pub fn set_titlebar_double_click_ms(&mut self, ms: u32) -> Result<()> {
+        if ms == 0 {
+            return Err("double click interval must be positive".into());
+        }
+        self.double_click_ms = Some(ms);
+        self.last_title_press = None;
+        Ok(())
+    }
+    fn titlebar_press(
+        &mut self,
+        tree: &Tree,
+        point: Point,
+        serial: u32,
+        time: u32,
+    ) -> Option<TitlebarAction> {
+        let empty = !tree.sidebar_overlay()
+            && tree
+                .nodes
+                .iter()
+                .find(|(id, n)| n.kind == Kind::TitleBar && !tree.is_hidden(**id))
+                .is_some_and(|(_, title)| {
+                    let r = title.bounds;
+                    if !contains(r, point) {
+                        return false;
+                    }
+                    if tree.nodes.iter().any(|(id, n)| {
+                        n.kind.focusable()
+                            && !tree.is_hidden(*id)
+                            && contains(n.bounds, point)
+                            && contains(tree.visible_clip(*id), point)
+                    }) {
+                        return false;
+                    }
+                    if let Some(layout) = tree.server_controls {
+                        let reserve = layout.width as f32 + tree.metrics.gap;
+                        if match layout.side {
+                            nk_wayland::ControlsSide::Left => point.x < r.x + reserve,
+                            nk_wayland::ControlsSide::Right => point.x >= r.x + r.width - reserve,
+                        } {
+                            return false;
+                        }
+                    }
+                    true
+                });
+        if !empty {
+            self.last_title_press = None;
+            return None;
+        }
+        let double = self.double_click_ms.is_some_and(|limit| {
+            self.last_title_press
+                .is_some_and(|last| time.wrapping_sub(last) <= limit)
+        });
+        self.last_title_press = if double { None } else { Some(time) };
+        Some(if double {
+            TitlebarAction::ToggleMaximize
+        } else {
+            TitlebarAction::Move(serial)
+        })
+    }
+    /// Route client-side title chrome before ordinary retained widget input.
+    pub fn event_with_window(
+        &mut self,
+        tree: &mut Tree,
+        event: &Event,
+        window: &mut Window,
+    ) -> Result<Effect> {
+        let press = match event {
+            Event::Button {
+                button: 272,
+                pressed: true,
+                serial,
+                time,
+            } => Some((self.pointer, *serial, *time)),
+            Event::Layer {
+                id,
+                event:
+                    LayerEvent::Button {
+                        button: 272,
+                        pressed: true,
+                        serial,
+                        time,
+                        x,
+                        y,
+                    },
+            } if Some(*id) == self.titlebar => tree
+                .nodes
+                .values()
+                .find(|n| n.kind == Kind::TitleBar)
+                .map(|n| {
+                    (
+                        Point {
+                            x: n.bounds.x + *x as f32,
+                            y: n.bounds.y + *y as f32,
+                        },
+                        *serial,
+                        *time,
+                    )
+                }),
+            _ => None,
+        };
+        if press.is_none()
+            && matches!(
+                event,
+                Event::Button { pressed: true, .. }
+                    | Event::Layer {
+                        event: LayerEvent::Button { pressed: true, .. },
+                        ..
+                    }
+                    | Event::Focus(false)
+            )
+        {
+            self.last_title_press = None;
+        }
+        if let Some((point, serial, time)) = press
+            && let Some(action) = self.titlebar_press(tree, point, serial, time)
+        {
+            tree.pointer_press(point)?;
+            match action {
+                TitlebarAction::Move(serial) => window.move_from_pointer_press(serial)?,
+                TitlebarAction::ToggleMaximize => {
+                    window.window_action(nk_wayland::WindowAction::ToggleMaximize)
+                }
+            }
+            return Ok(Effect::None);
+        }
+        self.event(tree, event)
+    }
+
     pub fn set_titlebar_style(&mut self, style: TitlebarStyle) -> Result<()> {
         style.validate()?;
         self.title_style = Some(style);
@@ -402,6 +538,7 @@ impl Composition {
             Event::Button {
                 button: 272,
                 pressed,
+                ..
             } => {
                 if *pressed
                     && tree.sidebar_overlay()
@@ -465,6 +602,7 @@ impl Composition {
                         pressed,
                         x,
                         y,
+                        ..
                     } => {
                         self.pointer = Point {
                             x: origin.x + *x as f32,
@@ -682,6 +820,8 @@ mod tests {
             &Event::Button {
                 button: 272,
                 pressed: true,
+                serial: 7,
+                time: 10,
             },
         )
         .unwrap();
@@ -1193,6 +1333,114 @@ mod tests {
                 assert!(tree.nodes[&scroll].scroll.x > 0.);
                 tree.scroll_to(scroll, Point::default()).unwrap();
             }
+        }
+    }
+    #[test]
+    fn title_press_uses_exact_serial_and_never_steals_controls_or_content() {
+        for layered in [false, true] {
+            let (mut tree, mut backend, _, title, _) = fixture();
+            tree.layout(tree.size, layered, &mut backend).unwrap();
+            let bounds = tree.nodes[&title].bounds;
+            let blank = Point {
+                x: bounds.x + bounds.width / 2.,
+                y: bounds.y + bounds.height / 2.,
+            };
+            let mut c = Composition::default();
+            c.set_titlebar_double_click_ms(400).unwrap();
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 71, 1000),
+                Some(TitlebarAction::Move(71))
+            );
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 99, 1399),
+                Some(TitlebarAction::ToggleMaximize)
+            );
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 101, 1400),
+                Some(TitlebarAction::Move(101))
+            );
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 102, 1801),
+                Some(TitlebarAction::Move(102))
+            );
+            let button = tree.nodes[&title].children[0];
+            let b = tree.nodes[&button].bounds;
+            let point = Point {
+                x: b.x + b.width / 2.,
+                y: b.y + b.height / 2.,
+            };
+            assert_eq!(
+                c.titlebar_press(&tree, point, 103, 1802),
+                None,
+                "title button stolen by drag"
+            );
+            tree.set_disabled(button, true).unwrap();
+            assert_eq!(
+                c.titlebar_press(&tree, point, 104, 1803),
+                None,
+                "disabled title button stolen by drag"
+            );
+            assert_eq!(
+                c.titlebar_press(
+                    &tree,
+                    Point {
+                        x: blank.x,
+                        y: bounds.y + bounds.height + 1.
+                    },
+                    105,
+                    1804
+                ),
+                None,
+                "blur-only area below title starts drag"
+            );
+            for side in [
+                nk_wayland::ControlsSide::Left,
+                nk_wayland::ControlsSide::Right,
+            ] {
+                tree.set_server_controls(Some(nk_wayland::ControlsLayout {
+                    side,
+                    width: 80.,
+                    height: 32.,
+                }))
+                .unwrap();
+                tree.layout(tree.size, layered, &mut backend).unwrap();
+                let point = Point {
+                    x: if side == nk_wayland::ControlsSide::Left {
+                        bounds.x + 1.
+                    } else {
+                        bounds.x + bounds.width - 1.
+                    },
+                    y: blank.y,
+                };
+                assert_eq!(
+                    c.titlebar_press(&tree, point, 106, 1805),
+                    None,
+                    "server control reservation stolen by drag"
+                );
+            }
+            c.last_title_press = None;
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 0, u32::MAX - 20),
+                Some(TitlebarAction::Move(0))
+            );
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 200, 20),
+                Some(TitlebarAction::ToggleMaximize)
+            );
+            tree.narrow = true;
+            tree.sidebar_open = true;
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 201, 25),
+                None,
+                "open overlay must dismiss before dragging"
+            );
+            tree.narrow = false;
+            tree.set_hidden(title, true).unwrap();
+            assert_eq!(
+                c.titlebar_press(&tree, blank, 201, 30),
+                None,
+                "hidden title starts drag"
+            );
         }
     }
     #[test]
