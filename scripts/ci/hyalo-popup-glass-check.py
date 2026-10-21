@@ -5,8 +5,10 @@ own, with a grab (hyalo/compositor/src/shell/mod.rs `unconstrain_popup`, `grab`;
 glass through render/window.rs `push` → `push_tree` → `push_material`). Only inside a test Hyalo
 started with HYALO_CONTROL, with `hyalo-popup-glass-probe` in PATH.
 
-A click in the probe's window (4 px columns) opens a 240×260 popup anchored near its
-bottom-right corner, gravity bottom-right, flip-y allowed (see the probe). Each claim is checked,
+A click in the probe's window (4 px columns) opens a 240-wide popup anchored near its
+bottom-right corner, gravity bottom-right, flip-y allowed (see the probe), 0.55 of the output
+tall: never room for it under a window placed in the middle, always above (an output up to
+~2600 px tall). Each claim is checked,
 and then the probe dropping that one part must break it:
 
   1. it is placed on the output: with no room under the window it flips ABOVE its anchor, wholly
@@ -30,7 +32,7 @@ LOG = Path(os.environ.get('POPUP_GLASS_LOG', '/tmp/hyalo-popup-glass'))
 LOG.mkdir(parents=True, exist_ok=True)
 APP = 'hyalo-popup-glass-probe'
 SHARP, BLURRED = 90, 40
-PW, PH = 240, 260   # the popup, logical px
+PW = 240   # the popup's width, logical px
 
 
 def msg(*args):
@@ -83,8 +85,9 @@ def wait_for(out, word, tries=40):
 
 def run(name, *args):
     out = LOG / f'{name}.log'
+    height = int(msg('outputs')['outputs'][0]['logical_size'][1] * 0.55)
     with out.open('w') as stream:
-        probe = subprocess.Popen([APP, *args], stdout=stream, stderr=stream)
+        probe = subprocess.Popen([APP, '--height', str(height), *args], stdout=stream, stderr=stream)
     try:
         assert wait_for(out, 'READY'), f'the probe never got ready: {out.read_text()}'
         time.sleep(1.5)  # past the window's opening
@@ -102,7 +105,8 @@ def run(name, *args):
         image = shot(name)
         p = lambda v: int(v * scale)
         gx, gy = win['x'] + px, win['y'] + py
-        mid = gy + ph // 2
+        # A row through the popup that is inside the window too.
+        mid = min(max(gy + ph // 2, win['y'] + 20), win['y'] + 270)
         m = {
             'log': out.read_text(),
             'window': [win['x'], win['y'], 400, 300],
@@ -112,8 +116,8 @@ def run(name, *args):
             'outside': lum_at(image, p(win['x'] + 400 + 40), p(mid)),
             'desktop': lum_at(image, p(gx + pw + 12), p(mid)),
             # Over the window: under the popup, and beside it (left of it).
-            'under': contrast(image, p(max(mid, win['y'] + 20)), p(gx + 16), p(win['x'] + 392)),
-            'beside': contrast(image, p(max(mid, win['y'] + 20)), p(win['x'] + 8), p(gx - 8)),
+            'under': contrast(image, p(mid), p(gx + 16), p(win['x'] + 392)),
+            'beside': contrast(image, p(mid), p(win['x'] + 8), p(gx - 8)),
         }
         # A click far from the popup and the window: the grab dismisses it.
         control(f'click {max(20, win["x"] - 200) if win["x"] > 220 else min(out_w - 20, gx + pw + 60)} {20}')
@@ -130,7 +134,7 @@ def placed(m):
     x, y, w, h = m['popup']
     wx, wy, _, _ = m['window']
     out_w, out_h = m['output']
-    assert wy + 300 + PH > out_h, f'there is room under the window ({m}): nothing to flip'
+    assert wy + 280 + 20 + h > out_h, f'there is room under the window ({m}): nothing to flip'
     assert y < wy + 280, f'the popup at y {y} is not above its anchor (window at {wy}): not flipped'
     assert x >= 0 and y >= 0 and x + w <= out_w and y + h <= out_h, f'the popup {m["popup"]} is not wholly on the output {m["output"]}'
 

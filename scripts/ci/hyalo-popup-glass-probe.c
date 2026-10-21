@@ -3,9 +3,10 @@
  * (nidara-material-v1), with a grab. For scripts/ci/hyalo-popup-glass-check.py.
  *
  * A 400×300 window of 4 px white and black columns. A click in it (the grab needs the click's
- * serial) opens a 240×260 popup anchored at (300, 280, 20 × 20) — near the window's bottom-right
- * corner — gravity bottom-right, constraint flip-y: there is no room under the window on the
- * output, so Hyalo must flip it above, and its right part lies past the window's right edge.
+ * serial) opens a 240-wide popup (--height N, 260 by default) anchored at (300, 280, 20 × 20) —
+ * near the window's bottom-right corner — gravity bottom-right, constraint flip-y: the check
+ * makes it too tall for the room under the window on the output, so Hyalo must flip it above,
+ * and its right part lies past the window's right edge.
  * The popup's buffer is transparent; its material is the compositor's glass, one shape the whole
  * popup with corners of 12, a white wash at 0.5, its own blur.
  *
@@ -176,6 +177,7 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i], "--no-flip") == 0) no_flip = 1;
         else if (strcmp(argv[i], "--no-material") == 0) no_material = 1;
         else if (strcmp(argv[i], "--no-grab") == 0) no_grab = 1;
+        else if (strcmp(argv[i], "--height") == 0 && i + 1 < argc) popup_h = atoi(argv[++i]);
     }
     struct wl_display *d = wl_display_connect(NULL);
     if (!d) { fprintf(stderr, "no Wayland display\n"); return 1; }
