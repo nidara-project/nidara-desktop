@@ -16,7 +16,10 @@ near 0 blurred. Each claim is checked, and then its control must break it:
   3. the layers' glass shows nothing past the window's rounded corners (both layers reach the
      window's top corners): the pixel one px in from each top corner is what lies beside the
      window, not glass — control: a rule with `rounding = false` for the probe, whose square
-     corners then show the glass there (as every layer's glass did before it was cut).
+     corners then show the glass there (as every layer's glass did before it was cut);
+  4. a layer's CONTENT stops at the window's edge too (a sidebar sliding out of it): of the red
+     square half outside the window's left edge, nothing shows beside the window — control: the
+     same test on the square's half inside the window, which must be red (the test sees it).
 Exits 1 on failure."""
 import json
 import os
@@ -104,6 +107,9 @@ def measure(name, *args):
             'corner_right': pixel(image, x(win['width'] - 2), y(1)),
             'beside_left': pixel(image, x(-6), y(1)),
             'beside_right': pixel(image, x(win['width'] + 5), y(1)),
+            # The red square from -20 to 20: 10 px outside the window's left edge, 10 px inside.
+            'overhang_out': pixel(image, x(-10), y(220)),
+            'overhang_in': pixel(image, x(10), y(220)),
         }
     finally:
         probe.terminate()
@@ -129,6 +135,14 @@ def corners_cut(m):
             f'the {side} top corner shows {corner}, not what lies beside the window {beside}: the layers\' glass reaches past its rounded corner'
 
 
+def red(p):
+    return p[0] > 200 and p[1] < 60 and p[2] < 60
+
+
+def content_cut(m, at='overhang_out'):
+    assert not red(m[at]), f'the red layer shows {m[at]} beside the window: a layer\'s content reaches past its window'
+
+
 def caught(label, claim, m):
     try:
         claim(m)
@@ -145,14 +159,17 @@ def check():
         msg('do', 'set-workspace-mode', 94, 'floating')
         m = measure('glass')
         (LOG / 'glass.json').write_text(json.dumps(m, indent=2))
-        assert len(m['layers']) == 2 and all(l['glass_shapes'] == 1 for l in m['layers']), \
-            f'Hyalo does not list both layers with their glass: {m["layers"]}'
+        assert len(m['layers']) == 3 and sum(l['glass_shapes'] == 1 for l in m['layers']) == 2, \
+            f'Hyalo does not list the three layers, two with their glass: {m["layers"]}'
         sidebar_blurred(m)
         print(f'ok    under the sidebar the window\'s columns are blurred ({m["sidebar"]:.1f}), beside it sharp ({m["beside"]:.1f})', flush=True)
         title_graded(m)
         print(f'ok    under the title bar the blur falls from its top ({m["title_top"]:.1f}) to its bottom ({m["title_bottom"]:.1f})', flush=True)
         corners_cut(m)
         print(f'ok    the layers\' glass stops at the window\'s rounded corners ({m["corner_left"]} beside {m["beside_left"]}, {m["corner_right"]} beside {m["beside_right"]})', flush=True)
+        content_cut(m)
+        print(f'ok    a layer\'s content stops at the window\'s edge ({m["overhang_out"]} beside it, {m["overhang_in"]} inside)', flush=True)
+        caught('the square\'s half inside', lambda m: content_cut(m, 'overhang_in'), m)
 
         bare = measure('no-material', '--no-material')
         (LOG / 'no-material.json').write_text(json.dumps(bare, indent=2))
