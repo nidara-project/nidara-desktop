@@ -333,3 +333,21 @@ Demo SHA256 bc7c455bd4ca5d7af763f36197cbed979b302a5b7233f115e5c91d12c9d0ceff.
 Hyalo SHA256 3e264d3d0aba3a731f44e707fa0713361f09e0c57c71cf2c53057f9ef1dad3fa
 (the preserved cc39b569/#899/#900 build supplied by Claude). No live session
 acceptance or compositor timing claim is made.
+
+## #889 retained foundation (local only)
+
+This branch adds typed ControlMaterial validation/staging and a retained capsule
+Panel with existing Buttons. The focused Rust total is 41 tests (three new
+transport tests, one new retained-capsule test); clippy passes. The capsule test
+covers 32/60/88 widths at the current geometry, accessible names independent of
+glyphs, ordering, actions/focus, root/layer-local capture cancellation, disabled/
+removed controls, metric changes preserving IDs and off-window visibility, in
+D5/D7 layouts. It is not a compositor/material or visual acceptance result.
+
+Capsule geometry is explicit provisional component data: height32/button24/edge4
+from current server controls, pitch derived. Export/checker pass. Dropping edge
+from one component variant is CAUGHT by its own geometry assertion
+(target/capsule-geometry-control.log), with the same lightweight CI control.
+The server-side mirror check/uniform cleanup belongs to Claude and is pending.
+Layer material/coverage, demo wiring and visual/idle/performance oracles are not
+implemented by this retained foundation. No #889 implementation is published.
