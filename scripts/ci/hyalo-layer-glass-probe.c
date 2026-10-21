@@ -10,6 +10,8 @@
  *                 to 0 at its bottom edge (set_shape_grade).
  * Whatever shows the pattern softened under them is Hyalo blurring the window's own content
  * under a layer's material.
+ A third layer, an opaque red 40×40 square with no material at (-20, 200), lies half outside the
+ * window's left edge: Hyalo draws only its half inside (a sidebar sliding out of the window).
  *
  *   --no-material  the control: the layers keep no material (the sidebar's columns stay sharp)
  *   --uniform      the control: the title bar's blur is not graded (as blurred at its bottom
@@ -101,8 +103,9 @@ static struct wl_buffer *buffer(int w, int h, int stripes, uint32_t colour, uint
     return buf;
 }
 
-/* A layer at (x, y), w×h, transparent; with its own material unless `bare`. */
-static void make_layer(double x, double y, int w, int h, int bare, int graded) {
+/* A layer at (x, y), w×h, transparent — or every pixel `colour` if it is not 0; with its own
+ * material unless `bare`. */
+static void make_layer(double x, double y, int w, int h, int bare, int graded, uint32_t colour) {
     struct wl_surface *s = wl_compositor_create_surface(compositor);
     wl_subcompositor_get_subsurface(subcompositor, s, window); /* sync mode: the default */
     struct nidara_layer_v1 *l = nidara_layers_manager_v1_get_layer(layers_mgr, s);
@@ -116,7 +119,7 @@ static void make_layer(double x, double y, int w, int h, int bare, int graded) {
             nidara_material_v1_set_shape_grade(m, wl_fixed_from_double(1), wl_fixed_from_double(0));
         nidara_material_v1_add_shape(m, 0, 0, wl_fixed_from_int(w), wl_fixed_from_int(h), 0, wl_fixed_from_int(2));
     }
-    wl_surface_attach(s, buffer(w, h, 0, 0x00000000, WL_SHM_FORMAT_ARGB8888), 0, 0);
+    wl_surface_attach(s, buffer(w, h, 0, colour, WL_SHM_FORMAT_ARGB8888), 0, 0);
     wl_surface_damage(s, 0, 0, w, h);
     wl_surface_commit(s);
 }
@@ -146,8 +149,11 @@ int main(int argc, char **argv) {
     wl_surface_commit(window);
     while (!configured && wl_display_dispatch(d) != -1) {}
 
-    make_layer(0, 0, 120, 300, bare, 0);
-    make_layer(120, 0, 280, 60, bare, !uniform);
+    make_layer(0, 0, 120, 300, bare, 0, 0);
+    make_layer(120, 0, 280, 60, bare, !uniform, 0);
+    /* An opaque red square half outside the window's left edge, no material: what of it lies
+     * past the window must not be drawn (a sidebar sliding out). */
+    make_layer(-20, 200, 40, 40, 1, 0, 0xffff0000);
     xdg_surface_set_window_geometry(xs, 0, 0, 400, 300);
     wl_surface_attach(window, buffer(400, 300, 1, 0, WL_SHM_FORMAT_XRGB8888), 0, 0);
     wl_surface_damage(window, 0, 0, 400, 300);
