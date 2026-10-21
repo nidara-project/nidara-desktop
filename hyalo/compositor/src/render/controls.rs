@@ -252,6 +252,10 @@ struct PresentState {
     response: Option<crate::protocols::material::Response>,
     /// The material last drawn, as committed (before `present`): what `answers_info` reads.
     state: crate::protocols::material::MaterialState,
+    /// The button hovered and whether it is pressed, as last drawn.
+    input: (Option<usize>, bool),
+    /// Moves when what is drawn does — the input or the material (`msg windows`' `revision`).
+    revision: u64,
 }
 
 /// The capsule's one shape.
@@ -334,6 +338,11 @@ pub fn glass(
         let memo = states.data_map.get_or_insert(PresentMemo::default);
         let mut memo = memo.0.borrow_mut();
         memo.response = look.response;
+        let input = (controls.hover, controls.pressed);
+        if memo.revision == 0 || memo.input != input || memo.state != state {
+            memo.revision += 1;
+        }
+        memo.input = input;
         memo.state = state.clone();
         memo.presenting.committed(&state, when);
         memo.presenting.present(&mut state, when)
@@ -404,7 +413,7 @@ pub fn answers_info(surface: &WlSurface, now: std::time::Instant) -> Option<crat
     with_states(surface, |states| {
         let memo = states.data_map.get::<PresentMemo>()?;
         let memo = memo.0.borrow();
-        memo.response.map(|_| memo.presenting.info(&memo.state, now))
+        memo.response.map(|_| memo.presenting.info(&memo.state, memo.revision, now))
     })
 }
 

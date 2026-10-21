@@ -801,7 +801,20 @@ controls and Hyalo's own window controls on the same paths:
 - **What shows is reported** (`msg windows`): each layer's `answers` and the window's
   `controls_answers` — per answering shape `measured`, `r`, `c`, `settled`, `shadow_gain`, per
   wash its colour now and `settled` (`Presenting::info`). A check waits for `measured && settled`
-  instead of sleeping before its capture; the checks below do.
+  instead of sleeping before its capture; the checks below do. Each report has a `revision`:
+  it moves with every material state Hyalo takes in, changed or not — a client commit applied
+  (a layer's with its parent's), or for the window controls a hover, a press or a material drawn
+  differently. Read it, act, wait for it to move, THEN wait for `settled`: settled alone can
+  still describe the state before the input (#889).
+- ⚠️ **A picture never measures** (`render::picture_elements`: `msg screenshot`, screencopy, a
+  shared screen). Each picture draws the scene again offscreen and captures the backdrop with
+  its region rounded its own way; until 2026-10-21 its readback fed the same answers and ink as
+  the screen, so a check that took pictures while it waited flipped a still capsule's answer
+  with each one and it never settled — and a screen being shared would have done it live.
+- A pane's measurement INCLUDES its own shadow: the shadow is drawn right below its glass and
+  the blur carries it inside the shape. Measured 2026-10-21 over a fixed gray (sRGB 143): r
+  0.147–0.148 with the capsules' shadows, 0.156 with the lab's `no-shadow` — a target computed
+  from the source pixel (0.159) is not the answer. Whether it should be is open (#889).
 - A **layer's panes cast their shadow** (`LayeredTree`'s `LayerPaint::Shadow`, right below its
   glass, cut to the root's box): before #889 a layer's `set_shadow` drew nothing.
 - Values: `toolkit/tokens/control.json`, merged into every control step of `tokens/glass.json`

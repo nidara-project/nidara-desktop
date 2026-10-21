@@ -505,7 +505,7 @@ impl Presenting {
 impl Presenting {
     /// What it shows at `now`, for `msg windows` (a check waits on `settled` instead of a sleep):
     /// each answering shape of `state` — measured or not yet — and each wash.
-    pub fn info(&self, state: &MaterialState, now: std::time::Instant) -> crate::ipc::AnswersInfo {
+    pub fn info(&self, state: &MaterialState, revision: u64, now: std::time::Instant) -> crate::ipc::AnswersInfo {
         let shapes = state
             .shapes
             .iter()
@@ -536,7 +536,7 @@ impl Presenting {
                 }
             })
             .collect();
-        crate::ipc::AnswersInfo { shapes, washes }
+        crate::ipc::AnswersInfo { revision, shapes, washes }
     }
 }
 
@@ -544,7 +544,7 @@ impl Presenting {
 /// its states. None when it answers nothing and has no washes.
 pub fn answers_info(states: &smithay::wayland::compositor::SurfaceData, now: std::time::Instant) -> Option<crate::ipc::AnswersInfo> {
     let current = states.data_map.get::<std::sync::Mutex<Current>>()?.lock().unwrap();
-    let info = current.presenting.info(&current.state, now);
+    let info = current.presenting.info(&current.state, current.revision, now);
     (!info.shapes.is_empty() || !info.washes.is_empty()).then_some(info)
 }
 
@@ -586,6 +586,8 @@ pub struct Current {
     pub ink_darkest: std::collections::BTreeMap<u32, f64>,
     /// The answers and washes as they ease (`set_response`, `add_state_region`).
     pub presenting: Presenting,
+    /// Every state taken in, changed or not (`msg windows`' `revision`).
+    pub revision: u64,
 }
 
 /// The surface's material object, for the ink event.
@@ -715,6 +717,7 @@ pub fn on_commit(surface: &WlSurface) {
         let committed = states.cached_state.get::<MaterialState>().current().clone();
         let current = states.data_map.get_or_insert(|| std::sync::Mutex::new(Current::default()));
         let mut current = current.lock().unwrap();
+        current.revision += 1;
         if committed.ink.is_none() {
             // clear_ink: every group is light again, on both ends.
             current.dark_ink.clear();
@@ -1319,14 +1322,14 @@ mod tests {
         let ms = |n: u64| t0 + std::time::Duration::from_millis(n);
         let m = MaterialState { shapes: vec![Shape { response: Some(r), ..shape(0.0, 0.0) }], ..Default::default() };
         let mut p = Presenting::default();
-        let info = p.info(&m, t0);
+        let info = p.info(&m, 0, t0);
         assert_eq!((info.shapes.len(), info.shapes[0].measured), (1, false), "an answering shape, not measured yet");
         p.measured(0, &r, 0.9, 0.0, t0);
         p.measured(0, &r, 0.0, 0.0, ms(0));
-        let info = p.info(&m, ms(100));
+        let info = p.info(&m, 0, ms(100));
         let a = &info.shapes[0];
         assert!(a.measured && !a.settled && (a.r - 0.5).abs() < 1e-9 && (a.shadow_gain - 1.5).abs() < 1e-9, "{a:?}");
-        assert!(p.info(&m, ms(300)).shapes[0].settled);
+        assert!(p.info(&m, 0, ms(300)).shapes[0].settled);
     }
 
     #[test]
