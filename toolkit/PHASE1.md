@@ -292,9 +292,10 @@ it opened collapsed; otherwise it was part of the window. The native window does
   not repainted, Hyalo re-blurs. Held to gate 4's p95 frame interval like everything else.
 
 #889's reusable floating control capsule is the next independent component. Its
-kit/material boundary is proposed in CONTRACT.md, “Floating control capsule”; it
-is not yet a closed API or implemented behaviour. It shares the control material
-with Hyalo's server-side controls; final visual values are chosen in the native demo.
+kit/material boundary is closed in CONTRACT.md, “Floating control capsule” (#896), and
+the compositor's side is implemented (#900); the kit's capsule is being built. It
+shares the control material with Hyalo's server-side controls; final visual values are
+chosen in the native demo.
 
 ## D8 — lists, and the focus ring (owner, 2026-10-21)
 
