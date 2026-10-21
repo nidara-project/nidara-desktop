@@ -82,8 +82,10 @@ have no invented width. Group + rows applies the shared list behavior once.
 `tokens/glass.json` carries only material, including the control response/washes.
 
 `--choices` adds a "Choices" group above the foundations' content: two segmented radio groups
-(window controls, dock size) and the accent swatches, coloured from colors.json's `accents`
-(#882). `scripts/ci/nk-choices-check.py` drives it, run with
+(window controls, dock size) and the accent swatches, coloured from colors.json's `accents`,
+and a "Night light" group: the temperature slider (1000–6500 K by 100, at 4500) and the "From"
+time fields (#882). It answers AT-SPI `SetValue` through `Tree::request_value`. `scripts/ci/nk-choices-check.py` drives it, run with
 `NK_WIDGETS_CHECK=nk-choices-check.py toolkit/widgets-demo/check-headless.sh`; its faults
-(`two-checked`, `swatch-name`, `radio-role`, `arrows`) live in `src/choices.rs`. The radio
+(`two-checked`, `swatch-name`, `radio-role`, `arrows`, `slider-value`, `value-stale`,
+`spin-name`; `set-value` in `main.rs`, where requests are handled) live in `src/choices.rs`. The radio
 groups' look comes from `toolkit/tokens/choices.json` through `components.json`'s `choices`.

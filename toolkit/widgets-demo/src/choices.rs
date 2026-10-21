@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! `--choices`: the radio groups (#882) above the foundations' content, with fixed data, and
-//! the faults `scripts/ci/nk-choices-check.py` proves its assertions with.
+//! `--choices`: Claude's controls of #882 — the radio groups and the range controls — above the
+//! foundations' content, with fixed data, and the faults `scripts/ci/nk-choices-check.py` proves
+//! its assertions with.
 use crate::appearance::Appearance;
 use nk_a11y::Role;
-use nk_widgets::{ChoiceKind, Result, Tree};
+use nk_widgets::{ChoiceKind, Result, Tree, ValueRange};
 
 /// The accents shown, in the order the current Settings shows them.
 const ACCENTS: [&str; 9] = [
@@ -12,6 +13,21 @@ const ACCENTS: [&str; 9] = [
 pub struct Fixture {
     pub swatches: Vec<u64>,
     pub segments: Vec<u64>,
+    pub slider: u64,
+    pub spins: Vec<u64>,
+}
+/// The night light's temperature, as the current Settings shows it.
+pub const KELVIN: f32 = 4500.;
+fn clock(max: f32) -> ValueRange {
+    ValueRange {
+        min: 0.,
+        max,
+        step: 1.,
+        wrap: true,
+        digits: 2,
+        decimals: 0,
+        unit: String::new(),
+    }
 }
 pub fn build(tree: &mut Tree, scroll: u64, appearance: &Appearance) -> Result<Fixture> {
     let group = tree.group(scroll, "Choices")?;
@@ -48,7 +64,35 @@ pub fn build(tree: &mut Tree, scroll: u64, appearance: &Appearance) -> Result<Fi
             .1;
         tree.set_swatch(*id, color)?;
     }
-    Ok(Fixture { swatches, segments })
+    let night = tree.group(scroll, "Night light")?;
+    let (_, slider) = tree.slider(
+        night,
+        "Temperature",
+        ValueRange {
+            min: 1000.,
+            max: 6500.,
+            step: 100.,
+            wrap: false,
+            digits: 0,
+            decimals: 0,
+            unit: " K".into(),
+        },
+        KELVIN,
+    )?;
+    let (_, _, spins) = tree.fields(
+        night,
+        "From",
+        vec![
+            ("From hour", clock(23.), 22.),
+            ("From minute", clock(59.), 5.),
+        ],
+    )?;
+    Ok(Fixture {
+        swatches,
+        segments,
+        slider,
+        spins,
+    })
 }
 impl Fixture {
     /// The semantic faults: each breaks exactly what its assertion reads, and says so.
@@ -66,6 +110,34 @@ impl Fixture {
             }
             "radio-role" => {
                 tree.nodes.get_mut(&self.swatches[0]).unwrap().role = Role::ToggleButton;
+                true
+            }
+            "slider-value" => {
+                let v = tree
+                    .nodes
+                    .get_mut(&self.slider)
+                    .unwrap()
+                    .value
+                    .as_mut()
+                    .unwrap();
+                v.text.clear();
+                true
+            }
+            // A Value that does not follow the control: the reader would say the old number.
+            "value-stale" => {
+                let v = tree
+                    .nodes
+                    .get_mut(&self.slider)
+                    .unwrap()
+                    .value
+                    .as_mut()
+                    .unwrap();
+                v.current = KELVIN as f64;
+                v.text = format!("{KELVIN} K");
+                true
+            }
+            "spin-name" => {
+                tree.nodes.get_mut(&self.spins[0]).unwrap().name.clear();
                 true
             }
             _ => false,

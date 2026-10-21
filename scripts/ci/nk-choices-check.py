@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Radio groups (#882) through real libatspi on an isolated Hyalo: nk-widgets-demo --choices.
+"""Claude's controls of #882 — radio groups, the slider, the time fields — through real libatspi
+on an isolated Hyalo: nk-widgets-demo --choices.
 
 Every assertion runs on a baseline and again with its own fault applied (the demo logs
 CONTROL_APPLIED); the fault must fail THAT assertion. A timeout, a crash or a fault that never
@@ -28,8 +29,9 @@ SCALES = [float(s) for s in os.environ.get('NK_CHOICES_SCALES', '1 1.25').split(
 CONTROLS = os.environ.get('NK_REAL_CONTROLS', '1') != '0'
 # Each assertion and the fault that must fail it.
 STAGES = {'segmented': 'two-checked', 'swatch-name': 'swatch-name', 'radio-role': 'radio-role',
-          'arrows': 'arrows'}
-KEY_RIGHT, KEY_HOME = 106, 102
+          'arrows': 'arrows', 'slider': 'slider-value', 'slider-key': 'value-stale',
+          'set-value': 'set-value', 'time-fields': 'spin-name'}
+KEY_RIGHT, KEY_HOME, KEY_UP = 106, 102, 103
 if os.environ.get('NK_WIDGETS_TEST') == 'vkms':
     if os.environ.get('XDG_RUNTIME_DIR') != '/run/hyalo-smoke':
         raise RuntimeError('private vkms runtime required')
@@ -188,8 +190,10 @@ def run(scale, fault=None, stop=None):
             for code in (KEY_RIGHT, KEY_HOME):
                 before = text().count('A11Y_PUBLISHED')
                 PIPE.write(f'key {code}\n')
-                # Causal: the demo published the key's result, or the fault logged swallowing it.
-                barrier(lambda: text().count('A11Y_PUBLISHED') > before or f'CONTROL_APPLIED {fault}' in text(),
+                # Causal: the demo published the key's result — or, under the one fault that
+                # swallows keys, logged doing so (any other fault may be logged from the start).
+                barrier(lambda: text().count('A11Y_PUBLISHED') > before
+                        or (fault == 'arrows' and 'CONTROL_APPLIED arrows' in text()),
                         f'key {code} handled')
                 pump(.1)
                 if code == KEY_RIGHT:
@@ -197,6 +201,66 @@ def run(scale, fault=None, stop=None):
                         and not state(segments[1], Atspi.StateType.CHECKED)
             first = state(segments[0], Atspi.StateType.CHECKED) and state(segments[0], Atspi.StateType.FOCUSED)
             if check('arrows', moved and first, 'Right/Home did not move the choice and the focus'):
+                return 'PASS'
+
+            def press(code, node):
+                """A key to the focused node; causal: its publication (every fault here publishes)."""
+                before = text().count('A11Y_PUBLISHED')
+                PIPE.write(f'key {code}\n')
+                barrier(lambda: text().count('A11Y_PUBLISHED') > before, f'key {code} handled')
+                pump(.1)
+                node.clear_cache()
+
+            def focus(node):
+                before = text().count('A11Y_PUBLISHED')
+                node.get_component_iface().grab_focus()
+                barrier(lambda: text().count('A11Y_PUBLISHED') > before and state(node, Atspi.StateType.FOCUSED),
+                        f'focus on {node.get_name()}')
+
+            slider = next((n for n in walk(root) if n.get_role() == Atspi.Role.SLIDER), None)
+            # Atspi.Value.get_text by name: on the same object, get_text() is Accessible's (Text).
+            value = slider.get_value_iface() if slider else None
+            said = lambda: (value.get_minimum_value(), value.get_maximum_value(), value.get_current_value(),
+                            value.get_minimum_increment(), Atspi.Value.get_text(value))
+            if check('slider', slider is not None and slider.get_name() == 'Temperature' and value is not None
+                     and labelled(slider, 'Temperature') and said() == (1000, 6500, 4500, 100, '4500 K'),
+                     f'slider role/name/Value: {said() if value else None}'):
+                return 'PASS'
+            focus(slider)
+            press(KEY_RIGHT, slider)
+            if check('slider-key', said()[2:] == (4600, 100, '4600 K'),
+                     f'Right did not reach the spoken value: {said()}'):
+                return 'PASS'
+            for asked, expected in ((5000, 5000), (99999, 6500)):
+                before = text().count('A11Y_PUBLISHED')
+                value.set_current_value(asked)
+                barrier(lambda: text().count('A11Y_PUBLISHED') > before
+                        or (fault == 'set-value' and 'CONTROL_APPLIED set-value' in text()),
+                        f'SetValue {asked} handled')
+                pump(.1)
+                slider.clear_cache()
+                if said()[2] != expected:
+                    break
+            if check('set-value', said()[2] == expected, f'CurrentValue set to {asked} gave {said()[2]}, not {expected}'):
+                return 'PASS'
+            # The fields' panel, not its row's (also a panel named "From"): the one holding spins.
+            fields = barrier(lambda: next((n for n in walk(root) if n.get_name() == 'From'
+                                           and n.get_role() == Atspi.Role.PANEL
+                                           and any(c.get_role() == Atspi.Role.SPIN_BUTTON for c in children(n))),
+                                          None), 'time fields')
+            spins = children(fields)
+            hour = spins[0] if spins else None
+            spoken = lambda n: Atspi.Value.get_text(n.get_value_iface())
+            ok = labelled(fields, 'From') and [s.get_role() for s in spins] == [Atspi.Role.SPIN_BUTTON] * 2 \
+                and [s.get_name() for s in spins] == ['From hour', 'From minute'] \
+                and [spoken(s) for s in spins] == ['22', '05']
+            if ok:
+                focus(hour)
+                press(KEY_UP, hour)
+                first_up = spoken(hour)
+                press(KEY_UP, hour)
+                ok = (first_up, spoken(hour)) == ('23', '00')
+            if check('time-fields', ok, f'time fields: {[(s.get_name(), spoken(s)) for s in spins]}'):
                 return 'PASS'
             if not fault and os.environ.get('NK_WIDGETS_SCREENSHOTS') == '1':
                 pump(1)

@@ -44,6 +44,7 @@ impl Tree {
             },
             Kind::Switch { .. } => bounds.height / 2.,
             Kind::Choice { .. } => return self.choice_shape(id),
+            Kind::Slider { .. } | Kind::Spin { .. } => return self.range_shape(id),
             _ => 0.,
         };
         (bounds, radius)
@@ -242,6 +243,9 @@ impl Tree {
             }
             Kind::Button => canvas.rounded_rect(highlight, radius as f64, palette.surface),
             Kind::Choices { .. } => self.paint_choices(id, r, origin, canvas, palette),
+            Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields => {
+                self.paint_range(id, r, origin, canvas, palette)?
+            }
             Kind::Switch { checked } => {
                 canvas.rounded_rect(
                     r,

@@ -121,3 +121,9 @@ Radio groups (#882): `Tree::choices` builds a row whose control holds one `Choic
 colour, `set_choice` updates from the model. One Tab stop per group (its chosen option); the
 arrows/Home/End move focus and choice together (`control_key`, wired in `Composition::event`).
 A choice's keyboard ring sits outside its shape so it shows on the accent segment.
+
+Range controls (#882): `Tree::slider` and `Tree::fields` (spin buttons, the time fields) over a
+`ValueRange`; `set_range_style` hands over the exported `RangeStyle`. `set_value` (model),
+`control_key` (keys), `range_drag` (press/drag, wired in `Composition::event`) and
+`request_value` (AT-SPI SetValue) all clamp and step the same way and report
+`Effect::Changed(id)`. A spin button's clock wraps (`ValueRange::wrap`); a slider never does.

@@ -14,7 +14,9 @@ impl Tree {
                 Kind::TitleBar | Kind::Label => Role::Label,
                 Kind::Page { .. } => Role::Option,
                 Kind::Scroll => Role::ScrollPane,
-                Kind::Group | Kind::Row | Kind::Choices { .. } => Role::Panel,
+                Kind::Group | Kind::Row | Kind::Choices { .. } | Kind::Fields => Role::Panel,
+                Kind::Slider { .. } => Role::Slider,
+                Kind::Spin { .. } => Role::SpinButton,
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
                 Kind::Choice { .. } => Role::RadioButton,
@@ -68,7 +70,16 @@ impl Tree {
                 .copied()
                 .filter(|id| !self.is_hidden(*id))
                 .collect();
-            if widget.kind.focusable() {
+            if let (Some(range), Some(value)) = (&widget.range, self.value(id)) {
+                n.actions = vec![Action::Focus, Action::SetValue];
+                n.value = Some(nk_a11y::ValueInfo {
+                    min: range.min as f64,
+                    max: range.max as f64,
+                    current: value as f64,
+                    step: range.step as f64,
+                    text: range.text(value),
+                });
+            } else if widget.kind.focusable() {
                 n.actions = vec![Action::Focus, Action::Activate];
             }
             if matches!(widget.kind, Kind::Group | Kind::Row)

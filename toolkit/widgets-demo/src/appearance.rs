@@ -21,6 +21,8 @@ pub struct Appearance {
     pub titlebar_double_click_ms: u32,
     /// The radio groups' look (components.json `choices`, #882).
     pub choices: nk_widgets::ChoiceStyle,
+    /// The range controls' look (components.json `range`, #882).
+    pub range: nk_widgets::RangeStyle,
     /// The accent palette by name (colors.json `accents`).
     pub accents: Vec<(String, Color)>,
 }
@@ -218,6 +220,25 @@ impl Appearance {
                     .ok_or("missing swatch hover colour")?,
             )?,
         };
+        let range = &component["range"];
+        let range = nk_widgets::RangeStyle {
+            slider_width: number(&range["slider"]["width"])?,
+            slider_track: number(&range["slider"]["track"])?,
+            slider_thumb_radius: number(&range["slider"]["thumbRadius"])?,
+            slider_value_gap: number(&range["slider"]["valueGap"])?,
+            slider_fill_opacity: number(&range["slider"]["fillOpacity"])?,
+            slider_page_steps: number(&range["slider"]["pageSteps"])?,
+            spin_height: number(&range["spin"]["height"])?,
+            spin_text_width: number(&range["spin"]["textWidth"])?,
+            spin_button_width: number(&range["spin"]["buttonWidth"])?,
+            spin_border: number(&range["spin"]["border"])?,
+            spin_border_color: token(
+                range["spin"]["borderColor"]
+                    .as_str()
+                    .ok_or("missing spin border colour")?,
+            )?,
+            spin_gap: number(&range["spin"]["gap"])?,
+        };
         let accents = colors["accents"]
             .as_object()
             .ok_or("missing accent palette")?
@@ -305,6 +326,7 @@ impl Appearance {
             size,
             reduce_motion,
             choices,
+            range,
             accents,
             titlebar_double_click_ms: recipe["doubleClickMs"]
                 .as_u64()

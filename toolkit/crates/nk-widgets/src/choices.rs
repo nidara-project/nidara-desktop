@@ -163,12 +163,19 @@ impl Tree {
             .any(|c| self.nodes[c].kind == (Kind::Choice { checked: true }))
             && available.first() == Some(&id)
     }
-    /// The arrows, Home and End on a focused choice: the next/previous/first/last available
+    /// Keys a focused control takes before Tab and activation: a range control's (ranges.rs),
+    /// and the arrows, Home and End on a focused choice: the next/previous/first/last available
     /// option of its group takes the focus AND the choice; it wraps at the ends.
     pub fn control_key(&mut self, sym: u32) -> Result<Option<Effect>> {
         let Some(id) = self.focused else {
             return Ok(None);
         };
+        if matches!(
+            self.nodes[&id].kind,
+            Kind::Slider { .. } | Kind::Spin { .. }
+        ) {
+            return self.range_key(id, sym);
+        }
         if !matches!(self.nodes[&id].kind, Kind::Choice { .. }) {
             return Ok(None);
         }

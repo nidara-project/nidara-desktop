@@ -2565,6 +2565,13 @@ on the chosen segment (accent on accent); a choice's ring is offset outside it
 (`choice_focus_shape`), as the kit's `nidara-focus-ring` is. Its libatspi gate is
 `scripts/ci/nk-choices-check.py` (demo `--choices`), run in the hyalo job's real-gates block.
 
+Range controls (`ranges.rs`: `Slider`, `Fields` of `Spin`s) keep ONE clamp-and-step for every
+source — model, keys, pointer, AT-SPI SetValue — and report `Effect::Changed`. Two traps met
+while testing them through libatspi: in Python, `node.get_value_iface().get_text()` is
+`Atspi.Accessible.get_text` (the Text interface, None), not the value's text — call
+`Atspi.Value.get_text(iface)`; and a row is itself a Panel named by its label, so the fields'
+Panel "From" must be found by its spin-button children, not by name.
+
 ## Native toolkit text geometry
 
 `nk-text::Layout::cluster_boxes` caches logical shaped-cluster bounds and leading
