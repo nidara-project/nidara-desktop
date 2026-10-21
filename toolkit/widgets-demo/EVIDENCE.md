@@ -188,3 +188,15 @@ The unrounded formula was restored as an applied control and was caught by that
 new assertion (`blur boundary inside a physical pixel`). The corrected formula
 passes; the focused Rust total is now 33 tests, and clippy remains clean.
 Control evidence: `target/blur-band-control.log`.
+
+## D8 focus modality (after #901 integration, 2026-10-21)
+
+Pointer/root and presented-layer focus now preserve semantics/selection without
+a ring; keyboard navigation paints a rounded ring. A pixel test covers both D5
+and D7 at scales 1 and 1.25, including clicking outside a target and rounded
+corners. Forcing unconditional ring painting is CAUGHT by its pixel assertion
+(`target/focus-visible-control.log`). Focus width is explicit provisional data
+in `toolkit/tokens/list.json`, from the current kit's focus-ring measurement;
+final visual values remain for the owner live. This is not a new live/AT-SPI
+matrix result. Hover/separators and the named-width component from D8 are still
+pending; this commit does not claim all of D8.

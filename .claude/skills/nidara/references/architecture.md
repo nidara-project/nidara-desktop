@@ -2623,3 +2623,8 @@ demo trigger the full fcitx5/Orca matrices in ci-scope.sh.
 D7 graded-title bands share edges snapped to physical pixels at the current output
 scale: separate antialiased shapes meeting inside a pixel can expose sharp content
 between them. Keep these edges shared when changing title height or scale.
+
+D8's `focus_visible` is input modality, not semantic focus. Do not use `tab()` for
+automatic focus recovery: it marks keyboard input; internal recovery traverses
+without changing modality. Pointer input in root or layer coordinates hides the
+ring even on empty space. The retained focused node and selection remain intact.

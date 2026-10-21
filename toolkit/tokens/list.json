@@ -1,0 +1,4 @@
+{
+  "source": "Provisional D8 list/focus tokens; focus width follows nidara-focus-ring in ui/lib/nidara-kit/styles/_tokens.scss. Final values require owner live review.",
+  "focus": { "width": 2 }
+}

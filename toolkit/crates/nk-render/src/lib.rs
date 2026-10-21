@@ -7,7 +7,7 @@ use vello_cpu::{
     Glyph, Pixmap, RenderContext, Resources,
     color::AlphaColor,
     color::Srgb,
-    kurbo::{Affine, Rect as BoxRect, RoundedRect, Shape},
+    kurbo::{Affine, Rect as BoxRect, RoundedRect, Shape, Stroke},
     peniko::{Blob, FontData},
 };
 
@@ -39,6 +39,18 @@ impl Canvas {
         self.context.set_paint(color);
         self.context
             .fill_path(&RoundedRect::from_rect(rect(r), radius).to_path(0.1));
+    }
+    /// An inward stroke follows the element silhouette without changing hit geometry.
+    pub fn rounded_ring(&mut self, r: Rect, radius: f64, width: f64, color: Color) {
+        if width <= 0. {
+            return;
+        }
+        let inset = width.min(r.width.min(r.height) as f64) / 2.;
+        let bounds = rect(r).inset(-inset);
+        self.context.set_stroke(Stroke::new(width));
+        self.context.set_paint(color);
+        self.context
+            .stroke_path(&RoundedRect::from_rect(bounds, (radius - inset).max(0.)).to_path(0.1));
     }
     pub fn clip(&mut self, r: Rect) {
         self.context.push_clip_rect(&rect(r));

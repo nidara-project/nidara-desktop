@@ -237,45 +237,13 @@ impl Tree {
                 ink,
             )?;
         }
-        if self.focused == Some(id) {
-            // An inset ring, no change in hit geometry.
-            let line = 1.;
-            canvas.rect(
-                Rect {
-                    x: r.x,
-                    y: r.y,
-                    width: r.width,
-                    height: line,
-                },
-                palette.focus,
-            );
-            canvas.rect(
-                Rect {
-                    x: r.x,
-                    y: r.y + r.height - line,
-                    width: r.width,
-                    height: line,
-                },
-                palette.focus,
-            );
-            canvas.rect(
-                Rect {
-                    x: r.x,
-                    y: r.y,
-                    width: line,
-                    height: r.height,
-                },
-                palette.focus,
-            );
-            canvas.rect(
-                Rect {
-                    x: r.x + r.width - line,
-                    y: r.y,
-                    width: line,
-                    height: r.height,
-                },
-                palette.focus,
-            );
+        if self.focus_visible && self.focused == Some(id) {
+            let radius = if matches!(n.kind, Kind::Switch { .. }) {
+                r.height / 2.
+            } else {
+                m.radius
+            };
+            canvas.rounded_ring(r, radius as f64, m.focus_width as f64, palette.focus);
         }
         if n.kind == Kind::Sidebar {
             let viewport = if self.layered {

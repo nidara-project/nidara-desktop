@@ -172,6 +172,8 @@ impl Appearance {
             },
         };
         titlebar.validate()?;
+        let list: Value = serde_json::from_str(include_str!("../../tokens/list.json"))
+            .map_err(|e| e.to_string())?;
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
@@ -183,6 +185,7 @@ impl Appearance {
             switch_width: number(&stub["SWITCH"]["minWidth"])?,
             radius: number(&sizes["ts"]["RADIUS"]["sm"])?,
             group_radius: number(&sizes["ts"]["RADIUS"]["md"])?,
+            focus_width: number(&list["focus"]["width"])?,
         };
         let description = <&str>::try_from(get("org.gnome.desktop.interface", "font-name")?)
             .map_err(|e| e.to_string())?;

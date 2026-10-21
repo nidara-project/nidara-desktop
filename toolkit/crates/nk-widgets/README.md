@@ -81,3 +81,10 @@ cargo test --manifest-path toolkit/Cargo.toml -p nk-widgets
 
 The [demo](../../widgets-demo/README.md) and
 [libatspi check](../../../scripts/ci/nk-widgets-check.py) exercise the public APIs.
+
+D8 keeps focus modality separate from the semantic focused node. Pointer presses
+(including empty space and presented layer coordinates) hide the ring; Tab/key
+input restores it. Programmatic focus/reveal and automatic recovery preserve the
+modality. The ring follows the page/button radius or the switch track, with its
+width supplied in Metrics from tokens. Focus and selected state do not depend on
+whether the ring is visible.

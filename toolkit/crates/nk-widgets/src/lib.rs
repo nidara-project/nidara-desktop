@@ -59,6 +59,7 @@ pub struct Metrics {
     pub switch_width: f32,
     pub radius: f32,
     pub group_radius: f32,
+    pub focus_width: f32,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -143,6 +144,7 @@ pub struct Tree {
     next: NodeId,
     generation: u64,
     pub(crate) focused: Option<NodeId>,
+    pub(crate) focus_visible: bool,
     capture: Option<NodeId>,
     capture_space: Option<NodeId>,
     pub(crate) active: bool,
@@ -177,6 +179,7 @@ impl Tree {
             metrics.switch_width,
             metrics.radius,
             metrics.group_radius,
+            metrics.focus_width,
         ]
         .iter()
         .any(|n| !n.is_finite() || *n < 0.)
@@ -189,6 +192,7 @@ impl Tree {
             next: 1,
             generation: 0,
             focused: None,
+            focus_visible: false,
             capture: None,
             capture_space: None,
             active: false,
@@ -253,6 +257,17 @@ impl Tree {
     }
     pub fn focused(&self) -> Option<NodeId> {
         self.focused
+    }
+    pub fn focus_visible(&self) -> bool {
+        self.focus_visible
+    }
+    pub(crate) fn set_focus_visible(&mut self, visible: bool) {
+        if self.focus_visible != visible {
+            self.focus_visible = visible;
+            if let Some(id) = self.focused {
+                self.invalidate(id, Invalid::PAINT);
+            }
+        }
     }
     pub fn captured(&self) -> Option<NodeId> {
         self.capture
@@ -617,6 +632,10 @@ impl Tree {
         self.reveal(id);
     }
     pub fn tab(&mut self, backwards: bool) -> Result<()> {
+        self.set_focus_visible(true);
+        self.traverse_focus(backwards)
+    }
+    pub(crate) fn traverse_focus(&mut self, backwards: bool) -> Result<()> {
         let order = self.focus_order();
         if order.is_empty() {
             return Ok(());
@@ -683,6 +702,7 @@ impl Tree {
         Ok(Effect::Activated(id))
     }
     pub fn pointer_press(&mut self, p: Point) -> Result<()> {
+        self.set_focus_visible(false);
         self.capture_space = None;
         self.capture = self.hit_test(p);
         if let Some(id) = self.capture {
@@ -693,6 +713,7 @@ impl Tree {
     /// A subsurface event is already clipped and inverse-transformed by the
     /// compositor at its PRESENTED position. Never clip it at the model endpoint.
     pub fn pointer_press_in(&mut self, container: NodeId, local: Point) -> Result<()> {
+        self.set_focus_visible(false);
         let origin = self
             .nodes
             .get(&container)

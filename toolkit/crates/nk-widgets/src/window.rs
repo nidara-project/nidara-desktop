@@ -318,7 +318,7 @@ impl Composition {
                 .is_some_and(|id| matches!(tree.nodes[&id].kind, Kind::Page { .. }))
         {
             // Do not leave a focused page behind the closed pane.
-            let _ = tree.tab(false);
+            let _ = tree.traverse_focus(false);
         }
     }
     pub fn set_sidebar_open(
@@ -375,6 +375,9 @@ impl Composition {
         }
     }
     pub fn event(&mut self, tree: &mut Tree, event: &Event) -> Result<Effect> {
+        if matches!(event, Event::Key(_)) {
+            tree.set_focus_visible(true);
+        }
         match event {
             Event::Key(key) if key.sym == 0xff1b && tree.sidebar_overlay() => {
                 tree.sidebar_request = Some(false);
@@ -483,7 +486,7 @@ impl Composition {
                                 matches!(tree.nodes[&id].kind, Kind::Page { .. })
                             }) =>
                     {
-                        tree.tab(false)?
+                        tree.traverse_focus(false)?
                     }
                     _ => {}
                 }
@@ -513,6 +516,7 @@ mod tests {
                 switch_width: 44.,
                 radius: 8.,
                 group_radius: 12.,
+                focus_width: 2.,
             },
             TextStyle::default(),
         )
@@ -799,6 +803,83 @@ mod tests {
         }
         style.curve[1] = f64::NAN;
         assert!(style.validate().is_err());
+    }
+    #[test]
+    fn pointer_focus_keeps_semantics_and_selection_without_a_ring_but_tab_draws_round() {
+        for layered in [false, true] {
+            for scale in [1., 1.25] {
+                let (mut tree, mut backend, sidebar, _, _) = fixture();
+                tree.layout(tree.size, layered, &mut backend).unwrap();
+                let page = tree.nodes[&sidebar].children[0];
+                tree.focus(page).unwrap();
+                let bounds = tree.nodes[&page].bounds;
+                let origin = if layered {
+                    tree.nodes[&sidebar].bounds.x
+                } else {
+                    0.
+                };
+                let width = if layered { 120 } else { 640 };
+                let surface = if layered {
+                    Surface::Sidebar
+                } else {
+                    Surface::Content
+                };
+                let frame = nk_wayland::Frame {
+                    width,
+                    height: 480,
+                    pixel_width: (width as f64 * scale) as u16,
+                    pixel_height: (480. * scale) as u16,
+                    scale,
+                    material: layered,
+                };
+                let baseline = tree.paint(frame, surface, test_palette()).unwrap();
+                let point = Point {
+                    x: bounds.x + bounds.width / 2.,
+                    y: bounds.y + bounds.height / 2.,
+                };
+                if layered {
+                    tree.pointer_press_in(
+                        sidebar,
+                        Point {
+                            x: point.x - tree.nodes[&sidebar].bounds.x,
+                            y: point.y - tree.nodes[&sidebar].bounds.y,
+                        },
+                    )
+                    .unwrap();
+                } else {
+                    tree.pointer_press(point).unwrap();
+                }
+                assert_eq!(tree.focused(), Some(page));
+                assert!(!tree.focus_visible());
+                assert!(matches!(
+                    tree.nodes[&page].kind,
+                    Kind::Page { selected: true }
+                ));
+                assert!(
+                    baseline == tree.paint(frame, surface, test_palette()).unwrap(),
+                    "pointer focus painted a ring"
+                );
+                tree.tab(false).unwrap();
+                tree.tab(true).unwrap();
+                assert_eq!(tree.focused(), Some(page));
+                assert!(tree.focus_visible());
+                let keyboard = tree.paint(frame, surface, test_palette()).unwrap();
+                assert!(baseline != keyboard, "keyboard ring missing");
+                let x = ((bounds.x - origin) as f64 * scale) as usize;
+                let y = (bounds.y as f64 * scale) as usize;
+                let corner = (y * frame.pixel_width as usize + x) * 4;
+                assert_eq!(
+                    &baseline[corner..corner + 4],
+                    &keyboard[corner..corner + 4],
+                    "focus ring has a square corner"
+                );
+                // Clicking outside any target changes modality but keeps semantic focus.
+                tree.pointer_press(Point { x: -10., y: -10. }).unwrap();
+                assert_eq!(tree.focused(), Some(page));
+                assert!(!tree.focus_visible());
+                assert!(baseline == tree.paint(frame, surface, test_palette()).unwrap());
+            }
+        }
     }
     #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {

@@ -198,6 +198,7 @@ mod placement_tests {
                 switch_width: 44.,
                 radius: 8.,
                 group_radius: 12.,
+                focus_width: 2.,
             },
             TextStyle::default(),
         )

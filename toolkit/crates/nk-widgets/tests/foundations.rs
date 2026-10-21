@@ -18,6 +18,7 @@ fn fixture() -> (Tree, ParleyBackend, u64, Vec<(u64, u64)>) {
             switch_width: 44.,
             radius: 8.,
             group_radius: 12.,
+            focus_width: 2.,
         },
         TextStyle {
             size: 14.,
