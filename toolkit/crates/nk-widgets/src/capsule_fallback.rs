@@ -37,11 +37,7 @@ impl Fallback {
                         if !tree.is_hidden(*button) {
                             targets.insert(
                                 *button,
-                                (
-                                    tree.capsule_state(*button, style)
-                                        .map_or([0.; 4], |s| s.wash),
-                                    style.fade_ms(reduced),
-                                ),
+                                (tree.capsule_wash(*button, style), style.fade_ms(reduced)),
                             );
                         }
                     }

@@ -93,3 +93,8 @@ groups' look comes from `toolkit/tokens/choices.json` through `components.json`'
 Opaque capsule fallback supports a finite exported wash fade. The app samples
 while CapsuleComposition::is_animating() and returns to idle once settled.
 The bounded capsule laboratory remains a separate cut.
+
+Idle capsule washes preserve hover RGB at zero alpha, matching server controls
+for normal and destructive buttons. D5 and D7 share this target; interpolating
+from transparent black would change the visible fade. Native fade acceptance
+remains pending; earlier fixed capture binaries predate this correction.

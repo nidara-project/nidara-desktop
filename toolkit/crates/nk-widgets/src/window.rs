@@ -1632,6 +1632,17 @@ mod tests {
             destructive_press: state([0.5, 0., 0., 0.7], Some([1.; 4])),
             fade_ms: 123,
         };
+        let idle = tree.capsule_material(capsule, &style, false).unwrap();
+        assert_eq!(
+            idle.states[0].wash,
+            [1., 1., 1., 0.],
+            "normal idle wash discarded its hue"
+        );
+        assert_eq!(
+            idle.states[1].wash,
+            [1., 0., 0., 0.],
+            "destructive idle wash discarded its hue"
+        );
         let bounds = tree.nodes[&capsule].bounds;
         let frame = |scale: f64| nk_wayland::Frame {
             width: bounds.width.ceil() as u32,
@@ -1849,6 +1860,13 @@ mod tests {
             "D5 painter ignored the interpolated wash: {idle_pixel}/{middle_pixel}/{end_pixel}"
         );
         assert!(!fade.active);
+        assert!(
+            ((middle_pixel as i16 - idle_pixel as i16) * 2
+                - (end_pixel as i16 - idle_pixel as i16))
+                .abs()
+                <= 1,
+            "D5 wash changed hue during a linear alpha fade: {idle_pixel}/{middle_pixel}/{end_pixel}"
+        );
         tree.pointer_leave();
         fade.update(&mut tree, ms(123.), false, true);
         assert_eq!(tree.capsule_washes[&normal][3], 0.1);

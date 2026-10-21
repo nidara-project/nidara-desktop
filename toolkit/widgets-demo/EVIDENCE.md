@@ -563,3 +563,16 @@ painter is CAUGHT by its own midpoint pixel assertion, with log
 `toolkit/target/capsule-d5-fade-control.log`. It is not a timeout or crash catch.
 This is CPU/payload acceptance, not a new native compositor/D5 capture run.
 Earlier native capture results retain their exact fixed-binary identities.
+
+### #889 idle wash hue parity (historical source evidence)
+
+Source audit found idle client washes used transparent black, while Hyalo server
+controls preserve hover RGB and zero only alpha. Straight RGBA interpolation
+therefore produced different visible fading. D5 samples and D7 state payloads now
+share the matching normal/destructive hover hue with alpha zero. Tests assert
+both idle payloads and actual D5 midpoint pixels follow the linear alpha fade.
+Restoring transparent black is CAUGHT by the own normal-idle-hue assertion in
+`target/capsule-idle-hue-control.log`; source is restored after the mutation.
+Earlier native fixed binaries do not certify this correction, and native D5 fade
+acceptance remains pending.
+

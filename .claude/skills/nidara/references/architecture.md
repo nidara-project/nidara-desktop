@@ -2759,3 +2759,6 @@ consumes the stored wash, with geometry/input/semantics unchanged. Continue fram
 opportunities only while is_animating() is true; settled updates stop invalidating
 paint. D7 never starts this client timeline. Tests must inspect painted midpoint
 pixels, not just the stored alpha.
+Idle washes retain the matching hover RGB with alpha zero, including destructive
+controls, as Hyalo server controls do. Transparent black would change the straight
+RGBA interpolation and therefore the visible fade.
