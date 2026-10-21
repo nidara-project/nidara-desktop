@@ -741,7 +741,7 @@ PY
     # blurred, and a graded pane's blur falls from its top to its bottom; each with its control.
     LAYER_GLASS_LOG=/tmp/hyalo/layer-glass python "$REPO/scripts/ci/hyalo-layer-glass-check.py" >/tmp/hyalo/layer-glass.log 2>&1 \
         || { log "FAIL: layer glass"; cat /tmp/hyalo/layer-glass.log; exit 1; }
-    log "layer glass OK ($(grep -c '^ok' /tmp/hyalo/layer-glass.log) of 2, $(grep -c '^CAUGHT' /tmp/hyalo/layer-glass.log) of 2 controls caught)"
+    log "layer glass OK ($(grep -c '^ok' /tmp/hyalo/layer-glass.log) of 3, $(grep -c '^CAUGHT' /tmp/hyalo/layer-glass.log) of 3 controls caught)"
     if animations; then
         NK_PHASE0_LOG=/tmp/hyalo/nk-layer-motion python "$REPO/scripts/ci/nk-layer-motion-check.py" >/tmp/hyalo/nk-layer-motion.log 2>&1 \
             || { log "FAIL: native toolkit layer motion"; cat /tmp/hyalo/nk-layer-motion.log; exit 1; }

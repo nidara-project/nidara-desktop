@@ -542,7 +542,12 @@ pub fn push<R: HyaloRenderer>(
                 })
             };
             match crate::protocols::layers::render_tree(renderer, &surface, location, scale, output_size, Kind::Unspecified, when) {
-                Some(layered) => out.extend(layered.interleave(rounded, OutputElement::Glass)),
+                Some(layered) => {
+                    // Each layer's glass cut to the window's corners like its surface: a title
+                    // bar or a sidebar that reaches them shows nothing past them.
+                    let outer = super::glass_gl::Outer { rect: frame, radius, exponent: cfg.rounding_power };
+                    out.extend(layered.interleave(rounded, |g| OutputElement::Glass(g.rounded_to(outer))))
+                }
                 None => out.extend(
                     render_elements_from_surface_tree(renderer, &surface, location, scale, 1.0, Kind::Unspecified)
                         .into_iter()

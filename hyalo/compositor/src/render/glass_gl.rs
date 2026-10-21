@@ -538,6 +538,15 @@ impl Finish {
     pub const NEUTRAL: Finish = Finish { contrast: 1.0, brightness: 1.0, vibrancy: 0.0, vibrancy_darkness: 0.0, noise: 0.0 };
 }
 
+/// The rounded window a layer's glass lies in (toolkit/PHASE1.md D7): the glass shows nothing
+/// past its corners, as the layer's own surface does not (render/window.rs cuts it).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Outer {
+    pub rect: Rectangle<f64, Physical>,
+    pub radius: f64,
+    pub exponent: f64,
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct Program {
     pub(super) id: u32,
@@ -1127,6 +1136,7 @@ pub unsafe fn draw(
     clip: &[Rectangle<i32, Physical>],
     glass: Option<&Glass>,
     finish: &Finish,
+    outer: Option<Outer>,
 ) {
     if !cache.valid || cache.passes == 0 {
         return;
@@ -1224,6 +1234,13 @@ pub unsafe fn draw(
                 bounds = b;
             }
             gl.Uniform4f(p.loc(gl, c"clip"), cl.loc.x as f32, cl.loc.y as f32, cl.size.w as f32, cl.size.h as f32);
+            match outer {
+                Some(o) => {
+                    gl.Uniform4f(p.loc(gl, c"outer"), o.rect.loc.x as f32, o.rect.loc.y as f32, o.rect.size.w as f32, o.rect.size.h as f32);
+                    gl.Uniform2f(p.loc(gl, c"outer_par"), o.radius as f32, o.exponent as f32);
+                }
+                None => gl.Uniform4f(p.loc(gl, c"outer"), 0.0, 0.0, 0.0, 0.0),
+            }
             if fused {
                 let mut rects = [0f32; 4 * FUSE_MAX];
                 let mut pars = [0f32; 4 * FUSE_MAX];

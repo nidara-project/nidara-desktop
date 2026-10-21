@@ -1356,6 +1356,10 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   darkened with the desktop beside the window), and a layer fading in or out FORMS its glass
   (`forming`, #764). Made after the walk: the walk holds each surface's states locked, and
   `for_surface` takes them again.
+  And it is cut to the window's ROUNDED corners like the layer's own surface
+  (`GlassElement::rounded_to`, the shader's `outer`): before 2026-10-20 only the surfaces went
+  through the rounded program, and a title bar or sidebar reaching the window's corners drew its
+  glass square past them (owner, live on nk-widgets-demo).
 - **A graded blur** (`set_shape_grade(top, bottom)`, inside material v1 — lib + Hyalo together):
   a shape's blur strength from its top edge to its bottom edge, 0..1. One blur cannot be graded,
   so the shader (`graded` in `glass_final.glsl`) walks the capture's four as a ladder — sharp
@@ -1368,7 +1372,8 @@ time on the monotonic clock; `cancelled` when a new value replaced a running tra
   4 px columns in a window under a transparent sidebar layer with a blur and a title-bar layer
   with a graded blur, contrast measured along rows (≈ 127 sharp, under 40 blurred); controls
   `--no-material` (the sidebar's columns stay sharp) and `--uniform` (the title bar as blurred
-  at its bottom as at its top) must each fail their claim.
+  at its bottom as at its top) must each fail their claim; and the pixel one px in from each top
+  corner must be what lies beside the window (control: a `rounding = false` rule for the probe).
 - Not drawn yet: the drawn region (#761) of a layer-shell surface while it holds a layer (it is
   drawn whole); capture shows layers at their presented place like the screen. Not offered to
   sandboxed clients, like the material.

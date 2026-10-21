@@ -55,6 +55,8 @@ pub struct GlassElement {
     soft: Option<f32>,
     /// Whose material it is: where its ink measurement goes.
     whose: Whose,
+    /// The rounded window it lies in, for a layer's glass: nothing past its corners.
+    outer: Option<glass_gl::Outer>,
 }
 
 /// One id per group of a surface's shapes, stable across frames: its own material's, and the
@@ -164,6 +166,7 @@ impl GlassElement {
                     ink_boxes: mine,
                     surface: surface_weak.clone(),
                     whose,
+                    outer: None,
                     finish: glass_gl::Finish::NEUTRAL,
                     // The capture's three blurs: mixed by size where the compositor paints the
                     // glass, walked from sharp to full where a shape is graded.
@@ -221,6 +224,7 @@ impl GlassElement {
             ink_saturation: 1.0,
             surface: surface.downgrade(),
             whose: Whose::Client,
+            outer: None,
             finish,
             soft: None,
         })
@@ -266,7 +270,7 @@ impl GlassElement {
             if self.glass.is_some() {
                 glass_gl::measure_ink(gl, user_data, map, &mut c, &self.ink_boxes, self.ink_saturation, &self.surface, self.whose);
             }
-            glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish);
+            glass_gl::draw(gl, user_data, map, &c, &self.shapes, &clip, self.glass.as_ref(), &self.finish, self.outer);
         })
     }
 }
@@ -302,6 +306,13 @@ impl GlassElement {
     pub fn within(mut self, bounds: Rectangle<i32, Physical>) -> Option<Self> {
         self.region = self.region.intersection(bounds).filter(|r| r.size.w >= 2 && r.size.h >= 2)?;
         Some(self)
+    }
+
+    /// This glass cut to a rounded window's outline (a layer's, toolkit/PHASE1.md D7): what the
+    /// layer's own surface shows of the corners, its glass shows too, and nothing past them.
+    pub fn rounded_to(mut self, outer: glass_gl::Outer) -> Self {
+        self.outer = Some(outer);
+        self
     }
 }
 
