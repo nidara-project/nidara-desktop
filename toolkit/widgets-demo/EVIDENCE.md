@@ -266,3 +266,20 @@ No list visual values are compiled into the application.
 
 Formatting, skill-docs, ci-scope self-test, Python checker syntax and whitespace
 checks pass. No live visual acceptance or new vkms/Orca/fcitx5 run is claimed.
+
+## Final export boundary — owner decision through Claude #46
+
+This supersedes the earlier per-panel/per-glass-variant placement of list data.
+`tokens/glass.json` is material-only. `tokens/components.json` has four mode
+variants containing `list`, common padding/gap/radii and named widths. These
+common/form values alias the existing kit measurements; no new visual numbers
+were chosen. Reading width stays unmeasured. Group + rows applies D8 once.
+
+Real export and completeness checker pass; the export contains no list objects
+in glass.json. Removing components.variants[0].list.highlight is CAUGHT by its
+own completeness assertion (`target/components-control.log`). A temporary
+light-only list override changes light variants and preserves dark defaults.
+The four demo tests and demo all-target clippy pass after changing the reader.
+Private startup with `target/components-export` passes frame baseline/control
+at 1 and 1.25 (`target/components-startup`). This checks the final file boundary;
+it does not repeat or extend the full matrix/live evidence above.

@@ -20,7 +20,8 @@
 //                              control piece also carries `toolkit/tokens/control.json` — how a
 //                              control answers its backdrop, its states' washes, its inks — for
 //                              the variant it is in: the native kit's own source, not the kit's.
-//                              Panel steps carry list.json's focus/highlight/separator data (D8).
+//   <out>/tokens/components.json common geometry, named content widths and D8 list data,
+//                              per dark/light × reduce transparency, separate from material.
 //
 // The engine (`platform/theme-tokens.ts`) imports Gio/GLib for its file helpers only; a loader
 // stubs `gi://` and resolves the kit's extension-less imports, so the kit (frozen, #818) is
@@ -141,6 +142,7 @@ const controlFor = (dark, reduceTransparency) => {
     return { response, states, ink }
 }
 const variants = []
+const componentVariants = []
 for (const dark of [true, false])
     for (const reduceTransparency of [false, true]) {
         Object.assign(state, { light: !dark, reduce: reduceTransparency })
@@ -153,18 +155,34 @@ for (const dark of [true, false])
                 if (steps.at(-1)?.answer !== answer) steps.push({ side, answer })
             }
             if (steps.at(-1).side === SIDES) throw new Error(`glass: ${piece} still changes at ${SIDES} px`)
-            const extra = piece === "control" ? controlFor(dark, reduceTransparency)
-                : piece === "panel" ? { list: variantFor(list, dark, reduceTransparency) } : {}
+            const extra = piece === "control" ? controlFor(dark, reduceTransparency) : {}
             pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer), ...extra }))
         }
         // The ink: when a pane's text turns dark (Hyalo measures the darkest point under it, WCAG
         // luminance), as the shell asks it — null with reduce transparency (no ink).
         variants.push({ dark, reduceTransparency, glass: source.glass(null), ink: source.ink(null), pieces })
+        const pixels = key => {
+            const value = Number.parseFloat(scss[key])
+            if (!Number.isFinite(value)) throw new Error(`missing component geometry: ${key}`)
+            return value
+        }
+        componentVariants.push({ dark, reduceTransparency,
+            list: variantFor(list, dark, reduceTransparency),
+            common: { padding: pixels("space-3"), gap: pixels("space-1"),
+                radius: ts.RADIUS.sm, groupRadius: ts.RADIUS.md },
+            widths: { form: { preferred: ts.WINDOW_LAYOUT.content, floor: ts.WINDOW_LAYOUT.contentFloor },
+                reading: null, none: null },
+        })
     }
 write(join(out, "tokens/glass.json"), {
     inputs: { dark: "appearance.darkMode", reduceTransparency: "accessibility.reduceTransparency" },
     blur: { panel: source.blur({}), popover: source.blur(new Gtk.Popover()) },
     variants,
+})
+
+write(join(out, "tokens/components.json"), {
+    inputs: { dark: "appearance.darkMode", reduceTransparency: "accessibility.reduceTransparency" },
+    variants: componentVariants,
 })
 
 console.log(`export-tokens: ${Object.keys(scss).length} scss + ${Object.keys(ts).length} ts static, `

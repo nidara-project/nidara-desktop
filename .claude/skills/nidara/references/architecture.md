@@ -2643,7 +2643,12 @@ the current content viewport (after the sampled sidebar inset), not the window.
 
 D8's provisional list source is `toolkit/tokens/list.json` (`default` plus whole
 field `variants`, like control.json). The exporter attaches the resolved `list`
-object to every panel step. Native readers select the portal variant from the
+object to each components.json mode variant. Native readers select the portal variant from the
 installed export; never compile fallback visual numbers into an application.
 settings-tokens-check requires each field and its CI control removes highlight
-from one panel step. Form width still aliases the existing WINDOW_LAYOUT tokens.
+from one mode variant. Form width still aliases the existing WINDOW_LAYOUT tokens.
+
+Keep material and component exports separate (owner, 2026-10-21): glass.json is
+only glass/tone/blur/shadow/backdrop response, including control.json. Common
+geometry, focus/hover/separators and named content widths are components.json
+mode variants. Lists apply on ordinary window backgrounds too, not only panels.

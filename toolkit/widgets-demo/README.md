@@ -70,7 +70,13 @@ It requires that Hyalo revision; the earlier IPC listed only layer-shell. `NK_WI
 local subsets during that work; the CI invocation has no subset and stays strict.
 
 D8 list tokens originate in provisional shared `toolkit/tokens/list.json`.
-The exporter resolves default/variants into `list` on every panel step; the demo
+The exporter resolves default/variants into `components.json` at `variants[i].list`; the demo
 reads the portal-selected installed variant, without compiled fallback values.
 Pointer focus has no ring, keyboard focus uses the element's own shape, and
 selection stays independent. These numbers still require live owner review.
+
+`tokens/components.json` is independent of glass material. Its mode variant
+contains list appearance, common padding/gap/radii and named content widths.
+The geometry/width values alias the current kit exports; `reading` and `none`
+have no invented width. Group + rows applies the shared list behavior once.
+`tokens/glass.json` carries only material, including the control response/washes.

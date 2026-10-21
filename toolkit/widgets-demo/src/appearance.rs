@@ -58,20 +58,17 @@ fn color(text: &str) -> Result<Color> {
     }
     Err(format!("unsupported exported colour {text}"))
 }
-fn list_tokens(export: &Value, dark: bool, reduce: bool) -> Result<Value> {
-    let variant = export["variants"]
+fn component_variant(export: &Value, dark: bool, reduce: bool) -> Result<&Value> {
+    export["variants"]
         .as_array()
-        .ok_or("missing glass variants")?
+        .ok_or("missing components variants")?
         .iter()
         .find(|v| v["dark"] == dark && v["reduceTransparency"] == reduce)
-        .ok_or("missing list portal variant")?;
-    let steps = variant["pieces"]["panel"]
-        .as_array()
-        .ok_or("missing panel list steps")?;
-    let list = steps.first().ok_or("missing panel list step")?["list"].clone();
-    if steps.iter().any(|step| step["list"] != list) {
-        return Err("inconsistent list tokens within a panel variant".into());
-    }
+        .ok_or_else(|| "missing components portal variant".into())
+}
+fn list_tokens(export: &Value, dark: bool, reduce: bool) -> Result<Value> {
+    let variant = component_variant(export, dark, reduce)?;
+    let list = variant["list"].clone();
     let width = number(&list["focus"]["width"])?;
     let inset = number(&list["highlight"]["inset"])?;
     let opacity = number(&list["highlight"]["hoverOpacity"])?;
@@ -150,7 +147,9 @@ impl Appearance {
             )
         };
         let glass = read(root.join("tokens/glass.json"))?;
-        let list = list_tokens(&glass, scheme == 1, reduce)?;
+        let components = read(root.join("tokens/components.json"))?;
+        let component = component_variant(&components, scheme == 1, reduce)?;
+        let list = list_tokens(&components, scheme == 1, reduce)?;
         let palette = Palette {
             background: token("--nidara-bg")?,
             surface: token("--nidara-surface")?,
@@ -210,16 +209,16 @@ impl Appearance {
         let metrics = Metrics {
             sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
             content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
-            form_width: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
-            content_floor: number(&sizes["ts"]["WINDOW_LAYOUT"]["contentFloor"])?,
+            form_width: number(&component["widths"]["form"]["preferred"])?,
+            content_floor: number(&component["widths"]["form"]["floor"])?,
             titlebar: scss(&sizes["scss"]["space-10"])? + scss(&sizes["scss"]["space-2"])?,
-            padding: scss(&sizes["scss"]["space-3"])?,
-            gap: scss(&sizes["scss"]["space-1"])?,
+            padding: number(&component["common"]["padding"])?,
+            gap: number(&component["common"]["gap"])?,
             row: number(&sizes["ts"]["ROW_HEIGHT"]["single"])?,
             control: number(&stub["SWITCH"]["minHeight"])?,
             switch_width: number(&stub["SWITCH"]["minWidth"])?,
-            radius: number(&sizes["ts"]["RADIUS"]["sm"])?,
-            group_radius: number(&sizes["ts"]["RADIUS"]["md"])?,
+            radius: number(&component["common"]["radius"])?,
+            group_radius: number(&component["common"]["groupRadius"])?,
             focus_width: number(&list["focus"]["width"])?,
             highlight_inset: number(&list["highlight"]["inset"])?,
             hover_opacity: number(&list["highlight"]["hoverOpacity"])?,
@@ -332,7 +331,7 @@ mod tests {
                 listing["focus"]["width"] =
                     serde_json::json!(2 + i32::from(dark) + 2 * i32::from(reduce));
                 variants.push(serde_json::json!({"dark":dark,"reduceTransparency":reduce,
-                    "pieces":{"panel":[{"fromSide":0,"list":listing}]}}));
+                    "list":listing}));
             }
         }
         let export = serde_json::json!({"variants":variants});
@@ -346,20 +345,21 @@ mod tests {
             }
         }
         let mut missing = export.clone();
-        missing["variants"][0]["pieces"]["panel"][0]["list"]
+        missing["variants"][0]["list"]
             .as_object_mut()
             .unwrap()
             .remove("highlight");
         assert!(list_tokens(&missing, false, false).is_err());
         let mut invalid = export.clone();
-        invalid["variants"][0]["pieces"]["panel"][0]["list"]["highlight"]["hoverOpacity"] =
-            serde_json::json!(1.5);
+        invalid["variants"][0]["list"]["highlight"]["hoverOpacity"] = serde_json::json!(1.5);
         assert!(list_tokens(&invalid, false, false).is_err());
-        invalid["variants"][0]["pieces"]["panel"]
-            .as_array_mut()
-            .unwrap()
-            .push(serde_json::json!({"fromSide":10,"list":{}}));
-        assert!(list_tokens(&invalid, false, false).is_err());
+        let mut unrelated_panel = export.clone();
+        unrelated_panel["variants"][0]["pieces"] =
+            serde_json::json!({"panel":[{"fromSide":0,"list":{}}]});
+        assert_eq!(
+            list_tokens(&unrelated_panel, false, false).unwrap(),
+            list_tokens(&export, false, false).unwrap()
+        );
     }
     #[test]
     fn portal_fonts_are_points_and_scale_is_live_input() {

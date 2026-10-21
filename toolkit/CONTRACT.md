@@ -204,8 +204,10 @@ Phase 0 remains an independent client of those four crates.
   actions through `Window::window_action` from the same activation path.
   D8: `highlight_shape` is shared by selection, hover and keyboard-only focus.
   Lists take inset/opacity, focus width and separator thickness/colour from
-  `toolkit/tokens/list.json` via every panel step's exported `list` object. Readers
+  `toolkit/tokens/list.json` via `components.json`'s mode variant `list` object. Readers
   select the portal variant and reject absent fields rather than guessing defaults.
+  Common geometry and named content widths live in components.json too; glass.json
+  remains material-only. Group + rows is the shared reusable options component.
   `Tree::set_page_width` names Form/None; Reading requires measured tokens first.
   Form aliases WINDOW_LAYOUT.content/contentFloor and centres in the sampled
   content viewport beside the sidebar, preserving horizontal access below its floor.
