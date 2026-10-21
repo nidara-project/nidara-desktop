@@ -48,7 +48,7 @@ pub const BUTTON_H: f64 = 32.0;
 /// a button takes `PITCH` and the capsule `PITCH × n + EDGE`: 32, 60, 88. Two make the kit's
 /// back/forward pair (60 × 32), which follows the same rule. Until 2026-10-06 a button was a
 /// 30 px slot whose hover filled it, cut by the capsule: straight on one side or on both. The
-/// shader repeats these three numbers (render/controls.rs).
+/// shader takes these three numbers from here (render/controls.rs `set_geometry`).
 pub const HOVER_D: f64 = 24.0;
 pub const EDGE: f64 = 4.0;
 pub const PITCH: f64 = HOVER_D + EDGE;
