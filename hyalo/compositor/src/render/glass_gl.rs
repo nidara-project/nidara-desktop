@@ -64,7 +64,59 @@ uniform float brightness;
 uniform float vibrancy;
 uniform float vibrancy_darkness;
 uniform float passes;
+// The surface's own veils and shadows (render/scrim.rs `ScrimPx`, output px), on the first pass:
+// what its shadows darkened is brought back, so the glass sees its backdrop without them
+// (`Unshadow`). un_count 0: nothing to undo.
+uniform vec4 un_cores[32];
+uniform vec4 un_pars[32];
+uniform vec4 un_shad[32];
+uniform int un_count;
+uniform vec4 un_clip;      // output px: where the shadows were drawn
+uniform vec2 un_origin;    // the captured region's corner, framebuffer px
+uniform vec4 un_inv;       // framebuffer px -> output px: the linear part (column-major 2x2)
+uniform vec2 un_inv_b;     // and its translation
 varying vec2 v_px;
+
+float un_rr(vec2 p, vec4 r) {
+    vec2 h = r.zw * 0.5;
+    vec2 q = abs(p - r.xy - h) - h;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+}
+float un_rrc(vec2 p, vec4 r, float c) {
+    vec2 h = r.zw * 0.5;
+    vec2 q = abs(p - r.xy - h) - h + c;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - c;
+}
+float un_phi(float x) {
+    float z = abs(x) * 0.70710678;
+    float t = 1.0 / (1.0 + 0.3275911 * z);
+    float e = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-z * z);
+    return 0.5 * (1.0 + (x < 0.0 ? -e : e));
+}
+// What the scrim pass multiplied this pixel by with its shadows, over what its veils alone do:
+// it drew max(veil, shadow) outside the shapes that cast one, the veil alone inside them.
+float un_gain(vec2 uv) {
+    vec2 fb = un_origin + uv * src_size;
+    vec2 p = vec2(un_inv.x * fb.x + un_inv.z * fb.y, un_inv.y * fb.x + un_inv.w * fb.y) + un_inv_b;
+    if (p.x < un_clip.x || p.y < un_clip.y || p.x > un_clip.x + un_clip.z || p.y > un_clip.y + un_clip.w) return 1.0;
+    float a = 0.0;
+    float s = 0.0;
+    bool under = false;
+    for (int i = 0; i < 32; i++) {
+        if (i >= un_count) break;
+        if (un_shad[i].y > 0.0) {
+            if (un_rrc(p, un_cores[i], un_shad[i].x) < 0.0) under = true;
+            float d = un_rrc(p - vec2(0.0, un_shad[i].z), un_cores[i], un_shad[i].x);
+            s = max(s, un_pars[i].y * un_phi(-d / un_shad[i].y));
+        } else {
+            float d = un_rr(p, un_cores[i]);
+            float k = d > 0.0 ? pow(clamp(1.0 - d / max(un_pars[i].x, 1.0), 0.0, 1.0), un_pars[i].z) : 1.0;
+            a = max(a, un_pars[i].y * k);
+        }
+    }
+    float all_ = under ? a : max(a, s);
+    return (1.0 - a) / max(1.0 - all_, 1.0 / 255.0);
+}
 
 vec3 gain(vec3 src, float k) {
     vec3 x = clamp(src, 0.0, 1.0);
@@ -76,6 +128,7 @@ vec3 gain(vec3 src, float k) {
 vec4 tap(vec2 uv) {
     vec4 c = texture2D(tex, clamp(uv, 0.5 / src_size, (src_used - 0.5) / src_size));
     if (prepare > 0.5) {
+        if (un_count > 0) c.rgb = min(c.rgb * un_gain(uv), vec3(1.0));
         if (contrast != 1.0) c.rgb = gain(c.rgb, contrast);
         c.rgb *= max(1.0, brightness);
     }
@@ -849,6 +902,38 @@ impl Drop for Cache {
     }
 }
 
+/// `unshadow`'s uniforms on the down-sample program, bound.
+unsafe fn set_unshadow(gl: &Gles2, d: &Program, map: FrameMap, region_fb: Rectangle<i32, Physical>, unshadow: &Unshadow) {
+    let n = unshadow.scrims.len().min(super::scrim::MAX_SCRIMS);
+    unsafe {
+        gl.Uniform1i(d.loc(gl, c"un_count"), n as i32);
+        if n == 0 {
+            return;
+        }
+        let (mut cores, mut pars, mut shad) = ([0f32; 128], [0f32; 128], [0f32; 128]);
+        for (i, s) in unshadow.scrims.iter().take(n).enumerate() {
+            cores[i * 4..i * 4 + 4].copy_from_slice(&s.core.map(|v| v as f32));
+            pars[i * 4..i * 4 + 4].copy_from_slice(&[s.falloff as f32, s.alpha as f32, s.exponent as f32, 0.0]);
+            shad[i * 4..i * 4 + 4].copy_from_slice(&[s.radius as f32, s.sigma as f32, s.dy as f32, 0.0]);
+        }
+        gl.Uniform4fv(d.loc(gl, c"un_cores"), 32, cores.as_ptr());
+        gl.Uniform4fv(d.loc(gl, c"un_pars"), 32, pars.as_ptr());
+        gl.Uniform4fv(d.loc(gl, c"un_shad"), 32, shad.as_ptr());
+        let c = unshadow.clip.unwrap_or(Rectangle::new((-1e6, -1e6).into(), (2e6, 2e6).into()));
+        gl.Uniform4f(d.loc(gl, c"un_clip"), c.loc.x as f32, c.loc.y as f32, c.size.w as f32, c.size.h as f32);
+        gl.Uniform2f(d.loc(gl, c"un_origin"), region_fb.loc.x as f32, region_fb.loc.y as f32);
+        // map_point: fb = A·out + b; its inverse.
+        let [a, b, c2, dd] = map.linear();
+        let m = &map.projection;
+        let t = ((m[6] as f64 + 1.0) * 0.5 * map.fb_size.0 as f64, (m[7] as f64 + 1.0) * 0.5 * map.fb_size.1 as f64);
+        let det = (a * dd - c2 * b) as f64;
+        let inv = [dd as f64 / det, -b as f64 / det, -c2 as f64 / det, a as f64 / det];
+        let ib = (-(inv[0] * t.0 + inv[2] * t.1), -(inv[1] * t.0 + inv[3] * t.1));
+        gl.Uniform4f(d.loc(gl, c"un_inv"), inv[0] as f32, inv[1] as f32, inv[2] as f32, inv[3] as f32);
+        gl.Uniform2f(d.loc(gl, c"un_inv_b"), ib.0 as f32, ib.1 as f32);
+    }
+}
+
 /// The blur of glass `formed` of the way (0..1) to one of `passes` passes at `offset`: the passes
 /// to run, their offset, and how much of the sharp copy to mix in. A fractional level
 /// L = formed·passes runs as ceil(L) passes (at least one) at offset·2^(L − ceil(L)), so the
@@ -984,6 +1069,18 @@ pub unsafe fn fb_size(gl: &Gles2) -> (i32, i32) {
     (vp[2], vp[3])
 }
 
+/// A surface's own veils and shadows, for its glass's capture: the backdrop it blurs is brought
+/// back to what it was before its shadows darkened it (`FS_DOWN`'s `un_gain`), its veils kept.
+/// Its shadows are drawn right below its glass, outside its shapes, and the blur reaches past
+/// them: without this a pane saw its own shadow, darkest at its edge — and a pane answering its
+/// backdrop measured it, its shadow growing with that answer (#889, measured 2026-10-21).
+#[derive(Debug, Clone, Default)]
+pub struct Unshadow {
+    pub scrims: Vec<super::scrim::ScrimPx>,
+    /// Output px: where they were drawn (a layer's are cut to its window).
+    pub clip: Option<Rectangle<f64, Physical>>,
+}
+
 /// Copy `region` (output pixels) out of the frame being drawn and blur it into `cache`.
 #[allow(clippy::too_many_arguments)]
 pub unsafe fn capture(
@@ -1001,6 +1098,7 @@ pub unsafe fn capture(
     // chain's blur alone (a window's backdrop).
     soft: Option<f32>,
     finish: &Finish,
+    unshadow: &Unshadow,
     cache: &mut Cache,
 ) {
     unsafe {
@@ -1074,6 +1172,7 @@ pub unsafe fn capture(
             gl.Uniform1f(d.loc(gl, c"vibrancy"), finish.vibrancy);
             gl.Uniform1f(d.loc(gl, c"vibrancy_darkness"), finish.vibrancy_darkness);
             gl.Uniform1f(d.loc(gl, c"passes"), passes as f32);
+            set_unshadow(gl, d, map, region_fb, unshadow);
             for k in 1..=passes {
                 gl.Uniform1f(d.loc(gl, c"prepare"), (k == 1) as i32 as f32);
                 pass(&progs.down, &levels[k - 1], used(k - 1), &levels[k], used(k));

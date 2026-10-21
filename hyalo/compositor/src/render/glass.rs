@@ -61,6 +61,8 @@ pub struct GlassElement {
     answers: Vec<glass_gl::AnswerBox>,
     /// The washes over its glass (`add_state_region`), as they show now.
     states: Vec<glass_gl::StatePx>,
+    /// Its surface's own veils and shadows: what its capture undoes of them (`glass_gl::Unshadow`).
+    unshadow: glass_gl::Unshadow,
 }
 
 /// One id per group of a surface's shapes, stable across frames: its own material's, and the
@@ -134,6 +136,11 @@ impl GlassElement {
             Vec::new()
         };
         let surface_weak = surface.downgrade();
+        // The glass sees its backdrop without the shadows its own surface casts.
+        let unshadow = glass_gl::Unshadow {
+            scrims: if glass.is_some() { super::scrim::scrims_of(m, location, scale) } else { Vec::new() },
+            clip: None,
+        };
         let px = |x: f64, y: f64, w: f64, h: f64| {
             Rectangle::<f64, Physical>::new(location.to_f64() + Point::from((x * scale.x, y * scale.y)), (w * scale.x, h * scale.y).into())
         };
@@ -208,6 +215,7 @@ impl GlassElement {
                     outer: None,
                     answers,
                     states: states.clone(),
+                    unshadow: unshadow.clone(),
                     finish: glass_gl::Finish::NEUTRAL,
                     // The capture's three blurs: mixed by size where the compositor paints the
                     // glass, walked from sharp to full where a shape is graded.
@@ -268,6 +276,7 @@ impl GlassElement {
             outer: None,
             answers: Vec::new(),
             states: Vec::new(),
+            unshadow: glass_gl::Unshadow::default(),
             finish,
             soft: None,
         })
@@ -285,7 +294,7 @@ impl GlassElement {
             // Measured on the full blur while it forms: there is something to measure.
             let measure_full = self.glass.is_some() && !(self.ink_boxes.is_empty() && self.answers.is_empty());
             glass_gl::capture(
-                gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, self.soft, &self.finish, &mut c,
+                gl, user_data, map, self.region, self.offset, self.passes, self.formed, measure_full, self.soft, &self.finish, &self.unshadow, &mut c,
             );
             super::stats::captured(self.region);
         })
@@ -325,6 +334,10 @@ impl GlassElement {
     pub fn forming(mut self, k: f32, memo: &UserDataMap) -> Self {
         for s in &mut self.shapes {
             s.opacity *= k;
+        }
+        // Its veils form with it too (`ScrimElement::forming`).
+        for s in &mut self.unshadow.scrims {
+            s.alpha *= k as f64;
         }
         self.formed *= k;
         (self.id, self.commit) = forming_id(memo, &self.id, self.commit, k);

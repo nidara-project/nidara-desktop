@@ -16,6 +16,11 @@
 //! 38201914917: within 0.0012 of the captures). It is cut out of every shape that casts one: the
 //! pane's tone was fitted to the reference's glass as it looks, so nothing may darken under it a
 //! second time. Shadows combine by their maximum too; a veil is never cut out.
+//!
+//! A surface's glass never sees its own shadows: they lie right below it and its blur reaches
+//! past its edge, so its capture divides out what they darkened (`glass_gl::Unshadow`), its
+//! veils kept — a window's shadow is drawn in front of its backdrop for the same reason
+//! (render/window.rs).
 
 use std::cell::RefCell;
 

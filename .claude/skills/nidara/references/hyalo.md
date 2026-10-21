@@ -811,10 +811,15 @@ controls and Hyalo's own window controls on the same paths:
   its region rounded its own way; until 2026-10-21 its readback fed the same answers and ink as
   the screen, so a check that took pictures while it waited flipped a still capsule's answer
   with each one and it never settled — and a screen being shared would have done it live.
-- A pane's measurement INCLUDES its own shadow: the shadow is drawn right below its glass and
-  the blur carries it inside the shape. Measured 2026-10-21 over a fixed gray (sRGB 143): r
-  0.147–0.148 with the capsules' shadows, 0.156 with the lab's `no-shadow` — a target computed
-  from the source pixel (0.159) is not the answer. Whether it should be is open (#889).
+- 🔴 **A glass never sees its own shadows** (`glass_gl::Unshadow`, 2026-10-21). They are drawn
+  right below it, cut out of its shapes, but its blur reads ~64 px past its edge and took them in.
+  Its capture's first pass divides out what that surface's shadows darkened —
+  `(1 − veil) / (1 − max(veil, shadow))`, the scrim pass's own combination — and keeps its
+  veils (the Control Center's is behind it on purpose). Measured over a fixed gray (sRGB 143):
+  a capsule's r 0.148 with its shadow, 0.156 without, 0.156 with this (= the lab's `no-shadow`).
+  Nothing visible moves: the CC casts none, the bar's are 1.2 %, a menu changes ≤ 2/255; what it
+  fixes is a pane ANSWERING its backdrop, whose shadow grew with what it measured. A window's
+  shadow solved the same thing by being drawn in front of its backdrop (below).
 - A **layer's panes cast their shadow** (`LayeredTree`'s `LayerPaint::Shadow`, right below its
   glass, cut to the root's box): before #889 a layer's `set_shadow` drew nothing.
 - Values: `toolkit/tokens/control.json`, merged into every control step of `tokens/glass.json`
