@@ -27,7 +27,7 @@ select one `variants[]` entry. The sidebar selects the last
 `pieces.panel[]` step whose `fromSide` is at most its rounded shorter side, every
 time its size changes. Glass, tone (including the object-shaped wash) and shadow
 come from that entry; reduce transparency uses the exported variant directly.
-`panel-stub.json` now supplies only the two still-unexported switch measurements.
+The switch's size and look come from `components.json` `switch` (`toolkit/tokens/switch.json`), through `nk_settings::styles` like every other token.
 The demo does not yet enable backdrop-driven `ink`/`inkTone`. The header reads
 `blur.panel` for its blur-only material.
 `fixtures/glass.json` is the real #881 export with unrelated pieces removed;

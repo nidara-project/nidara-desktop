@@ -6,6 +6,7 @@ mod motion;
 mod paint;
 mod ranges;
 mod semantics;
+mod switch;
 pub mod window;
 pub use choices::{ChoiceKind, ChoiceStyle};
 pub use nk_a11y::NodeId;
@@ -13,6 +14,7 @@ use nk_text::{Layout, Point, Rect, Size, TextBackend, TextStyle};
 pub use paint::{Palette, Surface};
 pub use ranges::{RangeStyle, ValueRange};
 use std::collections::BTreeMap;
+pub use switch::SwitchStyle;
 pub type Result<T> = std::result::Result<T, String>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -235,6 +237,7 @@ pub struct Tree {
     pub(crate) pane_epoch: u64,
     pub(crate) choice_style: Option<ChoiceStyle>,
     pub(crate) range_style: Option<RangeStyle>,
+    pub(crate) switch_style: Option<SwitchStyle>,
 }
 impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
@@ -295,6 +298,7 @@ impl Tree {
             pane_epoch: 0,
             choice_style: None,
             range_style: None,
+            switch_style: None,
         };
         tree.allocate(None, Kind::Window, title.into());
         Ok(tree)

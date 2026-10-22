@@ -135,6 +135,7 @@ const control = JSON.parse(readFileSync(join(repo, "toolkit/tokens/control.json"
 const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "utf8"))
 const choices = JSON.parse(readFileSync(join(repo, "toolkit/tokens/choices.json"), "utf8"))
 const range = JSON.parse(readFileSync(join(repo, "toolkit/tokens/range.json"), "utf8"))
+const switchLook = JSON.parse(readFileSync(join(repo, "toolkit/tokens/switch.json"), "utf8"))
 const variantFor = (recipe, dark, reduceTransparency) => recipe.variants
     .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
     .reduce((acc, o) => ({ ...acc, ...Object.fromEntries(Object.entries(o).filter(([k]) => k !== "dark" && k !== "reduceTransparency")) }),
@@ -172,6 +173,7 @@ for (const dark of [true, false])
             list: variantFor(list, dark, reduceTransparency),
             choices: variantFor(choices, dark, reduceTransparency),
             range: variantFor(range, dark, reduceTransparency),
+            switch: variantFor(switchLook, dark, reduceTransparency),
             common: { padding: pixels("space-3"), gap: pixels("space-1"),
                 radius: ts.RADIUS.sm, groupRadius: ts.RADIUS.md },
             widths: { form: { preferred: ts.WINDOW_LAYOUT.content, floor: ts.WINDOW_LAYOUT.contentFloor },

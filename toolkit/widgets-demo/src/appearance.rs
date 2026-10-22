@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Demo data is fixed; appearance is selected from the Settings portal, never Config1.
+//! The tokens become `nk-widgets`' styles in `nk_settings::styles`, the one mapping the app
+//! and this demo share; only the demo's own pieces (its panel, its title bar recipe) are here.
 use crate::panel::PanelMaterial;
-use nk_render::{Color, rgba};
+use nk_render::Color;
+use nk_settings::exports::Exports;
+use nk_settings::portal::{self, NAMESPACES};
+use nk_settings::styles::Styles;
 use nk_widgets::{Metrics, Palette, Result};
 use serde_json::Value;
 use std::{collections::HashMap, path::Path, sync::mpsc};
@@ -23,12 +28,10 @@ pub struct Appearance {
     pub choices: nk_widgets::ChoiceStyle,
     /// The range controls' look (components.json `range`, #882).
     pub range: nk_widgets::RangeStyle,
+    /// The switch's look (components.json `switch`).
+    pub switch: nk_widgets::SwitchStyle,
     /// The accent palette by name (colors.json `accents`).
     pub accents: Vec<(String, Color)>,
-}
-fn read(path: impl AsRef<Path>) -> Result<Value> {
-    serde_json::from_slice(&std::fs::read(path).map_err(|e| e.to_string())?)
-        .map_err(|e| e.to_string())
 }
 fn number(v: &Value) -> Result<f32> {
     v.as_f64()
@@ -42,219 +45,23 @@ fn scss(v: &Value) -> Result<f32> {
         .parse()
         .map_err(|e| format!("SCSS number: {e}"))
 }
-fn color(text: &str) -> Result<Color> {
-    if let Some(hex) = text.strip_prefix('#')
-        && hex.len() == 6
-    {
-        let n = u32::from_str_radix(hex, 16).map_err(|e| e.to_string())?;
-        return Ok(rgba((n >> 16) as u8, (n >> 8) as u8, n as u8, 255));
-    }
-    if let Some(text) = text.strip_prefix("rgba(").and_then(|s| s.strip_suffix(')')) {
-        let values = text
-            .split(',')
-            .map(|s| s.trim().parse::<f32>().map_err(|e| e.to_string()))
-            .collect::<Result<Vec<_>>>()?;
-        if values.len() == 4 && values.iter().all(|v| v.is_finite()) {
-            return Ok(rgba(
-                values[0] as u8,
-                values[1] as u8,
-                values[2] as u8,
-                (values[3] * 255.).round() as u8,
-            ));
-        }
-    }
-    Err(format!("unsupported exported colour {text}"))
-}
-fn component_variant(export: &Value, dark: bool, reduce: bool) -> Result<&Value> {
-    export["variants"]
-        .as_array()
-        .ok_or("missing components variants")?
-        .iter()
-        .find(|v| v["dark"] == dark && v["reduceTransparency"] == reduce)
-        .ok_or_else(|| "missing components portal variant".into())
-}
-fn list_tokens(export: &Value, dark: bool, reduce: bool) -> Result<Value> {
-    let variant = component_variant(export, dark, reduce)?;
-    let list = variant["list"].clone();
-    let width = number(&list["focus"]["width"])?;
-    let inset = number(&list["highlight"]["inset"])?;
-    let opacity = number(&list["highlight"]["hoverOpacity"])?;
-    let line = number(&list["separator"]["physicalPixels"])?;
-    if ![width, inset, opacity, line].iter().all(|n| n.is_finite())
-        || width <= 0.
-        || inset < 0.
-        || !(0. ..=1.).contains(&opacity)
-        || line <= 0.
-        || list["separator"]["color"].as_str().is_none()
-    {
-        return Err("invalid installed list tokens".into());
-    }
-    Ok(list)
-}
 impl Appearance {
     fn load(root: &Path, settings: &Settings) -> Result<Self> {
-        if std::fs::read_to_string(root.join("version"))
-            .map_err(|e| e.to_string())?
-            .trim()
-            != "1"
-        {
-            return Err("unsupported settings-data version".into());
-        }
-        let colors = read(root.join("tokens/colors.json"))?;
-        let sizes = read(root.join("tokens/static.json"))?;
-        let get = |ns: &str, key: &str| {
-            settings
-                .get(ns)
-                .and_then(|m| m.get(key))
-                .ok_or_else(|| format!("portal missing {ns}.{key}"))
-        };
-        let scheme = u32::try_from(get("org.freedesktop.appearance", "color-scheme")?)
-            .map_err(|e| e.to_string())?;
-        if !matches!(scheme, 1 | 2) {
-            return Err(format!("unknown portal colour scheme {scheme}"));
-        }
-        let accent = <(f64, f64, f64)>::try_from(
-            get("org.freedesktop.appearance", "accent-color")?
-                .try_clone()
-                .map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?;
-        let reduce_motion = u32::try_from(get("org.freedesktop.appearance", "reduced-motion")?)
-            .map_err(|e| e.to_string())?
-            == 1;
-        let reduce = bool::try_from(get("org.nidara.appearance", "reduce-transparency")?)
-            .map_err(|e| e.to_string())?;
-        let level = <&str>::try_from(get("org.nidara.appearance", "window-background")?)
-            .map_err(|e| e.to_string())?;
-        let target = rgba(
-            (accent.0 * 255.).round() as u8,
-            (accent.1 * 255.).round() as u8,
-            (accent.2 * 255.).round() as u8,
-            255,
-        );
-        let set = colors["sets"]
-            .as_array()
-            .ok_or("missing colour sets")?
-            .iter()
-            .find(|s| {
-                s["dark"] == (scheme == 1)
-                    && s["reduceTransparency"] == reduce
-                    && s["windowBackground"] == level
-                    && s["tokens"]["--nidara-accent"]
-                        .as_str()
-                        .and_then(|s| color(s).ok())
-                        == Some(target)
-            })
-            .ok_or("portal combination missing from tokens export")?;
-        let token = |key: &str| {
-            color(
-                set["tokens"][key]
-                    .as_str()
-                    .ok_or_else(|| format!("missing {key}"))?,
-            )
-        };
-        let glass = read(root.join("tokens/glass.json"))?;
-        let components = read(root.join("tokens/components.json"))?;
-        let component = component_variant(&components, scheme == 1, reduce)?;
-        let list = list_tokens(&components, scheme == 1, reduce)?;
-        let palette = Palette {
-            background: token("--nidara-bg")?,
-            surface: token("--nidara-surface")?,
-            text: token("--nidara-text")?,
-            disabled: token("--nidara-text-disabled")?,
-            selected: token("--nidara-state-selected")?,
-            accent: token("--nidara-accent")?,
-            track: token("--nidara-surface")?,
-            thumb: token("--nidara-thumb")?,
-            focus: token("--nidara-accent")?,
-            separator: token(
-                list["separator"]["color"]
-                    .as_str()
-                    .ok_or("missing list separator colour")?,
-            )?,
-        };
-        let choices = &component["choices"];
-        let em = |key: &str| -> Result<f32> {
-            let text = sizes["scss"][key]
-                .as_str()
-                .ok_or("missing choices font size")?;
-            text.strip_suffix("em")
-                .ok_or("choices font size is not relative")?
-                .parse::<f32>()
-                .map_err(|e| e.to_string())
-        };
-        let choices = nk_widgets::ChoiceStyle {
-            segment_padding_x: number(&choices["segmented"]["paddingX"])?,
-            segment_padding_y: number(&choices["segmented"]["paddingY"])?,
-            segment_border: number(&choices["segmented"]["border"])?,
-            segment_text_scale: em(choices["segmented"]["fontSize"]
-                .as_str()
-                .ok_or("missing choices font size")?)?,
-            segment_border_color: token(
-                choices["segmented"]["borderColor"]
-                    .as_str()
-                    .ok_or("missing segment border colour")?,
-            )?,
-            segment_selected: token(
-                choices["segmented"]["selectedColor"]
-                    .as_str()
-                    .ok_or("missing segment colour")?,
-            )?,
-            segment_selected_text: token(
-                choices["segmented"]["selectedText"]
-                    .as_str()
-                    .ok_or("missing segment text colour")?,
-            )?,
-            swatch_diameter: number(&choices["swatch"]["diameter"])?,
-            swatch_border: number(&choices["swatch"]["border"])?,
-            swatch_ring: number(&choices["swatch"]["ring"])?,
-            swatch_gap: number(&choices["swatch"]["gap"])?,
-            swatch_selected: token(
-                choices["swatch"]["selectedColor"]
-                    .as_str()
-                    .ok_or("missing swatch ring colour")?,
-            )?,
-            swatch_hover: token(
-                choices["swatch"]["hoverColor"]
-                    .as_str()
-                    .ok_or("missing swatch hover colour")?,
-            )?,
-        };
-        let range = &component["range"];
-        let range = nk_widgets::RangeStyle {
-            slider_width: number(&range["slider"]["width"])?,
-            slider_track: number(&range["slider"]["track"])?,
-            slider_thumb_radius: number(&range["slider"]["thumbRadius"])?,
-            slider_value_gap: number(&range["slider"]["valueGap"])?,
-            slider_fill_opacity: number(&range["slider"]["fillOpacity"])?,
-            slider_page_steps: number(&range["slider"]["pageSteps"])?,
-            spin_height: number(&range["spin"]["height"])?,
-            spin_text_width: number(&range["spin"]["textWidth"])?,
-            spin_button_width: number(&range["spin"]["buttonWidth"])?,
-            spin_border: number(&range["spin"]["border"])?,
-            spin_border_color: token(
-                range["spin"]["borderColor"]
-                    .as_str()
-                    .ok_or("missing spin border colour")?,
-            )?,
-            spin_gap: number(&range["spin"]["gap"])?,
-        };
-        let accents = colors["accents"]
-            .as_object()
-            .ok_or("missing accent palette")?
-            .iter()
-            .map(|(name, value)| {
-                Ok((
-                    name.clone(),
-                    color(value.as_str().ok_or("invalid accent colour")?)?,
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        // Only the switch measurements still need the named _components.scss stub.
-        // Panel material always comes from the real, installed export.
-        let stub: Value =
-            serde_json::from_str(include_str!("../panel-stub.json")).map_err(|e| e.to_string())?;
-        let panel = PanelMaterial::load(glass.clone(), scheme == 1, reduce)?;
+        let exports = Exports::load(root)?;
+        let portal = portal::Appearance::from_portal(settings)?;
+        let Styles {
+            palette,
+            metrics,
+            choices,
+            range,
+            switch,
+            accents,
+            text: style,
+        } = Styles::new(&exports, &portal)?;
+        let (dark, reduce) = (portal.dark, portal.reduce_transparency);
+        let sizes = &exports.statics;
+        let glass = &exports.glass;
+        let panel = PanelMaterial::load(glass.clone(), dark, reduce)?;
         let recipe: Value = serde_json::from_str(include_str!("../titlebar-provisional.json"))
             .map_err(|e| e.to_string())?;
         let titlebar = nk_widgets::window::TitlebarStyle {
@@ -290,29 +97,6 @@ impl Appearance {
             },
         };
         titlebar.validate()?;
-        let metrics = Metrics {
-            sidebar: number(&sizes["ts"]["WINDOW_LAYOUT"]["sidebar"])?,
-            content: number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?,
-            form_width: number(&component["widths"]["form"]["preferred"])?,
-            content_floor: number(&component["widths"]["form"]["floor"])?,
-            titlebar: scss(&sizes["scss"]["space-10"])? + scss(&sizes["scss"]["space-2"])?,
-            padding: number(&component["common"]["padding"])?,
-            gap: number(&component["common"]["gap"])?,
-            row: number(&sizes["ts"]["ROW_HEIGHT"]["single"])?,
-            control: number(&stub["SWITCH"]["minHeight"])?,
-            switch_width: number(&stub["SWITCH"]["minWidth"])?,
-            radius: number(&component["common"]["radius"])?,
-            group_radius: number(&component["common"]["groupRadius"])?,
-            focus_width: number(&list["focus"]["width"])?,
-            highlight_inset: number(&list["highlight"]["inset"])?,
-            hover_opacity: number(&list["highlight"]["hoverOpacity"])?,
-            separator_width: number(&list["separator"]["physicalPixels"])?,
-        };
-        let description = <&str>::try_from(get("org.gnome.desktop.interface", "font-name")?)
-            .map_err(|e| e.to_string())?;
-        let scale = f64::try_from(get("org.gnome.desktop.interface", "text-scaling-factor")?)
-            .map_err(|e| e.to_string())?;
-        let style = font_style(description, scale, scss(&sizes["scss"]["lh-body"])?)?;
         let size = (
             (metrics.sidebar + number(&sizes["ts"]["WINDOW_LAYOUT"]["content"])?) as u32,
             number(&sizes["ts"]["WINDOW_LAYOUT"]["minHeight"])? as u32,
@@ -324,9 +108,10 @@ impl Appearance {
             titlebar,
             style,
             size,
-            reduce_motion,
+            reduce_motion: portal.reduced_motion,
             choices,
             range,
+            switch,
             accents,
             titlebar_double_click_ms: recipe["doubleClickMs"]
                 .as_u64()
@@ -354,14 +139,7 @@ pub fn watch(root: std::path::PathBuf) -> mpsc::Receiver<Result<Appearance>> {
                 .map_err(|e| e.to_string())?;
             let capture = || -> Result<()> {
                 let settings: Settings = proxy
-                    .call(
-                        "ReadAll",
-                        &(vec![
-                            "org.freedesktop.appearance",
-                            "org.nidara.appearance",
-                            "org.gnome.desktop.interface",
-                        ],),
-                    )
+                    .call("ReadAll", &(NAMESPACES.to_vec(),))
                     .map_err(|e| e.to_string())?;
                 tx.send(Appearance::load(&root, &settings))
                     .map_err(|e| e.to_string())
@@ -377,88 +155,4 @@ pub fn watch(root: std::path::PathBuf) -> mpsc::Receiver<Result<Appearance>> {
         }
     });
     rx
-}
-
-fn font_style(description: &str, scale: f64, line_height: f32) -> Result<nk_text::TextStyle> {
-    let (family, size) = description
-        .rsplit_once(' ')
-        .ok_or("portal font needs family and point size")?;
-    let size: f32 = size.parse().map_err(|e| format!("portal font size: {e}"))?;
-    if !scale.is_finite() || scale <= 0. || !size.is_finite() || size <= 0. || family.is_empty() {
-        return Err("invalid portal font or text scale".into());
-    }
-    let mut family = family.to_owned();
-    let mut weight = 400.;
-    for (suffix, value) in [
-        (" Regular", 400.),
-        (" Normal", 400.),
-        (" SemiBold", 600.),
-        (" Bold", 700.),
-        (" Light", 300.),
-    ] {
-        if let Some(name) = family.strip_suffix(suffix) {
-            family = name.into();
-            weight = value;
-            break;
-        }
-    }
-    Ok(nk_text::TextStyle {
-        family,
-        size: size * (96. / 72.) * scale as f32,
-        weight,
-        line_height,
-        ..Default::default()
-    })
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn installed_list_tokens_select_the_portal_variant_and_refuse_missing_fields() {
-        let recipe: Value = serde_json::from_str(include_str!("../../tokens/list.json")).unwrap();
-        let mut variants = Vec::new();
-        for dark in [false, true] {
-            for reduce in [false, true] {
-                let mut listing = recipe["default"].clone();
-                listing["focus"]["width"] =
-                    serde_json::json!(2 + i32::from(dark) + 2 * i32::from(reduce));
-                variants.push(serde_json::json!({"dark":dark,"reduceTransparency":reduce,
-                    "list":listing}));
-            }
-        }
-        let export = serde_json::json!({"variants":variants});
-        for dark in [false, true] {
-            for reduce in [false, true] {
-                let list = list_tokens(&export, dark, reduce).unwrap();
-                assert_eq!(
-                    list["focus"]["width"],
-                    2 + i32::from(dark) + 2 * i32::from(reduce)
-                );
-            }
-        }
-        let mut missing = export.clone();
-        missing["variants"][0]["list"]
-            .as_object_mut()
-            .unwrap()
-            .remove("highlight");
-        assert!(list_tokens(&missing, false, false).is_err());
-        let mut invalid = export.clone();
-        invalid["variants"][0]["list"]["highlight"]["hoverOpacity"] = serde_json::json!(1.5);
-        assert!(list_tokens(&invalid, false, false).is_err());
-        let mut unrelated_panel = export.clone();
-        unrelated_panel["variants"][0]["pieces"] =
-            serde_json::json!({"panel":[{"fromSide":0,"list":{}}]});
-        assert_eq!(
-            list_tokens(&unrelated_panel, false, false).unwrap(),
-            list_tokens(&export, false, false).unwrap()
-        );
-    }
-    #[test]
-    fn portal_fonts_are_points_and_scale_is_live_input() {
-        let style = font_style("Noto Sans Hebrew Bold 12", 1.5, 1.3).unwrap();
-        assert_eq!(style.family, "Noto Sans Hebrew");
-        assert_eq!(style.size, 24.);
-        assert_eq!(style.weight, 700.);
-        assert!(font_style("Noto Sans 12", f64::NAN, 1.3).is_err());
-    }
 }

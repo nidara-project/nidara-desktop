@@ -64,6 +64,19 @@ fn fixture(with_style: bool) -> Fixture {
     if with_style {
         tree.set_choice_style(style()).unwrap();
     }
+    // The row after the group is a switch: it paints with its own style.
+    let grey = |v| nk_render::rgba(v, v, v, 255);
+    tree.set_switch_style(nk_widgets::SwitchStyle {
+        border: 1.,
+        border_color: grey(90),
+        checked_border_color: grey(0),
+        track: grey(40),
+        checked: grey(200),
+        thumb: grey(255),
+        thumb_margin: 3.,
+        disabled_opacity: 0.45,
+    })
+    .unwrap();
     let root = tree.root();
     tree.append(root, Kind::TitleBar, "Title").unwrap();
     let scroll = tree.append(root, Kind::Scroll, "Content").unwrap();

@@ -1,0 +1,21 @@
+{
+  "$comment": [
+    "The switch of the native toolkit (#915): taken from the current Settings, which is the spec — `switch, .nidara-switch` in ui/lib/nidara-kit/styles/_components.scss. Final values require owner live review.",
+    "Default applies to every dark/reduceTransparency variant; variants override whole fields like list.json. Exported once as switch in each components.json mode variant.",
+    "Not carried: the kit's inset shadow, the checked glow and the thumb's drop shadow (nk-render draws no shadows yet), and the 0.3 s colour transition."
+  ],
+  "default": {
+    "width": 44,
+    "height": 24,
+    "border": 1,
+    "borderColor": "--nidara-border",
+    "checkedBorderColor": "rgba(0, 0, 0, 0.1)",
+    "trackColor": "--nidara-surface",
+    "checkedColor": "--nidara-accent",
+    "thumbColor": "--nidara-thumb",
+    "thumbMargin": 3,
+    "disabledOpacity": 0.45,
+    "source": "min-width 44, min-height 24, border 1px var(--nidara-border) (checked: rgba(0,0,0,0.1)), background var(--nidara-surface) (checked: var(--nidara-accent)); slider margin 3, 18×18, var(--nidara-thumb), pill; :disabled opacity 0.45."
+  },
+  "variants": []
+}

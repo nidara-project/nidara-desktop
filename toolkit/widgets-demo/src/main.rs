@@ -344,6 +344,7 @@ impl Application for Demo {
             self.appearance = appearance;
             self.tree.set_choice_style(self.appearance.choices)?;
             self.tree.set_range_style(self.appearance.range)?;
+            self.tree.set_switch_style(self.appearance.switch)?;
             self.tree
                 .invalidate(self.tree.root(), nk_widgets::Invalid::PAINT);
             self.composition
@@ -532,6 +533,7 @@ fn run() -> Result<()> {
     tree.set_page_width(nk_widgets::PageWidth::Form)?;
     tree.set_choice_style(appearance.choices)?;
     tree.set_range_style(appearance.range)?;
+    tree.set_switch_style(appearance.switch)?;
     let choices = if std::env::args().any(|a| a == "--choices") {
         Some(choices::build(&mut tree, scroll, &appearance)?)
     } else {

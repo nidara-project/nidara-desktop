@@ -31,6 +31,18 @@ fn fixture() -> (Tree, ParleyBackend, u64, Vec<(u64, u64)>) {
         },
     )
     .unwrap();
+    let grey = |v| nk_render::rgba(v, v, v, 255);
+    t.set_switch_style(nk_widgets::SwitchStyle {
+        border: 1.,
+        border_color: grey(90),
+        checked_border_color: grey(0),
+        track: grey(40),
+        checked: grey(200),
+        thumb: grey(255),
+        thumb_margin: 3.,
+        disabled_opacity: 0.45,
+    })
+    .unwrap();
     let root = t.root();
     let sidebar = t.append(root, Kind::Sidebar, "Pages").unwrap();
     t.append(sidebar, Kind::Page { selected: true }, "Appearance")
