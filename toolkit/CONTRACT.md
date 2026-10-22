@@ -427,7 +427,7 @@ either half depends on it.
 | `Notice` | `Ready` (a fresh store: redraw all, sensitive again), `Changed(keys)`, `Unavailable` (every control insensitive), `Failed { key, error }` (the row shows the value in force again and says why: `Invalid`, `Denied`, `Failed`, `NoReply` — never retried), `Error(text)` (no snapshot: said, never a default) |
 | `portal` | `Portal::watch(connection)`, `read()` → `Appearance` (accent, dark, reduce transparency, window background, reduced motion), `changed()`. What the app paints with; `Config1` is for editing only |
 | `exports` | `Exports::load(root)` (`NK_SETTINGS_DATA`, else `/usr/share/nidara/settings-data`; another `version` is an error), `pages`, `page(id)`, `text(i18n key)` (the shell's locale rule from `LANG`, English per key), `tokens(&Appearance)` → the colour set, the glass variant, the components variant — or an error, never the nearest |
-| `manifest` | `Page`, `Group` (`footer`/`footerWhen`, a group-level `custom`), `Item::{Key, Custom, Decoration}` with `visible_when()`/`sensitive_when()`/`key()`, `Predicate::holds(&Session)` (against what the controls show, compared as JavaScript's `String()`). An unknown field is an error, not skipped |
+| `manifest` | `Page`, `Group` (`footer`/`footerWhen`, a group-level `custom`), `Item::{Key, Custom, Decoration, Disclosure}` with `visible_when()`/`sensitive_when()`/`key()`; a page's `header` builder, `Predicate::holds(&Session)` (against what the controls show, compared as JavaScript's `String()`). An unknown field is an error, not skipped |
 
 - **A builder edits through the client, never the bus.** It reads its keys from `session()`,
   sends with `client.apply`, and redraws on the `Notice`s that name them. Builders whose item

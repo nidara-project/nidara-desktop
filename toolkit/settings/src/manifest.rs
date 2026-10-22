@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The manifest, typed: the pages, their groups and their items, as
-//! `scripts/export-settings-data.mjs` writes them from `ui/settings/manifest.ts` (PHASE1.md
-//! D2, D4). The page is the manifest; this file reads it and decides nothing about drawing.
+//! `scripts/export-settings-data.mjs` writes them from
+//! `ui/shell/surfaces/settings/manifest.ts` — whose `ItemDecl`/`GroupDecl`/`PageDecl` are the
+//! source of these shapes (PHASE1.md D2, D4). The page is the manifest; this file reads it and decides nothing about drawing.
 //!
 //! A shape this build does not know is an error, not something skipped: an allowlisted page
 //! drawn without one of its items is the parity failure gate 1 exists to catch.
@@ -24,6 +25,8 @@ pub struct Page {
     /// Empty for a page drawn by a builder of its own (`builder`): not a manifest page.
     pub groups: Vec<Group>,
     pub builder: Option<String>,
+    /// A builder's widget before the first group (`header: {custom}`).
+    pub header: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,13 +55,17 @@ pub enum Item {
         i18n: Option<String>,
         key: Option<String>,
         visible_when: Option<Predicate>,
+        sensitive_when: Option<Predicate>,
     },
     /// Something drawn that is not a control (the wallpaper preview, the schedule times row's
     /// frame) by a named builder.
     Decoration {
         name: String,
         visible_when: Option<Predicate>,
+        sensitive_when: Option<Predicate>,
     },
+    /// Items behind a row that opens and closes them ("Advanced"), labelled by `i18n`.
+    Disclosure { i18n: String, items: Vec<Item> },
 }
 
 impl Item {
@@ -67,13 +74,16 @@ impl Item {
             Self::Key { visible_when, .. }
             | Self::Custom { visible_when, .. }
             | Self::Decoration { visible_when, .. } => visible_when.as_ref(),
+            Self::Disclosure { .. } => None,
         }
     }
 
     pub fn sensitive_when(&self) -> Option<&Predicate> {
         match self {
-            Self::Key { sensitive_when, .. } => sensitive_when.as_ref(),
-            _ => None,
+            Self::Key { sensitive_when, .. }
+            | Self::Custom { sensitive_when, .. }
+            | Self::Decoration { sensitive_when, .. } => sensitive_when.as_ref(),
+            Self::Disclosure { .. } => None,
         }
     }
 
@@ -82,7 +92,7 @@ impl Item {
         match self {
             Self::Key { key, .. } => Some(key),
             Self::Custom { key, .. } => key.as_deref(),
-            Self::Decoration { .. } => None,
+            Self::Decoration { .. } | Self::Disclosure { .. } => None,
         }
     }
 }
@@ -143,6 +153,8 @@ fn page(v: &Json) -> Result<Page, String> {
             "groups",
             "builder",
             "reason",
+            "note",
+            "header",
         ],
         &at,
     )?;
@@ -164,6 +176,13 @@ fn page(v: &Json) -> Result<Page, String> {
         parent: optional(&v["parent"], &at)?,
         group_start: v["groupStart"].as_bool().unwrap_or(false),
         builder: optional(&v["builder"], &at)?,
+        header: match v.get("header") {
+            Some(h) => {
+                known(h, &["custom", "note"], &format!("{at} header"))?;
+                Some(text(&h["custom"], &format!("{at} header"))?)
+            }
+            None => None,
+        },
         groups,
         id,
     })
@@ -212,19 +231,49 @@ fn item(v: &Json, at: &str) -> Result<Item, String> {
     }
     // `note` is the manifest's documentation for people; it is exported and never drawn.
     if let Some(name) = v.get("custom") {
-        known(v, &["custom", "i18n", "key", "visibleWhen", "note"], at)?;
+        known(
+            v,
+            &[
+                "custom",
+                "i18n",
+                "key",
+                "visibleWhen",
+                "sensitiveWhen",
+                "note",
+            ],
+            at,
+        )?;
         return Ok(Item::Custom {
             name: text(name, at)?,
             i18n: optional(&v["i18n"], at)?,
             key: optional(&v["key"], at)?,
             visible_when: predicate(&v["visibleWhen"], at)?,
+            sensitive_when: predicate(&v["sensitiveWhen"], at)?,
         });
     }
     if let Some(name) = v.get("decoration") {
-        known(v, &["decoration", "visibleWhen", "note"], at)?;
+        known(
+            v,
+            &["decoration", "visibleWhen", "sensitiveWhen", "note"],
+            at,
+        )?;
         return Ok(Item::Decoration {
             name: text(name, at)?,
             visible_when: predicate(&v["visibleWhen"], at)?,
+            sensitive_when: predicate(&v["sensitiveWhen"], at)?,
+        });
+    }
+    if let Some(label) = v.get("disclosure") {
+        known(v, &["disclosure", "items", "note"], at)?;
+        return Ok(Item::Disclosure {
+            i18n: text(label, at)?,
+            items: v["items"]
+                .as_array()
+                .ok_or_else(|| format!("{at}: a disclosure without items"))?
+                .iter()
+                .enumerate()
+                .map(|(i, it)| item(it, &format!("{at} item {i}")))
+                .collect::<Result<_, _>>()?,
         });
     }
     if let Some(key) = v.get("key") {
@@ -289,6 +338,11 @@ mod tests {
                     {"custom": "accentPicker", "i18n": "a", "key": "appearance.accent"},
                     {"decoration": "nightScheduleTimes",
                      "visibleWhen": {"key": "nightlight.scheduleEnabled", "in": ["true"]}},
+                    {"disclosure": "g.advanced", "items": [
+                        "appearance.gtkTheme",
+                        {"custom": "monoFont", "i18n": "m",
+                         "sensitiveWhen": {"key": "appearance.darkMode", "in": ["true"]}},
+                    ]},
                  ]},
             ],
         }]))
@@ -302,6 +356,15 @@ mod tests {
         assert_eq!(g.items[1].key(), Some("appearance.accent"));
         assert!(
             matches!(&g.items[2], Item::Decoration { name, .. } if name == "nightScheduleTimes")
+        );
+        let Item::Disclosure { i18n, items } = &g.items[3] else {
+            panic!("not a disclosure: {:?}", g.items[3])
+        };
+        assert_eq!(i18n, "g.advanced");
+        assert_eq!(items[0].key(), Some("appearance.gtkTheme"));
+        assert_eq!(
+            items[1].sensitive_when().unwrap().key,
+            "appearance.darkMode"
         );
     }
 

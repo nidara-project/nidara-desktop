@@ -63,6 +63,7 @@ fn main() -> Result<(), String> {
                 Item::Key { key, .. } => key.clone(),
                 Item::Custom { name, .. } => format!("custom {name}"),
                 Item::Decoration { name, .. } => format!("decoration {name}"),
+                Item::Disclosure { i18n, .. } => format!("disclosure {i18n}"),
             };
             println!(
                 "  {what}: {}{}{}",
