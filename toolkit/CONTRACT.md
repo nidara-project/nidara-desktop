@@ -458,8 +458,31 @@ either half depends on it.
   sends with `client.apply`, and redraws on the `Notice`s that name them. Builders whose item
   has no `key` in the manifest know their own keys from PHASE1.md D1's table
   (`wallpaperPicker` → `wallpaper.current`, `interfaceFont` → `appearance.interfaceFont`, …).
-- **The builder interface itself** (what the renderer hands a builder, what it hands back) is
-  written here with the renderer's PR, before Sol's builders depend on it.
+- **The renderer** (`render`): `Rendered::build(Host, &Page, &mut Builders, content, mount)`
+  draws a manifest page under the scroll region; then `notices(Host, &[Notice])` after every
+  `poll`, `effect(Host, Effect) -> bool` for every tree effect (true: it was the page's),
+  `idle(Host)` from the app's idle, `unmount(Host)` when the page goes. `Host` lends the tree,
+  the `Editor` (the `Client`; a fake in tests), the exports, the styles and — in `effect`/`idle`
+  only — the window. It owns: which rows exist (a key `available: false` has no row, as the
+  legacy Settings; a key not in the snapshot, an unknown control or a name with no builder is
+  an error), visible and sensitive (`visibleWhen`, a collapsed disclosure, `sensitiveWhen`, the
+  service gone, a key not writable), what a row shows (`Session::shown`; a failed write shows
+  the value in force and says why in the row's second line until the next answer), and the
+  sliders' `commitOnRelease` and `debounce` (default 32 ms, as `NidaraSliderRow`).
+- **The builder interface** (agreed with Sol in #915, #123–#128):
+  `trait Builder { build(cx, group, &Item) -> Built; notice(cx, &Notice); effect(cx, Effect);
+  idle(cx); shown(cx, visible); unmount(cx) }` (the last three default to nothing).
+  `Built { rows, keys }`: the rows the renderer hides and disables, the keys whose notices reach
+  it (`Changed`/`Failed` naming one, `Ready`/`Unavailable` always). `Cx` lends `tree`,
+  `exports`, `styles`, `window` (effect/idle only, never kept), `session()`, `apply(key, v)` —
+  the only way a builder edits —, `connection()` (portals only), `own(id)` (route this node's
+  effects to me; for nodes created after `build` too), `remove(id)`, `mount()` (a token: an async
+  result of another mount is dropped; a builder may add its own per-operation tokens), and
+  `focus_if_shown(id)` (return focus only to a launcher still there, shown and enabled).
+  `Builders::register(name, factory)`: a factory per name, a fresh builder per item; the names
+  are the manifest's `custom`/`decoration` and `dropdown` (every row whose `ui.control` is
+  `dropdown`). Claude's are in `builders` (`accentPicker`, `nightScheduleTimes`); Sol's in their
+  own modules.
 - `styles`: `Styles::new(&Exports, &Appearance)` → `Palette`, `Metrics`, `ChoiceStyle`,
   `RangeStyle`, `SwitchStyle`, the accents by name and the interface `TextStyle` (the portal's
   font at its text scale). The ONE mapping from the exports to `nk-widgets`' styles: the

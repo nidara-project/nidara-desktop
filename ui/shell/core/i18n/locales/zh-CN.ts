@@ -194,6 +194,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "按计划自动开关夜间模式",
     "settings.appearance.night-light-from": "开启时间",
     "settings.appearance.night-light-to": "关闭时间",
+    "settings.appearance.time.hour": "小时",
+    "settings.appearance.time.minute": "分钟",
     "settings.appearance.group.resources": "系统资源",
     "settings.appearance.browse": "浏览…",
     "settings.appearance.title": "外观",

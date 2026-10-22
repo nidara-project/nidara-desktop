@@ -194,6 +194,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "スケジュールに従って夜間モードを自動でオン/オフします",
     "settings.appearance.night-light-from": "開始時刻",
     "settings.appearance.night-light-to": "終了時刻",
+    "settings.appearance.time.hour": "時",
+    "settings.appearance.time.minute": "分",
     "settings.appearance.group.resources": "システムリソース",
     "settings.appearance.browse": "参照…",
     "settings.appearance.title": "外観",

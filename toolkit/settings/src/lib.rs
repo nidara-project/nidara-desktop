@@ -11,14 +11,18 @@
 //! | `client` | `Config1` over one bus connection, feeding the session |
 //! | `portal` | the four appearance values that pick the token set, plus reduced motion |
 //! | `exports` | `settings-data`: the manifest, the strings, the token sets |
+//! | `builders` | Claude's named builders: `accentPicker`, `nightScheduleTimes` |
+//! | `render` | a manifest page drawn into a tree: the generic rows, predicates, builders |
 //! | `manifest` | the pages, groups, items and predicates, typed |
 //! | `styles` | the exported tokens as `nk-widgets`' styles, once for every reader |
 //! | `value` | a setting's value as `Config1` carries it |
 
+pub mod builders;
 pub mod client;
 pub mod exports;
 pub mod manifest;
 pub mod portal;
+pub mod render;
 pub mod session;
 pub mod styles;
 pub mod value;

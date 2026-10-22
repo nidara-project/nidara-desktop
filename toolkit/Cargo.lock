@@ -891,8 +891,10 @@ dependencies = [
 name = "nk-settings"
 version = "0.1.0"
 dependencies = [
+ "nk-icons",
  "nk-render",
  "nk-text",
+ "nk-wayland",
  "nk-widgets",
  "serde_json",
  "zbus",

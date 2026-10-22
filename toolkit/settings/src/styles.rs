@@ -154,6 +154,18 @@ impl Styles {
     }
 }
 
+impl Styles {
+    /// Every style a tree draws with, at once (a tree built from these metrics and text).
+    pub fn apply(&self, tree: &mut nk_widgets::Tree) -> Result<(), String> {
+        tree.set_choice_style(self.choices)?;
+        tree.set_range_style(self.range)?;
+        tree.set_switch_style(self.switch)?;
+        tree.set_row_text_style(self.rows.clone())?;
+        tree.set_text_style(self.text.clone());
+        Ok(())
+    }
+}
+
 /// A colour the export names: a `--nidara-*` token of the set, or a literal `#rrggbb` /
 /// `rgba(…)` (a value the kit's sheet writes as one, like the checked switch's edge).
 fn colour(tokens: &Tokens<'_>, name: &str) -> Result<Color, String> {

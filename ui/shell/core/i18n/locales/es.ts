@@ -192,6 +192,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "Activa y desactiva la Luz Nocturna según un horario",
     "settings.appearance.night-light-from": "Activar a las",
     "settings.appearance.night-light-to": "Desactivar a las",
+    "settings.appearance.time.hour": "Hora",
+    "settings.appearance.time.minute": "Minuto",
     "settings.appearance.group.resources": "Recursos del sistema",
     "settings.appearance.browse": "Explorar…",
     "settings.appearance.title": "Apariencia",

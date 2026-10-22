@@ -108,6 +108,8 @@ write(join(out, "tokens/colors.json"), {
         reduceTransparency: "accessibility.reduceTransparency", windowBackground: "appearance.windowBackground",
     },
     accents: Object.fromEntries(accents.map(k => [k, engine.ACCENT_PALETTE[k].color])),
+    // What each swatch is called (the current Settings names its buttons so, in English).
+    accentNames: Object.fromEntries(accents.map(k => [k, engine.ACCENT_PALETTE[k].name])),
     sets,
 })
 // ── glass ────────────────────────────────────────────────────────────────

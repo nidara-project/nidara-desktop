@@ -194,6 +194,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "Nachtlicht nach Zeitplan ein- und ausschalten",
     "settings.appearance.night-light-from": "Einschalten um",
     "settings.appearance.night-light-to": "Ausschalten um",
+    "settings.appearance.time.hour": "Stunde",
+    "settings.appearance.time.minute": "Minute",
     "settings.appearance.group.resources": "Systemressourcen",
     "settings.appearance.browse": "Durchsuchen…",
     "settings.appearance.title": "Erscheinungsbild",
