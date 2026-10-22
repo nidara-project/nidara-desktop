@@ -60,6 +60,11 @@ pub struct RangeStyle {
     pub slider_value_gap: f32,
     pub slider_fill_opacity: f32,
     pub slider_page_steps: f32,
+    /// The flanking icons (`set_slider_icons`): their size, their ink's opacity, the gap
+    /// between each and the track.
+    pub slider_icon_size: f32,
+    pub slider_icon_opacity: f32,
+    pub slider_icon_gap: f32,
     pub spin_height: f32,
     pub spin_text_width: f32,
     pub spin_button_width: f32,
@@ -75,6 +80,8 @@ impl RangeStyle {
             self.slider_thumb_radius,
             self.slider_value_gap,
             self.slider_page_steps,
+            self.slider_icon_size,
+            self.slider_icon_gap,
             self.spin_height,
             self.spin_text_width,
             self.spin_button_width,
@@ -83,6 +90,7 @@ impl RangeStyle {
         ];
         if !all.iter().all(|v| v.is_finite() && *v >= 0.)
             || !(0. ..=1.).contains(&self.slider_fill_opacity)
+            || !(0. ..=1.).contains(&self.slider_icon_opacity)
             || self.slider_width <= 2. * self.slider_thumb_radius
         {
             return Err("invalid range measurements".into());
@@ -247,12 +255,52 @@ impl Tree {
     fn slider_track(&self, id: NodeId) -> Option<(f32, f32, f32)> {
         let s = self.range_style?;
         let r = self.nodes[&id].bounds;
-        let x0 = r.x + s.slider_thumb_radius;
+        let x = r.x + self.slider_lead(id, &s);
         Some((
-            x0,
-            r.x + s.slider_width - s.slider_thumb_radius,
+            x + s.slider_thumb_radius,
+            x + s.slider_width - s.slider_thumb_radius,
             r.y + r.height / 2.,
         ))
+    }
+    /// What comes before the track: the lesser end's icon and its gap, when it has icons.
+    fn slider_lead(&self, id: NodeId, s: &RangeStyle) -> f32 {
+        if self.nodes[&id].endpoints.is_some() {
+            s.slider_icon_size + s.slider_icon_gap
+        } else {
+            0.
+        }
+    }
+    /// A slider's flanking icons, by interface icon name (`nd-…`, without `-symbolic`): the
+    /// lesser end's, the greater end's. Drawn in the ink at the style's opacity, resolved
+    /// through the tree's icon theme (`set_icon_theme`), so a theme change redraws them.
+    pub fn set_slider_icons(&mut self, id: NodeId, icons: Option<[String; 2]>) -> Result<()> {
+        let n = self.nodes.get_mut(&id).ok_or("unknown slider")?;
+        if !matches!(n.kind, Kind::Slider { .. }) {
+            return Err("widget is not a slider".into());
+        }
+        n.endpoints = icons;
+        self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
+    }
+    /// The interface icons every icon of the tree is drawn from.
+    pub fn set_icon_theme(&mut self, icons: nk_icons::Icons) {
+        self.icons = Some(std::cell::RefCell::new(icons));
+        let drawn: Vec<_> = self
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.endpoints.is_some())
+            .map(|(id, _)| *id)
+            .collect();
+        for id in drawn {
+            self.invalidate(id, Invalid::PAINT);
+        }
+    }
+    pub(crate) fn icon(&self, name: &str, size: f32) -> Result<std::sync::Arc<nk_icons::Icon>> {
+        self.icons
+            .as_ref()
+            .ok_or("an icon drawn before the tree's icon theme was set")?
+            .borrow_mut()
+            .get(name, size.round().max(1.) as u32)
     }
     /// A press, or a drag captured by a slider, puts its value under the pointer.
     pub fn range_drag(&mut self, p: Point) -> Result<Option<NodeId>> {
@@ -338,7 +386,7 @@ impl Tree {
         let layout = backend.layout(&range.text(value), &style, UNBOUNDED)?;
         let size = match kind {
             Kind::Slider { .. } => Size {
-                width: s.slider_width + s.slider_value_gap + room,
+                width: self.slider_lead(id, &s) * 2. + s.slider_width + s.slider_value_gap + room,
                 height: self
                     .metrics
                     .control
@@ -421,8 +469,30 @@ impl Tree {
                     ..thumb
                 };
                 let cy = thumb.y + rad;
-                let left = r.x + s.slider_thumb_radius;
-                let right = r.x + s.slider_width - s.slider_thumb_radius;
+                let lead = self.slider_lead(id, &s);
+                let left = r.x + lead + s.slider_thumb_radius;
+                let right = r.x + lead + s.slider_width - s.slider_thumb_radius;
+                if let Some([lesser, greater]) = &n.endpoints {
+                    let mut tint = ink;
+                    tint.components[3] *= s.slider_icon_opacity;
+                    let size = s.slider_icon_size;
+                    for (name, x) in [
+                        (lesser, r.x),
+                        (greater, r.x + lead + s.slider_width + s.slider_icon_gap),
+                    ] {
+                        let icon = self.icon(name, size)?;
+                        canvas.icon(
+                            &icon,
+                            Rect {
+                                x,
+                                y: cy - size / 2.,
+                                width: size,
+                                height: size,
+                            },
+                            tint,
+                        );
+                    }
+                }
                 let t = s.slider_track;
                 let track = Rect {
                     x: left - t / 2.,

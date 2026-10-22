@@ -36,6 +36,7 @@ toolkit/                     its own Cargo workspace, like hyalo/ and session/ (
     nk-render/               rasterises a frame into pixels                (no Wayland)
     nk-wayland/              the connection: window, buffers, input, IME, our protocols
     nk-widgets/              retained structural widgets, derived semantics (phase 1)
+    nk-icons/                interface icons by name, as vector shapes      (pure, no Wayland)
   phase0/                    the test window (a binary, nk-phase0), and its checks
   widgets-demo/              the fixed-data structural-widget demo (phase 1)
   settings/                  the native Settings (phase 1, #915): nk-settings
@@ -260,6 +261,15 @@ Phase 0 remains an independent client of those four crates.
   `SpinButton`s labelled by its row, each with `ValueInfo` and `Action::SetValue` (not
   Activate). `nk-choices-check.py` asserts them with a control each: the spoken text dropped,
   a Value that stays at the old number after a key, a `SetValue` ignored, an unnamed spin.
+- **Icons (#915)**: `nk-icons` is the shell's `Icons.ts` lookup for the toolkit — the
+  interface icon theme only if installed and declaring `X-Nidara-Icon-Spec`, the file GTK would
+  take for the size, the reference theme for a name the theme lacks or draws nothing for — and
+  hands back vector shapes, not pixels. `nk-render`'s `Canvas::icon` paints them in one ink as
+  ONE layer at the ink's alpha (a symbolic icon's crossing strokes are not laid twice). A tree
+  draws its icons from `Tree::set_icon_theme(Icons)`; an icon drawn without it is an error. The
+  slider's flanking icons: `Tree::set_slider_icons(slider, [lesser, greater])`, sized, faded
+  and spaced by `RangeStyle` (`range.json` `iconSize`/`iconOpacity`/`iconGap`, the kit's
+  `NidaraSliderRow`). Dependencies: `nk-render → nk-icons`, `nk-widgets → nk-icons`.
 - **Switch look (#915)**: `Tree::set_switch_style(SwitchStyle)` — border and its checked
   colour, track, checked fill, thumb, the thumb's margin, the disabled opacity — from
   `toolkit/tokens/switch.json` through `components.json`'s `switch` (the kit's

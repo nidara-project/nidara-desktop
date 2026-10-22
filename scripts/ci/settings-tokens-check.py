@@ -159,8 +159,8 @@ for variant in component_variants:
     ranged = variant.get('range') or {}
     slider = ranged.get('slider') or {}
     spin = ranged.get('spin') or {}
-    if not (all(positive_number(slider.get(k)) for k in ('width', 'track', 'thumbRadius', 'valueGap', 'fillOpacity', 'pageSteps'))
-            and slider['fillOpacity'] <= 1 and slider['thumbRadius'] * 2 >= slider['track']
+    if not (all(positive_number(slider.get(k)) for k in ('width', 'track', 'thumbRadius', 'valueGap', 'fillOpacity', 'pageSteps', 'iconSize', 'iconOpacity', 'iconGap'))
+            and slider['fillOpacity'] <= 1 and slider['iconOpacity'] <= 1 and slider['thumbRadius'] * 2 >= slider['track']
             and all(positive_number(spin.get(k)) for k in ('height', 'textWidth', 'buttonWidth', 'border', 'gap'))):
         fail.append(f'{where}: incomplete or invalid range (slider/spin)')
     if not isinstance(spin.get('borderColor'), str) or not all(spin['borderColor'] in s['tokens'] for s in sets):

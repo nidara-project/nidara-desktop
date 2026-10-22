@@ -160,6 +160,8 @@ pub struct Node {
     pub(crate) constraint: f32,
     pub(crate) swatch: Option<nk_render::Color>,
     pub(crate) range: Option<ValueRange>,
+    /// A slider's flanking icons, by name: its lesser end, its greater end.
+    pub(crate) endpoints: Option<[String; 2]>,
 }
 impl Node {
     pub fn kind(&self) -> Kind {
@@ -238,6 +240,8 @@ pub struct Tree {
     pub(crate) choice_style: Option<ChoiceStyle>,
     pub(crate) range_style: Option<RangeStyle>,
     pub(crate) switch_style: Option<SwitchStyle>,
+    /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
+    pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
 impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
@@ -299,6 +303,7 @@ impl Tree {
             choice_style: None,
             range_style: None,
             switch_style: None,
+            icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
         Ok(tree)
@@ -326,6 +331,7 @@ impl Tree {
                 constraint: 0.,
                 swatch: None,
                 range: None,
+                endpoints: None,
             },
         );
         if let Some(p) = parent {

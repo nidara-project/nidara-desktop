@@ -8,4 +8,5 @@ publish.workspace = true
 
 [dependencies]
 nk-text = { path = "../nk-text" }
+nk-icons = { path = "../nk-icons" }
 vello_cpu = "0.3"
