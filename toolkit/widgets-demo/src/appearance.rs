@@ -57,6 +57,7 @@ impl Appearance {
             switch,
             accents,
             text: style,
+            ..
         } = Styles::new(&exports, &portal)?;
         let (dark, reduce) = (portal.dark, portal.reduce_transparency);
         let sizes = &exports.statics;

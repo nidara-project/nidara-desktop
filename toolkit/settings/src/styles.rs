@@ -7,7 +7,7 @@
 use crate::exports::{Exports, Tokens};
 use crate::portal::Appearance;
 use nk_render::{Color, rgba};
-use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, SwitchStyle};
+use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, RowTextStyle, SwitchStyle};
 use serde_json::Value as Json;
 
 pub struct Styles {
@@ -16,6 +16,7 @@ pub struct Styles {
     pub choices: ChoiceStyle,
     pub range: RangeStyle,
     pub switch: SwitchStyle,
+    pub rows: RowTextStyle,
     /// The accent palette by name, in its export order (`colors.json` `accents`).
     pub accents: Vec<(String, Color)>,
     /// The interface font at the text scale (the portal's), at the kit's body line height.
@@ -117,6 +118,18 @@ impl Styles {
             spin_border_color: token(&field(&spin["borderColor"], "spin border colour")?)?,
             spin_gap: number(&spin["gap"])?,
         };
+        let rw = &c["rows"];
+        let (sub, foot, disc) = (&rw["subtitle"], &rw["footer"], &rw["disclosure"]);
+        let rows = RowTextStyle {
+            subtitle_scale: em(statics, &field(&sub["fontSize"], "subtitle font size")?)?,
+            subtitle: token(&field(&sub["color"], "subtitle colour")?)?,
+            footer_scale: em(statics, &field(&foot["fontSize"], "footer font size")?)?,
+            footer: token(&field(&foot["color"], "footer colour")?)?,
+            footer_gap: number(&foot["gap"])?,
+            disclosure_icon_size: number(&disc["iconSize"])?,
+            disclosure_open: field(&disc["open"], "disclosure open icon")?,
+            disclosure_closed: field(&disc["closed"], "disclosure closed icon")?,
+        };
         let accents = exports.colors["accents"]
             .as_object()
             .ok_or("missing accent palette")?
@@ -134,6 +147,7 @@ impl Styles {
             choices,
             range,
             switch,
+            rows,
             accents,
             text,
         })

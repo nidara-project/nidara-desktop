@@ -11,7 +11,8 @@ impl Tree {
             let role = match widget.kind {
                 Kind::Window => Role::Window,
                 Kind::Sidebar => Role::List,
-                Kind::TitleBar | Kind::Label => Role::Label,
+                Kind::TitleBar | Kind::Label | Kind::Subtitle | Kind::Footer => Role::Label,
+                Kind::Disclosure { .. } => Role::ToggleButton,
                 Kind::Page { .. } => Role::Option,
                 Kind::Scroll => Role::ScrollPane,
                 Kind::Group | Kind::Row | Kind::Choices { .. } | Kind::Fields => Role::Panel,
@@ -61,6 +62,8 @@ impl Tree {
                     Kind::Switch { checked: true } | Kind::Choice { checked: true }
                 ),
                 selected: matches!(widget.kind, Kind::Page { selected: true }),
+                expanded: matches!(widget.kind, Kind::Disclosure { expanded: true }),
+                expandable: matches!(widget.kind, Kind::Disclosure { .. }),
                 offscreen: !intersects(r, self.visible_clip(id)),
                 ..Default::default()
             };
@@ -82,11 +85,13 @@ impl Tree {
             } else if widget.kind.focusable() {
                 n.actions = vec![Action::Focus, Action::Activate];
             }
-            if matches!(widget.kind, Kind::Group | Kind::Row)
-                && let Some(label) = n
-                    .children
-                    .iter()
-                    .find(|id| self.nodes[id].kind == Kind::Label)
+            if matches!(
+                widget.kind,
+                Kind::Group | Kind::Row | Kind::Disclosure { .. }
+            ) && let Some(label) = n
+                .children
+                .iter()
+                .find(|id| self.nodes[id].kind == Kind::Label)
             {
                 n.relations.push(Relation::LabelledBy(*label));
                 n.name = self.nodes[label].name.clone();
@@ -100,6 +105,20 @@ impl Tree {
             {
                 n.relations.push(Relation::LabelledBy(*label));
                 n.name = self.nodes[label].name.clone();
+            }
+            // A row's second line describes the row and its control (as a GTK row's subtitle).
+            let row = match widget.kind {
+                Kind::Row => Some(id),
+                k if k.row_control() => widget.parent,
+                _ => None,
+            };
+            if let Some(subtitle) = row.and_then(|r| {
+                self.nodes[&r]
+                    .children
+                    .iter()
+                    .find(|c| self.nodes[c].kind == Kind::Subtitle && !self.is_hidden(**c))
+            }) {
+                n.description = self.nodes[subtitle].name.clone();
             }
             nodes.insert(id, n);
         }

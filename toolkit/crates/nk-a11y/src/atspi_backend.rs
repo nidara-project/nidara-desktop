@@ -192,7 +192,10 @@ fn states(n: &Node) -> StateSet {
         ),
         (n.role == Role::Slider, State::Horizontal),
         (n.states.expanded, State::Expanded),
-        (n.role == Role::ComboBox, State::Expandable),
+        (
+            n.role == Role::ComboBox || n.states.expandable,
+            State::Expandable,
+        ),
         (n.states.selected, State::Selected),
         (n.role == Role::Option, State::Selectable),
         (n.states.invalid, State::InvalidEntry),

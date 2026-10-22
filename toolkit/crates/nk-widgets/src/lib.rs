@@ -5,6 +5,7 @@ mod choices;
 mod motion;
 mod paint;
 mod ranges;
+mod rows;
 mod semantics;
 mod switch;
 pub mod window;
@@ -13,6 +14,7 @@ pub use nk_a11y::NodeId;
 use nk_text::{Layout, Point, Rect, Size, TextBackend, TextStyle};
 pub use paint::{Palette, Surface};
 pub use ranges::{RangeStyle, ValueRange};
+pub use rows::RowTextStyle;
 use std::collections::BTreeMap;
 pub use switch::SwitchStyle;
 pub type Result<T> = std::result::Result<T, String>;
@@ -111,6 +113,14 @@ pub enum Kind {
     Spin {
         value: f32,
     },
+    /// A row's second line (`set_subtitle`).
+    Subtitle,
+    /// The line under a group's card (`set_footer`).
+    Footer,
+    /// A row that opens and closes what follows it (`disclosure`).
+    Disclosure {
+        expanded: bool,
+    },
 }
 impl Kind {
     fn focusable(self) -> bool {
@@ -122,6 +132,7 @@ impl Kind {
                 | Self::Choice { .. }
                 | Self::Slider { .. }
                 | Self::Spin { .. }
+                | Self::Disclosure { .. }
         )
     }
     /// What a row holds beside its label: one of these.
@@ -240,6 +251,7 @@ pub struct Tree {
     pub(crate) choice_style: Option<ChoiceStyle>,
     pub(crate) range_style: Option<RangeStyle>,
     pub(crate) switch_style: Option<SwitchStyle>,
+    pub(crate) row_text_style: Option<RowTextStyle>,
     /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
     pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
@@ -303,6 +315,7 @@ impl Tree {
             choice_style: None,
             range_style: None,
             switch_style: None,
+            row_text_style: None,
             icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
@@ -402,7 +415,12 @@ impl Tree {
                 | (Kind::Sidebar, Kind::Page { .. })
                 | (Kind::TitleBar, Kind::Button)
                 | (Kind::Scroll, Kind::Group | Kind::Row)
-                | (Kind::Group, Kind::Label | Kind::Row)
+                | (
+                    Kind::Group,
+                    Kind::Label | Kind::Row | Kind::Footer | Kind::Disclosure { .. }
+                )
+                | (Kind::Row, Kind::Subtitle)
+                | (Kind::Disclosure { .. }, Kind::Label)
                 | (Kind::Row, Kind::Label | Kind::Switch { .. } | Kind::Button)
                 | (
                     Kind::Row,
@@ -419,10 +437,9 @@ impl Tree {
         {
             return Err("duplicate window region".into());
         }
-        if (matches!(p.kind, Kind::Row | Kind::Group) && kind == Kind::Label)
-            && p.children
-                .iter()
-                .any(|id| self.nodes[id].kind == Kind::Label)
+        if (matches!(p.kind, Kind::Row | Kind::Group | Kind::Disclosure { .. })
+            && matches!(kind, Kind::Label | Kind::Subtitle | Kind::Footer))
+            && p.children.iter().any(|id| self.nodes[id].kind == kind)
         {
             return Err("duplicate structural label".into());
         }
@@ -802,6 +819,7 @@ impl Tree {
         }
         match self.nodes[&id].kind {
             Kind::Switch { checked } => self.set_checked(id, !checked)?,
+            Kind::Disclosure { expanded } => self.set_expanded(id, !expanded)?,
             Kind::Choice { .. } => self.set_choice(id)?,
             // Space/Enter on a range control changes nothing; its keys and pointer do.
             Kind::Slider { .. } | Kind::Spin { .. } => return Ok(Effect::None),
@@ -1020,9 +1038,12 @@ impl Tree {
         if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
             return self.measure_range(id, backend);
         }
-        if kind == Kind::Row {
+        if matches!(kind, Kind::Row | Kind::Disclosure { .. }) {
             let children = self.nodes[&id].children.clone();
-            let mut control_width: f32 = 0.;
+            let mut control_width: f32 = match kind {
+                Kind::Disclosure { .. } => self.row_text()?.disclosure_icon_size,
+                _ => 0.,
+            };
             let mut height: f32 = 0.;
             for child in &children {
                 if !self.is_hidden(*child) && self.nodes[child].kind.row_control() {
@@ -1031,16 +1052,21 @@ impl Tree {
                     height = height.max(size.height);
                 }
             }
+            // The label and its second line, one above the other.
+            let mut text: f32 = 0.;
             for child in &children {
-                if !self.is_hidden(*child) && self.nodes[child].kind == Kind::Label {
+                if !self.is_hidden(*child)
+                    && matches!(self.nodes[child].kind, Kind::Label | Kind::Subtitle)
+                {
                     let size = self.measure(
                         *child,
                         (width - control_width - 3. * m.padding).max(1.),
                         backend,
                     )?;
-                    height = height.max(size.height);
+                    text += size.height;
                 }
             }
+            height = height.max(text);
             let size = Size {
                 width,
                 height: m.row.max(height + 2. * m.padding),
@@ -1097,13 +1123,22 @@ impl Tree {
         };
         let mut text = Size::default();
         if !self.nodes[&id].name.is_empty()
-            && matches!(kind, Kind::Label | Kind::Page { .. } | Kind::Button)
+            && matches!(
+                kind,
+                Kind::Label | Kind::Page { .. } | Kind::Button | Kind::Subtitle | Kind::Footer
+            )
         {
+            let mut style = self.style.clone();
+            match kind {
+                Kind::Subtitle => style.size *= self.row_text()?.subtitle_scale,
+                Kind::Footer => style.size *= self.row_text()?.footer_scale,
+                _ => {}
+            }
             let n = self.nodes.get_mut(&id).unwrap();
             if let Some(layout) = &mut n.layout {
                 text = layout.size(label_width)?;
             } else {
-                let layout = backend.layout(&n.name, &self.style, label_width)?;
+                let layout = backend.layout(&n.name, &style, label_width)?;
                 text = layout.measured_size();
                 n.layout = Some(layout);
             }
@@ -1127,6 +1162,9 @@ impl Tree {
             let s = self.measure(child, child_width, backend)?;
             if self.is_hidden(child) {
                 continue;
+            }
+            if self.nodes[&child].kind == Kind::Footer {
+                sum += (self.row_text()?.footer_gap - m.gap).max(0.);
             }
             sum += s.height + m.gap;
             max_h = max_h.max(s.height);
@@ -1166,10 +1204,12 @@ impl Tree {
                 width,
                 height: m.row.max(text.height + 2. * m.padding),
             },
-            Kind::Label => Size {
+            Kind::Label | Kind::Subtitle | Kind::Footer => Size {
                 width: text.width,
                 height: text.height,
             },
+            // Measured with their row (the Row branch above).
+            Kind::Disclosure { .. } => self.nodes[&id].measured,
             // Measured with their group (measure_choices).
             Kind::Choices { .. }
             | Kind::Choice { .. }
@@ -1366,6 +1406,20 @@ impl Tree {
             0.
         };
         let mut trailing_x = r.x + r.width - m.padding - trailing_width;
+        // A row's label and second line, as one block centred in the row.
+        let text_block: f32 = if matches!(kind, Kind::Row | Kind::Disclosure { .. }) {
+            children
+                .iter()
+                .filter(|c| {
+                    !self.is_hidden(**c)
+                        && matches!(self.nodes[*c].kind, Kind::Label | Kind::Subtitle)
+                })
+                .map(|c| self.nodes[c].measured.height)
+                .sum()
+        } else {
+            0.
+        };
+        let mut text_y = r.y + (r.height - text_block) / 2.;
         if kind == Kind::TitleBar {
             x += self.title_leading_controls();
         }
@@ -1383,19 +1437,31 @@ impl Tree {
                     width: s.width,
                     height: s.height,
                 }
-            } else if kind == Kind::Row {
+            } else if matches!(kind, Kind::Row | Kind::Disclosure { .. }) {
                 let control = n.kind.row_control();
+                let y = if matches!(n.kind, Kind::Label | Kind::Subtitle) {
+                    let y = text_y;
+                    text_y += s.height;
+                    y
+                } else {
+                    r.y + (r.height - s.height) / 2.
+                };
                 Rect {
                     x: if control {
                         r.x + r.width - m.padding - s.width
                     } else {
                         x
                     },
-                    y: r.y + (r.height - s.height) / 2.,
+                    y,
                     width: s.width,
                     height: s.height,
                 }
             } else {
+                if n.kind == Kind::Footer
+                    && let Some(style) = &self.row_text_style
+                {
+                    y += (style.footer_gap - m.gap).max(0.);
+                }
                 Rect {
                     x,
                     y,
@@ -1416,7 +1482,7 @@ impl Tree {
                 } else {
                     x += s.width + m.gap;
                 }
-            } else if kind != Kind::Row {
+            } else if !matches!(kind, Kind::Row | Kind::Disclosure { .. }) {
                 y += s.height + m.gap;
             }
         }
