@@ -15,6 +15,9 @@ fn style() -> RangeStyle {
         slider_value_gap: 12.,
         slider_fill_opacity: 0.9,
         slider_page_steps: 10.,
+        slider_icon_size: 16.,
+        slider_icon_opacity: 0.5,
+        slider_icon_gap: 12.,
         spin_height: 32.,
         spin_text_width: 28.,
         spin_button_width: 18.,
@@ -370,4 +373,81 @@ fn a_new_value_keeps_the_row_still_and_the_fill_reaches_the_thumb() {
     );
     let centre = px(thumb, y);
     assert!(centre.0 > 240 && centre.1 > 240, "thumb {centre:?}");
+}
+
+#[test]
+fn flanking_icons_move_the_track_and_are_drawn_from_the_icon_theme() {
+    let mut f = fixture(true);
+    let s = f.slider;
+    layout(&mut f);
+    let plain = f.tree.node(s).unwrap().bounds();
+    f.tree
+        .set_slider_icons(
+            s,
+            Some([
+                "nd-value-decrease".to_owned(),
+                "nd-value-increase".to_owned(),
+            ]),
+        )
+        .unwrap();
+    layout(&mut f);
+    let r = f.tree.node(s).unwrap().bounds();
+    // Both icons and their gaps: 2 × (16 + 12) wider, still at the row's trailing edge.
+    assert!(
+        (r.width - plain.width - 56.).abs() < 0.01,
+        "{r:?} vs {plain:?}"
+    );
+    assert!((r.x + r.width - plain.x - plain.width).abs() < 0.01);
+    // The pointer meets the track where it is drawn: after the lesser icon and its gap.
+    let (x0, y) = (r.x + 28. + 9., r.y + r.height / 2.);
+    f.tree.pointer_press(Point { x: x0, y }).unwrap();
+    f.tree.range_drag(Point { x: x0, y }).unwrap();
+    assert_eq!(f.tree.value(s), Some(1000.));
+    f.tree.pointer_release(Point { x: x0, y }).unwrap();
+    let palette = Palette {
+        background: rgba(0, 0, 0, 255),
+        surface: rgba(0, 0, 0, 255),
+        text: rgba(255, 255, 255, 255),
+        disabled: rgba(120, 120, 120, 255),
+        selected: rgba(0, 0, 0, 255),
+        accent: rgba(0, 100, 255, 255),
+        track: rgba(80, 80, 80, 255),
+        thumb: rgba(250, 250, 250, 255),
+        focus: rgba(0, 100, 255, 255),
+        separator: rgba(90, 90, 90, 255),
+    };
+    let frame = nk_wayland::Frame {
+        width: 600,
+        height: 400,
+        pixel_width: 600,
+        pixel_height: 400,
+        scale: 1.,
+        material: false,
+    };
+    assert!(
+        f.tree
+            .paint(frame, Surface::Content, palette)
+            .unwrap_err()
+            .contains("icon theme"),
+        "icons drawn with no icon theme"
+    );
+    let reference = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../ui/shell/assets/icons/nidara");
+    f.tree
+        .set_icon_theme(nk_icons::Icons::new("", &[], &reference).unwrap());
+    let pixels = f.tree.paint(frame, Surface::Content, palette).unwrap();
+    // The brightest pixel inside each icon's box: the ink at half opacity over black.
+    let brightest = |x0: f32| {
+        let mut best = 0u8;
+        for y in (r.y + r.height / 2. - 8.) as u32..(r.y + r.height / 2. + 8.) as u32 {
+            for x in x0 as u32..(x0 + 16.) as u32 {
+                best = best.max(pixels[((y * 600 + x) * 4) as usize + 1]);
+            }
+        }
+        best
+    };
+    for x in [r.x, r.x + 28. + 140. + 12.] {
+        let b = brightest(x);
+        assert!((110..=140).contains(&b), "icon at {x}: brightest {b}");
+    }
 }

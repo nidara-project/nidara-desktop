@@ -201,6 +201,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "Включать и выключать ночной режим по расписанию",
     "settings.appearance.night-light-from": "Включать в",
     "settings.appearance.night-light-to": "Выключать в",
+    "settings.appearance.time.hour": "Час",
+    "settings.appearance.time.minute": "Минута",
     "settings.appearance.group.resources": "Системные ресурсы",
     "settings.appearance.browse": "Обзор…",
     "settings.appearance.title": "Внешний вид",

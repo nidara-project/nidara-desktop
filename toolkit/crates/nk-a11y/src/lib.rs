@@ -50,6 +50,8 @@ pub struct States {
     pub disabled: bool,
     pub checked: bool,
     pub expanded: bool,
+    /// It can open and close (a disclosure row); a combo box always can.
+    pub expandable: bool,
     pub selected: bool,
     pub invalid: bool,
     pub hidden: bool,

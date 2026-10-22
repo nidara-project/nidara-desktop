@@ -1,0 +1,731 @@
+{
+ "schemaVersion": 1,
+ "keys": {
+  "appearance.darkMode": {
+   "desc": "Dark mode (false = light). Propagates to GTK apps and the portal.",
+   "type": "boolean",
+   "writable": true,
+   "value": true,
+   "page": "appearance",
+   "group": "settings.appearance.group.base-style",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.dark-mode",
+    "title": "Dark mode",
+    "subtitle": "Enable dark appearance",
+    "control": "toggle"
+   }
+  },
+  "wallpaper.current": {
+   "desc": "The wallpaper image: an absolute path (or file:// URI) to a JPEG, PNG, GIF, WebP or AVIF file. The bundled wallpapers are offered in `catalogue`; any readable image of those types is accepted.",
+   "type": "string",
+   "writable": true,
+   "value": "/usr/share/nidara/wallpapers/wallpaper-violet.jpg",
+   "available": true,
+   "catalogue": [
+    "/usr/share/nidara/wallpapers/wallpaper.jpg",
+    "/usr/share/nidara/wallpapers/wallpaper-chroma.jpg",
+    "/usr/share/nidara/wallpapers/wallpaper-emerald.jpg",
+    "/usr/share/nidara/wallpapers/wallpaper-midnight.jpg",
+    "/usr/share/nidara/wallpapers/wallpaper-sunset.jpg",
+    "/usr/share/nidara/wallpapers/wallpaper-violet.jpg"
+   ]
+  },
+  "wallpaper.transition": {
+   "desc": "Wallpaper transition animation style.",
+   "type": "enum",
+   "values": [
+    "random",
+    "simple",
+    "fade",
+    "center",
+    "grow",
+    "outer",
+    "wipe",
+    "wave",
+    "left",
+    "right",
+    "top",
+    "bottom"
+   ],
+   "writable": true,
+   "value": "random",
+   "page": "appearance",
+   "group": "settings.appearance.group.wallpaper",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.transition",
+    "title": "Transition",
+    "subtitle": "Effect when changing the wallpaper",
+    "control": "dropdown",
+    "options": [
+     {
+      "value": "random",
+      "label": "Random"
+     },
+     {
+      "value": "simple",
+      "label": "Soft fade"
+     },
+     {
+      "value": "fade",
+      "label": "Fade with curve"
+     },
+     {
+      "value": "center",
+      "label": "Center circle"
+     },
+     {
+      "value": "grow",
+      "label": "Expand"
+     },
+     {
+      "value": "outer",
+      "label": "Contract"
+     },
+     {
+      "value": "wipe",
+      "label": "Diagonal wipe"
+     },
+     {
+      "value": "wave",
+      "label": "Wave"
+     },
+     {
+      "value": "left",
+      "label": "From left"
+     },
+     {
+      "value": "right",
+      "label": "From right"
+     },
+     {
+      "value": "top",
+      "label": "From top"
+     },
+     {
+      "value": "bottom",
+      "label": "From bottom"
+     }
+    ]
+   }
+  },
+  "appearance.accent": {
+   "desc": "Accent color used for active/selected state across the shell and libadwaita apps.",
+   "type": "enum",
+   "values": [
+    "blue",
+    "teal",
+    "green",
+    "yellow",
+    "orange",
+    "red",
+    "pink",
+    "purple",
+    "slate"
+   ],
+   "writable": true,
+   "value": "blue",
+   "page": "appearance",
+   "group": "settings.appearance.group.theme",
+   "available": true
+  },
+  "appearance.windowBackground": {
+   "desc": "Nidara's own windows (Settings, About, the installer and toolkit apps that follow the setting): opaque; tinted â the colour of what is behind comes through, heavily blurred, subtle; or translucent â less opaque and less blurred, what is behind shows. A window that lets anything through is always blurred. Separate from the interface's glass. Ignored (opaque) while accessibility.reduceTransparency is on. Other apps' translucent windows always get the translucent blur.",
+   "type": "enum",
+   "values": [
+    "opaque",
+    "tinted",
+    "translucent"
+   ],
+   "writable": true,
+   "value": "tinted",
+   "page": "appearance",
+   "group": "settings.appearance.group.windows",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.window-background",
+    "title": "Window style",
+    "subtitle": "Tinted lets the colour of what is behind come through, heavily blurred; translucent shows more of it.",
+    "control": "segmented",
+    "options": [
+     {
+      "value": "opaque",
+      "label": "Opaque"
+     },
+     {
+      "value": "tinted",
+      "label": "Tinted"
+     },
+     {
+      "value": "translucent",
+      "label": "Translucent"
+     }
+    ]
+   }
+  },
+  "appearance.windowControls": {
+   "desc": "Which side of a window its controls (close, maximize; minimize where the compositor minimizes) go on: right, the Linux and Windows convention (close last), or left (close first; in a window with a sidebar shown, inside it). For every window: the compositor's controls over Nidara's windows and its title bar, and the buttons of apps that draw their own title bar (GTK, Chrome's web apps, Telegram) â all read org.gnome.desktop.wm.preferences button-layout, which this writes.",
+   "type": "enum",
+   "values": [
+    "right",
+    "left"
+   ],
+   "writable": true,
+   "value": "right",
+   "page": "appearance",
+   "group": "settings.appearance.group.windows",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.window-controls",
+    "title": "Window buttons",
+    "subtitle": "Close, minimize and maximize: the side of the window they go on.",
+    "control": "segmented",
+    "options": [
+     {
+      "value": "right",
+      "label": "Right"
+     },
+     {
+      "value": "left",
+      "label": "Left"
+     }
+    ]
+   }
+  },
+  "nightlight.enabled": {
+   "desc": "Blue-light filter (hyprsunset).",
+   "type": "boolean",
+   "writable": true,
+   "value": false,
+   "page": "appearance",
+   "group": "settings.appearance.group.night-light",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.night-light",
+    "title": "Night light",
+    "subtitle": "Reduce blue light in the evening",
+    "control": "toggle"
+   }
+  },
+  "nightlight.temperature": {
+   "desc": "Night light color temperature in Kelvin (lower = warmer).",
+   "type": "number",
+   "min": 2700,
+   "max": 6500,
+   "writable": true,
+   "value": 3334,
+   "page": "appearance",
+   "group": "settings.appearance.group.night-light",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.night-light-temp",
+    "title": "Color temperature",
+    "subtitle": "Lower values are warmer and easier on the eyes",
+    "control": "slider",
+    "slider": {
+     "unit": "K",
+     "debounce": 0,
+     "icons": [
+      "nd-value-decrease-symbolic",
+      "nd-value-increase-symbolic"
+     ]
+    }
+   }
+  },
+  "nightlight.scheduleEnabled": {
+   "desc": "Enable automatic night light schedule by time.",
+   "type": "boolean",
+   "writable": true,
+   "value": false,
+   "page": "appearance",
+   "group": "settings.appearance.group.night-light",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.night-light-schedule",
+    "title": "Activate automatically",
+    "subtitle": "Turn Night Light on and off on a schedule",
+    "control": "toggle"
+   }
+  },
+  "nightlight.scheduleFrom": {
+   "desc": "Night light schedule: when it turns on, as HH:MM (24 h). Used while nightlight.scheduleEnabled is on.",
+   "type": "string",
+   "writable": true,
+   "value": "22:00",
+   "available": true
+  },
+  "nightlight.scheduleTo": {
+   "desc": "Night light schedule: when it turns off, as HH:MM (24 h). Used while nightlight.scheduleEnabled is on.",
+   "type": "string",
+   "writable": true,
+   "value": "07:00",
+   "available": true
+  },
+  "appearance.gtkTheme": {
+   "desc": "GTK theme for THIRD-PARTY apps only â Nidara's own processes load no GTK theme (tech-debt #107).",
+   "type": "enum",
+   "values": [
+    "Adwaita"
+   ],
+   "writable": true,
+   "value": "Adwaita",
+   "page": "appearance",
+   "group": "settings.appearance.group.resources",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.gtk-theme",
+    "title": "External app theme",
+    "subtitle": "Look of GTK apps that aren't Nidara's",
+    "control": "dropdown",
+    "options": [
+     {
+      "value": "Adwaita",
+      "label": "Adwaita"
+     }
+    ]
+   }
+  },
+  "appearance.iconTheme": {
+   "desc": "System icon theme.",
+   "type": "enum",
+   "values": [
+    "Colloid",
+    "Colloid-Dark",
+    "Colloid-Green",
+    "Colloid-Green-Dark",
+    "Colloid-Green-Light",
+    "Colloid-Grey",
+    "Colloid-Grey-Dark",
+    "Colloid-Grey-Light",
+    "Colloid-Light",
+    "Colloid-Orange",
+    "Colloid-Orange-Dark",
+    "Colloid-Orange-Light",
+    "Colloid-Pink",
+    "Colloid-Pink-Dark",
+    "Colloid-Pink-Light",
+    "Colloid-Purple",
+    "Colloid-Purple-Dark",
+    "Colloid-Purple-Light",
+    "Colloid-Red",
+    "Colloid-Red-Dark",
+    "Colloid-Red-Light",
+    "Colloid-Teal",
+    "Colloid-Teal-Dark",
+    "Colloid-Teal-Light",
+    "Colloid-Yellow",
+    "Colloid-Yellow-Dark",
+    "Colloid-Yellow-Light",
+    "MacTahoe",
+    "MacTahoe-blue",
+    "MacTahoe-blue-dark",
+    "MacTahoe-blue-light",
+    "MacTahoe-dark",
+    "MacTahoe-green",
+    "MacTahoe-green-dark",
+    "MacTahoe-green-light",
+    "MacTahoe-grey",
+    "MacTahoe-grey-dark",
+    "MacTahoe-grey-light",
+    "MacTahoe-light",
+    "MacTahoe-nord",
+    "MacTahoe-nord-dark",
+    "MacTahoe-nord-light",
+    "MacTahoe-orange",
+    "MacTahoe-orange-dark",
+    "MacTahoe-orange-light",
+    "MacTahoe-purple",
+    "MacTahoe-purple-dark",
+    "MacTahoe-purple-light",
+    "MacTahoe-red",
+    "MacTahoe-red-dark",
+    "MacTahoe-red-light",
+    "MacTahoe-yellow",
+    "MacTahoe-yellow-dark",
+    "MacTahoe-yellow-light",
+    "Papirus",
+    "Papirus-Dark",
+    "Papirus-Light",
+    "Qogir",
+    "Qogir-Dark",
+    "Qogir-Light",
+    "Tela-circle-purple",
+    "Tela-circle-purple-dark",
+    "Tela-circle-purple-light"
+   ],
+   "writable": true,
+   "value": "Papirus",
+   "page": "appearance",
+   "group": "settings.appearance.group.resources",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.icons",
+    "title": "App icons",
+    "subtitle": "Applications, the dock and the app grid",
+    "control": "dropdown",
+    "options": [
+     {
+      "value": "Colloid",
+      "label": "Colloid"
+     },
+     {
+      "value": "Colloid-Dark",
+      "label": "Colloid-Dark"
+     },
+     {
+      "value": "Colloid-Green",
+      "label": "Colloid-Green"
+     },
+     {
+      "value": "Colloid-Green-Dark",
+      "label": "Colloid-Green-Dark"
+     },
+     {
+      "value": "Colloid-Green-Light",
+      "label": "Colloid-Green-Light"
+     },
+     {
+      "value": "Colloid-Grey",
+      "label": "Colloid-Grey"
+     },
+     {
+      "value": "Colloid-Grey-Dark",
+      "label": "Colloid-Grey-Dark"
+     },
+     {
+      "value": "Colloid-Grey-Light",
+      "label": "Colloid-Grey-Light"
+     },
+     {
+      "value": "Colloid-Light",
+      "label": "Colloid-Light"
+     },
+     {
+      "value": "Colloid-Orange",
+      "label": "Colloid-Orange"
+     },
+     {
+      "value": "Colloid-Orange-Dark",
+      "label": "Colloid-Orange-Dark"
+     },
+     {
+      "value": "Colloid-Orange-Light",
+      "label": "Colloid-Orange-Light"
+     },
+     {
+      "value": "Colloid-Pink",
+      "label": "Colloid-Pink"
+     },
+     {
+      "value": "Colloid-Pink-Dark",
+      "label": "Colloid-Pink-Dark"
+     },
+     {
+      "value": "Colloid-Pink-Light",
+      "label": "Colloid-Pink-Light"
+     },
+     {
+      "value": "Colloid-Purple",
+      "label": "Colloid-Purple"
+     },
+     {
+      "value": "Colloid-Purple-Dark",
+      "label": "Colloid-Purple-Dark"
+     },
+     {
+      "value": "Colloid-Purple-Light",
+      "label": "Colloid-Purple-Light"
+     },
+     {
+      "value": "Colloid-Red",
+      "label": "Colloid-Red"
+     },
+     {
+      "value": "Colloid-Red-Dark",
+      "label": "Colloid-Red-Dark"
+     },
+     {
+      "value": "Colloid-Red-Light",
+      "label": "Colloid-Red-Light"
+     },
+     {
+      "value": "Colloid-Teal",
+      "label": "Colloid-Teal"
+     },
+     {
+      "value": "Colloid-Teal-Dark",
+      "label": "Colloid-Teal-Dark"
+     },
+     {
+      "value": "Colloid-Teal-Light",
+      "label": "Colloid-Teal-Light"
+     },
+     {
+      "value": "Colloid-Yellow",
+      "label": "Colloid-Yellow"
+     },
+     {
+      "value": "Colloid-Yellow-Dark",
+      "label": "Colloid-Yellow-Dark"
+     },
+     {
+      "value": "Colloid-Yellow-Light",
+      "label": "Colloid-Yellow-Light"
+     },
+     {
+      "value": "MacTahoe",
+      "label": "MacTahoe"
+     },
+     {
+      "value": "MacTahoe-blue",
+      "label": "MacTahoe-blue"
+     },
+     {
+      "value": "MacTahoe-blue-dark",
+      "label": "MacTahoe-blue-dark"
+     },
+     {
+      "value": "MacTahoe-blue-light",
+      "label": "MacTahoe-blue-light"
+     },
+     {
+      "value": "MacTahoe-dark",
+      "label": "MacTahoe-dark"
+     },
+     {
+      "value": "MacTahoe-green",
+      "label": "MacTahoe-green"
+     },
+     {
+      "value": "MacTahoe-green-dark",
+      "label": "MacTahoe-green-dark"
+     },
+     {
+      "value": "MacTahoe-green-light",
+      "label": "MacTahoe-green-light"
+     },
+     {
+      "value": "MacTahoe-grey",
+      "label": "MacTahoe-grey"
+     },
+     {
+      "value": "MacTahoe-grey-dark",
+      "label": "MacTahoe-grey-dark"
+     },
+     {
+      "value": "MacTahoe-grey-light",
+      "label": "MacTahoe-grey-light"
+     },
+     {
+      "value": "MacTahoe-light",
+      "label": "MacTahoe-light"
+     },
+     {
+      "value": "MacTahoe-nord",
+      "label": "MacTahoe-nord"
+     },
+     {
+      "value": "MacTahoe-nord-dark",
+      "label": "MacTahoe-nord-dark"
+     },
+     {
+      "value": "MacTahoe-nord-light",
+      "label": "MacTahoe-nord-light"
+     },
+     {
+      "value": "MacTahoe-orange",
+      "label": "MacTahoe-orange"
+     },
+     {
+      "value": "MacTahoe-orange-dark",
+      "label": "MacTahoe-orange-dark"
+     },
+     {
+      "value": "MacTahoe-orange-light",
+      "label": "MacTahoe-orange-light"
+     },
+     {
+      "value": "MacTahoe-purple",
+      "label": "MacTahoe-purple"
+     },
+     {
+      "value": "MacTahoe-purple-dark",
+      "label": "MacTahoe-purple-dark"
+     },
+     {
+      "value": "MacTahoe-purple-light",
+      "label": "MacTahoe-purple-light"
+     },
+     {
+      "value": "MacTahoe-red",
+      "label": "MacTahoe-red"
+     },
+     {
+      "value": "MacTahoe-red-dark",
+      "label": "MacTahoe-red-dark"
+     },
+     {
+      "value": "MacTahoe-red-light",
+      "label": "MacTahoe-red-light"
+     },
+     {
+      "value": "MacTahoe-yellow",
+      "label": "MacTahoe-yellow"
+     },
+     {
+      "value": "MacTahoe-yellow-dark",
+      "label": "MacTahoe-yellow-dark"
+     },
+     {
+      "value": "MacTahoe-yellow-light",
+      "label": "MacTahoe-yellow-light"
+     },
+     {
+      "value": "Papirus",
+      "label": "Papirus"
+     },
+     {
+      "value": "Papirus-Dark",
+      "label": "Papirus-Dark"
+     },
+     {
+      "value": "Papirus-Light",
+      "label": "Papirus-Light"
+     },
+     {
+      "value": "Qogir",
+      "label": "Qogir"
+     },
+     {
+      "value": "Qogir-Dark",
+      "label": "Qogir-Dark"
+     },
+     {
+      "value": "Qogir-Light",
+      "label": "Qogir-Light"
+     },
+     {
+      "value": "Tela-circle-purple",
+      "label": "Tela-circle-purple"
+     },
+     {
+      "value": "Tela-circle-purple-dark",
+      "label": "Tela-circle-purple-dark"
+     },
+     {
+      "value": "Tela-circle-purple-light",
+      "label": "Tela-circle-purple-light"
+     }
+    ]
+   }
+  },
+  "appearance.interfaceIconTheme": {
+   "desc": "Icon theme for Nidara's own interface icons (bar, menus, Settings), separate from the app icon theme. 'nidara' = Nidara's own drawings (default). Only themes made for Nidara's icon spec (X-Nidara-Icon-Spec in index.theme, see ui/shell/assets/icons/nidara/SPEC.md) are listed. Any icon the chosen theme lacks, or cannot draw, falls back to Nidara's.",
+   "type": "enum",
+   "values": [
+    "nidara"
+   ],
+   "writable": true,
+   "value": "nidara",
+   "page": "appearance",
+   "group": "settings.appearance.group.resources",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.interface-icons",
+    "title": "Interface icons",
+    "subtitle": "The bar, menus and Settings",
+    "control": "dropdown",
+    "options": [
+     {
+      "value": "nidara",
+      "label": "Nidara"
+     }
+    ]
+   }
+  },
+  "appearance.cursorTheme": {
+   "desc": "System cursor theme.",
+   "type": "enum",
+   "values": [
+    "Adwaita",
+    "Qogir",
+    "Qogir-Dark",
+    "Qogir-Light"
+   ],
+   "writable": true,
+   "value": "default",
+   "page": "appearance",
+   "group": "settings.appearance.group.resources",
+   "available": true,
+   "ui": {
+    "i18n": "settings.appearance.cursor",
+    "title": "Cursor",
+    "subtitle": "Cursor style",
+    "control": "dropdown",
+    "options": [
+     {
+      "value": "Adwaita",
+      "label": "Adwaita"
+     },
+     {
+      "value": "Qogir",
+      "label": "Qogir"
+     },
+     {
+      "value": "Qogir-Dark",
+      "label": "Qogir-Dark"
+     },
+     {
+      "value": "Qogir-Light",
+      "label": "Qogir-Light"
+     }
+    ]
+   }
+  },
+  "appearance.interfaceFont": {
+   "desc": "The interface font as a Pango description, \"Family [Style] Size\" in points (unscaled: the text scale applies on top), as org.gnome.desktop.interface stores it. A family the system does not have is refused.",
+   "type": "string",
+   "writable": true,
+   "value": "Inter Variable 11",
+   "available": true
+  },
+  "appearance.monoFont": {
+   "desc": "The monospace font as a Pango description, \"Family [Style] Size\" in points (unscaled: the text scale applies on top), as org.gnome.desktop.interface stores it. A family the system does not have is refused.",
+   "type": "string",
+   "writable": true,
+   "value": "JetBrainsMono Nerd Font Medium 11",
+   "available": true
+  },
+  "accessibility.reduceTransparency": {
+   "desc": "Reduce transparency: every glass surface â bar, panels, dock, menus, Nidara's windows, the lock screen and the login screen â becomes solid.",
+   "type": "boolean",
+   "writable": true,
+   "value": false,
+   "page": "accessibility",
+   "group": "settings.accessibility.group.vision",
+   "available": true,
+   "ui": {
+    "i18n": "settings.accessibility.reduce-transparency",
+    "title": "Reduce transparency",
+    "subtitle": "The bar, dock, panels and windows become opaque, whatever glass is chosen.",
+    "control": "toggle"
+   }
+  },
+  "ai.allowConfigWrite": {
+   "desc": "Whether agents may change settings via setConfig. Toggle it in Settings â AI.",
+   "type": "boolean",
+   "writable": false,
+   "value": true,
+   "page": "ai",
+   "group": "settings.ai.group.access",
+   "available": true,
+   "ui": {
+    "i18n": "settings.ai.allow-config-write",
+    "title": "Allow agents to change settings",
+    "subtitle": "Local agents and scripts can modify shell settings through the official interface. Reading state is always available.",
+    "control": "toggle"
+   }
+  }
+ }
+}

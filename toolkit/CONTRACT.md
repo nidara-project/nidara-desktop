@@ -36,6 +36,7 @@ toolkit/                     its own Cargo workspace, like hyalo/ and session/ (
     nk-render/               rasterises a frame into pixels                (no Wayland)
     nk-wayland/              the connection: window, buffers, input, IME, our protocols
     nk-widgets/              retained structural widgets, derived semantics (phase 1)
+    nk-icons/                interface icons by name, as vector shapes      (pure, no Wayland)
   phase0/                    the test window (a binary, nk-phase0), and its checks
   widgets-demo/              the fixed-data structural-widget demo (phase 1)
   settings/                  the native Settings (phase 1, #915): nk-settings
@@ -260,6 +261,24 @@ Phase 0 remains an independent client of those four crates.
   `SpinButton`s labelled by its row, each with `ValueInfo` and `Action::SetValue` (not
   Activate). `nk-choices-check.py` asserts them with a control each: the spoken text dropped,
   a Value that stays at the old number after a key, a `SetValue` ignored, an unnamed spin.
+- **Icons (#915)**: `nk-icons` is the shell's `Icons.ts` lookup for the toolkit — the
+  interface icon theme only if installed and declaring `X-Nidara-Icon-Spec`, the file GTK would
+  take for the size, the reference theme for a name the theme lacks or draws nothing for — and
+  hands back vector shapes, not pixels. `nk-render`'s `Canvas::icon` paints them in one ink as
+  ONE layer at the ink's alpha (a symbolic icon's crossing strokes are not laid twice). A tree
+  draws its icons from `Tree::set_icon_theme(Icons)`; an icon drawn without it is an error. The
+  slider's flanking icons: `Tree::set_slider_icons(slider, [lesser, greater])`, sized, faded
+  and spaced by `RangeStyle` (`range.json` `iconSize`/`iconOpacity`/`iconGap`, the kit's
+  `NidaraSliderRow`). Dependencies: `nk-render → nk-icons`, `nk-widgets → nk-icons`.
+- **Row texts and the disclosure (#915)**: `Tree::set_subtitle(row, text)` — a second line
+  under the row's label, the two centred as one block; AT-SPI: the description of the row and
+  of its control. `Tree::set_footer(group, text)` — under the group's card, which stops
+  `footer_gap` above it; hidden like any node, which is how `footerWhen` is followed.
+  `Tree::disclosure(group, label, expanded)` — a focusable row, activated anywhere on it (its
+  state already flipped, `Effect::Activated`), a chevron at its trailing edge; the application
+  shows and hides what follows it; AT-SPI: an expandable `ToggleButton` (`States::expandable`,
+  new in nk-a11y). Look: `RowTextStyle` (`toolkit/tokens/rows.json` → `components.json`
+  `rows`: the kit's `.nidara-row-subtitle`, `.nidara-list-footer`, the Settings' "Advanced" row).
 - **Switch look (#915)**: `Tree::set_switch_style(SwitchStyle)` — border and its checked
   colour, track, checked fill, thumb, the thumb's margin, the disabled opacity — from
   `toolkit/tokens/switch.json` through `components.json`'s `switch` (the kit's
@@ -439,8 +458,31 @@ either half depends on it.
   sends with `client.apply`, and redraws on the `Notice`s that name them. Builders whose item
   has no `key` in the manifest know their own keys from PHASE1.md D1's table
   (`wallpaperPicker` → `wallpaper.current`, `interfaceFont` → `appearance.interfaceFont`, …).
-- **The builder interface itself** (what the renderer hands a builder, what it hands back) is
-  written here with the renderer's PR, before Sol's builders depend on it.
+- **The renderer** (`render`): `Rendered::build(Host, &Page, &mut Builders, content, mount)`
+  draws a manifest page under the scroll region; then `notices(Host, &[Notice])` after every
+  `poll`, `effect(Host, Effect) -> bool` for every tree effect (true: it was the page's),
+  `idle(Host)` from the app's idle, `unmount(Host)` when the page goes. `Host` lends the tree,
+  the `Editor` (the `Client`; a fake in tests), the exports, the styles and — in `effect`/`idle`
+  only — the window. It owns: which rows exist (a key `available: false` has no row, as the
+  legacy Settings; a key not in the snapshot, an unknown control or a name with no builder is
+  an error), visible and sensitive (`visibleWhen`, a collapsed disclosure, `sensitiveWhen`, the
+  service gone, a key not writable), what a row shows (`Session::shown`; a failed write shows
+  the value in force and says why in the row's second line until the next answer), and the
+  sliders' `commitOnRelease` and `debounce` (default 32 ms, as `NidaraSliderRow`).
+- **The builder interface** (agreed with Sol in #915, #123–#128):
+  `trait Builder { build(cx, group, &Item) -> Built; notice(cx, &Notice); effect(cx, Effect);
+  idle(cx); shown(cx, visible); unmount(cx) }` (the last three default to nothing).
+  `Built { rows, keys }`: the rows the renderer hides and disables, the keys whose notices reach
+  it (`Changed`/`Failed` naming one, `Ready`/`Unavailable` always). `Cx` lends `tree`,
+  `exports`, `styles`, `window` (effect/idle only, never kept), `session()`, `apply(key, v)` —
+  the only way a builder edits —, `connection()` (portals only), `own(id)` (route this node's
+  effects to me; for nodes created after `build` too), `remove(id)`, `mount()` (a token: an async
+  result of another mount is dropped; a builder may add its own per-operation tokens), and
+  `focus_if_shown(id)` (return focus only to a launcher still there, shown and enabled).
+  `Builders::register(name, factory)`: a factory per name, a fresh builder per item; the names
+  are the manifest's `custom`/`decoration` and `dropdown` (every row whose `ui.control` is
+  `dropdown`). Claude's are in `builders` (`accentPicker`, `nightScheduleTimes`); Sol's in their
+  own modules.
 - `styles`: `Styles::new(&Exports, &Appearance)` → `Palette`, `Metrics`, `ChoiceStyle`,
   `RangeStyle`, `SwitchStyle`, the accents by name and the interface `TextStyle` (the portal's
   font at its text scale). The ONE mapping from the exports to `nk-widgets`' styles: the

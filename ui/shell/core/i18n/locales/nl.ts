@@ -194,6 +194,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "Schakel Nachtmodus volgens een schema in en uit",
     "settings.appearance.night-light-from": "Inschakelen om",
     "settings.appearance.night-light-to": "Uitschakelen om",
+    "settings.appearance.time.hour": "Uur",
+    "settings.appearance.time.minute": "Minuut",
     "settings.appearance.group.resources": "Systeembronnen",
     "settings.appearance.browse": "Bladeren…",
     "settings.appearance.title": "Uiterlijk",

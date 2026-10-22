@@ -18,7 +18,7 @@ usage: settings-tokens-check.py OUT_DIR
   transparency), its states' washes and shared fadeMs, its two inks — a reader has no defaults.
 - Every components.json mode variant carries D8 list focus/highlight/separator tokens with a resolvable colour,
   and the radio groups' choices (toolkit/tokens/choices.json, #882) with resolvable colours and font,
-  the range controls' slider and spin (toolkit/tokens/range.json, #882), and the switch (toolkit/tokens/switch.json).
+  the range controls' slider and spin (toolkit/tokens/range.json, #882), the switch (toolkit/tokens/switch.json) and the rows' second line, footer and disclosure (toolkit/tokens/rows.json).
 CI also runs it on a copy with one used token dropped from one set, on one with `panel`
 dropped from one glass variant, a control step's `states` dropped, one variant's list highlight dropped, and one variant's swatch dropped, and one variant's slider dropped, and one variant's switch thumb colour dropped; all must fail.
 """
@@ -159,8 +159,8 @@ for variant in component_variants:
     ranged = variant.get('range') or {}
     slider = ranged.get('slider') or {}
     spin = ranged.get('spin') or {}
-    if not (all(positive_number(slider.get(k)) for k in ('width', 'track', 'thumbRadius', 'valueGap', 'fillOpacity', 'pageSteps'))
-            and slider['fillOpacity'] <= 1 and slider['thumbRadius'] * 2 >= slider['track']
+    if not (all(positive_number(slider.get(k)) for k in ('width', 'track', 'thumbRadius', 'valueGap', 'fillOpacity', 'pageSteps', 'iconSize', 'iconOpacity', 'iconGap'))
+            and slider['fillOpacity'] <= 1 and slider['iconOpacity'] <= 1 and slider['thumbRadius'] * 2 >= slider['track']
             and all(positive_number(spin.get(k)) for k in ('height', 'textWidth', 'buttonWidth', 'border', 'gap'))):
         fail.append(f'{where}: incomplete or invalid range (slider/spin)')
     if not isinstance(spin.get('borderColor'), str) or not all(spin['borderColor'] in s['tokens'] for s in sets):
@@ -175,6 +175,16 @@ for variant in component_variants:
             fail.append(f'{where}: missing switch colour token {key}')
     if not (isinstance(switch.get('checkedBorderColor'), str) and switch['checkedBorderColor'].startswith('rgba(')):
         fail.append(f"{where}: switch checkedBorderColor is not a literal rgba(): {switch.get('checkedBorderColor')}")
+    rows = variant.get('rows') or {}
+    sub, foot, disc = rows.get('subtitle') or {}, rows.get('footer') or {}, rows.get('disclosure') or {}
+    if not (positive_number(foot.get('gap'), True) and positive_number(disc.get('iconSize'))
+            and all(isinstance(disc.get(k), str) and disc[k].startswith('nd-') for k in ('open', 'closed'))):
+        fail.append(f'{where}: incomplete or invalid rows (footer gap, disclosure)')
+    for part in (sub, foot):
+        if part.get('fontSize') not in static['scss']:
+            fail.append(f"{where}: rows font size {part.get('fontSize')} is not a static scss token")
+        if not isinstance(part.get('color'), str) or not all(part['color'] in s['tokens'] for s in sets):
+            fail.append(f"{where}: missing rows colour token {part.get('color')}")
     if segmented.get('fontSize') not in static['scss']:
         fail.append(f"{where}: choices font size {segmented.get('fontSize')} is not a static scss token")
     common = variant.get('common') or {}
@@ -190,4 +200,4 @@ if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges and switch complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch and rows complete')

@@ -194,6 +194,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "Turn Night Light on and off on a schedule",
     "settings.appearance.night-light-from": "Turn on at",
     "settings.appearance.night-light-to": "Turn off at",
+    "settings.appearance.time.hour": "Hour",
+    "settings.appearance.time.minute": "Minute",
     "settings.appearance.group.resources": "System resources",
     "settings.appearance.browse": "Browse…",
     "settings.appearance.title": "Appearance",

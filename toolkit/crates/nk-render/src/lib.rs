@@ -7,8 +7,8 @@ use vello_cpu::{
     Glyph, Pixmap, RenderContext, Resources,
     color::AlphaColor,
     color::Srgb,
-    kurbo::{Affine, Rect as BoxRect, RoundedRect, Shape, Stroke},
-    peniko::{Blob, FontData},
+    kurbo::{Affine, BezPath, Cap, Join, Rect as BoxRect, RoundedRect, Shape, Stroke},
+    peniko::{Blob, Fill, FontData},
 };
 
 pub type Color = AlphaColor<Srgb>;
@@ -110,6 +110,65 @@ impl Canvas {
             }))
             .map_err(|e| format!("glyph rasterization: {e:?}"))
     }
+    /// A symbolic icon in one ink, its own units fitted into `r` (nk-icons: vector shapes,
+    /// sharp at any scale). Painted opaque into a layer that takes the ink's alpha, as GTK
+    /// composites a symbolic icon: where two strokes cross, a half-transparent ink is not laid
+    /// twice. Each shape's own opacity still multiplies inside the layer.
+    pub fn icon(&mut self, icon: &nk_icons::Icon, r: Rect, color: Color) {
+        let (w, h) = icon.size;
+        if w <= 0. || h <= 0. {
+            return;
+        }
+        let alpha = color.components[3];
+        let color = color.with_alpha(1.);
+        self.context.push_opacity_layer(alpha);
+        let fit = Affine::scale(self.scale)
+            * Affine::translate((r.x as f64, r.y as f64))
+            * Affine::scale_non_uniform((r.width / w) as f64, (r.height / h) as f64);
+        self.context.set_transform(fit);
+        for shape in &icon.shapes {
+            let path = bez(&shape.segments);
+            let fill = |c: &mut Self| {
+                if let Some(f) = shape.fill {
+                    c.context.set_fill_rule(if f.even_odd {
+                        Fill::EvenOdd
+                    } else {
+                        Fill::NonZero
+                    });
+                    c.context.set_paint(color.multiply_alpha(f.opacity));
+                    c.context.fill_path(&path);
+                }
+            };
+            let stroke = |c: &mut Self| {
+                if let Some(k) = shape.stroke {
+                    let mut s = Stroke::new(k.width as f64).with_caps(match k.cap {
+                        nk_icons::Cap::Butt => Cap::Butt,
+                        nk_icons::Cap::Round => Cap::Round,
+                        nk_icons::Cap::Square => Cap::Square,
+                    });
+                    s = s.with_join(match k.join {
+                        nk_icons::Join::Miter => Join::Miter,
+                        nk_icons::Join::Round => Join::Round,
+                        nk_icons::Join::Bevel => Join::Bevel,
+                    });
+                    s.miter_limit = k.miter_limit as f64;
+                    c.context.set_stroke(s);
+                    c.context.set_paint(color.multiply_alpha(k.opacity));
+                    c.context.stroke_path(&path);
+                }
+            };
+            if shape.stroke_first {
+                stroke(self);
+                fill(self);
+            } else {
+                fill(self);
+                stroke(self);
+            }
+        }
+        self.context.set_fill_rule(Fill::NonZero);
+        self.context.set_transform(Affine::scale(self.scale));
+        self.context.pop_layer();
+    }
     /// Native-endian wl_shm ARGB8888: premultiplied, sRGB encoded.
     pub fn finish(mut self) -> Vec<u8> {
         let mut target = Pixmap::new(self.context.width(), self.context.height());
@@ -121,6 +180,21 @@ impl Canvas {
             .flat_map(|p| u32::from_be_bytes([p.a, p.r, p.g, p.b]).to_ne_bytes())
             .collect()
     }
+}
+fn bez(segments: &[nk_icons::Segment]) -> BezPath {
+    use nk_icons::Segment as S;
+    let p = |p: nk_icons::Point| (p.x as f64, p.y as f64);
+    let mut path = BezPath::new();
+    for s in segments {
+        match *s {
+            S::Move(a) => path.move_to(p(a)),
+            S::Line(a) => path.line_to(p(a)),
+            S::Quad(a, b) => path.quad_to(p(a), p(b)),
+            S::Cubic(a, b, c) => path.curve_to(p(a), p(b), p(c)),
+            S::Close => path.close_path(),
+        }
+    }
+    path
 }
 fn rect(r: Rect) -> BoxRect {
     BoxRect::new(

@@ -194,6 +194,8 @@ export default {
     "settings.appearance.night-light-schedule.desc": "Włączaj i wyłączaj tryb nocny według harmonogramu",
     "settings.appearance.night-light-from": "Włącz o",
     "settings.appearance.night-light-to": "Wyłącz o",
+    "settings.appearance.time.hour": "Godzina",
+    "settings.appearance.time.minute": "Minuta",
     "settings.appearance.group.resources": "Zasoby systemowe",
     "settings.appearance.browse": "Przeglądaj…",
     "settings.appearance.title": "Wygląd",

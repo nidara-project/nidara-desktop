@@ -1,0 +1,26 @@
+{
+  "$comment": [
+    "A row's second line, a group's footer and the disclosure row of the native toolkit (#915). Taken from the current Settings, which is the spec: .nidara-row-subtitle and .nidara-list-footer in ui/lib/nidara-kit/styles/_components.scss, and the disclosure of ui/shell/surfaces/settings/PreferencePage.ts. Final values require owner live review.",
+    "Default applies to every dark/reduceTransparency variant; variants override whole fields like list.json. Exported once as rows in each components.json mode variant."
+  ],
+  "default": {
+    "subtitle": {
+      "fontSize": "fse-small",
+      "color": "--nidara-text-dim",
+      "source": ".nidara-row-subtitle: font-size $fse-small, color var(--nidara-text-dim)."
+    },
+    "footer": {
+      "fontSize": "fse-caption",
+      "color": "--nidara-text-dim",
+      "gap": 8,
+      "source": ".nidara-list-footer: font-size $fse-caption, color var(--nidara-text-dim), margin-top 8px (mirroring the header's margin-bottom)."
+    },
+    "disclosure": {
+      "iconSize": 16,
+      "open": "nd-pan-down",
+      "closed": "nd-pan-end",
+      "source": "PreferencePage.ts: Gtk.Image pixel_size 16, uiIcon nd-pan-down when revealed, nd-pan-end when not; revealed at first (reveal_child: true)."
+    }
+  },
+  "variants": []
+}

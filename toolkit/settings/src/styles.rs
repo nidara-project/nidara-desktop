@@ -7,7 +7,7 @@
 use crate::exports::{Exports, Tokens};
 use crate::portal::Appearance;
 use nk_render::{Color, rgba};
-use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, SwitchStyle};
+use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, RowTextStyle, SwitchStyle};
 use serde_json::Value as Json;
 
 pub struct Styles {
@@ -16,6 +16,7 @@ pub struct Styles {
     pub choices: ChoiceStyle,
     pub range: RangeStyle,
     pub switch: SwitchStyle,
+    pub rows: RowTextStyle,
     /// The accent palette by name, in its export order (`colors.json` `accents`).
     pub accents: Vec<(String, Color)>,
     /// The interface font at the text scale (the portal's), at the kit's body line height.
@@ -107,12 +108,27 @@ impl Styles {
             slider_value_gap: number(&slider["valueGap"])?,
             slider_fill_opacity: number(&slider["fillOpacity"])?,
             slider_page_steps: number(&slider["pageSteps"])?,
+            slider_icon_size: number(&slider["iconSize"])?,
+            slider_icon_opacity: number(&slider["iconOpacity"])?,
+            slider_icon_gap: number(&slider["iconGap"])?,
             spin_height: number(&spin["height"])?,
             spin_text_width: number(&spin["textWidth"])?,
             spin_button_width: number(&spin["buttonWidth"])?,
             spin_border: number(&spin["border"])?,
             spin_border_color: token(&field(&spin["borderColor"], "spin border colour")?)?,
             spin_gap: number(&spin["gap"])?,
+        };
+        let rw = &c["rows"];
+        let (sub, foot, disc) = (&rw["subtitle"], &rw["footer"], &rw["disclosure"]);
+        let rows = RowTextStyle {
+            subtitle_scale: em(statics, &field(&sub["fontSize"], "subtitle font size")?)?,
+            subtitle: token(&field(&sub["color"], "subtitle colour")?)?,
+            footer_scale: em(statics, &field(&foot["fontSize"], "footer font size")?)?,
+            footer: token(&field(&foot["color"], "footer colour")?)?,
+            footer_gap: number(&foot["gap"])?,
+            disclosure_icon_size: number(&disc["iconSize"])?,
+            disclosure_open: field(&disc["open"], "disclosure open icon")?,
+            disclosure_closed: field(&disc["closed"], "disclosure closed icon")?,
         };
         let accents = exports.colors["accents"]
             .as_object()
@@ -131,9 +147,22 @@ impl Styles {
             choices,
             range,
             switch,
+            rows,
             accents,
             text,
         })
+    }
+}
+
+impl Styles {
+    /// Every style a tree draws with, at once (a tree built from these metrics and text).
+    pub fn apply(&self, tree: &mut nk_widgets::Tree) -> Result<(), String> {
+        tree.set_choice_style(self.choices)?;
+        tree.set_range_style(self.range)?;
+        tree.set_switch_style(self.switch)?;
+        tree.set_row_text_style(self.rows.clone())?;
+        tree.set_text_style(self.text.clone());
+        Ok(())
     }
 }
 

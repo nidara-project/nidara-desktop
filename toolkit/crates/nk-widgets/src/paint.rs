@@ -236,6 +236,17 @@ impl Tree {
                     card.y = top;
                     card.height = (r.y + r.height - top).max(0.);
                 }
+                // The footer explains the card from under it, outside it.
+                if let Some(footer) = n
+                    .children
+                    .iter()
+                    .map(|id| &self.nodes[id])
+                    .find(|n| n.kind == Kind::Footer && !n.hidden)
+                {
+                    let gap = self.row_text()?.footer_gap;
+                    let bottom = footer.bounds.y - origin.y - gap;
+                    card.height = (bottom - card.y).max(0.);
+                }
                 canvas.rounded_rect(card, m.group_radius as f64, palette.surface);
             }
             Kind::Page { selected: true } => {
@@ -249,6 +260,7 @@ impl Tree {
             Kind::Switch { checked } => {
                 self.paint_switch(r, checked, self.available(id), canvas)?
             }
+            Kind::Disclosure { expanded } => self.paint_disclosure(r, expanded, ink, canvas)?,
             _ => {}
         }
         if self.hovered == Some(id)
@@ -266,12 +278,20 @@ impl Tree {
             && matches!(
                 n.kind,
                 Kind::Label
+                    | Kind::Subtitle
+                    | Kind::Footer
                     | Kind::Page { .. }
                     | Kind::Button
                     | Kind::TitleBar
                     | Kind::Choice { .. }
             )
         {
+            // A second line and a footer are dimmer than the label, unless unavailable.
+            let ink = match (n.kind, self.available(id)) {
+                (Kind::Subtitle, true) => self.row_text()?.subtitle,
+                (Kind::Footer, true) => self.row_text()?.footer,
+                _ => ink,
+            };
             let padding = if matches!(n.kind, Kind::Button | Kind::Page { .. } | Kind::TitleBar) {
                 if n.kind == Kind::TitleBar {
                     m.padding

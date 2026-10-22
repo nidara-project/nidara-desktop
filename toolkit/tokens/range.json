@@ -11,7 +11,10 @@
       "valueGap": 12,
       "fillOpacity": 0.9,
       "pageSteps": 10,
-      "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance)."
+      "iconSize": 16,
+      "iconOpacity": 0.5,
+      "iconGap": 12,
+      "source": "NidaraSliderRow: width_request 140, the value label 12 px beside it; slider.ts: TRACK_H 6, THUMB_R 9 (drawn at r-1), accent fill at 0.9. Page Up/Down move 10 steps (#882's acceptance). Flanking icons (opts.icons): pixel_size 16 (iconSizes' default), opacity 0.5, in the row's 12 px spacing."
     },
     "spin": {
       "height": 32,
