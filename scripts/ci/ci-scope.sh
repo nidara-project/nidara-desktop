@@ -49,6 +49,9 @@ needs_gates() {
         hyalo/compositor/src/control.rs|hyalo/compositor/src/protocols/layers*|hyalo/compositor/src/protocols/focus_grab.rs) return 0 ;;
         hyalo/Cargo.lock|hyalo/Cargo.toml|hyalo/compositor/Cargo.toml) return 0 ;;
         toolkit/settings-slice/*) return 1 ;;
+        # The native Settings (#915): nothing the matrices drive yet. Its own keyboard and Orca
+        # walk (PHASE1.md gate 2) comes with its window; then it joins this list.
+        toolkit/settings/*) return 1 ;;
         toolkit/*) return 0 ;;
         protocols/nidara-layers-v1.xml|config/hyalo/*) return 0 ;;
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py|scripts/ci/nk-widgets-check.py) return 0 ;;
@@ -129,6 +132,7 @@ if [ "${1:-}" = --self-test ]; then
     check_gates false scripts/ci/hyalo-smoke.sh .github/workflows/ci.yml .gitignore
     check_gates false hyalo/compositor/src/newmodule.rs newdir/anything
     check_gates false toolkit/crates/nk-text/README.md
+    check_gates false toolkit/settings/src/session.rs toolkit/settings/tests/bus.rs
     # What does: the matrices.
     check_gates true hyalo/compositor/src/control.rs
     check_gates true hyalo/compositor/src/render/decor.rs hyalo/compositor/src/input.rs
