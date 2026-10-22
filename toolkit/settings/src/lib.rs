@@ -7,6 +7,7 @@
 //!
 //! | module | what |
 //! |---|---|
+//! | `routing` | the bus names (D1 [A1]) and where a request to open Settings goes (D3) |
 //! | `session` | the store and every ordering rule of [A3], pure (no bus) |
 //! | `client` | `Config1` over one bus connection, feeding the session |
 //! | `portal` | the four appearance values that pick the token set, plus reduced motion |
@@ -23,6 +24,7 @@ pub mod exports;
 pub mod manifest;
 pub mod portal;
 pub mod render;
+pub mod routing;
 pub mod session;
 pub mod styles;
 pub mod value;
