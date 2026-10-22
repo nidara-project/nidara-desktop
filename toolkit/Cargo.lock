@@ -880,6 +880,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nk-settings"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zbus",
+]
+
+[[package]]
 name = "nk-settings-slice"
 version = "0.1.0"
 dependencies = [
