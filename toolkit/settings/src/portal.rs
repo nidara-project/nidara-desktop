@@ -5,7 +5,9 @@
 //! Four values pick one of the exported token sets — `org.freedesktop.appearance`
 //! `accent-color`/`color-scheme` and `org.nidara.appearance`
 //! `reduce-transparency`/`window-background` — plus `reduced-motion`, honoured on its own
-//! (D5). Subscribed to `SettingChanged` before `ReadAll`; on any change the whole namespace is
+//! (D5), and the interface font with the text scale (`org.gnome.desktop.interface`
+//! `font-name`/`text-scaling-factor`): run-time inputs of layout, never exported [A8].
+//! Subscribed to `SettingChanged` before `ReadAll`; on any change the whole namespace is
 //! read again, so a change and the read that already holds it can arrive in either order.
 
 use std::collections::HashMap;
@@ -13,7 +15,11 @@ use std::sync::mpsc::{self, Receiver};
 use zbus::blocking::{Connection, Proxy};
 use zbus::zvariant::{OwnedValue, Value as Variant};
 
-const NAMESPACES: [&str; 2] = ["org.freedesktop.appearance", "org.nidara.appearance"];
+pub const NAMESPACES: [&str; 3] = [
+    "org.freedesktop.appearance",
+    "org.nidara.appearance",
+    "org.gnome.desktop.interface",
+];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Appearance {
@@ -24,9 +30,14 @@ pub struct Appearance {
     /// `opaque`, `tinted` or `translucent` (D6).
     pub window_background: String,
     pub reduced_motion: bool,
+    /// A Pango description, `Family [Style] Size` in points.
+    pub font: String,
+    /// The text scale (`text-scaling-factor`), > 0.
+    pub text_scale: f64,
 }
 
-type Namespaces = HashMap<String, HashMap<String, OwnedValue>>;
+/// `ReadAll`'s answer.
+pub type Namespaces = HashMap<String, HashMap<String, OwnedValue>>;
 
 impl Appearance {
     /// From `ReadAll`'s answer. A value missing or of another kind is an error: an unknown
@@ -36,6 +47,12 @@ impl Appearance {
             all.get(ns)
                 .and_then(|m| m.get(key))
                 .ok_or_else(|| format!("the portal has no {ns} {key}"))
+        };
+        let text = |ns: &str, key: &str| -> Result<String, String> {
+            match &**get(ns, key)? {
+                Variant::Str(s) => Ok(s.as_str().to_owned()),
+                v => Err(format!("{key} of another kind: {v:?}")),
+            }
         };
         let accent = match &**get(NAMESPACES[0], "accent-color")? {
             Variant::Structure(s) => match s.fields() {
@@ -49,22 +66,24 @@ impl Appearance {
             Ok(2) => false,
             v => return Err(format!("color-scheme {v:?}: neither dark nor light")),
         };
-        let flag =
-            |key: &str| bool::try_from(get(NAMESPACES[1], key)?).map_err(|e| format!("{key}: {e}"));
-        let window_background = match &**get(NAMESPACES[1], "window-background")? {
-            Variant::Str(s) => s.as_str().to_owned(),
-            v => return Err(format!("window-background of another kind: {v:?}")),
-        };
-        let reduced_motion = match u32::try_from(get(NAMESPACES[0], "reduced-motion")?) {
-            Ok(n) => n == 1,
-            Err(e) => return Err(format!("reduced-motion: {e}")),
-        };
+        let reduced_motion = u32::try_from(get(NAMESPACES[0], "reduced-motion")?)
+            .map_err(|e| format!("reduced-motion: {e}"))?
+            == 1;
+        let reduce_transparency = bool::try_from(get(NAMESPACES[1], "reduce-transparency")?)
+            .map_err(|e| format!("reduce-transparency: {e}"))?;
+        let text_scale = f64::try_from(get(NAMESPACES[2], "text-scaling-factor")?)
+            .map_err(|e| format!("text-scaling-factor: {e}"))?;
+        if !(text_scale.is_finite() && text_scale > 0.) {
+            return Err(format!("text-scaling-factor {text_scale}"));
+        }
         Ok(Self {
             accent,
             dark,
-            reduce_transparency: flag("reduce-transparency")?,
-            window_background,
+            reduce_transparency,
+            window_background: text(NAMESPACES[1], "window-background")?,
             reduced_motion,
+            font: text(NAMESPACES[2], "font-name")?,
+            text_scale,
         })
     }
 }
@@ -142,47 +161,63 @@ mod tests {
             .add_field(1.0f64)
             .build()
             .unwrap();
+        let entries = |pairs: Vec<(&str, Variant<'static>)>| {
+            pairs
+                .into_iter()
+                .map(|(k, v)| (k.to_owned(), owned(v)))
+                .collect::<HashMap<_, _>>()
+        };
         HashMap::from([
             (
                 NAMESPACES[0].to_owned(),
-                HashMap::from([
-                    ("accent-color".to_owned(), owned(Variant::from(accent))),
-                    ("color-scheme".to_owned(), owned(Variant::from(scheme))),
-                    ("reduced-motion".to_owned(), owned(Variant::from(0u32))),
+                entries(vec![
+                    ("accent-color", Variant::from(accent)),
+                    ("color-scheme", Variant::from(scheme)),
+                    ("reduced-motion", Variant::from(0u32)),
                 ]),
             ),
             (
                 NAMESPACES[1].to_owned(),
-                HashMap::from([
-                    (
-                        "reduce-transparency".to_owned(),
-                        owned(Variant::from(false)),
-                    ),
-                    (
-                        "window-background".to_owned(),
-                        owned(Variant::from("tinted")),
-                    ),
+                entries(vec![
+                    ("reduce-transparency", Variant::from(false)),
+                    ("window-background", Variant::from("tinted")),
+                ]),
+            ),
+            (
+                NAMESPACES[2].to_owned(),
+                entries(vec![
+                    ("font-name", Variant::from("Inter Variable 11")),
+                    ("text-scaling-factor", Variant::from(1.25f64)),
                 ]),
             ),
         ])
     }
 
     #[test]
-    fn reads_the_four_values() {
+    fn reads_the_values() {
         let a = Appearance::from_portal(&portal(1)).unwrap();
         assert_eq!(a.accent, [0.0, 0.533, 1.0]);
         assert!(a.dark && !a.reduce_transparency && !a.reduced_motion);
         assert_eq!(a.window_background, "tinted");
+        assert_eq!((a.font.as_str(), a.text_scale), ("Inter Variable 11", 1.25));
         assert!(!Appearance::from_portal(&portal(2)).unwrap().dark);
     }
 
     #[test]
     fn no_preference_is_an_error_not_a_default() {
         assert!(Appearance::from_portal(&portal(0)).is_err());
+        for (ns, key) in [
+            (NAMESPACES[1], "window-background"),
+            (NAMESPACES[2], "font-name"),
+        ] {
+            let mut p = portal(1);
+            p.get_mut(ns).unwrap().remove(key);
+            assert!(Appearance::from_portal(&p).is_err(), "{key} missing passed");
+        }
         let mut p = portal(1);
-        p.get_mut(NAMESPACES[1])
+        p.get_mut(NAMESPACES[2])
             .unwrap()
-            .remove("window-background");
+            .insert("text-scaling-factor".into(), owned(Variant::from(0.0f64)));
         assert!(Appearance::from_portal(&p).is_err());
     }
 }

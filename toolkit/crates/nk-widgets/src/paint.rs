@@ -247,31 +247,7 @@ impl Tree {
                 self.paint_range(id, r, origin, canvas, palette)?
             }
             Kind::Switch { checked } => {
-                canvas.rounded_rect(
-                    r,
-                    (r.height / 2.) as f64,
-                    if checked {
-                        palette.accent
-                    } else {
-                        palette.track
-                    },
-                );
-                let pad = (r.height * 0.1).max(1.);
-                let diameter = r.height - 2. * pad;
-                canvas.rounded_rect(
-                    Rect {
-                        x: if checked {
-                            r.x + r.width - pad - diameter
-                        } else {
-                            r.x + pad
-                        },
-                        y: r.y + pad,
-                        width: diameter,
-                        height: diameter,
-                    },
-                    (diameter / 2.) as f64,
-                    palette.thumb,
-                );
+                self.paint_switch(r, checked, self.available(id), canvas)?
             }
             _ => {}
         }

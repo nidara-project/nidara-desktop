@@ -9,5 +9,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+nk-render = { path = "../crates/nk-render" }
+nk-text = { path = "../crates/nk-text" }
+nk-widgets = { path = "../crates/nk-widgets" }
 serde_json = "1"
 zbus = "5.19"

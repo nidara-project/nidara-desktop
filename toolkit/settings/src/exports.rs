@@ -224,6 +224,8 @@ mod tests {
                             reduce_transparency: reduce,
                             window_background: level.into(),
                             reduced_motion: false,
+                            font: "Inter 11".into(),
+                            text_scale: 1.0,
                         };
                         let t = e.tokens(&a).unwrap();
                         assert!(t.colors.contains_key("--nidara-bg"));
@@ -239,6 +241,8 @@ mod tests {
             reduce_transparency: false,
             window_background: "opaque".into(),
             reduced_motion: false,
+            font: "Inter 11".into(),
+            text_scale: 1.0,
         };
         assert!(e.tokens(&unknown).is_err());
     }

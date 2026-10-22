@@ -260,6 +260,12 @@ Phase 0 remains an independent client of those four crates.
   `SpinButton`s labelled by its row, each with `ValueInfo` and `Action::SetValue` (not
   Activate). `nk-choices-check.py` asserts them with a control each: the spoken text dropped,
   a Value that stays at the old number after a key, a `SetValue` ignored, an unnamed spin.
+- **Switch look (#915)**: `Tree::set_switch_style(SwitchStyle)` — border and its checked
+  colour, track, checked fill, thumb, the thumb's margin, the disabled opacity — from
+  `toolkit/tokens/switch.json` through `components.json`'s `switch` (the kit's
+  `.nidara-switch`). Its size stays `Metrics::switch_width` × `Metrics::control`, which come
+  from the same entry. A switch painted without it is an error. Not carried yet: the kit's
+  shadows (nk-render has none) and its colour transition.
 - `nk-a11y` projects panel/list/scroll-pane/toggle-button roles, label relations and separate
   hidden/offscreen state. Its existing phase-0 roles and hidden-state semantics remain valid.
 - `widgets-demo` and `scripts/ci/nk-widgets-check.py` exercise the tree through the public
@@ -425,7 +431,7 @@ either half depends on it.
 | `session` | `Session`: `store()` (epoch, revision, each key's schema `entry`, `value`, `available`, `writable()`), `available()` (false while the service is gone or restarting), `shown(key)` (the value asked and not yet answered, else the value in force), `pending(key)`. Every [A3] rule — subscribe-then-snapshot, revisions by one, other epochs never applied, owner lost/back, one `Apply` in flight per key with the latest waiting — is in this module and tested without a bus |
 | `client` | `Client` (one bus connection, also the one that will own `org.nidara.SettingsNative`): `apply(key, Value)` (`Err(Unavailable)` when not sent), `poll()`/`wait(deadline)` → `Vec<Notice>`, `session()`, `connection()` |
 | `Notice` | `Ready` (a fresh store: redraw all, sensitive again), `Changed(keys)`, `Unavailable` (every control insensitive), `Failed { key, error }` (the row shows the value in force again and says why: `Invalid`, `Denied`, `Failed`, `NoReply` — never retried), `Error(text)` (no snapshot: said, never a default) |
-| `portal` | `Portal::watch(connection)`, `read()` → `Appearance` (accent, dark, reduce transparency, window background, reduced motion), `changed()`. What the app paints with; `Config1` is for editing only |
+| `portal` | `Portal::watch(connection)`, `read()` → `Appearance` (accent, dark, reduce transparency, window background, reduced motion, interface font and text scale), `changed()`. What the app paints with; `Config1` is for editing only |
 | `exports` | `Exports::load(root)` (`NK_SETTINGS_DATA`, else `/usr/share/nidara/settings-data`; another `version` is an error), `pages`, `page(id)`, `text(i18n key)` (the shell's locale rule from `LANG`, English per key), `tokens(&Appearance)` → the colour set, the glass variant, the components variant — or an error, never the nearest |
 | `manifest` | `Page`, `Group` (`footer`/`footerWhen`, a group-level `custom`), `Item::{Key, Custom, Decoration, Disclosure}` with `visible_when()`/`sensitive_when()`/`key()`; a page's `header` builder, `Predicate::holds(&Session)` (against what the controls show, compared as JavaScript's `String()`). An unknown field is an error, not skipped |
 
@@ -435,9 +441,11 @@ either half depends on it.
   (`wallpaperPicker` → `wallpaper.current`, `interfaceFont` → `appearance.interfaceFont`, …).
 - **The builder interface itself** (what the renderer hands a builder, what it hands back) is
   written here with the renderer's PR, before Sol's builders depend on it.
-- Painting values from `tokens()` into `nk-widgets`' styles (`Palette`, `ChoiceStyle`,
-  `RangeStyle`…) is done once, for the demo and the app alike — today that mapping lives in
-  `widgets-demo/src/appearance.rs`; it moves to a shared place with the renderer, not copied.
+- `styles`: `Styles::new(&Exports, &Appearance)` → `Palette`, `Metrics`, `ChoiceStyle`,
+  `RangeStyle`, `SwitchStyle`, the accents by name and the interface `TextStyle` (the portal's
+  font at its text scale). The ONE mapping from the exports to `nk-widgets`' styles: the
+  widgets demo uses it too (`widgets-demo → nk-settings`); its own panel and title bar recipe
+  stay in the demo.
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 

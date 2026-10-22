@@ -2643,7 +2643,7 @@ the appearance portal and exported tokens. `tokens/glass.json` is required: sele
 `variants[]` by `dark`/`reduceTransparency`, then the last `pieces.panel[]` step
 with `fromSide` at or below each pane's rounded shorter side. The composition
 resolves material separately for sidebar/title on resize; the export's wash is an
-object, not an array. `panel-stub.json` supplies only switch measurements. Hyalo's own
+object, not an array. Every token becomes a style in `nk_settings::styles` (the switch too: `components.json` `switch`), shared with the native Settings. Hyalo's own
 layer glass and its window-layer IPC listing are Claude's separate work. The
 libatspi acceptance is `scripts/ci/nk-widgets-check.py`; each assertion has its own
 logged, applied fault, and timeouts/crashes never count as caught controls. New
