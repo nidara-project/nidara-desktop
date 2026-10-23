@@ -741,3 +741,45 @@ No rebuilt-head external revision/settled/constant-commit native oracle, valid i
 curve/full-area translucency, fractional D5, AT-SPI/Orca, idle CPU/frame count,
 presentation/performance or owner-live acceptance. No fixed binaries overwritten.
 The invalid old source-RGB ink estimator is not introduced by this app-only cut.
+
+
+## Rebuilt local external harness cut — 2026-10-23
+
+Parent:f0d12ae1. Extracts the existing637927b7 white/dark/white capture driver,
+wrapper/config and external-only portion of capsule-oracles.py. Reuses the current
+private check-headless host/portal/provider and introduces only the existing
+fixed-light-ink diagnostic intervention in the lab. Rejects other fault names.
+No intermediate RGB estimator, curve/states/D5/idle/Orca branches or historical
+native evidence/results are imported. No new native/EGL run was attempted.
+
+Review179: every command write now uses same-directory pending+rename through
+capsule_capture.publish_command, including initialization. The file client still
+refuses invalid input; no ignored partial/error path. Three local Python tests
+exercise actual filesystem publication (reader sees old bytes during half-write,
+then complete new bytes after rename), failed pending writes preserving old
+bytes, and a pure metadata barrier using explicit synthetic answer data. Both
+panel geometries and server-control revision must advance before measured+settled
+can be accepted. The driver records before-revisions and waits for a new matching
+backdrop commit count, preventing stale final-white log matches. Offline checks
+repeat the fresh-revision guard. Final screenshot/metadata are not overwritten
+with an unguarded second capture.
+
+- target/capsule-harness-restored-guards.log:3 tests PASS.
+- target/capsule-harness-atomic-control.log: interpreted production fault writes
+  directly to the visible file; the reader sees partial bytes and fails its own
+  publication assertion. target/capsule-harness-revision-control.log: allowing an
+  equal revision fails its own stale-settled assertion. Both restored before3PASS.
+  These are filesystem/metadata controls, not native material controls.
+- target/capsule-harness-demo-tests.log:8 demo tests PASS with mandatory unchanged
+  generated exports from cut3. target/capsule-harness-clippy.log: demo all targets
+  -D warnings PASS. The native fixed-light-ink intervention compiles, but no new
+  native glyph control is accepted here. fmt/skill-docs/diff, Python syntax and
+  shell syntax checks pass.
+
+Fixed binary identities are recorded by the driver; historical native results
+remain attributed to their original binaries. Rebuilt-head native two-client
+capture, glyph-control catch, constant-commit/fresh-revision behavior, valid ink
+curve/full-area translucency/fractional D5, Orca, idle CPU/frame counts,
+presentation/performance and owner-live acceptance remain pending. The harness
+has no CI invocation and was not run against a live session. Atomic writes do
+not claim durability across crashes or support concurrent command writers.

@@ -2806,3 +2806,22 @@ CPU painting checks do not prove native constant capsule commits, ink response,
 settling, performance or idle CPU. External harness/evidence and rebuilt-head
 native acceptance remain separate work; never reuse the invalid source-RGB curve
 estimator as a compositor oracle.
+
+
+The local external-capsule harness reuses check-headless.sh's private bus/runtime
+and caller-selected absolute fixed binaries; capsule-fixture.toml applies only
+to the two diagnostic app IDs. It captures white/dark/white at scale1 or1.25.
+Every command publication (initial and changes) MUST use a neighboring pending
+file plus same-directory rename, via capsule_capture.publish_command. Never
+truncate the visible command file: Backdrop::idle correctly treats invalid bytes
+as a fatal input error. A filesystem test reads the old command during a partial
+pending write, then the complete new command after rename; errors preserve old
+bytes. This is atomic visibility, not crash-durability or multiple-writer support.
+Before each change the harness records all three material answer revisions; it
+requires a new backdrop commit and strictly newer, measured, settled answers for
+every capsule and server controls. Offline checks repeat that metadata guard.
+The fixed-light-ink control must complete setup and fail its own glyph assertion;
+timeouts/setup failures never count. The extracted harness has no intermediate
+RGB estimator, curve/states/idle/Orca branches or CI job. Guard tests and compiled
+lab code do not prove this rebuilt native matrix; log exact binary hashes when
+running it, and keep source verification distinct from prior fixed-binary proof.

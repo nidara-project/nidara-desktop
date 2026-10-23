@@ -1,0 +1,6 @@
+# Only for the private capsule capture fixture; never a user configuration.
+[rules.capsule-fixture]
+match = { app_id = "^nk-capsule-(lab|backdrop)$" }
+backdrop = false
+rounding = false
+animate = false

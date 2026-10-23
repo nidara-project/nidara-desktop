@@ -95,6 +95,7 @@ struct Lab {
     duration: Option<Duration>,
     started: Option<Instant>,
     sweep_pending: bool,
+    fault: Option<String>,
     pattern: Layout,
     caption: Layout,
 }
@@ -173,11 +174,15 @@ impl Lab {
             window,
             self.appearance.palette,
             |side, material| {
-                if material {
-                    self.appearance.control.at(side)
+                let mut style = if material {
+                    self.appearance.control.at(side)?
                 } else {
-                    self.appearance.opaque_control.at(side)
+                    self.appearance.opaque_control.at(side)?
+                };
+                if self.fault.as_deref() == Some("fixed-light-ink") {
+                    style.material.dark_ink = style.material.light_ink;
                 }
+                Ok(style)
             },
             self.appearance.reduce_motion,
         )?;
@@ -333,6 +338,14 @@ pub fn run(
     size: (u32, u32),
 ) -> Result<()> {
     let scene = Scene::parse(name)?;
+    let fault =
+        std::env::args().find_map(|v| v.strip_prefix("--capsule-lab-fault=").map(str::to_owned));
+    if let Some(fault) = &fault {
+        if fault != "fixed-light-ink" {
+            return Err("unknown capsule lab fault".into());
+        }
+        eprintln!("CAPSULE_LAB_FAULT_APPLIED {fault}");
+    }
     let level = std::env::args()
         .find_map(|a| a.strip_prefix("--capsule-level=").map(str::to_owned))
         .unwrap_or_else(|| "0".into())
@@ -416,6 +429,7 @@ pub fn run(
             duration,
             started,
             sweep_pending,
+            fault,
             pattern,
             caption,
         },

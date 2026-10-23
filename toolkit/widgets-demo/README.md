@@ -143,3 +143,33 @@ The backdrop inherits1000ms polling. Its idle callback requests redraw only when
 command bytes change; there is no timed backdrop loop. This is a source behavior,
 not new native evidence of constant capsule commits or zero idle cost. This cut
 contains no external harness, native controls or compositor response oracle.
+
+
+## Local external capture harness (rebuilt-head native run pending)
+
+check-capsule-external.sh reuses check-headless.sh's isolated bus/runtime. Set
+HYALO_BIN, NK_WIDGETS_BIN and NK_SETTINGS_DATA to absolute paths to matching fixed
+binaries and real exports; NK_WIDGETS_LOG must be a fresh target/ directory.
+CAPSULE_EXTERNAL_SCALE selects 1 or 1.25, CAPSULE_LAB_FAULT optionally selects
+fixed-light-ink. The fixture configuration is confined to diagnostic app IDs.
+No compositor/backend changes or new CI job are part of this harness.
+
+The driver captures white/dark/white, requiring the new backdrop commit and a
+strictly newer material revision on every panel before measured+settled. The
+last white cannot reuse the initial white's log or answer. `capsule-oracles.py --external <baseline-dir> --external-control <control-dir>
+--scale 1.25` evaluates fixed captures. It rejects setup
+failures before checking ink and constant capsule commit counts. An applied
+fixed-light-ink control must fail its own white glyph assertion to count.
+
+All command writes, including initialization, use capsule_capture.publish_command:
+write complete bytes to a sibling pending file and rename over the visible file.
+This is mandatory for every driver; direct truncation can expose invalid/empty
+input and abort the backdrop client. Real errors remain fatal. This supports one
+writer and atomic visibility, without a crash-durability guarantee.
+
+Run test-capsule-capture.py with NK_CAPTURE_TEST_DIR and PYTHONPYCACHEPREFIX under
+target/. Its real filesystem test interposes a reader during a partial pending
+write; metadata tests use explicitly synthetic guard data. These checks and
+compiled demo tests are not a native two-client/Orca/idle/performance acceptance.
+The old intermediate source-RGB ink estimator is excluded. Native evidence on
+these rebuilt heads remains pending; preserve historical fixed binaries/results.
