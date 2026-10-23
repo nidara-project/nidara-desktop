@@ -752,3 +752,23 @@ This closes one app-lifecycle prerequisite. Full app host, wallpaper builders,
 native main/Config1/portal/Orca/performance/live gates remain unimplemented or
 unvalidated here; no native/EGL run, publication, merge or activation of legacy
 replacement. Full actual cut27 exports reused unchanged.
+
+
+## Application integration — retained Image primitive (2026-10-23)
+
+Tree::image and nk-render::Raster/Canvas::image add the reusable preview primitive,
+with explicit caller style/box, Contain/Cover, alpha, clipping, stable semantic
+IMAGE identity and scoped Arc ownership. It performs no decoding or file IO.
+Role::Image maps to the existing AT-SPI Image role; only mapping/unit proof here.
+
+169 affected Settings/widgets/render/a11y tests PASS [13, 2, 1, 2, 1, 41, 4, 1, 2, 13, 1, 5, 2, 17, 7, 19, 15, 8, 5, 8, 2]. CPU raster test
+uses synthetic RGBA, checks destination/letterbox/cover/alpha/clipping at1 and1.25.
+Widget test uses actual exported Styles and real layout/CPU paint, checking pixels,
+rounded clipping, named IMAGE with no actions, offscreen retention/hidden exclusion,
+atomic invalid size refusal, same-raster no-paint and final pixel ownership release.
+Compiled Cover-to-Contain fault failed its OWN cover/alpha pixel assertion; source
+restored before full tests. Clippy requested clamp idiom; final image test and
+four-package all-target Clippy -Dwarnings PASS after that finite-input equivalent
+change. Workspace all-target check PASS. Logs: target/retained-image-*.log.
+fmt/skilldocs/diff PASS. No native/EGL/Orca claim, no decoder/gallery/main or full
+wallpaper parity yet. Actual cut27 exports unchanged and reused.

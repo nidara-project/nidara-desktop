@@ -3267,3 +3267,13 @@ content/chrome survive failed construction. Mounted owns its content roots and
 retires them even when unmount reports an error. This lifecycle does not supply a
 Window/provider or bypass Config1; full Appearance still requires every named
 builder, with missing builders remaining explicit construction errors.
+
+
+Use Tree::image for decoded pictures: one retained IMAGE, accessible name separate
+from pixels, explicit logical size/ImageStyle, no file loading in paint/layout.
+ImageStyle supplies Contain/Cover, background, border and radius; the application
+resolves those from the exported specification. nk-render::Raster validates RGBA8
+and retains one premultiplied raster; Canvas paints it with the existing CPU engine.
+set_image preserves IDs and avoids repaint for the same Arc. Removal releases the
+raster. Builders own decode jobs/loading/error names and reject obsolete results.
+This primitive is not wallpaper loading, thumbnail selection or native/Orca proof.

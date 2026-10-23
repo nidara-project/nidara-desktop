@@ -246,6 +246,9 @@ impl Tree {
         if matches!(n.kind, Kind::List { .. }) {
             return self.paint_list(id, origin, canvas, palette, clip);
         }
+        if n.kind == Kind::Image {
+            return self.paint_image(id, r, canvas, clip);
+        }
         if n.kind == Kind::SearchInput {
             return self.paint_search(id, r, canvas, palette.disabled);
         }

@@ -1162,3 +1162,16 @@ unmount calls every builder before removing its roots, even on cleanup error.
 A failed replacement therefore leaves the old mount alive; the caller commits
 sidebar selection only after a new mount succeeds and the old one is retired.
 This lifecycle has no Window/provider/Config1 transport of its own and never Apply.
+
+
+### Retained raster image (#882/#915)
+
+nk-render::Raster validates a nonempty RGBA8 buffer and retains the decoded pixels
+once. Canvas::image paints it with explicit Contain/Cover fitting and normal alpha
+composition. It performs no file I/O or decoding. Tree::image owns one retained
+IMAGE with a caller-supplied logical size and ImageStyle (fit, radius, border,
+background); responsive measurement preserves that box's aspect ratio. The name
+is semantic, not painted text. set_image changes content without replacing IDs;
+set_image_size validates before mutation. Removal drops its raster ownership.
+The widget never enumerates files, starts work, writes Config1 or owns a provider.
+Loading/error names and async operation guards belong to its application builder.

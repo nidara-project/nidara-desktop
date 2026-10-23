@@ -16,6 +16,39 @@ pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
     Color::from_rgba8(r, g, b, a)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageFit {
+    Contain,
+    Cover,
+}
+#[derive(Debug)]
+pub struct Raster {
+    pixels: Arc<Pixmap>,
+    width: u16,
+    height: u16,
+}
+impl Raster {
+    pub fn from_rgba(width: u16, height: u16, pixels: Vec<u8>) -> Result<Self, String> {
+        if width == 0 || height == 0 || pixels.len() != usize::from(width) * usize::from(height) * 4
+        {
+            return Err("invalid RGBA image dimensions/buffer".into());
+        }
+        let pixels = pixels.into_boxed_slice().into_vec();
+        Ok(Self {
+            pixels: Arc::new(Pixmap::from_parts(
+                pixels,
+                width,
+                height,
+                vello_cpu::PixelMetadata::new(vello_cpu::peniko::ImageAlphaType::Alpha, true),
+            )),
+            width,
+            height,
+        })
+    }
+    pub fn size(&self) -> (u16, u16) {
+        (self.width, self.height)
+    }
+}
 pub struct Canvas {
     context: RenderContext,
     resources: Resources,
@@ -30,6 +63,34 @@ impl Canvas {
             resources: Resources::new(),
             scale,
         }
+    }
+    pub fn image(&mut self, image: &Raster, bounds: Rect, fit: ImageFit) {
+        if bounds.width <= 0. || bounds.height <= 0. {
+            return;
+        }
+        let sx = bounds.width as f64 / f64::from(image.width);
+        let sy = bounds.height as f64 / f64::from(image.height);
+        let scale = match fit {
+            ImageFit::Contain => sx.min(sy),
+            ImageFit::Cover => sx.max(sy),
+        };
+        let x = bounds.x as f64 + (bounds.width as f64 - f64::from(image.width) * scale) / 2.;
+        let y = bounds.y as f64 + (bounds.height as f64 - f64::from(image.height) * scale) / 2.;
+        self.clip(bounds);
+        self.context.set_paint(vello_cpu::Image {
+            image: vello_cpu::ImageSource::Pixmap(image.pixels.clone()),
+            sampler: vello_cpu::peniko::ImageSampler::default(),
+        });
+        self.context
+            .set_paint_transform(Affine::translate((x, y)) * Affine::scale(scale));
+        self.context.fill_rect(&BoxRect::new(
+            x,
+            y,
+            x + f64::from(image.width) * scale,
+            y + f64::from(image.height) * scale,
+        ));
+        self.context.reset_paint_transform();
+        self.pop_clip();
     }
     pub fn rect(&mut self, r: Rect, color: Color) {
         self.context.set_paint(color);

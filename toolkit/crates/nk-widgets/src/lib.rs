@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Retained structural widgets. The tree is the source for layout, pixels,
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
+mod image;
+pub use image::ImageStyle;
 mod choices;
 mod dropdown;
 pub use dropdown::DropdownStyle;
@@ -113,6 +115,7 @@ pub enum Kind {
     ControlCapsule,
     Row,
     Label,
+    Image,
     Switch {
         checked: bool,
     },
@@ -294,6 +297,7 @@ pub struct Tree {
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
     label_styles: BTreeMap<NodeId, TextStyle>,
+    images: BTreeMap<NodeId, image::Image>,
     button_descriptions: BTreeMap<NodeId, String>,
     dialog_role: bool,
     menu_style: Option<MenuStyle>,
@@ -377,6 +381,7 @@ impl Tree {
             row_text_style: None,
             dropdown_style: None,
             label_styles: BTreeMap::new(),
+            images: BTreeMap::new(),
             button_descriptions: BTreeMap::new(),
             dialog_role: false,
             menu_style: None,
@@ -486,6 +491,7 @@ impl Tree {
                 | (
                     Kind::Scroll,
                     Kind::Group
+                        | Kind::Image
                         | Kind::Row
                         | Kind::MenuOption { .. }
                         | Kind::SearchInput
@@ -494,6 +500,7 @@ impl Tree {
                 | (
                     Kind::Group,
                     Kind::Label
+                        | Kind::Image
                         | Kind::Row
                         | Kind::Footer
                         | Kind::Disclosure { .. }
@@ -775,6 +782,7 @@ impl Tree {
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.searches.remove(&id);
+            tree.images.remove(&id);
             tree.label_styles.remove(&id);
             tree.button_descriptions.remove(&id);
             tree.list_styles.remove(&id);
@@ -1275,6 +1283,9 @@ impl Tree {
         if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
             return self.measure_range(id, backend);
         }
+        if kind == Kind::Image {
+            return self.measure_image(id, width);
+        }
         if kind == Kind::SearchInput {
             return self.measure_search(id, width, backend);
         }
@@ -1487,7 +1498,7 @@ impl Tree {
                 width: m.switch_width,
                 height: m.control,
             },
-            Kind::SearchInput => unreachable!("measured above"),
+            Kind::SearchInput | Kind::Image => unreachable!("measured above"),
             Kind::Button | Kind::Dropdown { .. } => Size {
                 width: m.control.max(text.width + 2. * m.padding),
                 height: m.control.max(text.height + 2. * m.padding),
