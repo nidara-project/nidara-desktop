@@ -189,3 +189,18 @@ Alignment::Left is physical left alignment, independently of paragraph direction
 Start/End retain logical alignment. SearchInput uses Left for an unwrapped scrolling
 canvas, retaining bidi shaping and caret navigation without aligning RTL text to an
 unbounded measurement width.
+
+
+corpus. Glyph y is the baseline, positive down. `ParleyBackend::new` holds only
+the files of the `FontSet`; system font discovery is disabled for this corpus path.
+
+Enable `nk-text/system-fonts` and call `ParleyBackend::with_system_fonts(fonts)`
+for the Settings and chooser path. Fontique resolves installed fonts with
+`system_fonts: true`; the supplied files remain fallbacks. A system face outside
+`FontSet` is copied once per blob per retained layout into shared `Arc` bytes,
+reused by all runs and reflows, and released with the layout. Exported glyphs
+retain their data after backend and layout destruction. Indices and axis tags/
+normalized coordinates come from the shaped face, using the same export as the
+isolated path. Linux uses Fontconfig via dlopen, as the measured Settings slice
+does. This does not enumerate the chooser catalogue or parse a Pango description;
+the font chooser and its modal accessibility remain separate work.

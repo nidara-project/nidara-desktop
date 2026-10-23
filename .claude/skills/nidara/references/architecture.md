@@ -3108,3 +3108,16 @@ repaints the steady caret; there is no input-owned idle timer. Editor::set_style
 preserves history and preedit atomically; Alignment::Left keeps bidi text on the
 scrolling canvas's physical left instead of the end of its unbounded measurement.
 The new paths still need real native IME/clipboard/AT-SPI/Orca acceptance.
+
+
+
+
+For user-font shaping, reuse nk-text's opt-in system-fonts feature and
+ParleyBackend::with_system_fonts, rather than copying the Settings slice's
+independent glyph export into each chooser. Its Fontique collection enables system
+fonts; ParleyBackend::new remains isolated for the corpus. Actual system-face bytes
+are copied once per blob per retained layout and shared across runs/reflows; no
+global cache pins every previewed font. The normal export preserves collection
+index and normalized variation axis tags. The installed-face byte/lifetime test
+requires DejaVu Sans and fails if system resolution is bypassed. This is shaping
+acceptance only, not FontChooser UI, native publication, startup or Orca evidence.

@@ -75,6 +75,17 @@ Owns everything between a string and positioned glyphs, and the editing model on
   fed a `TextStyle` (family, size, weight, line height, alignment, direction) and a `FontSet`.
   The trait stays so another engine can be measured against the same corpus; phase 0's Pango
   adapter was removed after the decision (the comparison is in `crates/nk-text/README.md`).
+- `ParleyBackend::new` keeps the isolated required-font corpus. With the opt-in
+  `nk-text/system-fonts` feature, `ParleyBackend::with_system_fonts` uses Fontique's
+  system collection (`system_fonts: true`) alongside the supplied fallback files.
+  This is the reusable Settings/chooser shaping path, not catalogue enumeration.
+  Fontique resolves and loads faces used by a layout. Exported system font bytes
+  are copied once per blob per retained layout into `Arc<[u8]>`, shared by its
+  runs and reflows, and released with that layout; there is no process-wide cache
+  of every previewed font. Collection indices and normalized variation axes come
+  from the actual shaped run. Layouts and glyphs remain valid after backend drop.
+  Linux enables Fontconfig through dlopen, as the measured Settings slice does.
+  This API does not validate a Config1 font description or implement chooser UI.
 - `Layout` is the ONE object that is measured and painted: `size(max_width)`,
   `hit_test(point) → offset + affinity`, `caret_rect(offset, affinity)`,
   `selection_rects(range)`, `glyph_runs() → [GlyphRun { font, size, glyphs: [(id, x, y)] }]`.

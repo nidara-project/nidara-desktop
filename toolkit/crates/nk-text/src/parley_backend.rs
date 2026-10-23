@@ -4,19 +4,28 @@ use crate::{
     Line, Point, Rect, Result, Size, TextBackend, TextStyle,
 };
 use parley::{Cursor, FontContext, LayoutContext, PositionedLayoutItem, StyleProperty};
-use std::{borrow::Cow, ops::Range, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, ops::Range, sync::Arc};
 
 pub struct ParleyBackend {
     fonts: Arc<FontSet>,
+    system_fonts: bool,
     font_context: FontContext,
     context: LayoutContext<()>,
 }
 impl ParleyBackend {
     pub fn new(fonts: Arc<FontSet>) -> Result<Self> {
+        Self::create(fonts, false)
+    }
+    /// Shape installed user fonts through Fontique, retaining the supplied fallbacks.
+    #[cfg(feature = "system-fonts")]
+    pub fn with_system_fonts(fonts: Arc<FontSet>) -> Result<Self> {
+        Self::create(fonts, true)
+    }
+    fn create(fonts: Arc<FontSet>, system_fonts: bool) -> Result<Self> {
         let mut font_context = FontContext {
             collection: parley::fontique::Collection::new(parley::fontique::CollectionOptions {
                 shared: false,
-                system_fonts: false,
+                system_fonts,
             }),
             source_cache: Default::default(),
         };
@@ -31,6 +40,7 @@ impl ParleyBackend {
         }
         Ok(Self {
             fonts,
+            system_fonts,
             font_context,
             context: LayoutContext::new(),
         })
@@ -73,6 +83,8 @@ impl TextBackend for ParleyBackend {
             Box::new(ParleyLayout {
                 native,
                 fonts: self.fonts.clone(),
+                system_fonts: self.system_fonts,
+                system_data: BTreeMap::new(),
                 alignment: style.alignment,
                 empty: text.is_empty(),
                 runs: Vec::new(),
@@ -86,6 +98,8 @@ impl TextBackend for ParleyBackend {
 struct ParleyLayout {
     native: parley::Layout<()>,
     fonts: Arc<FontSet>,
+    system_fonts: bool,
+    system_data: BTreeMap<u64, Arc<[u8]>>,
     alignment: Alignment,
     empty: bool,
     runs: Vec<GlyphRun>,
@@ -190,11 +204,22 @@ impl LayoutEngine for ParleyLayout {
                         .iter()
                         .map(|v| v.to_bits())
                         .collect();
-                    let font = self.fonts.resolve_bytes(
+                    let font = match self.fonts.resolve_bytes(
                         run.font().data.data(),
                         run.font().index,
                         &coords,
-                    )?;
+                    ) {
+                        Ok(font) => font,
+                        Err(_) if self.system_fonts => {
+                            let data = self
+                                .system_data
+                                .entry(run.font().data.id())
+                                .or_insert_with(|| Arc::from(run.font().data.data()))
+                                .clone();
+                            crate::fonts::font(data, run.font().index, &coords)
+                        }
+                        Err(error) => return Err(error),
+                    };
                     self.runs.push(GlyphRun {
                         font,
                         size: run.font_size(),
