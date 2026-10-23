@@ -730,3 +730,25 @@ Before Apply, a family must resolve and load a valid face from the same Fontique
 used by Parley; fc-list remains discovery metadata, not a second rendering authority.
 42 Settings library tests and two nk-text geometry/resolution tests pass; all-target
 Clippy for nk-settings/nk-text passes. These checks do not establish live IME/Orca acceptance.
+
+## Application integration — transactional page lifecycle (2026-10-23)
+
+New page::Mounted ownership and Rendered build rollback precede app assembly.
+Failed replacements preserve existing content, unmount the failing builder and
+all successful partial builders, then remove new roots. Unmount failures do not
+skip remaining callbacks or root retirement. Contract before API; canonical
+skill and README in the same change.
+
+149 Settings/widgets tests PASS [41, 4, 1, 2, 13, 5, 2, 17, 7, 19, 15, 8, 5, 8, 2]; both all-target Clippy -D warnings
+PASS. Logs target/page-lifecycle-full-{tests,clippy}.log. Two lifecycle tests use
+the real renderer/Tree and exported styles with synthetic builder error callbacks;
+no fake Window/provider/Config1 integration. A compiled rollback fault skipped
+new-root removal; after callback completion, the own `failed replacement leaked
+roots` assertion caught it. Source restored before the full passing suite.
+Initial fixture used an invalid Group/Button nesting and failed before setup;
+that failure is preserved in page-lifecycle-tests.log, not acceptance.
+
+This closes one app-lifecycle prerequisite. Full app host, wallpaper builders,
+native main/Config1/portal/Orca/performance/live gates remain unimplemented or
+unvalidated here; no native/EGL run, publication, merge or activation of legacy
+replacement. Full actual cut27 exports reused unchanged.

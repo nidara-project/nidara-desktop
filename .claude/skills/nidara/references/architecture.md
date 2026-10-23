@@ -3257,3 +3257,13 @@ an error. Before a native selected family reaches Apply, the same rendering
 collection must resolve and load a valid face without fallback substitution.
 Catalogue timing/count logs describe each lazy enumeration; there is no second
 shaper or silent family fallback acceptance.
+
+Native Settings page replacement uses page::Mounted, never an untracked set of
+rows. Build the replacement first, then consume the old mount and commit sidebar
+selection. Rendered::build now rolls back newly-created content on any error and
+unmounts the failing builder plus every completed builder. Cleanup callbacks run
+before nodes are removed; one callback error does not skip the others. Existing
+content/chrome survive failed construction. Mounted owns its content roots and
+retires them even when unmount reports an error. This lifecycle does not supply a
+Window/provider or bypass Config1; full Appearance still requires every named
+builder, with missing builders remaining explicit construction errors.

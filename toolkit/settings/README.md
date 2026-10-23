@@ -96,3 +96,10 @@ performance and owner live acceptance remain pending. Historical fixed binaries
 prove only their recorded original source/hash. The exclusive parent borrow is
 bounded to short menus, with no concurrent parent servicing; adaptive foundations/
 Settings polling still needs a real caller and causal test.
+
+
+Use page::Mounted to own a renderer and the roots it created under the content
+Scroll. Failed builds unmount partial builder work and remove only newly-created
+roots. A replacement is built before retiring the old page; consuming unmount
+runs all callbacks before node removal even when cleanup fails. This is the page
+lifecycle prerequisite for the app, not yet its native main or wallpaper builders.

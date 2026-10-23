@@ -1149,3 +1149,16 @@ an error. Before a native selected family reaches Apply, the same rendering
 collection must resolve and load a valid face without fallback substitution.
 Catalogue timing/count logs describe each lazy enumeration; there is no second
 shaper or silent family fallback acceptance.
+
+### Application page mount lifecycle (#915)
+
+`Rendered::build` is transactional over the content's newly-created children.
+A failing builder receives unmount, previously mounted builders are unmounted,
+and every new content root is removed before returning the original error.
+Existing content and unrelated chrome are preserved. Cleanup continues if an
+unmount callback fails, reporting that failure alongside the build error.
+`page::Mounted` owns one successful renderer and its content roots. Consuming
+unmount calls every builder before removing its roots, even on cleanup error.
+A failed replacement therefore leaves the old mount alive; the caller commits
+sidebar selection only after a new mount succeeds and the old one is retired.
+This lifecycle has no Window/provider/Config1 transport of its own and never Apply.
