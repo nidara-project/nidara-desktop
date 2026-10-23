@@ -53,6 +53,7 @@ impl Tree {
         }
         let id = self.append(capsule, Kind::Button, name)?;
         let node = self.nodes.get_mut(&id).unwrap();
+        node.button_shape = ButtonShape::Capsule;
         node.caption = Some(glyph.into());
         node.destructive = destructive;
         Ok(id)

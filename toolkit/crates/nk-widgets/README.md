@@ -130,7 +130,8 @@ Range controls (#882): `Tree::slider` and `Tree::fields` (spin buttons, the time
 
 The #889 retained foundation is `control_capsule(name, position, CapsuleMetrics)`
 and `capsule_button(panel, accessible_name, glyph, destructive)`. It is one named
-Panel of existing Buttons, with glyph captions independent of accessible names.
+Panel of existing Buttons, explicitly Capsule-shaped, with glyph captions
+independent of accessible names.
 Measures, focus/actions, capture cancellation, hidden/disabled state and removal
 use the normal retained Tree. Metrics/position can change without replacing IDs.
 Geometry is supplied explicitly; the proposed common export is capsule.json →

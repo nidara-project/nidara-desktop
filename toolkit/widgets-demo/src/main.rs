@@ -3,6 +3,7 @@
 mod accessibility;
 mod appearance;
 mod choices;
+pub mod control;
 mod panel;
 use appearance::Appearance;
 use nk_a11y::{Request, Role};
