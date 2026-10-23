@@ -179,3 +179,13 @@ Besides the results, Parley is Rust, as the rest of the toolkit is, and needs no
 through C to recover the font file and the variation coordinates.
 
 Native API reference: [Parley](https://docs.rs/parley/0.12.0/parley/).
+
+
+
+
+Editor::set_style reshapes the displayed text while preserving committed text,
+caret/selection, preedit and undo/redo. A shaping failure keeps the old style/layout.
+Alignment::Left is physical left alignment, independently of paragraph direction;
+Start/End retain logical alignment. SearchInput uses Left for an unwrapped scrolling
+canvas, retaining bidi shaping and caret navigation without aligning RTL text to an
+unbounded measurement width.

@@ -17,7 +17,9 @@ mod motion;
 mod paint;
 mod ranges;
 mod rows;
+mod search;
 mod semantics;
+pub use search::SearchStyle;
 mod switch;
 pub mod window;
 pub use choices::{ChoiceKind, ChoiceStyle};
@@ -109,6 +111,7 @@ pub enum Kind {
         checked: bool,
     },
     Button,
+    SearchInput,
     Dropdown {
         expanded: bool,
     },
@@ -151,6 +154,7 @@ impl Kind {
             Self::Page { .. }
                 | Self::Switch { .. }
                 | Self::Button
+                | Self::SearchInput
                 | Self::Dropdown { .. }
                 | Self::MenuOption { .. }
                 | Self::Choice { .. }
@@ -284,6 +288,8 @@ pub struct Tree {
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
     menu_style: Option<MenuStyle>,
+    search_style: Option<SearchStyle>,
+    searches: BTreeMap<NodeId, search::Search>,
     /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
     pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
@@ -353,6 +359,8 @@ impl Tree {
             row_text_style: None,
             dropdown_style: None,
             menu_style: None,
+            search_style: None,
+            searches: BTreeMap::new(),
             icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
@@ -451,15 +459,19 @@ impl Tree {
         let valid = matches!(
             (p.kind, kind),
             (Kind::Window, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
-                | (Kind::Sidebar, Kind::Page { .. })
+                | (Kind::Sidebar, Kind::Page { .. } | Kind::SearchInput)
                 | (Kind::TitleBar | Kind::ControlCapsule, Kind::Button)
                 | (
                     Kind::Scroll,
-                    Kind::Group | Kind::Row | Kind::MenuOption { .. }
+                    Kind::Group | Kind::Row | Kind::MenuOption { .. } | Kind::SearchInput
                 )
                 | (
                     Kind::Group,
-                    Kind::Label | Kind::Row | Kind::Footer | Kind::Disclosure { .. }
+                    Kind::Label
+                        | Kind::Row
+                        | Kind::Footer
+                        | Kind::Disclosure { .. }
+                        | Kind::SearchInput
                 )
                 | (Kind::Row, Kind::Subtitle)
                 | (Kind::Disclosure { .. }, Kind::Label)
@@ -686,6 +698,11 @@ impl Tree {
                 Invalid::LAYOUT
             },
         );
+        for search_id in self.searches.keys().copied().collect::<Vec<_>>() {
+            if !self.available(search_id) {
+                self.cancel_search_preedit(search_id)?;
+            }
+        }
         if self.hovered.is_some_and(|id| !self.available(id)) {
             self.set_hovered(None);
         }
@@ -719,6 +736,7 @@ impl Tree {
         self.set_hidden(id, true)?;
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
+            tree.searches.remove(&id);
             tree.capsules.remove(&id);
             tree.capsule_styles.remove(&id);
             tree.capsule_washes.remove(&id);
@@ -784,6 +802,11 @@ impl Tree {
         Ok(())
     }
     pub fn set_active(&mut self, active: bool) {
+        if self.active != active {
+            for id in self.searches.keys().copied().collect::<Vec<_>>() {
+                self.invalidate(id, Invalid::PAINT);
+            }
+        }
         self.active = active;
         self.invalidate(self.root, Invalid::SEMANTICS);
     }
@@ -813,16 +836,20 @@ impl Tree {
         {
             return Err("widget cannot take focus".into());
         }
-        self.focus_node(id);
+        self.focus_node(id)?;
         Ok(())
     }
-    fn focus_node(&mut self, id: NodeId) {
+    fn focus_node(&mut self, id: NodeId) -> Result<()> {
         if let Some(old) = self.focused {
+            if old != id {
+                self.cancel_search_preedit(old)?;
+            }
             self.invalidate(old, Invalid::STATE);
         }
         self.focused = Some(id);
         self.invalidate(id, Invalid::STATE);
         self.reveal(id);
+        Ok(())
     }
     pub fn tab(&mut self, backwards: bool) -> Result<()> {
         self.set_focus_visible(true);
@@ -881,7 +908,7 @@ impl Tree {
             Kind::Disclosure { expanded } => self.set_expanded(id, !expanded)?,
             Kind::Choice { .. } => self.set_choice(id)?,
             // Space/Enter on a range control changes nothing; its keys and pointer do.
-            Kind::Slider { .. } | Kind::Spin { .. } => return Ok(Effect::None),
+            Kind::Slider { .. } | Kind::Spin { .. } | Kind::SearchInput => return Ok(Effect::None),
             Kind::Page { .. } => {
                 self.select_page(id)?;
                 if self.narrow {
@@ -926,10 +953,24 @@ impl Tree {
             self.set_focus_visible(false);
         }
         self.set_hovered(hit);
+        if let Some(id) = self.capture {
+            let _ = self.search_pointer(id, point, true);
+        }
     }
     pub fn pointer_motion_in(&mut self, container: NodeId, local: Point) -> Result<()> {
         let id = self.hit_test_in(container, local)?;
         self.set_hovered(id);
+        if let Some(id) = self.capture {
+            let r = self.nodes[&container].bounds;
+            self.search_pointer(
+                id,
+                Point {
+                    x: r.x + local.x,
+                    y: r.y + local.y,
+                },
+                true,
+            )?;
+        }
         Ok(())
     }
     pub fn pointer_press(&mut self, p: Point) -> Result<()> {
@@ -942,6 +983,7 @@ impl Tree {
         }
         if let Some(id) = self.capture {
             self.focus(id)?;
+            self.search_pointer(id, p, false)?;
         }
         Ok(())
     }
@@ -953,7 +995,16 @@ impl Tree {
         self.set_hovered(self.capture);
         self.capture_space = Some(container);
         if let Some(id) = self.capture {
-            self.focus_node(id);
+            self.focus_node(id)?;
+            let r = self.nodes[&container].bounds;
+            self.search_pointer(
+                id,
+                Point {
+                    x: r.x + local.x,
+                    y: r.y + local.y,
+                },
+                false,
+            )?;
         }
         Ok(())
     }
@@ -1119,6 +1170,9 @@ impl Tree {
         }
         if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
             return self.measure_range(id, backend);
+        }
+        if kind == Kind::SearchInput {
+            return self.measure_search(id, width, backend);
         }
         if kind == Kind::Button
             && let Some(capsule) = self.capsule_for_button(id)
@@ -1329,6 +1383,7 @@ impl Tree {
                 width: m.switch_width,
                 height: m.control,
             },
+            Kind::SearchInput => unreachable!("measured above"),
             Kind::Button | Kind::Dropdown { .. } => Size {
                 width: m.control.max(text.width + 2. * m.padding),
                 height: m.control.max(text.height + 2. * m.padding),

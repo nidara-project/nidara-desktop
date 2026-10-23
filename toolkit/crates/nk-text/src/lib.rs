@@ -57,6 +57,8 @@ pub struct Caret {
 pub enum Alignment {
     #[default]
     Start,
+    /// Physical left edge, independently of paragraph direction (scrolling inputs).
+    Left,
     Center,
     End,
     Justify,
@@ -69,7 +71,7 @@ pub enum Direction {
     Rtl,
 }
 /// Size in logical pixels; line_height is a multiple of size, weight is CSS 1..1000.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TextStyle {
     pub family: String,

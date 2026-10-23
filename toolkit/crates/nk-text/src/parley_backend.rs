@@ -122,6 +122,7 @@ impl LayoutEngine for ParleyLayout {
         self.native.align(
             match self.alignment {
                 Alignment::Start => parley::Alignment::Start,
+                Alignment::Left => parley::Alignment::Left,
                 Alignment::Center => parley::Alignment::Center,
                 Alignment::End => parley::Alignment::End,
                 Alignment::Justify => parley::Alignment::Justify,

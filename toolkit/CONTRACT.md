@@ -289,6 +289,40 @@ reply cannot immediately erase its error with its accompanying Changed notice. R
 visibility follows key availability; builder rows are sensitive only when every
 edited key is writable. No async worker/timer survives this synchronous builder.
 
+### SearchInput (#915)
+
+A retained `Kind::SearchInput` owns one nk-text::Editor, with a single-line committed
+buffer, selection/caret, undo and preedit. It is created by Tree::search_input with
+a supplied text backend and shared SearchStyle; absent style is an error. Visual
+metrics come from Settings' .settings-search and its custom box in Settings.tsx
+(surface-back, border, pill, padding12/min-height32, icon15/gap8), exported once.
+Its accessible name is separate from editable text; placeholder is description,
+never the value. Semantics are TextInput/TextInfo with UTF-8 indices and geometry
+from the same retained layout used to paint, excluding preedit geometry.
+
+Reads and set_search_text canonical updates do not emit Changed. User edits,
+paste/IME commits and authorized AT-SPI SetText return Changed exactly when the
+committed text changes. Selection-only operations invalidate semantics/paint but
+never trigger a search. Single-line text rejects control characters atomically.
+All requests validate target generation, visibility and enabled state. Tab leaves
+the input; Space types, Enter activates, Escape cancels preedit then clears text.
+Font/scale reflow preserves editing history, text and selection through
+nk-text::Editor::set_style; shaping failure leaves old style/layout intact.
+SearchInput uses absolute left alignment for its single-line scrolling canvas
+(`Alignment::Left` in nk-text), while text direction remains Auto/RTL as supplied;
+paragraph direction still controls shaping/caret movement. This prevents an unbounded
+RTL layout from aligning to the far end of its measurement constraint. Existing
+Start/End semantics remain logical alignment for other text. SearchInput itself
+owns no provider, timer, Config1 operation or search results.
+Composition::event_with_window routes Ctrl+C/X/V through nk-wayland, retaining a
+paste target until delivery and dropping it after focus/generation invalidation.
+Composition::sync_search_input (also called by sync) follows layout; it publishes
+committed surrounding text and the painted caret, with the existing layer-local
+cursor association for a sidebar input. It resets context when the focused input
+changes (including equal-text fields), and disables IME when the last input goes.
+IME echo uses the host's existing cause tracking. Model tests of these paths do
+not establish real native clipboard/fcitx/AT-SPI or Orca acceptance.
+
 ### Lazy font catalogue (#915, PHASE1 A4)
 
 `font_catalog::Catalogue` groups Fontconfig's installed primary family/style names

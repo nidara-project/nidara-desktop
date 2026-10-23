@@ -952,6 +952,7 @@ dependencies = [
  "nk-render",
  "nk-text",
  "nk-wayland",
+ "unicode-segmentation",
 ]
 
 [[package]]

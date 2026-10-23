@@ -243,6 +243,9 @@ impl Tree {
         if !intersects(r, clip) {
             return Ok(());
         }
+        if n.kind == Kind::SearchInput {
+            return self.paint_search(id, r, canvas, palette.disabled);
+        }
         if matches!(n.kind, Kind::Dropdown { .. }) {
             return self.paint_dropdown(id, r, canvas);
         }
@@ -255,6 +258,7 @@ impl Tree {
         let (highlight, radius) = self.highlight_shape(id);
         let highlight = local(highlight, origin);
         match n.kind {
+            Kind::SearchInput => unreachable!("painted above"),
             Kind::ControlCapsule => {
                 canvas.rounded_rect(r, (r.height / 2.) as f64, opaque(palette.background))
             }

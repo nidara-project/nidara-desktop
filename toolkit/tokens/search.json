@@ -1,0 +1,12 @@
+{
+  "$comment": "Settings SearchInput: ui/shell/styles/_settings.scss .settings-search and ui/shell/surfaces/settings/Settings.tsx custom box. Selection uses _components.scss selection: accent at .30, text ink. No new visual values.",
+  "default": {
+    "paddingX": 12, "border": 1, "minHeight": 32, "radius": "--nidara-radius-pill",
+    "iconSize": 15, "iconGap": 8, "icon": "nd-system-search",
+    "background": "--nidara-surface-back", "borderColor": "--nidara-border",
+    "focusBorder": "--nidara-surface-raised", "text": "--nidara-text",
+    "dim": "--nidara-text-dim", "selection": "--nidara-accent-30",
+    "selectionText": "--nidara-text"
+  },
+  "variants": []
+}

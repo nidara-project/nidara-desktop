@@ -74,6 +74,8 @@ pub struct Composition {
     transition: Option<(u32, Curve)>,
     double_click_ms: Option<u32>,
     last_title_press: Option<u32>,
+    paste_target: Option<Target>,
+    search_focus: Option<NodeId>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TitlebarAction {
@@ -148,6 +150,32 @@ impl Composition {
         event: &Event,
         window: &mut Window,
     ) -> Result<Effect> {
+        if let Event::Key(key) = event
+            && key.ctrl
+            && !key.alt
+        {
+            if key.sym == 0x63 || key.sym == 0x43 || key.sym == 0x78 || key.sym == 0x58 {
+                if let Some((text, effect)) =
+                    tree.search_clipboard(key.sym == 0x78 || key.sym == 0x58)?
+                {
+                    if !text.is_empty() {
+                        window.copy(text);
+                    }
+                    window.reset_ime();
+                    self.sync_search_input(tree, window)?;
+                    return Ok(effect);
+                }
+            } else if (key.sym == 0x76 || key.sym == 0x56)
+                && tree
+                    .focused
+                    .is_some_and(|id| tree.searches.contains_key(&id) && tree.available(id))
+            {
+                self.paste_target = tree.focused.map(|id| tree.target(id));
+                window.paste()?;
+                return Ok(Effect::None);
+            }
+        }
+        let old_focus = tree.focused;
         let press = match event {
             Event::Button {
                 button: 272,
@@ -207,7 +235,56 @@ impl Composition {
             }
             return Ok(Effect::None);
         }
-        self.event(tree, event)
+        let effect = self.event(tree, event)?;
+        if old_focus != tree.focused || matches!(event, Event::Focus(false)) {
+            self.paste_target = None;
+            if let Some(search) = old_focus.and_then(|id| tree.searches.get_mut(&id)) {
+                search.editor.cancel_preedit()?;
+            }
+            window.reset_ime();
+        } else if matches!(event, Event::Key(_) | Event::Button { pressed: true, .. }) {
+            window.reset_ime();
+        }
+        self.sync_search_input(tree, window)?;
+        Ok(effect)
+    }
+    /// Call after layout too, so the IME gets the same scrolled caret and pane as paint.
+    pub fn sync_search_input(&mut self, tree: &Tree, window: &mut Window) -> Result<()> {
+        if tree.searches.is_empty() {
+            if self.search_focus.take().is_some() {
+                self.paste_target = None;
+                window.reset_ime();
+                window.set_text_input(Default::default());
+            }
+            return Ok(());
+        }
+        let mut input = tree.search_text_input();
+        let next = tree.focused.filter(|_| input.focused);
+        if next != self.search_focus {
+            self.search_focus = next;
+            self.paste_target = None;
+            window.reset_ime();
+        }
+        let sidebar = tree.focused.and_then(|id| {
+            let mut p = Some(id);
+            while let Some(id) = p {
+                if tree.nodes[&id].kind == Kind::Sidebar {
+                    return Some(tree.nodes[&id].bounds);
+                }
+                p = tree.nodes[&id].parent;
+            }
+            None
+        });
+        if input.focused
+            && let (Some(layer), Some(origin)) = (self.sidebar, sidebar)
+        {
+            input.rect[0] -= origin.x.floor() as i32;
+            input.rect[1] -= origin.y.floor() as i32;
+            window.set_layer_text_input(layer, input)?;
+        } else {
+            window.set_text_input(input);
+        }
+        Ok(())
     }
 
     pub fn set_titlebar_style(&mut self, style: TitlebarStyle) -> Result<()> {
@@ -373,6 +450,7 @@ impl Composition {
         if tree.invalidation().paint {
             window.redraw();
         }
+        self.sync_search_input(tree, window)?;
         Ok(())
     }
     /// Use the same curve for the compositor pane and the content relayout.
@@ -511,8 +589,26 @@ impl Composition {
         }
     }
     pub fn event(&mut self, tree: &mut Tree, event: &Event) -> Result<Effect> {
+        if let Event::Ime(batch) = event {
+            return tree.search_ime(batch);
+        }
+        if let Event::Paste(text) = event {
+            if let Some(target) = self.paste_target.take()
+                && tree.focused == Some(target.id)
+                && target.generation == tree.generation
+                && tree.available(target.id)
+            {
+                return tree.search_paste(target, text);
+            }
+            return Ok(Effect::None);
+        }
         if matches!(event, Event::Key(_)) {
             tree.set_focus_visible(true);
+        }
+        if let Event::Key(key) = event
+            && let Some(effect) = tree.search_key(key)?
+        {
+            return Ok(effect);
         }
         if let Event::Key(key) = event
             && let Some(effect) = tree.control_key(key.sym)?
@@ -524,7 +620,12 @@ impl Composition {
                 tree.sidebar_request = Some(false);
             }
             Event::PointerLeave => tree.pointer_leave(),
-            Event::Focus(active) => tree.set_active(*active),
+            Event::Focus(active) => {
+                if !active && let Some(id) = tree.focused {
+                    tree.cancel_search_preedit(id)?;
+                }
+                tree.set_active(*active);
+            }
             Event::Key(key) if key.sym == 0xff09 || key.sym == 0xfe20 => {
                 tree.tab(key.shift || key.sym == 0xfe20)?
             }

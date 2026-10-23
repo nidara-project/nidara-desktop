@@ -222,3 +222,31 @@ Revise that ownership contract before building a controller that needs it.
 An unavailable chosen option retains its check but initial focus falls back to
 the first available option, or none if all options are unavailable; opening and
 cancellation must still work without changing the chosen value.
+
+
+
+
+SearchInput is created with Tree::search_input(parent, name, placeholder, backend)
+after supplying SearchStyle. It owns one nk-text::Editor in the retained Tree;
+paint, pointer hit-test, caret/selection and TextInfo use its shared layout. Its
+name and placeholder description are separate from committed text. Canonical
+set_search_text returns no effect; user edits return Changed only for a changed
+committed buffer. search_request handles authorized SetText/SetSelection targets;
+search_paste rejects stale/hidden/disabled targets and multiline/control text.
+When consuming Bridge requests, validate the publication revision first, then use
+Tree::target(id): publication revisions and structural tree generations differ.
+
+Composition::event handles text keys and Ime batches. Use event_with_window for
+native clipboard routing, then Composition::sync (or sync_search_input after your
+own layout) so the IME cursor follows the actual horizontal scroll and D7 pane.
+An asynchronous paste is tied to its target and dropped after invalidation. IME
+context is reset across input focus changes and disabled when the last input is
+removed. Focus loss/hidden/disabled state cancels preedit; inactivity repaints the
+caret without a timer. Single-line committed TextInfo remains valid during a
+separate preedit display buffer and omits geometry while preediting.
+
+Geometry and colours come from toolkit/tokens/search.json: the current Settings
+search box, plus shared kit text selection (accent30/text). Styles reads/applies
+this once for every application. No provider, search-result model or Config1 write
+is owned by the input. Component/synthetic-event tests do not establish native IME,
+clipboard, real AT-SPI requests or Orca speech acceptance.

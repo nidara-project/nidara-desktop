@@ -3084,3 +3084,27 @@ Keep Fontconfig's full face index, including named-instance bits. An empty style
 name is valid (observed on installed Adwaita variable faces); retain it as unnamed,
 never invent Regular. Enumeration/search are metadata only: the actual modal family
 LIST/search ENTRY and the font builders still have to consume this catalogue.
+
+
+
+
+SearchInput is now a real nk-widgets kind backed by one nk-text::Editor. Reuse it
+for Settings search and FontChooser filtering; do not build another text buffer or
+provider. Its SearchStyle comes from toolkit/tokens/search.json (Settings search
+box CSS/TSX, shared selection accent30/text, pill radius from the resolved CSS
+--nidara-radius-pill dimension). Name/placeholder are not the editable value.
+Canonical set_search_text emits nothing; committed user changes emit Changed once.
+SetText/SetSelection validate the current tree target as well as availability.
+Applications must first validate the Bridge publication revision; do not pass that
+revision as a structural tree generation. During preedit, export the committed
+single line and omit display geometry, never index committed text with preedit spans.
+
+Use Composition::event_with_window for native clipboard commands and sync after
+layout for surrounding text/caret. A paste result is tied to target/focus/generation;
+stale delivery is ignored. IME uses nk-wayland's existing cause tracking and D7
+layer cursor association, resets when input identity changes even if text is equal,
+and disables context when the last input is removed. Focus loss cancels preedit and
+repaints the steady caret; there is no input-owned idle timer. Editor::set_style
+preserves history and preedit atomically; Alignment::Left keeps bidi text on the
+scrolling canvas's physical left instead of the end of its unbounded measurement.
+The new paths still need real native IME/clipboard/AT-SPI/Orca acceptance.

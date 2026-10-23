@@ -24,6 +24,7 @@ impl Tree {
                 Kind::Spin { .. } => Role::SpinButton,
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
+                Kind::SearchInput => Role::TextInput,
                 Kind::Dropdown { .. } => Role::ComboBox,
                 Kind::DropdownOption { .. } | Kind::MenuOption { .. } => Role::Option,
                 Kind::Choice { .. } => Role::RadioButton,
@@ -135,6 +136,9 @@ impl Tree {
                     .find(|c| self.nodes[c].kind == Kind::Subtitle && !self.is_hidden(**c))
             }) {
                 n.description = self.nodes[subtitle].name.clone();
+            }
+            if widget.kind == Kind::SearchInput {
+                self.search_semantics(id, &mut n);
             }
             nodes.insert(id, n);
         }

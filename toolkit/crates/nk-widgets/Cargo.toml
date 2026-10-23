@@ -13,3 +13,4 @@ nk-render = { path = "../nk-render" }
 nk-a11y = { path = "../nk-a11y" }
 nk-wayland = { path = "../nk-wayland" }
 nk-icons = { path = "../nk-icons" }
+unicode-segmentation = "1.12"
