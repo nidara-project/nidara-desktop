@@ -22,6 +22,7 @@ pub mod builders;
 pub mod client;
 pub mod exports;
 pub mod manifest;
+pub mod material;
 pub mod portal;
 pub mod render;
 pub mod routing;

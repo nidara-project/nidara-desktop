@@ -470,6 +470,15 @@ native demo.
 
 ## The native Settings (`settings/`, #915)
 
+`nk_settings::material::{panel,control}` owns the existing strict installed-export
+readers: PanelMaterial, ControlRecipe and capsule_metrics. Settings and the
+widgets demo consume these same readers; neither re-parses a material recipe.
+The move preserves exact portal variants, short-side selection, validation,
+null state-ink semantics and separation of glass/component geometry. Exports and
+portal values are caller inputs; this module does not create a host or connect
+to Config1. Public reader behavior is unchanged from the diagnostic consumer.
+
+
 The app of phase 1 (`PHASE1.md`), split between Claude and Sol in #915. Its **data layer**
 (Claude) is the one thing every row and builder reads; this is what it offers, fixed before
 either half depends on it.

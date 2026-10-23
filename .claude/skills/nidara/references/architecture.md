@@ -2833,3 +2833,14 @@ revisions and still-settled fresh answers in the second snapshot; retry otherwis
 Save the second as stage.json and the first as stage-capture-before.json. Offline
 validation checks both, so it cannot pair an older PNG with a later settled JSON.
 A post-screenshot-only readiness test has a settling race and is insufficient.
+
+
+Settings and the diagnostic widgets demo share one installed material reader in
+nk_settings::material::{panel,control}. The demo modules only re-export it; no
+application-specific copy of ControlRecipe/PanelMaterial/capsule_metrics remains.
+Source-fixture and mandatory generated-export tests live with the shared reader
+in settings/tests/fixtures and settings/src/material. Null/absent state ink and
+all exact variant/size/validation rules are preserved. This ownership move does
+not assemble Settings chrome or add its native main loop. Settings export tests
+honor the caller's absolute NK_SETTINGS_DATA with NK_REQUIRE_EXPORT=1; a token-only
+export cannot satisfy manifest/i18n tests and must not be reported as complete.

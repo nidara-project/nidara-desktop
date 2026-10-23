@@ -322,8 +322,11 @@ mod tests {
     /// Every combination the portal can say gives complete styles from the real export.
     #[test]
     fn every_set_gives_complete_styles() {
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data");
+        let root = std::env::var_os("NK_SETTINGS_DATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+            });
         if !root.join("version").exists() && std::env::var_os("NK_REQUIRE_EXPORT").is_none() {
             eprintln!("skipped: no build/settings-data (set NK_REQUIRE_EXPORT to require it)");
             return;

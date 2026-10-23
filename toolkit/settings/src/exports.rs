@@ -195,7 +195,11 @@ mod tests {
     /// scripts/export-settings-data.mjs` and `export-tokens.mjs`); CI's toolkit job does.
     #[test]
     fn reads_the_generated_export() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data");
+        let root = std::env::var_os("NK_SETTINGS_DATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+            });
         if !root.join("version").exists() && std::env::var_os("NK_REQUIRE_EXPORT").is_none() {
             eprintln!("skipped: no build/settings-data (set NK_REQUIRE_EXPORT to require it)");
             return;

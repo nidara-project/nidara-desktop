@@ -81,7 +81,9 @@ struct Page {
 }
 
 fn root() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+    std::env::var_os("NK_SETTINGS_DATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data"))
 }
 
 fn exported() -> bool {
