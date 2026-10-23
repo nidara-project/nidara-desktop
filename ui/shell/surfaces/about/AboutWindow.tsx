@@ -212,9 +212,9 @@ export default function AboutWindow(): Gtk.Window | null {
     // button above is the fallback where it draws none.
     const leftSlot = controlsSlotWidget(Gtk.Align.START)
     const rightSlot = controlsSlotWidget(Gtk.Align.END)
-    // 16 from the window's top and sides, as in every window built on the kit (its header,
-    // `.nidara-window-header`): outside the card, whose content keeps its 24.
-    const controlsRow = new Gtk.CenterBox({ margin_top: 16, margin_start: 16, margin_end: 16 })
+    // 12 from the window's top and sides, as in every window built on the kit (its header,
+    // `.nidara-window-header`, #921): outside the card, whose content keeps its 24.
+    const controlsRow = new Gtk.CenterBox({ margin_top: 12, margin_start: 12, margin_end: 12, margin_bottom: 12 })
     controlsRow.set_start_widget(leftSlot)
     const controlsEnd = new Gtk.Box({ halign: Gtk.Align.END })
     controlsEnd.append(rightSlot)
@@ -222,7 +222,7 @@ export default function AboutWindow(): Gtk.Window | null {
     controlsRow.set_end_widget(controlsEnd)
 
     // ── Card ──────────────────────────────────────────────────────────────────
-    // The content starts where it did, 48 from the top: the row's 16 and the capsule's 32.
+    // The content starts where it did, 48 from the top: the row's 12, the capsule's 24 and 12.
     const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 0, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: CARD_WIDTH })
     card.append(headerBox)
     card.append(specsBox)

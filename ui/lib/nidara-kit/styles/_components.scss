@@ -633,23 +633,24 @@ window.nidara-app-window {
 .nidara-window-glass {
     @include glass(floating);
 }
-// The window's top, on the 4 px scale (owner, 2026-10-04 — it was 50, from a layout long gone):
-// the header row is 48, 8 below the window's top edge (window.ts `contentColumn`), so its
-// 32 px buttons sit 8 from its edges, and so does the window controls' capsule, as tall as they
-// are (owner, 2026-10-04) — its top 16 from the window's edge, and padding-right 16 puts its
-// right 16 from the side: the same gap on both
-// edges of the corner, on either side (the left one: `.nidara-sidebar-controls`, or window.ts
-// `leftSlot` when the sidebar is not docked). The divider under it is 64 from the window's top.
+// The window's top (owner, 2026-10-23, #921): the header row is 32, 8 below the window's top
+// edge (window.ts `contentColumn`) — so its 32 px buttons sit 8 from the edge, as the sidebar's
+// floating card does — and its centre line is 24 from the top. The window controls' capsule
+// (Hyalo's, 24 high) is centred on that line, so it sits 12 from the top, and padding-right 12
+// puts it 12 from the side: the same gap on both edges of the corner, 4 inside the card's, so
+// it is concentric with the card's radius of 16 (on the left: `.nidara-sidebar-controls`, or
+// window.ts `leftSlot` when the sidebar is not docked). The divider under it is 48 from the
+// window's top. Until #921 the row was 48 and the capsule 32, 16 from both edges.
 .nidara-window-header {
     background: transparent;
     border-bottom: 1px solid var(--nidara-border);
-    padding: 0 16px 8px 8px;
-    min-height: 48px;
+    padding: 0 12px 8px 8px;
+    min-height: 32px;
 }
 .nidara-window-tools {
     // Header start group: sidebar toggle + nav capsule + title/breadcrumb.
-    min-height: 48px;
-    padding: 0 6px;
+    min-height: 32px;
+    padding: 0 4px;
 }
 
 /* --- Split view & Sidebar Capsule (NidaraWindow with sidebar) ------------- */
@@ -671,12 +672,12 @@ window.nidara-app-window {
 
 // The window controls' row at the top of a docked sidebar (window.ts `sidebarSlotRow`): the
 // header's row, so the capsule is centred where the toggle and the navigation are. The header's
-// content box starts with the card (both 8 px from the window's top) and is 48 high; the card's
+// content box starts with the card (both 8 px from the window's top) and is 32 high; the card's
 // inside starts 1 px lower, under its border — so a row 2 px shorter has the same centre. And
-// 16 from the window's left edge, as from its top: the card's 8 margin and 1 border, then this.
+// 12 from the window's left edge, as from its top: the card's 8 margin and 1 border, then this.
 .nidara-sidebar-controls {
-    min-height: 48px - 2px;
-    margin-left: 16px - 8px - 1px;
+    min-height: 32px - 2px;
+    margin-left: 12px - 8px - 1px;
 }
 
 popover.nidara-sidebar-popup {
