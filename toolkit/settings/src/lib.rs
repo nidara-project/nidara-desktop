@@ -29,5 +29,6 @@ pub mod routing;
 pub mod session;
 pub mod styles;
 pub mod value;
+pub mod window;
 
 pub use value::Value;

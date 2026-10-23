@@ -528,6 +528,20 @@ either half depends on it.
   widgets demo uses it too (`widgets-demo → nk-settings`); its own panel and title bar recipe
   stay in the demo.
 
+### Settings window composition (Sol, #915)
+
+`settings::material::{panel, control}` owns the exact exported panel/control readers,
+including capsule geometry from components.json. The widgets demo reuses those readers;
+the app does not copy their recipes or fall back to compiled material numbers.
+`settings::window::Shell` builds the retained sidebar, title bar, content scroll region
+and one capsule of window-control Buttons. Labels are supplied by the caller, already
+translated. Sidebar activation reports a page id for the existing Router; it never draws
+a non-allowlisted page itself. The app mounts Rendered under `Shell::content`.
+The existing nk-widgets Composition/CapsuleComposition remain responsible for D7 layers,
+D5 painting, input, focus and finite animation. Window control capsules do not opt in to
+Hyalo's duplicate server controls. The app supplies exported metrics and provisional
+owner-reviewed titlebar/transition policies explicitly; this seam invents no visual values.
+
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
 The model is the reference platform's: the app says where a layer **ends**; the compositor

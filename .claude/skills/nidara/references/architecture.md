@@ -2844,3 +2844,18 @@ all exact variant/size/validation rules are preserved. This ownership move does
 not assemble Settings chrome or add its native main loop. Settings export tests
 honor the caller's absolute NK_SETTINGS_DATA with NK_REQUIRE_EXPORT=1; a token-only
 export cannot satisfy manifest/i18n tests and must not be reported as complete.
+
+
+### Native Settings window assembly (#915)
+
+`toolkit/settings/src/window.rs` assembles retained sidebar Page nodes, title bar,
+one content Scroll for Rendered and one control capsule. It reuses the existing
+Composition/CapsuleComposition and shared installed material readers. No second
+host/provider or material parser. Window labels and capsule metrics are caller
+inputs. Titlebar/transition policy must be supplied explicitly before sync.
+Sidebar activation reports a page ID to Router and restores the previous selection
+until routing and mounting succeed; only selected() commits the new title/page.
+The app mounts Rendered under Shell::content. Keep the shell separate from the
+native main loop: this assembly alone does not claim live routing, portal updates,
+AT-SPI/Orca, presentation or performance acceptance. Main still needs to supply
+window policies and integrate service/portal/routing/mount lifetimes.
