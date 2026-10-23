@@ -2940,3 +2940,11 @@ The native diagnostic source belongs to a separate cut. The production popup
 controller, shared accessibility publication/ID-generation safety across parent
 and popup, and Settings builder remain to integrate before any real AT-SPI/Orca
 acceptance claim. Current evidence is CPU component proof only.
+
+Menu keyboard navigation clears hover before focus/reveal: stationary pointer
+state must not paint a second highlighted row after arrows/Home/End or scrolling.
+The standalone menu remains a menu_style-controlled Tree mode across layout,
+measure, viewport and paint; preserve this explicit boundary until builder
+integration extracts it. Trigger visual debt: the kit's 0.15s hover/active
+transition has not been ported. The arrow text-dim token still needs live queryUI
+verification against the GTK arrow node (image CSS does not establish its ink).

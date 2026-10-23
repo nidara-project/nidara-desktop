@@ -471,6 +471,23 @@ fn menu_highlight_and_chosen_check_remain_independent_in_pixels_and_semantics() 
     assert!(!bright_in_check(&hover, other));
     assert!(tree.semantics().nodes[&ids[0]].states.selected);
     assert!(!tree.semantics().nodes[&ids[1]].states.selected);
+    // A stationary pointer must yield its highlight to keyboard navigation.
+    tree.focus(ids[1]).unwrap();
+    tree.control_key(0xff54).unwrap();
+    let keyboard = paint(&tree);
+    let next = r(&tree, ids[2]);
+    assert_eq!(
+        pixel(&keyboard, 300., other.y + other.height / 2.),
+        [30; 3],
+        "keyboard navigation must retire the stationary pointer highlight"
+    );
+    assert_eq!(
+        pixel(&keyboard, 300., next.y + next.height / 2.),
+        [0, 100, 255]
+    );
+    assert_eq!(tree.focused(), Some(ids[2]));
+    assert!(tree.semantics().nodes[&ids[0]].states.selected);
+    assert!(!tree.semantics().nodes[&ids[2]].states.selected);
     tree.focus(ids[0]).unwrap();
     tree.control_key(0xff54).unwrap();
     tree.pointer_motion(Point {

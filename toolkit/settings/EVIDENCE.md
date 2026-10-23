@@ -302,3 +302,22 @@ unchosen rows to paint a check, compiled, then failed OWN
 original3cf5527c before114PASS. All-target Clippy bothpackages-Dwarnings, workspace
 alltarget check, actual generated-token completeness, fmt/skilldocs/diff PASS.
 No historical native PASS is imported or attributed to this rebuilt head.
+
+## Review201 correction to cut16
+
+Claude found pointer→keyboard leaves stale hover alongside keyboard focus. New
+actual Tree/Canvas stationary-pointer test compiled against old production and
+failed OWN old-row background assertion [0,100,255] vs[30,30,30] AFTER initial
+hover/background/chosen-check setup (`menu-list-review201-old-control.log`).
+menu_key now clears hover before focus/reveal. Reverse keyboard→pointer coverage
+is retained. This fixes CPU behavior, not native input acceptance.
+
+Named debts from trigger review: 0.15s hover/active transition not ported; closed
+trigger currently jumps. arrowColor text-dim needs live queryUI against the arrow
+node; image CSS is not proof and no live query has been performed. Current token
+is provisional, not owner/live ink acceptance. No speculative token change here.
+CONTRACT now names standalone menu_style Tree mode boundary for later builder
+extraction; future general layout/measure/viewport/paint changes must account for it.
+
+Review201 final:114Settings/widgetsPASS requiredunchangedcut16exports, bothalltarget
+Clippy-Dwarnings/fmt/skilldocs/diffPASS. Logs menu-list-review201-{restored-tests,clippy}.log.

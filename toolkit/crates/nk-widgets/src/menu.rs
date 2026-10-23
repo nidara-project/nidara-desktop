@@ -184,6 +184,7 @@ impl Tree {
             0xff50 => 0,
             _ => n - 1,
         };
+        self.set_hovered(None);
         self.set_focus_visible(true);
         self.focus(available[next])?;
         Ok(Some(Effect::Focused(available[next])))

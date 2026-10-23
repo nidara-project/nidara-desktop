@@ -202,6 +202,12 @@ value, independent of pointer hover and keyboard focus. Up/Down/Home/End move
 focus and reveal it; activation emits Activated(option), leaving selection to the
 parent's controlled model. Escape/PopupDone are host cancellation, never edits.
 The list owns no Wayland connection: the existing standard popup host runs it.
+Keyboard menu navigation retires pointer hover before moving/revealing focus, so
+a stationary pointer cannot leave a second accent highlight or stale scrolled row.
+The standalone menu is currently a Tree mode selected by menu_style; generic
+layout/measure/content_viewport/paint branches must preserve that boundary. Extract
+this mode boundary when integrating the builder; it is not an embedded general list.
+
 `MenuStyle` comes from `components.json.dropdown.menu`, mapping the kit's actual
 popup CSS/check factory once. The viewport reaches the card's inner edge; row
 insets belong on the rows. Background is opaque without material, while a
