@@ -462,7 +462,8 @@ impl Application for Demo {
         let effect = if let Some(effect) = self.capsules.event(&mut self.tree, &event)? {
             effect
         } else {
-            self.composition.event_with_window(&mut self.tree, &event, window)?
+            self.composition
+                .event_with_window(&mut self.tree, &event, window)?
         };
         self.keep_scroll_fault(old, self.tree.focused() != focused)?;
         self.effect(effect, window)?;

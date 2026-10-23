@@ -1576,10 +1576,10 @@ mod tests {
                 "Test controls",
                 Point { x: 150., y: 100. },
                 CapsuleMetrics {
-                    padding: 4.,
-                    gap: 4.,
-                    button_min: 24.,
-                    height_min: 32.,
+                    padding: 5.,
+                    gap: 3.,
+                    button_min: 26.,
+                    height_min: 38.,
                 },
             )
             .unwrap();
@@ -1696,6 +1696,8 @@ mod tests {
                 capsule,
                 &LayerEvent::Button {
                     button: 272,
+                    serial: 7,
+                    time: 11,
                     pressed: true,
                     x: x as f64,
                     y: y as f64,
@@ -1725,6 +1727,8 @@ mod tests {
                     capsule,
                     &LayerEvent::Button {
                         button: 272,
+                        serial: 7,
+                        time: 11,
                         pressed: false,
                         x: -1.,
                         y: -1.
@@ -1739,6 +1743,8 @@ mod tests {
                 capsule,
                 &LayerEvent::Button {
                     button: 272,
+                    serial: 7,
+                    time: 11,
                     pressed: true,
                     x: x as f64,
                     y: y as f64,
@@ -1751,6 +1757,8 @@ mod tests {
                     capsule,
                     &LayerEvent::Button {
                         button: 272,
+                        serial: 7,
+                        time: 11,
                         pressed: false,
                         x: x as f64,
                         y: y as f64
