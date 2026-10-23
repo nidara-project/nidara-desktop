@@ -3071,3 +3071,16 @@ the latest pending snapshot; skipped revisions are not published acknowledgments
 An in-flight backend update completes, then the newest snapshot is consumed.
 Requests remain bound to the actual published revision. The app never blocks
 on a full notification channel, and superseded full trees are released promptly.
+
+
+
+FontChooser's metadata catalogue lives in nk-settings::font_catalog. Do not call
+Fontconfig while building a page: default Load is idle and start is for opening
+the chooser only. It uses one worker and at most one queued enumeration, with no
+font file/renderer/provider access. Carry BOTH mount and per-open request tokens;
+poll retires a result when either differs, cancel/Drop retires the receiver, and
+queued canceled work is skipped. No worker callback may touch the UI or Apply.
+Keep Fontconfig's full face index, including named-instance bits. An empty style
+name is valid (observed on installed Adwaita variable faces); retain it as unnamed,
+never invent Regular. Enumeration/search are metadata only: the actual modal family
+LIST/search ENTRY and the font builders still have to consume this catalogue.

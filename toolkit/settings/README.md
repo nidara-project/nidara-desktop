@@ -67,3 +67,15 @@ The complete native builder matrix is still pending: some local software EGL run
 lose their context and stop delivering parent frames. Such setup timeouts fail the
 check; they are never accepted as a control catch. See EVIDENCE.md for the passing
 subsets and preserved failed runs. Routing/page unmount and real Orca remain separate.
+
+
+
+
+FontChooser metadata is available through font_catalog::Load: start only on chooser
+open with Operation { mount, request }, poll nonblockingly with the current token,
+and cancel on hide/unmount or a newer open. A single worker serializes actual
+Fontconfig enumeration with one queued job maximum. Catalogue preserves primary
+family/style names, exact files and full face indices, and supports family-name
+filtering. It reads metadata without loading the font files. Empty style names from
+Fontconfig stay unnamed. This is the lazy catalogue foundation, not an implemented
+FontChooser dialog or font builder; the accessible search ENTRY is still required.

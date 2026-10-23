@@ -559,3 +559,21 @@ requests remain version-bound; in-flight publication is not interrupted.
 uses an actual mailbox and retained payload lifetime: old Arc drops before the
 reader runs, only final revision3 is received, then4 and disconnect are handled.
 No native Orca result is claimed for this unit-level concurrency fix.
+
+## Local cut26 — 915-font-catalog (2026-10-23)
+
+Extracted existing c2ebf2e1 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+62 tests [39, 3, 13, 5, 2] PASS; all-target Clippy -D warnings PASS
+for nk-settings. Logs: target/cut26-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-menu-list/toolkit/target/menu-list-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.

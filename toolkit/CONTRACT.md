@@ -289,6 +289,29 @@ reply cannot immediately erase its error with its accompanying Changed notice. R
 visibility follows key availability; builder rows are sensitive only when every
 edited key is writable. No async worker/timer survives this synchronous builder.
 
+### Lazy font catalogue (#915, PHASE1 A4)
+
+`font_catalog::Catalogue` groups Fontconfig's installed primary family/style names
+with their exact file and face index (including named-instance bits), without
+opening font files or substituting an unknown family. An empty style name from
+Fontconfig is retained as unnamed (some variable faces have no named style); no
+Regular label/style is invented. Duplicate file/index/name
+records collapse; names remain Unicode, with deterministic family/style ordering.
+Malformed records, failed fontconfig execution and an empty catalogue are errors,
+never a successful partial catalogue. This is metadata, not a font rendering backend.
+
+`font_catalog::Load::start(Operation { mount, request })` is called only when a
+chooser opens, never while building the Settings page or its first frame. One
+process-wide worker serializes enumeration, with one queued operation maximum;
+a full queue reports busy rather than spawning more workers. `poll(current)` is
+nonblocking and returns one result only for the same mount/request token. Cancel,
+Drop or a token mismatch retires the receiver; queued canceled jobs are skipped,
+and a running obsolete result cannot reach the UI. Worker work has no tree,
+Window, provider or Config1 access and performs no Apply. The chooser must still
+validate its current live/visible/available launcher before applying a selection.
+The modal family LIST/search ENTRY, preview, size/style selection and font builders
+remain separate consumers; catalogue tests are not FontChooser acceptance.
+
 ### Renderer modal context (#915)
 
 `render::Host.modal` optionally lends a `render::Modal` implementation in effect/idle;

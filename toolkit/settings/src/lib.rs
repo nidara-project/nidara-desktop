@@ -23,6 +23,7 @@ pub mod client;
 pub mod dropdown;
 pub mod dropdown_builder;
 pub mod exports;
+pub mod font_catalog;
 pub mod manifest;
 pub mod material;
 pub mod portal;
