@@ -25,7 +25,7 @@ impl Tree {
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
                 Kind::Dropdown { .. } => Role::ComboBox,
-                Kind::DropdownOption { .. } => Role::Option,
+                Kind::DropdownOption { .. } | Kind::MenuOption { .. } => Role::Option,
                 Kind::Choice { .. } => Role::RadioButton,
             };
             let mut n = Semantic::new(id, role, &widget.name);
@@ -69,7 +69,9 @@ impl Tree {
                 ),
                 selected: matches!(
                     widget.kind,
-                    Kind::Page { selected: true } | Kind::DropdownOption { selected: true }
+                    Kind::Page { selected: true }
+                        | Kind::DropdownOption { selected: true }
+                        | Kind::MenuOption { selected: true }
                 ),
                 expanded: matches!(
                     widget.kind,

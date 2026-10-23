@@ -2928,3 +2928,15 @@ including the reserved 2px focus border, relative Settings font/weight and
 shared-theme down chevron. Missing style/arrow is an error. The trigger's
 paint/geometry no longer reuse Button defaults. This does not implement the
 open popup list or accept its native look/Orca behavior.
+
+
+`Tree::menu_list` and `MenuStyle` now provide the retained Dropdown list over
+standard xdg_popup (#882/#915). MenuOption semantics use Option/selected; hover
+and keyboard focus are independent of the chosen check. Up/Down/Home/End reveal
+focus while skipping unavailable rows; Activate is returned to the controlled
+parent. Menu tokens come from the current CSS/factory, with one row inset and
+a permanently reserved trailing check slot. `set_menu_style` keeps IDs/focus.
+The native diagnostic source belongs to a separate cut. The production popup
+controller, shared accessibility publication/ID-generation safety across parent
+and popup, and Settings builder remain to integrate before any real AT-SPI/Orca
+acceptance claim. Current evidence is CPU component proof only.

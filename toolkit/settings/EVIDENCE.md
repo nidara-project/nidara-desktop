@@ -277,3 +277,28 @@ Validation PASS: 111 widgets/Settings tests (59+52) in
 settings-tokens-check:108 colour sets/4 variants complete; fmt/skilldocs/diff PASS.
 Collapsed Selection assertion is CPU model proof only. Text/icon rendering tests
 use a synthetic32px fixture, not #921 window-controls sizing or owner acceptance.
+
+## Local MenuList extraction (#915, cut 16)
+
+Existing3cf5527c production MenuList/MenuOption/MenuStyle, choice-key routing,
+semantic selected state, CPU tests and Settings menu token reader/checks extracted.
+Native dropdown-probe265/checker77/wrapper19 and historical native evidence are
+excluded for a separate independently compiling diagnostic cut. No new provider
+or Wayland host. Current main/capsule/trigger functions and review198 collapsed
+Selection assertion are preserved. Contract precedes API; skill/README describe
+CPU-only scope and keep native/AT-SPI/Orca/material/live acceptance pending.
+
+Fresh full actual exports at `toolkit/target/menu-list-data`, including the changed
+menu recipe, are required; cut15 data is stale for this reader. CPU fixture
+geometry and palette are explicitly synthetic, using actual Parley/Tree/Canvas.
+
+Validation PASS:114 Settings/widgets tests(52+62) with NK_REQUIRE_EXPORT=1 and
+absolute fresh cut16 data, `menu-list-split-restored-tests.log`. Three new menu
+CPU tests verify independent hover/focus/selected check, navigation/reveal with
+unavailable rows, and retained style updates. Production fault allowed hovered
+unchosen rows to paint a check, compiled, then failed OWN
+`!bright_in_check(&hover, other)` after both row-background and chosen-check setup
+(`menu-list-split-hover-check-control.log`). Restored menu.rs byte-identical to
+original3cf5527c before114PASS. All-target Clippy bothpackages-Dwarnings, workspace
+alltarget check, actual generated-token completeness, fmt/skilldocs/diff PASS.
+No historical native PASS is imported or attributed to this rebuilt head.

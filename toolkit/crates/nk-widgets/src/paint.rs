@@ -103,6 +103,9 @@ impl Tree {
         palette: Palette,
         title_style: Option<&crate::window::TitlebarStyle>,
     ) -> Result<Vec<u8>> {
+        if surface == Surface::Content && self.menu_style.is_some() {
+            return self.paint_menu(frame, palette);
+        }
         let mut canvas = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
         if surface == Surface::Content && !frame.material {
             canvas.rect(self.nodes[&self.root].bounds, opaque(palette.background));

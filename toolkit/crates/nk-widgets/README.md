@@ -177,3 +177,22 @@ press and keyboard focus keep the same bounds. This is the current source's
 recipe, still subject to native owner live review. This model is
 not the popup list, a complete Dropdown widget, a Settings builder, or an Orca
 acceptance result.
+
+
+### Dropdown menu list
+
+`Tree::menu_list` builds a standalone Scroll of retained MenuOptions for the
+standard popup host. `MenuStyle` reads `components.json.dropdown.menu`, from the
+current kit's dropdown CSS and check factory. The inner viewport reaches the
+card edge; border + row inset is accounted once. Arrow/Home/End focus reveals
+options and skips disabled entries without changing the chosen check. Activate
+returns an option action for the parent to accept. Hover/keyboard focus paints
+accent with accent ink; pointer movement removes an old keyboard highlight.
+The chosen check has a permanently reserved trailing slot and follows selected,
+not hovered/focused state. Portal style updates preserve IDs/focus/scroll through
+`set_menu_style`. No material forces the menu base opaque.
+
+The existing native probe/wrapper/checker are separated from this component cut.
+CPU tests do not prove native selection/cancel, material, pointer opening,
+AT-SPI/Orca, fractional scale or Settings app acceptance. Historical diagnostic
+binary results stay attached to their original source, not this rebuilt head.

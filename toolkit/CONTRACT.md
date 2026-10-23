@@ -194,6 +194,23 @@ the current kit's dropdown trigger, not Button's geometry. Missing style is an
 error. Its border reserves space at rest, keyboard focus uses that same border,
 and the arrow uses the shared icon theme with externally supplied ink.
 
+### Dropdown menu list (#882/#915)
+
+`Tree::menu_list` constructs a standalone retained popup list, one Scroll of
+MenuOption nodes. Each is an AT-SPI Option; `selected` means the currently chosen
+value, independent of pointer hover and keyboard focus. Up/Down/Home/End move
+focus and reveal it; activation emits Activated(option), leaving selection to the
+parent's controlled model. Escape/PopupDone are host cancellation, never edits.
+The list owns no Wayland connection: the existing standard popup host runs it.
+`MenuStyle` comes from `components.json.dropdown.menu`, mapping the kit's actual
+popup CSS/check factory once. The viewport reaches the card's inner edge; row
+insets belong on the rows. Background is opaque without material, while a
+material-backed host paints the same content/border over the shared glass.
+The check reserves a trailing slot for every option and follows chosen state,
+not hover. It uses the existing check.ts path and exported stroke/size in row ink.
+This retained list alone does not establish a complete native Dropdown/builder
+or real Orca speech acceptance; that requires the host and accessibility bridge.
+
 ### Standard popup host (#882/#915)
 
 `nk-wayland::run_popup(app, parent, placement, grab_serial)` is a nested host on

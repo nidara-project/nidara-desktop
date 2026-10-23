@@ -213,6 +213,22 @@ for variant in component_variants:
         colour = trigger.get(k)
         if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
             fail.append(f'{where}: missing dropdown colour {k}: {colour}')
+    menu = (variant.get('dropdown') or {}).get('menu') or {}
+    if not all(positive_number(menu.get(k), True) for k in ('border', 'inset', 'paddingX', 'paddingY', 'checkGap')):
+        fail.append(f'{where}: missing dropdown menu geometry')
+    if not all(positive_number(menu.get(k)) for k in ('checkSize', 'checkStroke')):
+        fail.append(f'{where}: invalid menu check geometry')
+    if not all(menu.get(k) in static['ts']['RADIUS'] for k in ('radius', 'rowRadius')):
+        fail.append(f'{where}: menu radii are not on the shared ladder')
+    if not all(menu.get(k) in static['scss'] for k in ('fontSize', 'fontWeight')):
+        fail.append(f'{where}: missing menu typography')
+    black = menu.get('pressedBlack')
+    if not isinstance(black, (int, float)) or not 0 <= black <= 1:
+        fail.append(f'{where}: invalid menu pressed mix')
+    for k in ('background', 'borderColor', 'text', 'accent', 'accentText'):
+        colour = menu.get(k)
+        if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
+            fail.append(f'{where}: missing menu colour {k}: {colour}')
     common = variant.get('common') or {}
     widths = variant.get('widths') or {}
     form = widths.get('form') or {}
