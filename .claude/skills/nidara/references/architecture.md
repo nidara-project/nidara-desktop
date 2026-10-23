@@ -2973,3 +2973,10 @@ Revise that ownership contract before building a controller that needs it.
 An unavailable chosen option retains its check but initial focus falls back to
 the first available option, or none if all options are unavailable; opening and
 cancellation must still work without changing the chosen value.
+
+For that modal snapshot, `nk-wayland::Window::popup_geometry()` now exposes the
+compositor's actual `[x,y,width,height]` relative to parent window geometry. It is
+None on toplevels/before first configure, and latches the pending popup rectangle
+with size only at xdg_surface.configure acknowledgement. A reposition request is
+not evidence of a new origin. Use the configured origin for semantic bounds;
+flip/slide can differ from the requested anchor, including negative coordinates.

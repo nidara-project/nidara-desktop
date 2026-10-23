@@ -71,7 +71,34 @@ pub fn run_popup(
     Ok(())
 }
 
+/// xdg_popup.configure is pending until its matching xdg_surface.configure.
+#[derive(Default)]
+pub(super) struct Geometry {
+    pending: Option<[i32; 4]>,
+    current: Option<[i32; 4]>,
+}
+impl Geometry {
+    fn stage(&mut self, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
+        if width <= 0 || height <= 0 {
+            return Err("invalid popup configure size".into());
+        }
+        self.pending = Some([x, y, width, height]);
+        Ok(())
+    }
+    pub(super) fn commit(&mut self) {
+        if let Some(geometry) = self.pending.take() {
+            self.current = Some(geometry);
+        }
+    }
+}
+
 impl Window {
+    /// Latest acknowledged popup rectangle in parent window-geometry logical coordinates.
+    /// None for toplevels and before the first popup configure acknowledgement.
+    pub fn popup_geometry(&self) -> Option<[i32; 4]> {
+        self.popup_geometry.current
+    }
+
     /// Reposition this popup with an acknowledgement token. Older xdg-shell versions
     /// fail explicitly; they cannot implement the version-3 reposition request.
     pub fn reposition_popup(&mut self, placement: PopupPlacement, token: u32) -> Result<()> {
@@ -97,14 +124,15 @@ impl Dispatch<xdg_popup::XdgPopup, ()> for Window {
         _: &QueueHandle<Self>,
     ) {
         match event {
-            xdg_popup::Event::Configure { width, height, .. } => {
-                if width > 0 && height > 0 {
-                    w.pending_size = Some((width as u32, height as u32));
-                } else {
-                    w.events
-                        .push(Event::Error("invalid popup configure size".into()));
-                }
-            }
+            xdg_popup::Event::Configure {
+                x,
+                y,
+                width,
+                height,
+            } => match w.popup_geometry.stage(x, y, width, height) {
+                Ok(()) => w.pending_size = Some((width as u32, height as u32)),
+                Err(error) => w.events.push(Event::Error(error)),
+            },
             xdg_popup::Event::PopupDone => {
                 w.closed = true;
                 w.events.push(Event::PopupDone);
@@ -122,6 +150,22 @@ delegate_noop!(Window: ignore xdg_positioner::XdgPositioner);
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn popup_geometry_is_atomic_with_surface_configure_and_keeps_signed_actual_origin() {
+        let mut geometry = Geometry::default();
+        assert_eq!(geometry.current, None);
+        geometry.stage(-40, -180, 200, 120).unwrap();
+        assert_eq!(geometry.current, None);
+        geometry.commit();
+        assert_eq!(geometry.current, Some([-40, -180, 200, 120]));
+        geometry.stage(31, 77, 190, 110).unwrap();
+        assert_eq!(geometry.current, Some([-40, -180, 200, 120]));
+        assert!(geometry.stage(99, 88, 0, 90).is_err());
+        geometry.commit();
+        assert_eq!(geometry.current, Some([31, 77, 190, 110]));
+        geometry.commit();
+        assert_eq!(geometry.current, Some([31, 77, 190, 110]));
+    }
     #[test]
     fn positioner_requires_a_nonempty_anchor_and_size_without_integer_overflow() {
         let valid = PopupPlacement {

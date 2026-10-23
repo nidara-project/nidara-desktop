@@ -389,3 +389,27 @@ CONTRACT/README/skill explicitly retain the exclusive parent borrow as this
 short-menu adapter's ownership boundary. Parent paint/configure/scale/appearance
 cannot be serviced concurrently; a controller requiring that must revise the
 contract first. This remains a documented limitation, not resolved concurrency.
+
+
+## Local cut19 — acknowledged popup geometry (2026-10-23)
+
+Existing962de449 production delta and its CPU test extracted above corrected
+cut18(9dd47d89). Contract before public Window::popup_geometry API, README and
+canonical architecture skill together. Current main transport features retained.
+The signed parent-relative rectangle stages on xdg_popup.configure and commits
+with size at xdg_surface.configure acknowledgement; toplevel/unconfigured state
+stays None. Reposition requests/tokens do not predict an actual origin.
+
+75 wayland/widgets tests PASS (10+65), mandatory fullcut16 menu-list-data:
+target/popup-geometry-split-restored-tests.log. Compiled eager-publication fault
+failed its own current=None assertion after stage(-40,-180,200,120), observing
+Some([-40,-180,200,120]) before commit; split-eager-control.log. Literal source
+restored before75PASS. All-target nk-wayland Clippy -D warnings and workspace
+all-target check PASS: split-clippy/workspace.log. fmt/skilldocs/diff PASS.
+
+CPU Geometry staging/commit proof only: no native wire/configure/bounds or role,
+grab/reposition/focus/cleanup/AT-SPI/Orca/performance/live acceptance. Existing
+962 diagnostic probe/checker changes are excluded for a separate compilable cut.
+Historical fixed binaries/evidence remain unchanged and are not this head's proof.
+The short-menu exclusive parent borrow and adaptive polling caller/causal test
+remain explicit debt; this geometry API does not resolve either.

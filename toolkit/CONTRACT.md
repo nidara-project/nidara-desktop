@@ -248,6 +248,14 @@ run a popup, or establish real AT-SPI/Orca acceptance.
 
 ### Standard popup host (#882/#915)
 
+`Window::popup_geometry()` returns None for a toplevel or before a popup's
+first acknowledged xdg_surface.configure. Afterwards it returns the latest
+compositor-configured `[x, y, width, height]` in parent window-geometry logical
+coordinates, including signed origins after flips/slides. Pending xdg_popup
+geometry becomes visible together with size at the following xdg_surface
+configure acknowledgement; a reposition request/token alone does not change it.
+Use this origin for modal semantics; requested anchors are not actual placement.
+
 `nk-wayland::run_popup(app, parent, placement, grab_serial)` is a nested host on
 its parent's connection, with a standard `xdg_popup` role, never a D7 layer or a
 new toplevel. `PopupPlacement` supplies a positive size and positive anchor

@@ -189,6 +189,7 @@ pub struct Window {
     width: u32,
     height: u32,
     pending_size: Option<(u32, u32)>,
+    popup_geometry: popup::Geometry,
     scale: u32,
     configured: bool,
     dirty: bool,
@@ -666,6 +667,7 @@ fn run_inner(
         width: options.size.0,
         height: options.size.1,
         pending_size: None,
+        popup_geometry: Default::default(),
         scale: 120,
         configured: false,
         dirty: true,
@@ -980,6 +982,7 @@ impl Dispatch<xdg_surface::XdgSurface, ()> for Window {
                 w.width = x;
                 w.height = y;
             }
+            w.popup_geometry.commit();
             w.configured = true;
             w.dirty = true;
             w.events.push(Event::Configure);

@@ -150,3 +150,10 @@ Evidence records source revision and binary hashes. A future run needs fresh
 logs and its exact rebuilt probe; historical fixed binaries prove their source only.
 This extraction was compiled and syntax checked, with no new native execution,
 control catch, protocol trace, focus/Orca or presentation acceptance.
+
+`Window::popup_geometry()` is None for toplevels and unconfigured popups. Once
+xdg_surface.configure is acknowledged it exposes `[x, y, width, height]` from the
+matching compositor popup configure, in parent window-geometry logical coordinates.
+Signed origins survive output constraint adjustments. Geometry/size update together;
+requesting reposition or receiving its token alone never predicts the new origin.
+Use this configured origin, rather than the requested anchor, for modal semantics.
