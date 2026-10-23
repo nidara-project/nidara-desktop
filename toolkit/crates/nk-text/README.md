@@ -212,3 +212,11 @@ positive; axis tags must be distinct printable four-byte tags with finite values
 GlyphRun exports the actual synthesis skew for the renderer's per-glyph transform.
 Synthetic emboldening is refused during export until its raster policy is defined;
 a family/style request does not promise an exact face or named instance.
+
+
+`system_fonts: true`; supplied files remain private fallbacks only when their
+families are absent. Installed families retain their full system face collection,
+rather than being replaced with a required regular file. A blob mixing installed
+and private declared families is refused because whole-blob registration could
+shadow installed faces. A system face outside
+Settings owns the description format and the existing chooser/modal consumer.

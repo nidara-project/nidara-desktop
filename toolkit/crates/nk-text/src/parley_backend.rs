@@ -29,7 +29,21 @@ impl ParleyBackend {
             }),
             source_cache: Default::default(),
         };
-        for (_, bytes) in fonts.font_files() {
+        for (file, bytes) in fonts.font_files() {
+            if system_fonts {
+                let installed: Vec<_> = fonts
+                    .files
+                    .iter()
+                    .filter(|font| font.path == file)
+                    .map(|font| font_context.collection.family_id(&font.family).is_some())
+                    .collect();
+                if installed.iter().all(|known| *known) {
+                    continue;
+                }
+                if installed.iter().any(|known| *known) {
+                    return Err("fallback collection mixes installed and private families".into());
+                }
+            }
             if font_context
                 .collection
                 .register_fonts(parley::fontique::Blob::new(Arc::new(bytes.clone())), None)

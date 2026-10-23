@@ -1014,7 +1014,7 @@ connection/app-id, caller title/size, and the same teardown/input-drain as run_d
 
 The Settings family/size picker consumer is `font_chooser::choose`: actual
 modal native UI with SearchInput, lazy font_catalog, embedded LIST, Cancel/Select
-and the shared system-font backend. Its result is Selection { family, points }, never
+and the shared system-font backend. Its result is Selection { family, points, attributes }, never
 Apply. Point-size editing and a retained sample share the existing widgets/layout.
 Style selection and Config1 font builders remain subsequent consumers; this UI is
 not full FontChooser parity or native/Orca acceptance. All labels,
@@ -1065,3 +1065,30 @@ GlyphRun carries the actual Parley synthesis skew in degrees. nk-render applies 
 around that glyph's baseline, leaving positions and advances from the shared Layout intact.
 Synthetic emboldening is currently refused during export instead of silently painting a regular
 face. A style request can resolve to a synthesized face; it does not promise a specific file.
+
+### Config1 font descriptions and chooser styles (#915)
+
+nk-settings::font_description interprets the supported Config1 Pango description
+attributes (single family, weight/slant/stretch, positive point or px size, explicit
+axis settings) in Rust, without another layout engine or startup enumeration.
+Canonical output is a Pango-compatible point description, with an ambiguity comma
+when the family ends in a style word/number. Absolute px sizes convert at 72/96,
+independently of portal text scale. Unsupported variant/gravity/features/family lists
+return an explicit error; they are never silently discarded or previewed as regular.
+Styles::font_style and the real chooser share this interpretation. The chooser's
+Selection includes attributes, and its embedded style LIST uses the catalogue's raw
+style labels (translated unnamed label for an empty style), retaining initial axis
+settings until an explicit family/style change. Canonical point precision follows Pango's
+1/1024 unit; output preserves supported attributes, not the exact spelling of its
+input. Unsupported named styles and high-index named-instance records cannot be
+selected. Unsupported initial attributes are preserved without preview/acceptance
+until an explicit supported choice, rather than being replaced on opening. A family/style request is not a promise of an exact file/index/named instance.
+Config1 Apply still belongs to builders; choosing only returns a draft description.
+
+System-font mode must preserve all installed faces of a required family. Registering
+only the FontSet's regular file over an installed family can hide its bold/italic
+faces. with_system_fonts therefore checks the declared families of each fallback file.
+When all are installed it leaves those system families intact; when none are it
+registers the private fallback. A collection mixing installed/private families is
+refused, since registering its whole blob could shadow installed faces. Isolated
+mode keeps its original file registration. This does not run the chooser fc-list.

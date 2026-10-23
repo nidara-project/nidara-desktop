@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Native family/point-size chooser with retained preview, on one semantic Bridge.
+//! Native family/style/point-size chooser with retained preview, on one semantic Bridge.
 use crate::{
     font_catalog::{Catalogue, Load, Operation},
+    font_description::{Attributes, Description},
     material::panel::PanelMaterial,
     styles::Styles,
 };
@@ -18,17 +19,16 @@ pub struct Labels<'a> {
     pub search: &'a str,
     pub placeholder: &'a str,
     pub families: &'a str,
+    pub styles: &'a str,
+    pub unnamed: &'a str,
+    pub unsupported_style: &'a str,
     pub preview: &'a str,
     pub point_size: &'a str,
     pub loading: &'a str,
     pub cancel: &'a str,
     pub select: &'a str,
 }
-#[derive(Clone, Debug, PartialEq)]
-pub struct Selection {
-    pub family: String,
-    pub points: f32,
-}
+pub type Selection = Description;
 pub struct Host<'a> {
     pub tree: &'a mut Tree,
     pub window: &'a mut Window,
@@ -50,6 +50,7 @@ pub struct Host<'a> {
     pub keep_open: &'a mut dyn FnMut() -> Result<bool>,
 }
 struct PointSize {
+    attributes: Attributes,
     initial: f32,
     range: nk_widgets::ValueRange,
     scale: f32,
@@ -63,6 +64,12 @@ struct View {
     select: NodeId,
     rows: Vec<(String, NodeId)>,
     selected: Option<String>,
+    style_list: NodeId,
+    style_options: Vec<(NodeId, Attributes)>,
+    catalogue_styles: std::collections::BTreeMap<String, Vec<(String, bool)>>,
+    unnamed: String,
+    unsupported_style: String,
+    attributes: Attributes,
     preview: NodeId,
     preview_row: NodeId,
     preview_style: nk_text::TextStyle,
@@ -79,6 +86,7 @@ impl View {
         points: PointSize,
     ) -> Result<Self> {
         let PointSize {
+            attributes,
             initial: initial_points,
             range: point_range,
             scale: text_scale,
@@ -104,6 +112,7 @@ impl View {
         let status_row = tree.append(scroll, Kind::Row, "")?;
         let status = tree.append(status_row, Kind::Label, labels.loading)?;
         let list = tree.list(scroll, labels.families, height, styles.menu.clone())?;
+        let style_list = tree.list(scroll, labels.styles, height, styles.menu.clone())?;
         let (_, _, point_controls) = tree.fields(
             scroll,
             labels.point_size,
@@ -131,6 +140,12 @@ impl View {
             select,
             rows: Vec::new(),
             selected: None,
+            style_list,
+            style_options: vec![],
+            catalogue_styles: Default::default(),
+            unnamed: labels.unnamed.into(),
+            unsupported_style: labels.unsupported_style.into(),
+            attributes,
             preview,
             preview_row,
             preview_style: styles.text.clone(),
@@ -140,6 +155,14 @@ impl View {
     }
     fn loaded(&mut self, tree: &mut Tree, catalogue: &Catalogue, initial: &str) -> Result<()> {
         for family in &catalogue.families {
+            self.catalogue_styles.insert(
+                family.name.clone(),
+                family
+                    .faces
+                    .iter()
+                    .map(|face| (face.style.clone(), face.index >> 16 != 0))
+                    .collect(),
+            );
             let id = tree.append(
                 self.list,
                 Kind::MenuOption {
@@ -156,14 +179,82 @@ impl View {
             .map(|(name, _)| name.clone());
         // Hide the entire loading row, not an empty-height label alone.
         tree.set_hidden(self.status_row, true)?;
+        self.rebuild_styles(tree, true)?;
         self.preview(tree)?;
         self.filter(tree)
     }
+    fn rebuild_styles(&mut self, tree: &mut Tree, preserve_initial: bool) -> Result<()> {
+        for (id, _) in self.style_options.drain(..) {
+            tree.remove(id)?;
+        }
+        // Also retire disabled unsupported options; all IDs are dialog-owned.
+        let old = tree.node(self.style_list).unwrap().children().to_vec();
+        for id in old {
+            tree.remove(id)?;
+        }
+        if let Some(styles) = self
+            .selected
+            .as_ref()
+            .and_then(|name| self.catalogue_styles.get(name))
+        {
+            let mut names = std::collections::BTreeMap::<String, bool>::new();
+            for (name, named_instance) in styles {
+                *names.entry(name.clone()).or_default() |= !named_instance;
+            }
+            for (name, selectable_face) in names {
+                let id = tree.append(
+                    self.style_list,
+                    Kind::MenuOption { selected: false },
+                    if name.is_empty() {
+                        &self.unnamed
+                    } else {
+                        &name
+                    },
+                )?;
+                match Attributes::named(&name) {
+                    Ok(attributes) if selectable_face => self.style_options.push((id, attributes)),
+                    _ => tree.set_disabled(id, true)?,
+                }
+            }
+        }
+        let matching = self.style_options.iter().find(|(_, a)| {
+            a.weight == self.attributes.weight
+                && a.slant == self.attributes.slant
+                && a.width == self.attributes.width
+        });
+        let chosen = if preserve_initial {
+            matching
+        } else {
+            matching.or(self.style_options.first())
+        };
+        tree.set_hidden(self.status_row, chosen.is_some())?;
+        if chosen.is_none() {
+            tree.set_name(self.status, &self.unsupported_style)?;
+        }
+        if let Some((id, attributes)) = chosen {
+            if attributes.weight != self.attributes.weight
+                || attributes.slant != self.attributes.slant
+                || attributes.width != self.attributes.width
+            {
+                self.attributes = attributes.clone();
+            }
+            tree.set_list_selected(self.style_list, Some(*id))?;
+        }
+        Ok(())
+    }
     fn preview(&self, tree: &mut Tree) -> Result<()> {
-        tree.set_hidden(self.preview_row, self.selected.is_none())?;
+        let visible = self.selected.is_some() && self.has_style(tree);
+        tree.set_hidden(self.preview_row, !visible)?;
+        if !visible {
+            return Ok(());
+        }
         if let Some(family) = &self.selected {
             let mut style = self.preview_style.clone();
             style.family = family.clone();
+            style.weight = self.attributes.weight;
+            style.slant = self.attributes.slant;
+            style.width = self.attributes.width;
+            style.variations = self.attributes.variations.clone();
             style.size = tree.value(self.points).ok_or("font size control missing")?
                 * (96. / 72.)
                 * self.text_scale;
@@ -179,15 +270,38 @@ impl View {
         tree.set_disabled(self.select, !self.can_select(tree))?;
         Ok(())
     }
+    fn has_style(&self, tree: &Tree) -> bool {
+        self.style_options.iter().any(|(id, _)| {
+            matches!(
+                tree.node(*id).unwrap().kind(),
+                Kind::MenuOption { selected: true }
+            )
+        })
+    }
     fn can_select(&self, tree: &Tree) -> bool {
-        self.rows
-            .iter()
-            .any(|(name, id)| self.selected.as_ref() == Some(name) && !tree.is_hidden(*id))
+        self.has_style(tree)
+            && self
+                .rows
+                .iter()
+                .any(|(name, id)| self.selected.as_ref() == Some(name) && !tree.is_hidden(*id))
     }
     fn effect(&mut self, tree: &mut Tree, effect: Effect) -> Result<bool> {
         match effect {
             Effect::Changed(id) if id == self.search => self.filter(tree)?,
             Effect::Changed(id) if id == self.points => self.preview(tree)?,
+            Effect::Changed(id) if id == self.style_list => {
+                if let Some((_, attributes)) = self.style_options.iter().find(|(id, _)| {
+                    matches!(
+                        tree.node(*id).unwrap().kind(),
+                        Kind::MenuOption { selected: true }
+                    )
+                }) {
+                    self.attributes = attributes.clone();
+                    self.preview(tree)?;
+                    tree.set_hidden(self.status_row, true)?;
+                    tree.set_disabled(self.select, !self.can_select(tree))?;
+                }
+            }
             Effect::Changed(id) if id == self.list => {
                 self.selected = self
                     .rows
@@ -199,6 +313,8 @@ impl View {
                         )
                     })
                     .map(|(name, _)| name.clone());
+                self.attributes.variations.clear();
+                self.rebuild_styles(tree, false)?;
                 self.preview(tree)?;
                 tree.set_disabled(self.select, !self.can_select(tree))?;
             }
@@ -275,6 +391,7 @@ impl Picker<'_, '_> {
         if self.view.effect(self.dialog.view_mut(), effect)? {
             *self.result = self.view.selected.clone().map(|family| Selection {
                 family,
+                attributes: self.view.attributes.clone(),
                 points: self.dialog.view().value(self.view.points).unwrap(),
             });
             window.close();
@@ -364,7 +481,7 @@ impl Application for Picker<'_, '_> {
         self.dialog.view_mut().acknowledge();
     }
 }
-/// A draft family/point-size choice. Face/style selection and Config1 Apply are separate.
+/// A draft family/style/point-size choice. Exact face identity and Config1 Apply are separate.
 pub fn choose(host: Host<'_>, launcher: NodeId, initial: Selection) -> Result<Option<Selection>> {
     if host.poll_interval_ms == 0 {
         return Err("font dialog requires a polling interval".into());
@@ -380,6 +497,7 @@ pub fn choose(host: Host<'_>, launcher: NodeId, initial: Selection) -> Result<Op
         host.list_height,
         host.fonts.clone(),
         PointSize {
+            attributes: initial.attributes.clone(),
             initial: initial.points,
             range: host.point_range,
             scale: host.text_scale,
@@ -473,6 +591,9 @@ mod tests {
             search: "Search families",
             placeholder: "Search",
             families: "Font families",
+            styles: "Font styles",
+            unnamed: "Unnamed style",
+            unsupported_style: "Unsupported styles",
             preview: "The quick brown fox",
             point_size: "Point size",
             loading: "Loading",
@@ -486,6 +607,7 @@ mod tests {
             160.,
             fonts,
             PointSize {
+                attributes: Attributes::default(),
                 initial: 11.,
                 range: nk_widgets::ValueRange {
                     min: 1.,
@@ -500,18 +622,65 @@ mod tests {
             },
         )
         .unwrap();
-        let catalogue = Catalogue {
+        let mut catalogue = Catalogue {
             families: vec![
                 crate::font_catalog::Family {
                     name: "Noto Sans".into(),
-                    faces: vec![],
+                    faces: vec![
+                        crate::font_catalog::Face {
+                            style: "Regular".into(),
+                            file: "/synthetic/font.ttf".into(),
+                            index: 0,
+                        },
+                        crate::font_catalog::Face {
+                            style: "Bold".into(),
+                            file: "/synthetic/bold.ttf".into(),
+                            index: 0,
+                        },
+                    ],
                 },
                 crate::font_catalog::Family {
                     name: "日本語".into(),
-                    faces: vec![],
+                    faces: vec![
+                        crate::font_catalog::Face {
+                            style: "Regular".into(),
+                            file: "/synthetic/font.ttf".into(),
+                            index: 0,
+                        },
+                        crate::font_catalog::Face {
+                            style: "Bold".into(),
+                            file: "/synthetic/bold.ttf".into(),
+                            index: 0,
+                        },
+                    ],
                 },
             ],
         };
+        catalogue.families[0].faces.extend([
+            crate::font_catalog::Face {
+                style: "Mystery".into(),
+                file: "/synthetic/mystery.ttf".into(),
+                index: 0,
+            },
+            crate::font_catalog::Face {
+                style: "Italic".into(),
+                file: "/synthetic/instance.ttf".into(),
+                index: 1 << 16,
+            },
+            crate::font_catalog::Face {
+                style: "".into(),
+                file: "/synthetic/unnamed.ttf".into(),
+                index: 0,
+            },
+        ]);
+        catalogue.families.push(crate::font_catalog::Family {
+            name: "Unavailable".into(),
+            faces: vec![crate::font_catalog::Face {
+                style: "Unknown Style".into(),
+                file: "/synthetic/unsupported.ttf".into(),
+                index: 0,
+            }],
+        });
         let icons = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../ui/shell/assets/icons/nidara");
         tree.set_icon_theme(nk_icons::Icons::new("", &[], &icons).unwrap());
@@ -547,6 +716,53 @@ mod tests {
                 .unwrap()
         );
         view.loaded(&mut tree, &catalogue, "Noto Sans").unwrap();
+        for label in ["Mystery", "Italic"] {
+            let id = *tree
+                .node(view.style_list)
+                .unwrap()
+                .children()
+                .iter()
+                .find(|id| tree.node(**id).unwrap().name() == label)
+                .unwrap();
+            assert!(
+                tree.dispatch(tree.target(id), nk_widgets::Command::Activate)
+                    .is_err(),
+                "unsupported style/named instance must not activate"
+            );
+        }
+        assert!(
+            tree.node(view.style_list)
+                .unwrap()
+                .children()
+                .iter()
+                .any(|id| tree.node(*id).unwrap().name() == "Unnamed style")
+        );
+        view.attributes.weight = 800.;
+        view.rebuild_styles(&mut tree, true).unwrap();
+        view.preview(&mut tree).unwrap();
+        assert_eq!(
+            view.attributes.weight, 800.,
+            "opening cannot silently replace an unsupported initial style"
+        );
+        assert!(!view.can_select(&tree));
+        assert!(tree.is_hidden(view.preview_row));
+        let regular = view
+            .style_options
+            .iter()
+            .find(|(_, a)| a.weight == 400.)
+            .unwrap()
+            .0;
+        let effect = tree
+            .dispatch(tree.target(regular), nk_widgets::Command::Activate)
+            .unwrap();
+        view.effect(&mut tree, effect).unwrap();
+        assert!(view.can_select(&tree));
+        assert!(tree.is_hidden(view.status_row));
+        assert_eq!(
+            tree.dispatch(tree.target(view.select), nk_widgets::Command::Activate)
+                .unwrap(),
+            Effect::Activated(view.select)
+        );
         let ids: Vec<_> = view.rows.iter().map(|(_, id)| *id).collect();
         tree.layout(
             Size {
@@ -600,6 +816,85 @@ mod tests {
                 .size,
             30.
         );
+        tree.layout(
+            Size {
+                width: 640.,
+                height: 900.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+        let preview_bounds = tree.node(view.preview).unwrap().bounds();
+        assert!(
+            preview_bounds.height > 0.
+                && preview_bounds.y >= 0.
+                && preview_bounds.y + preview_bounds.height <= 900.
+        );
+        let paint_preview = |tree: &Tree| {
+            tree.paint(
+                Frame {
+                    width: 640,
+                    height: 900,
+                    pixel_width: 640,
+                    pixel_height: 900,
+                    scale: 1.,
+                    material: false,
+                },
+                Surface::Content,
+                styles.palette,
+            )
+            .unwrap()
+        };
+        let regular_pixels = paint_preview(&tree);
+        let bold = view
+            .style_options
+            .iter()
+            .find(|(_, a)| a.weight == 700.)
+            .unwrap()
+            .0;
+        let effect = tree
+            .dispatch(tree.target(bold), nk_widgets::Command::Activate)
+            .unwrap();
+        assert_eq!(effect, Effect::Changed(view.style_list));
+        view.effect(&mut tree, effect).unwrap();
+        tree.layout(
+            Size {
+                width: 640.,
+                height: 900.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+        assert_eq!(
+            tree.node(view.preview)
+                .unwrap()
+                .text_layout()
+                .unwrap()
+                .style()
+                .weight,
+            700.
+        );
+        let bold_pixels = paint_preview(&tree);
+        assert!(
+            regular_pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(bold_pixels.as_chunks::<4>().0.iter())
+                .enumerate()
+                .any(|(i, (a, b))| {
+                    let x = (i % 640) as f32;
+                    let y = (i / 640) as f32;
+                    x >= preview_bounds.x
+                        && x < preview_bounds.x + preview_bounds.width
+                        && y >= preview_bounds.y
+                        && y < preview_bounds.y + preview_bounds.height
+                        && a != b
+                }),
+            "style activation must change the actual visible preview pixels"
+        );
         let old = tree
             .node(view.preview)
             .unwrap()
@@ -647,6 +942,29 @@ mod tests {
         view.effect(&mut tree, Effect::Changed(view.search))
             .unwrap();
         assert_eq!(tree.semantics().nodes[&view.list].children, ids);
+        let unsupported_family = view
+            .rows
+            .iter()
+            .find(|(name, _)| name == "Unavailable")
+            .unwrap()
+            .1;
+        let effect = tree
+            .dispatch(
+                tree.target(unsupported_family),
+                nk_widgets::Command::Activate,
+            )
+            .unwrap();
+        view.effect(&mut tree, effect).unwrap();
+        assert!(
+            tree.is_hidden(view.preview_row),
+            "unsupported styles cannot display a fake regular preview"
+        );
+        assert!(!tree.is_hidden(view.status_row));
+        assert!(
+            !view
+                .effect(&mut tree, Effect::Activated(view.select))
+                .unwrap()
+        );
         assert!(
             view.effect(&mut tree, Effect::Activated(view.cancel))
                 .unwrap()

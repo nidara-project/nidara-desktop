@@ -3196,3 +3196,37 @@ that degree value and nk-render applies it to each glyph, not the whole line.
 Never advertise exact-face selection from a family/style request. Synthetic
 emboldening currently returns an export error instead of silently painting upright
 regular outlines. Exact catalogue face/named-instance selection remains pending.
+
+
+It returns Selection { family, points, attributes } and never writes Config1. The existing
+points * 96/72 * text_scale. Filtering out a family prevents acceptance. The second
+embedded LIST selects supported catalogue style attributes; exact face/named-instance
+selection and interfaceFont/monoFont builders remain pending. Supply labels,
+window/list constraints, actual icon theme preparation and the external-notice hook.
+
+Config1 font descriptions now share nk-settings::font_description with Styles.
+It parses a single family, standard weight/slant/stretch words, positive point or
+absolute px size and explicit axes; canonical output is an unambiguous Pango point
+description (1/1024-point precision), not a byte-for-byte copy of Pango to_string.
+Unsupported family lists, variants, gravity, color directives and features fail
+explicitly; never treat those words as a guessed family or paint a fake regular
+preview. Production still shapes only through Parley; an installed-Pango metadata
+oracle is test-only and creates no font map.
+
+The real chooser Selection includes these attributes. Its style LIST shares the
+same MenuOption machinery as the family list and uses raw catalogue labels. Empty
+style labels use the caller's translated unnamed label, not invented Regular.
+Unknown style names and named-instance records (high index bits) are disabled
+until exact face/axis selection exists. An unrepresented initial style is preserved
+with no selected style, no preview and no acceptance; opening must never substitute
+the first style silently. An explicit supported style/family change can choose a
+new draft. Initial axes survive until such a change. No Config1 Apply in the chooser.
+
+System-font mode must not register a required regular file over an already known
+installed family: that hides its other faces. Check the declared families per blob;
+if all are installed use the system collection, if none register the private blob.
+A blob mixing installed/private families is refused instead of shadowing installed
+faces. This retains isolated corpus registration and does not invoke chooser fc-list.
+Actual installed Noto Sans Bold bytes/index are checked against Fontconfig separately
+from the CPU chooser test's synthetic catalogue. Exact named instances, font builders,
+native/Orca acceptance and main integration remain pending.

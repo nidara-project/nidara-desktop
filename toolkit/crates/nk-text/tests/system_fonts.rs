@@ -143,3 +143,51 @@ fn installed_oblique_face_and_explicit_variation_settings_reach_the_shaper() {
     invalid.width = f32::NAN;
     assert!(backend.layout("Preview", &invalid, 400.).is_err());
 }
+
+#[test]
+fn required_regular_fallback_does_not_hide_installed_bold_faces() {
+    let output = Command::new("fc-match")
+        .args([
+            "-f",
+            "%{family[0]}\n%{file}\n%{index}\n",
+            "Noto Sans:weight=200",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let metadata = String::from_utf8(output.stdout).unwrap();
+    let fields: Vec<_> = metadata.lines().collect();
+    assert_eq!(
+        fields[0], "Noto Sans",
+        "install Noto Sans Bold for this oracle"
+    );
+    let expected = std::fs::read(fields[1]).unwrap();
+    let index: u32 = fields[2].parse().unwrap();
+    let fonts = Arc::new(FontSet::discover_required().unwrap());
+    assert!(fonts.files.iter().any(|file| file.family == "Noto Sans"));
+    let mut backend = ParleyBackend::with_system_fonts(fonts).unwrap();
+    let result = backend.layout(
+        "Bold preview",
+        &TextStyle {
+            family: "Noto Sans".into(),
+            weight: 700.,
+            ..Default::default()
+        },
+        400.,
+    );
+    assert!(
+        result.is_ok(),
+        "required regular fallback must retain installed bold faces: {:?}",
+        result.as_ref().err()
+    );
+    let layout = result.unwrap();
+    assert!(
+        layout
+            .glyph_runs()
+            .iter()
+            .all(|run| run.font.data.as_ref() == expected
+                && run.font.index == index
+                && run.skew_degrees == 0.),
+        "bold must use the installed face independently identified by Fontconfig"
+    );
+}

@@ -87,3 +87,18 @@ It returns Selection { family, points }, never Apply. Caller supplies the point
 range, portal text scale, labels, icon preparation and staged-notice hook. Style
 selection, canonical descriptions and Config1 font builders remain pending; CPU
 paint/semantic tests are not native chooser or Orca acceptance.
+
+
+Fontconfig stay unnamed. font_chooser::choose consumes this in the existing modal
+DIALOG with SearchInput, embedded family/style LISTs, point-size SpinButton and
+retained selected-family sample. It returns Selection { family, points, attributes },
+never Apply. Caller supplies the point range, portal text scale, labels, icon
+preparation and staged-notice hook. Supported standard style attributes and canonical
+point descriptions share font_description with Styles. Unsupported styles/named
+instances are disabled, and an unsupported initial style is preserved without
+acceptance. Exact face/index selection and Config1 font builders remain pending;
+CPU paint/semantic tests are not native chooser or Orca acceptance.
+
+The font-description integration test requires Python 3 and installed libpango-1.0
+for an independent metadata oracle. No Pango dependency was added to production
+rendering or startup; all glyphs still come from the shared Parley Layout.

@@ -672,3 +672,22 @@ AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
 Historical fixed binary evidence remains bound to original hashes. Exclusive
 parent borrow short-menu limit and adaptive foundations/Settings real polling
 caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut32 — 915-font-styles (2026-10-23)
+
+Extracted existing 602ea614 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+151 tests [41, 3, 1, 13, 5, 2, 0, 1, 1, 3, 17, 7, 19, 15, 8, 5, 8, 2] PASS; all-target Clippy -D warnings PASS
+for nk-text, nk-widgets, nk-settings. Logs: target/cut32-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.

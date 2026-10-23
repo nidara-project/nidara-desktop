@@ -335,35 +335,9 @@ pub fn font_style(
     scale: f64,
     line_height: f32,
 ) -> Result<nk_text::TextStyle, String> {
-    let (family, size) = description
-        .rsplit_once(' ')
-        .ok_or("the font needs a family and a point size")?;
-    let size: f32 = size.parse().map_err(|e| format!("font size: {e}"))?;
-    if !scale.is_finite() || scale <= 0. || !size.is_finite() || size <= 0. || family.is_empty() {
-        return Err("invalid font or text scale".into());
-    }
-    let mut family = family.to_owned();
-    let mut weight = 400.;
-    for (suffix, value) in [
-        (" Regular", 400.),
-        (" Normal", 400.),
-        (" SemiBold", 600.),
-        (" Bold", 700.),
-        (" Light", 300.),
-    ] {
-        if let Some(name) = family.strip_suffix(suffix) {
-            family = name.into();
-            weight = value;
-            break;
-        }
-    }
-    Ok(nk_text::TextStyle {
-        family,
-        size: size * (96. / 72.) * scale as f32,
-        weight,
-        line_height,
-        ..Default::default()
-    })
+    let font = crate::font_description::Description::parse(description)?;
+    font.attributes
+        .text_style(&font.family, font.points, scale, line_height)
 }
 
 #[cfg(test)]
