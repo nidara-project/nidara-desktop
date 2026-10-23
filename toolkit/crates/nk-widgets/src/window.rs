@@ -1860,6 +1860,25 @@ mod tests {
         let middle_pixel = pixel(&tree);
         fade.update(&mut tree, ms(123.), false, true);
         let end_pixel = pixel(&tree);
+        // The lab's custom root canvas must use the same retained opaque painter.
+        let width = tree.size.width.ceil() as u16;
+        let height = tree.size.height.ceil() as u16;
+        let mut root_canvas = nk_render::Canvas::new(width, height, 1.);
+        tree.paint_capsules_fallback(&mut root_canvas, test_palette())
+            .unwrap();
+        let root_pixels = root_canvas.finish();
+        let r = tree.nodes[&normal].bounds;
+        let sample = ((r.y + r.height / 2.) as usize * width as usize + (r.x + 2.) as usize) * 4;
+        assert_eq!(
+            root_pixels[sample], end_pixel,
+            "custom root canvas omitted the retained capsule wash"
+        );
+        assert_eq!(root_pixels[sample + 3], 255);
+        assert_eq!(
+            root_pixels[root_pixels.len() - 1],
+            0,
+            "capsule fallback filled the diagnostic backdrop"
+        );
         assert!(
             idle_pixel < middle_pixel && middle_pixel < end_pixel,
             "D5 painter ignored the interpolated wash: {idle_pixel}/{middle_pixel}/{end_pixel}"

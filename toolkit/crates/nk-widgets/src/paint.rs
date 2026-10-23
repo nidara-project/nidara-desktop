@@ -197,24 +197,23 @@ impl Tree {
             }
         }
         if surface == Surface::Content && !self.layered {
-            let clip = self.nodes[&self.root].bounds;
-            for id in self.capsules.keys() {
-                if let Some(style) = self.capsule_styles.get(id) {
-                    canvas.clip(clip);
-                    self.paint_capsule_into(
-                        *id,
-                        Point::default(),
-                        &mut canvas,
-                        palette,
-                        Some(style),
-                    )?;
-                    canvas.pop_clip();
-                } else {
-                    self.paint_node(*id, Point::default(), &mut canvas, palette, clip)?;
-                }
-            }
+            self.paint_capsules_fallback(&mut canvas, palette)?;
         }
         Ok(canvas.finish())
+    }
+    /// Paint retained opaque capsules into an application's existing root canvas.
+    pub fn paint_capsules_fallback(&self, canvas: &mut Canvas, palette: Palette) -> Result<()> {
+        let clip = self.nodes[&self.root].bounds;
+        for id in self.capsules.keys() {
+            if let Some(style) = self.capsule_styles.get(id) {
+                canvas.clip(clip);
+                self.paint_capsule_into(*id, Point::default(), canvas, palette, Some(style))?;
+                canvas.pop_clip();
+            } else {
+                self.paint_node(*id, Point::default(), canvas, palette, clip)?;
+            }
+        }
+        Ok(())
     }
     fn paint_node(
         &self,

@@ -7,12 +7,17 @@ type PaintSignature = (u64, u64, u64, bool);
 pub struct CapsuleComposition {
     layers: BTreeMap<NodeId, (LayerId, Option<PaintSignature>)>,
     revision: u64,
+    paints: u64,
     // Client monotonic time since first sync, only for D5 wash sampling.
     // This is not a frame/presentation timestamp or phase-locked to D7.
     clock: Option<std::time::Instant>,
     fallback: crate::capsule_fallback::Fallback,
 }
 impl CapsuleComposition {
+    /// Successful client layer-buffer paints, not compositor damage or presentations.
+    pub fn paint_count(&self) -> u64 {
+        self.paints
+    }
     /// Whether the opaque fallback still needs timed samples; false for D7.
     pub fn is_animating(&self) -> bool {
         self.fallback.active
@@ -78,6 +83,7 @@ impl CapsuleComposition {
             })? {
                 continue;
             }
+            self.paints = self.paints.wrapping_add(1);
             window.set_layer_control_material(entry.0, &payload)?;
             window.set_position(entry.0, bounds.x as f64, bounds.y as f64)?;
             entry.1 = Some(signature);

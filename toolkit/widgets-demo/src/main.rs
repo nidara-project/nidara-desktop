@@ -2,6 +2,7 @@
 //! Fixed structural-widget demo, deliberately independent of Settings/Config1.
 mod accessibility;
 mod appearance;
+mod capsule_lab;
 mod choices;
 mod control;
 mod panel;
@@ -554,6 +555,11 @@ fn run() -> Result<()> {
     } else {
         appearance.size
     };
+    if let Some(scene) =
+        std::env::args().find_map(|a| a.strip_prefix("--capsule-lab=").map(str::to_owned))
+    {
+        return capsule_lab::run(&scene, appearance, appearance_updates, start, size);
+    }
     let mut tree = Tree::new(
         "Nidara widgets demo",
         appearance.metrics,
