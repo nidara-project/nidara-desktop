@@ -250,3 +250,18 @@ search box, plus shared kit text selection (accent30/text). Styles reads/applies
 this once for every application. No provider, search-result model or Config1 write
 is owned by the input. Component/synthetic-event tests do not establish native IME,
 clipboard, real AT-SPI requests or Orca speech acceptance.
+
+
+
+
+`Tree::list(parent, name, height, MenuStyle)` embeds the dropdown's retained menu
+rows as a real single-selection LIST inside a Scroll or Group. Append MenuOption
+children; use `set_list_selected(list, Some(option))` (or None) for canonical state.
+Activation changes once with Changed(list); arrows/Home/End focus and reveal only.
+One Tab stop uses current focus, selected or first available option. Each list
+keeps independent style/scroll; `set_list_style` and `set_list_height` preserve IDs.
+Filtering may hide options or leave the list empty. The same viewport clips pixels,
+hit tests and SHOWING; offscreen options remain semantic children. Composition's
+vertical wheel routes by viewport, including its empty insets. No second renderer,
+Tree, provider or global menu mode is needed. This primitive alone does not prove
+the FontChooser modal or its Orca speech.

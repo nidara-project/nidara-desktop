@@ -243,6 +243,9 @@ impl Tree {
         if !intersects(r, clip) {
             return Ok(());
         }
+        if matches!(n.kind, Kind::List { .. }) {
+            return self.paint_list(id, origin, canvas, palette, clip);
+        }
         if n.kind == Kind::SearchInput {
             return self.paint_search(id, r, canvas, palette.disabled);
         }
@@ -423,7 +426,7 @@ impl Tree {
         Ok(())
     }
 }
-fn local(mut r: Rect, origin: Point) -> Rect {
+pub(crate) fn local(mut r: Rect, origin: Point) -> Rect {
     r.x -= origin.x;
     r.y -= origin.y;
     r

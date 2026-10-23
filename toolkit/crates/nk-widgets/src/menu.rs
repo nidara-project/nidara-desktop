@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Retained dropdown list: a chosen check and an independently hovered/focused option.
+//! Shared retained popup/embedded list rows: chosen state and independent hover/focus.
 use crate::*;
 use nk_render::{Canvas, Color};
 
@@ -64,6 +64,96 @@ impl MenuStyle {
     }
 }
 impl Tree {
+    /// Embed the existing menu rows in a bounded single-selection LIST.
+    pub fn list(
+        &mut self,
+        parent: NodeId,
+        name: &str,
+        height: f32,
+        style: MenuStyle,
+    ) -> Result<NodeId> {
+        style.validate()?;
+        if !height.is_finite() || height <= 0. {
+            return Err("invalid list viewport height".into());
+        }
+        if !self
+            .nodes
+            .get(&parent)
+            .is_some_and(|node| matches!(node.kind, Kind::Scroll | Kind::Group))
+        {
+            return Err("list needs a Scroll or Group parent".into());
+        }
+        let id = self.allocate(Some(parent), Kind::List { height }, name.into());
+        self.list_styles.insert(id, style);
+        Ok(id)
+    }
+    pub fn set_list_height(&mut self, id: NodeId, height: f32) -> Result<()> {
+        if !height.is_finite() || height <= 0. {
+            return Err("invalid list viewport height".into());
+        }
+        if !self.list_styles.contains_key(&id) {
+            return Err("not an embedded list".into());
+        }
+        self.nodes.get_mut(&id).unwrap().kind = Kind::List { height };
+        self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
+    }
+    pub fn set_list_style(&mut self, id: NodeId, style: MenuStyle) -> Result<()> {
+        style.validate()?;
+        let slot = self
+            .list_styles
+            .get_mut(&id)
+            .ok_or("not an embedded list")?;
+        *slot = style;
+        self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
+    }
+    /// Canonical selection: no user effect; validate before mutating any row.
+    pub fn set_list_selected(&mut self, list: NodeId, selected: Option<NodeId>) -> Result<()> {
+        if !self.list_styles.contains_key(&list) {
+            return Err("not an embedded list".into());
+        }
+        if selected.is_some_and(|id| !self.nodes[&list].children.contains(&id)) {
+            return Err("selection is not a list child".into());
+        }
+        for id in self.nodes[&list].children.clone() {
+            self.nodes.get_mut(&id).unwrap().kind = Kind::MenuOption {
+                selected: Some(id) == selected,
+            };
+            self.invalidate(id, Invalid::STATE);
+        }
+        Ok(())
+    }
+    fn menu_style_for(&self, id: NodeId) -> Result<&MenuStyle> {
+        let list = if matches!(self.nodes[&id].kind, Kind::MenuOption { .. }) {
+            self.nodes[&id].parent.ok_or("orphan menu option")?
+        } else {
+            id
+        };
+        self.list_styles
+            .get(&list)
+            .or(self.menu_style.as_ref())
+            .ok_or_else(|| "menu style missing".into())
+    }
+    pub(crate) fn list_viewport(&self, id: NodeId) -> Rect {
+        let r = self.nodes[&id].bounds;
+        let border = self.list_styles.get(&id).map_or(0., |style| style.border);
+        Rect {
+            x: r.x + border,
+            y: r.y + border,
+            width: (r.width - 2. * border).max(0.),
+            height: (r.height - 2. * border).max(0.),
+        }
+    }
+    pub(crate) fn list_extent(&self, id: NodeId) -> f32 {
+        2. * self.list_styles[&id].inset
+            + self.nodes[&id]
+                .children
+                .iter()
+                .filter(|id| !self.is_hidden(**id))
+                .map(|id| self.nodes[id].measured.height)
+                .sum::<f32>()
+    }
     /// Portal/theme update, preserving node identities, focus and scroll.
     pub fn set_menu_style(&mut self, style: MenuStyle) -> Result<()> {
         style.validate()?;
@@ -112,12 +202,17 @@ impl Tree {
         width: f32,
         backend: &mut impl TextBackend,
     ) -> Result<Size> {
-        let s = self
-            .menu_style
-            .as_ref()
-            .ok_or("menu style missing")?
-            .clone();
-        let size = if self.nodes[&id].kind == Kind::Scroll {
+        let s = self.menu_style_for(id)?.clone();
+        let width = if matches!(self.nodes[&id].kind, Kind::List { .. }) {
+            self.nodes[&id]
+                .width
+                .unwrap_or(width)
+                .max(self.nodes[&id].min_width)
+                .max(1.)
+        } else {
+            width
+        };
+        let size = if matches!(self.nodes[&id].kind, Kind::Scroll | Kind::List { .. }) {
             let mut height = 2. * s.inset;
             for child in self.nodes[&id].children.clone() {
                 if !self.is_hidden(child) {
@@ -126,9 +221,20 @@ impl Tree {
                         .height;
                 }
             }
-            Size {
-                width: (width - 2. * s.border).max(0.),
-                height,
+            if let Kind::List { height: viewport } = self.nodes[&id].kind {
+                self.nodes.get_mut(&id).unwrap().scroll.y = self.nodes[&id]
+                    .scroll
+                    .y
+                    .min((height - (viewport - 2. * s.border).max(0.)).max(0.));
+                Size {
+                    width,
+                    height: viewport,
+                }
+            } else {
+                Size {
+                    width: (width - 2. * s.border).max(0.),
+                    height,
+                }
             }
         } else {
             let mut style = self.style.clone();
@@ -145,7 +251,7 @@ impl Tree {
         Ok(size)
     }
     pub(crate) fn place_menu(&mut self, id: NodeId, r: Rect) {
-        let s = self.menu_style.as_ref().unwrap().clone();
+        let s = self.menu_style_for(id).unwrap().clone();
         let mut y = r.y + s.border + s.inset - self.nodes[&id].scroll.y;
         for child in self.nodes[&id].children.clone() {
             if self.is_hidden(child) {
@@ -201,15 +307,58 @@ impl Tree {
         canvas.rounded_ring(outer, s.radius as f64, s.border as f64, s.border_color);
         let clip = self.content_viewport();
         canvas.clip_rounded_rect(clip, (s.radius - s.border).max(0.) as f64);
+        let list = self.nodes[&self.root]
+            .children
+            .iter()
+            .copied()
+            .find(|id| self.nodes[id].kind == Kind::Scroll)
+            .ok_or("menu scroll missing")?;
+        self.paint_menu_rows(list, s, Point::default(), &mut canvas, palette, clip)?;
+        canvas.pop_clip();
+        Ok(canvas.finish())
+    }
+    pub(crate) fn paint_list(
+        &self,
+        id: NodeId,
+        origin: Point,
+        canvas: &mut Canvas,
+        palette: Palette,
+        clip: Rect,
+    ) -> Result<()> {
+        let s = self.menu_style_for(id)?;
+        let outer = crate::paint::local(self.nodes[&id].bounds, origin);
+        let mut bg = s.background;
+        bg.components[3] = 1.;
+        canvas.rounded_rect(outer, s.radius as f64, bg);
+        canvas.rounded_ring(outer, s.radius as f64, s.border as f64, s.border_color);
+        let viewport = crate::paint::local(self.list_viewport(id), origin);
+        let clip = intersect_rect(clip, viewport);
+        canvas.clip(clip);
+        canvas.clip_rounded_rect(viewport, (s.radius - s.border).max(0.) as f64);
+        self.paint_menu_rows(id, s, origin, canvas, palette, clip)?;
+        canvas.pop_clip();
+        canvas.pop_clip();
+        Ok(())
+    }
+    fn paint_menu_rows(
+        &self,
+        list: NodeId,
+        s: &MenuStyle,
+        origin: Point,
+        canvas: &mut Canvas,
+        palette: Palette,
+        clip: Rect,
+    ) -> Result<()> {
         let check = check_icon(s.check_stroke);
-        for (id, node) in &self.nodes {
+        for id in &self.nodes[&list].children {
+            let node = &self.nodes[id];
             let Kind::MenuOption { selected } = node.kind else {
                 continue;
             };
-            if self.is_hidden(*id) || !intersects(node.bounds, clip) {
+            if self.is_hidden(*id) || !intersects(crate::paint::local(node.bounds, origin), clip) {
                 continue;
             }
-            let r = node.bounds;
+            let r = crate::paint::local(node.bounds, origin);
             let highlighted = self.available(*id)
                 && (self.hovered == Some(*id) || (self.focus_visible && self.focused == Some(*id)));
             let ink = if !self.available(*id) {
@@ -251,8 +400,7 @@ impl Tree {
                 );
             }
         }
-        canvas.pop_clip();
-        Ok(canvas.finish())
+        Ok(())
     }
 }
 // The single-select check.ts path, in its 24×24 source units; size/stroke/ink are inputs.

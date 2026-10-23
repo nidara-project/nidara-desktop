@@ -979,3 +979,19 @@ the latest pending snapshot; skipped revisions are not published acknowledgments
 An in-flight backend update completes, then the newest snapshot is consumed.
 Requests remain bound to the actual published revision. The app never blocks
 on a full notification channel, and superseded full trees are released promptly.
+### Embedded single-selection list (#882/#915)
+
+`Tree::list(parent, name, viewport_height, MenuStyle)` creates a retained `LIST`
+inside a Group or Scroll, with `MenuOption` children and the same row measurement,
+paint, check and keyboard logic used by dropdown menus. Each list owns its style;
+it never enables popup layout for the containing window. The positive finite
+viewport height is a caller constraint, not an intrinsic visual token;
+`set_list_height` updates that constraint on resize without replacing IDs. Scroll,
+focus reveal, clipping, hit testing and SHOWING use that viewport intersected with
+ancestor clips. Offscreen options remain semantic children; hidden options leave
+the semantic tree. `set_list_selected(list, Option<option>)` is canonical and emits
+no user change; activation changes selection once and returns Changed(list).
+Arrow/Home/End focus does not commit. Empty lists and no selection support filtering.
+`set_list_style` preserves IDs/focus and clamps scroll after remeasurement. There
+is no second text renderer, tree or provider. This primitive is not font-dialog
+or Orca acceptance; modal lifecycle and family catalogue are application consumers.

@@ -745,3 +745,239 @@ fn dropdown_reorder_keeps_option_ids_and_selection_and_rejects_nonpermutations_a
     assert_eq!(tree.semantics().selected_children(combo), vec![old[1]]);
     assert!(tree.dispatch(target, Command::Activate).is_err());
 }
+
+fn embedded_list_fixture() -> (Tree, u64, Vec<u64>, u64, u64, ParleyBackend) {
+    let mut tree = Tree::new(
+        "Fonts",
+        metrics(),
+        TextStyle {
+            size: 14.,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let scroll = tree.append(tree.root(), Kind::Scroll, "Content").unwrap();
+    let (_, before) = tree.row(scroll, "Before", Kind::Button).unwrap();
+    let list = tree
+        .list(scroll, "Font families", 80., menu_style())
+        .unwrap();
+    let ids = ["Noto Sans", "DejaVu Sans", "日本語", "العربية"]
+        .iter()
+        .enumerate()
+        .map(|(at, name)| {
+            tree.append(list, Kind::MenuOption { selected: at == 0 }, *name)
+                .unwrap()
+        })
+        .collect();
+    let (_, after) = tree.row(scroll, "After", Kind::Button).unwrap();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    tree.layout(
+        Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    (tree, list, ids, before, after, text)
+}
+
+#[test]
+fn embedded_list_has_real_selection_one_tab_stop_and_independent_reveal() {
+    let (mut tree, list, ids, before, after, _) = embedded_list_fixture();
+    let semantics = tree.semantics();
+    assert_eq!(semantics.nodes[&list].role, Role::List);
+    assert_eq!(semantics.nodes[&list].children, ids);
+    assert!(semantics.nodes[&ids[3]].states.offscreen);
+    assert!(!semantics.nodes[&ids[3]].states.hidden);
+    assert_eq!(tree.focus_order(), vec![before, ids[0], after]);
+    tree.focus(before).unwrap();
+    tree.tab(false).unwrap();
+    assert_eq!(tree.focused(), Some(ids[0]));
+    tree.set_disabled(ids[2], true).unwrap();
+    assert_eq!(
+        tree.control_key(0xff57).unwrap(),
+        Some(Effect::Focused(ids[3]))
+    );
+    assert!(tree.node(list).unwrap().scroll().y > 0.);
+    assert!(tree.showing(ids[3]));
+    assert!(tree.semantics().nodes[&ids[0]].states.selected);
+    assert_eq!(
+        tree.dispatch(tree.target(ids[3]), Command::Activate)
+            .unwrap(),
+        Effect::Changed(list)
+    );
+    assert!(!tree.semantics().nodes[&ids[0]].states.selected);
+    assert!(tree.semantics().nodes[&ids[3]].states.selected);
+    assert_eq!(
+        tree.dispatch(tree.target(ids[3]), Command::Activate)
+            .unwrap(),
+        Effect::None
+    );
+    tree.tab(false).unwrap();
+    assert_eq!(tree.focused(), Some(after));
+    tree.tab(true).unwrap();
+    assert_eq!(tree.focused(), Some(ids[3]));
+}
+
+#[test]
+fn embedded_list_reuses_menu_pixels_and_clips_hit_testing_and_scroll() {
+    let (mut tree, list, ids, _, after, _) = embedded_list_fixture();
+    let first = tree.node(ids[0]).unwrap().bounds();
+    let viewport = tree.node(list).unwrap().bounds();
+    let below = tree.node(ids[3]).unwrap().bounds();
+    assert_eq!(first.x, viewport.x + 7.);
+    assert_eq!(first.y, viewport.y + 7.);
+    let center = Point {
+        x: first.x + first.width / 2.,
+        y: first.y + first.height / 2.,
+    };
+    tree.pointer_motion(center);
+    assert_eq!(pixel(&paint(&tree), center.x, center.y), [0, 100, 255]);
+    assert_ne!(
+        tree.hit_test(Point {
+            x: below.x + 2.,
+            y: below.y + 2.
+        }),
+        Some(ids[3])
+    );
+    let outside = tree.node(after).unwrap().bounds();
+    assert!(outside.y >= viewport.y + viewport.height);
+    let before = paint(&tree);
+    tree.scroll_to(list, Point { x: 0., y: 10000. }).unwrap();
+    let scrolled = paint(&tree);
+    // A change in the list's scroll cannot alter pixels outside its own rectangle.
+    for y in 0..480 {
+        for x in 0..640 {
+            if (x as f32) < viewport.x
+                || (x as f32) >= viewport.x + viewport.width
+                || (y as f32) < viewport.y
+                || (y as f32) >= viewport.y + viewport.height
+            {
+                let at = (y * 640 + x) * 4;
+                assert_eq!(
+                    &before[at..at + 4],
+                    &scrolled[at..at + 4],
+                    "list scroll escaped its viewport at {x},{y}"
+                );
+            }
+        }
+    }
+    assert_eq!(tree.node(after).unwrap().bounds(), outside);
+}
+
+#[test]
+fn embedded_list_style_filtering_and_invalid_updates_preserve_identity() {
+    let (mut tree, list, ids, before, _, mut text) = embedded_list_fixture();
+    tree.focus(ids[3]).unwrap();
+    let stale = tree.target(ids[3]);
+    let selected = tree.semantics().nodes[&ids[0]].states.selected;
+    assert!(tree.set_list_selected(list, Some(before)).is_err());
+    assert_eq!(tree.semantics().nodes[&ids[0]].states.selected, selected);
+    let mut invalid = menu_style();
+    invalid.border = f32::NAN;
+    assert!(tree.set_list_style(list, invalid).is_err());
+    tree.set_list_selected(list, None).unwrap();
+    for id in &ids {
+        tree.set_hidden(*id, true).unwrap();
+    }
+    tree.layout(
+        Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    assert!(tree.semantics().nodes[&list].children.is_empty());
+    assert_eq!(tree.node(list).unwrap().scroll().y, 0.);
+    assert!(tree.dispatch(stale, Command::Activate).is_err());
+    for id in &ids {
+        tree.set_hidden(*id, false).unwrap();
+    }
+    tree.set_disabled(ids[2], false).unwrap();
+    let mut style = menu_style();
+    style.padding_y += 4.;
+    tree.set_list_style(list, style).unwrap();
+    tree.layout(
+        Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    assert_eq!(tree.semantics().nodes[&list].children, ids);
+    assert_eq!(tree.node(list).unwrap().bounds().height, 80.);
+    tree.focus(ids[3]).unwrap();
+    tree.set_list_height(list, 240.).unwrap();
+    assert!(tree.set_list_height(list, f32::NAN).is_err());
+    tree.layout(
+        Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    assert_eq!(tree.node(list).unwrap().bounds().height, 240.);
+    assert_eq!(tree.node(list).unwrap().scroll().y, 0.);
+    assert_eq!(tree.focused(), Some(ids[3]));
+    let count = tree.semantics().nodes.len();
+    assert!(tree.list(list, "Bad parent", 80., menu_style()).is_err());
+    assert!(
+        tree.list(tree.root(), "Bad height", f32::NAN, menu_style())
+            .is_err()
+    );
+    assert_eq!(tree.semantics().nodes.len(), count);
+}
+
+#[test]
+fn embedded_lists_keep_styles_and_wheel_offsets_independent() {
+    let (mut tree, list, ids, _, after, mut text) = embedded_list_fixture();
+    let scroll = tree.node(tree.root()).unwrap().children()[0];
+    let mut other_style = menu_style();
+    other_style.padding_y += 10.;
+    let other = tree
+        .list(scroll, "Other families", 60., other_style)
+        .unwrap();
+    let other_row = tree
+        .append(other, Kind::MenuOption { selected: false }, "Other font")
+        .unwrap();
+    tree.layout(
+        Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    assert_eq!(
+        tree.node(other_row).unwrap().bounds().height,
+        tree.node(ids[0]).unwrap().bounds().height + 20.
+    );
+    let r = tree.node(list).unwrap().bounds();
+    let root_offset = tree.node(scroll).unwrap().scroll();
+    let mut composition = nk_widgets::window::Composition::default();
+    // A blank inset has no hovered option; the viewport itself still consumes scrolling.
+    composition.pointer = Point {
+        x: r.x + 2.,
+        y: r.y + 2.,
+    };
+    composition
+        .event(&mut tree, &nk_wayland::Event::Scroll(30.))
+        .unwrap();
+    assert_eq!(tree.node(list).unwrap().scroll().y, 30.);
+    assert_eq!(tree.node(other).unwrap().scroll().y, 0.);
+    assert_eq!(tree.node(scroll).unwrap().scroll(), root_offset);
+    let after_bounds = tree.node(after).unwrap().bounds();
+    assert!(after_bounds.y > r.y);
+    tree.set_list_selected(other, Some(other_row)).unwrap();
+    assert!(tree.semantics().nodes[&ids[0]].states.selected);
+    assert!(tree.semantics().nodes[&other_row].states.selected);
+}

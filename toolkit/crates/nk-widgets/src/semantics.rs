@@ -10,7 +10,7 @@ impl Tree {
             let widget = &self.nodes[&id];
             let role = match widget.kind {
                 Kind::Window => Role::Window,
-                Kind::Sidebar => Role::List,
+                Kind::Sidebar | Kind::List { .. } => Role::List,
                 Kind::TitleBar | Kind::Label | Kind::Subtitle | Kind::Footer => Role::Label,
                 Kind::Disclosure { .. } => Role::ToggleButton,
                 Kind::Page { .. } => Role::Option,

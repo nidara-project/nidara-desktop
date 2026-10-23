@@ -3121,3 +3121,21 @@ global cache pins every previewed font. The normal export preserves collection
 index and normalized variation axis tags. The installed-face byte/lifetime test
 requires DejaVu Sans and fails if system resolution is bypassed. This is shaping
 acceptance only, not FontChooser UI, native publication, startup or Orca evidence.
+
+
+
+
+FontChooser's family viewport uses Tree::list, a real embedded LIST in the parent
+Tree, with MenuOption children and MenuStyle resolved by the existing style map.
+It shares dropdown row shaping/paint/check/keyboard code; do not create another
+list renderer or use sidebar pages/radios as families. Each embedded list owns its
+style, height constraint and scroll; set_list_style/set_list_height preserve IDs.
+Canonical set_list_selected emits nothing; user activation emits Changed(list)
+only when selection changes. Arrows focus/reveal without committing, and one Tab
+stop follows current focus, then selected/first available. Filtering hides rows
+without unmounting them; offscreen rows stay semantic children with SHOWING false.
+Composition routes vertical wheel input in the viewport, including blank insets,
+to that list. Paint, hit testing and semantics intersect the viewport with ancestor
+clips. Root-only menu_list retains its popup behavior and same row implementation.
+This is a widget primitive; modal DIALOG namespace/lifecycle and real FontChooser
+AT-SPI/Orca acceptance are still separate work.

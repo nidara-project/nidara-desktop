@@ -555,9 +555,24 @@ impl Composition {
         sidebar: bool,
         horizontal: bool,
         delta: f64,
+        root_input: bool,
     ) -> Result<()> {
         // A horizontal gesture on the sidebar has no horizontal navigation;
         // continue it into the underlying content, like the title pane.
+        if root_input
+            && !sidebar
+            && !horizontal
+            && let Some((&id, n)) = tree.nodes.iter().find(|(id, n)| {
+                matches!(n.kind, Kind::List { .. })
+                    && tree.available(**id)
+                    && contains(n.bounds, self.pointer)
+                    && contains(tree.visible_clip(**id), self.pointer)
+            })
+        {
+            let mut offset = n.scroll;
+            offset.y += delta as f32;
+            return tree.scroll_to(id, offset);
+        }
         let kind = if sidebar && !horizontal {
             Kind::Sidebar
         } else {
@@ -582,6 +597,7 @@ impl Composition {
                     kind == Kind::Sidebar,
                     matches!(event, LayerEvent::HorizontalScroll(_)),
                     *delta,
+                    false,
                 )?;
                 Ok(true)
             }
@@ -675,6 +691,7 @@ impl Composition {
                     sidebar,
                     matches!(event, Event::HorizontalScroll(_)),
                     *delta,
+                    true,
                 )?;
             }
             Event::Layer { id, event } => {
@@ -865,6 +882,54 @@ mod tests {
         );
         assert_eq!(t.node(content).unwrap().scroll().x, 70.);
         assert_eq!(t.node(content).unwrap().scroll().y, 90.);
+        let color = nk_render::rgba(30, 30, 30, 255);
+        let style = MenuStyle {
+            border: 1.,
+            radius: 16.,
+            inset: 6.,
+            padding_x: 9.,
+            padding_y: 6.,
+            row_radius: 10.,
+            text_scale: 0.93,
+            weight: 400.,
+            check_size: 14.,
+            check_gap: 8.,
+            check_stroke: 2.2,
+            background: color,
+            border_color: color,
+            text: color,
+            accent: color,
+            accent_text: color,
+            pressed_black: 0.15,
+        };
+        let list = t.list(content, "Families", 80., style).unwrap();
+        for _ in 0..8 {
+            t.append(list, Kind::MenuOption { selected: false }, "Font")
+                .unwrap();
+        }
+        let mut b = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+        t.layout(t.size, false, &mut b).unwrap();
+        t.scroll_to(content, Point { x: 0., y: 10000. }).unwrap();
+        t.scroll_to(list, Point { x: 0., y: 30. }).unwrap();
+        let r = t.node(list).unwrap().bounds();
+        c.pointer = Point {
+            x: r.x + 20.,
+            y: r.y + 20.,
+        };
+        assert!(
+            contains(t.visible_clip(list), c.pointer),
+            "root pointer setup must be inside the visible list"
+        );
+        let old_list = t.node(list).unwrap().scroll();
+        let old_content = t.node(content).unwrap().scroll();
+        c.layer_scroll(&mut t, Kind::TitleBar, &LayerEvent::Scroll(-30.))
+            .unwrap();
+        assert_eq!(
+            t.node(list).unwrap().scroll(),
+            old_list,
+            "layer input must not reuse a stale root pointer"
+        );
+        assert_eq!(t.node(content).unwrap().scroll().y, old_content.y - 30.);
     }
     #[test]
     fn collapse_and_expand_reflow_on_the_same_curve_in_d7_and_d5() {

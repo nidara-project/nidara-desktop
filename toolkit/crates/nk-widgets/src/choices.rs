@@ -146,6 +146,27 @@ impl Tree {
     /// reached with the arrows, as a radio group is.
     pub(crate) fn tab_stop(&self, id: NodeId) -> bool {
         let n = &self.nodes[&id];
+        if matches!(n.kind, Kind::MenuOption { .. })
+            && let Some(parent) = n.parent
+            && matches!(self.nodes[&parent].kind, Kind::List { .. })
+        {
+            let available: Vec<_> = self.nodes[&parent]
+                .children
+                .iter()
+                .copied()
+                .filter(|id| self.available(*id))
+                .collect();
+            let entry = self
+                .focused
+                .filter(|id| available.contains(id))
+                .or_else(|| {
+                    available.iter().copied().find(|id| {
+                        matches!(self.nodes[id].kind, Kind::MenuOption { selected: true })
+                    })
+                })
+                .or_else(|| available.first().copied());
+            return entry == Some(id);
+        }
         let Kind::Choice { checked } = n.kind else {
             return true;
         };
