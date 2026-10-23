@@ -2980,3 +2980,10 @@ None on toplevels/before first configure, and latches the pending popup rectangl
 with size only at xdg_surface.configure acknowledgement. A reposition request is
 not evidence of a new origin. Use the configured origin for semantic bounds;
 flip/slide can differ from the requested anchor, including negative coordinates.
+
+
+The separate popup-geometry diagnostic logs Window::popup_geometry on each
+Configure and compares it with received xdg_popup wire rectangles, including
+reposition, while requiring toplevel None. Its source is compiled/static-checked
+on extraction; checker execution remains pending. Do not substitute historical
+fixed-binary results for native evidence of a rebuilt head.

@@ -68,7 +68,12 @@ def run(control):
             assert 'POPUP_DONE' in text, 'outside click did not dismiss the popup'
             assert 'CONFIGURE child=true size=(200, 120)' in text, 'configured popup size not applied'
             assert re.search(r'xdg_popup[^\n]*\.destroy\(', text), 'popup role was not destroyed'
-            return {'setup_complete': True, 'role': 'xdg_popup', 'reposition_token': 17, 'popup_done': True}
+            wire = re.findall(r'<- xdg_popup[^\n]*\.configure, \((-?\d+), (-?\d+), (\d+), (\d+)\)', text)
+            observed = re.findall(r'POPUP_GEOMETRY child=true rect=Some\(\[(-?\d+), (-?\d+), (\d+), (\d+)\]\)', text)
+            assert len(wire) >= 2 and observed == wire, 'popup geometry differs from acknowledged compositor rectangles'
+            assert all(value == 'None' for value in re.findall(r'POPUP_GEOMETRY child=false rect=(.*)', text)), 'toplevel reported popup geometry'
+
+            return {'setup_complete': True, 'role': 'xdg_popup', 'reposition_token': 17, 'popup_done': True, 'configured_geometry': observed}
         finally:
             if process.poll() is None:
                 process.terminate()

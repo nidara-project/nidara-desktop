@@ -413,3 +413,19 @@ grab/reposition/focus/cleanup/AT-SPI/Orca/performance/live acceptance. Existing
 Historical fixed binaries/evidence remain unchanged and are not this head's proof.
 The short-menu exclusive parent borrow and adaptive polling caller/causal test
 remain explicit debt; this geometry API does not resolve either.
+
+
+## Local cut20 — popup geometry diagnostic source (2026-10-23)
+
+Separately extracted the existing962de449 popup-probe/checker delta above19:
+logs Window::popup_geometry on Configure; compares observed acknowledged popup
+rectangles with incoming wire messages and requires toplevel None. No new host,
+provider/backend or CI job. Existing private wrapper remains unchanged.
+
+Actual example BUILD and all-target nk-wayland Clippy -D warnings PASS in
+target/popup-geometry-probe-split-build.log and split-clippy.log. Python AST,
+bash syntax, fmt, skill-docs and diff checks PASS. Checker NOT EXECUTED: this
+cut separates/compiles diagnostic source; native baseline/control execution
+remains pending outside this local validation. No current native geometry,
+wire/role/grab/reposition/focus/cleanup, AT-SPI/Orca or performance/live proof.
+Historical fixed-binary evidence is not evidence of this rebuilt head.

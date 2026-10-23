@@ -157,3 +157,10 @@ matching compositor popup configure, in parent window-geometry logical coordinat
 Signed origins survive output constraint adjustments. Geometry/size update together;
 requesting reposition or receiving its token alone never predicts the new origin.
 Use this configured origin, rather than the requested anchor, for modal semantics.
+
+
+The popup probe also logs acknowledged geometry; nk-popup-check.py compares
+these rectangles with incoming popup.configure wire messages and checks None
+for toplevels. This diagnostic extraction is compile/static-only; its checker
+has not been executed on this head. Native baseline/control execution remains
+pending outside this local source split.

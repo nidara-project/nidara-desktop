@@ -51,6 +51,11 @@ impl Application for Probe {
             Event::Error(e) => return Err(e),
             Event::Configure => {
                 eprintln!("CONFIGURE child={} size={:?}", self.child, w.size());
+                eprintln!(
+                    "POPUP_GEOMETRY child={} rect={:?}",
+                    self.child,
+                    w.popup_geometry()
+                );
                 w.redraw();
             }
             Event::PopupDone => eprintln!("POPUP_DONE"),
