@@ -220,3 +220,28 @@ Orca, fractional/output-edge, glass, presentation, performance or owner-live
 acceptance is claimed. Historical binary evidence remains at the original source;
 this commit does not copy those PASS claims. The existing bounded driver and
 fault are prepared for later native validation, not reported as having passed.
+
+## Local Dropdown retained-model extraction (#915, cut 14)
+
+Existing4679a10e production delta and its three tests extracted onto current main
+features/capsule stack; module registration adapted to current ordering. Stable
+ComboBox/Option selection, guarded activation, independent expanded state and
+model-only zero-area options. Closed Button geometry/paint remain provisional;
+trigger tokens, popup MenuList, controller and builder are later cuts.
+
+Only CPU retained-model/layout/semantic tests are intended here; no native
+Selection signal, popup input, AT-SPI/Orca speech, Config1 write or owner-live
+acceptance is claimed. Prior popup diagnostic checker remains UNEXECUTED on
+rebuilt heads; compilation/static checks do not prove baseline/control passage.
+
+Validation PASS: `dropdown-model-split-restored-tests.log` contains 57 widget
+unit/integration tests (17+7+3+15+8+5+2), with absolute full cut9 data and
+NK_REQUIRE_EXPORT=1. The three Dropdown tests exercise actual Tree/Parley layout,
+selection semantics/diff and dispatch; no native Window/provider surrogate.
+`dropdown-model-split-repeat-control.log`: production same-selected return
+temporarily changed false to true, compiled, then failed its OWN repeated-action
+assertion Changed(6) vs None after initial selection/diff setup. Source restored
+byte-identical to original4679a10e before the full 57 PASS suite. All-target
+widgets Clippy -D warnings, workspace all-target check, fmt/skilldocs/diff PASS.
+Original delta did not apply at old module/doc context; only module registration
+order and append location were adapted, without replacing current lib wholesale.

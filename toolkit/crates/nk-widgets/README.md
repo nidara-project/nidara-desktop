@@ -158,3 +158,17 @@ current foundations demo still polls every 16 ms; it does not yet use this API
 to stop fast polling. The D5 clock is client monotonic time since first sync,
 not frame/presentation time.
 D7 has no client wash timeline or per-frame client repaint.
+
+
+### Dropdown model (#882/#915, popup list pending)
+
+`Tree::dropdown(group, label, options, selected)` adds a labelled row with one
+ComboBox and stable Selection children. Collapsed options are model-only: no
+paint/hit area and no Tab stops. The current option is still readable through
+AT-SPI Selection. Activating the combo requests opening (Activated); choosing
+an option uses the same guarded dispatch as accessibility and returns Changed
+once on the combo. Programmatic `set_dropdown_selected` emits no write.
+Expanded state is controlled explicitly so cancellation preserves the selection.
+The closed caption reuses Button paint/geometry provisionally. This model is
+not the popup list, a complete Dropdown widget, a Settings builder, or an Orca
+acceptance result.

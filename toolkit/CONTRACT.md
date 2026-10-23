@@ -173,6 +173,20 @@ Owns everything between a string and positioned glyphs, and the editing model on
   the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
 
+### Dropdown retained model (#882/#915)
+
+`Tree::dropdown` creates one labelled row and one ComboBox with stable option
+children. The selected option is reported through AT-SPI Selection even while
+collapsed. These model-only children have no painted or hit-test area and are
+not Tab stops; activating one through Selection changes the combo's value and
+emits `Effect::Changed(combo)`. Activating the combo itself asks the app to open
+its popup and does not change selection. Expanded state is explicit; cancellation
+can close it without changing the chosen option. Invalid option/index arguments
+are rejected before creating or changing nodes. A hidden/disabled/stale target
+cannot choose an option. Programmatic selection updates emit no application
+write. This model is a prerequisite, not acceptance of the popup list or builder;
+its closed caption currently reuses Button geometry and paint pending that work.
+
 ### Standard popup host (#882/#915)
 
 `nk-wayland::run_popup(app, parent, placement, grab_serial)` is a nested host on

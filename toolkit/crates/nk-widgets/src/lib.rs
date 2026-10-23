@@ -2,6 +2,7 @@
 //! Retained structural widgets. The tree is the source for layout, pixels,
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
+mod dropdown;
 
 mod capsule;
 mod capsule_fallback;
@@ -103,6 +104,13 @@ pub enum Kind {
         checked: bool,
     },
     Button,
+    Dropdown {
+        expanded: bool,
+    },
+    /// Model-only children for ComboBox Selection, not painted popup items.
+    DropdownOption {
+        selected: bool,
+    },
     /// A radio group: a row's control holding its `Choice`s (#882).
     Choices {
         kind: ChoiceKind,
@@ -135,6 +143,7 @@ impl Kind {
             Self::Page { .. }
                 | Self::Switch { .. }
                 | Self::Button
+                | Self::Dropdown { .. }
                 | Self::Choice { .. }
                 | Self::Slider { .. }
                 | Self::Spin { .. }
@@ -147,6 +156,7 @@ impl Kind {
             self,
             Self::Switch { .. }
                 | Self::Button
+                | Self::Dropdown { .. }
                 | Self::Choices { .. }
                 | Self::Slider { .. }
                 | Self::Fields
@@ -444,6 +454,8 @@ impl Tree {
                 )
                 | (Kind::Fields, Kind::Spin { .. })
                 | (Kind::Choices { .. }, Kind::Choice { .. })
+                | (Kind::Row, Kind::Dropdown { .. })
+                | (Kind::Dropdown { .. }, Kind::DropdownOption { .. })
         );
         if !valid {
             return Err("invalid structural widget parent".into());
@@ -466,6 +478,13 @@ impl Tree {
                 .any(|id| self.nodes[id].kind.row_control())
         {
             return Err("a row has one control".into());
+        }
+        if matches!(kind, Kind::DropdownOption { selected: true })
+            && p.children
+                .iter()
+                .any(|id| matches!(self.nodes[id].kind, Kind::DropdownOption { selected: true }))
+        {
+            return Err("dropdown already has a selected option".into());
         }
         let id = self.allocate(Some(parent), kind, name.into());
         if matches!(kind, Kind::Page { selected: true }) {
@@ -755,7 +774,9 @@ impl Tree {
     pub fn dispatch(&mut self, target: Target, command: Command) -> Result<Effect> {
         if target.generation != self.generation
             || !self.available(target.id)
-            || !self.nodes[&target.id].kind.focusable()
+            || !(self.nodes[&target.id].kind.focusable()
+                || (command == Command::Activate
+                    && matches!(self.nodes[&target.id].kind, Kind::DropdownOption { .. })))
         {
             return Err("stale, hidden, disabled or non-actionable widget target".into());
         }
@@ -851,6 +872,16 @@ impl Tree {
                     self.sidebar_request = Some(false);
                 }
             }
+            Kind::DropdownOption { .. } => {
+                let parent = self.nodes[&id].parent.ok_or("orphan dropdown option")?;
+                let changed = self.select_dropdown_option(id)?;
+                return Ok(if changed {
+                    Effect::Changed(parent)
+                } else {
+                    Effect::None
+                });
+            }
+            Kind::Dropdown { .. } => {}
             Kind::Button => {
                 if self.sidebar_button == Some(id) {
                     self.sidebar_request = Some(!self.sidebar_open);
@@ -1184,14 +1215,21 @@ impl Tree {
         }
         let label_width = match kind {
             Kind::TitleBar => (width - 3. * m.control - 2. * m.padding).max(1.),
-            Kind::Page { .. } | Kind::Button => (width - 2. * m.padding).max(1.),
+            Kind::Page { .. } | Kind::Button | Kind::Dropdown { .. } => {
+                (width - 2. * m.padding).max(1.)
+            }
             _ => width,
         };
         let mut text = Size::default();
         if !self.nodes[&id].name.is_empty()
             && matches!(
                 kind,
-                Kind::Label | Kind::Page { .. } | Kind::Button | Kind::Subtitle | Kind::Footer
+                Kind::Label
+                    | Kind::Page { .. }
+                    | Kind::Button
+                    | Kind::Dropdown { .. }
+                    | Kind::Subtitle
+                    | Kind::Footer
             )
         {
             let mut style = self.style.clone();
@@ -1237,6 +1275,7 @@ impl Tree {
             max_w = max_w.max(s.width);
         }
         let size = match kind {
+            Kind::DropdownOption { .. } => Size::default(),
             Kind::ControlCapsule => unreachable!("capsule measured above"),
             Kind::Window => self.size,
             Kind::Sidebar => Size {
@@ -1263,7 +1302,7 @@ impl Tree {
                 width: m.switch_width,
                 height: m.control,
             },
-            Kind::Button => Size {
+            Kind::Button | Kind::Dropdown { .. } => Size {
                 width: m.control.max(text.width + 2. * m.padding),
                 height: m.control.max(text.height + 2. * m.padding),
             },
@@ -1460,6 +1499,13 @@ impl Tree {
             return;
         }
         let children = node.children.clone();
+        if matches!(kind, Kind::Dropdown { .. }) {
+            // The model's Selection children are not the popup's painted list.
+            for child in children {
+                self.place_node(child, Rect::default());
+            }
+            return;
+        }
         let m = self.metrics;
         if kind == Kind::ControlCapsule {
             let metrics = self.capsules[&id].metrics;

@@ -2911,3 +2911,12 @@ checker requires completed lifecycle setup before its role-substitution assertio
 and verifies destruction before return on callback error. Compilation and syntax
 checks do not establish native role/grab/reposition/cleanup acceptance; keep older
 fixed-binary evidence attributed to its original source and hashes.
+
+
+`nk-widgets::Tree::dropdown` is the retained ComboBox/Selection model (#882/#915).
+Its selected option remains an accessible child while collapsed, with zero
+paint/hit area and no independent Tab stop. Option activation emits Changed on
+the combo through the ordinary stale/hidden/disabled guard; combo activation
+only requests opening. Expanded state and selection are independent. Popup list
+painting/input, final closed-control look and Settings builder remain separate
+pending work; model tests do not prove real Orca speech.
