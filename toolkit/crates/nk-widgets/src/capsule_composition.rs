@@ -7,6 +7,8 @@ type PaintSignature = (u64, u64, u64, bool);
 pub struct CapsuleComposition {
     layers: BTreeMap<NodeId, (LayerId, Option<PaintSignature>)>,
     revision: u64,
+    // Client monotonic time since first sync, only for D5 wash sampling.
+    // This is not a frame/presentation timestamp or phase-locked to D7.
     clock: Option<std::time::Instant>,
     fallback: crate::capsule_fallback::Fallback,
 }

@@ -90,8 +90,10 @@ time fields (#882). It answers AT-SPI `SetValue` through `Tree::request_value`. 
 `spin-name`; `set-value` in `main.rs`, where requests are handled) live in `src/choices.rs`. The radio
 groups' look comes from `toolkit/tokens/choices.json` through `components.json`'s `choices`.
 
-Opaque capsule fallback supports a finite exported wash fade. The app samples
-while CapsuleComposition::is_animating() and returns to idle once settled.
+Opaque capsule fallback supports a finite exported wash fade. In this cut the
+foundations demo still polls every 16 ms, even after the fade settles.
+CapsuleComposition::is_animating() is available but not yet consumed here;
+no idle scheduling acceptance is claimed.
 The bounded capsule laboratory remains a separate cut.
 
 Idle capsule washes preserve hover RGB at zero alpha, matching server controls

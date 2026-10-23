@@ -589,8 +589,9 @@ matching the same target sent to D7. No client wash timeline runs for D7.
 The lab source and its documentation are excluded from this cut. The incidental
 client paint-count API from historical lab context is also excluded; this cut
 publishes no rendering or presentation counter. The existing demo already supplies
-poll/sync opportunities; application callers stop requesting fade frames when
-is_animating() becomes false. No permanent animation is added.
+poll/sync opportunities at a constant 16 ms. No caller of is_animating() exists
+in this cut: fast-poll scheduling does not return to idle. The finite wash
+settles and stops paint invalidations, which is distinct from stopping polling.
 
 `target/capsule-fallback-split-restored-tests.log` passes 60 widget/demo tests
 with required generated exports from the unchanged reader cut. The deterministic
@@ -606,3 +607,16 @@ There is no new native D5/fractional run, compositor glass/ink-curve result,
 AT-SPI/Orca, timing/performance or owner-live acceptance for this rebuilt cut.
 Original source worktrees, fixed binaries and their exact historical evidence
 remain untouched. #921 and backend/bar changes are outside this extraction.
+
+### Split fallback scheduling review correction (2026-10-23)
+
+Claude review #169 found that the rebuilt foundations demo still polls at 16 ms
+and has no caller of is_animating(). Prior wording about callers returning to
+idle was unsupported. CONTRACT, both READMEs and the skill now state the actual
+scope: the API is available, the wash settles, but this demo keeps polling. No
+idle scheduling/CPU/frame-count acceptance follows from the settled no-op test.
+The implementation comment also identifies D5's client monotonic clock since
+first sync; it is not frame/presentation time or phase-locked to D7.
+This correction changes documentation/comments only. Connecting a caller to
+bounded fast polling remains unimplemented in this cut; no synthetic polling test
+or native idle proof is substituted.

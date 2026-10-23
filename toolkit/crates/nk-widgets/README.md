@@ -152,6 +152,9 @@ Opaque capsule state feedback is sampled by `CapsuleComposition::sync` using
 `states.fadeMs` and the same linear RGBA wash interpolation as Hyalo. Retargeting
 starts from the current sample; first appearance is immediate. Reduced motion
 snaps an in-flight wash to its target. The retained painter consumes that sample;
-geometry, hit-testing and semantics keep their existing paths. The app continues
-sync/frame opportunities while `is_animating()` is true, then returns to idle.
+geometry, hit-testing and semantics keep their existing paths. `is_animating()`
+is available to callers deciding when to request sync/frame opportunities. The
+current foundations demo still polls every 16 ms; it does not yet use this API
+to stop fast polling. The D5 clock is client monotonic time since first sync,
+not frame/presentation time.
 D7 has no client wash timeline or per-frame client repaint.
