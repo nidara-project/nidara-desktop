@@ -2948,3 +2948,9 @@ measure, viewport and paint; preserve this explicit boundary until builder
 integration extracts it. Trigger visual debt: the kit's 0.15s hover/active
 transition has not been ported. The arrow text-dim token still needs live queryUI
 verification against the GTK arrow node (image CSS does not establish its ink).
+
+The MenuList diagnostic source is separately available: Settings dropdown-probe,
+check-dropdown-headless.sh and nk-dropdown-check.py reuse the private widgets
+host. Forced opaque D5 composition and prepared select/cancel faults are not
+native proof until executed against exact binaries; current extraction is
+compile/static-only. Do not import original fixed-binary PASS into new heads.

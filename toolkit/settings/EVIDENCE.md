@@ -321,3 +321,22 @@ extraction; future general layout/measure/viewport/paint changes must account fo
 
 Review201 final:114Settings/widgetsPASS requiredunchangedcut16exports, bothalltarget
 Clippy-Dwarnings/fmt/skilldocs/diffPASS. Logs menu-list-review201-{restored-tests,clippy}.log.
+
+## Local MenuList diagnostic source extraction (#915, cut17)
+
+Existing3cf5527c dropdown-probe265, checker77 and wrapper19 extracted separately
+on corrected menu-list5afe8340. Reuses existing private widgets headless host;
+no new provider/backend or production controller. Diagnostic reads actual
+Exports/Portal/Styles and hosts retained model/menu with standard popup, forced
+opaque D5. No shared AT-SPI bridge or real Config1 builder is claimed.
+
+Checker NO EJECUTADO on rebuilt head. Compilation/static validation alone cannot
+prove its baseline or fault controls pass their own assertions. No native input,
+popup/grab/focus/cleanup/material/fractional, AT-SPI/Orca, timing/performance or
+owner-live acceptance. Historical fixed-binary results are not copied here.
+Fresh full cut16 menu-list-data is reusable because exporters/recipes unchanged.
+
+Validation PASS: actual `cargo build -p nk-settings --example dropdown-probe`,
+Settings alltargetClippy-Dwarnings, Python AST/bashsyntax, fmt/skilldocs/diff.
+Logs menu-probe-split-{build,clippy}.log. Rustfmt only adapts the original probe's
+formatting; no new production API. No native baseline/control catch is claimed.

@@ -196,3 +196,10 @@ The existing native probe/wrapper/checker are separated from this component cut.
 CPU tests do not prove native selection/cancel, material, pointer opening,
 AT-SPI/Orca, fractional scale or Settings app acceptance. Historical diagnostic
 binary results stay attached to their original source, not this rebuilt head.
+
+The separated `toolkit/settings/examples/dropdown-probe.rs` and
+`toolkit/settings/check-dropdown-headless.sh` use the existing private host and
+`scripts/ci/nk-dropdown-check.py`. The driver brackets select/cancel with handled
+input and parent commit markers and prepares ignore-selection/commit-on-cancel
+faults. It is not executed on this rebuilt head; build/syntax checks establish
+source compatibility only. It has no production Config1 or shared AT-SPI bridge.
