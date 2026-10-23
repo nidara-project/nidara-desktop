@@ -159,9 +159,9 @@ impl Managed {
 
 /// The height of the title bar Hyalo draws for an app that asks for one (render/title_bar.rs),
 /// logical px: the capsule and the same gap above, below and beside it (owner, 2026-10-03:
-/// equal gaps) — `window_controls::BAR_MARGIN`. 48 (owner, 2026-10-04): the kit's header row,
-/// with the header's 32 px buttons 8 from its edges — the same row in every window.
-pub const TITLE_BAR_H: i32 = 48;
+/// equal gaps) — `window_controls::BAR_MARGIN`: 24 + 8 + 8 = 40 (owner, 2026-10-23, #921: the
+/// small capsule keeps the bar thin). It was 48, the kit's header row, while the capsule was 32.
+pub const TITLE_BAR_H: i32 = 40;
 
 /// The client's box `r` with a bar of `bar` px on top of it: the window's whole box.
 pub fn with_bar(r: Rect, bar: i32) -> Rect {
