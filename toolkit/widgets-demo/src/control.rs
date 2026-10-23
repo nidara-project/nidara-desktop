@@ -43,7 +43,11 @@ fn rgba(v: &Value) -> Result<[f64; 4]> {
 fn state(v: &Value) -> Result<StateStyle> {
     Ok(StateStyle {
         wash: rgba(&v["wash"])?,
-        ink: v.get("ink").filter(|v| !v.is_null()).map(rgba).transpose()?,
+        ink: v
+            .get("ink")
+            .filter(|v| !v.is_null())
+            .map(rgba)
+            .transpose()?,
     })
 }
 impl ControlRecipe {
@@ -284,6 +288,48 @@ mod tests {
         }
     }
     #[test]
+    fn generated_exports_supply_every_portal_mode_without_defaults() {
+        let Some(root) = std::env::var_os("NK_SETTINGS_DATA") else {
+            assert!(
+                std::env::var_os("NK_REQUIRE_EXPORT").is_none(),
+                "exports required"
+            );
+            return;
+        };
+        let tokens = std::path::PathBuf::from(root).join("tokens");
+        let glass: Value =
+            serde_json::from_slice(&std::fs::read(tokens.join("glass.json")).unwrap()).unwrap();
+        let components: Value =
+            serde_json::from_slice(&std::fs::read(tokens.join("components.json")).unwrap())
+                .unwrap();
+        for dark in [false, true] {
+            for reduce in [false, true] {
+                let recipe = ControlRecipe::load(&glass, dark, reduce).unwrap();
+                let metrics = capsule_metrics(&components, dark, reduce).unwrap();
+                assert!(metrics.height_min >= metrics.button_min + 2. * metrics.padding);
+                for step in &recipe.steps {
+                    recipe
+                        .at(step.0.max(1.))
+                        .unwrap()
+                        .for_pane(
+                            Pane {
+                                x: 0.,
+                                y: 0.,
+                                width: 91.,
+                                height: 35.,
+                                radius: 17.5,
+                                exponent: 2.,
+                            },
+                            false,
+                        )
+                        .unwrap()
+                        .validate()
+                        .unwrap();
+                }
+            }
+        }
+    }
+    #[test]
     fn incomplete_ambiguous_and_invalid_exports_fail_without_defaults() {
         for field in ["tone", "inkTone", "shadow", "response", "states", "ink"] {
             let mut v = exported();
@@ -296,6 +342,17 @@ mod tests {
                 "missing {field} accepted"
             );
         }
+        let mut v = exported();
+        v["variants"][0]["pieces"]["control"][0]["states"]["destructiveHover"]["ink"] = Value::Null;
+        assert!(
+            ControlRecipe::load(&v, true, false)
+                .unwrap()
+                .at(32.)
+                .unwrap()
+                .destructive_hover
+                .ink
+                .is_none()
+        );
         let mut v = exported();
         v["variants"][0]["pieces"]["control"][0]["states"]["fadeMs"] = (-1).into();
         assert!(ControlRecipe::load(&v, true, false).is_err());
