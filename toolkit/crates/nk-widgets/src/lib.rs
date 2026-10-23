@@ -293,6 +293,7 @@ pub struct Tree {
     pub(crate) switch_style: Option<SwitchStyle>,
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
+    label_styles: BTreeMap<NodeId, TextStyle>,
     dialog_role: bool,
     menu_style: Option<MenuStyle>,
     list_styles: BTreeMap<NodeId, MenuStyle>,
@@ -374,6 +375,7 @@ impl Tree {
             switch_style: None,
             row_text_style: None,
             dropdown_style: None,
+            label_styles: BTreeMap::new(),
             dialog_role: false,
             menu_style: None,
             list_styles: BTreeMap::new(),
@@ -771,6 +773,7 @@ impl Tree {
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.searches.remove(&id);
+            tree.label_styles.remove(&id);
             tree.list_styles.remove(&id);
             tree.capsules.remove(&id);
             tree.capsule_styles.remove(&id);
@@ -819,6 +822,27 @@ impl Tree {
         }
         self.pane_epoch += 1;
         self.invalidate(self.root, Invalid::LAYOUT);
+    }
+    /// An explicit Label-only preview style, validated before replacing its layout.
+    pub fn set_label_style(&mut self, id: NodeId, style: Option<TextStyle>) -> Result<()> {
+        if self
+            .nodes
+            .get(&id)
+            .is_none_or(|node| node.kind != Kind::Label)
+        {
+            return Err("preview style requires a label".into());
+        }
+        if let Some(style) = &style {
+            style.validate(1.)?;
+        }
+        if let Some(style) = style {
+            self.label_styles.insert(id, style);
+        } else {
+            self.label_styles.remove(&id);
+        }
+        self.nodes.get_mut(&id).unwrap().layout = None;
+        self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
     }
     pub fn set_width(&mut self, id: NodeId, width: f32) -> Result<()> {
         if !width.is_finite() || width <= 0. {
@@ -1364,7 +1388,7 @@ impl Tree {
                     | Kind::Footer
             )
         {
-            let mut style = self.style.clone();
+            let mut style = self.label_styles.get(&id).unwrap_or(&self.style).clone();
             match kind {
                 Kind::Subtitle => style.size *= self.row_text()?.subtitle_scale,
                 Kind::Footer => style.size *= self.row_text()?.footer_scale,

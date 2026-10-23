@@ -1012,11 +1012,12 @@ are window-local; no screen-position or parent-relative geometry is invented.
 The existing AT-SPI mapping of Role::Dialog exports MODAL. `run_dialog_with_options` uses the parent's
 connection/app-id, caller title/size, and the same teardown/input-drain as run_dialog.
 
-The first Settings family-picker consumer is `font_chooser::choose_family`: actual
+The Settings family/size picker consumer is `font_chooser::choose`: actual
 modal native UI with SearchInput, lazy font_catalog, embedded LIST, Cancel/Select
-and the shared system-font backend. Its result is a family name only, never Apply.
-Style/point-size/preview and the Config1 font builders remain subsequent consumers;
-this family UI is not full FontChooser parity or native/Orca acceptance. All labels,
+and the shared system-font backend. Its result is Selection { family, points }, never
+Apply. Point-size editing and a retained sample share the existing widgets/layout.
+Style selection and Config1 font builders remain subsequent consumers; this UI is
+not full FontChooser parity or native/Orca acceptance. All labels,
 window size and list-height constraint are supplied by the host, without defaults.
 
 Modal Escape checks `Tree::search_composing(id)` before closing: composing text
@@ -1030,3 +1031,37 @@ before focus. Drop restores the launcher on ordinary cancellation/error.
 `Window::set_title(&str)` updates an existing xdg toplevel title, rejects NUL and
 non-toplevel roles. The family picker supplies its translated runtime title on
 Configure before its first frame; Labels never requires leaked static strings.
+
+### Font preview styling (#915)
+
+TextStyle adds Slant (Normal/Italic/Oblique), width as a positive percentage, and
+explicit OpenType AxisSetting values. Defaults preserve existing text. The shared
+Parley builder passes these attributes/settings to Fontique/Parley; glyph exports
+keep the actual selected face and normalized variation coordinates. validate(width)
+is public so a retained consumer can validate before changing its own state.
+Duplicate/nonprintable axis tags and nonfinite settings fail before shaping. This
+does not promise an arbitrary file/named-instance identity from a family/style
+request. Pango's description syntax remains the Config1 boundary, documented at
+https://docs.gtk.org/Pango/type_func.FontDescription.from_string.html .
+
+Tree::set_label_style(id, Option<TextStyle>) applies an explicit style only to a
+Label, validating before mutation and invalidating the retained layout; None
+restores the window style. The same measured Layout supplies paint and bounds.
+FontChooser's family view consumes this for a translated sample in the selected
+family, at the draft point size and current UI attributes. It does not prove a
+particular named font instance or implement face/style selection.
+
+The chooser consumer is extended from family-only choose_family to
+`font_chooser::choose(host, launcher, initial: Selection)`: Selection carries a
+family and unscaled point size, and the result is still a draft, never Apply.
+Host supplies a strictly positive point ValueRange and portal text scale explicitly; no size limits
+are invented in the widget. A SpinButton reuses existing range input/Value semantics.
+An initial size not representable by the caller's range is rejected before opening.
+The preview uses points * 96/72 * text_scale logical pixels and the one retained
+Label layout. Choosing family/size does not yet choose an arbitrary face/style;
+style/named-instance selection and Config1 builders remain pending.
+
+GlyphRun carries the actual Parley synthesis skew in degrees. nk-render applies it per glyph
+around that glyph's baseline, leaving positions and advances from the shared Layout intact.
+Synthetic emboldening is currently refused during export instead of silently painting a regular
+face. A style request can resolve to a synthesized face; it does not promise a specific file.

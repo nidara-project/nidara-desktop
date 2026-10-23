@@ -57,6 +57,13 @@ impl TextBackend for ParleyBackend {
             .iter()
             .map(|name| parley::FontFamilyName::Named(Cow::Borrowed(name)))
             .collect();
+        let variations: Vec<_> = style
+            .variations
+            .iter()
+            .map(|setting| {
+                parley::FontVariation::new(parley::setting::Tag::new(&setting.axis), setting.value)
+            })
+            .collect();
         let mut builder = self
             .context
             .ranged_builder(&mut self.font_context, text, 1.0, false);
@@ -64,6 +71,18 @@ impl TextBackend for ParleyBackend {
             Cow::Borrowed(&names),
         )));
         builder.push_default(StyleProperty::FontSize(style.size));
+        builder.push_default(StyleProperty::FontStyle(match style.slant {
+            crate::Slant::Normal => parley::FontStyle::Normal,
+            crate::Slant::Italic => parley::FontStyle::Italic,
+            crate::Slant::Oblique => parley::FontStyle::Oblique(None),
+        }));
+        builder.push_default(StyleProperty::FontWidth(
+            parley::FontWidth::from_percentage(style.width),
+        ));
+        builder.push_default(StyleProperty::FontVariations(parley::FontVariations::List(
+            Cow::Borrowed(&variations),
+        )));
+
         builder.push_default(StyleProperty::FontWeight(parley::FontWeight::new(
             style.weight,
         )));
@@ -199,6 +218,9 @@ impl LayoutEngine for ParleyLayout {
             for item in line.items() {
                 if let PositionedLayoutItem::GlyphRun(glyph_run) = item {
                     let run = glyph_run.run();
+                    if run.synthesis().embolden() {
+                        return Err("synthetic font emboldening is not supported".into());
+                    }
                     let coords: Vec<_> = run
                         .normalized_coords()
                         .iter()
@@ -221,6 +243,7 @@ impl LayoutEngine for ParleyLayout {
                         Err(error) => return Err(error),
                     };
                     self.runs.push(GlyphRun {
+                        skew_degrees: run.synthesis().skew().unwrap_or(0.),
                         font,
                         size: run.font_size(),
                         glyphs: glyph_run

@@ -3176,3 +3176,23 @@ Window::set_title on Configure before the first frame; do not leak a translation
 into a static string to satisfy the older Options title field. No geometry/provider
 publication is made before Configure. Dynamic title transport is compiled here;
 native title/chooser behavior is still unverified.
+
+
+Settings' font_chooser::choose consumes SearchInput, font_catalog,
+It returns Selection { family, points } and never writes Config1. The existing
+SpinButton edits unscaled points; its range and portal text_scale are supplied by
+the caller. Initial sizes that the range would clamp are refused. A translated
+sample uses Tree::set_label_style and one retained system-font Layout, with size
+points * 96/72 * text_scale. Filtering out a family prevents acceptance. Face/style
+selection, Pango description round-tripping and interfaceFont/monoFont builders
+remain pending. Supply labels, window/list constraints, actual icon theme
+preparation and the external-notice staging hook.
+
+TextStyle carries slant, width percentage and explicit design-space axis settings.
+Only distinct printable four-byte axis tags and finite values are valid. Parley's
+actual normalized coordinates remain the render input. A requested oblique style
+may resolve to an upright font plus the engine's synthesis skew: GlyphRun preserves
+that degree value and nk-render applies it to each glyph, not the whole line.
+Never advertise exact-face selection from a family/style request. Synthetic
+emboldening currently returns an export error instead of silently painting upright
+regular outlines. Exact catalogue face/named-instance selection remains pending.

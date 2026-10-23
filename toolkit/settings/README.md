@@ -79,3 +79,11 @@ family/style names, exact files and full face indices, and supports family-name
 filtering. It reads metadata without loading the font files. Empty style names from
 Fontconfig stay unnamed. This is the lazy catalogue foundation, not an implemented
 FontChooser dialog or font builder; the accessible search ENTRY is still required.
+
+
+Fontconfig stay unnamed. font_chooser::choose consumes this in the existing modal DIALOG with SearchInput,
+an embedded family LIST, point-size SpinButton and retained selected-family sample.
+It returns Selection { family, points }, never Apply. Caller supplies the point
+range, portal text scale, labels, icon preparation and staged-notice hook. Style
+selection, canonical descriptions and Config1 font builders remain pending; CPU
+paint/semantic tests are not native chooser or Orca acceptance.

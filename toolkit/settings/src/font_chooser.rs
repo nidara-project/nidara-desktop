@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Native family-picker view of the FontChooser, on the parent's single Bridge.
+//! Native family/point-size chooser with retained preview, on one semantic Bridge.
 use crate::{
     font_catalog::{Catalogue, Load, Operation},
     material::panel::PanelMaterial,
@@ -18,9 +18,16 @@ pub struct Labels<'a> {
     pub search: &'a str,
     pub placeholder: &'a str,
     pub families: &'a str,
+    pub preview: &'a str,
+    pub point_size: &'a str,
     pub loading: &'a str,
     pub cancel: &'a str,
     pub select: &'a str,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct Selection {
+    pub family: String,
+    pub points: f32,
 }
 pub struct Host<'a> {
     pub tree: &'a mut Tree,
@@ -34,11 +41,18 @@ pub struct Host<'a> {
     pub poll_interval_ms: u32,
     pub size: (u32, u32),
     pub list_height: f32,
+    pub point_range: nk_widgets::ValueRange,
+    pub text_scale: f32,
     pub labels: Labels<'a>,
     /// Supply the actual interface icon theme to the transient tree.
     pub prepare: &'a mut dyn FnMut(&mut Tree) -> Result<()>,
     /// Stage Config1/appearance/routing/mount notices; false invalidates before input.
     pub keep_open: &'a mut dyn FnMut() -> Result<bool>,
+}
+struct PointSize {
+    initial: f32,
+    range: nk_widgets::ValueRange,
+    scale: f32,
 }
 struct View {
     search: NodeId,
@@ -49,6 +63,11 @@ struct View {
     select: NodeId,
     rows: Vec<(String, NodeId)>,
     selected: Option<String>,
+    preview: NodeId,
+    preview_row: NodeId,
+    preview_style: nk_text::TextStyle,
+    points: NodeId,
+    text_scale: f32,
 }
 impl View {
     fn build(
@@ -57,7 +76,22 @@ impl View {
         labels: &Labels<'_>,
         height: f32,
         fonts: Arc<FontSet>,
+        points: PointSize,
     ) -> Result<Self> {
+        let PointSize {
+            initial: initial_points,
+            range: point_range,
+            scale: text_scale,
+        } = points;
+        if !point_range.min.is_finite()
+            || point_range.min <= 0.
+            || !text_scale.is_finite()
+            || text_scale <= 0.
+            || !initial_points.is_finite()
+            || initial_points <= 0.
+        {
+            return Err("invalid chooser point size or text scale".into());
+        }
         styles.apply(tree)?;
         tree.append(tree.root(), Kind::TitleBar, labels.title)?;
         let scroll = tree.append(tree.root(), Kind::Scroll, labels.families)?;
@@ -70,6 +104,18 @@ impl View {
         let status_row = tree.append(scroll, Kind::Row, "")?;
         let status = tree.append(status_row, Kind::Label, labels.loading)?;
         let list = tree.list(scroll, labels.families, height, styles.menu.clone())?;
+        let (_, _, point_controls) = tree.fields(
+            scroll,
+            labels.point_size,
+            vec![(labels.point_size, point_range, initial_points)],
+        )?;
+        let points = point_controls[0];
+        if tree.value(points) != Some(initial_points) {
+            return Err("point range cannot represent the current font size".into());
+        }
+        let preview_row = tree.append(scroll, Kind::Row, "")?;
+        let preview = tree.append(preview_row, Kind::Label, labels.preview)?;
+        tree.set_hidden(preview_row, true)?;
         let cancel_row = tree.append(scroll, Kind::Row, "")?;
         let cancel = tree.append(cancel_row, Kind::Button, labels.cancel)?;
         let select_row = tree.append(scroll, Kind::Row, "")?;
@@ -85,6 +131,11 @@ impl View {
             select,
             rows: Vec::new(),
             selected: None,
+            preview,
+            preview_row,
+            preview_style: styles.text.clone(),
+            points,
+            text_scale,
         })
     }
     fn loaded(&mut self, tree: &mut Tree, catalogue: &Catalogue, initial: &str) -> Result<()> {
@@ -105,7 +156,20 @@ impl View {
             .map(|(name, _)| name.clone());
         // Hide the entire loading row, not an empty-height label alone.
         tree.set_hidden(self.status_row, true)?;
+        self.preview(tree)?;
         self.filter(tree)
+    }
+    fn preview(&self, tree: &mut Tree) -> Result<()> {
+        tree.set_hidden(self.preview_row, self.selected.is_none())?;
+        if let Some(family) = &self.selected {
+            let mut style = self.preview_style.clone();
+            style.family = family.clone();
+            style.size = tree.value(self.points).ok_or("font size control missing")?
+                * (96. / 72.)
+                * self.text_scale;
+            tree.set_label_style(self.preview, Some(style))?;
+        }
+        Ok(())
     }
     fn filter(&self, tree: &mut Tree) -> Result<()> {
         let query = tree.search_text(self.search)?.trim().to_lowercase();
@@ -123,6 +187,7 @@ impl View {
     fn effect(&mut self, tree: &mut Tree, effect: Effect) -> Result<bool> {
         match effect {
             Effect::Changed(id) if id == self.search => self.filter(tree)?,
+            Effect::Changed(id) if id == self.points => self.preview(tree)?,
             Effect::Changed(id) if id == self.list => {
                 self.selected = self
                     .rows
@@ -134,6 +199,7 @@ impl View {
                         )
                     })
                     .map(|(name, _)| name.clone());
+                self.preview(tree)?;
                 tree.set_disabled(self.select, !self.can_select(tree))?;
             }
             Effect::Activated(id) if id == self.cancel => {
@@ -163,7 +229,7 @@ struct Picker<'a, 'p> {
     title: &'a str,
     publication: Option<u64>,
     configured: bool,
-    result: &'a mut Option<String>,
+    result: &'a mut Option<Selection>,
     keep_open: &'a mut dyn FnMut() -> Result<bool>,
     interval: u32,
 }
@@ -207,7 +273,10 @@ impl Picker<'_, '_> {
     }
     fn effect(&mut self, effect: Effect, window: &mut Window) -> Result<bool> {
         if self.view.effect(self.dialog.view_mut(), effect)? {
-            *self.result = self.view.selected.clone();
+            *self.result = self.view.selected.clone().map(|family| Selection {
+                family,
+                points: self.dialog.view().value(self.view.points).unwrap(),
+            });
             window.close();
             return Ok(true);
         }
@@ -295,8 +364,8 @@ impl Application for Picker<'_, '_> {
         self.dialog.view_mut().acknowledge();
     }
 }
-/// Native family selection only. The full font chooser adds face/point-size/preview.
-pub fn choose_family(host: Host<'_>, launcher: NodeId, initial: &str) -> Result<Option<String>> {
+/// A draft family/point-size choice. Face/style selection and Config1 Apply are separate.
+pub fn choose(host: Host<'_>, launcher: NodeId, initial: Selection) -> Result<Option<Selection>> {
     if host.poll_interval_ms == 0 {
         return Err("font dialog requires a polling interval".into());
     }
@@ -310,6 +379,11 @@ pub fn choose_family(host: Host<'_>, launcher: NodeId, initial: &str) -> Result<
         &host.labels,
         host.list_height,
         host.fonts.clone(),
+        PointSize {
+            initial: initial.points,
+            range: host.point_range,
+            scale: host.text_scale,
+        },
     )?;
     (host.prepare)(dialog.view_mut())?;
     let mut load = Load::default();
@@ -327,7 +401,7 @@ pub fn choose_family(host: Host<'_>, launcher: NodeId, initial: &str) -> Result<
             input: Composition::default(),
             load,
             operation: host.operation,
-            initial,
+            initial: &initial.family,
             title: host.labels.title,
             publication: None,
             configured: false,
@@ -399,11 +473,33 @@ mod tests {
             search: "Search families",
             placeholder: "Search",
             families: "Font families",
+            preview: "The quick brown fox",
+            point_size: "Point size",
             loading: "Loading",
             cancel: "Cancel",
             select: "Select",
         };
-        let mut view = View::build(&mut tree, &styles, &labels, 160., fonts).unwrap();
+        let mut view = View::build(
+            &mut tree,
+            &styles,
+            &labels,
+            160.,
+            fonts,
+            PointSize {
+                initial: 11.,
+                range: nk_widgets::ValueRange {
+                    min: 1.,
+                    max: 100.,
+                    step: 0.5,
+                    wrap: false,
+                    digits: 0,
+                    decimals: 1,
+                    unit: " pt".into(),
+                },
+                scale: 1.,
+            },
+        )
+        .unwrap();
         let catalogue = Catalogue {
             families: vec![
                 crate::font_catalog::Family {
@@ -452,6 +548,77 @@ mod tests {
         );
         view.loaded(&mut tree, &catalogue, "Noto Sans").unwrap();
         let ids: Vec<_> = view.rows.iter().map(|(_, id)| *id).collect();
+        tree.layout(
+            Size {
+                width: 640.,
+                height: 480.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+        let layout = tree.node(view.preview).unwrap().text_layout().unwrap();
+        assert_eq!(layout.style().family, "Noto Sans");
+        assert_eq!(layout.style().size, 11. * (96. / 72.));
+        let effect = tree.request_value(tree.target(view.points), 18.).unwrap();
+        view.effect(&mut tree, effect).unwrap();
+        tree.layout(
+            Size {
+                width: 640.,
+                height: 480.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+        assert_eq!(
+            tree.node(view.preview)
+                .unwrap()
+                .text_layout()
+                .unwrap()
+                .style()
+                .size,
+            24.
+        );
+        view.text_scale = 1.25;
+        view.preview(&mut tree).unwrap();
+        tree.layout(
+            Size {
+                width: 640.,
+                height: 480.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+        assert_eq!(
+            tree.node(view.preview)
+                .unwrap()
+                .text_layout()
+                .unwrap()
+                .style()
+                .size,
+            30.
+        );
+        let old = tree
+            .node(view.preview)
+            .unwrap()
+            .text_layout()
+            .unwrap()
+            .style()
+            .clone();
+        let mut invalid = old.clone();
+        invalid.width = f32::NAN;
+        assert!(tree.set_label_style(view.preview, Some(invalid)).is_err());
+        assert_eq!(
+            tree.node(view.preview)
+                .unwrap()
+                .text_layout()
+                .unwrap()
+                .style(),
+            &old
+        );
+
         tree.set_search_text(view.search, "日本").unwrap();
         view.effect(&mut tree, Effect::Changed(view.search))
             .unwrap();

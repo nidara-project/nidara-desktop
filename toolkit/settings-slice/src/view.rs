@@ -57,6 +57,7 @@ impl Fonts {
                 if let PositionedLayoutItem::GlyphRun(g) = item {
                     let r = g.run();
                     runs.push(GlyphRun {
+                        skew_degrees: r.synthesis().skew().unwrap_or(0.),
                         font: Font {
                             data: self
                                 .data

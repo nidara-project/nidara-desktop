@@ -102,6 +102,7 @@ impl Canvas {
         self.context
             .glyph_run(&mut self.resources, &font)
             .font_size(run.size)
+            .glyph_transform(Affine::skew(-run.skew_degrees.to_radians() as f64, 0.))
             .normalized_coords(&coords)
             .fill_glyphs(run.glyphs.iter().map(|&(id, x, y)| Glyph {
                 id,

@@ -204,3 +204,11 @@ normalized coordinates come from the shaped face, using the same export as the
 isolated path. Linux uses Fontconfig via dlopen, as the measured Settings slice
 does. This does not enumerate the chooser catalogue or parse a Pango description;
 the font chooser and its modal accessibility remain separate work.
+
+
+direction. Slant (normal/italic/oblique), width percentage and explicit OpenType
+axis settings use the same shaper. Width, size and line height must be finite and
+positive; axis tags must be distinct printable four-byte tags with finite values.
+GlyphRun exports the actual synthesis skew for the renderer's per-glyph transform.
+Synthetic emboldening is refused during export until its raster policy is defined;
+a family/style request does not promise an exact face or named instance.
