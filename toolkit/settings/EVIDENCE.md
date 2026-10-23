@@ -203,3 +203,20 @@ incremental0/jobs1/shared target. No new native popup/grab/reposition/focus/clea
 Dropdown/AT-SPI/Orca, output-edge/fractional, glass, presentation/performance or
 owner-live acceptance. Exact original fixed binaries and their evidence remain
 untouched and are not attributed to this rebuilt head. No new Wayland host.
+
+## Local popup diagnostic extraction (#915, cut 13)
+
+Source extracted from 0f42c903: popup-probe, nk-popup-check.py and the wrapper
+using the existing private headless host. No new transport/provider or CI job.
+Review #193's nested-loop limit is now explicit in CONTRACT/README/skill:
+parent painting/configure/scale/appearance servicing is suspended while open.
+
+Validation PASS: actual `cargo build -p nk-wayland --example popup-probe`,
+Clippy all targets with `-D warnings`, Python AST, shell syntax, workspace fmt,
+skill-docs-check and diff whitespace. Validation is compilation/static only (logs under
+`toolkit/target/popup-probe-split-*.log`). No native/EGL run was attempted, and no
+rebuilt-head role/grab/reposition/dismissal/cleanup/control catch, accessibility,
+Orca, fractional/output-edge, glass, presentation, performance or owner-live
+acceptance is claimed. Historical binary evidence remains at the original source;
+this commit does not copy those PASS claims. The existing bounded driver and
+fault are prepared for later native validation, not reported as having passed.

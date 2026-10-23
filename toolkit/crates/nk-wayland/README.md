@@ -134,3 +134,19 @@ This cut contains only the primitive and validation tests. The separate transpor
 probe/headless harness and their exact-binary evidence follow independently.
 No new native popup role/grab/reposition/cleanup trace or keyboard/Orca, edge,
 fractional, presentation/performance acceptance is implied by compilation.
+
+While this nested loop is open, the parent does not repaint or service its
+configure, scale or appearance changes. Keep it bounded to short menus; a
+long-running child needs parent servicing that this primitive does not provide.
+
+## Popup diagnostic source (#915)
+
+`examples/popup-probe.rs`, `scripts/ci/nk-popup-check.py` and
+`check-popup-headless.sh` reuse the existing private widgets headless host.
+The bounded driver checks physical-key serial, popup role/grab, reposition token,
+outside dismissal and child-callback-error cleanup. Its toplevel substitution
+must complete setup and fail the role assertion; setup timeouts are errors.
+Evidence records source revision and binary hashes. A future run needs fresh
+logs and its exact rebuilt probe; historical fixed binaries prove their source only.
+This extraction was compiled and syntax checked, with no new native execution,
+control catch, protocol trace, focus/Orca or presentation acceptance.

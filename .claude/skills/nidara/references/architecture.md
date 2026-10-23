@@ -2900,3 +2900,14 @@ resets keyboard state; Window Drop destroys child roles/surfaces on error too.
 Closed windows get no idle callback. The transport probe/harness belongs in a
 separate cut; compilation/placement unit tests are not a native popup or Dropdown,
 AT-SPI/Orca, output-edge/fractional or timing acceptance.
+
+While this nested loop is open, the parent does not repaint or service its
+configure, scale or appearance changes. Keep it bounded to short menus; a
+long-running child needs parent servicing that this primitive does not provide.
+
+The popup diagnostic reuses widgets-demo/check-headless.sh through
+nk-wayland/check-popup-headless.sh, with evidence/runtime under target. The
+checker requires completed lifecycle setup before its role-substitution assertion,
+and verifies destruction before return on callback error. Compilation and syntax
+checks do not establish native role/grab/reposition/cleanup acceptance; keep older
+fixed-binary evidence attributed to its original source and hashes.

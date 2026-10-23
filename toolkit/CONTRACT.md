@@ -191,6 +191,10 @@ on xdg-shell v3+, and returns an error on older versions (no fake reposition).
 `PopupRepositioned(token)` carries the compositor acknowledgement. Destruction
 happens before the parent's event queue resumes; after ordinary close queued modal key events are not
 replayed into the parent. The caller restores focus only to a live visible node.
+While this nested loop is open, the parent does not repaint or service its
+configure, scale or appearance changes. Keep it bounded to short menus; a
+long-running child needs parent servicing that this primitive does not provide.
+
 This primitive alone is not a Dropdown, keyboard/Orca gate or native acceptance.
 
 ## nk-widgets (phase 1, #873)
