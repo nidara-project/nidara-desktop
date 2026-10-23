@@ -2995,5 +2995,18 @@ lock. The callback queues that captured token, even if delayed across publicatio
 Do not reintroduce a separate Atomic token in a worker before/after update: both
 orders can mislabel an old-snapshot request. Application-side target/revision
 checks still apply. `published` acknowledges successful updates; `check` reports
-fatal worker errors. Widgets-demo reexports this worker; Settings popup/controller
-integration remains to consume it. This does not replace real Orca validation.
+fatal worker errors. Widgets-demo reexports this worker; the Settings popup controller consumes it.
+Builder integration remains pending. This does not replace real Orca validation.
+
+`nk-settings::dropdown::show` now supplies the reusable popup controller over
+DropdownPopup, configured origin and the application's existing Bridge. The host
+lends text/styles/Window and a keep_open hook that stages external notices while
+the parent Tree is borrowed. False closes before input/selection acceptance;
+apply staged notices after return. `DropdownPopup::invalidate` suppresses stale
+trigger focus restoration and rejects subsequent actions/snapshots/choices. An
+ordinary dismissal preserves value and restores available focus. Parent snapshots
+use `PopupSnapshot::new` so restored and modal tokens share one namespace. Optional
+exported panel material resolves at actual size; no recipe forces opaque paint.
+This controller does not write Config1: the manifest builder remains to integrate.
+The provider diagnostic is extracted separately; compilation/CPU tests of this
+controller do not prove real libatspi, Orca speech or owner live parity.

@@ -458,3 +458,31 @@ no new live worker/provider publication proof or runtime fault injection. No
 native popup, Config1 builder, AT-SPI action delivery or Orca speech acceptance,
 performance/live claim. Historical fixed evidence remains source-specific.
 Adaptive foundations/Settings real polling caller and causal test remain debt.
+
+
+## Local cut22 — controlled Dropdown popup host (2026-10-23)
+
+Extracted existing78ae2598 production controller237 lines, dependency/lib/lock,
+PopupSnapshot common namespace and DropdownPopup invalidation delta with its
+CPU test above21. Controller source matches that commit literally; test append
+context adapted to retain cut18 review206 disabled-chosen focus correction.
+Contract before API, skill/README/EVIDENCE in this commit. Main features retained.
+Provider probe/checker/wrapper are excluded for a separate compilable cut.
+
+130 a11y/Settings/widgets tests PASS (12+52+66), mandatory fullcut16 exports:
+target/dropdown-controller-split-restored-tests.log. Compiled invalidated-focus
+restoration fault removed Drop's live guard; its own parent.focused()==None
+assertion observed Some(6) AFTER invalidation, rejected snapshot/request/choice
+and preserved canonical selection: split-restore-control.log. Literal source
+restored before130PASS, including cut18 chosen-disabled/all-disabled regression.
+Both Settings/widgets all-target Clippy -D warnings, workspace all-target check,
+fmt/skilldocs/diff PASS in corresponding logs. Initial patch-context failures
+were extraction failures, not test acceptance; test appended without overwrites.
+
+Controller/keep_open staging, configured-origin publication, existing Bridge and
+restored revision, opaque fallback/optional panel path are compiled/source-reviewed.
+CPU invalidation test does not execute show(), a real Window/provider, Config1
+notices or input-to-controller lifecycle. No current native popup/action/focus/
+material, AT-SPI/Orca, performance/live acceptance. Historical fixed binaries'
+evidence is not evidence of this reconstructed head. Exclusive parent borrow
+short-menu limit and adaptive real polling caller/causal-test debt remain.

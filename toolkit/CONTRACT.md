@@ -268,6 +268,34 @@ menu options and unsupported/stale requests fail before selection changes.
 This adapter is CPU-tested groundwork; it does not itself publish a provider,
 run a popup, or establish real AT-SPI/Orca acceptance.
 
+### Settings Dropdown controller (#915)
+
+`nk_settings::dropdown::show(Host, combo)` runs the reusable MenuList in the
+standard popup host. Host lends parent Tree/Window, text backend, Styles, the
+application's existing Bridge and mutable parent revision slot, optional panel recipe,
+physical opening serial,
+poll interval and a `keep_open` callback. It never creates another provider.
+Popup snapshots use the acknowledged configured origin; requests route through
+DropdownPopup's revision guard. `PopupSnapshot::new(tree)` allocates tokens for
+ordinary/restored parent publications from the same namespace as modal snapshots;
+the application uses this namespace consistently when sharing that Bridge.
+Before returning, the controller updates the host revision slot to the restored
+parent publication, so subsequent parent requests can pass its own revision guard.
+
+`keep_open` polls/stages Config1/appearance/navigation/visibility notices without
+mutating the borrowed Tree. False cancels before handling input and immediately
+before accepting selection, so the caller can apply staged notices after return.
+Errors cancel and propagate. External invalidation calls `DropdownPopup::invalidate`,
+which rejects further snapshots/actions/selection and suppresses trigger focus
+restoration (clearing its retained focus if necessary) until staged changes apply.
+Cancellation/PopupDone do not choose; ordinary dismissal restores parent focus
+and collapsed semantics are republished even on a child error. Only the controlled
+model changes here; Config1 writes remain the builder's responsibility. The
+optional panel recipe is resolved for the actual configured size; absent recipe
+forces opaque D5 paint even if the compositor advertises material. A supplied
+recipe uses the exported menu radius. Native provider/Orca and lifecycle acceptance
+require dedicated evidence, not compilation of this controller.
+
 ### Standard popup host (#882/#915)
 
 `Window::popup_geometry()` returns None for a toplevel or before a popup's

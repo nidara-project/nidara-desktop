@@ -704,3 +704,23 @@ fn popup_unavailable_chosen_option_preserves_selection_and_uses_available_focus(
     popup.finish(None).unwrap();
     assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
 }
+
+#[test]
+fn invalidated_popup_cannot_publish_act_choose_or_restore_a_stale_trigger() {
+    let (mut parent, _, _, combo) = fixture();
+    parent.focus(combo).unwrap();
+    let option = parent.semantics().nodes[&combo].children[0];
+    let mut popup = nk_widgets::DropdownPopup::new(&mut parent, combo, menu_style()).unwrap();
+    let revision = popup.snapshot(Point::default()).unwrap().revision;
+    popup.invalidate();
+    assert!(popup.snapshot(Point::default()).is_err());
+    assert!(
+        popup
+            .request(revision, nk_a11y::Request::Activate(option))
+            .is_err()
+    );
+    assert!(popup.finish(Some(0)).is_err());
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
+    assert_eq!(parent.focused(), None);
+    assert!(!parent.semantics().nodes[&combo].states.expanded);
+}
