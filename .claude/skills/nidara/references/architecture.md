@@ -2705,10 +2705,15 @@ and ink tone before the capsule shape, in the same synchronized transaction.
 (glyphs) and accessible names are separate. Never add per-button surfaces or
 parallel focus/action machinery. Placement and metric changes preserve node IDs;
 visible bounds are clipped to the window. Capsule geometry is a component export
-(capsule.json), not glass material; pitch derives from button + edge. Hyalo will
+(capsule.json), not glass material; pitch derives from button + gap (independent of outer edge). Hyalo will
 retain a usable layout mirror checked against that source, so close works even
 without exported data.
 
 A live capsule metric change invalidates each child measurement too: its width
 constraint can stay identical while button_min changes. Invalidating only the
 parent reused stale button widths; the retained geometry oracle catches this.
+
+The capsule export requires independent edge and gap; neither is a fallback for
+the other. Hyalo keeps the default geometry mirror, unit-checked against the
+component source. Width and hit boundaries derive from the gap; current values
+remain unchanged by this schema repair. Missing either field fails export checks.

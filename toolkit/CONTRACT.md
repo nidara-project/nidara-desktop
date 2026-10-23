@@ -293,6 +293,13 @@ Phase 0 remains an independent client of those four crates.
 
 ## Floating control capsule — proposal for #889
 
+Geometry exports carry independent `height`, `button`, `edge` and `gap` values.
+`edge` is the outer inset; `gap` separates neighboring buttons. Pitch is
+`button + gap`, width is `2 * edge + n * button + (n - 1) * gap` for n buttons.
+The server layout mirror must match the default component export. This schema
+change preserves current values/pixels; owner visual tuning remains separate.
+
+
 **The compositor side is implemented; the kit's capsule is not yet.** This section
 closes the kit/compositor boundary, following #818. The owner has chosen the
 behaviour in #889; numeric visual values remain for the native demo. Hyalo's side —

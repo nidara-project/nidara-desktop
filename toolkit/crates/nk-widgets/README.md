@@ -136,3 +136,6 @@ use the normal retained Tree. Metrics/position can change without replacing IDs.
 Geometry is supplied explicitly; the proposed common export is capsule.json →
 components.json, with server layout mirrored and checked separately by Hyalo.
 This foundation does not yet wire capsule layer material/coverage or the demo.
+
+Capsule component data separates the outer edge from the inter-button gap.
+Pitch is button + gap; future visual tuning must not infer gap from edge.
