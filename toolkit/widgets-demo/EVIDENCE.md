@@ -576,3 +576,33 @@ Restoring transparent black is CAUGHT by the own normal-idle-hue assertion in
 Earlier native fixed binaries do not certify this correction, and native D5 fade
 acceptance remains pending.
 
+
+## Opaque capsule fallback split on current main (2026-10-23)
+
+This cut restores the existing finite D5 wash timeline and its later idle-hue and
+midpoint corrections above the composition cut. It samples the exported duration,
+starts immediately on first appearance, retargets from the current sample and
+snaps with reduced motion. Hidden/removed entries retire; disabling opaque fallback
+clears its samples. Idle retains normal/destructive hover RGB with alpha zero,
+matching the same target sent to D7. No client wash timeline runs for D7.
+
+The lab source and its documentation are excluded from this cut. The incidental
+client paint-count API from historical lab context is also excluded; this cut
+publishes no rendering or presentation counter. The existing demo already supplies
+poll/sync opportunities; application callers stop requesting fade frames when
+is_animating() becomes false. No permanent animation is added.
+
+`target/capsule-fallback-split-restored-tests.log` passes 60 widget/demo tests
+with required generated exports from the unchanged reader cut. The deterministic
+CPU oracle uses explicit times and actual painted pixels: start/mid/end, constant
+hue during fade, hover-out, interruption, reduced-motion snap, hidden cleanup and
+settled no-op updates. It does not infer idle CPU usage or native frame counts.
+A compiled production fault that bypasses the stored wash fails the test's own
+painted-midpoint assertion (`target/capsule-fallback-split-snap-control.log`).
+Source was restored before the full suite passed. Widgets/demo all-target Clippy
+with warnings denied, formatting, skill-docs and diff checks pass.
+
+There is no new native D5/fractional run, compositor glass/ink-curve result,
+AT-SPI/Orca, timing/performance or owner-live acceptance for this rebuilt cut.
+Original source worktrees, fixed binaries and their exact historical evidence
+remain untouched. #921 and backend/bar changes are outside this extraction.

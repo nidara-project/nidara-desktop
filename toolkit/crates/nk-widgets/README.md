@@ -146,7 +146,7 @@ material states and placement in the host transaction. It routes layer input to
 the same Tree capture/actions and caches paint revisions. Appearance changes call
 invalidate(); backdrop response requires no repeated client repaint. D5 draws
 exported opaque base and state feedback. The native demo opts in with --capsules.
-Compositor visual/idle/performance acceptance and D5 state fade remain pending.
+Compositor visual/idle/performance acceptance remains pending.
 
 Opaque capsule state feedback is sampled by `CapsuleComposition::sync` using
 `states.fadeMs` and the same linear RGBA wash interpolation as Hyalo. Retargeting
