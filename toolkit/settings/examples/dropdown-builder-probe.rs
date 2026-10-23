@@ -254,6 +254,7 @@ fn run() -> Result<()> {
     }));
     let staged = external.clone();
     let native = Native {
+        font: None,
         bridge: Bridge::new(snapshot.revision, snapshot.tree),
         revision: snapshot.revision,
         text: ParleyBackend::new(Arc::new(FontSet::discover_required()?))?,

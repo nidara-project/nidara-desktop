@@ -288,6 +288,7 @@ impl Snapshot {
 pub enum Event {
     Focus(NodeId, bool),
     Name(NodeId, String),
+    Description(NodeId, String),
     State(NodeId, &'static str, bool),
     Insert(NodeId, usize, String),
     Remove(NodeId, usize, String),
@@ -329,6 +330,9 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
         }
         if before.is_some_and(|b| b.name != n.name) {
             out.push(Event::Name(n.id, n.name.clone()));
+        }
+        if before.is_some_and(|b| b.description != n.description) {
+            out.push(Event::Description(n.id, n.description.clone()));
         }
         if s.active != n.states.active {
             // Before any focus event, wherever the node sits in the tree: a reader takes
@@ -428,6 +432,22 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn description_changes_are_observable_once_without_renaming_the_button() {
+        let mut node = Node::new(1, Role::Button, "Interface font");
+        node.description = "Noto Sans 11".into();
+        let old = Tree {
+            root: 1,
+            nodes: BTreeMap::from([(1, node)]),
+        };
+        let mut new = old.clone();
+        new.nodes.get_mut(&1).unwrap().description = "Noto Sans Bold 13".into();
+        assert_eq!(
+            diff(Some(&old), &new).unwrap(),
+            vec![Event::Description(1, "Noto Sans Bold 13".into())]
+        );
+        assert!(diff(Some(&new), &new).unwrap().is_empty());
+    }
     #[test]
     fn offsets_are_scalars_and_invalid_bytes_are_rejected() {
         let t = TextInfo {

@@ -12,7 +12,12 @@ No Wayland, renderer or accessibility dependency. License: LGPL-3.0-or-later.
 `TextBackend::layout(text, style, max_width)` builds one retained `Layout`.
 `TextStyle` supplies family, size in logical pixels, CSS weight (1–1000), line
 height as a size multiplier, start/center/end/justify alignment, and auto/LTR/RTL
-direction. Width, size and line height must be finite and positive.
+direction. Slant (normal/italic/oblique), width percentage and explicit OpenType
+axis settings use the same shaper. Width, size and line height must be finite and
+positive; axis tags must be distinct printable four-byte tags with finite values.
+GlyphRun exports the actual synthesis skew for the renderer's per-glyph transform.
+Synthetic emboldening is refused during export until its raster policy is defined;
+a family/style request does not promise an exact face or named instance.
 
 ```rust
 use nk_text::{FontSet, ParleyBackend, TextBackend, TextStyle};
@@ -48,8 +53,23 @@ Font bytes are shared with `Arc`; face indices distinguish TTC members. Variatio
 carry each axis tag and the actual shaper's normalized F2DOT14 coordinate (including
 `avar`), rather than assuming a linear relationship between CSS weight and an axis.
 A character with no glyph in any font of the set becomes glyph 0 and fails the
-corpus. Glyph y is the baseline, positive down. The Fontique collection holds only
-the files of the `FontSet`; system font discovery is disabled.
+corpus. Glyph y is the baseline, positive down. `ParleyBackend::new` holds only
+the files of the `FontSet`; system font discovery is disabled for this corpus path.
+
+Enable `nk-text/system-fonts` and call `ParleyBackend::with_system_fonts(fonts)`
+for the Settings and chooser path. Fontique resolves installed fonts with
+`system_fonts: true`; supplied files remain private fallbacks only when their
+families are absent. Installed families retain their full system face collection,
+rather than being replaced with a required regular file. A blob mixing installed
+and private declared families is refused because whole-blob registration could
+shadow installed faces. A system face outside
+`FontSet` is copied once per blob per retained layout into shared `Arc` bytes,
+reused by all runs and reflows, and released with the layout. Exported glyphs
+retain their data after backend and layout destruction. Indices and axis tags/
+normalized coordinates come from the shaped face, using the same export as the
+isolated path. Linux uses Fontconfig via dlopen, as the measured Settings slice
+does. This does not enumerate the chooser catalogue or parse a Pango description;
+Settings owns the description format and the existing chooser/modal consumer.
 
 `Editor` owns its backend, committed text, logical caret/selection, undo/redo and
 one displayed layout. It exposes grapheme and visual word movement, up/down with
@@ -181,42 +201,9 @@ through C to recover the font file and the variation coordinates.
 Native API reference: [Parley](https://docs.rs/parley/0.12.0/parley/).
 
 
-
-
 Editor::set_style reshapes the displayed text while preserving committed text,
 caret/selection, preedit and undo/redo. A shaping failure keeps the old style/layout.
 Alignment::Left is physical left alignment, independently of paragraph direction;
 Start/End retain logical alignment. SearchInput uses Left for an unwrapped scrolling
 canvas, retaining bidi shaping and caret navigation without aligning RTL text to an
 unbounded measurement width.
-
-
-corpus. Glyph y is the baseline, positive down. `ParleyBackend::new` holds only
-the files of the `FontSet`; system font discovery is disabled for this corpus path.
-
-Enable `nk-text/system-fonts` and call `ParleyBackend::with_system_fonts(fonts)`
-for the Settings and chooser path. Fontique resolves installed fonts with
-`system_fonts: true`; the supplied files remain fallbacks. A system face outside
-`FontSet` is copied once per blob per retained layout into shared `Arc` bytes,
-reused by all runs and reflows, and released with the layout. Exported glyphs
-retain their data after backend and layout destruction. Indices and axis tags/
-normalized coordinates come from the shaped face, using the same export as the
-isolated path. Linux uses Fontconfig via dlopen, as the measured Settings slice
-does. This does not enumerate the chooser catalogue or parse a Pango description;
-the font chooser and its modal accessibility remain separate work.
-
-
-direction. Slant (normal/italic/oblique), width percentage and explicit OpenType
-axis settings use the same shaper. Width, size and line height must be finite and
-positive; axis tags must be distinct printable four-byte tags with finite values.
-GlyphRun exports the actual synthesis skew for the renderer's per-glyph transform.
-Synthetic emboldening is refused during export until its raster policy is defined;
-a family/style request does not promise an exact face or named instance.
-
-
-`system_fonts: true`; supplied files remain private fallbacks only when their
-families are absent. Installed families retain their full system face collection,
-rather than being replaced with a required regular file. A blob mixing installed
-and private declared families is refused because whole-blob registration could
-shadow installed faces. A system face outside
-Settings owns the description format and the existing chooser/modal consumer.

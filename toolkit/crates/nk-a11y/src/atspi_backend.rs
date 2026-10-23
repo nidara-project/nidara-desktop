@@ -857,6 +857,14 @@ impl Backend {
                     0,
                     s.as_str().into(),
                 )?,
+                Event::Description(id, s) => self.emit(
+                    id,
+                    "PropertyChange",
+                    "accessible-description",
+                    0,
+                    0,
+                    s.as_str().into(),
+                )?,
                 Event::Insert(id, start, s) => self.emit(
                     id,
                     "TextChanged",

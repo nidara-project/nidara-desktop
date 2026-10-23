@@ -691,3 +691,33 @@ AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
 Historical fixed binary evidence remains bound to original hashes. Exclusive
 parent borrow short-menu limit and adaptive foundations/Settings real polling
 caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut33 — 915-font-builders (2026-10-23)
+
+Extracted existing 6dd728bd above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+182 tests [13, 2, 1, 2, 41, 4, 1, 13, 5, 2, 0, 1, 1, 3, 10, 17, 7, 19, 15, 8, 5, 8, 2, 2] PASS; all-target Clippy -D warnings PASS
+for nk-text, nk-render, nk-a11y, nk-widgets, nk-settings, nk-widgets-demo, nk-wayland. Logs: target/cut33-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+Final extraction audit: all original Settings modules are present. 19 source files
+match6dd728bd exactly; material/control production matches before cfg(test), routing
+retains the reviewed Native forwarding correction. Text/a11y/Wayland/render sources
+match the original endpoint exactly. Widget residuals are documented review fixes,
+per-capsule paint filtering, comments/registration and disjoint measurement order.
+Workspace all-target check PASS, including phase0/settings-slice; no-atspi check
+PASS with2existing dead-code warnings, not-D. Logs: target/split-final-{workspace,
+no-atspi}-check.log. All182 tests and7package Clippy results above remain current;
+this final addition is documentation only. Original branches remain clean.

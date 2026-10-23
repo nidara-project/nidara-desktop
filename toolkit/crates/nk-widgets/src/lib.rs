@@ -294,6 +294,7 @@ pub struct Tree {
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
     label_styles: BTreeMap<NodeId, TextStyle>,
+    button_descriptions: BTreeMap<NodeId, String>,
     dialog_role: bool,
     menu_style: Option<MenuStyle>,
     list_styles: BTreeMap<NodeId, MenuStyle>,
@@ -376,6 +377,7 @@ impl Tree {
             row_text_style: None,
             dropdown_style: None,
             label_styles: BTreeMap::new(),
+            button_descriptions: BTreeMap::new(),
             dialog_role: false,
             menu_style: None,
             list_styles: BTreeMap::new(),
@@ -774,6 +776,7 @@ impl Tree {
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.searches.remove(&id);
             tree.label_styles.remove(&id);
+            tree.button_descriptions.remove(&id);
             tree.list_styles.remove(&id);
             tree.capsules.remove(&id);
             tree.capsule_styles.remove(&id);
@@ -832,6 +835,19 @@ impl Tree {
         {
             return Err("preview style requires a label".into());
         }
+        self.set_owned_text_style(id, style)
+    }
+    pub fn set_button_text_style(&mut self, id: NodeId, style: Option<TextStyle>) -> Result<()> {
+        if self
+            .nodes
+            .get(&id)
+            .is_none_or(|node| node.kind != Kind::Button)
+        {
+            return Err("caption style requires a live button".into());
+        }
+        self.set_owned_text_style(id, style)
+    }
+    fn set_owned_text_style(&mut self, id: NodeId, style: Option<TextStyle>) -> Result<()> {
         if let Some(style) = &style {
             style.validate(1.)?;
         }
@@ -842,6 +858,18 @@ impl Tree {
         }
         self.nodes.get_mut(&id).unwrap().layout = None;
         self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
+    }
+    pub fn set_button_description(&mut self, id: NodeId, description: &str) -> Result<()> {
+        if self
+            .nodes
+            .get(&id)
+            .is_none_or(|node| node.kind != Kind::Button)
+        {
+            return Err("description requires a live button".into());
+        }
+        self.button_descriptions.insert(id, description.into());
+        self.invalidate(id, Invalid::SEMANTICS);
         Ok(())
     }
     pub fn set_width(&mut self, id: NodeId, width: f32) -> Result<()> {

@@ -18,21 +18,9 @@ mutating the borrowed Tree; false cancels before applying staged notices after
 return. Invalidation rejects choices and suppresses trigger focus restoration.
 Ordinary Escape/PopupDone preserve selection and restore available focus. No panel
 recipe forces D5 paint; a supplied recipe resolves at actual configured size.
-The schema-backed builder now supplies notice plumbing; actual app hosting remains pending.
-`dropdown-provider-probe` now supplies the separate diagnostic composition of
-controller/Tree/Bridge on nk-wayland. `check-dropdown-provider-headless.sh`
-reuses the existing private widgets host and runs
-scripts/ci/nk-dropdown-provider-check.py with explicit fixed binaries/data/log
-paths. The checker covers select/cancel/invalidate, stable IDs, one provider,
-configured option bounds, physical grab and focus restoration with three own-value
-fault controls. It is NOT EXECUTED on this extracted head: this cut only separates
-and compiles the diagnostic. Native baseline/control execution, Config1 builder
-integration and real Orca speech remain pending; historical fixed-binary results
-are not acceptance of a rebuilt head.
-Compilation/CPU tests here do not establish native controller/provider acceptance.
-
-
 The manifest builder below consumes this controller through the renderer context.
+`dropdown-provider-probe` and `nk-dropdown-provider-check.py` exercise the controller
+and one real provider diagnostically, not real Orca or Config1.
 
 
 `dropdown_builder::register` installs the real schema-backed dropdown builder.
@@ -47,8 +35,6 @@ return. Pure tests use no native host and do not establish that integration gate
 The Config1 integration tests use Client::start with their private bus connection.
 Their daemon sockets live under toolkit/target/config-bus-<pid>-<counter>, with
 scoped cleanup after exit; they never replace the live session bus address.
-
-
 
 
 `dropdown-builder-probe` composes the actual manifest builder, Client, Rendered and
@@ -69,26 +55,12 @@ check; they are never accepted as a control catch. See EVIDENCE.md for the passi
 subsets and preserved failed runs. Routing/page unmount and real Orca remain separate.
 
 
-
-
 FontChooser metadata is available through font_catalog::Load: start only on chooser
 open with Operation { mount, request }, poll nonblockingly with the current token,
 and cancel on hide/unmount or a newer open. A single worker serializes actual
 Fontconfig enumeration with one queued job maximum. Catalogue preserves primary
 family/style names, exact files and full face indices, and supports family-name
 filtering. It reads metadata without loading the font files. Empty style names from
-Fontconfig stay unnamed. This is the lazy catalogue foundation, not an implemented
-FontChooser dialog or font builder; the accessible search ENTRY is still required.
-
-
-Fontconfig stay unnamed. font_chooser::choose consumes this in the existing modal DIALOG with SearchInput,
-an embedded family LIST, point-size SpinButton and retained selected-family sample.
-It returns Selection { family, points }, never Apply. Caller supplies the point
-range, portal text scale, labels, icon preparation and staged-notice hook. Style
-selection, canonical descriptions and Config1 font builders remain pending; CPU
-paint/semantic tests are not native chooser or Orca acceptance.
-
-
 Fontconfig stay unnamed. font_chooser::choose consumes this in the existing modal
 DIALOG with SearchInput, embedded family/style LISTs, point-size SpinButton and
 retained selected-family sample. It returns Selection { family, points, attributes },
@@ -96,9 +68,31 @@ never Apply. Caller supplies the point range, portal text scale, labels, icon
 preparation and staged-notice hook. Supported standard style attributes and canonical
 point descriptions share font_description with Styles. Unsupported styles/named
 instances are disabled, and an unsupported initial style is preserved without
-acceptance. Exact face/index selection and Config1 font builders remain pending;
+acceptance. Exact face/index selection remains pending;
 CPU paint/semantic tests are not native chooser or Orca acceptance.
 
 The font-description integration test requires Python 3 and installed libpango-1.0
 for an independent metadata oracle. No Pango dependency was added to production
 rendering or startup; all glyphs still come from the shared Parley Layout.
+
+font_builder::register installs both controlled font rows against their real
+Config1 keys and exported i18n. Cx.open_font calls the existing Native modal context;
+configure Native.font before use. The caller supplies FontsArc, translated dialog
+labels, window/list/point constraints and icon-theme preparation; Styles supplies
+the actual portal text scale and the row supplies its title. Native shares its one
+Bridge/revision and stage_modal_notices with Dropdown. Drain notices after return.
+Accepted changed descriptions Apply once; cancel/same/invalidation do not. Canonical
+replies and refusal errors remain visible. Captions follow live text scale without
+writes or continuous repainting. Private-bus tests use actual exported font items
+and real Config1/Client with a headless modal decision seam; native end-to-end,
+main configuration and real Orca remain separate pending gates.
+
+
+Local extraction status (cuts23–33): provider/controller and builder diagnostic
+sources were compiled and static-checked; their checkers were NOT EXECUTED on
+these reconstructed heads. Tests use the complete search-input-data export from
+cut27. Native baseline/control, full Config1/modal lifecycle, real Orca speech,
+performance and owner live acceptance remain pending. Historical fixed binaries
+prove only their recorded original source/hash. The exclusive parent borrow is
+bounded to short menus, with no concurrent parent servicing; adaptive foundations/
+Settings polling still needs a real caller and causal test.

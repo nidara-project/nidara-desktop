@@ -28,6 +28,53 @@ pub struct Labels<'a> {
     pub cancel: &'a str,
     pub select: &'a str,
 }
+/// Owned translated strings; borrow them for each modal opening.
+pub struct DialogLabels {
+    pub search: String,
+    pub placeholder: String,
+    pub families: String,
+    pub styles: String,
+    pub unnamed: String,
+    pub unsupported_style: String,
+    pub preview: String,
+    pub point_size: String,
+    pub loading: String,
+    pub cancel: String,
+    pub select: String,
+}
+impl DialogLabels {
+    pub fn borrowed<'a>(&'a self, title: &'a str) -> Labels<'a> {
+        Labels {
+            title,
+            search: &self.search,
+            placeholder: &self.placeholder,
+            families: &self.families,
+            styles: &self.styles,
+            unnamed: &self.unnamed,
+            unsupported_style: &self.unsupported_style,
+            preview: &self.preview,
+            point_size: &self.point_size,
+            loading: &self.loading,
+            cancel: &self.cancel,
+            select: &self.select,
+        }
+    }
+}
+pub type PrepareTree = dyn FnMut(&mut Tree) -> Result<()>;
+pub struct Configuration {
+    pub fonts: Arc<FontSet>,
+    pub labels: DialogLabels,
+    pub size: (u32, u32),
+    pub list_height: f32,
+    pub point_range: nk_widgets::ValueRange,
+    pub prepare: Box<PrepareTree>,
+}
+pub struct Request {
+    pub title: String,
+    pub launcher: NodeId,
+    pub operation: Operation,
+    pub initial: Selection,
+}
 pub type Selection = Description;
 pub struct Host<'a> {
     pub tree: &'a mut Tree,

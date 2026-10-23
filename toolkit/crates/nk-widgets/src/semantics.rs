@@ -138,6 +138,9 @@ impl Tree {
             }) {
                 n.description = self.nodes[subtitle].name.clone();
             }
+            if let Some(description) = self.button_descriptions.get(&id) {
+                n.description = description.clone();
+            }
             if widget.kind == Kind::SearchInput {
                 self.search_semantics(id, &mut n);
             }

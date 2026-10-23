@@ -224,8 +224,6 @@ the first available option, or none if all options are unavailable; opening and
 cancellation must still work without changing the chosen value.
 
 
-
-
 SearchInput is created with Tree::search_input(parent, name, placeholder, backend)
 after supplying SearchStyle. It owns one nk-text::Editor in the retained Tree;
 paint, pointer hit-test, caret/selection and TextInfo use its shared layout. Its
@@ -252,8 +250,6 @@ is owned by the input. Component/synthetic-event tests do not establish native I
 clipboard, real AT-SPI requests or Orca speech acceptance.
 
 
-
-
 `Tree::list(parent, name, height, MenuStyle)` embeds the dropdown's retained menu
 rows as a real single-selection LIST inside a Scroll or Group. Append MenuOption
 children; use `set_list_selected(list, Some(option))` (or None) for canonical state.
@@ -267,8 +263,6 @@ Tree, provider or global menu mode is needed. This primitive alone does not prov
 the FontChooser modal or its Orca speech.
 
 
-
-
 `DialogTree::new(parent, launcher, title)` borrows the controlled parent and
 provides a transient retained view with window-lifetime IDs disjoint from its
 parent. Use its view to build existing controls, and publish `snapshot()` through
@@ -280,3 +274,9 @@ when the launcher is available/showing; `invalidate` suppresses restoration and
 rejects every request/snapshot. Stage parent mutations until the borrow ends.
 Dialog views reserve no sidebar inset. SearchInput's `search_composing` exposes the
 single Editor's preedit state so modal Escape can cancel composition first.
+
+A Button caption can opt into set_button_text_style, sharing the same validated
+retained-layout override as set_label_style. None restores the ordinary UI style.
+set_button_description changes only accessible text, preserving the row's title
+relation; the font builder uses it for current value/help/error. Both overrides
+are retired with the node. No separate font-button renderer or style defaults.

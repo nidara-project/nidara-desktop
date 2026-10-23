@@ -182,3 +182,11 @@ widgets on the provider thread. This worker is one provider per application;
 separate menu view IDs must be mapped onto the controlled parent's retained
 semantics before publication. The Dropdown adapter does that projection; this
 worker alone does not host its popup or establish real Orca speech acceptance.
+
+
+
+Dynamic descriptions participate in diff as Event::Description and publish the
+standard PropertyChange/accessible-description through the same provider. Existing
+node changes emit once, unchanged values emit nothing; initial getters need no
+synthetic event. This preserves activation-before-focus ordering. Unit diff and
+compiled emitter checks do not replace native AT-SPI or real Orca speech gates.

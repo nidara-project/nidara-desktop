@@ -166,8 +166,6 @@ has not been executed on this head. Native baseline/control execution remains
 pending outside this local source split.
 
 
-
-
 `run_dialog_with_options(app, parent, options)` opens the same modal xdg toplevel
 as `run_dialog`, with caller title/size and the parent's connection/app-id. Empty
 sizes fail before opening. It shares the existing child teardown and queued-input

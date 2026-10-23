@@ -16,6 +16,7 @@ use serde_json::Value as Json;
 pub struct Styles {
     /// Window capsule corner inset from components.json, independent of row spacing.
     pub controls_inset: f32,
+    pub text_scale: f64,
     pub palette: Palette,
     pub metrics: Metrics,
     pub choices: ChoiceStyle,
@@ -218,6 +219,7 @@ impl Styles {
         )?;
         Ok(Self {
             controls_inset: number(&c["capsule"]["windowInset"])?,
+            text_scale: appearance.text_scale,
             palette,
             metrics,
             choices,

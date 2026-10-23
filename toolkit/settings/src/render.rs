@@ -60,6 +60,22 @@ impl Editor for crate::client::Client {
     }
 }
 
+/// Stage real client notices before modal input/acceptance; apply external changes after return.
+pub fn stage_modal_notices(
+    editor: &mut dyn Editor,
+    notices: &mut Vec<Notice>,
+    external: &mut dyn FnMut() -> Result<bool>,
+) -> Result<bool> {
+    if !notices.is_empty() {
+        return Ok(false);
+    }
+    notices.extend(editor.poll());
+    if !notices.is_empty() {
+        return Ok(false);
+    }
+    external()
+}
+
 /// Native hosting is lent to builders, separate from the data layer's Editor.
 pub trait Modal {
     fn dropdown(
@@ -70,6 +86,14 @@ pub trait Modal {
         editor: &mut dyn Editor,
         combo: NodeId,
     ) -> Result<Effect>;
+    fn font(
+        &mut self,
+        tree: &mut Tree,
+        window: Option<&mut nk_wayland::Window>,
+        styles: &Styles,
+        editor: &mut dyn Editor,
+        request: crate::font_chooser::Request,
+    ) -> Result<Option<crate::font_chooser::Selection>>;
 }
 
 /// What a builder works with, lent for one call.
@@ -97,6 +121,21 @@ impl Cx<'_> {
             .as_deref_mut()
             .ok_or("dropdown needs its parent window")?;
         modal.dropdown(self.tree, window, self.styles, self.editor, combo)
+    }
+    pub fn open_font(
+        &mut self,
+        request: crate::font_chooser::Request,
+    ) -> Result<Option<crate::font_chooser::Selection>> {
+        self.modal
+            .as_deref_mut()
+            .ok_or("font chooser needs a native modal context")?
+            .font(
+                self.tree,
+                self.window.as_deref_mut(),
+                self.styles,
+                self.editor,
+                request,
+            )
     }
     pub fn session(&self) -> &Session {
         self.editor.session()

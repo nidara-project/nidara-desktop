@@ -468,3 +468,439 @@ fn real_dropdown_builder_writes_config1_and_keeps_canonical_value_on_bus_refusal
             .any(|n| n.name == "fixture rejects this cursor")
     );
 }
+
+struct FontState {
+    values: std::collections::BTreeMap<String, String>,
+    calls: usize,
+}
+struct FontConfig(Arc<Mutex<FontState>>);
+#[zbus::interface(name = "org.nidara.Config1")]
+impl FontConfig {
+    fn snapshot(&self) -> (u64, u64, String) {
+        let state = self.0.lock().unwrap();
+        let keys: serde_json::Map<String, serde_json::Value> = state.values.iter().map(|(key,value)|
+            (key.clone(),serde_json::json!({"type":"string","available":true,"writable":true,"value":value}))).collect();
+        (
+            83,
+            state.calls as u64,
+            serde_json::json!({"schemaVersion":1,"keys":keys}).to_string(),
+        )
+    }
+    fn apply(&self, key: String, value: OwnedValue) -> Result<(u64, OwnedValue), ConfigError> {
+        let mut state = self.0.lock().unwrap();
+        state.calls += 1;
+        let Some(Value::Text(value)) = Value::from_variant(&value) else {
+            return Err(ConfigError::Invalid("not a font string".into()));
+        };
+        if key == "appearance.monoFont" {
+            return Err(ConfigError::Invalid("denied-by-font-fixture".into()));
+        }
+        if !state.values.contains_key(&key) {
+            return Err(ConfigError::Invalid("wrong font key".into()));
+        }
+        let value = if value == "Noto Sans Bold 13" {
+            "Noto Sans Bold 13.0".to_owned()
+        } else {
+            value
+        };
+        state.values.insert(key, value.clone());
+        Ok((state.calls as u64, Value::Text(value).to_variant()))
+    }
+}
+
+/// Test-only modal decision seam: no Window/provider/chooser is fabricated. It
+/// exercises the real renderer/builder/client/Config1 path after a modal decision.
+struct FontDecisions {
+    choices: std::collections::VecDeque<Option<nk_settings::font_chooser::Selection>>,
+    operations: Vec<nk_settings::font_catalog::Operation>,
+    release_owner: Option<Connection>,
+    notices: Vec<Notice>,
+}
+impl nk_settings::render::Modal for FontDecisions {
+    fn dropdown(
+        &mut self,
+        _: &mut nk_widgets::Tree,
+        _: &mut nk_wayland::Window,
+        _: &nk_settings::styles::Styles,
+        _: &mut dyn nk_settings::render::Editor,
+        _: nk_widgets::NodeId,
+    ) -> Result<nk_widgets::Effect, String> {
+        Err("not a dropdown fixture".into())
+    }
+    fn font(
+        &mut self,
+        tree: &mut nk_widgets::Tree,
+        window: Option<&mut nk_wayland::Window>,
+        _: &nk_settings::styles::Styles,
+        editor: &mut dyn nk_settings::render::Editor,
+        request: nk_settings::font_chooser::Request,
+    ) -> Result<Option<nk_settings::font_chooser::Selection>, String> {
+        assert!(
+            window.is_none(),
+            "decision fixture is headless, not native evidence"
+        );
+        assert_eq!(request.operation.mount, 17);
+        assert_eq!(
+            request.title,
+            tree.semantics().nodes[&request.launcher].name
+        );
+        assert!(
+            self.operations
+                .iter()
+                .all(|old| old.request != request.operation.request)
+        );
+        self.operations.push(request.operation);
+        if let Some(owner) = self.release_owner.take() {
+            owner.release_name("org.nidara.Config").unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if !nk_settings::render::stage_modal_notices(
+                    editor,
+                    &mut self.notices,
+                    &mut || Ok(true),
+                )? {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "owner loss notice did not arrive"
+                );
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            assert!(!self.notices.is_empty());
+            return Ok(None);
+        }
+        Ok(self
+            .choices
+            .pop_front()
+            .expect("one decision per activation"))
+    }
+}
+
+#[test]
+fn real_font_builders_apply_once_and_keep_canonical_refusals_on_private_bus() {
+    use nk_settings::{
+        exports::Exports,
+        font_chooser::Selection,
+        portal::Appearance,
+        render::{Builders, Editor, Host, Rendered},
+        styles::Styles,
+    };
+    use nk_widgets::{Command as WidgetCommand, Effect, Kind, Tree};
+    let data = std::env::var_os("NK_SETTINGS_DATA")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+        });
+    if !data.join("manifest.json").exists() {
+        assert!(
+            std::env::var_os("NK_REQUIRE_EXPORT").is_none(),
+            "real exports required"
+        );
+        return;
+    }
+    let exports = Exports::load(&data).unwrap();
+    let appearance = Appearance {
+        accent: [0., 136. / 255., 1.],
+        dark: true,
+        reduce_transparency: false,
+        window_background: "tinted".into(),
+        reduced_motion: false,
+        font: "Inter Variable 11".into(),
+        text_scale: 1.25,
+    };
+    let styles = Styles::new(&exports, &appearance).unwrap();
+    let bus = Bus::new();
+    let state = Arc::new(Mutex::new(FontState {
+        values: [
+            (
+                "appearance.interfaceFont".into(),
+                "Noto Sans Regular 11".into(),
+            ),
+            ("appearance.monoFont".into(), "Unmapped family 11".into()),
+        ]
+        .into(),
+        calls: 0,
+    }));
+    let server = serve(&bus, FontConfig(state.clone()));
+    let mut client = Client::start(bus.connect()).unwrap();
+    until(&mut client, "font snapshot", |n| matches!(n, Notice::Ready));
+    let mut page = exports
+        .pages
+        .iter()
+        .find(|page| page.id == "appearance")
+        .unwrap()
+        .clone();
+    page.groups.retain(|group| group.items.iter().any(|item| matches!(item,nk_settings::manifest::Item::Custom{name,..} if name=="interfaceFont" || name=="monoFont")));
+    assert_eq!(page.groups.len(), 1, "actual exported fonts group");
+    assert_eq!(page.groups[0].items.len(), 2);
+    let mut tree = Tree::new("Fonts", styles.metrics, styles.text.clone()).unwrap();
+    styles.apply(&mut tree).unwrap();
+    let content = tree.append(tree.root(), Kind::Scroll, "Content").unwrap();
+    let mut builders = Builders::default();
+    nk_settings::font_builder::register(&mut builders);
+    let mut rendered = Rendered::build(
+        Host {
+            tree: &mut tree,
+            editor: &mut client,
+            exports: &exports,
+            styles: &styles,
+            window: None,
+            modal: None,
+        },
+        &page,
+        &mut builders,
+        content,
+        17,
+    )
+    .unwrap();
+    let interface = tree
+        .semantics()
+        .nodes
+        .values()
+        .find(|n| {
+            n.role == nk_a11y::Role::Button
+                && n.name == exports.text("settings.appearance.interface-font").unwrap()
+        })
+        .unwrap()
+        .id;
+    let mono = tree
+        .semantics()
+        .nodes
+        .values()
+        .find(|n| {
+            n.role == nk_a11y::Role::Button
+                && n.name == exports.text("settings.appearance.mono-font").unwrap()
+        })
+        .unwrap()
+        .id;
+    assert_eq!(tree.node(mono).unwrap().name(), "Unmapped family 11");
+    assert!(
+        tree.semantics().nodes[&mono]
+            .description
+            .contains("Unmapped family 11")
+    );
+    assert_eq!(
+        state.lock().unwrap().calls,
+        0,
+        "build/canonical/unknown reads cannot Apply"
+    );
+    let accepted = Selection::parse("Noto Sans Bold 13").unwrap();
+    let mut decisions = FontDecisions {
+        choices: vec![
+            Some(Selection::parse("Noto Sans 11").unwrap()),
+            Some(accepted.clone()),
+            Some(Selection::parse("Noto Sans Italic 14").unwrap()),
+            None,
+            Some(accepted),
+        ]
+        .into(),
+        operations: vec![],
+        release_owner: None,
+        notices: vec![],
+    };
+    for (button, calls) in [
+        (interface, 0),
+        (interface, 1),
+        (mono, 2),
+        (interface, 2),
+        (interface, 2),
+    ] {
+        let effect = tree
+            .dispatch(tree.target(button), WidgetCommand::Activate)
+            .unwrap();
+        assert_eq!(effect, Effect::Activated(button));
+        rendered
+            .effect(
+                Host {
+                    tree: &mut tree,
+                    editor: &mut client,
+                    exports: &exports,
+                    styles: &styles,
+                    window: None,
+                    modal: Some(&mut decisions),
+                },
+                effect,
+            )
+            .unwrap();
+        let key = if button == interface {
+            "appearance.interfaceFont"
+        } else {
+            "appearance.monoFont"
+        };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while client.session().pending(key) && Instant::now() < deadline {
+            let notices = <Client as Editor>::poll(&mut client);
+            rendered
+                .notices(
+                    Host {
+                        tree: &mut tree,
+                        editor: &mut client,
+                        exports: &exports,
+                        styles: &styles,
+                        window: None,
+                        modal: None,
+                    },
+                    &notices,
+                )
+                .unwrap();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(
+            !client.session().pending(key),
+            "font Apply did not complete"
+        );
+        assert_eq!(
+            state.lock().unwrap().calls,
+            calls,
+            "one Apply per changed accepted font, none for cancel/same"
+        );
+    }
+    assert_eq!(tree.node(interface).unwrap().name(), "Noto Sans Bold 13.0");
+    assert_eq!(tree.node(mono).unwrap().name(), "Unmapped family 11");
+    assert!(
+        tree.semantics().nodes[&mono]
+            .description
+            .contains("denied-by-font-fixture"),
+        "refusal error must survive canonical Changed notices"
+    );
+    let mut text = nk_text::ParleyBackend::with_system_fonts(Arc::new(
+        nk_text::FontSet::discover_required().unwrap(),
+    ))
+    .unwrap();
+    tree.layout(
+        nk_text::Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    let caption = tree.node(interface).unwrap().text_layout().unwrap();
+    assert_eq!(caption.style().family, "Noto Sans");
+    assert_eq!(caption.style().weight, 700.);
+    assert_eq!(caption.style().size, 13. * (96. / 72.) * 1.25);
+    let mut changed_appearance = appearance.clone();
+    changed_appearance.text_scale = 1.5;
+    let changed_styles = Styles::new(&exports, &changed_appearance).unwrap();
+    changed_styles.apply(&mut tree).unwrap();
+    rendered
+        .idle(Host {
+            tree: &mut tree,
+            editor: &mut client,
+            exports: &exports,
+            styles: &changed_styles,
+            window: None,
+            modal: None,
+        })
+        .unwrap();
+    tree.layout(
+        nk_text::Size {
+            width: 640.,
+            height: 480.,
+        },
+        false,
+        &mut text,
+    )
+    .unwrap();
+    assert_eq!(
+        tree.node(interface)
+            .unwrap()
+            .text_layout()
+            .unwrap()
+            .style()
+            .size,
+        13. * (96. / 72.) * 1.5,
+        "mounted font caption must follow the actual portal scale source"
+    );
+    assert_eq!(
+        state.lock().unwrap().calls,
+        2,
+        "appearance changes cannot Apply font settings"
+    );
+    tree.acknowledge();
+    rendered
+        .idle(Host {
+            tree: &mut tree,
+            editor: &mut client,
+            exports: &exports,
+            styles: &changed_styles,
+            window: None,
+            modal: None,
+        })
+        .unwrap();
+    assert!(
+        !tree.invalidation().paint,
+        "unchanged appearance must not keep repainting"
+    );
+    let styles = changed_styles;
+    assert!(decisions.choices.is_empty());
+    // Stale activation while hidden cannot even ask the modal.
+    let row = tree
+        .semantics()
+        .nodes
+        .values()
+        .find(|node| node.children.contains(&interface))
+        .unwrap()
+        .id;
+    tree.set_hidden(row, true).unwrap();
+    rendered
+        .effect(
+            Host {
+                tree: &mut tree,
+                editor: &mut client,
+                exports: &exports,
+                styles: &styles,
+                window: None,
+                modal: Some(&mut decisions),
+            },
+            Effect::Activated(interface),
+        )
+        .unwrap();
+    assert_eq!(decisions.operations.len(), 5);
+    tree.set_hidden(row, false).unwrap();
+    // Production staging predicate consumes a real Config1 owner-loss notice.
+    decisions.release_owner = Some(server);
+    rendered
+        .effect(
+            Host {
+                tree: &mut tree,
+                editor: &mut client,
+                exports: &exports,
+                styles: &styles,
+                window: None,
+                modal: Some(&mut decisions),
+            },
+            Effect::Activated(interface),
+        )
+        .unwrap();
+    rendered
+        .notices(
+            Host {
+                tree: &mut tree,
+                editor: &mut client,
+                exports: &exports,
+                styles: &styles,
+                window: None,
+                modal: None,
+            },
+            &decisions.notices,
+        )
+        .unwrap();
+    assert!(!client.session().available());
+    assert_eq!(state.lock().unwrap().calls, 2);
+    assert!(tree.semantics().nodes[&interface].states.disabled);
+    rendered
+        .unmount(Host {
+            tree: &mut tree,
+            editor: &mut client,
+            exports: &exports,
+            styles: &styles,
+            window: None,
+            modal: None,
+        })
+        .unwrap();
+    tree.remove(content).unwrap(); // Renderer unmount stops callbacks; host removes nodes.
+    assert!(tree.node(interface).is_none());
+}

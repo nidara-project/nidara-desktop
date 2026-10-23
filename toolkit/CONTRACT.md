@@ -1012,12 +1012,12 @@ are window-local; no screen-position or parent-relative geometry is invented.
 The existing AT-SPI mapping of Role::Dialog exports MODAL. `run_dialog_with_options` uses the parent's
 connection/app-id, caller title/size, and the same teardown/input-drain as run_dialog.
 
-The Settings family/size picker consumer is `font_chooser::choose`: actual
+The Settings family/style/size picker consumer is `font_chooser::choose`: actual
 modal native UI with SearchInput, lazy font_catalog, embedded LIST, Cancel/Select
 and the shared system-font backend. Its result is Selection { family, points, attributes }, never
 Apply. Point-size editing and a retained sample share the existing widgets/layout.
-Style selection and Config1 font builders remain subsequent consumers; this UI is
-not full FontChooser parity or native/Orca acceptance. All labels,
+The style list and controlled Config1 builders reuse these primitives; this UI
+is not full FontChooser parity or native/Orca acceptance. All labels,
 window size and list-height constraint are supplied by the host, without defaults.
 
 Modal Escape checks `Tree::search_composing(id)` before closing: composing text
@@ -1059,7 +1059,7 @@ are invented in the widget. A SpinButton reuses existing range input/Value seman
 An initial size not representable by the caller's range is rejected before opening.
 The preview uses points * 96/72 * text_scale logical pixels and the one retained
 Label layout. Choosing family/size does not yet choose an arbitrary face/style;
-style/named-instance selection and Config1 builders remain pending.
+Exact face/named-instance selection and native end-to-end acceptance remain pending.
 
 GlyphRun carries the actual Parley synthesis skew in degrees. nk-render applies it per glyph
 around that glyph's baseline, leaving positions and advances from the shared Layout intact.
@@ -1092,3 +1092,52 @@ When all are installed it leaves those system families intact; when none are it
 registers the private fallback. A collection mixing installed/private families is
 refused, since registering its whole blob could shadow installed faces. Isolated
 mode keeps its original file registration. This does not run the chooser fc-list.
+
+### Controlled font builders and native modal context (#915)
+
+font_builder::register installs interfaceFont/monoFont factories per manifest item.
+They show Session.shown verbatim without normalizing/writing during build/notices, keep
+stable launcher IDs, and call Cx.open_font only on explicit launcher activation.
+The accepted Description is canonicalized and compared semantically with current
+state; an actual change issues one Cx.apply after live/mount/visibility/writability
+checks. Cancel/invalidation/same value never Apply; Failed-last notices keep the
+reply error alongside canonical state. Unsupported current descriptions remain
+visible and report an error on activation, without a guessed preview or write.
+
+Modal::font lends the same tree, optional parent Window, Editor and a Request with
+launcher/Operation/initial draft. Native hosting requires the real parent; optional
+Window permits deterministic decision fixtures in headless builder/bus tests only.
+dropdown::Native also hosts fonts through its existing Bridge/revision/staged notices.
+Its optional font Configuration owns fonts, translated labels, caller constraints
+and actual icon-theme preparation; absence is an explicit capability
+error. No static translation leaks, second chooser/provider or font enumeration on
+page build. Editor.poll stages notices and cancels before modal input/acceptance;
+the app still drains notices and applies external changes after return.
+
+Tree::set_button_description supplies explicit accessible text (current font plus
+help/error) for a Button while the row's LabelledBy keeps the control's title.
+It changes only semantics, validates Button/liveness and is cleared on removal.
+No new visual tokens or button renderer are introduced.
+
+The font request title comes from that manifest row's translated label, matching
+the legacy font button; Configuration owns the remaining translated dialog labels.
+Styles.text_scale retains the actual Appearance portal scale, so both the modal
+and launcher preview use its value rather than inferring it from a font size.
+Tree::set_button_text_style shares the Label override/layout machinery for a
+Button's caption. Supported descriptions preview on the launcher; unsupported
+profile strings remain literal captions in the ordinary UI style. Font discovery
+and shaping stay in the shared system-font backend; no exact-face/fallback claim
+is implied for an uninstalled current family.
+
+A dynamic Button description must also be observable after focus has returned:
+nk-a11y::diff emits Event::Description once when an existing node's description
+changes; the same provider publishes PropertyChange/accessible-description. The
+initial snapshot exposes the getter normally, and unchanged descriptions emit
+nothing. This adds no provider or role/value interface and preserves activation
+before focus ordering. Native Orca speech acceptance remains a separate gate.
+
+Mounted font builders refresh caption styles from the current Styles during idle
+only when portal text scale or line height changes. This never Apply, preserves
+launcher IDs and does not invalidate repeatedly while appearance is unchanged.
+The application's existing appearance-notice hook still cancels an open modal
+before replacing Styles; main-loop native portal/routing acceptance is separate.
