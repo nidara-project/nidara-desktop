@@ -2792,3 +2792,17 @@ all its capsules. A layer allocation error still propagates out of sync; this
 filter is not silent allocation recovery. The mixed-ownership pixel oracle is
 CPU-only with a synthetic panel-ID predicate, not a native allocation test.
 Reduced-motion sweep selection/cancellation prints its stationary level explicitly.
+
+
+The capsule external-backdrop diagnostic is an independent nk-wayland application
+mode, --capsule-backdrop=<command-file>, not a second transport or provider.
+Commands white/text/dark/sweep [level0..1] are explicit stimuli; external overlay
+commands are refused. The backdrop has no material and shares paint_scene with
+the lab; lab scene overlay leaves its root background transparent. Changing the
+file changes only the external client. Unchanged input does not call redraw from
+Backdrop::idle; its inherited poll interval is1000ms, not a file-notification
+wakeup. A sweep command is a stationary grayscale level here, not a timed sweep.
+CPU painting checks do not prove native constant capsule commits, ink response,
+settling, performance or idle CPU. External harness/evidence and rebuilt-head
+native acceptance remain separate work; never reuse the invalid source-RGB curve
+estimator as a compositor oracle.

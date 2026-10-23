@@ -693,3 +693,51 @@ target/capsule-lab-mixed-clippy.log; fmt/skill-docs/diff pass.
 Reduced-motion selection/start/cancellation now logs SWEEP_DISABLED and the
 stationary level; source compiled, no native log/capture acceptance added. All
 native/scheduling/idle/presentation limits above still apply.
+
+
+## Rebuilt local external-backdrop app cut — 2026-10-23
+
+Parent: corrected lab0210d36d. This extracts the existing38e9ff4b independent
+nk-wayland Backdrop application, command parser, shared paint_scene and lab
+Overlay mode. The overlay does not fill the lab's root background; the external
+client paints opaque white/text/dark/stationary gray stimuli. Its default poll
+interval is1000ms; changed command bytes request redraw. Native unchanged-input
+commit counts and wakeups are not accepted through these source conditions.
+Harness scripts, fault injection and historical native result sections were not
+imported. Original source/fixed-binary evidence remains attributed to its heads.
+
+- target/capsule-backdrop-split-verified-tests.log:8 demo tests PASS with
+  NK_REQUIRE_EXPORT=1 and the unchanged mandatory generated exports from
+  889-capsule-recipes/toolkit/target/recipes-split-data. The added CPU test calls
+  actual Backdrop::paint with real text layout and synthetic96x64 frames: white,
+  dark and gray are opaque, text includes dark glyphs, overlay painter preserves
+  transparency. Invalid command parsing includes overlay, nonfinite/negative/
+  out-of-range levels and extra words. No Window/provider or file-wakeup fake.
+- target/capsule-backdrop-split-overlay-control.log: a compiled production fault
+  paints black in Overlay. It completes the preceding white/dark/gray/text pixel
+  assertions and fails its own overlay transparency assertion. Restored before
+  final8PASS. The test's chunks_exact adapters were subsequently changed to
+  as_chunks after Clippy rejected the former; the painting logic is identical.
+- target/capsule-backdrop-split-verified-clippy.log: demo all targets -D warnings
+  PASS. Initial clippy.log records the five test-adapter lint failures; no lint
+  suppression. The first as_chunks conversion missed dereferencing array
+  references in two assertions, producing E0277 in final-tests/final-clippy logs.
+  Corrected assertions and completed verified-tests/verified-clippy. The initial
+  local commit preceded that final result check and was amended only after the
+  corrected validation; no failing checkpoint was published. fmt/skill-docs/diff
+  PASS. CARGO_INCREMENTAL=0, jobs1/shared target.
+
+Review176 follow-up to cut6: opaque fallback does NOT come from painting the
+coverage layer's base. nk-wayland capabilities() requires material for layers;
+run_inner additionally masks layers with caps.material after Options.material.
+Without material, CapsuleComposition::sync retires layers, selects opaque_control
+and updates the D5 fallback. Existing each_optional_protocol_missing_takes_its_fallback
+asserts !material&&!layers (fresh targeted PASS in
+ target/capsule-backdrop-material-capability.log). Cut6's actual CPU custom-root
+assertion requires base alpha255. These are component proofs, not a new native
+material-global-removal run or allocation-recovery result.
+
+No rebuilt-head external revision/settled/constant-commit native oracle, valid ink
+curve/full-area translucency, fractional D5, AT-SPI/Orca, idle CPU/frame count,
+presentation/performance or owner-live acceptance. No fixed binaries overwritten.
+The invalid old source-RGB ink estimator is not introduced by this app-only cut.

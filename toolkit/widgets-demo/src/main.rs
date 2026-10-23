@@ -555,6 +555,11 @@ fn run() -> Result<()> {
     } else {
         appearance.size
     };
+    if let Some(path) =
+        std::env::args().find_map(|a| a.strip_prefix("--capsule-backdrop=").map(str::to_owned))
+    {
+        return capsule_lab::run_backdrop(path, appearance, start);
+    }
     if let Some(scene) =
         std::env::args().find_map(|a| a.strip_prefix("--capsule-lab=").map(str::to_owned))
     {
