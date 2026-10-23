@@ -16,6 +16,7 @@ use zbus::blocking::Connection;
 struct Bus {
     daemon: Child,
     address: String,
+    directory: std::path::PathBuf,
 }
 
 impl Bus {
@@ -29,9 +30,22 @@ impl Bus {
                 NEXT_BUS.fetch_add(1, Ordering::Relaxed)
             ));
         std::fs::create_dir_all(&directory).unwrap();
-        let address_option = format!("--address=unix:path={}", directory.join("bus").display());
+        let config = directory.join("bus.conf");
+        // No service directories: an absent ENTRY must never activate a real app
+        // from the installed desktop during this private-bus test.
+        std::fs::write(
+            &config,
+            format!(
+                r#"<busconfig><type>session</type><listen>unix:path={}</listen>
+<auth>EXTERNAL</auth><policy context="default"><allow send_destination="*"/>
+<allow receive_sender="*"/><allow own="*"/></policy></busconfig>"#,
+                directory.join("bus").display()
+            ),
+        )
+        .unwrap();
         let mut daemon = Command::new("dbus-daemon")
-            .args(["--session", "--nofork", "--print-address", &address_option])
+            .args(["--nofork", "--print-address"])
+            .arg(format!("--config-file={}", config.display()))
             .stdout(Stdio::piped())
             .spawn()
             .expect("dbus-daemon");
@@ -42,6 +56,7 @@ impl Bus {
         Self {
             daemon,
             address: address.trim().to_owned(),
+            directory,
         }
     }
     fn connect(&self) -> Connection {
@@ -57,6 +72,7 @@ impl Drop for Bus {
     fn drop(&mut self) {
         let _ = self.daemon.kill();
         let _ = self.daemon.wait();
+        std::fs::remove_dir_all(&self.directory).expect("remove owned routing test runtime");
     }
 }
 
@@ -268,4 +284,86 @@ fn before_the_takeover_the_entry_point_stays_the_legacy_settings() {
         "legacy: page appearance"
     );
     let _ = serve_legacy;
+}
+
+#[test]
+fn a_native_second_instance_forwards_to_the_existing_entry_without_launching_legacy() {
+    let bus = Bus::new();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let legacy = bus.connect();
+    legacy
+        .object_server()
+        .at(PATH, Legacy(seen.clone()))
+        .unwrap();
+    legacy.request_name(ENTRY).unwrap();
+    let launches = Arc::new(AtomicUsize::new(0));
+    let count = launches.clone();
+    let launcher: Launcher = Arc::new(move || {
+        count.fetch_add(1, Ordering::SeqCst);
+        Err("forbidden pre-takeover legacy launcher".into())
+    });
+    let first = bus.connect();
+    let _router = Router::start(&first, Mode::Native, launcher, &[])
+        .unwrap()
+        .unwrap();
+    assert!(owner(&bus, ENTRY) && owner(&bus, NATIVE) && !owner(&bus, LEGACY));
+    for args in [["page", "network"], ["app", "example.desktop"]] {
+        let second = bus.connect();
+        let args = args.into_iter().map(String::from).collect::<Vec<_>>();
+        let result = Router::start(
+            &second,
+            Mode::Native,
+            Arc::new(|| Err("second launcher".into())),
+            &args,
+        );
+        assert!(
+            result.is_ok(),
+            "native forwarded request failed: {:?}",
+            result.as_ref().err()
+        );
+        assert!(matches!(result.unwrap(), Err(AlreadyRunning)));
+    }
+    assert_eq!(
+        launches.load(Ordering::SeqCst),
+        0,
+        "native mode launched takeover legacy"
+    );
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![
+            vec!["page".to_string(), "network".to_string()],
+            vec!["app".to_string(), "example.desktop".to_string()]
+        ]
+    );
+}
+
+#[test]
+fn a_missing_native_entry_reports_service_unknown_without_the_legacy_start_path() {
+    let bus = Bus::new();
+    let launches = Arc::new(AtomicUsize::new(0));
+    let count = launches.clone();
+    let native = bus.connect();
+    let _router = Router::start(
+        &native,
+        Mode::Native,
+        Arc::new(move || {
+            count.fetch_add(1, Ordering::SeqCst);
+            Err("forbidden pre-takeover legacy launcher".into())
+        }),
+        &[],
+    )
+    .unwrap()
+    .unwrap();
+    assert!(!owner(&bus, ENTRY) && !owner(&bus, LEGACY));
+    let result = call(&bus, NATIVE, &["page", "network"]);
+    assert!(result.is_err(), "missing entry unexpectedly succeeded");
+    assert!(
+        result.unwrap_err().to_string().contains("ServiceUnknown"),
+        "missing entry did not return ServiceUnknown"
+    );
+    assert_eq!(
+        launches.load(Ordering::SeqCst),
+        0,
+        "missing entry used legacy startup path"
+    );
 }

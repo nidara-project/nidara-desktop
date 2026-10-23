@@ -99,3 +99,35 @@ These are real bus tests, not native Wayland/main-loop/window/Orca acceptance.
 Actual application mount/visibility/available/portal/config lifecycle remains
 pending, as do presentation/performance and owner-live gates. Contract/skill and
 evidence in the same change; originals/fixed binaries preserved, no publication.
+
+
+### Review188 — forward to the name that exists in each mode
+
+The initial Native Request export fix still forwarded non-native pages/apps to
+LEGACY, a name the installed entry point does not own before takeover. Service now
+retains Mode: Native forwards directly to ENTRY, without launcher or LEGACY_START;
+EntryPoint retains the previous LEGACY launcher policy. Activation/call errors
+from ENTRY propagate. Production D-Bus may activate ENTRY; the private test bus
+has no service directories and therefore cannot launch installed applications.
+Each Bus Drop now stops its daemon and removes only its own runtime directory.
+
+Two new real-private-bus cases exercise second native instances requesting page
+network and app example.desktop with a test ENTRY owner and launcher count zero,
+and missing ENTRY yielding ServiceUnknown with launcher count zero. The latter
+uses the immediate D-Bus error contract, not a wall-clock threshold. Existing
+post-takeover legacy launch/forward tests still pass. No session-bus environment
+is mutated and no live connection/window is used.
+
+Compiled production fault bypasses Native's direct-entry branch and takes the
+post-takeover launcher path. After ENTRY/NATIVE ownership setup it fails its OWN
+native-forwarded-request assertion with the fixture's forbidden-launcher error,
+not timeout: target/native-routing-mode-forward-control.log. Source restored;
+52 Settings tests PASS (33+2+10+5+2) in native-routing-mode-restored-tests.log,
+Settings all-target Clippy -D warnings PASS in native-routing-mode-clippy.log;
+fmt/skill-docs/diff pass. Earlier timeout control remains explicitly unaccepted.
+
+Review188 on Shell cut10: current control captions use text glyphs; integration
+with nk-icons remains pending. Its current y=metrics.gap placement is provisional,
+not #921's accepted centered small capsule geometry. #921 and its Hyalo hover
+work are outside these cuts. These limits are also named in the prepared Shell
+PR body; no final visual acceptance follows from the CPU layout tests.

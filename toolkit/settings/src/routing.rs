@@ -10,8 +10,8 @@
 //!
 //! `Request(as) → s` keeps the legacy interface's verbs and answers (`ui/settings/app.ts`):
 //! `open`, `page <id>`, `app <desktop-id>`, `queryUI [id]`. A page on [`DRAWN`] is navigated
-//! to here; any other page, and `app`, go to the legacy Settings — started if it is not running
-//! — and its answer is this answer. One connection for everything: the one the [`Client`]
+//! to here; other pages and `app` go to the existing entry point in Native mode,
+//! or to the launcher-backed legacy name after takeover. Its answer is this answer. One connection for everything: the one the [`Client`]
 //! calls `Config1` on, so "the sender owns `org.nidara.SettingsNative`" holds per call.
 //!
 //! [`Client`]: crate::client::Client
@@ -111,6 +111,7 @@ pub struct Router {
 pub struct AlreadyRunning;
 
 struct Service {
+    mode: Mode,
     to_app: async_channel::Sender<Incoming>,
     legacy: Launcher,
     starting: Arc<Mutex<()>>,
@@ -129,7 +130,7 @@ impl Service {
             Err(e) => return Err(zbus::fdo::Error::Failed(e)),
         };
         if let Route::Forward(args) = route {
-            return forward(connection, &self.legacy, &self.starting, args)
+            return forward(connection, self.mode, &self.legacy, &self.starting, args)
                 .await
                 .map_err(zbus::fdo::Error::Failed);
         }
@@ -145,13 +146,24 @@ impl Service {
     }
 }
 
-/// The legacy Settings' answer to `args`, starting it first if its name has no owner.
+/// Forward to the entry point before takeover, or start/use the legacy name afterwards.
 async fn forward(
     connection: &zbus::Connection,
+    mode: Mode,
     launcher: &Launcher,
     starting: &Mutex<()>,
     args: Vec<String>,
 ) -> Result<String, String> {
+    if mode == Mode::Native {
+        let reply = connection
+            .call_method(Some(ENTRY), PATH, Some(ENTRY), "Request", &(args,))
+            .await
+            .map_err(|e| format!("the Settings entry point: {e}"))?;
+        return reply
+            .body()
+            .deserialize::<String>()
+            .map_err(|e| e.to_string());
+    }
     let dbus = zbus::fdo::DBusProxy::new(connection)
         .await
         .map_err(|e| e.to_string())?;
@@ -222,6 +234,7 @@ impl Router {
                 .at(
                     PATH,
                     Service {
+                        mode,
                         to_app,
                         legacy,
                         starting: Arc::new(Mutex::new(())),

@@ -532,6 +532,10 @@ The Router exports its Request interface in both Native and EntryPoint modes;
 only EntryPoint takes the legacy entry-point name. A second native process hands
 its request to the existing native owner before takeover too. A failed handoff
 returns its actual transport error, never a silent AlreadyRunning result.
+In Native mode forwarded pages/apps go to ENTRY directly, without the legacy
+launcher or takeover-name wait. D-Bus may activate that existing entry point;
+activation/call failure is returned. EntryPoint mode forwards to LEGACY and retains
+its launcher/wait policy. The native side never launches a second legacy entry.
 
 ### Settings window composition (Sol, #915)
 

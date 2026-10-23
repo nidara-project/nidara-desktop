@@ -2870,3 +2870,12 @@ and explicit connections, without changing DBUS_SESSION_BUS_ADDRESS. A test-only
 RoutingReady endpoint confirms the real object server responds before a missing-
 Request control is tested; it implements no Request and no UI/provider behavior.
 The control must fail its handoff assertion with UnknownInterface, not a timeout.
+
+
+Native-mode forwarding goes directly to org.nidara.Settings (ENTRY), with no
+legacy launcher or LEGACY_START wait: the existing legacy process is still the
+entry point, or D-Bus activates it, or the call returns a clear error. Pass Mode
+into Service; do not route pre-takeover pages/apps to the post-takeover LEGACY
+name. EntryPoint mode retains LEGACY plus launcher. Private routing tests omit
+activation service directories so missing-entry cases cannot start installed apps;
+each Bus Drop stops its daemon then removes only its own target/rb runtime.
