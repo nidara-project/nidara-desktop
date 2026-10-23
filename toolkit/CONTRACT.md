@@ -528,6 +528,11 @@ either half depends on it.
   widgets demo uses it too (`widgets-demo → nk-settings`); its own panel and title bar recipe
   stay in the demo.
 
+The Router exports its Request interface in both Native and EntryPoint modes;
+only EntryPoint takes the legacy entry-point name. A second native process hands
+its request to the existing native owner before takeover too. A failed handoff
+returns its actual transport error, never a silent AlreadyRunning result.
+
 ### Settings window composition (Sol, #915)
 
 `settings::material::{panel, control}` owns the exact exported panel/control readers,

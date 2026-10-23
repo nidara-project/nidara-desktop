@@ -65,3 +65,37 @@ performance or owner-live acceptance. The caller must supply titlebar/transition
 policy before sync; this seam invents no new geometry/material numbers. Adaptive
 foundations/Settings scheduling remains named debt. Original branches/fixed bins
 preserved; nothing published.
+
+
+## Rebuilt local pre-takeover native routing cut — 2026-10-23
+
+Parent:Shell1089f3c2. Extracts existing7302dcb8 production correction: export the
+Request object in Native as well as EntryPoint mode, while only EntryPoint owns
+the legacy entry-point name. A second native instance can hand its request to the
+first before takeover; transport errors are propagated rather than swallowed.
+No bus name or installed application identity is changed by this local cut.
+
+- target/native-routing-ready-restored-tests.log:50 Settings tests PASS with
+  required complete exports from cut9. Three routing tests run actual private
+  dbus-daemon connections; the second-instance test covers both modes, receives
+  AlreadyRunning and confirms actual Navigate(appearance) delivery. Legacy entry
+  ownership/forwarding behavior remains tested. Socket paths are explicit under
+  this cut's toolkit/target/rb-<pid>-<counter>, no session-bus environment mutation.
+- target/native-routing-ready-control.log: compiled old export guard omits Request
+  in Native mode. A test-only RoutingReady Ping first confirms that the real
+  object server responds; it supplies no Request/UI/provider. The second native
+  handoff then returns actual UnknownInterface and fails its OWN is_ok assertion,
+  before any answer-wait loop. Restored before full50PASS.
+- target/native-routing-ready-clippy.log: Settings all targets -D warnings PASS;
+  fmt/skill-docs/diff pass. Incremental0/jobs1/shared target.
+- Initial native-routing-split-tests.log records a test diagnostic E0277 (Router
+  lacks Debug), fixed by printing only the error. Initial old-guard control in
+  native-routing-split-control.log timed out because no object server interface
+  existed at that path. That timeout is NOT an accepted catch. RoutingReady is an
+  explicit private-bus readiness fixture so the accepted control fails its own
+  missing-interface result assertion instead. No timeout relaxed or swallowed.
+
+These are real bus tests, not native Wayland/main-loop/window/Orca acceptance.
+Actual application mount/visibility/available/portal/config lifecycle remains
+pending, as do presentation/performance and owner-live gates. Contract/skill and
+evidence in the same change; originals/fixed binaries preserved, no publication.

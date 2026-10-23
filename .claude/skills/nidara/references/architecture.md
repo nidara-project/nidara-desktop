@@ -2859,3 +2859,14 @@ The app mounts Rendered under Shell::content. Keep the shell separate from the
 native main loop: this assembly alone does not claim live routing, portal updates,
 AT-SPI/Orca, presentation or performance acceptance. Main still needs to supply
 window policies and integrate service/portal/routing/mount lifetimes.
+
+
+Native Settings exports the Request object in Native mode too, before acquiring
+its native bus name. Only EntryPoint mode acquires org.nidara.Settings; pre-takeover
+second native instances must still reach Request at org.nidara.SettingsNative.
+Propagate handoff errors instead of reporting AlreadyRunning without delivery.
+Routing tests use explicit private dbus-daemon socket paths under toolkit/target
+and explicit connections, without changing DBUS_SESSION_BUS_ADDRESS. A test-only
+RoutingReady endpoint confirms the real object server responds before a missing-
+Request control is tested; it implements no Request and no UI/provider behavior.
+The control must fail its handoff assertion with UnknownInterface, not a timeout.

@@ -216,7 +216,7 @@ impl Router {
             Mode::EntryPoint => &[NATIVE, ENTRY],
         };
         // The interface first: a name taken with nothing behind it answers UnknownMethod.
-        if mode == Mode::EntryPoint {
+        {
             connection
                 .object_server()
                 .at(
@@ -247,13 +247,9 @@ impl Router {
                     } else {
                         args.to_vec()
                     };
-                    let _ = connection.call_method(
-                        Some(target),
-                        PATH,
-                        Some(ENTRY),
-                        "Request",
-                        &(args,),
-                    );
+                    connection
+                        .call_method(Some(target), PATH, Some(ENTRY), "Request", &(args,))
+                        .map_err(|e| format!("handing the request to {target}: {e}"))?;
                     return Ok(Err(AlreadyRunning));
                 }
                 Err(e) => return Err(e),

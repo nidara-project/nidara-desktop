@@ -20,8 +20,18 @@ struct Bus {
 
 impl Bus {
     fn new() -> Self {
+        static NEXT_BUS: AtomicUsize = AtomicUsize::new(0);
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../target")
+            .join(format!(
+                "rb-{}-{}",
+                std::process::id(),
+                NEXT_BUS.fetch_add(1, Ordering::Relaxed)
+            ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let address_option = format!("--address=unix:path={}", directory.join("bus").display());
         let mut daemon = Command::new("dbus-daemon")
-            .args(["--session", "--nofork", "--print-address"])
+            .args(["--session", "--nofork", "--print-address", &address_option])
             .stdout(Stdio::piped())
             .spawn()
             .expect("dbus-daemon");
@@ -181,22 +191,52 @@ fn the_entry_point_draws_its_pages_and_forwards_the_rest() {
 
 #[test]
 fn a_second_native_settings_hands_its_request_over() {
+    second_instance(Mode::EntryPoint);
+    second_instance(Mode::Native);
+}
+
+// A test-only real bus endpoint starts the object server even when the fault
+// omits Request, so that omission returns UnknownInterface instead of timing out.
+struct RoutingReady;
+#[zbus::interface(name = "org.nidara.Test.RoutingReady")]
+impl RoutingReady {
+    fn ping(&self) -> &str {
+        "ready"
+    }
+}
+
+fn second_instance(mode: Mode) {
     let bus = Bus::new();
     let first = bus.connect();
-    let router = Router::start(&first, Mode::EntryPoint, Arc::new(|| Ok(())), &[])
+    first.object_server().at(PATH, RoutingReady).unwrap();
+    let router = Router::start(&first, mode, Arc::new(|| Ok(())), &[])
         .unwrap()
         .unwrap();
     let answered = Arc::new(Mutex::new(Vec::new()));
     window(router, answered.clone());
     let second = bus.connect();
+    let ready = second
+        .call_method(
+            Some(NATIVE),
+            PATH,
+            Some("org.nidara.Test.RoutingReady"),
+            "Ping",
+            &(),
+        )
+        .unwrap();
+    assert_eq!(ready.body().deserialize::<String>().unwrap(), "ready");
     let again = Router::start(
         &second,
-        Mode::EntryPoint,
+        mode,
         Arc::new(|| Ok(())),
         &["page".into(), "appearance".into()],
-    )
-    .unwrap();
-    assert!(matches!(again, Err(AlreadyRunning)));
+    );
+    assert!(
+        again.is_ok(),
+        "second native Request handoff failed: {:?}",
+        again.as_ref().err()
+    );
+    assert!(matches!(again.unwrap(), Err(AlreadyRunning)));
     let deadline = Instant::now() + Duration::from_secs(3);
     while answered.lock().unwrap().is_empty() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
