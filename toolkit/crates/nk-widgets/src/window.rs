@@ -1463,10 +1463,10 @@ mod tests {
                 ..Default::default()
             });
             let metrics = CapsuleMetrics {
-                padding: 4.,
-                gap: 4.,
-                button_min: 24.,
-                height_min: 32.,
+                padding: 5.,
+                gap: 3.,
+                button_min: 26.,
+                height_min: 38.,
             };
             let capsule = tree
                 .control_capsule("Window actions", Point { x: 300., y: 8. }, metrics)
@@ -1481,7 +1481,7 @@ mod tests {
                 buttons.push(id);
                 tree.layout(tree.size, layered, &mut backend).unwrap();
                 let bounds = tree.nodes[&capsule].bounds;
-                assert_eq!((bounds.width, bounds.height), ([32., 60., 88.][i], 32.));
+                assert_eq!((bounds.width, bounds.height), ([36., 65., 94.][i], 38.));
                 assert_eq!(tree.nodes[&id].name, names[i]);
                 assert_eq!(tree.nodes[&id].caption.as_deref(), Some(glyphs[i]));
                 assert!(tree.showing(id));
@@ -1541,7 +1541,7 @@ mod tests {
                 capsule,
                 CapsuleMetrics {
                     button_min: 32.,
-                    height_min: 40.,
+                    height_min: 44.,
                     ..metrics
                 },
             )
@@ -1553,7 +1553,7 @@ mod tests {
                     tree.nodes[&capsule].bounds.width,
                     tree.nodes[&capsule].bounds.height
                 ),
-                (76., 40.)
+                (77., 44.)
             );
             tree.set_capsule_position(capsule, Point { x: 1000., y: 12. })
                 .unwrap();
