@@ -4037,3 +4037,12 @@ PAM can, so restarting the daemon by hand never fixes either.
 The pattern is: keybind in `hyprland.lua` → `nidara-ipc <cmd>` → `requestHandler` in `app.ts` → `ShellActions.<action>()` → `Status.<setter>()`.
 
 Don't shortcut this. Every step is there for a reason (Hyprland reload-safety, IPC visibility from CLI, typed registry, central state).
+
+
+### Settings slice startup diagnostics
+
+The slice smoke check retains stderr for its third (own-window-level) launch.
+An early exit must report its status/log instead of waiting out the listing
+deadline; missing-window failures also include the log. Keep the original
+deadline and semantic/pixel assertions. Diagnostic improvement alone is not
+proof that a failed native startup was corrected.

@@ -55,7 +55,7 @@ float glyph(float g, vec2 p) {
 }
 vec4 over(vec4 top, vec4 under) { return top + under * (1.0 - top.a); }
 // window_controls::{HOVER_D, EDGE, PITCH}, given by Rust (`set_geometry`): each button a circle
-// HOVER_D across, EDGE from the capsule's edge and from the next one.
+// HOVER_D across, EDGE from the capsule's edge, with PITCH between centers.
 uniform vec3 geometry;  // the circle's radius, the edge, the pitch — logical px
 #define HOVER_R geometry.x
 #define EDGE geometry.y
@@ -74,7 +74,7 @@ vec4 controls(vec2 p_out, float dark) {
     // Over the glass the glyphs take the ink its answer to the backdrop mixes, and the hover and
     // the press are washes in the glass itself (render/glass_gl.rs `StatePx`): no disc here.
     if (glass_under > 0.5) ink = vec4(ink_rgba.rgb * ink_rgba.a, ink_rgba.a);
-    float slot = clamp(floor((p.x - EDGE * 0.5) / PITCH), 0.0, count - 1.0);
+    float slot = clamp(floor((p.x - EDGE - HOVER_R + PITCH * 0.5) / PITCH), 0.0, count - 1.0);
     vec2 centre = vec2(EDGE + HOVER_R + slot * PITCH, size.y * 0.5);
     float g = slot < 0.5 ? glyphs.x : (slot < 1.5 ? glyphs.y : glyphs.z);
     bool on = active > 0.5;
@@ -261,7 +261,7 @@ struct PresentState {
 /// The capsule's one shape.
 const SHAPE: usize = 0;
 
-/// Each button a circle `HOVER_D` across, `EDGE` from the capsule's edge and from the next one —
+/// Each button a circle `HOVER_D` across, `EDGE` from the outside, with `PITCH` between centers —
 /// where its wash lies (protocols/window_controls.rs, the one copy of these in Hyalo).
 use crate::protocols::window_controls::{EDGE, HOVER_D, PITCH};
 const HOVER_R: f64 = HOVER_D / 2.0;

@@ -43,15 +43,13 @@ use crate::{
 /// title bar thin.
 pub const BUTTON_H: f64 = 32.0;
 
-/// The bar's rule for a capsule of icon buttons (owner, 2026-10-06): each button's hover is a
-/// circle `HOVER_D` across, `EDGE` from the capsule's edge and `EDGE` from the next circle — so
-/// a button takes `PITCH` and the capsule `PITCH × n + EDGE`: 32, 60, 88. Two make the kit's
-/// back/forward pair (60 × 32), which follows the same rule. Until 2026-10-06 a button was a
-/// 30 px slot whose hover filled it, cut by the capsule: straight on one side or on both. The
-/// shader takes these three numbers from here (render/controls.rs `set_geometry`).
+/// Independent outer inset and inter-button gap. The component export mirrors
+/// these provisional values; separating them preserves current pixels while
+/// allowing future owner tuning without conflating the two measurements.
 pub const HOVER_D: f64 = 24.0;
 pub const EDGE: f64 = 4.0;
-pub const PITCH: f64 = HOVER_D + EDGE;
+pub const GAP: f64 = 4.0;
+pub const PITCH: f64 = HOVER_D + GAP;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -101,9 +99,9 @@ impl Buttons {
         &self.slots[..self.len]
     }
 
-    /// The capsule's width, logical px: one `PITCH` per button, and `EDGE` once more.
+    /// Outer insets plus each button and the gaps between neighboring buttons.
     pub fn width(&self) -> f64 {
-        PITCH * self.len as f64 + EDGE
+        PITCH * self.len as f64 - GAP + 2.0 * EDGE
     }
 
     /// The shader's glyph per slot (render/controls.rs), and how many slots.
@@ -245,9 +243,9 @@ pub fn button_at(r: Rectangle<f64, Logical>, local: Point<f64, Logical>, buttons
     if !r.contains(local) || buttons.len == 0 {
         return None;
     }
-    // The boundary between two buttons is halfway between their circles, half an EDGE into
+    // The boundary between two buttons is halfway between their circles, half a GAP into
     // the gap: the end buttons reach the capsule's ends.
-    let i = (((local.x - r.loc.x - EDGE / 2.0) / PITCH).floor().max(0.0) as usize).min(buttons.len - 1);
+    let i = (((local.x - r.loc.x - EDGE + GAP / 2.0) / PITCH).floor().max(0.0) as usize).min(buttons.len - 1);
     Some(buttons.as_slice()[i])
 }
 
@@ -383,6 +381,17 @@ impl Dispatch2<NidaraWindowControlsV1, Hyalo> for ControlsData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn layout_mirror_matches_default_component_export() {
+        let token: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../toolkit/tokens/capsule.json"
+        )).unwrap();
+        for (key, value) in [("height", BUTTON_H), ("button", HOVER_D), ("edge", EDGE), ("gap", GAP)] {
+            assert_eq!(token["default"][key].as_f64(), Some(value), "capsule {key} mirror drift");
+        }
+        assert_eq!(PITCH, HOVER_D + GAP);
+    }
 
     fn of(list: &[Button]) -> Buttons {
         let mut out = Buttons { slots: [Button::Close; 3], len: 0 };

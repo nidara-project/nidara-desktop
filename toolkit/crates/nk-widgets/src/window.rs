@@ -1455,6 +1455,118 @@ mod tests {
         }
     }
     #[test]
+    fn capsules_retain_existing_button_actions_capture_names_and_geometry() {
+        for layered in [false, true] {
+            let (mut tree, mut backend, _, _, _) = fixture();
+            tree.set_text_style(TextStyle {
+                size: 14.,
+                ..Default::default()
+            });
+            let metrics = CapsuleMetrics {
+                padding: 5.,
+                gap: 3.,
+                button_min: 26.,
+                height_min: 38.,
+            };
+            let capsule = tree
+                .control_capsule("Window actions", Point { x: 300., y: 8. }, metrics)
+                .unwrap();
+            let names = ["Minimize", "Maximize", "Close"];
+            let glyphs = ["−", "□", "×"];
+            let mut buttons = Vec::new();
+            for i in 0..3 {
+                let id = tree
+                    .capsule_button(capsule, names[i], glyphs[i], i == 2)
+                    .unwrap();
+                buttons.push(id);
+                tree.layout(tree.size, layered, &mut backend).unwrap();
+                let bounds = tree.nodes[&capsule].bounds;
+                assert_eq!((bounds.width, bounds.height), ([36., 65., 94.][i], 38.));
+                assert_eq!(tree.nodes[&id].name, names[i]);
+                assert_eq!(tree.nodes[&id].caption.as_deref(), Some(glyphs[i]));
+                assert!(tree.showing(id));
+            }
+            let semantics = tree.semantics();
+            assert_eq!(semantics.nodes[&capsule].role, nk_a11y::Role::Panel);
+            assert_eq!(semantics.nodes[&capsule].children, buttons);
+            for id in &buttons {
+                assert_eq!(semantics.nodes[id].role, nk_a11y::Role::Button);
+                assert!(tree.focus_order().contains(id));
+                assert_eq!(
+                    tree.dispatch(tree.target(*id), Command::Activate).unwrap(),
+                    Effect::Activated(*id)
+                );
+            }
+            let close = buttons[2];
+            let r = tree.nodes[&close].bounds;
+            let point = Point {
+                x: r.x + r.width / 2.,
+                y: r.y + r.height / 2.,
+            };
+            tree.pointer_press(point).unwrap();
+            assert_eq!(tree.captured(), Some(close));
+            assert_eq!(
+                tree.pointer_release(Point { x: 0., y: 0. }).unwrap(),
+                Effect::None
+            );
+            tree.pointer_press_in(
+                capsule,
+                Point {
+                    x: point.x - 300.,
+                    y: point.y - 8.,
+                },
+            )
+            .unwrap();
+            assert_eq!(tree.captured(), Some(close));
+            tree.set_disabled(close, true).unwrap();
+            assert_eq!(tree.captured(), None);
+            assert!(
+                tree.dispatch(tree.target(close), Command::Activate)
+                    .is_err()
+            );
+            tree.set_disabled(close, false).unwrap();
+            tree.pointer_press(point).unwrap();
+            tree.remove(close).unwrap();
+            assert_eq!(tree.captured(), None);
+            assert!(tree.node(close).is_none());
+            tree.set_capsule_position(capsule, Point { x: 320., y: 12. })
+                .unwrap();
+            tree.layout(tree.size, layered, &mut backend).unwrap();
+            assert_eq!(tree.nodes[&capsule].children, buttons[..2]);
+            assert_eq!(
+                (tree.nodes[&capsule].bounds.x, tree.nodes[&capsule].bounds.y),
+                (320., 12.)
+            );
+            tree.set_capsule_metrics(
+                capsule,
+                CapsuleMetrics {
+                    button_min: 32.,
+                    height_min: 44.,
+                    ..metrics
+                },
+            )
+            .unwrap();
+            tree.layout(tree.size, layered, &mut backend).unwrap();
+            assert_eq!(tree.nodes[&capsule].children, buttons[..2]);
+            assert_eq!(
+                (
+                    tree.nodes[&capsule].bounds.width,
+                    tree.nodes[&capsule].bounds.height
+                ),
+                (77., 44.)
+            );
+            tree.set_capsule_position(capsule, Point { x: 1000., y: 12. })
+                .unwrap();
+            tree.layout(tree.size, layered, &mut backend).unwrap();
+            assert!(
+                buttons[..2].iter().all(|id| !tree.showing(*id)),
+                "capsule outside clipped window is still showing"
+            );
+            tree.remove(capsule).unwrap();
+            assert!(!tree.capsules.contains_key(&capsule));
+        }
+    }
+    #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {
         let style = TitlebarStyle {
             blur: nk_wayland::Blur {

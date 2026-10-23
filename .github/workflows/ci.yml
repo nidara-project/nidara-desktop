@@ -220,6 +220,13 @@ jobs:
           if python3 scripts/ci/settings-tokens-check.py build/settings-switch-control; then
             echo "::error::settings-tokens-check passed a components variant with no switch thumb colour"; exit 1
           fi
+          for key in edge gap; do
+            rm -rf build/settings-capsule-control && cp -r build/settings-data build/settings-capsule-control
+            python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['variants'][0]['capsule'].pop(sys.argv[2]); json.dump(d, open(p, 'w'))" build/settings-capsule-control/tokens/components.json "$key"
+            if python3 scripts/ci/settings-tokens-check.py build/settings-capsule-control; then
+              echo "::error::settings-tokens-check passed missing capsule $key"; exit 1
+            fi
+          done
       # The kit's ONE sheet (tech-debt #108 phase 2): the shell, greeter and lock
       # load it at runtime ahead of their own, so it is no longer compiled as part
       # of any of them — a break in it would otherwise reach nobody's compile.
