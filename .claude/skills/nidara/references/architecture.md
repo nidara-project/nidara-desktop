@@ -2987,3 +2987,13 @@ Configure and compares it with received xdg_popup wire rectangles, including
 reposition, while requiring toplevel None. Its source is compiled/static-checked
 on extraction; checker execution remains pending. Do not substitute historical
 fixed-binary results for native evidence of a rebuilt head.
+
+`nk-a11y::bridge::Bridge` now owns the reusable provider worker. Requests carry a
+snapshot-bound publication revision via `Backend::new_versioned/update_versioned`:
+node/action/availability validation and revision capture share the semantic Tree
+lock. The callback queues that captured token, even if delayed across publication.
+Do not reintroduce a separate Atomic token in a worker before/after update: both
+orders can mislabel an old-snapshot request. Application-side target/revision
+checks still apply. `published` acknowledges successful updates; `check` reports
+fatal worker errors. Widgets-demo reexports this worker; Settings popup/controller
+integration remains to consume it. This does not replace real Orca validation.

@@ -429,3 +429,32 @@ cut separates/compiles diagnostic source; native baseline/control execution
 remains pending outside this local validation. No current native geometry,
 wire/role/grab/reposition/focus/cleanup, AT-SPI/Orca or performance/live proof.
 Historical fixed-binary evidence is not evidence of this rebuilt head.
+
+
+## Local cut21 — snapshot-bound AT-SPI publication (2026-10-23)
+
+Existing5e26bd02 delta extracted literally above cut20: shared bridge::Bridge
+worker, versioned Backend callback/update, Selection option authorization under
+the same semantic Tree lock, demo reexport only. Contract before API, canonical
+skill/README in the same change. Main/other toolkit features preserved.
+
+131 a11y/Settings/widgets/demo tests PASS (12+52+65+2) with mandatory fullcut16
+menu-list-data: target/a11y-publication-split-restored-tests.log. Two deterministic
+Barriers exercise a callback authorized on revision7, delayed across revision8
+with target disabled, retaining7; the next request is rejected. Bus-free Object/
+Selection fixtures verify modal option selection without the combo open action,
+option/container availability and invalid indices. These are actual production
+methods with synthetic semantic snapshots, not a live provider/bus/Orca test.
+
+Compiled control restored the old SelectChild implementation requiring combo
+Activate: its own selection.select_child(0) assertion failed AFTER constructing
+an enabled modal option/container with combo opening suspended; split-modal-control.log.
+Literal source restored before131PASS. All-target a11y/demo Clippy -D warnings,
+workspace all-target check and nk-a11y no-default-features check PASS in split-
+clippy/workspace/no-atspi logs; fmt/skilldocs/diff PASS.
+
+Worker publication acknowledgements/fatal failure propagation are compiled here;
+no new live worker/provider publication proof or runtime fault injection. No
+native popup, Config1 builder, AT-SPI action delivery or Orca speech acceptance,
+performance/live claim. Historical fixed evidence remains source-specific.
+Adaptive foundations/Settings real polling caller and causal test remain debt.

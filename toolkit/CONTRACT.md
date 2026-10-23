@@ -217,6 +217,28 @@ not hover. It uses the existing check.ts path and exported stroke/size in row in
 This retained list alone does not establish a complete native Dropdown/builder
 or real Orca speech acceptance; that requires the host and accessibility bridge.
 
+### Versioned AT-SPI publication (#915)
+
+`atspi_backend::Backend::new_versioned(tree, revision, callback)` and
+`update_versioned(revision, tree)` associate an application publication token with
+the shared semantic snapshot. `VersionedCallback` receives `(revision, Request)`:
+node/action/availability validation and revision capture occur under the SAME
+snapshot lock. Selection.SelectChild checks the container and the chosen option
+(action/availability) under that same lock; it does not require the combo's separate
+open action, which may be suspended while the menu is modal. A callback delayed across a new publication retains the revision
+of the snapshot that authorized it. The app queues requests and revalidates that
+revision and the live target; provider threads never mutate widgets. Tokens are
+application-owned and must distinguish modal openings/subtree lifetimes. Legacy
+`Backend::new` and A11yBackend::update remain compatible, with unversioned callback.
+
+A worker must use this snapshot-bound token, not an independently updated Atomic
+counter before/after backend.update: either order can label an old-snapshot action
+with a new revision. Backend update failure is fatal to the worker, not a success
+acknowledgement. `nk_a11y::bridge::Bridge` owns that worker/provider, exposes queued
+`(revision, Request)` to the application, and reports successful publication tokens
+on `published`; failures surface through `check`. Widgets-demo reuses this worker.
+This seam does not itself prove real Orca speech or modal hosting.
+
 ### Dropdown modal semantics (#882/#915)
 
 `DropdownPopup::new` borrows the parent Tree until dismissal and constructs its

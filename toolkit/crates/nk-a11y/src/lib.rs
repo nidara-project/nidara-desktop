@@ -8,6 +8,8 @@ use std::{
 };
 #[cfg(feature = "atspi")]
 pub mod atspi_backend;
+#[cfg(feature = "atspi")]
+pub mod bridge;
 mod geometry;
 pub use geometry::{TextGeometry, TextSpan};
 pub type Result<T> = std::result::Result<T, String>;
