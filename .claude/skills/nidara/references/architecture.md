@@ -2920,3 +2920,11 @@ the combo through the ordinary stale/hidden/disabled guard; combo activation
 only requests opening. Expanded state and selection are independent. Popup list
 painting/input, final closed-control look and Settings builder remain separate
 pending work; model tests do not prove real Orca speech.
+
+The closed Dropdown trigger now uses `DropdownStyle`, exported once from
+`toolkit/tokens/dropdown.json` as components.json's `dropdown.trigger`; shared
+`nk-settings::Styles::apply` installs it. The source is the current kit CSS,
+including the reserved 2px focus border, relative Settings font/weight and
+shared-theme down chevron. Missing style/arrow is an error. The trigger's
+paint/geometry no longer reuse Button defaults. This does not implement the
+open popup list or accept its native look/Orca behavior.

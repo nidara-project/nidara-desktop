@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "Native Dropdown trigger, from ui/lib/nidara-kit/styles/_components.scss dropdown > button and _base-layer.scss dropdown > button > box/arrow. Settings uses fse-small instead of fixed fs-small. RADIUS.sm is the same nidara-radius-sm. Final native values still need owner live review.",
+    "The arrow size 16 is the GTK default documented in _base-layer.scss, not a new native visual choice. Default applies to every component mode variant."
+  ],
+  "default": {
+    "trigger": {
+      "paddingX": 14,
+      "paddingY": 4,
+      "border": 2,
+      "minContentHeight": 20,
+      "radius": "sm",
+      "fontSize": "fse-small",
+      "fontWeight": "fw-medium",
+      "labelMargin": "space-2",
+      "arrowSize": 16,
+      "arrowGap": 6,
+      "arrow": "nd-pan-down",
+      "background": "--nidara-surface-back",
+      "hover": "--nidara-surface-hover",
+      "pressed": "--nidara-surface-active",
+      "text": "--nidara-text",
+      "arrowColor": "--nidara-text-dim",
+      "focus": "--nidara-accent",
+      "disabledOpacity": 0.45
+    }
+  },
+  "variants": []
+}

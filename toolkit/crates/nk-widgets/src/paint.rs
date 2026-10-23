@@ -240,6 +240,9 @@ impl Tree {
         if !intersects(r, clip) {
             return Ok(());
         }
+        if matches!(n.kind, Kind::Dropdown { .. }) {
+            return self.paint_dropdown(id, r, canvas);
+        }
         let m = self.metrics;
         let ink = if self.available(id) {
             palette.text

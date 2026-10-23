@@ -195,6 +195,24 @@ for variant in component_variants:
             and positive_number(capsule.get('windowInset'), True)
             and capsule['height'] >= capsule['button'] + 2 * capsule['edge']):
         fail.append(f'{where}: missing or invalid capsule geometry')
+    trigger = (variant.get('dropdown') or {}).get('trigger') or {}
+    if not all(positive_number(trigger.get(k), True) for k in ('paddingX', 'paddingY', 'border', 'arrowGap')):
+        fail.append(f'{where}: missing dropdown trigger geometry')
+    if not all(positive_number(trigger.get(k)) for k in ('minContentHeight', 'arrowSize')):
+        fail.append(f'{where}: invalid dropdown trigger minimum/icon size')
+    if trigger.get('radius') not in static['ts']['RADIUS']:
+        fail.append(f'{where}: dropdown radius is not on the shared ladder')
+    if not all(trigger.get(k) in static['scss'] for k in ('fontSize', 'fontWeight', 'labelMargin')):
+        fail.append(f'{where}: missing dropdown typography/margin token')
+    if not isinstance(trigger.get('arrow'), str) or not trigger['arrow'].startswith('nd-'):
+        fail.append(f'{where}: missing dropdown arrow')
+    opacity = trigger.get('disabledOpacity')
+    if not isinstance(opacity, (int, float)) or not 0 <= opacity <= 1:
+        fail.append(f'{where}: invalid dropdown disabled opacity')
+    for k in ('background', 'hover', 'pressed', 'text', 'arrowColor', 'focus'):
+        colour = trigger.get(k)
+        if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
+            fail.append(f'{where}: missing dropdown colour {k}: {colour}')
     common = variant.get('common') or {}
     widths = variant.get('widths') or {}
     form = widths.get('form') or {}
@@ -208,4 +226,4 @@ if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch and rows complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch, rows and dropdown complete')

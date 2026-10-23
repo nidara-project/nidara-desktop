@@ -169,6 +169,11 @@ AT-SPI Selection. Activating the combo requests opening (Activated); choosing
 an option uses the same guarded dispatch as accessibility and returns Changed
 once on the combo. Programmatic `set_dropdown_selected` emits no write.
 Expanded state is controlled explicitly so cancellation preserves the selection.
-The closed caption reuses Button paint/geometry provisionally. This model is
+The closed trigger takes `DropdownStyle` from `components.json.dropdown.trigger`
+(`toolkit/tokens/dropdown.json`, derived from the current kit CSS): padding,
+constant border, minimum content height, radius, relative font/weight, colours,
+disabled opacity and shared-theme chevron. Missing style is an error. Hover,
+press and keyboard focus keep the same bounds. This is the current source's
+recipe, still subject to native owner live review. This model is
 not the popup list, a complete Dropdown widget, a Settings builder, or an Orca
 acceptance result.

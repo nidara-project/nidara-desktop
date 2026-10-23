@@ -245,3 +245,35 @@ byte-identical to original4679a10e before the full 57 PASS suite. All-target
 widgets Clippy -D warnings, workspace all-target check, fmt/skilldocs/diff PASS.
 Original delta did not apply at old module/doc context; only module registration
 order and append location were adapted, without replacing current lib wholesale.
+
+## Local Dropdown trigger extraction (#915, cut 15)
+
+Existingc238075d trigger style/paint/measure, Settings reader, token recipe and
+exporter/completeness checks reused. Current capsule exports and main choices,
+ranges, Styles and window input are preserved. Contract precedes the API; skill
+and README describe missing-style error, token geometry and shared themed arrow.
+Review198: collapsed ComboBox Selection activation is intentional and now explicit
+in CONTRACT, with a real Tree dispatch assertion while expanded=false. No popup
+opens for that selection path; availability/generation guards still apply.
+
+Fresh actual exports at `toolkit/target/dropdown-trigger-data` include all tokens,
+manifest and 12 i18n locales; old cut9 data lacks the new trigger and is not used.
+CPU pixel tests use explicit synthetic style colours/geometry, actual Parley and
+reference vector icon; Settings tests independently read all four exported modes
+and apply Styles, then require missing arrow rejection. These are component
+proofs, not native popup, AT-SPI signals, Orca speech or owner visual acceptance.
+No native/EGL run. Cut13 checker remains not executed on rebuilt heads.
+
+Compiled arrow-ink fault replaced arrow ink with background ink and failed its
+OWN opaque glyph pixel assertion after layout, geometry and idle background setup
+(`dropdown-trigger-split-arrow-control.log`). Restored production source before
+full suite verification; no assertion/timing relaxation. Initial patch-context
+failures were extraction mismatches, not acceptance; adapted insertion points
+preserve current capsule export/layout additions rather than copying old files.
+
+Validation PASS: 111 widgets/Settings tests (59+52) in
+`dropdown-trigger-split-restored-tests.log`, required fresh generated full data.
+`dropdown-trigger-split-clippy.log`: both packages all targets, -D warnings PASS;
+settings-tokens-check:108 colour sets/4 variants complete; fmt/skilldocs/diff PASS.
+Collapsed Selection assertion is CPU model proof only. Text/icon rendering tests
+use a synthetic32px fixture, not #921 window-controls sizing or owner acceptance.

@@ -3,6 +3,7 @@
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
 mod dropdown;
+pub use dropdown::DropdownStyle;
 
 mod capsule;
 mod capsule_fallback;
@@ -273,6 +274,7 @@ pub struct Tree {
     pub(crate) range_style: Option<RangeStyle>,
     pub(crate) switch_style: Option<SwitchStyle>,
     pub(crate) row_text_style: Option<RowTextStyle>,
+    dropdown_style: Option<DropdownStyle>,
     /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
     pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
@@ -340,6 +342,7 @@ impl Tree {
             range_style: None,
             switch_style: None,
             row_text_style: None,
+            dropdown_style: None,
             icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
@@ -1088,6 +1091,9 @@ impl Tree {
             return Ok(self.nodes[&id].measured);
         }
         self.nodes.get_mut(&id).unwrap().constraint = width;
+        if matches!(kind, Kind::Dropdown { .. }) {
+            return self.measure_dropdown(id, width, backend);
+        }
         if let Kind::Choices { kind } = kind {
             return self.measure_choices(id, kind, width, backend);
         }
