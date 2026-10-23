@@ -203,3 +203,15 @@ The separated `toolkit/settings/examples/dropdown-probe.rs` and
 input and parent commit markers and prepares ignore-selection/commit-on-cancel
 faults. It is not executed on this rebuilt head; build/syntax checks establish
 source compatibility only. It has no production Config1 or shared AT-SPI bridge.
+
+`DropdownPopup` borrows the combo's parent Tree while its menu is open. Publish
+its `snapshot(actual_popup_origin)` through the application's existing provider:
+the parent root/ComboBox/Selection option IDs remain stable, while menu-local IDs
+stay private. Focus, bounds and actions project onto those retained options;
+parent actions are suspended. Tag requests with the returned publication revision
+and call `request`, which also guards the captured menu generation. A revision
+from a previous opening cannot activate a new popup. `finish(Some(index))` uses
+the guarded parent activation; `finish(None)` and Drop preserve the value and
+collapse/restore focus. The popup host must supply its configured origin, and
+publish the restored parent snapshot after dismissal. This adapter alone does
+not establish provider, native popup geometry, or real Orca acceptance.

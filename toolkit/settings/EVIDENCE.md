@@ -340,3 +340,31 @@ Validation PASS: actual `cargo build -p nk-settings --example dropdown-probe`,
 Settings alltargetClippy-Dwarnings, Python AST/bashsyntax, fmt/skilldocs/diff.
 Logs menu-probe-split-{build,clippy}.log. Rustfmt only adapts the original probe's
 formatting; no new production API. No native baseline/control catch is claimed.
+
+
+## Local cut 18 — DropdownPopup semantics and revisions (2026-10-23)
+
+Extracted existing 5bd82b32 adapter (166 lines) and its two CPU tests
+(130 lines) above cut17. Only module registration order adapted to current lib;
+main choices/ranges/window/Styles retained. Contract precedes public API, with
+README and canonical architecture skill updated in this commit.
+
+The actual Tree/MenuList/Parley tests preserve parent Root/ComboBox/Option IDs,
+Selection and LabelledBy while projecting menu focus/actions and bounds. The
+origin (300,90) and layout are explicitly synthetic CPU inputs, not configured
+Wayland geometry. Reopening/publication/menu-generation guards, unavailable/hidden
+options, cancellation, removal/error and guarded selection are exercised.
+
+Current mandatory full cut16 menu-list-data reused: exporters/tokens unchanged.
+116 Settings/widgets tests PASS in target/dropdown-popup-split-restored-tests.log
+(52 Settings +64 widgets). Both packages all-target Clippy -D warnings and
+workspace all-target check PASS in corresponding split-clippy/workspace logs.
+Compiled production control bypassing the publication guard failed its own
+stale Activate rejection assertion AFTER initial snapshot, permitted Focus and
+second publication; target/dropdown-popup-split-stale-control.log. Literal source
+restored before the full116 PASS. No timeout/setup failure used as a catch.
+
+No host/controller/provider integration, native popup geometry, AT-SPI, Orca,
+Config1 builder, material, performance or live acceptance established here.
+Historical fixed-binary evidence stays attached to its original source only.
+Adaptive foundations/Settings polling still needs a real caller and causal test.

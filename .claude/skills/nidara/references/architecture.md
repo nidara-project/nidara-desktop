@@ -2954,3 +2954,15 @@ check-dropdown-headless.sh and nk-dropdown-check.py reuse the private widgets
 host. Forced opaque D5 composition and prepared select/cancel faults are not
 native proof until executed against exact binaries; current extraction is
 compile/static-only. Do not import original fixed-binary PASS into new heads.
+
+The Dropdown's `DropdownPopup` adapter borrows the controlled parent Tree and
+projects its separate MenuList view onto the parent's existing ComboBox option
+IDs. Publish that merged snapshot through the SAME provider, not two independently
+numbered Trees/providers. ComboBox/Selection/LabelledBy stay in place; menu focus
+and configured parent-relative bounds attach to the existing options. Other
+parent actions are suspended. The returned process-unique publication revision,
+plus captured menu generation, guards request routing across reopenings; the
+bridge must tag requests with its actual published revision. `finish` uses guarded
+parent selection; cancellation/Drop only collapse and restore available focus.
+This is CPU-tested groundwork: host/controller publication with the actual popup
+configure origin, builder integration and real Orca speech still need validation.

@@ -3,7 +3,9 @@
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
 mod dropdown;
+mod dropdown_popup;
 pub use dropdown::DropdownStyle;
+pub use dropdown_popup::{DropdownPopup, PopupSnapshot};
 mod menu;
 pub use menu::MenuStyle;
 

@@ -217,6 +217,28 @@ not hover. It uses the existing check.ts path and exported stroke/size in row in
 This retained list alone does not establish a complete native Dropdown/builder
 or real Orca speech acceptance; that requires the host and accessibility bridge.
 
+### Dropdown modal semantics (#882/#915)
+
+`DropdownPopup::new` borrows the parent Tree until dismissal and constructs its
+MenuList from that combo's retained options. Its `menu`/`menu_mut` serve the popup
+host; their private node IDs are never published. `snapshot(origin)` keeps the
+parent semantic root, ComboBox, LabelledBy and Selection option IDs, projecting
+the menu's focus/bounds/actions onto those existing options. The origin must be
+the compositor-configured popup origin in parent window coordinates, not the
+requested anchor. Other parent actions are suspended while modal. Chosen state
+continues to come from the parent's model, never the menu's hover/focus.
+
+Each snapshot returns a process-unique publication revision. `request` requires
+that revision and the menu generation captured by that publication; IDs from a
+previous opening/publication cannot act on a new menu. A host bridge must tag
+requests with the revision of its published snapshot and route them through this
+adapter, never dispatch popup-local IDs to the parent. `finish(Some(index))`
+commits through the parent's guarded option activation; cancellation and Drop
+only collapse and restore focus if still available. Invalid origins, removed
+menu options and unsupported/stale requests fail before selection changes.
+This adapter is CPU-tested groundwork; it does not itself publish a provider,
+run a popup, or establish real AT-SPI/Orca acceptance.
+
 ### Standard popup host (#882/#915)
 
 `nk-wayland::run_popup(app, parent, placement, grab_serial)` is a nested host on

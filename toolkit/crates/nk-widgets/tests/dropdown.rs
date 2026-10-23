@@ -530,3 +530,133 @@ fn menu_style_update_keeps_focus_and_chosen_ids_and_refuses_invalid_or_wrong_tre
     let (mut ordinary, _, _, _) = fixture();
     assert!(ordinary.set_menu_style(menu_style()).is_err());
 }
+
+#[test]
+fn popup_projects_focus_geometry_and_selection_onto_parent_ids() {
+    use nk_widgets::DropdownPopup;
+    let (mut parent, _, _, combo) = fixture();
+    let before = parent.semantics();
+    let options = before.nodes[&combo].children.clone();
+    parent.focus(combo).unwrap();
+    let mut popup = DropdownPopup::new(&mut parent, combo, menu_style()).unwrap();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    popup
+        .menu_mut()
+        .layout(
+            Size {
+                width: 200.,
+                height: 140.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+    let items = popup.menu().focus_order();
+    assert_ne!(items, options);
+    let published = popup.snapshot(Point { x: 300., y: 90. }).unwrap();
+    assert_eq!(published.tree.root, before.root);
+    assert_eq!(
+        published.tree.nodes.keys().collect::<Vec<_>>(),
+        before.nodes.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(published.tree.selected_children(combo), vec![options[1]]);
+    assert!(published.tree.nodes[&combo].states.expanded);
+    assert_eq!(
+        published.tree.nodes[&combo].relations,
+        before.nodes[&combo].relations
+    );
+    assert!(published.tree.nodes[&combo].actions.is_empty());
+    assert_eq!(
+        published
+            .tree
+            .nodes
+            .values()
+            .filter(|n| n.states.focused)
+            .map(|n| n.id)
+            .collect::<Vec<_>>(),
+        vec![options[1]]
+    );
+    assert_eq!(
+        published.tree.nodes[&options[1]].bounds.x,
+        f64::from(popup.menu().node(items[1]).unwrap().bounds().x + 300.)
+    );
+    assert!(
+        popup
+            .request(published.revision, nk_a11y::Request::Activate(combo))
+            .is_err()
+    );
+    assert_eq!(
+        popup
+            .request(published.revision, nk_a11y::Request::Focus(options[2]))
+            .unwrap(),
+        Effect::Focused(items[2])
+    );
+    let next = popup.snapshot(Point { x: 300., y: 90. }).unwrap();
+    assert!(
+        popup
+            .request(published.revision, nk_a11y::Request::Activate(options[2]))
+            .is_err()
+    );
+    assert_eq!(next.tree.selected_children(combo), vec![options[1]]);
+    let Effect::Activated(item) = popup
+        .request(next.revision, nk_a11y::Request::Activate(options[2]))
+        .unwrap()
+    else {
+        panic!("expected activation")
+    };
+    let index = popup.index(item).unwrap();
+    assert_eq!(popup.finish(Some(index)).unwrap(), Effect::Changed(combo));
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 2);
+    assert_eq!(parent.focused(), Some(combo));
+    assert!(!parent.semantics().nodes[&combo].states.expanded);
+}
+
+#[test]
+fn popup_reopening_rejects_old_requests_and_errors_preserve_choice() {
+    use nk_widgets::DropdownPopup;
+    let (mut parent, _, _, combo) = fixture();
+    let options = parent.semantics().nodes[&combo].children.clone();
+    let mut first = DropdownPopup::new(&mut parent, combo, menu_style()).unwrap();
+    let old = first.snapshot(Point::default()).unwrap().revision;
+    first.finish(None).unwrap();
+    let mut second = DropdownPopup::new(&mut parent, combo, menu_style()).unwrap();
+    let fresh = second.snapshot(Point::default()).unwrap().revision;
+    assert_ne!(old, fresh);
+    assert!(
+        second
+            .request(old, nk_a11y::Request::Activate(options[0]))
+            .is_err()
+    );
+    let item = second.menu().focus_order()[0];
+    second.menu_mut().set_disabled(item, true).unwrap();
+    assert!(
+        second
+            .request(fresh, nk_a11y::Request::Activate(options[0]))
+            .is_err()
+    );
+    let revision = second.snapshot(Point::default()).unwrap().revision;
+    assert!(
+        second
+            .request(revision, nk_a11y::Request::Activate(options[0]))
+            .is_err()
+    );
+    assert!(second.snapshot(Point { x: f32::NAN, y: 0. }).is_err());
+    second.menu_mut().set_hidden(item, true).unwrap();
+    let hidden = second.snapshot(Point::default()).unwrap();
+    assert!(hidden.tree.nodes[&options[0]].states.hidden);
+    assert!(
+        second
+            .request(hidden.revision, nk_a11y::Request::Activate(options[0]))
+            .is_err()
+    );
+    assert!(second.finish(Some(0)).is_err());
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
+    assert!(!parent.semantics().nodes[&combo].states.expanded);
+    let mut removed = DropdownPopup::new(&mut parent, combo, menu_style()).unwrap();
+    let item = removed.menu().focus_order()[0];
+    removed.menu_mut().remove(item).unwrap();
+    assert!(removed.snapshot(Point::default()).is_err());
+    drop(removed);
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
+    assert_eq!(parent.focused(), Some(combo));
+}
