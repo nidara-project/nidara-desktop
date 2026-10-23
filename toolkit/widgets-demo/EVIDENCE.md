@@ -402,3 +402,21 @@ checker PASS; deleting edge or gap fails own capsule-geometry assertion. Logs
 in repair worktree toolkit/target/gap-repair-*.log. No new live/pixel acceptance
 or change to #921 visual values. Original published branch remains untouched;
 correction is prepared on codex/889-retained-capsule-repair for review.
+
+
+### PR926 component/server integration repair (2026-10-23)
+
+Prepared #921 on top of the independent-gap schema (PR923 repair). Its component
+export changes together with the existing owner-approved server design to
+height24/button16/edge4/gap8. The actual mirror test first failed its own height
+assertion (export32 vsserver24), then passed after synchronization; no tolerance
+or predicate relaxed.3window_controls+31wm tests PASS, Hyalo alltargetClippy-
+Dwarnings, actual108sets/4variants exportchecker, kitSCSS and3listingdiagnostic
+regressions PASS. Corrected924reader consumes these actual exports in all four
+modes (1focusedtestPASS). Logs target/921-*.log. No Rust header implementation
+or live kit visual approval added; that existing #926 limitation remains.
+
+Proposed PR926 base: codex/889-retained-capsule, landing the gap schema before
+its visual-value change. Original published branch untouched, no push or merge.
+Common startup diagnostic comes from that base; private-fixture run passing is
+not proof of the real CI shell startup failure's underlying cause fixed.
