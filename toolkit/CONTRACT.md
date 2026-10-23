@@ -268,6 +268,43 @@ menu options and unsupported/stale requests fail before selection changes.
 This adapter is CPU-tested groundwork; it does not itself publish a provider,
 run a popup, or establish real AT-SPI/Orca acceptance.
 
+### Manifest Dropdown builder (#915)
+
+`dropdown_builder::register` registers the real per-item `dropdown` builder. It
+reads schema `ui.options` value/label pairs and the session's shown string, creates
+one retained ComboBox row, and labels unknown current enum values with themselves
+as an additional option. Notices reconcile labels/options while keeping the combo
+and surviving option IDs; `Tree::reorder_dropdown_options` accepts only an exact
+permutation of its current children (validated atomically) and invalidates stale
+actions when order changes. Reading/canonical updates never Apply.
+
+Changed(combo), including Selection activation, applies its mapped schema value
+exactly through Cx.apply, then displays Session::shown. Activated(combo) opens the
+shared modal controller through Cx.open_dropdown and applies only Changed results.
+Missing native context is an explicit opening error. Hidden, unavailable, readonly,
+unmounted or wrong-mount operations do not write. Failed writes show the existing
+service error/subtitle path and canonical/session value. Within a notice batch the
+renderer delivers Failed after Changed/availability notices, so the same failed
+reply cannot immediately erase its error with its accompanying Changed notice. Renderer row
+visibility follows key availability; builder rows are sensitive only when every
+edited key is writable. No async worker/timer survives this synchronous builder.
+
+### Renderer modal context (#915)
+
+`render::Host.modal` optionally lends a `render::Modal` implementation in effect/idle;
+Cx::open_dropdown requires that context and a parent Window, and delegates to the
+shared controller. Build/notice/shown/unmount receive no modal context. The default
+absence is an explicit error when opening, not a fallback control/provider.
+`Editor::poll` drains actual Client notices (empty by default in pure test editors).
+`dropdown::Native` supplies the production Modal: it lends Bridge/text/material/
+revision/physical serial/poll interval and stages polled notices in its application-owned
+Vec. Any staged/new notice cancels the modal operation before input/selection;
+the application delivers the staged notices to Rendered after return, without
+polling them a second time. Its external keep_open hook stages portal/routing/
+visibility invalidation too. It never applies a setting itself. A synchronous
+modal borrow cannot survive page unmount; builders still check mount/visibility
+and use operation tokens for any independently asynchronous work.
+
 ### Settings Dropdown controller (#915)
 
 `nk_settings::dropdown::show(Host, combo)` runs the reusable MenuList in the

@@ -3023,3 +3023,30 @@ the checker is NOT EXECUTED here. It does not establish current native/provider,
 Config1 builder, Orca speech or performance acceptance. Keep historical fixed
 binary evidence attributed to its original source/hash. The exclusive parent
 Tree borrow remains bounded to short menus, with no concurrent parent servicing.
+
+
+This controller does not write Config1; the manifest builder below owns that mapping.
+
+The real Dropdown manifest builder is `nk-settings::dropdown_builder::register`:
+ui.options value/label pairs and Session::shown drive the same retained component.
+Canonical reads/notices never Apply; Selection Changed and accepted popup changes
+map back to Cx.apply. Unknown current strings appear as an additional option.
+Reconciliation keeps the combo/surviving option IDs, retires obsolete options and
+atomically reorders the remaining children through reorder_dropdown_options.
+Failed notices are delivered after Changed within the same batch, retaining the
+error rather than immediately replacing it with the normal subtitle. Availability
+hides all builder rows; writability disables them. Wrong-mount/hidden/unmounted
+operations do not write. The builder has no independently asynchronous work.
+
+Renderer Host.modal lends a Modal only for effect/idle; Cx.open_dropdown requires
+it and a parent Window. dropdown::Native owns the single application's Bridge,
+text backend, panel recipe, revision and staged notices. Editor::poll delegates
+to Client::poll in production; any notice closes the modal before choices apply.
+The app drains Native.notices into Rendered after return. Its owned external hook
+stages portal/routing/visibility changes as well. No second provider or default
+replacement widget is created when context is missing: opening returns an error.
+
+Settings Config1 bus tests bind dbus-daemon with an explicit unix:dir under
+`toolkit/target/config-bus-<pid>-<counter>`, clean it after daemon termination, and
+pass the private connection to Client::start. Client::connect would contact the
+live session; neither the session address nor its accessibility bus is changed.

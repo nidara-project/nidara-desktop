@@ -149,6 +149,7 @@ fn page_with(
             exports: &p.exports,
             styles: &p.styles,
             window: None,
+            modal: None,
         },
         page,
         builders,
@@ -190,6 +191,7 @@ impl Page {
                 exports: &self.exports,
                 styles: &self.styles,
                 window: None,
+                modal: None,
             },
             self.rendered.as_mut().unwrap(),
         )
@@ -662,4 +664,165 @@ fn a_footer_follows_its_predicate_and_a_disclosure_hides_what_follows_it() {
     assert!(p.hidden(dark_row));
     p.activate(disclosure);
     assert!(!p.hidden(dark_row));
+}
+
+fn real_dropdown(edit: impl FnOnce(&mut serde_json::Value)) -> Result<Page> {
+    let page = manifest::parse(&serde_json::json!([{
+        "id":"test", "kind":"preference", "label":"settings.appearance.title",
+        "groups":[{"items":["appearance.cursorTheme"]}]
+    }]))
+    .unwrap()
+    .remove(0);
+    let mut builders = Builders::default();
+    nk_settings::dropdown_builder::register(&mut builders);
+    page_with(snapshot(edit), &page, &mut builders)
+}
+
+#[test]
+fn real_dropdown_maps_values_applies_once_and_reconciles_canonical_unknowns_and_schema() {
+    if !exported() {
+        return;
+    }
+    let mut p = real_dropdown(|_| {}).unwrap();
+    let title = p.title("appearance.cursorTheme");
+    let (_, combo) = p.row(&title).unwrap();
+    let original = p.tree.node(combo).unwrap().children().to_vec();
+    assert!(matches!(
+        p.tree.node(combo).unwrap().kind(),
+        Kind::Dropdown { .. }
+    ));
+    assert_eq!(p.tree.node(combo).unwrap().name(), "default");
+    assert!(p.editor.sent.is_empty());
+    p.activate(original[0]);
+    assert_eq!(
+        p.editor.sent,
+        vec![(
+            "appearance.cursorTheme".into(),
+            Value::Text("Adwaita".into())
+        )]
+    );
+    assert_eq!(p.tree.node(combo).unwrap().name(), "Adwaita");
+    assert_eq!(
+        p.tree
+            .dispatch(p.tree.target(original[0]), TreeCommand::Activate)
+            .unwrap(),
+        Effect::None
+    );
+    p.raw(Raw::Reply {
+        key: "appearance.cursorTheme".into(),
+        epoch: EPOCH,
+        result: Err(ApplyError::Denied("denied by fixture".into())),
+    });
+    assert_eq!(p.tree.node(combo).unwrap().name(), "default");
+    assert!(
+        p.tree
+            .semantics()
+            .nodes
+            .values()
+            .any(|n| n.name == "denied by fixture")
+    );
+    p.raw(Raw::Updated {
+        epoch: EPOCH,
+        revision: 11,
+        values: vec![(
+            "appearance.cursorTheme".into(),
+            Value::Text("custom-未知".into()),
+        )],
+    });
+    assert_eq!(p.tree.node(combo).unwrap().name(), "custom-未知");
+    assert_eq!(&p.tree.node(combo).unwrap().children()[..4], &original[..4]);
+    assert_eq!(p.editor.sent.len(), 1, "canonical notices must never Apply");
+    p.raw(Raw::Owner(false));
+    assert!(p.disabled(combo));
+    p.raw(Raw::Owner(true));
+    p.raw(Raw::Snapshot(Ok((
+        EPOCH + 1,
+        1,
+        snapshot(|s| {
+            s["keys"]["appearance.cursorTheme"]["value"] = "Qogir".into();
+            s["keys"]["appearance.cursorTheme"]["ui"]["options"] = serde_json::json!([
+                {"value":"Qogir", "label":"Brisa 日本語"}, {"value":"Adwaita", "label":"Adwaita"}
+            ]);
+        }),
+    ))));
+    assert_eq!(p.row(&title).unwrap().1, combo);
+    assert_eq!(
+        p.tree.node(combo).unwrap().children(),
+        &[original[1], original[0]]
+    );
+    assert_eq!(p.tree.node(combo).unwrap().name(), "Brisa 日本語");
+    assert_eq!(p.editor.sent.len(), 1);
+}
+
+#[test]
+fn real_dropdown_refuses_bad_schema_readonly_hidden_and_missing_native_open_context() {
+    if !exported() {
+        return;
+    }
+    assert!(
+        real_dropdown(
+            |s| s["keys"]["appearance.cursorTheme"]["ui"]["options"] = serde_json::json!([
+                {"value":"same","label":"One"}, {"value":"same","label":"Two"}
+            ])
+        )
+        .err()
+        .unwrap()
+        .contains("duplicate")
+    );
+    let mut p =
+        real_dropdown(|s| s["keys"]["appearance.cursorTheme"]["writable"] = false.into()).unwrap();
+    let (_, combo) = p.row(&p.title("appearance.cursorTheme")).unwrap();
+    assert!(p.disabled(combo));
+    assert!(
+        p.tree
+            .dispatch(p.tree.target(combo), TreeCommand::Activate)
+            .is_err()
+    );
+    assert!(p.effect(Effect::Changed(combo)));
+    assert!(p.editor.sent.is_empty());
+    let mut p = real_dropdown(|_| {}).unwrap();
+    let (row, combo) = p.row(&p.title("appearance.cursorTheme")).unwrap();
+    p.tree.set_hidden(row, true).unwrap();
+    assert!(p.effect(Effect::Changed(combo)));
+    assert!(p.editor.sent.is_empty());
+    let (host, rendered) = p.host();
+    assert!(
+        rendered
+            .effect(host, Effect::Activated(combo))
+            .unwrap_err()
+            .contains("native modal context")
+    );
+    assert!(p.editor.sent.is_empty());
+}
+
+#[test]
+fn real_dropdown_tracks_key_availability_without_writing_and_preserves_combo_identity() {
+    if !exported() {
+        return;
+    }
+    let mut p = real_dropdown(|_| {}).unwrap();
+    let title = p.title("appearance.cursorTheme");
+    let (row, combo) = p.row(&title).unwrap();
+    let old_target = p.tree.target(combo);
+    p.raw(Raw::Owner(false));
+    p.raw(Raw::Owner(true));
+    p.raw(Raw::Snapshot(Ok((
+        EPOCH + 1,
+        1,
+        snapshot(|s| {
+            s["keys"]["appearance.cursorTheme"]["available"] = false.into();
+            s["keys"]["appearance.cursorTheme"]["value"] = serde_json::Value::Null;
+        }),
+    ))));
+    assert!(p.hidden(row));
+    assert!(p.tree.dispatch(old_target, TreeCommand::Activate).is_err());
+    assert!(p.effect(Effect::Changed(combo)));
+    assert!(p.editor.sent.is_empty());
+    p.raw(Raw::Owner(false));
+    p.raw(Raw::Owner(true));
+    p.raw(Raw::Snapshot(Ok((EPOCH + 2, 1, snapshot(|_| {})))));
+    assert!(!p.hidden(row));
+    assert_eq!(p.row(&title).unwrap().1, combo);
+    assert!(!p.disabled(combo));
+    assert!(p.editor.sent.is_empty());
 }

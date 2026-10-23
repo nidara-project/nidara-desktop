@@ -724,3 +724,24 @@ fn invalidated_popup_cannot_publish_act_choose_or_restore_a_stale_trigger() {
     assert_eq!(parent.focused(), None);
     assert!(!parent.semantics().nodes[&combo].states.expanded);
 }
+
+#[test]
+fn dropdown_reorder_keeps_option_ids_and_selection_and_rejects_nonpermutations_atomically() {
+    let (mut tree, _, _, combo) = fixture();
+    let old = tree.node(combo).unwrap().children().to_vec();
+    let target = tree.target(old[0]);
+    for order in [
+        vec![old[0]],
+        vec![old[0], old[0], old[2]],
+        vec![old[0], old[1], tree.root()],
+    ] {
+        assert!(tree.reorder_dropdown_options(combo, &order).is_err());
+        assert_eq!(tree.node(combo).unwrap().children(), old);
+    }
+    let order = vec![old[1], old[2], old[0]];
+    tree.reorder_dropdown_options(combo, &order).unwrap();
+    assert_eq!(tree.node(combo).unwrap().children(), order);
+    assert_eq!(tree.dropdown_selected(combo).unwrap(), 0);
+    assert_eq!(tree.semantics().selected_children(combo), vec![old[1]]);
+    assert!(tree.dispatch(target, Command::Activate).is_err());
+}

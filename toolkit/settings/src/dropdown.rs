@@ -235,3 +235,52 @@ pub fn show(host: Host<'_>, combo: NodeId) -> Result<Effect> {
     live?;
     effect
 }
+
+/// Production renderer context. The app delivers `notices` after the modal returns.
+pub struct Native {
+    pub bridge: Bridge,
+    pub revision: u64,
+    pub text: ParleyBackend,
+    pub panel: Option<PanelMaterial>,
+    pub serial: Option<u32>,
+    pub poll_interval_ms: u32,
+    pub notices: Vec<crate::session::Notice>,
+    /// Owns/stages portal/routing/visibility changes without touching the borrowed Tree.
+    pub keep_open: Box<dyn FnMut() -> Result<bool>>,
+}
+impl crate::render::Modal for Native {
+    fn dropdown(
+        &mut self,
+        tree: &mut Tree,
+        window: &mut Window,
+        styles: &Styles,
+        editor: &mut dyn crate::render::Editor,
+        combo: NodeId,
+    ) -> Result<Effect> {
+        let mut keep_open = || {
+            if !self.notices.is_empty() {
+                return Ok(false);
+            }
+            self.notices.extend(editor.poll());
+            if !self.notices.is_empty() {
+                return Ok(false);
+            }
+            (self.keep_open)()
+        };
+        show(
+            Host {
+                tree,
+                window,
+                text: &mut self.text,
+                styles,
+                bridge: &self.bridge,
+                revision: &mut self.revision,
+                panel: self.panel.as_ref(),
+                serial: self.serial,
+                poll_interval_ms: self.poll_interval_ms,
+                keep_open: &mut keep_open,
+            },
+            combo,
+        )
+    }
+}

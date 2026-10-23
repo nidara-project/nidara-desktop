@@ -512,3 +512,18 @@ requires completed input, parent commit and publication before its assertions;
 three fault cases must fail their own selected-value assertion, not timeout.
 Exclusive parent borrow short-menu limit and adaptive foundations/Settings real
 polling caller plus causal-test debt remain explicit and unresolved.
+
+
+## Local cut24 — manifest Dropdown builder (2026-10-23)
+
+Existing498b90ad production/tests extracted above23, preserving earlier main and
+review corrections. Contract applied before API; skill/README in same change.
+123 Settings/widgets tests PASS [33, 3, 13, 5, 2, 17, 7, 13, 15, 8, 5, 2], mandatory complete cut16 exports.
+Settings/widgets all-target Clippy -D warnings PASS. Logs: target/
+dropdown-builder-split-{tests,clippy}.log. Private Config1 bus tests exercise
+actual Client/service/canonical refusal; no live session bus mutation.
+Native modal opening remains a headless decision seam in these tests, not a
+real Window/controller/provider integration acceptance. No new fault injection
+run: historical controls remain original-source evidence. No native/EGL/Orca,
+performance or live claim. Short-menu parent ownership and adaptive polling
+caller/causal-test debt remain. No push or merge.

@@ -18,7 +18,7 @@ mutating the borrowed Tree; false cancels before applying staged notices after
 return. Invalidation rejects choices and suppresses trigger focus restoration.
 Ordinary Escape/PopupDone preserve selection and restore available focus. No panel
 recipe forces D5 paint; a supplied recipe resolves at actual configured size.
-The real manifest builder/notice plumbing still need integration.
+The schema-backed builder now supplies notice plumbing; actual app hosting remains pending.
 `dropdown-provider-probe` now supplies the separate diagnostic composition of
 controller/Tree/Bridge on nk-wayland. `check-dropdown-provider-headless.sh`
 reuses the existing private widgets host and runs
@@ -30,3 +30,20 @@ and compiles the diagnostic. Native baseline/control execution, Config1 builder
 integration and real Orca speech remain pending; historical fixed-binary results
 are not acceptance of a rebuilt head.
 Compilation/CPU tests here do not establish native controller/provider acceptance.
+
+
+The manifest builder below consumes this controller through the renderer context.
+
+
+`dropdown_builder::register` installs the real schema-backed dropdown builder.
+It preserves the combo and surviving option IDs across canonical updates, adds an
+unknown current enum value by its own name, and maps Selection changes through
+Cx.apply. Reading/notice handling never writes. Opening requires Host.modal and
+a parent Window; `dropdown::Native` owns the application's single Bridge, text,
+revision and notice staging, implementing render::Modal. Its real Client polling
+cancels on any new notice, which the app must deliver from Native.notices after
+return. Pure tests use no native host and do not establish that integration gate.
+
+The Config1 integration tests use Client::start with their private bus connection.
+Their daemon sockets live under toolkit/target/config-bus-<pid>-<counter>, with
+scoped cleanup after exit; they never replace the live session bus address.
