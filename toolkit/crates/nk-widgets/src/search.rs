@@ -93,6 +93,15 @@ impl Tree {
         );
         Ok(id)
     }
+    pub fn search_composing(&self, id: NodeId) -> Result<bool> {
+        Ok(self
+            .searches
+            .get(&id)
+            .ok_or("not a search input")?
+            .editor
+            .preedit()
+            .is_some())
+    }
     pub fn search_text(&self, id: NodeId) -> Result<&str> {
         Ok(self
             .searches

@@ -265,3 +265,18 @@ hit tests and SHOWING; offscreen options remain semantic children. Composition's
 vertical wheel routes by viewport, including its empty insets. No second renderer,
 Tree, provider or global menu mode is needed. This primitive alone does not prove
 the FontChooser modal or its Orca speech.
+
+
+
+
+`DialogTree::new(parent, launcher, title)` borrows the controlled parent and
+provides a transient retained view with window-lifetime IDs disjoint from its
+parent. Use its view to build existing controls, and publish `snapshot()` through
+the application's existing Bridge. Snapshots preserve the parent root and attach
+a DIALOG child; parent actions/focus are suspended. `request` validates publication
+and view generation and confines actions/text/value requests to the dialog. Drop
+retires all view IDs, invalidates old structural targets and restores focus only
+when the launcher is available/showing; `invalidate` suppresses restoration and
+rejects every request/snapshot. Stage parent mutations until the borrow ends.
+Dialog views reserve no sidebar inset. SearchInput's `search_composing` exposes the
+single Editor's preedit state so modal Escape can cancel composition first.

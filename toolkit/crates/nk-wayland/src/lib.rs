@@ -210,6 +210,17 @@ pub struct Window {
     capabilities: Capabilities,
 }
 impl Window {
+    /// Update the caller's translated title on an existing xdg toplevel.
+    pub fn set_title(&mut self, title: &str) -> Result<()> {
+        if title.contains('\0') {
+            return Err("window title contains NUL".into());
+        }
+        self.toplevel
+            .as_ref()
+            .ok_or("title requires an xdg toplevel")?
+            .set_title(title.into());
+        Ok(())
+    }
     pub fn capabilities(&self) -> Capabilities {
         self.capabilities
     }
@@ -582,8 +593,9 @@ pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
 pub fn run_dialog(app: impl Application, parent: &mut Window) -> Result<()> {
-    let last_serial = run_inner(
+    run_dialog_with_options(
         app,
+        parent,
         Options {
             material: true,
             map: true,
@@ -592,13 +604,19 @@ pub fn run_dialog(app: impl Application, parent: &mut Window) -> Result<()> {
             size: (500, 300),
             require_material: None,
         },
-        Instant::now(),
-        Some(parent),
-        None,
-    )?;
-    // Each wl_keyboard on this connection receives the modal's key stream too.
-    // Those messages are queued on the parent's EventQueue; do not replay them
-    // into the form when its event loop resumes.
+    )
+}
+/// Caller-sized modal dialog on the parent's connection and application identity.
+pub fn run_dialog_with_options(
+    app: impl Application,
+    parent: &mut Window,
+    mut options: Options,
+) -> Result<()> {
+    if options.size.0 == 0 || options.size.1 == 0 {
+        return Err("dialog needs a nonempty size".into());
+    }
+    options.app_id = parent.app_id;
+    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None)?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();
     Ok(())

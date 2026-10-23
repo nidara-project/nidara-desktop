@@ -981,3 +981,144 @@ fn embedded_lists_keep_styles_and_wheel_offsets_independent() {
     assert!(tree.semantics().nodes[&ids[0]].states.selected);
     assert!(tree.semantics().nodes[&other_row].states.selected);
 }
+
+#[test]
+fn dialog_projects_one_root_and_retires_ids_and_requests_after_close() {
+    use nk_a11y::Request;
+    use nk_widgets::DialogTree;
+    let (mut parent, _, _, launcher) = fixture();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    parent
+        .layout(
+            Size {
+                width: 640.,
+                height: 480.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+    parent.focus(launcher).unwrap();
+    let root = parent.root();
+    let max = *parent.semantics().nodes.keys().max().unwrap();
+    let (old_publication, button, dialog_root);
+    {
+        let mut dialog = DialogTree::new(&mut parent, launcher, "Choose font").unwrap();
+        let view = dialog.view_mut();
+        dialog_root = view.root();
+        let scroll = view.append(view.root(), Kind::Scroll, "Families").unwrap();
+        let (_, action) = view.row(scroll, "Select", Kind::Button).unwrap();
+        button = action;
+        view.layout(
+            Size {
+                width: 640.,
+                height: 480.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+        assert_eq!(
+            view.content_viewport().x,
+            0.,
+            "dialog must not reserve a phantom sidebar"
+        );
+        view.focus(button).unwrap();
+        let inactive = dialog.snapshot().unwrap();
+        assert!(
+            inactive
+                .tree
+                .nodes
+                .values()
+                .all(|node| !node.states.focused),
+            "inactive dialog cannot publish focus before activation"
+        );
+        dialog.view_mut().set_active(true);
+        let snapshot = dialog.snapshot().unwrap();
+        old_publication = snapshot.revision;
+        assert_eq!(snapshot.tree.root, root);
+        assert!(dialog_root > max && button > max);
+        assert_eq!(snapshot.tree.nodes[&dialog_root].role, Role::Dialog);
+        assert!(snapshot.tree.nodes[&root].children.contains(&dialog_root));
+        assert!(snapshot.tree.nodes[&launcher].actions.is_empty());
+        assert!(snapshot.tree.nodes[&launcher].states.disabled);
+        assert_eq!(
+            snapshot
+                .tree
+                .nodes
+                .values()
+                .filter(|n| n.states.focused)
+                .count(),
+            1
+        );
+        assert!(snapshot.tree.nodes[&button].states.focused);
+        assert!(
+            dialog
+                .request(old_publication, Request::Activate(launcher))
+                .is_err()
+        );
+        assert_eq!(
+            dialog
+                .request(old_publication, Request::Activate(button))
+                .unwrap(),
+            Effect::Activated(button)
+        );
+        let new = dialog.snapshot().unwrap();
+        assert!(
+            dialog
+                .request(old_publication, Request::Activate(button))
+                .is_err()
+        );
+        assert_eq!(
+            dialog
+                .request(new.revision, Request::Activate(button))
+                .unwrap(),
+            Effect::Activated(button)
+        );
+    }
+    assert_eq!(parent.focused(), Some(launcher));
+    let restored = parent.semantics();
+    assert!(!restored.nodes.contains_key(&dialog_root));
+    let mut reopened = DialogTree::new(&mut parent, launcher, "Choose font").unwrap();
+    assert!(
+        reopened.view().root() > button,
+        "all transient IDs must be retired on close"
+    );
+    assert!(
+        reopened
+            .request(old_publication, Request::Activate(button))
+            .is_err()
+    );
+}
+
+#[test]
+fn invalidated_dialog_rejects_publication_and_never_restores_launcher_focus() {
+    use nk_widgets::DialogTree;
+    let (mut parent, _, _, launcher) = fixture();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    parent
+        .layout(
+            Size {
+                width: 640.,
+                height: 480.,
+            },
+            false,
+            &mut text,
+        )
+        .unwrap();
+    parent.focus(launcher).unwrap();
+    let stale = parent.target(launcher);
+    {
+        let mut dialog = DialogTree::new(&mut parent, launcher, "Choose font").unwrap();
+        let snapshot = dialog.snapshot().unwrap();
+        dialog.invalidate();
+        assert!(dialog.snapshot().is_err());
+        assert!(
+            dialog
+                .request(snapshot.revision, nk_a11y::Request::Focus(launcher))
+                .is_err()
+        );
+    }
+    assert_eq!(parent.focused(), None);
+    assert!(parent.dispatch(stale, Command::Activate).is_err());
+}

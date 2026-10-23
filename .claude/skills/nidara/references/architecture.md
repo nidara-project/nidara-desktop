@@ -3139,3 +3139,40 @@ to that list. Paint, hit testing and semantics intersect the viewport with ances
 clips. Root-only menu_list retains its popup behavior and same row implementation.
 This is a widget primitive; modal DIALOG namespace/lifecycle and real FontChooser
 AT-SPI/Orca acceptance are still separate work.
+
+
+
+
+Settings' font_chooser::choose_family now consumes SearchInput, font_catalog,
+embedded LIST and the shared system-font backend in an nk-wayland modal dialog.
+It returns a family only and never writes Config1; face/point-size/preview and
+interfaceFont/monoFont builders are still pending. Supply labels, window/list
+constraints, actual icon theme preparation and the external-notice staging hook.
+Enumeration starts on this call, with the existing mount/request token and bounded
+worker. Errors stay in the loading/status row; Cancel/close returns None. Escape
+first cancels the one Editor's preedit via SearchInput before closing the dialog.
+
+DialogTree borrows its parent, allocates the view above the parent's next unused
+ID and retires all transient IDs on Drop, even on error. Publish its snapshots
+through the ONE existing Bridge: original root/parent IDs remain, their actions
+and focus are suspended, and a real DIALOG child holds the modal controls. The
+existing provider already maps DIALOG to MODAL; do not add another provider or
+modality protocol. PopupSnapshot tokens cover ordinary/modal/restored publications.
+Requests require that snapshot and current view generation and cannot target
+parent controls. Stage external changes, invalidate/close first, apply after borrow
+ends; invalidation suppresses launcher focus restoration. Normal close restores
+only an available/showing/focusable launcher. run_dialog_with_options inherits the
+parent's connection/app-id and accepts caller size/title; legacy run_dialog uses
+the same implementation. Window-local bounds are not a screen/parent-origin claim.
+CPU tests and compiled transport are not native FontChooser/IME/Orca acceptance.
+
+Dialog entry clears the borrowed parent's widget focus. A dialog snapshot masks
+its view's focus until the real host Focus(true), preserving activation-before-focus
+publication rather than announcing an Entry inside an inactive modal. This ordering
+is tested in semantic snapshots; real Orca speech remains a separate gate.
+
+The family picker accepts runtime translated labels, including its title. It calls
+Window::set_title on Configure before the first frame; do not leak a translation
+into a static string to satisfy the older Options title field. No geometry/provider
+publication is made before Configure. Dynamic title transport is compiled here;
+native title/chooser behavior is still unverified.

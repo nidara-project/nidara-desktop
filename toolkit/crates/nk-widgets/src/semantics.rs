@@ -9,6 +9,7 @@ impl Tree {
         for id in ids {
             let widget = &self.nodes[&id];
             let role = match widget.kind {
+                Kind::Window if self.dialog_role => Role::Dialog,
                 Kind::Window => Role::Window,
                 Kind::Sidebar | Kind::List { .. } => Role::List,
                 Kind::TitleBar | Kind::Label | Kind::Subtitle | Kind::Footer => Role::Label,

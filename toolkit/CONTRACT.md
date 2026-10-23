@@ -995,3 +995,38 @@ Arrow/Home/End focus does not commit. Empty lists and no selection support filte
 `set_list_style` preserves IDs/focus and clamps scroll after remeasurement. There
 is no second text renderer, tree or provider. This primitive is not font-dialog
 or Orca acceptance; modal lifecycle and family catalogue are application consumers.
+
+### Retained modal dialog namespace (#882/#915)
+
+`DialogTree` borrows the parent Tree and creates a separate retained view whose IDs
+start at the parent's next unused ID. While borrowed, parent mutations are staged.
+On Drop, all view IDs are retired into the parent allocator and parent generations
+advance, including on error/cancel. A snapshot retains the original parent root and
+IDs, suspends its actions/focus, and attaches a real modal DIALOG child containing
+the view's SearchInput/List/etc. It uses PopupSnapshot's process publication tokens
+and the application's ONE Bridge. Requests require the last publication and current
+view generation and are confined to the dialog subtree. Invalidation rejects all
+requests/publication and suppresses launcher focus restoration. Normal close/error
+restores focus only to an alive, showing, available launcher. Dialog window bounds
+are window-local; no screen-position or parent-relative geometry is invented.
+The existing AT-SPI mapping of Role::Dialog exports MODAL. `run_dialog_with_options` uses the parent's
+connection/app-id, caller title/size, and the same teardown/input-drain as run_dialog.
+
+The first Settings family-picker consumer is `font_chooser::choose_family`: actual
+modal native UI with SearchInput, lazy font_catalog, embedded LIST, Cancel/Select
+and the shared system-font backend. Its result is a family name only, never Apply.
+Style/point-size/preview and the Config1 font builders remain subsequent consumers;
+this family UI is not full FontChooser parity or native/Orca acceptance. All labels,
+window size and list-height constraint are supplied by the host, without defaults.
+
+Modal Escape checks `Tree::search_composing(id)` before closing: composing text
+gets the existing SearchInput cancellation path first. This reads the one Editor's
+preedit state; it does not derive input policy from semantic geometry.
+
+DialogTree clears parent widget focus on entry and does not publish dialog focus
+until its actual host Focus(true); provider state diff then orders activation
+before focus. Drop restores the launcher on ordinary cancellation/error.
+
+`Window::set_title(&str)` updates an existing xdg toplevel title, rejects NUL and
+non-toplevel roles. The family picker supplies its translated runtime title on
+Configure before its first frame; Labels never requires leaked static strings.

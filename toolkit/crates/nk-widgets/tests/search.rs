@@ -201,6 +201,8 @@ fn ime_preedit_is_not_committed_text_and_invalid_batches_do_not_mutate() {
         .unwrap(),
         Effect::None
     );
+    assert!(t.search_composing(id).unwrap());
+    assert!(t.search_composing(next).is_err());
     assert_eq!(t.search_text(id).unwrap(), "A");
     t.semantics().nodes[&id]
         .text

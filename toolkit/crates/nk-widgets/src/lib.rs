@@ -3,8 +3,10 @@
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
 mod dropdown;
-mod dropdown_popup;
 pub use dropdown::DropdownStyle;
+mod dialog;
+mod dropdown_popup;
+pub use dialog::DialogTree;
 pub use dropdown_popup::{DropdownPopup, PopupSnapshot};
 mod menu;
 pub use menu::MenuStyle;
@@ -291,6 +293,7 @@ pub struct Tree {
     pub(crate) switch_style: Option<SwitchStyle>,
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
+    dialog_role: bool,
     menu_style: Option<MenuStyle>,
     list_styles: BTreeMap<NodeId, MenuStyle>,
     search_style: Option<SearchStyle>,
@@ -300,6 +303,14 @@ pub struct Tree {
 }
 impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
+        Self::new_at(title, metrics, style, 1)
+    }
+    fn new_at(
+        title: impl Into<String>,
+        metrics: Metrics,
+        style: TextStyle,
+        first: NodeId,
+    ) -> Result<Self> {
         if [
             metrics.sidebar,
             metrics.content,
@@ -328,8 +339,8 @@ impl Tree {
         }
         let mut tree = Self {
             nodes: BTreeMap::new(),
-            root: 1,
-            next: 1,
+            root: first,
+            next: first,
             generation: 0,
             focused: None,
             focus_visible: false,
@@ -363,6 +374,7 @@ impl Tree {
             switch_style: None,
             row_text_style: None,
             dropdown_style: None,
+            dialog_role: false,
             menu_style: None,
             list_styles: BTreeMap::new(),
             search_style: None,
@@ -1529,6 +1541,9 @@ impl Tree {
         }
     }
     pub(crate) fn adapt_sidebar(&mut self, width: f32) -> bool {
+        if self.dialog_role {
+            return false;
+        }
         let narrow = width < self.metrics.sidebar + self.metrics.content;
         if self.sidebar_initialized && self.narrow == narrow {
             return false;
