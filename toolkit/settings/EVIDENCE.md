@@ -486,3 +486,29 @@ notices or input-to-controller lifecycle. No current native popup/action/focus/
 material, AT-SPI/Orca, performance/live acceptance. Historical fixed binaries'
 evidence is not evidence of this reconstructed head. Exclusive parent borrow
 short-menu limit and adaptive real polling caller/causal-test debt remain.
+
+
+## Local cut23 — Dropdown controller/provider diagnostic (2026-10-23)
+
+Extracted the existing78ae2598 provider probe199, checker134 and wrapper19 above
+cut22 (1bc63b8f). Probe and wrapper match original source literally. The only
+checker adaptation adds git -c safe.directory=* for container ownership, as #882
+requires. No production/controller/token/export changes or new provider/backend.
+Contract and canonical skill/README updated in the same commit.
+
+Actual cargo BUILD of dropdown-provider-probe PASS:
+target/dropdown-provider-probe-split-build.log. Settings all-target Clippy
+-D warnings PASS: target/dropdown-provider-probe-split-clippy.log, with required
+fullcut16 menu-list-data. Python AST, bash syntax, source comparisons, cargo fmt,
+skill-docs and git diff --check PASS. No redundant production unit-test rerun:
+this cut adds diagnostic source only and compiles it with its real dependencies.
+
+CHECKER NOT EXECUTED: this cut only separates and compiles the diagnostic;
+native baseline/control execution remains pending. There is no current native
+controller/provider, selection/focus/grab/geometry/cleanup, AT-SPI action-delivery,
+Config1 builder, real Orca speech or performance/live acceptance. Historical
+fixed-binary evidence remains tied to its original source/hash. The checker
+requires completed input, parent commit and publication before its assertions;
+three fault cases must fail their own selected-value assertion, not timeout.
+Exclusive parent borrow short-menu limit and adaptive foundations/Settings real
+polling caller plus causal-test debt remain explicit and unresolved.

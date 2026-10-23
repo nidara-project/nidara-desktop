@@ -3010,3 +3010,16 @@ exported panel material resolves at actual size; no recipe forces opaque paint.
 This controller does not write Config1: the manifest builder remains to integrate.
 The provider diagnostic is extracted separately; compilation/CPU tests of this
 controller do not prove real libatspi, Orca speech or owner live parity.
+
+
+The separate `dropdown-provider-probe` composes nk-settings::dropdown::show with
+its one Bridge and the nk-wayland host in opaque fallback. Its wrapper reuses
+widgets-demo/check-headless.sh with private bus/runtime; evidence stays under
+target or the owner's task directory. The checker waits for completed input,
+a new parent commit and provider publication before its value/focus/identity
+assertions. Three faults must fail their own selected-value assertion after
+setup, never a timeout. This extraction builds/static-checks the diagnostic;
+the checker is NOT EXECUTED here. It does not establish current native/provider,
+Config1 builder, Orca speech or performance acceptance. Keep historical fixed
+binary evidence attributed to its original source/hash. The exclusive parent
+Tree borrow remains bounded to short menus, with no concurrent parent servicing.

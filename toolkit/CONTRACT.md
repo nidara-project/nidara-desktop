@@ -296,6 +296,17 @@ forces opaque D5 paint even if the compositor advertises material. A supplied
 recipe uses the exported menu radius. Native provider/Orca and lifecycle acceptance
 require dedicated evidence, not compilation of this controller.
 
+The separate `dropdown-provider-probe` diagnostic composes this controller with
+one real Bridge and the standard nk-wayland host, using opaque fallback. Its
+private-bus wrapper reuses widgets-demo/check-headless.sh; all evidence/runtime
+must stay under target or the owner's task directory. The checker observes
+completed input, a new parent commit and provider publication before asserting
+selection/focus/stable IDs. Fault controls must reach their own value assertion;
+a setup timeout or crash is a failure, never a caught control. Compilation and
+syntax checks do not establish native controller/provider acceptance, Config1
+integration or real Orca speech. Historical fixed-binary evidence remains tied
+to its original source and hashes.
+
 ### Standard popup host (#882/#915)
 
 `Window::popup_geometry()` returns None for a toplevel or before a popup's
