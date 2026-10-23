@@ -202,17 +202,21 @@ pub fn capsule_metrics(export: &Value, dark: bool, reduce: bool) -> Result<Capsu
     let height = number(v, "height")?;
     let button = number(v, "button")?;
     let edge = number(v, "edge")?;
+    let gap = number(v, "gap")?;
     if height <= 0.
         || button <= 0.
         || edge < 0.
+        || gap < 0.
         || height < button + 2. * edge
-        || [height, button, edge].iter().any(|v| *v > f32::MAX as f64)
+        || [height, button, edge, gap]
+            .iter()
+            .any(|v| *v > f32::MAX as f64)
     {
         return Err("invalid installed capsule geometry".into());
     }
     Ok(CapsuleMetrics {
         padding: edge as f32,
-        gap: edge as f32,
+        gap: gap as f32,
         button_min: button as f32,
         height_min: height as f32,
     })
@@ -373,13 +377,24 @@ mod tests {
     #[test]
     fn capsule_geometry_is_separate_and_has_no_fallback() {
         let v = serde_json::json!({"variants": [
-            {"dark": true, "reduceTransparency": false, "capsule": {"height":38,"button":26,"edge":5}},
-            {"dark": false, "reduceTransparency": false, "capsule": {"height":40,"button":30,"edge":5}}
+            {"dark": true, "reduceTransparency": false, "capsule": {"height":38,"button":26,"edge":5,"gap":7}},
+            {"dark": false, "reduceTransparency": false, "capsule": {"height":40,"button":30,"edge":5,"gap":8}}
         ]});
         let m = capsule_metrics(&v, false, false).unwrap();
         assert_eq!(m.height_min, 40.);
-        assert_eq!(m.button_min + m.gap, 35.);
+        assert_eq!(m.padding, 5.);
+        assert_eq!(m.gap, 8.);
+        assert_eq!(m.button_min + m.gap, 38.);
         assert!(capsule_metrics(&v, false, true).is_err());
+        let mut missing_gap = v.clone();
+        missing_gap["variants"][1]["capsule"]
+            .as_object_mut()
+            .unwrap()
+            .remove("gap");
+        assert!(capsule_metrics(&missing_gap, false, false).is_err());
+        let mut negative_gap = v.clone();
+        negative_gap["variants"][1]["capsule"]["gap"] = serde_json::json!(-1);
+        assert!(capsule_metrics(&negative_gap, false, false).is_err());
         let mut v = v;
         v["variants"][0]["capsule"]
             .as_object_mut()

@@ -2727,3 +2727,8 @@ reader is local and not yet connected to the demo's layer manager. A state ink
 override that is absent or explicitly null uses the shared material ink; no fixed
 colour is substituted. Reader tests also require generated exports when
 NK_REQUIRE_EXPORT is set, keeping fixture-only checks distinct from that path.
+
+The capsule reader requires gap independently from edge, including when zero.
+Missing/negative gap is an error; selected variants retain the exact exported
+separation. Toolkit CI passes absolute NK_SETTINGS_DATA to mandatory export
+tests, pointing at the actual exports generated earlier in the same job.
