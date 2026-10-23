@@ -387,3 +387,18 @@ This cut exports the existing provisional capsule token without applying a new
 window-control design. Issue #921 remains separate. There is no demo runtime token
 consumer, capsule material/coverage composition, D5 fade or native UI walk in this
 cut. No rendered glass, AT-SPI/Orca, idle/performance or owner-live result is claimed.
+
+
+### PR923 geometry schema repair (2026-10-23)
+
+Independent capsule gap=4 joins height32/button24/edge4. Current exported values,
+widths, centers and hit boundaries remain unchanged; gap no longer derives from
+outer edge. CONTRACT precedes schema, canonical skill/README match. Hyalo width,
+hit boundaries and shader slot formula now express independent gap; its default
+mirror test reads the actual capsule source.53 widgets tests PASS,3 filtered
+window_controls Hyalo tests PASS (includes retained32/60/88/currentboundaries and
+mirror test), Hyalo alltargetClippy-Dwarnings PASS.108sets/4variants exporter and
+checker PASS; deleting edge or gap fails own capsule-geometry assertion. Logs
+in repair worktree toolkit/target/gap-repair-*.log. No new live/pixel acceptance
+or change to #921 visual values. Original published branch remains untouched;
+correction is prepared on codex/889-retained-capsule-repair for review.

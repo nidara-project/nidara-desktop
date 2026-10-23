@@ -191,6 +191,7 @@ for variant in component_variants:
     capsule = variant.get('capsule') or {}
     if not (positive_number(capsule.get('height')) and positive_number(capsule.get('button'))
             and positive_number(capsule.get('edge'), True)
+            and positive_number(capsule.get('gap'), True)
             and capsule['height'] >= capsule['button'] + 2 * capsule['edge']):
         fail.append(f'{where}: missing or invalid capsule geometry')
     common = variant.get('common') or {}

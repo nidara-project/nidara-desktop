@@ -1,9 +1,14 @@
 {
   "$comment": [
     "Provisional native/server capsule geometry: current window_controls.rs: height 32, button 24, edge 4, pending owner live tuning.",
-    "Exported in components.json mode variants; pitch is button + edge, never a second token.",
+    "Exported in components.json mode variants; pitch is button + gap; edge is only the outer inset.",
     "Hyalo keeps an independently usable layout mirror, to be checked against this export by CI."
   ],
-  "default": { "height": 32, "button": 24, "edge": 4 },
+  "default": {
+    "height": 32,
+    "button": 24,
+    "edge": 4,
+    "gap": 4
+  },
   "variants": []
 }
