@@ -1495,14 +1495,14 @@ headers, the title centred. `render/title_bar.rs`.
   first frame is already its size under the bar. Recomputed at every commit
   (`update_title_bar`): an app that switches its frame while it runs gains or loses the bar,
   with the layout following. A rule's `title_bar = false` takes it from one app.
-- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (40, 0 in
-  fullscreen), `frame()` = the box with the bar. 40 = the capsule's 24 and the same 8 px above,
+- **Its place**: on top of the client's box, INSIDE the window's — `Managed::bar()` (32, 0 in
+  fullscreen), `frame()` = the box with the bar. 32 = the capsule's 24 and the same 4 px above,
   below and beside it (`window_controls::BAR_MARGIN`; owner 2026-10-03: equal gaps; #921, owner
-  2026-10-23: the small capsule keeps the bar thin — it was 48 with the 32 px capsule). Not the same total: a kit window's header starts 8 below the window's edge (its
+  2026-10-23: in Hyalo's bar the capsule sits 4 from the window's edges, which keeps the bar
+  thin — it was 48 with the 32 px capsule 8 from them). Not the same total: a kit window's header starts 8 below the window's edge (its
   floating sidebar card's margin), Hyalo's bar at the edge, so the capsule is 12/12 from the
-  corner in ours and 8/8 in the bar — centred on its row's line in both, as macOS centres its
-  window buttons in whatever bar they are in. Before 2026-10-04 it was also 40, with this same
-  24 px capsule. A tiled or maximized window's tile is the frame
+  corner in ours (inside the sidebar card) and 4/4 in the bar — centred on its row's line in
+  both, as macOS centres its window buttons in whatever bar they are in. A tiled or maximized window's tile is the frame
   and the client gets the rest; a floating window keeps the size it asked for and the bar sits
   above it, clamped by the frame (`clamp_floating_with_bar`: the bar, not the client, may never
   leave by the top). Placement, cascading, centring, dropping after a drag all use the frame.

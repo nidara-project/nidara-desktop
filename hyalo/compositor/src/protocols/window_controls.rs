@@ -208,8 +208,9 @@ pub fn dark_ink(surface: &WlSurface) -> bool {
 
 /// The capsule's gap in Hyalo's own title bar (render/title_bar.rs), logical px: the same on
 /// the side the user chose as above and below it — the bar is the capsule's height and twice
-/// this (`wm::TITLE_BAR_H`): 24 + 8 + 8 = 40 (#921).
-pub const BAR_MARGIN: f64 = 8.0;
+/// this (`wm::TITLE_BAR_H`): 24 + 4 + 4 = 32 (owner, 2026-10-23, #921: in Hyalo's bar the
+/// capsule sits 4 from the window's edges; in a kit window, 12, inside the sidebar's card).
+pub const BAR_MARGIN: f64 = 4.0;
 
 /// Where a window's controls are, surface-local logical px, and its buttons: in Hyalo's title
 /// bar when it has one (above the surface, so `y` is negative), else where the app placed them.
