@@ -7,6 +7,8 @@ mod controls;
 pub use controls::{ControlsLayout, ControlsSide, WindowAction};
 mod ime;
 mod keyboard;
+mod popup;
+pub use popup::{PopupPlacement, run_popup};
 mod layers;
 pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
@@ -42,7 +44,7 @@ use wayland_protocols::{
         text_input::zv3::client::{zwp_text_input_manager_v3, zwp_text_input_v3},
         viewporter::client::{wp_viewport, wp_viewporter},
     },
-    xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base},
+    xdg::shell::client::{xdg_popup, xdg_positioner, xdg_surface, xdg_toplevel, xdg_wm_base},
 };
 pub type Result<T> = std::result::Result<T, String>;
 const MIME: &str = "text/plain;charset=utf-8";
@@ -60,6 +62,8 @@ pub struct Frame {
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
+    PopupDone,
+    PopupRepositioned(u32),
     ControlsLayout(ControlsLayout),
     Layer {
         id: LayerId,
@@ -153,6 +157,8 @@ pub struct Window {
     surface: Option<wl_surface::WlSurface>,
     xdg: Option<xdg_surface::XdgSurface>,
     toplevel: Option<xdg_toplevel::XdgToplevel>,
+    popup: Option<xdg_popup::XdgPopup>,
+    positioner: Option<xdg_positioner::XdgPositioner>,
     shm: Option<wl_shm::WlShm>,
     seat: Option<wl_seat::WlSeat>,
     keyboard_proxy: Option<wl_keyboard::WlKeyboard>,
@@ -570,7 +576,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
-    run_inner(app, options, start, None).map(|_| ())
+    run_inner(app, options, start, None, None).map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -587,6 +593,7 @@ pub fn run_dialog(app: impl Application, parent: &mut Window) -> Result<()> {
         },
         Instant::now(),
         Some(parent),
+        None,
     )?;
     // Each wl_keyboard on this connection receives the modal's key stream too.
     // Those messages are queued on the parent's EventQueue; do not replay them
@@ -601,6 +608,7 @@ fn run_inner(
     options: Options,
     start: Instant,
     parent: Option<&Window>,
+    popup_options: Option<(PopupPlacement, Option<u32>)>,
 ) -> Result<u32> {
     let conn = if let Some(parent) = parent {
         parent.connection.clone()
@@ -628,6 +636,8 @@ fn run_inner(
         surface: None,
         xdg: None,
         toplevel: None,
+        popup: None,
+        positioner: None,
         shm: None,
         seat: None,
         keyboard_proxy: None,
@@ -693,7 +703,7 @@ fn run_inner(
     }
     // v6: preferred_buffer_scale, the integer fallback's source.
     let compositor = bind!(wl_compositor::WlCompositor, 6).unwrap();
-    let base = bind!(xdg_wm_base::XdgWmBase, 1).unwrap();
+    let base = bind!(xdg_wm_base::XdgWmBase, 3).unwrap();
     let materials = bind!(nidara_material_manager_v1::NidaraMaterialManagerV1, 1);
     let viewporter = bind!(wp_viewporter::WpViewporter, 1);
     let fraction = bind!(
@@ -719,12 +729,32 @@ fn run_inner(
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
     let surface = compositor.create_surface(&qh, ());
     let xdg = base.get_xdg_surface(&surface, &qh, ());
-    let top = xdg.get_toplevel(&qh, ());
-    top.set_app_id(options.app_id.into());
-    top.set_title(options.title.into());
-    top.set_min_size(400, 300);
-    if let Some(parent) = parent {
-        top.set_parent(parent.toplevel.as_ref());
+    if let Some((placement, grab_serial)) = popup_options {
+        let parent = parent.ok_or("popup requires a parent")?;
+        let parent_xdg = parent
+            .xdg
+            .as_ref()
+            .ok_or("popup parent has no xdg surface")?;
+        let positioner = base.create_positioner(&qh, ());
+        placement.apply(&positioner)?;
+        let popup = xdg.get_popup(Some(parent_xdg), &positioner, &qh, ());
+        if let Some(serial) = grab_serial {
+            popup.grab(
+                parent.seat.as_ref().ok_or("popup grab requires a seat")?,
+                serial,
+            );
+        }
+        w.popup = Some(popup);
+        w.positioner = Some(positioner);
+    } else {
+        let top = xdg.get_toplevel(&qh, ());
+        top.set_app_id(options.app_id.into());
+        top.set_title(options.title.into());
+        top.set_min_size(400, 300);
+        if let Some(parent) = parent {
+            top.set_parent(parent.toplevel.as_ref());
+        }
+        w.toplevel = Some(top);
     }
     w.material = materials
         .as_ref()
@@ -737,8 +767,7 @@ fn run_inner(
     }
     w.surface = Some(surface);
     w.xdg = Some(xdg);
-    w.toplevel = Some(top);
-    if app.window_controls() {
+    if w.popup.is_none() && app.window_controls() {
         w.request_window_controls();
     }
     // Seat and manager order in registry is unspecified.
@@ -795,6 +824,12 @@ fn run_inner(
             w.input_from_ime = matches!(&event, Event::Ime(_));
             app.event(event, &mut w)?;
             w.input_from_ime = false;
+            if w.closed {
+                break;
+            }
+        }
+        if w.closed {
+            break;
         }
         app.idle(&mut w)?;
         if w.closed {
@@ -835,43 +870,61 @@ fn run_inner(
             }
         }
     }
-    // Child windows share the parent's connection. Dropping a Rust proxy does
-    // not send Wayland destructor requests: destroy the role and surface now.
-    for layer in w.layers.drain(..) {
-        layer.destroy();
-    }
-    if let Some(t) = w.text.take() {
-        t.destroy();
-    }
-    if let Some(k) = w.keyboard_proxy.take() {
-        k.release();
-    }
-    if let Some(p) = w.pointer.take() {
-        p.release();
-    }
-    if let Some(d) = w.data.take() {
-        d.release();
-    }
-    if let Some(m) = w.material.take() {
-        m.destroy();
-    }
-    if let Some(v) = w.viewport.take() {
-        v.destroy();
-    }
-    if let Some(f) = w.fractional.take() {
-        f.destroy();
-    }
-    if let Some(t) = w.toplevel.take() {
-        t.destroy();
-    }
-    if let Some(x) = w.xdg.take() {
-        x.destroy();
-    }
-    if let Some(s) = w.surface.take() {
-        s.destroy();
-    }
+    w.destroy_surfaces();
     conn.flush().map_err(|e| format!("Wayland flush: {e}"))?;
     Ok(w.serial)
+}
+
+impl Window {
+    // Child windows share the parent's connection. Rust proxies alone do not send
+    // destructors; close roles even when a callback or transport operation fails.
+    fn destroy_surfaces(&mut self) {
+        for layer in self.layers.drain(..) {
+            layer.destroy();
+        }
+        if let Some(t) = self.text.take() {
+            t.destroy();
+        }
+        if let Some(k) = self.keyboard_proxy.take() {
+            k.release();
+        }
+        if let Some(p) = self.pointer.take() {
+            p.release();
+        }
+        if let Some(d) = self.data.take() {
+            d.release();
+        }
+        if let Some(m) = self.material.take() {
+            m.destroy();
+        }
+        if let Some(v) = self.viewport.take() {
+            v.destroy();
+        }
+        if let Some(f) = self.fractional.take() {
+            f.destroy();
+        }
+        if let Some(p) = self.popup.take() {
+            p.destroy();
+        }
+        if let Some(p) = self.positioner.take() {
+            p.destroy();
+        }
+        if let Some(t) = self.toplevel.take() {
+            t.destroy();
+        }
+        if let Some(x) = self.xdg.take() {
+            x.destroy();
+        }
+        if let Some(s) = self.surface.take() {
+            s.destroy();
+        }
+    }
+}
+impl Drop for Window {
+    fn drop(&mut self) {
+        self.destroy_surfaces();
+        let _ = self.connection.flush();
+    }
 }
 
 impl Dispatch<wl_registry::WlRegistry, ()> for Window {
@@ -1137,7 +1190,8 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
                 }
                 w.serial = serial;
                 if state == WEnum::Value(wl_keyboard::KeyState::Pressed) {
-                    if let Some(k) = w.keyboard.press(key) {
+                    if let Some(mut k) = w.keyboard.press(key) {
+                        k.serial = Some(serial);
                         w.events.push(Event::Key(k));
                     }
                 } else if w

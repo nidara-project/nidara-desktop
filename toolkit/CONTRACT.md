@@ -173,6 +173,26 @@ Owns everything between a string and positioned glyphs, and the editing model on
   the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
 
+### Standard popup host (#882/#915)
+
+`nk-wayland::run_popup(app, parent, placement, grab_serial)` is a nested host on
+its parent's connection, with a standard `xdg_popup` role, never a D7 layer or a
+new toplevel. `PopupPlacement` supplies a positive size and positive anchor
+rectangle in parent window-geometry coordinates; the menu opens below its left
+edge with compositor flip/slide constraints. Optional `grab_serial` is the serial
+of the initiating physical pointer/key event, never a later configure or an
+invented serial. `Key::serial` is Some only for a physical key press; repeats have
+None. Accessibility activation may open without an explicit input grab.
+
+The host acknowledges xdg_surface.configure before painting the compositor's
+configured dimensions. `PopupDone` closes the nested host; destroying the popup
+also dismisses it. `Window::reposition_popup` uses a new placement and caller token
+on xdg-shell v3+, and returns an error on older versions (no fake reposition).
+`PopupRepositioned(token)` carries the compositor acknowledgement. Destruction
+happens before the parent's event queue resumes; after ordinary close queued modal key events are not
+replayed into the parent. The caller restores focus only to a live visible node.
+This primitive alone is not a Dropdown, keyboard/Orca gate or native acceptance.
+
 ## nk-widgets (phase 1, #873)
 
 Dependencies point one way: `nk-widgets → nk-text, nk-render, nk-a11y, nk-wayland`.

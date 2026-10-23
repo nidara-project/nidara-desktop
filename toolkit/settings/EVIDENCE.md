@@ -169,3 +169,37 @@ Fresh 52 Settings +54 widget +2 demo tests and all-target Clippy -D warnings
 passed with mandatory complete exports (target/review-20261025/{tests,clippy}.log).
 Formatting, skill docs and diff checks pass. Native D7 retry on #935 remains
 pending because the active/installed Hyalo is not the #935 binary.
+
+
+## Rebuilt local standard-popup transport cut — 2026-10-23
+
+Parent:corrected routing c0ad7550 (comment-wrap follow-up to5ad1ba34). Extracts only production transport and required
+consumer-constructor adaptation from existing0f42c903. The patch applies to the
+current lib without replacing later main code: exact pointer serial/time title
+dragging, group/choice/range behavior remain preserved. Public PopupPlacement,
+run_popup, PopupDone/Repositioned and Key::serial live in the one nk-wayland host.
+Child shares the parent connection, uses xdg_popup/positioner/grab/reposition and
+explicit role cleanup, with Drop cleanup on errors. Ordinary close sets parent
+input floor/reset; no stronger error-path parent-input claim is made here.
+Probe, native checker/wrapper and historical native result sections are excluded.
+
+- target/popup-transport-split-restored-tests.log:63 wayland/widgets lib/integration
+  tests PASS (9+17+7+15+8+5+2), exports required from full cut9 data. Popup unit
+  validation covers nonempty anchor/size and integer overflow; retained consumers
+  and later main tests still pass. These unit tests do not create a fake Window
+  or prove native role/input/cleanup behavior.
+- target/popup-transport-split-anchor-control.log: compiled production validation
+  fault accepts zero anchor width. The positioner validation test fails its OWN
+  invalid-anchor is_err assertion. Restored before full63PASS. This is a validation
+  control, not the historical native role-substitution control.
+- target/popup-transport-split-clippy.log: wayland/widgets all targets -D warnings
+  PASS. target/popup-transport-split-workspace.log: workspace all-target check PASS,
+  covering the new public Key field/Event consumers. fmt/skill-docs/diff PASS.
+  The invalid initial cargo command repeated --lib and ran no test; its error is
+  preserved in popup-transport-split-tests.log and is not acceptance evidence.
+
+Contract before APIs and skill/README/evidence in the same change. Builds use
+incremental0/jobs1/shared target. No new native popup/grab/reposition/focus/cleanup,
+Dropdown/AT-SPI/Orca, output-edge/fractional, glass, presentation/performance or
+owner-live acceptance. Exact original fixed binaries and their evidence remain
+untouched and are not attributed to this rebuilt head. No new Wayland host.

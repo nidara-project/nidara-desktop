@@ -117,3 +117,20 @@ Validation uses the wire's truncating fixed-point conversion for nonempty bounds
 threshold ordering and coverage overlap; adjacent wire rectangles remain legal.
 The limits are eight washes and sixteen coverage rectangles. Keep zero-alpha
 exit regions with their stable IDs for compositor fading.
+
+
+## Standard popup host
+
+run_popup hosts a standard xdg_popup on the parent's Wayland connection.
+PopupPlacement anchors it in parent window geometry. Pass the initiating physical
+input serial for an explicit grab; Key::serial is None for repeats. Do not replace
+it with a configure serial. Accessibility activation can omit the explicit grab.
+Compositor dismissal is PopupDone; version3 reposition acknowledgement is
+PopupRepositioned(token). Older xdg-shell can open, but reposition returns an error.
+No D7 layer or new toplevel is substituted. Window Drop destroys roles/surfaces
+on callback failure; ordinary close filters queued modal input before parent use.
+
+This cut contains only the primitive and validation tests. The separate transport
+probe/headless harness and their exact-binary evidence follow independently.
+No new native popup role/grab/reposition/cleanup trace or keyboard/Orca, edge,
+fractional, presentation/performance acceptance is implied by compilation.

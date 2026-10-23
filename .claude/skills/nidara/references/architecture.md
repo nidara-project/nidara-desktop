@@ -2888,3 +2888,15 @@ Settings positions its three window-control buttons from the current exported
 CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
 metrics, including portal updates staged before layout; no cached measured bounds
 or second layout is needed just to compute the capsule's horizontal placement.
+
+
+The native popup seam is nk-wayland::run_popup: standard xdg_popup on the parent's
+connection, not a D7 layer or new toplevel. Positive integer anchor/size are
+validated before positioner requests; optional grab serial comes from physical
+input. Key::serial is Some on physical presses and None on repeats/synthetic keys.
+PopupDone closes the nested host; reposition requires xdg-shell v3 and publishes
+its acknowledgement token. Ordinary close advances the parent's input floor and
+resets keyboard state; Window Drop destroys child roles/surfaces on error too.
+Closed windows get no idle callback. The transport probe/harness belongs in a
+separate cut; compilation/placement unit tests are not a native popup or Dropdown,
+AT-SPI/Orca, output-edge/fractional or timing acceptance.
