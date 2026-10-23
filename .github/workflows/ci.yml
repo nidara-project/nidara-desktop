@@ -1045,6 +1045,7 @@ jobs:
       - name: Unit tests and the complete corpus
         env:
           NK_REQUIRE_EXPORT: "1"
+          NK_SETTINGS_DATA: ${{ github.workspace }}/build/settings-data
         run: cargo test --manifest-path toolkit/Cargo.toml --locked --workspace -- --nocapture
       - name: Case table, layout timing and isolated peak RSS
         if: ${{ !cancelled() }}

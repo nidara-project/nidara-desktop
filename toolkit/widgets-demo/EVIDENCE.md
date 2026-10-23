@@ -451,3 +451,19 @@ There is no native UI, rendered material/coverage, D5 fade, AT-SPI/Orca, idle,
 performance or owner-live acceptance for this rebuilt cut. Original native fixed
 binaries and historical evidence remain untouched; those results are not assigned
 to this split commit.
+
+
+### PR924 gap reader and mandatory export CI repair (2026-10-23)
+
+The reader now requires independent gap, rejecting missing/negative values;
+synthetic variant edge5/gap8 retains8 instead of deriving5. Compiled oldmapping
+fault fails OWN gap8 assertion observing5 after valid height/padding parsing;
+recipes-repair-edge-gap-control.log. CI's unit-test step now sets absolute
+NK_SETTINGS_DATA to the exports generated earlier in the same job. Removing the
+environment reproduces its OWN exports-required failure; ci-env-control.log.
+Full restored workspace: 141 tests PASS, required exports, plus demo alltarget
+Clippy-Dwarnings/fmt/skilldocs/diff. Actual current manifest/i18n in own target,
+unchanged exporter tokens symlinked from gap-repair export. Initial local full
+suite lacked the legacy build/settings-data path (2Settings failures); adding
+that path to the same complete data matches CI, without skipping/relaxing tests.
+Published heads untouched; local repair branch awaits owner review/publication.
