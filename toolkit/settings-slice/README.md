@@ -97,3 +97,11 @@ See [EVIDENCE.md](EVIDENCE.md). The check is not connected to
 `scripts/ci/hyalo-smoke.sh`: that path is not among the files #862 authorises.
 The necessary workspace-member and lockfile changes accompany this new member;
 no shell, exporter, protocol, transport crate, skill or workflow is edited.
+
+The own-window-level launch preserves stderr and reports an early process exit
+as setup failure immediately; a listing timeout includes that log as well.
+This keeps the six-second bound and all value/scale/background assertions; an
+exit or missing window is never accepted as a control catch.
+
+Run `python3 toolkit/settings-slice/test_check.py` for the listing diagnostic
+regressions (actual child exit and synthetic inventory; no live provider).

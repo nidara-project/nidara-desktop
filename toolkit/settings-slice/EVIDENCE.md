@@ -110,3 +110,26 @@ Workspace Cargo.toml/Cargo.lock changes are the metadata needed for the issue's
 new workspace member. All implementation, checks and documentation are inside
 `toolkit/settings-slice/`. No phase-0 crate, shell, export, protocol or skill file
 was changed; skill documentation was left untouched under the explicit scope cap.
+
+
+## CI startup investigation (2026-10-23)
+
+PR923/926 logs fail on the third --window-level launch: setup never listed its
+window. Its stderr was discarded. The checker now retains that error on early
+exit/timeout, checks process exit, and preserves the existing six-second bound,
+first-listing geometry semantics and all Config1/pixel/scale/background assertions.
+Three diagnostic regressions PASS: actual child exits23 with stderr reported,
+synthetic inventory chooses exact pid, missing window remains setup failure.
+No timeout or crash is accepted as a control catch.
+
+One bounded private Cage/Hyalo/Config1-fixture reproduction PASSed the original
+baseline/default-values/background controls and own-level assertion. This is a
+synthetic Config1/portal fixture, not the real CI shell service. It did NOT
+reproduce the CI failure and does NOT prove its underlying cause fixed. No
+live session, preferences, installed services or fixed binaries changed.
+Logs target/startup-private-run/, listing-unit-tests.log and startup-ci-build.log.
+Exact source: Rust slice from72ce1e83; checker diagnostic changes in this commit.
+Slice SHA256 4bbe4c5e335f8f996891003bc4588ccf7027074cd40700d845a203f34091eaca
+Fixed Hyalo SHA256 f684df818f0f28221fb817be3008cda103268dcc706d3386e7e087884bce787d
+A scoped CI run with the real shell is still required to resolve the original
+failure or expose the newly preserved process error. No repeated native attempts.

@@ -36,14 +36,18 @@ def hyalo_windows():
     return json.loads(out)['ok']['windows']
 
 
-def first_listing(pid, deadline):
+def first_listing(pid, deadline, process=None, log=None):
     """The window as Hyalo first lists it: mapped, so with its first content commit."""
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            detail = log.read_text() if log is not None else ''
+            raise RuntimeError(f'setup: slice exited {process.returncode} before listing: {detail}')
         for w in hyalo_windows():
             if w.get('pid') == pid:
                 return w
         time.sleep(.01)
-    raise RuntimeError('setup: Hyalo never listed the slice window')
+    detail = log.read_text() if log is not None else ''
+    raise RuntimeError(f'setup: Hyalo never listed the slice window: {detail}')
 
 
 def run(binary, control, folder):
@@ -58,7 +62,7 @@ def run(binary, control, folder):
         deadline = time.monotonic() + 6
         # Hyalo draws the window's background from its first frame (D6): the first time it lists
         # the window — mapped, so with that frame — it has it.
-        listed = first_listing(proc.pid, deadline)
+        listed = first_listing(proc.pid, deadline, proc)
         while time.monotonic() < deadline and not (ready and a11y):
             if proc.poll() is not None:
                 raise RuntimeError(f'process exited {proc.returncode}: {seen}')
@@ -149,12 +153,17 @@ def main():
         print(f'PASS assert-background: Hyalo draws the window background from its first frame {background}; the control has none')
         # An app's own level (set_window_background_level): the one Settings does not have.
         own = next(l for l in ('opaque', 'tinted', 'translucent') if l != background['level'])
-        asked = subprocess.Popen([binary, '--window-level', own], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            listed = first_listing(asked.pid, time.monotonic() + 6).get('background') or {}
-        finally:
-            asked.terminate()
-            asked.wait(timeout=5)
+        # Preserve this third launch's own error; discarding stderr hid the
+        # startup failure behind a generic six-second window-listing timeout.
+        own_log = folder / 'own-level.log'
+        with own_log.open('w') as stderr:
+            asked = subprocess.Popen([binary, '--window-level', own],
+                stdout=subprocess.DEVNULL, stderr=stderr)
+            try:
+                listed = first_listing(asked.pid, time.monotonic() + 6, asked, own_log).get('background') or {}
+            finally:
+                asked.terminate()
+                asked.wait(timeout=5)
         if listed.get('level') != own or not listed.get('own_level'):
             raise AssertionError(f'assert-own-level: asked for {own} over the user\'s {background["level"]}, Hyalo shows {listed}')
         print(f'PASS assert-own-level: an app\'s own level ({own}) over the user\'s ({background["level"]})')
