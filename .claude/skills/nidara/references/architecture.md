@@ -3277,3 +3277,16 @@ and retains one premultiplied raster; Canvas paints it with the existing CPU eng
 set_image preserves IDs and avoids repaint for the same Arc. Removal releases the
 raster. Builders own decode jobs/loading/error names and reject obsolete results.
 This primitive is not wallpaper loading, thumbnail selection or native/Orca proof.
+
+
+Wallpaper jobs use image_load::Load, not file IO in a widget or painter. Start
+only for visible work with mount/request identity and explicit target/budgets.
+One worker has four queued slots; Busy is retryable. Cancel hidden/unmounted or
+replaced work; wrong-token poll retires even an already-completed result. Canceled
+queued jobs never decode. Output stores only target-size Raster pixels, with Exif
+orientation applied before Contain/Cover. Five codecs match Config1 formats; AVIF
+uses system dav1d (libdav1d-dev in the existing Ubuntu toolkit job; Arch's ffmpeg
+already depends on dav1d). GIF is static first-frame here. Byte budgets reject
+oversized input/output but are not a hard process/codec-internal memory bound;
+full PSS/startup validation is still pending. ICC/HDR colour management is not
+claimed by this loader and needs explicit validation before wallpaper parity.

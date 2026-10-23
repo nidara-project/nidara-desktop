@@ -1175,3 +1175,24 @@ is semantic, not painted text. set_image changes content without replacing IDs;
 set_image_size validates before mutation. Removal drops its raster ownership.
 The widget never enumerates files, starts work, writes Config1 or owns a provider.
 Loading/error names and async operation guards belong to its application builder.
+
+
+### Lazy wallpaper image loading (#915)
+
+image_load::Load starts only for a visible preview/thumbnail request. One process
+worker serializes decode with at most four queued jobs. Request carries a nonzero
+mount/request token, absolute path, physical target size, Contain/Cover and explicit
+encoded/decoded-output byte budgets. Queue-full is Busy for later retry, not a
+permanent image failure. No work starts from Default, paint or layout. Jobs read
+only regular files, cap encoded input, inspect actual file format/dimensions and
+refuse a DynamicImage output buffer over budget before its allocation. PNG/JPEG/GIF/WebP/
+AVIF are the accepted formats (GIF's first frame). Decoder-internal allocations may already occur during header/AVIF setup and are
+best-effort; the byte budgets do not claim a hard process-memory bound. Orientation
+is applied before the target-size crop/resize. Only the resulting target raster
+is retained by the UI; full source/decoded buffers are dropped on the worker.
+
+Cancel/Drop and wrong-mount/request polling retire the receiver. Canceled queued
+jobs are skipped and an active obsolete result cannot reach the UI. Load owns no
+Tree, Window, Bridge or Config1 operation. Builders still guard current visibility,
+availability and mount before accepting a result. This is no full wallpaper/native,
+PSS/startup or animation acceptance. AVIF decoding uses the system dav1d library.

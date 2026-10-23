@@ -1011,7 +1011,7 @@ jobs:
           key: toolkit-${{ runner.os }}-${{ hashFiles('toolkit/Cargo.lock') }}
       - name: Install the corpus fonts
         run: |
-          scripts/ci/apt.sh install fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-inter-variable libwayland-dev libxkbcommon-dev pkg-config dbus-daemon
+          scripts/ci/apt.sh install fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji fonts-inter-variable libwayland-dev libxkbcommon-dev pkg-config dbus-daemon libdav1d-dev
       # The native Settings' tests read the real exports (its manifest parser refuses a field it
       # does not know, so a manifest.ts change it cannot draw fails here, not at start-up) and
       # talk to a Config1 on a private dbus-daemon of their own (toolkit/settings/tests/bus.rs).

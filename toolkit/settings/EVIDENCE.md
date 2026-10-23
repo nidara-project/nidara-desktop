@@ -772,3 +772,25 @@ four-package all-target Clippy -Dwarnings PASS after that finite-input equivalen
 change. Workspace all-target check PASS. Logs: target/retained-image-*.log.
 fmt/skilldocs/diff PASS. No native/EGL/Orca claim, no decoder/gallery/main or full
 wallpaper parity yet. Actual cut27 exports unchanged and reused.
+
+
+## Application integration — bounded lazy image loader (2026-10-23)
+
+One lazy worker/four queued slots, mount/request retirement, regular-file and
+input/output byte budgets, actual five-format decode and Exif-before-resize.
+Target pixels alone survive completion; worker internals are not a hard process
+memory guarantee (AVIF native setup may allocate before DynamicImage output).
+GIF uses first frame; ICC/HDR colour validation remains pending, not full parity.
+
+Three tests pass actual PNG/JPEG/GIF/WebP/AVIF file decoding to own target/pixel
+assertions, rotated JPEG target geometry, malformed/missing/over-budget refusal,
+and deterministic barrier queue4/BUSY/canceled-job/stale-completed-result behavior.
+Fixture generation/provenance is checked in; ffmpeg is not required by these tests.
+A compiled stale-token guard bypass failed its OWN completed-result mount assertion
+AFTER the next decoder call proved the first reply had been queued. Restored before
+72 Settings tests PASS [44, 4, 1, 2, 13, 1, 5, 2]. All-target Settings Clippy -Dwarnings and workspace
+all-target check PASS, logs target/image-loader-*.log. Existing Ubuntu toolkit
+job declares libdav1d-dev; no new job/native check or CI execution claim. Existing
+Arch Hyalo CI already installs ffmpeg (dav1d dependency); no compositor edits.
+Contract, canonical skill/README and evidence accompany the mechanism. No native
+Window/provider/Orca/startup/PSS or complete wallpaper/app acceptance.

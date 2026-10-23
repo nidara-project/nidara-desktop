@@ -103,3 +103,12 @@ Scroll. Failed builds unmount partial builder work and remove only newly-created
 roots. A replacement is built before retiring the old page; consuming unmount
 runs all callbacks before node removal even when cleanup fails. This is the page
 lifecycle prerequisite for the app, not yet its native main or wallpaper builders.
+
+
+image_load::Load supplies bounded off-UI wallpaper decoding. One worker and four
+queued requests; queue-full is retryable Busy. Callers supply absolute path,
+physical target, Contain/Cover, mount/request token and input/output byte budgets.
+Cancel on hide/unmount/replacement. Only target pixels survive completion; obsolete
+results are dropped. PNG/JPEG/GIF(first frame)/WebP/AVIF decode here; AVIF links
+dav1d. Decoder-internal allocations are not a hard memory guarantee. Native
+wallpaper parity, colour-profile/HDR validation and startup/PSS remain pending.
