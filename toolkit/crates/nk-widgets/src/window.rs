@@ -1915,6 +1915,46 @@ mod tests {
         fade.update(&mut tree, ms(501.), false, true);
         assert!(tree.capsule_washes.is_empty());
         assert!(!fade.active);
+
+        // CPU-only mixed-ownership oracle: one synthetic panel ID denotes a
+        // layer-owned capsule, the other stays in the custom root canvas.
+        // This does not fabricate a Wayland LayerId or allocation failure.
+        tree.set_hidden(capsule, false).unwrap();
+        let other = tree
+            .control_capsule(
+                "Other root panel",
+                Point { x: 350., y: 200. },
+                CapsuleMetrics {
+                    padding: 5.,
+                    gap: 3.,
+                    button_min: 26.,
+                    height_min: 38.,
+                },
+            )
+            .unwrap();
+        tree.capsule_button(other, "Other action", "B", false)
+            .unwrap();
+        tree.layout(tree.size, false, &mut backend).unwrap();
+        tree.capsule_styles
+            .insert(other, tree.capsule_styles[&capsule].clone());
+        for layered in [capsule, other] {
+            let mut canvas = nk_render::Canvas::new(width, height, 1.);
+            tree.paint_capsules_fallback_where(&mut canvas, test_palette(), |id| id != layered)
+                .unwrap();
+            let pixels = canvas.finish();
+            for id in [capsule, other] {
+                let b = tree.nodes[&id].bounds;
+                let alpha = pixels[((b.y + b.height / 2.) as usize * width as usize
+                    + (b.x + 2.) as usize)
+                    * 4
+                    + 3];
+                assert_eq!(
+                    alpha,
+                    if id == layered { 0 } else { 255 },
+                    "mixed ownership duplicated a layered capsule or omitted a root capsule"
+                );
+            }
+        }
     }
     #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {

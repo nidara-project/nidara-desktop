@@ -2780,3 +2780,12 @@ nor proof of native wakeup latency, idle CPU or zero compositor frames.
 `paint_count()` increments after a successful client layer-buffer paint; it does
 not count compositor work or presentations. External-backdrop harnesses and
 native acceptance on rebuilt heads remain separate work.
+
+
+The lab custom-root painter filters ownership per capsule with
+paint_capsules_fallback_where: panels with a CapsuleComposition layer are excluded
+individually, never inferred from panels[0]. Ordinary opaque content still paints
+all its capsules. A layer allocation error still propagates out of sync; this
+filter is not silent allocation recovery. The mixed-ownership pixel oracle is
+CPU-only with a synthetic panel-ID predicate, not a native allocation test.
+Reduced-motion sweep selection/cancellation prints its stationary level explicitly.

@@ -77,6 +77,11 @@ impl Lab {
                     && !self.appearance.reduce_motion
                 {
                     self.started = Some(Instant::now());
+                } else if *scene == Scene::Sweep && self.appearance.reduce_motion {
+                    eprintln!(
+                        "CAPSULE_LAB_SWEEP_DISABLED reduced-motion stationary-level={}",
+                        self.phase
+                    );
                 }
                 window.redraw();
             }
@@ -178,6 +183,12 @@ impl Application for Lab {
             self.input
                 .set_titlebar_double_click_ms(appearance.titlebar_double_click_ms)?;
             if appearance.reduce_motion {
+                if self.started.is_some() || self.sweep_pending {
+                    eprintln!(
+                        "CAPSULE_LAB_SWEEP_DISABLED reduced-motion stationary-level={}",
+                        self.phase
+                    );
+                }
                 self.started = None;
                 self.sweep_pending = false;
             }
@@ -273,10 +284,10 @@ impl Application for Lab {
                 rgba(0, 0, 0, 255)
             },
         )?;
-        if !frame.material || !self.tree_layered() {
-            self.tree
-                .paint_capsules_fallback(&mut canvas, self.appearance.palette)?;
-        }
+        self.tree
+            .paint_capsules_fallback_where(&mut canvas, self.appearance.palette, |id| {
+                self.capsules.layer(id).is_none()
+            })?;
         Ok(canvas.finish())
     }
     fn material(&self) -> Option<Material> {
@@ -290,11 +301,6 @@ impl Application for Lab {
             self.scene
         );
         self.tree.acknowledge();
-    }
-}
-impl Lab {
-    fn tree_layered(&self) -> bool {
-        self.capsules.layer(self.panels[0]).is_some()
     }
 }
 pub fn run(
@@ -368,6 +374,9 @@ pub fn run(
     input.set_titlebar_double_click_ms(appearance.titlebar_double_click_ms)?;
     let sweep_pending = scene == Scene::Sweep && duration.is_some() && !appearance.reduce_motion;
     let started = None;
+    if scene == Scene::Sweep && appearance.reduce_motion {
+        eprintln!("CAPSULE_LAB_SWEEP_DISABLED reduced-motion stationary-level={level}");
+    }
     nk_wayland::run(
         Lab {
             tree,

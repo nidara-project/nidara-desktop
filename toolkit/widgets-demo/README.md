@@ -118,3 +118,9 @@ The printed layer_paints counts successful client layer-buffer paints only.
 No native idle, CPU, compositor damage, capture, presentation or timing result
 follows from that diagnostic. This local cut does not include the external
 backdrop process, fault harness, or their historical fixed-binary acceptance.
+
+
+The custom root canvas excludes each capsule that CapsuleComposition owns in a
+layer. Layer creation errors remain explicit errors, rather than an allocation
+fallback. Reduced motion logs CAPSULE_LAB_SWEEP_DISABLED with the stationary
+level when it prevents or cancels a requested sweep.

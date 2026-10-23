@@ -434,7 +434,10 @@ copied into the frozen TypeScript material or given hidden defaults in transport
 
 The diagnostic lab may paint retained opaque capsules into an existing root canvas
 through `Tree::paint_capsules_fallback`; it uses the same painter as the ordinary
-content path. `CapsuleComposition::paint_count` counts successful client layer-buffer
+content path. `paint_capsules_fallback_where` accepts a per-capsule inclusion
+predicate for a host with mixed root/layer ownership. The lab tests each capsule
+against CapsuleComposition::layer, never inferring all panels from one panel.
+This filter does not recover from a layer allocation error: sync still returns it. `CapsuleComposition::paint_count` counts successful client layer-buffer
 paints only, incremented after `Window::paint_layer` succeeds; it is not a compositor
 commit, damage, capture or presentation counter. A diagnostic count is not idle or
 performance acceptance. The bounded lab can consume `is_animating()` for its own

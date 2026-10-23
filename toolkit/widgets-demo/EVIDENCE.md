@@ -669,3 +669,27 @@ portal/AT-SPI latency test. The foundations demo's constant16ms poll and its
 adaptive-caller test remain named debt. No native walkthrough, AT-SPI/Orca,
 compositor ink/shadow curve, fractional D5, idle CPU/frame counts, presentation,
 performance or owner-live acceptance was added. No fixed binaries were rebuilt.
+
+
+### Lab review correction — per-capsule root ownership
+
+Review173 found the lab inferred every panel's ownership from panels[0]. The lab
+now always calls paint_capsules_fallback_where and excludes each panel with its
+own CapsuleComposition::layer lookup. Ordinary content's original helper still
+includes all capsules. Layer allocation failures continue to propagate from sync:
+this does not add recovery from the64-layer limit or other allocation failures.
+
+The existing coverage/input/fade test now also creates two visible panels and
+checks both mixed-ownership permutations on a real CPU canvas. A synthetic panel
+ID predicate represents layer ownership; no LayerId/provider/native allocation is
+fabricated. Included panel pixels are opaque and excluded panel pixels stay
+transparent. A compiled production fault ignores this inclusion predicate and
+fails its own mixed-ownership pixel assertion (255 vs0), after all prior setup
+and pixel checks: target/capsule-lab-mixed-control.log. Source restored before
+61 widgets/demo tests PASS in target/capsule-lab-mixed-restored-tests.log with
+mandatory unchanged exports. All-target Clippy -D warnings passes in
+target/capsule-lab-mixed-clippy.log; fmt/skill-docs/diff pass.
+
+Reduced-motion selection/start/cancellation now logs SWEEP_DISABLED and the
+stationary level; source compiled, no native log/capture acceptance added. All
+native/scheduling/idle/presentation limits above still apply.
