@@ -5,20 +5,7 @@ use nk_wayland::{Blur, ControlMaterial, Glass, Material, Pane, Response, Shadow}
 use nk_widgets::{CapsuleMetrics, Result};
 use serde_json::Value;
 
-#[derive(Clone, Copy, Debug)]
-pub struct StateStyle {
-    pub wash: [f64; 4],
-    pub ink: Option<[f64; 4]>,
-}
-#[derive(Clone, Debug)]
-pub struct ControlStyle {
-    pub material: ControlMaterial,
-    pub hover: StateStyle,
-    pub press: StateStyle,
-    pub destructive_hover: StateStyle,
-    pub destructive_press: StateStyle,
-    pub fade_ms: u32,
-}
+pub use nk_widgets::{CapsuleStateStyle as StateStyle, CapsuleStyle as ControlStyle};
 pub struct ControlRecipe {
     steps: Vec<(f64, ControlStyle)>,
 }
@@ -172,20 +159,6 @@ impl ControlRecipe {
             .find(|(from, _)| *from <= short_side.round())
             .map(|(_, style)| style.clone())
             .ok_or_else(|| "control export: no size step".into())
-    }
-}
-impl ControlStyle {
-    pub fn for_pane(&self, pane: Pane, reduce_motion: bool) -> Result<ControlMaterial> {
-        let mut material = self.material.clone();
-        material.base.shapes = vec![pane];
-        if reduce_motion && let Some(response) = &mut material.response {
-            response.settle_ms = 0;
-        }
-        material.validate()?;
-        Ok(material)
-    }
-    pub fn fade_ms(&self, reduce_motion: bool) -> u32 {
-        if reduce_motion { 0 } else { self.fade_ms }
     }
 }
 /// Geometry belongs to components.json, independently of the glass material.

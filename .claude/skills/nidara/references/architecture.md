@@ -2732,3 +2732,16 @@ The capsule reader requires gap independently from edge, including when zero.
 Missing/negative gap is an error; selected variants retain the exact exported
 separation. Toolkit CI passes absolute NK_SETTINGS_DATA to mandatory export
 tests, pointing at the actual exports generated earlier in the same job.
+
+Capsule geometry is in components.json, not the material export. The demo's --capsules mode connects the reader to CapsuleComposition: one
+synchronized layer per panel, monochrome glyph/ring coverage, stable alpha-zero
+idle state IDs and root/layer input through the existing retained Tree. Repaint
+signatures include pane epoch, scale, style revision and reduced-motion mode;
+call invalidate() after appearance changes. D5 requests the exported opaque
+variant separately. Capsule input is offered to CapsuleComposition first; other
+input still uses Composition::event_with_window so client title dragging survives.
+The --capsules demo opts out of server window controls, preventing two sets.
+Compositor/idle acceptance and D5 state fading are pending.
+A state ink override that is absent or explicitly null uses shared material ink;
+no fixed colour is substituted. Reader tests require generated exports when
+NK_REQUIRE_EXPORT is set, separate from source-fixture checks.

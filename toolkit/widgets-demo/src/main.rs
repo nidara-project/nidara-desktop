@@ -3,7 +3,7 @@
 mod accessibility;
 mod appearance;
 mod choices;
-pub mod control;
+mod control;
 mod panel;
 use appearance::Appearance;
 use nk_a11y::{Request, Role};
@@ -21,6 +21,8 @@ struct Demo {
     appearance: Appearance,
     appearance_updates: mpsc::Receiver<Result<Appearance>>,
     composition: Composition,
+    capsules: nk_widgets::capsule_composition::CapsuleComposition,
+    capsule_ids: Vec<u64>,
     a11y: Option<accessibility::Bridge>,
     fault: String,
     applied: Cell<bool>,
@@ -143,6 +145,10 @@ impl Demo {
             self.appearance.metrics.padding,
             self.appearance.metrics.group_radius,
         )?;
+        for id in &self.capsule_ids {
+            self.tree
+                .set_capsule_metrics(*id, self.appearance.capsule_metrics)?;
+        }
         let width = window.size().0;
         if width != self.width {
             self.tree.set_min_width(self.wide, width as f32)?;
@@ -176,6 +182,44 @@ impl Demo {
             self.appearance.palette,
             |side| self.appearance.panel.at(side),
             self.fault != "layers",
+        )?;
+        if let [controls, toolbar] = self.capsule_ids.as_slice() {
+            let width = self.tree.node(*controls).unwrap().bounds().width;
+            self.tree.set_capsule_position(
+                *controls,
+                Point {
+                    x: (window.size().0 as f32 - self.appearance.metrics.padding - width).max(0.),
+                    y: self.appearance.metrics.gap,
+                },
+            )?;
+            self.tree.set_capsule_position(
+                *toolbar,
+                Point {
+                    x: self.tree.content_viewport().x + self.appearance.metrics.padding,
+                    y: self.tree.content_viewport().y + self.appearance.metrics.padding,
+                },
+            )?;
+            self.tree.layout(
+                nk_text::Size {
+                    width: window.size().0 as f32,
+                    height: window.size().1 as f32,
+                },
+                self.fault != "layers" && window.capabilities().layers,
+                &mut self.text,
+            )?;
+        }
+        self.capsules.sync(
+            &mut self.tree,
+            window,
+            self.appearance.palette,
+            |side, material| {
+                if material {
+                    self.appearance.control.at(side)
+                } else {
+                    self.appearance.opaque_control.at(side)
+                }
+            },
+            self.appearance.reduce_motion,
         )?;
         let inset = self.tree.content_viewport().x;
         let width = window.size().0 as f32;
@@ -324,7 +368,7 @@ impl Demo {
 }
 impl Application for Demo {
     fn window_controls(&self) -> bool {
-        self.fault != "window-controls"
+        self.capsule_ids.is_empty() && self.fault != "window-controls"
     }
     fn poll_interval_ms(&self) -> u32 {
         16
@@ -353,6 +397,7 @@ impl Application for Demo {
             self.composition
                 .set_titlebar_double_click_ms(self.appearance.titlebar_double_click_ms)?;
             self.composition.invalidate_panes();
+            self.capsules.invalidate();
         }
         if let Some(a11y) = &self.a11y {
             a11y.check()?;
@@ -414,9 +459,12 @@ impl Application for Demo {
         }
         let old = self.tree.node(self.scroll).unwrap().scroll();
         let focused = self.tree.focused();
-        let effect = self
-            .composition
-            .event_with_window(&mut self.tree, &event, window)?;
+        let effect = if let Some(effect) = self.capsules.event(&mut self.tree, &event)? {
+            effect
+        } else {
+            self.composition
+                .event_with_window(&mut self.tree, &event, window)?
+        };
         self.keep_scroll_fault(old, self.tree.focused() != focused)?;
         self.effect(effect, window)?;
         self.sync(window)
@@ -524,7 +572,21 @@ fn run() -> Result<()> {
     }
     let titlebar = tree.append(root, Kind::TitleBar, "Widget foundations")?;
     tree.sidebar_button(titlebar, "Sidebar")?;
-    let window_buttons = if fault == "window-controls" {
+    let capsule_mode = std::env::args().any(|a| a == "--capsules");
+    let mut capsule_ids = Vec::new();
+    let window_buttons = if capsule_mode {
+        let panel = tree.control_capsule(
+            "Window controls",
+            Point::default(),
+            appearance.capsule_metrics,
+        )?;
+        capsule_ids.push(panel);
+        [
+            tree.capsule_button(panel, "Minimize", "−", false)?,
+            tree.capsule_button(panel, "Maximize", "□", false)?,
+            tree.capsule_button(panel, "Close", "×", true)?,
+        ]
+    } else if fault == "window-controls" {
         eprintln!("CONTROL_APPLIED window-controls");
         [0; 3] // Deliberately omit both protocol opt-in and retained control registration.
     } else {
@@ -543,6 +605,19 @@ fn run() -> Result<()> {
     let group = tree.group(scroll, "General")?;
     let (_, switch) = tree.row(group, "Enable feature", Kind::Switch { checked: false })?;
     let mut buttons = vec![];
+    if capsule_mode {
+        let panel =
+            tree.control_capsule("Page toolbar", Point::default(), appearance.capsule_metrics)?;
+        capsule_ids.push(panel);
+        for (name, glyph) in [
+            ("Reset scroll", "↺"),
+            ("Larger text", "A"),
+            ("Toggle sidebar", "☰"),
+        ] {
+            let id = tree.capsule_button(panel, name, glyph, false)?;
+            buttons.push((id, name));
+        }
+    }
     for action in [
         "Scroll away",
         "Under sidebar",
@@ -592,6 +667,8 @@ fn run() -> Result<()> {
             appearance,
             appearance_updates,
             composition: Composition::default(),
+            capsules: Default::default(),
+            capsule_ids,
             a11y: None,
             fault,
             applied: Cell::new(false),
