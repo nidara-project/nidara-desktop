@@ -2717,3 +2717,8 @@ The capsule export requires independent edge and gap; neither is a fallback for
 the other. Hyalo keeps the default geometry mirror, unit-checked against the
 component source. Width and hit boundaries derive from the gap; current values
 remain unchanged by this schema repair. Missing either field fails export checks.
+
+The #921 visual change must update capsule.json's default in the same change
+as Hyalo's geometry mirror. Land the independent gap schema first, then keep
+server layout and generated native component data synchronized. The mirror
+unit test rejects leaving the previous export dimensions behind.

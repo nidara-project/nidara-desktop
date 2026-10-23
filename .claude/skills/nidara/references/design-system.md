@@ -4119,13 +4119,13 @@ The bar's rhythm, for a capsule of icon-only buttons (owner, 2026-10-06, chosen 
 mockup): each button's hover is a **24 px circle — the bar pill's height and radius — 4 px
 from the capsule's edge and 4 px from the next circle**, with no rule between buttons (the gap
 does that). So a button takes 28 and a 32-high capsule is `28 × n + 4` wide: **32, 60, 88**, the
-circle concentric with the capsule's ends (radius 12 in 16). Before, the window controls filled
-a 30 px slot cut by the capsule (a straight side or two), and the back/forward pair had 26 px
+circle concentric with the capsule's ends (radius 12 in 16). Before, the window controls (which
+left this rule with #921) filled a 30 px slot cut by the capsule (a straight side or two), and the back/forward pair had 26 px
 circles 3 from the edge with a hairline between.
 
 | capsule | where | how |
 |---|---|---|
-| window controls (1–3) | Hyalo, `render/controls.rs` + `protocols/window_controls.rs` | `HOVER_D`/`EDGE`/`PITCH`; the shader repeats them |
+| window controls (1–3) | Hyalo, `render/controls.rs` + `protocols/window_controls.rs` | NOT this rule since #921 (owner, 2026-10-23): 16 px circles, 4 from the ends, 8 apart, 24 high (24, 48, 72) — the loose window buttons in a capsule as small as it can be; hyalo.md → "The window controls are Hyalo's" |
 | Settings back/forward | `_settings.scss` `.navigation-capsule` + `Settings.tsx` | 1 border + 3 padding, buttons 24 (14 glyph + 5 + 5), `spacing: 4` |
 | CC detail back | `_control-center.scss` `.cc-detail-back-capsule` + `IslandGrid.tsx` | the same, one button |
 
