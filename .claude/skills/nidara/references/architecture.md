@@ -2966,3 +2966,10 @@ bridge must tag requests with its actual published revision. `finish` uses guard
 parent selection; cancellation/Drop only collapse and restore available focus.
 This is CPU-tested groundwork: host/controller publication with the actual popup
 configure origin, builder integration and real Orca speech still need validation.
+
+The short-menu adapter intentionally holds an exclusive parent Tree borrow:
+parent repaint/configure/scale/appearance servicing cannot run concurrently.
+Revise that ownership contract before building a controller that needs it.
+An unavailable chosen option retains its check but initial focus falls back to
+the first available option, or none if all options are unavailable; opening and
+cancellation must still work without changing the chosen value.

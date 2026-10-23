@@ -660,3 +660,47 @@ fn popup_reopening_rejects_old_requests_and_errors_preserve_choice() {
     assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
     assert_eq!(parent.focused(), Some(combo));
 }
+
+#[test]
+fn popup_unavailable_chosen_option_preserves_selection_and_uses_available_focus() {
+    use nk_widgets::DropdownPopup;
+    let (mut parent, _, _, combo) = fixture();
+    let options = parent.semantics().nodes[&combo].children.clone();
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
+    parent.set_disabled(options[1], true).unwrap();
+    assert!(parent.semantics().nodes[&options[1]].states.disabled);
+    let opened = DropdownPopup::new(&mut parent, combo, menu_style());
+    assert!(
+        opened.is_ok(),
+        "an unavailable chosen option must not prevent opening"
+    );
+    let mut popup = opened.ok().unwrap();
+    let snapshot = popup.snapshot(Point::default()).unwrap();
+    assert_eq!(snapshot.tree.selected_children(combo), vec![options[1]]);
+    assert!(snapshot.tree.nodes[&options[0]].states.focused);
+    assert!(!snapshot.tree.nodes[&options[1]].states.focused);
+    assert!(snapshot.tree.nodes[&options[1]].states.disabled);
+    popup.finish(None).unwrap();
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
+    for option in &options {
+        parent.set_disabled(*option, true).unwrap();
+    }
+    let opened = DropdownPopup::new(&mut parent, combo, menu_style());
+    assert!(
+        opened.is_ok(),
+        "an all-unavailable menu must still open for dismissal"
+    );
+    let mut popup = opened.ok().unwrap();
+    assert_eq!(popup.menu().focused(), None);
+    let snapshot = popup.snapshot(Point::default()).unwrap();
+    assert_eq!(snapshot.tree.selected_children(combo), vec![options[1]]);
+    assert!(
+        snapshot
+            .tree
+            .nodes
+            .values()
+            .all(|node| !node.states.focused)
+    );
+    popup.finish(None).unwrap();
+    assert_eq!(parent.dropdown_selected(combo).unwrap(), 1);
+}

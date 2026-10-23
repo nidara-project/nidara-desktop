@@ -368,3 +368,24 @@ No host/controller/provider integration, native popup geometry, AT-SPI, Orca,
 Config1 builder, material, performance or live acceptance established here.
 Historical fixed-binary evidence stays attached to its original source only.
 Adaptive foundations/Settings polling still needs a real caller and causal test.
+
+
+### Cut18 review206 — unavailable chosen option (2026-10-23)
+
+The original adapter refused opening when its chosen option was unavailable.
+Initial focus now uses that item only if available, otherwise the first available
+item, or none if all are unavailable. Selection/check remains on the parent's
+chosen option; cancellation preserves its value. New CPU regression first ran
+against the compiled old source and failed its own opening-success assertion
+AFTER confirming chosen index1 and disabled state (not timeout/unwrap):
+target/dropdown-popup-review206-old-control.log. Corrected source passes all117
+Settings/widgets tests (52+65), including all-unavailable no-focus dismissal,
+with mandatory fullcut16 exports: review206-restored-tests.log. Both-package
+all-target Clippy -D warnings PASS: review206-clippy.log. Clean rebuild followed
+Claude207's owner-authorized cache removal; no evidence/fixed binaries removed
+by this work. No native proof added.
+
+CONTRACT/README/skill explicitly retain the exclusive parent borrow as this
+short-menu adapter's ownership boundary. Parent paint/configure/scale/appearance
+cannot be serviced concurrently; a controller requiring that must revise the
+contract first. This remains a documented limitation, not resolved concurrency.

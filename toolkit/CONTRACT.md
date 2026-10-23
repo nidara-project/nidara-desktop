@@ -226,7 +226,14 @@ parent semantic root, ComboBox, LabelledBy and Selection option IDs, projecting
 the menu's focus/bounds/actions onto those existing options. The origin must be
 the compositor-configured popup origin in parent window coordinates, not the
 requested anchor. Other parent actions are suspended while modal. Chosen state
-continues to come from the parent's model, never the menu's hover/focus.
+continues to come from the parent's model, never the menu's hover/focus. Initial
+focus uses the chosen option if available, otherwise the first available option, or none when
+all are unavailable; the chosen check is preserved.
+
+The exclusive parent Tree borrow is an intentional boundary of this short-menu
+adapter: the controller cannot repaint, reconfigure, restyle or scale the parent
+while it lives. A controller requiring concurrent parent servicing must revise
+this ownership contract before using this API; this cut does not solve that debt.
 
 Each snapshot returns a process-unique publication revision. `request` requires
 that revision and the menu generation captured by that publication; IDs from a

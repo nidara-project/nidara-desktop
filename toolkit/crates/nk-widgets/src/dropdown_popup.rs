@@ -44,7 +44,12 @@ impl<'a> DropdownPopup<'a> {
             menu.set_disabled(*item, !parent.available(*option))?;
         }
         // No parent mutation on construction failure.
-        menu.focus(items[selected])?;
+        let focus = Some(items[selected])
+            .filter(|item| menu.available(*item))
+            .or_else(|| items.iter().copied().find(|item| menu.available(*item)));
+        if let Some(item) = focus {
+            menu.focus(item)?;
+        }
         parent.set_dropdown_expanded(combo, true)?;
         Ok(Self {
             parent,

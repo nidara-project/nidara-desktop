@@ -215,3 +215,10 @@ the guarded parent activation; `finish(None)` and Drop preserve the value and
 collapse/restore focus. The popup host must supply its configured origin, and
 publish the restored parent snapshot after dismissal. This adapter alone does
 not establish provider, native popup geometry, or real Orca acceptance.
+
+The short-menu adapter intentionally holds an exclusive parent Tree borrow:
+parent repaint/configure/scale/appearance servicing cannot run concurrently.
+Revise that ownership contract before building a controller that needs it.
+An unavailable chosen option retains its check but initial focus falls back to
+the first available option, or none if all options are unavailable; opening and
+cancellation must still work without changing the chosen value.
