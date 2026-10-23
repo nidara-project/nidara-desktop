@@ -11,7 +11,8 @@
 //! `Request(as) → s` keeps the legacy interface's verbs and answers (`ui/settings/app.ts`):
 //! `open`, `page <id>`, `app <desktop-id>`, `queryUI [id]`. A page on [`DRAWN`] is navigated
 //! to here; other pages and `app` go to the existing entry point in Native mode,
-//! or to the launcher-backed legacy name after takeover. Its answer is this answer. One connection for everything: the one the [`Client`]
+//! or to the launcher-backed legacy name after takeover. Its answer is this answer.
+//! One connection for everything: the one the [`Client`]
 //! calls `Config1` on, so "the sender owns `org.nidara.SettingsNative`" holds per call.
 //!
 //! [`Client`]: crate::client::Client
