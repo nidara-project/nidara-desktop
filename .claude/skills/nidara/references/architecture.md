@@ -3050,3 +3050,17 @@ Settings Config1 bus tests bind dbus-daemon with an explicit unix:dir under
 `toolkit/target/config-bus-<pid>-<counter>`, clean it after daemon termination, and
 pass the private connection to Client::start. Client::connect would contact the
 live session; neither the session address nor its accessibility bus is changed.
+
+
+
+
+For native Dropdown builder diagnostics, reuse the provider check's registry and
+private Cage/Hyalo runtime with NK_DROPDOWN_BUILDER=1 and dropdown-builder-probe.
+Its Config1 fixture is a separate real bus service; the probe consumes Client,
+Rendered and dropdown::Native. A Settings proxy filters signals by their owner:
+emitting SettingChanged from the checker connection does not simulate the portal.
+The private portal-fixture.py exposes org.nidara.TestPortal.ChangeScale only to this
+isolated test so the actual fixture owner updates ReadAll and emits SettingChanged.
+Reset scale before each case to ensure baseline and control both change it.
+Private test code is never installed. Preserve failed EGL/context-loss runs;
+a missing post-input parent commit is setup failure, not acceptance/control evidence.

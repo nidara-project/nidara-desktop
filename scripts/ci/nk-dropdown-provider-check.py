@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
 import gi
 gi.require_version('Atspi', '2.0')
@@ -116,7 +117,11 @@ def run(stage, fault=''):
                 process.wait(timeout=5)
 results = {}
 try:
-    for stage, fault in [('select', 'ignore-selection'), ('cancel', 'commit-on-cancel'), ('invalidate', 'ignore-invalidation')]:
+    if os.environ.get('NK_DROPDOWN_BUILDER') == '1':
+        sys.dont_write_bytecode = True
+        from nk_dropdown_builder_check import check_builder
+        results = check_builder(globals())
+    for stage, fault in ([] if os.environ.get('NK_DROPDOWN_BUILDER') == '1' else [('select', 'ignore-selection'), ('cancel', 'commit-on-cancel'), ('invalidate', 'ignore-invalidation')]):
         results[stage] = {'baseline': run(stage)}
         try:
             run(stage, fault)

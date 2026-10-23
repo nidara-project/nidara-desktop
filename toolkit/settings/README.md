@@ -47,3 +47,23 @@ return. Pure tests use no native host and do not establish that integration gate
 The Config1 integration tests use Client::start with their private bus connection.
 Their daemon sockets live under toolkit/target/config-bus-<pid>-<counter>, with
 scoped cleanup after exit; they never replace the live session bus address.
+
+
+
+
+`dropdown-builder-probe` composes the actual manifest builder, Client, Rendered and
+Native modal context on the existing private provider harness. Set
+NK_DROPDOWN_BUILDER=1 with its fixed binary when running
+check-dropdown-provider-headless.sh. Optional NK_DROPDOWN_BUILDER_STAGES selects
+comma-separated select,cancel,refuse,updated,unavailable,portal cases; default is all.
+The checker supplies a real private Config1 service and uses the portal fixture's
+private ChangeScale method, so SettingChanged comes from the portal owner itself.
+This fixture interface is never installed. Controls sabotage only modal Config1
+polling or the external appearance hook and must fail their own Apply-count assertion
+after close, pending completion, parent commit and provider publication. Earlier
+controller checks are unchanged without NK_DROPDOWN_BUILDER.
+
+The complete native builder matrix is still pending: some local software EGL runs
+lose their context and stop delivering parent frames. Such setup timeouts fail the
+check; they are never accepted as a control catch. See EVIDENCE.md for the passing
+subsets and preserved failed runs. Routing/page unmount and real Orca remain separate.

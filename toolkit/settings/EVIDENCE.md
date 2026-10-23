@@ -527,3 +527,22 @@ real Window/controller/provider integration acceptance. No new fault injection
 run: historical controls remain original-source evidence. No native/EGL/Orca,
 performance or live claim. Short-menu parent ownership and adaptive polling
 caller/causal-test debt remain. No push or merge.
+
+
+## Local cut25 — 915-dropdown-builder-probe (2026-10-23)
+
+Extracted existing 13d1bc6d above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+Actual example BUILD PASS; all-target Clippy -D warnings PASS
+for nk-settings. Logs: target/cut25-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-menu-list/toolkit/target/menu-list-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
