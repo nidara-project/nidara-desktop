@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 import subprocess
 import time
-from capsule_capture import publish_command, answer_revisions, material_ready
+from capsule_capture import publish_command, answer_revisions, stable_capture
 import gi
 gi.require_version('Atspi', '2.0')
 from gi.repository import Atspi, Gio, GLib
@@ -127,15 +127,16 @@ try:
             def ready():
                 if front.poll() is not None or back.poll() is not None:
                     raise InfrastructureError('fixture client exited')
-                ipc('screenshot', path)
-                w = current()
+                pair = stable_capture(current, lambda: ipc('screenshot', path), expected, before)
+                if pair is None:
+                    return None
+                first, w = pair
                 meta = json.loads((LOG / f'{stage}.capture.json').read_text())
                 if str(w['id']) in meta.get('opening', {}):
                     return None
-                if not material_ready(w, expected, before):
-                    return None
-                return w
-            w = barrier(ready, f'{stage} measured settled external answer', seconds=20)
+                return first, w
+            first, w = barrier(ready, f'{stage} measured settled external answer', seconds=20)
+            (LOG / f'{stage}-capture-before.json').write_text(json.dumps(first, indent=2))
             (LOG / f'{stage}.json').write_text(json.dumps(w, indent=2))
             (LOG / f'{stage}-before.json').write_text(json.dumps(before))
             layer = max(w['layers'], key=lambda l: l['width'])

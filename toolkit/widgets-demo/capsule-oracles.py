@@ -23,8 +23,12 @@ def external(directory, scale):
         window = json.loads((directory / f'{stage}.json').read_text())
         metadata = json.loads((directory / f'{stage}.capture.json').read_text())
         before = json.loads((directory / f'{stage}-before.json').read_text())
-        if str(window['id']) in metadata.get('opening', {}) or not material_ready(window, expected, before):
-            raise RuntimeError('external capture not fresh, measured and settled')
+        first = json.loads((directory / f'{stage}-capture-before.json').read_text())
+        if (str(window['id']) in metadata.get('opening', {})
+                or not material_ready(first, expected, before)
+                or not material_ready(window, expected, before)
+                or answer_revisions(first) != answer_revisions(window)):
+            raise RuntimeError('external capture not stable across fresh, settled answer revisions')
         layer = max(window['layers'], key=lambda l: l['width'])
         image = GdkPixbuf.Pixbuf.new_from_file(str(directory / f'{stage}.png'))
         pixels, stride, channels = image.get_pixels(), image.get_rowstride(), image.get_n_channels()

@@ -7,7 +7,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from capsule_capture import publish_command, answer_revisions, material_ready
+from capsule_capture import publish_command, answer_revisions, material_ready, stable_capture
 
 
 class CaptureGuards(unittest.TestCase):
@@ -49,6 +49,32 @@ class CaptureGuards(unittest.TestCase):
                 with self.assertRaises(OSError):
                     publish_command(target, 'dark\n')
             self.assertEqual(target.read_text(), 'white\n')
+
+    def test_capture_rejects_revision_change_during_screenshot(self):
+        answer = {'revision': 7, 'shapes': [{'measured': True, 'settled': True, 'r': 1.}]}
+        first = {'layers': [dict(x=x, y=4, width=40, height=24, answers=copy.deepcopy(answer))
+                           for x in (4, 80)], 'controls_answers': copy.deepcopy(answer)}
+        last = copy.deepcopy(first)
+        last['layers'][0]['answers']['revision'] = 8
+        order = []
+        reads = iter([first, last])
+        def read():
+            order.append('read')
+            return next(reads)
+        def screenshot():
+            order.append('screenshot')
+        self.assertIsNone(stable_capture(read, screenshot, 1.),
+                          'revision advanced while capturing but screenshot was accepted')
+        self.assertEqual(order, ['read', 'screenshot', 'read'])
+        reads = iter([first, copy.deepcopy(first)])
+        self.assertIsNotNone(stable_capture(read, screenshot, 1.))
+        last = copy.deepcopy(first)
+        last['layers'][0]['answers']['shapes'][0]['settled'] = False
+        reads = iter([first, last])
+        self.assertIsNone(stable_capture(read, screenshot, 1.), 'capture became unsettled')
+        order.clear()
+        self.assertIsNone(stable_capture(lambda: last, screenshot, 1.))
+        self.assertEqual(order, [], 'captured before the first ready answer')
 
     def test_revision_must_advance_on_every_panel_before_settled_is_accepted(self):
         # Explicit synthetic metadata exercises only the guard, not a compositor.

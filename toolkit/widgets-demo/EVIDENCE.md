@@ -783,3 +783,22 @@ curve/full-area translucency/fractional D5, Orca, idle CPU/frame counts,
 presentation/performance and owner-live acceptance remain pending. The harness
 has no CI invocation and was not run against a live session. Atomic writes do
 not claim durability across crashes or support concurrent command writers.
+
+
+### Review182 — bracket screenshot with stable ready revisions
+
+The initial rebuilt driver checked readiness only after screenshot and could
+accept an earlier PNG if settling occurred before the subsequent window read.
+No native acceptance was claimed for that source. stable_capture now reads and
+checks ready answers first, captures, then requires identical answer revisions
+and ready/settled state in a second read. The second read is stage.json; the first
+is stage-capture-before.json, revalidated offline with identical revisions.
+
+A pure callback-order/metadata test rejects a revision change during screenshot,
+rejects an unsettled second read and avoids capture before a ready first read.
+It also accepts the stable pair. Interpreted production fault removing the
+revision equality check fails its own changed-revision assertion in
+ target/capsule-harness-bracket-control.log. Source restored;4 guard tests PASS in
+ target/capsule-harness-bracket-restored-tests.log. Python/shell syntax, skill-docs
+and diff pass. Rust code is unchanged from the prior8demo/alltargetclippy PASS;
+not rerun for this Python-only correction. Still no native capture acceptance.

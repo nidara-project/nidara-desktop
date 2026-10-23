@@ -40,3 +40,16 @@ def material_ready(window, expected, before=None):
             and abs(s['r'] - expected) < .01 for s in shapes)
     except (KeyError, TypeError, ValueError):
         return False
+
+
+def stable_capture(read_window, screenshot, expected, before=None):
+    """Bracket a real capture with ready answers of the same revisions."""
+    first = read_window()
+    if not material_ready(first, expected, before):
+        return None
+    screenshot()
+    last = read_window()
+    if (not material_ready(last, expected, before)
+            or answer_revisions(first) != answer_revisions(last)):
+        return None
+    return first, last

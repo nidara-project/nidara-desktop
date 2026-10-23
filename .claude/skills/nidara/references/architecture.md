@@ -2825,3 +2825,11 @@ timeouts/setup failures never count. The extracted harness has no intermediate
 RGB estimator, curve/states/idle/Orca branches or CI job. Guard tests and compiled
 lab code do not prove this rebuilt native matrix; log exact binary hashes when
 running it, and keep source verification distinct from prior fixed-binary proof.
+
+
+External PNG acceptance brackets screenshot with two material-ready snapshots.
+After the first ready snapshot, capture, then require identical per-panel answer
+revisions and still-settled fresh answers in the second snapshot; retry otherwise.
+Save the second as stage.json and the first as stage-capture-before.json. Offline
+validation checks both, so it cannot pair an older PNG with a later settled JSON.
+A post-screenshot-only readiness test has a settling race and is insufficient.

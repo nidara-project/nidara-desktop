@@ -173,3 +173,9 @@ write; metadata tests use explicitly synthetic guard data. These checks and
 compiled demo tests are not a native two-client/Orca/idle/performance acceptance.
 The old intermediate source-RGB ink estimator is excluded. Native evidence on
 these rebuilt heads remains pending; preserve historical fixed binaries/results.
+
+
+Capture acceptance reads a fresh settled snapshot, takes the screenshot, then
+requires the same answer revisions and settled state in a second snapshot. Both
+snapshots are saved and checked offline. A capture spanning a revision/state
+change is retried; readiness observed only after the PNG is insufficient.
