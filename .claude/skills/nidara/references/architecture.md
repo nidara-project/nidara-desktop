@@ -3372,8 +3372,9 @@ This is also how a queued Config1 change retires a completed file choice before
 acceptance. The app must stage external portal/routing/visibility first.
 Builder/Rendered::external_modal_active tells the host to suppress parent
 accessibility actions and publish parent inactivity during an external chooser.
-No growing staging queue or extra provider. Actual main/provider caller is still
-pending: unit/direct-decision and private Config1 proofs are not native modality.
+No growing staging queue or extra provider. The local nk-settings executable now
+consumes this flag and these returned notices (application.rs); actual native
+execution/parent modality is still pending. CPU/private-bus proofs do not establish it.
 Full exported Appearance now mounts/layouts with the real five registration modules
 (including separate wallpaper preview/gallery and picker), no substitute builders;
 that CPU check neither opens a native window nor validates all wallpaper pixels.
@@ -3384,3 +3385,39 @@ RGB pixels (`image_load::jpeg_thumbnail`). Preserve the source/encoded budgets
 and EXIF-aware Cover/Contain sizing when changing it; other codecs still use
 bounded full decode. The ignored `real_wallpaper_decode_timing` test accepts an
 absolute `NK_THUMB_BENCH` JPEG path for local timing, never as a CI speed threshold.
+
+The local nk-settings executable assembles Shell, Mounted, the five real builder
+registrations, Client, Portal, Router in Native mode, and one shared Bridge/Native
+context. All use the same bus connection. There is no installed launcher or ENTRY
+takeover. No snapshot fixture is a production fallback. Loading/error rows precede
+the authoritative Snapshot; CONTENT_READY is emitted only by a successful root
+commit after the page is mounted and the Client available. The provider/layers
+are not created before a real Configure. This milestone is not presentation time.
+
+Stage portal and native queued routes before input/idle acceptance; consume both
+Native.notices and Rendered::idle's returned notices. New Ready snapshots rebuild
+Mounted roots transactionally so previously unavailable generic rows can appear.
+Ordinary Changed updates retain IDs. Portal/native-route invalidation retires an
+external picker before accepting its reply. Its pending flag masks parent semantic
+actions/focus and physical input. A queued request requires current publication
+revision AND current Tree generation. Bridge acknowledgements are drained.
+
+Icon theme comes from canonical Config1 appearance.interfaceIconTheme; portal
+values alone pick paint. Material recipes are rebuilt on appearance changes,
+not every idle. The owned font configuration uses actual translated labels,
+System-font Parley, the same Bridge, current interface icons and exported form
+geometry. Its precision/range/layout remain local caller policy, not GTK parity.
+Image budgets are 64/256 MiB input/output policies, not hard decoder memory limits.
+NK_ICON_REFERENCE selects a development reference directory; installed reference
+and existing icon search paths are used otherwise. All new labels are translated
+in the twelve locales and both real exporters must be regenerated.
+
+This first executable still polls at16ms, uses provisional loose controls/panel
+titlebar and opens at the exported WINDOW_LAYOUT minHeight (not GTK's760 default).
+No adaptive scheduling or final chrome acceptance is claimed. Nested font/popup
+hosting still suspends parent servicing. Raise and queryUI explicitly refuse until
+standard activation and existing agent-view policy/serialization are integrated.
+Undrawn sidebar requests forward to ENTRY on a worker without changing native
+selection; those directly forwarded Router calls do not currently enter the
+nested-modal staging queue. Search/sidebar results, this forwarding/modal edge,
+real Window/dialog/provider/Orca and installed performance/live gates remain owed.

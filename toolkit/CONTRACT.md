@@ -1310,3 +1310,32 @@ buffer and final fit. The requested fit is computed in source coordinates, with
 EXIF axis swaps applied before choosing the reduction. Encoded/source allocation
 budgets still apply. Other codecs and uncommon JPEG pixel formats keep their
 bounded decoder path; they have no claimed reduced-decode guarantee.
+### Local native application assembly (#915)
+
+The `nk-settings` binary is a separate, explicitly launched application, hosted only
+by nk-wayland. It never installs a launcher or takes the ENTRY name: Router Native,
+Client and portal share one session-bus connection. Startup paints a translated
+loading row until a real Config1 Snapshot; CONTENT_READY names only a successful
+root commit with a mounted authoritative Appearance page. No cached fixture is a
+production fallback. Portal/read/export errors remain errors.
+
+The application registers all five existing builder modules, owns Mounted roots,
+stages portal/routing changes before input and asynchronous acceptance, drains
+Native notices after nested dialogs and Renderer::idle notices for app dependencies.
+Fresh snapshots reconcile the mounted page (including formerly unavailable keys);
+ordinary updates preserve retained controls. External portal selection masks parent
+semantic actions/focus and input while pending. One Bridge serves parent and dialogs;
+requests must match both the published revision and current Tree generation.
+
+This first assembly polls at 16 ms: it does not close the adaptive scheduling debt.
+Nested popup/font hosting retains its documented exclusive-parent limitation.
+Existing loose control glyphs and panel titlebar policy remain provisional. Raise
+and queryUI are explicitly unsupported until standard activation and the existing
+agent-view policy/shape are integrated; no redraw is reported as a successful raise.
+Undrawn sidebar requests use ENTRY asynchronously, keeping the native selection.
+The font dialog uses caller geometry derived from exported window/form metrics;
+point sizes use the supported description precision (1/1024 pt, positive signed
+32-bit Pango unit domain), not a claimed GTK size-choice parity. Image input/output
+budgets are application resource policy (64/256 MiB), not codec allocation limits.
+Native execution, Orca, installed startup/performance and live acceptance remain
+separate gates, not consequences of compilation or CPU/private-bus tests.

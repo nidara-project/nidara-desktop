@@ -972,3 +972,70 @@ full decode + fit 62.153 / 61.729 / 60.901 ms; reduced decode + fit
 32.472 / 30.893 / 30.656 ms. Reproduce with `NK_THUMB_BENCH=<absolute JPEG>` and
 `cargo test --release -p nk-settings --lib real_wallpaper_decode_timing -- --ignored --nocapture`.
 No wall-clock assertion is added to CI. PNG/GIF/WebP/AVIF have no reduced-decode claim.
+## Local integration42 — first native application entry point (2026-10-24)
+
+Worktree 915-native-app over41 42cd75c3. Adds src/main.rs and the private
+application composition; no installed launcher or ENTRY takeover. Router Native,
+Client and portal use the same connection. Shell and all five real builder
+registrations mount the actual exported Appearance page after a real Snapshot;
+no production fixture or fallback schema. Loading/status rows are retained widgets.
+The one Bridge is created only after Configure; Native shares it for dialogs.
+CONTENT_READY is emitted from a successful root commit with a mounted available
+Snapshot, not from the loading state and not as presentation/performance proof.
+
+Actual code stages portal/native queued routing, consumes Native notices and
+Renderer::idle returned notices, follows canonical interfaceIconTheme, retires
+pending external selection on invalidation and masks parent actions/focus/input.
+Fresh snapshots reconcile roots, ordinary changes retain controls. Material
+readers are shared and cached until appearance changes. Provider acknowledgements
+are drained. None of those Window/provider callbacks has been executed natively
+in this cut; this is compiled integration plus the bounded evidence below.
+
+Final settings lib/tests suite:93 PASS (86 existing +7 application tests),
+required complete actual native-app-data. Actual executable BUILD, Settings
+alltarget Clippy -Dwarnings, workspace alltargets check, tokenchecker, i18n-check,
+fmt, canonical skilldocs and git diff check PASS. New19 strings in all12 locales;
+translation-state --sync retains the existing117 untranslated-key debt elsewhere,
+no old stale list cleared. BOTH actual exporters regenerated. Older wallpaper-data
+lacks the new application labels and is not this cut's current complete data.
+
+CPU tests use the SAME private View composition and actual exports/Styles/Tree/
+Parley layout, with explicit synthetic Snapshot sessions where stated. They cover
+loading→full mount, fresh root/operation retirement, formerly unavailable generic
+row becoming present, real Picker pending state→semantic action/focus mask,
+Unavailable cancellation0writes, publication+generation rejection after valid
+focus, portal restyle preserving focus/IDs0writes, and staged external retirement
+before idle acceptance0writes. No Window/Bridge/provider is fabricated in tests.
+
+One actual private Config1 bus uses Client::start plus Router::start on the SAME
+connection. Full Appearance mounts from that service's synthetic schema; a real
+retained toggle activation makes exactlyone real Apply, returns canonicalfalse
+and pendingfalse. The service's async GetNameOwner check confirms Apply's sender
+owns SettingsNative. Bus config has no service dirs, explicit target/ap-PID/bus;
+no live bus connection/environment changes. No native Window/portal/Orca proof.
+
+Two COMPILED production faults caught their OWN assertions AFTER setup: leaving
+parent actions in project() failed the own mask assertion after real Picker
+activation/pending; suppressing fresh-snapshot remount failed own newlyavailable
+row assertion after initial unavailable mount and second Snapshot. Both source
+faults restored before final suite. Logs native-app-parent-actions-control.log and
+native-app-snapshot-reconcile-control.log. These are CPU caller controls, not
+native portal controls. Initial direct Label-under-Scroll structure failed and
+was corrected to Group/Row/Label. Initial private service used blocking DBusProxy
+inside its executor and timed out; corrected to actual async GetNameOwner. That
+setup failure is NOT control acceptance. Initial type/borrow/Clippy failures are
+preserved in native-app-{check,clippy,clippy-fixed}.log, not acceptance.
+
+Final logs: target/native-app-final-tests.log, native-app-build-current.log,
+native-app-verified-clippy.log, native-app-workspace.log, native-app-token-check.log,
+native-app-i18n-check.log, native-app-{skill-docs,fmt}.log and export-final.log.
+Contract preceded code; canonical architecture/tech-debt/README/EVIDENCE same commit.
+
+Remaining explicitly: raise/queryUI unsupported; no sidebar search/results;
+direct forwarded Router routes do not yet stage nested-modal cancellation;
+exclusive-parent long-modal servicing, adaptive poll caller (currently16ms),
+provisional controls/panel titlebar/window/font geometry/point-step policy,
+secondary/pill look, ICC/HDR and hard codec allocation limits. No native window,
+EGL/checker, AT-SPI/Orca, installed startup/PSS/frame, owner live or replacement
+acceptance. Original915/889/fixed artifacts preserved, no publication/merge,
+no Hyalo/backend/bar/shader/#921 changes, heartbeat remains paused.

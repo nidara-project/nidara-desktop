@@ -22,5 +22,4 @@ image = { version = "0.25.10", default-features = false, features = ["png", "jpe
 zbus = "5.19"
 jpeg-decoder = { version = "0.3.2", default-features = false }
 
-[dev-dependencies]
 nk-icons = { path = "../crates/nk-icons" }

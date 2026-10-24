@@ -151,3 +151,36 @@ pending external portal operations: host must reject parent accessibility action
 and publish inactive parent semantics during them. That host/provider integration
 and native focus/dialog acceptance remain pending. Button secondary/pill visual
 parity is still provisional; this consumer reuses the shared native Button.
+
+
+The first local application entry point is now src/main.rs/application.rs, the
+nk-settings binary. It assembles the actual exported Appearance page, all five
+builder modules, Shell, Client, Portal, Native-mode Router and one shared Bridge.
+It does not install a launcher or replace the current Settings. Development build:
+
+```sh
+CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1 cargo build -p nk-settings --bin nk-settings
+```
+
+Run only in an explicitly selected graphical test environment, with complete
+NK_SETTINGS_DATA from both real exporters. NK_ICON_REFERENCE can name the actual
+reference icon directory for development. No native run was made for this cut.
+The binary connects to the selected session bus; this is not a fixture mode.
+Startup shows a loading row until Client's real Snapshot. CONTENT_READY commit=N
+means the root commit contains the mounted authoritative page, not a presentation
+or performance result. Real Configure precedes provider/layer publication.
+
+The application stages portal/native routes, retires pending external choices
+before acceptance, handles Native and Renderer idle notices, and applies actual
+Config1 interfaceIconTheme to parent/transient trees. Fresh snapshots rebuild
+mounted roots so formerly unavailable generic rows appear. Pending file selection
+masks parent semantic actions/focus and physical input; CPU tests verify this
+policy without faking Window or provider. Full-page activation is also checked
+through the actual Client/Router-owned connection on a private bus.
+
+Remaining: raise/queryUI explicitly unsupported, sidebar search/results, direct
+forwarded-route/modal cancellation, long-modal parent servicing, adaptive polling
+(still16ms), provisional window/font geometry/chrome and all native/Orca/installed
+performance/live gates. This is a compiled local executable, not full parity or
+native acceptance. New twelve-locale strings require new complete native-app-data;
+older cut38 data does not contain this application's labels.
