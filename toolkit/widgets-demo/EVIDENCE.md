@@ -333,3 +333,72 @@ Demo SHA256 bc7c455bd4ca5d7af763f36197cbed979b302a5b7233f115e5c91d12c9d0ceff.
 Hyalo SHA256 3e264d3d0aba3a731f44e707fa0713361f09e0c57c71cf2c53057f9ef1dad3fa
 (the preserved cc39b569/#899/#900 build supplied by Claude). No live session
 acceptance or compositor timing claim is made.
+
+## #889 retained foundation (historical source evidence)
+
+This section records the original private source branch, not acceptance of the
+rebuilt split commit. Its later original controls/logs are not rerun or attributed
+to the split.
+
+The original branch adds typed ControlMaterial validation/staging and a retained capsule
+Panel with existing Buttons. The focused Rust total is 41 tests (three new
+transport tests, one new retained-capsule test); clippy passes. The capsule test
+covers 32/60/88 widths at the current geometry, accessible names independent of
+glyphs, ordering, actions/focus, root/layer-local capture cancellation, disabled/
+removed controls, metric changes preserving IDs and off-window visibility, in
+D5/D7 layouts. It is not a compositor/material or visual acceptance result.
+
+Capsule geometry is explicit provisional component data: height32/button24/edge4
+from current server controls, pitch derived. Export/checker pass. Dropping edge
+from one component variant is CAUGHT by its own geometry assertion
+(target/capsule-geometry-control.log), with the same lightweight CI control.
+The server-side mirror check/uniform cleanup belongs to Claude and is pending.
+Layer material/coverage, demo wiring and visual/idle/performance oracles are not
+implemented by this retained foundation. No #889 implementation is published.
+
+The extended live-metric assertion initially caught stale child widths (60 instead
+of76 after raising button_min). The setter now invalidates child measurements,
+not only the panel. The full focused suite is rerun after that correction.
+
+## Retained capsule split on current main (2026-10-23)
+
+This local cut is reconstructed from the retained foundation and its metric-change
+fix on the separately checked control-material transport. Existing main choices,
+range widgets, title interaction, shaped buttons and D8 behavior are preserved.
+The old button-silhouette correction is already on main and is not replayed.
+Original worktrees and fixed native artifacts are untouched.
+
+`target/retained-capsule-split-restored-tests.log` passes 53 nk-widgets lib and
+integration tests (16 + 7 + 15 + 8 + 5 + 2), with required settings exports. The
+capsule regression uses synthetic dimensions unrelated to the old window-control
+geometry: it checks stable IDs/names, actions, root/layer capture, disabling,
+removal, relocation, metric changes and clipping. Its first smaller synthetic
+height failed because the shaped text naturally required more height; that fixture
+failure is retained in `retained-capsule-split-final-tests.log`, not acceptance.
+
+`target/retained-capsule-split-clippy.log` passes nk-widgets/nk-wayland all targets
+with warnings denied. Format, skill-docs and diff checks pass. The token exporter
+runs from this worktree into `target/capsule-split-data`; all four component mode
+variants pass the checker. Dropping edge in the first variant is caught by the
+checker's own capsule completeness assertion, recorded in
+`target/retained-capsule-split-token-control.log`.
+
+This cut exports the existing provisional capsule token without applying a new
+window-control design. Issue #921 remains separate. There is no demo runtime token
+consumer, capsule material/coverage composition, D5 fade or native UI walk in this
+cut. No rendered glass, AT-SPI/Orca, idle/performance or owner-live result is claimed.
+
+
+### PR923 geometry schema repair (2026-10-23)
+
+Independent capsule gap=4 joins height32/button24/edge4. Current exported values,
+widths, centers and hit boundaries remain unchanged; gap no longer derives from
+outer edge. CONTRACT precedes schema, canonical skill/README match. Hyalo width,
+hit boundaries and shader slot formula now express independent gap; its default
+mirror test reads the actual capsule source.53 widgets tests PASS,3 filtered
+window_controls Hyalo tests PASS (includes retained32/60/88/currentboundaries and
+mirror test), Hyalo alltargetClippy-Dwarnings PASS.108sets/4variants exporter and
+checker PASS; deleting edge or gap fails own capsule-geometry assertion. Logs
+in repair worktree toolkit/target/gap-repair-*.log. No new live/pixel acceptance
+or change to #921 visual values. Original published branch remains untouched;
+correction is prepared on codex/889-retained-capsule-repair for review.

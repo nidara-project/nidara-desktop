@@ -15,7 +15,11 @@ impl Tree {
                 Kind::Disclosure { .. } => Role::ToggleButton,
                 Kind::Page { .. } => Role::Option,
                 Kind::Scroll => Role::ScrollPane,
-                Kind::Group | Kind::Row | Kind::Choices { .. } | Kind::Fields => Role::Panel,
+                Kind::Group
+                | Kind::Row
+                | Kind::Choices { .. }
+                | Kind::Fields
+                | Kind::ControlCapsule => Role::Panel,
                 Kind::Slider { .. } => Role::Slider,
                 Kind::Spin { .. } => Role::SpinButton,
                 Kind::Switch { .. } => Role::ToggleButton,

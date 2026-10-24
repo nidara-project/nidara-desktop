@@ -196,6 +196,12 @@ impl Tree {
                 }
             }
         }
+        if surface == Surface::Content && !self.layered {
+            let clip = self.nodes[&self.root].bounds;
+            for id in self.capsules.keys() {
+                self.paint_node(*id, Point::default(), &mut canvas, palette, clip)?;
+            }
+        }
         Ok(canvas.finish())
     }
     fn paint_node(
@@ -223,6 +229,9 @@ impl Tree {
         let (highlight, radius) = self.highlight_shape(id);
         let highlight = local(highlight, origin);
         match n.kind {
+            Kind::ControlCapsule => {
+                canvas.rounded_rect(r, (r.height / 2.) as f64, opaque(palette.background))
+            }
             Kind::Group => {
                 // The header labels the card from outside it, as NidaraList does.
                 let mut card = r;
@@ -304,6 +313,8 @@ impl Tree {
                             })
                             .map(|id| self.nodes[id].measured.width + m.gap)
                             .sum::<f32>()
+                } else if self.capsule_for_button(id).is_some() {
+                    (r.width - layout.measured_size().width) / 2.
                 } else {
                     m.padding
                 }
