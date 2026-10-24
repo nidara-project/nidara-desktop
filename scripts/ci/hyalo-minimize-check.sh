@@ -5,7 +5,7 @@
 # locally, a nested Hyalo), with the real shell on it (its dock gives the places) and
 # `hyalo-window-controls-probe` in PATH.
 #
-#   1. the minimize button is shown — a 90 px box — and not on the window's dialog (60);
+#   1. the minimize button is shown — a 72 px box — and not on the window's dialog (48);
 #   2. a dialog is not minimized by itself;
 #   3. the capsule's minimize hides the window and its dialog: listed minimized, not visible,
 #      neither focused; the app saw no click;
@@ -28,8 +28,8 @@
 #      and comes back into it;
 #   9. reduce motion (`[animations] enabled = false`): it goes at once, nothing drawn moving;
 #  10. the user's buttons without minimize (the settings layer, which the shell keeps equal to
-#      button-layout): a 60 px box.
-# Controls seen failing nested: the installed Hyalo before #724 (step 1: "LAYOUT right 60 32");
+#      button-layout): a 48 px box.
+# Controls seen failing nested: the installed Hyalo before #724 (step 1: "LAYOUT right 48 24", in today's capsule);
 # one whose window surfaces are not sized at the animation's scale (step 5: its full-size box
 # drawn around the small window); one whose focus does not restore (step 6); the Hyalo of #736,
 # which drew it under the dock (step 5: "just inside its edge, is '76 72 77'", the blurred edge;
@@ -115,9 +115,9 @@ wait_line '^CHILD PLACED' "$out" || fail "the probe never opened its dialog"
 sleep 0.6
 
 # 1. The minimize button, not on the dialog.
-grep -q '^LAYOUT right 88 32' "$out" || fail "the window was told '$(grep '^LAYOUT' "$out" | tail -n 1)', not 'LAYOUT right 88 32'"
-grep -q '^CHILD LAYOUT right 60 32' "$out" || fail "the dialog was told '$(grep '^CHILD LAYOUT' "$out" | tail -n 1)', not 'CHILD LAYOUT right 60 32'"
-echo "ok    minimize is shown (90 px), and not on the window's dialog (60 px)"
+grep -q '^LAYOUT right 72 24' "$out" || fail "the window was told '$(grep '^LAYOUT' "$out" | tail -n 1)', not 'LAYOUT right 72 24'"
+grep -q '^CHILD LAYOUT right 48 24' "$out" || fail "the dialog was told '$(grep '^CHILD LAYOUT' "$out" | tail -n 1)', not 'CHILD LAYOUT right 48 24'"
+echo "ok    minimize is shown (72 px), and not on the window's dialog (48 px)"
 
 # 2. A dialog alone.
 did=$(field "$(dialog)" id)
@@ -255,6 +255,6 @@ echo "ok    reduce motion: it goes at once"
 # 10. The user's buttons without minimize.
 : >"$out"
 $MSG settings '{"windows":{"controls":{"buttons":["maximize","close"]}}}' >/dev/null
-wait_line '^LAYOUT right 60 32' "$out" || fail "without minimize in the user's buttons, the app was told '$(grep '^LAYOUT' "$out" | tail -n 1)'"
+wait_line '^LAYOUT right 48 24' "$out" || fail "without minimize in the user's buttons, the app was told '$(grep '^LAYOUT' "$out" | tail -n 1)'"
 $MSG settings '{"windows":null}' >/dev/null
-echo "ok    the user's buttons without minimize: a 60 px box"
+echo "ok    the user's buttons without minimize: a 48 px box"
