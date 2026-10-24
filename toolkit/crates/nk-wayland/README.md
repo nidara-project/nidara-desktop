@@ -176,3 +176,12 @@ its error-dialog defaults. Widget accessibility remains in the caller's provider
 `Window::set_title(&str)` accepts runtime translations on a toplevel (NUL and
 popup/layer roles fail). A modal consumer can set it on Configure before painting
 its first frame; it need not leak a translated String into Options' static title.
+
+Window::portal_parent lazily requests xdg-foreign-v2 export of an actual configured
+xdg_toplevel, reusing this connection and queue. ForeignParent::Unsupported means
+no exporter global (D5 allows empty parent_window); Pending means wait; Ready is
+the compositor's opaque handle prefixed with wayland:. Empty handles are errors,
+popups are refused, and repeated polls retain one export until Window destruction.
+The export is destroyed before the surface role. No blocking roundtrip or own host.
+Format reference: https://flatpak.github.io/xdg-desktop-portal/docs/window-identifiers.html
+Unit tests cover capability/state logic; native export/portal-parenting is untested.

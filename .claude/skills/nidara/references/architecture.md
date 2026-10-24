@@ -3329,3 +3329,13 @@ built builder starts shown (the renderer's initial state); shown(false) is sent
 when its renderer predicates hide it. Do not wait for an initial shown(true) call
 to begin eligible work. Private test buses use an explicit short target/cb-*/bus
 socket; dbus-daemon's generated socket name can exceed Unix's limit in long worktrees.
+
+nk-wayland Window::portal_parent is the lazy xdg-foreign-v2 path for portal dialogs.
+Unsupported alone permits an empty parent string. Pending must wait without blocking
+or unparented fallback; Ready borrows the received opaque wayland: identifier. It
+exports only a configured real xdg_toplevel, once per Window, handles the event on
+that Window's existing queue, and destroys the export before role/surface cleanup.
+Empty protocol handles are explicit errors. This API's unit capability/state checks
+are not a native parenting/portal acceptance run; actual file chooser integration
+and native verification remain separate. No compositor/backend change is required
+for D5's no-exporter fallback.

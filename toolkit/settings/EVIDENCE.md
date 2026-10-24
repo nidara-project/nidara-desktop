@@ -852,3 +852,21 @@ parented portal picker, long-modal parent servicing, adaptive polling caller/cau
 proof, ICC/HDR and native/Orca/performance/live gates remain pending. The existing
 CSS border transition150ms is exported but not ported. No publication/merge or
 legacy takeover; no native/EGL checker run. Original branches/fixed evidence intact.
+
+## Application integration — portal parent transport (2026-10-24)
+
+Window::portal_parent adds optional standard zxdg_exporter_v2 binding/lazy actual
+toplevel export, same existing connection/queue, Pending vs Unsupported vs Ready,
+opaque wayland: identifier and destruction before role/surface. Empty handles
+fail rather than allowing empty-parent fallback; popups are refused. Format read
+against primary portal window-identifiers documentation and installed protocol XML.
+Capability/handle state tests are pure CPU, not fabricated Window/protocol proof.
+Native export/wire ordering/portal parenting and file chooser remain unexecuted.
+
+13 nk-wayland unit tests PASS; alltarget Clippy-Dwarnings/workspacealltargets/fmt/
+skilldocs/diff PASS. Compiled pure Handle-state fault mapped Pending to Unsupported;
+its OWN equality assertion caught it, then source was restored before13PASS. This
+control has no Window, Wayland server or exported-wire setup and proves only that
+production handle-state classification. Tests also check exact v2 capability,
+nonempty opaque handle prefix/retention and persistent empty-handle error. Logs:
+target/foreign-parent-{tests,state-control,restored-tests,clippy,workspace-check}.log.

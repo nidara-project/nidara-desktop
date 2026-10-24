@@ -1238,3 +1238,15 @@ Builder::row_visible supplies per-owned-row content visibility, combined with
 renderer availability/predicates/disclosures, never overriding them. Refresh after
 idle applies async row visibility changes before publication. Default true keeps
 existing builders' behavior. Empty gallery and absent error text occupy no row.
+
+### Parented portal identifier (`nk-wayland`, #915/D5)
+
+Window::portal_parent lazily exports an actual configured xdg_toplevel through the
+optional standard zxdg_exporter_v2 on its existing connection/queue. Unsupported
+means the protocol is absent, so a portal may use an empty parent identifier.
+Pending means wait without blocking or falling back to empty; Ready supplies the
+opaque `wayland:` identifier received from the compositor. Invalid empty handles
+are errors, never unparented fallback. A popup cannot be exported as a toplevel.
+The export is retained for the Window lifetime and destroyed before its role/
+surface; repeated calls reuse it. There is no new host/provider/compositor path.
+Unit state/capability checks are not native export/portal/parenting acceptance.
