@@ -109,7 +109,7 @@ fn both_control_sides_fit_docked_and_narrow_layouts_with_and_without_layers() {
                     height: 600.,
                 };
                 shell
-                    .layout_controls(size, side, styles.metrics, layered, &mut text)
+                    .layout_controls(size, side, layered, &mut text)
                     .unwrap();
                 let r = shell.tree.node(shell.controls).unwrap().bounds();
                 let expected_x = match side {

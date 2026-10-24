@@ -229,20 +229,18 @@ impl Router {
             Mode::EntryPoint => &[NATIVE, ENTRY],
         };
         // The interface first: a name taken with nothing behind it answers UnknownMethod.
-        {
-            connection
-                .object_server()
-                .at(
-                    PATH,
-                    Service {
-                        mode,
-                        to_app,
-                        legacy,
-                        starting: Arc::new(Mutex::new(())),
-                    },
-                )
-                .map_err(|e| format!("exporting {PATH}: {e}"))?;
-        }
+        connection
+            .object_server()
+            .at(
+                PATH,
+                Service {
+                    mode,
+                    to_app,
+                    legacy,
+                    starting: Arc::new(Mutex::new(())),
+                },
+            )
+            .map_err(|e| format!("exporting {PATH}: {e}"))?;
         for name in names {
             let reply = connection
                 .request_name_with_flags(*name, RequestNameFlags::DoNotQueue.into())

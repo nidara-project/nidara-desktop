@@ -147,17 +147,12 @@ impl Shell {
         &mut self,
         size: Size,
         side: ControlsSide,
-        _metrics: nk_widgets::Metrics,
         layered: bool,
         backend: &mut impl TextBackend,
     ) -> Result<()> {
-        self.tree.layout(size, layered, backend)?;
-        let width = self
-            .tree
-            .node(self.controls)
-            .ok_or("missing controls capsule")?
-            .bounds()
-            .width;
+        let metrics = self.tree.capsule_metrics(self.controls)?;
+        let count = self.buttons.len() as f32;
+        let width = 2. * metrics.padding + count * metrics.button_min + (count - 1.) * metrics.gap;
         let x = match side {
             ControlsSide::Left => self.controls_inset,
             ControlsSide::Right => (size.width - self.controls_inset - width).max(0.),
@@ -194,7 +189,6 @@ impl Shell {
                 height: window.size().1 as f32,
             },
             look.controls_side,
-            look.styles.metrics,
             look.layers_allowed && window.capabilities().layers,
             backend,
         )?;

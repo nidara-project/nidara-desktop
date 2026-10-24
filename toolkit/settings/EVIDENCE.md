@@ -151,3 +151,21 @@ token checker: 108 sets / 4 variants. Logs: target/publication-20261025/.
 Initial attempts failed for a stale shared-cache artifact / moved fixture path,
 and then the height assertion above; only tests-final.log is final acceptance.
 No new native/Orca/presentation/performance or owner visual acceptance.
+
+### PR934 review corrections, 2026-10-25
+
+The shared reader commit itself now uses ../../tests/fixtures/control-glass.json;
+its isolated Settings/demo suite passed (50 tests), without depending on later
+window/typography changes. The geometry commit explicitly explains the caption
+change: body typography measured 27.066666px for a 24px capsule, so glyph layouts
+use the exported button box and unit line height. No visual vector-glyph parity
+acceptance is claimed.
+
+layout_controls reads current CapsuleMetrics from the retained tree, positions
+its three buttons' capsule before layout, then invokes layout once. This avoids
+the preliminary layout just to read bounds, including after staged metric updates.
+Unused generic row metrics and Router::start's redundant scope are removed.
+Fresh 52 Settings +54 widget +2 demo tests and all-target Clippy -D warnings
+passed with mandatory complete exports (target/review-20261025/{tests,clippy}.log).
+Formatting, skill docs and diff checks pass. Native D7 retry on #935 remains
+pending because the active/installed Hyalo is not the #935 binary.

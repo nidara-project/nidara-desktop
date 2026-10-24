@@ -696,3 +696,8 @@ listener is the access control’s negative case; Orca’s key echo proves deliv
 The native Settings window capsule uses components.json capsule.windowInset for both
 corner axes, independently of generic row padding/gap. The owner #921 geometry is
 72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.
+
+Settings positions its three window-control buttons from the current exported
+CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
+metrics, including portal updates staged before layout; no cached measured bounds
+or second layout is needed just to compute the capsule's horizontal placement.
