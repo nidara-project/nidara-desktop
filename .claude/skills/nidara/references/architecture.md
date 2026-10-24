@@ -3421,3 +3421,11 @@ Undrawn sidebar requests forward to ENTRY on a worker without changing native
 selection; those directly forwarded Router calls do not currently enter the
 nested-modal staging queue. Search/sidebar results, this forwarding/modal edge,
 real Window/dialog/provider/Orca and installed performance/live gates remain owed.
+
+Standard activation consumption lives in nk-wayland Window::activate(String): one
+optional xdg_activation_v1 proxy on the existing queue sends the caller's opaque
+token to this root surface. Requested means sent, never compositor acknowledgement
+or focus proof. Unsupported remains explicit; malformed tokens, non-toplevels and
+requests before a configured painted buffer are errors. No token creation, fake
+input serials, alternate host, repaint-as-raise or environment access. Proxy is
+destroyed with Window. Caller owns real initiating-token handoff/retirement.

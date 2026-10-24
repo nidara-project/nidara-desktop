@@ -1339,3 +1339,17 @@ point sizes use the supported description precision (1/1024 pt, positive signed
 budgets are application resource policy (64/256 MiB), not codec allocation limits.
 Native execution, Orca, installed startup/performance and live acceptance remain
 separate gates, not consequences of compilation or CPU/private-bus tests.
+
+### Standard activation-token consumption (#915)
+
+nk-wayland Window::activate(token: String) consumes a caller-supplied opaque
+xdg_activation_v1 token on the existing connection/queue and that Window's root
+surface. It does not mint tokens, invent input serials, read process environment,
+paint to emulate raising, or report focus confirmation. Activation::Requested
+means only the protocol request was sent; the compositor may ignore it.
+Activation::Unsupported means the optional global is absent. Empty/NUL tokens,
+non-toplevel/destroyed surfaces and activation before the first painted buffer
+are errors. Unsupported does not require a mapped buffer. The optional proxy is
+released with the Window. Capabilities.activation reflects the exact global.
+Caller owns token acquisition/handoff, one-use policy and environment retirement.
+This transport cut does not wire Settings routing or claim native activation.

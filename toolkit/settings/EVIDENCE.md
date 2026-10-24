@@ -1039,3 +1039,19 @@ secondary/pill look, ICC/HDR and hard codec allocation limits. No native window,
 EGL/checker, AT-SPI/Orca, installed startup/PSS/frame, owner live or replacement
 acceptance. Original915/889/fixed artifacts preserved, no publication/merge,
 no Hyalo/backend/bar/shader/#921 changes, heartbeat remains paused.
+
+## Local integration43 — standard activation transport (2026-10-24)
+
+Standalone nk-wayland consumer of xdg_activation_v1; existing connection/queue,
+root surface, optional global, cleanup. Contract before API; no new provider/host.
+Activation::Requested is only a sent request, no compositor/focus confirmation.
+17Wayland CPU tests PASS; alltargetWayland Clippy-Dwarnings, workspacealltargets,
+fmt/skilldocs/diff PASS. Pure dispatch tests record sends, preserve opaque token,
+refuse empty/NUL/non-toplevel/unpainted, explicitly unsupported without global.
+Capability requires exact global. Compiled unpainted-guard bypass caught OWN
+unpainted assertion AFTER valid-send setup; restored before17PASS. No fake Window,
+server, native protocol trace or focus proof. Local installed wayland-protocols
+0.32.13 XML is the protocol source; upstream web fetch unavailable. No rerun EGL.
+Settings caller/token environment/handoff remains separate. No export/token/data
+change: complete cut42 native-app-data reusable. Logs target/activation-transport-*
+(restored-tests, unpainted-control, clippy, workspace, skill-docs, fmt).
