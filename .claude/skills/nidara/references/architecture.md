@@ -2745,3 +2745,7 @@ Compositor/idle acceptance and D5 state fading are pending.
 A state ink override that is absent or explicitly null uses shared material ink;
 no fixed colour is substituted. Reader tests require generated exports when
 NK_REQUIRE_EXPORT is set, separate from source-fixture checks.
+The #921 visual change must update capsule.json's default in the same change
+as Hyalo's geometry mirror. Land the independent gap schema first, then keep
+server layout and generated native component data synchronized. The mirror
+unit test rejects leaving the previous export dimensions behind.

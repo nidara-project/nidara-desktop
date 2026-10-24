@@ -4,8 +4,8 @@
 # Chrome with "Use system title bar and borders"). Run INSIDE a Hyalo session started with
 # HYALO_CONTROL, with `hyalo-title-bar-probe` in PATH, on a floating workspace.
 #
-#   1. the probe asks for server-side: it gets a 48 px bar on top of its box, and the capsule
-#      in it (88×32 — minimize, maximize and close — the same 8 px from the right as above and
+#   1. the probe asks for server-side: it gets a 32 px bar on top of its box, and the capsule
+#      in it (72×24 — minimize, maximize and close — the same 4 px from the right as above and
 #      below it);
 #   2. one piece: the bar's pixel is the colour of the app's top row (light), and its ink is
 #      dark on it (the title's darkest pixel) — also for an app that draws into a subsurface
@@ -60,15 +60,15 @@ wait_line '^SHOWN' || fail "the probe never showed its window"
 sleep 0.8
 
 # 1. The bar and its capsule.
-[ "$(field title_bar)" = 48 ] || fail "no title bar: title_bar = $(field title_bar) (48 expected)"
-want=$(win | jq -r '"\(.x + .width - 8 - 88) \(.y - 48 + 8) 88 32"')
+[ "$(field title_bar)" = 32 ] || fail "no title bar: title_bar = $(field title_bar) (32 expected)"
+want=$(win | jq -r '"\(.x + .width - 4 - 72) \(.y - 32 + 4) 72 24"')
 got=$(win | jq -r '.controls | map(floor) | join(" ")')
-[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (8 px in from the right, above and below)"
-echo "ok    a 48 px bar on top of the window, the capsule in it"
+[ "$got" = "$want" ] || fail "the capsule at '$got', '$want' expected (4 px in from the right, above and below)"
+echo "ok    a 32 px bar on top of the window, the capsule in it"
 
 # 2. One piece, and dark ink on a light bar.
 $MSG screenshot "$log/bar.png" >/dev/null || fail "no screenshot"
-set -- $(win | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 18) * $s | floor) \((.x + .width / 2 - 70) * $s | floor) \((.y - 36) * $s | floor) \(140 * $s | floor) \(24 * $s | floor)"')
+set -- $(win | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 16) * $s | floor) \((.x + .width / 2 - 70) * $s | floor) \((.y - 28) * $s | floor) \(140 * $s | floor) \(24 * $s | floor)"')
 bg=$(pixels pixel "$log/bar.png" "$1" "$2")
 set -- $bg $3 $4 $5 $6
 for v in "$1" "$2" "$3"; do
@@ -85,9 +85,9 @@ sub=$!
 for _ in $(seq 1 40); do grep -q '^SHOWN' "$log/sub.log" && break; sleep 0.25; done
 sleep 0.8
 sw=$($MSG windows | jq -c '.ok.windows[] | select(.app_id == "hyalo-title-bar-probe-sub")')
-[ "$(echo "$sw" | jq '.title_bar')" = 48 ] || { kill $sub; fail "the subsurface probe has no bar: $sw"; }
+[ "$(echo "$sw" | jq '.title_bar')" = 32 ] || { kill $sub; fail "the subsurface probe has no bar: $sw"; }
 $MSG screenshot "$log/sub.png" >/dev/null || { kill $sub; fail "no screenshot"; }
-set -- $(echo "$sw" | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 18) * $s | floor)"')
+set -- $(echo "$sw" | jq -r --argjson s "$scale" '"\((.x + 40) * $s | floor) \((.y - 16) * $s | floor)"')
 subbar=$(pixels pixel "$log/sub.png" "$1" "$2")
 kill $sub
 set -- $subbar
@@ -116,7 +116,7 @@ grep -q '^BUTTON' "$out" && fail "the app got the press on its title bar"
 p=$(in_bar 60)
 echo "click $p" >"$C"; sleep 0.1; echo "click $p" >"$C"
 wait_field fullscreen maximized || fail "a double click on the bar did not maximize: $(field fullscreen)"
-[ "$(field title_bar)" = 48 ] || fail "maximized, the bar went"
+[ "$(field title_bar)" = 32 ] || fail "maximized, the bar went"
 p=$(in_bar 60)
 echo "click $p" >"$C"; sleep 0.1; echo "click $p" >"$C"
 wait_field fullscreen none || fail "a second double click did not restore: $(field fullscreen)"
@@ -181,7 +181,7 @@ sleep 0.6
 echo "ok    its own maximize button maximizes it, with no bar over its frame, and restores it to its box"
 kill -USR2 "$pid"
 wait_line '^SWITCHED server' || fail "the probe did not switch back"
-wait_field title_bar 48 || fail "back to server-side, and no bar"
+wait_field title_bar 32 || fail "back to server-side, and no bar"
 echo "ok    the app switched to its own frame and the bar went; back, and it came back"
 
 # 6. Close.
