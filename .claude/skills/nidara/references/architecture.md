@@ -3304,3 +3304,28 @@ mapping belong to builders, and geometry/visual/native acceptance stays separate
 
 reorder_thumbnails accepts an exact permutation only, preserving IDs/pixels and
 selection while invalidating layout and old action targets. Invalid input is atomic.
+
+Native wallpaper decorations are wallpaper::register(Builders, Budget). They consume
+wallpaper.current and its catalogue from Config1; no UI-thread directory discovery
+or second catalogue is introduced. Only wallpaperPreview/wallpaperGallery register
+here; wallpaperPicker still requires its real parented portal path. Surviving
+catalogue options keep IDs/order, exact paths define canonical selection, unknown
+paths select none, and changed guarded activation uses Cx.apply. Preview follows
+Session::shown during idle too, so a request from another builder replaces pixels
+before its asynchronous reply. Failed notices restore canonical state and keep
+visible error text; image decode errors never write settings.
+
+Loading starts only after layout says an image is showing. Hidden/offscreen,
+unavailable, replaced and unmounted requests are canceled through image_load.
+Host supplies byte budgets. Wallpaper component exports carry the current legacy
+picture dimensions, borders, colours and radius references for every portal mode;
+missing values are errors. CSS border transition150ms and ICC/HDR accuracy remain
+explicit debts; this is not whole-window/native wallpaper parity.
+
+Builder::row_visible adds content visibility to renderer-owned availability,
+predicates and disclosures; it cannot override them. Renderer refreshes after idle
+so asynchronous errors/empty content do not leave blank visible rows. A newly
+built builder starts shown (the renderer's initial state); shown(false) is sent
+when its renderer predicates hide it. Do not wait for an initial shown(true) call
+to begin eligible work. Private test buses use an explicit short target/cb-*/bus
+socket; dbus-daemon's generated socket name can exceed Unix's limit in long worktrees.

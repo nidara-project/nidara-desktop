@@ -190,6 +190,10 @@ pub trait Builder {
     fn idle(&mut self, _cx: &mut Cx<'_>) -> Result<()> {
         Ok(())
     }
+    /// Content visibility, combined with renderer predicates and availability.
+    fn row_visible(&self, _row: NodeId) -> bool {
+        true
+    }
     /// Its row was hidden or shown (it stays mounted): cancel or resume visual work.
     fn shown(&mut self, _cx: &mut Cx<'_>, _visible: bool) -> Result<()> {
         Ok(())
@@ -774,7 +778,7 @@ impl Rendered {
             };
             m.builder.idle(&mut cx)?;
         }
-        Ok(())
+        self.refresh(tree, editor, exports, styles)
     }
 
     /// The page goes away: every builder's `unmount`; the caller removes the nodes.
@@ -863,7 +867,7 @@ impl Rendered {
             });
             let visible = available && inside(&m.under) && holds(&m.visible_when);
             for row in &m.built.rows {
-                tree.set_hidden(*row, !visible)?;
+                tree.set_hidden(*row, !(visible && m.builder.row_visible(*row)))?;
                 tree.set_disabled(*row, !(live && writable && holds(&m.sensitive_when)))?;
             }
             if visible != m.shown {

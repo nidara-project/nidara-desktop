@@ -1216,3 +1216,25 @@ application builders; this layout primitive alone is not wallpaper/native parity
 Catalogue reordering accepts only an exact permutation of surviving thumbnail
 children, atomically; identities, pixels and canonical selection survive. Changed
 order invalidates layout and stale action targets; invalid permutations do nothing.
+
+### Wallpaper preview/gallery builders (#915)
+
+wallpaperPreview and wallpaperGallery read wallpaper.current and its Config1
+catalogue, never a second directory scan. Catalogue paths are unique absolute
+paths, preserving service order; surviving options retain IDs. Unknown current
+paths select none. Same-value activation emits no Apply; changed, live, writable,
+shown activation uses exactly Cx.apply. Failed replies restore canonical selection
+and retain their error. No picker stub is registered here: wallpaperPicker remains
+an error until its portal implementation is connected.
+
+The existing image loader starts only for showing images, with nonzero mount and
+per-request tokens and explicit host byte budgets. Offscreen/hidden/unavailable/
+unmounted/replaced requests are canceled. Decode failures are displayed as text;
+obsolete pixels are removed before replacement. Only target-sized pixels survive.
+Appearance restyling uses required wallpaper component exports for all four modes.
+No ICC/HDR, native wallpaper parity or CSS 150ms border transition is claimed.
+
+Builder::row_visible supplies per-owned-row content visibility, combined with
+renderer availability/predicates/disclosures, never overriding them. Refresh after
+idle applies async row visibility changes before publication. Default true keeps
+existing builders' behavior. Empty gallery and absent error text occupy no row.

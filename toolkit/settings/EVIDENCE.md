@@ -814,3 +814,41 @@ keyboard-focus viewport assertion after selection setup. Source restored before
 the full suites. The first reorder test expected stale dispatch to return None;
 the existing API correctly returns Err, and the test now asserts that rejection.
 Logs target/thumbnail-strip-*.log. No native/Orca/live or full wallpaper parity.
+
+
+## Application integration — wallpaper preview/gallery builders (2026-10-24)
+
+Real wallpaperPreview/wallpaperGallery consume Config1 wallpaper.current/catalogue
+via the existing Session/renderer. Exact paths define selection; surviving IDs and
+catalogue order persist. Same activation does not Apply; changed guarded activation
+uses Cx.apply, preview follows optimistic Session::shown from idle, and refusal
+restores canonical selection/pixels with visible error. Empty gallery/error rows
+are hidden through renderer-combined row_visible. Only showing images start decode;
+offscreen/hidden/unavailable/replaced/unmounted work cancels. No UI file scan.
+
+158 Settings/widgets tests PASS [44, 4, 1, 2, 13, 1, 5, 2, 3, 2, 17, 7, 19, 15, 8, 5, 8, 2]; both alltarget Clippy-Dwarnings and
+workspace alltargets check PASS. Three new tests use actual exported Styles,
+renderer/Tree, real tiny-file decoding and CPU pixels; Editor/Config1 session is
+an explicitly synthetic headless seam, not actual Config1 bus/native acceptance.
+Assertions cover preview pixel change, same/change/refusal, persistent canonical
+error, unknown-current None, catalogue reorder IDs, empty->populated visibility,
+offscreen missing-file refusal only after scrolling, all four required export
+variants, and owner/unavailable stale activation refusal. A compiled fallback-to-
+first-option fault failed its OWN unknown-selection assertion after decode/write/
+refusal setup. Source restored before suites; later optimistic-preview sync was
+covered by final green-pixel tests, with the selection guard unchanged.
+
+Fresh full actual exporters generated target/wallpaper-data (old exports without
+wallpaper are now obsolete). Required token checker, fmt/skilldocs/diff and Python
+AST PASS. Initial test API/structural-label failures and initial shown-callback
+assumption caused failures before valid setup; none are acceptance. First full
+suite failed because old test dbus-daemon generated a socket name beyond Unix's
+limit in this longer worktree. Fixture now uses short explicit target/cb-*/bus;
+all four existing real private-bus tests pass, no predicates dropped or relaxed.
+Logs target/wallpaper-builders-*.log, exporter logs alongside.
+
+wallpaperPicker remains genuinely missing, not a stub. Main Window composition,
+parented portal picker, long-modal parent servicing, adaptive polling caller/causal
+proof, ICC/HDR and native/Orca/performance/live gates remain pending. The existing
+CSS border transition150ms is exported but not ported. No publication/merge or
+legacy takeover; no native/EGL checker run. Original branches/fixed evidence intact.

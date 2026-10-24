@@ -112,3 +112,13 @@ Cancel on hide/unmount/replacement. Only target pixels survive completion; obsol
 results are dropped. PNG/JPEG/GIF(first frame)/WebP/AVIF decode here; AVIF links
 dav1d. Decoder-internal allocations are not a hard memory guarantee. Native
 wallpaper parity, colour-profile/HDR validation and startup/PSS remain pending.
+
+wallpaper::register supplies the real wallpaperPreview/wallpaperGallery decorations
+using wallpaper.current/catalogue, retained images/thumbnail choices and the lazy
+image loader. It requires explicit host Budget and complete wallpaper token exports.
+No file scan or decode at build; only showing pictures start work from idle.
+Same value does not Apply, unknown path selects none, and canonical refusal/error
+handling reuses Session/Cx. Empty/error rows use Builder::row_visible under the
+renderer's own predicates. wallpaperPicker is deliberately still unregistered
+until the actual portal path exists; full Appearance remains a missing-builder
+error rather than silently substituting it. No native or full wallpaper parity.

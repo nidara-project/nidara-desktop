@@ -138,6 +138,7 @@ const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "ut
 const choices = JSON.parse(readFileSync(join(repo, "toolkit/tokens/choices.json"), "utf8"))
 const range = JSON.parse(readFileSync(join(repo, "toolkit/tokens/range.json"), "utf8"))
 const switchLook = JSON.parse(readFileSync(join(repo, "toolkit/tokens/switch.json"), "utf8"))
+const wallpaper = JSON.parse(readFileSync(join(repo, "toolkit/tokens/wallpaper.json"), "utf8"))
 const search = JSON.parse(readFileSync(join(repo, "toolkit/tokens/search.json"), "utf8"))
 const dropdown = JSON.parse(readFileSync(join(repo, "toolkit/tokens/dropdown.json"), "utf8"))
 const rows = JSON.parse(readFileSync(join(repo, "toolkit/tokens/rows.json"), "utf8"))
@@ -186,6 +187,7 @@ for (const dark of [true, false])
 
             capsule: variantFor(capsule, dark, reduceTransparency),
             search: variantFor(search, dark, reduceTransparency),
+            wallpaper: variantFor(wallpaper, dark, reduceTransparency),
             common: { padding: pixels("space-3"), gap: pixels("space-1"),
                 radius: ts.RADIUS.sm, groupRadius: ts.RADIUS.md },
             widths: { form: { preferred: ts.WINDOW_LAYOUT.content, floor: ts.WINDOW_LAYOUT.contentFloor },

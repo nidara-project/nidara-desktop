@@ -40,3 +40,5 @@ pub mod value;
 pub mod window;
 
 pub use value::Value;
+
+pub mod wallpaper;
