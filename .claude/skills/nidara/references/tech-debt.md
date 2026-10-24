@@ -46,6 +46,18 @@ heading.
 
 ## Active debt
 
+### Toolkit capsule demo adaptive scheduling (#889, 2026-10-25)
+
+The foundations widgets demo polls/syncs every 16 ms even after the D5 capsule
+wash settles. It does not consume `CapsuleComposition::is_animating()`. Settled
+paint invalidation tests do not establish idle scheduling, CPU or frame counts.
+To close: connect the real demo caller to fast frame opportunities only while
+`is_animating()` is true, return to idle when settled, and prove the transition
+with a discriminating caller test that fails if constant 16 ms polling returns.
+Preserve input, portal and accessibility wakeups. Lab-specific scheduling is not
+acceptance of the foundations demo or native Settings host.
+
+
 ### 1. `@mixin glass()` underused — audited 2026-06-09, mostly NOT migratable
 Defined in `_base.scss` (levels `surface`, `raised`, `floating`) with few call sites. A
 sweep audit found the manual glass-ish blocks **diverge deliberately** (different radii,

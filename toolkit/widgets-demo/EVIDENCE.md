@@ -590,7 +590,8 @@ The lab source and its documentation are excluded from this cut. The incidental
 client paint-count API from historical lab context is also excluded; this cut
 publishes no rendering or presentation counter. The existing demo already supplies
 poll/sync opportunities at a constant 16 ms. No caller of is_animating() exists
-in this cut: fast-poll scheduling does not return to idle. The finite wash
+in this cut. Application callers do not stop requesting poll/sync opportunities
+when the wash settles: fast-poll scheduling does not return to idle. The finite wash
 settles and stops paint invalidations, which is distinct from stopping polling.
 
 `target/capsule-fallback-split-restored-tests.log` passes 60 widget/demo tests
