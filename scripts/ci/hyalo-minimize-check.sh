@@ -5,18 +5,21 @@
 # locally, a nested Hyalo), with the real shell on it (its dock gives the places) and
 # `hyalo-window-controls-probe` in PATH.
 #
-#   1. the minimize button is shown — a 90 px box — and not on the window's dialog (60);
+#   1. the minimize button is shown — a 72 px box — and not on the window's dialog (48);
 #   2. a dialog is not minimized by itself;
 #   3. the capsule's minimize hides the window and its dialog: listed minimized, not visible,
 #      neither focused; the app saw no click;
 #   4. the dock gives it a place, inside the dock's layer;
-#   5. it is DRAWN shrinking: a second in (the animation made 6 s long), the pixel at the centre
-#      of where Hyalo says it is drawn is the probe's grey, its dialog's grey in front of it, and
-#      the one where it was is not —
+#   5. it is DRAWN shrinking (the animation made 12 s long), all of it read from ONE picture,
+#      the one that catches it crossing the dock's glass: the pixel at the centre of where Hyalo
+#      says it is drawn is the probe's grey, its dialog's grey in front of it, and the one where
+#      it was is not —
 #      which also proves the place came within Hyalo's wait (wm/minimize.rs `WAIT`): a window
 #      whose place comes later goes without an animation, and is drawn nowhere; beside it,
-#      inside the box it had at full size, the pixel is what is there once it has gone; crossing
-#      the dock's glass beside its place, it is OVER the dock (`over_dock`);
+#      inside the box it had at full size, the pixel is what is there once it has gone; and it is
+#      OVER the dock's glass beside its place (`over_dock`). Nothing is captured before that
+#      picture: on the nightly runs of 2026-10-22 and 23 a capture taken "a second in" came back
+#      when the window was already into the dock, and no poll after it could see it cross;
 #   6. a click on its place in the dock brings it back, over the dock too, with its dialog,
 #      focused;
 #   7. the app's own minimize (xdg_toplevel.set_minimized) minimizes it; `unminimize` brings it
@@ -25,8 +28,8 @@
 #      and comes back into it;
 #   9. reduce motion (`[animations] enabled = false`): it goes at once, nothing drawn moving;
 #  10. the user's buttons without minimize (the settings layer, which the shell keeps equal to
-#      button-layout): a 60 px box.
-# Controls seen failing nested: the installed Hyalo before #724 (step 1: "LAYOUT right 60 32");
+#      button-layout): a 48 px box.
+# Controls seen failing nested: the installed Hyalo before #724 (step 1: "LAYOUT right 48 24", in today's capsule);
 # one whose window surfaces are not sized at the animation's scale (step 5: its full-size box
 # drawn around the small window); one whose focus does not restore (step 6); the Hyalo of #736,
 # which drew it under the dock (step 5: "just inside its edge, is '76 72 77'", the blurred edge;
@@ -63,13 +66,16 @@ grey() { set -- $1; [ "$1" -ge 56 ] && [ "$1" -le 104 ] && [ $(($1 - $2)) -le 4 
 # the point is taken from where the window is drawn IN the screenshot: Hyalo writes it beside
 # the picture (`<shot>.capture.json`, `drawn`, at the capture's own moment) — never from polls
 # before and after it, which a slow capture leaves far apart (CI's software GL: 63 px). $1 names
-# the screenshot, $2 is its place (read before a click: the dock drops a restored window's place).
+# the screenshot, $2 is its place (read before a click: the dock drops a restored window's place),
+# $3 a further condition on the drawn box (jq, with $y and $dx), if the caller reads more of it.
 over_dock() {
     shot=$1
     y=$(echo "$2" | jq '.[1] + 8')
     dx=$(echo "$dock" | jq '.[0]')
-    inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60)'
+    inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60 and ('"${3:-true}"'))'
     seen=""
+    # How late the watch began, after the click: what was slow, if it fails.
+    echo "$(($(date +%s%N) / 1000000)) watching, $(( ($(date +%s%N) - t0) / 1000000 )) ms after the click" >>"$log/$shot-polled.log"
     for _ in $(seq 1 400); do
         drawn=$(win | jq -c .drawn)
         # When each poll was, ms: what was slow, if it fails.
@@ -101,7 +107,7 @@ over_dock() {
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
 
 # From the shipped buttons, whatever the shell carried from button-layout before.
-$MSG settings '{"windows":null,"animations":{"minimize":6000}}' >/dev/null \
+$MSG settings '{"windows":null,"animations":{"minimize":12000}}' >/dev/null \
     || fail "Hyalo refused [animations] (a Hyalo that does not minimize)"
 HYALO_PROBE_DIALOG=1 hyalo-window-controls-probe >"$out" 2>&1 &
 pid=$!; pids="$pids $pid"
@@ -109,9 +115,9 @@ wait_line '^CHILD PLACED' "$out" || fail "the probe never opened its dialog"
 sleep 0.6
 
 # 1. The minimize button, not on the dialog.
-grep -q '^LAYOUT right 88 32' "$out" || fail "the window was told '$(grep '^LAYOUT' "$out" | tail -n 1)', not 'LAYOUT right 88 32'"
-grep -q '^CHILD LAYOUT right 60 32' "$out" || fail "the dialog was told '$(grep '^CHILD LAYOUT' "$out" | tail -n 1)', not 'CHILD LAYOUT right 60 32'"
-echo "ok    minimize is shown (90 px), and not on the window's dialog (60 px)"
+grep -q '^LAYOUT right 72 24' "$out" || fail "the window was told '$(grep '^LAYOUT' "$out" | tail -n 1)', not 'LAYOUT right 72 24'"
+grep -q '^CHILD LAYOUT right 48 24' "$out" || fail "the dialog was told '$(grep '^CHILD LAYOUT' "$out" | tail -n 1)', not 'CHILD LAYOUT right 48 24'"
+echo "ok    minimize is shown (72 px), and not on the window's dialog (48 px)"
 
 # 2. A dialog alone.
 did=$(field "$(dialog)" id)
@@ -150,38 +156,37 @@ echo "$target $dock" | jq -e -s '.[0] as $t | .[1] as $d | $t[0] >= $d[0] and $t
     || fail "its place $target is not inside the dock $dock"
 echo "ok    the dock gives it a place, inside the dock (listed after ${ms} ms, this script's polling included)"
 
-# 5. Drawn shrinking toward it.
-sleep 0.85
-drawn=$(win | jq -c .drawn)
-ddrawn=$(dialog | jq -c .drawn)
-$MSG screenshot "$log/shrinking.ppm" >/dev/null || fail "no screenshot"
-[ "$drawn" != null ] || fail "a second in, it is not drawn moving"
+# 5. Drawn shrinking toward it. Watching starts at once, and every check of this step reads the
+#    picture that caught it crossing the dock, with where Hyalo drew each window IN it
+#    (capture.json). Its top must be clear of the dock's glass, 20 above its place, for the
+#    point beside it (below) to be over the wallpaper; reading pixels (gjs, seconds on CI) waits
+#    until nothing moves.
+over_dock shrinking "$target" '.[1] < $y - 28'
+pic="$log/shrinking-crossing.ppm"
+drawn=$(jq -c --arg id "$id" '.drawn[$id]' "$log/shrinking-crossing.capture.json")
+ddrawn=$(jq -c --arg id "$did" '.drawn[$id]' "$log/shrinking-crossing.capture.json")
 mid=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
 k=$(echo "$drawn" | jq -r '.[2] / 400 * 100 | floor')
-[ "$k" -lt 90 ] || fail "a second in, it is still ${k}% of its size"
-# Captures are raw PPMs: a PNG took 4 s to write on CI, which is most of this
-# animation — the nightly of 2026-10-20 (#891) began watching it cross the dock once it was in.
-# While it moves, nothing but watching it cross the dock: the pixels of the picture taken a
-# second in are read after (a probe_pixel is a gjs process — seconds on CI, the animation's).
-over_dock shrinking "$target"
-grey "$(probe_pixel "$log/shrinking.ppm" $mid)" || fail "where it is drawn ($drawn) the pixel is $(probe_pixel "$log/shrinking.ppm" $mid), not its grey"
-grey "$(probe_pixel "$log/shrinking.ppm" $centre)" && fail "where it was, the pixel is still its grey"
-# Its dialog moves with it, in front of it: the dialog's own grey at its middle.
-[ "$ddrawn" != null ] || fail "a second in, its dialog is not drawn moving"
+[ "$k" -lt 90 ] || fail "crossing the dock, it is still ${k}% of its size"
+[ "$ddrawn" != null ] || fail "crossing the dock, its dialog is not drawn moving"
 dmid=$(echo "$ddrawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] / 2) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
-set -- $(probe_pixel "$log/shrinking.ppm" $dmid)
-[ "$1" -ge 92 ] && [ "$1" -le 100 ] && grey "$1 $2 $3" || fail "where its dialog is drawn ($ddrawn) the pixel is '$*', not the dialog's grey (96): the dialog is not in front"
-# Beside the small window, inside the box it had at full size: what is there once it has gone.
-# A window whose surfaces kept their full size from the scaled origin drew that box too.
-beside=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] + 24) * $s | floor) \((.[1] + .[3] / 2) * $s | floor)"')
-for _ in $(seq 1 40); do [ "$(win | jq -c .drawn)" = null ] && break; sleep 0.25; done
+# Beside the small window, inside the box it had at full size (which grows right and down from
+# where it is drawn), above the dock: what is there once it has gone. A window whose surfaces
+# kept their full size from the scaled origin drew that box too.
+beside=$(echo "$drawn" | jq -r --argjson s "$scale" '"\((.[0] + .[2] + 24) * $s | floor) \((.[1] + 2) * $s | ceil)"')
+for _ in $(seq 1 80); do [ "$(win | jq -c .drawn)" = null ] && break; sleep 0.25; done
 sleep 0.3
 $MSG screenshot "$log/gone.ppm" >/dev/null || fail "no screenshot"
-now=$(probe_pixel "$log/shrinking.ppm" $beside); then=$(probe_pixel "$log/gone.ppm" $beside)
+grey "$(probe_pixel "$pic" $mid)" || fail "where it is drawn ($drawn) the pixel is $(probe_pixel "$pic" $mid), not its grey"
+grey "$(probe_pixel "$pic" $centre)" && fail "where it was, the pixel is still its grey"
+# Its dialog moves with it, in front of it: the dialog's own grey at its middle.
+set -- $(probe_pixel "$pic" $dmid)
+[ "$1" -ge 92 ] && [ "$1" -le 100 ] && grey "$1 $2 $3" || fail "where its dialog is drawn ($ddrawn) the pixel is '$*', not the dialog's grey (96): the dialog is not in front"
+now=$(probe_pixel "$pic" $beside); then=$(probe_pixel "$log/gone.ppm" $beside)
 set -- $now $then
 [ $(($1 - $4)) -le 6 ] && [ $(($4 - $1)) -le 6 ] && [ $(($2 - $5)) -le 6 ] && [ $(($5 - $2)) -le 6 ] \
     || fail "beside the small window ($beside) the pixel is '$now' while it shrinks and '$then' once it has gone: its full-size box is drawn too"
-echo "ok    it is drawn shrinking toward its place (${k}% of its size a second in), over the dock, and nothing else of it"
+echo "ok    it is drawn shrinking toward its place (${k}% of its size crossing the dock), over the dock, and nothing else of it"
 
 # 6. Back from the dock: a click on its place.
 sleep 0.3
@@ -191,6 +196,7 @@ place=$(echo "$target" | jq -r '"\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"')
 # 6 s, missed in CI). Ten minutes give that part a second; step 7 minimizes it again, which
 # replaces the animation.
 $MSG settings '{"animations":{"minimize":600000}}' >/dev/null
+t0=$(date +%s%N)
 echo "click $place" >"$C"
 over_dock back "$target"
 $MSG settings '{"animations":null}' >/dev/null
@@ -249,6 +255,6 @@ echo "ok    reduce motion: it goes at once"
 # 10. The user's buttons without minimize.
 : >"$out"
 $MSG settings '{"windows":{"controls":{"buttons":["maximize","close"]}}}' >/dev/null
-wait_line '^LAYOUT right 60 32' "$out" || fail "without minimize in the user's buttons, the app was told '$(grep '^LAYOUT' "$out" | tail -n 1)'"
+wait_line '^LAYOUT right 48 24' "$out" || fail "without minimize in the user's buttons, the app was told '$(grep '^LAYOUT' "$out" | tail -n 1)'"
 $MSG settings '{"windows":null}' >/dev/null
-echo "ok    the user's buttons without minimize: a 60 px box"
+echo "ok    the user's buttons without minimize: a 48 px box"
