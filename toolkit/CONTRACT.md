@@ -1250,3 +1250,25 @@ are errors, never unparented fallback. A popup cannot be exported as a toplevel.
 The export is retained for the Window lifetime and destroyed before its role/
 surface; repeated calls reuse it. There is no new host/provider/compositor path.
 Unit state/capability checks are not native export/portal/parenting acceptance.
+
+### FileChooser transport (#915/D5)
+
+file_chooser::Chooser uses the caller's existing Config1 bus connection on a
+cancelable worker, never Apply. At most one request worker is active per process;
+Busy is retryable. Nonzero mount/request tokens reject completed stale results.
+OpenFile requests one file, modal, with the translated image filter covering
+JPEG/PNG/GIF/WebP/AVIF. Only a successful response with exactly one local file URI
+returns an absolute path; cancel returns None, other/malformed responses error.
+Filters are hints, not validation: Config1 still validates any accepted path.
+
+Subscribe before OpenFile to bounded Response traffic from the captured portal
+unique owner; match the returned request path (including older nonpredicted
+paths), ignore unrelated signals, and detect that owner's loss/replacement.
+No arbitrary dialog-duration timeout. Initial protocol operations are bounded;
+Close targets the captured owner's request on cancel/retirement. Close failures
+are protocol errors/best-effort cleanup, not proof of a closed native dialog.
+Tokens include random bytes and do not collide with unrelated libraries. Parent
+is the actual Window's ready wayland identifier, or empty only after Unsupported;
+this transport cannot itself prove the caller supplied an actual Window handle.
+Private-bus fixtures prove protocol/cancel ordering, not native chooser/parenting,
+full-window accessibility, focus restoration or owner live acceptance.

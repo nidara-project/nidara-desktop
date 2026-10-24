@@ -870,3 +870,36 @@ control has no Window, Wayland server or exported-wire setup and proves only tha
 production handle-state classification. Tests also check exact v2 capability,
 nonempty opaque handle prefix/retention and persistent empty-handle error. Logs:
 target/foreign-parent-{tests,state-control,restored-tests,clippy,workspace-check}.log.
+
+
+## Application integration — FileChooser portal transport (2026-10-24)
+
+Chooser uses the existing caller connection, one cancelable process worker,
+nonzero mount/request tokens, bounded initial operations and no user-duration
+limit. Subscribes before OpenFile, pins owner and actual returned path, validates
+one local file URI and returns it without Apply. Cancel/retirement request Close;
+Close failure remains best effort, no native closed-dialog guarantee.
+
+80 Settings tests PASS [46, 4, 1, 1, 2, 13, 1, 5, 2, 3, 2]; alltarget Settings Clippy-Dwarnings and
+workspacealltargets/fmt/skilldocs/diff PASS. Actual private dbus-daemon has its
+own target/fc-*/bus and config with no service dirs. Synthetic portal implements
+real OpenFile/Response/Close objects. Before the method reply it emits unrelated
+and matching Response signals on a nonpredicted request path. Own returned-path
+assertion checks the selected local path, options/modal/single/filter signature
+and random token. Cases cover success, cancel, response2 error, multiple URIs,
+remote URI refusal, cancel->actual Close and actual bus owner release->error/Close.
+Parent string is explicitly synthetic, not a Window or native parenting claim.
+Two pure units cover escaped Unicode/path syntax and completed stale reply.
+
+Compiled production path-filter bypass failed its OWN selected-path assertion
+AFTER actual OpenFile returned/setup complete; mount-guard bypass failed its OWN
+buffered-result assertion (pure channel seam). Source restored before full suite.
+No timeout counted as a control catch. Initial test signature API and signed u32
+fixture errors are preserved, not acceptance. Logs target/file-chooser-*.log.
+Canonical skill/README/contract accompany API; two already-transitive async deps
+are now explicit. Required full cut38 wallpaper-data reused, exporters unchanged.
+
+This transport still needs the real wallpaperPicker builder and main caller.
+No native file-dialog/Wayland export/provider/Orca/focus/performance/live proof,
+no publication/merge, no heartbeat restart or legacy takeover. Modal parent
+servicing/adaptive polling/ICC-HDR and existing visual debts remain pending.

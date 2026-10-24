@@ -122,3 +122,15 @@ handling reuses Session/Cx. Empty/error rows use Builder::row_visible under the
 renderer's own predicates. wallpaperPicker is deliberately still unregistered
 until the actual portal path exists; full Appearance remains a missing-builder
 error rather than silently substituting it. No native or full wallpaper parity.
+
+file_chooser::Chooser is the asynchronous OpenFile transport over Editor's existing
+connection. Supply nonzero Operation and translated Open labels plus the actual
+Window portal-parent identifier. It never Applies. Poll accepts only the current
+mount/request; cancel/Drop requests Close. One process worker, Busy retryable.
+Subscribes before OpenFile, pins the portal unique owner, checks the returned path
+and owner before acceptance, and rejects multiple/remote/malformed URIs. Local
+file URI escapes decode before returning the absolute UTF-8 path. Config1 remains
+the image validator. The caller must enforce mount/visibility/write/baseline guards,
+focus restoration and parent accessibility; these are not transport acceptance.
+Protocol references: https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.FileChooser.html
+and https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Request.html

@@ -1076,6 +1076,8 @@ name = "nk-settings"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "async-io",
+ "futures-lite",
  "image",
  "nk-a11y",
  "nk-icons",

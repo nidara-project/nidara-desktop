@@ -3339,3 +3339,17 @@ Empty protocol handles are explicit errors. This API's unit capability/state che
 are not a native parenting/portal acceptance run; actual file chooser integration
 and native verification remain separate. No compositor/backend change is required
 for D5's no-exporter fallback.
+
+The file_chooser transport borrows Editor's existing connection and runs one
+cancelable portal worker per process. It pins the unique portal owner, subscribes
+to bounded Response traffic before OpenFile, filters by the actual returned path
+(including older paths), and checks owner continuity before accepting it. Initial
+protocol calls are bounded; user dialog duration is not. Cancel/Drop/retirement
+requests Close on the captured owner/request; failure is best-effort cleanup,
+not a native closed-dialog guarantee. Random handle_token bytes avoid other
+libraries' requests. Multiple/remote/malformed file URIs are errors. Success returns
+one local absolute UTF-8 PathBuf; it never Applies or decodes. Mounted picker/main
+must still enforce availability/write/visibility/baseline guards and restore focus/
+parent accessibility. Its private-bus fixture is a synthetic portal and parent
+identifier, not native chooser/Wayland parenting proof. No blocking signal-forwarder
+thread is left behind; async streams and worker retire together.
