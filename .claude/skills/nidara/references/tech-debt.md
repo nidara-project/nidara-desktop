@@ -69,6 +69,19 @@ with a discriminating caller test that fails if constant 16 ms polling returns.
 Preserve input, portal and accessibility wakeups. Lab-specific scheduling is not
 acceptance of the foundations demo or native Settings host.
 
+### Native Settings wallpaper picker — local host/visual acceptance pending (#915, 2026-10-24)
+
+The local wallpaper_picker builder uses the shared native Button; exact legacy
+secondary/pill appearance remains unvalidated. Its Config1/decision checks and the
+separate portal transport fixture do not establish native Window parenting, dialog
+focus return, AT-SPI/Orca or owner live acceptance. The actual application caller
+must consume Rendered::idle's returned notices for non-row dependencies, stage its
+external changes, and use external_modal_active to reject parent accessibility
+actions/publish inactivity during the portal request. That caller and native
+acceptance remain pending. The flag alone is neither working parent modality nor
+an adaptive polling/idle-CPU proof. Preserve these gaps until actual caller and
+causal/native evidence close them; local clean cuts are not shipped acceptance.
+
 
 ### 1. `@mixin glass()` underused — audited 2026-06-09, mostly NOT migratable
 Defined in `_base.scss` (levels `surface`, `raised`, `floating`) with few call sites. A

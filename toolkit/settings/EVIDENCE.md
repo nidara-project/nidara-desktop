@@ -903,3 +903,58 @@ This transport still needs the real wallpaperPicker builder and main caller.
 No native file-dialog/Wayland export/provider/Orca/focus/performance/live proof,
 no publication/merge, no heartbeat restart or legacy takeover. Modal parent
 servicing/adaptive polling/ICC-HDR and existing visual debts remain pending.
+
+
+## Application integration — mounted wallpaper picker (2026-10-24)
+
+wallpaper_picker::register connects the actual custom item to Window::portal_parent,
+Editor connection and the real cancelable Chooser. Nonzero mount/process-wide
+per-open IDs plus epoch/value and live/shown/writable guards retire stale results.
+Repeated activation is ignored while pending. Cancel/same/invalidation0 Apply;
+accepted changed selection1 Cx.apply. Canonical failure/error survives cancel.
+Hidden/unmounted/unavailable notices cancel without restoring focus; ordinary
+completion restores the eligible widget. No Window -> explicit row error.
+
+Rendered::idle now processes Editor.poll before async builder completion and
+returns the Vec<Notice> for host dependencies; no growing staging queue. Its
+external_modal_active flag exposes pending portal operations. Actual app/provider
+caller still must consume these notices, reject parent AT-SPI actions and publish
+parent inactivity. The API alone is not that caller/modality/idle CPU proof.
+
+86 Settings +81 widgets = 167 final tests PASS; both alltarget
+Clippy-Dwarnings/workspacealltargets/current tokenchecker/fmt/skilldocs/diff PASS.
+Five picker tests: production activation/completion with an explicitly injected
+post-dialog decision seam (no Window/chooser/provider fabricated), canonical
+same/cancel/changed/error/focus/stale/hidden/unmount checks; queued raw Config1
+notice before result and returned to host; actual Client on a private dbus-daemon,
+Snapshot/Apply with the service checking the real sender owns SettingsNative,
+same/cancel0, changed1, refusal2 plus pending=false/canonical reply/error, owner
+release -> production idle poll -> retire decision/no further write. The chooser
+decision in this private Config1 test remains injected, not native end-to-end.
+
+The full actual exported Appearance page mounts/layouts with the five real builder
+registration modules, no Stubs, no writes; actual Browse caption and row label
+relation plus IMAGE checked. Wallpaper loading/dialog decisions/native Window
+are not accepted by that CPU assembly check. Initial caption assertion incorrectly
+expected semantic name Browse; existing row LabelledBy correctly gives Image.
+The test now checks actual painted node caption and semantic row relation separately.
+Initial Clippy let-and-return fixture warning fixed. Atomic token allocation uses
+existing compare-exchange loop compatible with declared1.90 rather than a new API.
+
+Two compiled production faults caught OWN assertions AFTER activation/decision
+setup: cancel branch wrote a changed value (own cancel0write assertion), and idle
+skipped Editor.poll (own queued-notice0write assertion). Source restored before
+full suites. These are headless decision-seam controls, not native dialog controls.
+Later optional folder/UTF8 handling changes covered by final suite, guards unchanged.
+
+Open.current_folder now carries validated absolute filesystem bytes + trailing NUL;
+picker suggests HOME when absolute. Actual private portal fixture checks ay payload;
+unit checks non-UTF8 filesystem bytes, rejects relative/NUL paths. Portal may ignore
+this hint, no native initial-directory claim. Existing unchanged complete cut38
+wallpaper-data reused; no exporter change. Logs target/wallpaper-picker-*.log.
+
+Contract before API; canonical architecture/tech-debt, README, EVIDENCE same commit.
+Pending: actual main/provider/portal/routing/visibility integration, adaptive polling
+caller/causal test, long-modal parent servicing, ICC/HDR, exact secondary/pill look,
+native Window/dialog/AT-SPI/Orca/performance/live gates. No push/publication/merge,
+legacy activation or native/EGL rerun. Original branches/fixed artifacts preserved.

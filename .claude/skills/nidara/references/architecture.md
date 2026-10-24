@@ -3353,3 +3353,28 @@ must still enforce availability/write/visibility/baseline guards and restore foc
 parent accessibility. Its private-bus fixture is a synthetic portal and parent
 identifier, not native chooser/Wayland parenting proof. No blocking signal-forwarder
 thread is left behind; async streams and worker retire together.
+
+wallpaper_picker::register supplies the wallpaperPicker custom builder. It uses
+wallpaper.current, the existing Button/description/subtitle, ready real Window
+portal_parent and the Editor's same trusted connection. Epoch/value/mount and
+process-wide per-open tokens guard completion; no dialog fabricated when Window
+is absent. Repeated activation while pending is ignored; parent Pending waits,
+Unsupported alone allows empty parent. Cancel/same/invalidation do not Apply;
+accepted changed path calls Cx.apply once, with canonical refusal/error retained.
+Hidden/unmounted/schema/key/owner changes cancel without restoring launcher focus;
+normal completion may restore it if still eligible. HOME is suggested with the
+portal's filesystem-byte current_folder terminated by NUL; no environment mutation.
+
+For asynchronous completion, Rendered::idle now polls the real Editor FIRST and
+applies these notices before any builder idle callback. It returns Vec<Notice>;
+the app must process them for dependencies outside its rows, not discard them.
+This is also how a queued Config1 change retires a completed file choice before
+acceptance. The app must stage external portal/routing/visibility first.
+Builder/Rendered::external_modal_active tells the host to suppress parent
+accessibility actions and publish parent inactivity during an external chooser.
+No growing staging queue or extra provider. Actual main/provider caller is still
+pending: unit/direct-decision and private Config1 proofs are not native modality.
+Full exported Appearance now mounts/layouts with the real five registration modules
+(including separate wallpaper preview/gallery and picker), no substitute builders;
+that CPU check neither opens a native window nor validates all wallpaper pixels.
+Existing native Button is reused; exact secondary/pill appearance remains visual debt.

@@ -1224,8 +1224,8 @@ catalogue, never a second directory scan. Catalogue paths are unique absolute
 paths, preserving service order; surviving options retain IDs. Unknown current
 paths select none. Same-value activation emits no Apply; changed, live, writable,
 shown activation uses exactly Cx.apply. Failed replies restore canonical selection
-and retain their error. No picker stub is registered here: wallpaperPicker remains
-an error until its portal implementation is connected.
+and retain their error. The picker is registered separately by wallpaper_picker; omitting that builder
+remains a missing-builder error.
 
 The existing image loader starts only for showing images, with nonzero mount and
 per-request tokens and explicit host byte budgets. Offscreen/hidden/unavailable/
@@ -1272,3 +1272,35 @@ is the actual Window's ready wayland identifier, or empty only after Unsupported
 this transport cannot itself prove the caller supplied an actual Window handle.
 Private-bus fixtures prove protocol/cancel ordering, not native chooser/parenting,
 full-window accessibility, focus restoration or owner live acceptance.
+
+### Mounted wallpaper picker (#915/D5)
+
+wallpaper_picker::register binds wallpaperPicker to wallpaper.current. The row
+uses existing Button/description/error components and exported labels. Activation
+records a nonzero mount/process-wide request ID plus epoch/current-value baseline;
+repeated activation while pending does nothing. Idle polls the real Window parent
+identifier and existing Editor connection, then the cancelable Chooser. Pending
+parent export waits; only Unsupported uses empty parent. No Window is an explicit
+row error, never a fabricated unparented dialog.
+
+Only a matching, still-mounted/shown/available/writable operation with unchanged
+epoch/value may accept. Cancel/same selection writes nothing; changed selection
+calls Cx.apply once. Errors stay in the row; Failed-last notices retain the error
+alongside canonical reply. Hidden/unmounted/unavailable/schema/value changes retire
+the request without restoring focus. Ordinary completion restores the surviving
+launcher only while eligible; this is widget focus logic, not native focus proof.
+
+Rendered::idle now drains Editor.poll and applies these notices before builder
+async results, returning the drained Vec<Notice> for the host's other dependencies
+(e.g. icon-theme refresh). The host must process this return and also stage its
+external portal/routing/visibility changes before idle/input. No notices are held
+in a growing renderer queue. Builder/Rendered::external_modal_active reports a
+pending external portal operation; the app must reject parent accessibility actions
+and publish parent inactivity while it is true. No second provider is introduced.
+This API alone does not establish that future app caller or native modality.
+
+The picker currently uses the existing shared native Button appearance; exact
+legacy secondary/pill visual parity remains pending. The picker suggests the absolute HOME directory when supplied by the environment.
+Open.current_folder uses filesystem bytes with one trailing NUL (ay), rejecting
+relative/NUL-containing paths; the portal may ignore this suggestion. No native dialog/AT-SPI/Orca/live acceptance from CPU,
+private-bus or injected-decision tests.

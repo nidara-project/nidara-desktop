@@ -194,6 +194,10 @@ pub trait Builder {
     fn row_visible(&self, _row: NodeId) -> bool {
         true
     }
+    /// External portal is preparing/open: host must suspend parent accessibility actions.
+    fn external_modal_active(&self) -> bool {
+        false
+    }
     /// Its row was hidden or shown (it stays mounted): cancel or resume visual work.
     fn shown(&mut self, _cx: &mut Cx<'_>, _visible: bool) -> Result<()> {
         Ok(())
@@ -731,9 +735,15 @@ impl Rendered {
         Ok(true)
     }
 
+    pub fn external_modal_active(&self) -> bool {
+        self.builders
+            .iter()
+            .any(|m| m.builder.external_modal_active())
+    }
+
     /// From the app's idle: a held slider value goes (its drag ended, its debounce passed),
     /// and every builder's own idle.
-    pub fn idle(&mut self, h: Host<'_>) -> Result<()> {
+    pub fn idle(&mut self, h: Host<'_>) -> Result<Vec<Notice>> {
         let Host {
             tree,
             editor,
@@ -742,6 +752,20 @@ impl Rendered {
             mut window,
             mut modal,
         } = h;
+        let notices = editor.poll();
+        if !notices.is_empty() {
+            self.notices(
+                Host {
+                    tree: &mut *tree,
+                    editor: &mut *editor,
+                    exports,
+                    styles,
+                    window: None,
+                    modal: None,
+                },
+                &notices,
+            )?;
+        }
         let now = Instant::now();
         for row in &mut self.rows {
             let Control::Slider {
@@ -778,7 +802,8 @@ impl Rendered {
             };
             m.builder.idle(&mut cx)?;
         }
-        self.refresh(tree, editor, exports, styles)
+        self.refresh(tree, editor, exports, styles)?;
+        Ok(notices)
     }
 
     /// The page goes away: every builder's `unmount`; the caller removes the nodes.

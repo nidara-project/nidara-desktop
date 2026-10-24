@@ -119,9 +119,8 @@ image loader. It requires explicit host Budget and complete wallpaper token expo
 No file scan or decode at build; only showing pictures start work from idle.
 Same value does not Apply, unknown path selects none, and canonical refusal/error
 handling reuses Session/Cx. Empty/error rows use Builder::row_visible under the
-renderer's own predicates. wallpaperPicker is deliberately still unregistered
-until the actual portal path exists; full Appearance remains a missing-builder
-error rather than silently substituting it. No native or full wallpaper parity.
+renderer's own predicates. wallpaper_picker::register supplies the separate real picker consumer; omitting
+it remains a missing-builder error rather than silently substituting it. No native or full wallpaper parity.
 
 file_chooser::Chooser is the asynchronous OpenFile transport over Editor's existing
 connection. Supply nonzero Operation and translated Open labels plus the actual
@@ -134,3 +133,21 @@ the image validator. The caller must enforce mount/visibility/write/baseline gua
 focus restoration and parent accessibility; these are not transport acceptance.
 Protocol references: https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.FileChooser.html
 and https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Request.html
+
+wallpaper_picker::register connects wallpaperPicker to the real Window parent
+export and file_chooser transport. It owns one pending operation, a process-wide
+nonzero request number, the mount, epoch/value baseline and cancellation lifetime.
+Normal cancel/same chooses do not Apply; changed accepted results call Cx.apply
+once. Hidden/unmounted/stale/unavailable results are retired without focus return;
+ordinary completion restores the eligible launcher. Raw current path/help/error
+are in its existing description/subtitle; canonical failures survive cancel.
+The picker suggests HOME through current_folder filesystem bytes plus NUL; the
+portal can ignore the suggestion. No Window becomes an explicit row error.
+
+Rendered::idle drains Editor.poll BEFORE async builder completion and returns the
+applied Vec<Notice>. Hosts must observe that return for dependencies outside rows,
+and stage portal/routing/visibility changes first. external_modal_active exposes
+pending external portal operations: host must reject parent accessibility actions
+and publish inactive parent semantics during them. That host/provider integration
+and native focus/dialog acceptance remain pending. Button secondary/pill visual
+parity is still provisional; this consumer reuses the shared native Button.

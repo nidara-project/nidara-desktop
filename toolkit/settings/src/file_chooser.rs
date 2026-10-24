@@ -5,7 +5,8 @@ use std::{
     collections::HashMap,
     future::Future,
     io::Read,
-    path::PathBuf,
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc,
@@ -34,6 +35,7 @@ pub struct Open {
     pub parent: String,
     pub title: String,
     pub images_label: String,
+    pub current_folder: Option<PathBuf>,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum StartError {
@@ -65,6 +67,12 @@ impl Chooser {
         {
             return Err(StartError::Failed("invalid file chooser request".into()));
         }
+        let folder = open
+            .current_folder
+            .as_deref()
+            .map(folder_bytes)
+            .transpose()
+            .map_err(StartError::Failed)?;
         if self.pending.is_some()
             || ACTIVE
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -85,7 +93,7 @@ impl Chooser {
                     }
                 }
                 let lease = Lease;
-                let result = async_io::block_on(run(connection, open, receive));
+                let result = async_io::block_on(run(connection, open, folder, receive));
                 drop(lease);
                 let _ = send.send(result);
             });
@@ -150,6 +158,7 @@ async fn close(connection: &zbus::Connection, owner: &str, handle: &str) -> Resu
 async fn run(
     connection: zbus::Connection,
     open: Open,
+    folder: Option<Vec<u8>>,
     cancel: async_channel::Receiver<()>,
 ) -> Result<Option<PathBuf>> {
     let mut random = [0u8; 16];
@@ -229,12 +238,15 @@ async fn run(
             (1, "image/avif"),
         ],
     )];
-    let options = HashMap::from([
+    let mut options = HashMap::from([
         ("handle_token", Value::from(token.as_str())),
         ("modal", Value::from(true)),
         ("multiple", Value::from(false)),
         ("filters", Value::from(filters)),
     ]);
+    if let Some(folder) = folder {
+        options.insert("current_folder", Value::from(folder));
+    }
     let result = bounded(async {
         let p = Proxy::new(
             &connection,
@@ -347,6 +359,16 @@ async fn run(
     result
 }
 
+fn folder_bytes(path: &Path) -> Result<Vec<u8>> {
+    let bytes = path.as_os_str().as_bytes();
+    if !path.is_absolute() || bytes.contains(&0) {
+        return Err("invalid file chooser current folder".into());
+    }
+    let mut bytes = bytes.to_vec();
+    bytes.push(0);
+    Ok(bytes)
+}
+
 fn file_path(uri: &str) -> Result<PathBuf> {
     let rest = uri
         .strip_prefix("file://")
@@ -384,6 +406,16 @@ fn file_path(uri: &str) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn current_folder_uses_filesystem_bytes_and_a_single_terminator() {
+        use std::os::unix::ffi::OsStringExt;
+        let path = PathBuf::from(std::ffi::OsString::from_vec(
+            b"/home/non-utf8-\xff".to_vec(),
+        ));
+        assert_eq!(folder_bytes(&path).unwrap(), b"/home/non-utf8-\xff\0");
+        assert!(folder_bytes(Path::new("relative")).is_err());
+        assert!(folder_bytes(Path::new("/a\0b")).is_err());
+    }
     #[test]
     fn completed_result_cannot_cross_a_mount_and_cancel_retires_pending() {
         let (send, reply) = mpsc::channel();

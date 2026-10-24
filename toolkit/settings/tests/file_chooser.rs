@@ -101,6 +101,10 @@ impl Portal {
             options["filters"].value_signature().to_string(),
             "a(sa(us))"
         );
+        assert_eq!(
+            Vec::<u8>::try_from(options["current_folder"].try_clone().unwrap()).unwrap(),
+            b"/home/test\0"
+        );
         let token = <&str>::try_from(&options["handle_token"]).unwrap();
         assert!(token.starts_with("nidara_") && token.len() > 25);
         let sender = header.sender().unwrap().as_str();
@@ -175,6 +179,7 @@ fn start(chooser: &mut Chooser, connection: &Connection, request: u64) {
                 parent: "wayland:synthetic-parent".into(),
                 title: "Choose wallpaper".into(),
                 images_label: "Images".into(),
+                current_folder: Some("/home/test".into()),
             },
         ) {
             Ok(()) => true,
