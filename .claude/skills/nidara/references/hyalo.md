@@ -1231,8 +1231,11 @@ that picture and grows back out of it. `wm/minimize.rs`.
   `minimizedOrder`. Alt+Tab and the overview are #669.
 - CI: `scripts/ci/hyalo-minimize-check.sh` in the smoke (the window-controls probe, now with
   `HYALO_PROBE_DIALOG=1` and SIGURG = `set_minimized`), ten steps with the REAL dock giving the
-  place — the drawing checked by pixels a second into a 6 s animation (the probe's grey where
-  `drawn` says, not where it was, and beside the small window what is there once it has gone).
+  place — the drawing checked by pixels of ONE capture of a 12 s animation, the one that catches
+  it crossing the dock's glass (the probe's grey where its `capture.json` says it is drawn, not
+  where it was, and beside the small window, above the dock, what is there once it has gone).
+  Nothing is captured before it: on the nightlies of 2026-10-22/23 a capture "a second in" came
+  back with the window already into the dock, and no poll after it could see it cross.
   Controls seen failing nested: the installed Hyalo before #724; one without `AtScale` ("its
   full-size box is drawn too"); one whose focus does not restore.
 
@@ -2490,7 +2493,19 @@ keyboard settings reapplies configured outputs and resets a transient scale.
 
 Orca's form walk also includes authentic flat review (#846): KP_Up (evdev 72) must
 speak the complete `日本🙂 word`, separately from the earlier focus announcement;
-KP_Subtract (74) leaves review before editing continues. The shared vkms settings
+KP_Subtract (74) leaves review before editing continues.
+
+**KEY LATE** (nightly of 2026-10-24): Orca names a caret move's cause after the last key it has
+seen, and the key (Hyalo → session bus) and the move (app → accessibility bus) are not ordered
+with each other — Hyalo writes the key first (`a11y.rs`), yet Left once reached Orca 24 ms after
+the move it caused, which Orca put down to the `d` typed before, and kept silent. A FAILED step
+whose delta shows a caret move attributed `TextEventReason.TYPING` before the step's first
+`KEYBOARD_EVENT` is `KEY LATE`: neither pass nor failure, never repeated; a control setup step
+goes on past it, a control whose TARGET is late reports `KEY LATE` (exit 2) and leaves
+`complete_matrix` false. Only that cause: a move left by the previous step (the dialog
+reopened) is `UNKNOWN` to Orca and stays a failure — checked against all 24 failed rows of that
+night's matrix, which marks exactly the one. Whether Hyalo should hold a key back for a
+listening reader is #927. The shared vkms settings
 check enables Num Lock: the Orca probe observes its real modifier with a harmless
 Shift release before mapping the app, toggles Num_Lock only if needed, verifies it
 is off, and restores the original state afterward. Keep `numlock-setup.log`; a

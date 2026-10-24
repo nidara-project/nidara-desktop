@@ -38,6 +38,7 @@ def main():
     target = os.environ.get('NK_ORCA_TARGET')
     dynamic = os.environ.get('NK_ORCA_DYNAMIC') == '1'
     caught = False
+    key_late = False
     p = native.Probe('orca-' + os.environ.get('NK_ORCA_CASE', broken or 'baseline'))
     app = None
     debug = p.log / 'orca-debug.log'
@@ -172,7 +173,20 @@ def main():
             # Diagnostics never replace the fresh SPEECH OUTPUT predicate.
             causes = [line for line in delta.splitlines()
                       if 'Reason for object:text-caret-moved' in line]
-            p.row(label, passed, repr(utterances), speech=utterances, caret_causes=causes)
+            # Orca names a caret move's cause after the last key IT has seen. The key reaches it
+            # from Hyalo over the session bus, the move from the app over the accessibility bus,
+            # and nothing orders the two: Hyalo writes the key first (a11y.rs), yet on the
+            # nightly of 2026-10-24 Left reached Orca 24 ms after the move, which it took for the
+            # 'd' typed before and kept silent. When Orca's own log shows a move it put down to
+            # TYPING before this step's key reached it, the step proves nothing either way: KEY
+            # LATE, neither a pass nor a failure, and never repeated. Only that cause: a move the
+            # previous step left behind (the dialog reopened, its entry refilled) is UNKNOWN to
+            # Orca and stays a failure. Only a step that failed: speech that came anyway passed.
+            key = delta.find('KEYBOARD_EVENT:')
+            typed = re.search(r'Reason for object:text-caret-moved .*: TextEventReason\.TYPING$', delta, re.M)
+            late = not passed and key >= 0 and typed is not None and typed.start() < key
+            p.row(label, passed, repr(utterances), status='KEY LATE' if late else None,
+                  speech=utterances, caret_causes=causes)
             (p.log / (label.replace(' ', '-') + '.log')).write_text(delta)
             p.msg('screenshot', p.log / (label.replace(' ', '-') + '.png'))
             if label == target:
@@ -188,9 +202,12 @@ def main():
                         r"AXText: Range .*?Name.*?has rect \(x:-10000, y:-10000, width:0, height:0\)", line)]
                     applied = applied and bool(responses)
                     p.rows[-1].update(fault=broken, applied=applied, geometry_response=responses)
-                caught = not passed and applied
+                caught = not passed and applied and not late
+                if late:
+                    nonlocal key_late
+                    key_late = True
                 raise TargetReached()
-            if target and not passed:
+            if target and not passed and not late:
                 raise AssertionError('control setup failed before ' + target + ': ' + label)
 
         # Include translated role synonyms, but require each distinct fact.
@@ -285,7 +302,10 @@ def main():
         if bus:
             bus.close_sync(None)
     if target:
-        return 0 if caught and all(r['status'] == 'PASS' for r in p.rows[:-1]) else 1
+        # 2: the target's key reached Orca after its effect — this control is undecided tonight.
+        if key_late:
+            return 2
+        return 0 if caught and all(r['status'] != 'FAIL' for r in p.rows[:-1]) else 1
     return 1 if any(row['status'] == 'FAIL' for row in p.rows) else 0
 
 
@@ -314,13 +334,16 @@ def matrix():
         if os.environ.get('NK_ORCA_CONTROLS') and str(index) not in os.environ['NK_ORCA_CONTROLS'].split():
             continue
         row = next((r for r in baseline['rows'] if r['step'] == target), None)
-        if not row or row['status'] != 'PASS':
+        if not row or row['status'] == 'FAIL':
             controls.append(dict(fault=fault, assertion=target, status='BLOCKED', reason='baseline did not pass'))
             status = 1
             continue
         result = subprocess.run(['python3', __file__], env=os.environ | {
             'NK_ORCA_CHILD': '1', 'NK_ORCA_FAULT': fault, 'NK_ORCA_TARGET': target,
             'NK_ORCA_DYNAMIC': '1' if dynamic else '0', 'NK_ORCA_CASE': str(index)})
+        if result.returncode == 2:
+            controls.append(dict(fault=fault, assertion=target, status='KEY LATE'))
+            continue
         controls.append(dict(fault=fault, assertion=target, status='CAUGHT' if result.returncode == 0 else 'FAIL'))
         status = status or result.returncode
     pending = []
@@ -330,7 +353,7 @@ def matrix():
     coverage['Dropdown focus'] = coverage['Tab Language']
     coverage['Wayland keyboard monitor refusal'] = ['ordinary Atspi.Device + explicit AccessDenied; positive Orca key echo']
     assert not run_controls or all(coverage.values()), 'a baseline assertion lacks its control'
-    report = dict(baseline=baseline, controls=controls, coverage=coverage, pending=pending, complete_matrix=status == 0 and len(controls) == len(cases))
+    report = dict(baseline=baseline, controls=controls, coverage=coverage, pending=pending, complete_matrix=status == 0 and len(controls) == len(cases) and all(c['status'] == 'CAUGHT' for c in controls))
     (log / 'orca-report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     lines = ['| Orca assertion | Baseline |', '| --- | --- |']
     lines += [f"| {r['step']} | {r['status']} |" for r in baseline['rows']]

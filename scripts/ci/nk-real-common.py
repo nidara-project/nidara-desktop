@@ -98,8 +98,8 @@ class Probe:
                 proc.kill()
                 proc.wait(timeout=5)
 
-    def row(self, step, passed, why='', **details):
-        status = 'PASS' if passed else 'FAIL'
+    def row(self, step, passed, why='', status=None, **details):
+        status = status or ('PASS' if passed else 'FAIL')
         self.rows.append(dict(step=step, status=status, why=why, **details))
         print(f'{status} {step}: {why}', flush=True)
 
