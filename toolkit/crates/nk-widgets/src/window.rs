@@ -1567,6 +1567,244 @@ mod tests {
         }
     }
     #[test]
+    fn capsule_coverage_states_and_layer_input_share_retained_geometry() {
+        use crate::capsule_composition::CapsuleComposition;
+        use nk_wayland::{Blur, ControlMaterial, Glass, Material, Shadow, Tone};
+        let (mut tree, mut backend, _, _, _) = fixture();
+        let capsule = tree
+            .control_capsule(
+                "Test controls",
+                Point { x: 150., y: 100. },
+                CapsuleMetrics {
+                    padding: 5.,
+                    gap: 3.,
+                    button_min: 26.,
+                    height_min: 38.,
+                },
+            )
+            .unwrap();
+        let normal = tree.capsule_button(capsule, "Normal", "A", false).unwrap();
+        let close = tree.capsule_button(capsule, "Close", "X", true).unwrap();
+        tree.layout(tree.size, true, &mut backend).unwrap();
+        let tone = Tone {
+            saturation: 1.,
+            ceiling: 1.,
+            lift: 0.,
+            gain: 1.,
+            wash: [0., 0., 0., 1.],
+            ambient: 0.,
+            ambient_lift: 0.,
+            ambient_gain: 1.,
+        };
+        let state = |wash, ink| CapsuleStateStyle { wash, ink };
+        let style = CapsuleStyle {
+            material: ControlMaterial {
+                base: Material {
+                    glass: Glass {
+                        refraction: 0.,
+                        rim: 0.,
+                        lensing: 0.,
+                    },
+                    tone,
+                    shadow: Shadow {
+                        opacity_small: 0.,
+                        opacity_large: 0.,
+                        blur_small: 0.,
+                        blur_large: 0.,
+                        offset: 0.,
+                    },
+                    shapes: vec![],
+                },
+                blur: Blur {
+                    size: 0.,
+                    passes: 0,
+                },
+                ink_tone: tone,
+                response: None,
+                light_ink: [1.; 4],
+                dark_ink: [0., 0., 0., 1.],
+                states: vec![],
+                coverage: vec![],
+            },
+            hover: state([1., 1., 1., 0.1], None),
+            press: state([1., 1., 1., 0.2], None),
+            destructive_hover: state([1., 0., 0., 0.5], Some([1.; 4])),
+            destructive_press: state([0.5, 0., 0., 0.7], Some([1.; 4])),
+            fade_ms: 123,
+        };
+        let bounds = tree.nodes[&capsule].bounds;
+        let frame = |scale: f64| nk_wayland::Frame {
+            width: bounds.width.ceil() as u32,
+            height: bounds.height.ceil() as u32,
+            pixel_width: (bounds.width as f64 * scale).ceil() as u16,
+            pixel_height: (bounds.height as f64 * scale).ceil() as u16,
+            scale,
+            material: true,
+        };
+        let local_center = |tree: &Tree, id| {
+            let r = tree.nodes[&id].bounds;
+            (
+                r.x - bounds.x + r.width / 2.,
+                r.y - bounds.y + r.height / 2.,
+            )
+        };
+        let material = tree.capsule_material(capsule, &style, false).unwrap();
+        assert_eq!(material.base.shapes.len(), 1);
+        assert_eq!(
+            material
+                .states
+                .iter()
+                .map(|s| s.id as u64)
+                .collect::<Vec<_>>(),
+            vec![normal, close]
+        );
+        assert!(
+            material
+                .states
+                .iter()
+                .all(|s| s.wash[3] == 0. && s.fade_ms == 123)
+        );
+        assert_eq!(material.coverage.len(), 2);
+        for scale in [1., 1.25] {
+            let f = frame(scale);
+            let idle = tree
+                .paint_capsule_coverage(capsule, f, test_palette())
+                .unwrap();
+            assert_eq!(idle[3], 0, "coverage buffer paints a capsule background");
+            assert!(
+                idle.as_chunks::<4>().0.iter().any(|p| p[3] > 0),
+                "glyph coverage absent"
+            );
+            for pixel in idle.as_chunks::<4>().0.iter().filter(|p| p[3] > 0) {
+                assert_eq!(pixel[0], pixel[1]);
+                assert_eq!(pixel[1], pixel[2]);
+            }
+            let (x, y) = local_center(&tree, close);
+            CapsuleComposition::route(&mut tree, capsule, &LayerEvent::Motion(x as f64, y as f64))
+                .unwrap();
+            let hovered = tree.capsule_material(capsule, &style, false).unwrap();
+            assert_eq!(hovered.states[1].wash, style.destructive_hover.wash);
+            assert_eq!(hovered.coverage[1].override_color, [1.; 4]);
+            assert_eq!(
+                idle,
+                tree.paint_capsule_coverage(capsule, f, test_palette())
+                    .unwrap(),
+                "hover painted a client-side disc instead of material wash"
+            );
+            CapsuleComposition::route(
+                &mut tree,
+                capsule,
+                &LayerEvent::Button {
+                    button: 272,
+                    serial: 7,
+                    time: 11,
+                    pressed: true,
+                    x: x as f64,
+                    y: y as f64,
+                },
+            )
+            .unwrap();
+            assert_eq!(tree.captured(), Some(close));
+            assert_eq!(
+                tree.capsule_material(capsule, &style, false)
+                    .unwrap()
+                    .states[1]
+                    .wash,
+                style.destructive_press.wash
+            );
+            CapsuleComposition::route(&mut tree, capsule, &LayerEvent::Leave).unwrap();
+            assert_eq!(
+                tree.capsule_material(capsule, &style, false)
+                    .unwrap()
+                    .states[1]
+                    .wash[3],
+                0.,
+                "exit region lost its alpha-zero state"
+            );
+            assert_eq!(
+                CapsuleComposition::route(
+                    &mut tree,
+                    capsule,
+                    &LayerEvent::Button {
+                        button: 272,
+                        serial: 7,
+                        time: 11,
+                        pressed: false,
+                        x: -1.,
+                        y: -1.
+                    }
+                )
+                .unwrap(),
+                Effect::None
+            );
+            let (x, y) = local_center(&tree, normal);
+            CapsuleComposition::route(
+                &mut tree,
+                capsule,
+                &LayerEvent::Button {
+                    button: 272,
+                    serial: 7,
+                    time: 11,
+                    pressed: true,
+                    x: x as f64,
+                    y: y as f64,
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                CapsuleComposition::route(
+                    &mut tree,
+                    capsule,
+                    &LayerEvent::Button {
+                        button: 272,
+                        serial: 7,
+                        time: 11,
+                        pressed: false,
+                        x: x as f64,
+                        y: y as f64
+                    }
+                )
+                .unwrap(),
+                Effect::Activated(normal)
+            );
+            tree.pointer_leave();
+        }
+        tree.set_disabled(close, true).unwrap();
+        let (x, y) = local_center(&tree, close);
+        CapsuleComposition::route(&mut tree, capsule, &LayerEvent::Motion(x as f64, y as f64))
+            .unwrap();
+        let m = tree.capsule_material(capsule, &style, true).unwrap();
+        assert!(m.states.iter().all(|s| s.fade_ms == 0));
+        assert_eq!(m.states[1].wash[3], 0.);
+        tree.set_hidden(close, true).unwrap();
+        assert_eq!(
+            tree.capsule_material(capsule, &style, false)
+                .unwrap()
+                .coverage
+                .len(),
+            1
+        );
+        tree.set_hidden(close, false).unwrap();
+        tree.layout(tree.size, false, &mut backend).unwrap();
+        tree.capsule_styles.insert(capsule, style);
+        let mut canvas = nk_render::Canvas::new(frame(1.).pixel_width, frame(1.).pixel_height, 1.);
+        tree.paint_capsule_into(
+            capsule,
+            Point {
+                x: bounds.x,
+                y: bounds.y,
+            },
+            &mut canvas,
+            test_palette(),
+            tree.capsule_styles.get(&capsule),
+        )
+        .unwrap();
+        let opaque = canvas.finish();
+        let center =
+            ((frame(1.).pixel_height as usize / 2) * frame(1.).pixel_width as usize + 1) * 4;
+        assert_eq!(opaque[center + 3], 255, "D5 capsule base is not opaque");
+    }
+    #[test]
     fn blur_band_interior_edges_are_shared_physical_pixel_boundaries() {
         let style = TitlebarStyle {
             blur: nk_wayland::Blur {

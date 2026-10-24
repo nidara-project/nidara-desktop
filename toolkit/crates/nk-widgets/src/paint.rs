@@ -199,7 +199,19 @@ impl Tree {
         if surface == Surface::Content && !self.layered {
             let clip = self.nodes[&self.root].bounds;
             for id in self.capsules.keys() {
-                self.paint_node(*id, Point::default(), &mut canvas, palette, clip)?;
+                if let Some(style) = self.capsule_styles.get(id) {
+                    canvas.clip(clip);
+                    self.paint_capsule_into(
+                        *id,
+                        Point::default(),
+                        &mut canvas,
+                        palette,
+                        Some(style),
+                    )?;
+                    canvas.pop_clip();
+                } else {
+                    self.paint_node(*id, Point::default(), &mut canvas, palette, clip)?;
+                }
             }
         }
         Ok(canvas.finish())

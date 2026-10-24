@@ -467,3 +467,61 @@ unchanged exporter tokens symlinked from gap-repair export. Initial local full
 suite lacked the legacy build/settings-data path (2Settings failures); adding
 that path to the same complete data matches CI, without skipping/relaxing tests.
 Published heads untouched; local repair branch awaits owner review/publication.
+
+### #889 capsule composition integration (local)
+
+### #889 capsule composition integration (historical source evidence)
+
+The following results describe the original source, not the rebuilt split.
+
+CapsuleComposition stages one layer per panel, coverage-only buffers and explicit
+state/ink payloads together with placement. Stable idle state IDs preserve
+compositor fade-out; frame signatures suppress unchanged capsule repaints.
+Appearance now loads control and opaque fallback variants plus capsule geometry.
+The opt-in --capsules demo provides window controls and an action toolbar.
+D5 draws the exported opaque base and immediate state feedback. Timed D5 state
+fading, backdrop fixtures, compositor visual oracles and idle/performance remain
+pending; no completion or live acceptance is claimed.
+
+The new unit oracle covers monochrome coverage/no background, unchanged coverage
+pixels on hover, normal/destructive state payloads, idle IDs, reduced-motion
+duration0, disabled/hidden handling, layer input capture/cancel/activation and
+opaque D5 base at scales1/1.25. A client-painted coverage background is CAUGHT by
+its own assertion (toolkit/target/capsule-coverage-control.log). Total46 focused
+tests and clippy pass. This is CPU/payload/input evidence, not GPU presentation.
+
+## Capsule composition split on current main (2026-10-23)
+
+This cut restores CapsuleComposition and the --capsules demo connection above the
+reader cut. The one existing host stages coverage buffers, state regions,
+placement and material on a synchronized layer for each capsule. The demo loads
+its control/opaque recipes from Exports using the shared portal/Styles path.
+Shared CapsuleStyle replaces demo-local state/style types. Main's choices and
+range controls are preserved, and non-capsule input still reaches
+Composition::event_with_window for exact-serial title dragging.
+
+The later known opt-in correction is included: --capsules does not request server
+window controls. No #921 geometry or material redesign is implemented. Test
+capsule dimensions are synthetic rather than a pin of the old control design.
+D5 uses its exported opaque base with immediate state feedback; timed fade is a
+separate next cut. This is a compiled native application path, not a native run.
+
+`target/capsule-composition-split-restored-tests.log` passes 60 widget/demo tests
+(17 + 7 + 15 + 8 + 5 + 2 + 6), with required generated exports from the unchanged
+reader cut. The new CPU/payload test covers transparent monochrome coverage,
+unchanged coverage on hover, state and destructive-ink payloads, zero-alpha exit
+IDs, disabled/hidden actions, layer capture/activation/cancellation and an opaque
+D5 base at scales 1/1.25. Test LayerEvents carry synthetic serial/time fields;
+they are not physical input or native Wayland event evidence.
+
+A production coverage-fill fault compiles and fails the test's own background
+assertion in `target/capsule-composition-split-coverage-control.log`. Source was
+restored before the full 60-test pass. All-target Clippy for widgets/demo with
+warnings denied, formatting, skill-docs and diff checks pass. The first rebuilt
+demo failed compilation because the old reader used pre-shared-Styles variables;
+it was adapted to current Exports/portal values, and the failure log is preserved.
+
+No native compositor walk, new AT-SPI/Orca, presentation, idle/performance or
+owner-live acceptance is claimed. Historical fixed native evidence belongs to
+its original binaries and is not acceptance of this rebuilt split. Those binaries
+and original source worktrees are untouched.
