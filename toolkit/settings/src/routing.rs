@@ -46,8 +46,42 @@ pub enum Route {
     Query(Option<String>),
 }
 
+/// Optional metadata on the existing Request(as), not a new remote action method.
+pub const ACTIVATION_ARG: &str = "--xdg-activation-token";
+fn activation_metadata(args: &[String]) -> Result<(&[String], Option<String>), String> {
+    // page/app IDs are positional; a literal ID equal to this marker is still an ID.
+    let positional = match args.first().map(String::as_str) {
+        Some("page" | "app") => 2,
+        Some("queryUI") if args.get(1).is_some_and(|a| a != ACTIVATION_ARG) => 2,
+        _ => 1,
+    };
+    if let Some(index) = args
+        .iter()
+        .enumerate()
+        .skip(positional)
+        .find_map(|(i, a)| (a == ACTIVATION_ARG).then_some(i))
+    {
+        if index + 2 != args.len() || args[index + 1].is_empty() || args[index + 1].contains('\0') {
+            return Err("invalid activation metadata".into());
+        }
+        Ok((&args[..index], Some(args[index + 1].clone())))
+    } else {
+        Ok((args, None))
+    }
+}
+/// Attach the initiating launch token without changing the original routing arguments.
+pub fn with_activation(args: &[String], token: String) -> Result<Vec<String>, String> {
+    if activation_metadata(args)?.1.is_some() || token.is_empty() || token.contains('\0') {
+        return Err("invalid or duplicate activation metadata".into());
+    }
+    let mut result = args.to_vec();
+    result.extend([ACTIVATION_ARG.into(), token]);
+    Ok(result)
+}
+
 /// The decision, with nothing else: the legacy verbs, the allowlist.
 pub fn route(args: &[String], drawn: &[&str]) -> Result<Route, String> {
+    let (args, _) = activation_metadata(args)?;
     let id = args.get(1).filter(|s| !s.is_empty()).cloned();
     match args.first().map(String::as_str) {
         Some("open") => Ok(Route::Raise),
@@ -77,6 +111,7 @@ pub enum Mode {
 /// A request the app answers on its own loop (navigation, raising, the UI tree).
 pub struct Incoming {
     pub route: Route,
+    pub activation: Option<String>,
     reply: async_channel::Sender<String>,
 }
 
@@ -125,7 +160,8 @@ impl Service {
         args: Vec<String>,
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> zbus::fdo::Result<String> {
-        let route = match route(&args, DRAWN) {
+        let (args, activation) = activation_metadata(&args).map_err(zbus::fdo::Error::Failed)?;
+        let route = match route(args, DRAWN) {
             Ok(r) => r,
             Err(e) if e.starts_with("usage") => return Ok(e),
             Err(e) => return Err(zbus::fdo::Error::Failed(e)),
@@ -137,7 +173,11 @@ impl Service {
         }
         let (reply, answer) = async_channel::bounded(1);
         self.to_app
-            .send(Incoming { route, reply })
+            .send(Incoming {
+                route,
+                activation,
+                reply,
+            })
             .await
             .map_err(|_| zbus::fdo::Error::Failed("the window has gone".into()))?;
         answer
@@ -284,6 +324,37 @@ mod tests {
         a.iter().map(|s| s.to_string()).collect()
     }
 
+    #[test]
+    fn activation_metadata_keeps_tokens_opaque_and_original_route_shape() {
+        let original = args(&["page", "appearance"]);
+        let marked = with_activation(&original, " opaque 日本語 ".into()).unwrap();
+        assert_eq!(
+            activation_metadata(&marked).unwrap(),
+            (original.as_slice(), Some(" opaque 日本語 ".into()))
+        );
+        assert_eq!(
+            route(&marked, DRAWN),
+            Ok(Route::Navigate("appearance".into()))
+        );
+        assert_eq!(
+            route(&args(&["page", ACTIVATION_ARG]), DRAWN),
+            Ok(Route::Forward(args(&["page", ACTIVATION_ARG])))
+        );
+        assert!(with_activation(&marked, "second".into()).is_err());
+    }
+    #[test]
+    fn malformed_activation_is_rejected_without_echoing_token() {
+        for a in [
+            args(&["open", ACTIVATION_ARG]),
+            args(&["open", ACTIVATION_ARG, ""]),
+            args(&["open", ACTIVATION_ARG, "bad\0secret"]),
+            args(&["open", ACTIVATION_ARG, "secret", ACTIVATION_ARG, "other"]),
+        ] {
+            let error = route(&a, DRAWN).unwrap_err();
+            assert!(!error.contains("secret"));
+        }
+        assert!(with_activation(&args(&["open"]), "".into()).is_err());
+    }
     #[test]
     fn a_drawn_page_is_navigated_and_any_other_forwarded() {
         assert_eq!(

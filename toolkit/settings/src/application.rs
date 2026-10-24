@@ -243,6 +243,8 @@ struct App {
     ready: bool,
     forwarding: Option<mpsc::Receiver<Result<String>>>,
     configured: bool,
+    startup_activation: Option<String>,
+    activations: Vec<Incoming>,
 }
 fn icons(theme: &str, reference: &std::path::Path) -> Result<nk_icons::Icons> {
     nk_icons::Icons::new(theme, &nk_icons::search_path(), reference)
@@ -419,15 +421,24 @@ impl App {
             self.view.invalidate_external(&mut self.client)?;
         }
         for message in incoming {
+            if message.activation.is_some()
+                && matches!(&message.route, Route::Raise | Route::Navigate(_))
+            {
+                if let Route::Navigate(page) = &message.route {
+                    self.view.shell.selected(&self.view.exports, page)?;
+                }
+                self.activations.push(message);
+                continue;
+            }
             let answer: String = match &message.route {
-                Route::Raise => "unsupported: native window activation is not implemented".into(),
+                Route::Raise => "activation token missing; no activation requested".into(),
                 Route::Query(_) => {
                     "unsupported: native queryUI policy/serialization is not integrated".into()
                 }
                 Route::Navigate(page) if page == "appearance" => {
                     // Navigation is real; raising is not silently advertised as successful.
                     self.view.shell.selected(&self.view.exports, page)?;
-                    "appearance selected; native window activation is unsupported".into()
+                    "appearance selected; activation token missing".into()
                 }
                 _ => "unsupported native route".into(),
             };
@@ -451,6 +462,28 @@ impl App {
         Ok(())
     }
     fn sync(&mut self, window: &mut Window) -> Result<()> {
+        // Initial empty commit is1. The next app loop follows a real painted root.
+        if window.commits() > 1 {
+            if let Some(token) = self.startup_activation.take()
+                && window.activate(token)? == nk_wayland::Activation::Unsupported
+            {
+                eprintln!("ACTIVATION_UNSUPPORTED");
+            }
+            for mut incoming in std::mem::take(&mut self.activations) {
+                let token = incoming
+                    .activation
+                    .take()
+                    .ok_or("activation metadata disappeared")?;
+                let answer = match window.activate(token) {
+                    Ok(nk_wayland::Activation::Requested) => "activation requested".to_owned(),
+                    Ok(nk_wayland::Activation::Unsupported) => {
+                        "activation protocol unavailable".to_owned()
+                    }
+                    Err(error) => error,
+                };
+                incoming.respond(answer);
+            }
+        }
         let (dark, reduce, reduced_motion) = (
             self.view.appearance.dark,
             self.view.appearance.reduce_transparency,
@@ -687,13 +720,17 @@ impl Application for App {
     }
 }
 
-pub fn run() -> Result<()> {
+pub fn run(activation: Option<String>) -> Result<()> {
     let start = Instant::now();
     let args: Vec<_> = std::env::args().skip(1).collect();
     let args = if args.is_empty() {
         vec!["open".into()]
     } else {
         args
+    };
+    let args = match &activation {
+        Some(token) => routing::with_activation(&args, token.clone())?,
+        None => args,
     };
     let route = routing::route(&args, routing::DRAWN)?;
     let bus = zbus::blocking::Connection::session().map_err(|e| e.to_string())?;
@@ -749,6 +786,8 @@ pub fn run() -> Result<()> {
         ready: false,
         forwarding: None,
         configured: false,
+        startup_activation: activation,
+        activations: Vec::new(),
     };
     nk_wayland::run(
         app,

@@ -178,9 +178,23 @@ masks parent semantic actions/focus and physical input; CPU tests verify this
 policy without faking Window or provider. Full-page activation is also checked
 through the actual Client/Router-owned connection on a private bus.
 
-Remaining: raise/queryUI explicitly unsupported, sidebar search/results, direct
+Remaining: queryUI explicitly unsupported, native activation/focus acceptance,
+sidebar search/results, direct
 forwarded-route/modal cancellation, long-modal parent servicing, adaptive polling
 (still16ms), provisional window/font geometry/chrome and all native/Orca/installed
 performance/live gates. This is a compiled local executable, not full parity or
 native acceptance. New twelve-locale strings require new complete native-app-data;
 older cut38 data does not contain this application's labels.
+
+
+Native activation now accepts the launcher's actual XDG_ACTIVATION_TOKEN and
+transfers it to an existing native instance via the existing Request(as) optional
+trailing --xdg-activation-token pair (routing::with_activation). main removes the
+environment entry before starting threads; no tests mutate the process env.
+The app waits for its first painted root, takes the token once, and uses the
+standard nk-wayland consumer. Responses distinguish request submitted, missing
+token and unavailable protocol; none asserts confirmed focus. Native queued
+navigation invalidates pending modals first. No self-issued token or fake serial.
+Legacy forwarding keeps its original arguments; tokenized legacy activation,
+queryUI and real native validation remain pending. Private-bus handoff tests do
+not exercise the actual Window or the main-entry environment mutation.

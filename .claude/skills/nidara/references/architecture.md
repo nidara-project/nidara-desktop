@@ -3415,8 +3415,9 @@ in the twelve locales and both real exporters must be regenerated.
 This first executable still polls at16ms, uses provisional loose controls/panel
 titlebar and opens at the exported WINDOW_LAYOUT minHeight (not GTK's760 default).
 No adaptive scheduling or final chrome acceptance is claimed. Nested font/popup
-hosting still suspends parent servicing. Raise and queryUI explicitly refuse until
-standard activation and existing agent-view policy/serialization are integrated.
+hosting still suspends parent servicing. Tokenized Raise now uses the standard
+activation consumer below; missing tokens/protocol remain explicit and focus is
+not guaranteed. queryUI still refuses until agent-view policy/serialization is integrated.
 Undrawn sidebar requests forward to ENTRY on a worker without changing native
 selection; those directly forwarded Router calls do not currently enter the
 nested-modal staging queue. Search/sidebar results, this forwarding/modal edge,
@@ -3429,3 +3430,19 @@ or focus proof. Unsupported remains explicit; malformed tokens, non-toplevels an
 requests before a configured painted buffer are errors. No token creation, fake
 input serials, alternate host, repaint-as-raise or environment access. Proxy is
 destroyed with Window. Caller owns real initiating-token handoff/retirement.
+
+
+Native Request(as) can carry trailing --xdg-activation-token plus an opaque token;
+routing::with_activation attaches it. Existing verb/positional arguments remain
+unchanged; Incoming.activation belongs only to queued native requests. Metadata
+is validated without echoing tokens. Forwarded legacy requests retain the old
+argument shape; tokenized legacy activation is not implemented by this addition.
+The binary consumes/removes XDG_ACTIVATION_TOKEN at its single-threaded main entry
+before creating a bus, library worker or font job, then either hands it to the
+already-running Native owner or holds it for the first painted root. Never move
+that process-env mutation into a library callback or a threaded test. Launch
+metadata and subsequent Incoming tokens are taken once, not logged or minted.
+Window::activate is called after the buffer and replies only request submitted,
+unsupported or error. Bare open cannot promise raise without an initiator token.
+Native queued routes invalidate modals before the request; compositor focus,
+environment retirement and actual startup/modal timing still need native proof.

@@ -1353,3 +1353,24 @@ are errors. Unsupported does not require a mapped buffer. The optional proxy is
 released with the Window. Capabilities.activation reflects the exact global.
 Caller owns token acquisition/handoff, one-use policy and environment retirement.
 This transport cut does not wire Settings routing or claim native activation.
+
+### Native activation handoff (#915)
+
+The existing Request(as) accepts an optional trailing --xdg-activation-token,
+opaque-token pair. with_activation(args, token) produces it; malformed/duplicate
+metadata is an error without echoing the token. Legacy verbs and arguments are
+unchanged. Incoming.activation carries the token only for native queued routes;
+forwarded legacy requests retain their previous argument shape, without new token
+support claimed. No new action/provider transport is introduced.
+
+The binary reads/removes XDG_ACTIVATION_TOKEN in main BEFORE any bus/worker/library
+initialization (the only single-threaded process-environment mutation). It is not
+inherited by child jobs. Startup passes the same token to Router's second-instance
+handoff or holds it for the first mapped root buffer. Each received token is taken
+once and sent through Window::activate after that buffer; tokens are never logged
+or synthesized. Replies distinguish request sent, unsupported protocol, missing
+token and actual transport errors, never confirmed raise/focus. Bare open without
+a caller token remains explicitly unable to guarantee activation. Native queued
+routes cancel pending modals before handoff; queryUI and legacy forwarding gaps
+remain as documented. Actual compositor focus/activation and launch-environment
+retirement require native validation; CPU/private-bus tests do not establish them.

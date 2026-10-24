@@ -1055,3 +1055,33 @@ server, native protocol trace or focus proof. Local installed wayland-protocols
 Settings caller/token environment/handoff remains separate. No export/token/data
 change: complete cut42 native-app-data reusable. Logs target/activation-transport-*
 (restored-tests, unpainted-control, clippy, workspace, skill-docs, fmt).
+
+## Local integration44 — native activation handoff/caller (2026-10-24)
+
+Over43 36e1ff34. Existing Request(as) optional trailing metadata and Incoming
+activation, main-entry launch token read/removal before worker initialization,
+second-instance handoff and first-buffer Window::activate caller. No new action
+transport, provider, token minting, fabricated serial or success-by-repaint.
+Replies mean request submitted, never confirmed compositor focus. Missing token
+and unsupported protocol remain explicit; legacy forwarding strips metadata and
+retains old argument shape, without tokenized legacy activation claimed.
+
+96Settings tests PASS (93prior+2metadata+1actual private-bus second-instance test).
+Full actual cut42 native-app-data reused; no exporter/token/string changes.
+Actual private Router owner receives Navigate(appearance) and exact opaque token
+through the second Router::start handoff, responds and worker returns AlreadyRunning.
+Only then the own exact token assertion runs. No Window/Wayland/compositor is
+simulated. Compiled production metadata-drop fault caught OWN lost-token assertion
+AFTER actual method response/join; restored before96PASS. Token parser refuses
+malformed/duplicate/NUL without exposing token; positional page IDs stay positional.
+Main env retirement and Window timing remain compiled/source proof only: neither
+main nor a native window was run. No thread-parallel environment mutation in tests.
+Initial Clippy collapsible-if corrected cosmetically before final verification.
+
+SettingsalltargetClippy-Dwarnings/workspacealltargets/build/fmt/skilldocs/diff PASS.
+Logs target/activation-routing-{restored-tests,final-tests,handoff-control,
+verified-clippy,workspace,build,skill-docs,fmt}.log. Contract preceded API; canonical
+architecture/tech-debt/README/EVIDENCE same commit. QueryUI/search, forwarded-modal
+queue edge, long-modal parent servicing, adaptive poll16ms, provisional visuals and
+native/Orca/installed performance/live remain open. Original/fixed preserved;
+no push/install/merge, no Hyalo/backend/bar/shader/#921 edits, heartbeat paused.

@@ -73,9 +73,9 @@ acceptance of the foundations demo or native Settings host.
 
 The local main/application composition exists, with a real private-bus full-page
 Apply test and CPU parent-mask/snapshot/retirement checks. It has not run a native
-window and is not an installed replacement. Raise and queryUI explicitly report
-unsupported; standard activation and existing agent-view policy/serialization
-must precede successful replies. Sidebar search/results remain absent. Undrawn
+window and is not an installed replacement. Tokenized native Raise now submits xdg_activation_v1 after the first buffer;
+compositor focus and real launch/modal ordering remain unverified. Missing tokens
+are explicit. queryUI still requires existing agent-view policy/serialization. Sidebar search/results remain absent. Undrawn
 Router calls forward directly to ENTRY and are not staged in the nested-modal
 queue yet. Parent servicing while a font/popup borrows Tree remains limited.
 Polling is still16ms, including settled state: adaptive caller/causal test and
