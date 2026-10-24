@@ -8,13 +8,13 @@ pub struct PanelMaterial {
     steps: Vec<(f64, Material)>,
 }
 
-fn number(v: &Value, key: &str) -> Result<f64> {
+pub(crate) fn number(v: &Value, key: &str) -> Result<f64> {
     v[key]
         .as_f64()
         .filter(|n| n.is_finite())
         .ok_or_else(|| format!("glass export: missing or invalid {key}"))
 }
-fn tone(v: &Value) -> Result<Tone> {
+pub(crate) fn tone(v: &Value) -> Result<Tone> {
     Ok(Tone {
         saturation: number(v, "saturation")?,
         ceiling: number(v, "ceiling")?,

@@ -2717,3 +2717,18 @@ The capsule export requires independent edge and gap; neither is a fallback for
 the other. Hyalo keeps the default geometry mirror, unit-checked against the
 component source. Width and hit boundaries derive from the gap; current values
 remain unchanged by this schema repair. Missing either field fails export checks.
+
+For the #889 native demo control reader, retain the exact installed portal variant
+and rounded short-side step. `inkTone: null` explicitly reuses `tone` (Hyalo's
+Shape semantics); missing inkTone is an error. Response null is the reduced-
+transparency variant, and reduced motion zeros response settling and wash fading.
+Capsule geometry is in components.json, not the material export. The current
+reader is local and not yet connected to the demo's layer manager. A state ink
+override that is absent or explicitly null uses the shared material ink; no fixed
+colour is substituted. Reader tests also require generated exports when
+NK_REQUIRE_EXPORT is set, keeping fixture-only checks distinct from that path.
+
+The capsule reader requires gap independently from edge, including when zero.
+Missing/negative gap is an error; selected variants retain the exact exported
+separation. Toolkit CI passes absolute NK_SETTINGS_DATA to mandatory export
+tests, pointing at the actual exports generated earlier in the same job.
