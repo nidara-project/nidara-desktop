@@ -10,7 +10,7 @@ use smithay::{
     reexports::{
         calloop::{Interest, LoopHandle, LoopSignal, Mode, PostAction, generic::Generic},
         wayland_server::{
-            Display, DisplayHandle,
+            Client, Display, DisplayHandle,
             backend::{ClientData, ClientId, DisconnectReason},
             protocol::wl_surface::WlSurface,
         },
@@ -297,16 +297,16 @@ impl Hyalo {
     }
 
     fn init_wayland_listener(display: Display<Hyalo>, loop_handle: &LoopHandle<'static, Hyalo>) -> OsString {
+        // Every client connected from here on, the sandboxed ones too (sandbox.rs).
+        display.handle().set_default_max_buffer_size(CLIENT_BUFFER);
         let listening_socket = ListeningSocketSource::new_auto().expect("a Wayland socket");
         let socket_name = listening_socket.socket_name().to_os_string();
 
         loop_handle
             .insert_source(listening_socket, move |client_stream, _, state| {
-                if let Err(err) = state
-                    .display_handle
-                    .insert_client(client_stream, Arc::new(ClientState::default()))
-                {
-                    tracing::warn!(?err, "could not accept a client");
+                match state.display_handle.insert_client(client_stream, Arc::new(ClientState::default())) {
+                    Ok(client) => ClientState::identify(&client, &state.display_handle),
+                    Err(err) => tracing::warn!(?err, "could not accept a client"),
                 }
             })
             .expect("the Wayland socket's event source");
@@ -580,15 +580,44 @@ impl Hyalo {
     }
 }
 
+/// How many bytes of events Hyalo holds for a client that is not reading, beyond what its socket
+/// takes, before it drops the client. wayland-backend's own default is 4 KiB; with one `sendmsg`
+/// per flush the kernel counts far more than the bytes, so a window that stopped reading for a
+/// moment's work was gone after about 420 pointer motions (`hyalo-stalled-client-check.sh`) —
+/// the native Settings, busy for 6 s with the pointer over it, took Broken pipe (#915). A MiB
+/// is some 37 000 motions; a client that never reads again is still dropped, at that bound.
+const CLIENT_BUFFER: usize = 1 << 20;
+
 /// Per-client data.
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
     /// Set for a client that connected through a sandbox's socket (sandbox.rs).
     pub security_context: Option<smithay::wayland::security_context::SecurityContext>,
+    /// "pid (command)", read when it connects: by its disconnection the process may be gone.
+    pub process: std::sync::OnceLock<String>,
+}
+
+impl ClientState {
+    /// Names a client just inserted, for the line its disconnection logs.
+    pub fn identify(client: &Client, display: &DisplayHandle) {
+        let Some(data) = client.get_data::<ClientState>() else { return };
+        let Ok(credentials) = client.get_credentials(display) else { return };
+        let command = std::fs::read_to_string(format!("/proc/{}/comm", credentials.pid)).unwrap_or_default();
+        let _ = data.process.set(format!("{} ({})", credentials.pid, command.trim()));
+    }
 }
 
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
-    fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
+    /// Hyalo dropping a client says nothing to it (no wl_display.error when its buffer is full):
+    /// this line is the only trace of why a window vanished.
+    fn disconnected(&self, _client_id: ClientId, reason: DisconnectReason) {
+        let client = self.process.get().map_or("?", String::as_str);
+        match reason {
+            DisconnectReason::ProtocolError(error) => tracing::warn!(client, "client dropped: {error}"),
+            // Its own exit, or the buffer above full: the backend does not tell the two apart.
+            DisconnectReason::ConnectionClosed => tracing::info!(client, "client disconnected"),
+        }
+    }
 }
