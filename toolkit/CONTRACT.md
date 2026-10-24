@@ -1196,3 +1196,23 @@ jobs are skipped and an active obsolete result cannot reach the UI. Load owns no
 Tree, Window, Bridge or Config1 operation. Builders still guard current visibility,
 availability and mount before accepting a result. This is no full wallpaper/native,
 PSS/startup or animation acceptance. AVIF decoding uses the system dav1d library.
+
+
+### Retained thumbnail strip (#882/#915)
+
+Tree::thumbnail_strip is the horizontal layout of the existing Choice radio model,
+not a second selection/provider implementation. Explicit ThumbnailStyle supplies
+picture size/ImageStyle, padding/border/radius/gap and state colours. Options use
+retained Choice IDs and Raster ownership; canonical selection may be None for an
+unknown current file. Arrow/Home/End activate the existing guarded Choice path,
+one Tab stop follows selected/first available, and focused options reveal inside
+the strip's own horizontal viewport. Empty strips are valid. Wheel input over the
+viewport scrolls it independently; D7 pane input is not routed through stale root
+coordinates. Paint, pointer hit tests and SHOWING use the same viewport clipped
+by ancestors. Offscreen options remain semantic RadioButton children. Reflow/style
+changes clamp scroll and preserve IDs/selection. Loading/decode/Config1 belong to
+application builders; this layout primitive alone is not wallpaper/native parity.
+
+Catalogue reordering accepts only an exact permutation of surviving thumbnail
+children, atomically; identities, pixels and canonical selection survive. Changed
+order invalidates layout and stale action targets; invalid permutations do nothing.

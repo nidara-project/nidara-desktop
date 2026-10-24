@@ -12,11 +12,11 @@ pub struct ImageStyle {
     pub background: Color,
 }
 pub(crate) struct Image {
-    size: Size,
-    style: ImageStyle,
-    pixels: Option<Arc<Raster>>,
+    pub(crate) size: Size,
+    pub(crate) style: ImageStyle,
+    pub(crate) pixels: Option<Arc<Raster>>,
 }
-fn validate(size: Size, style: ImageStyle) -> Result<()> {
+pub(crate) fn validate(size: Size, style: ImageStyle) -> Result<()> {
     if ![size.width, size.height]
         .iter()
         .all(|v| v.is_finite() && *v > 0.)

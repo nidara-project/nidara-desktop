@@ -5,13 +5,15 @@
 use crate::*;
 use nk_render::{Canvas, Color};
 
-/// How a radio group looks. Both are the same group to keyboard, pointer and AT-SPI.
+/// Radio layouts share the same keyboard, pointer and AT-SPI selection model.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChoiceKind {
     /// Linked segments with their text; the chosen one in the accent.
     Segmented,
     /// Round colour samples, each named; the chosen one ringed.
     Swatch,
+    /// Pictures inside an independent horizontal viewport with explicit per-strip style.
+    Thumbnail,
 }
 /// The groups' measurements and colours, resolved by the app from the exported choices
 /// (`toolkit/tokens/choices.json` → `components.json`). There are no defaults here.
@@ -231,6 +233,9 @@ impl Tree {
         available: f32,
         backend: &mut impl TextBackend,
     ) -> Result<Size> {
+        if kind == ChoiceKind::Thumbnail {
+            return self.measure_thumbnails(id, available);
+        }
         let style = self
             .choice_style
             .ok_or("radio group measured before its choice style was set")?;
@@ -245,6 +250,7 @@ impl Tree {
                 continue;
             }
             let size = match kind {
+                ChoiceKind::Thumbnail => unreachable!("thumbnail strip measured above"),
                 ChoiceKind::Swatch => Size {
                     width: style.swatch_diameter + 2. * style.swatch_ring,
                     height: style.swatch_diameter + 2. * style.swatch_ring,
@@ -274,6 +280,7 @@ impl Tree {
         let gap = match kind {
             ChoiceKind::Swatch => style.swatch_gap,
             ChoiceKind::Segmented => 0.,
+            ChoiceKind::Thumbnail => unreachable!("thumbnail strip measured above"),
         };
         let height = self.nodes[&id]
             .children
@@ -288,6 +295,10 @@ impl Tree {
         Ok(size)
     }
     pub(crate) fn place_choices(&mut self, id: NodeId, r: Rect) {
+        if self.thumbnail_styles.contains_key(&id) {
+            self.place_thumbnails(id, r);
+            return;
+        }
         let gap = match self.nodes[&id].kind {
             Kind::Choices {
                 kind: ChoiceKind::Swatch,
@@ -312,6 +323,12 @@ impl Tree {
     /// The focus/hover silhouette of a choice: its segment, or its sample's circle.
     pub(crate) fn choice_shape(&self, id: NodeId) -> (Rect, f32) {
         let r = self.nodes[&id].bounds;
+        if let Some(style) = self.nodes[&id]
+            .parent
+            .and_then(|p| self.thumbnail_styles.get(&p))
+        {
+            return (r, style.radius);
+        }
         match (self.choice_kind(id), self.choice_style) {
             (Some(ChoiceKind::Swatch), Some(s)) => {
                 let d = s.swatch_diameter;
@@ -376,6 +393,7 @@ impl Tree {
             .filter(|c| !self.is_hidden(*c))
             .collect();
         match kind {
+            ChoiceKind::Thumbnail => unreachable!("thumbnail strip painted separately"),
             ChoiceKind::Segmented => {
                 let radius = self.metrics.radius as f64;
                 canvas.rounded_rect(r, radius, palette.surface);

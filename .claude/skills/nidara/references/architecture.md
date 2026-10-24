@@ -3290,3 +3290,17 @@ already depends on dav1d). GIF is static first-frame here. Byte budgets reject
 oversized input/output but are not a hard process/codec-internal memory bound;
 full PSS/startup validation is still pending. ICC/HDR colour management is not
 claimed by this loader and needs explicit validation before wallpaper parity.
+
+
+Thumbnail galleries use Tree::thumbnail_strip, a horizontal layout of the existing
+Choice radio model. ThumbnailStyle is explicit; pictures reuse Image/Raster, not
+a second painter. Canonical selection can be None for an unknown file. Existing
+Choice keyboard/activation and one Tab stop apply; focused options reveal in the
+strip's own scroll viewport, and wheel input over it scrolls horizontally without
+moving the page. Paint/hit/SHOWING share the ancestor-clipped viewport. Offscreen
+options remain RadioButton children. Style/reflow clamp scroll while preserving
+IDs/selection; removal drops pixels. Decode/visibility scheduling and Config1
+mapping belong to builders, and geometry/visual/native acceptance stays separate.
+
+reorder_thumbnails accepts an exact permutation only, preserving IDs/pixels and
+selection while invalidating layout and old action targets. Invalid input is atomic.

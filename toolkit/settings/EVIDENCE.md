@@ -794,3 +794,23 @@ job declares libdav1d-dev; no new job/native check or CI execution claim. Existi
 Arch Hyalo CI already installs ffmpeg (dav1d dependency); no compositor edits.
 Contract, canonical skill/README and evidence accompany the mechanism. No native
 Window/provider/Orca/startup/PSS or complete wallpaper/app acceptance.
+
+## Application integration — retained thumbnail viewport (2026-10-24)
+
+ThumbnailStyle/thumbnail_strip reuse Choice radios and retained Image painting.
+Unknown canonical selection is None; keyboard focus reveals in the independent
+horizontal viewport, wheel routing leaves page scroll unchanged, and paint/hit/
+SHOWING agree on ancestor clipping. Reflow/style/reorder preserve surviving IDs,
+pixels and selection. Reorder rejects non-permutations atomically and retires
+old action targets. No decoding or Apply in this shared layout primitive.
+
+155 Settings/widgets tests PASS, both all-target Clippy -Dwarnings PASS, workspace
+all-target check PASS (before the final reorder addition, covered by final tests
+and Clippy). fmt/skilldocs/diff PASS. Two tests use actual exports/layout/CPU paint
+with synthetic file names and rasters; selected-border pixels survive pointer
+hover, offscreen pointer input refuses, keyboard/wheel viewport routing and
+semantic retention are asserted. A compiled no-scroll fault failed its OWN
+keyboard-focus viewport assertion after selection setup. Source restored before
+the full suites. The first reorder test expected stale dispatch to return None;
+the existing API correctly returns Err, and the test now asserts that rejection.
+Logs target/thumbnail-strip-*.log. No native/Orca/live or full wallpaper parity.
