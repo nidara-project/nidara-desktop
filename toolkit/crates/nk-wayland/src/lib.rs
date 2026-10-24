@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! One thread owns the connection, input and buffers. All sizes and input are
 //! logical pixels; only Frame's buffer dimensions are physical pixels.
+mod control_material;
+pub use control_material::{ControlMaterial, InkCoverage, MaterialRect, Response, StateRegion};
 mod controls;
 pub use controls::{ControlsLayout, ControlsSide, WindowAction};
 mod ime;
