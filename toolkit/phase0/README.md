@@ -3,7 +3,7 @@
 `nk-phase0` is a Rust Wayland client, without GTK or GJS. It needs **Hyalo**:
 `nidara-material-v1` paints the transparent pane's glass. It refuses to run on a
 compositor without that protocol. This implements #818's tests 1, 2 and 4;
-the live fcitx5 matrix below is an owner gate, not something the scripted IME proves.
+test 2's gate is the real fcitx5 matrix below (CI, #832), which the scripted IME alone does not pass.
 
 ## Build and run
 
