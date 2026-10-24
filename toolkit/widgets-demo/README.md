@@ -87,5 +87,8 @@ and a "Night light" group: the temperature slider (1000–6500 K by 100, at 4500
 time fields (#882). It answers AT-SPI `SetValue` through `Tree::request_value`. `scripts/ci/nk-choices-check.py` drives it, run with
 `NK_WIDGETS_CHECK=nk-choices-check.py toolkit/widgets-demo/check-headless.sh`; its faults
 (`two-checked`, `swatch-name`, `radio-role`, `arrows`, `slider-value`, `value-stale`,
-`spin-name`; `set-value` in `main.rs`, where requests are handled) live in `src/choices.rs`. The radio
+`spin-name`; `set-value` in `main.rs`, where requests are handled) live in `src/choices.rs`.
+`scripts/ci/nk-choices-orca-check.py` walks the same mode with real Orca (CI only: it needs
+orca and speech-dispatcher in a disposable container), with `segment-role` and `spin-stale` and
+the libatspi check's `arrows`, `slider-value`, `value-stale`, `spin-name` as its controls. The radio
 groups' look comes from `toolkit/tokens/choices.json` through `components.json`'s `choices`.

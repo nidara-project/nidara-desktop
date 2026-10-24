@@ -55,7 +55,7 @@ needs_gates() {
         toolkit/*) return 0 ;;
         protocols/nidara-layers-v1.xml|config/hyalo/*) return 0 ;;
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py|scripts/ci/nk-widgets-check.py) return 0 ;;
-        scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py) return 0 ;;
+        scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py|scripts/ci/nk-choices-orca-check.py) return 0 ;;
     esac
     return 1
 }
@@ -67,6 +67,7 @@ needs_full() {
     case "$1" in
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py) return 0 ;;
         scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py|toolkit/widgets-demo/src/choices.rs) return 0 ;;
+        scripts/ci/nk-choices-orca-check.py) return 0 ;;
         scripts/ci/hyalo-control-material-check.py|scripts/ci/hyalo-control-material-probe.c) return 0 ;;
         toolkit/phase0/*) return 0 ;;
     esac
@@ -152,6 +153,7 @@ if [ "${1:-}" = --self-test ]; then
     check_gates true protocols/nidara-layers-v1.xml
     check_gates true config/hyalo/hyalo.toml
     check_gates true scripts/ci/nk-orca-check.py
+    check_gates true scripts/ci/nk-choices-orca-check.py
     check_gates true ''
     # Their controls and second scale: only when the checks or the faults change.
     check_full false toolkit/crates/nk-text/src/lib.rs hyalo/compositor/src/input.rs
@@ -159,6 +161,7 @@ if [ "${1:-}" = --self-test ]; then
     check_full true scripts/ci/nk-fcitx5-check.py
     check_full true scripts/ci/nk-a11y-check.py
     check_full true scripts/ci/nk-choices-check.py
+    check_full true scripts/ci/nk-choices-orca-check.py
     check_full true toolkit/widgets-demo/src/choices.rs
     check_full false toolkit/widgets-demo/src/main.rs
     check_full true scripts/ci/hyalo-control-material-check.py

@@ -112,6 +112,11 @@ impl Fixture {
                 tree.nodes.get_mut(&self.swatches[0]).unwrap().role = Role::ToggleButton;
                 true
             }
+            // nk-choices-orca-check.py: the chosen segment not a radio button, the role Orca says.
+            "segment-role" => {
+                tree.nodes.get_mut(&self.segments[1]).unwrap().role = Role::ToggleButton;
+                true
+            }
             "slider-value" => {
                 let v = tree
                     .nodes
@@ -138,6 +143,19 @@ impl Fixture {
             }
             "spin-name" => {
                 tree.nodes.get_mut(&self.spins[0]).unwrap().name.clear();
+                true
+            }
+            // The hour's Value left at its start: Up moves the field, the reader hears nothing new.
+            "spin-stale" => {
+                let v = tree
+                    .nodes
+                    .get_mut(&self.spins[0])
+                    .unwrap()
+                    .value
+                    .as_mut()
+                    .unwrap();
+                v.current = 22.;
+                v.text = "22".into();
                 true
             }
             _ => false,

@@ -261,6 +261,9 @@ Phase 0 remains an independent client of those four crates.
   `SpinButton`s labelled by its row, each with `ValueInfo` and `Action::SetValue` (not
   Activate). `nk-choices-check.py` asserts them with a control each: the spoken text dropped,
   a Value that stays at the old number after a key, a `SetValue` ignored, an unnamed spin.
+  `nk-choices-orca-check.py` is their real Orca walk (the A7 "real Orca rows"): focus on the
+  chosen segment and → to the next, the slider and →, the hour and ↑, each asserted on Orca's
+  SPEECH OUTPUT, each with a fault that must silence its step.
 - **Icons (#915)**: `nk-icons` is the shell's `Icons.ts` lookup for the toolkit — the
   interface icon theme only if installed and declaring `X-Nidara-Icon-Spec`, the file GTK would
   take for the size, the reference theme for a name the theme lacks or draws nothing for — and
