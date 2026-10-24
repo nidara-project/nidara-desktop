@@ -1110,3 +1110,70 @@ normal-mode cause remains unresolved; opaque success does not prove a D7 fix.
 Prior nested HYALO_A11Y_MANAGER/live-bus ownership incident remains pending next
 session restart: no service/compositor restarted and no name claimed by this view.
 No installation, push, merge or heartbeat resume.
+
+
+## Pointer-entry failure and activation invalidation46 (2026-10-24)
+
+Cut45's bounded opening/resize observation was superseded by the owner's report:
+window69 closed on pointer entry. Its preserved log ends in Wayland Broken pipe;
+opaque mode is NOT a fix for the normal-mode disconnections.
+One instrumented reproduction used the EXACT same copied binary and only added
+WAYLAND_DEBUG=client. Trace is in cut45 target/pointer-diagnostic-20261024T170807Z:
+890 A11Y_PUBLISHED records, batches of pointer samples/configures processed with
+long gaps before socket service, then Broken pipe. No server disconnect reason
+was logged; do not label socket buffer exhaustion/ping timeout as proven.
+
+Source defect: App stages Tree::set_active on every event; that method dirtied
+root semantics even when activation was unchanged. It now returns without adding
+invalidation in that case. Actual transitions retain root semantics/search paint;
+existing pending invalidations and retained focus are preserved. Contract before
+code; canonical skill/README updated. New retained-Tree CPU test uses 1000 pointer
+samples and real activation transitions; old compiled production fails its own
+unchanged-activation semantics assertion AFTER layout/focus/ack setup, log
+ target/focus-invalidation-old-control.log. This control is not a native closure
+oracle. Verification and native status are recorded below after execution.
+
+
+Corrected Tree suites: 178 tests PASS (96 Settings,82 widgets), both packages
+alltarget Clippy -Dwarnings, actual debug executable build, fmt, skill-docs and
+diff checks PASS. Corrected debug native diagnostic PID1268147/window71,
+SHA256 0f343e6630d60310b4c0095b4656564476567e6abf68ebb4eda97e665d8db165,
+cut46 target/pointer-corrected-20261024T171243Z: 402 motion records with only4
+semantic publications, but it STILL ends in Broken pipe. Idempotency reduces
+publication work; this is explicitly NOT a native closure fix. Approx12.8s gap
+between the last batch's read and next root commit remains. A bounded perf sample
+contains Tree lookups, rendering and image-worker samples; it does not establish
+that image decoding repeats on every motion. All prior window binaries are debug
+(unoptimized); an optimized release build is being prepared separately.
+
+Source inspection of the remaining BTree-lookup cost found a second no-op defect:
+set_unavailable collected full focus order BEFORE checking whether the hidden/
+disabled value changed. Renderer refresh stages these setters for all page rows
+before/after input. The unchanged check now precedes that traversal; actual
+transitions still capture old order before mutation, preserving focus repair.
+This cost optimization uses the existing availability/focus tests rather than
+inventing a wall-clock threshold. Suites/Clippy must be rerun after this addition.
+
+
+Final code verification after BOTH no-op fixes: 178 Settings/widgets tests PASS,
+both alltarget Clippy -Dwarnings, optimized release build, fmt/skill-docs/diff PASS.
+Logs: target/focus-invalidation-final-{tests,clippy,release-build}.log.
+Release diagnostic launched PID1273771/window73 with exact copied SHA256
+fa7e0135206f9d074f411a0a27bcae79dbffe2359d6bc73b9c07ba51095bb590,
+target/pointer-release-20261024T171940Z. Real Config1/portal, CONTENT_READY2 and
+presentation observed; verified executable identity before own-window floating/
+resize/center to928x760. Pointer test and owner result are pending at this entry;
+opening/resize alone do not establish closure resolved. No automatic Apply,
+native a11y/Orca acceptance, protocol/material gate or performance gate claimed.
+No Hyalo/backend modifications, service restart, installation, publication or
+heartbeat resumption. Original/fixed binaries and failed traces preserved.
+
+
+Bounded release input verification: the same PID1273771/window73 trace subsequently
+records pointer enter and2245 real wl_pointer motion events, only3 semantic
+publications, and root frame callbacks/presentation AFTER those inputs, without
+SETTINGS_ERROR. This exceeds the failed debug reproduction's402 motions. Owner
+visual result remains pending; this is one D5 optimized run, not proof of normal
+D7, long-running responsiveness, every control/dialog, Orca or performance gates.
+Both no-op fixes and optimization differ from the failed partial debug run; do
+not attribute the symptom's disappearance exclusively to one change.

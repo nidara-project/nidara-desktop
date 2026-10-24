@@ -72,8 +72,15 @@ acceptance of the foundations demo or native Settings host.
 ### Native Settings first executable — remaining integration/gates (#915, 2026-10-24)
 
 The local main/application composition exists, with a real private-bus full-page
-Apply test and CPU parent-mask/snapshot/retirement checks. It has not run a native
-window and is not an installed replacement. Tokenized native Raise now submits xdg_activation_v1 after the first buffer;
+Apply test and CPU parent-mask/snapshot/retirement checks. Native diagnostic
+windows have reached CONTENT_READY but subsequently disconnected, including the
+opaque D5 preview after pointer entry; opening/resize is not live acceptance.
+A source defect causing unchanged activation to republish semantics per pointer
+sample is corrected locally with a compiled old-source control; native closure
+cause remains unlogged; an optimized D5 run with both no-op fixes has handled
+2245 real pointer motions and presented afterwards without disconnecting. Owner
+visual confirmation, normal D7 and long-run responsiveness remain pending. This is not
+an installed replacement. Tokenized native Raise now submits xdg_activation_v1 after the first buffer;
 compositor focus and real launch/modal ordering remain unverified. Missing tokens
 are explicit. queryUI still requires existing agent-view policy/serialization. Sidebar search/results remain absent. Undrawn
 Router calls forward directly to ENTRY and are not staged in the nested-modal

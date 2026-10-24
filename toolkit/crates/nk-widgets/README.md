@@ -20,6 +20,9 @@ Scrolling places the retained measures again and invalidates paint/semantics onl
 `set_text_style` invalidates layouts while preserving ids, focus and scroll.
 `acknowledge_semantics()` follows publication; `acknowledge()` follows a successful
 paint/commit. An application's state changes remain on its connection thread.
+`set_active()` is idempotent: unchanged physical activation does not request
+semantic publication or erase pending changes. Real transitions still publish
+activation and invalidate search caret paint without changing retained focus.
 
 Use `window::Composition` from an `nk_wayland::Application`. `sync()` lays out and
 paints pane buffers when their content, dimensions, appearance or scale changes;
@@ -298,3 +301,6 @@ Offscreen options stay retained. This primitive does not enumerate/decode or App
 
 reorder_thumbnails accepts an exact permutation only, preserving IDs/pixels and
 selection while invalidating layout and old action targets. Invalid input is atomic.
+
+Unchanged hidden/disabled setters return after id validation, before collecting
+focus order. Actual availability changes retain the old order for focus repair.

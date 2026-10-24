@@ -457,6 +457,11 @@ Phase 0 remains an independent client of those four crates.
   Layout, paint and semantics invalidations are distinct. Font/text scale changes remeasure
   while keeping ids, focus and scroll offsets. There is one focus and one pointer capture;
   Tab order follows tree order, and release belongs to the node that was pressed.
+- `Tree::set_active` is idempotent: repeating the current physical activation state
+  preserves pending invalidations and adds none. A real transition invalidates root
+  semantics and search caret paint; it preserves retained focus and widget ids.
+  Unchanged hidden/disabled setters validate the id and return before traversing
+  focus order; focus repair is required only for a real availability transition.
 - Window, sidebar/page list, title bar, scroll region, group/header/row, switch and button
   are the phase-1 foundations. Hidden subtrees leave semantics; offscreen subtrees remain
   VISIBLE, with SHOWING determined by intersection with the unoccluded viewport. Focus

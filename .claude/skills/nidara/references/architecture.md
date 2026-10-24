@@ -3455,3 +3455,17 @@ manager is introduced by opening this mode. Native visual inspection of it does
 not accept the normal D7/material path. Never enable HYALO_A11Y_MANAGER on a nested
 compositor connected to the live session bus: it can replace that session's manager
 name, and quitting the nested instance does not restore the original ownership.
+
+Native Tree activation staging is idempotent. Apps may stage their current physical
+focus state before ordinary input, but Tree::set_active must add no invalidation
+when it is unchanged. Otherwise every pointer sample forces whole-tree semantic
+publication and can delay servicing subsequent Wayland input/configures. A real
+activation transition still invalidates root semantics and search caret paint;
+no-op staging preserves any prior unpublished invalidation. This does not solve
+the separate fixed16ms polling debt or establish responsiveness/native acceptance.
+
+Availability setters also check an unchanged hidden/disabled value BEFORE collecting
+focus order. Renderer refresh repeats these setters for the page's rows during
+input staging; collecting the full tree for each unchanged row makes staging
+quadratic. Real transitions still capture the old order before mutation and use
+that order for focus repair; an unknown id still returns an error.
