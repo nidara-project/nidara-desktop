@@ -2879,3 +2879,7 @@ into Service; do not route pre-takeover pages/apps to the post-takeover LEGACY
 name. EntryPoint mode retains LEGACY plus launcher. Private routing tests omit
 activation service directories so missing-entry cases cannot start installed apps;
 each Bus Drop stops its daemon then removes only its own target/rb runtime.
+
+The native Settings window capsule uses components.json capsule.windowInset for both
+corner axes, independently of generic row padding/gap. The owner #921 geometry is
+72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.

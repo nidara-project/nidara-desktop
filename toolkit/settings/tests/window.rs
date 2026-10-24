@@ -113,13 +113,15 @@ fn both_control_sides_fit_docked_and_narrow_layouts_with_and_without_layers() {
                     .unwrap();
                 let r = shell.tree.node(shell.controls).unwrap().bounds();
                 let expected_x = match side {
-                    ControlsSide::Left => styles.metrics.padding,
-                    ControlsSide::Right => width - styles.metrics.padding - r.width,
+                    ControlsSide::Left => 12.,
+                    ControlsSide::Right => width - 12. - 72.,
                 };
                 assert_eq!(
                     r.x, expected_x,
                     "window controls ignored the requested side"
                 );
+                assert_eq!(r.y, 12., "capsule must be centered on the header line");
+                assert_eq!((r.width, r.height), (72., 24.));
                 assert!(r.x >= 0. && r.y >= 0. && r.x + r.width <= width);
                 assert!(r.height > 0. && r.y + r.height <= styles.metrics.titlebar);
                 for button in shell.tree.node(shell.controls).unwrap().children() {

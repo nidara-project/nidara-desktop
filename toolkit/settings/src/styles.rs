@@ -11,6 +11,8 @@ use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, RowTextStyle, Switch
 use serde_json::Value as Json;
 
 pub struct Styles {
+    /// Window capsule corner inset from components.json, independent of row spacing.
+    pub controls_inset: f32,
     pub palette: Palette,
     pub metrics: Metrics,
     pub choices: ChoiceStyle,
@@ -142,6 +144,7 @@ impl Styles {
             scss(statics, "lh-body")?,
         )?;
         Ok(Self {
+            controls_inset: number(&c["capsule"]["windowInset"])?,
             palette,
             metrics,
             choices,

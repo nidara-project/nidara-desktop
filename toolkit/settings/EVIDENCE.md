@@ -131,3 +131,23 @@ with nk-icons remains pending. Its current y=metrics.gap placement is provisiona
 not #921's accepted centered small capsule geometry. #921 and its Hyalo hover
 work are outside these cuts. These limits are also named in the prepared Shell
 PR body; no final visual acceptance follows from the CPU layout tests.
+
+### Block A publication rebase, 2026-10-25
+
+Based on capsule endpoint 575a4748 above main 8b3f9ecc, without replaying
+squashed #923-#925. The shared material reader preserves the independent gap
+validation from main. Its moved control fixture uses the Settings tests path.
+
+A new capsule.windowInset token selects both corner axes independently of
+common row spacing. Actual generated exports require x=12 or width-12-72, y=12
+and 72x24 in both sides, narrow/docked and D5/D7 CPU layouts. The first
+geometry run discriminated the body-line-height leak (27.066666 vs 24); capsule
+captions now retain a layout measured at the exported button size and unit
+line height. The same layout is painted. No tolerance relaxed.
+
+Fresh 25 October: 52 Settings + 54 widgets + 2 demo tests passed with mandatory
+complete exports; all-target Clippy -D warnings for all three passed. Real
+token checker: 108 sets / 4 variants. Logs: target/publication-20261025/.
+Initial attempts failed for a stale shared-cache artifact / moved fixture path,
+and then the height assertion above; only tests-final.log is final acceptance.
+No new native/Orca/presentation/performance or owner visual acceptance.

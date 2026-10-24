@@ -692,3 +692,7 @@ listener is the access control’s negative case; Orca’s key echo proves deliv
   and must fail that same assertion. Orca's returned-rectangle diagnostics establish that
   the wrong geometry was consumed; a timeout, crash or unapplied fault cannot count.
   Existing form-walk speech assertions and controls remain required.
+
+The native Settings window capsule uses components.json capsule.windowInset for both
+corner axes, independently of generic row padding/gap. The owner #921 geometry is
+72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.

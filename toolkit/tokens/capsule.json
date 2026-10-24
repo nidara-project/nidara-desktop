@@ -8,7 +8,8 @@
     "height": 24,
     "button": 16,
     "edge": 4,
-    "gap": 8
+    "gap": 8,
+    "windowInset": 12
   },
   "variants": []
 }

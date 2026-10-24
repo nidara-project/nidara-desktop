@@ -36,6 +36,7 @@ pub struct Shell {
     pages: HashMap<NodeId, String>,
     buttons: [NodeId; 3],
     selected_page: NodeId,
+    controls_inset: f32,
 }
 
 /// One coherent portal-selected look. Recipes are the shared exact export readers.
@@ -102,6 +103,7 @@ impl Shell {
             pages,
             buttons,
             selected_page,
+            controls_inset: styles.controls_inset,
         })
     }
 
@@ -145,7 +147,7 @@ impl Shell {
         &mut self,
         size: Size,
         side: ControlsSide,
-        metrics: nk_widgets::Metrics,
+        _metrics: nk_widgets::Metrics,
         layered: bool,
         backend: &mut impl TextBackend,
     ) -> Result<()> {
@@ -157,11 +159,16 @@ impl Shell {
             .bounds()
             .width;
         let x = match side {
-            ControlsSide::Left => metrics.padding,
-            ControlsSide::Right => (size.width - metrics.padding - width).max(0.),
+            ControlsSide::Left => self.controls_inset,
+            ControlsSide::Right => (size.width - self.controls_inset - width).max(0.),
         };
-        self.tree
-            .set_capsule_position(self.controls, Point { x, y: metrics.gap })?;
+        self.tree.set_capsule_position(
+            self.controls,
+            Point {
+                x,
+                y: self.controls_inset,
+            },
+        )?;
         self.tree.layout(size, layered, backend)
     }
 
