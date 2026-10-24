@@ -3446,3 +3446,12 @@ Window::activate is called after the buffer and replies only request submitted,
 unsupported or error. Bare open cannot promise raise without an initiator token.
 Native queued routes invalidate modals before the request; compositor focus,
 environment retirement and actual startup/modal timing still need native proof.
+
+NK_SETTINGS_OPAQUE_PREVIEW=1 is a local diagnostic opt-in on the same nk-settings
+binary. Options.material=false uses nk-wayland's existing material/layer mask;
+root paint uses the existing opaque D5 fallback and App sends no background
+protocol declaration. No setting writes, new host, synthetic schema or compositor
+manager is introduced by opening this mode. Native visual inspection of it does
+not accept the normal D7/material path. Never enable HYALO_A11Y_MANAGER on a nested
+compositor connected to the live session bus: it can replace that session's manager
+name, and quitting the nested instance does not restore the original ownership.

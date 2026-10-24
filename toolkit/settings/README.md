@@ -198,3 +198,10 @@ navigation invalidates pending modals first. No self-issued token or fake serial
 Legacy forwarding keeps its original arguments; tokenized legacy activation,
 queryUI and real native validation remain pending. Private-bus handoff tests do
 not exercise the actual Window or the main-entry environment mutation.
+
+For an explicitly opaque diagnostic view, set NK_SETTINGS_OPAQUE_PREVIEW=1 before
+launch. It uses the same real application/data/builders through the existing D5
+paint path, masks material/layer capabilities in the existing host and omits the
+window-background declaration. It is a launch opt-in, not a persisted preference.
+Controls still edit real Config1 if operated; simply opening makes no Apply.
+This mode does not establish that the normal D7/material path is stable.

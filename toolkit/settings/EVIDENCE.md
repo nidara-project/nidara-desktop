@@ -1085,3 +1085,28 @@ architecture/tech-debt/README/EVIDENCE same commit. QueryUI/search, forwarded-mo
 queue edge, long-modal parent servicing, adaptive poll16ms, provisional visuals and
 native/Orca/installed performance/live remain open. Original/fixed preserved;
 no push/install/merge, no Hyalo/backend/bar/shader/#921 edits, heartbeat paused.
+
+## Local opaque diagnostic preview45 (2026-10-24)
+
+Adds explicit NK_SETTINGS_OPAQUE_PREVIEW=1 using existing Options.material=false
+capability mask, existing opaque fallback and no window-background declaration.
+Default launch unchanged. Contract before mechanism, canonical skill/README and
+this evidence in same change. Build/alltargetSettingsClippy-Dwarnings/fmt/
+skilldocs/diff PASS. No redundant tests of the private environment switch added.
+
+Actual direct native view on the current compositor, real Config1/portal and
+shared provider: CONTENT_READY commit2, frame callback AND presentation observed.
+PID1261804/window69, copied binarySHA256
+a8f1789e7b78d0c7cc90655ee20992817f7c829b785b9e8b0e2acbc11a32696c.
+Verified executable identity before setting this own window floating, resizing
+351x646→928x760 and centering. Same PID/window remained visible/focused after resize,
+no SETTINGS_ERROR at verification. No automated Apply or control/dialog test.
+Opening/resize is a bounded visual preview only, not parity/Orca/performance gate.
+Logs and metadata target/opaque-view-20261024T165527Z; fixed originals untouched.
+
+Prior normal-mode attempts remain failed diagnostics in cut44 target preview-
+20261024T164120Z: nested connection reset/EGL errors and direct broken pipe. The
+normal-mode cause remains unresolved; opaque success does not prove a D7 fix.
+Prior nested HYALO_A11Y_MANAGER/live-bus ownership incident remains pending next
+session restart: no service/compositor restarted and no name claimed by this view.
+No installation, push, merge or heartbeat resume.

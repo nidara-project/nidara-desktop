@@ -1374,3 +1374,14 @@ a caller token remains explicitly unable to guarantee activation. Native queued
 routes cancel pending modals before handoff; queryUI and legacy forwarding gaps
 remain as documented. Actual compositor focus/activation and launch-environment
 retirement require native validation; CPU/private-bus tests do not establish them.
+
+### Explicit opaque preview (#915)
+
+NK_SETTINGS_OPAQUE_PREVIEW=1 is a diagnostic launch opt-in, not a saved setting:
+the same Settings composition uses nk-wayland Options.material=false, disables
+D7 through the host's existing capability mask, paints the existing opaque D5
+fallback and sends no window-background declaration. Default launch is unchanged.
+No new host, fake Config1 data, compositor mutation or accessibility manager is
+created. This view can still read/edit actual Config1 through normal controls;
+opening it performs no Apply. It is not material/D7 acceptance or a fix for the
+unresolved normal-mode disconnect.

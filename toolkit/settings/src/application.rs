@@ -228,6 +228,7 @@ impl Materials {
     }
 }
 struct App {
+    opaque_preview: bool,
     materials: Materials,
     view: View,
     client: Client,
@@ -705,6 +706,9 @@ impl Application for App {
         None
     }
     fn window_background(&self) -> Option<WindowBackground> {
+        if self.opaque_preview {
+            return None;
+        }
         let c = self.view.styles.palette.background.components;
         Some(WindowBackground {
             color: [c[0] as f64, c[1] as f64, c[2] as f64],
@@ -722,6 +726,7 @@ impl Application for App {
 
 pub fn run(activation: Option<String>) -> Result<()> {
     let start = Instant::now();
+    let opaque_preview = std::env::var_os("NK_SETTINGS_OPAQUE_PREVIEW").is_some_and(|v| v == "1");
     let args: Vec<_> = std::env::args().skip(1).collect();
     let args = if args.is_empty() {
         vec!["open".into()]
@@ -766,6 +771,7 @@ pub fn run(activation: Option<String>) -> Result<()> {
         });
     let materials = Materials::load(&view)?;
     let app = App {
+        opaque_preview,
         view,
         client,
         materials,
@@ -796,7 +802,7 @@ pub fn run(activation: Option<String>) -> Result<()> {
             title: "Nidara Settings",
             size,
             map: true,
-            material: true,
+            material: !opaque_preview,
             require_material: None,
         },
         start,
