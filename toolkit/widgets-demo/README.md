@@ -127,3 +127,19 @@ The custom root canvas excludes each capsule that CapsuleComposition owns in a
 layer. Layer creation errors remain explicit errors, rather than an allocation
 fallback. Reduced motion logs CAPSULE_LAB_SWEEP_DISABLED with the stationary
 level when it prevents or cancels a requested sweep.
+
+
+## External backdrop diagnostic client
+
+Run --capsule-backdrop=<absolute-command-file> separately from
+--capsule-lab=overlay. The command file contains `white`, `text`, `dark` or `sweep 0.25`; a sweep command
+selects a stationary gray level.
+The separate nk-wayland client paints the stimulus without a material. The lab's
+overlay scene leaves its background transparent while retaining its own content
+and capsules. File errors, unknown scenes, nonfinite/out-of-range levels and
+extra arguments are refused. Use target/ or ~/Nidara/ChatGPT/ for command files.
+
+The backdrop inherits1000ms polling. Its idle callback requests redraw only when
+command bytes change; there is no timed backdrop loop. This is a source behavior,
+not new native evidence of constant capsule commits or zero idle cost. This cut
+contains no external harness, native controls or compositor response oracle.

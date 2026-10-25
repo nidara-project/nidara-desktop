@@ -19,6 +19,7 @@ enum Scene {
     Text,
     Dark,
     Sweep,
+    Overlay,
 }
 impl Scene {
     fn parse(name: &str) -> Result<Self> {
@@ -27,7 +28,8 @@ impl Scene {
             "text" => Ok(Self::Text),
             "dark" => Ok(Self::Dark),
             "sweep" => Ok(Self::Sweep),
-            _ => Err("capsule lab expects white/text/dark/sweep".into()),
+            "overlay" => Ok(Self::Overlay),
+            _ => Err("capsule lab expects white/text/dark/sweep/overlay".into()),
         }
     }
 }
@@ -38,6 +40,45 @@ fn sweep_level(elapsed: Duration, duration: Duration) -> (f32, bool) {
         t >= 1.,
     )
 }
+fn paint_scene(
+    canvas: &mut Canvas,
+    frame: Frame,
+    scene: Scene,
+    phase: f32,
+    pattern: &Layout,
+    gap: f32,
+) -> Result<f32> {
+    let level = match scene {
+        Scene::White | Scene::Text => 1.,
+        Scene::Dark => 0.,
+        Scene::Sweep => phase,
+        Scene::Overlay => return Ok(0.),
+    };
+    canvas.rect(
+        Rect {
+            x: 0.,
+            y: 0.,
+            width: frame.width as f32,
+            height: frame.height as f32,
+        },
+        nk_render::Color::new([level, level, level, 1.]),
+    );
+    if scene == Scene::Text {
+        let size = pattern.measured_size();
+        let step = size.height + gap;
+        let mut y = 0.;
+        while y < frame.height as f32 {
+            let mut x = 0.;
+            while x < frame.width as f32 {
+                canvas.layout(pattern, (x, y), rgba(0, 0, 0, 255))?;
+                x += size.width.max(1.);
+            }
+            y += step.max(1.);
+        }
+    }
+    Ok(level)
+}
+
 struct Lab {
     tree: Tree,
     text: ParleyBackend,
@@ -245,33 +286,14 @@ impl Application for Lab {
     }
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
         let mut canvas = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
-        let level = match self.scene {
-            Scene::White | Scene::Text => 1.,
-            Scene::Dark => 0.,
-            Scene::Sweep => self.phase,
-        };
-        canvas.rect(
-            Rect {
-                x: 0.,
-                y: 0.,
-                width: frame.width as f32,
-                height: frame.height as f32,
-            },
-            nk_render::Color::new([level, level, level, 1.]),
-        );
-        if self.scene == Scene::Text {
-            let size = self.pattern.measured_size();
-            let step = size.height + self.appearance.metrics.gap;
-            let mut y = 0.;
-            while y < frame.height as f32 {
-                let mut x = 0.;
-                while x < frame.width as f32 {
-                    canvas.layout(&self.pattern, (x, y), rgba(0, 0, 0, 255))?;
-                    x += size.width.max(1.);
-                }
-                y += step.max(1.);
-            }
-        }
+        let level = paint_scene(
+            &mut canvas,
+            frame,
+            self.scene,
+            self.phase,
+            &self.pattern,
+            self.appearance.metrics.gap,
+        )?;
         canvas.layout(
             &self.caption,
             (
@@ -408,9 +430,167 @@ pub fn run(
         start,
     )
 }
+// A deliberately separate Wayland client. The driver changes one file at a time;
+// unchanged input never requests redraw, and there is no animation loop.
+struct Backdrop {
+    path: String,
+    command: String,
+    scene: Scene,
+    level: f32,
+    pattern: Layout,
+    gap: f32,
+}
+fn backdrop_command(value: &str) -> Result<(Scene, f32)> {
+    let mut words = value.split_whitespace();
+    let scene = Scene::parse(words.next().ok_or("empty backdrop command")?)?;
+    if scene == Scene::Overlay {
+        return Err("external backdrop must be opaque".into());
+    }
+    let level = words
+        .next()
+        .map(str::parse::<f32>)
+        .transpose()
+        .map_err(|e| e.to_string())?
+        .unwrap_or(0.);
+    if !level.is_finite() || !(0. ..=1.).contains(&level) || words.next().is_some() {
+        return Err("invalid external backdrop level".into());
+    }
+    Ok((scene, level))
+}
+impl Application for Backdrop {
+    fn event(&mut self, event: Event, _: &mut Window) -> Result<()> {
+        if let Event::Error(error) = event {
+            return Err(error);
+        }
+        Ok(())
+    }
+    fn material(&self) -> Option<Material> {
+        None
+    }
+
+    fn idle(&mut self, window: &mut Window) -> Result<()> {
+        let command = std::fs::read_to_string(&self.path).map_err(|e| e.to_string())?;
+        if command != self.command {
+            (self.scene, self.level) = backdrop_command(&command)?;
+            self.command = command;
+            window.redraw();
+        }
+        Ok(())
+    }
+    fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
+        let mut canvas = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+        paint_scene(
+            &mut canvas,
+            frame,
+            self.scene,
+            self.level,
+            &self.pattern,
+            self.gap,
+        )?;
+        Ok(canvas.finish())
+    }
+    fn committed(&mut self, commit: u64) {
+        eprintln!(
+            "CAPSULE_BACKDROP_COMMIT root={commit} command={}",
+            self.command.trim()
+        );
+    }
+}
+pub fn run_backdrop(path: String, appearance: Appearance, start: Instant) -> Result<()> {
+    let command = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let (scene, level) = backdrop_command(&command)?;
+    let mut text = crate::text_backend(&appearance.style)?;
+    let pattern = text.layout(
+        "Backdrop text: black letters over a white page. ",
+        &appearance.style,
+        1100.,
+    )?;
+    nk_wayland::run(
+        Backdrop {
+            path,
+            command,
+            scene,
+            level,
+            pattern,
+            gap: appearance.metrics.gap,
+        },
+        Options {
+            material: false,
+            map: true,
+            app_id: "nk-capsule-backdrop",
+            title: "Capsule external backdrop",
+            size: (1100, 620),
+            require_material: None,
+        },
+        start,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn backdrop_paints_opaque_stimuli_and_overlay_keeps_transparency() {
+        let style = nk_text::TextStyle::default();
+        let mut text = crate::text_backend(&style).unwrap();
+        let pattern = text.layout("Backdrop text", &style, 96.).unwrap();
+        let frame = Frame {
+            width: 96,
+            height: 64,
+            pixel_width: 96,
+            pixel_height: 64,
+            scale: 1.,
+            material: false,
+        };
+        let mut backdrop = Backdrop {
+            path: String::new(),
+            command: "white".into(),
+            scene: Scene::White,
+            level: 0.,
+            pattern,
+            gap: 3.,
+        };
+        let white = backdrop.paint(frame).unwrap();
+        assert!(
+            white
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [255, 255, 255, 255])
+        );
+        backdrop.scene = Scene::Dark;
+        let dark = backdrop.paint(frame).unwrap();
+        assert!(dark.as_chunks::<4>().0.iter().all(|p| *p == [0, 0, 0, 255]));
+        backdrop.scene = Scene::Sweep;
+        backdrop.level = 0.25;
+        let gray = backdrop.paint(frame).unwrap();
+        assert!(gray.as_chunks::<4>().0.iter().all(|p| p[0] > 0
+            && p[0] < 255
+            && p[0] == p[1]
+            && p[1] == p[2]
+            && p[3] == 255));
+        backdrop.scene = Scene::Text;
+        let text = backdrop.paint(frame).unwrap();
+        assert!(text.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
+        assert!(
+            text.as_chunks::<4>().0.iter().any(|p| p[0] < 128),
+            "text stimulus omitted dark glyphs"
+        );
+        let mut canvas = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
+        paint_scene(
+            &mut canvas,
+            frame,
+            Scene::Overlay,
+            0.,
+            &backdrop.pattern,
+            3.,
+        )
+        .unwrap();
+        assert!(
+            canvas.finish().iter().all(|v| *v == 0),
+            "overlay stimulus painted over the external backdrop"
+        );
+    }
     #[test]
     fn sweep_samples_clamp_to_one_cycle() {
         let duration = Duration::from_secs(2);
@@ -419,5 +599,24 @@ mod tests {
         assert_eq!(sweep_level(duration, duration), (0., true));
         assert_eq!(sweep_level(duration * 2, duration), (0., true));
         assert!(Scene::parse("unrecognized").is_err());
+        assert_eq!(
+            backdrop_command("sweep 0.25").unwrap(),
+            (Scene::Sweep, 0.25)
+        );
+        for invalid in [
+            "",
+            "overlay",
+            "sweep NaN",
+            "sweep inf",
+            "sweep -0.1",
+            "sweep 1.1",
+            "white extra",
+            "dark 0 extra",
+        ] {
+            assert!(
+                backdrop_command(invalid).is_err(),
+                "accepted invalid backdrop command: {invalid}"
+            );
+        }
     }
 }
