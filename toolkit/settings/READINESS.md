@@ -34,7 +34,9 @@ Request interface/path remain compatible. It does not recurse through the public
 launcher and ignores the native executable override. GJS raising selects its own
 PID, so a native window with the same title cannot receive its raise request.
 
-The existing `/usr/bin/nidara-settings` and desktop entry remain unchanged. The
+The public `/usr/bin/nidara-settings` keeps its existing identity and executable
+override, then delegates to the one GJS launcher with `NIDARA_SETTINGS_LEGACY=0`.
+The desktop entry is unchanged. Direct legacy launches default to identity Legacy. The
 future public launcher is stored as data at
 `/usr/share/nidara/settings-native/nidara-settings`; installing that file as the
 public launcher is a separate, explicit activation step after acceptance.
@@ -96,3 +98,17 @@ its public-launcher path is absent, and staging to `/usr` is refused.
 Adding the second private-portal test exposed a shared PID-only socket directory;
 it now includes an atomic per-test sequence so parallel tests cannot connect to
 each other's bus. No assertion or CI gate was removed.
+
+
+## Follow-up review
+
+The GJS launch/rebuild logic lives only in `bin/nidara-settings-legacy`; the public
+wrapper selects the original identity and retains its executable override. The
+legacy path has no unreachable executable-override branch. HyaloState._rebuild
+fills CompositorWindow.pid from IPC window.pid (falling back to zero only when
+absent); the compositor exposes that PID in its window list. PID-based raising
+therefore uses the existing Hyalo mapping as well as the Hyprland one.
+
+The worktree now lives at `~/Nidara/ChatGPT/915-readiness`, outside every build cache.
+Historical measurement JSON retains the original executable path and hash; moving
+the worktree does not mean those measurements were repeated.

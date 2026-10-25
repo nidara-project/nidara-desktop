@@ -3518,8 +3518,9 @@ all twelve catalogs with their ledger. No workflow step or PR gate was added.
 
 The native binary can ship beside the current Settings: `nidara-settings-native`
 starts only SettingsNative by default. A leading `--entry-point` opts into owning
-Settings too and is removed before routing the request. The separately installed
-`nidara-settings-legacy` wrapper selects the GJS SettingsLegacy application identity
+Settings too and is removed before routing the request. The GJS rebuild/launch logic lives only in `nidara-settings-legacy`; the public
+wrapper delegates with `NIDARA_SETTINGS_LEGACY=0` until the swap, retaining its
+executable override. The separately installed `nidara-settings-legacy` selects the GJS SettingsLegacy application identity
 with `NIDARA_SETTINGS_LEGACY=1`; it starts GJS directly and never calls the public
 launcher. GJS raising is scoped to its own PID when both processes exist.
 The future entry-point launcher is staged as package data, not installed over
