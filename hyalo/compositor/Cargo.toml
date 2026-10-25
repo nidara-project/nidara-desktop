@@ -34,6 +34,8 @@ regex-automata = { version = "0.4", default-features = false, features = ["std",
 # libraries GTK draws the shell's text with, so the title reads like the rest of the desktop.
 pangocairo = "0.22"
 # Protocols Smithay does not ship are generated from their XML in ../../protocols.
-wayland-server = "0.31"
+# `libwayland_1_23` only exposes `set_default_max_buffer_size` (state.rs, CLIENT_BUFFER): on the
+# Rust backend Hyalo uses it links nothing.
+wayland-server = { version = "0.31", features = ["libwayland_1_23"] }
 wayland-backend = "0.3"
 wayland-scanner = "0.31"

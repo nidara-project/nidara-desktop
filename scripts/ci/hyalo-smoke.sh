@@ -92,6 +92,9 @@ phase_build() {
     wayland-scanner private-code  "$ii_xml" "$ii/idle-inhibit-unstable-v1-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-idle-inhibit-probe.c" "$ii/xdg-shell-protocol.c" "$ii/idle-inhibit-unstable-v1-protocol.c" \
         -I"$ii" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-idle-inhibit-probe
+    # The stalled-client probe (a window that stops reading its socket, state.rs CLIENT_BUFFER).
+    cc -O2 "$REPO/scripts/ci/hyalo-stalled-client-probe.c" "$ii/xdg-shell-protocol.c" \
+        -I"$ii" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-stalled-client-probe
     # The decoration probe (who draws a title bar, hyalo/compositor/src/shell/decoration.rs).
     # KDE's server-decoration is not in wayland-protocols: its XML, like input-method-v2's
     # below, comes with the wayland-protocols-misc crate.
@@ -639,6 +642,13 @@ PY
         || { log "FAIL: idle"; cat /tmp/hyalo/idle.log; exit 1; }
     nidara-hyalo msg do workspace 1 >/dev/null
     log "idle OK ($(grep -c '^ok' /tmp/hyalo/idle.log) steps: locked and dark, woken, held off, then locked)"
+    # A client that stops reading for a while (#915's Broken pipe) keeps its connection and gets
+    # every pointer motion sent meanwhile (state.rs, CLIENT_BUFFER).
+    nidara-hyalo msg do workspace 7 >/dev/null
+    STALL_LOG=/tmp/hyalo/stalled-client "$REPO/scripts/ci/hyalo-stalled-client-check.sh" >/tmp/hyalo/stalled-client.log 2>&1 \
+        || { log "FAIL: stalled client"; cat /tmp/hyalo/stalled-client.log; exit 1; }
+    nidara-hyalo msg do workspace 1 >/dev/null
+    log "stalled client OK ($(sed -n 's/^ok *//p' /tmp/hyalo/stalled-client.log))"
     # The guard (#683): a lock client that does not start, or hangs before asking, still gets
     # the session locked — by Hyalo itself — and a working one takes it over and unlocks.
     # Before sleep, that is the session coming back locked rather than open (logind.rs).

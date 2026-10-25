@@ -2357,6 +2357,19 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   adding it, re-read the primary node, which may now be the card node. `HYALO_DRM_DEVICE` names the
   ONE GPU to use and then only it.
 - **A refusal is said.** `vrr=on` on a monitor without VRR is an error, not a silent no-op.
+- **A client that stops reading is dropped without a word, so the buffer is a MiB** (#915). The
+  server never blocks on a client: what its socket does not take waits in wayland-backend's
+  buffer, 4 KiB by default, and past that the client is killed with `ConnectionClosed` — no
+  `wl_display.error`, the client only sees Broken pipe on its next write. Each flush is one
+  `sendmsg`, which the kernel charges far above its bytes, so ~420 pointer motions to a window
+  busy for a few seconds were enough (the native Settings, 6 s on its own work). `CLIENT_BUFFER`
+  (`state.rs`, 1 MiB through `set_default_max_buffer_size`, the `libwayland_1_23` feature, which
+  on the Rust backend links nothing) holds ~37 000; a client that never reads is still dropped at
+  that bound. Every disconnection is logged with the client's "pid (command)", read at connect
+  time (`ClientState::identify`): a protocol error as WARN with its message, the rest as INFO —
+  the backend gives its own exit and a full buffer the same reason. Gate:
+  `scripts/ci/hyalo-stalled-client-check.sh` (1500 motions to a stalled probe; before the fix,
+  DISCONNECTED at 426).
 - **Every process Hyalo starts is waited for** (`spawn` in `main.rs`, a thread per child). Unwaited,
   each one stayed a zombie once it exited, and `nidara-lock` — which will not start while a process
   of its name exists (`pgrep -x`) — saw the first lock's zombie and refused every lock after it

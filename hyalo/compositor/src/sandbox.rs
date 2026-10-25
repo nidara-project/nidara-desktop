@@ -39,8 +39,9 @@ impl SecurityContextHandler for Hyalo {
         // The source ends by itself when the engine closes the context's close_fd.
         let res = self.loop_handle.insert_source(source, move |stream, _, state| {
             let data = ClientState { security_context: Some(context.clone()), ..Default::default() };
-            if let Err(err) = state.display_handle.insert_client(stream, Arc::new(data)) {
-                tracing::warn!(?err, "could not accept a sandboxed client");
+            match state.display_handle.insert_client(stream, Arc::new(data)) {
+                Ok(client) => ClientState::identify(&client, &state.display_handle),
+                Err(err) => tracing::warn!(?err, "could not accept a sandboxed client"),
             }
         });
         if let Err(err) = res {
