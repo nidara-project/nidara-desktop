@@ -235,6 +235,7 @@ phase_boot() {
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
         XDG_CURRENT_DESKTOP=Nidara \
         NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
+        NK_SETTINGS_IME_NIGHTLY="${HYALO_ANIMATION_CHECKS:-false}" \
         HYALO_ANIMATION_CHECKS="${HYALO_ANIMATION_CHECKS:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
@@ -865,7 +866,7 @@ PY
     cat /tmp/hyalo/nk-phase0.log
 
     # Settings SearchInput + actual font chooser View, nightly/manual only.
-    if [ "${HYALO_ANIMATION_CHECKS:-false}" = true ]; then
+    if [ "${NK_SETTINGS_IME_NIGHTLY:-false}" = true ]; then
         NK_PHASE0_TEST=vkms NK_PHASE0_LOG="$REPO/toolkit/target/settings-ime-evidence" \
             NK_SETTINGS_DATA=/usr/share/nidara/settings-data NK_REAL_CONTROLS=1 \
             NK_FCITX5_SCALES="1 1.25" python "$REPO/scripts/ci/nk-settings-ime-check.py" \
