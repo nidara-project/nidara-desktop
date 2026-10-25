@@ -3372,8 +3372,9 @@ This is also how a queued Config1 change retires a completed file choice before
 acceptance. The app must stage external portal/routing/visibility first.
 Builder/Rendered::external_modal_active tells the host to suppress parent
 accessibility actions and publish parent inactivity during an external chooser.
-No growing staging queue or extra provider. Actual main/provider caller is still
-pending: unit/direct-decision and private Config1 proofs are not native modality.
+No growing staging queue or extra provider. The local nk-settings executable now
+consumes this flag and these returned notices (application.rs); actual native
+execution/parent modality is still pending. CPU/private-bus proofs do not establish it.
 Full exported Appearance now mounts/layouts with the real five registration modules
 (including separate wallpaper preview/gallery and picker), no substitute builders;
 that CPU check neither opens a native window nor validates all wallpaper pixels.
@@ -3384,3 +3385,87 @@ RGB pixels (`image_load::jpeg_thumbnail`). Preserve the source/encoded budgets
 and EXIF-aware Cover/Contain sizing when changing it; other codecs still use
 bounded full decode. The ignored `real_wallpaper_decode_timing` test accepts an
 absolute `NK_THUMB_BENCH` JPEG path for local timing, never as a CI speed threshold.
+
+The local nk-settings executable assembles Shell, Mounted, the five real builder
+registrations, Client, Portal, Router in Native mode, and one shared Bridge/Native
+context. All use the same bus connection. There is no installed launcher or ENTRY
+takeover. No snapshot fixture is a production fallback. Loading/error rows precede
+the authoritative Snapshot; CONTENT_READY is emitted only by a successful root
+commit after the page is mounted and the Client available. The provider/layers
+are not created before a real Configure. This milestone is not presentation time.
+
+Stage portal and native queued routes before input/idle acceptance; consume both
+Native.notices and Rendered::idle's returned notices. New Ready snapshots rebuild
+Mounted roots transactionally so previously unavailable generic rows can appear.
+Ordinary Changed updates retain IDs. Portal/native-route invalidation retires an
+external picker before accepting its reply. Its pending flag masks parent semantic
+actions/focus and physical input. A queued request requires current publication
+revision AND current Tree generation. Bridge acknowledgements are drained.
+
+Icon theme comes from canonical Config1 appearance.interfaceIconTheme; portal
+values alone pick paint. Material recipes are rebuilt on appearance changes,
+not every idle. The owned font configuration uses actual translated labels,
+System-font Parley, the same Bridge, current interface icons and exported form
+geometry. Its precision/range/layout remain local caller policy, not GTK parity.
+Image budgets are 64/256 MiB input/output policies, not hard decoder memory limits.
+NK_ICON_REFERENCE selects a development reference directory; installed reference
+and existing icon search paths are used otherwise. All new labels are translated
+in the twelve locales and both real exporters must be regenerated.
+
+This first executable still polls at16ms, uses provisional loose controls/panel
+titlebar and opens at the exported WINDOW_LAYOUT minHeight (not GTK's760 default).
+No adaptive scheduling or final chrome acceptance is claimed. Nested font/popup
+hosting still suspends parent servicing. Tokenized Raise now uses the standard
+activation consumer below; missing tokens/protocol remain explicit and focus is
+not guaranteed. queryUI still refuses until agent-view policy/serialization is integrated.
+Undrawn sidebar requests forward to ENTRY on a worker without changing native
+selection; those directly forwarded Router calls do not currently enter the
+nested-modal staging queue. Search/sidebar results, this forwarding/modal edge,
+real Window/dialog/provider/Orca and installed performance/live gates remain owed.
+
+Standard activation consumption lives in nk-wayland Window::activate(String): one
+optional xdg_activation_v1 proxy on the existing queue sends the caller's opaque
+token to this root surface. Requested means sent, never compositor acknowledgement
+or focus proof. Unsupported remains explicit; malformed tokens, non-toplevels and
+requests before a configured painted buffer are errors. No token creation, fake
+input serials, alternate host, repaint-as-raise or environment access. Proxy is
+destroyed with Window. Caller owns real initiating-token handoff/retirement.
+
+
+Native Request(as) can carry trailing --xdg-activation-token plus an opaque token;
+routing::with_activation attaches it. Existing verb/positional arguments remain
+unchanged; Incoming.activation belongs only to queued native requests. Metadata
+is validated without echoing tokens. Forwarded legacy requests retain the old
+argument shape; tokenized legacy activation is not implemented by this addition.
+The binary consumes/removes XDG_ACTIVATION_TOKEN at its single-threaded main entry
+before creating a bus, library worker or font job, then either hands it to the
+already-running Native owner or holds it for the first painted root. Never move
+that process-env mutation into a library callback or a threaded test. Launch
+metadata and subsequent Incoming tokens are taken once, not logged or minted.
+Window::activate is called after the buffer and replies only request submitted,
+unsupported or error. Bare open cannot promise raise without an initiator token.
+Native queued routes invalidate modals before the request; compositor focus,
+environment retirement and actual startup/modal timing still need native proof.
+
+NK_SETTINGS_OPAQUE_PREVIEW=1 is a local diagnostic opt-in on the same nk-settings
+binary. Options.material=false uses nk-wayland's existing material/layer mask;
+root paint uses the existing opaque D5 fallback and App sends no background
+protocol declaration. No setting writes, new host, synthetic schema or compositor
+manager is introduced by opening this mode. Native visual inspection of it does
+not accept the normal D7/material path. Never enable HYALO_A11Y_MANAGER on a nested
+compositor connected to the live session bus: it can replace that session's manager
+name, and quitting the nested instance does not restore the original ownership.
+
+Native Tree activation staging is idempotent. Apps may stage their current physical
+focus state before ordinary input, but Tree::set_active must add no invalidation
+when it is unchanged. Otherwise every pointer sample forces whole-tree semantic
+publication and can delay servicing subsequent Wayland input/configures. A real
+activation transition still invalidates root semantics and search caret paint;
+no-op staging preserves any prior unpublished invalidation. This does not solve
+the separate fixed16ms polling debt or establish responsiveness/native acceptance.
+
+Availability setters also check an unchanged hidden/disabled value BEFORE collecting
+focus order. Renderer refresh repeats these setters for the page's rows during
+input staging; collecting the full tree for each unchanged row makes staging
+quadratic. Real transitions still capture the old order before mutation and use
+that order for focus repair; an unknown id still returns an error.

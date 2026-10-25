@@ -457,6 +457,11 @@ Phase 0 remains an independent client of those four crates.
   Layout, paint and semantics invalidations are distinct. Font/text scale changes remeasure
   while keeping ids, focus and scroll offsets. There is one focus and one pointer capture;
   Tab order follows tree order, and release belongs to the node that was pressed.
+- `Tree::set_active` is idempotent: repeating the current physical activation state
+  preserves pending invalidations and adds none. A real transition invalidates root
+  semantics and search caret paint; it preserves retained focus and widget ids.
+  Unchanged hidden/disabled setters validate the id and return before traversing
+  focus order; focus repair is required only for a real availability transition.
 - Window, sidebar/page list, title bar, scroll region, group/header/row, switch and button
   are the phase-1 foundations. Hidden subtrees leave semantics; offscreen subtrees remain
   VISIBLE, with SHOWING determined by intersection with the unoccluded viewport. Focus
@@ -1310,3 +1315,78 @@ buffer and final fit. The requested fit is computed in source coordinates, with
 EXIF axis swaps applied before choosing the reduction. Encoded/source allocation
 budgets still apply. Other codecs and uncommon JPEG pixel formats keep their
 bounded decoder path; they have no claimed reduced-decode guarantee.
+### Local native application assembly (#915)
+
+The `nk-settings` binary is a separate, explicitly launched application, hosted only
+by nk-wayland. It never installs a launcher or takes the ENTRY name: Router Native,
+Client and portal share one session-bus connection. Startup paints a translated
+loading row until a real Config1 Snapshot; CONTENT_READY names only a successful
+root commit with a mounted authoritative Appearance page. No cached fixture is a
+production fallback. Portal/read/export errors remain errors.
+
+The application registers all five existing builder modules, owns Mounted roots,
+stages portal/routing changes before input and asynchronous acceptance, drains
+Native notices after nested dialogs and Renderer::idle notices for app dependencies.
+Fresh snapshots reconcile the mounted page (including formerly unavailable keys);
+ordinary updates preserve retained controls. External portal selection masks parent
+semantic actions/focus and input while pending. One Bridge serves parent and dialogs;
+requests must match both the published revision and current Tree generation.
+
+This first assembly polls at 16 ms: it does not close the adaptive scheduling debt.
+Nested popup/font hosting retains its documented exclusive-parent limitation.
+Existing loose control glyphs and panel titlebar policy remain provisional. Raise
+and queryUI are explicitly unsupported until standard activation and the existing
+agent-view policy/shape are integrated; no redraw is reported as a successful raise.
+Undrawn sidebar requests use ENTRY asynchronously, keeping the native selection.
+The font dialog uses caller geometry derived from exported window/form metrics;
+point sizes use the supported description precision (1/1024 pt, positive signed
+32-bit Pango unit domain), not a claimed GTK size-choice parity. Image input/output
+budgets are application resource policy (64/256 MiB), not codec allocation limits.
+Native execution, Orca, installed startup/performance and live acceptance remain
+separate gates, not consequences of compilation or CPU/private-bus tests.
+
+### Standard activation-token consumption (#915)
+
+nk-wayland Window::activate(token: String) consumes a caller-supplied opaque
+xdg_activation_v1 token on the existing connection/queue and that Window's root
+surface. It does not mint tokens, invent input serials, read process environment,
+paint to emulate raising, or report focus confirmation. Activation::Requested
+means only the protocol request was sent; the compositor may ignore it.
+Activation::Unsupported means the optional global is absent. Empty/NUL tokens,
+non-toplevel/destroyed surfaces and activation before the first painted buffer
+are errors. Unsupported does not require a mapped buffer. The optional proxy is
+released with the Window. Capabilities.activation reflects the exact global.
+Caller owns token acquisition/handoff, one-use policy and environment retirement.
+This transport cut does not wire Settings routing or claim native activation.
+
+### Native activation handoff (#915)
+
+The existing Request(as) accepts an optional trailing --xdg-activation-token,
+opaque-token pair. with_activation(args, token) produces it; malformed/duplicate
+metadata is an error without echoing the token. Legacy verbs and arguments are
+unchanged. Incoming.activation carries the token only for native queued routes;
+forwarded legacy requests retain their previous argument shape, without new token
+support claimed. No new action/provider transport is introduced.
+
+The binary reads/removes XDG_ACTIVATION_TOKEN in main BEFORE any bus/worker/library
+initialization (the only single-threaded process-environment mutation). It is not
+inherited by child jobs. Startup passes the same token to Router's second-instance
+handoff or holds it for the first mapped root buffer. Each received token is taken
+once and sent through Window::activate after that buffer; tokens are never logged
+or synthesized. Replies distinguish request sent, unsupported protocol, missing
+token and actual transport errors, never confirmed raise/focus. Bare open without
+a caller token remains explicitly unable to guarantee activation. Native queued
+routes cancel pending modals before handoff; queryUI and legacy forwarding gaps
+remain as documented. Actual compositor focus/activation and launch-environment
+retirement require native validation; CPU/private-bus tests do not establish them.
+
+### Explicit opaque preview (#915)
+
+NK_SETTINGS_OPAQUE_PREVIEW=1 is a diagnostic launch opt-in, not a saved setting:
+the same Settings composition uses nk-wayland Options.material=false, disables
+D7 through the host's existing capability mask, paints the existing opaque D5
+fallback and sends no window-background declaration. Default launch is unchanged.
+No new host, fake Config1 data, compositor mutation or accessibility manager is
+created. This view can still read/edit actual Config1 through normal controls;
+opening it performs no Apply. It is not material/D7 acceptance or a fix for the
+unresolved normal-mode disconnect.

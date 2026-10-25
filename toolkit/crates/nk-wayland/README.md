@@ -185,3 +185,15 @@ popups are refused, and repeated polls retain one export until Window destructio
 The export is destroyed before the surface role. No blocking roundtrip or own host.
 Format reference: https://flatpak.github.io/xdg-desktop-portal/docs/window-identifiers.html
 Unit tests cover capability/state logic; native export/portal-parenting is untested.
+
+## Activation tokens
+
+Window::activate(String) consumes the initiating client's opaque xdg_activation_v1
+ token on this connection and the existing root surface. Activation::Requested
+means sent, not acknowledged focus. Unsupported means the optional global is
+absent; no repaint or synthetic serial is used. Empty/NUL tokens, popup/destroyed
+targets and supported activation before a configured painted buffer are errors.
+The caller obtains/transfers the token and retires launch environment metadata;
+this API never reads environment or requests a token from the compositor.
+Capabilities.activation names exact optional global support. CPU dispatch/capability
+tests are not a native protocol/focus proof. Settings caller integration is separate.

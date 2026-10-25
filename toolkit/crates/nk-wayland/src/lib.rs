@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! One thread owns the connection, input and buffers. All sizes and input are
 //! logical pixels; only Frame's buffer dimensions are physical pixels.
+mod activation;
+pub use activation::Activation;
 mod control_material;
 pub use control_material::{ControlMaterial, InkCoverage, MaterialRect, Response, StateRegion};
 mod controls;
@@ -144,6 +146,7 @@ struct Send {
 pub struct Window {
     connection: Connection,
     foreign: foreign::Foreign,
+    activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
     controls: controls::Controls,
     maximized: bool,
     materials: Option<nidara_material_manager_v1::NidaraMaterialManagerV1>,
@@ -572,6 +575,8 @@ pub struct Capabilities {
     pub presentation: bool,
     /// zxdg_exporter_v2; otherwise portal dialogs may be unparented.
     pub foreign_parent: bool,
+    /// xdg_activation_v1; consumes caller tokens without guaranteeing focus.
+    pub activation: bool,
 }
 const REQUIRED: [&str; 4] = ["wl_compositor", "wl_shm", "xdg_wm_base", "wl_seat"];
 pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Capabilities> {
@@ -591,6 +596,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
         text_input: has("zwp_text_input_manager_v3"),
         presentation: has("wp_presentation"),
         foreign_parent: has("zxdg_exporter_v2"),
+        activation: has("xdg_activation_v1"),
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
@@ -646,6 +652,7 @@ fn run_inner(
     let mut w = Window {
         connection: conn.clone(),
         foreign: foreign::Foreign::default(),
+        activation: None,
         controls: controls::Controls::default(),
         maximized: false,
         materials: None,
@@ -754,6 +761,7 @@ fn run_inner(
     w.text_manager = bind!(zwp_text_input_manager_v3::ZwpTextInputManagerV3, 1);
     w.data_manager = bind!(wl_data_device_manager::WlDataDeviceManager, 3);
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
+    w.activation = bind!(activation::xdg_activation_v1::XdgActivationV1, 1);
     w.foreign.exporter = bind!(
         wayland_protocols::xdg::foreign::zv2::client::zxdg_exporter_v2::ZxdgExporterV2,
         1
@@ -911,6 +919,9 @@ impl Window {
     // destructors; close roles even when a callback or transport operation fails.
     fn destroy_surfaces(&mut self) {
         self.foreign.destroy();
+        if let Some(activation) = self.activation.take() {
+            activation.destroy();
+        }
         for layer in self.layers.drain(..) {
             layer.destroy();
         }
@@ -1582,6 +1593,20 @@ mod tests {
                 Err(format!("required Wayland protocol missing: {name}"))
             );
         }
+    }
+    #[test]
+    fn activation_is_optional_and_uses_the_exact_global() {
+        assert!(!capabilities(ALL).unwrap().activation);
+        assert!(
+            capabilities(ALL.into_iter().chain(["xdg_activation_v1"]))
+                .unwrap()
+                .activation
+        );
+        assert!(
+            !capabilities(ALL.into_iter().chain(["xdg_activation_token_v1"]))
+                .unwrap()
+                .activation
+        );
     }
     #[test]
     fn foreign_parent_capability_requires_the_exact_optional_global() {

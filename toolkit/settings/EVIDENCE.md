@@ -972,3 +972,250 @@ full decode + fit 62.153 / 61.729 / 60.901 ms; reduced decode + fit
 32.472 / 30.893 / 30.656 ms. Reproduce with `NK_THUMB_BENCH=<absolute JPEG>` and
 `cargo test --release -p nk-settings --lib real_wallpaper_decode_timing -- --ignored --nocapture`.
 No wall-clock assertion is added to CI. PNG/GIF/WebP/AVIF have no reduced-decode claim.
+## Local integration42 — first native application entry point (2026-10-24)
+
+Worktree 915-native-app over41 42cd75c3. Adds src/main.rs and the private
+application composition; no installed launcher or ENTRY takeover. Router Native,
+Client and portal use the same connection. Shell and all five real builder
+registrations mount the actual exported Appearance page after a real Snapshot;
+no production fixture or fallback schema. Loading/status rows are retained widgets.
+The one Bridge is created only after Configure; Native shares it for dialogs.
+CONTENT_READY is emitted from a successful root commit with a mounted available
+Snapshot, not from the loading state and not as presentation/performance proof.
+
+Actual code stages portal/native queued routing, consumes Native notices and
+Renderer::idle returned notices, follows canonical interfaceIconTheme, retires
+pending external selection on invalidation and masks parent actions/focus/input.
+Fresh snapshots reconcile roots, ordinary changes retain controls. Material
+readers are shared and cached until appearance changes. Provider acknowledgements
+are drained. None of those Window/provider callbacks has been executed natively
+in this cut; this is compiled integration plus the bounded evidence below.
+
+Final settings lib/tests suite:93 PASS (86 existing +7 application tests),
+required complete actual native-app-data. Actual executable BUILD, Settings
+alltarget Clippy -Dwarnings, workspace alltargets check, tokenchecker, i18n-check,
+fmt, canonical skilldocs and git diff check PASS. New19 strings in all12 locales;
+translation-state --sync retains the existing117 untranslated-key debt elsewhere,
+no old stale list cleared. BOTH actual exporters regenerated. Older wallpaper-data
+lacks the new application labels and is not this cut's current complete data.
+
+CPU tests use the SAME private View composition and actual exports/Styles/Tree/
+Parley layout, with explicit synthetic Snapshot sessions where stated. They cover
+loading→full mount, fresh root/operation retirement, formerly unavailable generic
+row becoming present, real Picker pending state→semantic action/focus mask,
+Unavailable cancellation0writes, publication+generation rejection after valid
+focus, portal restyle preserving focus/IDs0writes, and staged external retirement
+before idle acceptance0writes. No Window/Bridge/provider is fabricated in tests.
+
+One actual private Config1 bus uses Client::start plus Router::start on the SAME
+connection. Full Appearance mounts from that service's synthetic schema; a real
+retained toggle activation makes exactlyone real Apply, returns canonicalfalse
+and pendingfalse. The service's async GetNameOwner check confirms Apply's sender
+owns SettingsNative. Bus config has no service dirs, explicit target/ap-PID/bus;
+no live bus connection/environment changes. No native Window/portal/Orca proof.
+
+Two COMPILED production faults caught their OWN assertions AFTER setup: leaving
+parent actions in project() failed the own mask assertion after real Picker
+activation/pending; suppressing fresh-snapshot remount failed own newlyavailable
+row assertion after initial unavailable mount and second Snapshot. Both source
+faults restored before final suite. Logs native-app-parent-actions-control.log and
+native-app-snapshot-reconcile-control.log. These are CPU caller controls, not
+native portal controls. Initial direct Label-under-Scroll structure failed and
+was corrected to Group/Row/Label. Initial private service used blocking DBusProxy
+inside its executor and timed out; corrected to actual async GetNameOwner. That
+setup failure is NOT control acceptance. Initial type/borrow/Clippy failures are
+preserved in native-app-{check,clippy,clippy-fixed}.log, not acceptance.
+
+Final logs: target/native-app-final-tests.log, native-app-build-current.log,
+native-app-verified-clippy.log, native-app-workspace.log, native-app-token-check.log,
+native-app-i18n-check.log, native-app-{skill-docs,fmt}.log and export-final.log.
+Contract preceded code; canonical architecture/tech-debt/README/EVIDENCE same commit.
+
+Remaining explicitly: raise/queryUI unsupported; no sidebar search/results;
+direct forwarded Router routes do not yet stage nested-modal cancellation;
+exclusive-parent long-modal servicing, adaptive poll caller (currently16ms),
+provisional controls/panel titlebar/window/font geometry/point-step policy,
+secondary/pill look, ICC/HDR and hard codec allocation limits. No native window,
+EGL/checker, AT-SPI/Orca, installed startup/PSS/frame, owner live or replacement
+acceptance. Original915/889/fixed artifacts preserved, no publication/merge,
+no Hyalo/backend/bar/shader/#921 changes, heartbeat remains paused.
+
+## Local integration43 — standard activation transport (2026-10-24)
+
+Standalone nk-wayland consumer of xdg_activation_v1; existing connection/queue,
+root surface, optional global, cleanup. Contract before API; no new provider/host.
+Activation::Requested is only a sent request, no compositor/focus confirmation.
+17Wayland CPU tests PASS; alltargetWayland Clippy-Dwarnings, workspacealltargets,
+fmt/skilldocs/diff PASS. Pure dispatch tests record sends, preserve opaque token,
+refuse empty/NUL/non-toplevel/unpainted, explicitly unsupported without global.
+Capability requires exact global. Compiled unpainted-guard bypass caught OWN
+unpainted assertion AFTER valid-send setup; restored before17PASS. No fake Window,
+server, native protocol trace or focus proof. Local installed wayland-protocols
+0.32.13 XML is the protocol source; upstream web fetch unavailable. No rerun EGL.
+Settings caller/token environment/handoff remains separate. No export/token/data
+change: complete cut42 native-app-data reusable. Logs target/activation-transport-*
+(restored-tests, unpainted-control, clippy, workspace, skill-docs, fmt).
+
+## Local integration44 — native activation handoff/caller (2026-10-24)
+
+Over43 36e1ff34. Existing Request(as) optional trailing metadata and Incoming
+activation, main-entry launch token read/removal before worker initialization,
+second-instance handoff and first-buffer Window::activate caller. No new action
+transport, provider, token minting, fabricated serial or success-by-repaint.
+Replies mean request submitted, never confirmed compositor focus. Missing token
+and unsupported protocol remain explicit; legacy forwarding strips metadata and
+retains old argument shape, without tokenized legacy activation claimed.
+
+96Settings tests PASS (93prior+2metadata+1actual private-bus second-instance test).
+Full actual cut42 native-app-data reused; no exporter/token/string changes.
+Actual private Router owner receives Navigate(appearance) and exact opaque token
+through the second Router::start handoff, responds and worker returns AlreadyRunning.
+Only then the own exact token assertion runs. No Window/Wayland/compositor is
+simulated. Compiled production metadata-drop fault caught OWN lost-token assertion
+AFTER actual method response/join; restored before96PASS. Token parser refuses
+malformed/duplicate/NUL without exposing token; positional page IDs stay positional.
+Main env retirement and Window timing remain compiled/source proof only: neither
+main nor a native window was run. No thread-parallel environment mutation in tests.
+Initial Clippy collapsible-if corrected cosmetically before final verification.
+
+SettingsalltargetClippy-Dwarnings/workspacealltargets/build/fmt/skilldocs/diff PASS.
+Logs target/activation-routing-{restored-tests,final-tests,handoff-control,
+verified-clippy,workspace,build,skill-docs,fmt}.log. Contract preceded API; canonical
+architecture/tech-debt/README/EVIDENCE same commit. QueryUI/search, forwarded-modal
+queue edge, long-modal parent servicing, adaptive poll16ms, provisional visuals and
+native/Orca/installed performance/live remain open. Original/fixed preserved;
+no push/install/merge, no Hyalo/backend/bar/shader/#921 edits, heartbeat paused.
+
+## Local opaque diagnostic preview45 (2026-10-24)
+
+Adds explicit NK_SETTINGS_OPAQUE_PREVIEW=1 using existing Options.material=false
+capability mask, existing opaque fallback and no window-background declaration.
+Default launch unchanged. Contract before mechanism, canonical skill/README and
+this evidence in same change. Build/alltargetSettingsClippy-Dwarnings/fmt/
+skilldocs/diff PASS. No redundant tests of the private environment switch added.
+
+Actual direct native view on the current compositor, real Config1/portal and
+shared provider: CONTENT_READY commit2, frame callback AND presentation observed.
+PID1261804/window69, copied binarySHA256
+a8f1789e7b78d0c7cc90655ee20992817f7c829b785b9e8b0e2acbc11a32696c.
+Verified executable identity before setting this own window floating, resizing
+351x646→928x760 and centering. Same PID/window remained visible/focused after resize,
+no SETTINGS_ERROR at verification. No automated Apply or control/dialog test.
+Opening/resize is a bounded visual preview only, not parity/Orca/performance gate.
+Logs and metadata target/opaque-view-20261024T165527Z; fixed originals untouched.
+
+Prior normal-mode attempts remain failed diagnostics in cut44 target preview-
+20261024T164120Z: nested connection reset/EGL errors and direct broken pipe. The
+normal-mode cause remains unresolved; opaque success does not prove a D7 fix.
+Prior nested HYALO_A11Y_MANAGER/live-bus ownership incident remains pending next
+session restart: no service/compositor restarted and no name claimed by this view.
+No installation, push, merge or heartbeat resume.
+
+
+## Pointer-entry failure and activation invalidation46 (2026-10-24)
+
+Cut45's bounded opening/resize observation was superseded by the owner's report:
+window69 closed on pointer entry. Its preserved log ends in Wayland Broken pipe;
+opaque mode is NOT a fix for the normal-mode disconnections.
+One instrumented reproduction used the EXACT same copied binary and only added
+WAYLAND_DEBUG=client. Trace is in cut45 target/pointer-diagnostic-20261024T170807Z:
+890 A11Y_PUBLISHED records, batches of pointer samples/configures processed with
+long gaps before socket service, then Broken pipe. No server disconnect reason
+was logged; do not label socket buffer exhaustion/ping timeout as proven.
+
+Source defect: App stages Tree::set_active on every event; that method dirtied
+root semantics even when activation was unchanged. It now returns without adding
+invalidation in that case. Actual transitions retain root semantics/search paint;
+existing pending invalidations and retained focus are preserved. Contract before
+code; canonical skill/README updated. New retained-Tree CPU test uses 1000 pointer
+samples and real activation transitions; old compiled production fails its own
+unchanged-activation semantics assertion AFTER layout/focus/ack setup, log
+ target/focus-invalidation-old-control.log. This control is not a native closure
+oracle. Verification and native status are recorded below after execution.
+
+
+Corrected Tree suites: 178 tests PASS (96 Settings,82 widgets), both packages
+alltarget Clippy -Dwarnings, actual debug executable build, fmt, skill-docs and
+diff checks PASS. Corrected debug native diagnostic PID1268147/window71,
+SHA256 0f343e6630d60310b4c0095b4656564476567e6abf68ebb4eda97e665d8db165,
+cut46 target/pointer-corrected-20261024T171243Z: 402 motion records with only4
+semantic publications, but it STILL ends in Broken pipe. Idempotency reduces
+publication work; this is explicitly NOT a native closure fix. Approx12.8s gap
+between the last batch's read and next root commit remains. A bounded perf sample
+contains Tree lookups, rendering and image-worker samples; it does not establish
+that image decoding repeats on every motion. All prior window binaries are debug
+(unoptimized); an optimized release build is being prepared separately.
+
+Source inspection of the remaining BTree-lookup cost found a second no-op defect:
+set_unavailable collected full focus order BEFORE checking whether the hidden/
+disabled value changed. Renderer refresh stages these setters for all page rows
+before/after input. The unchanged check now precedes that traversal; actual
+transitions still capture old order before mutation, preserving focus repair.
+This cost optimization uses the existing availability/focus tests rather than
+inventing a wall-clock threshold. Suites/Clippy must be rerun after this addition.
+
+
+Final code verification after BOTH no-op fixes: 178 Settings/widgets tests PASS,
+both alltarget Clippy -Dwarnings, optimized release build, fmt/skill-docs/diff PASS.
+Logs: target/focus-invalidation-final-{tests,clippy,release-build}.log.
+Release diagnostic launched PID1273771/window73 with exact copied SHA256
+fa7e0135206f9d074f411a0a27bcae79dbffe2359d6bc73b9c07ba51095bb590,
+target/pointer-release-20261024T171940Z. Real Config1/portal, CONTENT_READY2 and
+presentation observed; verified executable identity before own-window floating/
+resize/center to928x760. Pointer test and owner result are pending at this entry;
+opening/resize alone do not establish closure resolved. No automatic Apply,
+native a11y/Orca acceptance, protocol/material gate or performance gate claimed.
+No Hyalo/backend modifications, service restart, installation, publication or
+heartbeat resumption. Original/fixed binaries and failed traces preserved.
+
+
+Bounded release input verification: the same PID1273771/window73 trace subsequently
+records pointer enter and2245 real wl_pointer motion events, only3 semantic
+publications, and root frame callbacks/presentation AFTER those inputs, without
+SETTINGS_ERROR. This exceeds the failed debug reproduction's402 motions. Owner
+visual result remains pending; this is one D5 optimized run, not proof of normal
+D7, long-running responsiveness, every control/dialog, Orca or performance gates.
+Both no-op fixes and optimization differ from the failed partial debug run; do
+not attribute the symptom's disappearance exclusively to one change.
+
+### Review F: idle CPU on the owner's session (2026-10-25)
+
+Measured the release binary at 79014d9892cd676b2a5c92f042a3459dafffcbc5,
+SHA256 2783e95a48ae9114332e0a4a85d71fb0bdbbf1e3baa313cc4c58beae3bd998e9,
+with data exported from that branch. Native Appearance was open and quiet, with
+CONTENT_READY and A11Y_READY, five seconds of settling followed by ten seconds
+of measurement. /proc/PID/stat increased by two CPU ticks (CLK_TCK=100):
+0.20% of one CPU. The process stayed alive throughout and was terminated by the
+measurement harness afterwards. This is near zero; no event-loop change is made.
+The installed Hyalo was not yet the running session binary, so this is CPU
+measurement only, not D7 acceptance after #935/restart. The earlier smoke failure
+was the unrelated intermittent Settings slice deadline, not a block-F regression.
+
+### Live cursor-entry regression after #935 + #938 and session restart (2026-10-25)
+
+The owner authenticated installation and the session was restarted. The running
+Hyalo was verified from /proc/194913/exe: commit 61e5343b92c9c0531657221dbd349567bf6ebd2d,
+SHA256 c8103a30f400da15566bfd8aef45eb3f291ddcdb0591d67ffd761d3fb54ebcf0. This is the real desktop session, not nested.
+
+Client: F implementation 79014d9892cd676b2a5c92f042a3459dafffcbc5,
+SHA256 2783e95a48ae9114332e0a4a85d71fb0bdbbf1e3baa313cc4c58beae3bd998e9,
+using data exported from F. Exact launch:
+
+```
+WAYLAND_DEBUG=1 NK_SETTINGS_DATA=/home/angel/Nidara/ChatGPT/915-block-f/build/settings-data /home/angel/Nidara/ChatGPT/915-block-f/toolkit/target/review-20261025/nk-settings-f open appearance
+```
+
+CONTENT_READY and actual material/get_material/set_glass requests were observed.
+The gated nidara-click wrapper hovered the exact-PID focused window's titlebar,
+sidebar, content and controls without pressing buttons. All four actions succeeded;
+the wire records three wl_pointer.enter events. Both processes survived the final
+five-second observation, with no Broken pipe, SETTINGS_ERROR or protocol error.
+The probe then terminated only its own client; the compositor remains running.
+
+Result: PASS for the cursor-entry crash regression. This does not establish the
+complete D7 visual/interaction acceptance gate. No compositor error is worked
+around in the client. The one-shot user service exited successfully and is inactive.
+
+Evidence: toolkit/target/review-20261025/d7-live/ (result.json, full client
+WAYLAND_DEBUG=1 log, compositor journal, exact window and hover commands/results).
+Client wire-log SHA256: c1ae07c0accde72bfa708cae26f76b7b448d78151f255259a3b6386326862fcc.

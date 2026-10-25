@@ -728,6 +728,10 @@ impl Tree {
         self.set_unavailable(id, disabled, true)
     }
     fn set_unavailable(&mut self, id: NodeId, value: bool, disabled: bool) -> Result<()> {
+        let node = self.nodes.get(&id).ok_or("unknown widget")?;
+        if (if disabled { node.disabled } else { node.hidden }) == value {
+            return Ok(());
+        }
         let old_order = self.focus_order();
         let old_focus = self.focused;
         let node = self.nodes.get_mut(&id).ok_or("unknown widget")?;
@@ -736,9 +740,6 @@ impl Tree {
         } else {
             &mut node.hidden
         };
-        if *field == value {
-            return Ok(());
-        }
         *field = value;
         self.generation += 1;
         self.invalidate(
@@ -904,10 +905,11 @@ impl Tree {
         Ok(())
     }
     pub fn set_active(&mut self, active: bool) {
-        if self.active != active {
-            for id in self.searches.keys().copied().collect::<Vec<_>>() {
-                self.invalidate(id, Invalid::PAINT);
-            }
+        if self.active == active {
+            return;
+        }
+        for id in self.searches.keys().copied().collect::<Vec<_>>() {
+            self.invalidate(id, Invalid::PAINT);
         }
         self.active = active;
         self.invalidate(self.root, Invalid::SEMANTICS);

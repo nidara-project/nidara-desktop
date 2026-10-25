@@ -367,3 +367,43 @@ fn a_missing_native_entry_reports_service_unknown_without_the_legacy_start_path(
         "missing entry used legacy startup path"
     );
 }
+
+#[test]
+fn second_native_instance_hands_off_the_initiating_activation_token() {
+    let bus = Bus::new();
+    let native = bus.connect();
+    let launcher: Launcher = Arc::new(|| Err("forbidden legacy launcher".into()));
+    let router = Router::start(&native, Mode::Native, launcher.clone(), &[])
+        .unwrap()
+        .unwrap();
+    let second = bus.connect();
+    let args = nk_settings::routing::with_activation(
+        &["page".into(), "appearance".into()],
+        "opaque initiating token 日本語".into(),
+    )
+    .unwrap();
+    let worker = std::thread::spawn(move || Router::start(&second, Mode::Native, launcher, &args));
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let incoming = loop {
+        if let Some(incoming) = router.poll().pop() {
+            break incoming;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "private activation handoff setup missing"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    };
+    assert_eq!(incoming.route, Route::Navigate("appearance".into()));
+    let token = incoming.activation.clone();
+    incoming.respond("activation queued by test receiver");
+    assert!(matches!(
+        worker.join().unwrap().unwrap(),
+        Err(AlreadyRunning)
+    ));
+    assert_eq!(
+        token.as_deref(),
+        Some("opaque initiating token 日本語"),
+        "second-instance activation token lost"
+    );
+}

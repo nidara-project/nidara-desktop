@@ -478,3 +478,37 @@ fn container_accessible_names_never_become_visible_labels() {
         }
     }
 }
+
+#[test]
+fn repeated_activation_during_pointer_input_does_not_republish_semantics() {
+    let (mut t, mut b, _, rows) = fixture();
+    layout(&mut t, &mut b, false);
+    t.set_active(true);
+    t.dispatch(t.target(rows[0].1), Command::Focus).unwrap();
+    assert!(t.semantics().nodes[&t.root()].states.active);
+    t.acknowledge();
+    for x in 0..1000 {
+        // Match the app's physical state staging before ordinary motion.
+        t.set_active(true);
+        t.pointer_motion(Point {
+            x: x as f32 / 4.,
+            y: 100.,
+        });
+        assert!(
+            !t.invalidation().semantics,
+            "unchanged activation dirtied semantics"
+        );
+    }
+    assert_eq!(t.focused(), Some(rows[0].1));
+    t.set_active(false);
+    assert!(t.invalidation().semantics);
+    assert!(!t.semantics().nodes[&t.root()].states.active);
+    t.acknowledge();
+    t.set_active(false);
+    assert_eq!(t.invalidation(), Invalid::default());
+    // No-op staging must not erase a real transition still awaiting publication.
+    t.set_active(true);
+    t.set_active(true);
+    assert!(t.invalidation().semantics);
+    assert_eq!(t.focused(), Some(rows[0].1));
+}

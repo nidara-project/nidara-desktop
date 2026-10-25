@@ -69,6 +69,31 @@ with a discriminating caller test that fails if constant 16 ms polling returns.
 Preserve input, portal and accessibility wakeups. Lab-specific scheduling is not
 acceptance of the foundations demo or native Settings host.
 
+### Native Settings first executable — remaining integration/gates (#915, 2026-10-24)
+
+The local main/application composition exists, with a real private-bus full-page
+Apply test and CPU parent-mask/snapshot/retirement checks. Native diagnostic
+windows have reached CONTENT_READY but subsequently disconnected, including the
+opaque D5 preview after pointer entry; opening/resize is not live acceptance.
+A source defect causing unchanged activation to republish semantics per pointer
+sample is corrected locally with a compiled old-source control; native closure
+cause remains unlogged; an optimized D5 run with both no-op fixes has handled
+2245 real pointer motions and presented afterwards without disconnecting. Owner
+visual confirmation, normal D7 and long-run responsiveness remain pending. This is not
+an installed replacement. Tokenized native Raise now submits xdg_activation_v1 after the first buffer;
+compositor focus and real launch/modal ordering remain unverified. Missing tokens
+are explicit. queryUI still requires existing agent-view policy/serialization. Sidebar search/results remain absent. Undrawn
+Router calls forward directly to ENTRY and are not staged in the nested-modal
+queue yet. Parent servicing while a font/popup borrows Tree remains limited.
+Polling is still16ms, including settled state: adaptive caller/causal test and
+idle/performance proofs remain open. Provisional loose glyph controls/panel
+header differ from final #921/graded-titlebar work; do not edit that scope here.
+Initial height is exported minHeight, not GTK's760; font list geometry and
+1/1024pt step/range are explicit initial caller policy, not accepted GTK parity.
+Image budgets are not a codec hard allocation bound. Native parent/focus, agent
+policy, Orca SPEECH OUTPUT, installed startup/PSS/frame gates and owner live
+acceptance must be recorded separately. Do not install or publish from this cut.
+
 ### Native Settings wallpaper picker — local host/visual acceptance pending (#915, 2026-10-24)
 
 The local wallpaper_picker builder uses the shared native Button; exact legacy
@@ -77,8 +102,8 @@ separate portal transport fixture do not establish native Window parenting, dial
 focus return, AT-SPI/Orca or owner live acceptance. The actual application caller
 must consume Rendered::idle's returned notices for non-row dependencies, stage its
 external changes, and use external_modal_active to reject parent accessibility
-actions/publish inactivity during the portal request. That caller and native
-acceptance remain pending. The flag alone is neither working parent modality nor
+actions/publish inactivity during the portal request. The local nk-settings application now provides that caller and has CPU causal
+checks for suspension/retirement; native acceptance remains pending. The flag alone is neither working parent modality nor
 an adaptive polling/idle-CPU proof. Preserve these gaps until actual caller and
 causal/native evidence close them; local clean cuts are not shipped acceptance.
 
