@@ -203,3 +203,71 @@ fn header_preserves_content_padding_in_scroll_extent() {
         .unwrap();
     assert_eq!(shell.tree.node(first).unwrap().bounds().y, 64.);
 }
+
+#[test]
+fn header_search_selection_is_excluded_from_adaptive_ink() {
+    let (exports, _, mut shell) = fixture();
+    shell.tree.set_active(true);
+    shell.tree.focus(shell.search).unwrap();
+    shell
+        .tree
+        .set_search_text(shell.search, "Color 日本")
+        .unwrap();
+    shell
+        .tree
+        .search_request(
+            shell.tree.target(shell.search),
+            nk_a11y::Request::SetSelection(shell.search, 0.."Color 日本".len()),
+        )
+        .unwrap();
+    shell
+        .layout_controls(
+            Size {
+                width: 1050.,
+                height: 600.,
+            },
+            ControlsSide::Right,
+            true,
+            &mut ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap(),
+        )
+        .unwrap();
+    let panel = shell
+        .tree
+        .capsule_ids()
+        .find(|id| {
+            shell
+                .tree
+                .node(*id)
+                .unwrap()
+                .children()
+                .contains(&shell.search)
+        })
+        .unwrap();
+    let pane = shell.tree.node(panel).unwrap().bounds();
+    let style = nk_settings::material::control::ControlRecipe::load(&exports.glass, true, false)
+        .unwrap()
+        .at(32.)
+        .unwrap();
+    let material = shell.tree.capsule_material(panel, &style, false).unwrap();
+    material.validate().unwrap();
+    assert!(material.coverage.len() > 1);
+    let semantics = shell.tree.semantics();
+    let geometry = semantics.nodes[&shell.search]
+        .text
+        .as_ref()
+        .unwrap()
+        .geometry
+        .as_ref()
+        .unwrap();
+    for span in &geometry.spans {
+        let x = span.bounds.x + span.bounds.width / 2. - f64::from(pane.x);
+        let y = span.bounds.y + span.bounds.height / 2. - f64::from(pane.y);
+        assert!(
+            !material.coverage.iter().any(|r| x >= r.bounds.x
+                && x < r.bounds.x + r.bounds.width
+                && y >= r.bounds.y
+                && y < r.bounds.y + r.bounds.height),
+            "selection was recoloured as adaptive ink"
+        );
+    }
+}
