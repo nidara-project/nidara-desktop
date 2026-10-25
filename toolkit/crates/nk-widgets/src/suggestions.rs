@@ -415,8 +415,14 @@ impl Suggestions {
         let height = menu.nodes[&scroll].measured.height + 2. * self.style.border;
         let placement = PopupPlacement {
             anchor: [
-                r.x.min((parent.size.width - menu.size.width).max(0.))
-                    .floor() as i32,
+                popup_horizontal(
+                    r.x,
+                    r.width,
+                    parent.metrics.content_floor,
+                    parent.size.width,
+                )
+                .0
+                .floor() as i32,
                 r.y.floor() as i32,
                 r.width.ceil() as i32,
                 r.height.ceil() as i32,
@@ -480,5 +486,21 @@ impl Suggestions {
             }
         }
         self.update_semantics(parent)
+    }
+}
+
+// Keep the popup inside the parent even when a narrow search field is at its right edge.
+fn popup_horizontal(x: f32, field: f32, floor: f32, parent: f32) -> (f32, f32) {
+    let width = field.max(floor).min(parent);
+    (x.min((parent - width).max(0.)).max(0.), width)
+}
+#[cfg(test)]
+mod placement_tests {
+    use super::popup_horizontal;
+    #[test]
+    fn wide_suggestions_grow_left_from_a_right_aligned_field() {
+        assert_eq!(popup_horizontal(600., 180., 400., 800.), (400., 400.));
+        assert_eq!(popup_horizontal(20., 180., 400., 800.), (20., 400.));
+        assert_eq!(popup_horizontal(100., 180., 400., 240.), (0., 240.));
     }
 }

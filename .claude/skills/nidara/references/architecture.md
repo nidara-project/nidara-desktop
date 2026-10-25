@@ -3501,13 +3501,13 @@ The list uses `nk-wayland::Window::open_popup_overlay`, an xdg popup on the exis
 parent queue (same positioner rules as Dropdown), without a nested modal loop or a
 keyboard grab. Parent input/IME, Config1 notices, frame callbacks and buffer releases
 continue while open. Popup IDs reject stale events; fractional scale and configured
-geometry belong to that popup. Reposition tracks the actual header anchor. Its option
+geometry belong to that popup. Reposition tracks the actual header anchor. Suggestions cap their width to the parent and shift left at its right edge. Its option
 bounds use acknowledged popup coordinates even outside the parent window's rectangle.
 The editable field keeps focus; AT-SPI receives expanded, ListBox Selection and
 ActiveDescendantChanged with actual option references. Do not substitute an attribute
 string or focused=true on a second node for the active descendant.
 
-`settings::search` supplies localized pages, available Config1 rows and manifest
+`settings::search` folds case and strips NFD combining diacritics on queries and labels. Icon-theme dependencies are refreshed on both content and results pages. It supplies localized pages, available Config1 rows and manifest
 custom/disclosure labels. Eight suggestions plus View all (N) are bounded independently
 of the full match set. The ordinary results page uses existing rows and explicit page
 routing; typing never replaces its current content. Builder-owned runtime objects
