@@ -38,7 +38,9 @@ a setting. The native sequence checks 8+all, Down/Up, Escape preserving both que
 and content, Enter opening results, and the observed AT-SPI Back action restoring
 Appearance. CPU and log-growth samples distinguish idle from interaction.
 
-Search ignores case and Unicode combining diacritics on both the query and labels.
+Search ignores case and, after NFD decomposition, removes only marks in
+U+0300–U+036F from both the query and labels. Script-specific marks outside that
+block, including Japanese dakuten and handakuten, remain significant.
 Enter with no highlighted option opens the first suggestion. The suggestion popup
 fits within the parent window horizontally, growing left when the field is near
 the right edge. Icon-theme updates also apply while the results page is visible.

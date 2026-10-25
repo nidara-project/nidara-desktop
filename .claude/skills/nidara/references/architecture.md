@@ -3507,7 +3507,7 @@ The editable field keeps focus; AT-SPI receives expanded, ListBox Selection and
 ActiveDescendantChanged with actual option references. Do not substitute an attribute
 string or focused=true on a second node for the active descendant.
 
-`settings::search` folds case and strips NFD combining diacritics on queries and labels. Icon-theme dependencies are refreshed on both content and results pages. It supplies localized pages, available Config1 rows and manifest
+`settings::search` folds case and strips only U+0300–U+036F after NFD decomposition on queries and labels; script-specific marks such as Japanese dakuten remain significant. Icon-theme dependencies are refreshed on both content and results pages. It supplies localized pages, available Config1 rows and manifest
 custom/disclosure labels. Eight suggestions plus View all (N) are bounded independently
 of the full match set. The ordinary results page uses existing rows and explicit page
 routing; typing never replaces its current content. Builder-owned runtime objects

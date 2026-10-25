@@ -7,10 +7,11 @@ use crate::{
 };
 use nk_widgets::{Kind, NodeId, Result, Tree};
 use std::collections::{HashMap, HashSet};
-use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
+use unicode_normalization::UnicodeNormalization;
 fn normalized(text: &str) -> String {
     text.nfd()
-        .filter(|c| !is_combining_mark(*c))
+        // Fold common accents without discarding script-specific marks such as dakuten.
+        .filter(|c| !matches!(c, '\u{0300}'..='\u{036f}'))
         .flat_map(char::to_lowercase)
         .collect()
 }
@@ -208,5 +209,12 @@ mod normalization_tests {
         assert_eq!(normalized("Configuración"), normalized("CONFIGURACION"));
         assert_eq!(normalized("CAFÉ"), normalized("cafe\u{301}"));
         assert_eq!(normalized("日本語"), "日本語");
+    }
+    #[test]
+    fn preserves_japanese_voicing_and_other_script_marks() {
+        assert_ne!(normalized("がめん"), normalized("かめん"));
+        assert_eq!(normalized("がめん"), normalized("か\u{3099}めん"));
+        assert_ne!(normalized("ぱ"), normalized("は"));
+        assert_ne!(normalized("بَ"), normalized("ب"));
     }
 }
