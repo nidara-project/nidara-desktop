@@ -103,3 +103,27 @@ Idle capsule washes preserve hover RGB at zero alpha, matching server controls
 for normal and destructive buttons. D5 and D7 share this target; interpolating
 from transparent black would change the visible fade. Native fade acceptance
 remains pending; earlier fixed capture binaries predate this correction.
+
+
+## Bounded capsule diagnostic mode
+
+`--capsule-lab=white|text|dark|sweep` reuses the installed Appearance export and
+portal subscription, retained controls and existing AT-SPI Bridge. The lab paints
+explicit backdrop stimuli rather than product material values. It deliberately
+shows server controls beside retained controls for comparison. `--capsule-level=0.5`
+sets a stationary sweep level; `--capsule-sweep-ms=2000` opts into one dark–white–dark
+cycle, begun after the first FrameDone. Without a duration there is no sweep loop;
+reduced motion prevents or cancels it. No material value or preference is changed.
+
+The lab uses 16 ms polling during a bounded sweep or D5 wash, otherwise 1000 ms;
+this is its own caller policy, not the foundations demo's scheduling integration.
+The printed layer_paints counts successful client layer-buffer paints only.
+No native idle, CPU, compositor damage, capture, presentation or timing result
+follows from that diagnostic. This local cut does not include the external
+backdrop process, fault harness, or their historical fixed-binary acceptance.
+
+
+The custom root canvas excludes each capsule that CapsuleComposition owns in a
+layer. Layer creation errors remain explicit errors, rather than an allocation
+fallback. Reduced motion logs CAPSULE_LAB_SWEEP_DISABLED with the stationary
+level when it prevents or cancels a requested sweep.

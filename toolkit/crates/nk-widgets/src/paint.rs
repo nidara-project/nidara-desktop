@@ -197,24 +197,32 @@ impl Tree {
             }
         }
         if surface == Surface::Content && !self.layered {
-            let clip = self.nodes[&self.root].bounds;
-            for id in self.capsules.keys() {
-                if let Some(style) = self.capsule_styles.get(id) {
-                    canvas.clip(clip);
-                    self.paint_capsule_into(
-                        *id,
-                        Point::default(),
-                        &mut canvas,
-                        palette,
-                        Some(style),
-                    )?;
-                    canvas.pop_clip();
-                } else {
-                    self.paint_node(*id, Point::default(), &mut canvas, palette, clip)?;
-                }
-            }
+            self.paint_capsules_fallback(&mut canvas, palette)?;
         }
         Ok(canvas.finish())
+    }
+    /// Paint retained opaque capsules into an application's existing root canvas.
+    pub fn paint_capsules_fallback(&self, canvas: &mut Canvas, palette: Palette) -> Result<()> {
+        self.paint_capsules_fallback_where(canvas, palette, |_| true)
+    }
+    /// Paint only included capsules; the host can exclude panels owned by layers.
+    pub fn paint_capsules_fallback_where(
+        &self,
+        canvas: &mut Canvas,
+        palette: Palette,
+        include: impl Fn(NodeId) -> bool,
+    ) -> Result<()> {
+        let clip = self.nodes[&self.root].bounds;
+        for id in self.capsules.keys().filter(|id| include(**id)) {
+            if let Some(style) = self.capsule_styles.get(id) {
+                canvas.clip(clip);
+                self.paint_capsule_into(*id, Point::default(), canvas, palette, Some(style))?;
+                canvas.pop_clip();
+            } else {
+                self.paint_node(*id, Point::default(), canvas, palette, clip)?;
+            }
+        }
+        Ok(())
     }
     fn paint_node(
         &self,

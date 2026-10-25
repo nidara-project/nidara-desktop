@@ -621,3 +621,75 @@ first sync; it is not frame/presentation time or phase-locked to D7.
 This correction changes documentation/comments only. Connecting a caller to
 bounded fast polling remains unimplemented in this cut; no synthetic polling test
 or native idle proof is substituted.
+
+
+## Rebuilt local bounded-lab cut — 2026-10-23
+
+Parent: corrected fallback `d1942070`, above the four earlier local cuts. This
+extracts the existing `570fee71` lab app and shared root-canvas painter/count API,
+with the later `is_animating()` caller condition retained for this lab only.
+It does not import the external-backdrop app, overlay scenes, fault harnesses or
+historical native acceptance sections. All earlier source/fixed-binary evidence
+continues to describe its original heads, not this rebuilt cut.
+
+White, text, dark and stationary/bounded sweep scenes reuse Appearance's actual
+portal/export reader, the retained Tree, existing Bridge and CapsuleComposition.
+The lab deliberately enables server controls for comparison. The custom D5 root
+canvas uses the same retained painter as ordinary content. `paint_count()` really
+increments after `Window::paint_layer` returns success, before the synchronized
+material/placement requests; it counts neither root commits nor compositor work.
+Its live counter behavior is not accepted here through a native run.
+
+Local validation uses `CARGO_INCREMENTAL=0`, jobs1 and the shared Cargo target.
+`NK_REQUIRE_EXPORT=1` and absolute NK_SETTINGS_DATA point to the real exports in
+`889-capsule-recipes/toolkit/target/recipes-split-data`; their exporters/tokens
+are unchanged in these later cuts.
+
+- `target/capsule-lab-split-restored-tests.log`: 61 widget/demo tests PASS
+  (17+7+15+8+5+2+7). Existing coverage/input/D5 tests remain; the new custom-root
+  canvas assertion checks the actual painted capsule wash and transparent area
+  outside it. The sweep test checks sampled start/mid/end and clamping after one
+  duration; it is not a native loop/scheduling oracle. Its name was narrowed to
+  sweep_samples_clamp_to_one_cycle after the full run; the renamed test also
+  passes in target/capsule-lab-split-sweep-named.log.
+- `target/capsule-lab-split-root-control.log`: a compiled production fault skips
+  the shared root-canvas painter. The same test completes its prior coverage,
+  input and fade setup, then fails its own `custom root canvas omitted the retained
+  capsule wash` pixel assertion (0 vs26). Restored before the final full suite.
+- `target/capsule-lab-split-clippy.log`: widgets/demo all targets, -D warnings.
+  fmt, skill-docs and diff checks pass.
+- The initial shell redirection found no new target directory and ran no tests;
+  the directory was created. A later test addition initially used u32 instead of
+  Canvas's u16 dimensions (`capsule-lab-split-final-tests.log`); corrected test
+  types, without a production fix. These failures are not acceptance evidence.
+
+The lab uses a 16 ms interval while its sweep or D5 wash is active and 1000 ms
+otherwise. This source integration is not a discriminating native scheduler or
+portal/AT-SPI latency test. The foundations demo's constant16ms poll and its
+adaptive-caller test remain named debt. No native walkthrough, AT-SPI/Orca,
+compositor ink/shadow curve, fractional D5, idle CPU/frame counts, presentation,
+performance or owner-live acceptance was added. No fixed binaries were rebuilt.
+
+
+### Lab review correction — per-capsule root ownership
+
+Review173 found the lab inferred every panel's ownership from panels[0]. The lab
+now always calls paint_capsules_fallback_where and excludes each panel with its
+own CapsuleComposition::layer lookup. Ordinary content's original helper still
+includes all capsules. Layer allocation failures continue to propagate from sync:
+this does not add recovery from the64-layer limit or other allocation failures.
+
+The existing coverage/input/fade test now also creates two visible panels and
+checks both mixed-ownership permutations on a real CPU canvas. A synthetic panel
+ID predicate represents layer ownership; no LayerId/provider/native allocation is
+fabricated. Included panel pixels are opaque and excluded panel pixels stay
+transparent. A compiled production fault ignores this inclusion predicate and
+fails its own mixed-ownership pixel assertion (255 vs0), after all prior setup
+and pixel checks: target/capsule-lab-mixed-control.log. Source restored before
+61 widgets/demo tests PASS in target/capsule-lab-mixed-restored-tests.log with
+mandatory unchanged exports. All-target Clippy -D warnings passes in
+target/capsule-lab-mixed-clippy.log; fmt/skill-docs/diff pass.
+
+Reduced-motion selection/start/cancellation now logs SWEEP_DISABLED and the
+stationary level; source compiled, no native log/capture acceptance added. All
+native/scheduling/idle/presentation limits above still apply.

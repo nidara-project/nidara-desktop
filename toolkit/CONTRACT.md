@@ -435,6 +435,17 @@ copied into the frozen TypeScript material or given hidden defaults in transport
   establish event-driven scheduling or idle behavior. D5 samples client monotonic
   time since first sync, not presentation timestamps or the D7 compositor clock.
 
+The diagnostic lab may paint retained opaque capsules into an existing root canvas
+through `Tree::paint_capsules_fallback`; it uses the same painter as the ordinary
+content path. `paint_capsules_fallback_where` accepts a per-capsule inclusion
+predicate for a host with mixed root/layer ownership. The lab tests each capsule
+against CapsuleComposition::layer, never inferring all panels from one panel.
+This filter does not recover from a layer allocation error: sync still returns it. `CapsuleComposition::paint_count` counts successful client layer-buffer
+paints only, incremented after `Window::paint_layer` succeeds; it is not a compositor
+commit, damage, capture or presentation counter. A diagnostic count is not idle or
+performance acceptance. The bounded lab can consume `is_animating()` for its own
+poll interval; this does not integrate adaptive polling into the foundations demo.
+
 Acceptance is developed in widgets-demo, with a fixed white page, black text over
 white, a dark page and a continuous dark-to-white backdrop sweep under a stationary
 capsule. Repeat native and server-side controls at scales 1 and 1.25. Assert shadow

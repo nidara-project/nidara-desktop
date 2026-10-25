@@ -2768,3 +2768,27 @@ pixels, not just the stored alpha.
 Idle washes retain the matching hover RGB with alpha zero, including destructive
 controls, as Hyalo server controls do. Transparent black would change the straight
 RGBA interpolation and therefore the visible fade.
+
+
+The #889 diagnostic `--capsule-lab=white|text|dark|sweep` is a separate app mode
+using the same Appearance reader, Bridge, retained Tree and CapsuleComposition.
+Its root paints explicit diagnostic stimuli; `Tree::paint_capsules_fallback` adds
+opaque capsules to that existing canvas using the ordinary retained painter.
+Server controls are deliberately enabled here for comparison, unlike --capsules.
+Sweep needs an explicit positive --capsule-sweep-ms; after one cycle it stops.
+Reduced motion prevents/cancels that sweep. The lab alone consumes is_animating()
+for a 16 ms active / 1000 ms inactive poll interval; portal/AT-SPI work still runs
+in idle. This is not integration into the foundations demo's constant 16 ms poll,
+nor proof of native wakeup latency, idle CPU or zero compositor frames.
+`paint_count()` increments after a successful client layer-buffer paint; it does
+not count compositor work or presentations. External-backdrop harnesses and
+native acceptance on rebuilt heads remain separate work.
+
+
+The lab custom-root painter filters ownership per capsule with
+paint_capsules_fallback_where: panels with a CapsuleComposition layer are excluded
+individually, never inferred from panels[0]. Ordinary opaque content still paints
+all its capsules. A layer allocation error still propagates out of sync; this
+filter is not silent allocation recovery. The mixed-ownership pixel oracle is
+CPU-only with a synthetic panel-ID predicate, not a native allocation test.
+Reduced-motion sweep selection/cancellation prints its stationary level explicitly.
