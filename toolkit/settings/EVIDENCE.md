@@ -1190,3 +1190,32 @@ measurement harness afterwards. This is near zero; no event-loop change is made.
 The installed Hyalo was not yet the running session binary, so this is CPU
 measurement only, not D7 acceptance after #935/restart. The earlier smoke failure
 was the unrelated intermittent Settings slice deadline, not a block-F regression.
+
+### Live cursor-entry regression after #935 + #938 and session restart (2026-10-25)
+
+The owner authenticated installation and the session was restarted. The running
+Hyalo was verified from /proc/194913/exe: commit 61e5343b92c9c0531657221dbd349567bf6ebd2d,
+SHA256 c8103a30f400da15566bfd8aef45eb3f291ddcdb0591d67ffd761d3fb54ebcf0. This is the real desktop session, not nested.
+
+Client: F implementation 79014d9892cd676b2a5c92f042a3459dafffcbc5,
+SHA256 2783e95a48ae9114332e0a4a85d71fb0bdbbf1e3baa313cc4c58beae3bd998e9,
+using data exported from F. Exact launch:
+
+```
+WAYLAND_DEBUG=1 NK_SETTINGS_DATA=/home/angel/Nidara/ChatGPT/915-block-f/build/settings-data /home/angel/Nidara/ChatGPT/915-block-f/toolkit/target/review-20261025/nk-settings-f open appearance
+```
+
+CONTENT_READY and actual material/get_material/set_glass requests were observed.
+The gated nidara-click wrapper hovered the exact-PID focused window's titlebar,
+sidebar, content and controls without pressing buttons. All four actions succeeded;
+the wire records three wl_pointer.enter events. Both processes survived the final
+five-second observation, with no Broken pipe, SETTINGS_ERROR or protocol error.
+The probe then terminated only its own client; the compositor remains running.
+
+Result: PASS for the cursor-entry crash regression. This does not establish the
+complete D7 visual/interaction acceptance gate. No compositor error is worked
+around in the client. The one-shot user service exited successfully and is inactive.
+
+Evidence: toolkit/target/review-20261025/d7-live/ (result.json, full client
+WAYLAND_DEBUG=1 log, compositor journal, exact window and hover commands/results).
+Client wire-log SHA256: c1ae07c0accde72bfa708cae26f76b7b448d78151f255259a3b6386326862fcc.
