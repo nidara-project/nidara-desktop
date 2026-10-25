@@ -48,7 +48,17 @@ impl CompositorHandler for Hyalo {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
+        // Read before the buffer handler takes it: this commit brings new content.
+        let attached = smithay::wayland::compositor::with_states(surface, |s| {
+            matches!(
+                s.cached_state.get::<smithay::wayland::compositor::SurfaceAttributes>().current().buffer,
+                Some(smithay::wayland::compositor::BufferAssignment::NewBuffer(_))
+            )
+        });
         on_commit_buffer_handler::<Self>(surface);
+        if attached {
+            self.record_frame(surface);
+        }
         self.backend.early_import(surface);
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();
@@ -83,6 +93,24 @@ impl CompositorHandler for Hyalo {
         // closing picture is taken while the surface still holds its last frame (wm/motion.rs).
         if let Some(id) = self.wm.by_surface(surface).map(|m| m.id) {
             self.start_closing(id);
+        }
+    }
+}
+
+impl Hyalo {
+    /// A buffer arrived somewhere in a window's tree (a subsurface's, a layer's too): its
+    /// time, for `msg frames` (wm/mod.rs `Managed::frames`).
+    fn record_frame(&mut self, surface: &WlSurface) {
+        let mut root = surface.clone();
+        while let Some(parent) = get_parent(&root) {
+            root = parent;
+        }
+        let now = std::time::Duration::from(self.clock.now()).as_secs_f64() * 1000.;
+        let Some(id) = self.wm.by_surface(&root).map(|m| m.id) else { return };
+        let Some(m) = self.wm.get_mut(id) else { return };
+        m.frames.push_back(now);
+        while m.frames.front().is_some_and(|t| now - t > crate::wm::FRAMES_KEPT_MS) {
+            m.frames.pop_front();
         }
     }
 }

@@ -23,6 +23,8 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   stats                           what each output's frames cost over the last second: frames
                                     drawn/unchanged, damage, CPU build/render, GPU time, and
                                     what the glass did (captures, passes, px, draws, measures)
+  frames ID                       when window ID last brought new content (a buffer anywhere
+                                    in its tree), CLOCK_MONOTONIC ms, the last 10 s
   debug-overlay on|off            outline each glass's capture region, flash a re-capture,
                                     outline the damage (also HYALO_DEBUG_OVERLAY=1)
   do <command…>                   a window-manager command, as in a binding:
@@ -114,6 +116,9 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
         "layers" => Request::Layers,
         "cursor" => Request::CursorPosition,
         "stats" => Request::Stats,
+        "frames" => Request::Frames {
+            id: args.get(1).ok_or("frames needs a window id")?.parse().map_err(|e| format!("frames: {e}"))?,
+        },
         "debug-overlay" => Request::DebugOverlay { on: on_off(args.get(1).ok_or("debug-overlay needs on or off")?)? },
         "lock" => Request::Lock,
         "idle" => Request::Idle,

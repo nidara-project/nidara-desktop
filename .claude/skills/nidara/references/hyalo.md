@@ -2439,6 +2439,14 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
 
 ## Measuring the render (#766 A, B)
 
+**An app's smoothness, not the compositor's** (toolkit/PHASE1.md gate 4): `msg frames ID` lists
+when window ID's tree last brought new content — a commit with a new buffer on any surface of
+it, subsurfaces and layers too — in CLOCK_MONOTONIC ms (Python's `time.monotonic() * 1000`),
+the last 10 s (`Managed::frames`, `handlers.rs` `record_frame`, read before the buffer handler
+takes the assignment). `scripts/dev/smoothness-probe.py` drives a scroll or a drag with
+`nidara-input … [ms]` (the optional duration spreads the notches or the glide) and compares the
+**time-weighted** p95 of the gaps: the per-gap p95 does not see a single freeze.
+
 `render/stats.rs` instruments every frame, per output:
 
 - **`nidara-hyalo msg stats`** — over the last second, per output: frames drawn, unchanged and

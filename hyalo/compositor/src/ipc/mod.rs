@@ -258,6 +258,8 @@ pub enum Request {
     CursorPosition,
     /// What each output's frames cost over the last second (render/stats.rs, #766).
     Stats,
+    /// When window `id`'s tree brought new content, the last 10 s (wm/mod.rs `frames`).
+    Frames { id: crate::wm::WindowId },
     /// The debug overlay: each glass's capture region, re-captures, damage (render/stats.rs).
     DebugOverlay { on: bool },
     /// Whether the session is locked, and the outputs a lock surface covers (lock.rs).
@@ -317,6 +319,8 @@ pub enum Response {
     Layers { layers: Vec<LayerInfo> },
     CursorPosition { x: f64, y: f64 },
     Stats { stats: crate::render::stats::Stats },
+    /// CLOCK_MONOTONIC milliseconds, oldest first — Python's `time.monotonic() * 1000`.
+    Frames { id: crate::wm::WindowId, times_ms: Vec<f64> },
     Lock { locked: bool, guard: bool, surfaces: Vec<String> },
     Idle { idle_secs: u64, inhibited: bool, config: crate::config::IdleConfig },
     Xwayland { display: Option<String>, ready: bool, scale: f64, overrides: usize },

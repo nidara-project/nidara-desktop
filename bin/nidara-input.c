@@ -7,8 +7,12 @@
 //   nidara-input move       <x> <y> <w> <h>
 //   nidara-input click      <x> <y> <w> <h>          # left button
 //   nidara-input rightclick <x> <y> <w> <h>          # right button
-//   nidara-input scroll     <x> <y> <w> <h> <dx> <dy> # wheel notches at (x,y)
-//   nidara-input drag       <x> <y> <w> <h> <x2> <y2> # press at (x,y), glide to (x2,y2), release
+//   nidara-input scroll     <x> <y> <w> <h> <dx> <dy> [ms] # wheel notches at (x,y)
+//   nidara-input drag       <x> <y> <w> <h> <x2> <y2> [ms] # press at (x,y), glide to (x2,y2), release
+//
+// [ms] spreads the notches, or the glide, over that many milliseconds: a sustained scroll or a
+// slow drag, what scripts/dev/smoothness-probe.py measures an app's frames over. Without it a
+// scroll's notches go at once and a drag glides in ~290 ms, as before.
 //
 // (x,y) is the target position and (w,h) the output's extent, BOTH in the same
 // (logical) units — motion_absolute maps x/w → output fraction, so the caller
@@ -59,7 +63,9 @@ static uint32_t now_ms(void) {
 // wlroots wheel convention); `discrete` is the integer step apps use for line/
 // notch scrolling. axis is called before axis_discrete (the latter extends it).
 // No axis_stop — wheel sources have no kinetic end (unlike touchpad/finger).
-static void emit_scroll(struct zwlr_virtual_pointer_v1 *vp, uint32_t axis, int notches) {
+static void nap_ms(long ms);
+static void emit_scroll(struct wl_display *dpy, struct zwlr_virtual_pointer_v1 *vp, uint32_t axis,
+                        int notches, long gap_ms) {
     if (notches == 0) return;
     int step = notches > 0 ? 1 : -1;
     int n = notches > 0 ? notches : -notches;
@@ -70,6 +76,7 @@ static void emit_scroll(struct zwlr_virtual_pointer_v1 *vp, uint32_t axis, int n
         zwlr_virtual_pointer_v1_axis(vp, t, axis, value);
         zwlr_virtual_pointer_v1_axis_discrete(vp, t, axis, value, step);
         zwlr_virtual_pointer_v1_frame(vp);
+        if (gap_ms > 0) { wl_display_flush(dpy); nap_ms(gap_ms); }
     }
 }
 
@@ -86,8 +93,10 @@ static void nap_ms(long ms) {
 // caller has already positioned the pointer at (x1,y1). Left button only.
 static void emit_drag(struct wl_display *dpy, struct zwlr_virtual_pointer_v1 *vp,
                       uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2,
-                      uint32_t w, uint32_t h) {
-    const int STEPS = 24;
+                      uint32_t w, uint32_t h, long duration_ms) {
+    // One motion every ~8 ms over a requested duration (a 125 Hz mouse); else 24 steps.
+    const int STEPS = duration_ms > 0 ? (int)(duration_ms / 8 > 24 ? duration_ms / 8 : 24) : 24;
+    const long GAP = duration_ms > 0 ? duration_ms / STEPS : 12;
     wl_display_flush(dpy);   // make sure the initial positioning motion landed
     nap_ms(40);
     uint32_t t = now_ms();
@@ -103,7 +112,7 @@ static void emit_drag(struct wl_display *dpy, struct zwlr_virtual_pointer_v1 *vp
         zwlr_virtual_pointer_v1_motion_absolute(vp, t, ix, iy, w, h);
         zwlr_virtual_pointer_v1_frame(vp);
         wl_display_flush(dpy);
-        nap_ms(12);          // ~290ms glide total
+        nap_ms(GAP);         // ~290ms glide total by default
     }
     nap_ms(50);              // settle at the target before dropping
     t = now_ms();
@@ -119,17 +128,18 @@ int main(int argc, char **argv) {
     int is_scroll = strcmp(verb, "scroll") == 0;
     int is_drag   = strcmp(verb, "drag") == 0;
     if ((!is_move && !is_click && !is_right && !is_scroll && !is_drag) ||
-        ((is_scroll || is_drag) ? argc != 8 : argc != 6)) {
+        ((is_scroll || is_drag) ? (argc != 8 && argc != 9) : argc != 6)) {
         fprintf(stderr,
             "usage: nidara-input move|click|rightclick <x> <y> <w> <h>\n"
-            "       nidara-input scroll <x> <y> <w> <h> <dx> <dy>\n"
-            "       nidara-input drag   <x> <y> <w> <h> <x2> <y2>\n");
+            "       nidara-input scroll <x> <y> <w> <h> <dx> <dy> [ms]\n"
+            "       nidara-input drag   <x> <y> <w> <h> <x2> <y2> [ms]\n");
         return 2;
     }
     uint32_t x = (uint32_t)strtoul(argv[2], NULL, 10);
     uint32_t y = (uint32_t)strtoul(argv[3], NULL, 10);
     uint32_t w = (uint32_t)strtoul(argv[4], NULL, 10);
     uint32_t h = (uint32_t)strtoul(argv[5], NULL, 10);
+    long duration = argc == 9 ? strtol(argv[8], NULL, 10) : 0;
     int dx = 0, dy = 0;
     uint32_t x2 = 0, y2 = 0;
     if (is_scroll) {
@@ -172,10 +182,12 @@ int main(int argc, char **argv) {
         zwlr_virtual_pointer_v1_button(vp, t, btn, WL_POINTER_BUTTON_STATE_RELEASED);
         zwlr_virtual_pointer_v1_frame(vp);
     } else if (is_scroll) {
-        emit_scroll(vp, WL_POINTER_AXIS_VERTICAL_SCROLL, dy);
-        emit_scroll(vp, WL_POINTER_AXIS_HORIZONTAL_SCROLL, dx);
+        int n = (dy < 0 ? -dy : dy) + (dx < 0 ? -dx : dx);
+        long gap = duration > 0 && n > 0 ? duration / n : 0;
+        emit_scroll(dpy, vp, WL_POINTER_AXIS_VERTICAL_SCROLL, dy, gap);
+        emit_scroll(dpy, vp, WL_POINTER_AXIS_HORIZONTAL_SCROLL, dx, gap);
     } else if (is_drag) {
-        emit_drag(dpy, vp, x, y, x2, y2, w, h);
+        emit_drag(dpy, vp, x, y, x2, y2, w, h, duration);
     }
 
     // Flush + roundtrip so the events actually reach the compositor before exit.
