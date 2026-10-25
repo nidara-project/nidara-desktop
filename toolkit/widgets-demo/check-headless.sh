@@ -15,7 +15,7 @@ case "${1:-}" in
     --inner)
         export HYALO_CONTROL="$NK_WIDGETS_RUN/control"
         mkfifo "$HYALO_CONTROL"
-        export HYALO_CONFIG=/dev/null HYALO_SETTINGS="$NK_WIDGETS_RUN/settings.toml" HYALO_A11Y_MANAGER=1
+        export HYALO_CONFIG=${NK_WIDGETS_HYALO_CONFIG:-/dev/null} HYALO_SETTINGS="$NK_WIDGETS_RUN/settings.toml" HYALO_A11Y_MANAGER=1
         "$HYALO_BIN" --winit -c "'$repo/toolkit/widgets-demo/check-headless.sh' --driver" > "$NK_WIDGETS_LOG/hyalo.log" 2>&1 &
         compositor=$!
         trap 'kill "$compositor" 2>/dev/null || true; wait "$compositor" 2>/dev/null || true' EXIT
