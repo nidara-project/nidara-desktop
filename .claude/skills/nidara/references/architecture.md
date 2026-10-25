@@ -3484,3 +3484,32 @@ schedule/workflow_dispatch flag `HYALO_ANIMATION_CHECKS`, never for a PR. Reuse
 `nk-real-common.start_ime` for profile/theme isolation. Hangul may commit then
 forward Escape: preserve SearchInput's one-shot finished-composition boundary
 and FontChooser's matching close guard; otherwise one Escape also erases/closes.
+
+
+### Editable search suggestions (#915)
+
+`nk_widgets::suggestions::Suggestions` attaches to an existing SearchInput before
+its first semantic publication. That field remains an editable ComboBox throughout
+its lifetime; one ListBox and bounded option slots live under it in the same tree.
+MenuList supplies layout, pointer handling, scrolling and keyboard highlight.
+SearchInput retains the editor, clipboard and IME. Up/Down choose an active option,
+Enter activates it, Escape dismisses without clearing committed text. Preedit and
+the finished-composition Escape boundary have priority. Programmatic page navigation
+must dismiss the model. Identical idle samples must not republish semantics.
+
+The list uses `nk-wayland::Window::open_popup_overlay`, an xdg popup on the existing
+parent queue (same positioner rules as Dropdown), without a nested modal loop or a
+keyboard grab. Parent input/IME, Config1 notices, frame callbacks and buffer releases
+continue while open. Popup IDs reject stale events; fractional scale and configured
+geometry belong to that popup. Reposition tracks the actual header anchor. Its option
+bounds use acknowledged popup coordinates even outside the parent window's rectangle.
+The editable field keeps focus; AT-SPI receives expanded, ListBox Selection and
+ActiveDescendantChanged with actual option references. Do not substitute an attribute
+string or focused=true on a second node for the active descendant.
+
+`settings::search` supplies localized pages, available Config1 rows and manifest
+custom/disclosure labels. Eight suggestions plus View all (N) are bounded independently
+of the full match set. The ordinary results page uses existing rows and explicit page
+routing; typing never replaces its current content. Builder-owned runtime objects
+without registry/manifest labels are not indexed yet. New translations fall back to
+English by the existing export policy. No workflow step or PR gate was added.

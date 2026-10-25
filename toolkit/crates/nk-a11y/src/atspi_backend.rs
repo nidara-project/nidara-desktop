@@ -174,6 +174,7 @@ fn role(n: &Node) -> AtRole {
         Role::TextInput => AtRole::Entry,
         Role::Password => AtRole::PasswordText,
         Role::ComboBox => AtRole::ComboBox,
+        Role::ListBox => AtRole::ListBox,
         Role::Option => AtRole::ListItem,
         Role::CheckBox => AtRole::CheckBox,
         Role::Button => AtRole::Button,
@@ -905,6 +906,12 @@ impl Backend {
                         0,
                         current.into(),
                     )?
+                }
+                Event::ActiveDescendant(id, child) => {
+                    let address = child
+                        .map(|child| self.object(child).address(child))
+                        .unwrap_or_else(|| self.object(0).null());
+                    self.emit(id, "ActiveDescendantChanged", "", 0, 0, Value::new(address))?;
                 }
                 Event::Children(id) => {
                     let before = self

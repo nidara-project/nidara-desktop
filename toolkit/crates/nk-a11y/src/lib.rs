@@ -24,6 +24,7 @@ pub enum Role {
     TextInput,
     Password,
     ComboBox,
+    ListBox,
     Option,
     CheckBox,
     Button,
@@ -123,6 +124,7 @@ pub struct Node {
     pub bounds: Bounds,
     pub text: Option<TextInfo>,
     pub value: Option<ValueInfo>,
+    pub active_descendant: Option<NodeId>,
     pub children: Vec<NodeId>,
     pub relations: Vec<Relation>,
     pub attributes: BTreeMap<String, String>,
@@ -139,6 +141,7 @@ impl Node {
             bounds: Bounds::default(),
             text: None,
             value: None,
+            active_descendant: None,
             children: vec![],
             relations: vec![],
             attributes: BTreeMap::new(),
@@ -163,6 +166,7 @@ impl Tree {
         let ids: BTreeSet<_> = nodes.keys().copied().collect();
         for n in nodes.values_mut() {
             n.children.retain(|id| ids.contains(id));
+            n.active_descendant = n.active_descendant.filter(|id| ids.contains(id));
             n.relations.retain(|r| {
                 let (Relation::LabelledBy(id) | Relation::LabelFor(id)) = r;
                 ids.contains(id)
@@ -192,6 +196,26 @@ impl Tree {
                 let (Relation::LabelledBy(target) | Relation::LabelFor(target)) = relation;
                 if !self.nodes.contains_key(target) {
                     return Err("missing relation target".into());
+                }
+            }
+            if let Some(active) = n.active_descendant {
+                let mut descendants = n.children.clone();
+                let mut found = false;
+                let mut visited = BTreeSet::new();
+                while let Some(child) = descendants.pop() {
+                    if !visited.insert(child) {
+                        continue;
+                    }
+                    if child == active {
+                        found = true;
+                        break;
+                    }
+                    if let Some(c) = self.nodes.get(&child) {
+                        descendants.extend(&c.children);
+                    }
+                }
+                if !found {
+                    return Err("active descendant is not in the subtree".into());
                 }
             }
             focus += usize::from(n.states.focused);
@@ -300,12 +324,13 @@ pub enum Event {
     /// A range control's current value changed.
     Value(NodeId),
     Children(NodeId),
+    ActiveDescendant(NodeId, Option<NodeId>),
 }
 impl Role {
     /// Whose children are chosen among: exposed through AT-SPI Selection. A reader asks a
     /// combo box for its selected child to say its value, collapsed or open (#835).
     pub fn is_selection_container(self) -> bool {
-        matches!(self, Role::ComboBox)
+        matches!(self, Role::ComboBox | Role::ListBox)
     }
 }
 impl Tree {
@@ -358,6 +383,9 @@ pub fn diff(old: Option<&Tree>, new: &Tree) -> Result<Vec<Event>> {
             if a != b {
                 out.push(Event::State(n.id, key, b));
             }
+        }
+        if before.and_then(|n| n.active_descendant) != n.active_descendant {
+            out.push(Event::ActiveDescendant(n.id, n.active_descendant));
         }
         if before.is_some_and(|b| b.children != n.children) {
             out.push(Event::Children(n.id));
@@ -569,5 +597,39 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, Event::SelectionChanged(_)))
         );
+    }
+    #[test]
+    fn editable_combo_keeps_focus_and_reports_its_active_list_descendant() {
+        let mut combo = Node::new(1, Role::ComboBox, "Search");
+        combo.children = vec![2];
+        combo.states.focused = true;
+        combo.states.expandable = true;
+        combo.states.expanded = true;
+        let mut list = Node::new(2, Role::ListBox, "Suggestions");
+        list.children = vec![3, 4];
+        let mut tree = Tree {
+            root: 1,
+            nodes: BTreeMap::from([
+                (1, combo),
+                (2, list),
+                (3, Node::new(3, Role::Option, "One")),
+                (4, Node::new(4, Role::Option, "Two")),
+            ]),
+        };
+        let old = tree.clone();
+        tree.nodes.get_mut(&1).unwrap().active_descendant = Some(4);
+        tree.nodes.get_mut(&4).unwrap().states.selected = true;
+        tree.validate().unwrap();
+        let events = diff(Some(&old), &tree).unwrap();
+        assert!(events.contains(&Event::ActiveDescendant(1, Some(4))));
+        assert!(events.contains(&Event::SelectionChanged(2)));
+        assert!(tree.nodes[&1].states.focused);
+        assert!(!tree.nodes[&4].states.focused);
+        assert!(diff(Some(&tree), &tree).unwrap().is_empty());
+        let filtered = tree.filtered(|n| n.id != 4);
+        assert_eq!(filtered.nodes[&1].active_descendant, None);
+        filtered.validate().unwrap();
+        tree.nodes.get_mut(&1).unwrap().active_descendant = Some(1);
+        assert!(tree.validate().is_err());
     }
 }

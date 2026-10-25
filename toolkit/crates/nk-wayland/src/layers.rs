@@ -88,7 +88,7 @@ impl Layer {
         }
     }
 }
-fn frame(size: (u32, u32), scale: u32) -> Result<Frame> {
+pub(super) fn frame(size: (u32, u32), scale: u32) -> Result<Frame> {
     let (width, height) = size;
     let scale = f64::from(scale) / 120.;
     let pw = (f64::from(width) * scale).ceil();

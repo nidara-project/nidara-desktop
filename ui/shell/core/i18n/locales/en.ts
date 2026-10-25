@@ -738,6 +738,8 @@ export default {
     "settings.nav.menu":           "Menu",
     "settings.window.close":       "Close",
     "settings.window.sidebar-toggle": "Show or hide the sidebar",
+    "settings.search.view-all": "View all ({count})",
+    "settings.search.results": "Search results",
     "settings.search.no-results":  "No results",
     "settings.page.load-error":    "Failed to load page",
 

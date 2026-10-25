@@ -36,7 +36,7 @@ pub struct Shell {
     pub capsules: nk_widgets::capsule_composition::CapsuleComposition,
     pages: HashMap<NodeId, String>,
     buttons: [NodeId; 3],
-    selected_page: NodeId,
+    selected_page: Option<NodeId>,
     controls_inset: f32,
     header: crate::header::Style,
     navigation: NodeId,
@@ -158,7 +158,7 @@ impl Shell {
             capsules: Default::default(),
             pages,
             buttons,
-            selected_page,
+            selected_page: Some(selected_page),
             controls_inset: styles.controls_inset,
             header: header.clone(),
             navigation,
@@ -193,7 +193,11 @@ impl Shell {
         }
         if let Some(page) = self.pages.get(&id) {
             let page = page.clone();
-            self.tree.select_page(self.selected_page)?;
+            if let Some(selected) = self.selected_page {
+                self.tree.select_page(selected)?;
+            } else {
+                self.tree.clear_page_selection(self.sidebar)?;
+            }
             return Ok(Action::Page(page));
         }
         Ok(match self.buttons.iter().position(|button| *button == id) {
@@ -216,7 +220,16 @@ impl Shell {
         let title = exports.text(&p.label)?;
         self.tree.set_name(self.titlebar, title)?;
         self.tree.select_page(id)?;
-        self.selected_page = id;
+        self.selected_page = Some(id);
+        self.remember(page)
+    }
+    pub fn selected_results(&mut self, title: &str) -> Result<()> {
+        self.tree.set_name(self.titlebar, title)?;
+        self.tree.clear_page_selection(self.sidebar)?;
+        self.selected_page = None;
+        self.remember("search-results")
+    }
+    fn remember(&mut self, page: &str) -> Result<()> {
         if self.history.is_empty() {
             self.history.push(page.to_owned());
         }

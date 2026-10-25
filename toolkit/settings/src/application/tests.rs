@@ -444,3 +444,203 @@ fn staged_external_change_retires_real_picker_before_idle_acceptance() {
     assert_ne!(view.shell.tree.focused(), Some(picker));
     assert!(editor.writes.is_empty());
 }
+
+#[test]
+fn suggestions_leave_content_in_place_until_view_all_and_never_apply() {
+    let mut view = view();
+    let mut editor = Editing::new(schema());
+    view.mount(&mut editor).unwrap();
+    layout(&mut view);
+    let original = view
+        .shell
+        .tree
+        .node(view.shell.content)
+        .unwrap()
+        .children()
+        .to_vec();
+    view.shell.tree.focus(view.shell.search).unwrap();
+    view.shell
+        .tree
+        .set_search_text(view.shell.search, "color")
+        .unwrap();
+    let mut text = ParleyBackend::new(view.fonts.clone()).unwrap();
+    view.update_search(editor.session.store(), &mut text)
+        .unwrap();
+    assert!(view.suggestions.is_open());
+    assert!(!view.search_matches.is_empty());
+    assert!(view.page.is_some());
+    assert!(view.results.is_none());
+    assert_eq!(
+        view.shell.tree.node(view.shell.content).unwrap().children(),
+        original
+    );
+    assert_eq!(
+        view.shell.tree.node(view.shell.titlebar).unwrap().name(),
+        "Appearance"
+    );
+    view.show_results(&mut editor, false).unwrap();
+    assert!(view.page.is_none());
+    let results = view.results.as_ref().unwrap().root;
+    layout(&mut view);
+    assert_eq!(
+        view.shell.tree.node(view.shell.titlebar).unwrap().name(),
+        "Search results"
+    );
+    assert!(
+        view.shell
+            .tree
+            .semantics()
+            .nodes
+            .values()
+            .any(|n| n.name == "Accent color")
+    );
+    view.shell
+        .tree
+        .set_search_text(view.shell.search, "no-such-setting-982375")
+        .unwrap();
+    view.update_search(editor.session.store(), &mut text)
+        .unwrap();
+    assert_eq!(
+        view.results.as_ref().unwrap().root,
+        results,
+        "typing replaced the content page"
+    );
+    assert!(view.search_matches.is_empty());
+    view.show_results(&mut editor, false).unwrap();
+    layout(&mut view);
+    assert!(
+        view.shell
+            .tree
+            .semantics()
+            .nodes
+            .values()
+            .any(|n| n.name == "No results")
+    );
+    view.mount(&mut editor).unwrap();
+    layout(&mut view);
+    assert!(view.results.is_none());
+    assert!(view.page.is_some());
+    assert_eq!(
+        view.shell.tree.node(view.shell.titlebar).unwrap().name(),
+        "Appearance"
+    );
+    assert!(editor.writes.is_empty());
+}
+
+#[test]
+fn search_indexes_pages_available_rows_and_bounds_only_the_suggestions() {
+    let view = view();
+    let editor = Editing::new(schema());
+    for page in view.exports.pages.iter().filter(|p| p.parent.is_none()) {
+        let label = view.exports.text(&page.label).unwrap();
+        let found = search::find(&view.exports, editor.session.store(), label).unwrap();
+        assert!(
+            found.iter().any(|m| m.page == page.id && m.is_page),
+            "page missing from search: {}",
+            page.id
+        );
+    }
+    let found = search::find(&view.exports, editor.session.store(), "appearance").unwrap();
+    assert!(found.len() > 8);
+    assert!(found[0].is_page);
+    let choices = search::suggestions(&found, &view.exports).unwrap();
+    assert_eq!(choices.len(), 9);
+    assert_eq!(choices.last().unwrap().key, search::ALL);
+    assert_eq!(
+        choices.last().unwrap().label,
+        format!("View all ({})", found.len())
+    );
+    assert!(choices[0].description.is_empty());
+    assert!(choices[1..8].iter().all(|m| !m.description.is_empty()));
+    let mut snapshot: serde_json::Value = serde_json::from_str(&schema()).unwrap();
+    snapshot["keys"]["appearance.darkMode"]["available"] = false.into();
+    let store = nk_settings::session::Store::parse(7, 1, &snapshot.to_string()).unwrap();
+    assert!(
+        !search::find(&view.exports, Some(&store), "dark mode")
+            .unwrap()
+            .iter()
+            .any(|m| m.label == "Dark mode")
+    );
+    let semantics = view.shell.tree.semantics();
+    assert_eq!(
+        semantics.nodes[&view.shell.search].role,
+        nk_a11y::Role::ComboBox
+    );
+    assert!(semantics.nodes[&view.shell.search].states.expandable);
+    assert!(!semantics.nodes[&view.shell.search].states.expanded);
+    semantics.validate().unwrap();
+}
+
+#[test]
+fn dismissed_suggestions_leave_the_parent_clean_in_repeated_idle_samples() {
+    let mut view = view();
+    let mut text = ParleyBackend::new(view.fonts.clone()).unwrap();
+    layout(&mut view);
+    view.shell.tree.focus(view.shell.search).unwrap();
+    view.shell
+        .tree
+        .set_search_text(view.shell.search, "appearance")
+        .unwrap();
+    view.update_search(None, &mut text).unwrap();
+    view.suggestions.dismiss(&mut view.shell.tree).unwrap();
+    layout(&mut view);
+    view.shell.tree.acknowledge();
+    for _ in 0..10 {
+        view.suggestions.dismiss(&mut view.shell.tree).unwrap();
+    }
+    assert_eq!(
+        view.shell.tree.invalidation(),
+        nk_widgets::Invalid::default()
+    );
+    assert_eq!(
+        view.shell.tree.search_text(view.shell.search).unwrap(),
+        "appearance"
+    );
+}
+
+#[test]
+fn suggestions_use_the_existing_menu_keyboard_highlight_without_editing_the_query() {
+    let mut view = view();
+    layout(&mut view);
+    view.shell.tree.focus(view.shell.search).unwrap();
+    view.shell
+        .tree
+        .set_search_text(view.shell.search, "appearance")
+        .unwrap();
+    let mut text = ParleyBackend::new(view.fonts.clone()).unwrap();
+    view.update_search(None, &mut text).unwrap();
+    let paint = |menu: &Tree| {
+        let size = menu.node(menu.root()).unwrap().bounds();
+        let width = size.width.ceil() as u32;
+        let height = size.height.ceil() as u32;
+        menu.paint(
+            Frame {
+                width,
+                height,
+                pixel_width: width as u16,
+                pixel_height: height as u16,
+                scale: 1.,
+                material: false,
+            },
+            nk_widgets::Surface::Content,
+            view.styles.palette,
+        )
+        .unwrap()
+    };
+    let before = paint(view.suggestions.view().unwrap());
+    view.suggestions
+        .move_selection(&mut view.shell.tree, true)
+        .unwrap();
+    let menu = view.suggestions.view().unwrap();
+    assert!(menu.focus_visible());
+    assert!(menu.focused().is_some());
+    assert_ne!(
+        before,
+        paint(menu),
+        "keyboard selection has no visible highlight"
+    );
+    assert_eq!(
+        view.shell.tree.search_text(view.shell.search).unwrap(),
+        "appearance"
+    );
+}

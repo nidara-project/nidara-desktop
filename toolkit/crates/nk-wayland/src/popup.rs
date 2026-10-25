@@ -75,10 +75,10 @@ pub fn run_popup(
 #[derive(Default)]
 pub(super) struct Geometry {
     pending: Option<[i32; 4]>,
-    current: Option<[i32; 4]>,
+    pub(super) current: Option<[i32; 4]>,
 }
 impl Geometry {
-    fn stage(&mut self, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
+    pub(super) fn stage(&mut self, x: i32, y: i32, width: i32, height: i32) -> Result<()> {
         if width <= 0 || height <= 0 {
             return Err("invalid popup configure size".into());
         }
