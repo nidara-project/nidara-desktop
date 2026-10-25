@@ -9,8 +9,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import time
+from types import SimpleNamespace
+import gi
+
+gi.require_version('Atspi', '2.0')
+from gi.repository import Atspi, Gio, GLib
 
 ROOT = Path(__file__).resolve().parents[2]
 BIN = os.environ.get('NK_PHASE0_BIN', str(ROOT / 'toolkit/target/release/nk-phase0'))
@@ -42,6 +48,8 @@ class Probe:
         self.procs = []
         self.streams = []
         self.rows = []
+        self.bus = None
+        self.restore_numlock = False
         self.original_workspace = next(w['id'] for w in self.msg('workspaces')['workspaces'] if w['focused'])
         self.msg('do', 'workspace', 96)
         self.msg('do', 'set-workspace-mode', 96, 'floating')
@@ -122,9 +130,112 @@ class Probe:
                 stream.write(summary)
 
     def close(self):
+        if self.restore_numlock:
+            self.key(69)  # restore the private compositor's original lock state
         for proc in reversed(self.procs):
             self.stop(proc)
         for stream in self.streams:
             stream.close()
         self.msg('do', 'workspace', self.original_workspace)
         self.pipe.close()
+        if self.bus:
+            self.bus.close_sync(None)
+
+
+def call(bus, service, path, interface, method, args=None):
+    return bus.call_sync(service, path, interface, method, args, None,
+                         Gio.DBusCallFlags.NONE, 5000, None).unpack()
+
+
+def start_reader(p):
+    """Real Orca on a private speech server and accessibility registry, its typing echo on and
+    Num Lock observed off through its own log. The bus and the lock's state live on the probe,
+    which closes and restores them."""
+    debug = p.log / 'orca-debug.log'
+    # An explicit guard prevents accidentally giving dummy a real sound device.
+    assert re.search(r'^default_driver\s*=\s*null\s*$', Path('/etc/libao.conf').read_text(), re.M), \
+        'configure libao default_driver=null inside a disposable test container'
+    p.environment['packages'] = subprocess.run(
+        ['pacman', '-Q', 'orca', 'speech-dispatcher', 'libao'], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT).stdout.strip()
+    # Orca 51 moved its preferences to relocatable GSettings schemas.
+    # Fail if the schema changes, rather than silently disabling typing echo.
+    for key in ['character-echo', 'word-echo']:
+        subprocess.run(['gsettings', 'set',
+                        'org.gnome.Orca.TypingEcho:/org/gnome/orca/default/typing-echo/',
+                        key, 'true'], check=True, timeout=5)
+    sd = p.log / 'speech'
+    sd.mkdir(exist_ok=True)
+    assert len(str(sd / 'socket').encode()) < 108, 'NK_PHASE0_LOG too long for a Unix speech socket'
+    (sd / 'speechd.conf').write_text(
+        f'LogLevel 5\nLogDir "{sd}"\nAudioOutputMethod "libao"\n'
+        'AddModule "dummy" "sd_dummy"\nDefaultModule dummy\n')
+    os.environ['SPEECHD_ADDRESS'] = 'unix_socket:' + str(sd / 'socket')
+    speechd = p.start(['speech-dispatcher', '-s', '-C', str(sd), '-S', str(sd / 'socket'),
+                       '-P', str(sd / 'pid'), '-t', '0'], p.log / 'speechd.log')
+    wait(lambda: speechd.poll() is not None or (sd / 'socket').exists(), 'speech dispatcher socket')
+    assert speechd.poll() is None, 'speech dispatcher exited'
+    session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    address = call(session, 'org.a11y.Bus', '/org/a11y/bus', 'org.a11y.Bus', 'GetAddress')[0]
+    os.environ['AT_SPI_BUS_ADDRESS'] = address
+    registry = next(path for path in ['/usr/lib/at-spi2-registryd', '/usr/libexec/at-spi2-registryd'] if Path(path).exists())
+    p.start([registry], p.log / 'registry.log')
+    bus = p.bus = Gio.DBusConnection.new_for_address_sync(address,
+        Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
+    wait(lambda: call(bus, 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+                      'NameHasOwner', GLib.Variant('(s)', ('org.a11y.atspi.Registry',)))[0], 'private registry')
+    call(session, 'org.a11y.Bus', '/org/a11y/bus', 'org.freedesktop.DBus.Properties', 'Set',
+         GLib.Variant('(ssv)', ('org.a11y.Status', 'IsEnabled', GLib.Variant('b', True))))
+    names = {label: call(conn, 'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                          'org.freedesktop.DBus', 'ListNames')[0]
+             for label, conn in [('session', session), ('accessibility', bus)]}
+    (p.log / 'bus-names.json').write_text(json.dumps(names, indent=2))
+    # Let libatspi select its normal Wayland backend; never force its legacy
+    # registry backend, synthesize monitor events, or inject into Orca.
+    device = Atspi.Device.new_full('org.nidara.ToolkitPreflight')
+    refused = False
+    try:
+        call(session, 'org.freedesktop.a11y.Manager', '/org/freedesktop/a11y/Manager',
+             'org.freedesktop.a11y.KeyboardMonitor', 'WatchKeyboard')
+    except GLib.Error as error:
+        refused = 'org.freedesktop.DBus.Error.AccessDenied' in str(error)
+    caps = device.get_capabilities()
+    p.environment['device_capabilities'] = int(caps)
+    key_events = []
+    device.connect('key-pressed', lambda *args: key_events.append(str(args)))
+    orca = p.start(['orca', '--debug-file', str(debug)], p.log / 'orca.log')
+    wait(lambda: debug.exists() and 'SPEECH OUTPUT:' in debug.read_text(), 'Orca speech startup', 15)
+    time.sleep(.5)
+    assert orca.poll() is None, 'Orca exited'
+    # Prove that the speech server connection works before testing silence.
+    server_log = sd / 'speech-dispatcher.log'
+    wait(lambda: server_log.exists() and 'SET self CLIENT_NAME' in server_log.read_text(), 'Orca speech-dispatcher connection')
+    # The shared vkms settings check enables Num Lock. Observe the actual
+    # lock modifier through Orca before the app exists; KP_8 would insert text
+    # instead of invoking KP_Up. No synthetic AT-SPI events or speech retry.
+    setup_start = debug.stat().st_size
+
+    def numlock_state():
+        before = debug.stat().st_size
+        p.key(42)  # harmless Shift_L press/release, through the real seat
+
+        def observed():
+            delta = debug.read_bytes()[before:].decode(errors='replace')
+            events = re.findall(
+                r"KEYBOARD_EVENT:  type=ATSPI_KEY_RELEASED_EVENT\s+"
+                r"id=\d+\s+hw_code=50\s+modifiers=(\d+)", delta)
+            return events[-1] if events else None
+
+        modifiers = int(wait(observed, 'Orca Shift release modifiers'))
+        return bool(modifiers & (1 << Atspi.ModifierType.NUMLOCK))
+
+    restore_numlock = p.restore_numlock = numlock_state()
+    if restore_numlock:
+        p.key(69)  # Num_Lock, only if its observed state was on
+    normalized = numlock_state()
+    p.environment['numlock'] = dict(initial=restore_numlock, normalized=normalized)
+    (p.log / 'numlock-setup.log').write_bytes(debug.read_bytes()[setup_start:])
+    assert not normalized, 'Num Lock must be off for real Orca KP_Up flat review'
+    # The device is returned so it lives: dropped, its key-pressed handler goes with it and an
+    # empty key_events would prove nothing.
+    return SimpleNamespace(debug=debug, orca=orca, speechd=speechd, refused=refused,
+                           device=device, key_events=key_events, caps=caps)

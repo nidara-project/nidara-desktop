@@ -258,6 +258,7 @@ phase_run() {
         if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
         if [ -d /tmp/ni ]; then cp -a /tmp/ni "$OUT/toolkit-fcitx5"; fi
         if [ -d /tmp/no ]; then cp -a /tmp/no "$OUT/toolkit-orca"; fi
+        if [ -d /tmp/nc ]; then cp -a /tmp/nc "$OUT/toolkit-choices-orca"; fi
         chmod -R a+rX "$OUT"
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
@@ -897,7 +898,11 @@ PY
             NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" python "$REPO/scripts/ci/nk-choices-check.py" \
             > "$REPO/toolkit/target/widgets-evidence/choices-check.log" 2>&1 || real_status=1
         cat "$REPO/toolkit/target/widgets-evidence/choices-check.log"
-        [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca/choices gates; inspect toolkit-fcitx5, toolkit-orca and widgets-evidence artifacts"; exit 1; }
+        # The same controls with real Orca (#882). A short log path: the speech socket's.
+        NK_PHASE0_TEST=vkms NK_PHASE0_LOG=/tmp/nc NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
+            python "$REPO/scripts/ci/nk-choices-orca-check.py" > /tmp/hyalo/nk-choices-orca.log 2>&1 || real_status=1
+        cat /tmp/hyalo/nk-choices-orca.log
+        [ "$real_status" -eq 0 ] || { log "FAIL: real IME/Orca/choices gates; inspect toolkit-fcitx5, toolkit-orca, toolkit-choices-orca and widgets-evidence artifacts"; exit 1; }
     fi
 
     # Phase 1 foundations beside phase 0. New evidence uses disk, not tmpfs.

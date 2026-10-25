@@ -2563,7 +2563,10 @@ controls hook their keys there too). AT-SPI: the group is a Panel labelled by it
 option a RadioButton. Trap found building it: the keyboard ring drawn ON a shape is invisible
 on the chosen segment (accent on accent); a choice's ring is offset outside it
 (`choice_focus_shape`), as the kit's `nidara-focus-ring` is. Its libatspi gate is
-`scripts/ci/nk-choices-check.py` (demo `--choices`), run in the hyalo job's real-gates block.
+`scripts/ci/nk-choices-check.py` (demo `--choices`), run in the hyalo job's real-gates block;
+its real Orca walk is `scripts/ci/nk-choices-orca-check.py`, beside it, sharing Orca's set-up
+(speech server, private registry, Num Lock observed off) with phase 0's through
+`nk-real-common.py`'s `start_reader` — one Orca for the run, the demo restarted per fault.
 
 Range controls (`ranges.rs`: `Slider`, `Fields` of `Spin`s) keep ONE clamp-and-step for every
 source — model, keys, pointer, AT-SPI SetValue — and report `Effect::Changed`. Two traps met
