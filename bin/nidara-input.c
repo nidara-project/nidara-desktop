@@ -7,12 +7,16 @@
 //   nidara-input move       <x> <y> <w> <h>
 //   nidara-input click      <x> <y> <w> <h>          # left button
 //   nidara-input rightclick <x> <y> <w> <h>          # right button
-//   nidara-input scroll     <x> <y> <w> <h> <dx> <dy> [ms] # wheel notches at (x,y)
-//   nidara-input drag       <x> <y> <w> <h> <x2> <y2> [ms] # press at (x,y), glide to (x2,y2), release
+//   nidara-input scroll     <x> <y> <w> <h> <dx> <dy> [ms [legs]] # wheel notches at (x,y)
+//   nidara-input drag       <x> <y> <w> <h> <x2> <y2> [ms [legs]] # press at (x,y), glide to (x2,y2), release
 //
 // [ms] spreads the notches, or the glide, over that many milliseconds: a sustained scroll or a
 // slow drag, what scripts/dev/smoothness-probe.py measures an app's frames over. Without it a
-// scroll's notches go at once and a drag glides in ~290 ms, as before.
+// scroll's notches go at once and a drag glides in ~290 ms, as before. [legs] repeats it that
+// many times, each leg the way back of the one before (one press for a drag), with no pause
+// between legs, and prints `LEG <start> <end>` per leg on stdout in CLOCK_MONOTONIC ms (Python's
+// `time.monotonic() * 1000`): the probe measures from the first notch, not from the process
+// start, and a new process per leg left a ~25 ms seam between legs.
 //
 // (x,y) is the target position and (w,h) the output's extent, BOTH in the same
 // (logical) units — motion_absolute maps x/w → output fraction, so the caller
@@ -64,6 +68,11 @@ static uint32_t now_ms(void) {
 // notch scrolling. axis is called before axis_discrete (the latter extends it).
 // No axis_stop — wheel sources have no kinetic end (unlike touchpad/finger).
 static void nap_ms(long ms);
+static double mono_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+}
 static void emit_scroll(struct wl_display *dpy, struct zwlr_virtual_pointer_v1 *vp, uint32_t axis,
                         int notches, long gap_ms) {
     if (notches == 0) return;
@@ -93,7 +102,7 @@ static void nap_ms(long ms) {
 // caller has already positioned the pointer at (x1,y1). Left button only.
 static void emit_drag(struct wl_display *dpy, struct zwlr_virtual_pointer_v1 *vp,
                       uint32_t x1, uint32_t y1, uint32_t x2, uint32_t y2,
-                      uint32_t w, uint32_t h, long duration_ms) {
+                      uint32_t w, uint32_t h, long duration_ms, int legs) {
     // One motion every ~8 ms over a requested duration (a 125 Hz mouse); else 24 steps.
     const int STEPS = duration_ms > 0 ? (int)(duration_ms / 8 > 24 ? duration_ms / 8 : 24) : 24;
     const long GAP = duration_ms > 0 ? duration_ms / STEPS : 12;
@@ -104,15 +113,21 @@ static void emit_drag(struct wl_display *dpy, struct zwlr_virtual_pointer_v1 *vp
     zwlr_virtual_pointer_v1_frame(vp);
     wl_display_flush(dpy);
     nap_ms(50);              // brief hold so the press registers before motion
-    for (int s = 1; s <= STEPS; s++) {
-        double f = (double)s / STEPS;
-        uint32_t ix = (uint32_t)((double)x1 + ((double)x2 - (double)x1) * f + 0.5);
-        uint32_t iy = (uint32_t)((double)y1 + ((double)y2 - (double)y1) * f + 0.5);
-        t = now_ms();
-        zwlr_virtual_pointer_v1_motion_absolute(vp, t, ix, iy, w, h);
-        zwlr_virtual_pointer_v1_frame(vp);
-        wl_display_flush(dpy);
-        nap_ms(GAP);         // ~290ms glide total by default
+    for (int leg = 0; leg < legs; leg++) {
+        // Odd legs come back: from (x2,y2) to (x1,y1).
+        double ax = leg % 2 ? x2 : x1, ay = leg % 2 ? y2 : y1;
+        double bx = leg % 2 ? x1 : x2, by = leg % 2 ? y1 : y2;
+        double start = mono_ms();
+        for (int s = 1; s <= STEPS; s++) {
+            double f = (double)s / STEPS;
+            t = now_ms();
+            zwlr_virtual_pointer_v1_motion_absolute(vp, t, (uint32_t)(ax + (bx - ax) * f + 0.5),
+                                                    (uint32_t)(ay + (by - ay) * f + 0.5), w, h);
+            zwlr_virtual_pointer_v1_frame(vp);
+            wl_display_flush(dpy);
+            nap_ms(GAP);     // ~290ms glide total by default
+        }
+        if (legs > 1) printf("LEG %.3f %.3f\n", start, mono_ms());
     }
     nap_ms(50);              // settle at the target before dropping
     t = now_ms();
@@ -128,18 +143,20 @@ int main(int argc, char **argv) {
     int is_scroll = strcmp(verb, "scroll") == 0;
     int is_drag   = strcmp(verb, "drag") == 0;
     if ((!is_move && !is_click && !is_right && !is_scroll && !is_drag) ||
-        ((is_scroll || is_drag) ? (argc != 8 && argc != 9) : argc != 6)) {
+        ((is_scroll || is_drag) ? (argc < 8 || argc > 10) : argc != 6)) {
         fprintf(stderr,
             "usage: nidara-input move|click|rightclick <x> <y> <w> <h>\n"
-            "       nidara-input scroll <x> <y> <w> <h> <dx> <dy> [ms]\n"
-            "       nidara-input drag   <x> <y> <w> <h> <x2> <y2> [ms]\n");
+            "       nidara-input scroll <x> <y> <w> <h> <dx> <dy> [ms [legs]]\n"
+            "       nidara-input drag   <x> <y> <w> <h> <x2> <y2> [ms [legs]]\n");
         return 2;
     }
     uint32_t x = (uint32_t)strtoul(argv[2], NULL, 10);
     uint32_t y = (uint32_t)strtoul(argv[3], NULL, 10);
     uint32_t w = (uint32_t)strtoul(argv[4], NULL, 10);
     uint32_t h = (uint32_t)strtoul(argv[5], NULL, 10);
-    long duration = argc == 9 ? strtol(argv[8], NULL, 10) : 0;
+    long duration = argc >= 9 ? strtol(argv[8], NULL, 10) : 0;
+    int legs = argc == 10 ? (int)strtol(argv[9], NULL, 10) : 1;
+    if (legs < 1) { fprintf(stderr, "nidara-input: legs must be at least 1\n"); return 2; }
     int dx = 0, dy = 0;
     uint32_t x2 = 0, y2 = 0;
     if (is_scroll) {
@@ -184,10 +201,15 @@ int main(int argc, char **argv) {
     } else if (is_scroll) {
         int n = (dy < 0 ? -dy : dy) + (dx < 0 ? -dx : dx);
         long gap = duration > 0 && n > 0 ? duration / n : 0;
-        emit_scroll(dpy, vp, WL_POINTER_AXIS_VERTICAL_SCROLL, dy, gap);
-        emit_scroll(dpy, vp, WL_POINTER_AXIS_HORIZONTAL_SCROLL, dx, gap);
+        for (int leg = 0; leg < legs; leg++) {
+            int sign = leg % 2 ? -1 : 1;   // odd legs come back
+            double start = mono_ms();
+            emit_scroll(dpy, vp, WL_POINTER_AXIS_VERTICAL_SCROLL, sign * dy, gap);
+            emit_scroll(dpy, vp, WL_POINTER_AXIS_HORIZONTAL_SCROLL, sign * dx, gap);
+            if (legs > 1) printf("LEG %.3f %.3f\n", start, mono_ms());
+        }
     } else if (is_drag) {
-        emit_drag(dpy, vp, x, y, x2, y2, w, h, duration);
+        emit_drag(dpy, vp, x, y, x2, y2, w, h, duration, legs);
     }
 
     // Flush + roundtrip so the events actually reach the compositor before exit.
