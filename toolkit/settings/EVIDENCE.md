@@ -1177,3 +1177,16 @@ visual result remains pending; this is one D5 optimized run, not proof of normal
 D7, long-running responsiveness, every control/dialog, Orca or performance gates.
 Both no-op fixes and optimization differ from the failed partial debug run; do
 not attribute the symptom's disappearance exclusively to one change.
+
+### Review F: idle CPU on the owner's session (2026-10-25)
+
+Measured the release binary at 79014d9892cd676b2a5c92f042a3459dafffcbc5,
+SHA256 2783e95a48ae9114332e0a4a85d71fb0bdbbf1e3baa313cc4c58beae3bd998e9,
+with data exported from that branch. Native Appearance was open and quiet, with
+CONTENT_READY and A11Y_READY, five seconds of settling followed by ten seconds
+of measurement. /proc/PID/stat increased by two CPU ticks (CLK_TCK=100):
+0.20% of one CPU. The process stayed alive throughout and was terminated by the
+measurement harness afterwards. This is near zero; no event-loop change is made.
+The installed Hyalo was not yet the running session binary, so this is CPU
+measurement only, not D7 acceptance after #935/restart. The earlier smoke failure
+was the unrelated intermittent Settings slice deadline, not a block-F regression.
