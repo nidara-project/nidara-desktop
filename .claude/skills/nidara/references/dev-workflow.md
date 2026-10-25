@@ -4046,3 +4046,18 @@ An early exit must report its status/log instead of waiting out the listing
 deadline; missing-window failures also include the log. Keep the original
 deadline and semantic/pixel assertions. Diagnostic improvement alone is not
 proof that a failed native startup was corrected.
+
+### Restarting the isolated IME harness
+
+The phase-0 fcitx5 restart case must use `nk-real-common.py:start_ime` just like
+its initial launch. That helper supplies the per-case `XDG_CONFIG_HOME` and engine
+profile. Starting the replacement directly with the application environment loads
+the default US-only group: Mozc/Pinyin type Latin text and Hangul never commits.
+A D-Bus owner and keyboard grab alone do not prove that the requested engine loaded.
+
+The phase-0 IME scroll case starts a fresh fcitx5 after the native-keyboard tests;
+it must also use `start_ime`, not a direct `p.start`. Otherwise the group and
+classicui theme are lost again even when the explicit restart case passed.
+When auditing Orca logs, use `orca-report.json`: FAIL inside a deliberately broken
+control is expected when the aggregate marks that control CAUGHT. The 2026-10-25
+#946 run 40232572113 had a passing baseline and all 24 controls CAUGHT.

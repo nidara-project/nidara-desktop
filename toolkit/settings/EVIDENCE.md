@@ -1219,3 +1219,56 @@ around in the client. The one-shot user service exited successfully and is inact
 Evidence: toolkit/target/review-20261025/d7-live/ (result.json, full client
 WAYLAND_DEBUG=1 log, compositor journal, exact window and hover commands/results).
 Client wire-log SHA256: c1ae07c0accde72bfa708cae26f76b7b448d78151f255259a3b6386326862fcc.
+### New-field real IME follow-up above D (2026-10-25)
+
+The opt-in `ime-gates` binary uses the production SearchInput and FontChooser
+View/filter/catalogue, on the existing shared nk-wayland host. CI builds/runs
+its Mozc/Pinyin/Hangul rows only on schedule/manual, at scales 1 and 1.25,
+with an applied control for each preedit/commit/cancel/candidate assertion.
+See IME.md for the local container command and the precise oracle boundary.
+
+A local complete run passed 168 assertions (48 baseline target rows, 48 own
+control target rows, 72 prerequisite assertions) on the installed #935 Hyalo,
+in private cage/nested Hyalo. Client SHA256:
+7e3af22ccf8629bfa9792df7a4c239435b966b906561d854b122529d301f6325;
+compositor SHA256:
+354778b2ffd59e32057955720c0602a42d8903209201062c63cb4df3b4f3a7bd.
+It was run before committing, on parent f4b48584 with the implementation present;
+it is not represented as evidence for a clean published head. The subsequent
+focus-loss cleanup and stricter report completeness check have unit/static
+coverage; the final committed source is rerun before publication.
+
+The rows exposed a real Hangul ordering case: commit followed by forwarded
+Escape cleared the query (and could close FontChooser). The one-shot finished
+composition boundary prevents that extra action. Ten SearchInput tests pass,
+including the forwarded Escape and retiring the boundary on focus loss.
+No complete Settings/Orca, Config1 Apply or live D7 acceptance is claimed here.
+
+Final committed-source repetition: implementation e172fe1a4e1ba76127a9d773e7f8d0f3c1fc782d,
+168/168 assertions PASS, complete_matrix=true, no pending rows. Client SHA256
+df0c25ed776eec8306885a3aafda577856b7f50e189c32ff821590a30c1256b7.
+Report/logs/screenshots: toolkit/target/ime-published-source/settings-ime/.
+Ten SearchInput tests, all-target feature-enabled Clippy, Python compilation,
+shell syntax, ci-scope self-test and skill-docs-check also pass. The following
+commit adds only this evidence and the local runner's executable file mode.
+
+### Rebase onto merged blocks A–F (2026-10-25)
+
+Rebased from D's old f4b48584 onto main 88f00f8c. Kept upstream Orca
+Probe/start_reader definitions and the IME helper exactly (AST comparison);
+seven core IME/search/runner files are byte-identical to their pre-rebase
+versions. The native app now needs nk-icons normally: its required dependency
+is retained rather than the old probe-only optional declaration. The smoke
+preserves the explicitly supplied nightly flag across its user-process boundary;
+unset/false remain false for these new rows, independently of older animation defaults.
+
+182 Settings/widgets Rust tests and feature-enabled all-target Clippy pass.
+Python/shell syntax, ci-scope self-test and skill-docs-check pass. The complete
+real IME matrix was repeated: 168/168 PASS, complete_matrix=true, no pending rows,
+implementation c9f0a1e13583069f8aa5e8518594f8f9c722bdcc,
+client SHA256 2b7f6ba2256f54bee23367da6822783d612782793692ca5df3ab23bd37491a40,
+compositor SHA256 c8103a30f400da15566bfd8aef45eb3f291ddcdb0591d67ffd761d3fb54ebcf0.
+Logs: toolkit/target/rebase-20261025/ and toolkit/target/ime-after-rebase/settings-ime/.
+The later commit changes CI flag forwarding only, verified for unset/false/true;
+this entry adds documentation only. This remains nested IME evidence, not full
+Settings/Config1 Apply/Orca or live visual acceptance.

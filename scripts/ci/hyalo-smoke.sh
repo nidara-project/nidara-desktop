@@ -82,6 +82,11 @@ phase_build() {
     wayland-scanner private-code  "$sc_xml" "$sc/security-context-v1-protocol.c"
     cc -O2 "$REPO/scripts/ci/hyalo-sandbox-probe.c" "$sc/security-context-v1-protocol.c" \
         -I"$sc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-sandbox-probe
+    # New Settings fields: real engines only in schedule/manual jobs, no PR build cost.
+    if [ "${HYALO_ANIMATION_CHECKS:-false}" = true ]; then
+        cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked \
+            -p nk-settings --features ime-gates --bin nk-settings-ime
+    fi
     # The idle-inhibit probe (a shown window holding idle off, hyalo/compositor/src/idle.rs).
     local ii="$REPO/build/ii" xs_xml=/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml \
           ii_xml=/usr/share/wayland-protocols/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml
@@ -230,6 +235,7 @@ phase_boot() {
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
         XDG_CURRENT_DESKTOP=Nidara \
         NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
+        NK_SETTINGS_IME_NIGHTLY="${HYALO_ANIMATION_CHECKS:-false}" \
         HYALO_ANIMATION_CHECKS="${HYALO_ANIMATION_CHECKS:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
@@ -254,6 +260,7 @@ phase_run() {
             [ -e "$f" ] && cp -f "$f" "$OUT/$(basename "$(dirname "$f")")-$(basename "$f")"
         done
         if [ -d /tmp/hyalo/nk-layer-motion ]; then cp -a /tmp/hyalo/nk-layer-motion "$OUT/toolkit-layer-motion"; fi
+        if [ -d "$REPO/toolkit/target/settings-ime-evidence" ]; then cp -a "$REPO/toolkit/target/settings-ime-evidence" "$OUT/toolkit-settings-ime"; fi
         if [ -d "$REPO/toolkit/target/widgets-evidence" ]; then cp -a "$REPO/toolkit/target/widgets-evidence" "$OUT/toolkit-widgets"; fi
         if [ -d /tmp/hyalo/nk-phase0 ]; then cp -a /tmp/hyalo/nk-phase0 "$OUT/toolkit-phase0"; fi
         if [ -d /tmp/ni ]; then cp -a /tmp/ni "$OUT/toolkit-fcitx5"; fi
@@ -857,6 +864,15 @@ PY
         > /tmp/hyalo/nk-phase0.log 2>&1 \
         || { cat /tmp/hyalo/nk-phase0.log; exit 1; }
     cat /tmp/hyalo/nk-phase0.log
+
+    # Settings SearchInput + actual font chooser View, nightly/manual only.
+    if [ "${NK_SETTINGS_IME_NIGHTLY:-false}" = true ]; then
+        NK_PHASE0_TEST=vkms NK_PHASE0_LOG="$REPO/toolkit/target/settings-ime-evidence" \
+            NK_SETTINGS_DATA=/usr/share/nidara/settings-data NK_REAL_CONTROLS=1 \
+            NK_FCITX5_SCALES="1 1.25" python "$REPO/scripts/ci/nk-settings-ime-check.py" \
+            > "$OUT/settings-ime.log" 2>&1 || { cat "$OUT/settings-ime.log"; exit 1; }
+        cat "$OUT/settings-ime.log"
+    fi
 
     # Test 3: the direct AT-SPI provider, consumed through libatspi like Orca.
     # Every oracle has a negative control; the controls (~2 of the check's ~3 min) run when

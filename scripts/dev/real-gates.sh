@@ -6,7 +6,7 @@
 # host, its /etc and its session are never touched, and no vkms device is loaded.
 #
 #   scripts/dev/real-gates.sh CHECK [CHECK…]
-#     CHECK: orca | ime | choices-orca | phase0 | a11y | <name>.py in scripts/ci/
+#     CHECK: orca | ime | choices-orca | settings-ime | phase0 | a11y | <name>.py in scripts/ci/
 #   env: REAL_GATES_CONTROLS=0  baseline only (NK_REAL_CONTROLS=0), as a PR without `full`
 #        REAL_GATES_NO_BUILD=1  use the binaries already in hyalo/ and toolkit/ target/release
 #        HYALO_BIN=PATH         a Hyalo built elsewhere (another worktree): not rebuilt here
@@ -22,6 +22,10 @@ fi
 if [ "${REAL_GATES_NO_BUILD:-}" != 1 ]; then
     [ -n "${HYALO_BIN:-}" ] || cargo build --manifest-path "$repo/hyalo/Cargo.toml" --release --locked -q
     cargo build --manifest-path "$repo/toolkit/Cargo.toml" --release --locked -q -p nk-phase0 -p nk-widgets-demo
+    if [[ " $* " == *" settings-ime "* || " $* " == *" nk-settings-ime-check.py "* ]]; then
+        cargo build --manifest-path "$repo/toolkit/Cargo.toml" --release --locked -q \
+            -p nk-settings --features ime-gates --bin nk-settings-ime
+    fi
     # The demo reads what the package installs as settings-data (NK_SETTINGS_DATA): its pages and
     # strings, then the tokens — the PKGBUILD's two exports, in its order.
     node --experimental-strip-types "$repo/scripts/export-settings-data.mjs" "$repo/build/settings-data" 2>/dev/null
@@ -37,6 +41,7 @@ for check in "$@"; do
         orca) script=nk-orca-check.py ;;
         ime) script=nk-fcitx5-check.py ;;
         choices-orca) script=nk-choices-orca-check.py ;;
+        settings-ime) script=nk-settings-ime-check.py ;;
         phase0) script=nk-phase0-check.py ;;
         a11y) script=nk-a11y-check.py ;;
         *.py) script=$check ;;
@@ -46,7 +51,7 @@ for check in "$@"; do
     # The demo's checks need its harness: it serves a Settings portal the demo reads its look
     # from (portal-fixture.py); phase 0's window does not, and has its own.
     harness=toolkit/phase0/check-headless.sh
-    case "$script" in nk-choices-*|nk-widgets-check.py) harness=toolkit/widgets-demo/check-headless.sh ;; esac
+    case "$script" in nk-choices-*|nk-widgets-check.py|nk-settings-ime-check.py) harness=toolkit/widgets-demo/check-headless.sh ;; esac
     out="$repo/toolkit/target/real-gates/${script%.py}"
     rm -rf "$out"; mkdir -p "$out"
     echo "── $script (evidence: ${out#"$repo/"})"
@@ -60,6 +65,7 @@ for check in "$@"; do
         -e NK_WIDGETS_CHECK="$script" -e NK_WIDGETS_LOG=/tmp/ev \
         -e NK_WIDGETS_BIN="$repo/toolkit/target/release/nk-widgets-demo" \
         -e NK_REAL_CONTROLS="${REAL_GATES_CONTROLS:-1}" \
+        -e NK_SETTINGS_IME_BIN="$repo/toolkit/target/release/nk-settings-ime" \
         -e NK_SETTINGS_DATA="$repo/build/settings-data" \
         "$image" bash -c '
             mkdir -p /tmp/home /tmp/ev

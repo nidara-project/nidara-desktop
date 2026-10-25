@@ -23,3 +23,11 @@ zbus = "5.19"
 jpeg-decoder = { version = "0.3.2", default-features = false }
 
 nk-icons = { path = "../crates/nk-icons" }
+
+[features]
+ime-gates = ["nk-widgets/ime-gates"]
+
+[[bin]]
+name = "nk-settings-ime"
+path = "src/bin/nk-settings-ime.rs"
+required-features = ["ime-gates"]

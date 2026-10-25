@@ -29,6 +29,7 @@ pub(crate) struct Search {
     style: TextStyle,
     scroll: f32,
     hide_preedit_caret: bool,
+    finished_composition: bool,
 }
 fn single_line(text: &str) -> Result<()> {
     if text
@@ -89,9 +90,25 @@ impl Tree {
                 style: self.style.clone(),
                 scroll: 0.,
                 hide_preedit_caret: false,
+                finished_composition: false,
             },
         );
         Ok(id)
+    }
+    /// Observation only, for the opt-in real-engine acceptance binary.
+    #[cfg(feature = "ime-gates")]
+    pub fn search_probe(&self, id: NodeId) -> Result<(&str, Option<&str>)> {
+        let editor = &self.searches.get(&id).ok_or("not a search input")?.editor;
+        Ok((
+            editor.display_text(),
+            editor.preedit().map(|p| p.text.as_str()),
+        ))
+    }
+    /// Escape first finishes an IME operation, including an engine's forwarded
+    /// Escape after commit. A following Escape may clear/close the search.
+    pub fn search_consumes_escape(&self, id: NodeId) -> Result<bool> {
+        let search = self.searches.get(&id).ok_or("not a search input")?;
+        Ok(search.editor.preedit().is_some() || search.finished_composition)
     }
     pub fn search_composing(&self, id: NodeId) -> Result<bool> {
         Ok(self
@@ -173,7 +190,15 @@ impl Tree {
             return Ok(None);
         }
         let before = self.search_text(id)?.to_owned();
-        let editor = &mut self.searches.get_mut(&id).unwrap().editor;
+        let search = self.searches.get_mut(&id).unwrap();
+        // Some engines commit/cancel, then forward the same Escape. It must not
+        // clear the committed query after finishing composition. The next key
+        // consumes this one-shot boundary, so a second Escape still clears.
+        let finished = std::mem::take(&mut search.finished_composition);
+        let editor = &mut search.editor;
+        if key.sym == 0xff1b && finished {
+            return Ok(Some(Effect::None));
+        }
         if key.ctrl {
             match key.sym {
                 0x61 | 0x41 => editor.set_selection(
@@ -277,6 +302,7 @@ impl Tree {
         } else {
             None
         };
+        let was_composing = editor.preedit().is_some();
         editor.cancel_preedit()?;
         if let Some(text) = &batch.commit {
             editor.replace_range(deletion.unwrap_or(selected), text)?;
@@ -295,6 +321,9 @@ impl Tree {
                 },
             )?;
         }
+        if was_composing && batch.preedit.as_ref().is_none_or(|p| p.0.is_empty()) {
+            search.finished_composition = true;
+        }
         search.hide_preedit_caret = false;
         if let Some((text, begin, _)) = &batch.preedit
             && !text.is_empty()
@@ -304,6 +333,7 @@ impl Tree {
                 .take_while(|p| *p <= (*begin).max(0) as usize)
                 .last()
                 .unwrap_or(0);
+            search.finished_composition = false;
             editor.set_preedit(editor.selection(), text, caret)?;
             search.hide_preedit_caret = *begin < 0;
         }
@@ -350,11 +380,12 @@ impl Tree {
         Ok(Some((text, self.search_changed(id, &before)?)))
     }
     pub(crate) fn cancel_search_preedit(&mut self, id: NodeId) -> Result<()> {
-        if let Some(search) = self.searches.get_mut(&id)
-            && search.editor.preedit().is_some()
-        {
-            search.editor.cancel_preedit()?;
-            self.invalidate(id, Invalid::LAYOUT);
+        if let Some(search) = self.searches.get_mut(&id) {
+            search.finished_composition = false;
+            if search.editor.preedit().is_some() {
+                search.editor.cancel_preedit()?;
+                self.invalidate(id, Invalid::LAYOUT);
+            }
         }
         Ok(())
     }
