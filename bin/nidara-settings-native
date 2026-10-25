@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Preview: owns SettingsNative only; the public entry point remains legacy.
+set -euo pipefail
+exec /usr/lib/nidara/nidara-settings-native "$@"

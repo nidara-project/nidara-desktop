@@ -108,6 +108,18 @@ pub enum Mode {
     EntryPoint,
 }
 
+/// Entry-point ownership is opt-in until the launcher swap is explicitly installed.
+/// Consume the host option before interpreting the ordinary Request arguments.
+pub fn launch_mode(mut args: Vec<String>) -> (Mode, Vec<String>) {
+    let mode = if args.first().is_some_and(|arg| arg == "--entry-point") {
+        args.remove(0);
+        Mode::EntryPoint
+    } else {
+        Mode::Native
+    };
+    (mode, args)
+}
+
 /// A request the app answers on its own loop (navigation, raising, the UI tree).
 pub struct Incoming {
     pub route: Route,

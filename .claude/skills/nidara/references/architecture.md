@@ -3513,3 +3513,15 @@ of the full match set. The ordinary results page uses existing rows and explicit
 routing; typing never replaces its current content. Builder-owned runtime objects
 without registry/manifest labels are not indexed yet. Both new labels are translated in
 all twelve catalogs with their ledger. No workflow step or PR gate was added.
+
+### Settings preview packaging and deferred entry-point switch
+
+The native binary can ship beside the current Settings: `nidara-settings-native`
+starts only SettingsNative by default. A leading `--entry-point` opts into owning
+Settings too and is removed before routing the request. The separately installed
+`nidara-settings-legacy` wrapper selects the GJS SettingsLegacy application identity
+with `NIDARA_SETTINGS_LEGACY=1`; it starts GJS directly and never calls the public
+launcher. GJS raising is scoped to its own PID when both processes exist.
+The future entry-point launcher is staged as package data, not installed over
+`/usr/bin/nidara-settings`. `toolkit/settings/READINESS.md` records D5 evidence,
+performance limitations and blockers. Preparation does not authorize activation.

@@ -15,7 +15,7 @@ use nk_settings::{
     page::Mounted,
     portal::{Appearance, Portal},
     render::{Builders, Editor, Host},
-    routing::{self, Incoming, Mode, Route, Router},
+    routing::{self, Incoming, Route, Router},
     search::{self, Match, Results},
     session::Notice,
     styles::Styles,
@@ -908,7 +908,7 @@ impl Application for App {
 pub fn run(activation: Option<String>) -> Result<()> {
     let start = Instant::now();
     let opaque_preview = std::env::var_os("NK_SETTINGS_OPAQUE_PREVIEW").is_some_and(|v| v == "1");
-    let args: Vec<_> = std::env::args().skip(1).collect();
+    let (mode, args) = routing::launch_mode(std::env::args().skip(1).collect());
     let args = if args.is_empty() {
         vec!["open".into()]
     } else {
@@ -920,7 +920,7 @@ pub fn run(activation: Option<String>) -> Result<()> {
     };
     let route = routing::route(&args, routing::DRAWN)?;
     let bus = zbus::blocking::Connection::session().map_err(|e| e.to_string())?;
-    let router = match Router::start(&bus, Mode::Native, routing::legacy_launcher(), &args)? {
+    let router = match Router::start(&bus, mode, routing::legacy_launcher(), &args)? {
         Ok(router) => router,
         Err(_) => return Ok(()),
     };

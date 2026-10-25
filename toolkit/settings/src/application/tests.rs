@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The same assembly View with real exports/retained Tree. No Window, Bridge or GUI is faked.
 use super::*;
+use nk_settings::routing::Mode;
 use nk_settings::session::{ApplyError, Raw, Session};
 use nk_text::Size;
 use std::time::{Duration, Instant};
@@ -643,4 +644,29 @@ fn suggestions_use_the_existing_menu_keyboard_highlight_without_editing_the_quer
         view.shell.tree.search_text(view.shell.search).unwrap(),
         "appearance"
     );
+}
+
+#[test]
+fn d5_window_and_header_force_opaque_base_without_changing_portal_preferences() {
+    let mut view = view();
+    view.styles.palette.background.components[3] = 0.1;
+    layout(&mut view);
+    let size = open_size(&view.exports).unwrap();
+    let frame = Frame {
+        width: size.0,
+        height: size.1,
+        pixel_width: size.0.try_into().unwrap(),
+        pixel_height: size.1.try_into().unwrap(),
+        scale: 1.,
+        material: false,
+    };
+    let pixels = view.shell.paint(frame, &view.styles).unwrap();
+    // Sample uncovered root pixels; anti-aliased content overlays have their own
+    // compositing rounding and are not the opaque base being tested here.
+    for (x, y) in [(0, 0), (size.0 - 1, size.1 / 2), (size.0 / 2, size.1 - 1)] {
+        let alpha = pixels[((y * size.0 + x) * 4 + 3) as usize];
+        assert_eq!(alpha, 255, "base pixel ({x}, {y})");
+    }
+    assert!(!view.appearance.reduce_transparency);
+    assert_eq!(view.styles.palette.background.components[3], 0.1);
 }

@@ -4061,3 +4061,14 @@ classicui theme are lost again even when the explicit restart case passed.
 When auditing Orca logs, use `orca-report.json`: FAIL inside a deliberately broken
 control is expected when the aggregate marks that control CAUGHT. The 2026-10-25
 #946 run 40232572113 had a passing baseline and all 24 controls CAUGHT.
+### Native Settings readiness artifacts
+
+`startup-probe.py --json FILE --ready 'CONTENT_READY commit=[0-9]+' nidara-settings 6 -- CMD`
+records the native milestone, samples PSS after five seconds, and excludes the warm-up
+from medians. Its report does not certify an installed build or the complete gate 4.
+Preserve a failed series; a successful diagnostic rerun does not explain it.
+`stage-native-settings.py build/DIRECTORY` prepares an inspectable preview overlay
+from the current build, including hashes, without replacing the public launcher.
+It refuses existing directories and destinations outside this checkout's build/target.
+Private-bus test runtime paths need a per-test sequence as well as the process PID;
+Rust runs multiple tests within one process, so a PID-only socket directory collides.

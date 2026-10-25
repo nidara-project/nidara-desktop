@@ -112,6 +112,8 @@ depends=(
   brightnessctl pamixer playerctl jq curl slurp grim wf-recorder
   wl-clipboard cliphist wtype at-spi2-core python-gobject libnotify
   xdg-utils gsettings-desktop-schemas awww lz4 mesa pam
+  # Native Settings decoder, keyboard mapping and system-font discovery.
+  dav1d libxkbcommon fontconfig
   # `dconf` — the BINARY, not the library. nidara-setup reads through it and the
   # pacman hook below execs /usr/bin/dconf; it had been arriving as a transitive
   # dependency of the GTK stack, which is the same shape of latent bug as the
@@ -222,6 +224,8 @@ prepare() {
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
   export RUSTUP_TOOLCHAIN=stable
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+  cd "$srcdir/nidara-desktop-$pkgver/toolkit"
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
   cd "$srcdir/nidara-desktop-$pkgver/session"
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
@@ -311,6 +315,10 @@ build() {
   export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
   cargo build --release --locked --offline
 
+  # Native Settings ships beside the legacy entry point until acceptance.
+  cd "$srcdir/nidara-desktop-$pkgver/toolkit"
+  cargo build --release --locked --offline -p nk-settings --bin nk-settings
+
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
   export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
@@ -358,7 +366,7 @@ package_nidara-desktop() {
 
   # /usr/bin — session launchers, helpers, agent toolkit (install.sh §5 list)
   local b
-  for b in nidara nidara-ui nidara-settings nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
+  for b in nidara nidara-ui nidara-settings nidara-settings-native nidara-settings-legacy nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal nidara-share-chooser \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click nidara-wm \
            nidara-hook nidara-update nidara-setup nidara-migrate nidara-language; do
@@ -408,6 +416,9 @@ package_nidara-desktop() {
   fi
   mkdir -p "$pkgdir/usr/share/nidara/wallpapers"
   install -m644 defaults/wallpaper/*.jpg "$pkgdir/usr/share/nidara/wallpapers/"
+  install -Dm755 toolkit/target/release/nk-settings "$pkgdir/usr/lib/nidara/nidara-settings-native"
+  # Future entry-point launcher is staged data, never installed over /usr/bin here.
+  install -Dm755 packaging/nidara/settings-entrypoint "$pkgdir/usr/share/nidara/settings-native/nidara-settings"
   install -Dm755 ui/settings/build/nidara-settings "$pkgdir/usr/share/nidara/ui/settings/build/nidara-settings"
   install -Dm644 ui/settings/style.css "$pkgdir/usr/share/nidara/ui/settings/style.css"
   # The native Settings' data (PHASE1.md D4), version file included.

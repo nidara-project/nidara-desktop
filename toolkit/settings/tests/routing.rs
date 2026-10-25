@@ -407,3 +407,17 @@ fn second_native_instance_hands_off_the_initiating_activation_token() {
         "second-instance activation token lost"
     );
 }
+
+#[test]
+fn launcher_swap_is_explicit_and_does_not_change_request_arguments() {
+    use nk_settings::routing::launch_mode;
+    assert_eq!(launch_mode(vec![]), (Mode::Native, vec![]));
+    let request = vec!["page".to_owned(), "appearance".to_owned()];
+    assert_eq!(
+        launch_mode(request.clone()),
+        (Mode::Native, request.clone())
+    );
+    let mut entry = vec!["--entry-point".to_owned()];
+    entry.extend(request.clone());
+    assert_eq!(launch_mode(entry), (Mode::EntryPoint, request));
+}

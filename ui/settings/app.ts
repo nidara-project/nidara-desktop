@@ -15,20 +15,22 @@ import queryUI from "../shell/core/UITree"
 import compositor from "../shell/core/CompositorState"
 
 useNoGtkTheme()
+const ownPid = new Gio.Credentials().get_unix_pid()
+const legacy = GLib.getenv("NIDARA_SETTINGS_LEGACY") === "1"
 let window: Gtk.Window | null = null
 let initialized: Promise<void>
 const raise = () => {
     if (!window) return
     window.present()
-    const client = compositor.clients.find(c => c.class === "nidara-settings" && c.title === "Nidara Settings")
+    const client = compositor.clients.find(c => c.pid === ownPid)
     if (client) compositor.focusWindow(client.address)
 }
 const interfaceXml = `<node><interface name="org.nidara.Settings"><method name="Request">
     <arg type="as" direction="in"/><arg type="s" direction="out"/>
     </method></interface></node>`
 app.start({
-    applicationId: "org.nidara.Settings", applicationName: "Nidara Settings", logDomain: "nidara-settings",
-    processName: "nidara-settings",
+    applicationId: legacy ? "org.nidara.SettingsLegacy" : "org.nidara.Settings", applicationName: "Nidara Settings", logDomain: "nidara-settings",
+    processName: legacy ? "nidara-settings-legacy" : "nidara-settings",
     css: withKitSheet(`${GLib.getenv("NIDARA_SETTINGS_ROOT") || SHELL_ROOT}/style.css`),
     activate: () => { void initialized?.then(raise).catch(e => console.error(String(e))) },
     main() {

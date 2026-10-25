@@ -14,18 +14,26 @@ Milestones:
 Each run, in order: the event stream has answered (it is subscribed) BEFORE the launch; a
 window of APP_ID already open refuses the run (it would be counted as this launch); the window
 counted must belong to the launched process or a descendant (an app that hands the request to
-an instance already running is refused, not measured); PSS 2 s after; then only that window is
+an instance already running is refused, not measured); PSS 5 s after; then only that window is
 closed and only the launched process is waited for. The median is of runs 2…N (run 1 warms
 the caches).
 """
-import json, queue, re, statistics, subprocess, sys, threading, time
+import argparse, hashlib, json, pathlib, queue, re, shutil, statistics, subprocess, sys, threading, time
 
-args = sys.argv[1:]
-ready = None
-if args[:1] == ['--ready']:
-    ready, args = re.compile(args[1]), args[2:]
-app_id, runs = args[0], int(args[1])
-cmd = args[args.index('--') + 1:]
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--ready', help='stderr regex for the authoritative content milestone')
+parser.add_argument('--json', type=pathlib.Path, help='write samples and environment to this report')
+parser.add_argument('app_id')
+parser.add_argument('runs', type=int)
+parser.add_argument('command', nargs=argparse.REMAINDER)
+args = parser.parse_args()
+if args.runs < 2:
+    parser.error('at least two runs are needed to exclude the warm-up')
+cmd = args.command[1:] if args.command[:1] == ['--'] else args.command
+if not cmd:
+    parser.error('provide a command after --')
+ready = re.compile(args.ready) if args.ready else None
+app_id, runs = args.app_id, args.runs
 
 
 def msg(*a):
@@ -49,13 +57,23 @@ def pss(pid):
     try:
         for line in open(f'/proc/{pid}/smaps_rollup'):
             if line.startswith('Pss:'):
-                return int(line.split()[1]) // 1024
+                return int(line.split()[1]) / 1024
     except OSError:
         return None
 
 
 def pump(stream, q):
     threading.Thread(target=lambda: [q.put((time.monotonic(), l)) for l in stream], daemon=True).start()
+
+
+def stop_child(proc):
+    if proc.poll() is None:
+        proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
 
 
 def one():
@@ -67,8 +85,10 @@ def one():
     try:
         _, first = events.get(timeout=5)       # the stream answers once it is subscribed
     except queue.Empty:
+        stop_child(ev)
         sys.exit('Hyalo\'s event stream did not answer')
     if 'ok' not in json.loads(first):
+        stop_child(ev)
         sys.exit(f'Hyalo\'s event stream refused: {first}')
     t0 = time.monotonic()
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
@@ -76,6 +96,7 @@ def one():
     lines = queue.Queue()
     if ready:
         pump(proc.stderr, lines)
+    errors = []
     mapped = ready_at = wid = wpid = None
     deadline = t0 + 30
     while time.monotonic() < deadline and not (mapped and (not ready or ready_at)):
@@ -85,7 +106,8 @@ def one():
             for w in e.get('windows', []) if e.get('event') == 'windows_changed' and not mapped else []:
                 if w['app_id'] == app_id and w['width'] > 0 and w['height'] > 0:
                     if not descends(w['pid'], proc.pid):
-                        ev.kill()
+                        stop_child(ev)
+                        stop_child(proc)
                         sys.exit(f'{app_id}: window {w["id"]} belongs to pid {w["pid"]}, not to the '
                                  f'launched {proc.pid} — an instance already running?')
                     mapped, wid, wpid = t, w['id'], w['pid']
@@ -93,21 +115,28 @@ def one():
             pass
         while ready and not ready_at and not lines.empty():
             t, line = lines.get()
+            errors.append(line.rstrip())
             if ready.search(line):
                 ready_at = t
-    ev.kill()
+    stop_child(ev)
     if not mapped or (ready and not ready_at):
-        proc.terminate()
-        sys.exit(f'{app_id}: no {"ready line and " if ready else ""}mapped window in 30 s')
+        if wid is not None:
+            msg('do', 'close-window', str(wid))
+        stop_child(proc)
+        error = f'{app_id}: no {"ready line and " if ready else ""}mapped window in 30 s; stderr: {errors[-20:]}'
+        if args.json:
+            args.json.parent.mkdir(parents=True, exist_ok=True)
+            args.json.write_text(json.dumps({'error': error, 'samples': rows,
+                'gate4_complete': False}, indent=2) + '\n')
+        sys.exit(error)
     end = max(mapped, ready_at or mapped)
-    time.sleep(2)
+    time.sleep(5)
     mem = pss(wpid)
     msg('do', 'close-window', str(wid))
     try:
         proc.wait(timeout=10)
     except subprocess.TimeoutExpired:
-        proc.terminate()       # ours: the process this run launched, nothing else
-        proc.wait(timeout=5)
+        stop_child(proc)       # ours: the process this run launched, nothing else
     return (mapped - t0) * 1000, (end - t0) * 1000, mem
 
 
@@ -116,11 +145,30 @@ for i in range(runs):
     m, e, mem = one()
     rows.append((m, e, mem))
     extra = f'  ready {e:7.0f} ms' if ready else ''
-    print(f'run {i+1}: first buffer {m:7.0f} ms{extra}  PSS {mem} MiB', flush=True)
+    print(f'run {i+1}: first buffer {m:7.0f} ms{extra}  PSS {mem if mem is None else round(mem, 2)} MiB', flush=True)
     time.sleep(1.5)
 warm = rows[1:] or rows
 what = 'ready' if ready else 'first buffer'
 mems = [r[2] for r in warm if r[2]]
 print(f'{app_id}: median {what} {statistics.median(r[1] for r in warm):.0f} ms '
       f'(min {min(r[1] for r in warm):.0f}, max {max(r[1] for r in warm):.0f}), '
-      f'median PSS {statistics.median(mems) if mems else "?"} MiB, {len(warm)} warm runs')
+      f'median PSS {round(statistics.median(mems), 2) if mems else "?"} MiB, {len(warm)} warm runs')
+
+if args.json:
+    executable = shutil.which(cmd[0])
+    report = {
+        'app_id': app_id, 'command': cmd, 'ready_regex': args.ready,
+        'settle_seconds': 5, 'excluded_warmup_runs': 1,
+        'executable': executable,
+        'sha256': hashlib.sha256(pathlib.Path(executable).read_bytes()).hexdigest() if executable else None,
+        'samples': [{'first_buffer_ms': m, 'ready_ms': e, 'pss_mib': mem} for m, e, mem in rows],
+        'median_ready_ms': statistics.median(r[1] for r in warm),
+        'median_pss_mib': statistics.median(mems) if mems else None,
+        'installed_build_verified': False,
+        'thresholds': {'ready_ms_lt': 473, 'pss_mib_lt': 157},
+        'startup_below_threshold': statistics.median(r[1] for r in warm) < 473,
+        'pss_below_threshold': statistics.median(mems) < 157 if len(mems) == len(warm) else None,
+        'gate4_complete': False,
+    }
+    args.json.parent.mkdir(parents=True, exist_ok=True)
+    args.json.write_text(json.dumps(report, indent=2) + '\n')

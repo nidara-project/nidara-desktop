@@ -205,3 +205,7 @@ paint path, masks material/layer capabilities in the existing host and omits the
 window-background declaration. It is a launch opt-in, not a persisted preference.
 Controls still edit real Config1 if operated; simply opening makes no Apply.
 This mode does not establish that the normal D7/material path is stable.
+
+D5 coverage, staged preview packaging and the development startup measurement are
+recorded in [READINESS.md](READINESS.md). The public Settings launcher is unchanged;
+entry-point activation and installed-build performance acceptance remain separate.

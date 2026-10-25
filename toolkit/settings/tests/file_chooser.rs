@@ -23,6 +23,7 @@ const REQUEST: &str = "org.freedesktop.portal.Request";
 struct State {
     mode: Arc<AtomicU32>,
     opened: Arc<AtomicU32>,
+    unparented: Arc<AtomicU32>,
     closed: Arc<AtomicU32>,
 }
 struct Bus {
@@ -32,11 +33,16 @@ struct Bus {
 }
 impl Bus {
     fn new() -> Self {
+        static NEXT_BUS: AtomicU32 = AtomicU32::new(0);
         let directory = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
             .join("target")
-            .join(format!("fc-{}", std::process::id()));
+            .join(format!(
+                "fc-{}-{}",
+                std::process::id(),
+                NEXT_BUS.fetch_add(1, Ordering::Relaxed)
+            ));
         std::fs::create_dir_all(&directory).unwrap();
         let config = directory.join("bus.conf");
         std::fs::write(&config,format!(r#"<busconfig><type>session</type><listen>unix:path={}</listen><auth>EXTERNAL</auth><policy context="default"><allow send_destination="*"/><allow eavesdrop="true"/><allow own="*"/></policy></busconfig>"#,directory.join("bus").display())).unwrap();
@@ -93,7 +99,14 @@ impl Portal {
         #[zbus(connection)] connection: &zbus::Connection,
         #[zbus(object_server)] server: &zbus::ObjectServer,
     ) -> zbus::fdo::Result<OwnedObjectPath> {
-        assert_eq!(parent, "wayland:synthetic-parent");
+        assert_eq!(
+            parent,
+            if self.0.unparented.load(Ordering::SeqCst) == 1 {
+                ""
+            } else {
+                "wayland:synthetic-parent"
+            }
+        );
         assert_eq!(title, "Choose wallpaper");
         assert!(bool::try_from(&options["modal"]).unwrap());
         assert!(!bool::try_from(&options["multiple"]).unwrap());
@@ -171,12 +184,15 @@ fn operation(request: u64) -> Operation {
     Operation { mount: 7, request }
 }
 fn start(chooser: &mut Chooser, connection: &Connection, request: u64) {
+    start_parented(chooser, connection, request, "wayland:synthetic-parent");
+}
+fn start_parented(chooser: &mut Chooser, connection: &Connection, request: u64, parent: &str) {
     spin(|| {
         match chooser.start(
             connection,
             operation(request),
             Open {
-                parent: "wayland:synthetic-parent".into(),
+                parent: parent.into(),
                 title: "Choose wallpaper".into(),
                 images_label: "Images".into(),
                 current_folder: Some("/home/test".into()),
@@ -251,4 +267,27 @@ fn private_bus_early_response_actual_path_cancel_and_owner_loss() {
             .contains("owner changed")
     );
     assert!(state.closed.load(Ordering::SeqCst) > closed);
+}
+
+#[test]
+fn missing_foreign_exporter_uses_empty_portal_parent_without_changing_selection() {
+    let bus = Bus::new();
+    let service = bus.connection();
+    let client = bus.connection();
+    let state = State::default();
+    state.unparented.store(1, Ordering::SeqCst);
+    service
+        .object_server()
+        .at(PATH, Portal(state.clone()))
+        .unwrap();
+    service.request_name(NAME).unwrap();
+    let mut chooser = Chooser::default();
+    start_parented(&mut chooser, &client, 10, "");
+    assert_eq!(
+        result(&mut chooser, 10).unwrap(),
+        Some(PathBuf::from("/home/test/Wallpaper #.png"))
+    );
+    state.mode.store(1, Ordering::SeqCst);
+    start_parented(&mut chooser, &client, 11, "");
+    assert_eq!(result(&mut chooser, 11).unwrap(), None);
 }

@@ -1416,3 +1416,11 @@ Only popup-local pointer events target the list. Configured popup geometry, neve
 its requested position, supplies accessible option bounds. Suggestion IDs and
 active descendant belong to the retained semantic tree; stale publications fail.
 Settings supplies its index and opens ordinary content results only on selection.
+
+### Prepared Settings entry point
+
+`routing::launch_mode` consumes an optional leading `--entry-point` host flag before
+interpreting Request arguments. Without it the native application keeps Mode::Native;
+with it Mode::EntryPoint owns the public name too. This is preparation, not activation.
+The preview package leaves the public launcher unchanged and stages the future launcher
+as data. See `settings/READINESS.md` for the explicit outstanding acceptance conditions.
