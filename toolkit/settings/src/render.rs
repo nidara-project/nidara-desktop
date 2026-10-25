@@ -35,6 +35,10 @@ pub type Result<T> = std::result::Result<T, String>;
 pub trait Editor {
     fn session(&self) -> &Session;
     fn apply(&mut self, key: &str, value: Value) -> std::result::Result<(), ApplyError>;
+    /// Drain/stage external changes during a modal call, without mutating its Tree.
+    fn poll(&mut self) -> Vec<Notice> {
+        Vec::new()
+    }
     /// The one bus connection, for a builder's portal call (the file chooser); None in tests.
     fn connection(&self) -> Option<&zbus::blocking::Connection> {
         None
@@ -51,6 +55,21 @@ impl Editor for crate::client::Client {
     fn connection(&self) -> Option<&zbus::blocking::Connection> {
         Some(crate::client::Client::connection(self))
     }
+    fn poll(&mut self) -> Vec<Notice> {
+        crate::client::Client::poll(self)
+    }
+}
+
+/// Native hosting is lent to builders, separate from the data layer's Editor.
+pub trait Modal {
+    fn dropdown(
+        &mut self,
+        tree: &mut Tree,
+        window: &mut nk_wayland::Window,
+        styles: &Styles,
+        editor: &mut dyn Editor,
+        combo: NodeId,
+    ) -> Result<Effect>;
 }
 
 /// What a builder works with, lent for one call.
@@ -60,6 +79,7 @@ pub struct Cx<'a> {
     pub styles: &'a Styles,
     /// Lent in `effect` and `idle` (to open a dialog over it), None in `build` and `notice`.
     pub window: Option<&'a mut nk_wayland::Window>,
+    pub modal: Option<&'a mut (dyn Modal + 'static)>,
     editor: &'a mut dyn Editor,
     owner: usize,
     owners: &'a mut HashMap<NodeId, Owner>,
@@ -67,6 +87,17 @@ pub struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    pub fn open_dropdown(&mut self, combo: NodeId) -> Result<Effect> {
+        let modal = self
+            .modal
+            .as_deref_mut()
+            .ok_or("dropdown needs a native modal context")?;
+        let window = self
+            .window
+            .as_deref_mut()
+            .ok_or("dropdown needs its parent window")?;
+        modal.dropdown(self.tree, window, self.styles, self.editor, combo)
+    }
     pub fn session(&self) -> &Session {
         self.editor.session()
     }
@@ -222,6 +253,7 @@ pub struct Host<'a> {
     pub exports: &'a Exports,
     pub styles: &'a Styles,
     pub window: Option<&'a mut nk_wayland::Window>,
+    pub modal: Option<&'a mut (dyn Modal + 'static)>,
 }
 
 impl Rendered {
@@ -446,6 +478,7 @@ impl Rendered {
                 exports,
                 styles,
                 window: None,
+                modal: None,
                 editor,
                 owner,
                 owners: &mut self.owners,
@@ -511,12 +544,23 @@ impl Rendered {
                 exports,
                 styles,
                 window: None,
+                modal: None,
                 editor,
                 owner: i,
                 owners: &mut self.owners,
                 mount: self.mount,
             };
-            for n in notices {
+            // A failed reply also carries Changed: show the canonical value first,
+            // then retain its error until a later batch changes the key again.
+            for n in notices
+                .iter()
+                .filter(|n| !matches!(n, Notice::Failed { .. }))
+                .chain(
+                    notices
+                        .iter()
+                        .filter(|n| matches!(n, Notice::Failed { .. })),
+                )
+            {
                 let names = match n {
                     Notice::Changed(k) => k.iter().any(|k| m.built.keys.contains(k)),
                     Notice::Failed { key, .. } => m.built.keys.contains(key),
@@ -543,6 +587,7 @@ impl Rendered {
             exports,
             styles,
             window,
+            modal,
         } = h;
         match self.owners.get(&id).copied() {
             Some(Owner::Row(i)) => {
@@ -587,6 +632,7 @@ impl Rendered {
                     exports,
                     styles,
                     window,
+                    modal,
                     editor,
                     owner: i,
                     owners: &mut self.owners,
@@ -609,6 +655,7 @@ impl Rendered {
             exports,
             styles,
             mut window,
+            mut modal,
         } = h;
         let now = Instant::now();
         for row in &mut self.rows {
@@ -636,6 +683,9 @@ impl Rendered {
                 exports,
                 styles,
                 window: window.as_deref_mut(),
+                modal: modal
+                    .as_mut()
+                    .map(|m| &mut **m as &mut (dyn Modal + 'static)),
                 editor,
                 owner: i,
                 owners: &mut self.owners,
@@ -661,6 +711,7 @@ impl Rendered {
                 exports,
                 styles,
                 window: None,
+                modal: None,
                 editor,
                 owner: i,
                 owners: &mut self.owners,
@@ -699,7 +750,14 @@ impl Rendered {
                 .store()
                 .and_then(|s| s.key(&row.key))
                 .is_some_and(|k| k.available && k.writable());
-            tree.set_hidden(row.row, !(inside(&row.under) && holds(&row.visible_when)))?;
+            let available = session
+                .store()
+                .and_then(|s| s.key(&row.key))
+                .is_some_and(|k| k.available);
+            tree.set_hidden(
+                row.row,
+                !(available && inside(&row.under) && holds(&row.visible_when)),
+            )?;
             let sensitive = live && writable && holds(&row.sensitive_when);
             for id in control_nodes(&row.control) {
                 tree.set_disabled(id, !sensitive)?;
@@ -707,10 +765,22 @@ impl Rendered {
         }
         let mut transitions = Vec::new();
         for (i, m) in self.builders.iter_mut().enumerate() {
-            let visible = inside(&m.under) && holds(&m.visible_when);
+            let available = m.built.keys.iter().all(|key| {
+                session
+                    .store()
+                    .and_then(|s| s.key(key))
+                    .is_some_and(|k| k.available)
+            });
+            let writable = m.built.keys.iter().all(|key| {
+                session
+                    .store()
+                    .and_then(|s| s.key(key))
+                    .is_some_and(|k| k.writable())
+            });
+            let visible = available && inside(&m.under) && holds(&m.visible_when);
             for row in &m.built.rows {
                 tree.set_hidden(*row, !visible)?;
-                tree.set_disabled(*row, !(live && holds(&m.sensitive_when)))?;
+                tree.set_disabled(*row, !(live && writable && holds(&m.sensitive_when)))?;
             }
             if visible != m.shown {
                 m.shown = visible;
@@ -723,6 +793,7 @@ impl Rendered {
                 exports,
                 styles,
                 window: None,
+                modal: None,
                 editor,
                 owner: i,
                 owners: &mut self.owners,

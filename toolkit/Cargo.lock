@@ -892,6 +892,7 @@ name = "nk-settings"
 version = "0.1.0"
 dependencies = [
  "async-channel",
+ "nk-a11y",
  "nk-icons",
  "nk-render",
  "nk-text",

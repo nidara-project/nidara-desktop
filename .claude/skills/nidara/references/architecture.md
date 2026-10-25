@@ -2987,3 +2987,87 @@ Configure and compares it with received xdg_popup wire rectangles, including
 reposition, while requiring toplevel None. Its source is compiled/static-checked
 on extraction; checker execution remains pending. Do not substitute historical
 fixed-binary results for native evidence of a rebuilt head.
+
+`nk-a11y::bridge::Bridge` now owns the reusable provider worker. Requests carry a
+snapshot-bound publication revision via `Backend::new_versioned/update_versioned`:
+node/action/availability validation and revision capture share the semantic Tree
+lock. The callback queues that captured token, even if delayed across publication.
+Do not reintroduce a separate Atomic token in a worker before/after update: both
+orders can mislabel an old-snapshot request. Application-side target/revision
+checks still apply. `published` acknowledges successful updates; `check` reports
+fatal worker errors. Widgets-demo reexports this worker; the Settings popup controller consumes it.
+Builder integration remains pending. This does not replace real Orca validation.
+
+`nk-settings::dropdown::show` now supplies the reusable popup controller over
+DropdownPopup, configured origin and the application's existing Bridge. The host
+lends text/styles/Window and a keep_open hook that stages external notices while
+the parent Tree is borrowed. False closes before input/selection acceptance;
+apply staged notices after return. `DropdownPopup::invalidate` suppresses stale
+trigger focus restoration and rejects subsequent actions/snapshots/choices. An
+ordinary dismissal preserves value and restores available focus. Parent snapshots
+use `PopupSnapshot::new` so restored and modal tokens share one namespace. Optional
+exported panel material resolves at actual size; no recipe forces opaque paint.
+This controller does not write Config1: the manifest builder remains to integrate.
+The provider diagnostic is extracted separately; compilation/CPU tests of this
+controller do not prove real libatspi, Orca speech or owner live parity.
+
+
+The separate `dropdown-provider-probe` composes nk-settings::dropdown::show with
+its one Bridge and the nk-wayland host in opaque fallback. Its wrapper reuses
+widgets-demo/check-headless.sh with private bus/runtime; evidence stays under
+target or the owner's task directory. The checker waits for completed input,
+a new parent commit and provider publication before its value/focus/identity
+assertions. Three faults must fail their own selected-value assertion after
+setup, never a timeout. This extraction builds/static-checks the diagnostic;
+the checker is NOT EXECUTED here. It does not establish current native/provider,
+Config1 builder, Orca speech or performance acceptance. Keep historical fixed
+binary evidence attributed to its original source/hash. The exclusive parent
+Tree borrow remains bounded to short menus, with no concurrent parent servicing.
+
+
+This controller does not write Config1; the manifest builder below owns that mapping.
+
+The real Dropdown manifest builder is `nk-settings::dropdown_builder::register`:
+ui.options value/label pairs and Session::shown drive the same retained component.
+Canonical reads/notices never Apply; Selection Changed and accepted popup changes
+map back to Cx.apply. Unknown current strings appear as an additional option.
+Reconciliation keeps the combo/surviving option IDs, retires obsolete options and
+atomically reorders the remaining children through reorder_dropdown_options.
+Failed notices are delivered after Changed within the same batch, retaining the
+error rather than immediately replacing it with the normal subtitle. Availability
+hides all builder rows; writability disables them. Wrong-mount/hidden/unmounted
+operations do not write. The builder has no independently asynchronous work.
+
+Renderer Host.modal lends a Modal only for effect/idle; Cx.open_dropdown requires
+it and a parent Window. dropdown::Native owns the single application's Bridge,
+text backend, panel recipe, revision and staged notices. Editor::poll delegates
+to Client::poll in production; any notice closes the modal before choices apply.
+The app drains Native.notices into Rendered after return. Its owned external hook
+stages portal/routing/visibility changes as well. No second provider or default
+replacement widget is created when context is missing: opening returns an error.
+
+Settings Config1 bus tests bind dbus-daemon with an explicit unix:dir under
+`toolkit/target/config-bus-<pid>-<counter>`, clean it after daemon termination, and
+pass the private connection to Client::start. Client::connect would contact the
+live session; neither the session address nor its accessibility bus is changed.
+
+
+
+
+For native Dropdown builder diagnostics, reuse the provider check's registry and
+private Cage/Hyalo runtime with NK_DROPDOWN_BUILDER=1 and dropdown-builder-probe.
+Its Config1 fixture is a separate real bus service; the probe consumes Client,
+Rendered and dropdown::Native. A Settings proxy filters signals by their owner:
+emitting SettingChanged from the checker connection does not simulate the portal.
+The private portal-fixture.py exposes org.nidara.TestPortal.ChangeScale only to this
+isolated test so the actual fixture owner updates ReadAll and emits SettingChanged.
+Reset scale before each case to ensure baseline and control both change it.
+Private test code is never installed. Preserve failed EGL/context-loss runs;
+a missing post-input parent commit is setup failure, not acceptance/control evidence.
+
+The accessibility Bridge keeps one pending (revision, tree), replacing it when
+the app outpaces the backend. The worker diffs the last published tree against
+the latest pending snapshot; skipped revisions are not published acknowledgments.
+An in-flight backend update completes, then the newest snapshot is consumed.
+Requests remain bound to the actual published revision. The app never blocks
+on a full notification channel, and superseded full trees are released promptly.

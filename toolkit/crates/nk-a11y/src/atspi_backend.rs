@@ -1,7 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use crate::*;
 use atspi_common::{Role as AtRole, State, StateSet};
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
+};
+
+/// Snapshot-bound publication token captured when the request is authorized.
+pub type VersionedCallback = Arc<dyn Fn(u64, Request) + Send + Sync>;
 use zbus::{
     blocking::{Connection, Proxy, connection::Builder},
     fdo, interface,
@@ -25,7 +34,8 @@ struct Object {
     id: NodeId,
     tree: Arc<Mutex<Tree>>,
     bus: String,
-    callback: Callback,
+    callback: VersionedCallback,
+    revision: Arc<AtomicU64>,
 }
 impl Object {
     fn node(&self) -> fdo::Result<Node> {
@@ -65,16 +75,19 @@ impl Object {
         }
     }
     fn request(&self, action: Action, request: Request) -> bool {
-        if let Ok(n) = self.node()
-            && n.actions.contains(&action)
-            && !n.states.disabled
-            && !n.states.hidden
-        {
-            (self.callback)(request);
-            true
-        } else {
-            false
-        }
+        let revision = {
+            let tree = self.tree.lock().unwrap();
+            let Some(n) = tree.nodes.get(&self.id) else {
+                return false;
+            };
+            if !n.actions.contains(&action) || n.states.disabled || n.states.hidden {
+                return false;
+            }
+            // The publisher writes both tree and token under this very lock.
+            self.revision.load(Ordering::Relaxed)
+        };
+        (self.callback)(revision, request);
+        true
     }
     fn text(&self) -> fdo::Result<CharacterText> {
         let n = self.node()?;
@@ -465,8 +478,36 @@ impl Selection {
         (id.map_or_else(|| self.0.null(), |id| self.0.address(id)),)
     }
     fn select_child(&self, index: i32) -> bool {
-        self.child(index)
-            .is_some_and(|id| self.0.request(Action::Activate, Request::Activate(id)))
+        let (revision, id) = {
+            let tree = self.0.tree.lock().unwrap();
+            let Some(combo) = tree.nodes.get(&self.0.id) else {
+                return false;
+            };
+            if !combo.role.is_selection_container() || combo.states.disabled || combo.states.hidden
+            {
+                return false;
+            }
+            let Some(id) = usize::try_from(index)
+                .ok()
+                .and_then(|i| combo.children.get(i))
+                .copied()
+            else {
+                return false;
+            };
+            let Some(option) = tree.nodes.get(&id) else {
+                return false;
+            };
+            if !option.actions.contains(&Action::Activate)
+                || option.states.disabled
+                || option.states.hidden
+            {
+                return false;
+            }
+            (self.0.revision.load(Ordering::Relaxed), id)
+        };
+        // Selection authorizes the option, not the combo's separate "open" action.
+        (self.0.callback)(revision, Request::Activate(id));
+        true
     }
     fn deselect_selected_child(&self, _index: i32) -> bool {
         false
@@ -652,11 +693,15 @@ pub struct Backend {
     connection: Connection,
     shared: Arc<Mutex<Tree>>,
     snapshot: Snapshot,
-    callback: Callback,
+    callback: VersionedCallback,
+    revision: Arc<AtomicU64>,
     registered: BTreeSet<NodeId>,
 }
 impl Backend {
     pub fn new(tree: Tree, callback: Callback) -> Result<Self> {
+        Self::new_versioned(tree, 0, Arc::new(move |_, request| callback(request)))
+    }
+    pub fn new_versioned(tree: Tree, revision: u64, callback: VersionedCallback) -> Result<Self> {
         let mut snapshot = Snapshot::default();
         let tree = snapshot.accept(tree)?;
         let session = Connection::session().map_err(error)?;
@@ -670,6 +715,7 @@ impl Backend {
         let mut b = Self {
             connection,
             shared: Arc::new(Mutex::new(tree.clone())),
+            revision: Arc::new(AtomicU64::new(revision)),
             snapshot,
             callback,
             registered: BTreeSet::new(),
@@ -700,6 +746,7 @@ impl Backend {
             tree: self.shared.clone(),
             bus: self.connection.unique_name().unwrap().to_string(),
             callback: self.callback.clone(),
+            revision: self.revision.clone(),
         }
     }
     fn register(&mut self, id: NodeId) -> Result<()> {
@@ -764,11 +811,15 @@ impl Backend {
             .map_err(error)
     }
 }
-impl A11yBackend for Backend {
-    fn update(&mut self, tree: Tree) -> Result<()> {
+impl Backend {
+    pub fn update_versioned(&mut self, revision: u64, tree: Tree) -> Result<()> {
         let tree = self.snapshot.accept(tree)?;
         let events = diff(self.snapshot.tree.as_ref(), &tree)?;
-        *self.shared.lock().unwrap() = tree.clone();
+        {
+            let mut shared = self.shared.lock().unwrap();
+            *shared = tree.clone();
+            self.revision.store(revision, Ordering::Relaxed);
+        }
         for id in tree.nodes.keys() {
             self.register(*id)?;
         }
@@ -890,9 +941,120 @@ impl A11yBackend for Backend {
         Ok(())
     }
 }
+impl A11yBackend for Backend {
+    fn update(&mut self, tree: Tree) -> Result<()> {
+        self.update_versioned(self.revision.load(Ordering::Relaxed), tree)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selecting_a_modal_option_checks_its_action_and_both_nodes_under_one_snapshot() {
+        let mut combo = Node::new(1, Role::ComboBox, "Language");
+        combo.children = vec![2]; // Opening is suspended while modal: no combo action.
+        let mut option = Node::new(2, Role::Option, "Español");
+        option.actions = vec![Action::Activate];
+        let tree = Arc::new(Mutex::new(Tree {
+            root: 1,
+            nodes: [(1, combo), (2, option)].into(),
+        }));
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let received = seen.clone();
+        let selection = Selection(Object {
+            id: 1,
+            tree: tree.clone(),
+            bus: String::new(),
+            revision: Arc::new(AtomicU64::new(31)),
+            callback: Arc::new(move |revision, request| {
+                received.lock().unwrap().push((revision, request))
+            }),
+        });
+        assert!(selection.select_child(0));
+        assert_eq!(*seen.lock().unwrap(), vec![(31, Request::Activate(2))]);
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&2)
+            .unwrap()
+            .states
+            .disabled = true;
+        assert!(!selection.select_child(0));
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&2)
+            .unwrap()
+            .states
+            .disabled = false;
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .states
+            .hidden = true;
+        assert!(!selection.select_child(0));
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&1)
+            .unwrap()
+            .states
+            .hidden = false;
+        tree.lock()
+            .unwrap()
+            .nodes
+            .get_mut(&2)
+            .unwrap()
+            .actions
+            .clear();
+        assert!(!selection.select_child(0));
+        assert!(!selection.select_child(-1));
+        assert!(!selection.select_child(1));
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+    #[test]
+    fn request_keeps_authorizing_snapshot_revision_when_callback_is_delayed() {
+        use std::sync::{Barrier, mpsc};
+        let mut node = Node::new(1, Role::Button, "Before");
+        node.actions = vec![Action::Activate];
+        let shared = Arc::new(Mutex::new(Tree {
+            root: 1,
+            nodes: [(1, node)].into(),
+        }));
+        let revision = Arc::new(AtomicU64::new(7));
+        let entered = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let (send, receive) = mpsc::channel();
+        let (at_callback, resume) = (entered.clone(), release.clone());
+        let object = Object {
+            id: 1,
+            tree: shared.clone(),
+            revision: revision.clone(),
+            bus: String::new(),
+            callback: Arc::new(move |token, request| {
+                at_callback.wait();
+                resume.wait();
+                send.send((token, request)).unwrap();
+            }),
+        };
+        let worker_object = object.clone();
+        let worker = std::thread::spawn(move || {
+            worker_object.request(Action::Activate, Request::Activate(1))
+        });
+        // Deterministic interleaving, no sleep: validation already authorized revision 7.
+        entered.wait();
+        {
+            let mut tree = shared.lock().unwrap();
+            tree.nodes.get_mut(&1).unwrap().states.disabled = true;
+            revision.store(8, Ordering::Relaxed);
+        }
+        release.wait();
+        assert!(worker.join().unwrap());
+        assert_eq!(receive.recv().unwrap(), (7, Request::Activate(1)));
+        assert!(!object.request(Action::Activate, Request::Activate(1)));
+    }
     #[test]
     fn structural_roles_relations_and_offscreen_states_project_without_a_bus() {
         for (input, expected) in [
@@ -921,7 +1083,8 @@ mod tests {
                 nodes: BTreeMap::from([(1, node.clone()), (2, label)]),
             })),
             bus: ":1.1".into(),
-            callback: Arc::new(|_| {}),
+            revision: Arc::new(AtomicU64::new(0)),
+            callback: Arc::new(|_, _| {}),
         };
         let mut app = object.clone();
         app.id = 0;
@@ -981,7 +1144,8 @@ mod tests {
             id: 1,
             tree: Arc::new(Mutex::new(tree)),
             bus: ":1.1".into(),
-            callback: Arc::new(|_| {}),
+            revision: Arc::new(AtomicU64::new(0)),
+            callback: Arc::new(|_, _| {}),
         };
         let text = Text(object.clone());
         assert_eq!(text.get_range_extents(0, 2, 1).unwrap(), (10, 4, 50, 13));
@@ -1037,7 +1201,8 @@ mod tests {
                 nodes: BTreeMap::from([(1, n)]),
             })),
             bus: ":1.1".into(),
-            callback: Arc::new(move |r| seen.lock().unwrap().push(r)),
+            revision: Arc::new(AtomicU64::new(0)),
+            callback: Arc::new(move |_, r| seen.lock().unwrap().push(r)),
         };
         assert!(
             object
@@ -1109,7 +1274,8 @@ mod tests {
             id: 1,
             tree: Arc::new(Mutex::new(tree)),
             bus: ":1.1".into(),
-            callback: Arc::new(|_| {}),
+            revision: Arc::new(AtomicU64::new(0)),
+            callback: Arc::new(|_, _| {}),
         };
         assert!(
             !o.get_interfaces()

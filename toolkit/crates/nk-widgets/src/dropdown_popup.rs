@@ -10,6 +10,20 @@ pub struct PopupSnapshot {
     pub revision: u64,
     pub tree: Semantics,
 }
+impl PopupSnapshot {
+    /// Use the modal publication namespace for ordinary/restored parent snapshots too.
+    pub fn new(tree: Semantics) -> Result<Self> {
+        tree.validate()?;
+        let mut next = PUBLICATION
+            .lock()
+            .map_err(|_| "popup revision lock poisoned")?;
+        let revision = *next;
+        *next = next
+            .checked_add(1)
+            .ok_or("popup publication revision exhausted")?;
+        Ok(Self { revision, tree })
+    }
+}
 
 /// Borrows the controlled model; popup-local IDs never escape into its provider.
 pub struct DropdownPopup<'a> {
@@ -19,6 +33,7 @@ pub struct DropdownPopup<'a> {
     menu: Tree,
     items: Vec<NodeId>,
     published: Option<(u64, u64)>,
+    live: bool,
 }
 impl<'a> DropdownPopup<'a> {
     pub fn new(parent: &'a mut Tree, combo: NodeId, style: MenuStyle) -> Result<Self> {
@@ -58,7 +73,17 @@ impl<'a> DropdownPopup<'a> {
             menu,
             items,
             published: None,
+            live: true,
         })
+    }
+    /// External state is invalidated; do not accept a choice or restore a stale trigger.
+    pub fn invalidate(&mut self) {
+        self.live = false;
+        self.published = None;
+        if self.parent.focused == Some(self.combo) {
+            self.parent.focused = None;
+            self.parent.invalidate(self.combo, Invalid::STATE);
+        }
     }
     pub fn menu(&self) -> &Tree {
         &self.menu
@@ -84,6 +109,9 @@ impl<'a> DropdownPopup<'a> {
     /// Origin is the actual configured popup location relative to the parent window.
     pub fn snapshot(&mut self, origin: Point) -> Result<PopupSnapshot> {
         self.validate()?;
+        if !self.live {
+            return Err("invalidated dropdown popup".into());
+        }
         if !origin.x.is_finite() || !origin.y.is_finite() {
             return Err("nonfinite popup origin".into());
         }
@@ -111,16 +139,9 @@ impl<'a> DropdownPopup<'a> {
                 n.actions = vec![Action::Focus, Action::Activate];
             }
         }
-        tree.validate()?;
-        let mut next = PUBLICATION
-            .lock()
-            .map_err(|_| "popup revision lock poisoned")?;
-        let revision = *next;
-        *next = next
-            .checked_add(1)
-            .ok_or("popup publication revision exhausted")?;
-        self.published = Some((revision, self.menu.generation()));
-        Ok(PopupSnapshot { revision, tree })
+        let snapshot = PopupSnapshot::new(tree)?;
+        self.published = Some((snapshot.revision, self.menu.generation()));
+        Ok(snapshot)
     }
     pub fn request(&mut self, revision: u64, request: Request) -> Result<Effect> {
         self.validate()?;
@@ -146,6 +167,9 @@ impl<'a> DropdownPopup<'a> {
         self.validate()?;
         match selected {
             Some(index) => {
+                if !self.live {
+                    return Err("invalidated dropdown popup".into());
+                }
                 let option = *self
                     .options
                     .get(index)
@@ -164,7 +188,7 @@ impl<'a> DropdownPopup<'a> {
 impl Drop for DropdownPopup<'_> {
     fn drop(&mut self) {
         let _ = self.parent.set_dropdown_expanded(self.combo, false);
-        if self.parent.available(self.combo) {
+        if self.live && self.parent.available(self.combo) {
             let _ = self.parent.focus(self.combo);
         }
     }

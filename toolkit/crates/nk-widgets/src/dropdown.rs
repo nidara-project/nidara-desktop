@@ -198,6 +198,26 @@ impl Tree {
         Ok((row, combo))
     }
 
+    /// Reorder surviving option nodes without replacing their semantic identities.
+    pub fn reorder_dropdown_options(&mut self, combo: NodeId, order: &[NodeId]) -> Result<()> {
+        let node = self.nodes.get(&combo).ok_or("unknown dropdown")?;
+        let current: std::collections::BTreeSet<_> = node.children.iter().copied().collect();
+        let requested: std::collections::BTreeSet<_> = order.iter().copied().collect();
+        if !matches!(node.kind, Kind::Dropdown { .. })
+            || node.children.len() != order.len()
+            || requested.len() != order.len()
+            || current != requested
+        {
+            return Err("dropdown order must be a permutation of its options".into());
+        }
+        if node.children != order {
+            self.nodes.get_mut(&combo).unwrap().children = order.to_vec();
+            self.generation += 1;
+            self.invalidate(combo, Invalid::SEMANTICS);
+        }
+        Ok(())
+    }
+
     pub fn dropdown_selected(&self, combo: NodeId) -> Result<usize> {
         let node = self.nodes.get(&combo).ok_or("unknown dropdown")?;
         if !matches!(node.kind, Kind::Dropdown { .. }) {

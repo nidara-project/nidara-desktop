@@ -20,6 +20,8 @@
 
 pub mod builders;
 pub mod client;
+pub mod dropdown;
+pub mod dropdown_builder;
 pub mod exports;
 pub mod manifest;
 pub mod material;

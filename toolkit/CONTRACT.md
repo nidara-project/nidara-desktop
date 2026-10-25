@@ -217,6 +217,28 @@ not hover. It uses the existing check.ts path and exported stroke/size in row in
 This retained list alone does not establish a complete native Dropdown/builder
 or real Orca speech acceptance; that requires the host and accessibility bridge.
 
+### Versioned AT-SPI publication (#915)
+
+`atspi_backend::Backend::new_versioned(tree, revision, callback)` and
+`update_versioned(revision, tree)` associate an application publication token with
+the shared semantic snapshot. `VersionedCallback` receives `(revision, Request)`:
+node/action/availability validation and revision capture occur under the SAME
+snapshot lock. Selection.SelectChild checks the container and the chosen option
+(action/availability) under that same lock; it does not require the combo's separate
+open action, which may be suspended while the menu is modal. A callback delayed across a new publication retains the revision
+of the snapshot that authorized it. The app queues requests and revalidates that
+revision and the live target; provider threads never mutate widgets. Tokens are
+application-owned and must distinguish modal openings/subtree lifetimes. Legacy
+`Backend::new` and A11yBackend::update remain compatible, with unversioned callback.
+
+A worker must use this snapshot-bound token, not an independently updated Atomic
+counter before/after backend.update: either order can label an old-snapshot action
+with a new revision. Backend update failure is fatal to the worker, not a success
+acknowledgement. `nk_a11y::bridge::Bridge` owns that worker/provider, exposes queued
+`(revision, Request)` to the application, and reports successful publication tokens
+on `published`; failures surface through `check`. Widgets-demo reuses this worker.
+This seam does not itself prove real Orca speech or modal hosting.
+
 ### Dropdown modal semantics (#882/#915)
 
 `DropdownPopup::new` borrows the parent Tree until dismissal and constructs its
@@ -245,6 +267,82 @@ only collapse and restore focus if still available. Invalid origins, removed
 menu options and unsupported/stale requests fail before selection changes.
 This adapter is CPU-tested groundwork; it does not itself publish a provider,
 run a popup, or establish real AT-SPI/Orca acceptance.
+
+### Manifest Dropdown builder (#915)
+
+`dropdown_builder::register` registers the real per-item `dropdown` builder. It
+reads schema `ui.options` value/label pairs and the session's shown string, creates
+one retained ComboBox row, and labels unknown current enum values with themselves
+as an additional option. Notices reconcile labels/options while keeping the combo
+and surviving option IDs; `Tree::reorder_dropdown_options` accepts only an exact
+permutation of its current children (validated atomically) and invalidates stale
+actions when order changes. Reading/canonical updates never Apply.
+
+Changed(combo), including Selection activation, applies its mapped schema value
+exactly through Cx.apply, then displays Session::shown. Activated(combo) opens the
+shared modal controller through Cx.open_dropdown and applies only Changed results.
+Missing native context is an explicit opening error. Hidden, unavailable, readonly,
+unmounted or wrong-mount operations do not write. Failed writes show the existing
+service error/subtitle path and canonical/session value. Within a notice batch the
+renderer delivers Failed after Changed/availability notices, so the same failed
+reply cannot immediately erase its error with its accompanying Changed notice. Renderer row
+visibility follows key availability; builder rows are sensitive only when every
+edited key is writable. No async worker/timer survives this synchronous builder.
+
+### Renderer modal context (#915)
+
+`render::Host.modal` optionally lends a `render::Modal` implementation in effect/idle;
+Cx::open_dropdown requires that context and a parent Window, and delegates to the
+shared controller. Build/notice/shown/unmount receive no modal context. The default
+absence is an explicit error when opening, not a fallback control/provider.
+`Editor::poll` drains actual Client notices (empty by default in pure test editors).
+`dropdown::Native` supplies the production Modal: it lends Bridge/text/material/
+revision/physical serial/poll interval and stages polled notices in its application-owned
+Vec. Any staged/new notice cancels the modal operation before input/selection;
+the application delivers the staged notices to Rendered after return, without
+polling them a second time. Its external keep_open hook stages portal/routing/
+visibility invalidation too. It never applies a setting itself. A synchronous
+modal borrow cannot survive page unmount; builders still check mount/visibility
+and use operation tokens for any independently asynchronous work.
+
+### Settings Dropdown controller (#915)
+
+`nk_settings::dropdown::show(Host, combo)` runs the reusable MenuList in the
+standard popup host. Host lends parent Tree/Window, text backend, Styles, the
+application's existing Bridge and mutable parent revision slot, optional panel recipe,
+physical opening serial,
+poll interval and a `keep_open` callback. It never creates another provider.
+Popup snapshots use the acknowledged configured origin; requests route through
+DropdownPopup's revision guard. `PopupSnapshot::new(tree)` allocates tokens for
+ordinary/restored parent publications from the same namespace as modal snapshots;
+the application uses this namespace consistently when sharing that Bridge.
+Before returning, the controller updates the host revision slot to the restored
+parent publication, so subsequent parent requests can pass its own revision guard.
+
+`keep_open` polls/stages Config1/appearance/navigation/visibility notices without
+mutating the borrowed Tree. False cancels before handling input and immediately
+before accepting selection, so the caller can apply staged notices after return.
+Errors cancel and propagate. External invalidation calls `DropdownPopup::invalidate`,
+which rejects further snapshots/actions/selection and suppresses trigger focus
+restoration (clearing its retained focus if necessary) until staged changes apply.
+Cancellation/PopupDone do not choose; ordinary dismissal restores parent focus
+and collapsed semantics are republished even on a child error. Only the controlled
+model changes here; Config1 writes remain the builder's responsibility. The
+optional panel recipe is resolved for the actual configured size; absent recipe
+forces opaque D5 paint even if the compositor advertises material. A supplied
+recipe uses the exported menu radius. Native provider/Orca and lifecycle acceptance
+require dedicated evidence, not compilation of this controller.
+
+The separate `dropdown-provider-probe` diagnostic composes this controller with
+one real Bridge and the standard nk-wayland host, using opaque fallback. Its
+private-bus wrapper reuses widgets-demo/check-headless.sh; all evidence/runtime
+must stay under target or the owner's task directory. The checker observes
+completed input, a new parent commit and provider publication before asserting
+selection/focus/stable IDs. Fault controls must reach their own value assertion;
+a setup timeout or crash is a failure, never a caught control. Compilation and
+syntax checks do not establish native controller/provider acceptance, Config1
+integration or real Orca speech. Historical fixed-binary evidence remains tied
+to its original source and hashes.
 
 ### Standard popup host (#882/#915)
 
@@ -806,3 +904,10 @@ Settings positions its three window-control buttons from the current exported
 CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
 metrics, including portal updates staged before layout; no cached measured bounds
 or second layout is needed just to compute the capsule's horizontal placement.
+
+The accessibility Bridge keeps one pending (revision, tree), replacing it when
+the app outpaces the backend. The worker diffs the last published tree against
+the latest pending snapshot; skipped revisions are not published acknowledgments.
+An in-flight backend update completes, then the newest snapshot is consumed.
+Requests remain bound to the actual published revision. The app never blocks
+on a full notification channel, and superseded full trees are released promptly.

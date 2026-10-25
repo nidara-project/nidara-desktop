@@ -429,3 +429,133 @@ cut separates/compiles diagnostic source; native baseline/control execution
 remains pending outside this local validation. No current native geometry,
 wire/role/grab/reposition/focus/cleanup, AT-SPI/Orca or performance/live proof.
 Historical fixed-binary evidence is not evidence of this rebuilt head.
+
+
+## Local cut21 — snapshot-bound AT-SPI publication (2026-10-23)
+
+Existing5e26bd02 delta extracted literally above cut20: shared bridge::Bridge
+worker, versioned Backend callback/update, Selection option authorization under
+the same semantic Tree lock, demo reexport only. Contract before API, canonical
+skill/README in the same change. Main/other toolkit features preserved.
+
+131 a11y/Settings/widgets/demo tests PASS (12+52+65+2) with mandatory fullcut16
+menu-list-data: target/a11y-publication-split-restored-tests.log. Two deterministic
+Barriers exercise a callback authorized on revision7, delayed across revision8
+with target disabled, retaining7; the next request is rejected. Bus-free Object/
+Selection fixtures verify modal option selection without the combo open action,
+option/container availability and invalid indices. These are actual production
+methods with synthetic semantic snapshots, not a live provider/bus/Orca test.
+
+Compiled control restored the old SelectChild implementation requiring combo
+Activate: its own selection.select_child(0) assertion failed AFTER constructing
+an enabled modal option/container with combo opening suspended; split-modal-control.log.
+Literal source restored before131PASS. All-target a11y/demo Clippy -D warnings,
+workspace all-target check and nk-a11y no-default-features check PASS in split-
+clippy/workspace/no-atspi logs; fmt/skilldocs/diff PASS.
+
+Worker publication acknowledgements/fatal failure propagation are compiled here;
+no new live worker/provider publication proof or runtime fault injection. No
+native popup, Config1 builder, AT-SPI action delivery or Orca speech acceptance,
+performance/live claim. Historical fixed evidence remains source-specific.
+Adaptive foundations/Settings real polling caller and causal test remain debt.
+
+
+## Local cut22 — controlled Dropdown popup host (2026-10-23)
+
+Extracted existing78ae2598 production controller237 lines, dependency/lib/lock,
+PopupSnapshot common namespace and DropdownPopup invalidation delta with its
+CPU test above21. Controller source matches that commit literally; test append
+context adapted to retain cut18 review206 disabled-chosen focus correction.
+Contract before API, skill/README/EVIDENCE in this commit. Main features retained.
+Provider probe/checker/wrapper are excluded for a separate compilable cut.
+
+130 a11y/Settings/widgets tests PASS (12+52+66), mandatory fullcut16 exports:
+target/dropdown-controller-split-restored-tests.log. Compiled invalidated-focus
+restoration fault removed Drop's live guard; its own parent.focused()==None
+assertion observed Some(6) AFTER invalidation, rejected snapshot/request/choice
+and preserved canonical selection: split-restore-control.log. Literal source
+restored before130PASS, including cut18 chosen-disabled/all-disabled regression.
+Both Settings/widgets all-target Clippy -D warnings, workspace all-target check,
+fmt/skilldocs/diff PASS in corresponding logs. Initial patch-context failures
+were extraction failures, not test acceptance; test appended without overwrites.
+
+Controller/keep_open staging, configured-origin publication, existing Bridge and
+restored revision, opaque fallback/optional panel path are compiled/source-reviewed.
+CPU invalidation test does not execute show(), a real Window/provider, Config1
+notices or input-to-controller lifecycle. No current native popup/action/focus/
+material, AT-SPI/Orca, performance/live acceptance. Historical fixed binaries'
+evidence is not evidence of this reconstructed head. Exclusive parent borrow
+short-menu limit and adaptive real polling caller/causal-test debt remain.
+
+
+## Local cut23 — Dropdown controller/provider diagnostic (2026-10-23)
+
+Extracted the existing78ae2598 provider probe199, checker134 and wrapper19 above
+cut22 (1bc63b8f). Probe and wrapper match original source literally. The only
+checker adaptation adds git -c safe.directory=* for container ownership, as #882
+requires. No production/controller/token/export changes or new provider/backend.
+Contract and canonical skill/README updated in the same commit.
+
+Actual cargo BUILD of dropdown-provider-probe PASS:
+target/dropdown-provider-probe-split-build.log. Settings all-target Clippy
+-D warnings PASS: target/dropdown-provider-probe-split-clippy.log, with required
+fullcut16 menu-list-data. Python AST, bash syntax, source comparisons, cargo fmt,
+skill-docs and git diff --check PASS. No redundant production unit-test rerun:
+this cut adds diagnostic source only and compiles it with its real dependencies.
+
+CHECKER NOT EXECUTED: this cut only separates and compiles the diagnostic;
+native baseline/control execution remains pending. There is no current native
+controller/provider, selection/focus/grab/geometry/cleanup, AT-SPI action-delivery,
+Config1 builder, real Orca speech or performance/live acceptance. Historical
+fixed-binary evidence remains tied to its original source/hash. The checker
+requires completed input, parent commit and publication before its assertions;
+three fault cases must fail their own selected-value assertion, not timeout.
+Exclusive parent borrow short-menu limit and adaptive foundations/Settings real
+polling caller plus causal-test debt remain explicit and unresolved.
+
+
+## Local cut24 — manifest Dropdown builder (2026-10-23)
+
+Existing498b90ad production/tests extracted above23, preserving earlier main and
+review corrections. Contract applied before API; skill/README in same change.
+123 Settings/widgets tests PASS [33, 3, 13, 5, 2, 17, 7, 13, 15, 8, 5, 2], mandatory complete cut16 exports.
+Settings/widgets all-target Clippy -D warnings PASS. Logs: target/
+dropdown-builder-split-{tests,clippy}.log. Private Config1 bus tests exercise
+actual Client/service/canonical refusal; no live session bus mutation.
+Native modal opening remains a headless decision seam in these tests, not a
+real Window/controller/provider integration acceptance. No new fault injection
+run: historical controls remain original-source evidence. No native/EGL/Orca,
+performance or live claim. Short-menu parent ownership and adaptive polling
+caller/causal-test debt remain. No push or merge.
+
+
+## Local cut25 — 915-dropdown-builder-probe (2026-10-23)
+
+Extracted existing 13d1bc6d above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+Actual example BUILD PASS; all-target Clippy -D warnings PASS
+for nk-settings. Logs: target/cut25-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-menu-list/toolkit/target/menu-list-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+### Block C latest pending accessibility snapshot (2026-10-25)
+
+Bridge replaces its unbounded pending-tree queue with one overwriteable slot and
+a bounded nonblocking wake notification. While the backend is busy, superseded
+trees are released; it diffs the last published snapshot against the newest one
+it takes next. Only actually published revisions are acknowledged. Metadata
+requests remain version-bound; in-flight publication is not interrupted.
+
+14 nk-a11y tests and all-target Clippy-Dwarnings pass. The slow-reader control
+uses an actual mailbox and retained payload lifetime: old Arc drops before the
+reader runs, only final revision3 is received, then4 and disconnect are handled.
+No native Orca result is claimed for this unit-level concurrency fix.

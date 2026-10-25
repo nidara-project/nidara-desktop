@@ -164,3 +164,21 @@ Real Orca KP_Up must speak the whole `日本🙂 word`. The wrong-extents contro
 test window, with no installed-provider fault switch: it publishes wrong plain geometry,
 logs application after backend update, and must fail the same real speech assertion.
 See [phase-0 evidence](../../phase0/EVIDENCE-846.md).
+
+
+`Backend::new_versioned(tree, revision, callback)` and
+`update_versioned(revision, tree)` capture a publication token together with the
+node/action/availability check under the semantic snapshot lock. Their callback
+receives `(revision, Request)`, even if delayed across a newer publication.
+Legacy `new`/`A11yBackend::update` keep the existing unversioned callback API.
+The application owns tokens and must distinguish modal/subtree lifetimes, then
+revalidate queued requests on its own thread. An independent Atomic revision
+counter outside the provider cannot provide that guarantee in either update order.
+
+`bridge::Bridge` is the shared provider worker used by widgets-demo and intended
+for Settings. `requests` queues snapshot-bound requests; `published` acknowledges
+successful update revisions; `check()` reports worker failures. It never mutates
+widgets on the provider thread. This worker is one provider per application;
+separate menu view IDs must be mapped onto the controlled parent's retained
+semantics before publication. The Dropdown adapter does that projection; this
+worker alone does not host its popup or establish real Orca speech acceptance.
