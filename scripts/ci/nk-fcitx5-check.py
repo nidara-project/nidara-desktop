@@ -416,7 +416,7 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
             p.stop(ime)
             time.sleep(.5)
             ime_log = directory / 'fcitx-restart.log'
-            ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin'], ime_log, env)
+            ime = native.start_ime(p, engine, label, ime_log, env)
             native.wait(lambda: b'true' in subprocess.check_output(
                 ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus', '--object-path',
                  '/org/freedesktop/DBus', '--method', 'org.freedesktop.DBus.NameHasOwner', 'org.fcitx.Fcitx5']), 'restart controller')
