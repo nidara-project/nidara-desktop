@@ -8,6 +8,10 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# Explicit test build only; normal installed Settings cannot inject gate faults.
+appearance-gates = ["nk-a11y/settings-gate-controls"]
+
 [dependencies]
 nk-a11y = { path = "../crates/nk-a11y" }
 nk-render = { path = "../crates/nk-render" }

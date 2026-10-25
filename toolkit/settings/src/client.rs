@@ -135,6 +135,11 @@ impl Client {
     /// Change a key through the service (the control's own path; `Session::apply` says when it
     /// is sent).
     pub fn apply(&mut self, key: &str, value: Value) -> Result<(), ApplyError> {
+        #[cfg(feature = "appearance-gates")]
+        if key == "nightlight.enabled" && crate::gate_controls::active("apply") {
+            crate::gate_controls::applied("apply", key);
+            return Ok(());
+        }
         if let Some(command) = self.session.apply(key, value)? {
             self.run(command);
         }
@@ -142,6 +147,13 @@ impl Client {
     }
 
     fn feed(&mut self, raw: Raw, notices: &mut Vec<Notice>) {
+        #[cfg(feature = "appearance-gates")]
+        if matches!(&raw, Raw::Updated { values, .. } if values.iter().any(|(key, _)| key == "nightlight.enabled"))
+            && crate::gate_controls::active("updated")
+        {
+            crate::gate_controls::applied("updated", "nightlight.enabled");
+            return;
+        }
         let (n, commands) = self.session.handle(raw);
         notices.extend(n);
         for c in commands {

@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [features]
+settings-gate-controls = []
 default = ["atspi"]
 atspi = ["dep:zbus", "dep:atspi-common"]
 

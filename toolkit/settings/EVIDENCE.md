@@ -1219,3 +1219,20 @@ around in the client. The one-shot user service exited successfully and is inact
 Evidence: toolkit/target/review-20261025/d7-live/ (result.json, full client
 WAYLAND_DEBUG=1 log, compositor journal, exact window and hover commands/results).
 Client wire-log SHA256: c1ae07c0accde72bfa708cae26f76b7b448d78151f255259a3b6386326862fcc.
+### Appearance gate implementation — draft, 2026-10-25
+
+A separate branch above block F prepares PHASE1 gates 1/2 with 21 operations,
+real Config1/getConfig and independent service effects/legacy rendered state,
+keyboard-only actions and real Orca SPEECH OUTPUT, plus six full-only controls.
+ci-scope/settings limits the new walk to toolkit/settings runtime changes.
+No new GitHub Actions job/step or redirect gate is introduced.
+
+Local validation: workspace all-target check with feature; settings/a11y unit and
+integration tests with and without feature; Clippy-Dwarnings in both modes;
+four Python matrix/legacy-row tests; Python/Bash syntax, ci-scope self-test,
+real 108-set/4-variant token checker, fmt/skill-docs/diff checks. Initial compiler
+and Clippy errors were corrected before final checks. Logs target/gates-20261025.
+The full native checker has NOT executed: no local Orca/speech-dispatcher or
+vkms disposable runner. No baseline/control catch, native parity, keyboard/Orca,
+performance or owner acceptance is claimed; checker no ejecutado. CI must supply
+that evidence. No live service/settings/compositor state was changed.

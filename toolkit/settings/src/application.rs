@@ -693,11 +693,23 @@ impl Application for App {
                     _ => None,
                 };
             }
+            #[cfg(feature = "appearance-gates")]
+            if matches!(&event, Event::Key(k) if k.sym == 0x20)
+                && nk_settings::gate_controls::active("keyboard")
+            {
+                nk_settings::gate_controls::applied("keyboard", "nightlight.enabled");
+                return self.sync(window);
+            }
             let effect = self.view.shell.event(&event, window)?;
             self.effect(effect, window)?;
         }
         self.stage()?;
-        self.sync(window)
+        let result = self.sync(window);
+        #[cfg(feature = "appearance-gates")]
+        if let Event::Key(key) = &event {
+            eprintln!("SETTINGS_GATE_INPUT_DONE sym={}", key.sym);
+        }
+        result
     }
     fn paint(&mut self, frame: Frame) -> Result<Vec<u8>> {
         self.view.shell.paint(frame, &self.view.styles)

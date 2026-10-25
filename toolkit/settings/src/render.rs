@@ -170,6 +170,11 @@ impl Cx<'_> {
 
     /// Focus `id` back (after a dialog), only if it is still there, shown and enabled.
     pub fn focus_if_shown(&mut self, id: NodeId) -> bool {
+        #[cfg(feature = "appearance-gates")]
+        if crate::gate_controls::active("focus-return") {
+            crate::gate_controls::applied("focus-return", "file-chooser");
+            return false;
+        }
         if self.tree.node(id).is_none() || self.tree.is_hidden(id) {
             return false;
         }
@@ -548,6 +553,11 @@ impl Rendered {
         item: &Item,
         under: &[usize],
     ) -> Result<()> {
+        #[cfg(feature = "appearance-gates")]
+        if name == "wallpaperPreview" && crate::gate_controls::active("builder") {
+            crate::gate_controls::applied("builder", name);
+            return Ok(());
+        }
         let mut builder = builders
             .0
             .get_mut(name)

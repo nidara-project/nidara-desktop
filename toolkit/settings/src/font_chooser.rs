@@ -593,6 +593,17 @@ pub fn choose(host: Host<'_>, launcher: NodeId, initial: Selection) -> Result<Op
         selected = None;
     }
     drop(dialog);
+    #[cfg(feature = "appearance-gates")]
+    if crate::gate_controls::active("focus-return")
+        && let Some(other) = host
+            .tree
+            .focus_order()
+            .into_iter()
+            .find(|id| *id != launcher)
+    {
+        host.tree.focus(other)?;
+        crate::gate_controls::applied("focus-return", "font-dialog");
+    }
     let snapshot = PopupSnapshot::new(host.tree.semantics())?;
     host.bridge.update(snapshot.revision, snapshot.tree)?;
     *host.revision = snapshot.revision;

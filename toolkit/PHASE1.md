@@ -426,6 +426,18 @@ setup failure is not a caught control.
 | 4 Measured | installed builds, same probe and milestone, 6 launches, median of 2–6: start-up **< 473 ms**; PSS after 5 s settled **< 157 MiB**; the **time-weighted** p95 frame interval over a scripted 2 s scroll and a 2 s slider drag **≤ the legacy Settings'** measured the same way (`scripts/dev/smoothness-probe.py`: frames from Hyalo's `msg frames ID`, input from `nidara-input … [ms]`). Time-weighted, not per gap: a 400 ms freeze in a 2 s scroll left the per-gap p95 at 16.3 ms (one gap among ~106) and raised the time-weighted one to 408.6 ms (measured 2026-10-25, nested Hyalo, `gtk4-widget-factory` SIGSTOPped 400 ms per run). The reference, measured in the owner's session (2026-10-25, Hyalo 61e5343b, 2560×1440 at 144 Hz, legacy Appearance, 6 runs, median of 2–6): scroll **13.9 ms**, night-light slider drag **21.1 ms**; the same scroll with Settings SIGSTOPped 400 ms per run gave 409.4 ms. CI records the same numbers as a trend; the decisive run is the owner's session | test-only flags: a startup delay, extra retained memory, a stalled frame — each must fail its own comparison |
 | 5 Live | the owner's explicit acceptance, with the revisions and the environment recorded | none — it is a person's judgement, not a test |
 
+### Appearance gate runner (#915)
+
+The implementation of gates 1 and 2 lives in `settings/acceptance/`: its operation
+matrix expands D1 per control (four separate time fields, both font dialogs and
+wallpaper preview/gallery/picker). It runs inside the existing Hyalo smoke only
+when ci-scope's independent `settings` output selects `toolkit/settings/` runtime
+changes; nightly/unknown scope retains the full fallback. The six controls run
+only with `NK_REAL_FULL=true`. No Actions job or step is added, and unrelated PRs
+do not run another native walk. The normal installed build omits the acceptance
+feature and fault hooks. Read the acceptance README for exact oracles and limits:
+local compilation/tests do not establish a passed native gate or a caught control.
+
 The exports are tightened too: #855's check compares **values** and Appearance's items and
 predicates, not only key sets; #856's compares every token value of a set with an independent
 computation of a sample of sets.
