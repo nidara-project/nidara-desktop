@@ -785,12 +785,12 @@ impl Application for App {
                 modal: None,
             })?;
             self.view.notices(&mut self.client, &notices)?;
-            self.dependencies()?;
         }
         if self.view.page.is_none() {
             let notices = self.client.poll();
             self.view.notices(&mut self.client, &notices)?;
         }
+        self.dependencies()?;
         self.sync(window)?;
         if let Some(native) = &self.native {
             native.bridge.check()?;

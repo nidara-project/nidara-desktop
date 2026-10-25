@@ -7,6 +7,13 @@ use crate::{
 };
 use nk_widgets::{Kind, NodeId, Result, Tree};
 use std::collections::{HashMap, HashSet};
+use unicode_normalization::{UnicodeNormalization, char::is_combining_mark};
+fn normalized(text: &str) -> String {
+    text.nfd()
+        .filter(|c| !is_combining_mark(*c))
+        .flat_map(char::to_lowercase)
+        .collect()
+}
 pub const ALL: u64 = u64::MAX;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Match {
@@ -20,7 +27,7 @@ pub fn find(exports: &Exports, store: Option<&Store>, query: &str) -> Result<Vec
     if query.trim().is_empty() {
         return Ok(vec![]);
     }
-    let words: Vec<_> = query.split_whitespace().map(str::to_lowercase).collect();
+    let words: Vec<_> = query.split_whitespace().map(normalized).collect();
     let mut all = vec![];
     let mut seen = HashSet::new();
     for page in &exports.pages {
@@ -114,7 +121,7 @@ pub fn find(exports: &Exports, store: Option<&Store>, query: &str) -> Result<Vec
         }
     }
     all.retain(|m| {
-        let text = format!("{} {} {}", m.label, m.subtitle, m.page_label).to_lowercase();
+        let text = normalized(&format!("{} {} {}", m.label, m.subtitle, m.page_label));
         words.iter().all(|word| text.contains(word))
     });
     all.sort_by_key(|m| !m.is_page);
@@ -190,5 +197,16 @@ impl Results {
     }
     pub fn target(&self, id: NodeId) -> Option<&str> {
         self.rows.get(&id).map(String::as_str)
+    }
+}
+
+#[cfg(test)]
+mod normalization_tests {
+    use super::normalized;
+    #[test]
+    fn matches_accents_case_and_decomposed_unicode() {
+        assert_eq!(normalized("Configuración"), normalized("CONFIGURACION"));
+        assert_eq!(normalized("CAFÉ"), normalized("cafe\u{301}"));
+        assert_eq!(normalized("日本語"), "日本語");
     }
 }

@@ -37,3 +37,8 @@ own-client PID, use existing Nidara gates for keyboard/screenshots, and never ed
 a setting. The native sequence checks 8+all, Down/Up, Escape preserving both query
 and content, Enter opening results, and the observed AT-SPI Back action restoring
 Appearance. CPU and log-growth samples distinguish idle from interaction.
+
+Search ignores case and Unicode combining diacritics on both the query and labels.
+Enter with no highlighted option opens the first suggestion. The suggestion popup
+fits within the parent window horizontally, growing left when the field is near
+the right edge. Icon-theme updates also apply while the results page is visible.

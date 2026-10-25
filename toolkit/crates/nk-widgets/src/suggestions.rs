@@ -159,7 +159,10 @@ impl Suggestions {
             let r = parent.nodes[&self.input].bounds;
             menu.layout(
                 Size {
-                    width: r.width.max(parent.metrics.content_floor),
+                    width: r
+                        .width
+                        .max(parent.metrics.content_floor)
+                        .min(parent.size.width),
                     height: parent.size.height,
                 },
                 false,
@@ -412,13 +415,17 @@ impl Suggestions {
         let height = menu.nodes[&scroll].measured.height + 2. * self.style.border;
         let placement = PopupPlacement {
             anchor: [
-                r.x.floor() as i32,
+                r.x.min((parent.size.width - menu.size.width).max(0.))
+                    .floor() as i32,
                 r.y.floor() as i32,
                 r.width.ceil() as i32,
                 r.height.ceil() as i32,
             ],
             size: (
-                r.width.max(parent.metrics.content_floor).ceil() as u32,
+                r.width
+                    .max(parent.metrics.content_floor)
+                    .min(parent.size.width)
+                    .ceil() as u32,
                 height.ceil().max(1.) as u32,
             ),
         };
