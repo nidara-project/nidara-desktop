@@ -84,3 +84,12 @@ fn cached_cluster_boxes_match_native_selection_and_carets() {
         }
     }
 }
+
+#[cfg(feature = "system-fonts")]
+#[test]
+fn selected_family_must_exist_without_fallback() {
+    let mut backend =
+        ParleyBackend::with_system_fonts(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    assert!(backend.family_available("Noto Sans"));
+    assert!(!backend.family_available("Nidara missing family 91d42a"));
+}

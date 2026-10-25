@@ -670,6 +670,7 @@ mod tests {
         )
         .unwrap();
         let mut catalogue = Catalogue {
+            skipped_records: 0,
             families: vec![
                 crate::font_catalog::Family {
                     name: "Noto Sans".into(),

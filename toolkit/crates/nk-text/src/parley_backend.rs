@@ -21,6 +21,17 @@ impl ParleyBackend {
     pub fn with_system_fonts(fonts: Arc<FontSet>) -> Result<Self> {
         Self::create(fonts, true)
     }
+    /// Check the named family through the same Fontique collection as shaping, without
+    /// accepting fallback substitution. Used before applying a fontconfig catalogue choice.
+    pub fn family_available(&mut self, name: &str) -> bool {
+        let Some(family) = self.font_context.collection.family_by_name(name) else {
+            return false;
+        };
+        family.fonts().iter().any(|font| {
+            font.load(Some(&mut self.font_context.source_cache))
+                .is_some_and(|bytes| ttf_parser::Face::parse(bytes.data(), font.index()).is_ok())
+        })
+    }
     fn create(fonts: Arc<FontSet>, system_fonts: bool) -> Result<Self> {
         let mut font_context = FontContext {
             collection: parley::fontique::Collection::new(parley::fontique::CollectionOptions {

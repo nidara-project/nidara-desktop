@@ -1141,3 +1141,11 @@ only when portal text scale or line height changes. This never Apply, preserves
 launcher IDs and does not invalidate repeatedly while appearance is unchanged.
 The application's existing appearance-notice hook still cancels an open modal
 before replacing Styles; main-loop native portal/routing acceptance is separate.
+
+The font chooser uses Fontconfig for installed family/style metadata only, and
+Fontique in Parley for rendering. Bad catalogue records (including bad UTF-8) are
+skipped, counted and logged by line; failed enumeration/no usable family remains
+an error. Before a native selected family reaches Apply, the same rendering
+collection must resolve and load a valid face without fallback substitution.
+Catalogue timing/count logs describe each lazy enumeration; there is no second
+shaper or silent family fallback acceptance.

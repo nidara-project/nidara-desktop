@@ -28,9 +28,12 @@ pub struct Family {
 #[derive(Debug)]
 pub struct Catalogue {
     pub families: Vec<Family>,
+    /// Malformed records omitted; good families remain selectable.
+    pub skipped_records: usize,
 }
 impl Catalogue {
     fn enumerate() -> Result<Self> {
+        let start = std::time::Instant::now();
         let output = Command::new("fc-list")
             .args(["--format", "%{family[0]}\t%{style[0]}\t%{file}\t%{index}\n"])
             .output()
@@ -41,45 +44,67 @@ impl Catalogue {
                 String::from_utf8_lossy(&output.stderr).trim()
             ));
         }
-        Self::parse(
-            std::str::from_utf8(&output.stdout)
-                .map_err(|e| format!("font catalogue is not UTF-8: {e}"))?,
-        )
+        let catalogue = Self::parse_bytes(&output.stdout)?;
+        eprintln!(
+            "FONT_CATALOGUE families={} skipped={} enumeration_ms={}",
+            catalogue.families.len(),
+            catalogue.skipped_records,
+            start.elapsed().as_millis()
+        );
+        Ok(catalogue)
     }
+    #[cfg(test)]
     fn parse(output: &str) -> Result<Self> {
+        Self::parse_bytes(output.as_bytes())
+    }
+    fn parse_bytes(output: &[u8]) -> Result<Self> {
         let mut families: BTreeMap<String, Vec<Face>> = BTreeMap::new();
         let mut seen = BTreeSet::new();
-        for (line, record) in output.lines().enumerate() {
-            let fields: Vec<_> = record.split('\t').collect();
-            let invalid = || format!("invalid font catalogue record {}", line + 1);
-            let [family, style, file, index] = fields.as_slice() else {
-                return Err(invalid());
+        let mut skipped_records = 0;
+        let records = output.strip_suffix(b"\n").unwrap_or(output);
+        for (line, record) in records.split(|b| *b == b'\n').enumerate() {
+            let parsed = || -> Option<(String, String, PathBuf, u32)> {
+                let record = std::str::from_utf8(record).ok()?;
+                let fields: Vec<_> = record.split('\t').collect();
+                let [family, style, file, index] = fields.as_slice() else {
+                    return None;
+                };
+                if family.is_empty()
+                    || file.is_empty()
+                    || [family, style, file]
+                        .iter()
+                        .any(|s| s.chars().any(char::is_control))
+                    || !std::path::Path::new(file).is_absolute()
+                {
+                    return None;
+                }
+                Some((
+                    family.to_string(),
+                    style.to_string(),
+                    file.into(),
+                    index.parse().ok()?,
+                ))
             };
-            if family.is_empty()
-                || file.is_empty()
-                || [family, style, file]
-                    .iter()
-                    .any(|s| s.chars().any(char::is_control))
-                || !std::path::Path::new(file).is_absolute()
-            {
-                return Err(invalid());
-            }
-            let index: u32 = index.parse().map_err(|_| invalid())?;
-            if seen.insert((
-                family.to_string(),
-                style.to_string(),
-                file.to_string(),
-                index,
-            )) {
-                families.entry(family.to_string()).or_default().push(Face {
-                    style: style.to_string(),
-                    file: file.into(),
-                    index,
-                });
+            let Some((family, style, file, index)) = parsed() else {
+                skipped_records += 1;
+                eprintln!(
+                    "FONT_CATALOGUE_SKIPPED line={} bytes={:?}",
+                    line + 1,
+                    &record[..record.len().min(160)]
+                );
+                continue;
+            };
+            if seen.insert((family.clone(), style.clone(), file.clone(), index)) {
+                families
+                    .entry(family)
+                    .or_default()
+                    .push(Face { style, file, index });
             }
         }
         if families.is_empty() {
-            return Err("fontconfig returned no installed families".into());
+            return Err(format!(
+                "fontconfig returned no usable installed families ({skipped_records} bad records)"
+            ));
         }
         let mut families: Vec<_> = families
             .into_iter()
@@ -96,7 +121,10 @@ impl Catalogue {
             })
             .collect();
         families.sort_by_key(|f| (f.name.to_lowercase(), f.name.clone()));
-        Ok(Self { families })
+        Ok(Self {
+            families,
+            skipped_records,
+        })
     }
     /// Family-name search only; the caller keeps the selected face independently of filtering.
     pub fn matching(&self, query: &str) -> impl Iterator<Item = &Family> {
@@ -226,12 +254,24 @@ mod tests {
             "",
             "Family\tRegular\trelative.ttf\t0\n",
             "Family\tRegular\t/a.ttf\twrong\n",
-            "Family\tRegular\t/a.ttf\t0\nBAD\n",
             "\tRegular\t/a.ttf\t0\n",
             "Family\tRegular\t/a.ttf\t0\textra\n",
         ] {
             assert!(Catalogue::parse(text).is_err(), "accepted {text:?}");
         }
+    }
+    #[test]
+    fn good_families_survive_bad_records_and_invalid_utf8() {
+        let data = b"Good\tRegular\t/good.ttf\t0\nBAD\nOther\tRegular\t/other.ttf\t0\nBroken\tRegular\t/a.ttf\tx\n\xff\n";
+        let c = Catalogue::parse_bytes(data).unwrap();
+        assert_eq!(c.skipped_records, 3);
+        assert_eq!(
+            c.families
+                .iter()
+                .map(|f| f.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Good", "Other"]
+        );
     }
     fn pending(token: Operation) -> (Load, mpsc::Sender<Result<Arc<Catalogue>>>, Arc<AtomicBool>) {
         let (send, receive) = mpsc::channel();

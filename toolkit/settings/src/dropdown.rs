@@ -266,7 +266,7 @@ impl crate::render::Modal for Native {
         let mut keep_open = || {
             crate::render::stage_modal_notices(editor, &mut self.notices, self.keep_open.as_mut())
         };
-        crate::font_chooser::choose(
+        let selected = crate::font_chooser::choose(
             crate::font_chooser::Host {
                 tree,
                 window,
@@ -287,7 +287,16 @@ impl crate::render::Modal for Native {
             },
             request.launcher,
             request.initial,
-        )
+        )?;
+        if let Some(choice) = &selected
+            && !self.text.family_available(&choice.family)
+        {
+            return Err(format!(
+                "font family unavailable to the renderer: {}",
+                choice.family
+            ));
+        }
+        Ok(selected)
     }
     fn dropdown(
         &mut self,

@@ -721,3 +721,12 @@ Workspace all-target check PASS, including phase0/settings-slice; no-atspi check
 PASS with2existing dead-code warnings, not-D. Logs: target/split-final-{workspace,
 no-atspi}-check.log. All182 tests and7package Clippy results above remain current;
 this final addition is documentation only. Original branches remain clean.
+
+### Review D: malformed catalogue records and renderer agreement (2026-10-25)
+
+The parser now omits and counts individual invalid records (including invalid UTF-8),
+retaining usable families. Enumeration logs total time, usable families and skipped records.
+Before Apply, a family must resolve and load a valid face from the same Fontique collection
+used by Parley; fc-list remains discovery metadata, not a second rendering authority.
+42 Settings library tests and two nk-text geometry/resolution tests pass; all-target
+Clippy for nk-settings/nk-text passes. These checks do not establish live IME/Orca acceptance.

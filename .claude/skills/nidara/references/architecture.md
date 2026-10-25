@@ -3249,3 +3249,11 @@ was executed while extracting cuts23–33. Historical fixed-binary results do no
 establish rebuilt-head acceptance. The short-menu parent ownership limit,
 hover/active transition and provisional arrow ink, adaptive real polling caller
 and causal-test debt remain as documented above.
+
+The font chooser uses Fontconfig for installed family/style metadata only, and
+Fontique in Parley for rendering. Bad catalogue records (including bad UTF-8) are
+skipped, counted and logged by line; failed enumeration/no usable family remains
+an error. Before a native selected family reaches Apply, the same rendering
+collection must resolve and load a valid face without fallback substitution.
+Catalogue timing/count logs describe each lazy enumeration; there is no second
+shaper or silent family fallback acceptance.
