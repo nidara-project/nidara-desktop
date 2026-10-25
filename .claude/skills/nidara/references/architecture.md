@@ -2833,3 +2833,58 @@ revisions and still-settled fresh answers in the second snapshot; retry otherwis
 Save the second as stage.json and the first as stage-capture-before.json. Offline
 validation checks both, so it cannot pair an older PNG with a later settled JSON.
 A post-screenshot-only readiness test has a settling race and is insufficient.
+
+
+Settings and the diagnostic widgets demo share one installed material reader in
+nk_settings::material::{panel,control}. The demo modules only re-export it; no
+application-specific copy of ControlRecipe/PanelMaterial/capsule_metrics remains.
+Source-fixture and mandatory generated-export tests live with the shared reader
+in settings/tests/fixtures and settings/src/material. Null/absent state ink and
+all exact variant/size/validation rules are preserved. This ownership move does
+not assemble Settings chrome or add its native main loop. Settings export tests
+honor the caller's absolute NK_SETTINGS_DATA with NK_REQUIRE_EXPORT=1; a token-only
+export cannot satisfy manifest/i18n tests and must not be reported as complete.
+
+
+### Native Settings window assembly (#915)
+
+`toolkit/settings/src/window.rs` assembles retained sidebar Page nodes, title bar,
+one content Scroll for Rendered and one control capsule. It reuses the existing
+Composition/CapsuleComposition and shared installed material readers. No second
+host/provider or material parser. Window labels and capsule metrics are caller
+inputs. Titlebar/transition policy must be supplied explicitly before sync.
+Sidebar activation reports a page ID to Router and restores the previous selection
+until routing and mounting succeed; only selected() commits the new title/page.
+The app mounts Rendered under Shell::content. Keep the shell separate from the
+native main loop: this assembly alone does not claim live routing, portal updates,
+AT-SPI/Orca, presentation or performance acceptance. Main still needs to supply
+window policies and integrate service/portal/routing/mount lifetimes.
+
+
+Native Settings exports the Request object in Native mode too, before acquiring
+its native bus name. Only EntryPoint mode acquires org.nidara.Settings; pre-takeover
+second native instances must still reach Request at org.nidara.SettingsNative.
+Propagate handoff errors instead of reporting AlreadyRunning without delivery.
+Routing tests use explicit private dbus-daemon socket paths under toolkit/target
+and explicit connections, without changing DBUS_SESSION_BUS_ADDRESS. A test-only
+RoutingReady endpoint confirms the real object server responds before a missing-
+Request control is tested; it implements no Request and no UI/provider behavior.
+The control must fail its handoff assertion with UnknownInterface, not a timeout.
+
+
+Native-mode forwarding goes directly to org.nidara.Settings (ENTRY), with no
+legacy launcher or LEGACY_START wait: the existing legacy process is still the
+entry point, or D-Bus activates it, or the call returns a clear error. Pass Mode
+into Service; do not route pre-takeover pages/apps to the post-takeover LEGACY
+name. EntryPoint mode retains LEGACY plus launcher. Private routing tests omit
+activation service directories so missing-entry cases cannot start installed apps;
+each Bus Drop stops its daemon then removes only its own target/rb runtime.
+
+The native Settings window capsule uses components.json capsule.windowInset for both
+corner axes, independently of generic row padding/gap. The owner #921 geometry is
+72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.
+
+Settings positions its three window-control buttons from the current exported
+CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
+metrics, including portal updates staged before layout; no cached measured bounds
+or second layout is needed just to compute the capsule's horizontal placement.

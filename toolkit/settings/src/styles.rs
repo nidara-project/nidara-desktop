@@ -11,6 +11,8 @@ use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, RowTextStyle, Switch
 use serde_json::Value as Json;
 
 pub struct Styles {
+    /// Window capsule corner inset from components.json, independent of row spacing.
+    pub controls_inset: f32,
     pub palette: Palette,
     pub metrics: Metrics,
     pub choices: ChoiceStyle,
@@ -142,6 +144,7 @@ impl Styles {
             scss(statics, "lh-body")?,
         )?;
         Ok(Self {
+            controls_inset: number(&c["capsule"]["windowInset"])?,
             palette,
             metrics,
             choices,
@@ -322,8 +325,11 @@ mod tests {
     /// Every combination the portal can say gives complete styles from the real export.
     #[test]
     fn every_set_gives_complete_styles() {
-        let root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data");
+        let root = std::env::var_os("NK_SETTINGS_DATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../build/settings-data")
+            });
         if !root.join("version").exists() && std::env::var_os("NK_REQUIRE_EXPORT").is_none() {
             eprintln!("skipped: no build/settings-data (set NK_REQUIRE_EXPORT to require it)");
             return;

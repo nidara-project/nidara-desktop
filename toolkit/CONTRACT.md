@@ -470,6 +470,15 @@ native demo.
 
 ## The native Settings (`settings/`, #915)
 
+`nk_settings::material::{panel,control}` owns the existing strict installed-export
+readers: PanelMaterial, ControlRecipe and capsule_metrics. Settings and the
+widgets demo consume these same readers; neither re-parses a material recipe.
+The move preserves exact portal variants, short-side selection, validation,
+null state-ink semantics and separation of glass/component geometry. Exports and
+portal values are caller inputs; this module does not create a host or connect
+to Config1. Public reader behavior is unchanged from the diagnostic consumer.
+
+
 The app of phase 1 (`PHASE1.md`), split between Claude and Sol in #915. Its **data layer**
 (Claude) is the one thing every row and builder reads; this is what it offers, fixed before
 either half depends on it.
@@ -518,6 +527,29 @@ either half depends on it.
   font at its text scale). The ONE mapping from the exports to `nk-widgets`' styles: the
   widgets demo uses it too (`widgets-demo → nk-settings`); its own panel and title bar recipe
   stay in the demo.
+
+The Router exports its Request interface in both Native and EntryPoint modes;
+only EntryPoint takes the legacy entry-point name. A second native process hands
+its request to the existing native owner before takeover too. A failed handoff
+returns its actual transport error, never a silent AlreadyRunning result.
+In Native mode forwarded pages/apps go to ENTRY directly, without the legacy
+launcher or takeover-name wait. D-Bus may activate that existing entry point;
+activation/call failure is returned. EntryPoint mode forwards to LEGACY and retains
+its launcher/wait policy. The native side never launches a second legacy entry.
+
+### Settings window composition (Sol, #915)
+
+`settings::material::{panel, control}` owns the exact exported panel/control readers,
+including capsule geometry from components.json. The widgets demo reuses those readers;
+the app does not copy their recipes or fall back to compiled material numbers.
+`settings::window::Shell` builds the retained sidebar, title bar, content scroll region
+and one capsule of window-control Buttons. Labels are supplied by the caller, already
+translated. Sidebar activation reports a page id for the existing Router; it never draws
+a non-allowlisted page itself. The app mounts Rendered under `Shell::content`.
+The existing nk-widgets Composition/CapsuleComposition remain responsible for D7 layers,
+D5 painting, input, focus and finite animation. Window control capsules do not opt in to
+Hyalo's duplicate server controls. The app supplies exported metrics and provisional
+owner-reviewed titlebar/transition policies explicitly; this seam invents no visual values.
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
@@ -660,3 +692,12 @@ listener is the access control’s negative case; Orca’s key echo proves deliv
   and must fail that same assertion. Orca's returned-rectangle diagnostics establish that
   the wrong geometry was consumed; a timeout, crash or unapplied fault cannot count.
   Existing form-walk speech assertions and controls remain required.
+
+The native Settings window capsule uses components.json capsule.windowInset for both
+corner axes, independently of generic row padding/gap. The owner #921 geometry is
+72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.
+
+Settings positions its three window-control buttons from the current exported
+CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
+metrics, including portal updates staged before layout; no cached measured bounds
+or second layout is needed just to compute the capsule's horizontal placement.

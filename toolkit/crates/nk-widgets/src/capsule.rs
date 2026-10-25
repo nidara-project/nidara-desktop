@@ -58,6 +58,13 @@ impl Tree {
         node.destructive = destructive;
         Ok(id)
     }
+    /// The current exported metrics, including changes applied before the next layout.
+    pub fn capsule_metrics(&self, id: NodeId) -> Result<CapsuleMetrics> {
+        self.capsules
+            .get(&id)
+            .map(|capsule| capsule.metrics)
+            .ok_or_else(|| "unknown capsule".into())
+    }
     pub fn set_capsule_metrics(&mut self, id: NodeId, metrics: CapsuleMetrics) -> Result<()> {
         metrics.validate()?;
         let capsule = self.capsules.get_mut(&id).ok_or("unknown capsule")?;

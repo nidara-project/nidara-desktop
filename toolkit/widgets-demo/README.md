@@ -30,7 +30,7 @@ come from that entry; reduce transparency uses the exported variant directly.
 The switch's size and look come from `components.json` `switch` (`toolkit/tokens/switch.json`), through `nk_settings::styles` like every other token.
 The demo does not yet enable backdrop-driven `ink`/`inkTone`. The header reads
 `blur.panel` for its blur-only material.
-`fixtures/glass.json` is the real #881 export with unrelated pieces removed;
+`../settings/tests/fixtures/glass.json` is the real #881 export with unrelated pieces removed;
 tests cover all four variants, the size ramp and malformed/stub input.
 
 The header uses the owner's provisional curve C in `titlebar-provisional.json`:
@@ -179,3 +179,9 @@ Capture acceptance reads a fresh settled snapshot, takes the screenshot, then
 requires the same answer revisions and settled state in a second snapshot. Both
 snapshots are saved and checked offline. A capture spanning a revision/state
 change is retried; readiness observed only after the PNG is insufficient.
+
+
+The demo's panel/control modules now re-export nk_settings::material readers.
+Source fixtures and the six material/component tests moved with their existing
+implementation into nk-settings; generated-export validation is still mandatory
+when NK_REQUIRE_EXPORT is set. This change adds no Settings window/main loop.

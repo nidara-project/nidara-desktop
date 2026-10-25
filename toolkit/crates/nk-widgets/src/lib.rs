@@ -1069,7 +1069,12 @@ impl Tree {
             let metrics = capsule.metrics;
             let n = self.nodes.get_mut(&id).unwrap();
             let caption = n.caption.as_deref().unwrap_or(&n.name);
-            let layout = backend.layout(caption, &self.style, width.max(1.))?;
+            // Capsule captions occupy the exported glyph box, independently of body
+            // typography; retain this same Layout for painting and geometry.
+            let mut style = self.style.clone();
+            style.size = metrics.button_min;
+            style.line_height = 1.;
+            let layout = backend.layout(caption, &style, width.max(1.))?;
             let text = layout.measured_size();
             n.measured = Size {
                 width: metrics.button_min.max(text.width),
