@@ -29,6 +29,7 @@ daily use**; what is missing comes back later; a phase is never lengthened.
 | 2026-10-18 | **No non-Hyalo compositor run in CI in phase 1** — it would be paid on every PR. D5's fallbacks are specified and unit-tested, not run on a foreign compositor |
 | 2026-09-13 | Applications read the appearance **only from the Settings portal** (#534) — so does the native Settings ([A8]) |
 | 2026-10-15 | Rust, own AT-SPI provider (#834), Parley (#825) |
+| 2026-10-25 | **No gate 3**: the current Settings stays openable on its own, so the D3 fallback needs no gate of its own — the routing already built (#919, #934) stays, held by its private-bus unit tests, and no fallback run is added to CI. Progress of the native Settings comes first |
 
 ## D1 — one service changes the settings: `org.nidara.Config1`
 
@@ -421,7 +422,7 @@ setup failure is not a caught control.
 |---|---|---|
 | 1 Parity | every row of D1's operation table: operated in the native Settings → the value read back through `getConfig`, applied by the service (the effect: GSettings key / Hyalo config / wallpaper daemon), shown by the legacy Settings; and written by another path → shown by the native one via `Updated` | separately: drop `Updated` handling; break one control's `Apply`; remove one custom builder; each must fail its own row |
 | 2 Keyboard + Orca | the real-Orca harness walks every control and dialog of Appearance: `SPEECH OUTPUT` with role, name, value; each change made by keyboard alone and its effect verified; focus restored after the font dialog and the file chooser | suppress one control's value-changed event; break one keyboard action; break focus return — each fails its own assertion |
-| 3 D3 fallback | a non-allowlisted page opens in the legacy process on that page: cold, with the native running, with the legacy already running | route to the wrong page; route to the native endpoint — each fails |
+| ~~3 D3 fallback~~ | **dropped** (owner, 2026-10-25): the current Settings opens on its own; the routing keeps its unit tests (`toolkit/settings/tests/routing.rs`), no CI run | — |
 | 4 Measured | installed builds, same probe and milestone, 6 launches, median of 2–6: start-up **< 473 ms**; PSS after 5 s settled **< 157 MiB**; p95 frame interval over a scripted 2 s scroll and a 2 s slider drag **≤ the legacy Settings' p95** measured the same way. CI records the same numbers as a trend; the decisive run is the owner's session | test-only flags: a startup delay, extra retained memory, a stalled frame — each must fail its own comparison |
 | 5 Live | the owner's explicit acceptance, with the revisions and the environment recorded | none — it is a person's judgement, not a test |
 
@@ -438,7 +439,7 @@ computation of a sample of sets.
 2. **Sol** — the measured slice (above); then `nk-widgets` component by component, each with
    its AT-SPI acceptance and a control; then the Settings app (D2 renderer, the custom
    builders, D3 routing, D5 fallbacks).
-3. **Owner** — gate 5, after gates 1–4 pass.
+3. **Owner** — gate 5, after gates 1, 2 and 4 pass.
 
 ## Out of phase 1, said so
 
