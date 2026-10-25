@@ -27,8 +27,10 @@ pub mod font_builder;
 pub mod font_catalog;
 pub mod font_chooser;
 pub mod font_description;
+pub mod image_load;
 pub mod manifest;
 pub mod material;
+pub mod page;
 pub mod portal;
 pub mod render;
 pub mod routing;
@@ -38,3 +40,9 @@ pub mod value;
 pub mod window;
 
 pub use value::Value;
+
+pub mod wallpaper;
+
+pub mod file_chooser;
+
+pub mod wallpaper_picker;

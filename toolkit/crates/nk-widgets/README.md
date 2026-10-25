@@ -280,3 +280,21 @@ retained-layout override as set_label_style. None restores the ordinary UI style
 set_button_description changes only accessible text, preserving the row's title
 relation; the font builder uses it for current value/help/error. Both overrides
 are retired with the node. No separate font-button renderer or style defaults.
+
+
+Tree::image retains a named IMAGE with explicit size/ImageStyle. set_image supplies
+an Arc<nk_render::Raster>; repeated identical content is a no-op. Measurement fits
+the caller's logical box responsively, while Contain/Cover control pixel fitting.
+Background/border/radius are caller styles. Hidden/offscreen clipping uses the same
+Tree rules, and removal releases pixels. Decode/loading lifetime belongs to builders.
+
+
+Tree::thumbnail_strip reuses Choice radios with an independent horizontal viewport
+and explicit ThumbnailStyle. Add named thumbnail_option children and supply their
+shared Rasters through set_image. Canonical selection accepts None; keyboard,
+pointer and Tab use existing Choice semantics. Focus reveals within the strip;
+wheel input scrolls it independently. Paint, hit tests and SHOWING share clipping.
+Offscreen options stay retained. This primitive does not enumerate/decode or Apply.
+
+reorder_thumbnails accepts an exact permutation only, preserving IDs/pixels and
+selection while invalidating layout and old action targets. Invalid input is atomic.

@@ -190,6 +190,14 @@ pub trait Builder {
     fn idle(&mut self, _cx: &mut Cx<'_>) -> Result<()> {
         Ok(())
     }
+    /// Content visibility, combined with renderer predicates and availability.
+    fn row_visible(&self, _row: NodeId) -> bool {
+        true
+    }
+    /// External portal is preparing/open: host must suspend parent accessibility actions.
+    fn external_modal_active(&self) -> bool {
+        false
+    }
     /// Its row was hidden or shown (it stays mounted): cancel or resume visual work.
     fn shown(&mut self, _cx: &mut Cx<'_>, _visible: bool) -> Result<()> {
         Ok(())
@@ -319,38 +327,72 @@ impl Rendered {
             styles,
             ..
         } = h;
-        if let Some(header) = &page.header {
-            return Err(format!(
-                "page {}: a header builder ({header}) is not drawn by this build",
-                page.id
-            ));
-        }
-        for g in &page.groups {
-            if let Some(custom) = &g.custom {
+        let before: BTreeSet<_> = tree
+            .node(content)
+            .ok_or("missing page content")?
+            .children()
+            .iter()
+            .copied()
+            .collect();
+        let built = (|| -> Result<()> {
+            if let Some(header) = &page.header {
                 return Err(format!(
-                    "page {}: a custom group ({custom}) is not drawn by this build",
+                    "page {}: a header builder ({header}) is not drawn by this build",
                     page.id
                 ));
             }
-            let header = match &g.i18n {
-                Some(k) => exports.text(k)?.to_owned(),
-                None => String::new(),
-            };
-            let group = tree.group(content, &header)?;
-            for item in &g.items {
-                r.item(tree, editor, exports, styles, builders, group, item, &[])?;
+            for g in &page.groups {
+                if let Some(custom) = &g.custom {
+                    return Err(format!(
+                        "page {}: a custom group ({custom}) is not drawn by this build",
+                        page.id
+                    ));
+                }
+                let header = match &g.i18n {
+                    Some(k) => exports.text(k)?.to_owned(),
+                    None => String::new(),
+                };
+                let group = tree.group(content, &header)?;
+                for item in &g.items {
+                    r.item(tree, editor, exports, styles, builders, group, item, &[])?;
+                }
+                if let Some(footer) = &g.footer {
+                    let id = tree
+                        .set_footer(group, Some(exports.text(footer)?))?
+                        .expect("a footer with text is a node");
+                    r.footers.push(Footer {
+                        id,
+                        when: g.footer_when.clone(),
+                    });
+                }
             }
-            if let Some(footer) = &g.footer {
-                let id = tree
-                    .set_footer(group, Some(exports.text(footer)?))?
-                    .expect("a footer with text is a node");
-                r.footers.push(Footer {
-                    id,
-                    when: g.footer_when.clone(),
-                });
+            r.refresh(tree, editor, exports, styles)?;
+            Ok(())
+        })();
+        if let Err(error) = built {
+            let cleanup = r.unmount(Host {
+                tree,
+                editor,
+                exports,
+                styles,
+                window: None,
+                modal: None,
+            });
+            let added: Vec<_> = tree
+                .node(content)
+                .into_iter()
+                .flat_map(|n| n.children())
+                .copied()
+                .filter(|id| !before.contains(id))
+                .collect();
+            for id in added {
+                tree.remove(id)?;
             }
+            return Err(match cleanup {
+                Ok(()) => error,
+                Err(e) => format!("{error}; unmount: {e}"),
+            });
         }
-        r.refresh(tree, editor, exports, styles)?;
         Ok(r)
     }
 
@@ -523,7 +565,15 @@ impl Rendered {
                 owners: &mut self.owners,
                 mount: self.mount,
             };
-            builder.build(&mut cx, group, item)?
+            match builder.build(&mut cx, group, item) {
+                Ok(built) => built,
+                Err(error) => {
+                    return Err(match builder.unmount(&mut cx) {
+                        Ok(()) => error,
+                        Err(cleanup) => format!("{error}; unmount: {cleanup}"),
+                    });
+                }
+            }
         };
         self.builders.push(Mounted {
             builder,
@@ -685,9 +735,15 @@ impl Rendered {
         Ok(true)
     }
 
+    pub fn external_modal_active(&self) -> bool {
+        self.builders
+            .iter()
+            .any(|m| m.builder.external_modal_active())
+    }
+
     /// From the app's idle: a held slider value goes (its drag ended, its debounce passed),
     /// and every builder's own idle.
-    pub fn idle(&mut self, h: Host<'_>) -> Result<()> {
+    pub fn idle(&mut self, h: Host<'_>) -> Result<Vec<Notice>> {
         let Host {
             tree,
             editor,
@@ -696,6 +752,20 @@ impl Rendered {
             mut window,
             mut modal,
         } = h;
+        let notices = editor.poll();
+        if !notices.is_empty() {
+            self.notices(
+                Host {
+                    tree: &mut *tree,
+                    editor: &mut *editor,
+                    exports,
+                    styles,
+                    window: None,
+                    modal: None,
+                },
+                &notices,
+            )?;
+        }
         let now = Instant::now();
         for row in &mut self.rows {
             let Control::Slider {
@@ -732,7 +802,8 @@ impl Rendered {
             };
             m.builder.idle(&mut cx)?;
         }
-        Ok(())
+        self.refresh(tree, editor, exports, styles)?;
+        Ok(notices)
     }
 
     /// The page goes away: every builder's `unmount`; the caller removes the nodes.
@@ -744,6 +815,7 @@ impl Rendered {
             styles,
             ..
         } = h;
+        let mut failure = None;
         for (i, mut m) in std::mem::take(&mut self.builders).into_iter().enumerate() {
             let mut cx = Cx {
                 tree,
@@ -756,9 +828,11 @@ impl Rendered {
                 owners: &mut self.owners,
                 mount: self.mount,
             };
-            m.builder.unmount(&mut cx)?;
+            if let Err(error) = m.builder.unmount(&mut cx) {
+                failure.get_or_insert(error);
+            }
         }
-        Ok(())
+        failure.map_or(Ok(()), Err)
     }
 
     /// Visible and sensitive, for every row, builder row, disclosure and footer.
@@ -818,7 +892,7 @@ impl Rendered {
             });
             let visible = available && inside(&m.under) && holds(&m.visible_when);
             for row in &m.built.rows {
-                tree.set_hidden(*row, !visible)?;
+                tree.set_hidden(*row, !(visible && m.builder.row_visible(*row)))?;
                 tree.set_disabled(*row, !(live && writable && holds(&m.sensitive_when)))?;
             }
             if visible != m.shown {

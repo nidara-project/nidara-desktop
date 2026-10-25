@@ -1149,3 +1149,164 @@ an error. Before a native selected family reaches Apply, the same rendering
 collection must resolve and load a valid face without fallback substitution.
 Catalogue timing/count logs describe each lazy enumeration; there is no second
 shaper or silent family fallback acceptance.
+
+### Application page mount lifecycle (#915)
+
+`Rendered::build` is transactional over the content's newly-created children.
+A failing builder receives unmount, previously mounted builders are unmounted,
+and every new content root is removed before returning the original error.
+Existing content and unrelated chrome are preserved. Cleanup continues if an
+unmount callback fails, reporting that failure alongside the build error.
+`page::Mounted` owns one successful renderer and its content roots. Consuming
+unmount calls every builder before removing its roots, even on cleanup error.
+A failed replacement therefore leaves the old mount alive; the caller commits
+sidebar selection only after a new mount succeeds and the old one is retired.
+This lifecycle has no Window/provider/Config1 transport of its own and never Apply.
+
+
+### Retained raster image (#882/#915)
+
+nk-render::Raster validates a nonempty RGBA8 buffer and retains the decoded pixels
+once. Canvas::image paints it with explicit Contain/Cover fitting and normal alpha
+composition. It performs no file I/O or decoding. Tree::image owns one retained
+IMAGE with a caller-supplied logical size and ImageStyle (fit, radius, border,
+background); responsive measurement preserves that box's aspect ratio. The name
+is semantic, not painted text. set_image changes content without replacing IDs;
+set_image_size validates before mutation. Removal drops its raster ownership.
+The widget never enumerates files, starts work, writes Config1 or owns a provider.
+Loading/error names and async operation guards belong to its application builder.
+
+
+### Lazy wallpaper image loading (#915)
+
+image_load::Load starts only for a visible preview/thumbnail request. One process
+worker serializes decode with at most four queued jobs. Request carries a nonzero
+mount/request token, absolute path, physical target size, Contain/Cover and explicit
+encoded/decoded-output byte budgets. Queue-full is Busy for later retry, not a
+permanent image failure. No work starts from Default, paint or layout. Jobs read
+only regular files, cap encoded input, inspect actual file format/dimensions and
+refuse a DynamicImage output buffer over budget before its allocation. PNG/JPEG/GIF/WebP/
+AVIF are the accepted formats (GIF's first frame). Decoder-internal allocations may already occur during header/AVIF setup and are
+best-effort; the byte budgets do not claim a hard process-memory bound. Orientation
+is applied before the target-size crop/resize. Only the resulting target raster
+is retained by the UI; full source/decoded buffers are dropped on the worker.
+
+Cancel/Drop and wrong-mount/request polling retire the receiver. Canceled queued
+jobs are skipped and an active obsolete result cannot reach the UI. Load owns no
+Tree, Window, Bridge or Config1 operation. Builders still guard current visibility,
+availability and mount before accepting a result. This is no full wallpaper/native,
+PSS/startup or animation acceptance. AVIF decoding uses the system dav1d library.
+
+
+### Retained thumbnail strip (#882/#915)
+
+Tree::thumbnail_strip is the horizontal layout of the existing Choice radio model,
+not a second selection/provider implementation. Explicit ThumbnailStyle supplies
+picture size/ImageStyle, padding/border/radius/gap and state colours. Options use
+retained Choice IDs and Raster ownership; canonical selection may be None for an
+unknown current file. Arrow/Home/End activate the existing guarded Choice path,
+one Tab stop follows selected/first available, and focused options reveal inside
+the strip's own horizontal viewport. Empty strips are valid. Wheel input over the
+viewport scrolls it independently; D7 pane input is not routed through stale root
+coordinates. Paint, pointer hit tests and SHOWING use the same viewport clipped
+by ancestors. Offscreen options remain semantic RadioButton children. Reflow/style
+changes clamp scroll and preserve IDs/selection. Loading/decode/Config1 belong to
+application builders; this layout primitive alone is not wallpaper/native parity.
+
+Catalogue reordering accepts only an exact permutation of surviving thumbnail
+children, atomically; identities, pixels and canonical selection survive. Changed
+order invalidates layout and stale action targets; invalid permutations do nothing.
+
+### Wallpaper preview/gallery builders (#915)
+
+wallpaperPreview and wallpaperGallery read wallpaper.current and its Config1
+catalogue, never a second directory scan. Catalogue paths are unique absolute
+paths, preserving service order; surviving options retain IDs. Unknown current
+paths select none. Same-value activation emits no Apply; changed, live, writable,
+shown activation uses exactly Cx.apply. Failed replies restore canonical selection
+and retain their error. The picker is registered separately by wallpaper_picker; omitting that builder
+remains a missing-builder error.
+
+The existing image loader starts only for showing images, with nonzero mount and
+per-request tokens and explicit host byte budgets. Offscreen/hidden/unavailable/
+unmounted/replaced requests are canceled. Decode failures are displayed as text;
+obsolete pixels are removed before replacement. Only target-sized pixels survive.
+Appearance restyling uses required wallpaper component exports for all four modes.
+No ICC/HDR, native wallpaper parity or CSS 150ms border transition is claimed.
+
+Builder::row_visible supplies per-owned-row content visibility, combined with
+renderer availability/predicates/disclosures, never overriding them. Refresh after
+idle applies async row visibility changes before publication. Default true keeps
+existing builders' behavior. Empty gallery and absent error text occupy no row.
+
+### Parented portal identifier (`nk-wayland`, #915/D5)
+
+Window::portal_parent lazily exports an actual configured xdg_toplevel through the
+optional standard zxdg_exporter_v2 on its existing connection/queue. Unsupported
+means the protocol is absent, so a portal may use an empty parent identifier.
+Pending means wait without blocking or falling back to empty; Ready supplies the
+opaque `wayland:` identifier received from the compositor. Invalid empty handles
+are errors, never unparented fallback. A popup cannot be exported as a toplevel.
+The export is retained for the Window lifetime and destroyed before its role/
+surface; repeated calls reuse it. There is no new host/provider/compositor path.
+Unit state/capability checks are not native export/portal/parenting acceptance.
+
+### FileChooser transport (#915/D5)
+
+file_chooser::Chooser uses the caller's existing Config1 bus connection on a
+cancelable worker, never Apply. At most one request worker is active per process;
+Busy is retryable. Nonzero mount/request tokens reject completed stale results.
+OpenFile requests one file, modal, with the translated image filter covering
+JPEG/PNG/GIF/WebP/AVIF. Only a successful response with exactly one local file URI
+returns an absolute path; cancel returns None, other/malformed responses error.
+Filters are hints, not validation: Config1 still validates any accepted path.
+
+Subscribe before OpenFile to bounded Response traffic from the captured portal
+unique owner; match the returned request path (including older nonpredicted
+paths), ignore unrelated signals, and detect that owner's loss/replacement.
+No arbitrary dialog-duration timeout. Initial protocol operations are bounded;
+Close targets the captured owner's request on cancel/retirement. Close failures
+are protocol errors/best-effort cleanup, not proof of a closed native dialog.
+Tokens include random bytes and do not collide with unrelated libraries. Parent
+is the actual Window's ready wayland identifier, or empty only after Unsupported;
+this transport cannot itself prove the caller supplied an actual Window handle.
+Private-bus fixtures prove protocol/cancel ordering, not native chooser/parenting,
+full-window accessibility, focus restoration or owner live acceptance.
+
+### Mounted wallpaper picker (#915/D5)
+
+wallpaper_picker::register binds wallpaperPicker to wallpaper.current. The row
+uses existing Button/description/error components and exported labels. Activation
+records a nonzero mount/process-wide request ID plus epoch/current-value baseline;
+repeated activation while pending does nothing. Idle polls the real Window parent
+identifier and existing Editor connection, then the cancelable Chooser. Pending
+parent export waits; only Unsupported uses empty parent. No Window is an explicit
+row error, never a fabricated unparented dialog.
+
+Only a matching, still-mounted/shown/available/writable operation with unchanged
+epoch/value may accept. Cancel/same selection writes nothing; changed selection
+calls Cx.apply once. Errors stay in the row; Failed-last notices retain the error
+alongside canonical reply. Hidden/unmounted/unavailable/schema/value changes retire
+the request without restoring focus. Ordinary completion restores the surviving
+launcher only while eligible; this is widget focus logic, not native focus proof.
+
+Rendered::idle now drains Editor.poll and applies these notices before builder
+async results, returning the drained Vec<Notice> for the host's other dependencies
+(e.g. icon-theme refresh). The host must process this return and also stage its
+external portal/routing/visibility changes before idle/input. No notices are held
+in a growing renderer queue. Builder/Rendered::external_modal_active reports a
+pending external portal operation; the app must reject parent accessibility actions
+and publish parent inactivity while it is true. No second provider is introduced.
+This API alone does not establish that future app caller or native modality.
+
+The picker currently uses the existing shared native Button appearance; exact
+legacy secondary/pill visual parity remains pending. The picker suggests the absolute HOME directory when supplied by the environment.
+Open.current_folder uses filesystem bytes with one trailing NUL (ay), rejecting
+relative/NUL-containing paths; the portal may ignore this suggestion. No native dialog/AT-SPI/Orca/live acceptance from CPU,
+private-bus or injected-decision tests.
+
+Wallpaper thumbnails use JPEG IDCT reduction (1/8, 1/4 or 1/2) before the RGB
+buffer and final fit. The requested fit is computed in source coordinates, with
+EXIF axis swaps applied before choosing the reduction. Encoded/source allocation
+budgets still apply. Other codecs and uncommon JPEG pixel formats keep their
+bounded decoder path; they have no claimed reduced-decode guarantee.

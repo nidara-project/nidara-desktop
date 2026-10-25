@@ -96,3 +96,58 @@ performance and owner live acceptance remain pending. Historical fixed binaries
 prove only their recorded original source/hash. The exclusive parent borrow is
 bounded to short menus, with no concurrent parent servicing; adaptive foundations/
 Settings polling still needs a real caller and causal test.
+
+
+Use page::Mounted to own a renderer and the roots it created under the content
+Scroll. Failed builds unmount partial builder work and remove only newly-created
+roots. A replacement is built before retiring the old page; consuming unmount
+runs all callbacks before node removal even when cleanup fails. This is the page
+lifecycle prerequisite for the app, not yet its native main or wallpaper builders.
+
+
+image_load::Load supplies bounded off-UI wallpaper decoding. One worker and four
+queued requests; queue-full is retryable Busy. Callers supply absolute path,
+physical target, Contain/Cover, mount/request token and input/output byte budgets.
+Cancel on hide/unmount/replacement. Only target pixels survive completion; obsolete
+results are dropped. PNG/JPEG/GIF(first frame)/WebP/AVIF decode here; AVIF links
+dav1d. Decoder-internal allocations are not a hard memory guarantee. Native
+wallpaper parity, colour-profile/HDR validation and startup/PSS remain pending.
+
+wallpaper::register supplies the real wallpaperPreview/wallpaperGallery decorations
+using wallpaper.current/catalogue, retained images/thumbnail choices and the lazy
+image loader. It requires explicit host Budget and complete wallpaper token exports.
+No file scan or decode at build; only showing pictures start work from idle.
+Same value does not Apply, unknown path selects none, and canonical refusal/error
+handling reuses Session/Cx. Empty/error rows use Builder::row_visible under the
+renderer's own predicates. wallpaper_picker::register supplies the separate real picker consumer; omitting
+it remains a missing-builder error rather than silently substituting it. No native or full wallpaper parity.
+
+file_chooser::Chooser is the asynchronous OpenFile transport over Editor's existing
+connection. Supply nonzero Operation and translated Open labels plus the actual
+Window portal-parent identifier. It never Applies. Poll accepts only the current
+mount/request; cancel/Drop requests Close. One process worker, Busy retryable.
+Subscribes before OpenFile, pins the portal unique owner, checks the returned path
+and owner before acceptance, and rejects multiple/remote/malformed URIs. Local
+file URI escapes decode before returning the absolute UTF-8 path. Config1 remains
+the image validator. The caller must enforce mount/visibility/write/baseline guards,
+focus restoration and parent accessibility; these are not transport acceptance.
+Protocol references: https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.FileChooser.html
+and https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Request.html
+
+wallpaper_picker::register connects wallpaperPicker to the real Window parent
+export and file_chooser transport. It owns one pending operation, a process-wide
+nonzero request number, the mount, epoch/value baseline and cancellation lifetime.
+Normal cancel/same chooses do not Apply; changed accepted results call Cx.apply
+once. Hidden/unmounted/stale/unavailable results are retired without focus return;
+ordinary completion restores the eligible launcher. Raw current path/help/error
+are in its existing description/subtitle; canonical failures survive cancel.
+The picker suggests HOME through current_folder filesystem bytes plus NUL; the
+portal can ignore the suggestion. No Window becomes an explicit row error.
+
+Rendered::idle drains Editor.poll BEFORE async builder completion and returns the
+applied Vec<Notice>. Hosts must observe that return for dependencies outside rows,
+and stage portal/routing/visibility changes first. external_modal_active exposes
+pending external portal operations: host must reject parent accessibility actions
+and publish inactive parent semantics during them. That host/provider integration
+and native focus/dialog acceptance remain pending. Button secondary/pill visual
+parity is still provisional; this consumer reuses the shared native Button.

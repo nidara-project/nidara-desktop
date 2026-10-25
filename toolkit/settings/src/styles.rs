@@ -16,6 +16,7 @@ use serde_json::Value as Json;
 pub struct Styles {
     /// Window capsule corner inset from components.json, independent of row spacing.
     pub controls_inset: f32,
+    pub wallpaper: crate::wallpaper::Look,
     pub text_scale: f64,
     pub palette: Palette,
     pub metrics: Metrics,
@@ -217,8 +218,10 @@ impl Styles {
             appearance.text_scale,
             scss(statics, "lh-body")?,
         )?;
+        let wallpaper = crate::wallpaper::Look::load(exports, &tokens)?;
         Ok(Self {
             controls_inset: number(&c["capsule"]["windowInset"])?,
+            wallpaper,
             text_scale: appearance.text_scale,
             palette,
             metrics,
@@ -251,7 +254,7 @@ impl Styles {
 
 /// A colour the export names: a `--nidara-*` token of the set, or a literal `#rrggbb` /
 /// `rgba(…)` (a value the kit's sheet writes as one, like the checked switch's edge).
-fn colour(tokens: &Tokens<'_>, name: &str) -> Result<Color, String> {
+pub(crate) fn colour(tokens: &Tokens<'_>, name: &str) -> Result<Color, String> {
     if name.starts_with("--") {
         let v = tokens
             .colors
@@ -309,7 +312,7 @@ fn list_tokens(variant: &Json) -> Result<&Json, String> {
     Ok(list)
 }
 
-fn number(v: &Json) -> Result<f32, String> {
+pub(crate) fn number(v: &Json) -> Result<f32, String> {
     v.as_f64()
         .map(|n| n as f32)
         .ok_or_else(|| format!("missing exported number (found {v})"))

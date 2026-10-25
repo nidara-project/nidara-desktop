@@ -557,6 +557,19 @@ impl Composition {
         delta: f64,
         root_input: bool,
     ) -> Result<()> {
+        if root_input
+            && !sidebar
+            && let Some((&id, n)) = tree.nodes.iter().find(|(id, n)| {
+                tree.thumbnail_styles.contains_key(id)
+                    && tree.available(**id)
+                    && contains(n.bounds, self.pointer)
+                    && contains(tree.visible_clip(**id), self.pointer)
+            })
+        {
+            let mut offset = n.scroll;
+            offset.x += delta as f32;
+            return tree.scroll_to(id, offset);
+        }
         // A horizontal gesture on the sidebar has no horizontal navigation;
         // continue it into the underlying content, like the title pane.
         if root_input

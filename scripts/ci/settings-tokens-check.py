@@ -246,6 +246,20 @@ for variant in component_variants:
         colour = menu.get(k)
         if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
             fail.append(f'{where}: missing menu colour {k}: {colour}')
+    wallpaper = variant.get('wallpaper') or {}
+    for k in ('previewWidth', 'previewHeight', 'previewDecodeWidth', 'previewDecodeHeight',
+              'thumbnailWidth', 'thumbnailHeight', 'thumbnailDecodeWidth', 'thumbnailDecodeHeight',
+              'thumbnailInnerInset', 'previewBorder', 'thumbnailBorder', 'pictureBorder', 'padding', 'gap'):
+        if not positive_number(wallpaper.get(k)):
+            fail.append(f'{where}: invalid wallpaper {k}')
+    for k in ('previewRadius', 'thumbnailRadius'):
+        if wallpaper.get(k) not in static['ts']['RADIUS']:
+            fail.append(f'{where}: missing wallpaper radius {k}')
+    for k in ('background', 'pictureBorderColor', 'hoverBorder', 'selectedBorder'):
+        if not all(wallpaper.get(k) in s['tokens'] for s in sets):
+            fail.append(f'{where}: missing wallpaper colour {k}')
+    if wallpaper.get('idleBorder') != 'rgba(0, 0, 0, 0)' or wallpaper.get('borderTransitionMs') != 150:
+        fail.append(f'{where}: missing wallpaper idle/transition source')
     common = variant.get('common') or {}
     widths = variant.get('widths') or {}
     form = widths.get('form') or {}

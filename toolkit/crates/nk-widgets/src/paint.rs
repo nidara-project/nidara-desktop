@@ -246,6 +246,16 @@ impl Tree {
         if matches!(n.kind, Kind::List { .. }) {
             return self.paint_list(id, origin, canvas, palette, clip);
         }
+        if n.kind
+            == (Kind::Choices {
+                kind: crate::ChoiceKind::Thumbnail,
+            })
+        {
+            return self.paint_thumbnails(id, origin, canvas, clip);
+        }
+        if n.kind == Kind::Image {
+            return self.paint_image(id, r, canvas, clip);
+        }
         if n.kind == Kind::SearchInput {
             return self.paint_search(id, r, canvas, palette.disabled);
         }

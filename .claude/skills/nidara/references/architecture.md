@@ -3257,3 +3257,130 @@ an error. Before a native selected family reaches Apply, the same rendering
 collection must resolve and load a valid face without fallback substitution.
 Catalogue timing/count logs describe each lazy enumeration; there is no second
 shaper or silent family fallback acceptance.
+
+Native Settings page replacement uses page::Mounted, never an untracked set of
+rows. Build the replacement first, then consume the old mount and commit sidebar
+selection. Rendered::build now rolls back newly-created content on any error and
+unmounts the failing builder plus every completed builder. Cleanup callbacks run
+before nodes are removed; one callback error does not skip the others. Existing
+content/chrome survive failed construction. Mounted owns its content roots and
+retires them even when unmount reports an error. This lifecycle does not supply a
+Window/provider or bypass Config1; full Appearance still requires every named
+builder, with missing builders remaining explicit construction errors.
+
+
+Use Tree::image for decoded pictures: one retained IMAGE, accessible name separate
+from pixels, explicit logical size/ImageStyle, no file loading in paint/layout.
+ImageStyle supplies Contain/Cover, background, border and radius; the application
+resolves those from the exported specification. nk-render::Raster validates RGBA8
+and retains one premultiplied raster; Canvas paints it with the existing CPU engine.
+set_image preserves IDs and avoids repaint for the same Arc. Removal releases the
+raster. Builders own decode jobs/loading/error names and reject obsolete results.
+This primitive is not wallpaper loading, thumbnail selection or native/Orca proof.
+
+
+Wallpaper jobs use image_load::Load, not file IO in a widget or painter. Start
+only for visible work with mount/request identity and explicit target/budgets.
+One worker has four queued slots; Busy is retryable. Cancel hidden/unmounted or
+replaced work; wrong-token poll retires even an already-completed result. Canceled
+queued jobs never decode. Output stores only target-size Raster pixels, with Exif
+orientation applied before Contain/Cover. Five codecs match Config1 formats; AVIF
+uses system dav1d (libdav1d-dev in the existing Ubuntu toolkit job; Arch's ffmpeg
+already depends on dav1d). GIF is static first-frame here. Byte budgets reject
+oversized input/output but are not a hard process/codec-internal memory bound;
+full PSS/startup validation is still pending. ICC/HDR colour management is not
+claimed by this loader and needs explicit validation before wallpaper parity.
+
+
+Thumbnail galleries use Tree::thumbnail_strip, a horizontal layout of the existing
+Choice radio model. ThumbnailStyle is explicit; pictures reuse Image/Raster, not
+a second painter. Canonical selection can be None for an unknown file. Existing
+Choice keyboard/activation and one Tab stop apply; focused options reveal in the
+strip's own scroll viewport, and wheel input over it scrolls horizontally without
+moving the page. Paint/hit/SHOWING share the ancestor-clipped viewport. Offscreen
+options remain RadioButton children. Style/reflow clamp scroll while preserving
+IDs/selection; removal drops pixels. Decode/visibility scheduling and Config1
+mapping belong to builders, and geometry/visual/native acceptance stays separate.
+
+reorder_thumbnails accepts an exact permutation only, preserving IDs/pixels and
+selection while invalidating layout and old action targets. Invalid input is atomic.
+
+Native wallpaper decorations are wallpaper::register(Builders, Budget). They consume
+wallpaper.current and its catalogue from Config1; no UI-thread directory discovery
+or second catalogue is introduced. Only wallpaperPreview/wallpaperGallery register
+here; wallpaperPicker still requires its real parented portal path. Surviving
+catalogue options keep IDs/order, exact paths define canonical selection, unknown
+paths select none, and changed guarded activation uses Cx.apply. Preview follows
+Session::shown during idle too, so a request from another builder replaces pixels
+before its asynchronous reply. Failed notices restore canonical state and keep
+visible error text; image decode errors never write settings.
+
+Loading starts only after layout says an image is showing. Hidden/offscreen,
+unavailable, replaced and unmounted requests are canceled through image_load.
+Host supplies byte budgets. Wallpaper component exports carry the current legacy
+picture dimensions, borders, colours and radius references for every portal mode;
+missing values are errors. CSS border transition150ms and ICC/HDR accuracy remain
+explicit debts; this is not whole-window/native wallpaper parity.
+
+Builder::row_visible adds content visibility to renderer-owned availability,
+predicates and disclosures; it cannot override them. Renderer refreshes after idle
+so asynchronous errors/empty content do not leave blank visible rows. A newly
+built builder starts shown (the renderer's initial state); shown(false) is sent
+when its renderer predicates hide it. Do not wait for an initial shown(true) call
+to begin eligible work. Private test buses use an explicit short target/cb-*/bus
+socket; dbus-daemon's generated socket name can exceed Unix's limit in long worktrees.
+
+nk-wayland Window::portal_parent is the lazy xdg-foreign-v2 path for portal dialogs.
+Unsupported alone permits an empty parent string. Pending must wait without blocking
+or unparented fallback; Ready borrows the received opaque wayland: identifier. It
+exports only a configured real xdg_toplevel, once per Window, handles the event on
+that Window's existing queue, and destroys the export before role/surface cleanup.
+Empty protocol handles are explicit errors. This API's unit capability/state checks
+are not a native parenting/portal acceptance run; actual file chooser integration
+and native verification remain separate. No compositor/backend change is required
+for D5's no-exporter fallback.
+
+The file_chooser transport borrows Editor's existing connection and runs one
+cancelable portal worker per process. It pins the unique portal owner, subscribes
+to bounded Response traffic before OpenFile, filters by the actual returned path
+(including older paths), and checks owner continuity before accepting it. Initial
+protocol calls are bounded; user dialog duration is not. Cancel/Drop/retirement
+requests Close on the captured owner/request; failure is best-effort cleanup,
+not a native closed-dialog guarantee. Random handle_token bytes avoid other
+libraries' requests. Multiple/remote/malformed file URIs are errors. Success returns
+one local absolute UTF-8 PathBuf; it never Applies or decodes. Mounted picker/main
+must still enforce availability/write/visibility/baseline guards and restore focus/
+parent accessibility. Its private-bus fixture is a synthetic portal and parent
+identifier, not native chooser/Wayland parenting proof. No blocking signal-forwarder
+thread is left behind; async streams and worker retire together.
+
+wallpaper_picker::register supplies the wallpaperPicker custom builder. It uses
+wallpaper.current, the existing Button/description/subtitle, ready real Window
+portal_parent and the Editor's same trusted connection. Epoch/value/mount and
+process-wide per-open tokens guard completion; no dialog fabricated when Window
+is absent. Repeated activation while pending is ignored; parent Pending waits,
+Unsupported alone allows empty parent. Cancel/same/invalidation do not Apply;
+accepted changed path calls Cx.apply once, with canonical refusal/error retained.
+Hidden/unmounted/schema/key/owner changes cancel without restoring launcher focus;
+normal completion may restore it if still eligible. HOME is suggested with the
+portal's filesystem-byte current_folder terminated by NUL; no environment mutation.
+
+For asynchronous completion, Rendered::idle now polls the real Editor FIRST and
+applies these notices before any builder idle callback. It returns Vec<Notice>;
+the app must process them for dependencies outside its rows, not discard them.
+This is also how a queued Config1 change retires a completed file choice before
+acceptance. The app must stage external portal/routing/visibility first.
+Builder/Rendered::external_modal_active tells the host to suppress parent
+accessibility actions and publish parent inactivity during an external chooser.
+No growing staging queue or extra provider. Actual main/provider caller is still
+pending: unit/direct-decision and private Config1 proofs are not native modality.
+Full exported Appearance now mounts/layouts with the real five registration modules
+(including separate wallpaper preview/gallery and picker), no substitute builders;
+that CPU check neither opens a native window nor validates all wallpaper pixels.
+Existing native Button is reused; exact secondary/pill appearance remains visual debt.
+
+Settings wallpaper JPEG thumbnails select IDCT reduction before allocating the
+RGB pixels (`image_load::jpeg_thumbnail`). Preserve the source/encoded budgets
+and EXIF-aware Cover/Contain sizing when changing it; other codecs still use
+bounded full decode. The ignored `real_wallpaper_decode_timing` test accepts an
+absolute `NK_THUMB_BENCH` JPEG path for local timing, never as a CI speed threshold.

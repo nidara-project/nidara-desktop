@@ -25,6 +25,7 @@ impl Tree {
                 Kind::Spin { .. } => Role::SpinButton,
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
+                Kind::Image => Role::Image,
                 Kind::SearchInput => Role::TextInput,
                 Kind::Dropdown { .. } => Role::ComboBox,
                 Kind::DropdownOption { .. } | Kind::MenuOption { .. } => Role::Option,

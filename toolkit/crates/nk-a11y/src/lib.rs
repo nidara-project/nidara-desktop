@@ -20,6 +20,7 @@ pub enum Role {
     Window,
     Dialog,
     Label,
+    Image,
     TextInput,
     Password,
     ComboBox,

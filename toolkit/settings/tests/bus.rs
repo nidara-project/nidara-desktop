@@ -28,14 +28,14 @@ impl Bus {
             .unwrap()
             .join("target")
             .join(format!(
-                "config-bus-{}-{}",
+                "cb-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
             ));
         std::fs::create_dir_all(&directory).unwrap();
         let mut daemon = Command::new("dbus-daemon")
             .args(["--session", "--nofork", "--print-address"])
-            .arg(format!("--address=unix:dir={}", directory.display()))
+            .arg(format!("--address=unix:path={}/bus", directory.display()))
             .stdout(Stdio::piped())
             .spawn()
             .expect("dbus-daemon (the test needs one; it is in the toolkit job's packages)");

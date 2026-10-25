@@ -730,3 +730,245 @@ Before Apply, a family must resolve and load a valid face from the same Fontique
 used by Parley; fc-list remains discovery metadata, not a second rendering authority.
 42 Settings library tests and two nk-text geometry/resolution tests pass; all-target
 Clippy for nk-settings/nk-text passes. These checks do not establish live IME/Orca acceptance.
+
+## Application integration — transactional page lifecycle (2026-10-23)
+
+New page::Mounted ownership and Rendered build rollback precede app assembly.
+Failed replacements preserve existing content, unmount the failing builder and
+all successful partial builders, then remove new roots. Unmount failures do not
+skip remaining callbacks or root retirement. Contract before API; canonical
+skill and README in the same change.
+
+149 Settings/widgets tests PASS [41, 4, 1, 2, 13, 5, 2, 17, 7, 19, 15, 8, 5, 8, 2]; both all-target Clippy -D warnings
+PASS. Logs target/page-lifecycle-full-{tests,clippy}.log. Two lifecycle tests use
+the real renderer/Tree and exported styles with synthetic builder error callbacks;
+no fake Window/provider/Config1 integration. A compiled rollback fault skipped
+new-root removal; after callback completion, the own `failed replacement leaked
+roots` assertion caught it. Source restored before the full passing suite.
+Initial fixture used an invalid Group/Button nesting and failed before setup;
+that failure is preserved in page-lifecycle-tests.log, not acceptance.
+
+This closes one app-lifecycle prerequisite. Full app host, wallpaper builders,
+native main/Config1/portal/Orca/performance/live gates remain unimplemented or
+unvalidated here; no native/EGL run, publication, merge or activation of legacy
+replacement. Full actual cut27 exports reused unchanged.
+
+
+## Application integration — retained Image primitive (2026-10-23)
+
+Tree::image and nk-render::Raster/Canvas::image add the reusable preview primitive,
+with explicit caller style/box, Contain/Cover, alpha, clipping, stable semantic
+IMAGE identity and scoped Arc ownership. It performs no decoding or file IO.
+Role::Image maps to the existing AT-SPI Image role; only mapping/unit proof here.
+
+169 affected Settings/widgets/render/a11y tests PASS [13, 2, 1, 2, 1, 41, 4, 1, 2, 13, 1, 5, 2, 17, 7, 19, 15, 8, 5, 8, 2]. CPU raster test
+uses synthetic RGBA, checks destination/letterbox/cover/alpha/clipping at1 and1.25.
+Widget test uses actual exported Styles and real layout/CPU paint, checking pixels,
+rounded clipping, named IMAGE with no actions, offscreen retention/hidden exclusion,
+atomic invalid size refusal, same-raster no-paint and final pixel ownership release.
+Compiled Cover-to-Contain fault failed its OWN cover/alpha pixel assertion; source
+restored before full tests. Clippy requested clamp idiom; final image test and
+four-package all-target Clippy -Dwarnings PASS after that finite-input equivalent
+change. Workspace all-target check PASS. Logs: target/retained-image-*.log.
+fmt/skilldocs/diff PASS. No native/EGL/Orca claim, no decoder/gallery/main or full
+wallpaper parity yet. Actual cut27 exports unchanged and reused.
+
+
+## Application integration — bounded lazy image loader (2026-10-23)
+
+One lazy worker/four queued slots, mount/request retirement, regular-file and
+input/output byte budgets, actual five-format decode and Exif-before-resize.
+Target pixels alone survive completion; worker internals are not a hard process
+memory guarantee (AVIF native setup may allocate before DynamicImage output).
+GIF uses first frame; ICC/HDR colour validation remains pending, not full parity.
+
+Three tests pass actual PNG/JPEG/GIF/WebP/AVIF file decoding to own target/pixel
+assertions, rotated JPEG target geometry, malformed/missing/over-budget refusal,
+and deterministic barrier queue4/BUSY/canceled-job/stale-completed-result behavior.
+Fixture generation/provenance is checked in; ffmpeg is not required by these tests.
+A compiled stale-token guard bypass failed its OWN completed-result mount assertion
+AFTER the next decoder call proved the first reply had been queued. Restored before
+72 Settings tests PASS [44, 4, 1, 2, 13, 1, 5, 2]. All-target Settings Clippy -Dwarnings and workspace
+all-target check PASS, logs target/image-loader-*.log. Existing Ubuntu toolkit
+job declares libdav1d-dev; no new job/native check or CI execution claim. Existing
+Arch Hyalo CI already installs ffmpeg (dav1d dependency); no compositor edits.
+Contract, canonical skill/README and evidence accompany the mechanism. No native
+Window/provider/Orca/startup/PSS or complete wallpaper/app acceptance.
+
+## Application integration — retained thumbnail viewport (2026-10-24)
+
+ThumbnailStyle/thumbnail_strip reuse Choice radios and retained Image painting.
+Unknown canonical selection is None; keyboard focus reveals in the independent
+horizontal viewport, wheel routing leaves page scroll unchanged, and paint/hit/
+SHOWING agree on ancestor clipping. Reflow/style/reorder preserve surviving IDs,
+pixels and selection. Reorder rejects non-permutations atomically and retires
+old action targets. No decoding or Apply in this shared layout primitive.
+
+155 Settings/widgets tests PASS, both all-target Clippy -Dwarnings PASS, workspace
+all-target check PASS (before the final reorder addition, covered by final tests
+and Clippy). fmt/skilldocs/diff PASS. Two tests use actual exports/layout/CPU paint
+with synthetic file names and rasters; selected-border pixels survive pointer
+hover, offscreen pointer input refuses, keyboard/wheel viewport routing and
+semantic retention are asserted. A compiled no-scroll fault failed its OWN
+keyboard-focus viewport assertion after selection setup. Source restored before
+the full suites. The first reorder test expected stale dispatch to return None;
+the existing API correctly returns Err, and the test now asserts that rejection.
+Logs target/thumbnail-strip-*.log. No native/Orca/live or full wallpaper parity.
+
+
+## Application integration — wallpaper preview/gallery builders (2026-10-24)
+
+Real wallpaperPreview/wallpaperGallery consume Config1 wallpaper.current/catalogue
+via the existing Session/renderer. Exact paths define selection; surviving IDs and
+catalogue order persist. Same activation does not Apply; changed guarded activation
+uses Cx.apply, preview follows optimistic Session::shown from idle, and refusal
+restores canonical selection/pixels with visible error. Empty gallery/error rows
+are hidden through renderer-combined row_visible. Only showing images start decode;
+offscreen/hidden/unavailable/replaced/unmounted work cancels. No UI file scan.
+
+158 Settings/widgets tests PASS [44, 4, 1, 2, 13, 1, 5, 2, 3, 2, 17, 7, 19, 15, 8, 5, 8, 2]; both alltarget Clippy-Dwarnings and
+workspace alltargets check PASS. Three new tests use actual exported Styles,
+renderer/Tree, real tiny-file decoding and CPU pixels; Editor/Config1 session is
+an explicitly synthetic headless seam, not actual Config1 bus/native acceptance.
+Assertions cover preview pixel change, same/change/refusal, persistent canonical
+error, unknown-current None, catalogue reorder IDs, empty->populated visibility,
+offscreen missing-file refusal only after scrolling, all four required export
+variants, and owner/unavailable stale activation refusal. A compiled fallback-to-
+first-option fault failed its OWN unknown-selection assertion after decode/write/
+refusal setup. Source restored before suites; later optimistic-preview sync was
+covered by final green-pixel tests, with the selection guard unchanged.
+
+Fresh full actual exporters generated target/wallpaper-data (old exports without
+wallpaper are now obsolete). Required token checker, fmt/skilldocs/diff and Python
+AST PASS. Initial test API/structural-label failures and initial shown-callback
+assumption caused failures before valid setup; none are acceptance. First full
+suite failed because old test dbus-daemon generated a socket name beyond Unix's
+limit in this longer worktree. Fixture now uses short explicit target/cb-*/bus;
+all four existing real private-bus tests pass, no predicates dropped or relaxed.
+Logs target/wallpaper-builders-*.log, exporter logs alongside.
+
+wallpaperPicker remains genuinely missing, not a stub. Main Window composition,
+parented portal picker, long-modal parent servicing, adaptive polling caller/causal
+proof, ICC/HDR and native/Orca/performance/live gates remain pending. The existing
+CSS border transition150ms is exported but not ported. No publication/merge or
+legacy takeover; no native/EGL checker run. Original branches/fixed evidence intact.
+
+## Application integration — portal parent transport (2026-10-24)
+
+Window::portal_parent adds optional standard zxdg_exporter_v2 binding/lazy actual
+toplevel export, same existing connection/queue, Pending vs Unsupported vs Ready,
+opaque wayland: identifier and destruction before role/surface. Empty handles
+fail rather than allowing empty-parent fallback; popups are refused. Format read
+against primary portal window-identifiers documentation and installed protocol XML.
+Capability/handle state tests are pure CPU, not fabricated Window/protocol proof.
+Native export/wire ordering/portal parenting and file chooser remain unexecuted.
+
+13 nk-wayland unit tests PASS; alltarget Clippy-Dwarnings/workspacealltargets/fmt/
+skilldocs/diff PASS. Compiled pure Handle-state fault mapped Pending to Unsupported;
+its OWN equality assertion caught it, then source was restored before13PASS. This
+control has no Window, Wayland server or exported-wire setup and proves only that
+production handle-state classification. Tests also check exact v2 capability,
+nonempty opaque handle prefix/retention and persistent empty-handle error. Logs:
+target/foreign-parent-{tests,state-control,restored-tests,clippy,workspace-check}.log.
+
+
+## Application integration — FileChooser portal transport (2026-10-24)
+
+Chooser uses the existing caller connection, one cancelable process worker,
+nonzero mount/request tokens, bounded initial operations and no user-duration
+limit. Subscribes before OpenFile, pins owner and actual returned path, validates
+one local file URI and returns it without Apply. Cancel/retirement request Close;
+Close failure remains best effort, no native closed-dialog guarantee.
+
+80 Settings tests PASS [46, 4, 1, 1, 2, 13, 1, 5, 2, 3, 2]; alltarget Settings Clippy-Dwarnings and
+workspacealltargets/fmt/skilldocs/diff PASS. Actual private dbus-daemon has its
+own target/fc-*/bus and config with no service dirs. Synthetic portal implements
+real OpenFile/Response/Close objects. Before the method reply it emits unrelated
+and matching Response signals on a nonpredicted request path. Own returned-path
+assertion checks the selected local path, options/modal/single/filter signature
+and random token. Cases cover success, cancel, response2 error, multiple URIs,
+remote URI refusal, cancel->actual Close and actual bus owner release->error/Close.
+Parent string is explicitly synthetic, not a Window or native parenting claim.
+Two pure units cover escaped Unicode/path syntax and completed stale reply.
+
+Compiled production path-filter bypass failed its OWN selected-path assertion
+AFTER actual OpenFile returned/setup complete; mount-guard bypass failed its OWN
+buffered-result assertion (pure channel seam). Source restored before full suite.
+No timeout counted as a control catch. Initial test signature API and signed u32
+fixture errors are preserved, not acceptance. Logs target/file-chooser-*.log.
+Canonical skill/README/contract accompany API; two already-transitive async deps
+are now explicit. Required full cut38 wallpaper-data reused, exporters unchanged.
+
+This transport still needs the real wallpaperPicker builder and main caller.
+No native file-dialog/Wayland export/provider/Orca/focus/performance/live proof,
+no publication/merge, no heartbeat restart or legacy takeover. Modal parent
+servicing/adaptive polling/ICC-HDR and existing visual debts remain pending.
+
+
+## Application integration — mounted wallpaper picker (2026-10-24)
+
+wallpaper_picker::register connects the actual custom item to Window::portal_parent,
+Editor connection and the real cancelable Chooser. Nonzero mount/process-wide
+per-open IDs plus epoch/value and live/shown/writable guards retire stale results.
+Repeated activation is ignored while pending. Cancel/same/invalidation0 Apply;
+accepted changed selection1 Cx.apply. Canonical failure/error survives cancel.
+Hidden/unmounted/unavailable notices cancel without restoring focus; ordinary
+completion restores the eligible widget. No Window -> explicit row error.
+
+Rendered::idle now processes Editor.poll before async builder completion and
+returns the Vec<Notice> for host dependencies; no growing staging queue. Its
+external_modal_active flag exposes pending portal operations. Actual app/provider
+caller still must consume these notices, reject parent AT-SPI actions and publish
+parent inactivity. The API alone is not that caller/modality/idle CPU proof.
+
+86 Settings +81 widgets = 167 final tests PASS; both alltarget
+Clippy-Dwarnings/workspacealltargets/current tokenchecker/fmt/skilldocs/diff PASS.
+Five picker tests: production activation/completion with an explicitly injected
+post-dialog decision seam (no Window/chooser/provider fabricated), canonical
+same/cancel/changed/error/focus/stale/hidden/unmount checks; queued raw Config1
+notice before result and returned to host; actual Client on a private dbus-daemon,
+Snapshot/Apply with the service checking the real sender owns SettingsNative,
+same/cancel0, changed1, refusal2 plus pending=false/canonical reply/error, owner
+release -> production idle poll -> retire decision/no further write. The chooser
+decision in this private Config1 test remains injected, not native end-to-end.
+
+The full actual exported Appearance page mounts/layouts with the five real builder
+registration modules, no Stubs, no writes; actual Browse caption and row label
+relation plus IMAGE checked. Wallpaper loading/dialog decisions/native Window
+are not accepted by that CPU assembly check. Initial caption assertion incorrectly
+expected semantic name Browse; existing row LabelledBy correctly gives Image.
+The test now checks actual painted node caption and semantic row relation separately.
+Initial Clippy let-and-return fixture warning fixed. Atomic token allocation uses
+existing compare-exchange loop compatible with declared1.90 rather than a new API.
+
+Two compiled production faults caught OWN assertions AFTER activation/decision
+setup: cancel branch wrote a changed value (own cancel0write assertion), and idle
+skipped Editor.poll (own queued-notice0write assertion). Source restored before
+full suites. These are headless decision-seam controls, not native dialog controls.
+Later optional folder/UTF8 handling changes covered by final suite, guards unchanged.
+
+Open.current_folder now carries validated absolute filesystem bytes + trailing NUL;
+picker suggests HOME when absolute. Actual private portal fixture checks ay payload;
+unit checks non-UTF8 filesystem bytes, rejects relative/NUL paths. Portal may ignore
+this hint, no native initial-directory claim. Existing unchanged complete cut38
+wallpaper-data reused; no exporter change. Logs target/wallpaper-picker-*.log.
+
+Contract before API; canonical architecture/tech-debt, README, EVIDENCE same commit.
+Pending: actual main/provider/portal/routing/visibility integration, adaptive polling
+caller/causal test, long-modal parent servicing, ICC/HDR, exact secondary/pill look,
+native Window/dialog/AT-SPI/Orca/performance/live gates. No push/publication/merge,
+legacy activation or native/EGL rerun. Original branches/fixed artifacts preserved.
+
+### Review E: reduced JPEG decoding (2026-10-25)
+
+JPEG thumbnails now decode with IDCT reduction before final resizing; the normal
+path retains orientation and source/encoded budgets. Other codecs retain their
+bounded existing path. Four image-loader tests pass, including decoded
+intermediate dimensions, a rotated Cover target, five real codec files, malformed
+inputs, budget rejection and cancellation. All-target nk-settings Clippy passes.
+
+Release timing, this machine, defaults/wallpaper/wallpaper.jpg, target 320x200:
+full decode + fit 62.153 / 61.729 / 60.901 ms; reduced decode + fit
+32.472 / 30.893 / 30.656 ms. Reproduce with `NK_THUMB_BENCH=<absolute JPEG>` and
+`cargo test --release -p nk-settings --lib real_wallpaper_decode_timing -- --ignored --nocapture`.
+No wall-clock assertion is added to CI. PNG/GIF/WebP/AVIF have no reduced-decode claim.

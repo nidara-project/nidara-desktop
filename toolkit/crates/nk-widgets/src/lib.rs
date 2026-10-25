@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Retained structural widgets. The tree is the source for layout, pixels,
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
+mod thumbnails;
+pub use thumbnails::ThumbnailStyle;
+mod image;
+pub use image::ImageStyle;
 mod choices;
 mod dropdown;
 pub use dropdown::DropdownStyle;
@@ -113,6 +117,7 @@ pub enum Kind {
     ControlCapsule,
     Row,
     Label,
+    Image,
     Switch {
         checked: bool,
     },
@@ -294,6 +299,8 @@ pub struct Tree {
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
     label_styles: BTreeMap<NodeId, TextStyle>,
+    images: BTreeMap<NodeId, image::Image>,
+    thumbnail_styles: BTreeMap<NodeId, ThumbnailStyle>,
     button_descriptions: BTreeMap<NodeId, String>,
     dialog_role: bool,
     menu_style: Option<MenuStyle>,
@@ -377,6 +384,8 @@ impl Tree {
             row_text_style: None,
             dropdown_style: None,
             label_styles: BTreeMap::new(),
+            images: BTreeMap::new(),
+            thumbnail_styles: BTreeMap::new(),
             button_descriptions: BTreeMap::new(),
             dialog_role: false,
             menu_style: None,
@@ -486,6 +495,7 @@ impl Tree {
                 | (
                     Kind::Scroll,
                     Kind::Group
+                        | Kind::Image
                         | Kind::Row
                         | Kind::MenuOption { .. }
                         | Kind::SearchInput
@@ -493,7 +503,10 @@ impl Tree {
                 )
                 | (
                     Kind::Group,
-                    Kind::Label
+                    Kind::Choices {
+                        kind: ChoiceKind::Thumbnail
+                    } | Kind::Label
+                        | Kind::Image
                         | Kind::Row
                         | Kind::Footer
                         | Kind::Disclosure { .. }
@@ -775,6 +788,8 @@ impl Tree {
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.searches.remove(&id);
+            tree.images.remove(&id);
+            tree.thumbnail_styles.remove(&id);
             tree.label_styles.remove(&id);
             tree.button_descriptions.remove(&id);
             tree.list_styles.remove(&id);
@@ -1275,6 +1290,9 @@ impl Tree {
         if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
             return self.measure_range(id, backend);
         }
+        if kind == Kind::Image {
+            return self.measure_image(id, width);
+        }
         if kind == Kind::SearchInput {
             return self.measure_search(id, width, backend);
         }
@@ -1487,7 +1505,7 @@ impl Tree {
                 width: m.switch_width,
                 height: m.control,
             },
-            Kind::SearchInput => unreachable!("measured above"),
+            Kind::SearchInput | Kind::Image => unreachable!("measured above"),
             Kind::Button | Kind::Dropdown { .. } => Size {
                 width: m.control.max(text.width + 2. * m.padding),
                 height: m.control.max(text.height + 2. * m.padding),
@@ -1809,7 +1827,11 @@ impl Tree {
                     y += (style.footer_gap - m.gap).max(0.);
                 }
                 Rect {
-                    x,
+                    x: if self.thumbnail_styles.contains_key(&child) {
+                        x + ((r.width - 2. * m.padding - s.width) / 2.).max(0.)
+                    } else {
+                        x
+                    },
                     y,
                     // A group's measured width includes overflow for the enclosing
                     // scroll extent. Its card occupies its constrained column.
@@ -1836,6 +1858,9 @@ impl Tree {
     pub fn scroll_to(&mut self, id: NodeId, offset: Point) -> Result<()> {
         if !offset.x.is_finite() || !offset.y.is_finite() {
             return Err("invalid scroll offset".into());
+        }
+        if self.thumbnail_styles.contains_key(&id) {
+            return self.scroll_thumbnails(id, offset.x);
         }
         let viewport = if self
             .nodes
@@ -1877,7 +1902,12 @@ impl Tree {
         while let Some(p) = parent {
             if matches!(
                 self.nodes[&p].kind,
-                Kind::Scroll | Kind::Sidebar | Kind::List { .. }
+                Kind::Scroll
+                    | Kind::Sidebar
+                    | Kind::List { .. }
+                    | Kind::Choices {
+                        kind: ChoiceKind::Thumbnail
+                    }
             ) {
                 let r = self.nodes[&id].bounds;
                 let clip = if self.nodes[&p].kind == Kind::Sidebar {
@@ -1912,6 +1942,8 @@ impl Tree {
         while let Some(p) = current {
             if matches!(self.nodes[&p].kind, Kind::List { .. }) {
                 clip = intersect_rect(clip, self.list_viewport(p));
+            } else if self.thumbnail_styles.contains_key(&p) {
+                clip = intersect_rect(clip, self.nodes[&p].bounds);
             }
             current = self.nodes[&p].parent;
         }

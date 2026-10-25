@@ -5,8 +5,10 @@ mod control_material;
 pub use control_material::{ControlMaterial, InkCoverage, MaterialRect, Response, StateRegion};
 mod controls;
 pub use controls::{ControlsLayout, ControlsSide, WindowAction};
+mod foreign;
 mod ime;
 mod keyboard;
+pub use foreign::ForeignParent;
 mod popup;
 pub use popup::{PopupPlacement, run_popup};
 mod layers;
@@ -141,6 +143,7 @@ struct Send {
 /// Small phase-0 window host, not a general widget library.
 pub struct Window {
     connection: Connection,
+    foreign: foreign::Foreign,
     controls: controls::Controls,
     maximized: bool,
     materials: Option<nidara_material_manager_v1::NidaraMaterialManagerV1>,
@@ -567,6 +570,8 @@ pub struct Capabilities {
     pub text_input: bool,
     /// wp_presentation; otherwise frame callbacks only.
     pub presentation: bool,
+    /// zxdg_exporter_v2; otherwise portal dialogs may be unparented.
+    pub foreign_parent: bool,
 }
 const REQUIRED: [&str; 4] = ["wl_compositor", "wl_shm", "xdg_wm_base", "wl_seat"];
 pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Capabilities> {
@@ -585,6 +590,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
             && has("nidara_layers_manager_v1"),
         text_input: has("zwp_text_input_manager_v3"),
         presentation: has("wp_presentation"),
+        foreign_parent: has("zxdg_exporter_v2"),
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
@@ -639,6 +645,7 @@ fn run_inner(
     let registry = conn.display().get_registry(&qh, ());
     let mut w = Window {
         connection: conn.clone(),
+        foreign: foreign::Foreign::default(),
         controls: controls::Controls::default(),
         maximized: false,
         materials: None,
@@ -747,6 +754,10 @@ fn run_inner(
     w.text_manager = bind!(zwp_text_input_manager_v3::ZwpTextInputManagerV3, 1);
     w.data_manager = bind!(wl_data_device_manager::WlDataDeviceManager, 3);
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
+    w.foreign.exporter = bind!(
+        wayland_protocols::xdg::foreign::zv2::client::zxdg_exporter_v2::ZxdgExporterV2,
+        1
+    );
     let surface = compositor.create_surface(&qh, ());
     let xdg = base.get_xdg_surface(&surface, &qh, ());
     if let Some((placement, grab_serial)) = popup_options {
@@ -899,6 +910,7 @@ impl Window {
     // Child windows share the parent's connection. Rust proxies alone do not send
     // destructors; close roles even when a callback or transport operation fails.
     fn destroy_surfaces(&mut self) {
+        self.foreign.destroy();
         for layer in self.layers.drain(..) {
             layer.destroy();
         }
@@ -1572,6 +1584,20 @@ mod tests {
         }
     }
     #[test]
+    fn foreign_parent_capability_requires_the_exact_optional_global() {
+        assert!(!capabilities(ALL).unwrap().foreign_parent);
+        assert!(
+            capabilities(ALL.into_iter().chain(["zxdg_exporter_v2"]))
+                .unwrap()
+                .foreign_parent
+        );
+        assert!(
+            !capabilities(ALL.into_iter().chain(["zxdg_exporter_v1"]))
+                .unwrap()
+                .foreign_parent
+        );
+    }
+    #[test]
     fn each_optional_protocol_missing_takes_its_fallback() {
         let c = without("wp_viewporter").unwrap();
         assert!(!c.fractional && !c.layers && c.material);
@@ -1585,6 +1611,8 @@ mod tests {
         assert!(!c.layers);
         let c = without("zwp_text_input_manager_v3").unwrap();
         assert!(!c.text_input && c.material);
+        let c = without("zxdg_exporter_v2").unwrap();
+        assert!(!c.foreign_parent && c.material);
         let c = without("wp_presentation").unwrap();
         assert!(!c.presentation && c.material);
     }

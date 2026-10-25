@@ -1,0 +1,13 @@
+{
+  "$comment": "Existing appearance.ts preview320x180/decode640x360 and thumbnails80x45/decode160x90/gap8; _settings.scss wallpaper rows/pictures/button borders and shared radius ladder. Border150ms transition is not implemented by the native builder yet.",
+  "default": {
+    "previewWidth": 320, "previewHeight": 180, "previewDecodeWidth": 640, "previewDecodeHeight": 360,
+    "thumbnailWidth": 80, "thumbnailHeight": 45, "thumbnailDecodeWidth": 160, "thumbnailDecodeHeight": 90,
+    "previewRadius": "md", "thumbnailRadius": "sm", "thumbnailInnerInset": 2,
+    "previewBorder": 2, "thumbnailBorder": 2, "pictureBorder": 1, "padding": 2, "gap": 8,
+    "background": "--nidara-surface", "pictureBorderColor": "--nidara-border",
+    "hoverBorder": "--nidara-surface-strong", "selectedBorder": "--nidara-accent",
+    "idleBorder": "rgba(0, 0, 0, 0)", "borderTransitionMs": 150
+  },
+  "variants": []
+}

@@ -170,6 +170,7 @@ fn role(n: &Node) -> AtRole {
         Role::Window => AtRole::Frame,
         Role::Dialog => AtRole::Dialog,
         Role::Label => AtRole::Label,
+        Role::Image => AtRole::Image,
         Role::TextInput => AtRole::Entry,
         Role::Password => AtRole::PasswordText,
         Role::ComboBox => AtRole::ComboBox,
@@ -1252,6 +1253,7 @@ mod tests {
         let radio = Node::new(2, Role::RadioButton, "Blue");
         assert!(states(&radio).contains(State::Checkable));
         assert_eq!(role(&radio), AtRole::RadioButton);
+        assert_eq!(role(&Node::new(4, Role::Image, "Wallpaper")), AtRole::Image);
         assert_eq!(
             role(&Node::new(3, Role::SpinButton, "From hour")),
             AtRole::SpinButton
