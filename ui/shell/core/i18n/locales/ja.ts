@@ -583,6 +583,8 @@ export default {
     "settings.nav.menu":           "メニュー",
     "settings.window.close":       "閉じる",
     "settings.window.sidebar-toggle": "サイドバーの表示・非表示",
+    "settings.search.view-all": "すべて表示（{count}）",
+    "settings.search.results": "検索結果",
     "settings.search.no-results":  "結果なし",
     "settings.page.load-error":    "ページの読み込みに失敗しました",
 

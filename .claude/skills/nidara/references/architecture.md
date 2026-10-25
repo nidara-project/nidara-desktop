@@ -3511,5 +3511,5 @@ string or focused=true on a second node for the active descendant.
 custom/disclosure labels. Eight suggestions plus View all (N) are bounded independently
 of the full match set. The ordinary results page uses existing rows and explicit page
 routing; typing never replaces its current content. Builder-owned runtime objects
-without registry/manifest labels are not indexed yet. New translations fall back to
-English by the existing export policy. No workflow step or PR gate was added.
+without registry/manifest labels are not indexed yet. Both new labels are translated in
+all twelve catalogs with their ledger. No workflow step or PR gate was added.

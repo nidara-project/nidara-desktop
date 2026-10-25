@@ -16,8 +16,8 @@ The index reads the same exported page names and custom/disclosure labels, plus
 available Config1 row titles/subtitles. Unavailable registry rows are excluded.
 Builder-owned runtime objects that supply neither registry nor manifest labels
 (e.g. discovered sound-card objects) are not indexed yet; this is not full legacy
-search parity. English/Spanish labels for results and View all are exported normally;
-other locales use the existing English fallback.
+search parity. Results and View all labels are translated in all twelve catalogs and their
+ledger is reconciled in the same change.
 
 The reusable component is nk-widgets::suggestions::Suggestions. It keeps one real
 editor and uses the existing MenuList in a nonmodal xdg popup on nk-wayland's
