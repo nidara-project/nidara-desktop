@@ -2741,7 +2741,7 @@ call invalidate() after appearance changes. D5 requests the exported opaque
 variant separately. Capsule input is offered to CapsuleComposition first; other
 input still uses Composition::event_with_window so client title dragging survives.
 The --capsules demo opts out of server window controls, preventing two sets.
-Compositor/idle acceptance and D5 state fading are pending.
+Compositor/idle acceptance remains pending; D5 state fading is described below.
 A state ink override that is absent or explicitly null uses shared material ink;
 no fixed colour is substituted. Reader tests require generated exports when
 NK_REQUIRE_EXPORT is set, separate from source-fixture checks.
@@ -2749,3 +2749,19 @@ The #921 visual change must update capsule.json's default in the same change
 as Hyalo's geometry mirror. Land the independent gap schema first, then keep
 server layout and generated native component data synchronized. The mirror
 unit test rejects leaving the previous export dimensions behind.
+
+
+For opaque capsule fallback, CapsuleComposition::sync samples a finite linear RGBA
+wash timeline using the exported states.fadeMs (the same law as Hyalo's Ease).
+First appearance is immediate; interrupted hover/press/out retargets from the
+sample currently shown. Reduced motion snaps any in-flight fade. The Tree painter
+consumes the stored wash, with geometry/input/semantics unchanged. Settled updates
+stop invalidating paint; is_animating() exposes the need for further samples. The
+foundations demo still polls at 16 ms in this cut; do not claim idle scheduling
+from the API or a settled no-op test. D5 uses client monotonic time since first
+sync, not presentation time or a clock shared with D7. D7 never starts this client
+timeline. Tests must inspect painted midpoint
+pixels, not just the stored alpha.
+Idle washes retain the matching hover RGB with alpha zero, including destructive
+controls, as Hyalo server controls do. Transparent black would change the straight
+RGBA interpolation and therefore the visible fade.

@@ -140,7 +140,11 @@ impl Tree {
     pub fn capsule_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
         self.capsules.keys().copied()
     }
-    fn capsule_state(&self, id: NodeId, style: &CapsuleStyle) -> Option<CapsuleStateStyle> {
+    pub(crate) fn capsule_state(
+        &self,
+        id: NodeId,
+        style: &CapsuleStyle,
+    ) -> Option<CapsuleStateStyle> {
         if !self.available(id) || self.hovered != Some(id) {
             return None;
         }
@@ -152,6 +156,20 @@ impl Tree {
                 (false, false) => style.hover,
             },
         )
+    }
+    /// Match Hyalo's server controls: idle keeps the hover hue at zero alpha.
+    /// Interpolating straight RGBA from transparent black changes the fade itself.
+    pub(crate) fn capsule_wash(&self, id: NodeId, style: &CapsuleStyle) -> [f64; 4] {
+        if let Some(state) = self.capsule_state(id, style) {
+            return state.wash;
+        }
+        let mut wash = if self.nodes[&id].destructive {
+            style.destructive_hover.wash
+        } else {
+            style.hover.wash
+        };
+        wash[3] = 0.;
+        wash
     }
     /// One monochrome capsule buffer and its complete, validated material replacement.
     pub fn capsule_material(
@@ -195,7 +213,7 @@ impl Tree {
                 bounds,
                 radius: self.highlight_shape(*button).1 as f64,
                 // Keep idle regions with the same IDs for compositor-owned fade-out.
-                wash: state.map_or([0.; 4], |s| s.wash),
+                wash: self.capsule_wash(*button, style),
                 fade_ms: style.fade_ms(reduce_motion),
             });
             material.coverage.push(nk_wayland::InkCoverage {
@@ -265,8 +283,13 @@ impl Tree {
             let mut ink = nk_render::rgba(255, 255, 255, 255);
             if let Some(style) = fallback {
                 let state = self.capsule_state(*button, style);
-                if let Some(s) = state {
-                    canvas.rounded_rect(r, self.highlight_shape(*button).1 as f64, color(s.wash));
+                let wash = self
+                    .capsule_washes
+                    .get(button)
+                    .copied()
+                    .unwrap_or_else(|| self.capsule_wash(*button, style));
+                if wash[3] > 0. {
+                    canvas.rounded_rect(r, self.highlight_shape(*button).1 as f64, color(wash));
                 }
                 ink = color(
                     state
