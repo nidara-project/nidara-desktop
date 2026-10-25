@@ -46,6 +46,18 @@ heading.
 
 ## Active debt
 
+### Native popup parent servicing (#915/#939, 2026-10-25)
+
+Opening the standard dropdown enters nk-wayland's nested run_inner on the same
+connection. It suspends the parent's application loop: parent repaint/configure,
+scale and appearance servicing wait for the popup to finish; input/focus at the
+popup is serviced. A large parent update can therefore be delayed for as long as
+the menu stays open. Fixing this requires one shared dispatcher that services the
+parent and popup with explicit modal input routing, plus a native test changing
+parent size/appearance while the popup is held open and a control that freezes
+the parent again. Compiling or closing the menu is not acceptance of that behavior.
+
+
 ### Toolkit capsule demo adaptive scheduling (#889, 2026-10-25)
 
 The foundations widgets demo polls/syncs every 16 ms even after the D5 capsule
