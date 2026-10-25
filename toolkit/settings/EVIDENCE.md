@@ -1251,3 +1251,24 @@ Report/logs/screenshots: toolkit/target/ime-published-source/settings-ime/.
 Ten SearchInput tests, all-target feature-enabled Clippy, Python compilation,
 shell syntax, ci-scope self-test and skill-docs-check also pass. The following
 commit adds only this evidence and the local runner's executable file mode.
+
+### Rebase onto merged blocks A–F (2026-10-25)
+
+Rebased from D's old f4b48584 onto main 88f00f8c. Kept upstream Orca
+Probe/start_reader definitions and the IME helper exactly (AST comparison);
+seven core IME/search/runner files are byte-identical to their pre-rebase
+versions. The native app now needs nk-icons normally: its required dependency
+is retained rather than the old probe-only optional declaration. The smoke
+preserves the explicitly supplied nightly flag across its user-process boundary;
+unset/false remain false for these new rows, independently of older animation defaults.
+
+182 Settings/widgets Rust tests and feature-enabled all-target Clippy pass.
+Python/shell syntax, ci-scope self-test and skill-docs-check pass. The complete
+real IME matrix was repeated: 168/168 PASS, complete_matrix=true, no pending rows,
+implementation c9f0a1e13583069f8aa5e8518594f8f9c722bdcc,
+client SHA256 2b7f6ba2256f54bee23367da6822783d612782793692ca5df3ab23bd37491a40,
+compositor SHA256 c8103a30f400da15566bfd8aef45eb3f291ddcdb0591d67ffd761d3fb54ebcf0.
+Logs: toolkit/target/rebase-20261025/ and toolkit/target/ime-after-rebase/settings-ime/.
+The later commit changes CI flag forwarding only, verified for unset/false/true;
+this entry adds documentation only. This remains nested IME evidence, not full
+Settings/Config1 Apply/Orca or live visual acceptance.
