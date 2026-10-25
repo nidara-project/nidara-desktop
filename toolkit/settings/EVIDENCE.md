@@ -1243,3 +1243,11 @@ Escape cleared the query (and could close FontChooser). The one-shot finished
 composition boundary prevents that extra action. Ten SearchInput tests pass,
 including the forwarded Escape and retiring the boundary on focus loss.
 No complete Settings/Orca, Config1 Apply or live D7 acceptance is claimed here.
+
+Final committed-source repetition: implementation e172fe1a4e1ba76127a9d773e7f8d0f3c1fc782d,
+168/168 assertions PASS, complete_matrix=true, no pending rows. Client SHA256
+df0c25ed776eec8306885a3aafda577856b7f50e189c32ff821590a30c1256b7.
+Report/logs/screenshots: toolkit/target/ime-published-source/settings-ime/.
+Ten SearchInput tests, all-target feature-enabled Clippy, Python compilation,
+shell syntax, ci-scope self-test and skill-docs-check also pass. The following
+commit adds only this evidence and the local runner's executable file mode.
