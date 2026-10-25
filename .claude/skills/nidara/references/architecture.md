@@ -3064,3 +3064,10 @@ isolated test so the actual fixture owner updates ReadAll and emits SettingChang
 Reset scale before each case to ensure baseline and control both change it.
 Private test code is never installed. Preserve failed EGL/context-loss runs;
 a missing post-input parent commit is setup failure, not acceptance/control evidence.
+
+The accessibility Bridge keeps one pending (revision, tree), replacing it when
+the app outpaces the backend. The worker diffs the last published tree against
+the latest pending snapshot; skipped revisions are not published acknowledgments.
+An in-flight backend update completes, then the newest snapshot is consumed.
+Requests remain bound to the actual published revision. The app never blocks
+on a full notification channel, and superseded full trees are released promptly.

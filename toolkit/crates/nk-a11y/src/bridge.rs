@@ -7,12 +7,15 @@ pub struct Bridge {
     pub requests: mpsc::Receiver<(u64, Request)>,
     /// Sent only after a successful backend update, for application-side barriers.
     pub published: mpsc::Receiver<u64>,
-    updates: mpsc::Sender<(u64, Tree)>,
+    updates: crate::latest::Sender<(u64, Tree)>,
     status: mpsc::Receiver<Result<()>>,
 }
 impl Bridge {
     pub fn new(revision: u64, tree: Tree) -> Self {
-        let (updates, rx) = mpsc::channel();
+        let (updates, rx) = crate::latest::channel();
+        updates
+            .send((revision, tree))
+            .expect("new snapshot receiver");
         let (actions, requests) = mpsc::channel();
         let (status, check) = mpsc::channel();
         let (published, commits) = mpsc::channel();
@@ -21,13 +24,14 @@ impl Bridge {
                 let callback = Arc::new(move |revision, request| {
                     let _ = actions.send((revision, request));
                 });
+                let (revision, tree) = rx.recv()?;
                 let mut backend =
                     crate::atspi_backend::Backend::new_versioned(tree.clone(), revision, callback)?;
                 backend.update_versioned(revision, tree)?;
                 let _ = published.send(revision);
                 eprintln!("A11Y_PUBLISHED");
                 let _ = status.send(Ok(()));
-                for (revision, tree) in rx {
+                while let Ok((revision, tree)) = rx.recv() {
                     backend.update_versioned(revision, tree)?;
                     let _ = published.send(revision);
                     eprintln!("A11Y_PUBLISHED");

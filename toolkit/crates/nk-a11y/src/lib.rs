@@ -11,6 +11,7 @@ pub mod atspi_backend;
 #[cfg(feature = "atspi")]
 pub mod bridge;
 mod geometry;
+mod latest;
 pub use geometry::{TextGeometry, TextSpan};
 pub type Result<T> = std::result::Result<T, String>;
 pub type NodeId = u64;

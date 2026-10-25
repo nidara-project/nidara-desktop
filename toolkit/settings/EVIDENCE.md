@@ -546,3 +546,16 @@ AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
 Historical fixed binary evidence remains bound to original hashes. Exclusive
 parent borrow short-menu limit and adaptive foundations/Settings real polling
 caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+### Block C latest pending accessibility snapshot (2026-10-25)
+
+Bridge replaces its unbounded pending-tree queue with one overwriteable slot and
+a bounded nonblocking wake notification. While the backend is busy, superseded
+trees are released; it diffs the last published snapshot against the newest one
+it takes next. Only actually published revisions are acknowledged. Metadata
+requests remain version-bound; in-flight publication is not interrupted.
+
+14 nk-a11y tests and all-target Clippy-Dwarnings pass. The slow-reader control
+uses an actual mailbox and retained payload lifetime: old Arc drops before the
+reader runs, only final revision3 is received, then4 and disconnect are handled.
+No native Orca result is claimed for this unit-level concurrency fix.

@@ -904,3 +904,10 @@ Settings positions its three window-control buttons from the current exported
 CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
 metrics, including portal updates staged before layout; no cached measured bounds
 or second layout is needed just to compute the capsule's horizontal placement.
+
+The accessibility Bridge keeps one pending (revision, tree), replacing it when
+the app outpaces the backend. The worker diffs the last published tree against
+the latest pending snapshot; skipped revisions are not published acknowledgments.
+An in-flight backend update completes, then the newest snapshot is consumed.
+Requests remain bound to the actual published revision. The app never blocks
+on a full notification channel, and superseded full trees are released promptly.
