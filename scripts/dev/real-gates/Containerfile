@@ -1,0 +1,18 @@
+# The real readers and input methods the toolkit's checks drive (Orca, speech-dispatcher, fcitx5),
+# in a disposable Arch container: nothing is installed on the host, and the host's /etc and
+# session are never touched. Built by scripts/dev/real-gates.sh; the binaries come from the repo.
+FROM docker.io/library/archlinux:latest
+# speech-dispatcher's dummy module still opens an audio backend: libao's null driver (the
+# checks refuse to run without it, so they never reach a real sound device).
+RUN pacman -Syu --noconfirm --needed \
+        orca speech-dispatcher libao at-spi2-core dbus dconf gsettings-desktop-schemas \
+        python python-gobject \
+        fcitx5 fcitx5-mozc fcitx5-chinese-addons fcitx5-hangul fcitx5-gtk \
+        cage mesa wl-clipboard jq \
+        noto-fonts noto-fonts-cjk noto-fonts-emoji inter-font \
+        cairo pango libinput libxkbcommon libdisplay-info seatd lua54 libwacom \
+    && pacman -Scc --noconfirm \
+    && echo 'default_driver=null' > /etc/libao.conf
+# What the checks record about their run: the revision (`git rev-parse HEAD`) and the AT-SPI
+# version (`pkg-config --modversion atspi-2`).
+RUN pacman -S --noconfirm --needed git pkgconf && pacman -Scc --noconfirm
