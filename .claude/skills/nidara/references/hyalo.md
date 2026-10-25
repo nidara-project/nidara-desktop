@@ -2444,8 +2444,18 @@ when window ID's tree last brought new content — a commit with a new buffer on
 it, subsurfaces and layers too — in CLOCK_MONOTONIC ms (Python's `time.monotonic() * 1000`),
 the last 10 s (`Managed::frames`, `handlers.rs` `record_frame`, read before the buffer handler
 takes the assignment). `scripts/dev/smoothness-probe.py` drives a scroll or a drag with
-`nidara-input … [ms]` (the optional duration spreads the notches or the glide) and compares the
-**time-weighted** p95 of the gaps: the per-gap p95 does not see a single freeze.
+`nidara-input … [ms [legs]]` (the duration spreads the notches or the glide; legs repeat it,
+each the way back of the one before, in ONE process, and print `LEG start end` in the
+monotonic clock) and compares the **time-weighted** p95 of the gaps: the per-gap p95 does not
+see a single freeze. ⚠️ Time-weighted means idle time scores as a freeze, so the input must
+never leave the window without something to draw: a scroll straight down that hits the bottom
+measured the page's length (703 ms in every run), 16 notches a second measured the pause
+between notches (~55 ms), and one process per leg measured the process start (~42 ms seams).
+Hence a notch every 16 ms going 8 down and 8 up for 2 s, and a guard that refuses a run where
+3/4 of the legs one way stop drawing early (out of page or track) while a freeze, a few legs in
+a row both ways, is scored. Accessibility extents of the legacy Settings are offset from the
+window box `msg windows` gives (~+52, +43 px on 2026-10-25): take slider coordinates from a
+screenshot, and check the value moved (a drag beside the slider still drew every 8 ms).
 
 `render/stats.rs` instruments every frame, per output:
 
