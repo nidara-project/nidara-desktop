@@ -4,23 +4,57 @@ use crate::{
     Line, Point, Rect, Result, Size, TextBackend, TextStyle,
 };
 use parley::{Cursor, FontContext, LayoutContext, PositionedLayoutItem, StyleProperty};
-use std::{borrow::Cow, ops::Range, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, ops::Range, sync::Arc};
 
 pub struct ParleyBackend {
     fonts: Arc<FontSet>,
+    system_fonts: bool,
     font_context: FontContext,
     context: LayoutContext<()>,
 }
 impl ParleyBackend {
     pub fn new(fonts: Arc<FontSet>) -> Result<Self> {
+        Self::create(fonts, false)
+    }
+    /// Shape installed user fonts through Fontique, retaining the supplied fallbacks.
+    #[cfg(feature = "system-fonts")]
+    pub fn with_system_fonts(fonts: Arc<FontSet>) -> Result<Self> {
+        Self::create(fonts, true)
+    }
+    /// Check the named family through the same Fontique collection as shaping, without
+    /// accepting fallback substitution. Used before applying a fontconfig catalogue choice.
+    pub fn family_available(&mut self, name: &str) -> bool {
+        let Some(family) = self.font_context.collection.family_by_name(name) else {
+            return false;
+        };
+        family.fonts().iter().any(|font| {
+            font.load(Some(&mut self.font_context.source_cache))
+                .is_some_and(|bytes| ttf_parser::Face::parse(bytes.data(), font.index()).is_ok())
+        })
+    }
+    fn create(fonts: Arc<FontSet>, system_fonts: bool) -> Result<Self> {
         let mut font_context = FontContext {
             collection: parley::fontique::Collection::new(parley::fontique::CollectionOptions {
                 shared: false,
-                system_fonts: false,
+                system_fonts,
             }),
             source_cache: Default::default(),
         };
-        for (_, bytes) in fonts.font_files() {
+        for (file, bytes) in fonts.font_files() {
+            if system_fonts {
+                let installed: Vec<_> = fonts
+                    .files
+                    .iter()
+                    .filter(|font| font.path == file)
+                    .map(|font| font_context.collection.family_id(&font.family).is_some())
+                    .collect();
+                if installed.iter().all(|known| *known) {
+                    continue;
+                }
+                if installed.iter().any(|known| *known) {
+                    return Err("fallback collection mixes installed and private families".into());
+                }
+            }
             if font_context
                 .collection
                 .register_fonts(parley::fontique::Blob::new(Arc::new(bytes.clone())), None)
@@ -31,6 +65,7 @@ impl ParleyBackend {
         }
         Ok(Self {
             fonts,
+            system_fonts,
             font_context,
             context: LayoutContext::new(),
         })
@@ -47,6 +82,13 @@ impl TextBackend for ParleyBackend {
             .iter()
             .map(|name| parley::FontFamilyName::Named(Cow::Borrowed(name)))
             .collect();
+        let variations: Vec<_> = style
+            .variations
+            .iter()
+            .map(|setting| {
+                parley::FontVariation::new(parley::setting::Tag::new(&setting.axis), setting.value)
+            })
+            .collect();
         let mut builder = self
             .context
             .ranged_builder(&mut self.font_context, text, 1.0, false);
@@ -54,6 +96,18 @@ impl TextBackend for ParleyBackend {
             Cow::Borrowed(&names),
         )));
         builder.push_default(StyleProperty::FontSize(style.size));
+        builder.push_default(StyleProperty::FontStyle(match style.slant {
+            crate::Slant::Normal => parley::FontStyle::Normal,
+            crate::Slant::Italic => parley::FontStyle::Italic,
+            crate::Slant::Oblique => parley::FontStyle::Oblique(None),
+        }));
+        builder.push_default(StyleProperty::FontWidth(
+            parley::FontWidth::from_percentage(style.width),
+        ));
+        builder.push_default(StyleProperty::FontVariations(parley::FontVariations::List(
+            Cow::Borrowed(&variations),
+        )));
+
         builder.push_default(StyleProperty::FontWeight(parley::FontWeight::new(
             style.weight,
         )));
@@ -73,6 +127,8 @@ impl TextBackend for ParleyBackend {
             Box::new(ParleyLayout {
                 native,
                 fonts: self.fonts.clone(),
+                system_fonts: self.system_fonts,
+                system_data: BTreeMap::new(),
                 alignment: style.alignment,
                 empty: text.is_empty(),
                 runs: Vec::new(),
@@ -86,6 +142,8 @@ impl TextBackend for ParleyBackend {
 struct ParleyLayout {
     native: parley::Layout<()>,
     fonts: Arc<FontSet>,
+    system_fonts: bool,
+    system_data: BTreeMap<u64, Arc<[u8]>>,
     alignment: Alignment,
     empty: bool,
     runs: Vec<GlyphRun>,
@@ -122,6 +180,7 @@ impl LayoutEngine for ParleyLayout {
         self.native.align(
             match self.alignment {
                 Alignment::Start => parley::Alignment::Start,
+                Alignment::Left => parley::Alignment::Left,
                 Alignment::Center => parley::Alignment::Center,
                 Alignment::End => parley::Alignment::End,
                 Alignment::Justify => parley::Alignment::Justify,
@@ -184,17 +243,32 @@ impl LayoutEngine for ParleyLayout {
             for item in line.items() {
                 if let PositionedLayoutItem::GlyphRun(glyph_run) = item {
                     let run = glyph_run.run();
+                    if run.synthesis().embolden() {
+                        return Err("synthetic font emboldening is not supported".into());
+                    }
                     let coords: Vec<_> = run
                         .normalized_coords()
                         .iter()
                         .map(|v| v.to_bits())
                         .collect();
-                    let font = self.fonts.resolve_bytes(
+                    let font = match self.fonts.resolve_bytes(
                         run.font().data.data(),
                         run.font().index,
                         &coords,
-                    )?;
+                    ) {
+                        Ok(font) => font,
+                        Err(_) if self.system_fonts => {
+                            let data = self
+                                .system_data
+                                .entry(run.font().data.id())
+                                .or_insert_with(|| Arc::from(run.font().data.data()))
+                                .clone();
+                            crate::fonts::font(data, run.font().index, &coords)
+                        }
+                        Err(error) => return Err(error),
+                    };
                     self.runs.push(GlyphRun {
+                        skew_degrees: run.synthesis().skew().unwrap_or(0.),
                         font,
                         size: run.font_size(),
                         glyphs: glyph_run

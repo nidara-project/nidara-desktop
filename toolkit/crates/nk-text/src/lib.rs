@@ -57,6 +57,8 @@ pub struct Caret {
 pub enum Alignment {
     #[default]
     Start,
+    /// Physical left edge, independently of paragraph direction (scrolling inputs).
+    Left,
     Center,
     End,
     Justify,
@@ -68,13 +70,29 @@ pub enum Direction {
     Ltr,
     Rtl,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Slant {
+    #[default]
+    Normal,
+    Italic,
+    Oblique,
+}
+/// An OpenType design-space setting; exported glyphs carry actual normalized values.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AxisSetting {
+    pub axis: [u8; 4],
+    pub value: f32,
+}
 /// Size in logical pixels; line_height is a multiple of size, weight is CSS 1..1000.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct TextStyle {
     pub family: String,
     pub size: f32,
     pub weight: f32,
+    pub slant: Slant,
+    pub width: f32,
+    pub variations: Vec<AxisSetting>,
     pub line_height: f32,
     pub alignment: Alignment,
     pub direction: Direction,
@@ -85,6 +103,9 @@ impl Default for TextStyle {
             family: "Noto Sans".into(),
             size: 20.0,
             weight: 400.0,
+            slant: Slant::Normal,
+            width: 100.,
+            variations: Vec::new(),
             line_height: 1.5,
             alignment: Alignment::Start,
             direction: Direction::Auto,
@@ -92,7 +113,7 @@ impl Default for TextStyle {
     }
 }
 impl TextStyle {
-    pub(crate) fn validate(&self, width: f32) -> Result<()> {
+    pub fn validate(&self, width: f32) -> Result<()> {
         if !width.is_finite()
             || width <= 0.0
             || !self.size.is_finite()
@@ -101,6 +122,15 @@ impl TextStyle {
             || self.line_height <= 0.0
             || !self.weight.is_finite()
             || !(1.0..=1000.0).contains(&self.weight)
+            || !self.width.is_finite()
+            || self.width <= 0.
+            || self.variations.iter().enumerate().any(|(i, setting)| {
+                !setting.value.is_finite()
+                    || !setting.axis.iter().all(|byte| (0x20..=0x7e).contains(byte))
+                    || self.variations[..i]
+                        .iter()
+                        .any(|old| old.axis == setting.axis)
+            })
         {
             return Err("invalid text style or max_width".into());
         }
@@ -123,6 +153,8 @@ pub struct Font {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlyphRun {
+    /// Actual shaper synthesis, in degrees; zero for an unsynthesized face.
+    pub skew_degrees: f32,
     pub font: Font,
     pub size: f32,
     pub glyphs: Vec<(u32, f32, f32)>,

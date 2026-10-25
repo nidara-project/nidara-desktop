@@ -75,6 +75,17 @@ Owns everything between a string and positioned glyphs, and the editing model on
   fed a `TextStyle` (family, size, weight, line height, alignment, direction) and a `FontSet`.
   The trait stays so another engine can be measured against the same corpus; phase 0's Pango
   adapter was removed after the decision (the comparison is in `crates/nk-text/README.md`).
+- `ParleyBackend::new` keeps the isolated required-font corpus. With the opt-in
+  `nk-text/system-fonts` feature, `ParleyBackend::with_system_fonts` uses Fontique's
+  system collection (`system_fonts: true`) alongside the supplied fallback files.
+  This is the reusable Settings/chooser shaping path, not catalogue enumeration.
+  Fontique resolves and loads faces used by a layout. Exported system font bytes
+  are copied once per blob per retained layout into `Arc<[u8]>`, shared by its
+  runs and reflows, and released with that layout; there is no process-wide cache
+  of every previewed font. Collection indices and normalized variation axes come
+  from the actual shaped run. Layouts and glyphs remain valid after backend drop.
+  Linux enables Fontconfig through dlopen, as the measured Settings slice does.
+  This API does not validate a Config1 font description or implement chooser UI.
 - `Layout` is the ONE object that is measured and painted: `size(max_width)`,
   `hit_test(point) → offset + affinity`, `caret_rect(offset, affinity)`,
   `selection_rects(range)`, `glyph_runs() → [GlyphRun { font, size, glyphs: [(id, x, y)] }]`.
@@ -288,6 +299,63 @@ renderer delivers Failed after Changed/availability notices, so the same failed
 reply cannot immediately erase its error with its accompanying Changed notice. Renderer row
 visibility follows key availability; builder rows are sensitive only when every
 edited key is writable. No async worker/timer survives this synchronous builder.
+
+### SearchInput (#915)
+
+A retained `Kind::SearchInput` owns one nk-text::Editor, with a single-line committed
+buffer, selection/caret, undo and preedit. It is created by Tree::search_input with
+a supplied text backend and shared SearchStyle; absent style is an error. Visual
+metrics come from Settings' .settings-search and its custom box in Settings.tsx
+(surface-back, border, pill, padding12/min-height32, icon15/gap8), exported once.
+Its accessible name is separate from editable text; placeholder is description,
+never the value. Semantics are TextInput/TextInfo with UTF-8 indices and geometry
+from the same retained layout used to paint, excluding preedit geometry.
+
+Reads and set_search_text canonical updates do not emit Changed. User edits,
+paste/IME commits and authorized AT-SPI SetText return Changed exactly when the
+committed text changes. Selection-only operations invalidate semantics/paint but
+never trigger a search. Single-line text rejects control characters atomically.
+All requests validate target generation, visibility and enabled state. Tab leaves
+the input; Space types, Enter activates, Escape cancels preedit then clears text.
+Font/scale reflow preserves editing history, text and selection through
+nk-text::Editor::set_style; shaping failure leaves old style/layout intact.
+SearchInput uses absolute left alignment for its single-line scrolling canvas
+(`Alignment::Left` in nk-text), while text direction remains Auto/RTL as supplied;
+paragraph direction still controls shaping/caret movement. This prevents an unbounded
+RTL layout from aligning to the far end of its measurement constraint. Existing
+Start/End semantics remain logical alignment for other text. SearchInput itself
+owns no provider, timer, Config1 operation or search results.
+Composition::event_with_window routes Ctrl+C/X/V through nk-wayland, retaining a
+paste target until delivery and dropping it after focus/generation invalidation.
+Composition::sync_search_input (also called by sync) follows layout; it publishes
+committed surrounding text and the painted caret, with the existing layer-local
+cursor association for a sidebar input. It resets context when the focused input
+changes (including equal-text fields), and disables IME when the last input goes.
+IME echo uses the host's existing cause tracking. Model tests of these paths do
+not establish real native clipboard/fcitx/AT-SPI or Orca acceptance.
+
+### Lazy font catalogue (#915, PHASE1 A4)
+
+`font_catalog::Catalogue` groups Fontconfig's installed primary family/style names
+with their exact file and face index (including named-instance bits), without
+opening font files or substituting an unknown family. An empty style name from
+Fontconfig is retained as unnamed (some variable faces have no named style); no
+Regular label/style is invented. Duplicate file/index/name
+records collapse; names remain Unicode, with deterministic family/style ordering.
+Malformed records, failed fontconfig execution and an empty catalogue are errors,
+never a successful partial catalogue. This is metadata, not a font rendering backend.
+
+`font_catalog::Load::start(Operation { mount, request })` is called only when a
+chooser opens, never while building the Settings page or its first frame. One
+process-wide worker serializes enumeration, with one queued operation maximum;
+a full queue reports busy rather than spawning more workers. `poll(current)` is
+nonblocking and returns one result only for the same mount/request token. Cancel,
+Drop or a token mismatch retires the receiver; queued canceled jobs are skipped,
+and a running obsolete result cannot reach the UI. Worker work has no tree,
+Window, provider or Config1 access and performs no Apply. The chooser must still
+validate its current live/visible/available launcher before applying a selection.
+The modal family LIST/search ENTRY, preview, size/style selection and font builders
+remain separate consumers; catalogue tests are not FontChooser acceptance.
 
 ### Renderer modal context (#915)
 
@@ -911,3 +979,173 @@ the latest pending snapshot; skipped revisions are not published acknowledgments
 An in-flight backend update completes, then the newest snapshot is consumed.
 Requests remain bound to the actual published revision. The app never blocks
 on a full notification channel, and superseded full trees are released promptly.
+### Embedded single-selection list (#882/#915)
+
+`Tree::list(parent, name, viewport_height, MenuStyle)` creates a retained `LIST`
+inside a Group or Scroll, with `MenuOption` children and the same row measurement,
+paint, check and keyboard logic used by dropdown menus. Each list owns its style;
+it never enables popup layout for the containing window. The positive finite
+viewport height is a caller constraint, not an intrinsic visual token;
+`set_list_height` updates that constraint on resize without replacing IDs. Scroll,
+focus reveal, clipping, hit testing and SHOWING use that viewport intersected with
+ancestor clips. Offscreen options remain semantic children; hidden options leave
+the semantic tree. `set_list_selected(list, Option<option>)` is canonical and emits
+no user change; activation changes selection once and returns Changed(list).
+Arrow/Home/End focus does not commit. Empty lists and no selection support filtering.
+`set_list_style` preserves IDs/focus and clamps scroll after remeasurement. There
+is no second text renderer, tree or provider. This primitive is not font-dialog
+or Orca acceptance; modal lifecycle and family catalogue are application consumers.
+
+### Retained modal dialog namespace (#882/#915)
+
+`DialogTree` borrows the parent Tree and creates a separate retained view whose IDs
+start at the parent's next unused ID. While borrowed, parent mutations are staged.
+On Drop, all view IDs are retired into the parent allocator and parent generations
+advance, including on error/cancel. A snapshot retains the original parent root and
+IDs, suspends its actions/focus, and attaches a real modal DIALOG child containing
+the view's SearchInput/List/etc. It uses PopupSnapshot's process publication tokens
+and the application's ONE Bridge. Requests require the last publication and current
+view generation and are confined to the dialog subtree. Invalidation rejects all
+requests/publication and suppresses launcher focus restoration. Normal close/error
+restores focus only to an alive, showing, available launcher. Dialog window bounds
+are window-local; no screen-position or parent-relative geometry is invented.
+The existing AT-SPI mapping of Role::Dialog exports MODAL. `run_dialog_with_options` uses the parent's
+connection/app-id, caller title/size, and the same teardown/input-drain as run_dialog.
+
+The Settings family/style/size picker consumer is `font_chooser::choose`: actual
+modal native UI with SearchInput, lazy font_catalog, embedded LIST, Cancel/Select
+and the shared system-font backend. Its result is Selection { family, points, attributes }, never
+Apply. Point-size editing and a retained sample share the existing widgets/layout.
+The style list and controlled Config1 builders reuse these primitives; this UI
+is not full FontChooser parity or native/Orca acceptance. All labels,
+window size and list-height constraint are supplied by the host, without defaults.
+
+Modal Escape checks `Tree::search_composing(id)` before closing: composing text
+gets the existing SearchInput cancellation path first. This reads the one Editor's
+preedit state; it does not derive input policy from semantic geometry.
+
+DialogTree clears parent widget focus on entry and does not publish dialog focus
+until its actual host Focus(true); provider state diff then orders activation
+before focus. Drop restores the launcher on ordinary cancellation/error.
+
+`Window::set_title(&str)` updates an existing xdg toplevel title, rejects NUL and
+non-toplevel roles. The family picker supplies its translated runtime title on
+Configure before its first frame; Labels never requires leaked static strings.
+
+### Font preview styling (#915)
+
+TextStyle adds Slant (Normal/Italic/Oblique), width as a positive percentage, and
+explicit OpenType AxisSetting values. Defaults preserve existing text. The shared
+Parley builder passes these attributes/settings to Fontique/Parley; glyph exports
+keep the actual selected face and normalized variation coordinates. validate(width)
+is public so a retained consumer can validate before changing its own state.
+Duplicate/nonprintable axis tags and nonfinite settings fail before shaping. This
+does not promise an arbitrary file/named-instance identity from a family/style
+request. Pango's description syntax remains the Config1 boundary, documented at
+https://docs.gtk.org/Pango/type_func.FontDescription.from_string.html .
+
+Tree::set_label_style(id, Option<TextStyle>) applies an explicit style only to a
+Label, validating before mutation and invalidating the retained layout; None
+restores the window style. The same measured Layout supplies paint and bounds.
+FontChooser's family view consumes this for a translated sample in the selected
+family, at the draft point size and current UI attributes. It does not prove a
+particular named font instance or implement face/style selection.
+
+The chooser consumer is extended from family-only choose_family to
+`font_chooser::choose(host, launcher, initial: Selection)`: Selection carries a
+family and unscaled point size, and the result is still a draft, never Apply.
+Host supplies a strictly positive point ValueRange and portal text scale explicitly; no size limits
+are invented in the widget. A SpinButton reuses existing range input/Value semantics.
+An initial size not representable by the caller's range is rejected before opening.
+The preview uses points * 96/72 * text_scale logical pixels and the one retained
+Label layout. Choosing family/size does not yet choose an arbitrary face/style;
+Exact face/named-instance selection and native end-to-end acceptance remain pending.
+
+GlyphRun carries the actual Parley synthesis skew in degrees. nk-render applies it per glyph
+around that glyph's baseline, leaving positions and advances from the shared Layout intact.
+Synthetic emboldening is currently refused during export instead of silently painting a regular
+face. A style request can resolve to a synthesized face; it does not promise a specific file.
+
+### Config1 font descriptions and chooser styles (#915)
+
+nk-settings::font_description interprets the supported Config1 Pango description
+attributes (single family, weight/slant/stretch, positive point or px size, explicit
+axis settings) in Rust, without another layout engine or startup enumeration.
+Canonical output is a Pango-compatible point description, with an ambiguity comma
+when the family ends in a style word/number. Absolute px sizes convert at 72/96,
+independently of portal text scale. Unsupported variant/gravity/features/family lists
+return an explicit error; they are never silently discarded or previewed as regular.
+Styles::font_style and the real chooser share this interpretation. The chooser's
+Selection includes attributes, and its embedded style LIST uses the catalogue's raw
+style labels (translated unnamed label for an empty style), retaining initial axis
+settings until an explicit family/style change. Canonical point precision follows Pango's
+1/1024 unit; output preserves supported attributes, not the exact spelling of its
+input. Unsupported named styles and high-index named-instance records cannot be
+selected. Unsupported initial attributes are preserved without preview/acceptance
+until an explicit supported choice, rather than being replaced on opening. A family/style request is not a promise of an exact file/index/named instance.
+Config1 Apply still belongs to builders; choosing only returns a draft description.
+
+System-font mode must preserve all installed faces of a required family. Registering
+only the FontSet's regular file over an installed family can hide its bold/italic
+faces. with_system_fonts therefore checks the declared families of each fallback file.
+When all are installed it leaves those system families intact; when none are it
+registers the private fallback. A collection mixing installed/private families is
+refused, since registering its whole blob could shadow installed faces. Isolated
+mode keeps its original file registration. This does not run the chooser fc-list.
+
+### Controlled font builders and native modal context (#915)
+
+font_builder::register installs interfaceFont/monoFont factories per manifest item.
+They show Session.shown verbatim without normalizing/writing during build/notices, keep
+stable launcher IDs, and call Cx.open_font only on explicit launcher activation.
+The accepted Description is canonicalized and compared semantically with current
+state; an actual change issues one Cx.apply after live/mount/visibility/writability
+checks. Cancel/invalidation/same value never Apply; Failed-last notices keep the
+reply error alongside canonical state. Unsupported current descriptions remain
+visible and report an error on activation, without a guessed preview or write.
+
+Modal::font lends the same tree, optional parent Window, Editor and a Request with
+launcher/Operation/initial draft. Native hosting requires the real parent; optional
+Window permits deterministic decision fixtures in headless builder/bus tests only.
+dropdown::Native also hosts fonts through its existing Bridge/revision/staged notices.
+Its optional font Configuration owns fonts, translated labels, caller constraints
+and actual icon-theme preparation; absence is an explicit capability
+error. No static translation leaks, second chooser/provider or font enumeration on
+page build. Editor.poll stages notices and cancels before modal input/acceptance;
+the app still drains notices and applies external changes after return.
+
+Tree::set_button_description supplies explicit accessible text (current font plus
+help/error) for a Button while the row's LabelledBy keeps the control's title.
+It changes only semantics, validates Button/liveness and is cleared on removal.
+No new visual tokens or button renderer are introduced.
+
+The font request title comes from that manifest row's translated label, matching
+the legacy font button; Configuration owns the remaining translated dialog labels.
+Styles.text_scale retains the actual Appearance portal scale, so both the modal
+and launcher preview use its value rather than inferring it from a font size.
+Tree::set_button_text_style shares the Label override/layout machinery for a
+Button's caption. Supported descriptions preview on the launcher; unsupported
+profile strings remain literal captions in the ordinary UI style. Font discovery
+and shaping stay in the shared system-font backend; no exact-face/fallback claim
+is implied for an uninstalled current family.
+
+A dynamic Button description must also be observable after focus has returned:
+nk-a11y::diff emits Event::Description once when an existing node's description
+changes; the same provider publishes PropertyChange/accessible-description. The
+initial snapshot exposes the getter normally, and unchanged descriptions emit
+nothing. This adds no provider or role/value interface and preserves activation
+before focus ordering. Native Orca speech acceptance remains a separate gate.
+
+Mounted font builders refresh caption styles from the current Styles during idle
+only when portal text scale or line height changes. This never Apply, preserves
+launcher IDs and does not invalidate repeatedly while appearance is unchanged.
+The application's existing appearance-notice hook still cancels an open modal
+before replacing Styles; main-loop native portal/routing acceptance is separate.
+
+The font chooser uses Fontconfig for installed family/style metadata only, and
+Fontique in Parley for rendering. Bad catalogue records (including bad UTF-8) are
+skipped, counted and logged by line; failed enumeration/no usable family remains
+an error. Before a native selected family reaches Apply, the same rendering
+collection must resolve and load a valid face without fallback substitution.
+Catalogue timing/count logs describe each lazy enumeration; there is no second
+shaper or silent family fallback acceptance.

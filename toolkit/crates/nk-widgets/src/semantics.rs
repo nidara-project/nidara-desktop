@@ -9,8 +9,9 @@ impl Tree {
         for id in ids {
             let widget = &self.nodes[&id];
             let role = match widget.kind {
+                Kind::Window if self.dialog_role => Role::Dialog,
                 Kind::Window => Role::Window,
-                Kind::Sidebar => Role::List,
+                Kind::Sidebar | Kind::List { .. } => Role::List,
                 Kind::TitleBar | Kind::Label | Kind::Subtitle | Kind::Footer => Role::Label,
                 Kind::Disclosure { .. } => Role::ToggleButton,
                 Kind::Page { .. } => Role::Option,
@@ -24,6 +25,7 @@ impl Tree {
                 Kind::Spin { .. } => Role::SpinButton,
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
+                Kind::SearchInput => Role::TextInput,
                 Kind::Dropdown { .. } => Role::ComboBox,
                 Kind::DropdownOption { .. } | Kind::MenuOption { .. } => Role::Option,
                 Kind::Choice { .. } => Role::RadioButton,
@@ -135,6 +137,12 @@ impl Tree {
                     .find(|c| self.nodes[c].kind == Kind::Subtitle && !self.is_hidden(**c))
             }) {
                 n.description = self.nodes[subtitle].name.clone();
+            }
+            if let Some(description) = self.button_descriptions.get(&id) {
+                n.description = description.clone();
+            }
+            if widget.kind == Kind::SearchInput {
+                self.search_semantics(id, &mut n);
             }
             nodes.insert(id, n);
         }

@@ -239,6 +239,7 @@ pub fn show(host: Host<'_>, combo: NodeId) -> Result<Effect> {
 /// Production renderer context. The app delivers `notices` after the modal returns.
 pub struct Native {
     pub bridge: Bridge,
+    pub font: Option<crate::font_chooser::Configuration>,
     pub revision: u64,
     pub text: ParleyBackend,
     pub panel: Option<PanelMaterial>,
@@ -249,6 +250,54 @@ pub struct Native {
     pub keep_open: Box<dyn FnMut() -> Result<bool>>,
 }
 impl crate::render::Modal for Native {
+    fn font(
+        &mut self,
+        tree: &mut Tree,
+        window: Option<&mut Window>,
+        styles: &Styles,
+        editor: &mut dyn crate::render::Editor,
+        request: crate::font_chooser::Request,
+    ) -> Result<Option<crate::font_chooser::Selection>> {
+        let window = window.ok_or("font chooser requires its real parent window")?;
+        let config = self
+            .font
+            .as_mut()
+            .ok_or("native font configuration missing")?;
+        let mut keep_open = || {
+            crate::render::stage_modal_notices(editor, &mut self.notices, self.keep_open.as_mut())
+        };
+        let selected = crate::font_chooser::choose(
+            crate::font_chooser::Host {
+                tree,
+                window,
+                fonts: config.fonts.clone(),
+                styles,
+                bridge: &self.bridge,
+                revision: &mut self.revision,
+                panel: self.panel.as_ref(),
+                operation: request.operation,
+                poll_interval_ms: self.poll_interval_ms,
+                size: config.size,
+                list_height: config.list_height,
+                point_range: config.point_range.clone(),
+                text_scale: styles.text_scale as f32,
+                labels: config.labels.borrowed(&request.title),
+                prepare: config.prepare.as_mut(),
+                keep_open: &mut keep_open,
+            },
+            request.launcher,
+            request.initial,
+        )?;
+        if let Some(choice) = &selected
+            && !self.text.family_available(&choice.family)
+        {
+            return Err(format!(
+                "font family unavailable to the renderer: {}",
+                choice.family
+            ));
+        }
+        Ok(selected)
+    }
     fn dropdown(
         &mut self,
         tree: &mut Tree,
@@ -258,14 +307,7 @@ impl crate::render::Modal for Native {
         combo: NodeId,
     ) -> Result<Effect> {
         let mut keep_open = || {
-            if !self.notices.is_empty() {
-                return Ok(false);
-            }
-            self.notices.extend(editor.poll());
-            if !self.notices.is_empty() {
-                return Ok(false);
-            }
-            (self.keep_open)()
+            crate::render::stage_modal_notices(editor, &mut self.notices, self.keep_open.as_mut())
         };
         show(
             Host {

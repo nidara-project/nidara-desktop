@@ -397,6 +397,16 @@ impl Editor {
         }
         Ok(())
     }
+    /// Reshape without changing committed text, caret, preedit or undo/redo history.
+    /// A shaping error leaves both the old style and old layout intact.
+    pub fn set_style(&mut self, style: TextStyle) -> Result<()> {
+        let display = self.display_text().to_owned();
+        let layout = self.backend.layout(&display, &style, self.width)?;
+        self.style = style;
+        self.layout = layout;
+        self.preferred_x = None;
+        Ok(())
+    }
     pub fn set_max_width(&mut self, max_width: f32) -> Result<()> {
         self.layout.size(max_width)?;
         self.width = max_width;

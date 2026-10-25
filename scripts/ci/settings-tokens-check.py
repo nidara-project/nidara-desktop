@@ -195,6 +195,23 @@ for variant in component_variants:
             and positive_number(capsule.get('windowInset'), True)
             and capsule['height'] >= capsule['button'] + 2 * capsule['edge']):
         fail.append(f'{where}: missing or invalid capsule geometry')
+    search = variant.get('search') or {}
+    if not all(positive_number(search.get(k), True) for k in ('paddingX', 'border', 'iconGap')) or not all(positive_number(search.get(k)) for k in ('minHeight', 'iconSize')):
+        fail.append(f'{where}: incomplete SearchInput geometry')
+    if not isinstance(search.get('radius'), str) or not all(search['radius'] in s['tokens'] for s in sets) or not isinstance(search.get('icon'), str) or not search['icon'].startswith('nd-'):
+        fail.append(f'{where}: missing SearchInput radius/icon')
+    for colour_set in sets:
+        radius_value = colour_set['tokens'].get(search.get('radius'))
+        try:
+            valid_radius = isinstance(radius_value, str) and radius_value.endswith('px') and positive_number(float(radius_value[:-2]))
+        except ValueError:
+            valid_radius = False
+        if not valid_radius:
+            fail.append(f'{where}: invalid SearchInput radius dimension')
+    for k in ('background', 'borderColor', 'focusBorder', 'text', 'dim', 'selection', 'selectionText'):
+        colour = search.get(k)
+        if not isinstance(colour, str) or not all(colour in s['tokens'] for s in sets):
+            fail.append(f'{where}: missing SearchInput colour {k}: {colour}')
     trigger = (variant.get('dropdown') or {}).get('trigger') or {}
     if not all(positive_number(trigger.get(k), True) for k in ('paddingX', 'paddingY', 'border', 'arrowGap')):
         fail.append(f'{where}: missing dropdown trigger geometry')
@@ -242,4 +259,4 @@ if fail:
     print('\n'.join(f'FAIL: {f}' for f in fail))
     sys.exit(1)
 print(f'settings tokens OK: {len(sets)} colour sets, {len(used)} used tokens in each, '
-      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch, rows and dropdown complete')
+      f'{len(static["scss"])} scss + {len(static["ts"])} ts static, {len(variants)} glass variants, their controls, lists, choices, ranges, switch, rows, dropdown and search complete')

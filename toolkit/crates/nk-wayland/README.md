@@ -164,3 +164,15 @@ these rectangles with incoming popup.configure wire messages and checks None
 for toplevels. This diagnostic extraction is compile/static-only; its checker
 has not been executed on this head. Native baseline/control execution remains
 pending outside this local source split.
+
+
+`run_dialog_with_options(app, parent, options)` opens the same modal xdg toplevel
+as `run_dialog`, with caller title/size and the parent's connection/app-id. Empty
+sizes fail before opening. It shares the existing child teardown and queued-input
+cutoff. `run_dialog` remains the legacy error-dialog wrapper; application choosers
+should supply their translated title and layout constraints instead of inheriting
+its error-dialog defaults. Widget accessibility remains in the caller's provider.
+
+`Window::set_title(&str)` accepts runtime translations on a toplevel (NUL and
+popup/layer roles fail). A modal consumer can set it on Configure before painting
+its first frame; it need not leak a translated String into Options' static title.

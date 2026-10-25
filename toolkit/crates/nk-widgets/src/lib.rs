@@ -3,8 +3,10 @@
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
 mod dropdown;
-mod dropdown_popup;
 pub use dropdown::DropdownStyle;
+mod dialog;
+mod dropdown_popup;
+pub use dialog::DialogTree;
 pub use dropdown_popup::{DropdownPopup, PopupSnapshot};
 mod menu;
 pub use menu::MenuStyle;
@@ -17,7 +19,9 @@ mod motion;
 mod paint;
 mod ranges;
 mod rows;
+mod search;
 mod semantics;
+pub use search::SearchStyle;
 mod switch;
 pub mod window;
 pub use choices::{ChoiceKind, ChoiceStyle};
@@ -101,6 +105,10 @@ pub enum Kind {
     },
     TitleBar,
     Scroll,
+    /// Embedded single-selection viewport; rows reuse MenuOption.
+    List {
+        height: f32,
+    },
     Group,
     ControlCapsule,
     Row,
@@ -109,6 +117,7 @@ pub enum Kind {
         checked: bool,
     },
     Button,
+    SearchInput,
     Dropdown {
         expanded: bool,
     },
@@ -151,6 +160,7 @@ impl Kind {
             Self::Page { .. }
                 | Self::Switch { .. }
                 | Self::Button
+                | Self::SearchInput
                 | Self::Dropdown { .. }
                 | Self::MenuOption { .. }
                 | Self::Choice { .. }
@@ -283,12 +293,26 @@ pub struct Tree {
     pub(crate) switch_style: Option<SwitchStyle>,
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
+    label_styles: BTreeMap<NodeId, TextStyle>,
+    button_descriptions: BTreeMap<NodeId, String>,
+    dialog_role: bool,
     menu_style: Option<MenuStyle>,
+    list_styles: BTreeMap<NodeId, MenuStyle>,
+    search_style: Option<SearchStyle>,
+    searches: BTreeMap<NodeId, search::Search>,
     /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
     pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
 impl Tree {
     pub fn new(title: impl Into<String>, metrics: Metrics, style: TextStyle) -> Result<Self> {
+        Self::new_at(title, metrics, style, 1)
+    }
+    fn new_at(
+        title: impl Into<String>,
+        metrics: Metrics,
+        style: TextStyle,
+        first: NodeId,
+    ) -> Result<Self> {
         if [
             metrics.sidebar,
             metrics.content,
@@ -317,8 +341,8 @@ impl Tree {
         }
         let mut tree = Self {
             nodes: BTreeMap::new(),
-            root: 1,
-            next: 1,
+            root: first,
+            next: first,
             generation: 0,
             focused: None,
             focus_visible: false,
@@ -352,7 +376,13 @@ impl Tree {
             switch_style: None,
             row_text_style: None,
             dropdown_style: None,
+            label_styles: BTreeMap::new(),
+            button_descriptions: BTreeMap::new(),
+            dialog_role: false,
             menu_style: None,
+            list_styles: BTreeMap::new(),
+            search_style: None,
+            searches: BTreeMap::new(),
             icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
@@ -451,16 +481,26 @@ impl Tree {
         let valid = matches!(
             (p.kind, kind),
             (Kind::Window, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
-                | (Kind::Sidebar, Kind::Page { .. })
+                | (Kind::Sidebar, Kind::Page { .. } | Kind::SearchInput)
                 | (Kind::TitleBar | Kind::ControlCapsule, Kind::Button)
                 | (
                     Kind::Scroll,
-                    Kind::Group | Kind::Row | Kind::MenuOption { .. }
+                    Kind::Group
+                        | Kind::Row
+                        | Kind::MenuOption { .. }
+                        | Kind::SearchInput
+                        | Kind::List { .. }
                 )
                 | (
                     Kind::Group,
-                    Kind::Label | Kind::Row | Kind::Footer | Kind::Disclosure { .. }
+                    Kind::Label
+                        | Kind::Row
+                        | Kind::Footer
+                        | Kind::Disclosure { .. }
+                        | Kind::SearchInput
+                        | Kind::List { .. }
                 )
+                | (Kind::List { .. }, Kind::MenuOption { .. })
                 | (Kind::Row, Kind::Subtitle)
                 | (Kind::Disclosure { .. }, Kind::Label)
                 | (Kind::Row, Kind::Label | Kind::Switch { .. } | Kind::Button)
@@ -475,6 +515,16 @@ impl Tree {
         );
         if !valid {
             return Err("invalid structural widget parent".into());
+        }
+        if matches!(kind, Kind::List { .. }) {
+            return Err("use Tree::list to supply its required style".into());
+        }
+        if matches!(kind, Kind::MenuOption { selected: true })
+            && p.children
+                .iter()
+                .any(|id| matches!(self.nodes[id].kind, Kind::MenuOption { selected: true }))
+        {
+            return Err("list already has a selected option".into());
         }
         if matches!(kind, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
             && p.children.iter().any(|id| self.nodes[id].kind == kind)
@@ -686,6 +736,11 @@ impl Tree {
                 Invalid::LAYOUT
             },
         );
+        for search_id in self.searches.keys().copied().collect::<Vec<_>>() {
+            if !self.available(search_id) {
+                self.cancel_search_preedit(search_id)?;
+            }
+        }
         if self.hovered.is_some_and(|id| !self.available(id)) {
             self.set_hovered(None);
         }
@@ -719,6 +774,10 @@ impl Tree {
         self.set_hidden(id, true)?;
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
+            tree.searches.remove(&id);
+            tree.label_styles.remove(&id);
+            tree.button_descriptions.remove(&id);
+            tree.list_styles.remove(&id);
             tree.capsules.remove(&id);
             tree.capsule_styles.remove(&id);
             tree.capsule_washes.remove(&id);
@@ -767,6 +826,52 @@ impl Tree {
         self.pane_epoch += 1;
         self.invalidate(self.root, Invalid::LAYOUT);
     }
+    /// An explicit Label-only preview style, validated before replacing its layout.
+    pub fn set_label_style(&mut self, id: NodeId, style: Option<TextStyle>) -> Result<()> {
+        if self
+            .nodes
+            .get(&id)
+            .is_none_or(|node| node.kind != Kind::Label)
+        {
+            return Err("preview style requires a label".into());
+        }
+        self.set_owned_text_style(id, style)
+    }
+    pub fn set_button_text_style(&mut self, id: NodeId, style: Option<TextStyle>) -> Result<()> {
+        if self
+            .nodes
+            .get(&id)
+            .is_none_or(|node| node.kind != Kind::Button)
+        {
+            return Err("caption style requires a live button".into());
+        }
+        self.set_owned_text_style(id, style)
+    }
+    fn set_owned_text_style(&mut self, id: NodeId, style: Option<TextStyle>) -> Result<()> {
+        if let Some(style) = &style {
+            style.validate(1.)?;
+        }
+        if let Some(style) = style {
+            self.label_styles.insert(id, style);
+        } else {
+            self.label_styles.remove(&id);
+        }
+        self.nodes.get_mut(&id).unwrap().layout = None;
+        self.invalidate(id, Invalid::LAYOUT);
+        Ok(())
+    }
+    pub fn set_button_description(&mut self, id: NodeId, description: &str) -> Result<()> {
+        if self
+            .nodes
+            .get(&id)
+            .is_none_or(|node| node.kind != Kind::Button)
+        {
+            return Err("description requires a live button".into());
+        }
+        self.button_descriptions.insert(id, description.into());
+        self.invalidate(id, Invalid::SEMANTICS);
+        Ok(())
+    }
     pub fn set_width(&mut self, id: NodeId, width: f32) -> Result<()> {
         if !width.is_finite() || width <= 0. {
             return Err("invalid width".into());
@@ -784,6 +889,11 @@ impl Tree {
         Ok(())
     }
     pub fn set_active(&mut self, active: bool) {
+        if self.active != active {
+            for id in self.searches.keys().copied().collect::<Vec<_>>() {
+                self.invalidate(id, Invalid::PAINT);
+            }
+        }
         self.active = active;
         self.invalidate(self.root, Invalid::SEMANTICS);
     }
@@ -813,16 +923,20 @@ impl Tree {
         {
             return Err("widget cannot take focus".into());
         }
-        self.focus_node(id);
+        self.focus_node(id)?;
         Ok(())
     }
-    fn focus_node(&mut self, id: NodeId) {
+    fn focus_node(&mut self, id: NodeId) -> Result<()> {
         if let Some(old) = self.focused {
+            if old != id {
+                self.cancel_search_preedit(old)?;
+            }
             self.invalidate(old, Invalid::STATE);
         }
         self.focused = Some(id);
         self.invalidate(id, Invalid::STATE);
         self.reveal(id);
+        Ok(())
     }
     pub fn tab(&mut self, backwards: bool) -> Result<()> {
         self.set_focus_visible(true);
@@ -881,7 +995,7 @@ impl Tree {
             Kind::Disclosure { expanded } => self.set_expanded(id, !expanded)?,
             Kind::Choice { .. } => self.set_choice(id)?,
             // Space/Enter on a range control changes nothing; its keys and pointer do.
-            Kind::Slider { .. } | Kind::Spin { .. } => return Ok(Effect::None),
+            Kind::Slider { .. } | Kind::Spin { .. } | Kind::SearchInput => return Ok(Effect::None),
             Kind::Page { .. } => {
                 self.select_page(id)?;
                 if self.narrow {
@@ -891,6 +1005,20 @@ impl Tree {
             Kind::DropdownOption { .. } => {
                 let parent = self.nodes[&id].parent.ok_or("orphan dropdown option")?;
                 let changed = self.select_dropdown_option(id)?;
+                return Ok(if changed {
+                    Effect::Changed(parent)
+                } else {
+                    Effect::None
+                });
+            }
+            Kind::MenuOption { .. }
+                if self.nodes[&id]
+                    .parent
+                    .is_some_and(|p| matches!(self.nodes[&p].kind, Kind::List { .. })) =>
+            {
+                let parent = self.nodes[&id].parent.unwrap();
+                let changed = !matches!(self.nodes[&id].kind, Kind::MenuOption { selected: true });
+                self.set_list_selected(parent, Some(id))?;
                 return Ok(if changed {
                     Effect::Changed(parent)
                 } else {
@@ -926,10 +1054,24 @@ impl Tree {
             self.set_focus_visible(false);
         }
         self.set_hovered(hit);
+        if let Some(id) = self.capture {
+            let _ = self.search_pointer(id, point, true);
+        }
     }
     pub fn pointer_motion_in(&mut self, container: NodeId, local: Point) -> Result<()> {
         let id = self.hit_test_in(container, local)?;
         self.set_hovered(id);
+        if let Some(id) = self.capture {
+            let r = self.nodes[&container].bounds;
+            self.search_pointer(
+                id,
+                Point {
+                    x: r.x + local.x,
+                    y: r.y + local.y,
+                },
+                true,
+            )?;
+        }
         Ok(())
     }
     pub fn pointer_press(&mut self, p: Point) -> Result<()> {
@@ -942,6 +1084,7 @@ impl Tree {
         }
         if let Some(id) = self.capture {
             self.focus(id)?;
+            self.search_pointer(id, p, false)?;
         }
         Ok(())
     }
@@ -953,7 +1096,16 @@ impl Tree {
         self.set_hovered(self.capture);
         self.capture_space = Some(container);
         if let Some(id) = self.capture {
-            self.focus_node(id);
+            self.focus_node(id)?;
+            let r = self.nodes[&container].bounds;
+            self.search_pointer(
+                id,
+                Point {
+                    x: r.x + local.x,
+                    y: r.y + local.y,
+                },
+                false,
+            )?;
         }
         Ok(())
     }
@@ -1093,7 +1245,10 @@ impl Tree {
             return Ok(Size::default());
         }
         let kind = self.nodes[&id].kind;
-        if self.menu_style.is_some() && matches!(kind, Kind::Scroll | Kind::MenuOption { .. }) {
+        if matches!(kind, Kind::List { .. })
+            || (self.menu_style.is_some() && kind == Kind::Scroll)
+            || matches!(kind, Kind::MenuOption { .. })
+        {
             return self.measure_menu(id, width, backend);
         }
         let m = self.metrics;
@@ -1119,6 +1274,9 @@ impl Tree {
         }
         if matches!(kind, Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields) {
             return self.measure_range(id, backend);
+        }
+        if kind == Kind::SearchInput {
+            return self.measure_search(id, width, backend);
         }
         if kind == Kind::Button
             && let Some(capsule) = self.capsule_for_button(id)
@@ -1258,7 +1416,7 @@ impl Tree {
                     | Kind::Footer
             )
         {
-            let mut style = self.style.clone();
+            let mut style = self.label_styles.get(&id).unwrap_or(&self.style).clone();
             match kind {
                 Kind::Subtitle => style.size *= self.row_text()?.subtitle_scale,
                 Kind::Footer => style.size *= self.row_text()?.footer_scale,
@@ -1301,7 +1459,7 @@ impl Tree {
             max_w = max_w.max(s.width);
         }
         let size = match kind {
-            Kind::MenuOption { .. } => return Err("menu option outside menu layout".into()),
+            Kind::MenuOption { .. } | Kind::List { .. } => unreachable!("list measured above"),
             Kind::DropdownOption { .. } => Size::default(),
             Kind::ControlCapsule => unreachable!("capsule measured above"),
             Kind::Window => self.size,
@@ -1329,6 +1487,7 @@ impl Tree {
                 width: m.switch_width,
                 height: m.control,
             },
+            Kind::SearchInput => unreachable!("measured above"),
             Kind::Button | Kind::Dropdown { .. } => Size {
                 width: m.control.max(text.width + 2. * m.padding),
                 height: m.control.max(text.height + 2. * m.padding),
@@ -1434,6 +1593,9 @@ impl Tree {
         }
     }
     pub(crate) fn adapt_sidebar(&mut self, width: f32) -> bool {
+        if self.dialog_role {
+            return false;
+        }
         let narrow = width < self.metrics.sidebar + self.metrics.content;
         if self.sidebar_initialized && self.narrow == narrow {
             return false;
@@ -1534,7 +1696,8 @@ impl Tree {
             return;
         }
         let children = node.children.clone();
-        if kind == Kind::Scroll && self.menu_style.is_some() {
+        if matches!(kind, Kind::List { .. }) || (kind == Kind::Scroll && self.menu_style.is_some())
+        {
             self.place_menu(id, r);
             return;
         }
@@ -1674,19 +1837,29 @@ impl Tree {
         if !offset.x.is_finite() || !offset.y.is_finite() {
             return Err("invalid scroll offset".into());
         }
-        let viewport = if self.nodes.get(&id).is_some_and(|n| n.kind == Kind::Sidebar) {
+        let viewport = if self
+            .nodes
+            .get(&id)
+            .is_some_and(|n| matches!(n.kind, Kind::List { .. }))
+        {
+            self.list_viewport(id)
+        } else if self.nodes.get(&id).is_some_and(|n| n.kind == Kind::Sidebar) {
             self.sidebar_viewport()
         } else {
             self.content_viewport()
         };
+        let list_extent = self
+            .list_styles
+            .contains_key(&id)
+            .then(|| self.list_extent(id));
         let n = self.nodes.get_mut(&id).ok_or("unknown scroll")?;
-        if !matches!(n.kind, Kind::Scroll | Kind::Sidebar) {
+        if !matches!(n.kind, Kind::Scroll | Kind::Sidebar | Kind::List { .. }) {
             return Err("widget is not scrollable".into());
         }
-        let max_y = (n.measured.height - viewport.height).max(0.);
+        let max_y = (list_extent.unwrap_or(n.measured.height) - viewport.height).max(0.);
         // Horizontal content may be deliberately wider than the viewport. The
         // viewport width is excluded from the scrollable content extent.
-        let max_x = if n.kind == Kind::Sidebar {
+        let max_x = if n.kind == Kind::Sidebar || matches!(n.kind, Kind::List { .. }) {
             0.
         } else {
             (n.measured.width - viewport.width).max(0.)
@@ -1702,7 +1875,10 @@ impl Tree {
     fn reveal(&mut self, id: NodeId) {
         let mut parent = self.nodes[&id].parent;
         while let Some(p) = parent {
-            if matches!(self.nodes[&p].kind, Kind::Scroll | Kind::Sidebar) {
+            if matches!(
+                self.nodes[&p].kind,
+                Kind::Scroll | Kind::Sidebar | Kind::List { .. }
+            ) {
                 let r = self.nodes[&id].bounds;
                 let clip = if self.nodes[&p].kind == Kind::Sidebar {
                     self.sidebar_viewport()
@@ -1731,6 +1907,17 @@ impl Tree {
         }
     }
     pub(crate) fn visible_clip(&self, id: NodeId) -> Rect {
+        let mut clip = self.outer_visible_clip(id);
+        let mut current = Some(id);
+        while let Some(p) = current {
+            if matches!(self.nodes[&p].kind, Kind::List { .. }) {
+                clip = intersect_rect(clip, self.list_viewport(p));
+            }
+            current = self.nodes[&p].parent;
+        }
+        clip
+    }
+    fn outer_visible_clip(&self, id: NodeId) -> Rect {
         if self.in_pane(id) {
             let mut current = Some(id);
             while let Some(p) = current {
@@ -1791,4 +1978,15 @@ pub(crate) fn intersects(a: Rect, b: Rect) -> bool {
         && a.x + a.width > b.x
         && a.y < b.y + b.height
         && a.y + a.height > b.y
+}
+
+pub(crate) fn intersect_rect(a: Rect, b: Rect) -> Rect {
+    let x = a.x.max(b.x);
+    let y = a.y.max(b.y);
+    Rect {
+        x,
+        y,
+        width: ((a.x + a.width).min(b.x + b.width) - x).max(0.),
+        height: ((a.y + a.height).min(b.y + b.height) - y).max(0.),
+    }
 }

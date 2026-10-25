@@ -105,7 +105,7 @@ impl FontSet {
         Ok(font(data, index, coords))
     }
 }
-fn font(data: Arc<[u8]>, index: u32, coords: &[i16]) -> Font {
+pub(crate) fn font(data: Arc<[u8]>, index: u32, coords: &[i16]) -> Font {
     let variations = ttf_parser::Face::parse(&data, index)
         .ok()
         .map(|face| {

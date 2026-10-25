@@ -559,3 +559,174 @@ requests remain version-bound; in-flight publication is not interrupted.
 uses an actual mailbox and retained payload lifetime: old Arc drops before the
 reader runs, only final revision3 is received, then4 and disconnect are handled.
 No native Orca result is claimed for this unit-level concurrency fix.
+
+## Local cut26 — 915-font-catalog (2026-10-23)
+
+Extracted existing c2ebf2e1 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+62 tests [39, 3, 13, 5, 2] PASS; all-target Clippy -D warnings PASS
+for nk-settings. Logs: target/cut26-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-menu-list/toolkit/target/menu-list-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut27 — 915-search-input (2026-10-23)
+
+Extracted existing fb0da104 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+139 tests [39, 3, 13, 5, 2, 0, 1, 1, 17, 7, 13, 15, 8, 5, 8, 2] PASS; all-target Clippy -D warnings PASS
+for nk-text, nk-widgets, nk-settings. Logs: target/cut27-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut28 — 915-system-fonts (2026-10-23)
+
+Extracted existing 5408f547 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+3 tests [0, 1, 1, 1] PASS; all-target Clippy -D warnings PASS
+for nk-text. Logs: target/cut28-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut29 — 915-embedded-list (2026-10-23)
+
+Extracted existing 4d63de5d above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+141 tests [39, 3, 13, 5, 2, 17, 7, 17, 15, 8, 5, 8, 2] PASS; all-target Clippy -D warnings PASS
+for nk-widgets, nk-settings. Logs: target/cut29-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut30 — 915-font-dialog (2026-10-23)
+
+Extracted existing fb3c07b8 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+169 tests [12, 40, 3, 13, 5, 2, 0, 1, 1, 1, 10, 17, 7, 19, 15, 8, 5, 8, 2] PASS; all-target Clippy -D warnings PASS
+for nk-wayland, nk-widgets, nk-settings, nk-text, nk-a11y. Logs: target/cut30-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut31 — 915-font-preview (2026-10-23)
+
+Extracted existing 9fc49bb1 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+153 tests [2, 1, 2, 40, 3, 13, 5, 2, 0, 1, 1, 2, 17, 7, 19, 15, 8, 5, 8, 2] PASS; all-target Clippy -D warnings PASS
+for nk-text, nk-render, nk-widgets, nk-settings. Logs: target/cut31-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut32 — 915-font-styles (2026-10-23)
+
+Extracted existing 602ea614 above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+151 tests [41, 3, 1, 13, 5, 2, 0, 1, 1, 3, 17, 7, 19, 15, 8, 5, 8, 2] PASS; all-target Clippy -D warnings PASS
+for nk-text, nk-widgets, nk-settings. Logs: target/cut32-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+## Local cut33 — 915-font-builders (2026-10-23)
+
+Extracted existing 6dd728bd above the previous local cut, retaining main
+features and earlier review fixes. Contract applied before implementation;
+canonical skill and relevant README documentation accompany the mechanism.
+
+182 tests [13, 2, 1, 2, 41, 4, 1, 13, 5, 2, 0, 1, 1, 3, 10, 17, 7, 19, 15, 8, 5, 8, 2, 2] PASS; all-target Clippy -D warnings PASS
+for nk-text, nk-render, nk-a11y, nk-widgets, nk-settings, nk-widgets-demo, nk-wayland. Logs: target/cut33-split-*.log. Mandatory complete
+exports: /home/angel/Nidara/ChatGPT/915-search-input/toolkit/target/search-input-data. fmt/skill-docs/diff checks PASS; changed Python/Bash
+static syntax checked where present. No historical controls were reclassified
+as current fault acceptance; no native/EGL checker was executed.
+
+Native Window/provider, complete Config1/modal lifecycle, real IME/clipboard,
+AT-SPI/Orca speech, performance and owner live acceptance remain separate gates.
+Historical fixed binary evidence remains bound to original hashes. Exclusive
+parent borrow short-menu limit and adaptive foundations/Settings real polling
+caller plus causal-test debt remain. No push/merge or heartbeat reactivation.
+
+
+Final extraction audit: all original Settings modules are present. 19 source files
+match6dd728bd exactly; material/control production matches before cfg(test), routing
+retains the reviewed Native forwarding correction. Text/a11y/Wayland/render sources
+match the original endpoint exactly. Widget residuals are documented review fixes,
+per-capsule paint filtering, comments/registration and disjoint measurement order.
+Workspace all-target check PASS, including phase0/settings-slice; no-atspi check
+PASS with2existing dead-code warnings, not-D. Logs: target/split-final-{workspace,
+no-atspi}-check.log. All182 tests and7package Clippy results above remain current;
+this final addition is documentation only. Original branches remain clean.
+
+### Review D: malformed catalogue records and renderer agreement (2026-10-25)
+
+The parser now omits and counts individual invalid records (including invalid UTF-8),
+retaining usable families. Enumeration logs total time, usable families and skipped records.
+Before Apply, a family must resolve and load a valid face from the same Fontique collection
+used by Parley; fc-list remains discovery metadata, not a second rendering authority.
+42 Settings library tests and two nk-text geometry/resolution tests pass; all-target
+Clippy for nk-settings/nk-text passes. These checks do not establish live IME/Orca acceptance.

@@ -8,13 +8,15 @@ use crate::exports::{Exports, Tokens};
 use crate::portal::Appearance;
 use nk_render::{Color, rgba};
 use nk_widgets::{
-    ChoiceStyle, DropdownStyle, MenuStyle, Metrics, Palette, RangeStyle, RowTextStyle, SwitchStyle,
+    ChoiceStyle, DropdownStyle, MenuStyle, Metrics, Palette, RangeStyle, RowTextStyle, SearchStyle,
+    SwitchStyle,
 };
 use serde_json::Value as Json;
 
 pub struct Styles {
     /// Window capsule corner inset from components.json, independent of row spacing.
     pub controls_inset: f32,
+    pub text_scale: f64,
     pub palette: Palette,
     pub metrics: Metrics,
     pub choices: ChoiceStyle,
@@ -23,6 +25,7 @@ pub struct Styles {
     pub rows: RowTextStyle,
     pub dropdown: DropdownStyle,
     pub menu: MenuStyle,
+    pub search: SearchStyle,
     /// The accent palette by name, in its export order (`colors.json` `accents`).
     pub accents: Vec<(String, Color)>,
     /// The interface font at the text scale (the portal's), at the kit's body line height.
@@ -179,6 +182,30 @@ impl Styles {
             accent_text: token(&field(&m["accentText"], "menu accent ink")?)?,
             pressed_black: number(&m["pressedBlack"])?,
         };
+        let q = &c["search"];
+        let search = SearchStyle {
+            padding_x: number(&q["paddingX"])?,
+            border: number(&q["border"])?,
+            min_height: number(&q["minHeight"])?,
+            radius: tokens
+                .colors
+                .get(&field(&q["radius"], "search radius")?)
+                .and_then(Json::as_str)
+                .and_then(|v| v.strip_suffix("px"))
+                .ok_or("missing search radius dimension")?
+                .parse::<f32>()
+                .map_err(|e| e.to_string())?,
+            icon_size: number(&q["iconSize"])?,
+            icon_gap: number(&q["iconGap"])?,
+            icon: field(&q["icon"], "search icon")?,
+            background: token(&field(&q["background"], "search background")?)?,
+            border_color: token(&field(&q["borderColor"], "search border")?)?,
+            focus_border: token(&field(&q["focusBorder"], "search focus border")?)?,
+            text: token(&field(&q["text"], "search text")?)?,
+            dim: token(&field(&q["dim"], "search dim")?)?,
+            selection: token(&field(&q["selection"], "search selection")?)?,
+            selection_text: token(&field(&q["selectionText"], "search selection text")?)?,
+        };
         let accents = exports.colors["accents"]
             .as_object()
             .ok_or("missing accent palette")?
@@ -192,6 +219,7 @@ impl Styles {
         )?;
         Ok(Self {
             controls_inset: number(&c["capsule"]["windowInset"])?,
+            text_scale: appearance.text_scale,
             palette,
             metrics,
             choices,
@@ -200,6 +228,7 @@ impl Styles {
             rows,
             dropdown,
             menu,
+            search,
             accents,
             text,
         })
@@ -214,6 +243,7 @@ impl Styles {
         tree.set_switch_style(self.switch)?;
         tree.set_row_text_style(self.rows.clone())?;
         tree.set_dropdown_style(self.dropdown.clone())?;
+        tree.set_search_style(self.search.clone())?;
         tree.set_text_style(self.text.clone());
         Ok(())
     }
@@ -307,35 +337,9 @@ pub fn font_style(
     scale: f64,
     line_height: f32,
 ) -> Result<nk_text::TextStyle, String> {
-    let (family, size) = description
-        .rsplit_once(' ')
-        .ok_or("the font needs a family and a point size")?;
-    let size: f32 = size.parse().map_err(|e| format!("font size: {e}"))?;
-    if !scale.is_finite() || scale <= 0. || !size.is_finite() || size <= 0. || family.is_empty() {
-        return Err("invalid font or text scale".into());
-    }
-    let mut family = family.to_owned();
-    let mut weight = 400.;
-    for (suffix, value) in [
-        (" Regular", 400.),
-        (" Normal", 400.),
-        (" SemiBold", 600.),
-        (" Bold", 700.),
-        (" Light", 300.),
-    ] {
-        if let Some(name) = family.strip_suffix(suffix) {
-            family = name.into();
-            weight = value;
-            break;
-        }
-    }
-    Ok(nk_text::TextStyle {
-        family,
-        size: size * (96. / 72.) * scale as f32,
-        weight,
-        line_height,
-        ..Default::default()
-    })
+    let font = crate::font_description::Description::parse(description)?;
+    font.attributes
+        .text_style(&font.family, font.points, scale, line_height)
 }
 
 #[cfg(test)]
@@ -434,6 +438,16 @@ mod tests {
                 .err()
                 .unwrap()
                 .contains("dropdown arrow")
+        );
+        let mut missing = Exports::load(&root).unwrap();
+        for variant in missing.components["variants"].as_array_mut().unwrap() {
+            variant["search"].as_object_mut().unwrap().remove("icon");
+        }
+        assert!(
+            Styles::new(&missing, &a)
+                .err()
+                .unwrap()
+                .contains("search icon")
         );
     }
 }

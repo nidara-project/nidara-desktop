@@ -222,3 +222,61 @@ Revise that ownership contract before building a controller that needs it.
 An unavailable chosen option retains its check but initial focus falls back to
 the first available option, or none if all options are unavailable; opening and
 cancellation must still work without changing the chosen value.
+
+
+SearchInput is created with Tree::search_input(parent, name, placeholder, backend)
+after supplying SearchStyle. It owns one nk-text::Editor in the retained Tree;
+paint, pointer hit-test, caret/selection and TextInfo use its shared layout. Its
+name and placeholder description are separate from committed text. Canonical
+set_search_text returns no effect; user edits return Changed only for a changed
+committed buffer. search_request handles authorized SetText/SetSelection targets;
+search_paste rejects stale/hidden/disabled targets and multiline/control text.
+When consuming Bridge requests, validate the publication revision first, then use
+Tree::target(id): publication revisions and structural tree generations differ.
+
+Composition::event handles text keys and Ime batches. Use event_with_window for
+native clipboard routing, then Composition::sync (or sync_search_input after your
+own layout) so the IME cursor follows the actual horizontal scroll and D7 pane.
+An asynchronous paste is tied to its target and dropped after invalidation. IME
+context is reset across input focus changes and disabled when the last input is
+removed. Focus loss/hidden/disabled state cancels preedit; inactivity repaints the
+caret without a timer. Single-line committed TextInfo remains valid during a
+separate preedit display buffer and omits geometry while preediting.
+
+Geometry and colours come from toolkit/tokens/search.json: the current Settings
+search box, plus shared kit text selection (accent30/text). Styles reads/applies
+this once for every application. No provider, search-result model or Config1 write
+is owned by the input. Component/synthetic-event tests do not establish native IME,
+clipboard, real AT-SPI requests or Orca speech acceptance.
+
+
+`Tree::list(parent, name, height, MenuStyle)` embeds the dropdown's retained menu
+rows as a real single-selection LIST inside a Scroll or Group. Append MenuOption
+children; use `set_list_selected(list, Some(option))` (or None) for canonical state.
+Activation changes once with Changed(list); arrows/Home/End focus and reveal only.
+One Tab stop uses current focus, selected or first available option. Each list
+keeps independent style/scroll; `set_list_style` and `set_list_height` preserve IDs.
+Filtering may hide options or leave the list empty. The same viewport clips pixels,
+hit tests and SHOWING; offscreen options remain semantic children. Composition's
+vertical wheel routes by viewport, including its empty insets. No second renderer,
+Tree, provider or global menu mode is needed. This primitive alone does not prove
+the FontChooser modal or its Orca speech.
+
+
+`DialogTree::new(parent, launcher, title)` borrows the controlled parent and
+provides a transient retained view with window-lifetime IDs disjoint from its
+parent. Use its view to build existing controls, and publish `snapshot()` through
+the application's existing Bridge. Snapshots preserve the parent root and attach
+a DIALOG child; parent actions/focus are suspended. `request` validates publication
+and view generation and confines actions/text/value requests to the dialog. Drop
+retires all view IDs, invalidates old structural targets and restores focus only
+when the launcher is available/showing; `invalidate` suppresses restoration and
+rejects every request/snapshot. Stage parent mutations until the borrow ends.
+Dialog views reserve no sidebar inset. SearchInput's `search_composing` exposes the
+single Editor's preedit state so modal Escape can cancel composition first.
+
+A Button caption can opt into set_button_text_style, sharing the same validated
+retained-layout override as set_label_style. None restores the ordinary UI style.
+set_button_description changes only accessible text, preserving the row's title
+relation; the font builder uses it for current value/help/error. Both overrides
+are retired with the node. No separate font-button renderer or style defaults.

@@ -922,6 +922,7 @@ dependencies = [
 name = "nk-text"
 version = "0.1.0"
 dependencies = [
+ "fontique",
  "parley",
  "serde",
  "serde_json",
@@ -952,6 +953,7 @@ dependencies = [
  "nk-render",
  "nk-text",
  "nk-wayland",
+ "unicode-segmentation",
 ]
 
 [[package]]
