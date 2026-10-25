@@ -239,3 +239,32 @@ def start_reader(p):
     # empty key_events would prove nothing.
     return SimpleNamespace(debug=debug, orca=orca, speechd=speechd, refused=refused,
                            device=device, key_events=key_events, caps=caps)
+
+
+def start_ime(p, engine, label, log, env):
+    """Real fcitx5, fresh profile and classicui theme shared by both IME matrices."""
+    config = p.log / 'config' / label / 'fcitx5'
+    config.mkdir(parents=True, exist_ok=True)
+    (config / 'profile').write_text(
+        '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=' + engine +
+        '\n\n[Groups/0/Items/0]\nName=keyboard-us\nLayout=\n\n[Groups/0/Items/1]\nName=' + engine +
+        '\nLayout=\n\n[GroupOrder]\n0=Default\n')
+    (config / 'config').write_text('[Behavior]\nActiveByDefault=True\n')
+    conf = config / 'conf'
+    conf.mkdir(exist_ok=True)
+    (conf / 'classicui.conf').write_text('Theme=preflight\nUseDarkTheme=False\nUseAccentColor=False\n')
+    theme = p.log / 'data/fcitx5/themes/preflight'
+    theme.mkdir(parents=True, exist_ok=True)
+    (theme / 'theme.conf').write_text(
+        '[Metadata]\nName=Preflight diagnostic\nVersion=1\n'
+        '[InputPanel]\nNormalColor=#000000\nHighlightColor=#ffffff\n'
+        '[InputPanel/TextMargin]\nLeft=5\nRight=5\nTop=5\nBottom=5\n'
+        '[InputPanel/Background]\nColor=#ffffff\n'
+        '[InputPanel/Highlight]\nColor=#0080ff\n')
+    ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin',
+                   '--verbose=key_trace=5'], log, env | {'XDG_CONFIG_HOME': str(config.parent)})
+    wait(lambda: b'true' in subprocess.check_output(
+        ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus',
+         '--object-path', '/org/freedesktop/DBus', '--method',
+         'org.freedesktop.DBus.NameHasOwner', 'org.fcitx.Fcitx5'], timeout=2), 'fcitx5 controller')
+    return ime

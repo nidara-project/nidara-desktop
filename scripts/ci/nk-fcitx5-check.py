@@ -98,42 +98,19 @@ def run(p, engine, scale, fault=None, target=None, mutation=None):
     label = f'{engine}-{scale:g}' + ('-' + (target or fault) if target or fault else '')
     directory = p.log / label
     directory.mkdir(exist_ok=True)
-    config = p.log / 'config' / label / 'fcitx5'
-    config.mkdir(parents=True, exist_ok=True)
-    (config / 'profile').write_text(
-        '[Groups/0]\nName=Default\nDefault Layout=us\nDefaultIM=' + engine +
-        '\n\n[Groups/0/Items/0]\nName=keyboard-us\nLayout=\n\n[Groups/0/Items/1]\nName=' + engine +
-        '\nLayout=\n\n[GroupOrder]\n0=Default\n')
-    (config / 'config').write_text('[Behavior]\nActiveByDefault=True\n')
-    conf = config / 'conf'
-    conf.mkdir(exist_ok=True)
-    (conf / 'classicui.conf').write_text('Theme=preflight\nUseDarkTheme=False\nUseAccentColor=False\n')
-    theme = p.log / 'data/fcitx5/themes/preflight'
-    theme.mkdir(parents=True, exist_ok=True)
-    (theme / 'theme.conf').write_text(
-        '[Metadata]\nName=Preflight diagnostic\nVersion=1\n'
-        '[InputPanel]\nNormalColor=#000000\nHighlightColor=#ffffff\n'
-        '[InputPanel/TextMargin]\nLeft=5\nRight=5\nTop=5\nBottom=5\n'
-        '[InputPanel/Background]\nColor=#ffffff\n'
-        '[InputPanel/Highlight]\nColor=#0080ff\n')
     fault_file = directory / 'fault'
     fault_file.write_text('')
     barrier_file = directory / 'barrier'
     barrier_file.write_text('0')
     (directory / 'state.jsonl').write_text('')
     barrier_nonce = 0
-    env = os.environ | {'XDG_CONFIG_HOME': str(config.parent), 'WAYLAND_DEBUG': '1',
+    env = os.environ | {'WAYLAND_DEBUG': '1',
                         'NK_IME_STATE_LOG': str(directory / 'state.jsonl'), 'NK_IME_FAULT_FILE': str(fault_file),
                         'NK_IME_BARRIER_FILE': str(barrier_file)}
     app = ime = None
     ime_log = directory / 'fcitx.log'
     try:
-        ime = p.start(['fcitx5', '-D', '--disable=ibusfrontend,xim,notifications,cloudpinyin',
-                       '--verbose=key_trace=5'], ime_log, env)
-        native.wait(lambda: b'true' in subprocess.check_output(
-            ['gdbus', 'call', '--session', '--dest', 'org.freedesktop.DBus',
-             '--object-path', '/org/freedesktop/DBus', '--method',
-             'org.freedesktop.DBus.NameHasOwner', 'org.fcitx.Fcitx5'], timeout=2), 'fcitx5 controller')
+        ime = native.start_ime(p, engine, label, ime_log, env)
         app = p.start([native.BIN, '--ime-evidence', *([fault] if fault else [])], directory / 'client.log', env)
         win = native.wait(lambda: next((w for w in p.msg('windows')['windows'] if w['pid'] == app.pid), None), 'mapped native client')
         time.sleep(.8)

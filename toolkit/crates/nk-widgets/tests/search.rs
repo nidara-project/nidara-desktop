@@ -453,3 +453,65 @@ fn rtl_and_mixed_text_keep_finite_visible_caret_and_valid_committed_geometry() {
         );
     }
 }
+
+#[test]
+fn forwarded_escape_after_ime_commit_keeps_the_committed_query() {
+    let (mut tree, input, _) = fixture();
+    let mut composition = Composition::default();
+    tree.focus(input).unwrap();
+    tree.set_search_text(input, "base").unwrap();
+    composition
+        .event(
+            &mut tree,
+            &Event::Ime(ImeBatch {
+                preedit: Some(("하".into(), 3, 3)),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    composition
+        .event(
+            &mut tree,
+            &Event::Ime(ImeBatch {
+                commit: Some("하".into()),
+                preedit: Some(("".into(), 0, 0)),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    assert!(tree.search_consumes_escape(input).unwrap());
+    key(&mut composition, &mut tree, 0xff1b, "", false, false);
+    assert_eq!(tree.search_text(input).unwrap(), "base하");
+    assert!(!tree.search_consumes_escape(input).unwrap());
+    key(&mut composition, &mut tree, 0xff1b, "", false, false);
+    assert_eq!(tree.search_text(input).unwrap(), "");
+}
+
+#[test]
+fn finished_composition_boundary_does_not_survive_focus_loss() {
+    let (mut tree, input, _) = fixture();
+    let mut composition = Composition::default();
+    tree.focus(input).unwrap();
+    composition
+        .event(
+            &mut tree,
+            &Event::Ime(ImeBatch {
+                preedit: Some(("하".into(), 3, 3)),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    composition
+        .event(
+            &mut tree,
+            &Event::Ime(ImeBatch {
+                commit: Some("하".into()),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+    assert!(tree.search_consumes_escape(input).unwrap());
+    // The normal host calls this same cancellation path on focus loss.
+    composition.event(&mut tree, &Event::Focus(false)).unwrap();
+    assert!(!tree.search_consumes_escape(input).unwrap());
+}

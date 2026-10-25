@@ -1219,3 +1219,27 @@ around in the client. The one-shot user service exited successfully and is inact
 Evidence: toolkit/target/review-20261025/d7-live/ (result.json, full client
 WAYLAND_DEBUG=1 log, compositor journal, exact window and hover commands/results).
 Client wire-log SHA256: c1ae07c0accde72bfa708cae26f76b7b448d78151f255259a3b6386326862fcc.
+### New-field real IME follow-up above D (2026-10-25)
+
+The opt-in `ime-gates` binary uses the production SearchInput and FontChooser
+View/filter/catalogue, on the existing shared nk-wayland host. CI builds/runs
+its Mozc/Pinyin/Hangul rows only on schedule/manual, at scales 1 and 1.25,
+with an applied control for each preedit/commit/cancel/candidate assertion.
+See IME.md for the local container command and the precise oracle boundary.
+
+A local complete run passed 168 assertions (48 baseline target rows, 48 own
+control target rows, 72 prerequisite assertions) on the installed #935 Hyalo,
+in private cage/nested Hyalo. Client SHA256:
+7e3af22ccf8629bfa9792df7a4c239435b966b906561d854b122529d301f6325;
+compositor SHA256:
+354778b2ffd59e32057955720c0602a42d8903209201062c63cb4df3b4f3a7bd.
+It was run before committing, on parent f4b48584 with the implementation present;
+it is not represented as evidence for a clean published head. The subsequent
+focus-loss cleanup and stricter report completeness check have unit/static
+coverage; the final committed source is rerun before publication.
+
+The rows exposed a real Hangul ordering case: commit followed by forwarded
+Escape cleared the query (and could close FontChooser). The one-shot finished
+composition boundary prevents that extra action. Ten SearchInput tests pass,
+including the forwarded Escape and retiring the boundary on focus loss.
+No complete Settings/Orca, Config1 Apply or live D7 acceptance is claimed here.

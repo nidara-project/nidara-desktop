@@ -482,7 +482,10 @@ impl Application for Picker<'_, '_> {
         }
         if matches!(&event, Event::Key(key) if key.sym == 0xff1b)
             && !(self.dialog.view().focused() == Some(self.view.search)
-                && self.dialog.view().search_composing(self.view.search)?)
+                && self
+                    .dialog
+                    .view()
+                    .search_consumes_escape(self.view.search)?)
         {
             *self.result = None;
             window.close();
@@ -1020,3 +1023,8 @@ mod tests {
         assert_eq!(view.selected, None);
     }
 }
+
+#[cfg(feature = "ime-gates")]
+mod ime_probe;
+#[cfg(feature = "ime-gates")]
+pub use ime_probe::run as run_ime_probe;

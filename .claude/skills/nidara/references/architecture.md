@@ -3469,3 +3469,10 @@ focus order. Renderer refresh repeats these setters for the page's rows during
 input staging; collecting the full tree for each unchanged row makes staging
 quadratic. Real transitions still capture the old order before mutation and use
 that order for focus repair; an unknown id still returns an error.
+The new Settings search and font-search real-IME rows live in
+`nk-settings-ime-check.py` and `toolkit/settings/IME.md`. The `ime-gates` feature
+and binary are opt-in: CI builds/runs them only with the existing
+schedule/workflow_dispatch flag `HYALO_ANIMATION_CHECKS`, never for a PR. Reuse
+`nk-real-common.start_ime` for profile/theme isolation. Hangul may commit then
+forward Escape: preserve SearchInput's one-shot finished-composition boundary
+and FontChooser's matching close guard; otherwise one Escape also erases/closes.

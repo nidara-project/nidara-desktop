@@ -9,6 +9,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+nk-icons = { path = "../crates/nk-icons", optional = true }
 nk-a11y = { path = "../crates/nk-a11y" }
 nk-render = { path = "../crates/nk-render" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
@@ -23,3 +24,11 @@ zbus = "5.19"
 jpeg-decoder = { version = "0.3.2", default-features = false }
 
 nk-icons = { path = "../crates/nk-icons" }
+
+[features]
+ime-gates = ["nk-widgets/ime-gates", "dep:nk-icons"]
+
+[[bin]]
+name = "nk-settings-ime"
+path = "src/bin/nk-settings-ime.rs"
+required-features = ["ime-gates"]

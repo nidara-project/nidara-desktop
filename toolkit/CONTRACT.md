@@ -1390,3 +1390,9 @@ No new host, fake Config1 data, compositor mutation or accessibility manager is
 created. This view can still read/edit actual Config1 through normal controls;
 opening it performs no Apply. It is not material/D7 acceptance or a fix for the
 unresolved normal-mode disconnect.
+Real new-field IME acceptance is documented in `settings/IME.md`: an opt-in
+`ime-gates` client drives the actual SearchInput/FontChooser View with real
+engines; the new matrix compiles and runs only on schedule/manual CI. It adds no
+PR gate. A forwarded Escape after an IME finishes composition consumes that
+operation's one-shot boundary; it must not also clear the committed query or
+close FontChooser. A following Escape retains its normal clear/close behavior.
