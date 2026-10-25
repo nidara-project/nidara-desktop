@@ -135,7 +135,14 @@ pub struct Managed {
     /// Minimized (wm/minimize.rs): the order it was minimized in, most recent highest — what
     /// the dock's icon restores first. Its dialogs are hidden with it (`Wm::is_hidden`).
     pub minimized: Option<u64>,
+    /// When its tree last brought new content, CLOCK_MONOTONIC ms, the last `FRAMES_KEPT`
+    /// (`msg frames ID`): an app's smoothness is the gaps between them while it scrolls or
+    /// follows a drag (toolkit/PHASE1.md, gate 4).
+    pub frames: std::collections::VecDeque<f64>,
 }
+
+/// How far back `Managed::frames` reaches: a 2 s scroll or drag, and the second before it.
+pub const FRAMES_KEPT_MS: f64 = 10_000.;
 
 impl Managed {
     /// The height of Hyalo's title bar over it, logical px: 0 when it has none, and in
@@ -684,6 +691,7 @@ impl Hyalo {
             pseudo: false,
             pinned: false,
             mapped: false,
+            frames: Default::default(),
             rect: Rect::default(),
             focus_serial: 0,
             clamp_ask: None,

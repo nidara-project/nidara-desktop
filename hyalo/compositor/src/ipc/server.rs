@@ -147,6 +147,10 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
         Request::Workspaces => Reply::Ok(Response::Workspaces { workspaces: state.workspace_infos() }),
         Request::Layers => Reply::Ok(Response::Layers { layers: state.layer_infos() }),
         Request::Stats => Reply::Ok(Response::Stats { stats: crate::render::stats::snapshot() }),
+        Request::Frames { id } => match state.wm.get(id) {
+            Some(m) => Reply::Ok(Response::Frames { id, times_ms: m.frames.iter().copied().collect() }),
+            None => Reply::Error(format!("no window {id}")),
+        },
         Request::DebugOverlay { on } => {
             crate::render::stats::set_overlay(on);
             state.queue_redraw(None);
