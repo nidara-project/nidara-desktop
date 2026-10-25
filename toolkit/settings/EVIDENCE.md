@@ -958,3 +958,17 @@ Pending: actual main/provider/portal/routing/visibility integration, adaptive po
 caller/causal test, long-modal parent servicing, ICC/HDR, exact secondary/pill look,
 native Window/dialog/AT-SPI/Orca/performance/live gates. No push/publication/merge,
 legacy activation or native/EGL rerun. Original branches/fixed artifacts preserved.
+
+### Review E: reduced JPEG decoding (2026-10-25)
+
+JPEG thumbnails now decode with IDCT reduction before final resizing; the normal
+path retains orientation and source/encoded budgets. Other codecs retain their
+bounded existing path. Four image-loader tests pass, including decoded
+intermediate dimensions, a rotated Cover target, five real codec files, malformed
+inputs, budget rejection and cancellation. All-target nk-settings Clippy passes.
+
+Release timing, this machine, defaults/wallpaper/wallpaper.jpg, target 320x200:
+full decode + fit 62.153 / 61.729 / 60.901 ms; reduced decode + fit
+32.472 / 30.893 / 30.656 ms. Reproduce with `NK_THUMB_BENCH=<absolute JPEG>` and
+`cargo test --release -p nk-settings --lib real_wallpaper_decode_timing -- --ignored --nocapture`.
+No wall-clock assertion is added to CI. PNG/GIF/WebP/AVIF have no reduced-decode claim.

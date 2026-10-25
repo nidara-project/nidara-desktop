@@ -69,11 +69,12 @@ fn decode(request: Request) -> Result<Arc<Raster>> {
     if bytes.len() as u64 > request.budget.encoded_bytes {
         return Err("encoded image exceeds budget".into());
     }
-    let mut reader = ImageReader::new(Cursor::new(bytes))
+    let mut reader = ImageReader::new(Cursor::new(&bytes))
         .with_guessed_format()
         .map_err(|e| e.to_string())?;
+    let format = reader.format();
     if !matches!(
-        reader.format(),
+        format,
         Some(
             ImageFormat::Png
                 | ImageFormat::Jpeg
@@ -94,7 +95,14 @@ fn decode(request: Request) -> Result<Arc<Raster>> {
         return Err("decoded image exceeds budget".into());
     }
     let orientation = decoder.orientation().map_err(|e| e.to_string())?;
-    let mut decoded = DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?;
+    let mut decoded = if format == Some(ImageFormat::Jpeg) {
+        match jpeg_thumbnail(&bytes, &request, orientation)? {
+            Some(image) => image,
+            None => DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?,
+        }
+    } else {
+        DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?
+    };
     decoded.apply_orientation(orientation);
     let (w, h) = (u32::from(request.size.0), u32::from(request.size.1));
     let small = match request.fit {
@@ -109,6 +117,64 @@ fn decode(request: Request) -> Result<Arc<Raster>> {
         small.into_raw(),
     )
     .map(Arc::new)
+}
+// JPEG's IDCT emits 1/8, 1/4, 1/2 or full dimensions before RGB allocation.
+// Other formats and uncommon JPEG pixel formats retain the bounded image decoder.
+fn jpeg_thumbnail(
+    bytes: &[u8],
+    request: &Request,
+    orientation: image::metadata::Orientation,
+) -> Result<Option<DynamicImage>> {
+    use jpeg_decoder::{Decoder, PixelFormat};
+    let mut decoder = Decoder::new(Cursor::new(bytes));
+    decoder.set_max_decoding_buffer_size(
+        request
+            .budget
+            .decoded_bytes
+            .try_into()
+            .unwrap_or(usize::MAX),
+    );
+    decoder
+        .read_info()
+        .map_err(|e| format!("JPEG header: {e}"))?;
+    let info = decoder.info().ok_or("JPEG metadata missing")?;
+    if !matches!(info.pixel_format, PixelFormat::L8 | PixelFormat::RGB24) {
+        return Ok(None);
+    }
+    // Fit in source coordinates; EXIF 5–8 swap the target axes.
+    let (tw, th) = if orientation.to_exif() >= 5 {
+        (request.size.1, request.size.0)
+    } else {
+        request.size
+    };
+    let ratios = (
+        f64::from(tw) / f64::from(info.width),
+        f64::from(th) / f64::from(info.height),
+    );
+    let ratio = match request.fit {
+        ImageFit::Contain => ratios.0.min(ratios.1),
+        ImageFit::Cover => ratios.0.max(ratios.1),
+    }
+    .min(1.0);
+    let target = (
+        (f64::from(info.width) * ratio).ceil() as u16,
+        (f64::from(info.height) * ratio).ceil() as u16,
+    );
+    let (w, h) = decoder
+        .scale(target.0.max(1), target.1.max(1))
+        .map_err(|e| format!("JPEG scaling: {e}"))?;
+    let pixels = decoder.decode().map_err(|e| format!("JPEG decode: {e}"))?;
+    let image = match info.pixel_format {
+        PixelFormat::RGB24 => {
+            image::RgbImage::from_raw(w.into(), h.into(), pixels).map(DynamicImage::ImageRgb8)
+        }
+        PixelFormat::L8 => {
+            image::GrayImage::from_raw(w.into(), h.into(), pixels).map(DynamicImage::ImageLuma8)
+        }
+        _ => unreachable!("pixel format checked before decoding"),
+    }
+    .ok_or("JPEG scaled buffer has invalid dimensions")?;
+    Ok(Some(image))
 }
 struct Job {
     request: Request,
@@ -255,6 +321,56 @@ mod tests {
             );
             std::thread::yield_now();
         }
+    }
+    #[test]
+    #[ignore = "local wallpaper timing; NK_THUMB_BENCH is an absolute JPEG path"]
+    fn real_wallpaper_decode_timing() {
+        let path = std::path::PathBuf::from(std::env::var_os("NK_THUMB_BENCH").unwrap());
+        let bytes = std::fs::read(&path).unwrap();
+        let mut r = request("sample.jpg");
+        r.path = path;
+        r.size = (320, 200);
+        r.budget = Budget {
+            encoded_bytes: 64 * 1024 * 1024,
+            decoded_bytes: 256 * 1024 * 1024,
+        };
+        for _ in 0..3 {
+            let start = Instant::now();
+            let full = image::load_from_memory(&bytes)
+                .unwrap()
+                .resize_to_fill(320, 200, image::imageops::FilterType::Triangle)
+                .into_rgba8();
+            let full_ms = start.elapsed().as_secs_f64() * 1000.;
+            let start = Instant::now();
+            let scaled = decode(r.clone()).unwrap();
+            eprintln!(
+                "THUMB_TIMING full_ms={full_ms:.3} reduced_ms={:.3} target={:?} full_pixels={}",
+                start.elapsed().as_secs_f64() * 1000.,
+                scaled.size(),
+                full.len()
+            );
+        }
+    }
+    #[test]
+    fn jpeg_decoder_emits_reduced_pixels_before_final_resizing() {
+        let source = image::RgbImage::from_pixel(1536, 1024, image::Rgb([20, 180, 50]));
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+            .encode_image(&source)
+            .unwrap();
+        let mut r = request("sample.jpg");
+        r.size = (96, 64);
+        let image = jpeg_thumbnail(&bytes, &r, image::metadata::Orientation::NoTransforms)
+            .unwrap()
+            .unwrap();
+        assert_eq!((image.width(), image.height()), (192, 128));
+        assert!(image.as_bytes().len() < source.as_raw().len() / 16);
+        // Cover must retain enough pixels on both axes, including portrait crops.
+        r.size = (64, 256);
+        let image = jpeg_thumbnail(&bytes, &r, image::metadata::Orientation::Rotate90)
+            .unwrap()
+            .unwrap();
+        assert!(image.width() >= 256 && image.height() >= 64);
     }
     #[test]
     fn real_five_codec_files_decode_to_bounded_target_pixels_and_exif_orientation() {

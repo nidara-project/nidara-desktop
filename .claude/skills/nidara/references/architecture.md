@@ -3378,3 +3378,9 @@ Full exported Appearance now mounts/layouts with the real five registration modu
 (including separate wallpaper preview/gallery and picker), no substitute builders;
 that CPU check neither opens a native window nor validates all wallpaper pixels.
 Existing native Button is reused; exact secondary/pill appearance remains visual debt.
+
+Settings wallpaper JPEG thumbnails select IDCT reduction before allocating the
+RGB pixels (`image_load::jpeg_thumbnail`). Preserve the source/encoded budgets
+and EXIF-aware Cover/Contain sizing when changing it; other codecs still use
+bounded full decode. The ignored `real_wallpaper_decode_timing` test accepts an
+absolute `NK_THUMB_BENCH` JPEG path for local timing, never as a CI speed threshold.

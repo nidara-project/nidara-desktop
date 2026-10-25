@@ -1304,3 +1304,9 @@ legacy secondary/pill visual parity remains pending. The picker suggests the abs
 Open.current_folder uses filesystem bytes with one trailing NUL (ay), rejecting
 relative/NUL-containing paths; the portal may ignore this suggestion. No native dialog/AT-SPI/Orca/live acceptance from CPU,
 private-bus or injected-decision tests.
+
+Wallpaper thumbnails use JPEG IDCT reduction (1/8, 1/4 or 1/2) before the RGB
+buffer and final fit. The requested fit is computed in source coordinates, with
+EXIF axis swaps applied before choosing the reduction. Encoded/source allocation
+budgets still apply. Other codecs and uncommon JPEG pixel formats keep their
+bounded decoder path; they have no claimed reduced-decode guarantee.
