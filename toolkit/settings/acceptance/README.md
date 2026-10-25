@@ -81,3 +81,9 @@ here. **Checker no ejecutado**; native acceptance, control catches and takeover
 readiness remain unproven until the real smoke produces evidence. No live
 settings, services, audio configuration or compositor were changed for these
 local checks. Gate 3 is not added; gate 4 remains separately owned.
+
+Application discovery uses the launched process PID, never the frame title or
+the AT-SPI application name (GTK may decorate its application ID with a version).
+On the legacy discovery deadline the log includes every observed PID/name plus
+the expected process PID. Metadata-selector tests cover the original mismatch;
+they are not a native accessibility run.

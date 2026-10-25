@@ -17,6 +17,7 @@ import sys
 import time
 import gi
 from matrix import OPERATIONS, CONTROLS, KEYS, KEY
+from discovery import by_pid, describe
 from visible import row as visible_row, contains as visible_contains
 
 gi.require_version('Atspi', '2.0')
@@ -44,13 +45,18 @@ def pump():
     time.sleep(.01)
 
 
-def wait(test, label, seconds=8):
+def wait(test, label, seconds=8, diagnostics=None):
     until = time.monotonic() + seconds
     while time.monotonic() < until:
         value = test()
         if value:
             return value
         pump()
+    if diagnostics is not None:
+        try:
+            print(json.dumps({'deadline':label, 'observed':diagnostics()}), file=sys.stderr, flush=True)
+        except Exception as error:
+            print(f'deadline diagnostics failed: {error}', file=sys.stderr, flush=True)
     raise InfrastructureError('setup/publication deadline: ' + label)
 
 
@@ -352,7 +358,9 @@ class Run:
         if not legacy.exists():
             legacy = Path('/usr/bin/nidara-settings')
         self.legacy = self.start([legacy], 'legacy.log')
-        self.legacy_app = wait(lambda: next((a for a in applications() if a.get_name() == 'Nidara Settings'), None), 'legacy AT-SPI app')
+        self.legacy_app = wait(lambda: by_pid(applications(), self.legacy.pid), 'legacy AT-SPI app',
+                               diagnostics=lambda: {'expected_pid':self.legacy.pid,
+                                                    'applications':describe(applications())})
         call(self.bus, 'org.nidara.Settings', '/org/nidara/Settings', 'org.nidara.Settings', 'Request',
              GLib.Variant('(as)', (['page', 'appearance'],)))
         environment = os.environ | {'NK_SETTINGS_GATE_CONTROL': str(self.control), 'LANG':'en_US.UTF-8'}

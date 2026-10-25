@@ -4,6 +4,7 @@
 import unittest
 from matrix import OPERATIONS, CONTROLS
 from visible import row, contains
+from discovery import by_pid, describe
 
 class Matrix(unittest.TestCase):
     def test_every_d1_operation_and_time_field_is_present(self):
@@ -33,6 +34,20 @@ class LegacyObservation(unittest.TestCase):
     def test_boolean_false_is_an_observed_switch_state(self):
         self.assertTrue(contains([{'active':False}], 'toggle', False))
         self.assertFalse(contains([{}], 'toggle', False))
+
+class ApplicationIdentity(unittest.TestCase):
+    def test_application_name_is_not_frame_title_and_pid_is_authoritative(self):
+        class Metadata:
+            def __init__(self, pid, name): self.pid, self.name = pid, name
+            def get_process_id(self): return self.pid
+            def get_name(self): return self.name
+        wrong = Metadata(7, 'Nidara Settings')
+        expected = Metadata(42, 'org.nidara.Settings (GTK 4.24.1)')
+        self.assertIs(by_pid([wrong, expected], 42), expected)
+        self.assertIsNone(by_pid([wrong, expected], 99))
+        self.assertEqual(describe([wrong, expected]), [
+            {'pid':7, 'name':'Nidara Settings'},
+            {'pid':42, 'name':'org.nidara.Settings (GTK 4.24.1)'}])
 
 if __name__ == '__main__':
     unittest.main()
