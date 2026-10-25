@@ -2494,8 +2494,18 @@ may belong to an earlier or later frame. Encode PNG previews after the client
 stops, keeping evidence preparation outside capture-to-input timing.
 
 The toolkit's real fcitx5/Orca drivers run in the vkms smoke, or locally through
-`toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces, then
-the cage harness). Their acceptance decisions, fault controls and evidence are recorded in
+`scripts/dev/real-gates.sh orca|ime|choices-orca|phase0|<check>.py`: a rootless podman
+container (`scripts/dev/real-gates/Containerfile`: Orca, speech-dispatcher, fcitx5 with Mozc,
+Pinyin and Hangul, cage, `libao` null) runs the same cage harness on the repo's binaries —
+nothing installed on the host, no vkms loaded (it would show up in the live session as a
+monitor). The demo's checks (`nk-choices-*`) take the demo's harness, which serves the Settings
+portal the demo reads its look from; the others phase 0's. `HYALO_BIN=` reuses a Hyalo built in
+another worktree. Measured 2026-10-25: `choices-orca` with its six controls, 94 s, the same
+speech and verdicts as CI's hyalo job. The image is ~3.4 GB (CJK fonts): extend it with
+`podman build --from <the current tag>`, never after `podman image prune`, which drops the layer
+cache and pulls everything again (it filled the disk once). The older path,
+`toolkit/phase0/check-prerequisites.sh ime|orca` (private bwrap namespaces over packages
+extracted to `NK_PREFLIGHT_SYSROOT`), still works. Their acceptance decisions, fault controls and evidence are recorded in
 `toolkit/phase0/EVIDENCE-832-835.md`. Headless runs enable the keyboard manager
 with `HYALO_A11Y_MANAGER=1`; ordinary Atspi.Device listeners are denied on
 purpose, while Orca's key echo proves delivery. Never infer actual monitoring
