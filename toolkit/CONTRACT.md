@@ -1396,3 +1396,14 @@ engines; the new matrix compiles and runs only on schedule/manual CI. It adds no
 PR gate. A forwarded Escape after an IME finishes composition consumes that
 operation's one-shot boundary; it must not also clear the committed query or
 close FontChooser. A following Escape retains its normal clear/close behavior.
+
+Settings' D7 header geometry is exported from tokens/header.json, sourced from
+Main.dc.html in the owner's 23-10 artifact. Header controls are 32 high at y=8;
+the title band is 48 and the separate window-control capsule remains 72x24 at
+12. Do not change Hyalo SSD geometry to match a header button. The title layer
+uses TitlebarStyle's blur-only grade and background fade, with no panel tone/rim.
+A configured title text box reserves the actual floating controls; its caption
+uses retained text geometry. Floating capsules support named vector-icon buttons
+and one retained SearchInput using the same editor and IME host. Selection pixels
+remain full-colour, excluded from adaptive ink coverage. Input rectangles follow
+the owning capsule surface; no second Wayland host or text engine is introduced.

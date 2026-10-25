@@ -223,10 +223,56 @@ impl Tree {
                 wash: self.capsule_wash(*button, style),
                 fade_ms: style.fade_ms(reduce_motion),
             });
-            material.coverage.push(nk_wayland::InkCoverage {
-                bounds,
-                override_color: state.and_then(|s| s.ink).unwrap_or([0.; 4]),
-            });
+            // Keep actual coloured selection pixels out of the adaptive ink mask.
+            // The conservative union bounds bidi selections with at most four regions.
+            let selected = if self.nodes[button].kind == Kind::SearchInput {
+                self.search_selection_box(*button)?
+            } else {
+                None
+            };
+            let regions = match selected {
+                None => vec![r],
+                Some(cut) => vec![
+                    Rect {
+                        x: r.x,
+                        y: r.y,
+                        width: r.width,
+                        height: (cut.y - r.y).max(0.),
+                    },
+                    Rect {
+                        x: r.x,
+                        y: cut.y + cut.height,
+                        width: r.width,
+                        height: (r.y + r.height - cut.y - cut.height).max(0.),
+                    },
+                    Rect {
+                        x: r.x,
+                        y: cut.y,
+                        width: (cut.x - r.x).max(0.),
+                        height: cut.height,
+                    },
+                    Rect {
+                        x: cut.x + cut.width,
+                        y: cut.y,
+                        width: (r.x + r.width - cut.x - cut.width).max(0.),
+                        height: cut.height,
+                    },
+                ],
+            };
+            for area in regions
+                .into_iter()
+                .filter(|a| a.width > 0. && a.height > 0.)
+            {
+                material.coverage.push(nk_wayland::InkCoverage {
+                    bounds: nk_wayland::MaterialRect {
+                        x: (area.x - pane.x) as f64,
+                        y: (area.y - pane.y) as f64,
+                        width: area.width as f64,
+                        height: area.height as f64,
+                    },
+                    override_color: state.and_then(|s| s.ink).unwrap_or([0.; 4]),
+                });
+            }
         }
         material.validate()?;
         Ok(material)
@@ -307,7 +353,21 @@ impl Tree {
             if !self.available(*button) {
                 ink.components[3] *= palette.disabled.components[3];
             }
-            if let Some(layout) = &n.layout {
+            if n.kind == Kind::SearchInput {
+                self.paint_search_chrome(*button, r, canvas, palette.disabled, false)?;
+            } else if let Some((name, size)) = self.button_icons.get(button) {
+                let icon = self.icon(name, *size)?;
+                canvas.icon(
+                    &icon,
+                    Rect {
+                        x: r.x + (r.width - size) / 2.,
+                        y: r.y + (r.height - size) / 2.,
+                        width: *size,
+                        height: *size,
+                    },
+                    ink,
+                );
+            } else if let Some(layout) = &n.layout {
                 let size = layout.measured_size();
                 canvas.layout(
                     layout,

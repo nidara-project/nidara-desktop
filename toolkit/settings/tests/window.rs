@@ -42,6 +42,7 @@ fn fixture() -> (Exports, Styles, Shell) {
         },
         metrics,
         "appearance",
+        Arc::new(FontSet::discover_required().unwrap()),
     )
     .unwrap();
     (exports, styles, shell)
@@ -131,4 +132,74 @@ fn both_control_sides_fit_docked_and_narrow_layouts_with_and_without_layers() {
             }
         }
     }
+}
+
+#[test]
+fn header_has_icon_semantics_fixed_geometry_and_stays_clean_when_idle() {
+    let (_, styles, mut shell) = fixture();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    let size = Size {
+        width: 1050.,
+        height: 600.,
+    };
+    for side in [ControlsSide::Right, ControlsSide::Left] {
+        shell.layout_controls(size, side, true, &mut text).unwrap();
+        let toggle = shell
+            .tree
+            .capsule_ids()
+            .find(|id| shell.tree.node(*id).unwrap().name() == "Toggle sidebar")
+            .unwrap();
+        let toggle_button = shell.tree.node(toggle).unwrap().children()[0];
+        let icon = shell.tree.node(toggle_button).unwrap();
+        assert_eq!(icon.name(), "Toggle sidebar");
+        assert!(
+            icon.text_layout().is_none(),
+            "accessible label became visible text"
+        );
+        let r = shell.tree.node(toggle).unwrap().bounds();
+        assert_eq!((r.y, r.width, r.height), (8., 32., 32.));
+        let nav = shell
+            .tree
+            .capsule_ids()
+            .find(|id| shell.tree.node(*id).unwrap().name() == "Pages")
+            .unwrap();
+        let r = shell.tree.node(nav).unwrap().bounds();
+        assert_eq!((r.y, r.width, r.height), (8., 60., 32.));
+        let title = shell.tree.node(shell.titlebar).unwrap().bounds();
+        assert_eq!(title.height, 48.);
+        let search = shell.tree.node(shell.search).unwrap().bounds();
+        assert_eq!((search.y, search.width, search.height), (8., 200., 32.));
+        let controls = shell.tree.node(shell.controls).unwrap().bounds();
+        assert!(search.x + search.width + 12. <= controls.x || side == ControlsSide::Left);
+        shell.tree.acknowledge();
+        shell.layout_controls(size, side, true, &mut text).unwrap();
+        let invalid = shell.tree.invalidation();
+        assert!(
+            !invalid.layout && !invalid.paint && !invalid.semantics,
+            "unchanged header layout requested idle work: {invalid:?}"
+        );
+    }
+    assert_eq!(styles.header.titlebar.height, 68.);
+    assert!(!styles.header.titlebar.opaque);
+    assert!(styles.header.titlebar.blur.passes > 0);
+}
+
+#[test]
+fn header_preserves_content_padding_in_scroll_extent() {
+    let (_, _, mut shell) = fixture();
+    let group = shell.tree.group(shell.content, "Start of page").unwrap();
+    let first = group;
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    shell
+        .layout_controls(
+            Size {
+                width: 1050.,
+                height: 600.,
+            },
+            ControlsSide::Right,
+            true,
+            &mut text,
+        )
+        .unwrap();
+    assert_eq!(shell.tree.node(first).unwrap().bounds().y, 64.);
 }

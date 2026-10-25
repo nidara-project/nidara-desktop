@@ -76,6 +76,7 @@ pub struct Composition {
     last_title_press: Option<u32>,
     paste_target: Option<Target>,
     search_focus: Option<NodeId>,
+    search_layers: BTreeMap<NodeId, (LayerId, Point)>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TitlebarAction {
@@ -248,6 +249,10 @@ impl Composition {
         self.sync_search_input(tree, window)?;
         Ok(effect)
     }
+    /// Floating retained editors use the same text-input host, on their actual pane.
+    pub fn set_search_layers(&mut self, layers: BTreeMap<NodeId, (LayerId, Point)>) {
+        self.search_layers = layers;
+    }
     /// Call after layout too, so the IME gets the same scrolled caret and pane as paint.
     pub fn sync_search_input(&mut self, tree: &Tree, window: &mut Window) -> Result<()> {
         if tree.searches.is_empty() {
@@ -264,6 +269,12 @@ impl Composition {
             self.search_focus = next;
             self.paste_target = None;
             window.reset_ime();
+        }
+        if let Some((layer, origin)) = tree.focused.and_then(|id| self.search_layers.get(&id)) {
+            input.rect[0] -= origin.x.floor() as i32;
+            input.rect[1] -= origin.y.floor() as i32;
+            window.set_layer_text_input(*layer, input)?;
+            return Ok(());
         }
         let sidebar = tree.focused.and_then(|id| {
             let mut p = Some(id);
@@ -314,6 +325,29 @@ impl Composition {
         panel: impl Fn(f64) -> Result<Material>,
         layers_allowed: bool,
     ) -> Result<()> {
+        self.sync_with_layout(
+            tree,
+            window,
+            backend,
+            palette,
+            panel,
+            layers_allowed,
+            |_, _, _, _| Ok(()),
+        )
+    }
+    /// Place app-owned floating controls on the same sampled pane/inset timeline,
+    /// before any chrome buffers are painted or committed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn sync_with_layout<B: TextBackend>(
+        &mut self,
+        tree: &mut Tree,
+        window: &mut Window,
+        backend: &mut B,
+        palette: Palette,
+        panel: impl Fn(f64) -> Result<Material>,
+        layers_allowed: bool,
+        mut arrange: impl FnMut(&mut Tree, Size, bool, &mut B) -> Result<()>,
+    ) -> Result<()> {
         if tree.window_buttons.is_some() {
             window.request_window_controls();
         }
@@ -334,6 +368,15 @@ impl Composition {
         self.sample(tree, None);
         let layered = window.capabilities().layers && layers_allowed;
         tree.layout(
+            Size {
+                width: w as f32,
+                height: h as f32,
+            },
+            layered,
+            backend,
+        )?;
+        arrange(
+            tree,
             Size {
                 width: w as f32,
                 height: h as f32,

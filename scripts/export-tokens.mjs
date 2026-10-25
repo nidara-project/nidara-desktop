@@ -143,6 +143,7 @@ const search = JSON.parse(readFileSync(join(repo, "toolkit/tokens/search.json"),
 const dropdown = JSON.parse(readFileSync(join(repo, "toolkit/tokens/dropdown.json"), "utf8"))
 const rows = JSON.parse(readFileSync(join(repo, "toolkit/tokens/rows.json"), "utf8"))
 
+const header = JSON.parse(readFileSync(join(repo, "toolkit/tokens/header.json"), "utf8"))
 const capsule = JSON.parse(readFileSync(join(repo, "toolkit/tokens/capsule.json"), "utf8"))
 const variantFor = (recipe, dark, reduceTransparency) => recipe.variants
     .filter(o => (o.dark ?? dark) === dark && (o.reduceTransparency ?? reduceTransparency) === reduceTransparency)
@@ -186,6 +187,7 @@ for (const dark of [true, false])
             dropdown: variantFor(dropdown, dark, reduceTransparency),
 
             capsule: variantFor(capsule, dark, reduceTransparency),
+            header: variantFor(header, dark, reduceTransparency),
             search: variantFor(search, dark, reduceTransparency),
             wallpaper: variantFor(wallpaper, dark, reduceTransparency),
             common: { padding: pixels("space-3"), gap: pixels("space-1"),

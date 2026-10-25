@@ -2632,6 +2632,14 @@ D7's native title uses an explicit `TitlebarStyle` (blur-only graded bands and a
 client background fade); it does not reuse the sidebar's panel glass. The demo's
 provisional recipe is identified in `titlebar-provisional.json`, not in transport.
 The sidebar's margin/radius come from `Tree::set_sidebar_frame` with app tokens.
+Native Settings supplies that title style explicitly from `toolkit/tokens/header.json`
+(via components.json), including reduced-transparency fallback. Its 48px band,
+32px header controls and 60×32 navigation are distinct from 72×24 window controls
+at y12. A sidebar icon keeps its full accessible name without painting that name.
+`Composition::sync_with_layout` positions floating controls on the same sampled
+sidebar timeline before painting. A SearchInput inside ControlCapsule uses that
+capsule's text-input surface and local caret coordinates; selection pixels stay
+outside the adaptive ink coverage. Identical placement must leave Tree clean.
 Native apps register `Tree::window_controls` fallback buttons and opt into
 `Application::window_controls` for server layout before configure; composition
 reserves the reported side/size and hides fallback nodes only when layout arrives.

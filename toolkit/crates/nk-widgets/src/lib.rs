@@ -26,7 +26,9 @@ mod rows;
 mod search;
 mod semantics;
 pub use search::SearchStyle;
+mod header;
 mod switch;
+pub use header::TitleTextBox;
 pub mod window;
 pub use choices::{ChoiceKind, ChoiceStyle};
 pub use nk_a11y::NodeId;
@@ -271,6 +273,9 @@ pub struct Tree {
     pub(crate) hovered: Option<NodeId>,
     page_width: PageWidth,
     pub(crate) capsules: BTreeMap<NodeId, capsule::Capsule>,
+    pub(crate) button_icons: BTreeMap<NodeId, (String, f32)>,
+    pub(crate) title_text_box: Option<TitleTextBox>,
+    pub(crate) content_top_gap: Option<f32>,
     pub(crate) capsule_styles: BTreeMap<NodeId, CapsuleStyle>,
     pub(crate) capsule_washes: BTreeMap<NodeId, [f64; 4]>,
     capture: Option<NodeId>,
@@ -356,6 +361,9 @@ impl Tree {
             hovered: None,
             page_width: PageWidth::None,
             capsules: BTreeMap::new(),
+            button_icons: BTreeMap::new(),
+            title_text_box: None,
+            content_top_gap: None,
             capsule_styles: BTreeMap::new(),
             capsule_washes: BTreeMap::new(),
             capture: None,
@@ -490,8 +498,12 @@ impl Tree {
         let valid = matches!(
             (p.kind, kind),
             (Kind::Window, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
-                | (Kind::Sidebar, Kind::Page { .. } | Kind::SearchInput)
-                | (Kind::TitleBar | Kind::ControlCapsule, Kind::Button)
+                | (
+                    Kind::Sidebar,
+                    Kind::Page { .. } | Kind::SearchInput | Kind::Label
+                )
+                | (Kind::TitleBar, Kind::Button)
+                | (Kind::ControlCapsule, Kind::Button | Kind::SearchInput)
                 | (
                     Kind::Scroll,
                     Kind::Group
@@ -792,6 +804,7 @@ impl Tree {
             tree.images.remove(&id);
             tree.thumbnail_styles.remove(&id);
             tree.label_styles.remove(&id);
+            tree.button_icons.remove(&id);
             tree.button_descriptions.remove(&id);
             tree.list_styles.remove(&id);
             tree.capsules.remove(&id);
@@ -892,7 +905,11 @@ impl Tree {
         if !width.is_finite() || width <= 0. {
             return Err("invalid width".into());
         }
-        self.nodes.get_mut(&id).ok_or("unknown widget")?.width = Some(width);
+        let node = self.nodes.get_mut(&id).ok_or("unknown widget")?;
+        if node.width == Some(width) {
+            return Ok(());
+        }
+        node.width = Some(width);
         self.invalidate(id, Invalid::LAYOUT);
         Ok(())
     }
@@ -1302,12 +1319,23 @@ impl Tree {
             && let Some(capsule) = self.capsule_for_button(id)
         {
             let metrics = capsule.metrics;
+            if self.button_icons.contains_key(&id) {
+                let n = self.nodes.get_mut(&id).unwrap();
+                n.layout = None;
+                n.measured = Size {
+                    width: metrics.button_min,
+                    height: metrics.button_min,
+                };
+                return Ok(n.measured);
+            }
             let n = self.nodes.get_mut(&id).unwrap();
             let caption = n.caption.as_deref().unwrap_or(&n.name);
             // Capsule captions occupy the exported glyph box, independently of body
             // typography; retain this same Layout for painting and geometry.
-            let mut style = self.style.clone();
-            style.size = metrics.button_min;
+            let mut style = self.label_styles.get(&id).unwrap_or(&self.style).clone();
+            if !self.label_styles.contains_key(&id) {
+                style.size = metrics.button_min;
+            }
             style.line_height = 1.;
             let layout = backend.layout(caption, &style, width.max(1.))?;
             let text = layout.measured_size();
@@ -1374,6 +1402,22 @@ impl Tree {
             };
             self.nodes.get_mut(&id).unwrap().measured = size;
             return Ok(size);
+        }
+        if kind == Kind::TitleBar
+            && let Some(text_box) = &self.title_text_box
+        {
+            let layout = backend.layout(
+                &self.nodes[&id].name,
+                &text_box.style,
+                text_box.bounds.width.max(1.),
+            )?;
+            let n = self.nodes.get_mut(&id).unwrap();
+            n.layout = Some(layout);
+            n.measured = Size {
+                width,
+                height: m.titlebar,
+            };
+            return Ok(n.measured);
         }
         if kind == Kind::TitleBar {
             let mut reserved = 0.;
@@ -1493,7 +1537,13 @@ impl Tree {
             },
             Kind::Scroll => Size {
                 width: max_w,
-                height: sum + 2. * m.padding,
+                height: sum
+                    + m.padding
+                    + if self.nodes[&id].parent == Some(self.root) {
+                        self.content_top_gap.unwrap_or(m.padding)
+                    } else {
+                        m.padding
+                    },
             },
             Kind::Row => Size {
                 width,
@@ -1759,7 +1809,7 @@ impl Tree {
         if kind == Kind::Scroll {
             let column = self.content_column_width(inset.width);
             x = inset.x + (inset.width - column).max(0.) / 2. + m.padding - node.scroll.x;
-            y = inset.y + m.padding - node.scroll.y;
+            y = inset.y + self.content_top_gap.unwrap_or(m.padding) - node.scroll.y;
         }
         let trailing_width = if kind == Kind::TitleBar {
             self.window_buttons.map_or(0., |ids| {

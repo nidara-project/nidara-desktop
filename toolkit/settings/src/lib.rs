@@ -28,6 +28,7 @@ pub mod font_catalog;
 pub mod font_chooser;
 pub mod font_description;
 pub mod image_load;
+pub mod header;
 pub mod manifest;
 pub mod material;
 pub mod page;

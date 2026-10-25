@@ -45,6 +45,7 @@ struct View {
     shell: Shell,
     page: Option<Mounted>,
     builders: Builders,
+    fonts: Arc<FontSet>,
     mount: u64,
     status: NodeId,
     status_root: NodeId,
@@ -52,6 +53,7 @@ struct View {
 impl View {
     fn new(exports: Exports, appearance: Appearance) -> Result<Self> {
         let styles = Styles::new(&exports, &appearance)?;
+        let fonts = Arc::new(FontSet::discover_required()?);
         let metrics = capsule_metrics(
             &exports.components,
             appearance.dark,
@@ -72,6 +74,7 @@ impl View {
             },
             metrics,
             "appearance",
+            fonts.clone(),
         )?;
         let status_root = shell.tree.group(shell.content, "")?;
         let status_row = shell.tree.append(status_root, Kind::Row, "")?;
@@ -93,6 +96,7 @@ impl View {
             shell,
             page: None,
             builders,
+            fonts,
             mount: 0,
             status,
             status_root,
@@ -181,6 +185,7 @@ impl View {
         self.shell
             .tree
             .set_capsule_metrics(self.shell.controls, metrics)?;
+        self.shell.restyle(&styles)?;
         self.shell.composition.invalidate_panes();
         self.shell.capsules.invalidate();
         self.styles = styles;
@@ -758,7 +763,7 @@ pub fn run(activation: Option<String>) -> Result<()> {
     let portal = Portal::watch(&bus)?;
     let view = View::new(exports, portal.read()?)?;
     let client = Client::start(bus)?;
-    let fonts = Arc::new(FontSet::discover_required()?);
+    let fonts = view.fonts.clone();
     let reference = std::env::var_os("NK_ICON_REFERENCE")
         .map(PathBuf::from)
         .unwrap_or_else(|| {

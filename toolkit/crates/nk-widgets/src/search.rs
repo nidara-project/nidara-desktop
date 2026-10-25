@@ -73,21 +73,34 @@ impl Tree {
         placeholder: &str,
         backend: Box<dyn TextBackend>,
     ) -> Result<NodeId> {
+        let style = self.style.clone();
+        let id = self.search_input_styled(parent, name, placeholder, backend, style)?;
+        self.label_styles.remove(&id);
+        Ok(id)
+    }
+    pub fn search_input_styled(
+        &mut self,
+        parent: NodeId,
+        name: &str,
+        placeholder: &str,
+        backend: Box<dyn TextBackend>,
+        mut text_style: TextStyle,
+    ) -> Result<NodeId> {
         self.search_style
             .as_ref()
             .ok_or("SearchInput style not supplied")?;
         single_line(placeholder)?;
-        let mut text_style = self.style.clone();
         text_style.alignment = nk_text::Alignment::Left;
-        let editor = Editor::new(backend, "", text_style, f32::MAX)?;
+        let editor = Editor::new(backend, "", text_style.clone(), f32::MAX)?;
         let id = self.append(parent, Kind::SearchInput, name)?;
+        self.label_styles.insert(id, text_style.clone());
         self.searches.insert(
             id,
             Search {
                 editor,
                 placeholder: placeholder.into(),
                 placeholder_layout: None,
-                style: self.style.clone(),
+                style: text_style,
                 scroll: 0.,
                 hide_preedit_caret: false,
                 finished_composition: false,
@@ -109,6 +122,12 @@ impl Tree {
     pub fn search_consumes_escape(&self, id: NodeId) -> Result<bool> {
         let search = self.searches.get(&id).ok_or("not a search input")?;
         Ok(search.editor.preedit().is_some() || search.finished_composition)
+    }
+    pub fn set_search_text_style(&mut self, id: NodeId, style: TextStyle) -> Result<()> {
+        if !self.searches.contains_key(&id) {
+            return Err("not a search input".into());
+        }
+        self.set_owned_text_style(id, Some(style))
     }
     pub fn search_composing(&self, id: NodeId) -> Result<bool> {
         Ok(self
@@ -413,20 +432,18 @@ impl Tree {
             .search_style
             .as_ref()
             .ok_or("SearchInput style not supplied")?;
+        let mut text_style = self.label_styles.get(&id).unwrap_or(&self.style).clone();
+        text_style.alignment = nk_text::Alignment::Left;
         let search = self
             .searches
             .get_mut(&id)
             .ok_or("SearchInput editor missing")?;
-        if search.style != self.style {
-            let mut text_style = self.style.clone();
-            text_style.alignment = nk_text::Alignment::Left;
-            search.editor.set_style(text_style)?;
-            search.style = self.style.clone();
+        if search.style != text_style {
+            search.editor.set_style(text_style.clone())?;
+            search.style = text_style.clone();
             search.placeholder_layout = None;
         }
         if search.placeholder_layout.is_none() {
-            let mut text_style = self.style.clone();
-            text_style.alignment = nk_text::Alignment::Left;
             search.placeholder_layout =
                 Some(backend.layout(&search.placeholder, &text_style, f32::MAX)?);
         }
@@ -471,6 +488,16 @@ impl Tree {
         canvas: &mut Canvas,
         disabled: Color,
     ) -> Result<()> {
+        self.paint_search_chrome(id, r, canvas, disabled, true)
+    }
+    pub(crate) fn paint_search_chrome(
+        &self,
+        id: NodeId,
+        r: Rect,
+        canvas: &mut Canvas,
+        disabled: Color,
+        chrome: bool,
+    ) -> Result<()> {
         let s = self
             .search_style
             .as_ref()
@@ -478,17 +505,19 @@ impl Tree {
         let search = &self.searches[&id];
         let focused = self.focused == Some(id) && self.active;
         let radius = s.radius.min(r.height / 2.);
-        canvas.rounded_rect(r, radius as f64, s.background);
-        canvas.rounded_ring(
-            r,
-            radius as f64,
-            s.border as f64,
-            if focused {
-                s.focus_border
-            } else {
-                s.border_color
-            },
-        );
+        if chrome {
+            canvas.rounded_rect(r, radius as f64, s.background);
+            canvas.rounded_ring(
+                r,
+                radius as f64,
+                s.border as f64,
+                if focused {
+                    s.focus_border
+                } else {
+                    s.border_color
+                },
+            );
+        }
         let icon = self.icon(&s.icon, s.icon_size)?;
         canvas.icon(
             &icon,
@@ -538,6 +567,32 @@ impl Tree {
         }
         canvas.pop_clip();
         Ok(())
+    }
+    pub(crate) fn search_selection_box(&self, id: NodeId) -> Result<Option<Rect>> {
+        let search = self.searches.get(&id).ok_or("not a search input")?;
+        let r = self.nodes[&id].bounds;
+        let origin = self.search_origin(id, r);
+        let mut union: Option<Rect> = None;
+        for rect in search.editor.selection_rects()? {
+            let part = intersect_rect(r, offset(rect, (origin.x, origin.y)));
+            if part.width <= 0. || part.height <= 0. {
+                continue;
+            }
+            union = Some(match union {
+                None => part,
+                Some(u) => {
+                    let x = u.x.min(part.x);
+                    let y = u.y.min(part.y);
+                    Rect {
+                        x,
+                        y,
+                        width: (u.x + u.width).max(part.x + part.width) - x,
+                        height: (u.y + u.height).max(part.y + part.height) - y,
+                    }
+                }
+            });
+        }
+        Ok(union)
     }
     pub(crate) fn search_semantics(&self, id: NodeId, node: &mut nk_a11y::Node) {
         use nk_a11y::{Action, Bounds, TextGeometry, TextInfo, TextSpan};

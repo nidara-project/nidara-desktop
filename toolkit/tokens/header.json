@@ -1,0 +1,22 @@
+{
+  "$comment": [
+    "Owner 23-10 artifact https://claude.ai/artifact/PMiqz1sR5drU9GgiwPgpBV, Main.dc.html, default 32px header and right-side controls.",
+    "Header geometry is separate from capsule.json's 72x24 window controls and Hyalo's SSD.",
+    "Title grade follows the provisional owner choice in PHASE1 D7 (20-10); native visual tuning remains required."
+  ],
+  "default": {
+    "band": 48,
+    "inset": 8,
+    "button": 32,
+    "icon": 16,
+    "sidebarRadius": 16,
+    "contentTopGap": 16,
+    "navigation": { "button": 24, "edge": 4, "gap": 4, "height": 32, "icon": 12 },
+    "titleGap": 14,
+    "titleSize": 15,
+    "titleWeight": 600,
+    "search": { "width": 200, "padding": 14, "size": 13, "gap": 12 },
+    "titlebar": { "extraHeight": 20, "curve": [1,1,0.5,0], "backgroundOpacity": 0.85, "doubleClickMs": 400 }
+  },
+  "variants": []
+}

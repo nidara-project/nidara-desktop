@@ -98,6 +98,18 @@ impl CapsuleComposition {
         }
         Ok(())
     }
+    pub fn search_layers(&self, tree: &Tree) -> BTreeMap<NodeId, (LayerId, Point)> {
+        let mut layers = BTreeMap::new();
+        for (capsule, (layer, _)) in &self.layers {
+            let r = tree.nodes[capsule].bounds;
+            for child in &tree.nodes[capsule].children {
+                if tree.nodes[child].kind == Kind::SearchInput && !tree.is_hidden(*child) {
+                    layers.insert(*child, (*layer, Point { x: r.x, y: r.y }));
+                }
+            }
+        }
+        layers
+    }
     pub fn event(&mut self, tree: &mut Tree, event: &Event) -> Result<Option<Effect>> {
         let Event::Layer { id, event } = event else {
             return Ok(None);
