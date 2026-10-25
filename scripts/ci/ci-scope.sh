@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # What does this change need run?
 #
-#   ci-scope.sh BASE_SHA        → prints code=…, gates=… and full=…, for $GITHUB_OUTPUT
+#   ci-scope.sh BASE_SHA        → prints code=…, gates=…, settings=… and full=…, for $GITHUB_OUTPUT
 #   ci-scope.sh --self-test     → both classifiers against known lists; exits 1 if wrong
 #
 # code: the long jobs (smoke, hyalo, toolkit, sessiond). false ONLY when every changed
@@ -12,6 +12,8 @@
 #   Hyalo, so true ONLY when a changed path is one they use (`needs_gates` below) — a list
 #   of what RUNS them (owner, 2026-10-19; it was a list of what skipped them until then, and
 #   nearly every Hyalo PR ran the 35 minutes).
+# settings: native Appearance gates 1/2, only toolkit/settings/ runtime changes.
+#   It is independent of the phase-0 matrices. Controls still follow full.
 # full: the matrices' controls (each assertion re-run with a fault) and their second scale
 #   (1.25), the AT-SPI check's controls (nk-a11y-check.py, ~2 of its ~3 min) and the control
 #   material check's (hyalo-control-material-check.py, seven of its ten runs): true only
@@ -50,12 +52,22 @@ needs_gates() {
         hyalo/Cargo.lock|hyalo/Cargo.toml|hyalo/compositor/Cargo.toml) return 0 ;;
         toolkit/settings-slice/*) return 1 ;;
         # The native Settings (#915): nothing the matrices drive yet. Its own keyboard and Orca
-        # walk (PHASE1.md gate 2) comes with its window; then it joins this list.
+        # walk is independently scoped by needs_settings; it does not run phase-0 matrices.
         toolkit/settings/*) return 1 ;;
         toolkit/*) return 0 ;;
         protocols/nidara-layers-v1.xml|config/hyalo/*) return 0 ;;
         scripts/ci/nk-fcitx5-check.py|scripts/ci/nk-orca-check.py|scripts/ci/nk-real-common.py|scripts/ci/nk-widgets-check.py) return 0 ;;
         scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py|scripts/ci/nk-choices-orca-check.py) return 0 ;;
+    esac
+    return 1
+}
+
+# Settings acceptance is deliberately narrow: shared-crate, shell and compositor
+# changes are covered by the full nightly, not another walk on every unrelated PR.
+needs_settings() {
+    case "$1" in
+        *.md) return 1 ;;
+        toolkit/settings/*) return 0 ;;
     esac
     return 1
 }
@@ -69,7 +81,7 @@ needs_full() {
         scripts/ci/nk-a11y-check.py|scripts/ci/nk-choices-check.py|toolkit/widgets-demo/src/choices.rs) return 0 ;;
         scripts/ci/nk-choices-orca-check.py) return 0 ;;
         scripts/ci/hyalo-control-material-check.py|scripts/ci/hyalo-control-material-probe.c) return 0 ;;
-        toolkit/phase0/*) return 0 ;;
+        toolkit/phase0/*|toolkit/settings/acceptance/*|toolkit/settings/src/gate_controls.rs) return 0 ;;
     esac
     return 1
 }
@@ -87,6 +99,7 @@ any_needs() {
 }
 gates() { any_needs needs_gates; }
 full() { any_needs needs_full; }
+settings() { any_needs needs_settings; }
 
 if [ "${1:-}" = --self-test ]; then
     fail=0
@@ -123,6 +136,24 @@ if [ "${1:-}" = --self-test ]; then
             fail=1
         fi
     }
+    check_settings() {
+        local want=$1 got
+        shift
+        got=$(printf '%s\n' "$@" | settings)
+        if [ "$got" != "$want" ]; then
+            echo "::error::ci-scope: settings [$*] gave $got, want $want"
+            fail=1
+        fi
+    }
+    check_settings true toolkit/settings/src/application.rs
+    check_settings true toolkit/settings/acceptance/run.py
+    check_settings false toolkit/settings/README.md
+    check_settings false toolkit/crates/nk-a11y/src/lib.rs ui/shell/app.ts
+    check_settings false scripts/ci/hyalo-smoke.sh .github/workflows/ci.yml
+    check_settings true ''
+    check_full false toolkit/settings/src/application.rs
+    check_full true toolkit/settings/acceptance/run.py
+    check_full true toolkit/settings/src/gate_controls.rs
     # What does not touch typing, focus, the screen reader or the toolkit: no matrices.
     check_gates false ui/shell/surfaces/bar/Bar.tsx README.md
     check_gates false bin/nidara-agent config/hypr/hyprland.lua session/daemon/src/model.rs
@@ -178,10 +209,12 @@ if [ -z "$base" ] || ! git fetch --quiet --depth=1 origin "$base" \
     echo "ci-scope: cannot diff against '${base}', running everything" >&2
     echo code=true
     echo gates=true
+    echo settings=true
     echo full=true
     exit 0
 fi
 printf '%s\n' "$changed" | sed 's/^/ci-scope: changed /' >&2
 echo "code=$(printf '%s\n' "$changed" | classify)"
+echo "settings=$(printf '%s\n' "$changed" | settings)"
 echo "gates=$(printf '%s\n' "$changed" | gates)"
 echo "full=$(printf '%s\n' "$changed" | full)"

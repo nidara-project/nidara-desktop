@@ -150,6 +150,7 @@ jobs:
     outputs:
       code: ${{ steps.scope.outputs.code }}
       gates: ${{ steps.scope.outputs.gates }}
+      settings: ${{ steps.scope.outputs.settings }}
       full: ${{ steps.scope.outputs.full }}
     steps:
       - uses: actions/checkout@v4
@@ -629,6 +630,7 @@ jobs:
           # The real fcitx5/Orca matrices (~35 min) only when the change touches what they
           # use; empty (scope failed) counts as true. See scripts/ci/ci-scope.sh.
           NK_REAL_GATES: ${{ needs.scope.outputs.gates || 'true' }}
+          NK_SETTINGS_GATES: ${{ needs.scope.outputs.settings || 'true' }}
           # Their controls and second scale only when the checks or their faults change.
           NK_REAL_FULL: ${{ needs.scope.outputs.full || 'true' }}
           # The checks that watch an animation on screen race the runner's software GL: the
@@ -641,7 +643,7 @@ jobs:
             -v "$PWD:/repo" \
             -e CARGO_HOME=/repo/hyalo/target/cargo-home -e CARGO_INCREMENTAL=0 \
             -e CARGO_PROFILE_DEV_DEBUG=0 -e CARGO_PROFILE_TEST_DEBUG=0 \
-            -e NK_REAL_GATES -e NK_REAL_FULL -e HYALO_ANIMATION_CHECKS \
+            -e NK_REAL_GATES -e NK_SETTINGS_GATES -e NK_REAL_FULL -e HYALO_ANIMATION_CHECKS \
             archlinux:latest bash /repo/scripts/ci/hyalo-smoke.sh
       - name: Upload screenshots + logs
         if: always()

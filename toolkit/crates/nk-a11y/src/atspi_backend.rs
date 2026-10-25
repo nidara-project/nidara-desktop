@@ -892,6 +892,14 @@ impl Backend {
                     self.emit(id, "SelectionChanged", "", 0, 0, 0i32.into())?
                 }
                 Event::Value(id) => {
+                    #[cfg(feature = "settings-gate-controls")]
+                    if std::env::var_os("NK_SETTINGS_GATE_CONTROL")
+                        .and_then(|p| std::fs::read_to_string(p).ok())
+                        .is_some_and(|s| s.trim() == "value-event")
+                    {
+                        eprintln!("SETTINGS_GATE_CONTROL_APPLIED value-event target={id}");
+                        continue;
+                    }
                     let current = tree
                         .nodes
                         .get(&id)

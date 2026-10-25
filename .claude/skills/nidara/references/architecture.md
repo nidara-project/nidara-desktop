@@ -3469,3 +3469,12 @@ focus order. Renderer refresh repeats these setters for the page's rows during
 input staging; collecting the full tree for each unchanged row makes staging
 quadratic. Real transitions still capture the old order before mutation and use
 that order for focus repair; an unknown id still returns an error.
+
+Native Appearance acceptance (PHASE1 gates 1/2) lives under
+`toolkit/settings/acceptance/`. ci-scope has a separate `settings` output: only
+native Settings runtime paths run that walk; full controls follow NK_REAL_FULL.
+It uses real service effects and the legacy window's rendered queryUI for parity,
+and real physical keys plus Orca SPEECH OUTPUT for accessibility. Local build or
+static checks are not native acceptance. The acceptance-only feature and private
+fault file do not exist in normal builds; control markers are diagnostics, never
+the speech/value oracle. The existing smoke copies evidence even after failures.

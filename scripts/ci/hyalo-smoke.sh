@@ -74,6 +74,12 @@ phase_build() {
     # its real input/material/IME pixel checks run below on this vkms Hyalo.
     cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice -p nk-widgets-demo
 
+    if [ "${NK_SETTINGS_GATES:-true}" != false ]; then
+        python "$REPO/toolkit/settings/acceptance/test_matrix.py"
+        cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked \
+            -p nk-settings --features nk-settings/appearance-gates
+    fi
+
     # The checks' own clients below; everything of the product comes from the package.
     # The sandbox probe (what a Flatpak app sees, hyalo/compositor/src/sandbox.rs).
     local sc_xml=/usr/share/wayland-protocols/staging/security-context/security-context-v1.xml sc="$REPO/build/sc"
@@ -229,7 +235,7 @@ phase_boot() {
     # before the bus starts: xdg-desktop-portal, started by it, picks nidara-portals.conf by it.
     runuser -u ci -- env XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" REPO="$REPO" OUT="$OUT" \
         XDG_CURRENT_DESKTOP=Nidara \
-        NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
+        NK_REAL_GATES="${NK_REAL_GATES:-true}" NK_SETTINGS_GATES="${NK_SETTINGS_GATES:-true}" NK_REAL_FULL="${NK_REAL_FULL:-true}" \
         HYALO_ANIMATION_CHECKS="${HYALO_ANIMATION_CHECKS:-true}" \
         dbus-run-session -- bash "$REPO/scripts/ci/hyalo-smoke.sh" run
 }
@@ -259,6 +265,8 @@ phase_run() {
         if [ -d /tmp/ni ]; then cp -a /tmp/ni "$OUT/toolkit-fcitx5"; fi
         if [ -d /tmp/no ]; then cp -a /tmp/no "$OUT/toolkit-orca"; fi
         if [ -d /tmp/nc ]; then cp -a /tmp/nc "$OUT/toolkit-choices-orca"; fi
+        if [ -d "$REPO/toolkit/target/sg" ]; then cp -a "$REPO/toolkit/target/sg" "$OUT/settings-gates"; fi
+        if [ -f "$REPO/toolkit/target/settings-gates.log" ]; then cp "$REPO/toolkit/target/settings-gates.log" "$OUT/"; fi
         chmod -R a+rX "$OUT"
         cp -f "$HOME"/.local/state/nidara/hyalo/crash-*.txt "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
@@ -326,6 +334,9 @@ phase_run() {
     # As the session starts it: the installed nidara-ui, which runs the packaged bundle (no
     # .dev marker for this user) and finds Settings through /usr/bin/nidara-settings.
     log "booting the shell…"
+    if [ "${NK_SETTINGS_GATES:-true}" != false ]; then
+        NK_SETTINGS_TEST=vkms python "$REPO/toolkit/settings/acceptance/prepare.py"
+    fi
     nidara-ui &
     shell_pid=$!
     local ok=""
@@ -907,6 +918,16 @@ PY
 
     # Phase 1 foundations beside phase 0. New evidence uses disk, not tmpfs.
     mkdir -p "$REPO/toolkit/target/widgets-evidence"
+    if [ "${NK_SETTINGS_GATES:-true}" != false ]; then
+        NK_SETTINGS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
+            NK_SETTINGS_GATE_LOG="$REPO/toolkit/target/sg" \
+            python "$REPO/toolkit/settings/acceptance/run.py" \
+            >"$REPO/toolkit/target/settings-gates.log" 2>&1 \
+            || { log "FAIL: native Appearance gates 1/2"; cat "$REPO/toolkit/target/settings-gates.log"; exit 1; }
+    else
+        log "Appearance gates skipped: no toolkit/settings runtime change (ci-scope settings=false)"
+    fi
+
     NK_WIDGETS_TEST=vkms NK_SETTINGS_DATA=/usr/share/nidara/settings-data \
         NK_WIDGETS_LOG="$REPO/toolkit/target/widgets-evidence" env -u NK_WIDGETS_STAGES python "$REPO/scripts/ci/nk-widgets-check.py" \
         > "$REPO/toolkit/target/widgets-evidence/check.log" 2>&1 \

@@ -1390,3 +1390,15 @@ No new host, fake Config1 data, compositor mutation or accessibility manager is
 created. This view can still read/edit actual Config1 through normal controls;
 opening it performs no Apply. It is not material/D7 acceptance or a fix for the
 unresolved normal-mode disconnect.
+
+### Settings acceptance build
+
+nk-settings' optional appearance-gates feature compiles private-file-controlled
+faults for PHASE1 gates 1/2 only. Normal builds have no gate control module/hooks.
+The feature forwards nk-a11y's settings-gate-controls to suppress one real Value
+event in the acceptance build; its property remains queryable and no fake event
+is emitted. Each applied fault logs its branch/target. These are test controls,
+not a runtime application API or an exemption from Settings/agent permissions.
+The real application, Config1, portal and legacy UI remain the oracles; tests run
+only on the disposable smoke session with evidence outside /tmp. Six controls
+are executed only in full, after the same baseline assertion passes.
