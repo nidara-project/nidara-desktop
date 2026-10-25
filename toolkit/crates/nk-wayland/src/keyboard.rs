@@ -7,6 +7,8 @@ use xkbcommon::xkb::{self, compose};
 
 #[derive(Clone, Debug)]
 pub struct Key {
+    /// Originating wl_keyboard serial. None for repeats or synthetic keys.
+    pub serial: Option<u32>,
     pub sym: u32,
     pub text: String,
     pub shift: bool,
@@ -78,6 +80,7 @@ impl Keyboard {
             }
         }
         let key = Key {
+            serial: None,
             sym: sym.raw(),
             text,
             ctrl,

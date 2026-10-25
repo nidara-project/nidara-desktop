@@ -841,6 +841,7 @@ mod tests {
         c.event(
             &mut t,
             &Event::Key(nk_wayland::Key {
+                serial: None,
                 sym: 0xff1b,
                 text: String::new(),
                 shift: false,

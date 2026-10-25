@@ -169,3 +169,263 @@ Fresh 52 Settings +54 widget +2 demo tests and all-target Clippy -D warnings
 passed with mandatory complete exports (target/review-20261025/{tests,clippy}.log).
 Formatting, skill docs and diff checks pass. Native D7 retry on #935 remains
 pending because the active/installed Hyalo is not the #935 binary.
+
+
+## Rebuilt local standard-popup transport cut — 2026-10-23
+
+Parent:corrected routing c0ad7550 (comment-wrap follow-up to5ad1ba34). Extracts only production transport and required
+consumer-constructor adaptation from existing0f42c903. The patch applies to the
+current lib without replacing later main code: exact pointer serial/time title
+dragging, group/choice/range behavior remain preserved. Public PopupPlacement,
+run_popup, PopupDone/Repositioned and Key::serial live in the one nk-wayland host.
+Child shares the parent connection, uses xdg_popup/positioner/grab/reposition and
+explicit role cleanup, with Drop cleanup on errors. Ordinary close sets parent
+input floor/reset; no stronger error-path parent-input claim is made here.
+Probe, native checker/wrapper and historical native result sections are excluded.
+
+- target/popup-transport-split-restored-tests.log:63 wayland/widgets lib/integration
+  tests PASS (9+17+7+15+8+5+2), exports required from full cut9 data. Popup unit
+  validation covers nonempty anchor/size and integer overflow; retained consumers
+  and later main tests still pass. These unit tests do not create a fake Window
+  or prove native role/input/cleanup behavior.
+- target/popup-transport-split-anchor-control.log: compiled production validation
+  fault accepts zero anchor width. The positioner validation test fails its OWN
+  invalid-anchor is_err assertion. Restored before full63PASS. This is a validation
+  control, not the historical native role-substitution control.
+- target/popup-transport-split-clippy.log: wayland/widgets all targets -D warnings
+  PASS. target/popup-transport-split-workspace.log: workspace all-target check PASS,
+  covering the new public Key field/Event consumers. fmt/skill-docs/diff PASS.
+  The invalid initial cargo command repeated --lib and ran no test; its error is
+  preserved in popup-transport-split-tests.log and is not acceptance evidence.
+
+Contract before APIs and skill/README/evidence in the same change. Builds use
+incremental0/jobs1/shared target. No new native popup/grab/reposition/focus/cleanup,
+Dropdown/AT-SPI/Orca, output-edge/fractional, glass, presentation/performance or
+owner-live acceptance. Exact original fixed binaries and their evidence remain
+untouched and are not attributed to this rebuilt head. No new Wayland host.
+
+## Local popup diagnostic extraction (#915, cut 13)
+
+Source extracted from 0f42c903: popup-probe, nk-popup-check.py and the wrapper
+using the existing private headless host. No new transport/provider or CI job.
+Review #193's nested-loop limit is now explicit in CONTRACT/README/skill:
+parent painting/configure/scale/appearance servicing is suspended while open.
+
+Validation PASS: actual `cargo build -p nk-wayland --example popup-probe`,
+Clippy all targets with `-D warnings`, Python AST, shell syntax, workspace fmt,
+skill-docs-check and diff whitespace. Validation is compilation/static only (logs under
+`toolkit/target/popup-probe-split-*.log`). No native/EGL run was attempted, and no
+rebuilt-head role/grab/reposition/dismissal/cleanup/control catch, accessibility,
+Orca, fractional/output-edge, glass, presentation, performance or owner-live
+acceptance is claimed. Historical binary evidence remains at the original source;
+this commit does not copy those PASS claims. The existing bounded driver and
+fault are prepared for later native validation, not reported as having passed.
+
+## Local Dropdown retained-model extraction (#915, cut 14)
+
+Existing4679a10e production delta and its three tests extracted onto current main
+features/capsule stack; module registration adapted to current ordering. Stable
+ComboBox/Option selection, guarded activation, independent expanded state and
+model-only zero-area options. Closed Button geometry/paint remain provisional;
+trigger tokens, popup MenuList, controller and builder are later cuts.
+
+Only CPU retained-model/layout/semantic tests are intended here; no native
+Selection signal, popup input, AT-SPI/Orca speech, Config1 write or owner-live
+acceptance is claimed. Prior popup diagnostic checker remains UNEXECUTED on
+rebuilt heads; compilation/static checks do not prove baseline/control passage.
+
+Validation PASS: `dropdown-model-split-restored-tests.log` contains 57 widget
+unit/integration tests (17+7+3+15+8+5+2), with absolute full cut9 data and
+NK_REQUIRE_EXPORT=1. The three Dropdown tests exercise actual Tree/Parley layout,
+selection semantics/diff and dispatch; no native Window/provider surrogate.
+`dropdown-model-split-repeat-control.log`: production same-selected return
+temporarily changed false to true, compiled, then failed its OWN repeated-action
+assertion Changed(6) vs None after initial selection/diff setup. Source restored
+byte-identical to original4679a10e before the full 57 PASS suite. All-target
+widgets Clippy -D warnings, workspace all-target check, fmt/skilldocs/diff PASS.
+Original delta did not apply at old module/doc context; only module registration
+order and append location were adapted, without replacing current lib wholesale.
+
+## Local Dropdown trigger extraction (#915, cut 15)
+
+Existingc238075d trigger style/paint/measure, Settings reader, token recipe and
+exporter/completeness checks reused. Current capsule exports and main choices,
+ranges, Styles and window input are preserved. Contract precedes the API; skill
+and README describe missing-style error, token geometry and shared themed arrow.
+Review198: collapsed ComboBox Selection activation is intentional and now explicit
+in CONTRACT, with a real Tree dispatch assertion while expanded=false. No popup
+opens for that selection path; availability/generation guards still apply.
+
+Fresh actual exports at `toolkit/target/dropdown-trigger-data` include all tokens,
+manifest and 12 i18n locales; old cut9 data lacks the new trigger and is not used.
+CPU pixel tests use explicit synthetic style colours/geometry, actual Parley and
+reference vector icon; Settings tests independently read all four exported modes
+and apply Styles, then require missing arrow rejection. These are component
+proofs, not native popup, AT-SPI signals, Orca speech or owner visual acceptance.
+No native/EGL run. Cut13 checker remains not executed on rebuilt heads.
+
+Compiled arrow-ink fault replaced arrow ink with background ink and failed its
+OWN opaque glyph pixel assertion after layout, geometry and idle background setup
+(`dropdown-trigger-split-arrow-control.log`). Restored production source before
+full suite verification; no assertion/timing relaxation. Initial patch-context
+failures were extraction mismatches, not acceptance; adapted insertion points
+preserve current capsule export/layout additions rather than copying old files.
+
+Validation PASS: 111 widgets/Settings tests (59+52) in
+`dropdown-trigger-split-restored-tests.log`, required fresh generated full data.
+`dropdown-trigger-split-clippy.log`: both packages all targets, -D warnings PASS;
+settings-tokens-check:108 colour sets/4 variants complete; fmt/skilldocs/diff PASS.
+Collapsed Selection assertion is CPU model proof only. Text/icon rendering tests
+use a synthetic32px fixture, not #921 window-controls sizing or owner acceptance.
+
+## Local MenuList extraction (#915, cut 16)
+
+Existing3cf5527c production MenuList/MenuOption/MenuStyle, choice-key routing,
+semantic selected state, CPU tests and Settings menu token reader/checks extracted.
+Native dropdown-probe265/checker77/wrapper19 and historical native evidence are
+excluded for a separate independently compiling diagnostic cut. No new provider
+or Wayland host. Current main/capsule/trigger functions and review198 collapsed
+Selection assertion are preserved. Contract precedes API; skill/README describe
+CPU-only scope and keep native/AT-SPI/Orca/material/live acceptance pending.
+
+Fresh full actual exports at `toolkit/target/menu-list-data`, including the changed
+menu recipe, are required; cut15 data is stale for this reader. CPU fixture
+geometry and palette are explicitly synthetic, using actual Parley/Tree/Canvas.
+
+Validation PASS:114 Settings/widgets tests(52+62) with NK_REQUIRE_EXPORT=1 and
+absolute fresh cut16 data, `menu-list-split-restored-tests.log`. Three new menu
+CPU tests verify independent hover/focus/selected check, navigation/reveal with
+unavailable rows, and retained style updates. Production fault allowed hovered
+unchosen rows to paint a check, compiled, then failed OWN
+`!bright_in_check(&hover, other)` after both row-background and chosen-check setup
+(`menu-list-split-hover-check-control.log`). Restored menu.rs byte-identical to
+original3cf5527c before114PASS. All-target Clippy bothpackages-Dwarnings, workspace
+alltarget check, actual generated-token completeness, fmt/skilldocs/diff PASS.
+No historical native PASS is imported or attributed to this rebuilt head.
+
+## Review201 correction to cut16
+
+Claude found pointer→keyboard leaves stale hover alongside keyboard focus. New
+actual Tree/Canvas stationary-pointer test compiled against old production and
+failed OWN old-row background assertion [0,100,255] vs[30,30,30] AFTER initial
+hover/background/chosen-check setup (`menu-list-review201-old-control.log`).
+menu_key now clears hover before focus/reveal. Reverse keyboard→pointer coverage
+is retained. This fixes CPU behavior, not native input acceptance.
+
+Named debts from trigger review: 0.15s hover/active transition not ported; closed
+trigger currently jumps. arrowColor text-dim needs live queryUI against the arrow
+node; image CSS is not proof and no live query has been performed. Current token
+is provisional, not owner/live ink acceptance. No speculative token change here.
+CONTRACT now names standalone menu_style Tree mode boundary for later builder
+extraction; future general layout/measure/viewport/paint changes must account for it.
+
+Review201 final:114Settings/widgetsPASS requiredunchangedcut16exports, bothalltarget
+Clippy-Dwarnings/fmt/skilldocs/diffPASS. Logs menu-list-review201-{restored-tests,clippy}.log.
+
+## Local MenuList diagnostic source extraction (#915, cut17)
+
+Existing3cf5527c dropdown-probe265, checker77 and wrapper19 extracted separately
+on corrected menu-list5afe8340. Reuses existing private widgets headless host;
+no new provider/backend or production controller. Diagnostic reads actual
+Exports/Portal/Styles and hosts retained model/menu with standard popup, forced
+opaque D5. No shared AT-SPI bridge or real Config1 builder is claimed.
+
+Checker NO EJECUTADO on rebuilt head. Compilation/static validation alone cannot
+prove its baseline or fault controls pass their own assertions. No native input,
+popup/grab/focus/cleanup/material/fractional, AT-SPI/Orca, timing/performance or
+owner-live acceptance. Historical fixed-binary results are not copied here.
+Fresh full cut16 menu-list-data is reusable because exporters/recipes unchanged.
+
+Validation PASS: actual `cargo build -p nk-settings --example dropdown-probe`,
+Settings alltargetClippy-Dwarnings, Python AST/bashsyntax, fmt/skilldocs/diff.
+Logs menu-probe-split-{build,clippy}.log. Rustfmt only adapts the original probe's
+formatting; no new production API. No native baseline/control catch is claimed.
+
+
+## Local cut 18 — DropdownPopup semantics and revisions (2026-10-23)
+
+Extracted existing 5bd82b32 adapter (166 lines) and its two CPU tests
+(130 lines) above cut17. Only module registration order adapted to current lib;
+main choices/ranges/window/Styles retained. Contract precedes public API, with
+README and canonical architecture skill updated in this commit.
+
+The actual Tree/MenuList/Parley tests preserve parent Root/ComboBox/Option IDs,
+Selection and LabelledBy while projecting menu focus/actions and bounds. The
+origin (300,90) and layout are explicitly synthetic CPU inputs, not configured
+Wayland geometry. Reopening/publication/menu-generation guards, unavailable/hidden
+options, cancellation, removal/error and guarded selection are exercised.
+
+Current mandatory full cut16 menu-list-data reused: exporters/tokens unchanged.
+116 Settings/widgets tests PASS in target/dropdown-popup-split-restored-tests.log
+(52 Settings +64 widgets). Both packages all-target Clippy -D warnings and
+workspace all-target check PASS in corresponding split-clippy/workspace logs.
+Compiled production control bypassing the publication guard failed its own
+stale Activate rejection assertion AFTER initial snapshot, permitted Focus and
+second publication; target/dropdown-popup-split-stale-control.log. Literal source
+restored before the full116 PASS. No timeout/setup failure used as a catch.
+
+No host/controller/provider integration, native popup geometry, AT-SPI, Orca,
+Config1 builder, material, performance or live acceptance established here.
+Historical fixed-binary evidence stays attached to its original source only.
+Adaptive foundations/Settings polling still needs a real caller and causal test.
+
+
+### Cut18 review206 — unavailable chosen option (2026-10-23)
+
+The original adapter refused opening when its chosen option was unavailable.
+Initial focus now uses that item only if available, otherwise the first available
+item, or none if all are unavailable. Selection/check remains on the parent's
+chosen option; cancellation preserves its value. New CPU regression first ran
+against the compiled old source and failed its own opening-success assertion
+AFTER confirming chosen index1 and disabled state (not timeout/unwrap):
+target/dropdown-popup-review206-old-control.log. Corrected source passes all117
+Settings/widgets tests (52+65), including all-unavailable no-focus dismissal,
+with mandatory fullcut16 exports: review206-restored-tests.log. Both-package
+all-target Clippy -D warnings PASS: review206-clippy.log. Clean rebuild followed
+Claude207's owner-authorized cache removal; no evidence/fixed binaries removed
+by this work. No native proof added.
+
+CONTRACT/README/skill explicitly retain the exclusive parent borrow as this
+short-menu adapter's ownership boundary. Parent paint/configure/scale/appearance
+cannot be serviced concurrently; a controller requiring that must revise the
+contract first. This remains a documented limitation, not resolved concurrency.
+
+
+## Local cut19 — acknowledged popup geometry (2026-10-23)
+
+Existing962de449 production delta and its CPU test extracted above corrected
+cut18(9dd47d89). Contract before public Window::popup_geometry API, README and
+canonical architecture skill together. Current main transport features retained.
+The signed parent-relative rectangle stages on xdg_popup.configure and commits
+with size at xdg_surface.configure acknowledgement; toplevel/unconfigured state
+stays None. Reposition requests/tokens do not predict an actual origin.
+
+75 wayland/widgets tests PASS (10+65), mandatory fullcut16 menu-list-data:
+target/popup-geometry-split-restored-tests.log. Compiled eager-publication fault
+failed its own current=None assertion after stage(-40,-180,200,120), observing
+Some([-40,-180,200,120]) before commit; split-eager-control.log. Literal source
+restored before75PASS. All-target nk-wayland Clippy -D warnings and workspace
+all-target check PASS: split-clippy/workspace.log. fmt/skilldocs/diff PASS.
+
+CPU Geometry staging/commit proof only: no native wire/configure/bounds or role,
+grab/reposition/focus/cleanup/AT-SPI/Orca/performance/live acceptance. Existing
+962 diagnostic probe/checker changes are excluded for a separate compilable cut.
+Historical fixed binaries/evidence remain unchanged and are not this head's proof.
+The short-menu exclusive parent borrow and adaptive polling caller/causal test
+remain explicit debt; this geometry API does not resolve either.
+
+
+## Local cut20 — popup geometry diagnostic source (2026-10-23)
+
+Separately extracted the existing962de449 popup-probe/checker delta above19:
+logs Window::popup_geometry on Configure; compares observed acknowledged popup
+rectangles with incoming wire messages and requires toplevel None. No new host,
+provider/backend or CI job. Existing private wrapper remains unchanged.
+
+Actual example BUILD and all-target nk-wayland Clippy -D warnings PASS in
+target/popup-geometry-probe-split-build.log and split-clippy.log. Python AST,
+bash syntax, fmt, skill-docs and diff checks PASS. Checker NOT EXECUTED: this
+cut separates/compiles diagnostic source; native baseline/control execution
+remains pending outside this local validation. No current native geometry,
+wire/role/grab/reposition/focus/cleanup, AT-SPI/Orca or performance/live proof.
+Historical fixed-binary evidence is not evidence of this rebuilt head.

@@ -117,3 +117,50 @@ Validation uses the wire's truncating fixed-point conversion for nonempty bounds
 threshold ordering and coverage overlap; adjacent wire rectangles remain legal.
 The limits are eight washes and sixteen coverage rectangles. Keep zero-alpha
 exit regions with their stable IDs for compositor fading.
+
+
+## Standard popup host
+
+run_popup hosts a standard xdg_popup on the parent's Wayland connection.
+PopupPlacement anchors it in parent window geometry. Pass the initiating physical
+input serial for an explicit grab; Key::serial is None for repeats. Do not replace
+it with a configure serial. Accessibility activation can omit the explicit grab.
+Compositor dismissal is PopupDone; version3 reposition acknowledgement is
+PopupRepositioned(token). Older xdg-shell can open, but reposition returns an error.
+No D7 layer or new toplevel is substituted. Window Drop destroys roles/surfaces
+on callback failure; ordinary close filters queued modal input before parent use.
+
+This cut contains only the primitive and validation tests. The separate transport
+probe/headless harness and their exact-binary evidence follow independently.
+No new native popup role/grab/reposition/cleanup trace or keyboard/Orca, edge,
+fractional, presentation/performance acceptance is implied by compilation.
+
+While this nested loop is open, the parent does not repaint or service its
+configure, scale or appearance changes. Keep it bounded to short menus; a
+long-running child needs parent servicing that this primitive does not provide.
+
+## Popup diagnostic source (#915)
+
+`examples/popup-probe.rs`, `scripts/ci/nk-popup-check.py` and
+`check-popup-headless.sh` reuse the existing private widgets headless host.
+The bounded driver checks physical-key serial, popup role/grab, reposition token,
+outside dismissal and child-callback-error cleanup. Its toplevel substitution
+must complete setup and fail the role assertion; setup timeouts are errors.
+Evidence records source revision and binary hashes. A future run needs fresh
+logs and its exact rebuilt probe; historical fixed binaries prove their source only.
+This extraction was compiled and syntax checked, with no new native execution,
+control catch, protocol trace, focus/Orca or presentation acceptance.
+
+`Window::popup_geometry()` is None for toplevels and unconfigured popups. Once
+xdg_surface.configure is acknowledged it exposes `[x, y, width, height]` from the
+matching compositor popup configure, in parent window-geometry logical coordinates.
+Signed origins survive output constraint adjustments. Geometry/size update together;
+requesting reposition or receiving its token alone never predicts the new origin.
+Use this configured origin, rather than the requested anchor, for modal semantics.
+
+
+The popup probe also logs acknowledged geometry; nk-popup-check.py compares
+these rectangles with incoming popup.configure wire messages and checks None
+for toplevels. This diagnostic extraction is compile/static-only; its checker
+has not been executed on this head. Native baseline/control execution remains
+pending outside this local source split.

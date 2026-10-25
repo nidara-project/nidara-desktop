@@ -158,3 +158,67 @@ current foundations demo still polls every 16 ms; it does not yet use this API
 to stop fast polling. The D5 clock is client monotonic time since first sync,
 not frame/presentation time.
 D7 has no client wash timeline or per-frame client repaint.
+
+
+### Dropdown model (#882/#915, popup list pending)
+
+`Tree::dropdown(group, label, options, selected)` adds a labelled row with one
+ComboBox and stable Selection children. Collapsed options are model-only: no
+paint/hit area and no Tab stops. The current option is still readable through
+AT-SPI Selection. Activating the combo requests opening (Activated); choosing
+an option uses the same guarded dispatch as accessibility and returns Changed
+once on the combo. Programmatic `set_dropdown_selected` emits no write.
+Expanded state is controlled explicitly so cancellation preserves the selection.
+The closed trigger takes `DropdownStyle` from `components.json.dropdown.trigger`
+(`toolkit/tokens/dropdown.json`, derived from the current kit CSS): padding,
+constant border, minimum content height, radius, relative font/weight, colours,
+disabled opacity and shared-theme chevron. Missing style is an error. Hover,
+press and keyboard focus keep the same bounds. This is the current source's
+recipe, still subject to native owner live review. This model is
+not the popup list, a complete Dropdown widget, a Settings builder, or an Orca
+acceptance result.
+
+
+### Dropdown menu list
+
+`Tree::menu_list` builds a standalone Scroll of retained MenuOptions for the
+standard popup host. `MenuStyle` reads `components.json.dropdown.menu`, from the
+current kit's dropdown CSS and check factory. The inner viewport reaches the
+card edge; border + row inset is accounted once. Arrow/Home/End focus reveals
+options and skips disabled entries without changing the chosen check. Activate
+returns an option action for the parent to accept. Hover/keyboard focus paints
+accent with accent ink; pointer movement removes an old keyboard highlight.
+The chosen check has a permanently reserved trailing slot and follows selected,
+not hovered/focused state. Portal style updates preserve IDs/focus/scroll through
+`set_menu_style`. No material forces the menu base opaque.
+
+The existing native probe/wrapper/checker are separated from this component cut.
+CPU tests do not prove native selection/cancel, material, pointer opening,
+AT-SPI/Orca, fractional scale or Settings app acceptance. Historical diagnostic
+binary results stay attached to their original source, not this rebuilt head.
+
+The separated `toolkit/settings/examples/dropdown-probe.rs` and
+`toolkit/settings/check-dropdown-headless.sh` use the existing private host and
+`scripts/ci/nk-dropdown-check.py`. The driver brackets select/cancel with handled
+input and parent commit markers and prepares ignore-selection/commit-on-cancel
+faults. It is not executed on this rebuilt head; build/syntax checks establish
+source compatibility only. It has no production Config1 or shared AT-SPI bridge.
+
+`DropdownPopup` borrows the combo's parent Tree while its menu is open. Publish
+its `snapshot(actual_popup_origin)` through the application's existing provider:
+the parent root/ComboBox/Selection option IDs remain stable, while menu-local IDs
+stay private. Focus, bounds and actions project onto those retained options;
+parent actions are suspended. Tag requests with the returned publication revision
+and call `request`, which also guards the captured menu generation. A revision
+from a previous opening cannot activate a new popup. `finish(Some(index))` uses
+the guarded parent activation; `finish(None)` and Drop preserve the value and
+collapse/restore focus. The popup host must supply its configured origin, and
+publish the restored parent snapshot after dismissal. This adapter alone does
+not establish provider, native popup geometry, or real Orca acceptance.
+
+The short-menu adapter intentionally holds an exclusive parent Tree borrow:
+parent repaint/configure/scale/appearance servicing cannot run concurrently.
+Revise that ownership contract before building a controller that needs it.
+An unavailable chosen option retains its check but initial focus falls back to
+the first available option, or none if all options are unavailable; opening and
+cancellation must still work without changing the chosen value.

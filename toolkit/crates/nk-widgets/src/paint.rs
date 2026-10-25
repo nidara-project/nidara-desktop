@@ -38,7 +38,7 @@ impl Tree {
                 bounds.height -= 2. * inset;
                 self.metrics.radius
             }
-            Kind::Button => match n.button_shape {
+            Kind::Button | Kind::Dropdown { .. } => match n.button_shape {
                 ButtonShape::Rounded => self.metrics.radius,
                 ButtonShape::Capsule => bounds.height / 2.,
             },
@@ -103,6 +103,9 @@ impl Tree {
         palette: Palette,
         title_style: Option<&crate::window::TitlebarStyle>,
     ) -> Result<Vec<u8>> {
+        if surface == Surface::Content && self.menu_style.is_some() {
+            return self.paint_menu(frame, palette);
+        }
         let mut canvas = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
         if surface == Surface::Content && !frame.material {
             canvas.rect(self.nodes[&self.root].bounds, opaque(palette.background));
@@ -240,6 +243,9 @@ impl Tree {
         if !intersects(r, clip) {
             return Ok(());
         }
+        if matches!(n.kind, Kind::Dropdown { .. }) {
+            return self.paint_dropdown(id, r, canvas);
+        }
         let m = self.metrics;
         let ink = if self.available(id) {
             palette.text
@@ -281,7 +287,9 @@ impl Tree {
             Kind::Page { selected: true } => {
                 canvas.rounded_rect(highlight, radius as f64, palette.selected)
             }
-            Kind::Button => canvas.rounded_rect(highlight, radius as f64, palette.surface),
+            Kind::Button | Kind::Dropdown { .. } => {
+                canvas.rounded_rect(highlight, radius as f64, palette.surface)
+            }
             Kind::Choices { .. } => self.paint_choices(id, r, origin, canvas, palette),
             Kind::Slider { .. } | Kind::Spin { .. } | Kind::Fields => {
                 self.paint_range(id, r, origin, canvas, palette)?
@@ -311,6 +319,7 @@ impl Tree {
                     | Kind::Footer
                     | Kind::Page { .. }
                     | Kind::Button
+                    | Kind::Dropdown { .. }
                     | Kind::TitleBar
                     | Kind::Choice { .. }
             )
@@ -321,7 +330,10 @@ impl Tree {
                 (Kind::Footer, true) => self.row_text()?.footer,
                 _ => ink,
             };
-            let padding = if matches!(n.kind, Kind::Button | Kind::Page { .. } | Kind::TitleBar) {
+            let padding = if matches!(
+                n.kind,
+                Kind::Button | Kind::Dropdown { .. } | Kind::Page { .. } | Kind::TitleBar
+            ) {
                 if n.kind == Kind::TitleBar {
                     m.padding
                         + self.title_leading_controls()

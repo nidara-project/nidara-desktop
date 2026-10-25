@@ -2888,3 +2888,102 @@ Settings positions its three window-control buttons from the current exported
 CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
 metrics, including portal updates staged before layout; no cached measured bounds
 or second layout is needed just to compute the capsule's horizontal placement.
+
+
+The native popup seam is nk-wayland::run_popup: standard xdg_popup on the parent's
+connection, not a D7 layer or new toplevel. Positive integer anchor/size are
+validated before positioner requests; optional grab serial comes from physical
+input. Key::serial is Some on physical presses and None on repeats/synthetic keys.
+PopupDone closes the nested host; reposition requires xdg-shell v3 and publishes
+its acknowledgement token. Ordinary close advances the parent's input floor and
+resets keyboard state; Window Drop destroys child roles/surfaces on error too.
+Closed windows get no idle callback. The transport probe/harness belongs in a
+separate cut; compilation/placement unit tests are not a native popup or Dropdown,
+AT-SPI/Orca, output-edge/fractional or timing acceptance.
+
+While this nested loop is open, the parent does not repaint or service its
+configure, scale or appearance changes. Keep it bounded to short menus; a
+long-running child needs parent servicing that this primitive does not provide.
+
+The popup diagnostic reuses widgets-demo/check-headless.sh through
+nk-wayland/check-popup-headless.sh, with evidence/runtime under target. The
+checker requires completed lifecycle setup before its role-substitution assertion,
+and verifies destruction before return on callback error. Compilation and syntax
+checks do not establish native role/grab/reposition/cleanup acceptance; keep older
+fixed-binary evidence attributed to its original source and hashes.
+
+
+`nk-widgets::Tree::dropdown` is the retained ComboBox/Selection model (#882/#915).
+Its selected option remains an accessible child while collapsed, with zero
+paint/hit area and no independent Tab stop. Option activation emits Changed on
+the combo through the ordinary stale/hidden/disabled guard; combo activation
+only requests opening. Expanded state and selection are independent. Popup list
+painting/input, final closed-control look and Settings builder remain separate
+pending work; model tests do not prove real Orca speech.
+
+The closed Dropdown trigger now uses `DropdownStyle`, exported once from
+`toolkit/tokens/dropdown.json` as components.json's `dropdown.trigger`; shared
+`nk-settings::Styles::apply` installs it. The source is the current kit CSS,
+including the reserved 2px focus border, relative Settings font/weight and
+shared-theme down chevron. Missing style/arrow is an error. The trigger's
+paint/geometry no longer reuse Button defaults. This does not implement the
+open popup list or accept its native look/Orca behavior.
+
+
+`Tree::menu_list` and `MenuStyle` now provide the retained Dropdown list over
+standard xdg_popup (#882/#915). MenuOption semantics use Option/selected; hover
+and keyboard focus are independent of the chosen check. Up/Down/Home/End reveal
+focus while skipping unavailable rows; Activate is returned to the controlled
+parent. Menu tokens come from the current CSS/factory, with one row inset and
+a permanently reserved trailing check slot. `set_menu_style` keeps IDs/focus.
+The native diagnostic source belongs to a separate cut. The production popup
+controller, shared accessibility publication/ID-generation safety across parent
+and popup, and Settings builder remain to integrate before any real AT-SPI/Orca
+acceptance claim. Current evidence is CPU component proof only.
+
+Menu keyboard navigation clears hover before focus/reveal: stationary pointer
+state must not paint a second highlighted row after arrows/Home/End or scrolling.
+The standalone menu remains a menu_style-controlled Tree mode across layout,
+measure, viewport and paint; preserve this explicit boundary until builder
+integration extracts it. Trigger visual debt: the kit's 0.15s hover/active
+transition has not been ported. The arrow text-dim token still needs live queryUI
+verification against the GTK arrow node (image CSS does not establish its ink).
+
+The MenuList diagnostic source is separately available: Settings dropdown-probe,
+check-dropdown-headless.sh and nk-dropdown-check.py reuse the private widgets
+host. Forced opaque D5 composition and prepared select/cancel faults are not
+native proof until executed against exact binaries; current extraction is
+compile/static-only. Do not import original fixed-binary PASS into new heads.
+
+The Dropdown's `DropdownPopup` adapter borrows the controlled parent Tree and
+projects its separate MenuList view onto the parent's existing ComboBox option
+IDs. Publish that merged snapshot through the SAME provider, not two independently
+numbered Trees/providers. ComboBox/Selection/LabelledBy stay in place; menu focus
+and configured parent-relative bounds attach to the existing options. Other
+parent actions are suspended. The returned process-unique publication revision,
+plus captured menu generation, guards request routing across reopenings; the
+bridge must tag requests with its actual published revision. `finish` uses guarded
+parent selection; cancellation/Drop only collapse and restore available focus.
+This is CPU-tested groundwork: host/controller publication with the actual popup
+configure origin, builder integration and real Orca speech still need validation.
+
+The short-menu adapter intentionally holds an exclusive parent Tree borrow:
+parent repaint/configure/scale/appearance servicing cannot run concurrently.
+Revise that ownership contract before building a controller that needs it.
+An unavailable chosen option retains its check but initial focus falls back to
+the first available option, or none if all options are unavailable; opening and
+cancellation must still work without changing the chosen value.
+
+For that modal snapshot, `nk-wayland::Window::popup_geometry()` now exposes the
+compositor's actual `[x,y,width,height]` relative to parent window geometry. It is
+None on toplevels/before first configure, and latches the pending popup rectangle
+with size only at xdg_surface.configure acknowledgement. A reposition request is
+not evidence of a new origin. Use the configured origin for semantic bounds;
+flip/slide can differ from the requested anchor, including negative coordinates.
+
+
+The separate popup-geometry diagnostic logs Window::popup_geometry on each
+Configure and compares it with received xdg_popup wire rectangles, including
+reposition, while requiring toplevel None. Its source is compiled/static-checked
+on extraction; checker execution remains pending. Do not substitute historical
+fixed-binary results for native evidence of a rebuilt head.

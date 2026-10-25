@@ -7,7 +7,9 @@
 use crate::exports::{Exports, Tokens};
 use crate::portal::Appearance;
 use nk_render::{Color, rgba};
-use nk_widgets::{ChoiceStyle, Metrics, Palette, RangeStyle, RowTextStyle, SwitchStyle};
+use nk_widgets::{
+    ChoiceStyle, DropdownStyle, MenuStyle, Metrics, Palette, RangeStyle, RowTextStyle, SwitchStyle,
+};
 use serde_json::Value as Json;
 
 pub struct Styles {
@@ -19,6 +21,8 @@ pub struct Styles {
     pub range: RangeStyle,
     pub switch: SwitchStyle,
     pub rows: RowTextStyle,
+    pub dropdown: DropdownStyle,
+    pub menu: MenuStyle,
     /// The accent palette by name, in its export order (`colors.json` `accents`).
     pub accents: Vec<(String, Color)>,
     /// The interface font at the text scale (the portal's), at the kit's body line height.
@@ -132,6 +136,49 @@ impl Styles {
             disclosure_open: field(&disc["open"], "disclosure open icon")?,
             disclosure_closed: field(&disc["closed"], "disclosure closed icon")?,
         };
+        let d = &c["dropdown"]["trigger"];
+        let dropdown = DropdownStyle {
+            padding_x: number(&d["paddingX"])?,
+            padding_y: number(&d["paddingY"])?,
+            border: number(&d["border"])?,
+            min_content_height: number(&d["minContentHeight"])?,
+            radius: number(&statics["ts"]["RADIUS"][field(&d["radius"], "dropdown radius")?])?,
+            text_scale: em(statics, &field(&d["fontSize"], "dropdown font size")?)?,
+            weight: scss(statics, &field(&d["fontWeight"], "dropdown weight")?)?,
+            label_margin: scss(statics, &field(&d["labelMargin"], "dropdown label margin")?)?,
+            arrow_size: number(&d["arrowSize"])?,
+            arrow_gap: number(&d["arrowGap"])?,
+            arrow: field(&d["arrow"], "dropdown arrow")?,
+            background: token(&field(&d["background"], "dropdown background")?)?,
+            hover: token(&field(&d["hover"], "dropdown hover")?)?,
+            pressed: token(&field(&d["pressed"], "dropdown pressed")?)?,
+            text: token(&field(&d["text"], "dropdown text")?)?,
+            arrow_color: token(&field(&d["arrowColor"], "dropdown arrow colour")?)?,
+            focus: token(&field(&d["focus"], "dropdown focus")?)?,
+            disabled_opacity: number(&d["disabledOpacity"])?,
+        };
+        let m = &c["dropdown"]["menu"];
+        let menu = MenuStyle {
+            border: number(&m["border"])?,
+            radius: number(&statics["ts"]["RADIUS"][field(&m["radius"], "menu radius")?])?,
+            inset: number(&m["inset"])?,
+            padding_x: number(&m["paddingX"])?,
+            padding_y: number(&m["paddingY"])?,
+            row_radius: number(
+                &statics["ts"]["RADIUS"][field(&m["rowRadius"], "menu row radius")?],
+            )?,
+            text_scale: em(statics, &field(&m["fontSize"], "menu font")?)?,
+            weight: scss(statics, &field(&m["fontWeight"], "menu font weight")?)?,
+            check_size: number(&m["checkSize"])?,
+            check_gap: number(&m["checkGap"])?,
+            check_stroke: number(&m["checkStroke"])?,
+            background: token(&field(&m["background"], "menu background")?)?,
+            border_color: token(&field(&m["borderColor"], "menu border")?)?,
+            text: token(&field(&m["text"], "menu text")?)?,
+            accent: token(&field(&m["accent"], "menu accent")?)?,
+            accent_text: token(&field(&m["accentText"], "menu accent ink")?)?,
+            pressed_black: number(&m["pressedBlack"])?,
+        };
         let accents = exports.colors["accents"]
             .as_object()
             .ok_or("missing accent palette")?
@@ -151,6 +198,8 @@ impl Styles {
             range,
             switch,
             rows,
+            dropdown,
+            menu,
             accents,
             text,
         })
@@ -164,6 +213,7 @@ impl Styles {
         tree.set_range_style(self.range)?;
         tree.set_switch_style(self.switch)?;
         tree.set_row_text_style(self.rows.clone())?;
+        tree.set_dropdown_style(self.dropdown.clone())?;
         tree.set_text_style(self.text.clone());
         Ok(())
     }
@@ -334,7 +384,7 @@ mod tests {
             eprintln!("skipped: no build/settings-data (set NK_REQUIRE_EXPORT to require it)");
             return;
         }
-        let exports = Exports::load(&root).unwrap();
+        let mut exports = Exports::load(&root).unwrap();
         for dark in [true, false] {
             for reduce in [true, false] {
                 let a = Appearance {
@@ -349,7 +399,41 @@ mod tests {
                 let s = Styles::new(&exports, &a).unwrap();
                 assert!(s.metrics.switch_width >= s.metrics.control);
                 assert_eq!(s.accents.len(), 9);
+                assert_eq!(s.dropdown.border, 2.);
+                assert_eq!(s.dropdown.arrow, "nd-pan-down");
+                nk_widgets::Tree::menu_list(
+                    "Menu",
+                    s.metrics,
+                    s.text.clone(),
+                    s.menu.clone(),
+                    &["one"],
+                    0,
+                )
+                .unwrap();
+                let mut tree = nk_widgets::Tree::new("Styles", s.metrics, s.text.clone()).unwrap();
+                s.apply(&mut tree).unwrap();
             }
         }
+        for variant in exports.components["variants"].as_array_mut().unwrap() {
+            variant["dropdown"]["trigger"]
+                .as_object_mut()
+                .unwrap()
+                .remove("arrow");
+        }
+        let a = Appearance {
+            accent: [0., 136. / 255., 1.],
+            dark: true,
+            reduce_transparency: false,
+            window_background: "opaque".into(),
+            reduced_motion: false,
+            font: "Inter Variable 11".into(),
+            text_scale: 1.,
+        };
+        assert!(
+            Styles::new(&exports, &a)
+                .err()
+                .unwrap()
+                .contains("dropdown arrow")
+        );
     }
 }

@@ -24,6 +24,8 @@ impl Tree {
                 Kind::Spin { .. } => Role::SpinButton,
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
+                Kind::Dropdown { .. } => Role::ComboBox,
+                Kind::DropdownOption { .. } | Kind::MenuOption { .. } => Role::Option,
                 Kind::Choice { .. } => Role::RadioButton,
             };
             let mut n = Semantic::new(id, role, &widget.name);
@@ -65,9 +67,17 @@ impl Tree {
                     widget.kind,
                     Kind::Switch { checked: true } | Kind::Choice { checked: true }
                 ),
-                selected: matches!(widget.kind, Kind::Page { selected: true }),
-                expanded: matches!(widget.kind, Kind::Disclosure { expanded: true }),
-                expandable: matches!(widget.kind, Kind::Disclosure { .. }),
+                selected: matches!(
+                    widget.kind,
+                    Kind::Page { selected: true }
+                        | Kind::DropdownOption { selected: true }
+                        | Kind::MenuOption { selected: true }
+                ),
+                expanded: matches!(
+                    widget.kind,
+                    Kind::Disclosure { expanded: true } | Kind::Dropdown { expanded: true }
+                ),
+                expandable: matches!(widget.kind, Kind::Disclosure { .. } | Kind::Dropdown { .. }),
                 offscreen: !intersects(r, self.visible_clip(id)),
                 ..Default::default()
             };
@@ -86,6 +96,8 @@ impl Tree {
                     step: range.step as f64,
                     text: range.text(value),
                 });
+            } else if matches!(widget.kind, Kind::DropdownOption { .. }) {
+                n.actions = vec![Action::Activate];
             } else if widget.kind.focusable() {
                 n.actions = vec![Action::Focus, Action::Activate];
             }

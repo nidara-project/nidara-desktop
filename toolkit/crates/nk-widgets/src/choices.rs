@@ -170,6 +170,9 @@ impl Tree {
         let Some(id) = self.focused else {
             return Ok(None);
         };
+        if matches!(self.nodes[&id].kind, Kind::MenuOption { .. }) {
+            return self.menu_key(id, sym);
+        }
         if matches!(
             self.nodes[&id].kind,
             Kind::Slider { .. } | Kind::Spin { .. }

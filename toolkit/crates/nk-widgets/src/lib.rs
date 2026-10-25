@@ -2,6 +2,12 @@
 //! Retained structural widgets. The tree is the source for layout, pixels,
 //! hit-testing, focus and semantics; Wayland remains in nk-wayland.
 mod choices;
+mod dropdown;
+mod dropdown_popup;
+pub use dropdown::DropdownStyle;
+pub use dropdown_popup::{DropdownPopup, PopupSnapshot};
+mod menu;
+pub use menu::MenuStyle;
 
 mod capsule;
 mod capsule_fallback;
@@ -103,6 +109,16 @@ pub enum Kind {
         checked: bool,
     },
     Button,
+    Dropdown {
+        expanded: bool,
+    },
+    /// Model-only children for ComboBox Selection, not painted popup items.
+    DropdownOption {
+        selected: bool,
+    },
+    MenuOption {
+        selected: bool,
+    },
     /// A radio group: a row's control holding its `Choice`s (#882).
     Choices {
         kind: ChoiceKind,
@@ -135,6 +151,8 @@ impl Kind {
             Self::Page { .. }
                 | Self::Switch { .. }
                 | Self::Button
+                | Self::Dropdown { .. }
+                | Self::MenuOption { .. }
                 | Self::Choice { .. }
                 | Self::Slider { .. }
                 | Self::Spin { .. }
@@ -147,6 +165,7 @@ impl Kind {
             self,
             Self::Switch { .. }
                 | Self::Button
+                | Self::Dropdown { .. }
                 | Self::Choices { .. }
                 | Self::Slider { .. }
                 | Self::Fields
@@ -263,6 +282,8 @@ pub struct Tree {
     pub(crate) range_style: Option<RangeStyle>,
     pub(crate) switch_style: Option<SwitchStyle>,
     pub(crate) row_text_style: Option<RowTextStyle>,
+    dropdown_style: Option<DropdownStyle>,
+    menu_style: Option<MenuStyle>,
     /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
     pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
@@ -330,6 +351,8 @@ impl Tree {
             range_style: None,
             switch_style: None,
             row_text_style: None,
+            dropdown_style: None,
+            menu_style: None,
             icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
@@ -430,7 +453,10 @@ impl Tree {
             (Kind::Window, Kind::Sidebar | Kind::TitleBar | Kind::Scroll)
                 | (Kind::Sidebar, Kind::Page { .. })
                 | (Kind::TitleBar | Kind::ControlCapsule, Kind::Button)
-                | (Kind::Scroll, Kind::Group | Kind::Row)
+                | (
+                    Kind::Scroll,
+                    Kind::Group | Kind::Row | Kind::MenuOption { .. }
+                )
                 | (
                     Kind::Group,
                     Kind::Label | Kind::Row | Kind::Footer | Kind::Disclosure { .. }
@@ -444,6 +470,8 @@ impl Tree {
                 )
                 | (Kind::Fields, Kind::Spin { .. })
                 | (Kind::Choices { .. }, Kind::Choice { .. })
+                | (Kind::Row, Kind::Dropdown { .. })
+                | (Kind::Dropdown { .. }, Kind::DropdownOption { .. })
         );
         if !valid {
             return Err("invalid structural widget parent".into());
@@ -466,6 +494,13 @@ impl Tree {
                 .any(|id| self.nodes[id].kind.row_control())
         {
             return Err("a row has one control".into());
+        }
+        if matches!(kind, Kind::DropdownOption { selected: true })
+            && p.children
+                .iter()
+                .any(|id| matches!(self.nodes[id].kind, Kind::DropdownOption { selected: true }))
+        {
+            return Err("dropdown already has a selected option".into());
         }
         let id = self.allocate(Some(parent), kind, name.into());
         if matches!(kind, Kind::Page { selected: true }) {
@@ -755,7 +790,9 @@ impl Tree {
     pub fn dispatch(&mut self, target: Target, command: Command) -> Result<Effect> {
         if target.generation != self.generation
             || !self.available(target.id)
-            || !self.nodes[&target.id].kind.focusable()
+            || !(self.nodes[&target.id].kind.focusable()
+                || (command == Command::Activate
+                    && matches!(self.nodes[&target.id].kind, Kind::DropdownOption { .. })))
         {
             return Err("stale, hidden, disabled or non-actionable widget target".into());
         }
@@ -851,6 +888,16 @@ impl Tree {
                     self.sidebar_request = Some(false);
                 }
             }
+            Kind::DropdownOption { .. } => {
+                let parent = self.nodes[&id].parent.ok_or("orphan dropdown option")?;
+                let changed = self.select_dropdown_option(id)?;
+                return Ok(if changed {
+                    Effect::Changed(parent)
+                } else {
+                    Effect::None
+                });
+            }
+            Kind::Dropdown { .. } | Kind::MenuOption { .. } => {}
             Kind::Button => {
                 if self.sidebar_button == Some(id) {
                     self.sidebar_request = Some(!self.sidebar_open);
@@ -874,7 +921,11 @@ impl Tree {
         }
     }
     pub fn pointer_motion(&mut self, point: Point) {
-        self.set_hovered(self.hit_test(point));
+        let hit = self.hit_test(point);
+        if hit.is_some_and(|id| matches!(self.nodes[&id].kind, Kind::MenuOption { .. })) {
+            self.set_focus_visible(false);
+        }
+        self.set_hovered(hit);
     }
     pub fn pointer_motion_in(&mut self, container: NodeId, local: Point) -> Result<()> {
         let id = self.hit_test_in(container, local)?;
@@ -999,7 +1050,7 @@ impl Tree {
         {
             return Err("invalid window constraints".into());
         }
-        if self.adapt_sidebar(size.width) {
+        if self.menu_style.is_none() && self.adapt_sidebar(size.width) {
             self.sidebar_x = self.sidebar_target();
             self.leading = self.inset_target();
         }
@@ -1042,6 +1093,9 @@ impl Tree {
             return Ok(Size::default());
         }
         let kind = self.nodes[&id].kind;
+        if self.menu_style.is_some() && matches!(kind, Kind::Scroll | Kind::MenuOption { .. }) {
+            return self.measure_menu(id, width, backend);
+        }
         let m = self.metrics;
         let width = self.nodes[&id]
             .width
@@ -1057,6 +1111,9 @@ impl Tree {
             return Ok(self.nodes[&id].measured);
         }
         self.nodes.get_mut(&id).unwrap().constraint = width;
+        if matches!(kind, Kind::Dropdown { .. }) {
+            return self.measure_dropdown(id, width, backend);
+        }
         if let Kind::Choices { kind } = kind {
             return self.measure_choices(id, kind, width, backend);
         }
@@ -1184,14 +1241,21 @@ impl Tree {
         }
         let label_width = match kind {
             Kind::TitleBar => (width - 3. * m.control - 2. * m.padding).max(1.),
-            Kind::Page { .. } | Kind::Button => (width - 2. * m.padding).max(1.),
+            Kind::Page { .. } | Kind::Button | Kind::Dropdown { .. } => {
+                (width - 2. * m.padding).max(1.)
+            }
             _ => width,
         };
         let mut text = Size::default();
         if !self.nodes[&id].name.is_empty()
             && matches!(
                 kind,
-                Kind::Label | Kind::Page { .. } | Kind::Button | Kind::Subtitle | Kind::Footer
+                Kind::Label
+                    | Kind::Page { .. }
+                    | Kind::Button
+                    | Kind::Dropdown { .. }
+                    | Kind::Subtitle
+                    | Kind::Footer
             )
         {
             let mut style = self.style.clone();
@@ -1237,6 +1301,8 @@ impl Tree {
             max_w = max_w.max(s.width);
         }
         let size = match kind {
+            Kind::MenuOption { .. } => return Err("menu option outside menu layout".into()),
+            Kind::DropdownOption { .. } => Size::default(),
             Kind::ControlCapsule => unreachable!("capsule measured above"),
             Kind::Window => self.size,
             Kind::Sidebar => Size {
@@ -1263,7 +1329,7 @@ impl Tree {
                 width: m.switch_width,
                 height: m.control,
             },
-            Kind::Button => Size {
+            Kind::Button | Kind::Dropdown { .. } => Size {
                 width: m.control.max(text.width + 2. * m.padding),
                 height: m.control.max(text.height + 2. * m.padding),
             },
@@ -1395,6 +1461,14 @@ impl Tree {
         }
     }
     pub fn content_viewport(&self) -> Rect {
+        if let Some(s) = &self.menu_style {
+            return Rect {
+                x: s.border,
+                y: s.border,
+                width: (self.size.width - 2. * s.border).max(0.),
+                height: (self.size.height - 2. * s.border).max(0.),
+            };
+        }
         let leading = self.leading;
         let top = self
             .nodes
@@ -1460,6 +1534,17 @@ impl Tree {
             return;
         }
         let children = node.children.clone();
+        if kind == Kind::Scroll && self.menu_style.is_some() {
+            self.place_menu(id, r);
+            return;
+        }
+        if matches!(kind, Kind::Dropdown { .. }) {
+            // The model's Selection children are not the popup's painted list.
+            for child in children {
+                self.place_node(child, Rect::default());
+            }
+            return;
+        }
         let m = self.metrics;
         if kind == Kind::ControlCapsule {
             let metrics = self.capsules[&id].metrics;

@@ -1,0 +1,49 @@
+{
+  "$comment": [
+    "Native Dropdown trigger, from ui/lib/nidara-kit/styles/_components.scss dropdown > button and _base-layer.scss dropdown > button > box/arrow. Settings uses fse-small instead of fixed fs-small. RADIUS.sm is the same nidara-radius-sm. Final native values still need owner live review.",
+    "The arrow size 16 is the GTK default documented in _base-layer.scss, not a new native visual choice. Default applies to every component mode variant.",
+    "Menu list from _components.scss dropdown popover > contents/listview/.nidara-dropdown-item and scrolled.ts NidaraDropDown factory. Chosen check uses check.ts path with 2.2/24 stroke, requested at14, always reserving its slot. Hover/focus is accent; it never changes the chosen check."
+  ],
+  "default": {
+    "trigger": {
+      "paddingX": 14,
+      "paddingY": 4,
+      "border": 2,
+      "minContentHeight": 20,
+      "radius": "sm",
+      "fontSize": "fse-small",
+      "fontWeight": "fw-medium",
+      "labelMargin": "space-2",
+      "arrowSize": 16,
+      "arrowGap": 6,
+      "arrow": "nd-pan-down",
+      "background": "--nidara-surface-back",
+      "hover": "--nidara-surface-hover",
+      "pressed": "--nidara-surface-active",
+      "text": "--nidara-text",
+      "arrowColor": "--nidara-text-dim",
+      "focus": "--nidara-accent",
+      "disabledOpacity": 0.45
+    },
+    "menu": {
+      "border": 1,
+      "radius": "md",
+      "inset": 6,
+      "paddingX": 9,
+      "paddingY": 6,
+      "rowRadius": "sm",
+      "fontSize": "fse-small",
+      "fontWeight": "fw-regular",
+      "checkSize": 14,
+      "checkGap": 8,
+      "checkStroke": 2.2,
+      "background": "--nidara-popover-bg",
+      "borderColor": "--nidara-popover-border",
+      "text": "--nidara-text",
+      "accent": "--nidara-accent",
+      "accentText": "--nidara-accent-fg",
+      "pressedBlack": 0.15
+    }
+  },
+  "variants": []
+}

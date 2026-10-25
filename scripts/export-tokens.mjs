@@ -138,6 +138,7 @@ const list = JSON.parse(readFileSync(join(repo, "toolkit/tokens/list.json"), "ut
 const choices = JSON.parse(readFileSync(join(repo, "toolkit/tokens/choices.json"), "utf8"))
 const range = JSON.parse(readFileSync(join(repo, "toolkit/tokens/range.json"), "utf8"))
 const switchLook = JSON.parse(readFileSync(join(repo, "toolkit/tokens/switch.json"), "utf8"))
+const dropdown = JSON.parse(readFileSync(join(repo, "toolkit/tokens/dropdown.json"), "utf8"))
 const rows = JSON.parse(readFileSync(join(repo, "toolkit/tokens/rows.json"), "utf8"))
 
 const capsule = JSON.parse(readFileSync(join(repo, "toolkit/tokens/capsule.json"), "utf8"))
@@ -180,6 +181,7 @@ for (const dark of [true, false])
             range: variantFor(range, dark, reduceTransparency),
             switch: variantFor(switchLook, dark, reduceTransparency),
             rows: variantFor(rows, dark, reduceTransparency),
+            dropdown: variantFor(dropdown, dark, reduceTransparency),
 
             capsule: variantFor(capsule, dark, reduceTransparency),
             common: { padding: pixels("space-3"), gap: pixels("space-1"),

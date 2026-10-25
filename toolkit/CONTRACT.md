@@ -173,6 +173,111 @@ Owns everything between a string and positioned glyphs, and the editing model on
   the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
 
+### Dropdown retained model (#882/#915)
+
+`Tree::dropdown` creates one labelled row and one ComboBox with stable option
+children. The selected option is reported through AT-SPI Selection even while
+collapsed. Selection activation is intentionally allowed while collapsed,
+independent of expanded state; it changes the value without opening a popup.
+These model-only children have no painted or hit-test area and are
+not Tab stops; activating one through Selection changes the combo's value and
+emits `Effect::Changed(combo)`. Activating the combo itself asks the app to open
+its popup and does not change selection. Expanded state is explicit; cancellation
+can close it without changing the chosen option. Invalid option/index arguments
+are rejected before creating or changing nodes. A hidden/disabled/stale target
+cannot choose an option. Programmatic selection updates emit no application
+write. This model is a prerequisite, not acceptance of the popup list or builder;
+its popup list remains pending. `DropdownStyle` supplies the closed trigger's
+geometry/colours/type/arrow exclusively from `components.json.dropdown.trigger`
+(`toolkit/tokens/dropdown.json`); `nk-settings::Styles::apply` sets it. It follows
+the current kit's dropdown trigger, not Button's geometry. Missing style is an
+error. Its border reserves space at rest, keyboard focus uses that same border,
+and the arrow uses the shared icon theme with externally supplied ink.
+
+### Dropdown menu list (#882/#915)
+
+`Tree::menu_list` constructs a standalone retained popup list, one Scroll of
+MenuOption nodes. Each is an AT-SPI Option; `selected` means the currently chosen
+value, independent of pointer hover and keyboard focus. Up/Down/Home/End move
+focus and reveal it; activation emits Activated(option), leaving selection to the
+parent's controlled model. Escape/PopupDone are host cancellation, never edits.
+The list owns no Wayland connection: the existing standard popup host runs it.
+Keyboard menu navigation retires pointer hover before moving/revealing focus, so
+a stationary pointer cannot leave a second accent highlight or stale scrolled row.
+The standalone menu is currently a Tree mode selected by menu_style; generic
+layout/measure/content_viewport/paint branches must preserve that boundary. Extract
+this mode boundary when integrating the builder; it is not an embedded general list.
+
+`MenuStyle` comes from `components.json.dropdown.menu`, mapping the kit's actual
+popup CSS/check factory once. The viewport reaches the card's inner edge; row
+insets belong on the rows. Background is opaque without material, while a
+material-backed host paints the same content/border over the shared glass.
+The check reserves a trailing slot for every option and follows chosen state,
+not hover. It uses the existing check.ts path and exported stroke/size in row ink.
+This retained list alone does not establish a complete native Dropdown/builder
+or real Orca speech acceptance; that requires the host and accessibility bridge.
+
+### Dropdown modal semantics (#882/#915)
+
+`DropdownPopup::new` borrows the parent Tree until dismissal and constructs its
+MenuList from that combo's retained options. Its `menu`/`menu_mut` serve the popup
+host; their private node IDs are never published. `snapshot(origin)` keeps the
+parent semantic root, ComboBox, LabelledBy and Selection option IDs, projecting
+the menu's focus/bounds/actions onto those existing options. The origin must be
+the compositor-configured popup origin in parent window coordinates, not the
+requested anchor. Other parent actions are suspended while modal. Chosen state
+continues to come from the parent's model, never the menu's hover/focus. Initial
+focus uses the chosen option if available, otherwise the first available option, or none when
+all are unavailable; the chosen check is preserved.
+
+The exclusive parent Tree borrow is an intentional boundary of this short-menu
+adapter: the controller cannot repaint, reconfigure, restyle or scale the parent
+while it lives. A controller requiring concurrent parent servicing must revise
+this ownership contract before using this API; this cut does not solve that debt.
+
+Each snapshot returns a process-unique publication revision. `request` requires
+that revision and the menu generation captured by that publication; IDs from a
+previous opening/publication cannot act on a new menu. A host bridge must tag
+requests with the revision of its published snapshot and route them through this
+adapter, never dispatch popup-local IDs to the parent. `finish(Some(index))`
+commits through the parent's guarded option activation; cancellation and Drop
+only collapse and restore focus if still available. Invalid origins, removed
+menu options and unsupported/stale requests fail before selection changes.
+This adapter is CPU-tested groundwork; it does not itself publish a provider,
+run a popup, or establish real AT-SPI/Orca acceptance.
+
+### Standard popup host (#882/#915)
+
+`Window::popup_geometry()` returns None for a toplevel or before a popup's
+first acknowledged xdg_surface.configure. Afterwards it returns the latest
+compositor-configured `[x, y, width, height]` in parent window-geometry logical
+coordinates, including signed origins after flips/slides. Pending xdg_popup
+geometry becomes visible together with size at the following xdg_surface
+configure acknowledgement; a reposition request/token alone does not change it.
+Use this origin for modal semantics; requested anchors are not actual placement.
+
+`nk-wayland::run_popup(app, parent, placement, grab_serial)` is a nested host on
+its parent's connection, with a standard `xdg_popup` role, never a D7 layer or a
+new toplevel. `PopupPlacement` supplies a positive size and positive anchor
+rectangle in parent window-geometry coordinates; the menu opens below its left
+edge with compositor flip/slide constraints. Optional `grab_serial` is the serial
+of the initiating physical pointer/key event, never a later configure or an
+invented serial. `Key::serial` is Some only for a physical key press; repeats have
+None. Accessibility activation may open without an explicit input grab.
+
+The host acknowledges xdg_surface.configure before painting the compositor's
+configured dimensions. `PopupDone` closes the nested host; destroying the popup
+also dismisses it. `Window::reposition_popup` uses a new placement and caller token
+on xdg-shell v3+, and returns an error on older versions (no fake reposition).
+`PopupRepositioned(token)` carries the compositor acknowledgement. Destruction
+happens before the parent's event queue resumes; after ordinary close queued modal key events are not
+replayed into the parent. The caller restores focus only to a live visible node.
+While this nested loop is open, the parent does not repaint or service its
+configure, scale or appearance changes. Keep it bounded to short menus; a
+long-running child needs parent servicing that this primitive does not provide.
+
+This primitive alone is not a Dropdown, keyboard/Orca gate or native acceptance.
+
 ## nk-widgets (phase 1, #873)
 
 Dependencies point one way: `nk-widgets → nk-text, nk-render, nk-a11y, nk-wayland`.
