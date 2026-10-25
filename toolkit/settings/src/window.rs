@@ -325,7 +325,7 @@ impl Shell {
 
     /// Capsule input and ordinary window input use their shared toolkit dispatchers.
     pub fn event(&mut self, event: &nk_wayland::Event, window: &mut Window) -> Result<Effect> {
-        if matches!(event,nk_wayland::Event::Key(key) if key.ctrl && key.sym==0x66)
+        if matches!(event, nk_wayland::Event::Key(key) if key.ctrl && !key.alt && matches!(key.sym, 0x66 | 0x46))
             && self.tree.showing(self.search)
         {
             self.tree.focus(self.search)?;
