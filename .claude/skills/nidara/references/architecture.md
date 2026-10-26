@@ -873,8 +873,9 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
 thread of its own — `Config1` below).
 It owns `org.freedesktop.Notifications` at `/org/freedesktop/Notifications` for
 the whole session. Killing/reloading `nidara-shell` leaves the owner, history,
-sender timers and incoming notifications alive. NM/BlueZ agents and SNI remain
-where they were; this split moves only notifications.
+sender timers and incoming notifications alive. BlueZ agents and SNI remain
+where they were. The daily TS session also keeps its NM agent; the Rust session has
+its own opt-in Network1 service, described below.
 
 The shell connects to `org.nidara.Session`, `/org/nidara/Notifications`, interface
 `org.nidara.Notifications1`: `List() → s` (JSON array), `Dismiss(u)` (reason 2),
@@ -986,6 +987,53 @@ integration in `session/daemon/tests/config.rs` records Hyalo requests and wallp
 checks GTK files, external writers, schedule decisions, refusal/retry, reconnect and no-ops.
 The nested runner isolates runtime/config/data/cache/state and closes its children on exit
 (`#956`); always check that the nested compositor and helpers are gone after a bench run.
+
+## The Rust session network service
+
+`session/daemon/src/network/` serves `org.nidara.Network1` under the name
+`org.nidara.Network`, object `/org/nidara/Network`, only with `--network` (#959).
+**Never enable it alongside the daily TS shell**, whose NM secret agent already
+serves that user. Its agent ID is `org.nidara.Session.NetworkAgent`; the normal
+sessiond invocation has neither the network service nor an NM agent. The nested
+runner accepts an explicit `--network`; tests must supply a private system bus too.
+
+`Snapshot`/`Updated` carry epoch, revision and a complete JSON v1 state document;
+clients subscribe before hydration, pin the unique owner and discard old epochs.
+NM replacement clears all old devices/profiles/activations before repopulating.
+No secret enters the snapshot. NetworkManager calls use zbus, never password argv.
+Wi-Fi scan/connect/forget, saved hidden profiles, explicit enterprise/hidden profile
+submission, wired autoconnect, VPN, IP editing/Reapply with reactivation fallback
+and DHCP renewal live in this service. A missing enterprise/hidden profile is a
+`NeedsProfile` refusal, not guessed authentication. A returned activation is already
+ACTIVATED; cancellation differs from failure, and failed new profiles are removed.
+
+The Wi-Fi/802.1x agent only accepts NM's current unique system-bus sender. One
+registered renderer receives unicast questions with allowlisted metadata and replies
+by request ID; another living renderer cannot replace it (its PID is logged).
+NM withdrawal/restart, renderer loss and the 120-second deadline close questions.
+Secret Service writes include libsecret's NM `xdg:schema` attribute for exact item
+replacement; search/delete still match by subset for older entries without it.
+Duplicate setting-keys are read by greatest Item.Modified, with a stable path tie.
+Save/lookup/delete are ordered per UUID, including asynchronous GetSecrets saves:
+failed new-profile cleanup waits behind the save before deleting the UUID's secrets.
+Storage is selectable: user (1, keyring), system (0, NM's root-protected profile)
+and ask (2, forget persistent copies); public/private permissions are independent.
+New default connections use user storage and an explicit empty public ACL, while
+saved activation preserves its policy. Snapshot exposes per-secret flags/modes and
+permissions, including optional EAP NOT_REQUIRED(4), never values. The explicit
+storage APIs use NM VersionId/Update2 CAS (1.44+), verified destinations and rollback;
+Incomplete exposes locations/keys, never passwords. Failed rollback keeps a verified
+copy. Reconciliation on the next storage/IP mutation (or explicit call) follows NM
+flags, including ask's committed erasure intent. Consistent profiles skip repair
+writes, preserving VersionId and avoiding redundant polkit authorization.
+No backup schema or recovery file
+is created, and no SS queue slot is held while awaiting an NM callback. Missing
+ask-mode passwords require explicit values, with NeedsSecrets refusing before mutation.
+Not-saved secrets never go to disk. `--network-read-only` reads NM without exporting
+or registering an agent and refuses writes. Tests use fake NM and Secret Service
+on private buses for every mutation, and run through the existing sessiond test job.
+The wire contract and isolated test procedure are in
+`session/daemon/src/network/README.md`. TypeScript services remain unchanged.
 
 ## Boot sequence
 

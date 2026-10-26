@@ -1,0 +1,378 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Secret Service, with NetworkManager/libsecret's existing lookup attributes.
+//! Plain sessions on the user's private bus, never plaintext files or command arguments.
+use super::{
+    Error, Settings,
+    nm::{Props, number, owned, text},
+    storage::{Credential, Key},
+};
+use futures_util::StreamExt;
+use std::{
+    collections::HashMap,
+    future::Future,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use zbus::{
+    Connection, Proxy,
+    zvariant::{OwnedObjectPath as Path, OwnedValue, Value},
+};
+const NAME: &str = "org.freedesktop.secrets";
+const ROOT: &str = "/org/freedesktop/secrets";
+const SERVICE: &str = "org.freedesktop.Secret.Service";
+type Secret = (Path, Vec<u8>, Vec<u8>, String);
+const SCHEMA: &str = "org.freedesktop.NetworkManager.Connection";
+
+/// One ordered chain per UUID. Enqueue BEFORE replying to NM, so profile cleanup
+/// cannot race a save spawned by GetSecrets. Unrelated connections remain independent.
+#[derive(Clone)]
+pub struct Queue {
+    bus: Connection,
+    tails: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
+}
+impl Queue {
+    pub fn new(bus: Connection) -> Self {
+        Self {
+            bus,
+            tails: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+    fn run<T: Send + 'static>(
+        &self,
+        uuid: String,
+        work: impl Future<Output = Result<T, Error>> + Send + 'static,
+    ) -> tokio::sync::oneshot::Receiver<Result<T, Error>> {
+        let (send, receive) = tokio::sync::oneshot::channel();
+        let mut tails = self.tails.lock().unwrap();
+        tails.retain(|_, task| !task.is_finished());
+        let previous = tails.remove(&uuid);
+        let task = tokio::spawn(async move {
+            if let Some(previous) = previous {
+                let _ = previous.await;
+            }
+            let result = work.await;
+            if result.is_err() {
+                eprintln!("[network] keyring operation failed");
+            }
+            let _ = send.send(result);
+        });
+        tails.insert(uuid, task);
+        receive
+    }
+    pub fn save_later(&self, settings: Settings) {
+        let uuid = text(settings.get("connection"), "uuid");
+        let bus = self.bus.clone();
+        drop(self.run(uuid, async move { save(&bus, &settings).await }));
+    }
+    pub async fn save(&self, settings: Settings) -> Result<(), Error> {
+        let uuid = text(settings.get("connection"), "uuid");
+        let bus = self.bus.clone();
+        receive(self.run(uuid, async move { save(&bus, &settings).await })).await
+    }
+    pub async fn delete(&self, uuid: &str) -> Result<(), Error> {
+        let bus = self.bus.clone();
+        let key = uuid.to_string();
+        receive(self.run(key.clone(), async move { delete(&bus, &key).await })).await
+    }
+    pub async fn delete_keys(&self, uuid: &str, keys: &[Key]) -> Result<(), Error> {
+        let bus = self.bus.clone();
+        let uuid = uuid.to_string();
+        let keys = keys.to_vec();
+        receive(self.run(uuid.clone(), async move {
+            delete_keys(&bus, &uuid, &keys).await
+        }))
+        .await
+    }
+    pub async fn lookup(&self, uuid: &str, setting: &str) -> Result<Props, Error> {
+        let bus = self.bus.clone();
+        let key = uuid.to_string();
+        let setting = setting.to_string();
+        receive(self.run(
+            key.clone(),
+            async move { lookup(&bus, &key, &setting).await },
+        ))
+        .await
+    }
+}
+async fn receive<T>(rx: tokio::sync::oneshot::Receiver<Result<T, Error>>) -> Result<T, Error> {
+    rx.await
+        .map_err(|_| Error::Failed("keyring worker stopped".into()))?
+}
+struct Candidate {
+    modified: u64,
+    path: String,
+    value: Credential,
+}
+fn newest(out: &mut HashMap<String, Candidate>, key: String, candidate: Candidate) {
+    if out.get(&key).is_none_or(|old| {
+        (candidate.modified, candidate.path.as_str()) > (old.modified, old.path.as_str())
+    }) {
+        out.insert(key, candidate);
+    }
+}
+fn storage_attrs(uuid: &str, setting: &str, key: &str) -> HashMap<String, String> {
+    let mut a = attrs(uuid, Some(setting), Some(key));
+    // DONT_MATCH_NAME affects libsecret lookup, not its stored schema attribute.
+    a.insert("xdg:schema".into(), SCHEMA.into());
+    a
+}
+async fn proxy<'a>(bus: &'a Connection, path: &'a str, iface: &'a str) -> Result<Proxy<'a>, Error> {
+    Ok(Proxy::new(bus, NAME, path, iface).await?)
+}
+async fn prompt(bus: &Connection, path: &Path) -> Result<OwnedValue, Error> {
+    let p = proxy(bus, path, "org.freedesktop.Secret.Prompt").await?;
+    let mut signals = p.receive_signal("Completed").await?;
+    p.call::<_, _, ()>("Prompt", &("",)).await?;
+    let msg = tokio::time::timeout(Duration::from_secs(110), signals.next())
+        .await
+        .map_err(|_| Error::Failed("keyring prompt timed out".into()))?
+        .ok_or_else(|| Error::Failed("keyring prompt closed".into()))?;
+    let (dismissed, result): (bool, OwnedValue) = msg.body().deserialize()?;
+    if dismissed {
+        return Err(Error::Cancelled("keyring prompt cancelled".into()));
+    }
+    Ok(result)
+}
+async fn unlock(bus: &Connection, paths: &[Path]) -> Result<(), Error> {
+    let p = proxy(bus, ROOT, SERVICE).await?;
+    let (_unlocked, prompt_path): (Vec<Path>, Path) = p.call("Unlock", &(paths,)).await?;
+    if prompt_path.as_str() != "/" {
+        prompt(bus, &prompt_path).await?;
+    }
+    Ok(())
+}
+fn attrs(uuid: &str, setting: Option<&str>, key: Option<&str>) -> HashMap<String, String> {
+    let mut a = HashMap::from([("connection-uuid".into(), uuid.into())]);
+    if let Some(s) = setting {
+        a.insert("setting-name".into(), s.into());
+    }
+    if let Some(k) = key {
+        a.insert("setting-key".into(), k.into());
+    }
+    a
+}
+async fn search(bus: &Connection, a: &HashMap<String, String>) -> Result<Vec<Path>, Error> {
+    let p = proxy(bus, ROOT, SERVICE).await?;
+    let (mut paths, locked): (Vec<Path>, Vec<Path>) = p.call("SearchItems", &(a,)).await?;
+    unlock(bus, &locked).await?;
+    paths.extend(locked);
+    Ok(paths)
+}
+async fn session(bus: &Connection) -> Result<Path, Error> {
+    let p = proxy(bus, ROOT, SERVICE).await?;
+    let (_, session): (OwnedValue, Path) =
+        p.call("OpenSession", &("plain", Value::from(""))).await?;
+    Ok(session)
+}
+async fn close(bus: &Connection, s: &Path) {
+    if let Ok(p) = proxy(bus, s, "org.freedesktop.Secret.Session").await {
+        let _ = p.call::<_, _, ()>("Close", &()).await;
+    }
+}
+pub async fn lookup(bus: &Connection, uuid: &str, setting: &str) -> Result<Props, Error> {
+    let paths = search(bus, &attrs(uuid, Some(setting), None)).await?;
+    if paths.is_empty() {
+        return Ok(Props::new());
+    }
+    let s = session(bus).await?;
+    let result = async {
+        let p = proxy(bus, ROOT, SERVICE).await?;
+        let values: HashMap<Path, Secret> = p.call("GetSecrets", &(&paths, &s)).await?;
+        let mut out = HashMap::new();
+        for (path, (_, _, value, _)) in values {
+            let item = proxy(bus, &path, "org.freedesktop.Secret.Item").await?;
+            let a: HashMap<String, String> = item.get_property("Attributes").await?;
+            if let Some(key) = a.get("setting-key") {
+                let value = if key == "password-raw" {
+                    Credential::Bytes(value)
+                } else {
+                    let Ok(value) = String::from_utf8(value) else {
+                        continue;
+                    };
+                    Credential::Text(value)
+                };
+                let modified: u64 = item.get_property("Modified").await?;
+                newest(
+                    &mut out,
+                    key.clone(),
+                    Candidate {
+                        modified,
+                        path: path.to_string(),
+                        value,
+                    },
+                );
+            }
+        }
+        Ok(out
+            .into_iter()
+            .map(|(key, entry)| (key, entry.value.value()))
+            .collect())
+    }
+    .await;
+    close(bus, &s).await;
+    result
+}
+pub async fn save(bus: &Connection, s: &Settings) -> Result<(), Error> {
+    let uuid = text(s.get("connection"), "uuid");
+    if uuid.is_empty() {
+        return Err(Error::Invalid("missing connection UUID".into()));
+    }
+    let mut values = Vec::new();
+    for (setting, p) in s {
+        if !super::agent::supported(setting) {
+            continue;
+        }
+        for key in p.keys().filter(|k| super::agent::secret_key(setting, k)) {
+            let flag = if key.starts_with("wep-key") {
+                "wep-key-flags".to_string()
+            } else {
+                format!("{key}-flags")
+            };
+            let flags = number(Some(p), &flag);
+            if flags & 1 != 0
+                && flags & 2 == 0
+                && let Some(value) = p.get(key).and_then(Credential::read)
+            {
+                let (bytes, content) = match value {
+                    Credential::Text(v) => (v.into_bytes(), "text/plain; charset=utf8"),
+                    Credential::Bytes(v) => (v, "application/octet-stream"),
+                };
+                if !bytes.is_empty() {
+                    values.push((setting, key.as_str(), bytes, content));
+                }
+            }
+        }
+    }
+
+    if values.is_empty() {
+        return Ok(());
+    }
+    let svc = proxy(bus, ROOT, SERVICE).await?;
+    let mut collection: Path = svc.call("ReadAlias", &("default",)).await?;
+    if collection.as_str() == "/" {
+        let props = Props::from([(
+            "org.freedesktop.Secret.Collection.Label".into(),
+            owned("Network secrets"),
+        )]);
+        let (created, pp): (Path, Path) =
+            svc.call("CreateCollection", &(&props, "default")).await?;
+        collection = if pp.as_str() != "/" {
+            Path::try_from(prompt(bus, &pp).await?)
+                .map_err(|_| Error::Failed("invalid keyring collection reply".into()))?
+        } else {
+            created
+        };
+    }
+    unlock(bus, std::slice::from_ref(&collection)).await?;
+    let session = session(bus).await?;
+    let result = async {
+        let p = proxy(bus, &collection, "org.freedesktop.Secret.Collection").await?;
+        for (setting, key, value, content) in values {
+            let a = storage_attrs(&uuid, setting, key);
+            let properties = Props::from([
+                ("org.freedesktop.Secret.Item.Attributes".into(), owned(a)),
+                (
+                    "org.freedesktop.Secret.Item.Label".into(),
+                    owned(format!(
+                        "Network secret for {}/{setting}/{key}",
+                        text(s.get("connection"), "id")
+                    )),
+                ),
+            ]);
+            let secret = (session.clone(), Vec::<u8>::new(), value, content);
+            let (_, pp): (Path, Path) = p.call("CreateItem", &(&properties, secret, true)).await?;
+            if pp.as_str() != "/" {
+                prompt(bus, &pp).await?;
+            }
+        }
+        Ok(())
+    }
+    .await;
+    close(bus, &session).await;
+    result
+}
+async fn delete_item(bus: &Connection, path: &Path) -> Result<(), Error> {
+    let p = proxy(bus, path, "org.freedesktop.Secret.Item").await?;
+    let attrs: HashMap<String, String> = p.get_property("Attributes").await?;
+    if !attrs
+        .get("setting-name")
+        .zip(attrs.get("setting-key"))
+        .is_some_and(|(setting, key)| {
+            super::agent::supported(setting) && super::agent::secret_key(setting, key)
+        })
+        || attrs.get("xdg:schema").is_some_and(|s| s != SCHEMA)
+    {
+        return Ok(());
+    }
+    let pp: Path = p.call("Delete", &()).await?;
+    if pp.as_str() != "/" {
+        prompt(bus, &pp).await?;
+    }
+    Ok(())
+}
+async fn delete_keys(bus: &Connection, uuid: &str, keys: &[Key]) -> Result<(), Error> {
+    for key in keys {
+        for path in search(bus, &attrs(uuid, Some(&key.setting), Some(&key.key))).await? {
+            delete_item(bus, &path).await?;
+        }
+    }
+    Ok(())
+}
+pub async fn delete(bus: &Connection, uuid: &str) -> Result<(), Error> {
+    for path in search(bus, &attrs(uuid, None, None)).await? {
+        delete_item(bus, &path).await?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn storage_matches_libsecret_but_search_remains_a_subset() {
+        assert_eq!(
+            storage_attrs("uuid", "setting", "key")["xdg:schema"],
+            SCHEMA
+        );
+        assert!(!attrs("uuid", Some("setting"), None).contains_key("xdg:schema"));
+    }
+    #[test]
+    fn newest_duplicate_wins_in_both_orders_and_ties_are_stable() {
+        for rows in [
+            [(1, "old", "old-value"), (2, "new", "new-value")],
+            [(2, "new", "new-value"), (1, "old", "old-value")],
+        ] {
+            let mut out = HashMap::new();
+            for (modified, path, value) in rows {
+                newest(
+                    &mut out,
+                    "psk".into(),
+                    Candidate {
+                        modified,
+                        path: path.into(),
+                        value: Credential::Text(value.into()),
+                    },
+                );
+            }
+            assert_eq!(out["psk"].value, Credential::Text("new-value".into()));
+        }
+        for rows in [
+            [("a", "a-value"), ("b", "b-value")],
+            [("b", "b-value"), ("a", "a-value")],
+        ] {
+            let mut out = HashMap::new();
+            for (path, value) in rows {
+                newest(
+                    &mut out,
+                    "psk".into(),
+                    Candidate {
+                        modified: 2,
+                        path: path.into(),
+                        value: Credential::Text(value.into()),
+                    },
+                );
+            }
+            assert_eq!(out["psk"].value, Credential::Text("b-value".into()));
+        }
+    }
+}
