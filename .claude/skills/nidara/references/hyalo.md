@@ -1935,8 +1935,12 @@ What holds while locked, and where:
   session is hidden already), and only a client can unlock. Before sleep the delay inhibitor goes
   once the guard is on screen (or `GUARD_SHOWN`, 1 s, later: 4 s total, under logind's 5), and on
   the way back an output is powered only over a locked session — guarded if it somehow is not.
-  ⚠️ A `nidara-lock` that HANGS keeps every relaunch out (its `pgrep -x` single-instance check):
-  the guard then holds until it moves — safe, not friendly; Ctrl+Alt+Backspace is the way out.
+  ⚠️ A `nidara-lock` that HANGS keeps every relaunch of its SESSION out (one launcher per
+  session: `flock` on `$XDG_RUNTIME_DIR/nidara-lock.$WAYLAND_DISPLAY.lock`): the guard then holds
+  until it moves — safe, not friendly; Ctrl+Alt+Backspace is the way out. Until 2026-10-26 the
+  check was `pgrep -x nidara-lock`, machine-wide: a forgotten nested Hyalo's own lock client kept
+  the live session's out all night, which stayed locked on the bare wallpaper with nothing to
+  type into.
 - **The lock surface needs its frame callbacks** (`post_repaint`). Without them GTK's frame clock
   never ticks there and everything the lock fades in (the clock, the card) stays at its first
   frame: invisible. Found nested, 2026-10-02.
@@ -1968,16 +1972,19 @@ lock.
   `org.freedesktop.ScreenSaver.Inhibit`. While the session is locked none counts.
 - Steps are independent and fire once per idle stretch; the first input powers the screens back
   on, the lock stays. `ext-idle-notify-v1` is offered to other programs from the same state.
-- **`logind.rs` runs only with `--session`**: a sleep *delay* inhibitor (`PrepareForSleep(true)`
+- **`logind.rs` runs only with `--session` and never in a window (`--winit`)**: a sleep *delay* inhibitor (`PrepareForSleep(true)`
   → lock, the inhibitor released once the lock is CONFIRMED; past 3 s without a request, the
   GUARD and then sleep — see "The lock screen" above), the session's
   `Lock` signal (`loginctl lock-session`) and the ScreenSaver service on the session bus — a
   development Hyalo must not take the live session's. Suspend from idle also only with
-  `--session`: a nested Hyalo must never put the machine to sleep.
+  `--session`: a nested Hyalo must never put the machine to sleep. And **idle never locks a
+  window** (`IdleState::nested`): its lock client is a `nidara-lock` too, started next to the live
+  session's. The screens still go dark inside the window; Super+L still locks it by hand.
 - ⚠️ Testing the ScreenSaver path: a client that EXITS drops its inhibition (its bus name goes),
   so `dbus-send`/`gdbus call` look like "inhibit does nothing". Hold the connection (a gjs script
-  that sleeps). Do it nested with `dbus-run-session -- nidara-hyalo --winit --session` and
-  `HYALO_CONFIG=/dev/null` (no autostart), never against the live session bus.
+  that sleeps). Not in a window: since 2026-10-26 `--winit` never starts `logind.rs`, so nothing
+  serves the name there. Use `dbus-run-session -- nidara-hyalo --tty --session` on a spare VT
+  with `HYALO_CONFIG=/dev/null` (no autostart), never against the live session bus.
 - IPC: `nidara-hyalo msg idle` (`idle_secs`, `inhibited`, the config). Tested by
   `scripts/ci/hyalo-idle-check.sh` in the smoke (`hyalo-idle-inhibit-probe.c` is the inhibitor).
 
@@ -2371,9 +2378,9 @@ Two things Hyalo had to learn for the shell, both Hyprland behaviour the shell r
   `scripts/ci/hyalo-stalled-client-check.sh` (1500 motions to a stalled probe; before the fix,
   DISCONNECTED at 426).
 - **Every process Hyalo starts is waited for** (`spawn` in `main.rs`, a thread per child). Unwaited,
-  each one stayed a zombie once it exited, and `nidara-lock` — which will not start while a process
-  of its name exists (`pgrep -x`) — saw the first lock's zombie and refused every lock after it
-  (owner-caught 2026-10-02). CI: the smoke spawns five and requires no zombie left.
+  each one stayed a zombie once it exited, and `nidara-lock` — which then would not start while a
+  process of its name existed (`pgrep -x`, now a per-session `flock`) — saw the first lock's
+  zombie and refused every lock after it (owner-caught 2026-10-02). CI: the smoke spawns five and requires no zombie left.
 - **Layer surfaces are placed by Hyprland's rule, not Smithay's** (`arrange_output` in
   `shell/layer.rs`): a surface that reserves room is placed against the WHOLE output and its room
   comes off the usable area; zone 0 goes in what is left; -1 ignores it all. Smithay's

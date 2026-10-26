@@ -113,6 +113,7 @@ fn run(winit: bool, session: bool, command: Option<String>) -> Result<(), Box<dy
         );
         backend::winit::init(&mut state, &loop_handle, source)?;
         control::init(&mut event_loop);
+        state.idle.nested = true;
         start(&mut state, session, command);
         event_loop.run(None, &mut state, |state| state.after_dispatch())?;
     } else {
@@ -150,7 +151,9 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
     // A real session listens to logind and serves org.freedesktop.ScreenSaver, and may suspend
     // when idle; a development Hyalo does none of that (logind.rs, idle.rs).
     state.a11y = a11y::start(session);
-    if session {
+    // Not from a window, even with --session: the machine's sleep is the live session's to
+    // answer, and a nested Hyalo locking for it starts a second lock client.
+    if session && !state.idle.nested {
         state.idle.session = true;
         logind::start(state);
     }
