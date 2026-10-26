@@ -80,12 +80,22 @@ the requested setting. IDs cannot answer a different request, or a request alrea
 closed. NM cancellation, owner change, renderer loss and the 120-second deadline
 withdraw the question. Only explicit UI cancellation creates a cancellation record.
 
-Secret Service uses the existing NM attributes `connection-uuid`, `setting-name`,
-`setting-key`, so GNOME/libsecret entries remain usable. Only agent-owned string
-secrets are saved; `not-saved` values are not persisted. Keyring unlock/creation
-prompts use Secret Service's own prompt protocol. Store work after UI submission is
-asynchronous, as in TS, and a failure logs a generic message. No key is stored in
-sessiond's JSON or notification cache. Keyring calls never fall back to a file.
+Secret Service writes the existing NM attributes `connection-uuid`, `setting-name`,
+`setting-key` and `xdg:schema=org.freedesktop.NetworkManager.Connection`, matching
+libsecret's stored attributes so CreateItem(replace=true) replaces its item rather
+than creating a duplicate. Search/delete omit the schema constraint, like TS's
+DONT_MATCH_NAME, to keep older entries without it readable and removable. If multiple
+items share a setting-key, lookup selects the greatest Item.Modified value, with
+object path as a stable tie-breaker, independent of hash iteration order.
+
+Only agent-owned string secrets are saved; `not-saved` values are not persisted.
+Keyring unlock/creation prompts use Secret Service's own prompt protocol. Save,
+lookup and delete use one ordered chain per UUID; different UUIDs are independent.
+GetSecrets queues its save before replying to NM. Failed new-profile cleanup deletes
+its keyring entries after that save, so a delayed save cannot resurrect an orphan.
+Store work after UI submission remains asynchronous and a failure logs a generic
+message. No key is stored in sessiond's JSON or notification cache. Keyring calls
+never fall back to a file.
 
 ## Validation
 

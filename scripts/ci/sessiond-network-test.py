@@ -81,6 +81,9 @@ def fake():
     calls, items, retained = [], {}, []
     state = {'agent': '', 'result': None, 'radio': True, 'strength': 70, 'enterprise': False, 'reapplyFail': False, 'active': ACTIVE, 'activeProfile': PROF, 'activeState': 2, 'registrations': 0, 'carrier': True, 'autoconnect': True, 'locked': False, 'saveflags': 1, 'sequence': 0, 'noCollection': False, 'created': 4, 'lastCreated': '', 'wifiPresent': True}
     objects = {}
+    modified = {}
+    held_stores = []
+    state.update(stores=0, clock=100, holdStores=False, heldStores=0, newNeedsSecrets=False, profileDeletes=0)
     def method_xml(name, ins=(), outs=()):
         return '<method name="'+name+'">'+''.join('<arg type="'+t+'" direction="in"/>' for t in ins)+''.join('<arg type="'+t+'" direction="out"/>' for t in outs)+'</method>'
     def export(path, iface, methods=(), props=None):
@@ -108,7 +111,7 @@ def fake():
         if iface == NM + '.IP4Config':
             return {'AddressData': v('aa{sv}', [{'address': v('s', '192.0.2.4'), 'prefix': v('u', 24)}]), 'NameserverData': v('aa{sv}', [{'address': v('s', '192.0.2.1')}]), 'Domains': v('as', ['example']), 'Gateway': v('s', '192.0.2.1')}
         if iface == SS + '.Item':
-            return {'Attributes': v('a{ss}', items[path][0]), 'Locked': v('b', state['locked'])}
+            return {'Attributes': v('a{ss}', items[path][0]), 'Locked': v('b', state['locked']), 'Modified':v('t',modified[path])}
         return {}
     def getprop(bus, sender, path, iface, key):
         return properties(path, iface).get(key)
@@ -123,12 +126,43 @@ def fake():
         return True
     def answer(inv, signature='()', args=()):
         inv.return_value(v(signature, args))
+    def store_item(inv, p):
+        props, secret, replace = p
+        attrs = props[SS+'.Item.Attributes']
+        existing = next((path for path,(a,_) in items.items() if a==attrs), None)
+        item = existing or SECRET+'/item/'+str(len(items)+1)
+        items[item] = (attrs, bytes(secret[2]).decode())
+        state['clock']+=1
+        modified[item]=state['clock']
+        state['stores']+=1
+        if (item,SS+'.Item') not in objects:
+            export(item, SS+'.Item', [('Delete',(),('o',))], {'Attributes':'a{ss}', 'Locked':'b', 'Modified':'t'})
+        answer(inv, '(oo)', (item,'/'))
     def dispatch(bus, sender, path, iface, method, parameters, inv):
         try:
             p = parameters.unpack()
             if iface == 'org.nidara.NetworkTest':
                 if method == 'Info':
-                    answer(inv, '(s)', (json.dumps(dict(state, calls=calls, items=len(items))),))
+                    answer(inv, '(s)', (json.dumps(dict(state, calls=calls, items=len(items), itemUuids=[a['connection-uuid'] for a,_ in items.values()])),))
+                elif method == 'ReleaseStores':
+                    state['holdStores']=False
+                    for pending,parameters in held_stores:
+                        store_item(pending,parameters)
+                    held_stores.clear()
+                    answer(inv)
+                elif method == 'Seed':
+                    item=SECRET+'/item/'+('libsecret' if p[0]=='libsecret' else 'duplicate')
+                    if p[0]=='remove_duplicate':
+                        items.pop(SECRET+'/item/duplicate',None)
+                    else:
+                        attrs={'connection-uuid':'wifi','setting-name':'802-11-wireless-security','setting-key':'psk'}
+                        if p[0]=='libsecret':
+                            attrs['xdg:schema']='org.freedesktop.NetworkManager.Connection'
+                        items[item]=(attrs,'old-libsecret-key' if p[0]=='libsecret' else 'old-duplicate-key')
+                        modified[item]=10 if p[0]=='libsecret' else 1
+                        if (item,SS+'.Item') not in objects:
+                            export(item,SS+'.Item',[('Delete',(),('o',))],{'Attributes':'a{ss}','Locked':'b','Modified':'t'})
+                    answer(inv)
                 elif method == 'Set':
                     state[p[0]] = json.loads(p[1]); answer(inv)
                 elif method == 'Drop':
@@ -190,7 +224,7 @@ def fake():
                     profiles[path][setting] = {values.get_child_value(j).get_child_value(0).unpack(): values.get_child_value(j).get_child_value(1).get_variant() for j in range(values.n_children())}
                 answer(inv)
             elif method == 'Delete' and iface == NM+'.Settings.Connection':
-                profiles.pop(path); answer(inv)
+                profiles.pop(path); state['profileDeletes']+=1; answer(inv)
             elif method in ('AddConnection', 'AddAndActivateConnection'):
                 state['created'] += 1
                 newpath = ROOT+'/Settings/'+str(state['created'])
@@ -204,7 +238,17 @@ def fake():
                 if method == 'AddConnection':
                     answer(inv, '(o)', (newpath,))
                 else:
-                    state['activeProfile'] = newpath; answer(inv, '(oo)', (newpath, ACTIVE))
+                    state['activeProfile'] = newpath
+                    if state['newNeedsSecrets']:
+                        state['activeState']=1
+                        def wrong_password(c,res):
+                            try:
+                                c.call_finish(res)
+                            except GLib.Error:
+                                pass
+                            state['activeState']=4
+                        nm_bus.call(state['agent'],AGENT,NM+'.SecretAgent','GetSecrets',v('(a{sa{sv}}osasu)',(profiles[newpath],newpath,'802-11-wireless-security',[],3)),None,Gio.DBusCallFlags.NONE,130000,None,wrong_password)
+                    answer(inv, '(oo)', (newpath, ACTIVE))
             elif method == 'GetAllAccessPoints':
                 answer(inv, '(ao)', ([AP],))
             elif method in ('Disconnect','DeactivateConnection'):
@@ -245,14 +289,11 @@ def fake():
                 state['noCollection'] = False
                 answer(inv, '(oo)', (SECRET+'/collection/default', '/'))
             elif method == 'CreateItem':
-                props, secret, replace = p
-                attrs = props[SS+'.Item.Attributes']
-                existing = next((path for path,(a,_) in items.items() if a==attrs), None)
-                item = existing or SECRET+'/item/'+str(len(items)+1)
-                items[item] = (attrs, bytes(secret[2]).decode())
-                if not existing:
-                    export(item, SS+'.Item', [('Delete',(),('o',))], {'Attributes':'a{ss}', 'Locked':'b'})
-                answer(inv, '(oo)', (item,'/'))
+                if state['holdStores']:
+                    held_stores.append((inv,p))
+                    state['heldStores']+=1
+                else:
+                    store_item(inv,p)
             elif method == 'Delete' and iface == SS+'.Item':
                 items.pop(path); answer(inv, '(o)', ('/',))
             else:
@@ -272,7 +313,7 @@ def fake():
     export(ACTIVE,NM+'.Connection.Active',props={'Connection':'o','Uuid':'s','Type':'s','State':'u','Vpn':'b','Default':'b','Devices':'ao'})
     export(ROOT+'/IP4Config/1',NM+'.IP4Config',props={'AddressData':'aa{sv}','NameserverData':'aa{sv}','Domains':'as','Gateway':'s'})
     export(ROOT+'/AgentManager',NM+'.AgentManager',[('RegisterWithCapabilities',('s','u'),())])
-    export('/test','org.nidara.NetworkTest',[('Info',(),('s',)),('Set',('s','s'),()),('Ask',('u','s'),()),('Cancel',(),()),('Save',(),()),('Delete',(),()),('Drop',(),()),('Restore',(),())])
+    export('/test','org.nidara.NetworkTest',[('Info',(),('s',)),('Seed',('s',),()),('ReleaseStores',(),()),('Set',('s','s'),()),('Ask',('u','s'),()),('Cancel',(),()),('Save',(),()),('Delete',(),()),('Drop',(),()),('Restore',(),())])
     export(SECRET,SS+'.Service',[('OpenSession',('s','v'),('v','o')),('SearchItems',('a{ss}',),('ao','ao')),('Unlock',('ao',),('ao','o')),('GetSecrets',('ao','o'),('a{o(oayays)}',)),('ReadAlias',('s',),('o',)),('CreateCollection',('a{sv}','s'),('o','o'))])
     export(SECRET+'/session/test',SS+'.Session',[('Close',(),())])
     export(SECRET+'/collection/default',SS+'.Collection',[('CreateItem',('a{sv}','(oayays)','b'),('o','o'))])
@@ -393,17 +434,25 @@ def exercise(binary, directory, managed=False):
         meta = json.loads(requested[-1][1])
         check(not leaks and 'psk' not in meta['profile']['802-11-wireless-security'] and 'system-private-sentinel' not in requested[-1][1] and meta['retry'],'no secrets broadcast and retry metadata')
         fails(lambda: net('SubmitSecrets','(ta{sa{sv}})',(rid,{'802-11-wireless-security':{'psk':v('s','test-key')}}),c=competitor),'Denied')
-        state('noCollection',True)
+        ctrl('Seed','(s)',('libsecret',))
+        before_stores=info()['stores']
         net('SubmitSecrets','(ta{sa{sv}})',(rid,{'802-11-wireless-security':{'psk':v('s','test-key')}}),c=ui)
         wait(lambda: info()['result'] is not None,'NM secrets response')
         check(info()['result']['ok'] and info()['result']['value']=='test-key','secrets reach only NM')
-        wait(lambda: info()['items']==1,'agent-owned keyring save')
+        wait(lambda: info()['stores']>before_stores,'agent-owned keyring save completes')
+        check(info()['items']==1,'libsecret item replaced without duplicate')
         fails(lambda: net('SubmitSecrets','(ta{sa{sv}})',(rid,{'802-11-wireless-security':{'psk':v('s','stale')}}),c=ui),'Invalid')
+        ctrl('Seed','(s)',('duplicate',))
         state('locked',True)
         count = len(requested)
         ctrl('Ask','(us)',(0,'802-11-wireless-security'))
         wait(lambda: info()['result'] is not None,'keyring lookup')
-        check(info()['result']['value']=='test-key' and len(requested)==count,'keyring unlock prompt and noninteractive lookup')
+        check(info()['result']['value']=='test-key' and len(requested)==count,'keyring unlock prompt and newest duplicate lookup')
+        for _ in range(8):
+            ctrl('Ask','(us)',(0,'802-11-wireless-security'))
+            wait(lambda: info()['result'] is not None,'duplicate lookup')
+            check(info()['result']['value']=='test-key','newest Modified wins independently of item order')
+        ctrl('Seed','(s)',('remove_duplicate',))
         ctrl('Ask','(us)',(3,'802-11-wireless-security'))
         wait(lambda: len(requested)>count,'second question')
         net('CancelSecrets','(t)',(requested[-1][0],),c=ui)
@@ -424,13 +473,14 @@ def exercise(binary, directory, managed=False):
         wait(lambda: len(requested)>count,'timeout question')
         if managed or os.environ.get('NETWORK_TEST_QUICK')=='1':
             ctrl('Cancel')
-        wait(lambda: info()['result'] is not None,'120 second NM deadline',125)
+        # System-bus reply and session-bus close signal have no cross-bus ordering.
+        wait(lambda: info()['result'] is not None and any(x[0]==requested[-1][0] for x in closed),'120 second NM deadline and UI withdrawal',125)
         check('UserCanceled' in info()['result'].get('error','') and any(x[0]==requested[-1][0] for x in closed),'NM deadline/cancel withdraws unanswered request')
         count = len(requested)
         ctrl('Ask','(us)',(3,'802-11-wireless-security'))
         wait(lambda: len(requested)>count,'NM cancellation question')
         ctrl('Cancel')
-        wait(lambda: any(x[0]==requested[-1][0] for x in closed),'NM withdrawal closes UI')
+        wait(lambda: info()['result'] is not None and 'UserCanceled' in info()['result'].get('error','') and any(x[0]==requested[-1][0] for x in closed),'NM withdrawal closes UI and completes its request')
         count = len(requested)
         ctrl('Ask','(us)',(3,'802-11-wireless-security'))
         wait(lambda: len(requested)>count,'UI loss question')
@@ -444,6 +494,31 @@ def exercise(binary, directory, managed=False):
         check(info()['result']['value']=='test-key','not-saved flag never overwrites keyring')
         ctrl('Delete'); wait(lambda: info()['items']==0,'delete keyring')
         check('test-key' not in json.dumps(snapshot()[2]) and 'only-in-keyring' not in json.dumps(snapshot()[2]),'Snapshot never includes secrets')
+        # Deliberately let NM fail before its asynchronous keyring save finishes.
+        state('newNeedsSecrets',True)
+        state('holdStores',True)
+        state('activeState',2)
+        before=len(leaks)
+        before_deletes=info()['profileDeletes']
+        before_stores=info()['stores']
+        completion=[]
+        def connected(c,res):
+            try:
+                c.call_finish(res)
+                completion.append('unexpected-success')
+            except GLib.Error as e:
+                completion.append(str(e))
+        bus.call(NET,NETPATH,IFACE,'Connect',v('(oos)',(DEV,AP,'')),None,Gio.DBusCallFlags.NONE,20000,None,connected)
+        wait(lambda:len(leaks)>before,'new connection secret question')
+        new_uuid=json.loads(leaks[-1][1])['uuid']
+        net('SubmitSecrets','(ta{sa{sv}})',(leaks[-1][0],{'802-11-wireless-security':{'psk':v('s','wrong-new-key')}}),c=competitor)
+        wait(lambda:info()['heldStores']>0 and info()['profileDeletes']>before_deletes,'NM failed and save is still pending')
+        ctrl('ReleaseStores')
+        wait(lambda:info()['stores']>before_stores,'delayed save completed')
+        wait(lambda:completion and new_uuid not in info()['itemUuids'],'failed activation leaves no orphan after delayed save')
+        check('Failed' in completion[0] and new_uuid not in info()['itemUuids'],'failed activation leaves no orphan after delayed save')
+        state('newNeedsSecrets',False)
+        state('activeState',2)
         before=len(leaks)
         ctrl('Ask','(us)',(3,'802-11-wireless-security'))
         wait(lambda: len(leaks)>before,'question before NM restart')

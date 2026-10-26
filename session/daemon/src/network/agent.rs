@@ -61,15 +61,23 @@ pub struct Agent {
     session: Connection,
     state: Arc<Mutex<State>>,
     gate: Arc<Semaphore>,
+    keyring: keyring::Queue,
 }
 impl Agent {
     pub fn new(system: Connection, session: Connection) -> Self {
         Self {
             system,
+            keyring: keyring::Queue::new(session.clone()),
             session,
             state: Arc::new(Mutex::new(State::default())),
             gate: Arc::new(Semaphore::new(1)),
         }
+    }
+    pub fn save_profile_secrets(&self, settings: Settings) {
+        self.keyring.save_later(settings);
+    }
+    pub async fn delete_profile_secrets(&self, uuid: &str) -> Result<(), Error> {
+        self.keyring.delete(uuid).await
     }
     async fn auth(&self, h: &Header<'_>) -> Result<(), AgentError> {
         let owner = Nm::current(&self.system)
@@ -257,7 +265,7 @@ impl Agent {
         let work = async {
             if flags & 2 == 0 {
                 // A keyring error is not evidence that no password exists: ask the UI if allowed.
-                let found = tokio::select! { found = keyring::lookup(&self.session, &uuid, &setting_name) => found, _ = &mut rx => return Err(AgentError::UserCanceled("withdrawn".into())) };
+                let found = tokio::select! { found = self.keyring.lookup(&uuid, &setting_name) => found, _ = &mut rx => return Err(AgentError::UserCanceled("withdrawn".into())) };
                 if let Ok(mut found) = found {
                     found.retain(|k, _| secret_key(&setting_name, k));
                     if !found.is_empty() {
@@ -312,12 +320,7 @@ impl Agent {
                 }
                 merged.insert(setting.clone(), values);
             }
-            let bus = self.session.clone();
-            tokio::spawn(async move {
-                if keyring::save(&bus, &merged).await.is_err() {
-                    eprintln!("[network] could not store agent-owned secrets");
-                }
-            });
+            self.keyring.save_later(merged);
             Ok(reply)
         };
         let result = tokio::time::timeout(Duration::from_secs(120), work)
@@ -367,7 +370,8 @@ impl Agent {
         #[zbus(header)] header: Header<'_>,
     ) -> Result<(), AgentError> {
         self.auth(&header).await?;
-        keyring::save(&self.session, &connection)
+        self.keyring
+            .save(connection)
             .await
             .map_err(|_| AgentError::Failed("keyring store failed".into()))
     }
@@ -382,7 +386,8 @@ impl Agent {
         if uuid.is_empty() {
             return Err(AgentError::NoSecrets("missing UUID".into()));
         }
-        keyring::delete(&self.session, &uuid)
+        self.keyring
+            .delete(&uuid)
             .await
             .map_err(|_| AgentError::Failed("keyring deletion failed".into()))
     }

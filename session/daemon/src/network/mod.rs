@@ -116,6 +116,19 @@ impl Network {
         }
         result
     }
+    async fn cleanup_new_profile(&self, nm: &Nm, profile: &Path, uuid: &str) {
+        if nm
+            .call::<()>(profile, nm::PROFILE, "Delete", &())
+            .await
+            .is_err()
+        {
+            eprintln!("[network] could not remove failed new profile");
+            return;
+        }
+        if uuid.is_empty() || self.agent.delete_profile_secrets(uuid).await.is_err() {
+            eprintln!("[network] could not remove failed new profile's secrets");
+        }
+    }
     async fn activate_inner(&self, nm: &Nm, uuid: &str, device: &Path) -> Result<Path, Error> {
         let (p, _) = nm.profile(uuid).await?;
         let a = nm.activate(&p, device, &nm::root_path()).await?;
@@ -241,7 +254,7 @@ impl Network {
             .activation_result(nm.wait_active(&active).await, &uuid)
             .await;
         if result.is_err() {
-            let _ = nm.call::<()>(&profile, nm::PROFILE, "Delete", &()).await;
+            self.cleanup_new_profile(&nm, &profile, &uuid).await;
         }
         result?;
         Ok(active)
@@ -283,7 +296,7 @@ impl Network {
             .activation_result(nm.wait_active(&active).await, &uuid)
             .await;
         if result.is_err() {
-            let _ = nm.call::<()>(&profile, nm::PROFILE, "Delete", &()).await;
+            self.cleanup_new_profile(&nm, &profile, &uuid).await;
         } else {
             let canonical = merged.get("connection").cloned();
             for (name, keys) in settings {
@@ -292,12 +305,7 @@ impl Network {
             if let Some(canonical) = canonical {
                 merged.insert("connection".into(), canonical);
             }
-            let bus = self.session.clone();
-            tokio::spawn(async move {
-                if keyring::save(&bus, &merged).await.is_err() {
-                    eprintln!("[network] could not store profile's agent-owned secrets");
-                }
-            });
+            self.agent.save_profile_secrets(merged);
         }
         result?;
         Ok(active)

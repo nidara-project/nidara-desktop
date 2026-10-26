@@ -1011,8 +1011,12 @@ The Wi-Fi/802.1x agent only accepts NM's current unique system-bus sender. One
 registered renderer receives unicast questions with allowlisted metadata and replies
 by request ID; another living renderer cannot replace it (its PID is logged).
 NM withdrawal/restart, renderer loss and the 120-second deadline close questions.
-NM-compatible Secret Service attributes preserve agent-owned keyring entries;
-not-saved secrets never go to disk. `--network-read-only` reads NM without exporting
+Secret Service writes include libsecret's NM `xdg:schema` attribute for exact item
+replacement; search/delete still match by subset for older entries without it.
+Duplicate setting-keys are read by greatest Item.Modified, with a stable path tie.
+Save/lookup/delete are ordered per UUID, including asynchronous GetSecrets saves:
+failed new-profile cleanup waits behind the save before deleting the UUID's secrets.
+Not-saved secrets never go to disk. `--network-read-only` reads NM without exporting
 or registering an agent and refuses writes. Tests use fake NM and Secret Service
 on private buses for every mutation, and run through the existing sessiond test job.
 The wire contract and isolated test procedure are in
