@@ -42,6 +42,40 @@ impl CapsuleMetrics {
     }
 }
 impl Tree {
+    /// Register an existing vector capsule as the client fallback for server controls.
+    /// The host hides the whole panel on layout, including semantics, focus and capture.
+    pub fn window_controls_capsule(&mut self, panel: NodeId) -> Result<[NodeId; 3]> {
+        if self.window_buttons.is_some() {
+            return Err("duplicate window controls".into());
+        }
+        let capsule = self
+            .nodes
+            .get(&panel)
+            .filter(|_| self.capsules.contains_key(&panel))
+            .ok_or("window controls need a capsule")?;
+        let ids: [NodeId; 3] = capsule
+            .children
+            .as_slice()
+            .try_into()
+            .map_err(|_| "window controls need three buttons")?;
+        for (id, kind) in ids.into_iter().zip([
+            WindowGlyph::Minimize,
+            WindowGlyph::Maximize,
+            WindowGlyph::Close,
+        ]) {
+            if self.nodes[&id].kind != Kind::Button || self.nodes[&id].window_glyph != Some(kind) {
+                return Err(
+                    "window controls need minimize, maximize and close paths in order".into(),
+                );
+            }
+        }
+        self.window_buttons = Some(ids);
+        self.window_control_capsule = Some(panel);
+        self.set_hidden(panel, self.server_controls.is_some())?;
+        self.invalidate(self.root, Invalid::LAYOUT);
+        Ok(ids)
+    }
+
     pub fn set_window_glyph_style(&mut self, style: WindowGlyphStyle) -> Result<()> {
         style.validate()?;
         if self.window_glyph_style != Some(style) {

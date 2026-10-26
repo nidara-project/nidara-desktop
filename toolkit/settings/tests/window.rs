@@ -271,3 +271,147 @@ fn header_search_selection_is_excluded_from_adaptive_ink() {
         );
     }
 }
+
+#[test]
+fn server_controls_replace_the_whole_capsule_and_reserve_announced_geometry() {
+    use nk_wayland::{ControlsLayout, Frame};
+    use nk_widgets::Command;
+    let (_, styles, mut shell) = fixture();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    let buttons = shell.tree.node(shell.controls).unwrap().children().to_vec();
+    shell.tree.set_active(true);
+    for layered in [false, true] {
+        for width in [1050., 650.] {
+            let size = Size {
+                width,
+                height: 600.,
+            };
+            shell.tree.set_server_controls(None).unwrap();
+            shell
+                .layout_controls(size, ControlsSide::Right, layered, &mut text)
+                .unwrap();
+            shell.tree.focus(buttons[2]).unwrap();
+            let r = shell.tree.node(buttons[2]).unwrap().bounds();
+            shell
+                .tree
+                .pointer_press(nk_text::Point {
+                    x: r.x + r.width / 2.,
+                    y: r.y + r.height / 2.,
+                })
+                .unwrap();
+            assert_eq!(shell.tree.captured(), Some(buttons[2]));
+            for (cw, ch) in [(72., 24.), (88., 32.)] {
+                for side in [ControlsSide::Left, ControlsSide::Right] {
+                    shell
+                        .tree
+                        .set_server_controls(Some(ControlsLayout {
+                            side,
+                            width: cw,
+                            height: ch,
+                        }))
+                        .unwrap();
+                    // The compositor's announced side wins over the app's stale preference.
+                    let stale = if side == ControlsSide::Left {
+                        ControlsSide::Right
+                    } else {
+                        ControlsSide::Left
+                    };
+                    shell
+                        .layout_controls(size, stale, layered, &mut text)
+                        .unwrap();
+                    assert!(shell.tree.is_hidden(shell.controls));
+                    assert_eq!(shell.tree.captured(), None);
+                    assert!(!shell.tree.focused().is_some_and(|id| buttons.contains(&id)));
+                    let semantics = shell.tree.semantics();
+                    assert!(
+                        !semantics.nodes.contains_key(&shell.controls),
+                        "orphan capsule panel"
+                    );
+                    for id in &buttons {
+                        assert!(!semantics.nodes.contains_key(id));
+                        assert!(!shell.tree.focus_order().contains(id));
+                        assert!(
+                            shell
+                                .tree
+                                .dispatch(shell.tree.target(*id), Command::Activate)
+                                .is_err()
+                        );
+                    }
+                    for node in semantics.nodes.values() {
+                        assert!(
+                            node.children
+                                .iter()
+                                .all(|id| semantics.nodes.contains_key(id)),
+                            "dangling semantic child"
+                        );
+                    }
+                    let bounds = shell.tree.server_controls_bounds().unwrap();
+                    assert_eq!((bounds.width, bounds.height), (cw as f32, ch as f32));
+                    assert_eq!(bounds.y, (styles.header.band - ch as f32) / 2.);
+                    let toggle_panel = shell
+                        .tree
+                        .capsule_ids()
+                        .find(|id| shell.tree.node(*id).unwrap().name() == "Toggle sidebar")
+                        .unwrap();
+                    let toggle = shell.tree.node(toggle_panel).unwrap().bounds();
+                    let search = shell.tree.node(shell.search).unwrap().bounds();
+                    if side == ControlsSide::Left {
+                        assert_eq!(bounds.x, styles.controls_inset);
+                        assert!(toggle.x >= bounds.x + bounds.width + styles.header.search_gap);
+                    } else {
+                        assert_eq!(bounds.x, width - styles.controls_inset - cw as f32);
+                        if !shell.tree.is_hidden(shell.search) {
+                            assert!(search.x + search.width + styles.header.search_gap <= bounds.x);
+                        }
+                    }
+                    // Both layer coverage and root fallback painting consume the hidden panel.
+                    let frame = Frame {
+                        width: 72,
+                        height: 24,
+                        pixel_width: 72,
+                        pixel_height: 24,
+                        scale: 1.,
+                        material: true,
+                    };
+                    let image = shell
+                        .tree
+                        .paint_capsule_coverage(shell.controls, frame, styles.palette)
+                        .unwrap();
+                    assert!(
+                        image.iter().all(|v| *v == 0),
+                        "client capsule still paints beside server controls"
+                    );
+                    shell.tree.acknowledge();
+                    shell
+                        .layout_controls(size, stale, layered, &mut text)
+                        .unwrap();
+                    let invalid = shell.tree.invalidation();
+                    assert!(
+                        !invalid.layout && !invalid.paint && !invalid.semantics,
+                        "idle server header invalidates: {invalid:?}"
+                    );
+                }
+            }
+            shell.tree.set_server_controls(None).unwrap();
+            shell
+                .layout_controls(size, ControlsSide::Right, layered, &mut text)
+                .unwrap();
+            assert!(shell.tree.server_controls_bounds().is_none());
+            assert!(!shell.tree.is_hidden(shell.controls));
+            let semantics = shell.tree.semantics();
+            assert!(semantics.nodes.contains_key(&shell.controls));
+            for id in &buttons {
+                assert!(semantics.nodes.contains_key(id));
+                assert!(shell.tree.focus_order().contains(id));
+                assert!(shell.tree.node(*id).unwrap().text_layout().is_none());
+                assert_eq!(
+                    shell
+                        .tree
+                        .dispatch(shell.tree.target(*id), Command::Activate)
+                        .unwrap(),
+                    Effect::Activated(*id)
+                );
+            }
+        }
+    }
+}

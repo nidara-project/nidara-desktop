@@ -2640,9 +2640,15 @@ at y12. A sidebar icon keeps its full accessible name without painting that name
 sidebar timeline before painting. A SearchInput inside ControlCapsule uses that
 capsule's text-input surface and local caret coordinates; selection pixels stay
 outside the adaptive ink coverage. Identical placement must leave Tree clean.
-Native apps register `Tree::window_controls` fallback buttons and opt into
-`Application::window_controls` for server layout before configure; composition
-reserves the reported side/size and hides fallback nodes only when layout arrives.
+Native apps opt into `Application::window_controls` before configure; Hyalo owns
+window controls whenever its protocol supplies a layout. `Tree::window_controls`
+registers ordinary titlebar fallbacks. Native Settings instead registers its existing
+vector capsule with `Tree::window_controls_capsule`: the whole fallback panel and
+its children leave paint, focus/capture and AT-SPI on server layout, and return
+with the same IDs without it. Placement reserves the announced side/size, not the
+client's fallback metrics or a stale Config1 side. The registered capsule's root-local
+position feeds `Tree::server_controls_bounds` and Composition's compositor request;
+keep the kit's 12/12 position independent of content/sidebar insets and SSD margins.
 The existing protocol is bound in nk-wayland, never in a second app host.
 
 Container accessible names are not visual labels: the native Sidebar/Scroll names

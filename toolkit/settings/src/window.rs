@@ -154,6 +154,7 @@ impl Shell {
             )?,
             tree.capsule_button(controls, labels.close, nk_widgets::WindowGlyph::Close, true)?,
         ];
+        tree.window_controls_capsule(controls)?;
         let content = tree.append(root, Kind::Scroll, labels.content)?;
         let mut composition = nk_widgets::window::Composition::default();
         composition.set_titlebar_style(header.titlebar.clone())?;
@@ -401,21 +402,22 @@ impl Placement {
     ) -> Result<()> {
         let h = &self.header;
         let m = tree.capsule_metrics(self.controls)?;
-        let cw = 2. * m.padding + 3. * m.button_min + 2. * m.gap;
-        let cx = if self.side == ControlsSide::Left {
+        let server = tree.server_controls_layout();
+        let side = server.map_or(self.side, |layout| layout.side);
+        let cw = server.map_or(2. * m.padding + 3. * m.button_min + 2. * m.gap, |layout| {
+            layout.width as f32
+        });
+        let cy = server.map_or(self.controls_inset, |layout| {
+            ((h.band - layout.height as f32) / 2.).max(0.)
+        });
+        let cx = if side == ControlsSide::Left {
             self.controls_inset
         } else {
             (size.width - self.controls_inset - cw).max(0.)
         };
-        tree.set_capsule_position(
-            self.controls,
-            Point {
-                x: cx,
-                y: self.controls_inset,
-            },
-        )?;
+        tree.set_capsule_position(self.controls, Point { x: cx, y: cy })?;
         let leading = tree.content_viewport().x;
-        let tx = if self.side == ControlsSide::Left {
+        let tx = if side == ControlsSide::Left {
             cx + cw + h.search_gap
         } else {
             h.inset
@@ -425,7 +427,7 @@ impl Placement {
         tree.set_capsule_position(self.nav, Point { x: nx, y: h.inset })?;
         let nw = 2. * h.navigation.padding + 2. * h.navigation.button_min + h.navigation.gap;
         let title = nx + nw + h.title_gap;
-        let right = if self.side == ControlsSide::Right {
+        let right = if side == ControlsSide::Right {
             cx - h.search_gap
         } else {
             size.width - h.inset

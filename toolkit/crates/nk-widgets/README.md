@@ -311,3 +311,13 @@ button glyph; translated accessible names remain separate. Call
 painting. They measure from capsule geometry and never shape text; nk-render
 strokes their paths in both layer coverage and D5. Ordinary toolbar captions
 continue to use retained text layouts.
+
+Applications with a floating window-control capsule register it using
+`Tree::window_controls_capsule(panel)` after adding the three typed glyph buttons.
+They opt into `Application::window_controls` before the first configure. Composition
+requests/receives the existing server protocol layout and hides the whole fallback
+panel while it exists (including semantics, focus and capture). The app arranges
+against `server_controls_layout()`'s actual side/size and updates the registered
+capsule's root-local position, even while hidden. `server_controls_bounds()` is
+then the one box sent to Hyalo and excluded from title dragging. No content inset
+is added to a registered capsule. Ordinary titlebar fallback placement is unchanged.

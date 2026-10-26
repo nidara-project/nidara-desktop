@@ -119,12 +119,23 @@ impl Composition {
                         return false;
                     }
                     if let Some(layout) = tree.server_controls {
-                        let reserve = layout.width as f32 + tree.metrics.gap;
-                        if match layout.side {
-                            nk_wayland::ControlsSide::Left => point.x < r.x + reserve,
-                            nk_wayland::ControlsSide::Right => point.x >= r.x + r.width - reserve,
-                        } {
-                            return false;
+                        if tree.window_control_capsule.is_some() {
+                            if tree
+                                .server_controls_bounds()
+                                .is_some_and(|r| contains(r, point))
+                            {
+                                return false;
+                            }
+                        } else {
+                            let reserve = layout.width as f32 + tree.metrics.gap;
+                            if match layout.side {
+                                nk_wayland::ControlsSide::Left => point.x < r.x + reserve,
+                                nk_wayland::ControlsSide::Right => {
+                                    point.x >= r.x + r.width - reserve
+                                }
+                            } {
+                                return false;
+                            }
                         }
                     }
                     true
@@ -384,21 +395,10 @@ impl Composition {
             layered,
             backend,
         )?;
-        if let Some(controls) = window.window_controls_layout() {
-            let inset = tree.content_viewport();
-            let x = match controls.side {
-                nk_wayland::ControlsSide::Left => inset.x + tree.metrics.padding,
-                nk_wayland::ControlsSide::Right => {
-                    tree.size.width - tree.metrics.padding - controls.width as f32
-                }
-            };
+        if let Some(controls) = tree.server_controls_bounds() {
             let c = palette.text.components;
             let dark = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 0.5;
-            window.place_window_controls(
-                x as f64,
-                ((inset.y - controls.height as f32) / 2.).max(0.) as f64,
-                dark,
-            )?;
+            window.place_window_controls(controls.x as f64, controls.y as f64, dark)?;
         }
         if layered {
             let inset = tree.content_viewport();
