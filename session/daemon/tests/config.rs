@@ -618,7 +618,7 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     .unwrap();
     peer.expect(json!({"request":"night_light","temperature":null}))
         .await;
-    // The clock owns enabled while scheduled; an equal window is always empty.
+    // Enabling a schedule applies its current position once; an equal window is always empty.
     for key in ["nightlight.scheduleFrom", "nightlight.scheduleTo"] {
         let _: (u64, OwnedValue) = call(
             &conn,
@@ -653,6 +653,34 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
         !bool::try_from(&enabled["nightlight.enabled"]).unwrap(),
         "schedule writes its decision back to Config1's home"
     );
+    // An enabled notification must not be mistaken for a schedule edit. In the empty
+    // window a manual on is kept until a boundary/edit (clock transitions are unit-tested
+    // with explicit minutes rather than depending on the wall clock or a minute-long sleep).
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.enabled", OwnedValue::from(true)),
+    )
+    .await
+    .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":4700}))
+        .await;
+    let enabled: HashMap<String, OwnedValue> = call(&conn, "Get", &(vec!["nightlight.enabled"],))
+        .await
+        .unwrap();
+    assert!(
+        bool::try_from(&enabled["nightlight.enabled"]).unwrap(),
+        "manual on survives its own notification"
+    );
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.enabled", OwnedValue::from(false)),
+    )
+    .await
+    .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":null}))
+        .await;
     // A wallpaper refusal retries the current transition; writing the home externally is heard.
     std::fs::write(env.dir.join("awww-refuse"), b"1").unwrap();
     std::fs::write(

@@ -274,51 +274,68 @@ fn in_schedule(from: &str, to: &str, now: i32) -> Option<bool> {
         now >= from && now < to
     })
 }
+/// Remember the schedule's position, not the last manual enabled value. Startup and
+/// schedule edits apply once; subsequent clock checks write only on an inside/outside
+/// transition. Manual toggles and temperature changes never reset this state.
+#[derive(Default)]
+struct Schedule {
+    config: Option<(bool, String, String)>,
+    inside: Option<bool>,
+}
+impl Schedule {
+    fn decision(&mut self, night: &Night, now: i32) -> Option<bool> {
+        let config = (night.schedule, night.from.clone(), night.to.clone());
+        let edited = self.config.as_ref() != Some(&config);
+        self.config = Some(config);
+        if !night.schedule {
+            self.inside = None;
+            return None;
+        }
+        let Some(inside) = in_schedule(&night.from, &night.to, now) else {
+            self.inside = None;
+            return None;
+        };
+        let crossed = self.inside != Some(inside);
+        self.inside = Some(inside);
+        (edited || crossed).then_some(inside)
+    }
+}
 async fn schedule(store: Handle, mut rx: watch::Receiver<Snapshot>) {
-    let mut previous = None;
+    let mut state = Schedule::default();
     let mut tick = tokio::time::interval(Duration::from_secs(60));
     loop {
-        let n = rx.borrow_and_update().night.clone();
-        let config = n
-            .as_ref()
-            .map(|n| (n.schedule, n.from.clone(), n.to.clone()));
-        // Enabled/temperature changes are manual until the next clock check. Only schedule
-        // configuration changes trigger an immediate check, like the desktop's existing rule.
-        if config != previous {
-            check_schedule(&store).await;
-            previous = config;
-        }
+        // Read authoritative homes on GLib, including when a manual toggle wakes us.
+        // Schedule::decision ignores it until the next boundary or schedule edit.
+        rx.borrow_and_update();
+        state = check_schedule(&store, state).await;
         tokio::select! {
             r = rx.changed() => if r.is_err() { return; },
-            _ = tick.tick() => check_schedule(&store).await,
+            _ = tick.tick() => {},
         }
     }
 }
-async fn check_schedule(store: &Handle) {
+async fn check_schedule(store: &Handle, mut state: Schedule) -> Schedule {
     // Read and decide on the GLib thread: a schedule disabled meanwhile cannot be applied
     // from an older snapshot. The resulting enabled change follows the ordinary home path.
     store
-        .call(|st| {
-            let Some(n) = Snapshot::read(st).night.filter(|n| n.schedule) else {
-                return;
+        .call(move |st| {
+            let Some(n) = Snapshot::read(st).night else {
+                return Schedule::default();
             };
             let Ok(now) = glib::DateTime::now_local() else {
-                return;
+                return state;
             };
-            let Some(enabled) = in_schedule(&n.from, &n.to, now.hour() * 60 + now.minute()) else {
-                eprintln!(
-                    "[followers] night-light: invalid schedule {}–{}",
-                    n.from, n.to
-                );
-                return;
-            };
-            if n.enabled != enabled
+            if let Some(enabled) = state.decision(&n, now.hour() * 60 + now.minute())
+                && n.enabled != enabled
                 && let Err(e) = st.settings(NIGHT).unwrap().set_boolean("enabled", enabled)
             {
                 eprintln!("[followers] night-light schedule: {e}");
+                // A failed boundary write is still pending; retry at the next check.
+                return Schedule::default();
             }
+            state
         })
-        .await;
+        .await
 }
 
 /// Reconnect after a compositor restart and restate runtime effects. Output hotplug also
@@ -423,6 +440,112 @@ pub(super) fn start(store: Handle, changes: Arc<Changes>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn night() -> Night {
+        Night {
+            enabled: false,
+            temperature: 4000,
+            schedule: true,
+            from: "20:00".into(),
+            to: "07:00".into(),
+        }
+    }
+
+    #[test]
+    fn manual_toggle_survives_clock_ticks_until_the_next_boundary() {
+        let mut state = Schedule::default();
+        let mut n = night();
+        assert_eq!(
+            state.decision(&n, 21 * 60),
+            Some(true),
+            "startup applies once"
+        );
+        n.enabled = true;
+        assert_eq!(
+            state.decision(&n, 21 * 60),
+            None,
+            "own enabled notification is not an edit"
+        );
+        n.enabled = false; // The user's override inside the active window.
+        for now in [21 * 60 + 1, 23 * 60, 0, 6 * 60 + 59] {
+            assert_eq!(
+                state.decision(&n, now),
+                None,
+                "manual off must survive a clock tick at {now}"
+            );
+        }
+        assert_eq!(
+            state.decision(&n, 7 * 60),
+            Some(false),
+            "leaving the window applies off"
+        );
+        assert_eq!(state.decision(&n, 7 * 60 + 1), None);
+        assert_eq!(
+            state.decision(&n, 20 * 60),
+            Some(true),
+            "the next start re-enables after manual off"
+        );
+        n.enabled = true;
+        assert_eq!(state.decision(&n, 20 * 60 + 1), None);
+        assert_eq!(
+            state.decision(&n, 7 * 60),
+            Some(false),
+            "the next end switches off again"
+        );
+        n.enabled = true; // The inverse override, outside the active window.
+        assert_eq!(
+            state.decision(&n, 8 * 60),
+            None,
+            "manual on also survives ticks"
+        );
+    }
+
+    #[test]
+    fn schedule_edits_apply_once_even_without_crossing_a_boundary() {
+        let mut state = Schedule::default();
+        let mut n = night();
+        assert_eq!(state.decision(&n, 22 * 60), Some(true));
+        n.enabled = false;
+        n.temperature = 4500;
+        assert_eq!(
+            state.decision(&n, 22 * 60 + 1),
+            None,
+            "temperature is not a schedule edit"
+        );
+        n.from = "21:00".into();
+        assert_eq!(
+            state.decision(&n, 22 * 60 + 1),
+            Some(true),
+            "editing from reapplies current position"
+        );
+        n.to = "08:00".into();
+        assert_eq!(
+            state.decision(&n, 22 * 60 + 1),
+            Some(true),
+            "editing to reapplies current position"
+        );
+        n.schedule = false;
+        assert_eq!(
+            state.decision(&n, 22 * 60 + 1),
+            None,
+            "disabling the schedule preserves manual state"
+        );
+        n.schedule = true;
+        assert_eq!(
+            state.decision(&n, 22 * 60 + 1),
+            Some(true),
+            "enabling applies once"
+        );
+        assert_eq!(state.decision(&n, 22 * 60 + 2), None);
+        n.from = "invalid".into();
+        assert_eq!(state.decision(&n, 22 * 60 + 3), None);
+        n.from = "21:00".into();
+        assert_eq!(
+            state.decision(&n, 22 * 60 + 3),
+            Some(true),
+            "repairing the schedule applies it"
+        );
+    }
+
     #[test]
     fn schedule_boundaries_overnight_and_equal() {
         for (from, to, now, expected) in [

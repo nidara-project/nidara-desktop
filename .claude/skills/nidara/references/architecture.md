@@ -971,9 +971,11 @@ stored canonical value/revision, not a claim that an asynchronous effect has suc
   patch (`cursor.theme/size`). Size is watched even though Config1 has no size picker yet.
   Only Hyalo writes its settings TOML. This does not write the user's Xcursor default mirror.
 - **Night light:** enabled/temperature become `night_light` with kelvin or null. The schedule
-  writes `enabled` back to its home at start, on schedule edits, and each minute (local time;
-  overnight intervals wrap, equal endpoints mean off). Manual changes last until the next
-  clock check. Hyalo reconnect restates runtime gamma; it refuses gamma on winit because
+  checks local time each minute (overnight intervals wrap, equal endpoints mean off) and
+  writes `enabled` only when crossing a start/end boundary. At startup and when enabling or
+  editing the schedule it applies the current position once. Manual changes last until the
+  next boundary crossing; toggles and temperature changes do not reset the remembered
+  inside/outside position. Hyalo reconnect restates runtime gamma; it refuses gamma on winit because
   ramps require hardware. A nested refusal is not physical-gamma acceptance.
 - **GTK apps:** both `$XDG_CONFIG_HOME/gtk-{3,4}.0/settings.ini` get theme, dark preference,
   icon theme, font and cursor theme/size. KeyFile preserves other groups, keys and comments;
