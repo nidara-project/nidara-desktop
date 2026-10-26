@@ -31,7 +31,8 @@ service exposes all devices and APs. SSID bytes preserve non-UTF-8 identities.
 |---|---|---|
 | SetWifiEnabled | `b enabled` | NM radio property |
 | Scan | `o device` | RequestScan, including its errors |
-| Connect | `o device, o AP, s UUID` | `o active`; empty UUID finds a compatible saved profile or completes one from the AP |
+| Connect | `o device, o AP, s UUID, s storage, b all_users` | `o active`; empty UUID finds a compatible saved profile or completes one from the AP |
+| ConnectDefault | `o device, o AP, s UUID` | Connect with `user` storage and public ACL for new profiles |
 | ConnectProfile | `o device, o AP, a{sa{sv}} settings` | `o active`; explicitly configured Wi-Fi profile, including existing TS enterprise/hidden flows |
 | Activate | `s UUID, o device` | `o active`; saved hidden/Wi-Fi/wired/VPN/WireGuard; `/` lets NM pick the device |
 | Deactivate | `o active` | NM DeactivateConnection |
@@ -41,6 +42,9 @@ service exposes all devices and APs. SSID bytes preserve non-UTF-8 identities.
 | GetIp | `s UUID` | `s form JSON`; empty UUID returns the defaults for a new profile |
 | ApplyIp | `s UUID, o device, s form JSON` | Update existing profile or create Ethernet profile if UUID empty; `/` means no live device |
 | Renew | `o device` | Reactivate the device's current profile |
+| SetSecretStorage | `s UUID, s storage, b all_users` | Migrate supported Wi-Fi secrets and permissions |
+| SetSecretStorageWithSecrets | `s UUID, s storage, b all_users, a{sa{sv}} values` | Fill missing secrets explicitly, including ask to persistent storage |
+| ReconcileSecretStorage | `s UUID` | Finish interrupted storage cleanup according to NM flags |
 | RegisterSecretsUi | none | Reserve the renderer slot for the calling unique sender |
 | SubmitSecrets | `t id, a{sa{sv}} values` | Answer the pending question from that renderer |
 | CancelSecrets | `t id` | Explicit user cancellation from that renderer |
@@ -52,7 +56,8 @@ failed saved profiles remain. An explicit secret cancellation becomes `Cancelled
 Without a supplied/saved profile, hidden/enterprise connections answer `NeedsProfile`;
 the service never invents EAP credentials. ConnectProfile is the transport for a
 profile supplied by the renderer, not a new editor or a new authentication policy.
-Other errors include `Unavailable`, `Invalid`, `Denied`, `Failed`, and NM's own
+Other errors include `Unavailable`, `Invalid`, `Denied`, `Failed`, `NeedsSecrets`,
+`Conflict`, `Incomplete`, `Unsupported`, and NM's own
 D-Bus failures. No operation invokes nmcli or puts credentials in process arguments.
 
 The IP form has `v4`/`v6` objects (`method`, `address`, `prefix`, `gateway`) and
@@ -88,7 +93,7 @@ DONT_MATCH_NAME, to keep older entries without it readable and removable. If mul
 items share a setting-key, lookup selects the greatest Item.Modified value, with
 object path as a stable tie-breaker, independent of hash iteration order.
 
-Only agent-owned string secrets are saved; `not-saved` values are not persisted.
+Only agent-owned secrets are saved (text, or binary for EAP password-raw); `not-saved` values are not persisted.
 Keyring unlock/creation prompts use Secret Service's own prompt protocol. Save,
 lookup and delete use one ordered chain per UUID; different UUIDs are independent.
 GetSecrets queues its save before replying to NM. Failed new-profile cleanup deletes
@@ -97,13 +102,70 @@ Store work after UI submission remains asynchronous and a failure logs a generic
 message. No key is stored in sessiond's JSON or notification cache. Keyring calls
 never fall back to a file.
 
+## Storage choices and recovery
+
+New profiles select `user` (flag 1, session keyring), `system` (flag 0, NM's
+root-protected persistent profile), or `ask` (flag 2, no persistent password).
+ConnectDefault selects user; Connect requires an explicit choice. A system secret
+may be stored by NM in plaintext protected by root permissions, according to its
+settings plugin. The backend itself never creates a password file. Mode and access
+are independent: `all_users=true` gives an explicit empty permissions array;
+false sets `user:<service-login>:`. ConnectDefault uses true, matching the old TS
+null-profile path. System storage with a private ACL still needs that user's active
+session; pre-login connectivity also depends on autoconnect and the network.
+
+Activating a saved profile preserves its existing storage/ACL; changing them requires
+the explicit storage methods. ConnectProfile accepts 0/1/2 flags from its settings
+and preserves NOT_REQUIRED(4) only for supported optional 802.1x fields. Snapshot
+exposes per-key mode/flags, raw permissions and allUsers without fetching secrets.
+Optional EAP fields retain mode `not-required`. WEP exposes all slots, with their
+shared flags; only the selected slot requires a value when migrating. The agent
+never satisfies an ask/system field from a stale user-keyring entry.
+
+Storage migration uses NM VersionId and Update2's version-id check (NM 1.44+).
+A conflicting external edit is preserved and reported; no blind rollback overwrites
+it. An uncertain applied update keeps the persisted policy and durable destination
+for reconciliation; matching flags alone cannot prove no later edit occurred.
+The destination is written and verified before erasing the source. NM calls
+never run while holding a Secret Service queue slot: NM can synchronously call the
+agent back during Update. Callback stores also honor the profile's current flags,
+so a late user-mode save cannot resurrect a copy after a system/ask transition.
+
+If the destination refuses, source data remain intact. A cleanup failure in
+user/system migration attempts to restore the original storage first. If that
+restore fails, the verified current destination is retained. `Incomplete` includes
+policy plus readable NM/keyring key names (never values) and points to reconciliation;
+unreadable locations are explicitly unknown. Transient duplicates are possible
+between services, and a double failure can leave them pending. Successful completion
+has only the requested persistent destination.
+
+Ask is a committed erasure intent: flags 2 are written first, then surplus copies
+are removed. A partial erasure returns Incomplete; reconciliation finishes forgetting,
+without recreating an unwanted backup. There is no third store, recovery schema or
+password journal. On the next storage/IP mutation, and via the explicit reconcile
+method, NM's persisted flags select the destination and surplus copies are removed
+idempotently. Snapshot, read-only mode, normal startup and plain activation do not
+perform reconciliation writes. NM Update with user/ask flags is what removes its
+persistent system copy; user-mode callback values remain available from the keyring.
+
+A missing password in ask mode cannot be invented: SetSecretStorage returns
+NeedsSecrets before mutation. SetSecretStorageWithSecrets accepts only applicable
+secret values to fill missing fields, without flags or profile metadata. Existing
+values cannot be replaced through this migration API. Polkit is handled by NM;
+its refusal maps to Denied and preserves the previous policy/data. Permission rules
+for modify.own/system depend on the profile ACL, not just its secret flags.
+
 ## Validation
 
 `cargo test --manifest-path session/Cargo.toml --locked` includes the private-bus
 integration in `scripts/ci/sessiond-network-test.py`, using the existing Python/Gio
 and dbus-daemon dependencies. NM and Secret Service are separate peer connections;
 all mutations and registrations go to those peers. The test includes the real
-120-second unanswered-request timeout. No new CI job or step is needed.
+120-second unanswered-request timeout, all directed storage transitions, binary EAP,
+optional flags, partial destination/source failures, policy denial, failed rollback,
+concurrent profile revision, callbacks during Update2 and recovery after a process
+restart. The repeated nested run uses cancellation for the same deadline and keeps
+the storage recovery checks on its private services. No new CI job or step is needed.
 
 Nested check: `scripts/dev/rust-session.sh --network COMMAND...`, with a **private**
 `DBUS_SYSTEM_BUS_ADDRESS` and the fake peer started inside the nested session bus.

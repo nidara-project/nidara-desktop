@@ -41,7 +41,18 @@ impl Nm {
         method: &str,
         body: &(impl serde::Serialize + DynamicType),
     ) -> Result<R, Error> {
-        tokio::time::timeout(Duration::from_secs(10), async {
+        self.call_timeout(path, iface, method, body, Duration::from_secs(10))
+            .await
+    }
+    pub async fn call_timeout<R: DeserializeOwned + Type>(
+        &self,
+        path: &str,
+        iface: &str,
+        method: &str,
+        body: &(impl serde::Serialize + DynamicType),
+        duration: Duration,
+    ) -> Result<R, Error> {
+        tokio::time::timeout(duration, async {
             self.bus
                 .call_method(Some(self.owner.as_str()), path, Some(iface), method, body)
                 .await?
@@ -50,7 +61,19 @@ impl Nm {
         })
         .await
         .map_err(|_| Error::Failed("NetworkManager call timed out".into()))?
-        .map_err(Into::into)
+        .map_err(|e| match &e {
+            zbus::Error::MethodError(name, _, _)
+                if name.as_str().ends_with("PermissionDenied")
+                    || name.as_str().ends_with("AccessDenied")
+                    || name.as_str().ends_with("NotAuthorized") =>
+            {
+                Error::Denied("NetworkManager denied permission for this operation".into())
+            }
+            zbus::Error::MethodError(name, _, _) if name.as_str().contains("VersionId") => {
+                Error::Conflict("NetworkManager profile version changed".into())
+            }
+            _ => Error::ZBus(e),
+        })
     }
     pub async fn props(&self, path: &str, iface: &str) -> Result<Props, Error> {
         self.call(path, "org.freedesktop.DBus.Properties", "GetAll", &(iface,))
@@ -192,6 +215,12 @@ impl Nm {
             let w = s.get("802-11-wireless"); let conn = s.get("connection");
             json!({"path":path.as_str(),"uuid":text(conn,"uuid"),"name":text(conn,"id"),"type":text(conn,"type"),"interface":text(conn,"interface-name"),"autoconnect":boolean(conn,"autoconnect",true),"ssid":bytes(w,"ssid"),"hidden":boolean(w,"hidden",false),"secured":s.contains_key("802-11-wireless-security"),"needsEnterprise":s.contains_key("802-1x")})
         }).collect();
+        for (row, (_, settings)) in saved.iter_mut().zip(&profiles) {
+            let metadata = super::storage::metadata(settings);
+            for key in ["secretStorage", "permissions", "allUsers"] {
+                row[key] = metadata[key].clone();
+            }
+        }
         saved.sort_by(|a, b| a["uuid"].as_str().cmp(&b["uuid"].as_str()));
         let active_paths: Vec<Path> = root
             .get("ActiveConnections")

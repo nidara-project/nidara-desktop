@@ -6,6 +6,7 @@ Invoked by cargo test (no new CI job). All mutation and agent registration stay 
 these private buses. --inside is also usable from rust-session.sh with BOTH private
 bus addresses provided by the outer test; never sends a write to the host NM.
 """
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -79,11 +80,13 @@ def fake():
         assert call(owner_bus, 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'RequestName', '(su)', (name, 4))[0] in (1,4), 'fake must own its names'
     profiles = {PROF: profile(), PROF_WIRED: profile('wired', '802-3-ethernet'), PROF_HIDDEN: profile('hidden'), PROF_VPN: profile('vpn', 'vpn')}
     calls, items, retained = [], {}, []
+    versions={path:1 for path in profiles}
+    system_secrets={path:{} for path in profiles}
     state = {'agent': '', 'result': None, 'radio': True, 'strength': 70, 'enterprise': False, 'reapplyFail': False, 'active': ACTIVE, 'activeProfile': PROF, 'activeState': 2, 'registrations': 0, 'carrier': True, 'autoconnect': True, 'locked': False, 'saveflags': 1, 'sequence': 0, 'noCollection': False, 'created': 4, 'lastCreated': '', 'wifiPresent': True}
     objects = {}
     modified = {}
     held_stores = []
-    state.update(stores=0, clock=100, holdStores=False, heldStores=0, newNeedsSecrets=False, profileDeletes=0)
+    state.update(appliedErrorAt=[], concurrentAt=[], nmUpdates=0, nmFailAt=[], nmDenyAt=[], ssWriteCalls=0, ssWriteFailAt=[], ssDeleteCalls=0, ssDeleteFailAt=[], callbacks=False, itemSeq=0, newFinalState=4, stores=0, clock=100, holdStores=False, heldStores=0, newNeedsSecrets=False, profileDeletes=0)
     def method_xml(name, ins=(), outs=()):
         return '<method name="'+name+'">'+''.join('<arg type="'+t+'" direction="in"/>' for t in ins)+''.join('<arg type="'+t+'" direction="out"/>' for t in outs)+'</method>'
     def export(path, iface, methods=(), props=None):
@@ -94,7 +97,33 @@ def fake():
         export_bus = nm_bus if iface.startswith(NM) else bus
         obj = export_bus.register_object(path, info.interfaces[0], dispatch, getprop, setprop)
         objects[(path, iface)] = obj
+    secret_names={'802-11-wireless-security':['psk','wep-key0','wep-key1','wep-key2','wep-key3','leap-password'],'802-1x':['password','password-raw','private-key-password','phase2-private-key-password','pin']}
+    def flag_name(key):
+        return 'wep-key-flags' if key.startswith('wep-key') else key+'-flags'
+    def decode_settings(raw):
+        result={}
+        for i in range(raw.n_children()):
+            entry=raw.get_child_value(i);name=entry.get_child_value(0).unpack();values=entry.get_child_value(1)
+            result[name]={values.get_child_value(j).get_child_value(0).unpack():values.get_child_value(j).get_child_value(1).get_variant() for j in range(values.n_children())}
+        return result
+    def apply_profile(path,settings):
+        old=system_secrets.get(path,{})
+        keep={}
+        for setting,keys in secret_names.items():
+            if setting not in settings:continue
+            p=settings[setting]
+            for key in keys:
+                flags=p.get(flag_name(key),v('u',0)).unpack()
+                value=p.get(key,old.get(setting,{}).get(key))
+                if flags==0 and value is not None:keep.setdefault(setting,{})[key]=value
+        profiles[path]={name:{key:value for key,value in p.items() if key not in secret_names.get(name,[])} for name,p in settings.items()}
+        system_secrets[path]=keep
+        versions[path]=versions.get(path,0)+1
+    def item_digest(value):
+        return hashlib.sha256(value.encode() if isinstance(value,str) else bytes(value)).hexdigest()
     def properties(path, iface):
+        if iface == NM+'.Settings.Connection':
+            return {'VersionId':v('t',versions[path])}
         if iface == NM:
             return {'WirelessEnabled': v('b', state['radio']), 'WirelessHardwareEnabled': v('b', True), 'State': v('u', 70), 'Connectivity': v('u', 4), 'ActiveConnections': v('ao', [ACTIVE] if state['active'] != '/' else [])}
         if iface == DEVICE:
@@ -104,7 +133,7 @@ def fake():
         if iface == NM + '.Device.Wired':
             return {'Carrier': v('b', state['carrier']), 'Speed': v('u', 1000), 'HwAddress':v('s','00:aa:bb:cc:dd:ee'), 'PermHwAddress':v('s','00:aa:bb:cc:dd:ee')}
         if iface == NM + '.AccessPoint':
-            return {'Ssid': v('ay', b'Test'), 'Strength': v('y', state['strength']), 'Frequency': v('u', 5180), 'Flags': v('u', 1), 'WpaFlags': v('u', 0), 'RsnFlags': v('u', 0x200 if state['enterprise'] else 0x100), 'HwAddress': v('s', '00:11:22:33:44:55')}
+            return {'Ssid': v('ay',state.get('ssid','Test').encode()), 'Strength': v('y', state['strength']), 'Frequency': v('u', 5180), 'Flags': v('u', 1), 'WpaFlags': v('u', 0), 'RsnFlags': v('u', 0x200 if state['enterprise'] else 0x100), 'HwAddress': v('s', '00:11:22:33:44:55')}
         if iface == NM + '.Connection.Active':
             p = profiles.get(state['activeProfile'], profile())['connection']
             return {'Connection': v('o', state['activeProfile']), 'Uuid': p['uuid'], 'Type': p['type'], 'State': v('u', state['activeState']), 'Vpn': v('b', state['activeProfile'] == PROF_VPN), 'Default': v('b', True), 'Devices': v('ao', [DEV])}
@@ -127,11 +156,15 @@ def fake():
     def answer(inv, signature='()', args=()):
         inv.return_value(v(signature, args))
     def store_item(inv, p):
+        state['ssWriteCalls']+=1
+        if state['ssWriteCalls'] in state['ssWriteFailAt']:
+            inv.return_dbus_error(SS+'.Error.Failed','injected keyring write refusal');return
         props, secret, replace = p
         attrs = props[SS+'.Item.Attributes']
         existing = next((path for path,(a,_) in items.items() if a==attrs), None)
-        item = existing or SECRET+'/item/'+str(len(items)+1)
-        items[item] = (attrs, bytes(secret[2]).decode())
+        if not existing:state['itemSeq']+=1
+        item = existing or SECRET+'/item/generated_'+str(state['itemSeq'])
+        items[item] = (attrs, bytes(secret[2]) if secret[3]=='application/octet-stream' else bytes(secret[2]).decode())
         state['clock']+=1
         modified[item]=state['clock']
         state['stores']+=1
@@ -144,6 +177,72 @@ def fake():
             if iface == 'org.nidara.NetworkTest':
                 if method == 'Info':
                     answer(inv, '(s)', (json.dumps(dict(state, calls=calls, items=len(items), itemUuids=[a['connection-uuid'] for a,_ in items.values()])),))
+                elif method == 'StorageFixture':
+                    mode,enterprise=p
+                    path=ROOT+'/Settings/storage'
+                    setting='802-1x' if enterprise else '802-11-wireless-security'
+                    values={'password':'fixture-password','private-key-password':'fixture-private'} if enterprise else {'psk':'fixture-psk'}
+                    template=profile('storage-fixture')
+                    if enterprise:
+                        template['802-11-wireless-security']['key-mgmt']=v('s','wpa-eap')
+                        template['802-11-wireless-security'].pop('psk-flags',None)
+                        template['802-1x']={'eap':v('as',['peap']),'pin-flags':v('u',4)}
+                    for key in values:template.setdefault(setting,{})[flag_name(key)]=v('u',{'user':1,'system':0,'ask':2}[mode])
+                    template['connection']['permissions']=v('as',[])
+                    profiles[path]=template;versions[path]=1;system_secrets[path]={}
+                    for item in list(items):
+                        if items[item][0].get('connection-uuid')=='storage-fixture':items.pop(item)
+                    for key,value in values.items():
+                        if mode=='system':system_secrets[path].setdefault(setting,{})[key]=v('s',value)
+                        elif mode=='user':
+                            attrs={'connection-uuid':'storage-fixture','setting-name':setting,'setting-key':key,'xdg:schema':'org.freedesktop.NetworkManager.Connection'}
+                            item=SECRET+'/item/storage_'+key.replace('-','_')
+                            items[item]=(attrs,value);modified[item]=state['clock']
+                            if (item,SS+'.Item') not in objects:export(item,SS+'.Item',[('Delete',(),('o',))],{'Attributes':'a{ss}','Locked':'b','Modified':'t'})
+                    if (path,NM+'.Settings.Connection') not in objects:export(path,NM+'.Settings.Connection',[('GetSettings',(),('a{sa{sv}}',)),('GetSecrets',('s',),('a{sa{sv}}',)),('Update',('a{sa{sv}}',),()),('Update2',('a{sa{sv}}','u','a{sv}'),('a{sv}',)),('Delete',(),())],{'VersionId':'t'})
+                    answer(inv)
+                elif method == 'StorageWep':
+                    path=ROOT+'/Settings/storage'
+                    profiles[path]['802-11-wireless-security']={'key-mgmt':v('s','none'),'wep-key-flags':v('u',1),'wep-tx-keyidx':v('u',0)}
+                    for item in list(items):
+                        if items[item][0].get('connection-uuid')=='storage-fixture':items.pop(item)
+                    for key,value in [('wep-key0','abcde'),('wep-key2','vwxyz')]:
+                        attrs={'connection-uuid':'storage-fixture','setting-name':'802-11-wireless-security','setting-key':key,'xdg:schema':'org.freedesktop.NetworkManager.Connection'}
+                        item=SECRET+'/item/storage_'+key.replace('-','_')
+                        items[item]=(attrs,value);modified[item]=state['clock']
+                        if (item,SS+'.Item') not in objects:export(item,SS+'.Item',[('Delete',(),('o',))],{'Attributes':'a{ss}','Locked':'b','Modified':'t'})
+                    versions[path]+=1;answer(inv)
+                elif method == 'StorageCopies':
+                    path=ROOT+'/Settings/storage';setting='802-11-wireless-security';key='psk'
+                    flags=profiles[path][setting]['psk-flags'].unpack()
+                    if flags!=0:system_secrets[path].setdefault(setting,{})[key]=v('s','surplus-nm')
+                    if flags!=1:
+                        attrs={'connection-uuid':'storage-fixture','setting-name':setting,'setting-key':key,'xdg:schema':'org.freedesktop.NetworkManager.Connection'}
+                        item=SECRET+'/item/surplus_key'
+                        items[item]=(attrs,'surplus-keyring');modified[item]=state['clock']
+                        if (item,SS+'.Item') not in objects:export(item,SS+'.Item',[('Delete',(),('o',))],{'Attributes':'a{ss}','Locked':'b','Modified':'t'})
+                    answer(inv)
+                elif method == 'LateStorageSave':
+                    path=ROOT+'/Settings/storage';template=profile('storage-fixture')
+                    template['802-11-wireless-security']['psk']=v('s','stale-late')
+                    state['lateResult']=None
+                    def late_saved(c,res):
+                        try:c.call_finish(res);state['lateResult']=True
+                        except GLib.Error:state['lateResult']=False
+                    nm_bus.call(state['agent'],AGENT,NM+'.SecretAgent','SaveSecrets',v('(a{sa{sv}}o)',(template,path)),None,Gio.DBusCallFlags.NONE,6000,None,late_saved)
+                    answer(inv)
+                elif method == 'StorageBinary':
+                    path=ROOT+'/Settings/storage'
+                    profiles[path].setdefault('802-1x',{})['password-raw-flags']=v('u',0)
+                    system_secrets[path].setdefault('802-1x',{})['password-raw']=v('ay',[0,255,1])
+                    versions[path]+=1
+                    answer(inv)
+                elif method == 'StorageProbe':
+                    uuid=p[0];path=next((path for path,s in profiles.items() if s['connection']['uuid'].unpack()==uuid),None)
+                    meta=v('(a{sa{sv}})',(profiles[path],)).unpack()[0] if path else None
+                    syskeys={setting+'.'+key:item_digest(value.unpack()) for setting,p in system_secrets.get(path,{}).items() for key,value in p.items()}
+                    userkeys={a['setting-name']+'.'+a['setting-key']:item_digest(value) for a,value in items.values() if a.get('connection-uuid')==uuid and 'setting-name' in a and 'setting-key' in a}
+                    answer(inv,'(s)',(json.dumps({'settings':meta,'system':syskeys,'user':userkeys,'version':versions.get(path)}),))
                 elif method == 'ReleaseStores':
                     state['holdStores']=False
                     for pending,parameters in held_stores:
@@ -214,27 +313,48 @@ def fake():
                 answer(inv, '(ao)', (list(profiles),))
             elif method == 'GetSettings':
                 answer(inv, '(a{sa{sv}})', (profiles[path],))
-            elif method == 'Update':
-                raw = parameters.get_child_value(0)
-                profiles[path] = {s: {k: value for k,value in keys.items()} for s,keys in raw.unpack().items()}
-                # Restore types from the actual wire, without guessing integer widths.
-                profiles[path] = {}
-                for i in range(raw.n_children()):
-                    entry = raw.get_child_value(i); setting = entry.get_child_value(0).unpack(); values = entry.get_child_value(1)
-                    profiles[path][setting] = {values.get_child_value(j).get_child_value(0).unpack(): values.get_child_value(j).get_child_value(1).get_variant() for j in range(values.n_children())}
-                answer(inv)
+            elif method == 'GetSecrets' and iface==NM+'.Settings.Connection':
+                answer(inv,'(a{sa{sv}})',({p[0]:system_secrets.get(path,{}).get(p[0],{})},))
+            elif method in ('Update','Update2'):
+                state['nmUpdates']+=1
+                if state['nmUpdates'] in state['nmDenyAt']:
+                    inv.return_dbus_error(NM+'.Settings.PermissionDenied','injected policy denial');return
+                if state['nmUpdates'] in state['nmFailAt']:
+                    inv.return_dbus_error(NM+'.Settings.Error.Failed','injected update refusal');return
+                if state['nmUpdates'] in state['concurrentAt']:
+                    profiles[path]['connection']['id']=v('s','external-writer-name')
+                    versions[path]+=1
+                if method=='Update2' and p[2].get('version-id',0) not in (0,versions[path]):
+                    inv.return_dbus_error(NM+'.Settings.VersionIdMismatch','concurrent edit');return
+                settings=decode_settings(parameters.get_child_value(0))
+                apply_profile(path,settings)
+                if state['nmUpdates'] in state['appliedErrorAt']:
+                    profiles[path]['connection']['id']=v('s','external-after-apply')
+                    versions[path]+=1
+                    inv.return_dbus_error(NM+'.Settings.Error.Failed','injected uncertain result');return
+                if method=='Update2' and state['callbacks']:
+                    def saved(c,res):
+                        try:
+                            c.call_finish(res)
+                            answer(inv,'(a{sv})',({},))
+                        except GLib.Error:
+                            inv.return_dbus_error(NM+'.Settings.Error.Failed','agent callback failed')
+                    nm_bus.call(state['agent'],AGENT,NM+'.SecretAgent','SaveSecrets',v('(a{sa{sv}}o)',(settings,path)),None,Gio.DBusCallFlags.NONE,6000,None,saved)
+                else:answer(inv,'(a{sv})',({},)) if method=='Update2' else answer(inv)
             elif method == 'Delete' and iface == NM+'.Settings.Connection':
                 profiles.pop(path); state['profileDeletes']+=1; answer(inv)
             elif method in ('AddConnection', 'AddAndActivateConnection'):
                 state['created'] += 1
                 newpath = ROOT+'/Settings/'+str(state['created'])
                 state['lastCreated'] = newpath
-                profiles[newpath] = profile('new', '802-3-ethernet' if method == 'AddConnection' else '802-11-wireless')
+                profiles[newpath] = profile('new-'+str(state['created']), '802-3-ethernet' if method == 'AddConnection' else '802-11-wireless')
                 template = parameters.get_child_value(0)
                 for i in range(template.n_children()):
                     entry=template.get_child_value(i); name=entry.get_child_value(0).unpack(); keys=entry.get_child_value(1)
                     profiles[newpath].setdefault(name,{}).update({keys.get_child_value(j).get_child_value(0).unpack():keys.get_child_value(j).get_child_value(1).get_variant() for j in range(keys.n_children())})
-                export(newpath, NM+'.Settings.Connection', [('GetSettings',(),('a{sa{sv}}',)),('Update',('a{sa{sv}}',),()),('Delete',(),())])
+                if method=='AddAndActivateConnection':profiles[newpath]['802-11-wireless']['ssid']=v('ay',state.get('ssid','Test').encode())
+                apply_profile(newpath,profiles[newpath])
+                export(newpath, NM+'.Settings.Connection', [('GetSettings',(),('a{sa{sv}}',)),('GetSecrets',('s',),('a{sa{sv}}',)),('Update',('a{sa{sv}}',),()),('Update2',('a{sa{sv}}','u','a{sv}'),('a{sv}',)),('Delete',(),())],{'VersionId':'t'})
                 if method == 'AddConnection':
                     answer(inv, '(o)', (newpath,))
                 else:
@@ -243,10 +363,14 @@ def fake():
                         state['activeState']=1
                         def wrong_password(c,res):
                             try:
-                                c.call_finish(res)
+                                result=c.call_finish(res).unpack()[0]
+                                for setting,values in result.items():
+                                    for key,value in values.items():
+                                        if profiles[newpath].get(setting,{}).get(flag_name(key),v('u',0)).unpack()==0:
+                                            system_secrets[newpath].setdefault(setting,{})[key]=v('ay' if key=='password-raw' else 's',value)
+                                state['activeState']=state['newFinalState']
                             except GLib.Error:
-                                pass
-                            state['activeState']=4
+                                state['activeState']=4
                         nm_bus.call(state['agent'],AGENT,NM+'.SecretAgent','GetSecrets',v('(a{sa{sv}}osasu)',(profiles[newpath],newpath,'802-11-wireless-security',[],3)),None,Gio.DBusCallFlags.NONE,130000,None,wrong_password)
                     answer(inv, '(oo)', (newpath, ACTIVE))
             elif method == 'GetAllAccessPoints':
@@ -282,7 +406,7 @@ def fake():
                     return False
                 GLib.idle_add(complete)
             elif method == 'GetSecrets':
-                answer(inv, '(a{o(oayays)})', ({path:(p[1],[],list(items[path][1].encode()),'text/plain') for path in p[0]},))
+                answer(inv, '(a{o(oayays)})', ({path:(p[1],[],list(items[path][1].encode() if isinstance(items[path][1],str) else items[path][1]),'text/plain') for path in p[0]},))
             elif method == 'ReadAlias':
                 answer(inv, '(o)', ('/' if state['noCollection'] else SECRET+'/collection/default',))
             elif method == 'CreateCollection':
@@ -295,6 +419,9 @@ def fake():
                 else:
                     store_item(inv,p)
             elif method == 'Delete' and iface == SS+'.Item':
+                state['ssDeleteCalls']+=1
+                if state['ssDeleteCalls'] in state['ssDeleteFailAt']:
+                    inv.return_dbus_error(SS+'.Error.Failed','injected keyring delete refusal');return
                 items.pop(path); answer(inv, '(o)', ('/',))
             else:
                 inv.return_dbus_error('org.freedesktop.DBus.Error.UnknownMethod',method)
@@ -304,7 +431,7 @@ def fake():
     export(ROOT, NM, [('GetDevices',(),('ao',)),('ActivateConnection',('o','o','o'),('o',)),('DeactivateConnection',('o',),()),('AddAndActivateConnection',('a{sa{sv}}','o','o'),('o','o'))], {'WirelessEnabled':'b','WirelessHardwareEnabled':'b','State':'u','Connectivity':'u','ActiveConnections':'ao'})
     export(ROOT+'/Settings', NM+'.Settings', [('ListConnections',(),('ao',)),('AddConnection',('a{sa{sv}}',),('o',))])
     for path in list(profiles):
-        export(path,NM+'.Settings.Connection',[('GetSettings',(),('a{sa{sv}}',)),('Update',('a{sa{sv}}',),()),('Delete',(),())])
+        export(path,NM+'.Settings.Connection',[('GetSettings',(),('a{sa{sv}}',)),('GetSecrets',('s',),('a{sa{sv}}',)),('Update',('a{sa{sv}}',),()),('Update2',('a{sa{sv}}','u','a{sv}'),('a{sv}',)),('Delete',(),())],{'VersionId':'t'})
     for path in (DEV,WIRED):
         export(path,DEVICE,[('Disconnect',(),()),('Reapply',('a{sa{sv}}','t','u'),())],{'DeviceType':'u','Interface':'s','State':'u','StateReason':'(uu)','Autoconnect':'b','ActiveConnection':'o','Ip4Config':'o','Ip6Config':'o','AvailableConnections':'ao'})
     export(DEV,WIFI,[('GetAllAccessPoints',(),('ao',)),('RequestScan',('a{sv}',),())],{'ActiveAccessPoint':'o','Bitrate':'u','LastScan':'x'})
@@ -313,7 +440,7 @@ def fake():
     export(ACTIVE,NM+'.Connection.Active',props={'Connection':'o','Uuid':'s','Type':'s','State':'u','Vpn':'b','Default':'b','Devices':'ao'})
     export(ROOT+'/IP4Config/1',NM+'.IP4Config',props={'AddressData':'aa{sv}','NameserverData':'aa{sv}','Domains':'as','Gateway':'s'})
     export(ROOT+'/AgentManager',NM+'.AgentManager',[('RegisterWithCapabilities',('s','u'),())])
-    export('/test','org.nidara.NetworkTest',[('Info',(),('s',)),('Seed',('s',),()),('ReleaseStores',(),()),('Set',('s','s'),()),('Ask',('u','s'),()),('Cancel',(),()),('Save',(),()),('Delete',(),()),('Drop',(),()),('Restore',(),())])
+    export('/test','org.nidara.NetworkTest',[('Info',(),('s',)),('Seed',('s',),()),('StorageFixture',('s','b'),()),('StorageProbe',('s',),('s',)),('StorageBinary',(),()),('StorageWep',(),()),('StorageCopies',(),()),('LateStorageSave',(),()),('ReleaseStores',(),()),('Set',('s','s'),()),('Ask',('u','s'),()),('Cancel',(),()),('Save',(),()),('Delete',(),()),('Drop',(),()),('Restore',(),())])
     export(SECRET,SS+'.Service',[('OpenSession',('s','v'),('v','o')),('SearchItems',('a{ss}',),('ao','ao')),('Unlock',('ao',),('ao','o')),('GetSecrets',('ao','o'),('a{o(oayays)}',)),('ReadAlias',('s',),('o',)),('CreateCollection',('a{sv}','s'),('o','o'))])
     export(SECRET+'/session/test',SS+'.Session',[('Close',(),())])
     export(SECRET+'/collection/default',SS+'.Collection',[('CreateItem',('a{sv}','(oayays)','b'),('o','o'))])
@@ -370,15 +497,15 @@ def exercise(binary, directory, managed=False):
         wait(lambda: not snapshot()[2]['wirelessEnabled'],'radio write')
         check(not info()['radio'],'radio via D-Bus')
         net('Scan','(o)',(DEV,))
-        net('Connect','(oos)',(DEV,AP,''))
+        net('Connect','(oossb)',(DEV,AP,'','user',True))
         net('Activate','(so)',('hidden',DEV))
         net('Activate','(so)',('vpn','/'))
         check(any(c[0]=='RequestScan' for c in info()['calls']) and any(c[0]=='ActivateConnection' for c in info()['calls']),'scan, saved hidden and VPN activation')
         net('Deactivate','(o)',(ACTIVE,))
         check(info()['active']=='/','VPN deactivation')
         state('enterprise',True)
-        fails(lambda: net('Connect','(oos)',(DEV,AP,'')),'NeedsProfile')
-        fails(lambda: net('Connect','(oos)',(DEV,'/','')),'NeedsProfile')
+        fails(lambda: net('Connect','(oossb)',(DEV,AP,'','user',True)),'NeedsProfile')
+        fails(lambda: net('Connect','(oossb)',(DEV,'/','','user',True)),'NeedsProfile')
         state('enterprise',False)
         net('Activate','(so)',('wifi',DEV))
         form = dict(v4=dict(method='manual',address='192.0.2.44',prefix='255.255.255.0',gateway='192.0.2.1'),v6=dict(method='auto',address='',prefix='',gateway=''),dns='1.1.1.1, 2001:4860:4860::8888',search='example')
@@ -399,6 +526,9 @@ def exercise(binary, directory, managed=False):
         net('SetWiredEnabled','(ob)',(WIRED,True))
         state('carrier',True)
         check(any(c[0]=='Update' and c[1]==PROF_WIRED for c in info()['calls']),'Ethernet switch persists profile autoconnect')
+        net('Activate','(so)',('wired',WIRED))
+        net('ApplyIp','(sos)',('wired',WIRED,json.dumps(form)))
+        check(json.loads(net('GetIp','(s)',('wired',))[0])['v4']['address']=='192.0.2.44','saved Ethernet IP editing remains available without Wi-Fi storage reconciliation')
         net('ApplyIp','(sos)',('',WIRED,json.dumps(form)))
         check(any(c[0]=='AddConnection' for c in info()['calls']),'Ethernet without profile creates one')
         net('Forget','(s)',('hidden',))
@@ -409,7 +539,7 @@ def exercise(binary, directory, managed=False):
         check(any(c[0]=='AddAndActivateConnection' for c in info()['calls']),'explicit enterprise profile reaches NM')
         net('Forget','(s)',('wifi',))
         state('activeState',4)
-        fails(lambda: net('Connect','(oos)',(DEV,AP,'')),'Failed')
+        fails(lambda: net('Connect','(oossb)',(DEV,AP,'','user',True)),'Failed')
         check(any(c[0]=='Delete' and c[1]==info()['lastCreated'] for c in info()['calls']),'failed fresh connection is removed')
         state('activeState',2)
         # Requests come only from the fake NM owner; a session peer cannot phish.
@@ -489,6 +619,7 @@ def exercise(binary, directory, managed=False):
         net('RegisterSecretsUi',c=competitor)
         state('saveflags',2)
         ctrl('Save'); wait(lambda: info()['result'] is not None,'save not-saved flag')
+        state('saveflags',1)
         ctrl('Ask','(us)',(0,'802-11-wireless-security'))
         wait(lambda: info()['result'] is not None,'keyring retained prior secret')
         check(info()['result']['value']=='test-key','not-saved flag never overwrites keyring')
@@ -508,7 +639,7 @@ def exercise(binary, directory, managed=False):
                 completion.append('unexpected-success')
             except GLib.Error as e:
                 completion.append(str(e))
-        bus.call(NET,NETPATH,IFACE,'Connect',v('(oos)',(DEV,AP,'')),None,Gio.DBusCallFlags.NONE,20000,None,connected)
+        bus.call(NET,NETPATH,IFACE,'Connect',v('(oossb)',(DEV,AP,'','user',True)),None,Gio.DBusCallFlags.NONE,20000,None,connected)
         wait(lambda:len(leaks)>before,'new connection secret question')
         new_uuid=json.loads(leaks[-1][1])['uuid']
         net('SubmitSecrets','(ta{sa{sv}})',(leaks[-1][0],{'802-11-wireless-security':{'psk':v('s','wrong-new-key')}}),c=competitor)
@@ -530,6 +661,20 @@ def exercise(binary, directory, managed=False):
         wait(ready,'NM restart snapshot')
         wait(lambda: info()['registrations']>=2,'NM restart agent registration')
         check(True,'NM restart recovers state and registration')
+        def restart_storage_daemon():
+            nonlocal daemon
+            previous_agent=info()['agent']
+            daemon.terminate();daemon.wait(timeout=5)
+            daemon=subprocess.Popen([binary,'--network'],stdout=daemon_log,stderr=daemon_log)
+            wait(ready,'network after storage recovery restart')
+            wait(lambda:info()['agent'] and info()['agent']!=previous_agent,'new process secret agent registration')
+            pid=call(system_client,'org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','GetConnectionUnixProcessID','(s)',(info()['agent'],))[0]
+            check(pid==daemon.pid,'recovery uses the restarted process system-bus agent')
+            net('RegisterSecretsUi',c=competitor)
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('network_storage_tests',Path(__file__).with_name('sessiond-network-storage-test.py'))
+        storage_tests=importlib.util.module_from_spec(spec);spec.loader.exec_module(storage_tests)
+        storage_tests.exercise(net,ctrl,info,state,bus,competitor,leaks,None if managed else restart_storage_daemon,globals())
         if managed:
             return
         daemon.terminate(); daemon.wait(timeout=5); daemon=None
@@ -537,8 +682,13 @@ def exercise(binary, directory, managed=False):
         registrations = info()['registrations']
         daemon = subprocess.Popen([binary,'--network-read-only'],stdout=daemon_log,stderr=daemon_log)
         wait(ready,'read-only network service')
+        before_nm_writes=info()['nmUpdates']
         fails(lambda: net('SetWifiEnabled','(b)',(True,)),'Denied')
+        fails(lambda:net('SetSecretStorage','(ssb)',('storage-fixture','system',True)),'Denied')
+        fails(lambda:net('SetSecretStorageWithSecrets','(ssba{sa{sv}})',('storage-fixture','user',True,{})),'Denied')
+        fails(lambda:net('ReconcileSecretStorage','(s)',('storage-fixture',)),'Denied')
         check(info()['registrations']==registrations,'read-only mode registers no NM agent')
+        check(info()['nmUpdates']==before_nm_writes,'read-only storage methods leave NM untouched')
         check(True,'all Network1 writes used fake services')
     finally:
         for c in extra:

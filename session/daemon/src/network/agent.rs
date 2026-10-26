@@ -62,11 +62,13 @@ pub struct Agent {
     state: Arc<Mutex<State>>,
     gate: Arc<Semaphore>,
     keyring: keyring::Queue,
+    storage_busy: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
 }
 impl Agent {
     pub fn new(system: Connection, session: Connection) -> Self {
         Self {
             system,
+            storage_busy: Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             keyring: keyring::Queue::new(session.clone()),
             session,
             state: Arc::new(Mutex::new(State::default())),
@@ -78,6 +80,65 @@ impl Agent {
     }
     pub async fn delete_profile_secrets(&self, uuid: &str) -> Result<(), Error> {
         self.keyring.delete(uuid).await
+    }
+    pub fn keyring(&self) -> keyring::Queue {
+        self.keyring.clone()
+    }
+    pub fn begin_storage(&self, uuid: &str) -> Result<StorageGuard, Error> {
+        let mut busy = self.storage_busy.lock().unwrap();
+        if self.gate.available_permits() == 0 || busy.contains(uuid) {
+            return Err(Error::Conflict(
+                "a secrets request or storage change is in progress".into(),
+            ));
+        }
+        busy.insert(uuid.into());
+        Ok(StorageGuard {
+            busy: self.storage_busy.clone(),
+            uuid: uuid.into(),
+        })
+    }
+    async fn received_save(&self, connection: Settings, path: Path) -> Result<(), AgentError> {
+        let uuid = text(connection.get("connection"), "uuid");
+        let has_owned = connection.iter().any(|(setting, p)| {
+            p.keys().any(|key| {
+                secret_key(setting, key)
+                    && super::storage::allowed_user_key(&connection, setting, key)
+            })
+        });
+        if !has_owned {
+            return Ok(());
+        }
+        let nm = Nm::current(&self.system)
+            .await
+            .map_err(|_| AgentError::Failed("NetworkManager unavailable".into()))?;
+        let canonical: Settings = nm
+            .call(&path, nm::PROFILE, "GetSettings", &())
+            .await
+            .map_err(|_| AgentError::Failed("profile unavailable while storing secrets".into()))?;
+        if text(canonical.get("connection"), "uuid") != uuid {
+            return Err(AgentError::PermissionDenied("profile UUID mismatch".into()));
+        }
+        let mut values = Settings::new();
+        values.insert("connection".into(), canonical["connection"].clone());
+        for (setting, p) in connection {
+            for (key, value) in p {
+                if secret_key(&setting, &key)
+                    && super::storage::allowed_user_key(&canonical, &setting, &key)
+                {
+                    let field = super::storage::Key {
+                        setting: setting.clone(),
+                        key: key.clone(),
+                    };
+                    let out = values.entry(setting.clone()).or_default();
+                    out.insert(key, value);
+                    out.insert(field.flag(), 1u32.into());
+                }
+            }
+        }
+        self.keyring
+            .save(values)
+            .await
+            .map_err(|_| AgentError::Failed("keyring store failed".into()))
     }
     async fn auth(&self, h: &Header<'_>) -> Result<(), AgentError> {
         let owner = Nm::current(&self.system)
@@ -184,10 +245,11 @@ impl Agent {
             }
             for (key, v) in &values[&p.setting] {
                 if !secret_key(&p.setting, key)
-                    || !(<&str>::try_from(v).is_ok()
-                        || p.setting == "802-1x"
-                            && key == "password-raw"
-                            && Vec::<u8>::try_from(v.try_clone().unwrap()).is_ok())
+                    || !(if p.setting == "802-1x" && key == "password-raw" {
+                        Vec::<u8>::try_from(v.try_clone().unwrap()).is_ok()
+                    } else {
+                        <&str>::try_from(v).is_ok()
+                    })
                 {
                     return Err(Error::Invalid("invalid secret key or type".into()));
                 }
@@ -218,6 +280,15 @@ impl Agent {
         s.cancels.remove(uuid).is_some()
     }
 }
+pub struct StorageGuard {
+    busy: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
+    uuid: String,
+}
+impl Drop for StorageGuard {
+    fn drop(&mut self) {
+        self.busy.lock().unwrap().remove(&self.uuid);
+    }
+}
 #[zbus::interface(name = "org.freedesktop.NetworkManager.SecretAgent")]
 impl Agent {
     #[allow(clippy::too_many_arguments)] // NetworkManager's fixed wire signature.
@@ -236,14 +307,44 @@ impl Agent {
         {
             return Err(AgentError::NoSecrets("not a Wi-Fi secret".into()));
         }
-        let _permit = self
-            .gate
-            .try_acquire()
-            .map_err(|_| AgentError::UserCanceled("another request is pending".into()))?;
         let uuid = text(connection.get("connection"), "uuid");
         if uuid.is_empty() {
             return Err(AgentError::NoSecrets("missing UUID".into()));
         }
+        let (busy, permit) = {
+            let state = self.storage_busy.lock().unwrap();
+            let busy = state.contains(&uuid);
+            let permit =
+                if busy {
+                    None
+                } else {
+                    Some(self.gate.try_acquire().map_err(|_| {
+                        AgentError::UserCanceled("another request is pending".into())
+                    })?)
+                };
+            (busy, permit)
+        };
+        if busy {
+            if flags & 3 != 0 {
+                return Err(AgentError::NoSecrets(
+                    "secret storage is being changed".into(),
+                ));
+            }
+            let mut found = self
+                .keyring
+                .lookup(&uuid, &setting_name)
+                .await
+                .map_err(|_| AgentError::NoSecrets("keyring unavailable".into()))?;
+            found.retain(|key, _| {
+                secret_key(&setting_name, key)
+                    && super::storage::allowed_user_key(&connection, &setting_name, key)
+            });
+            if found.is_empty() {
+                return Err(AgentError::NoSecrets("no agent-owned secrets".into()));
+            }
+            return Ok(Settings::from([(setting_name, found)]));
+        }
+        let _permit = permit;
         let (tx, mut rx) = oneshot::channel();
         let id = {
             let mut s = self.state.lock().await;
@@ -267,7 +368,10 @@ impl Agent {
                 // A keyring error is not evidence that no password exists: ask the UI if allowed.
                 let found = tokio::select! { found = self.keyring.lookup(&uuid, &setting_name) => found, _ = &mut rx => return Err(AgentError::UserCanceled("withdrawn".into())) };
                 if let Ok(mut found) = found {
-                    found.retain(|k, _| secret_key(&setting_name, k));
+                    found.retain(|k, _| {
+                        secret_key(&setting_name, k)
+                            && super::storage::allowed_user_key(&connection, &setting_name, k)
+                    });
                     if !found.is_empty() {
                         return Ok(Settings::from([(setting_name.clone(), found)]));
                     }
@@ -366,14 +470,11 @@ impl Agent {
     async fn save_secrets(
         &self,
         connection: Settings,
-        _connection_path: Path,
+        connection_path: Path,
         #[zbus(header)] header: Header<'_>,
     ) -> Result<(), AgentError> {
         self.auth(&header).await?;
-        self.keyring
-            .save(connection)
-            .await
-            .map_err(|_| AgentError::Failed("keyring store failed".into()))
+        self.received_save(connection, connection_path).await
     }
     async fn delete_secrets(
         &self,

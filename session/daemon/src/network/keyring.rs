@@ -4,6 +4,7 @@
 use super::{
     Error, Settings,
     nm::{Props, number, owned, text},
+    storage::{Credential, Key},
 };
 use futures_util::StreamExt;
 use std::{
@@ -73,6 +74,15 @@ impl Queue {
         let key = uuid.to_string();
         receive(self.run(key.clone(), async move { delete(&bus, &key).await })).await
     }
+    pub async fn delete_keys(&self, uuid: &str, keys: &[Key]) -> Result<(), Error> {
+        let bus = self.bus.clone();
+        let uuid = uuid.to_string();
+        let keys = keys.to_vec();
+        receive(self.run(uuid.clone(), async move {
+            delete_keys(&bus, &uuid, &keys).await
+        }))
+        .await
+    }
     pub async fn lookup(&self, uuid: &str, setting: &str) -> Result<Props, Error> {
         let bus = self.bus.clone();
         let key = uuid.to_string();
@@ -91,7 +101,7 @@ async fn receive<T>(rx: tokio::sync::oneshot::Receiver<Result<T, Error>>) -> Res
 struct Candidate {
     modified: u64,
     path: String,
-    value: String,
+    value: Credential,
 }
 fn newest(out: &mut HashMap<String, Candidate>, key: String, candidate: Candidate) {
     if out.get(&key).is_none_or(|old| {
@@ -172,9 +182,15 @@ pub async fn lookup(bus: &Connection, uuid: &str, setting: &str) -> Result<Props
         for (path, (_, _, value, _)) in values {
             let item = proxy(bus, &path, "org.freedesktop.Secret.Item").await?;
             let a: HashMap<String, String> = item.get_property("Attributes").await?;
-            if let Some(key) = a.get("setting-key")
-                && let Ok(value) = String::from_utf8(value)
-            {
+            if let Some(key) = a.get("setting-key") {
+                let value = if key == "password-raw" {
+                    Credential::Bytes(value)
+                } else {
+                    let Ok(value) = String::from_utf8(value) else {
+                        continue;
+                    };
+                    Credential::Text(value)
+                };
                 let modified: u64 = item.get_property("Modified").await?;
                 newest(
                     &mut out,
@@ -189,7 +205,7 @@ pub async fn lookup(bus: &Connection, uuid: &str, setting: &str) -> Result<Props
         }
         Ok(out
             .into_iter()
-            .map(|(key, entry)| (key, owned(entry.value)))
+            .map(|(key, entry)| (key, entry.value.value()))
             .collect())
     }
     .await;
@@ -213,10 +229,16 @@ pub async fn save(bus: &Connection, s: &Settings) -> Result<(), Error> {
                 format!("{key}-flags")
             };
             let flags = number(Some(p), &flag);
-            if flags & 1 != 0 && flags & 2 == 0 {
-                let v = text(Some(p), key);
-                if !v.is_empty() {
-                    values.push((setting, key.as_str(), v));
+            if flags & 1 != 0
+                && flags & 2 == 0
+                && let Some(value) = p.get(key).and_then(Credential::read)
+            {
+                let (bytes, content) = match value {
+                    Credential::Text(v) => (v.into_bytes(), "text/plain; charset=utf8"),
+                    Credential::Bytes(v) => (v, "application/octet-stream"),
+                };
+                if !bytes.is_empty() {
+                    values.push((setting, key.as_str(), bytes, content));
                 }
             }
         }
@@ -245,7 +267,7 @@ pub async fn save(bus: &Connection, s: &Settings) -> Result<(), Error> {
     let session = session(bus).await?;
     let result = async {
         let p = proxy(bus, &collection, "org.freedesktop.Secret.Collection").await?;
-        for (setting, key, value) in values {
+        for (setting, key, value, content) in values {
             let a = storage_attrs(&uuid, setting, key);
             let properties = Props::from([
                 ("org.freedesktop.Secret.Item.Attributes".into(), owned(a)),
@@ -257,12 +279,7 @@ pub async fn save(bus: &Connection, s: &Settings) -> Result<(), Error> {
                     )),
                 ),
             ]);
-            let secret = (
-                session.clone(),
-                Vec::<u8>::new(),
-                value.into_bytes(),
-                "text/plain; charset=utf8",
-            );
+            let secret = (session.clone(), Vec::<u8>::new(), value, content);
             let (_, pp): (Path, Path) = p.call("CreateItem", &(&properties, secret, true)).await?;
             if pp.as_str() != "/" {
                 prompt(bus, &pp).await?;
@@ -274,13 +291,36 @@ pub async fn save(bus: &Connection, s: &Settings) -> Result<(), Error> {
     close(bus, &session).await;
     result
 }
+async fn delete_item(bus: &Connection, path: &Path) -> Result<(), Error> {
+    let p = proxy(bus, path, "org.freedesktop.Secret.Item").await?;
+    let attrs: HashMap<String, String> = p.get_property("Attributes").await?;
+    if !attrs
+        .get("setting-name")
+        .zip(attrs.get("setting-key"))
+        .is_some_and(|(setting, key)| {
+            super::agent::supported(setting) && super::agent::secret_key(setting, key)
+        })
+        || attrs.get("xdg:schema").is_some_and(|s| s != SCHEMA)
+    {
+        return Ok(());
+    }
+    let pp: Path = p.call("Delete", &()).await?;
+    if pp.as_str() != "/" {
+        prompt(bus, &pp).await?;
+    }
+    Ok(())
+}
+async fn delete_keys(bus: &Connection, uuid: &str, keys: &[Key]) -> Result<(), Error> {
+    for key in keys {
+        for path in search(bus, &attrs(uuid, Some(&key.setting), Some(&key.key))).await? {
+            delete_item(bus, &path).await?;
+        }
+    }
+    Ok(())
+}
 pub async fn delete(bus: &Connection, uuid: &str) -> Result<(), Error> {
     for path in search(bus, &attrs(uuid, None, None)).await? {
-        let p = proxy(bus, &path, "org.freedesktop.Secret.Item").await?;
-        let pp: Path = p.call("Delete", &()).await?;
-        if pp.as_str() != "/" {
-            prompt(bus, &pp).await?;
-        }
+        delete_item(bus, &path).await?;
     }
     Ok(())
 }
@@ -310,11 +350,11 @@ mod tests {
                     Candidate {
                         modified,
                         path: path.into(),
-                        value: value.into(),
+                        value: Credential::Text(value.into()),
                     },
                 );
             }
-            assert_eq!(out["psk"].value, "new-value");
+            assert_eq!(out["psk"].value, Credential::Text("new-value".into()));
         }
         for rows in [
             [("a", "a-value"), ("b", "b-value")],
@@ -328,11 +368,11 @@ mod tests {
                     Candidate {
                         modified: 2,
                         path: path.into(),
-                        value: value.into(),
+                        value: Credential::Text(value.into()),
                     },
                 );
             }
-            assert_eq!(out["psk"].value, "b-value");
+            assert_eq!(out["psk"].value, Credential::Text("b-value".into()));
         }
     }
 }

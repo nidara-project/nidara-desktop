@@ -5,6 +5,7 @@ mod agent;
 mod ip;
 mod keyring;
 mod nm;
+mod storage;
 use nm::{Nm, owned, text};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
@@ -25,6 +26,10 @@ pub enum Error {
     Unavailable(String),
     Invalid(String),
     NeedsProfile(String),
+    NeedsSecrets(String),
+    Incomplete(String),
+    Conflict(String),
+    Unsupported(String),
     Denied(String),
     Cancelled(String),
     Failed(String),
@@ -160,7 +165,18 @@ impl Network {
             .call(&device, nm::WIFI, "RequestScan", &(options,))
             .await
     }
-    async fn connect(&self, device: Path, ap: Path, uuid: String) -> Result<Path, Error> {
+    async fn connect_default(&self, device: Path, ap: Path, uuid: String) -> Result<Path, Error> {
+        self.connect(device, ap, uuid, "user".into(), true).await
+    }
+    async fn connect(
+        &self,
+        device: Path,
+        ap: Path,
+        uuid: String,
+        mode: String,
+        all_users: bool,
+    ) -> Result<Path, Error> {
+        let mode = storage::Mode::parse(&mode)?;
         let nm = self.nm(true).await?;
         if !uuid.is_empty() {
             return self.activate_inner(&nm, &uuid, &device).await;
@@ -228,14 +244,13 @@ impl Network {
             };
             let mut sec = nm::Props::from([("key-mgmt".into(), owned(key_mgmt))]);
             if key_mgmt == "none" {
-                for i in 0..4 {
-                    sec.insert(format!("wep-key{i}-flags"), 1u32.into());
-                }
+                sec.insert("wep-key-flags".into(), mode.flags().into());
             } else if key_mgmt != "owe" {
-                sec.insert("psk-flags".into(), 1u32.into());
+                sec.insert("psk-flags".into(), mode.flags().into());
             }
             settings.insert("802-11-wireless-security".into(), sec);
         }
+        storage::permissions(&mut settings, all_users)?;
         let (profile, active): (Path, Path) = nm
             .call(
                 nm::ROOT,
@@ -267,6 +282,7 @@ impl Network {
         ap: Path,
         settings: Settings,
     ) -> Result<Path, Error> {
+        storage::validate(&settings)?;
         let nm = self.nm(true).await?;
         if text(settings.get("connection"), "type") != "802-11-wireless" {
             return Err(Error::Invalid("expected a Wi-Fi profile".into()));
@@ -342,6 +358,45 @@ impl Network {
         }
         Ok(())
     }
+    async fn set_secret_storage(
+        &self,
+        uuid: String,
+        mode: String,
+        all_users: bool,
+    ) -> Result<(), Error> {
+        let _op = self.operations.lock().await;
+        storage::change(
+            &self.nm(true).await?,
+            &self.agent,
+            &uuid,
+            &mode,
+            all_users,
+            &Settings::new(),
+        )
+        .await
+    }
+    async fn set_secret_storage_with_secrets(
+        &self,
+        uuid: String,
+        mode: String,
+        all_users: bool,
+        values: Settings,
+    ) -> Result<(), Error> {
+        let _op = self.operations.lock().await;
+        storage::change(
+            &self.nm(true).await?,
+            &self.agent,
+            &uuid,
+            &mode,
+            all_users,
+            &values,
+        )
+        .await
+    }
+    async fn reconcile_secret_storage(&self, uuid: String) -> Result<(), Error> {
+        let _op = self.operations.lock().await;
+        storage::reconcile(&self.nm(true).await?, &self.agent, &uuid).await
+    }
     async fn get_ip(&self, uuid: String) -> Result<String, Error> {
         let nm = self.nm(false).await?;
         let s = if uuid.is_empty() {
@@ -357,6 +412,12 @@ impl Network {
         let form =
             serde_json::from_str(&form).map_err(|_| Error::Invalid("invalid IP form".into()))?;
         let nm = self.nm(true).await?;
+        if !uuid.is_empty() {
+            let (_, profile) = nm.profile(&uuid).await?;
+            if text(profile.get("connection"), "type") == "802-11-wireless" {
+                storage::reconcile(&nm, &self.agent, &uuid).await?;
+            }
+        }
         let active = ip::apply(&nm, &uuid, &device, form).await?;
         drop(_op);
         if let Some(active) = active {

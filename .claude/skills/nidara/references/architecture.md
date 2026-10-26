@@ -1016,6 +1016,17 @@ replacement; search/delete still match by subset for older entries without it.
 Duplicate setting-keys are read by greatest Item.Modified, with a stable path tie.
 Save/lookup/delete are ordered per UUID, including asynchronous GetSecrets saves:
 failed new-profile cleanup waits behind the save before deleting the UUID's secrets.
+Storage is selectable: user (1, keyring), system (0, NM's root-protected profile)
+and ask (2, forget persistent copies); public/private permissions are independent.
+New default connections use user storage and an explicit empty public ACL, while
+saved activation preserves its policy. Snapshot exposes per-secret flags/modes and
+permissions, including optional EAP NOT_REQUIRED(4), never values. The explicit
+storage APIs use NM VersionId/Update2 CAS (1.44+), verified destinations and rollback;
+Incomplete exposes locations/keys, never passwords. Failed rollback keeps a verified
+copy. Reconciliation on the next storage/IP mutation (or explicit call) follows NM
+flags, including ask's committed erasure intent. No backup schema or recovery file
+is created, and no SS queue slot is held while awaiting an NM callback. Missing
+ask-mode passwords require explicit values, with NeedsSecrets refusing before mutation.
 Not-saved secrets never go to disk. `--network-read-only` reads NM without exporting
 or registering an agent and refuses writes. Tests use fake NM and Secret Service
 on private buses for every mutation, and run through the existing sessiond test job.
