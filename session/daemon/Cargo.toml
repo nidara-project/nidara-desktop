@@ -1,6 +1,6 @@
 [package]
 name = "nidara-sessiond"
-description = "Nidara session services: the notification server"
+description = "Nidara session services: the notification server, the settings service (Config1)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,3 +14,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 png = "0.18"
 sha2 = "0.10"
+# GSettings, the settings' home, on a GLib thread of its own (config/store.rs).
+gio = "0.22"
+glib = "0.22"
+futures-util = { version = "0.3", default-features = false }

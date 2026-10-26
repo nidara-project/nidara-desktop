@@ -1081,7 +1081,9 @@ jobs:
           key: sessiond-${{ runner.os }}-${{ hashFiles('session/Cargo.lock') }}
       - name: Install private-bus and GJS client test dependencies
         run: |
-          scripts/ci/apt.sh install dbus-daemon libnotify-bin python3-gi gjs
+          # libglib2.0-dev: the gio crate (Config1's GSettings); gsettings-desktop-schemas:
+          # the GNOME keys its integration test compiles with ours.
+          scripts/ci/apt.sh install dbus-daemon libnotify-bin python3-gi gjs libglib2.0-dev gsettings-desktop-schemas
           npm install -g esbuild@0.28.2
       - name: Build the real shell client probe
         run: scripts/bundle.sh --js scripts/dev/notifd-probe.ts /tmp/notifd-client.js

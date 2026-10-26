@@ -55,6 +55,43 @@ pub struct Store {
     keys: BTreeMap<String, Key>,
 }
 
+/// Turns an i18n key into the app's text (its own catalogue, D4): set once by the app.
+pub type Translate = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
+static TRANSLATE: std::sync::OnceLock<Translate> = std::sync::OnceLock::new();
+
+/// Labels a schema leaves to the client — `ui.i18n` without a `title`, an option with an
+/// `i18n` and no `label`, as the Rust `Config1` serves them — come from `translate`. A server
+/// that sends its labels (the TypeScript shell's) is left as it is.
+pub fn set_translator(translate: Translate) {
+    let _ = TRANSLATE.set(translate);
+}
+fn localize(entry: &mut serde_json::Value) {
+    let Some(t) = TRANSLATE.get() else { return };
+    let ui = &mut entry["ui"];
+    let Some(i18n) = ui["i18n"].as_str().map(str::to_owned) else {
+        return;
+    };
+    if ui["title"].is_null()
+        && let Some(title) = t(&i18n)
+    {
+        ui["title"] = title.into();
+    }
+    if ui["subtitle"].is_null()
+        && let Some(subtitle) = t(&format!("{i18n}.desc"))
+    {
+        ui["subtitle"] = subtitle.into();
+    }
+    if let Some(options) = ui["options"].as_array_mut() {
+        for o in options {
+            if o["label"].is_null()
+                && let Some(label) = o["i18n"].as_str().and_then(t)
+            {
+                o["label"] = label.into();
+            }
+        }
+    }
+}
+
 impl Store {
     /// `Snapshot`'s answer.
     pub fn parse(epoch: u64, revision: u64, schema: &str) -> Result<Self, String> {
@@ -74,10 +111,12 @@ impl Store {
         let keys = entries
             .iter()
             .map(|(name, entry)| {
+                let mut entry = entry.clone();
+                localize(&mut entry);
                 let key = Key {
                     value: Value::from_json(&entry["value"]),
                     available: entry["available"].as_bool().unwrap_or(true),
-                    entry: entry.clone(),
+                    entry,
                     revision,
                 };
                 (name.clone(), key)
@@ -454,6 +493,33 @@ struct Out {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn labels_a_schema_leaves_to_the_client_come_from_its_catalogue() {
+        super::set_translator(Box::new(|k| match k {
+            "settings.x" => Some("Equis".into()),
+            "settings.x.desc" => Some("Una equis".into()),
+            "settings.x.a" => Some("A grande".into()),
+            _ => None,
+        }));
+        let schema = serde_json::json!({"schemaVersion": 1, "keys": {
+            "k": {"type": "enum", "value": "a", "writable": true,
+                "ui": {"i18n": "settings.x", "control": "segmented",
+                    "options": [{"value": "a", "i18n": "settings.x.a"}, {"value": "b", "label": "b"}]}},
+            "served": {"type": "boolean", "value": true, "writable": true,
+                "ui": {"i18n": "settings.x", "title": "Del servidor"}}}});
+        let store = Store::parse(1, 0, &schema.to_string()).unwrap();
+        let k = &store.key("k").unwrap().entry["ui"];
+        assert_eq!(k["title"], "Equis");
+        assert_eq!(k["subtitle"], "Una equis");
+        assert_eq!(k["options"][0]["label"], "A grande");
+        assert_eq!(k["options"][1]["label"], "b");
+        assert_eq!(
+            store.key("served").unwrap().entry["ui"]["title"],
+            "Del servidor"
+        );
+    }
+
     use super::*;
 
     const EPOCH: u64 = 1000;
