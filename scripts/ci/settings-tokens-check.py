@@ -195,6 +195,9 @@ for variant in component_variants:
             and positive_number(capsule.get('windowInset'), True)
             and capsule['height'] >= capsule['button'] + 2 * capsule['edge']):
         fail.append(f'{where}: missing or invalid capsule geometry')
+    glyph = capsule.get('glyph') or {}
+    if not all(positive_number(glyph.get(k)) for k in ('size', 'stroke', 'minimizeHalf', 'maximizeHalf', 'maximizeRadius', 'closeHalf')):
+        fail.append(f'{where}: incomplete window glyph geometry')
     search = variant.get('search') or {}
     if not all(positive_number(search.get(k), True) for k in ('paddingX', 'border', 'iconGap')) or not all(positive_number(search.get(k)) for k in ('minHeight', 'iconSize')):
         fail.append(f'{where}: incomplete SearchInput geometry')

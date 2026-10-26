@@ -21,6 +21,7 @@ pub struct Appearance {
     pub panel: PanelMaterial,
     pub control: crate::control::ControlRecipe,
     pub opaque_control: crate::control::ControlRecipe,
+    pub window_glyph: nk_widgets::WindowGlyphStyle,
     pub capsule_metrics: nk_widgets::CapsuleMetrics,
     pub titlebar: nk_widgets::window::TitlebarStyle,
     pub style: nk_text::TextStyle,
@@ -54,6 +55,7 @@ impl Appearance {
         let portal = portal::Appearance::from_portal(settings)?;
         let Styles {
             palette,
+            window_glyph,
             metrics,
             choices,
             range,
@@ -111,6 +113,7 @@ impl Appearance {
             panel,
             control: crate::control::ControlRecipe::load(glass, dark, reduce)?,
             opaque_control: crate::control::ControlRecipe::load(glass, dark, true)?,
+            window_glyph,
             capsule_metrics: crate::control::capsule_metrics(&exports.components, dark, reduce)?,
             titlebar,
             style,

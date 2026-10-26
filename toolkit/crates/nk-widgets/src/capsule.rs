@@ -1,6 +1,21 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! One retained panel of existing buttons; geometry comes from shared component data.
 use crate::*;
+/// Captions are for ordinary toolbar actions; window controls use paths.
+pub enum CapsuleGlyph<'a> {
+    Window(WindowGlyph),
+    Caption(&'a str),
+}
+impl<'a> From<&'a str> for CapsuleGlyph<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::Caption(value)
+    }
+}
+impl From<WindowGlyph> for CapsuleGlyph<'_> {
+    fn from(value: WindowGlyph) -> Self {
+        Self::Window(value)
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CapsuleMetrics {
     pub padding: f32,
@@ -27,6 +42,51 @@ impl CapsuleMetrics {
     }
 }
 impl Tree {
+    /// Register an existing vector capsule as the client fallback for server controls.
+    /// The host hides the whole panel on layout, including semantics, focus and capture.
+    pub fn window_controls_capsule(&mut self, panel: NodeId) -> Result<[NodeId; 3]> {
+        if self.window_buttons.is_some() {
+            return Err("duplicate window controls".into());
+        }
+        let capsule = self
+            .nodes
+            .get(&panel)
+            .filter(|_| self.capsules.contains_key(&panel))
+            .ok_or("window controls need a capsule")?;
+        let ids: [NodeId; 3] = capsule
+            .children
+            .as_slice()
+            .try_into()
+            .map_err(|_| "window controls need three buttons")?;
+        for (id, kind) in ids.into_iter().zip([
+            WindowGlyph::Minimize,
+            WindowGlyph::Maximize,
+            WindowGlyph::Close,
+        ]) {
+            if self.nodes[&id].kind != Kind::Button || self.nodes[&id].window_glyph != Some(kind) {
+                return Err(
+                    "window controls need minimize, maximize and close paths in order".into(),
+                );
+            }
+        }
+        self.window_buttons = Some(ids);
+        self.window_control_capsule = Some(panel);
+        self.set_hidden(panel, self.server_controls.is_some())?;
+        self.invalidate(self.root, Invalid::LAYOUT);
+        Ok(ids)
+    }
+
+    pub fn set_window_glyph_style(&mut self, style: WindowGlyphStyle) -> Result<()> {
+        style.validate()?;
+        if self.window_glyph_style != Some(style) {
+            self.window_glyph_style = Some(style);
+            for id in self.capsules.keys().copied().collect::<Vec<_>>() {
+                self.invalidate(id, Invalid::PAINT);
+            }
+        }
+        Ok(())
+    }
+
     pub fn control_capsule(
         &mut self,
         name: &str,
@@ -41,20 +101,27 @@ impl Tree {
         self.capsules.insert(id, Capsule { position, metrics });
         Ok(id)
     }
-    pub fn capsule_button(
+    pub fn capsule_button<'a>(
         &mut self,
         capsule: NodeId,
         name: &str,
-        glyph: &str,
+        glyph: impl Into<CapsuleGlyph<'a>>,
         destructive: bool,
     ) -> Result<NodeId> {
-        if !self.capsules.contains_key(&capsule) || name.is_empty() || glyph.is_empty() {
+        let glyph = glyph.into();
+        if !self.capsules.contains_key(&capsule)
+            || name.is_empty()
+            || matches!(glyph, CapsuleGlyph::Caption(""))
+        {
             return Err("capsule button needs its panel, accessible name and glyph".into());
         }
         let id = self.append(capsule, Kind::Button, name)?;
         let node = self.nodes.get_mut(&id).unwrap();
         node.button_shape = ButtonShape::Capsule;
-        node.caption = Some(glyph.into());
+        match glyph {
+            CapsuleGlyph::Window(kind) => node.window_glyph = Some(kind),
+            CapsuleGlyph::Caption(text) => node.caption = Some(text.into()),
+        }
         node.destructive = destructive;
         Ok(id)
     }
@@ -355,6 +422,14 @@ impl Tree {
             }
             if n.kind == Kind::SearchInput {
                 self.paint_search_chrome(*button, r, canvas, palette.disabled, false)?;
+            } else if let Some(kind) = n.window_glyph {
+                canvas.window_glyph(
+                    kind,
+                    self.window_glyph_style
+                        .ok_or("missing window glyph style")?,
+                    r,
+                    ink,
+                );
             } else if let Some((name, size)) = self.button_icons.get(button) {
                 let icon = self.icon(name, *size)?;
                 canvas.icon(

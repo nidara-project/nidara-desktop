@@ -858,9 +858,13 @@ and one capsule of window-control Buttons. Labels are supplied by the caller, al
 translated. Sidebar activation reports a page id for the existing Router; it never draws
 a non-allowlisted page itself. The app mounts Rendered under `Shell::content`.
 The existing nk-widgets Composition/CapsuleComposition remain responsible for D7 layers,
-D5 painting, input, focus and finite animation. Window control capsules do not opt in to
-Hyalo's duplicate server controls. The app supplies exported metrics and provisional
-owner-reviewed titlebar/transition policies explicitly; this seam invents no visual values.
+D5 painting, input, focus and finite animation. Native Settings opts into
+`Application::window_controls` before configure and registers its vector capsule
+with `Tree::window_controls_capsule`. With a server layout, Hyalo draws the controls;
+the whole client panel and its three buttons leave paint, focus, capture and AT-SPI.
+Without that protocol/layout, the same retained vector buttons are the fallback.
+The app supplies exported metrics and provisional owner-reviewed titlebar/transition
+policies explicitly; this seam invents no visual values.
 
 ## The layers protocol — `nidara-layers-v1` (test 5)
 
@@ -1008,7 +1012,31 @@ The native Settings window capsule uses components.json capsule.windowInset for 
 corner axes, independently of generic row padding/gap. The owner #921 geometry is
 72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.
 
-Settings positions its three window-control buttons from the current exported
+Window-control capsule buttons take `WindowGlyph::{Minimize,Maximize,Close}`
+through `CapsuleGlyph::Window`; captions remain for ordinary toolbar labels.
+They never create a text Layout. `Tree::set_window_glyph_style` supplies validated
+`WindowGlyphStyle` from components.json capsule.glyph (size, stroke,
+minimizeHalf, maximizeHalf, maximizeRadius, closeHalf). Missing values fail;
+there is no compiled app fallback. nk-render strokes round-capped segments and
+a rounded rectangle at the current output scale, centred in the retained button.
+The same painter supplies layer ink coverage and opaque D5 pixels. Names,
+keyboard/AT-SPI actions, hit boxes and material response remain the retained Tree's.
+Changing glyph style invalidates capsule layer paint without changing IDs.
+Hyalo uses an independently usable uniform mirror; the existing capsule layout
+unit test also checks all six glyph fields against capsule.json. No new CI step.
+
+For registered window-control capsules, `Tree::server_controls_layout` exposes the
+host's announced side/size. Settings reserves those actual dimensions, places the
+root-local box at capsule.windowInset from the chosen edge and centres it on the
+header band. `Tree::server_controls_bounds` gives this same box to Composition for
+`Window::place_window_controls` and drag exclusion. It does not add the content or
+sidebar inset to the kit's left position. Composition continues to use its existing
+inset-based placement for ordinary `Tree::window_controls` titlebar fallbacks.
+`Tree::set_server_controls` applies/removes the validated host layout; hiding the
+registered whole panel also retires the empty Panel semantic node and cancels a
+captured/focused child. Removal restores the same client node IDs.
+
+Settings positions its three fallback window-control buttons from the current exported
 CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
 metrics, including portal updates staged before layout; no cached measured bounds
 or second layout is needed just to compute the capsule's horizontal placement.

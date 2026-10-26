@@ -773,6 +773,10 @@ impl App {
     }
 }
 impl Application for App {
+    fn window_controls(&self) -> bool {
+        true
+    }
+
     fn poll_interval_ms(&self) -> u32 {
         16
     }

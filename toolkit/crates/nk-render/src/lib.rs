@@ -349,3 +349,6 @@ mod tests {
         }
     }
 }
+
+mod window_glyph;
+pub use window_glyph::{WindowGlyph, WindowGlyphStyle};

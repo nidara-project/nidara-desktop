@@ -2668,9 +2668,15 @@ at y12. A sidebar icon keeps its full accessible name without painting that name
 sidebar timeline before painting. A SearchInput inside ControlCapsule uses that
 capsule's text-input surface and local caret coordinates; selection pixels stay
 outside the adaptive ink coverage. Identical placement must leave Tree clean.
-Native apps register `Tree::window_controls` fallback buttons and opt into
-`Application::window_controls` for server layout before configure; composition
-reserves the reported side/size and hides fallback nodes only when layout arrives.
+Native apps opt into `Application::window_controls` before configure; Hyalo owns
+window controls whenever its protocol supplies a layout. `Tree::window_controls`
+registers ordinary titlebar fallbacks. Native Settings instead registers its existing
+vector capsule with `Tree::window_controls_capsule`: the whole fallback panel and
+its children leave paint, focus/capture and AT-SPI on server layout, and return
+with the same IDs without it. Placement reserves the announced side/size, not the
+client's fallback metrics or a stale Config1 side. The registered capsule's root-local
+position feeds `Tree::server_controls_bounds` and Composition's compositor request;
+keep the kit's 12/12 position independent of content/sidebar insets and SSD margins.
 The existing protocol is bound in nk-wayland, never in a second app host.
 
 Container accessible names are not visual labels: the native Sidebar/Scroll names
@@ -2747,6 +2753,16 @@ visible bounds are clipped to the window. Capsule geometry is a component export
 (capsule.json), not glass material; pitch derives from button + gap (independent of outer edge). Hyalo will
 retain a usable layout mirror checked against that source, so close works even
 without exported data.
+
+Window-control capsule glyphs (#936) are `WindowGlyph` kinds, never font
+characters. The shared strict reader in nk_settings::styles loads capsule.glyph
+from components.json into WindowGlyphStyle; the app calls
+Tree::set_window_glyph_style before painting (and on appearance changes).
+nk-render strokes the paths; both capsule layer coverage and D5 use that painter.
+Caption-based toolbar actions remain separate from window controls. The existing
+Hyalo capsule mirror unit test checks glyph geometry too; keep shader uniforms
+and the export together. Glyph-style changes must invalidate the capsule panes,
+not only the root, or a cached layer will keep its old coverage.
 
 A live capsule metric change invalidates each child measurement too: its width
 constraint can stay identical while button_min changes. Invalidating only the

@@ -381,15 +381,16 @@ pub fn run(
         appearance.style.clone(),
     )?;
     tree.append(tree.root(), Kind::TitleBar, "Control capsule lab")?;
+    tree.set_window_glyph_style(appearance.window_glyph)?;
     let native = tree.control_capsule(
         "Native window controls",
         Point::default(),
         appearance.capsule_metrics,
     )?;
     let controls = [
-        tree.capsule_button(native, "Minimize", "-", false)?,
-        tree.capsule_button(native, "Maximize", "+", false)?,
-        tree.capsule_button(native, "Close", "x", true)?,
+        tree.capsule_button(native, "Minimize", nk_widgets::WindowGlyph::Minimize, false)?,
+        tree.capsule_button(native, "Maximize", nk_widgets::WindowGlyph::Maximize, false)?,
+        tree.capsule_button(native, "Close", nk_widgets::WindowGlyph::Close, true)?,
     ];
     let toolbar = tree.control_capsule(
         "Backdrop controls",

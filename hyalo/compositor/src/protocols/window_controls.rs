@@ -394,6 +394,12 @@ mod tests {
         for (key, value) in [("height", BUTTON_H), ("button", HOVER_D), ("edge", EDGE), ("gap", GAP)] {
             assert_eq!(token["default"][key].as_f64(), Some(value), "capsule {key} mirror drift");
         }
+        use crate::render::controls::*;
+        for (key, value) in [("size", GLYPH_SIZE), ("stroke", GLYPH_STROKE),
+            ("minimizeHalf", GLYPH_MINIMIZE_HALF), ("maximizeHalf", GLYPH_MAXIMIZE_HALF),
+            ("maximizeRadius", GLYPH_MAXIMIZE_RADIUS), ("closeHalf", GLYPH_CLOSE_HALF)] {
+            assert_eq!(token["default"]["glyph"][key].as_f64(), Some(value), "glyph {key} mirror drift");
+        }
         assert_eq!(PITCH, HOVER_D + GAP);
     }
 

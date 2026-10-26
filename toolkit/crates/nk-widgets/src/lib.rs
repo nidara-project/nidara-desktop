@@ -21,7 +21,8 @@ pub use menu::MenuStyle;
 
 mod capsule;
 mod capsule_fallback;
-pub use capsule::{CapsuleMetrics, CapsuleStateStyle, CapsuleStyle};
+pub use capsule::{CapsuleGlyph, CapsuleMetrics, CapsuleStateStyle, CapsuleStyle};
+pub use nk_render::{WindowGlyph, WindowGlyphStyle};
 pub mod capsule_composition;
 mod motion;
 mod paint;
@@ -205,6 +206,7 @@ pub struct Node {
     pub(crate) button_shape: ButtonShape,
     pub(crate) name: String,
     pub(crate) caption: Option<String>,
+    pub(crate) window_glyph: Option<WindowGlyph>,
     pub(crate) destructive: bool,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
@@ -278,6 +280,7 @@ pub struct Tree {
     pub(crate) hovered: Option<NodeId>,
     page_width: PageWidth,
     pub(crate) capsules: BTreeMap<NodeId, capsule::Capsule>,
+    pub(crate) window_glyph_style: Option<WindowGlyphStyle>,
     pub(crate) button_icons: BTreeMap<NodeId, (String, f32)>,
     pub(crate) title_text_box: Option<TitleTextBox>,
     pub(crate) content_top_gap: Option<f32>,
@@ -300,6 +303,7 @@ pub struct Tree {
     pub(crate) sidebar_request: Option<bool>,
     sidebar_button: Option<NodeId>,
     pub(crate) window_buttons: Option<[NodeId; 3]>,
+    pub(crate) window_control_capsule: Option<NodeId>,
     pub(crate) server_controls: Option<nk_wayland::ControlsLayout>,
     invalid: Invalid,
     pub(crate) pane_epoch: u64,
@@ -370,6 +374,7 @@ impl Tree {
             hovered: None,
             page_width: PageWidth::None,
             capsules: BTreeMap::new(),
+            window_glyph_style: None,
             button_icons: BTreeMap::new(),
             title_text_box: None,
             content_top_gap: None,
@@ -392,6 +397,7 @@ impl Tree {
             sidebar_request: None,
             sidebar_button: None,
             window_buttons: None,
+            window_control_capsule: None,
             server_controls: None,
             invalid: Invalid::LAYOUT,
             pane_epoch: 0,
@@ -428,6 +434,7 @@ impl Tree {
                 button_shape: ButtonShape::Rounded,
                 name,
                 caption: None,
+                window_glyph: None,
                 destructive: false,
                 parent,
                 children: vec![],
@@ -636,13 +643,19 @@ impl Tree {
         self.window_buttons = Some(ids);
         Ok(ids)
     }
-    pub(crate) fn set_server_controls(
+    /// Apply the layout announced by the host; None restores the retained client fallback.
+    pub fn set_server_controls(
         &mut self,
         layout: Option<nk_wayland::ControlsLayout>,
     ) -> Result<()> {
+        if layout.is_some_and(|v| ![v.width, v.height].iter().all(|n| n.is_finite() && *n > 0.)) {
+            return Err("invalid server window controls layout".into());
+        }
         if self.server_controls != layout {
             self.server_controls = layout;
-            if let Some(ids) = self.window_buttons {
+            if let Some(panel) = self.window_control_capsule {
+                self.set_hidden(panel, layout.is_some())?;
+            } else if let Some(ids) = self.window_buttons {
                 for id in ids {
                     self.set_hidden(id, layout.is_some())?;
                 }
@@ -651,6 +664,34 @@ impl Tree {
             self.invalidate(self.root, Invalid::LAYOUT);
         }
         Ok(())
+    }
+    pub fn server_controls_layout(&self) -> Option<nk_wayland::ControlsLayout> {
+        self.server_controls
+    }
+    /// Root-local compositor controls. A registered capsule supplies app-owned placement;
+    /// ordinary titlebar fallbacks retain their existing inset-based placement.
+    pub fn server_controls_bounds(&self) -> Option<Rect> {
+        let controls = self.server_controls?;
+        let inset = self.content_viewport();
+        let position = self
+            .window_control_capsule
+            .and_then(|id| self.capsules.get(&id))
+            .map(|c| c.position)
+            .unwrap_or_else(|| Point {
+                x: match controls.side {
+                    nk_wayland::ControlsSide::Left => inset.x + self.metrics.padding,
+                    nk_wayland::ControlsSide::Right => {
+                        self.size.width - self.metrics.padding - controls.width as f32
+                    }
+                },
+                y: ((inset.y - controls.height as f32) / 2.).max(0.),
+            });
+        Some(Rect {
+            x: position.x,
+            y: position.y,
+            width: controls.width as f32,
+            height: controls.height as f32,
+        })
     }
     pub(crate) fn title_leading_controls(&self) -> f32 {
         self.server_controls
@@ -813,6 +854,10 @@ impl Tree {
         self.set_hidden(id, true)?;
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
+            if tree.window_control_capsule == Some(id) {
+                tree.window_control_capsule = None;
+                tree.window_buttons = None;
+            }
             tree.searches.remove(&id);
             tree.suggestion_combos.remove(&id);
             tree.images.remove(&id);
@@ -1352,7 +1397,7 @@ impl Tree {
             && let Some(capsule) = self.capsule_for_button(id)
         {
             let metrics = capsule.metrics;
-            if self.button_icons.contains_key(&id) {
+            if self.button_icons.contains_key(&id) || self.nodes[&id].window_glyph.is_some() {
                 let n = self.nodes.get_mut(&id).unwrap();
                 n.layout = None;
                 n.measured = Size {
