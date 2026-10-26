@@ -34,7 +34,8 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn setup() -> Env {
+/// `without`: a key taken out of the system's interface schema, as an older GNOME lacks it.
+fn setup_without(without: Option<&str>) -> Env {
     static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir =
@@ -58,6 +59,14 @@ fn setup() -> Env {
             schemas.join(f),
         )
         .unwrap_or_else(|e| panic!("{f} (gsettings-desktop-schemas): {e}"));
+    }
+    if let Some(key) = without {
+        let path = schemas.join("org.gnome.desktop.interface.gschema.xml");
+        let xml = std::fs::read_to_string(&path).unwrap();
+        if let Some(start) = xml.find(&format!("<key name=\"{key}\"")) {
+            let end = start + xml[start..].find("</key>").unwrap() + "</key>".len();
+            std::fs::write(&path, format!("{}{}", &xml[..start], &xml[end..])).unwrap();
+        }
     }
     let ok = Command::new("glib-compile-schemas")
         .arg(&schemas)
@@ -91,6 +100,10 @@ fn setup() -> Env {
         daemon: None,
         address,
     }
+}
+
+fn setup() -> Env {
+    setup_without(None)
 }
 
 impl Env {
@@ -278,7 +291,7 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
     // Errors: out of range, not in the enum, a read-only key.
     for (key, value) in [
         ("nightlight.temperature", Value::from(100.)),
-        ("appearance.accent", Value::from("magenta")),
+        ("appearance.windowBackground", Value::from("glass")),
         ("ai.allowConfigWrite", Value::from(true)),
     ] {
         let err = call::<(u64, OwnedValue)>(&conn, "Apply", &(key, value))
@@ -300,7 +313,11 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
         .await
         .is_ok()
     {}
-    env.gsettings_set("org.gnome.desktop.interface", "accent-color", "teal");
+    env.gsettings_set(
+        "org.gnome.desktop.wm.preferences",
+        "button-layout",
+        "close,minimize,maximize:",
+    );
     let signal = tokio::time::timeout(Duration::from_secs(5), updated.next())
         .await
         .unwrap()
@@ -308,8 +325,8 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
     let (_, r, values): Updated = signal.body().deserialize().unwrap();
     assert!(r > before.1);
     assert_eq!(
-        String::try_from(values["appearance.accent"].clone()).unwrap(),
-        "teal"
+        String::try_from(values["appearance.windowControls"].clone()).unwrap(),
+        "left"
     );
     // The wallpaper file, written by somebody else.
     std::fs::write(
@@ -351,4 +368,23 @@ async fn a_second_server_leaves_the_name_alone() {
         .await
         .unwrap();
     assert_eq!(owner.as_str(), conn.unique_name().unwrap().as_str());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_key_its_schema_lacks_is_unavailable_not_fatal() {
+    // GLib aborts the process on a key the schema lacks; an older GNOME has no accent-color.
+    let mut env = setup_without(Some("accent-color"));
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let (_, _, schema): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&schema).unwrap();
+    assert_eq!(schema["keys"]["appearance.accent"]["available"], false);
+    assert_eq!(schema["keys"]["appearance.darkMode"]["available"], true);
+    let err =
+        call::<(u64, OwnedValue)>(&conn, "Apply", &("appearance.accent", Value::from("teal")))
+            .await
+            .unwrap_err();
+    assert_eq!(error_name(err), "org.nidara.Config1.Error.Invalid");
+    assert!(env.daemon.as_mut().unwrap().try_wait().unwrap().is_none());
 }

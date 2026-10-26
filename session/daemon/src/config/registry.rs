@@ -92,28 +92,36 @@ const AI: &str = "org.nidara.ai";
 /// The GSettings of this session, by schema; a schema not installed is simply absent.
 pub struct Store {
     settings: HashMap<&'static str, gio::Settings>,
+    schemas: HashMap<&'static str, gio::SettingsSchema>,
     home: PathBuf,
     config: PathBuf,
 }
 impl Store {
     pub fn new() -> Self {
         let source = gio::SettingsSchemaSource::default();
-        let mut settings = HashMap::new();
+        let (mut settings, mut schemas) = (HashMap::new(), HashMap::new());
         for id in [INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI] {
-            if source.as_ref().and_then(|s| s.lookup(id, true)).is_some() {
+            if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
+                schemas.insert(id, schema);
             } else {
                 eprintln!("[config] {id}: schema not installed — its keys are unavailable");
             }
         }
         Self {
             settings,
+            schemas,
             home: glib::home_dir(),
             config: glib::user_config_dir(),
         }
     }
     pub fn settings(&self, schema: &str) -> Option<&gio::Settings> {
         self.settings.get(schema)
+    }
+    /// Whether the installed schema has the key: GLib aborts the process on one it lacks
+    /// (`accent-color` came with GNOME 47's schemas; an older system has none).
+    pub fn has(&self, schema: &str, key: &str) -> bool {
+        self.schemas.get(schema).is_some_and(|s| s.has_key(key))
     }
     fn s(&self, schema: &str) -> &gio::Settings {
         // Callers are keys whose `needs` were checked by `available`.
@@ -444,6 +452,9 @@ fn table() -> Vec<Key> {
                     (st.settings(BACKGROUND), file_uri(Path::new(text(v))))
                 {
                     for k in ["picture-uri", "picture-uri-dark"] {
+                        if !st.has(BACKGROUND, k) {
+                            continue;
+                        }
                         if bg.string(k) != uri.as_str() {
                             bg.set_string(k, &uri).map_err(|e| e.to_string())?;
                         }
@@ -602,6 +613,7 @@ pub fn find(name: &str) -> Option<&'static Key> {
 }
 pub fn available(st: &Store, key: &Key) -> bool {
     key.needs.iter().all(|s| st.settings(s).is_some())
+        && key.watch.iter().all(|(schema, k)| st.has(schema, k))
 }
 pub fn get(st: &Store, key: &Key) -> Value {
     (key.get)(st)
@@ -611,8 +623,7 @@ fn writable(key: &Key) -> bool {
 }
 /// Whether agents may write (`ai.allowConfigWrite`); the native Settings is not asked.
 pub fn agents_may_write(st: &Store) -> bool {
-    st.settings(AI)
-        .is_some_and(|s| s.boolean("allow-config-write"))
+    st.has(AI, "allow-config-write") && st.s(AI).boolean("allow-config-write")
 }
 
 /// The raw text of a value as the registry parses it (`setConfigValue(key, String(v))`).

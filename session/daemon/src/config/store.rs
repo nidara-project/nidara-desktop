@@ -76,7 +76,9 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                 let store = Store::new();
                 for key in registry::keys() {
                     for (schema, k) in key.watch {
-                        if let Some(settings) = store.settings(schema) {
+                        if let Some(settings) =
+                            store.settings(schema).filter(|_| store.has(schema, k))
+                        {
                             let changes = changes.clone();
                             let name = key.name;
                             settings.connect_changed(Some(k), move |_, _| announce(&changes, name));
