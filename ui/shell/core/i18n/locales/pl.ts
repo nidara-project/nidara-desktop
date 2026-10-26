@@ -583,6 +583,8 @@ export default {
     "settings.nav.menu":           "Menu",
     "settings.window.close":       "Zamknij",
     "settings.window.sidebar-toggle": "Pokaż lub ukryj panel boczny",
+    "settings.search.view-all": "Pokaż wszystkie ({count})",
+    "settings.search.results": "Wyniki wyszukiwania",
     "settings.search.no-results":  "Brak wyników",
     "settings.page.load-error":    "Nie udało się wczytać strony",
 

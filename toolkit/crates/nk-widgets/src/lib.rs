@@ -27,6 +27,7 @@ mod search;
 mod semantics;
 pub use search::SearchStyle;
 mod header;
+pub mod suggestions;
 mod switch;
 pub use header::TitleTextBox;
 pub mod window;
@@ -312,6 +313,7 @@ pub struct Tree {
     list_styles: BTreeMap<NodeId, MenuStyle>,
     search_style: Option<SearchStyle>,
     searches: BTreeMap<NodeId, search::Search>,
+    suggestion_combos: BTreeMap<NodeId, suggestions::SemanticState>,
     /// Interface icons by name (`set_icon_theme`), cached as they are drawn.
     pub(crate) icons: Option<std::cell::RefCell<nk_icons::Icons>>,
 }
@@ -400,6 +402,7 @@ impl Tree {
             list_styles: BTreeMap::new(),
             search_style: None,
             searches: BTreeMap::new(),
+            suggestion_combos: BTreeMap::new(),
             icons: None,
         };
         tree.allocate(None, Kind::Window, title.into());
@@ -801,6 +804,7 @@ impl Tree {
         let parent = self.nodes.get(&id).ok_or("unknown widget")?.parent.unwrap();
         fn erase(tree: &mut Tree, id: NodeId) {
             tree.searches.remove(&id);
+            tree.suggestion_combos.remove(&id);
             tree.images.remove(&id);
             tree.thumbnail_styles.remove(&id);
             tree.label_styles.remove(&id);
@@ -1001,6 +1005,22 @@ impl Tree {
         if node.kind != (Kind::Switch { checked }) {
             node.kind = Kind::Switch { checked };
             self.invalidate(id, Invalid::STATE);
+        }
+        Ok(())
+    }
+    pub fn clear_page_selection(&mut self, sidebar: NodeId) -> Result<()> {
+        if self
+            .nodes
+            .get(&sidebar)
+            .is_none_or(|n| n.kind != Kind::Sidebar)
+        {
+            return Err("not a sidebar".into());
+        }
+        for id in self.nodes[&sidebar].children.clone() {
+            if matches!(self.nodes[&id].kind, Kind::Page { selected: true }) {
+                self.nodes.get_mut(&id).unwrap().kind = Kind::Page { selected: false };
+                self.invalidate(id, Invalid::STATE);
+            }
         }
         Ok(())
     }
@@ -1763,6 +1783,9 @@ impl Tree {
         }
         if kind == Kind::Fields {
             self.place_fields(id, r);
+            return;
+        }
+        if kind == Kind::SearchInput {
             return;
         }
         let children = node.children.clone();

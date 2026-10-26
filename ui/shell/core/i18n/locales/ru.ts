@@ -590,6 +590,8 @@ export default {
     "settings.nav.menu":           "Меню",
     "settings.window.close":       "Закрыть",
     "settings.window.sidebar-toggle": "Показать или скрыть боковую панель",
+    "settings.search.view-all": "Показать все ({count})",
+    "settings.search.results": "Результаты поиска",
     "settings.search.no-results":  "Нет результатов",
     "settings.page.load-error":    "Не удалось загрузить страницу",
 

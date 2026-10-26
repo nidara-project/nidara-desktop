@@ -26,12 +26,16 @@ impl Tree {
                 Kind::Switch { .. } => Role::ToggleButton,
                 Kind::Button => Role::Button,
                 Kind::Image => Role::Image,
+                Kind::SearchInput if self.suggestion_combos.contains_key(&id) => Role::ComboBox,
                 Kind::SearchInput => Role::TextInput,
                 Kind::Dropdown { .. } => Role::ComboBox,
                 Kind::DropdownOption { .. } | Kind::MenuOption { .. } => Role::Option,
                 Kind::Choice { .. } => Role::RadioButton,
             };
             let mut n = Semantic::new(id, role, &widget.name);
+            if self.suggestion_combos.values().any(|s| s.list == id) {
+                n.role = Role::ListBox;
+            }
             if id == self.root {
                 n.attributes
                     .insert("application-name".into(), widget.name.clone());
@@ -144,6 +148,22 @@ impl Tree {
             }
             if widget.kind == Kind::SearchInput {
                 self.search_semantics(id, &mut n);
+            }
+            if let Some(combo) = self.suggestion_combos.get(&id) {
+                n.states.expandable = true;
+                n.states.expanded = combo.expanded;
+                n.active_descendant = combo.active;
+            }
+            for combo in self.suggestion_combos.values() {
+                if id == combo.list || widget.parent == Some(combo.list) {
+                    n.states.offscreen = !intersects(widget.bounds, self.nodes[&combo.list].bounds);
+                    if widget.parent == Some(combo.list) && !n.states.disabled {
+                        n.actions = vec![Action::Focus, Action::Activate];
+                    }
+                    if let Some(description) = &widget.caption {
+                        n.description = description.clone();
+                    }
+                }
             }
             nodes.insert(id, n);
         }

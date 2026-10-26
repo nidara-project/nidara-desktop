@@ -583,6 +583,8 @@ export default {
     "settings.nav.menu": "Menü",
     "settings.window.close": "Schließen",
     "settings.window.sidebar-toggle": "Seitenleiste ein- oder ausblenden",
+    "settings.search.view-all": "Alle anzeigen ({count})",
+    "settings.search.results": "Suchergebnisse",
     "settings.search.no-results": "Keine Ergebnisse",
     "settings.page.load-error": "Seite konnte nicht geladen werden",
 

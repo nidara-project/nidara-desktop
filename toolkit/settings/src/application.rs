@@ -16,6 +16,7 @@ use nk_settings::{
     portal::{Appearance, Portal},
     render::{Builders, Editor, Host},
     routing::{self, Incoming, Mode, Route, Router},
+    search::{self, Match, Results},
     session::Notice,
     styles::Styles,
     window::{Action, Labels, Look, Shell},
@@ -49,6 +50,12 @@ struct View {
     mount: u64,
     status: NodeId,
     status_root: NodeId,
+    suggestions: nk_widgets::suggestions::Suggestions,
+    search_query: String,
+    search_stamp: Option<(u64, u64)>,
+    search_matches: Vec<Match>,
+    results: Option<Results>,
+    results_cache: Option<(String, Vec<Match>)>,
 }
 impl View {
     fn new(exports: Exports, appearance: Appearance) -> Result<Self> {
@@ -76,6 +83,12 @@ impl View {
             "appearance",
             fonts.clone(),
         )?;
+        let suggestions = nk_widgets::suggestions::Suggestions::new(
+            &mut shell.tree,
+            shell.search,
+            exports.text("settings.search.results")?,
+            styles.menu.clone(),
+        )?;
         let status_root = shell.tree.group(shell.content, "")?;
         let status_row = shell.tree.append(status_root, Kind::Row, "")?;
         let status = shell.tree.append(
@@ -100,6 +113,12 @@ impl View {
             mount: 0,
             status,
             status_root,
+            suggestions,
+            search_query: String::new(),
+            search_stamp: None,
+            search_matches: vec![],
+            results: None,
+            results_cache: None,
         })
     }
     fn status(&mut self, text: &str) -> Result<()> {
@@ -109,6 +128,12 @@ impl View {
             .set_hidden(self.status_root, text.is_empty())
     }
     fn mount(&mut self, editor: &mut dyn Editor) -> Result<()> {
+        if let Some(results) = self.results.take() {
+            self.shell.tree.remove(results.root)?;
+        }
+        self.shell
+            .tree
+            .scroll_to(self.shell.content, nk_text::Point::default())?;
         let next = self
             .mount
             .checked_add(1)
@@ -147,7 +172,10 @@ impl View {
         self.status("")
     }
     fn notices(&mut self, editor: &mut dyn Editor, notices: &[Notice]) -> Result<()> {
-        if notices.contains(&Notice::Ready) && editor.session().available() {
+        if notices.contains(&Notice::Ready)
+            && editor.session().available()
+            && self.results.is_none()
+        {
             // A new snapshot can add formerly unavailable rows. Build transactionally first.
             self.mount(editor)?;
         }
@@ -188,8 +216,67 @@ impl View {
         self.shell.restyle(&styles)?;
         self.shell.composition.invalidate_panes();
         self.shell.capsules.invalidate();
+        self.suggestions
+            .restyle(&self.shell.tree, styles.menu.clone())?;
+        self.search_stamp = None;
         self.styles = styles;
         self.appearance = appearance;
+        Ok(())
+    }
+    fn show_results(&mut self, editor: &mut dyn Editor, cached: bool) -> Result<()> {
+        self.suggestions.dismiss(&mut self.shell.tree)?;
+        let (query, matches) = if cached {
+            self.results_cache.clone().ok_or("no cached results page")?
+        } else {
+            (self.search_query.clone(), self.search_matches.clone())
+        };
+        if let Some(page) = self.page.take() {
+            page.unmount(Host {
+                tree: &mut self.shell.tree,
+                editor,
+                exports: &self.exports,
+                styles: &self.styles,
+                window: None,
+                modal: None,
+            })?;
+        }
+        if let Some(results) = self.results.take() {
+            self.shell.tree.remove(results.root)?;
+        }
+        self.results = Some(Results::build(
+            &mut self.shell.tree,
+            self.shell.content,
+            &self.exports,
+            &query,
+            &matches,
+        )?);
+        self.results_cache = Some((query, matches));
+        self.shell
+            .selected_results(self.exports.text("settings.search.results")?)?;
+        self.shell
+            .tree
+            .scroll_to(self.shell.content, nk_text::Point::default())?;
+        self.status("")
+    }
+    fn update_search(
+        &mut self,
+        store: Option<&nk_settings::session::Store>,
+        text: &mut ParleyBackend,
+    ) -> Result<()> {
+        let query = self.shell.tree.search_text(self.shell.search)?.to_owned();
+        let stamp = store.map(|s| (s.epoch, s.revision));
+        if query != self.search_query || stamp != self.search_stamp {
+            self.search_matches = search::find(&self.exports, store, &query)?;
+            self.search_query = query;
+            self.search_stamp = stamp;
+            let values = if self.search_query.trim().is_empty() {
+                vec![]
+            } else {
+                search::suggestions(&self.search_matches, &self.exports)?
+            };
+            self.suggestions
+                .set_values(&mut self.shell.tree, values, text)?;
+        }
         Ok(())
     }
     fn invalidate_external(&mut self, editor: &mut dyn Editor) -> Result<()> {
@@ -431,7 +518,7 @@ impl App {
                 && matches!(&message.route, Route::Raise | Route::Navigate(_))
             {
                 if let Route::Navigate(page) = &message.route {
-                    self.view.shell.selected(&self.view.exports, page)?;
+                    self.navigate(page.clone())?;
                 }
                 self.activations.push(message);
                 continue;
@@ -525,6 +612,27 @@ impl App {
             .composition
             .sync_search_input(&self.view.shell.tree, window)?;
         let blocked = self.view.external_modal();
+        self.view
+            .update_search(self.client.session().store(), &mut self.text)?;
+        if blocked {
+            self.view
+                .suggestions
+                .close(&mut self.view.shell.tree, window)?;
+        } else {
+            self.view.suggestions.sync(
+                &mut self.view.shell.tree,
+                window,
+                &mut self.text,
+                self.view.styles.palette,
+                |side| {
+                    if self.opaque_preview {
+                        Ok(None)
+                    } else {
+                        self.materials.panel.at(side).map(Some)
+                    }
+                },
+            )?;
+        }
         if self.publication.is_none_or(|(_, generation, old)| {
             generation != self.view.shell.tree.generation() || old != blocked
         }) || self.view.shell.tree.invalidation().semantics
@@ -572,26 +680,67 @@ impl App {
         }
         Ok(())
     }
+    fn navigate(&mut self, page: String) -> Result<()> {
+        self.view.suggestions.dismiss(&mut self.view.shell.tree)?;
+        if page == "search-results" {
+            return self.view.show_results(&mut self.client, true);
+        }
+        if page == "appearance" {
+            if self.view.results.is_some() || self.view.page.is_none() {
+                self.view.mount(&mut self.client)?;
+            }
+            return self.view.shell.selected(&self.view.exports, &page);
+        }
+        if self.forwarding.is_none() {
+            let connection = self.client.connection().clone();
+            let (tx, rx) = mpsc::sync_channel(1);
+            std::thread::Builder::new()
+                .name("settings-forward".into())
+                .spawn(move || {
+                    let _ = tx.send(forward(&connection, vec!["page".into(), page]));
+                })
+                .map_err(|e| e.to_string())?;
+            self.forwarding = Some(rx);
+        }
+        Ok(())
+    }
+    fn choose_search(&mut self, key: u64) -> Result<()> {
+        if key == search::ALL {
+            return self.view.show_results(&mut self.client, false);
+        }
+        let target = self
+            .view
+            .search_matches
+            .get(usize::try_from(key).map_err(|_| "invalid suggestion")?)
+            .ok_or("stale suggestion")?
+            .page
+            .clone();
+        self.view
+            .shell
+            .tree
+            .set_search_text(self.view.shell.search, "")?;
+        self.navigate(target)
+    }
     fn effect(&mut self, effect: Effect, window: &mut Window) -> Result<()> {
         if matches!(effect, Effect::None | Effect::Focused(_)) {
             return Ok(());
         }
-        let action = self.view.shell.action(effect)?;
+        let result_target = if let Effect::Activated(id) = effect {
+            self.view
+                .results
+                .as_ref()
+                .and_then(|r| r.target(id))
+                .map(str::to_owned)
+        } else {
+            None
+        };
+        let action = if let Some(page) = result_target {
+            Action::Page(page)
+        } else {
+            self.view.shell.action(effect)?
+        };
         match action {
-            Action::Page(page) if page != "appearance" => {
-                if self.forwarding.is_none() {
-                    let connection = self.client.connection().clone();
-                    let (tx, rx) = mpsc::sync_channel(1);
-                    std::thread::Builder::new()
-                        .name("settings-forward".into())
-                        .spawn(move || {
-                            let _ = tx.send(forward(&connection, vec!["page".into(), page]));
-                        })
-                        .map_err(|e| e.to_string())?;
-                    self.forwarding = Some(rx);
-                }
-            }
-            Action::Page(page) => self.view.shell.selected(&self.view.exports, &page)?,
+            Action::Page(page) => self.navigate(page)?,
             Action::Window(action) => window.window_action(action),
             Action::None => {
                 if let Some(page) = &mut self.view.page {
@@ -636,8 +785,12 @@ impl Application for App {
                 modal: None,
             })?;
             self.view.notices(&mut self.client, &notices)?;
-            self.dependencies()?;
         }
+        if self.view.page.is_none() {
+            let notices = self.client.poll();
+            self.view.notices(&mut self.client, &notices)?;
+        }
+        self.dependencies()?;
         self.sync(window)?;
         if let Some(native) = &self.native {
             native.bridge.check()?;
@@ -653,7 +806,20 @@ impl Application for App {
             };
             self.stage()?;
             let blocked = self.view.external_modal();
-            if let Ok(effect) = request(
+            let handled = if !blocked
+                && self.publication == Some((revision, self.view.shell.tree.generation(), false))
+            {
+                self.view
+                    .suggestions
+                    .request(&mut self.view.shell.tree, &action, window)?
+            } else {
+                None
+            };
+            if let Some(key) = handled {
+                if let Some(key) = key {
+                    self.choose_search(key)?;
+                }
+            } else if let Ok(effect) = request(
                 &mut self.view.shell.tree,
                 self.publication,
                 revision,
@@ -698,8 +864,18 @@ impl Application for App {
                     _ => None,
                 };
             }
-            let effect = self.view.shell.event(&event, window)?;
-            self.effect(effect, window)?;
+            if let Some(key) =
+                self.view
+                    .suggestions
+                    .event(&mut self.view.shell.tree, &event, window)?
+            {
+                if let Some(key) = key {
+                    self.choose_search(key)?;
+                }
+            } else {
+                let effect = self.view.shell.event(&event, window)?;
+                self.effect(effect, window)?;
+            }
         }
         self.stage()?;
         self.sync(window)

@@ -12,7 +12,9 @@ mod ime;
 mod keyboard;
 pub use foreign::ForeignParent;
 mod popup;
+mod popup_overlay;
 pub use popup::{PopupPlacement, run_popup};
+pub use popup_overlay::{PopupEvent, PopupId};
 mod layers;
 pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
@@ -67,6 +69,10 @@ pub struct Frame {
 pub enum Event {
     Configure,
     PopupDone,
+    PopupOverlay {
+        id: PopupId,
+        event: PopupEvent,
+    },
     PopupRepositioned(u32),
     ControlsLayout(ControlsLayout),
     Layer {
@@ -149,6 +155,8 @@ pub struct Window {
     activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
     controls: controls::Controls,
     maximized: bool,
+    wm: Option<xdg_wm_base::XdgWmBase>,
+    fractional_manager: Option<wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1>,
     materials: Option<nidara_material_manager_v1::NidaraMaterialManagerV1>,
     compositor: Option<wl_compositor::WlCompositor>,
     subcompositor: Option<wl_subcompositor::WlSubcompositor>,
@@ -156,6 +164,8 @@ pub struct Window {
     viewporter: Option<wp_viewporter::WpViewporter>,
     layers: Vec<layers::Layer>,
     pointer_layer: Option<LayerId>,
+    pointer_popup: Option<PopupId>,
+    overlay: Option<popup_overlay::Overlay>,
     pointer_inside: bool,
     pointer_position: (f64, f64),
     ignore_input_before: Option<u32>,
@@ -655,6 +665,8 @@ fn run_inner(
         activation: None,
         controls: controls::Controls::default(),
         maximized: false,
+        wm: None,
+        fractional_manager: None,
         materials: None,
         compositor: None,
         subcompositor: None,
@@ -662,6 +674,8 @@ fn run_inner(
         viewporter: None,
         layers: Vec::new(),
         pointer_layer: None,
+        pointer_popup: None,
+        overlay: None,
         pointer_inside: false,
         pointer_position: (0., 0.),
         ignore_input_before: None,
@@ -750,6 +764,8 @@ fn run_inner(
         controls::nidara_window_controls_manager_v1::NidaraWindowControlsManagerV1,
         1
     );
+    w.wm = Some(base.clone());
+    w.fractional_manager = fraction.clone();
     w.compositor = Some(compositor.clone());
     w.viewporter = viewporter.clone();
     w.shm = bind!(wl_shm::WlShm, 1);
@@ -918,6 +934,7 @@ impl Window {
     // Child windows share the parent's connection. Rust proxies alone do not send
     // destructors; close roles even when a callback or transport operation fails.
     fn destroy_surfaces(&mut self) {
+        self.close_popup_overlay();
         self.foreign.destroy();
         if let Some(activation) = self.activation.take() {
             activation.destroy();
@@ -1072,6 +1089,7 @@ impl Dispatch<wl_buffer::WlBuffer, ()> for Window {
                 .buffers
                 .iter_mut()
                 .chain(w.layers.iter_mut().flat_map(|l| l.buffers.iter_mut()))
+                .chain(w.overlay.iter_mut().flat_map(|p| p.buffers.iter_mut()))
             {
                 if b.proxy == *p {
                     b.busy = false;
@@ -1264,7 +1282,12 @@ impl Window {
         if !self.pointer_inside {
             return;
         }
-        if let Some(id) = self.pointer_layer {
+        if let Some(id) = self.pointer_popup {
+            self.events.push(Event::PopupOverlay {
+                id,
+                event: PopupEvent::Input(LayerEvent::Motion(x, y)),
+            });
+        } else if let Some(id) = self.pointer_layer {
             self.events.push(Event::Layer {
                 id,
                 event: LayerEvent::Motion(x, y),
@@ -1291,12 +1314,24 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 surface_y,
             } => {
                 w.serial = serial;
+                w.pointer_popup = w
+                    .overlay
+                    .as_ref()
+                    .filter(|p| p.surface == surface)
+                    .map(|p| p.id);
                 w.pointer_layer = w.layers.iter().find(|l| l.surface == surface).map(|l| l.id);
-                w.pointer_inside =
-                    w.pointer_layer.is_some() || w.surface.as_ref() == Some(&surface);
+                w.pointer_inside = w.pointer_popup.is_some()
+                    || w.pointer_layer.is_some()
+                    || w.surface.as_ref() == Some(&surface);
                 w.pointer_motion(surface_x, surface_y);
             }
             wl_pointer::Event::Leave { .. } => {
+                if let Some(id) = w.pointer_popup.take() {
+                    w.events.push(Event::PopupOverlay {
+                        id,
+                        event: PopupEvent::Input(LayerEvent::Leave),
+                    });
+                }
                 if let Some(id) = w.pointer_layer.take() {
                     w.events.push(Event::Layer {
                         id,
@@ -1325,7 +1360,20 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 }
                 w.serial = serial;
                 let pressed = state == WEnum::Value(wl_pointer::ButtonState::Pressed);
-                if let Some(id) = w.pointer_layer {
+                if let Some(id) = w.pointer_popup {
+                    let (x, y) = w.pointer_position;
+                    w.events.push(Event::PopupOverlay {
+                        id,
+                        event: PopupEvent::Input(LayerEvent::Button {
+                            button,
+                            pressed,
+                            serial,
+                            time,
+                            x,
+                            y,
+                        }),
+                    });
+                } else if let Some(id) = w.pointer_layer {
                     let (x, y) = w.pointer_position;
                     w.events.push(Event::Layer {
                         id,
@@ -1352,7 +1400,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 value,
                 ..
             } => {
-                if let Some(id) = w.pointer_layer {
+                if let Some(id) = w.pointer_popup {
+                    w.events.push(Event::PopupOverlay {
+                        id,
+                        event: PopupEvent::Input(LayerEvent::HorizontalScroll(value)),
+                    });
+                } else if let Some(id) = w.pointer_layer {
                     w.events.push(Event::Layer {
                         id,
                         event: LayerEvent::HorizontalScroll(value),
@@ -1366,7 +1419,12 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 value,
                 ..
             } => {
-                if let Some(id) = w.pointer_layer {
+                if let Some(id) = w.pointer_popup {
+                    w.events.push(Event::PopupOverlay {
+                        id,
+                        event: PopupEvent::Input(LayerEvent::Scroll(value)),
+                    });
+                } else if let Some(id) = w.pointer_layer {
                     w.events.push(Event::Layer {
                         id,
                         event: LayerEvent::Scroll(value),

@@ -583,6 +583,8 @@ export default {
     "settings.nav.menu":           "Menu",
     "settings.window.close":       "Sluiten",
     "settings.window.sidebar-toggle": "Zijbalk tonen of verbergen",
+    "settings.search.view-all": "Alles weergeven ({count})",
+    "settings.search.results": "Zoekresultaten",
     "settings.search.no-results":  "Geen resultaten",
     "settings.page.load-error":    "Laden van pagina mislukt",
 

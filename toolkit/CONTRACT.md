@@ -1407,3 +1407,12 @@ uses retained text geometry. Floating capsules support named vector-icon buttons
 and one retained SearchInput using the same editor and IME host. Selection pixels
 remain full-colour, excluded from adaptive ink coverage. Input rectangles follow
 the owning capsule surface; no second Wayland host or text engine is introduced.
+
+Search suggestions are a reusable editable combo over SearchInput and the existing
+MenuList rows. Its xdg popup is nonmodal on nk-wayland's existing connection/event
+queue: the parent keeps processing keyboard/IME, Config1 and frame releases while
+the list is open. No nested host, duplicate editor or clipboard/IME route exists.
+Only popup-local pointer events target the list. Configured popup geometry, never
+its requested position, supplies accessible option bounds. Suggestion IDs and
+active descendant belong to the retained semantic tree; stale publications fail.
+Settings supplies its index and opens ordinary content results only on selection.

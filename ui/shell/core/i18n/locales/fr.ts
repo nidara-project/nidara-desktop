@@ -583,6 +583,8 @@ export default {
     "settings.nav.menu": "Menu",
     "settings.window.close": "Fermer",
     "settings.window.sidebar-toggle": "Afficher ou masquer la barre latérale",
+    "settings.search.view-all": "Tout afficher ({count})",
+    "settings.search.results": "Résultats de recherche",
     "settings.search.no-results": "Aucun résultat",
     "settings.page.load-error": "Échec du chargement de la page",
 

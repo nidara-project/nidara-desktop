@@ -47,3 +47,5 @@ pub mod wallpaper;
 pub mod file_chooser;
 
 pub mod wallpaper_picker;
+
+pub mod search;
