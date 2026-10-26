@@ -8,8 +8,8 @@ use crate::exports::{Exports, Tokens};
 use crate::portal::Appearance;
 use nk_render::{Color, rgba};
 use nk_widgets::{
-    ChoiceStyle, DropdownStyle, MenuStyle, Metrics, Palette, RangeStyle, RowTextStyle, SearchStyle,
-    SwitchStyle,
+    ButtonStyle, ChoiceStyle, DropdownStyle, MenuStyle, Metrics, Palette, RangeStyle, RowTextStyle,
+    ScrollbarStyle, SearchStyle, SwitchStyle,
 };
 use serde_json::Value as Json;
 
@@ -26,6 +26,8 @@ pub struct Styles {
     pub switch: SwitchStyle,
     pub rows: RowTextStyle,
     pub dropdown: DropdownStyle,
+    pub button: ButtonStyle,
+    pub scrollbar: ScrollbarStyle,
     pub menu: MenuStyle,
     pub search: SearchStyle,
     /// The accent palette by name, in its export order (`colors.json` `accents`).
@@ -162,6 +164,38 @@ impl Styles {
             focus: token(&field(&d["focus"], "dropdown focus")?)?,
             disabled_opacity: number(&d["disabledOpacity"])?,
         };
+        let b = &c["button"];
+        let button = ButtonStyle {
+            padding_x: number(&b["paddingX"])?,
+            padding_y: number(&b["paddingY"])?,
+            border: number(&b["border"])?,
+            min_content_height: number(&b["minContentHeight"])?,
+            radius: number(&statics["ts"]["RADIUS"][field(&b["radius"], "button radius")?])?,
+            text_scale: em(statics, &field(&b["fontSize"], "button font size")?)?,
+            weight: scss(statics, &field(&b["fontWeight"], "button weight")?)?,
+            background: token(&field(&b["background"], "button background")?)?,
+            border_color: token(&field(&b["borderColor"], "button border colour")?)?,
+            hover: token(&field(&b["hover"], "button hover")?)?,
+            pressed: token(&field(&b["pressed"], "button pressed")?)?,
+            text: token(&field(&b["text"], "button text")?)?,
+            focus: token(&field(&b["focus"], "button focus")?)?,
+            disabled_opacity: number(&b["disabledOpacity"])?,
+        };
+        let sb = &c["scrollbar"];
+        let scrollbar = ScrollbarStyle {
+            lane: number(&sb["lane"])?,
+            thumb_rest: number(&sb["thumbRest"])?,
+            thumb_hover: number(&sb["thumbHover"])?,
+            thumb_min: number(&sb["thumbMin"])?,
+            edge_clear: number(&sb["edgeClear"])?,
+            corner_clear: number(&sb["cornerClear"])?,
+            hide_ms: number(&sb["hideMs"])?,
+            fade_ms: number(&sb["fadeMs"])?,
+            width_tau_ms: number(&sb["widthTauMs"])?,
+            track_opacity: number(&sb["trackOpacity"])?,
+            color: token(&field(&sb["color"], "scrollbar colour")?)?,
+            active: token(&field(&sb["active"], "scrollbar active colour")?)?,
+        };
         let m = &c["dropdown"]["menu"];
         let menu = MenuStyle {
             border: number(&m["border"])?,
@@ -232,6 +266,8 @@ impl Styles {
             switch,
             rows,
             dropdown,
+            button,
+            scrollbar,
             menu,
             search,
             accents,
@@ -248,6 +284,8 @@ impl Styles {
         tree.set_switch_style(self.switch)?;
         tree.set_row_text_style(self.rows.clone())?;
         tree.set_dropdown_style(self.dropdown.clone())?;
+        tree.set_button_style(self.button.clone())?;
+        tree.set_scrollbar_style(self.scrollbar.clone())?;
         tree.set_search_style(self.search.clone())?;
         tree.set_text_style(self.text.clone());
         Ok(())

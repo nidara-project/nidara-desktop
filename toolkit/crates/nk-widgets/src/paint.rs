@@ -121,6 +121,7 @@ impl Tree {
             for &id in &self.nodes[&self.root].children {
                 if self.nodes[&id].kind == Kind::Scroll {
                     self.paint_node(id, Point::default(), &mut canvas, palette, clip)?;
+                    self.paint_scrollbar(id, Point::default(), &mut canvas);
                 }
             }
             canvas.pop_clip();
@@ -194,6 +195,7 @@ impl Tree {
                         },
                     )?;
                     if kind == Kind::Sidebar {
+                        self.paint_scrollbar(id, origin, &mut canvas);
                         canvas.pop_clip();
                     }
                 }
@@ -261,6 +263,9 @@ impl Tree {
         }
         if matches!(n.kind, Kind::Dropdown { .. }) {
             return self.paint_dropdown(id, r, canvas);
+        }
+        if self.styled_button(id).is_some() {
+            return self.paint_button(id, r, canvas);
         }
         let m = self.metrics;
         let ink = if self.available(id) {

@@ -339,6 +339,8 @@ struct App {
     startup_activation: Option<String>,
     activations: Vec<Incoming>,
 }
+/// The reference theme's own name (`ui/shell/assets/icons/nidara`).
+const REFERENCE_THEME: &str = "nidara";
 fn icons(theme: &str, reference: &std::path::Path) -> Result<nk_icons::Icons> {
     nk_icons::Icons::new(theme, &nk_icons::search_path(), reference)
 }
@@ -686,7 +688,11 @@ impl App {
             return self.view.show_results(&mut self.client, true);
         }
         if page == "appearance" {
-            if self.view.results.is_some() || self.view.page.is_none() {
+            // Before Config1's snapshot there is nothing to draw yet; the first mount comes
+            // with it, and the page selected here is the one it shows.
+            if (self.view.results.is_some() || self.view.page.is_none())
+                && self.client.session().available()
+            {
                 self.view.mount(&mut self.client)?;
             }
             return self.view.shell.selected(&self.view.exports, &page);
@@ -791,6 +797,7 @@ impl Application for App {
             self.view.notices(&mut self.client, &notices)?;
         }
         self.dependencies()?;
+        self.view.shell.tree.tick_scrollbars(Instant::now());
         self.sync(window)?;
         if let Some(native) = &self.native {
             native.bridge.check()?;
@@ -937,7 +944,7 @@ pub fn run(activation: Option<String>) -> Result<()> {
     let exports = Exports::load(&Exports::root())?;
     let size = open_size(&exports)?;
     let portal = Portal::watch(&bus)?;
-    let view = View::new(exports, portal.read()?)?;
+    let mut view = View::new(exports, portal.read()?)?;
     let client = Client::start(bus)?;
     let fonts = view.fonts.clone();
     let reference = std::env::var_os("NK_ICON_REFERENCE")
@@ -950,6 +957,12 @@ pub fn run(activation: Option<String>) -> Result<()> {
                 PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../ui/shell/assets/icons/nidara")
             }
         });
+    // The header draws icons in its first frame, and Config1 — which names the user's theme —
+    // may answer after it (it did in the CI boot): until then, the reference theme, which has
+    // every name. `dependencies` swaps in the user's own as soon as the session is up.
+    view.shell
+        .tree
+        .set_icon_theme(icons(REFERENCE_THEME, &reference)?);
     let materials = Materials::load(&view)?;
     let app = App {
         opaque_preview,

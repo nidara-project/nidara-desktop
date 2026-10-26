@@ -5,9 +5,13 @@ mod thumbnails;
 pub use thumbnails::ThumbnailStyle;
 mod image;
 pub use image::ImageStyle;
+mod button;
 mod choices;
 mod dropdown;
+mod scrollbar;
+pub use button::ButtonStyle;
 pub use dropdown::DropdownStyle;
+pub use scrollbar::ScrollbarStyle;
 mod dialog;
 mod dropdown_popup;
 pub use dialog::DialogTree;
@@ -304,6 +308,9 @@ pub struct Tree {
     pub(crate) switch_style: Option<SwitchStyle>,
     pub(crate) row_text_style: Option<RowTextStyle>,
     dropdown_style: Option<DropdownStyle>,
+    button_style: Option<ButtonStyle>,
+    scrollbar_style: Option<ScrollbarStyle>,
+    bars: BTreeMap<NodeId, scrollbar::Bar>,
     label_styles: BTreeMap<NodeId, TextStyle>,
     images: BTreeMap<NodeId, image::Image>,
     thumbnail_styles: BTreeMap<NodeId, ThumbnailStyle>,
@@ -393,6 +400,9 @@ impl Tree {
             switch_style: None,
             row_text_style: None,
             dropdown_style: None,
+            button_style: None,
+            scrollbar_style: None,
+            bars: BTreeMap::new(),
             label_styles: BTreeMap::new(),
             images: BTreeMap::new(),
             thumbnail_styles: BTreeMap::new(),
@@ -1323,6 +1333,9 @@ impl Tree {
         if matches!(kind, Kind::Dropdown { .. }) {
             return self.measure_dropdown(id, width, backend);
         }
+        if self.styled_button(id).is_some() {
+            return self.measure_button(id, width, backend);
+        }
         if let Kind::Choices { kind } = kind {
             return self.measure_choices(id, kind, width, backend);
         }
@@ -1964,10 +1977,15 @@ impl Tree {
         } else {
             (n.measured.width - viewport.width).max(0.)
         };
-        n.scroll = Point {
+        let scroll = Point {
             x: offset.x.clamp(0., max_x),
             y: offset.y.clamp(0., max_y),
         };
+        let moved = n.scroll != scroll;
+        n.scroll = scroll;
+        if moved {
+            self.scrolled(id);
+        }
         self.invalidate(id, Invalid::STATE);
         self.place();
         Ok(())

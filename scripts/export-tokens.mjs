@@ -141,6 +141,8 @@ const switchLook = JSON.parse(readFileSync(join(repo, "toolkit/tokens/switch.jso
 const wallpaper = JSON.parse(readFileSync(join(repo, "toolkit/tokens/wallpaper.json"), "utf8"))
 const search = JSON.parse(readFileSync(join(repo, "toolkit/tokens/search.json"), "utf8"))
 const dropdown = JSON.parse(readFileSync(join(repo, "toolkit/tokens/dropdown.json"), "utf8"))
+const button = JSON.parse(readFileSync(join(repo, "toolkit/tokens/button.json"), "utf8"))
+const scrollbar = JSON.parse(readFileSync(join(repo, "toolkit/tokens/scrollbar.json"), "utf8"))
 const rows = JSON.parse(readFileSync(join(repo, "toolkit/tokens/rows.json"), "utf8"))
 
 const header = JSON.parse(readFileSync(join(repo, "toolkit/tokens/header.json"), "utf8"))
@@ -185,6 +187,8 @@ for (const dark of [true, false])
             switch: variantFor(switchLook, dark, reduceTransparency),
             rows: variantFor(rows, dark, reduceTransparency),
             dropdown: variantFor(dropdown, dark, reduceTransparency),
+            button: variantFor(button, dark, reduceTransparency),
+            scrollbar: variantFor(scrollbar, dark, reduceTransparency),
 
             capsule: variantFor(capsule, dark, reduceTransparency),
             header: variantFor(header, dark, reduceTransparency),

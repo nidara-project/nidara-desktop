@@ -1,0 +1,21 @@
+{
+  "$comment": [
+    "Native overlay scroll bar of the content pane and the sidebar, from ui/lib/nidara-kit/scrolled.ts (NidaraScrolled) and _components.scss .nidara-scroll-bar: THUMB_REST 4, THUMB_HOVER 8, THUMB_MIN_H 28, HIDE_MS 1100, EDGE_CLEAR 4, CORNER_CLEAR 4, lane 12 (= THUMB_HOVER + EDGE_CLEAR), the width easing's 45 ms time constant, the 0.18 track and the 0.25 s opacity transition. Pill colour at rest --nidara-surface-raised, on the lane or dragging --nidara-text-dim.",
+    "Default applies to every component mode variant."
+  ],
+  "default": {
+    "lane": 12,
+    "thumbRest": 4,
+    "thumbHover": 8,
+    "thumbMin": 28,
+    "edgeClear": 4,
+    "cornerClear": 4,
+    "hideMs": 1100,
+    "fadeMs": 250,
+    "widthTauMs": 45,
+    "trackOpacity": 0.18,
+    "color": "--nidara-surface-raised",
+    "active": "--nidara-text-dim"
+  },
+  "variants": []
+}

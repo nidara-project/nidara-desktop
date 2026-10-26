@@ -205,6 +205,23 @@ the current kit's dropdown trigger, not Button's geometry. Missing style is an
 error. Its border reserves space at rest, keyboard focus uses that same border,
 and the arrow uses the shared icon theme with externally supplied ink.
 
+### Row button and scroll bar (#915)
+
+`ButtonStyle` (`components.json.button`, `toolkit/tokens/button.json`) sizes and paints a
+Button whose parent is a Row — Browse, the font buttons — from the kit's `button.nidara-btn`:
+5/14 padding, a 1 px border and a 20 px content floor, so it is 32 tall like the Dropdown
+trigger beside it. A caption with its own text style (a font button showing its font) keeps
+it whole. Header and capsule buttons are not row buttons. Without the style a row button
+keeps the generic control box.
+
+`ScrollbarStyle` (`components.json.scrollbar`, `toolkit/tokens/scrollbar.json`) is the
+kit's `NidaraScrolled` for the content Scroll and the Sidebar: a pill painted in a lane of
+constant width, revealed by scrolling or by motion over the pane, faded `hideMs` later unless
+the pointer is on the lane or drags it; on the lane it widens and shows a faint track. A
+press on the empty track jumps there, then drags. The hit lane never grows. Time advances
+only through `Tree::tick_scrollbars(now)`, which the app calls from its idle; a press the bar
+takes never reaches the row under it. Without the style there is no bar.
+
 ### Dropdown menu list (#882/#915)
 
 `Tree::menu_list` constructs a standalone retained popup list, one Scroll of

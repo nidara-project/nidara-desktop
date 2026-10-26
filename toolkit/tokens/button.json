@@ -1,0 +1,23 @@
+{
+  "$comment": [
+    "Native row button (Browse, the font buttons): ui/lib/nidara-kit/styles/_components.scss button.nidara-btn, the secondary look — padding 5px 14px, a 1px border, the shared 20px content floor, so it is 32 tall like the Dropdown trigger beside it (whose 4px padding + 2px border was chosen to match this one). Settings uses fse-small instead of fixed fs-small, as the Dropdown does.",
+    "Default applies to every component mode variant."
+  ],
+  "default": {
+    "paddingX": 14,
+    "paddingY": 5,
+    "border": 1,
+    "minContentHeight": 20,
+    "radius": "sm",
+    "fontSize": "fse-small",
+    "fontWeight": "fw-medium",
+    "background": "--nidara-surface",
+    "borderColor": "--nidara-border",
+    "hover": "--nidara-surface-hover",
+    "pressed": "--nidara-surface-active",
+    "text": "--nidara-text",
+    "focus": "--nidara-accent",
+    "disabledOpacity": 0.45
+  },
+  "variants": []
+}

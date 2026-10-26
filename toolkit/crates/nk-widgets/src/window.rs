@@ -691,7 +691,10 @@ impl Composition {
             Event::Key(key) if key.sym == 0xff1b && tree.sidebar_overlay() => {
                 tree.sidebar_request = Some(false);
             }
-            Event::PointerLeave => tree.pointer_leave(),
+            Event::PointerLeave => {
+                tree.scrollbar_leave();
+                tree.pointer_leave()
+            }
             Event::Focus(active) => {
                 if !active && let Some(id) = tree.focused {
                     tree.cancel_search_preedit(id)?;
@@ -711,6 +714,9 @@ impl Composition {
                     x: *x as f32,
                     y: *y as f32,
                 };
+                if tree.scrollbar_motion(self.pointer)? {
+                    return Ok(Effect::None);
+                }
                 tree.pointer_motion(self.pointer);
                 if let Some(id) = tree.range_drag(self.pointer)? {
                     return Ok(Effect::Changed(id));
@@ -726,6 +732,12 @@ impl Composition {
                     && !contains(tree.sidebar_viewport(), self.pointer)
                 {
                     tree.sidebar_request = Some(false);
+                    return Ok(Effect::None);
+                }
+                if *pressed && tree.scrollbar_press(self.pointer)? {
+                    return Ok(Effect::None);
+                }
+                if !*pressed && tree.scrollbar_release() {
                     return Ok(Effect::None);
                 }
                 if *pressed {
@@ -774,6 +786,9 @@ impl Composition {
                             x: origin.x + *x as f32,
                             y: origin.y + *y as f32,
                         };
+                        if tree.scrollbar_motion(self.pointer)? {
+                            return Ok(Effect::None);
+                        }
                         tree.pointer_motion_in(
                             container,
                             Point {
@@ -813,13 +828,22 @@ impl Composition {
                             tree.sidebar_request = Some(false);
                             return Ok(Effect::None);
                         }
+                        if *pressed && tree.scrollbar_press(self.pointer)? {
+                            return Ok(Effect::None);
+                        }
+                        if !*pressed && tree.scrollbar_release() {
+                            return Ok(Effect::None);
+                        }
                         if *pressed {
                             tree.pointer_press_in(container, local)?;
                         } else {
                             return tree.pointer_release_in(container, local);
                         }
                     }
-                    LayerEvent::Leave => tree.pointer_leave(),
+                    LayerEvent::Leave => {
+                        tree.scrollbar_leave();
+                        tree.pointer_leave()
+                    }
                     LayerEvent::Done { .. }
                         if !tree.sidebar_open
                             && tree.focused.is_some_and(|id| {
@@ -899,6 +923,135 @@ mod tests {
             "button padding must not be added twice to title height"
         );
         (t, b, sidebar, title, content)
+    }
+    fn bar_style() -> ScrollbarStyle {
+        ScrollbarStyle {
+            lane: 12.,
+            thumb_rest: 4.,
+            thumb_hover: 8.,
+            thumb_min: 28.,
+            edge_clear: 4.,
+            corner_clear: 4.,
+            hide_ms: 1100.,
+            fade_ms: 250.,
+            width_tau_ms: 45.,
+            track_opacity: 0.18,
+            color: nk_render::rgba(200, 200, 200, 255),
+            active: nk_render::rgba(255, 255, 255, 255),
+        }
+    }
+    /// Tick every 16 ms from `start` for `ms`; the time reached.
+    fn run_bars(t: &mut Tree, start: std::time::Instant, ms: u64) -> std::time::Instant {
+        let mut now = start;
+        for _ in 0..ms / 16 {
+            now += std::time::Duration::from_millis(16);
+            t.tick_scrollbars(now);
+        }
+        now
+    }
+    #[test]
+    fn scrollbar_shows_on_scroll_hides_after_the_delay_and_drags_the_content() {
+        let (mut t, _, _, _, content) = fixture();
+        t.set_scrollbar_style(bar_style()).unwrap();
+        let start = std::time::Instant::now();
+        t.tick_scrollbars(start);
+        let lane_x = t.content_viewport().x + t.content_viewport().width - 6.;
+        let top = t.content_viewport().y + 10.;
+        // Hidden: a press on the lane is the content's, not the bar's.
+        assert!(!t.scrollbar_press(Point { x: lane_x, y: top }).unwrap());
+        t.scroll_to(content, Point { x: 0., y: 1. }).unwrap();
+        let now = run_bars(&mut t, start, 16);
+        assert!(t.bars[&content].opacity > 0.99, "a scroll reveals it");
+        let later = run_bars(&mut t, now, 1000);
+        assert!(t.bars[&content].opacity > 0.99, "still within hide_ms");
+        let gone = run_bars(&mut t, later, 400);
+        assert_eq!(
+            t.bars[&content].opacity, 0.,
+            "faded after hide_ms + fade_ms"
+        );
+        // Revealed again, then dragged from the top of the track to the bottom.
+        t.scrollbar_motion(Point { x: lane_x, y: top }).unwrap();
+        run_bars(&mut t, gone, 32);
+        assert!(t.scrollbar_press(Point { x: lane_x, y: top }).unwrap());
+        assert!(t.scrollbar_dragging());
+        let bottom = t.content_viewport().y + t.content_viewport().height;
+        assert!(
+            t.scrollbar_motion(Point {
+                x: lane_x,
+                y: bottom + 500.
+            })
+            .unwrap()
+        );
+        let max = t.node(content).unwrap().measured().height - t.content_viewport().height;
+        assert_eq!(t.node(content).unwrap().scroll().y, max);
+        assert!(t.scrollbar_release());
+        assert!(!t.scrollbar_dragging());
+    }
+    #[test]
+    fn scrollbar_widens_only_on_its_lane_and_never_without_a_style() {
+        let (mut t, _, _, _, content) = fixture();
+        t.scroll_to(content, Point { x: 0., y: 1. }).unwrap();
+        assert!(
+            !t.tick_scrollbars(std::time::Instant::now()),
+            "no style, no bar"
+        );
+        t.set_scrollbar_style(bar_style()).unwrap();
+        let start = std::time::Instant::now();
+        let vp = t.content_viewport();
+        t.scrollbar_motion(Point {
+            x: vp.x + vp.width - 6.,
+            y: vp.y + 40.,
+        })
+        .unwrap();
+        run_bars(&mut t, start, 400);
+        assert_eq!(t.bars[&content].width, 8., "on the lane: hover width");
+        t.scrollbar_motion(Point {
+            x: vp.x + vp.width - 40.,
+            y: vp.y + 40.,
+        })
+        .unwrap();
+        run_bars(&mut t, start, 400);
+        assert_eq!(t.bars[&content].width, 4., "off the lane: rest width");
+        let mut wide = bar_style();
+        wide.thumb_hover = 10.;
+        assert!(
+            t.set_scrollbar_style(wide).is_err(),
+            "the widened pill must fit the lane"
+        );
+    }
+    #[test]
+    fn row_buttons_take_the_button_style_and_header_buttons_do_not() {
+        let (mut t, mut b, _, title, content) = fixture();
+        let header = *t.node(title).unwrap().children().first().unwrap();
+        let header_height = t.node(header).unwrap().bounds().height;
+        let row = *t.node(content).unwrap().children().first().unwrap();
+        let button = *t.node(row).unwrap().children().last().unwrap();
+        assert!(
+            t.node(button).unwrap().bounds().height > 32.,
+            "generic box before"
+        );
+        let grey = nk_render::rgba(80, 80, 80, 255);
+        t.set_button_style(ButtonStyle {
+            padding_x: 14.,
+            padding_y: 5.,
+            border: 1.,
+            min_content_height: 20.,
+            radius: 10.,
+            // Small enough that the line (scale x default size x 1.5) is under the floor.
+            text_scale: 0.5,
+            weight: 500.,
+            background: grey,
+            border_color: grey,
+            hover: grey,
+            pressed: grey,
+            text: grey,
+            focus: grey,
+            disabled_opacity: 0.45,
+        })
+        .unwrap();
+        t.layout(t.size, true, &mut b).unwrap();
+        assert_eq!(t.node(button).unwrap().bounds().height, 32.);
+        assert_eq!(t.node(header).unwrap().bounds().height, header_height);
     }
     #[test]
     fn sidebar_layer_scroll_is_independent_and_clamped() {
