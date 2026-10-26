@@ -1062,7 +1062,12 @@ tmpfs/ramfs (and hugetlbfs); never stage incoming data in RAM or silently use /t
 Default upstream Root is XDG_CACHE_HOME/obexd. Another deployment precondition is
 obexd WITHOUT --auto-accept and with OPP as its only incoming file server. FTP and
 PCSuite bypass per-file consent. Agent1 rejects FTP when asked, but BlueZ can skip
-the agent for Trusted devices; daemon deployment must enforce the plugin policy.
+the agent for Trusted devices; daemon deployment must enforce the plugin policy. The desktop package depends on
+bluez-obex and installs `/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf`,
+resetting ExecStart to `/usr/lib/bluetooth/obexd -p bluetooth,filesystem,opp`.
+Removing that allowlist breaks the consent guarantee. The Arch D-Bus descriptor
+names the systemd unit alias, but direct Exec fallback or user overrides do not
+inherit this guarantee; unmanaged launches must enforce the same policy explicitly.
 Snapshot reports observed local unsupported file-service UUIDs as a warning;
 absence means unverified, never proof of safe obexd flags. Do not change an
 installed service to satisfy a test. Root restrictions also mean an arbitrary path

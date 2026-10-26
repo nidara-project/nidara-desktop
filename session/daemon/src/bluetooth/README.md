@@ -115,9 +115,12 @@ OPP-only daemon or proves that auto-accept is off.
 Upstream PCSuite delegates file operations to FTP and creates backup files;
 SyncEvolution receives PUT data through its backend. MAS has message/status
 operations; PBAP and IrMC reject PUT but expose address-book reads. All are outside
-this slice. A deployment may restrict server plugins to bluetooth,filesystem,opp
-rather than relying on a future-proof denylist; that packaging/service decision
-belongs to the owner and is not implemented by this PR.
+this slice. The desktop package depends on bluez-obex and installs
+`/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf`, resetting ExecStart
+to `/usr/lib/bluetooth/obexd -p bluetooth,filesystem,opp`. Removing this allowlist
+breaks the per-file consent guarantee; excluding individual known plugins is not
+a future-proof replacement. This source change does not install or activate it
+in an existing session.
 Without `-r`, upstream `main.c` selects `$XDG_CACHE_HOME/obexd` (normally
 `~/.cache/obexd`) and creates it with mode 0700. The expected deployment keeps this
 on disk, as well as the configured Downloads directory. `statfs` refuses tmpfs,
@@ -199,8 +202,8 @@ Arch package inspection: bluez-obex5.87-2 supplies `/usr/lib/bluetooth/obexd`,
 `/usr/lib/systemd/user/obex.service` and its dbus-org.bluez.obex.service alias. The
 D-Bus descriptor names the systemd alias, but its direct Exec fallback does not
 inherit systemd drop-ins. Unmanaged/private-bus launches must satisfy the same
-plugin precondition explicitly. No package/drop-in change is included in this
-backend slice without owner approval.
+plugin precondition explicitly. The packaged drop-in covers systemd activation; it cannot enforce arbitrary
+direct launches or user overrides.
 
 The extracted Arch binary was checked in a rootless, networkless container against
 a private fake ProfileManager. Its default registered FTP and PCSuite; the allowlist

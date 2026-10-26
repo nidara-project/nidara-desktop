@@ -91,7 +91,7 @@ depends=(
   # core/BatteryService.ts imports. `libnma-gtk4` owns NMA4-1.0.typelib: the Wi-Fi
   # dialogs (password, enterprise, hidden network) surfaces/network/WifiSecretsDialog.ts
   # builds — without it the shell's NetworkManager secret agent has nothing to show.
-  networkmanager libnma-gtk4 bluez bluez-libs bluez-utils upower accountsservice
+  networkmanager libnma-gtk4 bluez bluez-libs bluez-utils bluez-obex upower accountsservice
   # (no `cups`: nothing in the desktop talks to it — printing is system policy
   # and lives in nidara-system, which also enables cups.socket)
   # `libwireplumber` is the same shape as `upower` above: it owns
@@ -458,6 +458,9 @@ package_nidara-desktop() {
   # see the unit's NOTE)
   install -Dm644 bin/nidara.service "$pkgdir/usr/lib/systemd/user/nidara.service"
   install -Dm644 bin/nidara-sessiond.service "$pkgdir/usr/lib/systemd/user/nidara-sessiond.service"
+  # Only OPP asks our agent before receiving EACH file; FTP/PCSuite bypass it.
+  install -Dm644 config/bluetooth/obex-opp-only.conf \
+    "$pkgdir/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf"
   install -Dm755 session/target/release/nidara-sessiond "$pkgdir/usr/bin/nidara-sessiond"
 
   # XDG portal: Nidara's Settings backend (accent-color) + portal preferences
