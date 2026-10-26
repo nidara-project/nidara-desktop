@@ -312,6 +312,7 @@ mod tests {
     #[test]
     fn collision_suffix_preserves_last_extension_and_extensionless_names() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target");
+        fs::create_dir_all(&root).unwrap();
         let directory = private_dir(&root).unwrap();
         for (base, expected) in [
             ("photo.jpg", "photo (1).jpg"),
