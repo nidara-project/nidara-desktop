@@ -2869,6 +2869,10 @@ AT-SPI/Orca, presentation or performance acceptance. Main still needs to supply
 window policies and integrate service/portal/routing/mount lifetimes.
 
 
+🔑 **The takeover is dropped (owner, 2026-10-26, PHASE1.md revision 3):** the Rust desktop
+grows as its own session and never routes to the GJS Settings. The routing below stays as
+code until it is in the way; nothing is added to it.
+
 Native Settings exports the Request object in Native mode too, before acquiring
 its native bus name. Only EntryPoint mode acquires org.nidara.Settings; pre-takeover
 second native instances must still reach Request at org.nidara.SettingsNative.
