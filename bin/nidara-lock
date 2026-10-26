@@ -17,12 +17,18 @@ export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # No LD_PRELOAD here: the bundle (and scripts/run.sh in dev) preloads gtk4-layer-shell for gjs
-# alone. Exported here it loaded GTK into every helper below — pgrep, nidara-ipc, nidara-wm,
+# alone. Exported here it loaded GTK into every helper below — flock, nidara-ipc, nidara-wm,
 # run.sh's realpath/dirname/node — at ~17 ms each, and Super+L waited ~0.4 s for it.
 
-# Prevent multiple instances (exclude own PID — bash names itself after the script)
-SELF=$$
-if pgrep -x nidara-lock | grep -qv "^${SELF}$"; then
+# One lock client per SESSION: a lock on a file of this session's runtime directory and
+# display, held (fd 9, inherited by the bundle) for as long as this launcher runs. Not
+# `pgrep -x nidara-lock`, which saw every process of that name on the machine: a nested Hyalo's
+# own lock client made the live session's launcher exit, and the live session stayed locked
+# with no lock screen (2026-10-26). And two launches 10 ms apart (idle lock + sleep) each saw
+# the other and BOTH left; a lock lets exactly one through.
+LOCKFILE="${XDG_RUNTIME_DIR:-/tmp}/nidara-lock.${WAYLAND_DISPLAY:-wayland}.lock"
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
     exit 0
 fi
 

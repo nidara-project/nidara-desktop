@@ -14,6 +14,10 @@
 //!   by the same activity and the same inhibitors.
 //! - **Suspend only in a real session** (`--session`): a development Hyalo in a window must
 //!   never put the machine it runs on to sleep.
+//! - **No lock from idle in a window** (`--winit`): its lock client is a `nidara-lock` like the
+//!   live session's, and while it sat on a forgotten nested Hyalo the live session's launcher
+//!   took it for its own and never drew the lock screen (2026-10-26). The screens still go dark,
+//!   inside the window; Super+L still locks it by hand.
 
 use std::time::{Duration, Instant};
 
@@ -52,6 +56,8 @@ pub struct IdleState {
     pub dbus_inhibitors: usize,
     /// A real session: suspend may run.
     pub session: bool,
+    /// A window inside another session (`--winit`): idle never locks it.
+    pub nested: bool,
 }
 
 impl IdleState {
@@ -65,6 +71,7 @@ impl IdleState {
             inhibitors: Vec::new(),
             dbus_inhibitors: 0,
             session: false,
+            nested: false,
         }
     }
 }
@@ -160,7 +167,9 @@ impl Hyalo {
         }
         if due(cfg.lock) && !self.idle.fired.lock {
             self.idle.fired.lock = true;
-            if !self.lock.is_locked() {
+            if self.idle.nested {
+                tracing::info!("idle: lock skipped, this Hyalo is a window (--winit)");
+            } else if !self.lock.is_locked() {
                 tracing::info!(secs = cfg.lock, "idle: locking");
                 self.lock_session();
             }
