@@ -140,9 +140,19 @@ impl Shell {
         tree.set_width(search, header.search_width)?;
         let controls = tree.control_capsule(labels.controls, Point::default(), metrics)?;
         let buttons = [
-            tree.capsule_button(controls, labels.minimize, "−", false)?,
-            tree.capsule_button(controls, labels.maximize, "□", false)?,
-            tree.capsule_button(controls, labels.close, "×", true)?,
+            tree.capsule_button(
+                controls,
+                labels.minimize,
+                nk_widgets::WindowGlyph::Minimize,
+                false,
+            )?,
+            tree.capsule_button(
+                controls,
+                labels.maximize,
+                nk_widgets::WindowGlyph::Maximize,
+                false,
+            )?,
+            tree.capsule_button(controls, labels.close, nk_widgets::WindowGlyph::Close, true)?,
         ];
         let content = tree.append(root, Kind::Scroll, labels.content)?;
         let mut composition = nk_widgets::window::Composition::default();
@@ -255,6 +265,7 @@ impl Shell {
     }
 
     pub fn restyle(&mut self, styles: &Styles) -> Result<()> {
+        self.tree.set_window_glyph_style(styles.window_glyph)?;
         self.header = styles.header.clone();
         self.controls_inset = styles.controls_inset;
         self.title_style = styles.text.clone();

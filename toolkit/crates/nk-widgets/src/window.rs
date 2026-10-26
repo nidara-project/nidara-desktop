@@ -1695,7 +1695,20 @@ mod tests {
                 .control_capsule("Window actions", Point { x: 300., y: 8. }, metrics)
                 .unwrap();
             let names = ["Minimize", "Maximize", "Close"];
-            let glyphs = ["−", "□", "×"];
+            let glyphs = [
+                WindowGlyph::Minimize,
+                WindowGlyph::Maximize,
+                WindowGlyph::Close,
+            ];
+            tree.set_window_glyph_style(WindowGlyphStyle {
+                size: 14.,
+                stroke: 1.6,
+                minimize_half: 3.5,
+                maximize_half: 3.7,
+                maximize_radius: 1.6,
+                close_half: 3.,
+            })
+            .unwrap();
             let mut buttons = Vec::new();
             for i in 0..3 {
                 let id = tree
@@ -1706,7 +1719,9 @@ mod tests {
                 let bounds = tree.nodes[&capsule].bounds;
                 assert_eq!((bounds.width, bounds.height), ([36., 65., 94.][i], 38.));
                 assert_eq!(tree.nodes[&id].name, names[i]);
-                assert_eq!(tree.nodes[&id].caption.as_deref(), Some(glyphs[i]));
+                assert_eq!(tree.nodes[&id].window_glyph, Some(glyphs[i]));
+                assert!(tree.nodes[&id].layout.is_none());
+                assert!(tree.nodes[&id].caption.is_none());
                 assert!(tree.showing(id));
             }
             let semantics = tree.semantics();
@@ -1789,6 +1804,106 @@ mod tests {
             assert!(!tree.capsules.contains_key(&capsule));
         }
     }
+    #[test]
+    fn window_control_paths_paint_without_text_at_both_scales() {
+        let (mut tree, mut backend, _, _, _) = fixture();
+        let style = WindowGlyphStyle {
+            size: 14.,
+            stroke: 1.6,
+            minimize_half: 3.5,
+            maximize_half: 3.7,
+            maximize_radius: 1.6,
+            close_half: 3.,
+        };
+        let capsule = tree
+            .control_capsule(
+                "Controls",
+                Point::default(),
+                CapsuleMetrics {
+                    padding: 4.,
+                    gap: 8.,
+                    button_min: 16.,
+                    height_min: 24.,
+                },
+            )
+            .unwrap();
+        let id = tree
+            .capsule_button(
+                capsule,
+                "Translated accessible name",
+                WindowGlyph::Minimize,
+                false,
+            )
+            .unwrap();
+        tree.set_window_glyph_style(style).unwrap();
+        let epoch = tree.pane_epoch;
+        tree.set_window_glyph_style(style).unwrap();
+        assert_eq!(epoch, tree.pane_epoch, "unchanged style repainted panes");
+        tree.set_window_glyph_style(WindowGlyphStyle {
+            stroke: 1.5,
+            ..style
+        })
+        .unwrap();
+        assert!(
+            tree.pane_epoch > epoch,
+            "style update left cached layer coverage stale"
+        );
+        tree.set_window_glyph_style(style).unwrap();
+        for kind in [
+            WindowGlyph::Minimize,
+            WindowGlyph::Maximize,
+            WindowGlyph::Close,
+        ] {
+            tree.nodes.get_mut(&id).unwrap().window_glyph = Some(kind);
+            tree.layout(tree.size, true, &mut backend).unwrap();
+            assert!(tree.nodes[&id].layout.is_none());
+            assert!(tree.nodes[&id].caption.is_none());
+            assert_eq!(tree.nodes[&id].bounds.width, 16.);
+            for scale in [1., 1.25] {
+                let pixels = (24. * scale) as u16;
+                let frame = nk_wayland::Frame {
+                    width: 24,
+                    height: 24,
+                    pixel_width: pixels,
+                    pixel_height: pixels,
+                    scale,
+                    material: true,
+                };
+                let image = tree
+                    .paint_capsule_coverage(capsule, frame, test_palette())
+                    .unwrap();
+                let alpha = |x: usize, y: usize| image[4 * (y * pixels as usize + x) + 3];
+                let centre = (12. * scale) as usize;
+                assert!(
+                    image.as_chunks::<4>().0.iter().any(|p| p[3] > 200),
+                    "{kind:?} drew nothing"
+                );
+                if kind == WindowGlyph::Maximize {
+                    assert_eq!(alpha(centre, centre), 0, "maximize must be hollow");
+                } else {
+                    assert!(alpha(centre, centre) > 200, "missing stroke centre");
+                }
+                assert_eq!(alpha(0, 0), 0, "glyph escaped its box");
+            }
+        }
+        tree.window_glyph_style = None;
+        assert!(
+            tree.paint_capsule_coverage(
+                capsule,
+                nk_wayland::Frame {
+                    width: 24,
+                    height: 24,
+                    pixel_width: 24,
+                    pixel_height: 24,
+                    scale: 1.,
+                    material: true
+                },
+                test_palette()
+            )
+            .is_err()
+        );
+    }
+
     #[test]
     fn capsule_coverage_states_and_layer_input_share_retained_geometry() {
         use crate::capsule_composition::CapsuleComposition;

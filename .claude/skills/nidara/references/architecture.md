@@ -2720,6 +2720,16 @@ visible bounds are clipped to the window. Capsule geometry is a component export
 retain a usable layout mirror checked against that source, so close works even
 without exported data.
 
+Window-control capsule glyphs (#936) are `WindowGlyph` kinds, never font
+characters. The shared strict reader in nk_settings::styles loads capsule.glyph
+from components.json into WindowGlyphStyle; the app calls
+Tree::set_window_glyph_style before painting (and on appearance changes).
+nk-render strokes the paths; both capsule layer coverage and D5 use that painter.
+Caption-based toolbar actions remain separate from window controls. The existing
+Hyalo capsule mirror unit test checks glyph geometry too; keep shader uniforms
+and the export together. Glyph-style changes must invalidate the capsule panes,
+not only the root, or a cached layer will keep its old coverage.
+
 A live capsule metric change invalidates each child measurement too: its width
 constraint can stay identical while button_min changes. Invalidating only the
 parent reused stale button widths; the retained geometry oracle catches this.

@@ -9,7 +9,15 @@
     "button": 16,
     "edge": 4,
     "gap": 8,
-    "windowInset": 12
+    "windowInset": 12,
+    "glyph": {
+      "size": 14,
+      "stroke": 1.6,
+      "minimizeHalf": 3.5,
+      "maximizeHalf": 3.7,
+      "maximizeRadius": 1.6,
+      "closeHalf": 3
+    }
   },
   "variants": []
 }

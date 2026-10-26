@@ -973,6 +973,19 @@ The native Settings window capsule uses components.json capsule.windowInset for 
 corner axes, independently of generic row padding/gap. The owner #921 geometry is
 72 by 24 at 12/12; generated-export window tests check both sides and D5/D7 layouts.
 
+Window-control capsule buttons take `WindowGlyph::{Minimize,Maximize,Close}`
+through `CapsuleGlyph::Window`; captions remain for ordinary toolbar labels.
+They never create a text Layout. `Tree::set_window_glyph_style` supplies validated
+`WindowGlyphStyle` from components.json capsule.glyph (size, stroke,
+minimizeHalf, maximizeHalf, maximizeRadius, closeHalf). Missing values fail;
+there is no compiled app fallback. nk-render strokes round-capped segments and
+a rounded rectangle at the current output scale, centred in the retained button.
+The same painter supplies layer ink coverage and opaque D5 pixels. Names,
+keyboard/AT-SPI actions, hit boxes and material response remain the retained Tree's.
+Changing glyph style invalidates capsule layer paint without changing IDs.
+Hyalo uses an independently usable uniform mirror; the existing capsule layout
+unit test also checks all six glyph fields against capsule.json. No new CI step.
+
 Settings positions its three window-control buttons from the current exported
 CapsuleMetrics before one layout pass. Tree::capsule_metrics returns the current
 metrics, including portal updates staged before layout; no cached measured bounds

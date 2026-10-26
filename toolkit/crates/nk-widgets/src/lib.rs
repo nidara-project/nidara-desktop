@@ -17,7 +17,8 @@ pub use menu::MenuStyle;
 
 mod capsule;
 mod capsule_fallback;
-pub use capsule::{CapsuleMetrics, CapsuleStateStyle, CapsuleStyle};
+pub use capsule::{CapsuleGlyph, CapsuleMetrics, CapsuleStateStyle, CapsuleStyle};
+pub use nk_render::{WindowGlyph, WindowGlyphStyle};
 pub mod capsule_composition;
 mod motion;
 mod paint;
@@ -201,6 +202,7 @@ pub struct Node {
     pub(crate) button_shape: ButtonShape,
     pub(crate) name: String,
     pub(crate) caption: Option<String>,
+    pub(crate) window_glyph: Option<WindowGlyph>,
     pub(crate) destructive: bool,
     pub(crate) parent: Option<NodeId>,
     pub(crate) children: Vec<NodeId>,
@@ -274,6 +276,7 @@ pub struct Tree {
     pub(crate) hovered: Option<NodeId>,
     page_width: PageWidth,
     pub(crate) capsules: BTreeMap<NodeId, capsule::Capsule>,
+    pub(crate) window_glyph_style: Option<WindowGlyphStyle>,
     pub(crate) button_icons: BTreeMap<NodeId, (String, f32)>,
     pub(crate) title_text_box: Option<TitleTextBox>,
     pub(crate) content_top_gap: Option<f32>,
@@ -363,6 +366,7 @@ impl Tree {
             hovered: None,
             page_width: PageWidth::None,
             capsules: BTreeMap::new(),
+            window_glyph_style: None,
             button_icons: BTreeMap::new(),
             title_text_box: None,
             content_top_gap: None,
@@ -418,6 +422,7 @@ impl Tree {
                 button_shape: ButtonShape::Rounded,
                 name,
                 caption: None,
+                window_glyph: None,
                 destructive: false,
                 parent,
                 children: vec![],
@@ -1339,7 +1344,7 @@ impl Tree {
             && let Some(capsule) = self.capsule_for_button(id)
         {
             let metrics = capsule.metrics;
-            if self.button_icons.contains_key(&id) {
+            if self.button_icons.contains_key(&id) || self.nodes[&id].window_glyph.is_some() {
                 let n = self.nodes.get_mut(&id).unwrap();
                 n.layout = None;
                 n.measured = Size {

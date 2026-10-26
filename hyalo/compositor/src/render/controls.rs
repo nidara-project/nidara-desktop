@@ -23,6 +23,14 @@ use smithay::{
 use super::{HyaloRenderer, glass_gl};
 use crate::protocols::window_controls::Buttons;
 
+// Independently usable mirror of capsule.json, checked by the existing layout test.
+pub(crate) const GLYPH_SIZE: f64 = 14.0;
+pub(crate) const GLYPH_STROKE: f64 = 1.6;
+pub(crate) const GLYPH_MINIMIZE_HALF: f64 = 3.5;
+pub(crate) const GLYPH_MAXIMIZE_HALF: f64 = 3.7;
+pub(crate) const GLYPH_MAXIMIZE_RADIUS: f64 = 1.6;
+pub(crate) const GLYPH_CLOSE_HALF: f64 = 3.0;
+
 /// The capsule's GLSL, shared with Hyalo's title bar (render/title_bar.rs), which draws the
 /// same capsule in its own pass: its uniforms, and `controls(p, dark)` — the capsule's colour at
 /// output pixel `p`, premultiplied, transparent outside it; `dark` 1 draws it with dark ink, for
@@ -48,10 +56,12 @@ float seg(vec2 p, vec2 a, vec2 b) {
     return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
 }
 // A glyph's distance, logical px from the slot's centre: a 14 px icon, strokes 1.6 wide.
+uniform vec4 glyph_geometry; // stroke half-width, minimize half, maximize half, radius
+uniform float glyph_close_half;
 float glyph(float g, vec2 p) {
-    if (g < 0.5) return seg(p, vec2(-3.5, 0.0), vec2(3.5, 0.0)) - 0.8;
-    if (g < 1.5) return abs(box(p, vec2(3.7), 1.6)) - 0.8;
-    return min(seg(p, vec2(-3.0, -3.0), vec2(3.0, 3.0)), seg(p, vec2(3.0, -3.0), vec2(-3.0, 3.0))) - 0.8;
+    if (g < 0.5) return seg(p, vec2(-glyph_geometry.y, 0.0), vec2(glyph_geometry.y, 0.0)) - glyph_geometry.x;
+    if (g < 1.5) return abs(box(p, vec2(glyph_geometry.z), glyph_geometry.w)) - glyph_geometry.x;
+    return min(seg(p, vec2(-glyph_close_half), vec2(glyph_close_half)), seg(p, vec2(glyph_close_half, -glyph_close_half), vec2(-glyph_close_half, glyph_close_half))) - glyph_geometry.x;
 }
 vec4 over(vec4 top, vec4 under) { return top + under * (1.0 - top.a); }
 // window_controls::{HOVER_D, EDGE, GAP, PITCH}, given by Rust (`set_geometry`): each button a
@@ -124,7 +134,11 @@ void main() {
 /// The capsule's geometry for the shader (its `geometry` uniform): the one copy, window_controls.rs.
 pub(super) unsafe fn set_geometry(gl: &smithay::backend::renderer::gles::ffi::Gles2, p: &glass_gl::Program) {
     use crate::protocols::window_controls::{EDGE, GAP, HOVER_D, PITCH};
-    unsafe { gl.Uniform4f(p.loc(gl, c"geometry"), (HOVER_D / 2.0) as f32, EDGE as f32, PITCH as f32, GAP as f32) };
+    unsafe {
+        debug_assert!(GLYPH_SIZE >= 2.0 * (GLYPH_MAXIMIZE_HALF + GLYPH_STROKE / 2.0));
+        gl.Uniform4f(p.loc(gl, c"glyph_geometry"), (GLYPH_STROKE / 2.0) as f32, GLYPH_MINIMIZE_HALF as f32, GLYPH_MAXIMIZE_HALF as f32, GLYPH_MAXIMIZE_RADIUS as f32);
+        gl.Uniform1f(p.loc(gl, c"glyph_close_half"), GLYPH_CLOSE_HALF as f32);
+        gl.Uniform4f(p.loc(gl, c"geometry"), (HOVER_D / 2.0) as f32, EDGE as f32, PITCH as f32, GAP as f32) };
 }
 
 /// What the capsule shows: its buttons left to right (only those that do something), the one

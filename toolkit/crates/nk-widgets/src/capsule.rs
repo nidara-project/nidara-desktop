@@ -1,6 +1,21 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! One retained panel of existing buttons; geometry comes from shared component data.
 use crate::*;
+/// Captions are for ordinary toolbar actions; window controls use paths.
+pub enum CapsuleGlyph<'a> {
+    Window(WindowGlyph),
+    Caption(&'a str),
+}
+impl<'a> From<&'a str> for CapsuleGlyph<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::Caption(value)
+    }
+}
+impl From<WindowGlyph> for CapsuleGlyph<'_> {
+    fn from(value: WindowGlyph) -> Self {
+        Self::Window(value)
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CapsuleMetrics {
     pub padding: f32,
@@ -27,6 +42,17 @@ impl CapsuleMetrics {
     }
 }
 impl Tree {
+    pub fn set_window_glyph_style(&mut self, style: WindowGlyphStyle) -> Result<()> {
+        style.validate()?;
+        if self.window_glyph_style != Some(style) {
+            self.window_glyph_style = Some(style);
+            for id in self.capsules.keys().copied().collect::<Vec<_>>() {
+                self.invalidate(id, Invalid::PAINT);
+            }
+        }
+        Ok(())
+    }
+
     pub fn control_capsule(
         &mut self,
         name: &str,
@@ -41,20 +67,27 @@ impl Tree {
         self.capsules.insert(id, Capsule { position, metrics });
         Ok(id)
     }
-    pub fn capsule_button(
+    pub fn capsule_button<'a>(
         &mut self,
         capsule: NodeId,
         name: &str,
-        glyph: &str,
+        glyph: impl Into<CapsuleGlyph<'a>>,
         destructive: bool,
     ) -> Result<NodeId> {
-        if !self.capsules.contains_key(&capsule) || name.is_empty() || glyph.is_empty() {
+        let glyph = glyph.into();
+        if !self.capsules.contains_key(&capsule)
+            || name.is_empty()
+            || matches!(glyph, CapsuleGlyph::Caption(""))
+        {
             return Err("capsule button needs its panel, accessible name and glyph".into());
         }
         let id = self.append(capsule, Kind::Button, name)?;
         let node = self.nodes.get_mut(&id).unwrap();
         node.button_shape = ButtonShape::Capsule;
-        node.caption = Some(glyph.into());
+        match glyph {
+            CapsuleGlyph::Window(kind) => node.window_glyph = Some(kind),
+            CapsuleGlyph::Caption(text) => node.caption = Some(text.into()),
+        }
         node.destructive = destructive;
         Ok(id)
     }
@@ -355,6 +388,14 @@ impl Tree {
             }
             if n.kind == Kind::SearchInput {
                 self.paint_search_chrome(*button, r, canvas, palette.disabled, false)?;
+            } else if let Some(kind) = n.window_glyph {
+                canvas.window_glyph(
+                    kind,
+                    self.window_glyph_style
+                        .ok_or("missing window glyph style")?,
+                    r,
+                    ink,
+                );
             } else if let Some((name, size)) = self.button_icons.get(button) {
                 let icon = self.icon(name, *size)?;
                 canvas.icon(

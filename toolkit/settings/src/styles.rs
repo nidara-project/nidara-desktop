@@ -16,6 +16,7 @@ use serde_json::Value as Json;
 pub struct Styles {
     /// Window capsule corner inset from components.json, independent of row spacing.
     pub controls_inset: f32,
+    pub window_glyph: nk_widgets::WindowGlyphStyle,
     pub header: crate::header::Style,
     pub wallpaper: crate::wallpaper::Look,
     pub text_scale: f64,
@@ -222,6 +223,7 @@ impl Styles {
         let wallpaper = crate::wallpaper::Look::load(exports, &tokens)?;
         Ok(Self {
             controls_inset: number(&c["capsule"]["windowInset"])?,
+            window_glyph: window_glyph_style(&c["capsule"]["glyph"])?,
             header: crate::header::Style::load(&c["header"], &exports.glass, appearance)?,
             wallpaper,
             text_scale: appearance.text_scale,
@@ -243,6 +245,7 @@ impl Styles {
 impl Styles {
     /// Every style a tree draws with, at once (a tree built from these metrics and text).
     pub fn apply(&self, tree: &mut nk_widgets::Tree) -> Result<(), String> {
+        tree.set_window_glyph_style(self.window_glyph)?;
         tree.set_choice_style(self.choices)?;
         tree.set_range_style(self.range)?;
         tree.set_switch_style(self.switch)?;
@@ -454,5 +457,48 @@ mod tests {
                 .unwrap()
                 .contains("search icon")
         );
+    }
+}
+
+/// Strict reader shared by Settings and the widgets demo.
+pub fn window_glyph_style(g: &Json) -> Result<nk_widgets::WindowGlyphStyle, String> {
+    let style = nk_widgets::WindowGlyphStyle {
+        size: number(&g["size"])?,
+        stroke: number(&g["stroke"])?,
+        minimize_half: number(&g["minimizeHalf"])?,
+        maximize_half: number(&g["maximizeHalf"])?,
+        maximize_radius: number(&g["maximizeRadius"])?,
+        close_half: number(&g["closeHalf"])?,
+    };
+    style.validate()?;
+    Ok(style)
+}
+
+#[cfg(test)]
+mod window_glyph_tests {
+    use super::*;
+    #[test]
+    fn glyph_export_is_required_and_validated() {
+        let source: Json = serde_json::from_str(include_str!("../../tokens/capsule.json")).unwrap();
+        let glyph = source["default"]["glyph"].clone();
+        assert!(window_glyph_style(&glyph).is_ok());
+        for key in [
+            "size",
+            "stroke",
+            "minimizeHalf",
+            "maximizeHalf",
+            "maximizeRadius",
+            "closeHalf",
+        ] {
+            let mut broken = glyph.clone();
+            broken.as_object_mut().unwrap().remove(key);
+            assert!(
+                window_glyph_style(&broken).is_err(),
+                "accepted missing {key}"
+            );
+        }
+        let mut broken = glyph;
+        broken["stroke"] = serde_json::json!(100);
+        assert!(window_glyph_style(&broken).is_err());
     }
 }

@@ -304,3 +304,10 @@ selection while invalidating layout and old action targets. Invalid input is ato
 
 Unchanged hidden/disabled setters return after id validation, before collecting
 focus order. Actual availability changes retain the old order for focus repair.
+
+Window controls pass `WindowGlyph::{Minimize, Maximize, Close}` as the capsule
+button glyph; translated accessible names remain separate. Call
+`set_window_glyph_style` with the validated exported `WindowGlyphStyle` before
+painting. They measure from capsule geometry and never shape text; nk-render
+strokes their paths in both layer coverage and D5. Ordinary toolbar captions
+continue to use retained text layouts.

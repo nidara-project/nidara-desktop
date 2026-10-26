@@ -142,6 +142,8 @@ impl Demo {
         tree
     }
     fn sync(&mut self, window: &mut Window) -> Result<()> {
+        self.tree
+            .set_window_glyph_style(self.appearance.window_glyph)?;
         self.tree.set_sidebar_frame(
             self.appearance.metrics.padding,
             self.appearance.metrics.group_radius,
@@ -570,6 +572,7 @@ fn run() -> Result<()> {
         appearance.metrics,
         appearance.style.clone(),
     )?;
+    tree.set_window_glyph_style(appearance.window_glyph)?;
     let root = tree.root();
     let sidebar = tree.append(root, Kind::Sidebar, "Pages")?;
     tree.append(sidebar, Kind::Page { selected: true }, "Appearance")?;
@@ -593,9 +596,9 @@ fn run() -> Result<()> {
         )?;
         capsule_ids.push(panel);
         [
-            tree.capsule_button(panel, "Minimize", "−", false)?,
-            tree.capsule_button(panel, "Maximize", "□", false)?,
-            tree.capsule_button(panel, "Close", "×", true)?,
+            tree.capsule_button(panel, "Minimize", nk_widgets::WindowGlyph::Minimize, false)?,
+            tree.capsule_button(panel, "Maximize", nk_widgets::WindowGlyph::Maximize, false)?,
+            tree.capsule_button(panel, "Close", nk_widgets::WindowGlyph::Close, true)?,
         ]
     } else if fault == "window-controls" {
         eprintln!("CONTROL_APPLIED window-controls");
