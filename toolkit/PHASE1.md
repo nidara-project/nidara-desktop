@@ -7,6 +7,39 @@ does not amend it. Component names follow [CATALOG.md](CATALOG.md) and are still
 `nk` stays the working name (the public name is the owner's, still open — `ntk` is taken in
 Arch's own repositories by the Non ToolKit).
 
+## Revision 3 — the direct path (owner, 2026-10-26)
+
+🔑 **The next release is Rust only.** No coexistence with the TypeScript desktop: no piece of it
+is adapted, bridged or kept in step with the Rust one. Owner: "otherwise we take three years";
+"I don't care about losing things"; "the shortest path". What this supersedes below:
+
+- **D3 is dropped.** The native Settings does not take over the GJS one's entry point and
+  routes nothing to it. The routing built for it (#919, #934) stays as code until it is in the
+  way; nothing is added to it. #950 (the takeover) was closed unmerged.
+- **Gate 1 checks the native app against `Config1`** (operated → read back → applied), never
+  against what the legacy Settings shows. **Gate 4 keeps its numbers** (start-up < 473 ms, PSS
+  < 157 MiB, the 13.9 / 21.1 ms frame intervals measured once on the legacy Settings) as fixed
+  targets; the legacy Settings is not run again to compare.
+- **The Rust desktop grows as a session of its own**, nested in a Hyalo window
+  (`scripts/dev/rust-session.sh`): seen without restarting anything, the TypeScript session
+  untouched as the daily one until the Rust one replaces it whole. Until `nidara-sessiond`
+  serves them, the nested apps use the services on the shared session bus, whoever serves
+  them; nothing is changed on the TypeScript side for them.
+
+**The order:**
+1. **Services, once, outside any UI** — `nidara-sessiond` (Rust, already the notifications)
+   serves `Config1`, network, audio, Bluetooth, power, media, night light, displays,
+   wallpaper, the tray watcher and the shell's IPC. Today they live inside the TypeScript
+   shell's process (`ui/shell/core/`), which is what tied the native Settings to it.
+2. **What makes the session usable** — the shell's essentials (bar, dock, launcher,
+   notifications, Control Center) and the lock screen. The toolkit gains what the shell needs
+   and Settings does not: layer-shell surfaces, popups, panel motion.
+3. **The rest** — Settings' other pages (each on the services of step 1), the greeter, the
+   installer.
+
+No CI step is added for any of it: each piece is checked in the nested session, and the
+checks that exist keep running.
+
 ## The gate (#818)
 
 > **Phase 1 — foundations + Settings.** The new Settings covers the daily-use pages and is
@@ -138,9 +171,10 @@ Added **inside v1** (the protocol rule: never bump; old members stay as they are
   (`appearance.interfaceIconTheme`), as the shell does (`core/Icons.ts`).
 - Read-only `ai.*` rows are not on the allowlist; their writes stay the legacy Settings'.
 
-## D3 — replace the entry point when Appearance passes (accepted)
+## D3 — replace the entry point when Appearance passes (dropped 2026-10-26)
 
-See [A1] for the identities and the routing.
+**Superseded by revision 3**: no takeover, no routing to the GJS Settings. See [A1] for what
+was built for it.
 
 ## D4 — one source for strings, pages, icons and tokens
 
