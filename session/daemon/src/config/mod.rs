@@ -15,6 +15,7 @@
 //! Served only on request (`nidara-sessiond --config`): in a session where the TypeScript
 //! shell serves the name, this does not compete for it.
 
+mod followers;
 pub mod registry;
 mod store;
 
@@ -252,7 +253,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<bool> {
         .at(
             PATH,
             Config1 {
-                store,
+                store: store.clone(),
                 changes: changes.clone(),
                 announced: announced.clone(),
                 settings_owner: settings_owner.clone(),
@@ -269,6 +270,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<bool> {
         conn.object_server().remove::<Config1, _>(PATH).await?;
         return Ok(false);
     }
+    followers::start(store.clone(), changes.clone());
     // The native Settings' owner, followed rather than asked on every write (every slider
     // step paid a GetNameOwner).
     let dbus = zbus::fdo::DBusProxy::new(conn).await?;

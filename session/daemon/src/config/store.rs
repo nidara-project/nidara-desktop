@@ -3,6 +3,7 @@
 //! file monitor, runs their change notifications, and answers the D-Bus side's calls. Every
 //! change of a key's home, from any writer, comes out of `changes` as (key, value).
 
+use super::followers::Snapshot;
 use super::registry::{self, Store, Value};
 use gio::prelude::*;
 use std::cell::RefCell;
@@ -11,12 +12,35 @@ use tokio::sync::{Notify, oneshot};
 
 /// Changes heard on the GLib thread, waiting to be announced. Pushed BEFORE that thread
 /// answers the call that caused them, so `Apply` finds its own change here.
-#[derive(Default)]
 pub struct Changes {
     pending: Mutex<Vec<(String, Value)>>,
     pub notify: Notify,
+    pub followers: tokio::sync::watch::Sender<Snapshot>,
+}
+impl Default for Changes {
+    fn default() -> Self {
+        Self {
+            pending: Mutex::new(Vec::new()),
+            notify: Notify::new(),
+            followers: tokio::sync::watch::channel(Snapshot::default()).0,
+        }
+    }
 }
 impl Changes {
+    pub fn publish(&self) {
+        STORE.with(|s| {
+            if let Some(st) = s.borrow().as_ref() {
+                let snapshot = Snapshot::read(st);
+                self.followers.send_if_modified(|old| {
+                    if *old == snapshot {
+                        return false;
+                    }
+                    *old = snapshot;
+                    true
+                });
+            }
+        });
+    }
     fn push(&self, name: &str, value: Value) {
         self.pending.lock().unwrap().push((name.to_owned(), value));
         self.notify.notify_one();
@@ -62,7 +86,8 @@ fn announce(changes: &Changes, name: &'static str) {
         {
             changes.push(name, registry::get(st, key));
         }
-    })
+    });
+    changes.publish();
 }
 
 pub fn spawn(changes: Arc<Changes>) -> Handle {
@@ -85,6 +110,14 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                         }
                     }
                 }
+                // Cursor size is a GSettings home even though Config1 has no picker for it.
+                if store.has("org.gnome.desktop.interface", "cursor-size") {
+                    let updates = changes.clone();
+                    store
+                        .settings("org.gnome.desktop.interface")
+                        .unwrap()
+                        .connect_changed(Some("cursor-size"), move |_, _| updates.publish());
+                }
                 // The wallpaper's file: whoever writes it (the TypeScript shell, a script).
                 let file = gio::File::for_path(store.wallpaper_file());
                 match file.monitor_file(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE) {
@@ -100,6 +133,7 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                     Err(e) => eprintln!("[config] cannot watch the wallpaper file: {e}"),
                 }
                 STORE.with(|s| *s.borrow_mut() = Some(store));
+                changes.publish();
                 glib::MainLoop::new(Some(&ctx), false).run();
             })
             .expect("a fresh context is free to own");
