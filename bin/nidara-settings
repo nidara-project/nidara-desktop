@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
-# Current public entry: share the GJS launcher while retaining its original bus identity.
+# Public entry: the native Settings owns org.nidara.Settings and draws the pages on its list
+# (toolkit/settings/src/routing.rs `DRAWN`); any other page it hands to the legacy Settings,
+# which it starts on demand (`nidara-settings-legacy`, identity org.nidara.SettingsLegacy).
 set -euo pipefail
 export NIDARA_SETTINGS_PROCESS=1 GDK_BACKEND=wayland
 if [ -n "${NIDARA_SETTINGS_EXECUTABLE:-}" ]; then
     exec "$NIDARA_SETTINGS_EXECUTABLE" "$@"
 fi
-export NIDARA_SETTINGS_LEGACY=0
-exec "$(dirname -- "$0")/nidara-settings-legacy" "$@"
+repo="${NIDARA_SETTINGS_REPO:-}"
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/nidara/.dev"
+if [ -z "$repo" ] && [ -f "$marker" ]; then repo=$(cat "$marker"); fi
+native=/usr/lib/nidara/nidara-settings-native
+# Dev mode runs the checkout's own build when there is one (`cargo build --release -p
+# nk-settings` in toolkit/), with the data and icons of the same checkout: a binary and an
+# export from different commits refuse each other (settings-data `version`).
+if [ -n "$repo" ] && [ -x "$repo/toolkit/target/release/nk-settings" ]; then
+    native="$repo/toolkit/target/release/nk-settings"
+    export NK_SETTINGS_LEGACY="$repo/bin/nidara-settings-legacy"
+    export NK_ICON_REFERENCE="$repo/ui/shell/assets/icons/nidara"
+    if [ -f "$repo/build/settings-data/version" ]; then export NK_SETTINGS_DATA="$repo/build/settings-data"; fi
+fi
+exec "$native" --entry-point "$@"

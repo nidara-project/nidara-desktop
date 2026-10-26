@@ -1,8 +1,5 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
-# Native Settings: D5 and entry-point preparation
-
-This branch prepares a preview package. It does not replace the public launcher,
-activate the entry-point identity, install a package, or complete acceptance.
+# Native Settings: D5 and the entry point
 
 ## D5 coverage
 
@@ -20,39 +17,14 @@ cover every optional protocol missing; phase 1 does not run another compositor i
 These are component/protocol tests, not foreign-compositor, Orca or live visual
 acceptance. Server-side effects and page parity remain governed by the other gates.
 
-## Prepared identities and files
+## Entry point (activated 2026-10-26, owner's decision)
 
-The package builds the locked native binary offline and installs it as
-`/usr/lib/nidara/nidara-settings-native`, with a `nidara-settings-native` preview
-launcher. Ordinary native launches still own only `org.nidara.SettingsNative`.
-Only an explicit leading `--entry-point` also claims `org.nidara.Settings`;
-the host option is removed before routing the original request.
-
-`nidara-settings-legacy` directly executes the GJS launcher with
-`NIDARA_SETTINGS_LEGACY=1`. That selects `org.nidara.SettingsLegacy`, while the
-Request interface/path remain compatible. It does not recurse through the public
-launcher and ignores the native executable override. GJS raising selects its own
-PID, so a native window with the same title cannot receive its raise request.
-
-The public `/usr/bin/nidara-settings` keeps its existing identity and executable
-override, then delegates to the one GJS launcher with `NIDARA_SETTINGS_LEGACY=0`.
-The desktop entry is unchanged. Direct legacy launches default to identity Legacy. The
-future public launcher is stored as data at
-`/usr/share/nidara/settings-native/nidara-settings`; installing that file as the
-public launcher is a separate, explicit activation step after acceptance.
-
-For inspection without installation, build the native binary, GJS Settings bundle
-and exports, then run:
-
-```
-python3 scripts/dev/stage-native-settings.py build/settings-preview-stage
-```
-
-This creates an overlay for an existing Nidara package, records source revision,
-dirty state and executable hashes, and deliberately contains no
-`usr/bin/nidara-settings`. It refuses system destinations and existing directories.
-Shared host, kit, assets and CSS come from the normal package. No full makepkg build
-or installation is claimed by staging this overlay.
+`/usr/bin/nidara-settings` runs `/usr/lib/nidara/nidara-settings-native --entry-point`:
+the native Settings owns `org.nidara.Settings` and draws Appearance; every other page goes
+to `org.nidara.SettingsLegacy`, which it starts on demand (`nidara-settings-legacy`). The
+owner chose to switch before the remaining gates so the layout work happens on the real
+app; the gates below still run, they no longer hold the switch. How the two hand pages to
+each other: the skill, architecture.md → "Settings entry point".
 
 ## Gate 4: measured development build, still incomplete
 
@@ -76,14 +48,11 @@ as an installed package. The comparison must be repeated with the installed buil
 and native scroll/slider measurements must still be compared to the recorded
 legacy references (13.9 ms / 21.1 ms). No new CI step is introduced.
 
-## Before activation
+## Still open
 
-The parity/Orca and new-header IME gates must pass on the final stack; the owner
-must accept its live appearance. Native `queryUI` serialization is still explicitly
-unintegrated in the application and blocks replacing the public endpoint. Resolve
-that integration, the unexplained startup failure and the installed performance
-checks before proposing activation. Public routing tests already cover both modes,
-legacy launch/forwarding and second-instance handoff, on private buses.
+The parity/Orca and new-header IME gates (#944) and the installed performance checks.
+Native `queryUI` serialization is not integrated: `nidara-settings queryUI` answers an
+error until it is.
 
 ## Validation of this preparation
 
@@ -92,23 +61,15 @@ D5 menus, private routing and file-chooser buses, retained images, thumbnails, a
 nk-wayland capabilities. All-target Settings Clippy passes with warnings denied.
 The GJS bundle builds and Settings passes the repo-pinned TypeScript 5.7.3 check.
 PKGBUILD parses through `makepkg --printsrcinfo`; shell/Python syntax, skill docs,
-and whitespace checks pass. The staging overlay was generated and inspected;
-its public-launcher path is absent, and staging to `/usr` is refused.
+and whitespace checks pass.
 
 Adding the second private-portal test exposed a shared PID-only socket directory;
 it now includes an atomic per-test sequence so parallel tests cannot connect to
 each other's bus. No assertion or CI gate was removed.
 
 
-## Follow-up review
+## Raising
 
-The GJS launch/rebuild logic lives only in `bin/nidara-settings-legacy`; the public
-wrapper selects the original identity and retains its executable override. The
-legacy path has no unreachable executable-override branch. HyaloState._rebuild
-fills CompositorWindow.pid from IPC window.pid (falling back to zero only when
-absent); the compositor exposes that PID in its window list. PID-based raising
-therefore uses the existing Hyalo mapping as well as the Hyprland one.
-
-The worktree now lives at `~/Nidara/ChatGPT/915-readiness`, outside every build cache.
-Historical measurement JSON retains the original executable path and hash; moving
-the worktree does not mean those measurements were repeated.
+GJS raising is scoped to its own PID: HyaloState._rebuild fills CompositorWindow.pid from
+IPC window.pid (zero only when absent), so a native window with the same title cannot
+receive the legacy one's raise.

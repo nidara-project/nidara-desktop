@@ -4067,8 +4067,5 @@ control is expected when the aggregate marks that control CAUGHT. The 2026-10-25
 records the native milestone, samples PSS after five seconds, and excludes the warm-up
 from medians. Its report does not certify an installed build or the complete gate 4.
 Preserve a failed series; a successful diagnostic rerun does not explain it.
-`stage-native-settings.py build/DIRECTORY` prepares an inspectable preview overlay
-from the current build, including hashes, without replacing the public launcher.
-It refuses existing directories and destinations outside this checkout's build/target.
 Private-bus test runtime paths need a per-test sequence as well as the process PID;
 Rust runs multiple tests within one process, so a PID-only socket directory collides.

@@ -127,8 +127,8 @@ fails `native-host-check.py`.
 
 In dev, `scripts/run.sh` selects the native shell ONLY for this checkout's
 `ui/shell/app.ts`; probes and other entrypoints (the lock in dev mode included)
-retain GJS. `bin/nidara-settings` builds/runs the native Settings host and still
-cleans up its own temporary JS. Both paths compile the hosts from the checkout,
+retain GJS. `bin/nidara-settings-legacy` builds/runs the GJS Settings host and still
+cleans up its own temporary JS (`bin/nidara-settings` is the native entry point now). Both paths compile the hosts from the checkout,
 without installing anything. The gtk4-layer-shell preload is retained in every
 bundle path and removed by the TypeScript host before any child is launched.
 Native runner semantics, every listed host, the generated wrappers and the
@@ -3514,15 +3514,22 @@ routing; typing never replaces its current content. Builder-owned runtime object
 without registry/manifest labels are not indexed yet. Both new labels are translated in
 all twelve catalogs with their ledger. No workflow step or PR gate was added.
 
-### Settings preview packaging and deferred entry-point switch
+### Settings entry point: native for Appearance, legacy for the rest
 
-The native binary can ship beside the current Settings: `nidara-settings-native`
-starts only SettingsNative by default. A leading `--entry-point` opts into owning
-Settings too and is removed before routing the request. The GJS rebuild/launch logic lives only in `nidara-settings-legacy`; the public
-wrapper delegates with `NIDARA_SETTINGS_LEGACY=0` until the swap, retaining its
-executable override. The separately installed `nidara-settings-legacy` selects the GJS SettingsLegacy application identity
-with `NIDARA_SETTINGS_LEGACY=1`; it starts GJS directly and never calls the public
-launcher. GJS raising is scoped to its own PID when both processes exist.
-The future entry-point launcher is staged as package data, not installed over
-`/usr/bin/nidara-settings`. `toolkit/settings/READINESS.md` records D5 evidence,
-performance limitations and blockers. Preparation does not authorize activation.
+`/usr/bin/nidara-settings` runs the native binary (`/usr/lib/nidara/nidara-settings-native`)
+with a leading `--entry-point`: it owns `org.nidara.Settings` as well as SettingsNative, and
+that option is removed before the request is routed. It draws the pages on `routing::DRAWN`
+(Appearance today). Any other page it forwards to `org.nidara.SettingsLegacy`, starting
+`nidara-settings-legacy` on demand with `NIDARA_SETTINGS_NATIVE_PAGES` = `DRAWN`. That one list
+is how the GJS window knows what to hand back: `Settings(monitor, elsewhere)` turns a click,
+a search result or a `page` request for one of them into a `page <id>` Request to the entry
+point, and its own window stays on the page it was showing. Its landing page is the first one
+it draws. To port a page, add it to `DRAWN`; nothing on the GJS side changes.
+
+The GJS rebuild/launch logic lives only in `nidara-settings-legacy` (identity SettingsLegacy
+by default; `NIDARA_SETTINGS_LEGACY=0` keeps the public one). GJS raising is scoped to its own
+PID. In dev mode the public launcher prefers the checkout's `toolkit/target/release/nk-settings`
+with that checkout's `build/settings-data`, icons and legacy launcher; rebuild it with
+`cargo build --release -p nk-settings` — the launcher does not. `NIDARA_SETTINGS_EXECUTABLE`
+still runs an executable directly (the headless smoke uses it for the GJS bundle).
+`toolkit/settings/READINESS.md` records D5 evidence and performance measurements.

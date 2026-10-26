@@ -37,14 +37,14 @@ class Launchers(unittest.TestCase):
         self.assertEqual(process.returncode, 0, err)
         return out.splitlines()
 
-    def test_public_delegates_original_identity_and_preserves_arguments(self):
-        public = self.root/'nidara-settings'
-        shutil.copy2(ROOT/'bin/nidara-settings', public)
-        self.script(self.root/'nidara-settings-legacy', 'printf "%s\\n" "$NIDARA_SETTINGS_LEGACY" "$GDK_BACKEND" "$@"\n')
-        self.assertEqual(self.run_script(public, self.env | {'NIDARA_SETTINGS_LEGACY':'1'}),
-                         ['0', 'wayland', 'page', 'a b 日本'])
+    def test_public_runs_the_dev_native_entry_point_and_preserves_arguments(self):
+        repo = self.root/'repo'
+        self.script(repo/'toolkit/target/release/nk-settings',
+                    'printf "%s\\n" "$NK_SETTINGS_LEGACY" "$GDK_BACKEND" "$@"\n')
+        self.assertEqual(self.run_script(ROOT/'bin/nidara-settings', self.env | {'NIDARA_SETTINGS_REPO':str(repo)}),
+                         [str(repo/'bin/nidara-settings-legacy'), 'wayland', '--entry-point', 'page', 'a b 日本'])
 
-    def test_public_executable_override_does_not_need_the_legacy_sibling(self):
+    def test_public_executable_override_runs_directly(self):
         public = self.root/'nidara-settings'
         shutil.copy2(ROOT/'bin/nidara-settings', public)
         override = self.script(self.root/'override', 'printf "%s\\n" "$NIDARA_SETTINGS_PROCESS" "$@"\n')

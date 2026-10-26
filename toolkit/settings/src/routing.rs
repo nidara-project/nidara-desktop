@@ -143,6 +143,7 @@ pub fn legacy_launcher() -> Launcher {
         let program =
             std::env::var("NK_SETTINGS_LEGACY").unwrap_or_else(|_| "nidara-settings-legacy".into());
         std::process::Command::new(program)
+            .env("NIDARA_SETTINGS_NATIVE_PAGES", DRAWN.join(","))
             .spawn()
             .map(drop)
             .map_err(|e| format!("starting the legacy Settings: {e}"))

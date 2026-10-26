@@ -619,6 +619,7 @@ sudo cp "$REPO_DIR/ui/lockscreen/build/nidara-lock" /usr/share/nidara/ui/lockscr
 sudo cp "$REPO_DIR/bin/nidara"     /usr/bin/nidara
 sudo cp "$REPO_DIR/bin/nidara-ui"  /usr/bin/nidara-ui
 sudo cp "$REPO_DIR/bin/nidara-settings" /usr/bin/nidara-settings
+sudo cp "$REPO_DIR/bin/nidara-settings-legacy" /usr/bin/nidara-settings-legacy
 sudo cp "$REPO_DIR/bin/nidara-greeter"   /usr/bin/nidara-greeter
 sudo cp "$REPO_DIR/bin/nidara-lock"      /usr/bin/nidara-lock
 sudo cp "$REPO_DIR/bin/nidara-before-sleep" /usr/bin/nidara-before-sleep
@@ -645,7 +646,7 @@ sudo cp "$REPO_DIR/bin/nidara-language" /usr/bin/nidara-language
 sudo rm -rf /usr/share/nidara/migrations
 sudo mkdir -p /usr/share/nidara/migrations
 sudo cp "$REPO_DIR"/migrations/*.sh /usr/share/nidara/migrations/
-sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-settings /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
+sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-settings /usr/bin/nidara-settings-legacy /usr/bin/nidara-greeter /usr/bin/nidara-greeter-session /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-share-chooser /usr/bin/nidara-mcp /usr/bin/nidara-agent /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-wm /usr/bin/nidara-hook /usr/bin/nidara-update /usr/bin/nidara-setup /usr/bin/nidara-migrate /usr/bin/nidara-language
 
 # The private runners embed libgjs and keep each program's executable identity
 # (lib/nidara-host/hosts). The installer's belongs to its own package, not here.
@@ -739,6 +740,11 @@ rm -rf "$AUTH_BUILD"
 echo "  Building nidara-sessiond..."
 (cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked)
 sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond
+# The native Settings — the entry point /usr/bin/nidara-settings runs — compiled the same
+# way, every mode: in --dev the launcher prefers the checkout's own build when it exists.
+echo "  Building the native Settings..."
+(cd "$REPO_DIR/toolkit" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked -p nk-settings --bin nk-settings)
+sudo install -Dm755 "$REPO_DIR/toolkit/target/release/nk-settings" /usr/lib/nidara/nidara-settings-native
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/nidara.service). NOT enabled by target: it's

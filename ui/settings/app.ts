@@ -7,6 +7,7 @@ import { applyCrispFontRendering } from "../lib/nidara-kit/platform/font-renderi
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Gtk from "gi://Gtk?version=4.0"
+import Gdk from "gi://Gdk?version=4.0"
 import Settings from "../shell/surfaces/settings/Settings"
 import { registerConfigEntries } from "../shell/config-entries"
 import { setWidgetCatalog } from "../shell/core/WidgetCatalog"
@@ -18,6 +19,24 @@ useNoGtkTheme()
 const ownPid = new Gio.Credentials().get_unix_pid()
 const legacy = GLib.getenv("NIDARA_SETTINGS_LEGACY") === "1"
 let window: Gtk.Window | null = null
+// Held here, not in main(): a local is collected and the collection unexports the object,
+// so `Request` stopped answering a while after startup.
+let exported: ReturnType<typeof Gio.DBusExportedObject.wrapJSObject> | null = null
+// The pages the native Settings draws, from the one list it keeps (routing.rs `DRAWN`):
+// it starts this process with them. Going to one asks the entry point — the native
+// Settings — to show it, and this window stays where it was.
+const drawnNatively = new Set((GLib.getenv("NIDARA_SETTINGS_NATIVE_PAGES") ?? "").split(",").filter(Boolean))
+const handedOver = (pageId: string): boolean => {
+    if (!legacy || !drawnNatively.has(pageId)) return false
+    // The click's activation token travels with the request: without one the compositor
+    // does not raise a window over the one the person is using (routing.rs ACTIVATION_ARG).
+    const token = Gdk.Display.get_default()?.get_app_launch_context().get_startup_notify_id(null, [])
+    const args = token ? ["page", pageId, "--xdg-activation-token", token] : ["page", pageId]
+    Gio.DBus.session.call("org.nidara.Settings", "/org/nidara/Settings", "org.nidara.Settings", "Request",
+        new GLib.Variant("(as)", [args]), null, Gio.DBusCallFlags.NONE, -1, null,
+        (bus, result) => { try { bus!.call_finish(result) } catch (e) { console.error("[Settings] Hand-over:", String(e)) } })
+    return true
+}
 let initialized: Promise<void>
 const raise = () => {
     if (!window) return
@@ -30,7 +49,8 @@ const interfaceXml = `<node><interface name="org.nidara.Settings"><method name="
     </method></interface></node>`
 app.start({
     applicationId: legacy ? "org.nidara.SettingsLegacy" : "org.nidara.Settings", applicationName: "Nidara Settings", logDomain: "nidara-settings",
-    processName: legacy ? "nidara-settings-legacy" : "nidara-settings",
+    // One name for both identities: Linux keeps 15 bytes, "nidara-settings-legacy" does not fit.
+    processName: "nidara-settings",
     css: withKitSheet(`${GLib.getenv("NIDARA_SETTINGS_ROOT") || SHELL_ROOT}/style.css`),
     activate: () => { void initialized?.then(raise).catch(e => console.error(String(e))) },
     main() {
@@ -41,7 +61,7 @@ app.start({
             const catalog = await createRemoteWidgetCatalog()
             await catalog.ready
             setWidgetCatalog(catalog)
-            window = Settings()
+            window = Settings(undefined, handedOver)
             window.connect("close-request", () => { Gio.Settings.sync(); catalog.dispose(); app.quit(); return false })
             window.connect("notify::visible", () => {
                 if (window && !window.visible) { Gio.Settings.sync(); catalog.dispose(); app.quit() }
@@ -49,7 +69,7 @@ app.start({
             raise()
         })()
         void initialized.catch(e => { console.error("[Settings] Startup:", String(e)); app.quit(1) })
-        const exported = Gio.DBusExportedObject.wrapJSObject(interfaceXml, {
+        exported = Gio.DBusExportedObject.wrapJSObject(interfaceXml, {
             RequestAsync([args]: [string[]], invocation: Gio.DBusMethodInvocation) {
                 void initialized.then(() => {
                     let response = "ok"

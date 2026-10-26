@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# Staged launcher: install as /usr/bin/nidara-settings only after acceptance.
-set -euo pipefail
-exec /usr/lib/nidara/nidara-settings-native --entry-point "$@"

@@ -59,7 +59,9 @@ const _checkNoExtraBuilders: [ExtraBuilders] extends [never] ? true : { error: "
  * Pure GTK4 — no Adwaita dependency.
  */
 
-export default function Settings(monitor?: Gdk.Monitor) {
+/** `elsewhere`: the pages another process draws (the native Settings, while the two
+ *  coexist). Going to one hands it over instead of showing it here. */
+export default function Settings(monitor?: Gdk.Monitor, elsewhere?: (pageId: string) => boolean) {
     clearSearchIndex()
 
     // The content pane's width — one number for all 18 pages, the search results
@@ -395,6 +397,11 @@ export default function Settings(monitor?: Gdk.Monitor) {
     }
 
     const navigateTo = (pageId: string, addToHistory = true) => {
+        if (elsewhere?.(pageId)) {
+            // The row the click selected goes back to the page still shown here.
+            if (activePageId) syncSidebarSelection(activePageId)
+            return
+        }
         if (addToHistory) {
             history.splice(historyIdx + 1)
             history.push(pageId)
@@ -570,8 +577,9 @@ export default function Settings(monitor?: Gdk.Monitor) {
     }
 
     // Default page — seeds history. Appearance is the chosen landing (not the
-    // sidebar's first item), falling back to the first category if it's ever gone.
-    const defaultPage = categories.find(c => c.id === "appearance")?.id ?? categories[0]?.id
+    // sidebar's first item), falling back to the first category this window draws.
+    const here = categories.filter(c => !elsewhere?.(c.id))
+    const defaultPage = here.find(c => c.id === "appearance")?.id ?? here[0]?.id
     if (defaultPage) navigateTo(defaultPage)
 
     return win
