@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The server outlives shell reloads. DnD and the user's banner timeout remain UI
 // policy; only the sender's positive expire_timeout belongs here (#819).
+mod bluetooth;
 mod config;
 mod model;
 mod network;
@@ -285,6 +286,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let read_only = std::env::args().any(|a| a == "--network-read-only");
     if read_only || std::env::args().any(|a| a == "--network") {
         network::serve(&conn, read_only).await?;
+    }
+    let read_only = std::env::args().any(|a| a == "--bluetooth-read-only");
+    if read_only || std::env::args().any(|a| a == "--bluetooth") {
+        bluetooth::serve(&conn, read_only).await?;
     }
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }

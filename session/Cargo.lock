@@ -508,6 +508,7 @@ dependencies = [
  "futures-util",
  "gio",
  "glib",
+ "libc",
  "png",
  "serde",
  "serde_json",
