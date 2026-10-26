@@ -359,7 +359,7 @@ impl PairAgent {
         } else {
             label
         };
-        let metadata = json!({"kind":kind,"device":path.as_str(),"deviceName":label,"address":bus::text(&props,"Address"),"adapter":bus::text(&props,"Adapter")});
+        let metadata = json!({"kind":kind,"device":path.as_str(),"deviceName":super::files::safe_name(&label),"address":bus::text(&props,"Address"),"adapter":bus::text(&props,"Adapter")});
         Ok((props, metadata))
     }
     async fn ask(

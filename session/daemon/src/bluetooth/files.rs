@@ -57,6 +57,20 @@ pub fn capacity(
     }
     Ok(())
 }
+// Admission preflight creates nothing before consent, even if Downloads is absent.
+pub fn preflight(
+    space: &dyn Space,
+    root: &Path,
+    destination: &Path,
+    size: u64,
+    reserved: u64,
+) -> Result<(), Error> {
+    let existing = destination
+        .ancestors()
+        .find(|p| p.exists())
+        .ok_or_else(io_error)?;
+    capacity(space, root, existing, Some(size), reserved)
+}
 fn require_persistent(path: &Path) -> Result<(), Error> {
     let path = CString::new(path.as_os_str().as_bytes()).map_err(|_| io_error())?;
     let mut info = std::mem::MaybeUninit::<libc::statfs>::uninit();
@@ -81,7 +95,7 @@ pub fn safe_name(input: &str) -> String {
     let mut out = String::new();
     for c in input.chars() {
         let c = if c.is_control()
-            || matches!(c,'/'|'\\'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}')
+            || matches!(c,'/'|'\\'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}'|'\u{200e}'|'\u{200f}'|'\u{061c}')
         {
             '_'
         } else {
@@ -97,7 +111,7 @@ pub fn safe_name(input: &str) -> String {
     }
     let out = out.trim_matches(['.', ' ']);
     if out.is_empty() {
-        "archivo".into()
+        "bluetooth-file".into()
     } else {
         out.into()
     }
@@ -224,7 +238,12 @@ fn publish_exclusive(source: &Path, destination: &Path, base: &str) -> Result<St
         let name = if suffix == 0 {
             base.to_owned()
         } else {
-            format!("{base} ({suffix})")
+            match base.rsplit_once('.') {
+                Some((stem, extension)) if !stem.is_empty() && !extension.is_empty() => {
+                    format!("{stem} ({suffix}).{extension}")
+                }
+                _ => format!("{base} ({suffix})"),
+            }
         };
         let old = CString::new(source.as_os_str().as_bytes()).map_err(|_| io_error())?;
         let new =
@@ -291,6 +310,37 @@ mod tests {
         assert!(capacity(&FakeSpace(FREE_FLOOR + 10), p, p, Some(10), 1).is_err());
     }
     #[test]
+    fn collision_suffix_preserves_last_extension_and_extensionless_names() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target");
+        let directory = private_dir(&root).unwrap();
+        for (base, expected) in [
+            ("photo.jpg", "photo (1).jpg"),
+            ("archive.tar.gz", "archive.tar (1).gz"),
+            ("README", "README (1)"),
+            (".hidden", ".hidden (1)"),
+        ] {
+            fs::write(directory.join(base), b"keep").unwrap();
+            let source = directory.join("partial");
+            fs::write(&source, b"new").unwrap();
+            assert_eq!(
+                publish_exclusive(&source, &directory, base).unwrap(),
+                expected
+            );
+            assert_eq!(fs::read(directory.join(base)).unwrap(), b"keep");
+            fs::remove_file(directory.join(base)).unwrap();
+            fs::remove_file(directory.join(expected)).unwrap();
+        }
+        let absent = directory.join("missing-downloads");
+        assert!(preflight(&FakeSpace(FREE_FLOOR + 4), &directory, &absent, 4, 0).is_ok());
+        assert!(preflight(&FakeSpace(FREE_FLOOR + 3), &directory, &absent, 4, 0).is_err());
+        assert!(
+            !absent.exists(),
+            "preflight must not create Downloads before consent"
+        );
+        assert_eq!(safe_name(""), "bluetooth-file");
+        fs::remove_dir(directory).unwrap();
+    }
+    #[test]
     fn cross_filesystem_publication_primitive_and_ram_admission_refusal() {
         let disk = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target");
         fs::create_dir_all(&disk).unwrap();
@@ -323,19 +373,28 @@ mod tests {
             fs::write(destination.join("test.txt"), b"keep").unwrap();
             assert_eq!(
                 incoming.publish(&FakeSpace(u64::MAX)).unwrap(),
-                "test.txt (1)"
+                "test (1).txt"
             );
             assert_eq!(fs::read(destination.join("test.txt")).unwrap(), b"keep");
-            assert_eq!(fs::read(destination.join("test.txt (1)")).unwrap(), b"test");
+            assert_eq!(fs::read(destination.join("test (1).txt")).unwrap(), b"test");
             fs::remove_file(destination.join("test.txt")).unwrap();
-            fs::remove_file(destination.join("test.txt (1)")).unwrap();
+            fs::remove_file(destination.join("test (1).txt")).unwrap();
         }
         drop(incoming);
         fs::remove_dir(destination).unwrap();
     }
     #[test]
     fn names_have_no_paths_controls_or_dotdot() {
-        for input in ["../../a", "a\\b", ".", "..", "\u{202e}evil", "a\nb", ""] {
+        for input in [
+            "../../a",
+            "a\\b",
+            ".",
+            "..",
+            "\u{202e}evil",
+            "\u{200e}a\u{200f}b\u{061c}",
+            "a\nb",
+            "",
+        ] {
             let n = safe_name(input);
             assert!(
                 !n.contains('/')
@@ -344,6 +403,7 @@ mod tests {
                     && !n.chars().any(char::is_control)
             );
             assert!(!n.is_empty());
+            assert!(!n.chars().any(|c| matches!(c, '\u{200e}'|'\u{200f}'|'\u{061c}'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}')));
         }
     }
 }

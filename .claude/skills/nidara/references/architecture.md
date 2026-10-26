@@ -1052,10 +1052,11 @@ those names. Visibility we enabled has a 180-second BlueZ timer refreshed only w
 held; preexisting external visibility is preserved. One renderer handles typed
 pairing prompts, display entry progress and incoming-file consent. A trusted/paired
 AuthorizeService never bypasses consent for EACH file. Incoming consent expires at
-45 seconds; no UI, loss or refusal rejects it. Passcodes stay out of snapshots/logs.
+45 seconds; no UI, loss or refusal rejects it. Remote consent labels strip controls
+and bidi marks and retain the address alongside. Passcodes stay out of snapshots/logs.
 
 The agreed disk floor is 256 MiB on staging and Downloads. Known size plus outstanding
-reservations must fit; unknown-size reception is monitored and cancelled below the
+reservations must fit before prompting and again after consent; unknown-size reception is monitored and cancelled below the
 floor. Staging is private within obexd Root, which MUST be persistent. statfs rejects
 tmpfs/ramfs (and hugetlbfs); never stage incoming data in RAM or silently use /tmp.
 Default upstream Root is XDG_CACHE_HOME/obexd. Another deployment precondition is

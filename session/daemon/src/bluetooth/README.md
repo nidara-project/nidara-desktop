@@ -24,7 +24,8 @@ A failed provider read is retried, not treated as a successful empty inventory.
 Snapshots include all adapters and device paths, parent adapter, address/type,
 name/alias/icon, paired/trusted/blocked/connected, servicesResolved, UUIDs, optional
 RSSI and optional Battery1 percentage. Missing battery is null, not zero. Radio,
-alias and device writes refresh actual state before returning. No PIN/passkey is
+alias and device writes refresh actual state before returning. Consent device labels strip control and bidi characters, retain the device address
+alongside them, and use the same bounded sanitization as filenames. No PIN/passkey is
 in snapshots, logs, command arguments or files. Audio profile selection is outside
 this service; Device1.Connect is the generic BlueZ operation.
 
@@ -132,7 +133,9 @@ or an auto-accept daemon can bypass this backend's consent policy; registration 
 these preconditions are part of the deployment, not proof about an arbitrary daemon.
 
 The free-space floor is **256 MiB**, checked on both staging and destination volumes.
-A known size plus the floor and outstanding known reservations must fit, using
+A known size is checked before prompting, without creating Downloads or staging;
+capacity is checked again after consent. Size plus the floor and outstanding known
+reservations must fit, using
 checked arithmetic. Unknown-size transfers are allowed, but the monitor checks both
 volumes every 250 ms and calls Transfer1.Cancel if below the floor or capacity cannot
 be read. Cancel failure remains `cancel-pending` with an explicit incomplete error
@@ -142,7 +145,7 @@ consume space independently; the service does not claim a filesystem quota.
 On complete, same-filesystem publication uses renameat2(RENAME_NOREPLACE). A different
 filesystem uses a bounded copy to private staging in Downloads, checking space per
 chunk, then the same exclusive publication. Sanitization removes separators, '..',
-control/bidi characters and excessive byte length. Empty names become `archivo`.
+control/bidi characters and excessive byte length. Empty names become `bluetooth-file`; collision suffixes precede the last extension.
 Existing files and symlinks cause a suffix, including concurrent collisions; they
 are never overwritten. XDG_DOWNLOAD_DIR comes from GLib's user directory setting;
 if absent, the fallback is `~/Downloads`, never a hardcoded localized name.

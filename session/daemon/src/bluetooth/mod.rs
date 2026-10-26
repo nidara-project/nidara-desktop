@@ -585,6 +585,11 @@ impl Bluetooth {
                 {
                     device = path.to_string();
                     let alias = text(p, "Alias");
+                    let alias = if alias.is_empty() {
+                        text(p, "Name")
+                    } else {
+                        alias
+                    };
                     if !alias.is_empty() {
                         label = alias;
                     }
@@ -592,19 +597,38 @@ impl Bluetooth {
                 }
             }
         }
+        let preflight = if let Some(size) = size {
+            let transfers = self.transfers.lock().await;
+            let reserved = transfers
+                .values()
+                .filter(|t| t.active() && t.incoming.is_some())
+                .try_fold(0u64, |sum, t| sum.checked_add(t.size.unwrap_or(0)))
+                .ok_or_else(|| Error::NoSpace("incoming reservations exceed capacity".into()))?;
+            files::preflight(
+                self.space.as_ref(),
+                &PathBuf::from(text(&session, "Root")),
+                &files::downloads(),
+                size,
+                reserved,
+            )
+        } else {
+            Ok(())
+        };
         let epoch = self.epoch.load(Ordering::SeqCst);
-        self.broker.ask(bus::OBEX,path,"incoming-file",json!({"kind":"incoming-file","device":device,"deviceName":label,"address":address,"name":name,"size":size}),Duration::from_secs(45)).await?;
-        if self.epoch.load(Ordering::SeqCst) != epoch {
-            return Err(Error::Conflict("provider changed during consent".into()));
-        }
-        let now = peer.props(path, bus::TRANSFER).await?;
-        if text(&now, "Session") != session_path.as_str()
-            || files::safe_name(&text(&now, "Name")) != name
-            || number(&now, "Size") != size
-        {
-            return Err(Error::Conflict(
-                "transfer metadata changed during consent".into(),
-            ));
+        if preflight.is_ok() {
+            self.broker.ask(bus::OBEX,path,"incoming-file",json!({"kind":"incoming-file","device":device,"deviceName":files::safe_name(&label),"address":address,"name":name,"size":size}),Duration::from_secs(45)).await?;
+            if self.epoch.load(Ordering::SeqCst) != epoch {
+                return Err(Error::Conflict("provider changed during consent".into()));
+            }
+            let now = peer.props(path, bus::TRANSFER).await?;
+            if text(&now, "Session") != session_path.as_str()
+                || files::safe_name(&text(&now, "Name")) != name
+                || number(&now, "Size") != size
+            {
+                return Err(Error::Conflict(
+                    "transfer metadata changed during consent".into(),
+                ));
+            }
         }
         let mut transfers = self.transfers.lock().await;
         let reserved = transfers
@@ -612,14 +636,16 @@ impl Bluetooth {
             .filter(|t| t.active() && t.incoming.is_some())
             .try_fold(0u64, |sum, t| sum.checked_add(t.size.unwrap_or(0)))
             .ok_or_else(|| Error::NoSpace("incoming reservations exceed capacity".into()))?;
-        let prepared = files::Incoming::prepare(
-            &PathBuf::from(text(&session, "Root")),
-            &files::downloads(),
-            &name,
-            size,
-            self.space.as_ref(),
-            reserved,
-        );
+        let prepared = preflight.and_then(|_| {
+            files::Incoming::prepare(
+                &PathBuf::from(text(&session, "Root")),
+                &files::downloads(),
+                &name,
+                size,
+                self.space.as_ref(),
+                reserved,
+            )
+        });
         let incoming = match prepared {
             Ok(file) => Arc::new(file),
             Err(error) => {
