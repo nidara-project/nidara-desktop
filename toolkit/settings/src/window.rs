@@ -110,20 +110,22 @@ impl Shell {
         tree.set_sidebar_toggle(toggle_button)?;
         let navigation =
             tree.control_capsule(labels.sidebar, Point::default(), header.navigation)?;
+        // Vector icons from the interface theme, as the toggle's: a font character's shape,
+        // weight and centring were the font's.
         let navigation_buttons = [
-            tree.capsule_button(navigation, exports.text("settings.nav.back")?, "‹", false)?,
+            tree.capsule_button(navigation, exports.text("settings.nav.back")?, " ", false)?,
             tree.capsule_button(
                 navigation,
                 exports.text("settings.nav.forward")?,
-                "›",
+                " ",
                 false,
             )?,
         ];
-        for button in navigation_buttons {
-            let mut glyph = styles.text.clone();
-            glyph.size = header.nav_icon;
-            glyph.line_height = 1.;
-            tree.set_button_text_style(button, Some(glyph))?;
+        for (button, icon) in navigation_buttons
+            .into_iter()
+            .zip(["nd-pan-start", "nd-pan-end"])
+        {
+            tree.set_button_icon(button, icon, header.nav_icon)?;
             tree.set_disabled(button, true)?;
         }
         let placeholder = exports.text("settings.search.placeholder")?;

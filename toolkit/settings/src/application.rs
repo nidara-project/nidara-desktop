@@ -797,6 +797,7 @@ impl Application for App {
             self.view.notices(&mut self.client, &notices)?;
         }
         self.dependencies()?;
+        self.view.shell.tree.tick_scrollbars(Instant::now());
         self.sync(window)?;
         if let Some(native) = &self.native {
             native.bridge.check()?;
