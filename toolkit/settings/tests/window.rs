@@ -42,6 +42,7 @@ fn fixture() -> (Exports, Styles, Shell) {
         },
         metrics,
         "appearance",
+        Arc::new(FontSet::discover_required().unwrap()),
     )
     .unwrap();
     (exports, styles, shell)
@@ -130,5 +131,143 @@ fn both_control_sides_fit_docked_and_narrow_layouts_with_and_without_layers() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn header_has_icon_semantics_fixed_geometry_and_stays_clean_when_idle() {
+    let (_, styles, mut shell) = fixture();
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    let size = Size {
+        width: 1050.,
+        height: 600.,
+    };
+    for side in [ControlsSide::Right, ControlsSide::Left] {
+        shell.layout_controls(size, side, true, &mut text).unwrap();
+        let toggle = shell
+            .tree
+            .capsule_ids()
+            .find(|id| shell.tree.node(*id).unwrap().name() == "Toggle sidebar")
+            .unwrap();
+        let toggle_button = shell.tree.node(toggle).unwrap().children()[0];
+        let icon = shell.tree.node(toggle_button).unwrap();
+        assert_eq!(icon.name(), "Toggle sidebar");
+        assert!(
+            icon.text_layout().is_none(),
+            "accessible label became visible text"
+        );
+        let r = shell.tree.node(toggle).unwrap().bounds();
+        assert_eq!((r.y, r.width, r.height), (8., 32., 32.));
+        let nav = shell
+            .tree
+            .capsule_ids()
+            .find(|id| shell.tree.node(*id).unwrap().name() == "Pages")
+            .unwrap();
+        let r = shell.tree.node(nav).unwrap().bounds();
+        assert_eq!((r.y, r.width, r.height), (8., 60., 32.));
+        let title = shell.tree.node(shell.titlebar).unwrap().bounds();
+        assert_eq!(title.height, 48.);
+        let search = shell.tree.node(shell.search).unwrap().bounds();
+        assert_eq!((search.y, search.width, search.height), (8., 200., 32.));
+        let controls = shell.tree.node(shell.controls).unwrap().bounds();
+        assert!(search.x + search.width + 12. <= controls.x || side == ControlsSide::Left);
+        shell.tree.acknowledge();
+        shell.layout_controls(size, side, true, &mut text).unwrap();
+        let invalid = shell.tree.invalidation();
+        assert!(
+            !invalid.layout && !invalid.paint && !invalid.semantics,
+            "unchanged header layout requested idle work: {invalid:?}"
+        );
+    }
+    assert_eq!(styles.header.titlebar.height, 68.);
+    assert!(!styles.header.titlebar.opaque);
+    assert!(styles.header.titlebar.blur.passes > 0);
+}
+
+#[test]
+fn header_preserves_content_padding_in_scroll_extent() {
+    let (_, _, mut shell) = fixture();
+    let group = shell.tree.group(shell.content, "Start of page").unwrap();
+    let first = group;
+    let mut text = ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap();
+    shell
+        .layout_controls(
+            Size {
+                width: 1050.,
+                height: 600.,
+            },
+            ControlsSide::Right,
+            true,
+            &mut text,
+        )
+        .unwrap();
+    assert_eq!(shell.tree.node(first).unwrap().bounds().y, 64.);
+}
+
+#[test]
+fn header_search_selection_is_excluded_from_adaptive_ink() {
+    let (exports, _, mut shell) = fixture();
+    shell.tree.set_active(true);
+    shell.tree.focus(shell.search).unwrap();
+    shell
+        .tree
+        .set_search_text(shell.search, "Color 日本")
+        .unwrap();
+    shell
+        .tree
+        .search_request(
+            shell.tree.target(shell.search),
+            nk_a11y::Request::SetSelection(shell.search, 0.."Color 日本".len()),
+        )
+        .unwrap();
+    shell
+        .layout_controls(
+            Size {
+                width: 1050.,
+                height: 600.,
+            },
+            ControlsSide::Right,
+            true,
+            &mut ParleyBackend::new(Arc::new(FontSet::discover_required().unwrap())).unwrap(),
+        )
+        .unwrap();
+    let panel = shell
+        .tree
+        .capsule_ids()
+        .find(|id| {
+            shell
+                .tree
+                .node(*id)
+                .unwrap()
+                .children()
+                .contains(&shell.search)
+        })
+        .unwrap();
+    let pane = shell.tree.node(panel).unwrap().bounds();
+    let style = nk_settings::material::control::ControlRecipe::load(&exports.glass, true, false)
+        .unwrap()
+        .at(32.)
+        .unwrap();
+    let material = shell.tree.capsule_material(panel, &style, false).unwrap();
+    material.validate().unwrap();
+    assert!(material.coverage.len() > 1);
+    let semantics = shell.tree.semantics();
+    let geometry = semantics.nodes[&shell.search]
+        .text
+        .as_ref()
+        .unwrap()
+        .geometry
+        .as_ref()
+        .unwrap();
+    for span in &geometry.spans {
+        let x = span.bounds.x + span.bounds.width / 2. - f64::from(pane.x);
+        let y = span.bounds.y + span.bounds.height / 2. - f64::from(pane.y);
+        assert!(
+            !material.coverage.iter().any(|r| x >= r.bounds.x
+                && x < r.bounds.x + r.bounds.width
+                && y >= r.bounds.y
+                && y < r.bounds.y + r.bounds.height),
+            "selection was recoloured as adaptive ink"
+        );
     }
 }

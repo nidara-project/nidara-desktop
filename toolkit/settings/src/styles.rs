@@ -16,6 +16,7 @@ use serde_json::Value as Json;
 pub struct Styles {
     /// Window capsule corner inset from components.json, independent of row spacing.
     pub controls_inset: f32,
+    pub header: crate::header::Style,
     pub wallpaper: crate::wallpaper::Look,
     pub text_scale: f64,
     pub palette: Palette,
@@ -80,7 +81,7 @@ impl Styles {
             content: number(&layout["content"])?,
             form_width: number(&c["widths"]["form"]["preferred"])?,
             content_floor: number(&c["widths"]["form"]["floor"])?,
-            titlebar: scss(statics, "space-10")? + scss(statics, "space-2")?,
+            titlebar: number(&c["header"]["band"])?,
             padding: number(&c["common"]["padding"])?,
             gap: number(&c["common"]["gap"])?,
             row: number(&statics["ts"]["ROW_HEIGHT"]["single"])?,
@@ -221,6 +222,7 @@ impl Styles {
         let wallpaper = crate::wallpaper::Look::load(exports, &tokens)?;
         Ok(Self {
             controls_inset: number(&c["capsule"]["windowInset"])?,
+            header: crate::header::Style::load(&c["header"], &exports.glass, appearance)?,
             wallpaper,
             text_scale: appearance.text_scale,
             palette,

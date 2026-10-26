@@ -42,7 +42,7 @@ impl Tree {
                 ButtonShape::Rounded => self.metrics.radius,
                 ButtonShape::Capsule => bounds.height / 2.,
             },
-            Kind::Switch { .. } => bounds.height / 2.,
+            Kind::Switch { .. } | Kind::SearchInput => bounds.height / 2.,
             Kind::Choice { .. } => return self.choice_shape(id),
             Kind::Slider { .. } | Kind::Spin { .. } => return self.range_shape(id),
             _ => 0.,
@@ -347,40 +347,60 @@ impl Tree {
                 (Kind::Footer, true) => self.row_text()?.footer,
                 _ => ink,
             };
-            let padding = if matches!(
-                n.kind,
-                Kind::Button | Kind::Dropdown { .. } | Kind::Page { .. } | Kind::TitleBar
-            ) {
-                if n.kind == Kind::TitleBar {
-                    m.padding
-                        + self.title_leading_controls()
-                        + n.children
-                            .iter()
-                            .filter(|id| {
-                                !self.is_hidden(**id)
-                                    && !self.window_buttons.is_some_and(|ids| ids.contains(id))
-                            })
-                            .map(|id| self.nodes[id].measured.width + m.gap)
-                            .sum::<f32>()
-                } else if self.capsule_for_button(id).is_some() {
-                    (r.width - layout.measured_size().width) / 2.
+            if n.kind == Kind::TitleBar
+                && let Some(text_box) = &self.title_text_box
+            {
+                let box_ = Rect {
+                    x: r.x + text_box.bounds.x,
+                    y: r.y + text_box.bounds.y,
+                    ..text_box.bounds
+                };
+                canvas.clip(box_);
+                canvas.layout(
+                    layout,
+                    (
+                        box_.x,
+                        box_.y + (box_.height - layout.measured_size().height) / 2.,
+                    ),
+                    ink,
+                )?;
+                canvas.pop_clip();
+            } else {
+                let padding = if matches!(
+                    n.kind,
+                    Kind::Button | Kind::Dropdown { .. } | Kind::Page { .. } | Kind::TitleBar
+                ) {
+                    if n.kind == Kind::TitleBar {
+                        m.padding
+                            + self.title_leading_controls()
+                            + n.children
+                                .iter()
+                                .filter(|id| {
+                                    !self.is_hidden(**id)
+                                        && !self.window_buttons.is_some_and(|ids| ids.contains(id))
+                                })
+                                .map(|id| self.nodes[id].measured.width + m.gap)
+                                .sum::<f32>()
+                    } else if self.capsule_for_button(id).is_some() {
+                        (r.width - layout.measured_size().width) / 2.
+                    } else {
+                        m.padding
+                    }
                 } else {
-                    m.padding
-                }
-            } else {
-                0.
-            };
-            // A segment centres its text; everything else starts at its padding.
-            let x = if matches!(n.kind, Kind::Choice { .. }) {
-                r.x + (r.width - layout.measured_size().width) / 2.
-            } else {
-                r.x + padding
-            };
-            canvas.layout(
-                layout,
-                (x, r.y + (r.height - layout.measured_size().height) / 2.),
-                self.choice_ink(id, ink),
-            )?;
+                    0.
+                };
+                // A segment centres its text; everything else starts at its padding.
+                let x = if matches!(n.kind, Kind::Choice { .. }) {
+                    r.x + (r.width - layout.measured_size().width) / 2.
+                } else {
+                    r.x + padding
+                };
+                canvas.layout(
+                    layout,
+                    (x, r.y + (r.height - layout.measured_size().height) / 2.),
+                    self.choice_ink(id, ink),
+                )?;
+            }
         }
         if self.focus_visible && self.focused == Some(id) {
             let (highlight, radius) = if matches!(n.kind, Kind::Choice { .. }) {
