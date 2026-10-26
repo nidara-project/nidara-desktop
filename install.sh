@@ -747,6 +747,9 @@ sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/
 sudo mkdir -p /usr/lib/systemd/user
 sudo cp "$REPO_DIR/bin/nidara.service" /usr/lib/systemd/user/nidara.service
 sudo cp "$REPO_DIR/bin/nidara-sessiond.service" /usr/lib/systemd/user/nidara-sessiond.service
+# Only OPP asks our agent before receiving EACH file; FTP/PCSuite bypass it.
+sudo install -Dm644 "$REPO_DIR/config/bluetooth/obex-opp-only.conf" \
+    /usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf
 
 # Wayland session entry (shared file: config/wayland-sessions/, also shipped by
 # the nidara pacman package — keep ONE source, don't reintroduce a heredoc here)

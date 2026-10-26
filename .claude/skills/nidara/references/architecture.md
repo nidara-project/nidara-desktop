@@ -1035,6 +1035,51 @@ on private buses for every mutation, and run through the existing sessiond test 
 The wire contract and isolated test procedure are in
 `session/daemon/src/network/README.md`. TypeScript services remain unchanged.
 
+## The Rust session Bluetooth service
+
+`session/daemon/src/bluetooth/` serves `org.nidara.Bluetooth1` only with an explicit
+`--bluetooth`; never alongside the daily TS agent. `--bluetooth-read-only` registers
+no agent and makes no provider writes or activations. BlueZ uses the system bus,
+obexd the session bus; callbacks pin their distinct unique owners. Epoch/revision
+snapshots expose all adapters/devices, optional Battery1 and transfer progress.
+Sensor inventory updates are coalesced to four per second; user operations and
+unicast consent bypass the limiter. Inventory, provider control and transfer monitoring run independently,
+so stalled BlueZ discovery does not stop OBEX disk checks. Completed OBEX signals are retained even if
+the transfer object disappears before the next snapshot. Audio profiles come later.
+
+Discovery and visibility leases belong to frontend unique names and disappear with
+those names. Visibility we enabled has a 180-second BlueZ timer refreshed only while
+held; preexisting external visibility is preserved. One renderer handles typed
+pairing prompts, display entry progress and incoming-file consent. A trusted/paired
+AuthorizeService never bypasses consent for EACH file. Incoming consent expires at
+45 seconds; no UI, loss or refusal rejects it. Remote consent labels strip controls
+and bidi marks and retain the address alongside. Passcodes stay out of snapshots/logs.
+
+The agreed disk floor is 256 MiB on staging and Downloads. Known size plus outstanding
+reservations must fit before prompting and again after consent; unknown-size reception is monitored and cancelled below the
+floor. Staging is private within obexd Root, which MUST be persistent. statfs rejects
+tmpfs/ramfs (and hugetlbfs); never stage incoming data in RAM or silently use /tmp.
+Default upstream Root is XDG_CACHE_HOME/obexd. Another deployment precondition is
+obexd WITHOUT --auto-accept and with OPP as its only incoming file server. FTP and
+PCSuite bypass per-file consent. Agent1 rejects FTP when asked, but BlueZ can skip
+the agent for Trusted devices; daemon deployment must enforce the plugin policy. The desktop package depends on
+bluez-obex and installs `/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf`,
+resetting ExecStart to `/usr/lib/bluetooth/obexd -p bluetooth,filesystem,opp`.
+Removing that allowlist breaks the consent guarantee. The Arch D-Bus descriptor
+names the systemd unit alias, but direct Exec fallback or user overrides do not
+inherit this guarantee; unmanaged launches must enforce the same policy explicitly.
+Snapshot reports observed local unsupported file-service UUIDs as a warning;
+absence means unverified, never proof of safe obexd flags. Do not change an
+installed service to satisfy a test. Root restrictions also mean an arbitrary path
+outside it is not a safe fallback. See the module README for the full wire contract.
+
+Publication into XDG_DOWNLOAD_DIR uses no-replace rename, with private destination
+staging for cross-filesystem copies, safe names and collision suffixes. Snapshot
+announces received plus publishedName only after that succeeds; the future shell
+owns notifications. Partial cleanup touches only tracked files; crash leftovers
+are never promoted without consent. Validation uses private fake BlueZ/obexd and
+fake disk capacity, through the existing sessiond test job and isolated nested Hyalo.
+
 ## Boot sequence
 
 1. Display manager (greetd by default) runs `/usr/bin/nidara` via `/usr/share/wayland-sessions/nidara.desktop`.
