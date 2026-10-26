@@ -112,6 +112,7 @@ impl Env {
             .env("PATH", std::env::var("PATH").unwrap_or_default())
             .env("DBUS_SESSION_BUS_ADDRESS", &self.address)
             .env("GSETTINGS_BACKEND", "keyfile")
+            .env("GIO_USE_VFS", "local")
             .env("GSETTINGS_SCHEMA_DIR", self.dir.join("schemas"))
             .env("HOME", &self.dir)
             .env("XDG_CONFIG_HOME", self.dir.join("config"))
@@ -387,4 +388,312 @@ async fn a_key_its_schema_lacks_is_unavailable_not_fatal() {
             .unwrap_err();
     assert_eq!(error_name(err), "org.nidara.Config1.Error.Invalid");
     assert!(env.daemon.as_mut().unwrap().try_wait().unwrap().is_none());
+}
+
+/// Protocol peer, not an implementation of the effects: records requests and can refuse
+/// them. Real Hyalo + awww are checked separately in the nested session.
+struct HyaloPeer {
+    path: PathBuf,
+    requests: std::sync::mpsc::Receiver<serde_json::Value>,
+    pending: std::sync::Mutex<Vec<serde_json::Value>>,
+    refuse: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    events: std::sync::mpsc::Receiver<std::os::unix::net::UnixStream>,
+    thread: Option<std::thread::JoinHandle<()>>,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+impl HyaloPeer {
+    fn new(path: PathBuf) -> Self {
+        use std::io::{BufRead, Write};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let (tx, requests) = std::sync::mpsc::channel();
+        let (events_tx, events) = std::sync::mpsc::channel();
+        let refuse = Arc::new(AtomicBool::new(false));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (r, s) = (refuse.clone(), stop.clone());
+        let thread = std::thread::spawn(move || {
+            while !s.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(2)))
+                            .unwrap();
+                        let mut line = String::new();
+                        std::io::BufReader::new(stream.try_clone().unwrap())
+                            .read_line(&mut line)
+                            .unwrap();
+                        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+                        if value["request"] == "event_stream" {
+                            let _ = events_tx.send(stream);
+                            continue;
+                        }
+                        let reply = if r.load(Ordering::Relaxed) {
+                            "{\"error\":\"injected refusal\"}\n"
+                        } else {
+                            "{\"ok\":{\"kind\":\"handled\"}}\n"
+                        };
+                        let _ = stream.write_all(reply.as_bytes());
+                        let _ = tx.send(value);
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(5))
+                    }
+                    Err(e) => panic!("peer: {e}"),
+                }
+            }
+        });
+        Self {
+            path,
+            requests,
+            pending: std::sync::Mutex::new(Vec::new()),
+            refuse,
+            events,
+            thread: Some(thread),
+            stop,
+        }
+    }
+    async fn expect(&self, expected: serde_json::Value) {
+        for _ in 0..700 {
+            let found = {
+                let mut pending = self.pending.lock().unwrap();
+                pending.extend(self.requests.try_iter());
+                pending
+                    .iter()
+                    .position(|value| *value == expected)
+                    .map(|i| pending.remove(i))
+                    .is_some()
+            };
+            if found {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!("follower never sent {expected}");
+    }
+}
+impl Drop for HyaloPeer {
+    fn drop(&mut self) {
+        self.stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.thread.take().unwrap().join().unwrap();
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+async fn eventually(label: &str, test: impl Fn() -> bool) {
+    for _ in 0..700 {
+        if test() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("{label}");
+}
+fn ini(env: &Env, toolkit: &str, key: &str) -> Option<String> {
+    let kf = glib::KeyFile::new();
+    kf.load_from_file(
+        env.dir.join("config").join(toolkit).join("settings.ini"),
+        glib::KeyFileFlags::NONE,
+    )
+    .ok()?;
+    kf.string("Settings", key).ok().map(|s| s.to_string())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn followers_apply_initial_values_changes_retries_and_reconnect() {
+    use serde_json::json;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    let mut env = setup();
+    let peer = HyaloPeer::new(env.dir.join("hyalo"));
+    let bin = env.dir.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let awww = bin.join("awww");
+    std::fs::write(
+        &awww,
+        r#"#!/usr/bin/env python3
+import json, os, sys
+with open(os.path.join(os.environ['HOME'], 'awww-calls'), 'a') as f:
+    f.write(json.dumps(sys.argv[1:]) + '\n')
+if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
+    sys.exit(1)
+"#,
+    )
+    .unwrap();
+    std::fs::set_permissions(&awww, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::create_dir_all(env.dir.join("config/gtk-4.0")).unwrap();
+    std::fs::write(
+        env.dir.join("config/gtk-4.0/settings.ini"),
+        "# user settings\n[Settings]\ngtk-enable-animations=false\n[Other]\ncustom=preserved\n",
+    )
+    .unwrap();
+    env.gsettings_set(
+        "org.gnome.desktop.interface",
+        "cursor-theme",
+        "'TestCursor'",
+    );
+    env.gsettings_set("org.gnome.desktop.interface", "cursor-size", "32");
+    env.gsettings_set("org.nidara.night-light", "enabled", "true");
+    env.gsettings_set("org.nidara.night-light", "temperature", "4300");
+    let image = env.dir.join("an image;literal.png");
+    std::fs::write(&image, b"fixture").unwrap();
+    std::fs::write(
+        env.dir.join("config/nidara/wallpaper"),
+        json!({"path":image,"transition":"fade"}).to_string(),
+    )
+    .unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_nidara-sessiond"));
+    cmd.arg("--config");
+    env.vars(&mut cmd);
+    cmd.env("HYALO_SOCKET", &peer.path)
+        .env("WAYLAND_DISPLAY", "isolated-test")
+        .env(
+            "PATH",
+            format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+        );
+    env.daemon = Some(cmd.spawn().unwrap());
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let cursor = json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":32}}});
+    peer.expect(cursor.clone()).await;
+    peer.expect(json!({"request":"night_light","temperature":4300}))
+        .await;
+    eventually("initial GTK values and preserved keys", || {
+        ini(&env, "gtk-4.0", "gtk-cursor-theme-size").as_deref() == Some("32")
+            && ini(&env, "gtk-4.0", "gtk-enable-animations").as_deref() == Some("false")
+            && ini(&env, "gtk-3.0", "gtk-cursor-theme-name").as_deref() == Some("TestCursor")
+    })
+    .await;
+    let calls = || {
+        std::fs::read_to_string(env.dir.join("awww-calls"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+            .collect::<Vec<_>>()
+    };
+    let expected = json!(["img", image, "--transition-type", "fade"]);
+    eventually("initial wallpaper applied with literal argv", || {
+        calls().contains(&expected)
+    })
+    .await;
+    // Failed effects must retry without needing another Config1 change.
+    peer.refuse
+        .store(true, std::sync::atomic::Ordering::Relaxed);
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.temperature", OwnedValue::from(4700.)),
+    )
+    .await
+    .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":4700}))
+        .await;
+    peer.refuse
+        .store(false, std::sync::atomic::Ordering::Relaxed);
+    peer.expect(json!({"request":"night_light","temperature":4700}))
+        .await;
+    // Another writer, not Apply, must drive both the compositor and the GTK files.
+    env.gsettings_set("org.gnome.desktop.interface", "cursor-size", "48");
+    peer.expect(json!({"request":"settings","patch":{"cursor":{"theme":"TestCursor","size":48}}}))
+        .await;
+    env.gsettings_set(
+        "org.gnome.desktop.interface",
+        "color-scheme",
+        "'prefer-dark'",
+    );
+    eventually("external dark mode reflected in both GTK versions", || {
+        ["gtk-3.0", "gtk-4.0"]
+            .iter()
+            .all(|t| ini(&env, t, "gtk-application-prefer-dark-theme").as_deref() == Some("1"))
+    })
+    .await;
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.enabled", OwnedValue::from(false)),
+    )
+    .await
+    .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":null}))
+        .await;
+    // The clock owns enabled while scheduled; an equal window is always empty.
+    for key in ["nightlight.scheduleFrom", "nightlight.scheduleTo"] {
+        let _: (u64, OwnedValue) = call(
+            &conn,
+            "Apply",
+            &(key, OwnedValue::try_from(Value::from("00:00")).unwrap()),
+        )
+        .await
+        .unwrap();
+    }
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.enabled", OwnedValue::from(true)),
+    )
+    .await
+    .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":4700}))
+        .await;
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.scheduleEnabled", OwnedValue::from(true)),
+    )
+    .await
+    .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":null}))
+        .await;
+    let enabled: HashMap<String, OwnedValue> = call(&conn, "Get", &(vec!["nightlight.enabled"],))
+        .await
+        .unwrap();
+    assert!(
+        !bool::try_from(&enabled["nightlight.enabled"]).unwrap(),
+        "schedule writes its decision back to Config1's home"
+    );
+    // A wallpaper refusal retries the current transition; writing the home externally is heard.
+    std::fs::write(env.dir.join("awww-refuse"), b"1").unwrap();
+    std::fs::write(
+        env.dir.join("config/nidara/wallpaper"),
+        json!({"path":image,"transition":"wipe"}).to_string(),
+    )
+    .unwrap();
+    let expected = json!(["img", image, "--transition-type", "wipe"]);
+    eventually("external wallpaper change attempted", || {
+        calls().contains(&expected)
+    })
+    .await;
+    let before = calls().len();
+    std::fs::remove_file(env.dir.join("awww-refuse")).unwrap();
+    eventually("failed wallpaper retried", || calls().len() > before).await;
+    // Hotplug and a fresh event connection both restate runtime effects.
+    let mut stream = peer.events.recv_timeout(Duration::from_secs(2)).unwrap();
+    stream
+        .write_all(b"{\"event\":\"outputs_changed\",\"outputs\":[]}\n")
+        .unwrap();
+    peer.expect(json!({"request":"night_light","temperature":null}))
+        .await;
+    drop(stream);
+    peer.expect(json!({"request":"night_light","temperature":null}))
+        .await;
+    // A no-op must not rewrite the INI or reapply wallpaper after it has settled.
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let file = env.dir.join("config/gtk-4.0/settings.ini");
+    let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+    let before = calls().len();
+    let _: (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("nightlight.enabled", OwnedValue::from(false)),
+    )
+    .await
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    assert_eq!(
+        std::fs::metadata(file).unwrap().modified().unwrap(),
+        modified
+    );
+    assert_eq!(calls().len(), before);
 }

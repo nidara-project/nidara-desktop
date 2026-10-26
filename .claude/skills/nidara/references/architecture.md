@@ -954,6 +954,37 @@ owner trusted, any other sender gated by `ai.allowConfigWrite`, errors `Denied`/
   backend in a temporary directory: trust gate, canonical answers, errors, a no-op, and a change
   by another writer (`gsettings`, the wallpaper file) announced.
 
+### Config1 followers in the Rust session
+
+After taking the Config name, `config/followers.rs` applies the initial values and follows
+changes from every writer. The GLib thread publishes a complete latest snapshot through a
+Tokio watch channel. Each effect has an independent worker: a blocked wallpaper command does
+not delay night light or Config1. Only successful effects are remembered; failures log once
+per distinct error and retry the latest value after two seconds. Config1's `Apply` answers the
+stored canonical value/revision, not a claim that an asynchronous effect has succeeded.
+
+- **Wallpaper:** `awww img PATH --transition-type TYPE`, as literal arguments, with a five-second
+  deadline and cancellation killing the child. `awww-daemon` belongs to the session runner,
+  not this worker. A compositor event connection and output hotplug restate effects; a quiet
+  settings home is never polled. No Wayland display means no wallpaper client is started.
+- **Cursor:** the interface's `cursor-theme` and `cursor-size` go to Hyalo's `settings` merge
+  patch (`cursor.theme/size`). Size is watched even though Config1 has no size picker yet.
+  Only Hyalo writes its settings TOML. This does not write the user's Xcursor default mirror.
+- **Night light:** enabled/temperature become `night_light` with kelvin or null. The schedule
+  writes `enabled` back to its home at start, on schedule edits, and each minute (local time;
+  overnight intervals wrap, equal endpoints mean off). Manual changes last until the next
+  clock check. Hyalo reconnect restates runtime gamma; it refuses gamma on winit because
+  ramps require hardware. A nested refusal is not physical-gamma acceptance.
+- **GTK apps:** both `$XDG_CONFIG_HOME/gtk-{3,4}.0/settings.ini` get theme, dark preference,
+  icon theme, font and cursor theme/size. KeyFile preserves other groups, keys and comments;
+  atomic replacement happens only when an owned value differs. No portal process is restarted.
+
+Without `--config`, or if another process owns Config, no followers start. The private-bus
+integration in `session/daemon/tests/config.rs` records Hyalo requests and wallpaper argv,
+checks GTK files, external writers, schedule decisions, refusal/retry, reconnect and no-ops.
+The nested runner isolates runtime/config/data/cache/state and closes its children on exit
+(`#956`); always check that the nested compositor and helpers are gone after a bench run.
+
 ## Boot sequence
 
 1. Display manager (greetd by default) runs `/usr/bin/nidara` via `/usr/share/wayland-sessions/nidara.desktop`.
