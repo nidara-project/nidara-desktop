@@ -1982,8 +1982,9 @@ lock.
   session's. The screens still go dark inside the window; Super+L still locks it by hand.
 - ⚠️ Testing the ScreenSaver path: a client that EXITS drops its inhibition (its bus name goes),
   so `dbus-send`/`gdbus call` look like "inhibit does nothing". Hold the connection (a gjs script
-  that sleeps). Do it nested with `dbus-run-session -- nidara-hyalo --winit --session` and
-  `HYALO_CONFIG=/dev/null` (no autostart), never against the live session bus.
+  that sleeps). Not in a window: since 2026-10-26 `--winit` never starts `logind.rs`, so nothing
+  serves the name there. Use `dbus-run-session -- nidara-hyalo --tty --session` on a spare VT
+  with `HYALO_CONFIG=/dev/null` (no autostart), never against the live session bus.
 - IPC: `nidara-hyalo msg idle` (`idle_secs`, `inhibited`, the config). Tested by
   `scripts/ci/hyalo-idle-check.sh` in the smoke (`hyalo-idle-inhibit-probe.c` is the inhibitor).
 
