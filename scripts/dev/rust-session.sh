@@ -6,7 +6,9 @@
 # directory below) and its own services: nidara-sessiond serves Config1 there. Nothing it
 # changes reaches the live session, and nothing of the live session serves it.
 #
-#   scripts/dev/rust-session.sh [COMMAND…]     default: the native Settings
+#   scripts/dev/rust-session.sh [--network] [COMMAND…]   default: native Settings
+# --network is explicit: never use it alongside the daily TS shell agent. A test
+# must also provide a private DBUS_SYSTEM_BUS_ADDRESS, not the host NetworkManager.
 #
 # From a checkout: this checkout's Hyalo, nidara-sessiond, nk-settings and exports when they
 # are built (`cargo build --release` in hyalo/, session/ and toolkit/; `node
@@ -32,6 +34,13 @@ mkdir -p "$rt"; chmod 700 "$rt"
 # On disk, not in the runtime directory (RAM): the session's settings outlive a run.
 state="${XDG_DATA_HOME:-$HOME/.local/share}/nidara/rust-session"
 mkdir -p "$state/config/nidara"
+network_flag=""
+if [ "${1:-}" = --network ]; then
+    # Explicit opt-in only. Never enable this in the daily TS session: its NM agent
+    # is already registered. Tests pass a PRIVATE DBUS_SYSTEM_BUS_ADDRESS as well.
+    network_flag=" --network"
+    shift
+fi
 parent="$WAYLAND_DISPLAY"; case "$parent" in /*) ;; *) parent="$XDG_RUNTIME_DIR/$parent" ;; esac
 
 if [ $# -eq 0 ]; then
@@ -51,12 +60,12 @@ children="$rt/children"
 : >"$children"
 q() { printf '%q' "$1"; }
 bg() { echo "$* & echo \$! >>$(q "$children");"; }
-cmd="$(bg "$(q "$sessiond") --config") $(bg "$(q "$registryd") --use-gnome-session")"
+cmd="$(bg "$(q "$sessiond") --config$network_flag") $(bg "$(q "$registryd") --use-gnome-session")"
 awww=$(command -v awww-daemon) && cmd+=" $(bg "$(q "$awww")")"
 cmd+=" echo \$\$ >>$(q "$children"); exec $app"
 
 echo "Hyalo:     $hyalo"
-echo "services:  $sessiond --config${awww:+, $awww}"
+echo "services:  $sessiond --config$network_flag${awww:+, $awww}"
 echo "inside:    $app"
 echo "settings:  $state"
 echo "msg:       HYALO_SOCKET=$rt/nidara-hyalo.wayland-1.sock nidara-hyalo msg …"

@@ -3,6 +3,7 @@
 // policy; only the sender's positive expire_timeout belongs here (#819).
 mod config;
 mod model;
+mod network;
 mod store;
 
 use model::{CAPABILITIES, MAX_ID, Notification, actions, allocate, now, scalar_hints, truthy};
@@ -279,6 +280,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TypeScript shell serves it, and the daemon leaves it alone.
     if std::env::args().any(|a| a == "--config") {
         config::serve(&conn).await?;
+    }
+    // Opt-in only; the normal TS shell already registers its own NM secret agent.
+    let read_only = std::env::args().any(|a| a == "--network-read-only");
+    if read_only || std::env::args().any(|a| a == "--network") {
+        network::serve(&conn, read_only).await?;
     }
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }
