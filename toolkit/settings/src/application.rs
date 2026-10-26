@@ -942,6 +942,12 @@ pub fn run(activation: Option<String>) -> Result<()> {
         _ => {}
     }
     let exports = Exports::load(&Exports::root())?;
+    {
+        let catalogue = Exports::load(&Exports::root())?;
+        nk_settings::session::set_translator(Box::new(move |key| {
+            catalogue.text(key).ok().map(str::to_owned)
+        }));
+    }
     let size = open_size(&exports)?;
     let portal = Portal::watch(&bus)?;
     let mut view = View::new(exports, portal.read()?)?;

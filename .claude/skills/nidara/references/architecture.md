@@ -869,7 +869,8 @@ interval is how long a dismissal can lag; it is not a polling loop for state.
 ## The session notification daemon
 
 `session/` is a Cargo workspace independent of `hyalo/`, with one crate in
-`session/daemon`, binary `nidara-sessiond` (Rust, zbus + Tokio, no GTK/GLib).
+`session/daemon`, binary `nidara-sessiond` (Rust, zbus + Tokio; GLib only for GSettings, on a
+thread of its own — `Config1` below).
 It owns `org.freedesktop.Notifications` at `/org/freedesktop/Notifications` for
 the whole session. Killing/reloading `nidara-shell` leaves the owner, history,
 sender timers and incoming notifications alive. NM/BlueZ agents and SNI remain
@@ -925,6 +926,33 @@ private name before starting the shell. Neither unit has `[Install]`: the generi
 graphical target also belongs to other desktops. There is deliberately **no D-Bus
 activation file** for the public notification name. Shell reloads restart only
 `nidara.service`; logout stops both. See dev-workflow.md for builds and integration.
+
+### `Config1` in the session daemon (`--config`, the Rust session)
+
+`nidara-sessiond --config` serves `org.nidara.Config1` (`session/daemon/src/config/`) with the
+interface, members and rules of the TypeScript shell's `ConfigService.ts`: `Snapshot`/`Apply`/
+`Updated` with epoch and revision, `Describe`/`Get`/`Set`/`Changed`, the native Settings'
+owner trusted, any other sender gated by `ai.allowConfigWrite`, errors `Denied`/`Invalid`/
+`Failed`. Without the flag it serves notifications only, and with it a name already owned
+(the TS shell's, in its session) is left alone — the daemon keeps running.
+
+- **The keys are a table** (`registry.rs`): type, enum (re-read at every `Describe`), bounds,
+  validation and canonical value, its home, what announces it, how to draw it. Today Appearance's
+  (D1 [A2]) plus `accessibility.reduceTransparency` and the read-only `ai.allowConfigWrite`.
+- **Homes, not effects.** Each key reads and writes where the desktop already keeps it —
+  GSettings (`org.gnome.desktop.*`, `org.nidara.*`), the wallpaper's JSON file — and is announced
+  from that home, so a change by ANY writer (`gsettings`, a script, the TS shell) is heard.
+  Applying a change (the wallpaper drawn, the screen warmed, the cursor in Hyalo) is the job of
+  what follows the key, not of this table.
+- **GLib on its own thread** (`store.rs`): `gio::Settings` is not `Send`. The D-Bus side calls
+  into it (`Handle::call`), and the thread pushes every change BEFORE answering the call that
+  caused it, so `Apply` announces its own change and answers the revision that includes it.
+- **No strings.** `ui` carries i18n keys (`ui.i18n`, an option's `i18n`); the native Settings
+  fills `title`/`subtitle`/`label` from its own catalogue when a server leaves them out
+  (`session::set_translator`, D4). A server that sends labels (the TS one) is left as it is.
+- `session/daemon/tests/config.rs` runs it on a private bus with GSettings on the keyfile
+  backend in a temporary directory: trust gate, canonical answers, errors, a no-op, and a change
+  by another writer (`gsettings`, the wallpaper file) announced.
 
 ## Boot sequence
 

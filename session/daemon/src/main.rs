@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The server outlives shell reloads. DnD and the user's banner timeout remain UI
 // policy; only the sender's positive expire_timeout belongs here (#819).
+mod config;
 mod model;
 mod store;
 
@@ -274,6 +275,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
     }
     eprintln!("[notifd] serving {PUBLIC_IFACE} and org.nidara.Session");
+    // The settings service, where this session asks for it (the Rust session): elsewhere the
+    // TypeScript shell serves it, and the daemon leaves it alone.
+    if std::env::args().any(|a| a == "--config") {
+        config::serve(&conn).await?;
+    }
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }
     // systemd's SIGTERM must not lose the last 100 ms of a burst.

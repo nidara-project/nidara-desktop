@@ -63,7 +63,9 @@ impl Appearance {
         };
         let dark = match u32::try_from(get(NAMESPACES[0], "color-scheme")?) {
             Ok(1) => true,
-            Ok(2) => false,
+            // 0 is "no preference" (a fresh system: color-scheme 'default'): light, as the
+            // registry reads it (`appearance.darkMode` is true only for prefer-dark).
+            Ok(0 | 2) => false,
             v => return Err(format!("color-scheme {v:?}: neither dark nor light")),
         };
         let reduced_motion = u32::try_from(get(NAMESPACES[0], "reduced-motion")?)
@@ -204,8 +206,10 @@ mod tests {
     }
 
     #[test]
-    fn no_preference_is_an_error_not_a_default() {
-        assert!(Appearance::from_portal(&portal(0)).is_err());
+    fn no_preference_is_light_and_an_unknown_scheme_an_error() {
+        // 0 is a value the spec defines ("no preference"), not a missing one: light.
+        assert!(!Appearance::from_portal(&portal(0)).unwrap().dark);
+        assert!(Appearance::from_portal(&portal(3)).is_err());
         for (ns, key) in [
             (NAMESPACES[1], "window-background"),
             (NAMESPACES[2], "font-name"),
