@@ -688,7 +688,11 @@ impl App {
             return self.view.show_results(&mut self.client, true);
         }
         if page == "appearance" {
-            if self.view.results.is_some() || self.view.page.is_none() {
+            // Before Config1's snapshot there is nothing to draw yet; the first mount comes
+            // with it, and the page selected here is the one it shows.
+            if (self.view.results.is_some() || self.view.page.is_none())
+                && self.client.session().available()
+            {
                 self.view.mount(&mut self.client)?;
             }
             return self.view.shell.selected(&self.view.exports, &page);
