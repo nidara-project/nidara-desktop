@@ -144,7 +144,9 @@ are removed. A partial erasure returns Incomplete; reconciliation finishes forge
 without recreating an unwanted backup. There is no third store, recovery schema or
 password journal. On the next storage/IP mutation, and via the explicit reconcile
 method, NM's persisted flags select the destination and surplus copies are removed
-idempotently. Snapshot, read-only mode, normal startup and plain activation do not
+idempotently. A consistent profile is left untouched, including its VersionId;
+changing its storage needs only the requested NM update, with no repair authorization.
+Snapshot, read-only mode, normal startup and plain activation do not
 perform reconciliation writes. NM Update with user/ask flags is what removes its
 persistent system copy; user-mode callback values remain available from the keyring.
 

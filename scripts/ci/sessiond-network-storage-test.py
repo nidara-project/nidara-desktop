@@ -75,6 +75,22 @@ def exercise(net, ctrl, info, state, bus, ui, questions, restart, h):
         check('creation-secret' not in net('Snapshot')[2],'Snapshot never exposes the stored value')
     state('newNeedsSecrets',False);state('newFinalState',4);state('ssid','Test')
 
+    # Consistent profiles need no repair write or extra authorization before a change.
+    for mode in ('system','user','ask'):
+        before=setup(mode)
+        old_updates=info()['nmUpdates']
+        reconcile()
+        after=probe()
+        repair_updates=info()['nmUpdates']-old_updates
+        unchanged=after==before
+        old_updates=info()['nmUpdates']
+        change('ask' if mode!='ask' else 'user', values=(
+            {'802-11-wireless-security':{'psk':v('s','fixture-psk')}} if mode=='ask' else None))
+        change_updates=info()['nmUpdates']-old_updates
+        check(unchanged and repair_updates==0 and change_updates==1,
+              mode+' consistent reconciliation preserves VersionId and mode change uses one NM update'
+              +' (repair='+str(repair_updates)+', change='+str(change_updates)+')')
+
     # All directed transitions, including ask -> persistence without existing input.
     for source in ('user','system','ask'):
         for target in ('user','system','ask'):
@@ -147,16 +163,16 @@ def exercise(net, ctrl, info, state, bus, ui, questions, restart, h):
     # NM policy denial and an ordinary update failure both leave original policy/data.
     for fault,name in [('nmDenyAt','Denied'),('nmFailAt',None)]:
         before=setup('user')
-        at(fault,'nmUpdates',2)
+        at(fault,'nmUpdates',1)
         failure(lambda:change('system'),name)
         check(stable(probe())==stable(before),'NM refusal keeps profile, permissions and keyring source')
     before=setup('system')
-    at('nmFailAt','nmUpdates',2)
+    at('nmFailAt','nmUpdates',1)
     failure(lambda:change('user'))
     check(stable(probe())==stable(before),'NM cleanup refusal removes only new SS destination')
 
     setup('system')
-    at('concurrentAt','nmUpdates',2)
+    at('concurrentAt','nmUpdates',1)
     failure(lambda:change('user'),'Incomplete')
     p=probe()
     check(p['settings']['connection']['id']=='external-writer-name' and p['system'] and p['user'],'CAS conflict preserves external edit and both safe copies')
@@ -165,7 +181,7 @@ def exercise(net, ctrl, info, state, bus, ui, questions, restart, h):
     check(probe()['settings']['connection']['id']=='external-writer-name' and not probe()['user'],'recovery respects external profile revision')
 
     setup('system')
-    at('appliedErrorAt','nmUpdates',2)
+    at('appliedErrorAt','nmUpdates',1)
     failure(lambda:change('user'),'Incomplete')
     p=probe()
     check(p['settings']['connection']['id']=='external-after-apply' and policy(p)==1 and p['user'],'uncertain applied update cannot roll back a later external edit')
@@ -183,7 +199,7 @@ def exercise(net, ctrl, info, state, bus, ui, questions, restart, h):
     # and use flags after a process restart to reconcile without any new secret store.
     setup('user',True)
     at('ssDeleteFailAt','ssDeleteCalls',1)
-    at('nmFailAt','nmUpdates',3)
+    at('nmFailAt','nmUpdates',2)
     failure(lambda:change('system'),'Incomplete')
     partial=probe()
     check(len(partial['system'])==2 and len(partial['user'])==2,'failed rollback retains durable destination and reports duplicate')
@@ -206,7 +222,7 @@ def exercise(net, ctrl, info, state, bus, ui, questions, restart, h):
     reconcile();once=stable(probe());reconcile()
     check(not probe()['user'] and not probe()['system'] and stable(probe())==once,'ask reconciliation completes erasure idempotently')
     setup('system')
-    before=stable(probe());at('nmFailAt','nmUpdates',2)
+    before=stable(probe());at('nmFailAt','nmUpdates',1)
     failure(lambda:change('ask'))
     check(stable(probe())==before,'failed ask commit leaves original system secret')
     for key in ('nmFailAt','nmDenyAt','ssWriteFailAt','ssDeleteFailAt','concurrentAt','appliedErrorAt'):

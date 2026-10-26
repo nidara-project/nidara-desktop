@@ -1024,7 +1024,9 @@ permissions, including optional EAP NOT_REQUIRED(4), never values. The explicit
 storage APIs use NM VersionId/Update2 CAS (1.44+), verified destinations and rollback;
 Incomplete exposes locations/keys, never passwords. Failed rollback keeps a verified
 copy. Reconciliation on the next storage/IP mutation (or explicit call) follows NM
-flags, including ask's committed erasure intent. No backup schema or recovery file
+flags, including ask's committed erasure intent. Consistent profiles skip repair
+writes, preserving VersionId and avoiding redundant polkit authorization.
+No backup schema or recovery file
 is created, and no SS queue slot is held while awaiting an NM callback. Missing
 ask-mode passwords require explicit values, with NeedsSecrets refusing before mutation.
 Not-saved secrets never go to disk. `--network-read-only` reads NM without exporting

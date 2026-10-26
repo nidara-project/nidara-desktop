@@ -549,6 +549,16 @@ async fn reconcile_inner(
     let values = effective(&original.settings, &sys, &user);
     let wanted_user = select(&values, &original.settings, Mode::User);
     let wanted_system = select(&values, &original.settings, Mode::System);
+    // A consistent profile needs no Update2 (and therefore no extra polkit
+    // authorization). Optional/irrelevant keys are outside migration's scope.
+    if keys(&original.settings)
+        .iter()
+        .filter(|key| key.mode(&original.settings).ok() != Some(Mode::Optional))
+        .all(|key| sys.get(key) == wanted_system.get(key) && user.get(key) == wanted_user.get(key))
+    {
+        ensure_snapshot(nm, uuid, &original).await?;
+        return Ok(original);
+    }
     // Reconstitute the destination first if an interrupted operation left only
     // a surplus copy in the other service. Empty profiles may still ask on activation.
     if wanted_user
