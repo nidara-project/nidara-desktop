@@ -451,6 +451,21 @@ fn request(
         }
     }
 }
+/// `queryUI` to the legacy Settings, only if it already runs: a query never starts it.
+fn query_legacy(connection: &zbus::blocking::Connection, args: Vec<String>) -> Result<String> {
+    connection
+        .call_method(
+            Some(routing::LEGACY),
+            routing::PATH,
+            Some(routing::ENTRY),
+            "Request",
+            &(args,),
+        )
+        .map_err(|e| format!("legacy Settings: {e}"))?
+        .body()
+        .deserialize()
+        .map_err(|e| e.to_string())
+}
 fn forward(connection: &zbus::blocking::Connection, args: Vec<String>) -> Result<String> {
     connection
         .call_method(
@@ -525,15 +540,31 @@ impl App {
                 self.activations.push(message);
                 continue;
             }
+            if let Route::Query(id) = &message.route {
+                // The legacy window answers for the pages it draws; the native tree's own
+                // serialization is not integrated yet, so with no legacy window there is none.
+                let args: Vec<String> = std::iter::once("queryUI".to_string())
+                    .chain(id.clone())
+                    .collect();
+                let connection = self.client.connection().clone();
+                std::thread::Builder::new()
+                    .name("settings-query".into())
+                    .spawn(move || {
+                        let answer = query_legacy(&connection, args).unwrap_or_else(|e| {
+                            format!("unsupported: native queryUI is not integrated ({e})")
+                        });
+                        message.respond(answer);
+                    })
+                    .map_err(|e| e.to_string())?;
+                continue;
+            }
+            // The legacy contract: "ok" once the page is shown. Without an activation token
+            // the compositor may keep the window where it is, as the legacy one could.
             let answer: String = match &message.route {
-                Route::Raise => "activation token missing; no activation requested".into(),
-                Route::Query(_) => {
-                    "unsupported: native queryUI policy/serialization is not integrated".into()
-                }
+                Route::Raise => "ok".into(),
                 Route::Navigate(page) if page == "appearance" => {
-                    // Navigation is real; raising is not silently advertised as successful.
-                    self.view.shell.selected(&self.view.exports, page)?;
-                    "appearance selected; activation token missing".into()
+                    self.navigate(page.clone())?;
+                    "ok".into()
                 }
                 _ => "unsupported native route".into(),
             };

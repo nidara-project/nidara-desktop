@@ -3525,6 +3525,10 @@ is how the GJS window knows what to hand back: `Settings(monitor, elsewhere)` tu
 a search result or a `page` request for one of them into a `page <id>` Request to the entry
 point, and its own window stays on the page it was showing. Its landing page is the first one
 it draws. To port a page, add it to `DRAWN`; nothing on the GJS side changes.
+Its answers keep the legacy contract: `ok` once a page is shown, with or without an activation
+token. `queryUI` goes to the legacy window if it is running (never starts it); the native tree's
+own serialization is not integrated. `scripts/ci/settings-process-check.sh` walks both shapes:
+the native entry point (Hyalo smoke, the public launcher) and the GJS one run directly.
 
 The GJS rebuild/launch logic lives only in `nidara-settings-legacy` (identity SettingsLegacy
 by default; `NIDARA_SETTINGS_LEGACY=0` keeps the public one). GJS raising is scoped to its own

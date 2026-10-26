@@ -51,8 +51,8 @@ legacy references (13.9 ms / 21.1 ms). No new CI step is introduced.
 ## Still open
 
 The parity/Orca and new-header IME gates (#944) and the installed performance checks.
-Native `queryUI` serialization is not integrated: `nidara-settings queryUI` answers an
-error until it is.
+Native `queryUI` serialization is not integrated: the entry point forwards `queryUI` to
+the legacy window when it runs (the pages it draws), and answers `unsupported: …` otherwise.
 
 ## Validation of this preparation
 
