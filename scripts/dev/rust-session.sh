@@ -44,16 +44,29 @@ printf -v app '%q ' "$@"
 # with the LIVE session's environment, on the live bus — and the native apps refuse to run
 # without accessibility.
 registryd=/usr/lib/at-spi2-registryd
-cmd="$(printf '%q' "$sessiond") --config & $(printf '%q' "$registryd") --use-gnome-session & exec $app"
+# Every process started in there writes its PID here, and leaves with the window: Hyalo does not
+# take its children with it, and a session left behind is what kept the live one locked all
+# night (#956). The wallpaper daemon is the session's own (its socket in $rt, its cache below).
+children="$rt/children"
+: >"$children"
+q() { printf '%q' "$1"; }
+bg() { echo "$* & echo \$! >>$(q "$children");"; }
+cmd="$(bg "$(q "$sessiond") --config") $(bg "$(q "$registryd") --use-gnome-session")"
+awww=$(command -v awww-daemon) && cmd+=" $(bg "$(q "$awww")")"
+cmd+=" echo \$\$ >>$(q "$children"); exec $app"
 
 echo "Hyalo:     $hyalo"
-echo "services:  $sessiond --config"
+echo "services:  $sessiond --config${awww:+, $awww}"
 echo "inside:    $app"
 echo "settings:  $state"
 echo "msg:       HYALO_SOCKET=$rt/nidara-hyalo.wayland-1.sock nidara-hyalo msg …"
 # HYALO_SETTINGS: the settings layer Hyalo writes, here and not in ~/.config. The glass
 # tokens of this checkout when it has them (an installed export may be older than Hyalo).
 vars=(XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
-    XDG_CONFIG_HOME="$state/config" GSETTINGS_BACKEND=keyfile)
+    XDG_CONFIG_HOME="$state/config" XDG_DATA_HOME="$state/data" XDG_CACHE_HOME="$state/cache"
+    XDG_STATE_HOME="$state/state" GSETTINGS_BACKEND=keyfile)
 [ -f "$data/tokens/glass.json" ] && vars+=(HYALO_GLASS_TOKENS="$data/tokens/glass.json")
-exec env "${vars[@]}" dbus-run-session -- "$hyalo" --winit -c "sh -c $(printf '%q' "$cmd")"
+leave() { xargs -r kill 2>/dev/null <"$children" || true; rm -f "$children"; }
+trap leave EXIT
+trap 'exit 130' INT TERM
+env "${vars[@]}" dbus-run-session -- "$hyalo" --winit -c "sh -c $(q "$cmd")"
