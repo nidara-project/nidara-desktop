@@ -30,6 +30,7 @@ pub(crate) const GLYPH_MINIMIZE_HALF: f64 = 3.5;
 pub(crate) const GLYPH_MAXIMIZE_HALF: f64 = 3.7;
 pub(crate) const GLYPH_MAXIMIZE_RADIUS: f64 = 1.6;
 pub(crate) const GLYPH_CLOSE_HALF: f64 = 3.0;
+const _: () = assert!(GLYPH_SIZE >= 2.0 * (GLYPH_MAXIMIZE_HALF + GLYPH_STROKE / 2.0));
 
 /// The capsule's GLSL, shared with Hyalo's title bar (render/title_bar.rs), which draws the
 /// same capsule in its own pass: its uniforms, and `controls(p, dark)` — the capsule's colour at
@@ -135,7 +136,6 @@ void main() {
 pub(super) unsafe fn set_geometry(gl: &smithay::backend::renderer::gles::ffi::Gles2, p: &glass_gl::Program) {
     use crate::protocols::window_controls::{EDGE, GAP, HOVER_D, PITCH};
     unsafe {
-        debug_assert!(GLYPH_SIZE >= 2.0 * (GLYPH_MAXIMIZE_HALF + GLYPH_STROKE / 2.0));
         gl.Uniform4f(p.loc(gl, c"glyph_geometry"), (GLYPH_STROKE / 2.0) as f32, GLYPH_MINIMIZE_HALF as f32, GLYPH_MAXIMIZE_HALF as f32, GLYPH_MAXIMIZE_RADIUS as f32);
         gl.Uniform1f(p.loc(gl, c"glyph_close_half"), GLYPH_CLOSE_HALF as f32);
         gl.Uniform4f(p.loc(gl, c"geometry"), (HOVER_D / 2.0) as f32, EDGE as f32, PITCH as f32, GAP as f32) };
