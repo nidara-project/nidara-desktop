@@ -570,6 +570,24 @@ Phase 0 remains an independent client of those four crates.
   AT-SPI provider and Hyalo's layer listing; faults belong only to the demo. Each oracle
   requires a logged applied mutation and a failed assertion (never a crash or timeout).
 
+## Who draws what on glass
+
+The rule is the skill's (`references/design-system.md`, "Who draws what on glass"); here, what
+it means for the toolkit:
+
+- With `nidara-material-v1` and layers (D7), a control capsule's glass, its washes (hover,
+  press, destructive) and its ink are Hyalo's: `CapsuleComposition` declares shapes,
+  `add_state_region` per button and `add_ink_coverage`, and paints only the glyphs and icons.
+  `capsule_fallback` paints washes in the client ONLY when layers are absent (D5).
+- With `nidara-window-controls-v1`, an app's window controls are Hyalo's: the tree reserves the
+  layout Hyalo sends (`set_server_controls`) and places it (`place_window_controls`); it creates
+  no buttons of its own for them (the native Settings still do: #936). Client-drawn controls
+  are the D5 fallback.
+- Rows, lists, menus' rows, selection, the scroll bar and the focus ring are content: the app
+  draws them, over glass or not.
+- No widget paints a blur, tone, rim or shadow imitating glass while the protocol is offered. A
+  state Hyalo cannot express is a request added to the protocol (v1), not a client painting.
+
 ## Floating control capsule — proposal for #889
 
 Geometry exports carry independent `height`, `button`, `edge` and `gap` values.

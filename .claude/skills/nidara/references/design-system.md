@@ -1580,6 +1580,39 @@ The 2026-10-08 run's menu (`0 4 15`, α .23/.27) and large-panel (`0 18 38`, α 
 are of the reference's OPAQUE menus and panels (98–100 % fill): a different object, which
 Nidara does not have.
 
+### Who draws what on glass: the compositor, never an imitation (owner, 2026-10-26)
+
+🔑 Owner: "we cannot have some buttons drawn by the compositor one way and others drawn by the
+app as an imitation. We built our own compositor to control these things." Hyalo exists so that
+the glass and how it behaves are ONE thing across the desktop; a client copy always drifts (seen
+in #952: the toolkit's window glyphs 3–9 % off Hyalo's, with another hover).
+
+- **Hyalo draws the glass AND the states of anything whose body is glass** — a capsule, a
+  header button, a control: rest, hover, press, the destructive red, and the ink that answers
+  the backdrop. The app *declares* them through `nidara-material-v1` (its shapes,
+  `add_state_region` per button id, `add_ink_coverage`) and never paints a wash, tint, blur,
+  rim or shadow over glass itself.
+- **The window controls are Hyalo's entirely** — glyphs, clicks, which buttons show and on
+  which side (`nidara-window-controls-v1`). An app with its own header reserves the room the
+  layout gives it and says where; it draws none of them.
+- **The app draws its content on the glass** — icons, text, rows and lists and their
+  selection, menus' rows, the scroll bar, the keyboard focus ring — and owns input, focus and
+  accessibility. A highlighted row in a list on glass is content, as in any toolkit; the glass
+  under it is not.
+- **Without the protocol** (another compositor: PHASE1 D5) the app paints its own fallback.
+  That is the ONLY case of client-painted glass or washes, and it never runs where the protocol
+  is offered.
+- **Before painting over glass, ask which it is.** The glass or its state → Hyalo. Content →
+  the app. Something Hyalo cannot express yet → extend the protocol (inside v1, the library and
+  Hyalo together), never imitate it in the client.
+
+**Where the code still departs (2026-10-26 audit; to be removed, not new exceptions):**
+- The native Settings draw their own window controls: Hyalo's glass and washes under them, but
+  the glyphs, the clicks and the layout are the app's (#934). Moving to Hyalo's: #936 / #952.
+- The TypeScript shell never declares state regions: every hover over its glass (the bar's icon
+  circles, the Control Center's tiles, the dock…) is a CSS background GTK paints. Frozen kit
+  (#818): it goes when the shell moves to the native toolkit; nothing new is built on it.
+
 ## The shell's glass, as a painter asks for it (`common/ShellGlass.ts`)
 
 On Hyalo the shell's panes are the compositor's glass (references/hyalo.md). What a Cairo painter on

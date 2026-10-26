@@ -94,7 +94,7 @@ already confirmed erasing. The size floor was that bug until 2026-09-17: the dis
 `entireDiskFits` (and `manualProblems` holds a manual `/` to the same `MIN_ROOT_MIB`), and the
 throw inside `entireDiskConfig` is the last word, not the first.
 
-## The eleven inviolable commandments
+## The twelve inviolable commandments
 
 These are non-negotiable. Violating them produces bugs that are hard to debug because the symptoms don't point at the cause.
 
@@ -150,6 +150,14 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
     ship, and its body is the base layer of tech-debt #107. The lever table — who moves what, and how
     far it reaches — is canonical in `references/design-system.md` ("Who may change each layer").
     `scripts/ci/style-ownership-check.mjs` is the gate.
+
+12. **Never imitate the compositor in an app.** On Hyalo, the glass and the states of what is
+    made of glass (hover, press, the destructive red, the ink) are Hyalo's, declared through
+    `nidara-material-v1`; the window controls are Hyalo's entirely (`nidara-window-controls-v1`).
+    The app draws content and owns input, focus and accessibility; it paints glass or a wash
+    itself only as the fallback when the protocol is absent. Missing a capability → extend the
+    protocol, never copy it in the client (owner, 2026-10-26). Full rule and the known
+    departures: `references/design-system.md`, "Who draws what on glass".
 
 ## Quick orientation: where to start
 
