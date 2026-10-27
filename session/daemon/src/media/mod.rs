@@ -89,6 +89,7 @@ struct Media {
     errors: Arc<RwLock<BTreeMap<String, String>>>,
     audio: Arc<RwLock<audio::Snapshot>>,
     art: art::Art,
+    art_jobs: Arc<Mutex<BTreeMap<String, tokio::task::AbortHandle>>>,
     conn: Connection,
     roster: Arc<RwLock<Roster>>,
     serial: Arc<std::sync::atomic::AtomicU64>,
@@ -454,9 +455,13 @@ impl Media {
             &self.audio.read().unwrap(),
         );
         bus::publish(self).await?;
+        if new_art && let Some(job) = self.art_jobs.lock().await.remove(&p.path) {
+            job.abort();
+        }
         if new_art && !p.art_url.is_empty() {
             let media = self.clone();
-            tokio::spawn(async move {
+            let key = p.path.clone();
+            let job = tokio::spawn(async move {
                 let result = media.art.resolve(p.art_url.clone()).await;
                 let _guard = media.updates.lock().await;
                 if let Some(live) = media.roster.write().unwrap().players.get_mut(&p.path)
@@ -479,6 +484,7 @@ impl Media {
                 }
                 let _ = bus::publish(&media).await;
             });
+            self.art_jobs.lock().await.insert(key, job.abort_handle());
         }
         Ok(())
     }
@@ -494,6 +500,9 @@ impl Media {
             .find(|p| p.bus == bus && p.owner == owner)
             .cloned();
         if let Some(p) = p {
+            if let Some(job) = self.art_jobs.lock().await.remove(&p.path) {
+                job.abort();
+            }
             self.roster.write().unwrap().remove(&p.path);
             bus::publish(self).await?;
             self.conn
@@ -514,6 +523,7 @@ async fn start(conn: &Connection) -> zbus::Result<Media> {
         errors: Default::default(),
         audio: Default::default(),
         art: art::Art::new(),
+        art_jobs: Default::default(),
         conn: conn.clone(),
         roster: Default::default(),
         serial: Arc::new(std::sync::atomic::AtomicU64::new(1)),

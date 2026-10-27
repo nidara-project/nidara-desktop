@@ -35,8 +35,9 @@ impl Art {
         let slot = self
             .slots
             .clone()
-            .try_acquire_owned()
-            .map_err(|_| "artwork workers busy")?;
+            .acquire_owned()
+            .await
+            .map_err(|_| "artwork workers stopped")?;
         let source = url.clone();
         let task = tokio::spawn(async move {
             let _slot = slot;
@@ -57,6 +58,23 @@ impl Art {
         result
     }
 }
+#[cfg(test)]
+impl Art {
+    pub(super) async fn check_queue_progress(&self, url: String) {
+        let held = self.slots.clone().acquire_many_owned(2).await.unwrap();
+        let key = format!("{:x}", Sha256::digest(url.as_bytes()));
+        let pending = self.resolve(url);
+        tokio::pin!(pending);
+        assert!(futures_util::poll!(pending.as_mut()).is_pending());
+        assert!(!self.negative.lock().await.contains_key(&key));
+        drop(held);
+        assert!(
+            pending.await.is_ok(),
+            "queued cover must proceed once a worker is free"
+        );
+    }
+}
+
 fn directory() -> Result<PathBuf, String> {
     let dir = std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
@@ -122,23 +140,41 @@ async fn resolve(url: &str) -> Result<String, String> {
     }
     let dir = directory()?;
     let key = format!("{:x}", Sha256::digest(url.as_bytes()));
-    let file = dir.join(format!("{key}.img"));
-    if !url.starts_with("/")
-        && !url.starts_with("file:")
-        && std::fs::symlink_metadata(&file).is_ok_and(|m| m.file_type().is_file())
-    {
-        let copy = file.clone();
-        if tokio::task::spawn_blocking(move || local(&copy).and_then(|b| validate(&b)))
-            .await
-            .map_err(|e| e.to_string())?
-            .is_ok()
-        {
-            if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&file) {
-                let _ = f.set_times(
-                    std::fs::FileTimes::new().set_modified(std::time::SystemTime::now()),
-                );
+    // HTTP/data URLs can reuse a validated immutable copy. Local paths must be
+    // read again: players commonly overwrite a fixed cover file on track change.
+    if !url.starts_with("/") && !url.starts_with("file:") {
+        let prefix = format!("{key}-");
+        let cached = std::fs::read_dir(&dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                e.file_name().to_string_lossy().starts_with(&prefix)
+                    && e.path().extension().is_some_and(|s| s == "img")
+            })
+            .filter_map(|e| {
+                e.metadata()
+                    .ok()
+                    .filter(|m| m.is_file())
+                    .map(|m| (m.modified().ok(), e.path()))
+            })
+            .max()
+            .map(|(_, path)| path);
+        if let Some(file) = cached {
+            let copy = file.clone();
+            if tokio::task::spawn_blocking(move || local(&copy).and_then(|b| validate(&b)))
+                .await
+                .map_err(|e| e.to_string())?
+                .is_ok()
+            {
+                if let Ok(f) = std::fs::OpenOptions::new().write(true).open(&file) {
+                    let _ = f.set_times(
+                        std::fs::FileTimes::new().set_modified(std::time::SystemTime::now()),
+                    );
+                }
+                return Ok(file.to_string_lossy().into());
             }
-            return Ok(file.to_string_lossy().into());
         }
     }
     let data = if url.starts_with("http://") || url.starts_with("https://") {
@@ -225,6 +261,8 @@ async fn resolve(url: &str) -> Result<String, String> {
             .await
             .map_err(|e| e.to_string())??
     };
+    let content = format!("{:x}", Sha256::digest(&data));
+    let file = dir.join(format!("{key}-{content}.img"));
     let copy = file.clone();
     tokio::task::spawn_blocking(move || {
         validate(&data)?;

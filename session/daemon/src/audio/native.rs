@@ -192,6 +192,26 @@ fn ints(o: &spa::pod::Object, key: u32) -> Vec<i32> {
         _ => Vec::new(),
     }
 }
+fn info(object: &spa::pod::Object, key: u32, name: &str) -> String {
+    let Some(PodValue::Struct(values)) = field(object, key) else {
+        return String::new();
+    };
+    let Some(PodValue::Int(count)) = values.first() else {
+        return String::new();
+    };
+    if !(0..=64).contains(count) || values.len() != 1 + *count as usize * 2 {
+        return String::new();
+    }
+    values[1..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .find_map(|pair| match (&pair[0], &pair[1]) {
+            (PodValue::String(k), PodValue::String(v)) if k == name => Some(v.clone()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
 fn availability(v: i32) -> String {
     match v {
         1 => "no",
@@ -612,6 +632,18 @@ impl Worker {
                 for dev in devices {
                     let path = format!("{key}/routes/r{index}_{dev}_{direction}");
                     let route = Route {
+                        port_type: {
+                            let kind = info(&r, spa::sys::SPA_PARAM_ROUTE_info, "port.type");
+                            if kind.is_empty() {
+                                active
+                                    .iter()
+                                    .find(|a| int(a, 1) == index && int(a, 3) == dev)
+                                    .map(|a| info(a, spa::sys::SPA_PARAM_ROUTE_info, "port.type"))
+                                    .unwrap_or_default()
+                            } else {
+                                kind
+                            }
+                        },
                         path: path.clone(),
                         device: key.clone(),
                         index,
@@ -1275,4 +1307,35 @@ pub fn start(
             }
         });
     });
+}
+
+#[cfg(test)]
+mod route_info_tests {
+    use super::*;
+    #[test]
+    fn route_info_reads_spa_pairs_and_rejects_malformed_counts() {
+        let mut route = spa::pod::Object {
+            type_: spa::sys::SPA_TYPE_OBJECT_ParamRoute,
+            id: spa::sys::SPA_PARAM_EnumRoute,
+            properties: vec![property(
+                spa::sys::SPA_PARAM_ROUTE_info,
+                PodValue::Struct(vec![
+                    PodValue::Int(2),
+                    PodValue::String("other".into()),
+                    PodValue::String("value".into()),
+                    PodValue::String("port.type".into()),
+                    PodValue::String("headphones".into()),
+                ]),
+            )],
+        };
+        assert_eq!(
+            info(&route, spa::sys::SPA_PARAM_ROUTE_info, "port.type"),
+            "headphones"
+        );
+        route.properties[0].value =
+            PodValue::Struct(vec![PodValue::Int(1), PodValue::String("port.type".into())]);
+        assert!(info(&route, spa::sys::SPA_PARAM_ROUTE_info, "port.type").is_empty());
+        route.properties[0].value = PodValue::Struct(vec![PodValue::Int(i32::MAX)]);
+        assert!(info(&route, spa::sys::SPA_PARAM_ROUTE_info, "port.type").is_empty());
+    }
 }

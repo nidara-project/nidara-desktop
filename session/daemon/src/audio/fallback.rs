@@ -20,10 +20,24 @@ pub fn endpoint(g: &Graph, n: &Node) -> &'static str {
         return "bluetooth";
     }
     if let Some(route) = g.routes.get(&n.active_route) {
-        if route.name == "analog-output-headphones" {
+        match route.port_type.as_str() {
+            "headphones" | "headset" => return "headphones",
+            "speaker" => return "speaker",
+            _ => {}
+        }
+        if matches!(
+            route.name.as_str(),
+            "analog-output-headphones"
+                | "analog-output-headset"
+                | "[Out] Headphones"
+                | "[Out] Headset"
+        ) {
             return "headphones";
         }
-        if route.name == "analog-output-speaker" {
+        if matches!(
+            route.name.as_str(),
+            "analog-output-speaker" | "[Out] Speaker"
+        ) {
             return "speaker";
         }
     }
@@ -214,5 +228,64 @@ mod tests {
             tracker.advance(&old, &new, 2, false).is_empty(),
             "virtual/unknown destinations are not evidence of speaker fallback"
         );
+    }
+    #[test]
+    fn ucm_jack_availability_loss_on_same_sink_and_port_type_priority() {
+        let mut old = graph();
+        old.nodes.get_mut("/out").unwrap().endpoint_kind = "unknown".into();
+        old.nodes.get_mut("/out").unwrap().active_route = "/headphones".into();
+        old.routes.insert(
+            "/headphones".into(),
+            Route {
+                name: "[Out] Headphones".into(),
+                availability: "yes".into(),
+                ..Default::default()
+            },
+        );
+        old.routes.insert(
+            "/speaker".into(),
+            Route {
+                name: "[Out] Speaker".into(),
+                availability: "yes".into(),
+                ..Default::default()
+            },
+        );
+        let mut new = old.clone();
+        new.routes.get_mut("/headphones").unwrap().availability = "no".into();
+        new.nodes.get_mut("/out").unwrap().active_route = "/speaker".into();
+        assert_eq!(Tracker::default().advance(&old, &new, 1, false).len(), 1);
+        let route = new.routes.get_mut("/speaker").unwrap();
+        route.name = "custom-uCm-name".into();
+        route.port_type = "speaker".into();
+        assert_eq!(endpoint(&new, &new.nodes["/out"]), "speaker");
+        new.routes.get_mut("/speaker").unwrap().name = "[Out] Headphones".into();
+        assert_eq!(
+            endpoint(&new, &new.nodes["/out"]),
+            "speaker",
+            "typed metadata takes precedence over names"
+        );
+    }
+    #[test]
+    fn bluetooth_disconnect_can_fall_back_to_ucm_speaker() {
+        let mut old = graph();
+        old.nodes.get_mut("/out").unwrap().endpoint_kind = "bluetooth".into();
+        let mut new = old.clone();
+        new.nodes.remove("/out");
+        new.devices.remove("/device");
+        let mut speaker = node("/internal", "output", "unknown");
+        speaker.device = "/internal_card".into();
+        speaker.active_route = "/ucm_speaker".into();
+        new.nodes.insert(speaker.path.clone(), speaker);
+        new.routes.insert(
+            "/ucm_speaker".into(),
+            Route {
+                name: "[Out] Speaker".into(),
+                ..Default::default()
+            },
+        );
+        new.nodes.get_mut("/app").unwrap().targets = vec!["/internal".into()];
+        let events = Tracker::default().advance(&old, &new, 1, false);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].new, "/internal");
     }
 }

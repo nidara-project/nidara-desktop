@@ -496,6 +496,7 @@ async fn artwork_fixture() {
     });
     let art = art::Art::new();
     let url = format!("http://{addr}/ok");
+    art.check_queue_progress(url.clone()).await;
     let file = art.resolve(url.clone()).await.unwrap();
     assert!(file.contains("/media-art/sessiond/"));
     assert_eq!(std::fs::read(&file).unwrap(), png);
@@ -519,7 +520,21 @@ async fn artwork_fixture() {
     let local = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/media-test-home/local.png");
     std::fs::write(&local, &png).unwrap();
-    assert!(art.resolve(local.to_string_lossy().into()).await.is_ok());
+    let first = art.resolve(local.to_string_lossy().into()).await.unwrap();
+    let mut second_image = vec![];
+    let mut writer = png::Encoder::new(&mut second_image, 1, 1)
+        .write_header()
+        .unwrap();
+    writer.write_image_data(&[255]).unwrap();
+    drop(writer);
+    std::fs::write(&local, &second_image).unwrap();
+    let second = art.resolve(local.to_string_lossy().into()).await.unwrap();
+    assert_ne!(
+        first, second,
+        "fixed local URI with new bytes must invalidate path-keyed clients"
+    );
+    assert_eq!(std::fs::read(&first).unwrap(), png);
+    assert_eq!(std::fs::read(&second).unwrap(), second_image);
     assert!(
         art.resolve("file://remote.invalid/path.png".into())
             .await

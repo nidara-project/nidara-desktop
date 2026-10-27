@@ -3755,3 +3755,11 @@ Media1 matches PID/ancestor/app-id only unambiguously, pauses still-playing
 players, and never resumes. An absent Audio1 withdraws that capability normally.
 Artwork is decoded off-thread under bounds into media-art/sessiond/, never into
 the old shell's shared cache: two independent pruning writers must not share it.
+
+Media artwork saturation queues the current request instead of caching Busy;
+track/owner changes cancel obsolete queued requests. Worker permits remain held
+until active work actually finishes. Cached ArtPath includes the content hash,
+so rewriting a fixed local cover changes the path. Audio route classification
+prefers SPA route-info port.type and falls back to both ACP and UCM route names;
+ACP-only names silently miss same-node jack changes on UCM laptops. Physical
+port.type evidence remains separate from the parser/name-family fixtures.

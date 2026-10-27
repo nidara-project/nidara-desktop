@@ -91,7 +91,11 @@ scale and VolumeLimit apply. No matching stream never means the master output.
 AudioNode1 additionally exposes ProcessId `u` (0 unknown). Audio1 adds capability
 headphone-fallback and signal HeadphoneFallback(`t eventId,o oldOutput,o newOutput,
 ao affectedPlayback,s reason`). Detection compares physical device/route snapshots:
-headphones→speaker on the SAME node requires the old route to become unavailable;
+Route classification prefers SPA route-info port.type (headphones/headset/speaker),
+with both ACP analog-output-* and UCM [Out] Headphones/Headset/Speaker names as
+fallbacks. The SPA structure is checked against headers and fixtures; port.type
+values on physical ACP/UCM hardware have not been confirmed locally.
+Headphones→speaker on the SAME node requires the old route to become unavailable;
 BT/USB headphone-node loss requires the corresponding physical Device to disappear,
 then the actual affected streams to link to a classified speaker within two seconds.
 Missing/ambiguous evidence, virtual/HDMI destinations, profile reenumeration,
@@ -117,13 +121,19 @@ here. Disabling the second suppresses the automatic pause request.
 Local absolute paths, local file URIs, image data/base64 and HTTP(S) are copied
 into `$XDG_CACHE_HOME/nidara/media-art/sessiond/` (default ~/.cache). This directory
 is separate from the legacy TS writer. Limits: 10 MiB, ten seconds per request,
-two workers, three redirects limited to HTTP(S), PNG/JPEG/GIF/WebP, at most
+two active workers, three redirects limited to HTTP(S), PNG/JPEG/GIF/WebP, at most
 4096×4096 and 64 MiB decoder allocation. `image` uses only those codecs, no
 native codec dependency. Signature and actual decode must pass before ArtPath is
 published. curl is executed with fixed argv and disabled curlrc. File sources
 must be regular and opens are nonblocking. Data and filenames are never executed.
 
-SHA256 filenames and atomic rename publish complete files. The cache prunes its
+Filenames combine URL and content SHA256 hashes; replacing a fixed local cover
+therefore produces a new ArtPath for clients caching by path. Atomic rename
+publishes complete files. A saturated worker pool queues the current cover,
+without a Busy failure or negative-cache entry. A player changing its track/URL
+cancels its obsolete queued request; any already-started bounded worker retains
+its permit until it finishes, so cancelling a caller cannot exceed two workers.
+The ten-second I/O/decode deadline starts after acquiring a worker slot. The cache prunes its
 own files at 150 entries/100 MiB, touching successful cache hits for recency.
 Negative results are cached for 60 seconds, capped at 256 entries. A late result
 checks owner, track revision and URL before publication. Art failure does not

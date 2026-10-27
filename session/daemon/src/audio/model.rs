@@ -59,6 +59,7 @@ pub struct Profile {
 }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Route {
+    pub port_type: String,
     pub path: String,
     pub device: String,
     pub index: i32,
