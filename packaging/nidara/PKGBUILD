@@ -202,7 +202,7 @@ _hyalo_makedepends=(
 )
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
-  wayland gtk4 gobject-introspection pkgconf rust
+  wayland gtk4 gobject-introspection pkgconf rust clang-libs
   "${_hyalo_makedepends[@]}"
 )
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
@@ -309,7 +309,7 @@ build() {
   # Session daemon (package nidara-desktop). prepare() fetched its locked crates.
   cd "$srcdir/nidara-desktop-$pkgver/session"
   export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
-  cargo build --release --locked --offline
+  cargo build --release --locked --offline --features audio-native
 
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
@@ -462,6 +462,8 @@ package_nidara-desktop() {
   install -Dm644 config/bluetooth/obex-opp-only.conf \
     "$pkgdir/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf"
   install -Dm755 session/target/release/nidara-sessiond "$pkgdir/usr/bin/nidara-sessiond"
+  install -Dm644 config/wireplumber/nidara-audio.lua "$pkgdir/usr/share/wireplumber/scripts/nidara/audio.lua"
+  install -Dm644 config/wireplumber/60-nidara-audio.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/60-nidara-audio.conf"
 
   # XDG portal: Nidara's Settings backend (accent-color) + portal preferences
   install -Dm644 config/portal/nidara.portal "$pkgdir/usr/share/xdg-desktop-portal/portals/nidara.portal"
