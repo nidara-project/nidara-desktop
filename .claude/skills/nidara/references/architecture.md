@@ -3763,3 +3763,28 @@ so rewriting a fixed local cover changes the path. Audio route classification
 prefers SPA route-info port.type and falls back to both ACP and UCM route names;
 ACP-only names silently miss same-node jack changes on UCM laptops. Physical
 port.type evidence remains separate from the parser/name-family fixtures.
+
+
+### Native Power1 and hardware policy
+
+`session/daemon/src/power/README.md` specifies the typed Power1 objects and leases on
+org.nidara.Session. Packaged sessiond starts `--media --power`; read-only is diagnostic,
+without effects or hardware inhibitors. UPower, PPD and logind have independent owner epochs;
+never recycle provider object identities or retry uncertain mutations on another owner.
+Config1's org.nidara.power preferences are GSettings, but idle values have one home: Hyalo's
+merged config via IPC, with Hyalo as sole TOML writer. A stale asynchronous read cannot replace
+an Apply result. The legacy TS single suspend timer maps to both new timers before layer merge.
+
+The battery-low hook has one owner in sessiond; critical 2% actions still belong solely to
+UPower. Automatic saving owns only its PPD cookie and persists manual episode overrides;
+legacy game profile sets count as manual. The TS critical island can duplicate Power1's backup
+critical notification until the Rust island is delivered. A menu consumer is not implemented
+here: menu preference with no registered Rust consumer has effective action suspend. A failed
+registered consumer NEVER changes into suspend/poweroff; lease.MenuShown(t) is an owner-scoped
+method confirming presentation, not a broadcast acknowledgement.
+
+Hardware handle-power-key and handle-lid-switch FDs require a real active local Hyalo and
+ready forwarding. The power FD inhibits logind software long press as well; no own long press.
+FD loss restores logind defaults, potentially poweroff. Locked short presses only wake screens.
+Charge protection is actual UPower state per physical battery, never globally forced off/on.
+No new polkit, governors or system installation belongs to this backend's development tests.

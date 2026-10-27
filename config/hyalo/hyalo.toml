@@ -241,6 +241,9 @@ inactive = { range = 12, offset = 2, color = "#00000033" }
 "XF86AudioLowerVolume" = { action = "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-", locked = true, repeat = true }
 "XF86AudioMute" = { action = "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle", locked = true }
 "XF86AudioMicMute" = { action = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle", locked = true }
+"XF86PowerOff" = { action = "spawn nidara-power-key", locked = true, repeat = false, dont_inhibit = true }
+"XF86KbdBrightnessUp" = { action = "spawn nidara-kbd-light up", locked = true, repeat = true }
+"XF86KbdBrightnessDown" = { action = "spawn nidara-kbd-light down", locked = true, repeat = true }
 "XF86MonBrightnessUp" = { action = "spawn brightnessctl -n s 5%+", locked = true, repeat = true }
 "XF86MonBrightnessDown" = { action = "spawn brightnessctl -n s 5%-", locked = true, repeat = true }
 "XF86AudioPlay" = { action = "spawn nidara-media-key play-pause", locked = true }
@@ -254,6 +257,9 @@ inactive = { range = 12, offset = 2, color = "#00000033" }
 screen_off = 300
 lock = 600
 suspend = 0
+suspend_battery = 0
+suspend_ac = 0
+dim_before_off = 10
 
 # What Hyalo animates, in milliseconds — the Hyprland session's animations, so nothing changes at
 # the switch. A minimized window shrinks into its place in the dock and grows back out of it,

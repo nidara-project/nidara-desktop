@@ -304,6 +304,7 @@ fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Sca
 /// What a frame is made from: the parts of the state rendering reads, borrowed apart from the
 /// backend (which renders them).
 pub struct Scene<'a> {
+    pub dimmed:bool,
     pub space: &'a Space<Window>,
     pub wm: &'a crate::wm::Wm,
     pub pointer: Point<f64, Logical>,
@@ -328,9 +329,10 @@ impl<'a> Scene<'a> {
         windows: &'a crate::config::WindowsConfig,
         animations: bool,
         when: std::time::Instant,
+        dimmed:bool,
     ) -> Self {
         let pointer = seat.get_pointer().unwrap().current_location();
-        Self { space, wm, pointer, cursor_status, lock, windows, when, reduce_motion: !animations }
+        Self { dimmed,space, wm, pointer, cursor_status, lock, windows, when, reduce_motion: !animations }
     }
 }
 
@@ -364,6 +366,18 @@ pub fn output_elements<R: HyaloRenderer>(
     let Some(output_geo) = state.space.output_geometry(output) else { return out };
     let scale = Scale::from(output.current_scale().fractional_scale());
     let output_size = output_geo.size.to_f64().to_physical_precise_round(scale);
+    if state.dimmed {
+        use smithay::backend::renderer::element::{Kind, solid::{SolidColorBuffer, SolidColorRenderElement}};
+        struct DimBuffer(std::sync::Mutex<SolidColorBuffer>);
+        output.user_data().insert_if_missing(|| DimBuffer(std::sync::Mutex::new(
+            SolidColorBuffer::new(output_geo.size, Color32F::new(0.0, 0.0, 0.0, 0.65)),
+        )));
+        let mut buffer = output.user_data().get::<DimBuffer>().unwrap().0.lock().unwrap();
+        buffer.resize(output_geo.size);
+        out.push(OutputElement::Debug(SolidColorRenderElement::from_buffer(
+            &buffer, (0, 0), scale, 1.0, Kind::Unspecified,
+        )));
+    }
 
     if let Some(image) = cursor.filter(|_| !state.wm.cursor_hidden) {
         push_cursor(&mut out, state, renderer, output_geo.loc, scale, image);

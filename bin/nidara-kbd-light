@@ -1,0 +1,5 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+case "${1-}" in up) direction=1 ;; down) direction=-1 ;; *) exit 2 ;; esac
+exec gdbus call --session --timeout 7 --dest org.nidara.Session \
+    --object-path /org/nidara/Power --method org.nidara.Power1.StepPrimaryKeyboardBrightness -- "$direction"

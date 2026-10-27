@@ -41,10 +41,12 @@ const GUARD_SHOWN: Duration = Duration::from_secs(1);
 pub enum LoginEvent {
     PrepareForSleep(bool),
     LockSession,
-    Inhibitors(usize),
+    Inhibitors(Vec<serde_json::Value>),
+    PowerSource(Option<bool>),
 }
 
 pub struct Login {
+    pub inhibitors: Vec<serde_json::Value>,
     /// The sleep delay inhibitor; dropping the fd lets the machine sleep.
     delay: Arc<Mutex<Option<OwnedFd>>>,
     /// Sleep is waiting for the lock.
@@ -63,8 +65,17 @@ pub fn start(state: &mut Hyalo) {
         tracing::warn!("logind: no channel into the event loop");
         return;
     }
-    state.login = Some(Login { delay: delay.clone(), sleep_pending: false });
+    state.login = Some(Login {
+        delay: delay.clone(),
+        sleep_pending: false,
+        inhibitors: Vec::new(),
+    });
 
+    let power_tx = tx.clone();
+    std::thread::Builder::new()
+        .name("hyalo-power-source".into())
+        .spawn(move || power_source(power_tx))
+        .ok();
     let system_tx = tx.clone();
     std::thread::Builder::new()
         .name("hyalo-logind".into())
@@ -85,8 +96,10 @@ pub fn start(state: &mut Hyalo) {
 }
 
 fn take_delay(manager: &zbus::blocking::Proxy<'_>, delay: &Mutex<Option<OwnedFd>>) {
-    let fd: zbus::Result<zbus::zvariant::OwnedFd> =
-        manager.call("Inhibit", &("sleep", "Hyalo", "Locks the screen before the computer sleeps", "delay"));
+    let fd: zbus::Result<zbus::zvariant::OwnedFd> = manager.call(
+        "Inhibit",
+        &("sleep", "Hyalo", "Locks the screen before the computer sleeps", "delay"),
+    );
     match fd {
         Ok(fd) => *delay.lock().unwrap() = Some(fd.into()),
         Err(err) => tracing::warn!(%err, "logind: no sleep delay inhibitor; the lock may come after the sleep"),
@@ -112,7 +125,12 @@ fn system_bus(tx: Sender<LoginEvent>, delay: Arc<Mutex<Option<OwnedFd>>>) -> zbu
         .name("hyalo-logind-lock".into())
         .spawn(move || {
             let run = || -> zbus::Result<()> {
-                let proxy = zbus::blocking::Proxy::new(&lock_conn, "org.freedesktop.login1", session, "org.freedesktop.login1.Session")?;
+                let proxy = zbus::blocking::Proxy::new(
+                    &lock_conn,
+                    "org.freedesktop.login1",
+                    session,
+                    "org.freedesktop.login1.Session",
+                )?;
                 for _ in proxy.receive_signal("Lock")? {
                     if lock_tx.send(LoginEvent::LockSession).is_err() {
                         break;
@@ -127,7 +145,9 @@ fn system_bus(tx: Sender<LoginEvent>, delay: Arc<Mutex<Option<OwnedFd>>>) -> zbu
         .ok();
 
     for msg in manager.receive_signal("PrepareForSleep")? {
-        let Ok(sleeping) = msg.body().deserialize::<bool>() else { continue };
+        let Ok(sleeping) = msg.body().deserialize::<bool>() else {
+            continue;
+        };
         if !sleeping {
             take_delay(&manager, &delay);
         }
@@ -142,7 +162,7 @@ fn system_bus(tx: Sender<LoginEvent>, delay: Arc<Mutex<Option<OwnedFd>>>) -> zbu
 struct Inhibitions {
     next: u32,
     /// Cookie → the unique bus name that holds it.
-    held: HashMap<u32, String>,
+    held: HashMap<u32, (String, String, String)>,
 }
 
 #[derive(Clone)]
@@ -152,8 +172,14 @@ struct ScreenSaver {
 }
 
 impl ScreenSaver {
-    fn report(&self, n: usize) {
-        if let Err(err) = self.tx.send(LoginEvent::Inhibitors(n)) {
+    fn report(&self, _n: usize) {
+        let items = self.inner.lock().unwrap().held.iter().map(|(cookie, (owner, app, reason))| {
+            serde_json::json!({
+                "id": format!("screensaver:{owner}:{cookie}"), "source": "screensaver",
+                "who": app, "reason": reason, "app_id": app, "pid": 0, "uid": 0, "identity_known": false,
+            })
+        }).collect();
+        if let Err(err) = self.tx.send(LoginEvent::Inhibitors(items)) {
             tracing::warn!(%err, "ScreenSaver: the event loop did not take the change");
         }
     }
@@ -161,13 +187,19 @@ impl ScreenSaver {
 
 #[zbus::interface(name = "org.freedesktop.ScreenSaver")]
 impl ScreenSaver {
-    fn inhibit(&self, #[zbus(header)] header: zbus::message::Header<'_>, application_name: String, reason_for_inhibit: String) -> u32 {
+    fn inhibit(
+        &self,
+        #[zbus(header)] header: zbus::message::Header<'_>,
+        application_name: String,
+        reason_for_inhibit: String,
+    ) -> u32 {
         let sender = header.sender().map(|s| s.to_string()).unwrap_or_default();
         let (cookie, n) = {
             let mut i = self.inner.lock().unwrap();
             i.next = i.next.wrapping_add(1).max(1);
             let cookie = i.next;
-            i.held.insert(cookie, sender);
+            i.held
+                .insert(cookie, (sender, application_name.clone(), reason_for_inhibit.clone()));
             (cookie, i.held.len())
         };
         tracing::info!(app = %application_name, reason = %reason_for_inhibit, cookie, "the screen is held on");
@@ -186,7 +218,10 @@ impl ScreenSaver {
 }
 
 fn screensaver(tx: Sender<LoginEvent>) -> zbus::Result<()> {
-    let service = ScreenSaver { inner: Arc::default(), tx };
+    let service = ScreenSaver {
+        inner: Arc::default(),
+        tx,
+    };
     let conn = zbus::blocking::connection::Builder::session()?
         .name("org.freedesktop.ScreenSaver")?
         .serve_at("/org/freedesktop/ScreenSaver", service.clone())?
@@ -203,7 +238,7 @@ fn screensaver(tx: Sender<LoginEvent>) -> zbus::Result<()> {
         let n = {
             let mut i = service.inner.lock().unwrap();
             let before = i.held.len();
-            i.held.retain(|_, s| s != &gone);
+            i.held.retain(|_, (s, _, _)| s != &gone);
             (i.held.len() != before).then_some(i.held.len())
         };
         if let Some(n) = n {
@@ -226,27 +261,33 @@ impl Hyalo {
                     l.sleep_pending = true;
                 }
                 self.lock_session();
-                let _ = self.loop_handle.insert_source(Timer::from_duration(SLEEP_GRACE), |_, _, state| {
-                    if !state.login.as_ref().is_some_and(|l| l.sleep_pending) {
-                        return TimeoutAction::Drop;
-                    }
-                    if state.lock.is_locked() {
-                        // Asked, not yet confirmed: the session is hidden already (lock.rs).
-                        tracing::warn!("the lock did not confirm in time; the computer sleeps locked");
-                        state.release_sleep_delay();
-                        return TimeoutAction::Drop;
-                    }
-                    // No client asked: the guard, and sleep once it is on screen (lock.rs).
-                    state.guard_session("no lock client asked for the lock before sleep");
-                    let _ = state.loop_handle.insert_source(Timer::from_duration(GUARD_SHOWN), |_, _, state| {
-                        if state.login.as_ref().is_some_and(|l| l.sleep_pending) {
-                            tracing::warn!("the guard did not reach the screen in time; the computer sleeps locked");
-                            state.release_sleep_delay();
+                let _ = self
+                    .loop_handle
+                    .insert_source(Timer::from_duration(SLEEP_GRACE), |_, _, state| {
+                        if !state.login.as_ref().is_some_and(|l| l.sleep_pending) {
+                            return TimeoutAction::Drop;
                         }
+                        if state.lock.is_locked() {
+                            // Asked, not yet confirmed: the session is hidden already (lock.rs).
+                            tracing::warn!("the lock did not confirm in time; the computer sleeps locked");
+                            state.release_sleep_delay();
+                            return TimeoutAction::Drop;
+                        }
+                        // No client asked: the guard, and sleep once it is on screen (lock.rs).
+                        state.guard_session("no lock client asked for the lock before sleep");
+                        let _ = state
+                            .loop_handle
+                            .insert_source(Timer::from_duration(GUARD_SHOWN), |_, _, state| {
+                                if state.login.as_ref().is_some_and(|l| l.sleep_pending) {
+                                    tracing::warn!(
+                                        "the guard did not reach the screen in time; the computer sleeps locked"
+                                    );
+                                    state.release_sleep_delay();
+                                }
+                                TimeoutAction::Drop
+                            });
                         TimeoutAction::Drop
                     });
-                    TimeoutAction::Drop
-                });
             }
             LoginEvent::PrepareForSleep(false) => {
                 tracing::info!("back from sleep");
@@ -267,9 +308,12 @@ impl Hyalo {
                     self.lock_session();
                 }
             }
-            LoginEvent::Inhibitors(n) => {
-                tracing::debug!(n, "ScreenSaver inhibitors");
-                self.idle.dbus_inhibitors = n;
+            LoginEvent::PowerSource(source) => self.idle_power_source(source),
+            LoginEvent::Inhibitors(items) => {
+                self.idle.dbus_inhibitors = items.len();
+                if let Some(login) = &mut self.login {
+                    login.inhibitors = items;
+                }
                 self.idle_inhibition_changed();
             }
         }
@@ -287,5 +331,70 @@ impl Hyalo {
             l.sleep_pending = false;
             l.delay.lock().unwrap().take();
         }
+    }
+}
+
+fn power_source(tx: Sender<LoginEvent>) {
+    loop {
+        let run = || -> zbus::Result<()> {
+            let conn = zbus::blocking::Connection::system()?;
+            let dbus = zbus::blocking::fdo::DBusProxy::new(&conn)?;
+            dbus.add_match_rule(
+                zbus::MatchRule::builder()
+                    .msg_type(zbus::message::Type::Signal)
+                    .path("/org/freedesktop/UPower")?
+                    .build(),
+            )?;
+            dbus.add_match_rule(
+                zbus::MatchRule::builder()
+                    .msg_type(zbus::message::Type::Signal)
+                    .member("NameOwnerChanged")?
+                    .add_arg("org.freedesktop.UPower")?
+                    .build(),
+            )?;
+            let read = || {
+                let value = zbus::blocking::Proxy::new(
+                    &conn,
+                    "org.freedesktop.UPower",
+                    "/org/freedesktop/UPower",
+                    "org.freedesktop.UPower",
+                )
+                .ok()
+                .and_then(|p| p.get_property::<bool>("OnBattery").ok());
+                tx.send(LoginEvent::PowerSource(value)).ok();
+            };
+            read();
+            let signals = zbus::MatchRule::builder().msg_type(zbus::message::Type::Signal).build();
+            for message in zbus::blocking::MessageIterator::for_match_rule(signals, &conn, Some(64))? {
+                let message = message?;
+                if message
+                    .header()
+                    .member()
+                    .is_some_and(|m| m.as_str() == "NameOwnerChanged")
+                {
+                    if let Ok((name, _, owner)) = message.body().deserialize::<(String, String, String)>()
+                        && name == "org.freedesktop.UPower"
+                    {
+                        if owner.is_empty() {
+                            let _ = tx.send(LoginEvent::PowerSource(None));
+                        } else {
+                            read();
+                        }
+                    }
+                } else if message
+                    .header()
+                    .path()
+                    .is_some_and(|p| p.as_str() == "/org/freedesktop/UPower")
+                {
+                    read();
+                }
+            }
+            Ok(())
+        };
+        let _ = run();
+        if tx.send(LoginEvent::PowerSource(None)).is_err() {
+            break;
+        }
+        std::thread::sleep(Duration::from_secs(2));
     }
 }

@@ -382,11 +382,14 @@ pub struct IdleConfig {
     pub screen_off: u32,
     pub lock: u32,
     pub suspend: u32,
+    pub suspend_battery: u32,
+    pub suspend_ac: u32,
+    pub dim_before_off: u32,
 }
 
 impl Default for IdleConfig {
     fn default() -> Self {
-        Self { screen_off: 300, lock: 600, suspend: 0 }
+        Self { screen_off: 300, lock: 600, suspend: 0, suspend_battery: 0, suspend_ac: 0, dim_before_off: 10 }
     }
 }
 
@@ -823,9 +826,18 @@ pub fn load_from(paths: &[PathBuf]) -> Result<Config, ConfigError> {
 }
 
 /// The configuration the layers make, bottom first, checked.
+fn normalize_idle_layer(layer: &mut toml::Table) {
+    if let Some(idle) = layer.get_mut("idle").and_then(toml::Value::as_table_mut)
+        && let Some(legacy) = idle.get("suspend").cloned()
+    {
+        idle.entry("suspend_battery").or_insert(legacy.clone());
+        idle.entry("suspend_ac").or_insert(legacy);
+    }
+}
 fn from_layers(layers: Vec<toml::Table>) -> Result<Config, ConfigError> {
     let mut merged = toml::Table::new();
-    for layer in layers {
+    for mut layer in layers {
+        normalize_idle_layer(&mut layer);
         merge(&mut merged, layer);
     }
     let config: Config = toml::Value::Table(merged)
@@ -940,7 +952,7 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
         state.rules = crate::wm::rules::compile(&new.rules).unwrap_or_default();
     }
     if old.idle != new.idle {
-        state.idle_rearm();
+        state.idle_config_changed();
     }
     if old.windows.controls != new.windows.controls {
         crate::protocols::window_controls::send_layouts(state);
@@ -1006,9 +1018,15 @@ pub fn set_numlock(keyboard: &smithay::input::keyboard::KeyboardHandle<crate::Hy
 /// Hyalo is the one writer of this file. Before, the shell wrote it whole from each module's
 /// state, and two modules writing one file would have dropped each other's tables.
 pub fn apply_settings(state: &mut crate::Hyalo, patch: serde_json::Value) -> Result<bool, String> {
-    let serde_json::Value::Object(patch) = patch else {
+    let serde_json::Value::Object(mut patch) = patch else {
         return Err("settings: the patch must be an object".into());
     };
+    if let Some(idle) = patch.get_mut("idle").and_then(serde_json::Value::as_object_mut)
+        && let Some(legacy) = idle.get("suspend").cloned()
+    {
+        idle.entry("suspend_battery").or_insert(legacy.clone());
+        idle.entry("suspend_ac").or_insert(legacy);
+    }
     let Some(path) = settings_layer() else {
         return Err("settings: this session has no settings layer (HYALO_CONFIG without HYALO_SETTINGS)".into());
     };
@@ -1100,6 +1118,19 @@ fn json_to_toml(v: serde_json::Value) -> Result<toml::Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_suspend_is_normalized_per_layer_before_merge() {
+        let parse = |s: &str| s.parse::<toml::Table>().unwrap();
+        let c = from_layers(vec![
+            parse("[idle]\nsuspend_battery=0\nsuspend_ac=0"), parse("[idle]\nsuspend=120"),
+        ]).unwrap();
+        assert_eq!((c.idle.suspend_battery, c.idle.suspend_ac), (120, 120));
+        let c = from_layers(vec![parse("[idle]\nsuspend=120"), parse("[idle]\nsuspend_battery=60")]).unwrap();
+        assert_eq!((c.idle.suspend_battery, c.idle.suspend_ac), (60, 120));
+        let c = from_layers(vec![parse("[idle]\nsuspend=120\nsuspend_battery=30")]).unwrap();
+        assert_eq!((c.idle.suspend_battery, c.idle.suspend_ac), (30, 120));
+    }
 
     #[test]
     fn an_undeclared_window_follows_the_level_only_when_a_rule_says_so() {

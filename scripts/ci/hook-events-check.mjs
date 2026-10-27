@@ -77,6 +77,7 @@ function walk(dir, out = []) {
 
 const sources = [
     ...walk("ui/shell").filter(f => f.endsWith(".ts") || f.endsWith(".tsx")),
+    ...walk("session/daemon/src").filter(f => f.endsWith(".rs")),
     ...walk("bin").filter(f => !f.endsWith(".c")),
 ]
 
@@ -89,6 +90,10 @@ const record = (event, file) => {
 for (const file of sources) {
     const src = readFileSync(file, "utf8")
     for (const m of src.matchAll(/fireHook\(\s*"([^"]+)"/g)) record(m[1], file)
+    // Rust invokes the runner directly with a fixed argv; dynamic names remain forbidden.
+    if (file.endsWith(".rs")) {
+        for (const m of src.matchAll(/Command::new\("nidara-hook"\)\s*\.args\(\["([a-z][a-z0-9-]*)"/g)) record(m[1], file)
+    }
     // The runner itself only ever talks about events in prose.
     if (file === RUNNER || !file.startsWith("bin/")) continue
     // Anchored to a command position: unanchored, the word "nidara-hook" inside a

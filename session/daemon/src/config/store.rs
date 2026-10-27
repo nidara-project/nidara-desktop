@@ -41,7 +41,7 @@ impl Changes {
             }
         });
     }
-    fn push(&self, name: &str, value: Value) {
+    pub(super) fn push(&self, name: &str, value: Value) {
         self.pending.lock().unwrap().push((name.to_owned(), value));
         self.notify.notify_one();
     }
@@ -132,8 +132,42 @@ pub fn spawn(changes: Arc<Changes>) -> Handle {
                     }
                     Err(e) => eprintln!("[config] cannot watch the wallpaper file: {e}"),
                 }
+                let idle_serial = store.idle_serial.clone();
                 STORE.with(|s| *s.borrow_mut() = Some(store));
                 changes.publish();
+                let updates = changes.clone();
+                let context = ctx.clone();
+                std::thread::Builder::new()
+                    .name("config-hyalo".into())
+                    .spawn(move || {
+                        loop {
+                            let serial = idle_serial.load(std::sync::atomic::Ordering::SeqCst);
+                            let idle = registry::read_idle();
+                            let updates = updates.clone();
+                            context.invoke(move || {
+                                STORE.with(|s| {
+                                    if let Some(st) = s.borrow().as_ref() {
+                                        if st.idle_serial.load(std::sync::atomic::Ordering::SeqCst)
+                                            != serial
+                                        {
+                                            return;
+                                        }
+                                        let before = st.idle.replace(idle);
+                                        for key in registry::keys() {
+                                            if let Some(field) = registry::idle_field(key.name)
+                                                && before[field] != st.idle.borrow()[field]
+                                                && registry::available(st, key)
+                                            {
+                                                updates.push(key.name, registry::get(st, key));
+                                            }
+                                        }
+                                    }
+                                })
+                            });
+                            std::thread::sleep(std::time::Duration::from_secs(2));
+                        }
+                    })
+                    .expect("Hyalo settings watcher");
                 glib::MainLoop::new(Some(&ctx), false).run();
             })
             .expect("a fresh context is free to own");

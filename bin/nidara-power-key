@@ -1,0 +1,5 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Hyalo forwards one physical press. Never retry an uncertain hardware action.
+exec gdbus call --session --timeout 10 --dest org.nidara.Session \
+    --object-path /org/nidara/Power --method org.nidara.Power1.PowerButtonPressed

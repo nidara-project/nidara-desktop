@@ -18,6 +18,16 @@ and leave its line in the index at the bottom of this file. It must match realit
 predates the split; #102 was reused on 2026-09-04, both now resolved). Cite them by title, not by
 number alone.
 
+## Native Power1 consumers and accepted legacy limits (#959, 2026-10-27)
+
+Power1 is the backend; Rust bar/island/menu consumers remain in the queued Rust shell work.
+Until a Rust menu consumer registers, the factory menu preference has effective action suspend.
+A registered consumer failure never falls back destructively. The legacy TS 5% island can appear
+alongside the backup critical notification. Legacy game powerprofilesctl sets cancel automatic
+PPD holds and can restore power-saver as a manual profile that AC does not undo. Future Rust game
+code must use sender-owned holds. These are explicit boundaries, not authorization to extend TS.
+The power-key inhibitor also covers logind software long press; firmware cutoff remains outside.
+
 ## Where this file stops and the issue tracker starts (2026-08-31)
 
 **This file is not the queue any more, and it never was a good one.** Since 2026-08-31 the open

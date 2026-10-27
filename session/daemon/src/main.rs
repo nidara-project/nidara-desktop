@@ -4,9 +4,11 @@
 mod audio;
 mod bluetooth;
 mod config;
+mod hyalo;
 mod media;
 mod model;
 mod network;
+mod power;
 mod store;
 
 use model::{CAPABILITIES, MAX_ID, Notification, actions, allocate, now, scalar_hints, truthy};
@@ -298,6 +300,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if std::env::args().any(|a| a == "--media") {
         media::serve(&conn).await?;
+    }
+    let power_read_only = std::env::args().any(|a| a == "--power-read-only");
+    if power_read_only || std::env::args().any(|a| a == "--power") {
+        power::serve(&conn, power_read_only).await?;
     }
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }

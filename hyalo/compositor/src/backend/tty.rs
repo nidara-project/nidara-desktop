@@ -1009,7 +1009,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
-    let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config,idle, .. } = state;
     let cursor_status = &*cursor_status;
     let Backend::Tty(tty) = backend else { return };
     if !tty.session.is_active() {
@@ -1034,7 +1034,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         Some(last) if !vrr => render::timing::next_vblank(last, period, begun),
         _ => begun,
     };
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when,idle.dimmed);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,
