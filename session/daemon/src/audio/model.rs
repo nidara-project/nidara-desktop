@@ -18,6 +18,8 @@ pub struct Node {
     pub name: String,
     pub description: String,
     pub media_name: String,
+    pub process_id: u32,
+    pub endpoint_kind: String,
     pub application_id: String,
     pub application_name: String,
     pub icon_name: String,
@@ -57,6 +59,7 @@ pub struct Profile {
 }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Route {
+    pub port_type: String,
     pub path: String,
     pub device: String,
     pub index: i32,

@@ -87,6 +87,7 @@ const WM: &str = "org.gnome.desktop.wm.preferences";
 const BACKGROUND: &str = "org.gnome.desktop.background";
 const APPEARANCE: &str = "org.nidara.appearance";
 const NIGHT: &str = "org.nidara.night-light";
+const MEDIA: &str = "org.nidara.media";
 const AUDIO: &str = "org.nidara.audio";
 const AI: &str = "org.nidara.ai";
 
@@ -101,7 +102,9 @@ impl Store {
     pub fn new() -> Self {
         let source = gio::SettingsSchemaSource::default();
         let (mut settings, mut schemas) = (HashMap::new(), HashMap::new());
-        for id in [INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO] {
+        for id in [
+            INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO, MEDIA,
+        ] {
             if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
                 schemas.insert(id, schema);
@@ -586,6 +589,44 @@ fn table() -> Vec<Key> {
                 |_| json!({"i18n": "settings.accessibility.reduce-transparency", "control": "toggle"}),
             ),
             watch: &[(APPEARANCE, "reduce-transparency")],
+            file: false,
+        },
+        Key {
+            name: "media.lock-screen-controls",
+            desc: "Native session media preference.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[MEDIA],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(MEDIA).boolean("lock-screen-controls")),
+            set: Some(|st, v| {
+                st.s(MEDIA)
+                    .set_boolean("lock-screen-controls", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(MEDIA, "lock-screen-controls")],
+            file: false,
+        },
+        Key {
+            name: "media.pause-on-headphones-disconnect",
+            desc: "Native session media preference.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[MEDIA],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(MEDIA).boolean("pause-on-headphones-disconnect")),
+            set: Some(|st, v| {
+                st.s(MEDIA)
+                    .set_boolean("pause-on-headphones-disconnect", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(MEDIA, "pause-on-headphones-disconnect")],
             file: false,
         },
         Key {

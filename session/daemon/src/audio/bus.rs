@@ -5,6 +5,15 @@ use zbus::object_server::SignalEmitter;
 pub struct Root(pub Audio);
 #[zbus::interface(name = "org.nidara.Audio1")]
 impl Root {
+    #[zbus(signal)]
+    async fn headphone_fallback(
+        emitter: &SignalEmitter<'_>,
+        event_id: u64,
+        old_output: Path,
+        new_output: Path,
+        affected_playback: Vec<Path>,
+        reason: &str,
+    ) -> zbus::Result<()>;
     #[zbus(property)]
     fn state(&self) -> String {
         self.0.snapshot().state
@@ -201,6 +210,10 @@ impl NodeObject {
 }
 #[zbus::interface(name = "org.nidara.AudioNode1")]
 impl NodeObject {
+    #[zbus(property)]
+    fn process_id(&self) -> u32 {
+        self.get().process_id
+    }
     #[zbus(property)]
     fn kind(&self) -> String {
         self.get().kind
@@ -437,6 +450,12 @@ fn root_caps(g: &Graph) -> Vec<String> {
         return vec![];
     }
     let mut capabilities = vec!["mixer".into()];
+    if g.nodes
+        .values()
+        .any(|n| matches!(super::fallback::endpoint(g, n), "headphones" | "bluetooth"))
+    {
+        capabilities.push("headphone-fallback".into());
+    }
     if g.defaults_available {
         capabilities.push("defaults".into());
     }
@@ -489,6 +508,7 @@ fn root_props(g: &Graph, prefs: &Preferences) -> Props {
 }
 fn node_props(n: &model::Node) -> Props {
     [
+        ("ProcessId", v(n.process_id)),
         ("Kind", v(n.kind.clone())),
         ("Serial", v(n.serial)),
         ("Name", v(n.name.clone())),

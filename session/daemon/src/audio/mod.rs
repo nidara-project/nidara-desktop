@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Audio1, opt-in. WirePlumber owns graph policy and persistent mixer state.
 mod bus;
+mod fallback;
 mod model;
 #[cfg(feature = "audio-native")]
 mod native;
@@ -95,6 +96,7 @@ pub struct Audio {
     changed: Arc<Notify>,
     sequence: Arc<AtomicU64>,
     announced_root: Arc<std::sync::Mutex<bus::Props>>,
+    manual_until: Arc<std::sync::Mutex<Option<std::time::Instant>>>,
     pending: Arc<std::sync::Mutex<BTreeMap<String, PendingVolume>>>,
     #[cfg(feature = "audio-native")]
     streams: streams::Manager,
@@ -185,6 +187,17 @@ impl Audio {
         } else {
             None
         };
+        if matches!(
+            action,
+            Action::Default
+                | Action::ClearDefault(_)
+                | Action::Move(_)
+                | Action::Profile
+                | Action::Route(_)
+        ) {
+            *self.manual_until.lock().unwrap() =
+                Some(std::time::Instant::now() + Duration::from_secs(2));
+        }
         let wait = async {
             self.backend
                 .send(
@@ -298,6 +311,7 @@ pub async fn serve(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> 
         changed: Arc::new(Notify::new()),
         sequence: Arc::new(AtomicU64::new(1)),
         announced_root: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
+        manual_until: Default::default(),
         pending: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
         #[cfg(feature = "audio-native")]
         streams,
@@ -312,10 +326,41 @@ pub async fn serve(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> 
     let a = audio.clone();
     tokio::spawn(async move {
         let mut previous = Graph::default();
+        let mut fallback = fallback::Tracker::default();
+        let started = std::time::Instant::now();
+        let mut event_id = 0u64;
         loop {
             let next = snapshots.borrow_and_update().clone();
             if let Err(e) = bus::publish(&c, &a, &previous, &next).await {
                 eprintln!("[audio] publish: {e}");
+            }
+            let manual = a
+                .manual_until
+                .lock()
+                .unwrap()
+                .is_some_and(|until| until > std::time::Instant::now());
+            for event in fallback.advance(
+                &previous,
+                &next,
+                started.elapsed().as_micros() as u64,
+                manual,
+            ) {
+                event_id += 1;
+                let _ = c
+                    .emit_signal(
+                        None::<&str>,
+                        ROOT,
+                        "org.nidara.Audio1",
+                        "HeadphoneFallback",
+                        &(
+                            event_id,
+                            path(&event.old),
+                            path(&event.new),
+                            event.streams.iter().map(|s| path(s)).collect::<Vec<_>>(),
+                            event.reason,
+                        ),
+                    )
+                    .await;
             }
             previous = next;
             if snapshots.changed().await.is_err() {
@@ -359,6 +404,7 @@ mod tests {
                 changed: Arc::new(Notify::new()),
                 sequence: Arc::new(AtomicU64::new(1)),
                 announced_root: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
+                manual_until: Default::default(),
                 pending: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
                 #[cfg(feature = "audio-native")]
                 streams: streams::Manager::new(),

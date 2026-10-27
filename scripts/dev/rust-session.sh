@@ -6,7 +6,7 @@
 # directory below) and its own services: nidara-sessiond serves Config1 there. Nothing it
 # changes reaches the live session, and nothing of the live session serves it.
 #
-#   scripts/dev/rust-session.sh [--network] [--bluetooth] [--audio] [COMMAND…]   default: native Settings
+#   scripts/dev/rust-session.sh [--network] [--bluetooth] [--audio] [--media] [COMMAND…]   default: native Settings
 # Network/Bluetooth are explicit: never use it alongside the daily TS shell agent. A test
 # must also provide a private DBUS_SYSTEM_BUS_ADDRESS, not the host NetworkManager/BlueZ.
 # OBEX must be a private fake on the nested session bus too.
@@ -39,7 +39,7 @@ mkdir -p "$state/config/nidara"
 service_flags=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --network|--bluetooth|--audio) service_flags+=" $1"; shift ;;
+        --network|--bluetooth|--audio|--media) service_flags+=" $1"; shift ;;
         *) break ;;
     esac
 done
@@ -73,7 +73,7 @@ echo "settings:  $state"
 echo "msg:       HYALO_SOCKET=$rt/nidara-hyalo.wayland-1.sock nidara-hyalo msg …"
 # HYALO_SETTINGS: the settings layer Hyalo writes, here and not in ~/.config. The glass
 # tokens of this checkout when it has them (an installed export may be older than Hyalo).
-vars=(XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
+vars=(PATH="$repo/bin:$PATH" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
     XDG_CONFIG_HOME="$state/config" XDG_DATA_HOME="$state/data" XDG_CACHE_HOME="$state/cache"
     XDG_STATE_HOME="$state/state" GSETTINGS_BACKEND=keyfile)
 [ -f "$data/tokens/glass.json" ] && vars+=(HYALO_GLASS_TOKENS="$data/tokens/glass.json")

@@ -934,7 +934,8 @@ activation file** for the public notification name. Shell reloads restart only
 interface, members and rules of the TypeScript shell's `ConfigService.ts`: `Snapshot`/`Apply`/
 `Updated` with epoch and revision, `Describe`/`Get`/`Set`/`Changed`, the native Settings'
 owner trusted, any other sender gated by `ai.allowConfigWrite`, errors `Denied`/`Invalid`/
-`Failed`. Without the flag it serves notifications only, and with it a name already owned
+`Failed`. Without `--config` this interface is absent (other service flags are independent);
+with it a name already owned
 (the TS shell's, in its session) is left alone — the daemon keeps running.
 
 - **The keys are a table** (`registry.rs`): type, enum (re-read at every `Describe`), bounds,
@@ -3729,3 +3730,36 @@ tone. `sound.rs` owns bounded Vorbis/WAV decoding (lewton/hound), immutable PCM 
 the cache; no decoder, file lookup or allocation belongs in the RT callback.
 The package ships sound-theme-freedesktop as a runtime dependency. Theme tests
 use fixtures and private playback, never the user's audio graph.
+
+### Native Media1 and selected-player multimedia keys
+
+`session/daemon/src/media/` serves Media1 with `--media`; the packaged
+`nidara-sessiond.service` enables it alongside notifications. MPRIS can coexist
+with the TS reader, but there is deliberately no selection bridge: the old
+panel's pin does not reach the keys until its Rust replacement. The contract,
+clock, optional controls, artwork bounds and private tests are in media/README.md.
+No TS or lock UI is added. Config1 owns the two org.nidara.media preferences;
+lock-screen-controls is for the future Rust lock, not a promise of current UI.
+
+Hyalo spawns `nidara-media-key`, which calls Media1 Selected* with gdbus. A
+transport timeout must never retry through playerctl. Only a named absence error
+AND NameHasOwner=false for org.nidara.Session permits that fallback; the same
+error can have come from a disappeared MPRIS player. The installed helper and
+unit are package/install inputs; changing only the bindings leaves dead keys.
+
+Audio1 stays opt-in. It adds informational ProcessId and a conservative causal
+HeadphoneFallback signal; an analog jack can change route on the SAME sink, so
+link movement alone is insufficient. A route must become unavailable, or a lost
+physical headphone/BT device's streams must actually fall back to a speaker.
+Media1 matches PID/ancestor/app-id only unambiguously, pauses still-playing
+players, and never resumes. An absent Audio1 withdraws that capability normally.
+Artwork is decoded off-thread under bounds into media-art/sessiond/, never into
+the old shell's shared cache: two independent pruning writers must not share it.
+
+Media artwork saturation queues the current request instead of caching Busy;
+track/owner changes cancel obsolete queued requests. Worker permits remain held
+until active work actually finishes. Cached ArtPath includes the content hash,
+so rewriting a fixed local cover changes the path. Audio route classification
+prefers SPA route-info port.type and falls back to both ACP and UCM route names;
+ACP-only names silently miss same-node jack changes on UCM laptops. Physical
+port.type evidence remains separate from the parser/name-family fixtures.
