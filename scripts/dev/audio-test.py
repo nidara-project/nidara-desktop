@@ -17,7 +17,7 @@ def outer():
         run=Path(d);env=os.environ.copy()
         for key in ['DBUS_SESSION_BUS_ADDRESS','PIPEWIRE_REMOTE','PIPEWIRE_RUNTIME_DIR','WIREPLUMBER_CONFIG_DIR','GSETTINGS_SCHEMA_DIR']:
             env.pop(key,None)
-        for key,part in [('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache'),('XDG_STATE_HOME','state'),('XDG_RUNTIME_DIR','runtime')]:
+        for key,part in [('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache'),('XDG_STATE_HOME','state'),('XDG_DATA_HOME','data'),('XDG_RUNTIME_DIR','runtime')]:
             p=run/part;p.mkdir(mode=0o700);env[key]=str(p)
         env['XDG_RUNTIME_DIR']=runtime
         env['PIPEWIRE_REMOTE']='nidara-audio-test';env['PIPEWIRE_RUNTIME_DIR']=env['XDG_RUNTIME_DIR'];env['PIPEWIRE_CORE']='nidara-audio-test'
@@ -63,6 +63,8 @@ def outer():
 def private(binary):
     from gi.repository import Gio,GLib
     bus=Gio.bus_get_sync(Gio.BusType.SESSION,None);processes=[];logs=[]
+    finished={}
+    bus.signal_subscribe(None,'org.nidara.AudioTestPlayback1','Finished',None,None,Gio.DBusSignalFlags.NONE,lambda *args:finished.__setitem__(args[2],args[5].unpack()[0]))
     bus.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','RequestName',GLib.Variant('(su)',('org.nidara.SettingsNative',0)),None,Gio.DBusCallFlags.NONE,3000,None)
     def spawn(args,name):
         log=open(Path(os.environ['NIDARA_AUDIO_TEST_LOG'])/f'{name}.log','w');logs.append(log)
@@ -130,16 +132,16 @@ def private(binary):
         assert abs(nodes()[a]['Balance']+.5)<.01
         invoke('SetVolume','(od)',(a,.6))
         configure('audio.alerts-enabled',GLib.Variant('b',False))
-        try:invoke('PlayAlert','(s)',('notification',));raise AssertionError('disabled alert accepted')
+        try:invoke('PlayAlert','(s)',('message-new-instant',));raise AssertionError('disabled alert accepted')
         except GLib.Error as e:assert 'disabled' in str(e),e
         configure('audio.alerts-enabled',GLib.Variant('b',True))
-        alert=invoke('PlayAlert','(s)',('notification',))[0]
-        wait(lambda:alert not in objects(),'alert sound completes without ducking')
+        alert=invoke('PlayAlert','(s)',('message-new-instant',))[0]
+        wait(lambda:alert not in objects() and finished.get(alert)=='completed','XDG alert sound completes without ducking')
         try:invoke('PlayVolumeFeedback','(o)',(a,));raise AssertionError('disabled feedback accepted')
         except GLib.Error as e:assert 'disabled' in str(e),e
         configure('audio.volume-feedback',GLib.Variant('b',True))
         click=invoke('PlayVolumeFeedback','(o)',(a,))[0]
-        wait(lambda:click not in objects(),'optional volume feedback completes')
+        wait(lambda:click not in objects() and finished.get(click)=='completed','XDG audio-volume-change feedback completes')
         invoke('SetMuted','(ob)',(a,True))
         try:invoke('TestChannel','(os)',(a,'FL'));raise AssertionError('muted test accepted')
         except GLib.Error as e:assert 'output muted' in str(e),e
@@ -178,11 +180,16 @@ def private(binary):
         capture=Path(os.environ['NIDARA_AUDIO_TEST_RUN'])/'channel.raw'
         recorder=spawn(['pw-record','--raw','--format','f32','--rate','48000','--channels','2','--target','test-a','-P','{ stream.capture.sink=true }',str(capture)],'channel-capture')
         wait(lambda:any(v['Kind']=='capture' and v['CaptureKind']=='monitor' for v in nodes().values()),'external sink monitor is classified separately')
-        test=invoke('TestChannel','(os)',(a,'FL'))[0];wait(lambda:test not in objects(),'channel test completes and object is removed')
+        test=invoke('TestChannel','(os)',(a,'FL'))[0];wait(lambda:test not in objects() and finished.get(test)=='completed','channel test completes and object is removed')
         recorder.terminate();recorder.wait(timeout=3)
         samples=struct.unpack('<'+'f'*(capture.stat().st_size//4),capture.read_bytes())
         assert max(map(abs,samples[::2]))>.01 and max(map(abs,samples[1::2]))<.0001,'channel bleed or no test tone'
         print('PASS: FL test has energy only in FL',flush=True)
+        wp.terminate();wp.wait(timeout=3)
+        wait(lambda:root()['State']=='degraded','missing WirePlumber metadata is degraded')
+        assert 'mixer' in root()['Capabilities'] and 'defaults' not in root()['Capabilities']
+        invoke('SetVolume','(od)',(a,.4));assert abs(nodes()[a]['Volume']-.4)<.002
+        print('PASS: degraded retains working mixer and withdraws only defaults',flush=True)
         old_generation=root()['Generation'];pw.terminate();pw.wait(timeout=3);wait(lambda:root()['State']=='unavailable','PipeWire loss is explicit')
         wp.terminate();wp.wait(timeout=3)
         pw=spawn(['pipewire'],'pipewire-restart');wait(lambda:pw.poll() is None and (Path(os.environ['XDG_RUNTIME_DIR'])/'nidara-audio-test').exists(),'restarted exclusive socket')

@@ -3718,3 +3718,14 @@ privacy classification from an app-id claiming to be Nidara. **Ducking is
 intentionally absent**: moving an app directly to a sink bypasses WP's role
 loopback, and moving that loopback moves the role group. Do not enable role-based
 policy or alter installed WP configuration to work around it.
+
+Audio1 property signals carry **changed values only**, not whole-object
+invalidations; root maps are compared separately so volume drags do not trigger
+root Get calls. Degraded capabilities retain the working mixer independently of
+default-node metadata. Alerts/feedback resolve **XDG sound themes**, following
+`org.gnome.desktop.sound` theme-name (freedesktop fallback), index.theme/Inherits,
+locale/name/profile fallback and `.disabled`. Only TestChannel uses a generated
+tone. `sound.rs` owns bounded Vorbis/WAV decoding (lewton/hound), immutable PCM and
+the cache; no decoder, file lookup or allocation belongs in the RT callback.
+The package ships sound-theme-freedesktop as a runtime dependency. Theme tests
+use fixtures and private playback, never the user's audio graph.

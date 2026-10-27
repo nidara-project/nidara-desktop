@@ -538,6 +538,7 @@ impl Worker {
             ..Default::default()
         };
         let md = metadata(&all);
+        graph.defaults_available = md.is_some();
         if md.is_none() {
             graph.state = "degraded".into();
             graph.error = "WirePlumber default metadata unavailable".into();
@@ -1066,39 +1067,69 @@ pub fn channel_id(s: &str) -> Option<u32> {
         _ => return None,
     })
 }
-fn preferences(dirty: &Rc<Cell<bool>>, prefs: &Arc<RwLock<Preferences>>) -> Option<gio::Settings> {
+fn preferences(dirty: &Rc<Cell<bool>>, prefs: &Arc<RwLock<Preferences>>) -> Vec<gio::Settings> {
     use gio::prelude::*;
-    let source = gio::SettingsSchemaSource::default()?;
-    let schema = source.lookup("org.nidara.audio", true)?;
-    if ![
-        "overamplification",
-        "alerts-enabled",
-        "alert-volume",
-        "volume-feedback",
-        "switch-on-connect",
-    ]
-    .iter()
-    .all(|k| schema.has_key(k))
+    let mut guards = Vec::new();
+    let Some(source) = gio::SettingsSchemaSource::default() else {
+        return guards;
+    };
+    if let Some(schema) = source
+        .lookup("org.gnome.desktop.sound", true)
+        .filter(|s| s.has_key("theme-name"))
     {
-        return None;
+        let sound = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
+        let theme = sound.string("theme-name").to_string();
+        if !theme.is_empty() {
+            prefs.write().unwrap().sound_theme = theme;
+        }
+        let p = prefs.clone();
+        let d = dirty.clone();
+        sound.connect_changed(Some("theme-name"), move |s, _| {
+            let theme = s.string("theme-name").to_string();
+            p.write().unwrap().sound_theme = if theme.is_empty() {
+                "freedesktop".into()
+            } else {
+                theme
+            };
+            d.set(true);
+        });
+        guards.push(sound);
     }
+    let Some(schema) = source.lookup("org.nidara.audio", true).filter(|s| {
+        [
+            "overamplification",
+            "alerts-enabled",
+            "alert-volume",
+            "volume-feedback",
+            "switch-on-connect",
+        ]
+        .iter()
+        .all(|k| s.has_key(k))
+    }) else {
+        return guards;
+    };
     let s = gio::Settings::new_full(&schema, None::<&gio::SettingsBackend>, None);
-    let read = |s: &gio::Settings| Preferences {
+    let read = |s: &gio::Settings, theme: String| Preferences {
         overamplification: s.boolean("overamplification"),
         alerts_enabled: s.boolean("alerts-enabled"),
         alert_volume: s.double("alert-volume"),
         volume_feedback: s.boolean("volume-feedback"),
         switch_on_connect: s.boolean("switch-on-connect"),
+        sound_theme: theme,
     };
-    *prefs.write().unwrap() = read(&s);
+    let theme = prefs.read().unwrap().sound_theme.clone();
+    *prefs.write().unwrap() = read(&s, theme);
     let p = prefs.clone();
     let d = dirty.clone();
     s.connect_changed(None, move |s, _| {
-        *p.write().unwrap() = read(s);
+        let theme = p.read().unwrap().sound_theme.clone();
+        *p.write().unwrap() = read(s, theme);
         d.set(true);
     });
-    Some(s)
+    guards.push(s);
+    guards
 }
+
 pub fn start(
     rx: std::sync::mpsc::Receiver<Request>,
     snapshots: watch::Sender<Graph>,

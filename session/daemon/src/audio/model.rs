@@ -80,6 +80,7 @@ pub struct Graph {
     pub profiles: BTreeMap<String, Profile>,
     pub routes: BTreeMap<String, Route>,
     pub switch_policy: bool,
+    pub defaults_available: bool,
 }
 impl Default for Graph {
     fn default() -> Self {
@@ -94,6 +95,7 @@ impl Default for Graph {
             profiles: BTreeMap::new(),
             routes: BTreeMap::new(),
             switch_policy: false,
+            defaults_available: false,
         }
     }
 }
@@ -223,6 +225,7 @@ pub struct Preferences {
     pub alert_volume: f64,
     pub volume_feedback: bool,
     pub switch_on_connect: bool,
+    pub sound_theme: String,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -232,6 +235,7 @@ impl Default for Preferences {
             alert_volume: 0.5,
             volume_feedback: false,
             switch_on_connect: true,
+            sound_theme: "freedesktop".into(),
         }
     }
 }

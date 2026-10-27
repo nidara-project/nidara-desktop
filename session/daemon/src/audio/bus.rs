@@ -69,11 +69,7 @@ impl Root {
     }
     #[zbus(property)]
     fn capabilities(&self) -> Vec<String> {
-        if self.0.snapshot().state == "ready" {
-            vec!["mixer".into(), "defaults".into()]
-        } else {
-            vec![]
-        }
+        root_caps(&self.0.snapshot())
     }
     async fn set_volume(&self, node: Path, volume: f64) -> Result<(), Error> {
         self.0.apply(node.as_str(), Action::Volume(volume)).await
@@ -425,15 +421,158 @@ impl RouteObject {
         self.get().active
     }
 }
-// All properties are invalidated together on a changed record; clients re-read. This also
-// covers capability loss and avoids a second, drifting table of hand-written deltas.
-async fn invalidate(c: &Connection, key: &str, iface: &str, names: &[&str]) -> zbus::Result<()> {
+// Maps are shared by change detection: no invalidation/getter round-trips on a drag.
+pub type Props = std::collections::BTreeMap<&'static str, zbus::zvariant::OwnedValue>;
+fn v<T: Into<zbus::zvariant::Value<'static>>>(value: T) -> zbus::zvariant::OwnedValue {
+    value
+        .into()
+        .try_into()
+        .expect("audio properties contain no file descriptors")
+}
+fn paths(values: &[String]) -> Vec<Path> {
+    values.iter().map(|s| path(s)).collect()
+}
+fn root_caps(g: &Graph) -> Vec<String> {
+    if !matches!(g.state.as_str(), "ready" | "degraded") {
+        return vec![];
+    }
+    let mut capabilities = vec!["mixer".into()];
+    if g.defaults_available {
+        capabilities.push("defaults".into());
+    }
+    capabilities
+}
+fn root_props(g: &Graph, prefs: &Preferences) -> Props {
+    [
+        ("State", v(g.state.clone())),
+        ("LastError", v(g.error.clone())),
+        ("Generation", v(g.generation)),
+        ("DefaultOutput", v(path(&g.default_output))),
+        ("DefaultInput", v(path(&g.default_input))),
+        ("VolumeLimit", v(prefs.limit())),
+        (
+            "Streams",
+            v(g.nodes
+                .values()
+                .filter(|n| matches!(n.kind.as_str(), "playback" | "capture") && !n.internal)
+                .map(|n| path(&n.path))
+                .collect::<Vec<_>>()),
+        ),
+        (
+            "RecordingStreams",
+            v(g.nodes
+                .values()
+                .filter(|n| n.kind == "capture" && !n.internal)
+                .map(|n| path(&n.path))
+                .collect::<Vec<_>>()),
+        ),
+        (
+            "InternalCapture",
+            v(g.nodes
+                .values()
+                .filter(|n| n.kind == "capture" && n.internal)
+                .map(|n| path(&n.path))
+                .collect::<Vec<_>>()),
+        ),
+        ("Capabilities", v(root_caps(g))),
+        (
+            "DefaultSwitchMode",
+            v(if g.switch_policy {
+                "wireplumber-policy"
+            } else {
+                "unsupported"
+            }
+            .to_string()),
+        ),
+    ]
+    .into()
+}
+fn node_props(n: &model::Node) -> Props {
+    [
+        ("Kind", v(n.kind.clone())),
+        ("Serial", v(n.serial)),
+        ("Name", v(n.name.clone())),
+        ("Description", v(n.description.clone())),
+        ("MediaName", v(n.media_name.clone())),
+        ("ApplicationId", v(n.application_id.clone())),
+        ("ApplicationName", v(n.application_name.clone())),
+        ("IconName", v(n.icon_name.clone())),
+        ("Device", v(path(&n.device))),
+        ("Volume", v(n.volume)),
+        ("Muted", v(n.muted)),
+        (
+            "Channels",
+            v(n.channels
+                .iter()
+                .map(|c| (c.position.clone(), c.volume))
+                .collect::<Vec<_>>()),
+        ),
+        ("Balance", v(model::balance(&n.channels))),
+        ("Capabilities", v(n.capabilities.clone())),
+        ("State", v(n.state.clone())),
+        ("Targets", v(paths(&n.targets))),
+        ("RequestedTarget", v(path(&n.requested_target))),
+        ("CaptureKind", v(n.capture_kind.clone())),
+        ("Routes", v(paths(&n.routes))),
+        ("ActiveRoute", v(path(&n.active_route))),
+    ]
+    .into()
+}
+fn device_props(n: &model::Device) -> Props {
+    [
+        ("Name", v(n.name.clone())),
+        ("Description", v(n.description.clone())),
+        ("Profiles", v(paths(&n.profiles))),
+        ("ActiveProfile", v(path(&n.active_profile))),
+        ("Capabilities", v(n.capabilities.clone())),
+    ]
+    .into()
+}
+fn profile_props(n: &model::Profile) -> Props {
+    [
+        ("Index", v(n.index)),
+        ("Name", v(n.name.clone())),
+        ("Description", v(n.description.clone())),
+        ("Availability", v(n.availability.clone())),
+        ("Priority", v(n.priority)),
+    ]
+    .into()
+}
+fn route_props(n: &model::Route) -> Props {
+    [
+        ("Index", v(n.index)),
+        ("DeviceIndex", v(n.device_index)),
+        ("Direction", v(n.direction.clone())),
+        ("Name", v(n.name.clone())),
+        ("Description", v(n.description.clone())),
+        ("Availability", v(n.availability.clone())),
+        ("Profiles", v(paths(&n.profiles))),
+        ("Active", v(n.active)),
+    ]
+    .into()
+}
+fn delta(old: &Props, new: &Props) -> Props {
+    new.iter()
+        .filter(|(k, v)| old.get(*k) != Some(*v))
+        .map(|(k, v)| {
+            (
+                *k,
+                v.try_clone()
+                    .expect("audio values contain no file descriptors"),
+            )
+        })
+        .collect()
+}
+async fn emit(c: &Connection, key: &str, iface: &str, changed: Props) -> zbus::Result<()> {
+    if changed.is_empty() {
+        return Ok(());
+    }
     let e = SignalEmitter::new(c, key)?;
     zbus::fdo::Properties::properties_changed(
         &e,
         iface.try_into()?,
-        std::collections::HashMap::new(),
-        names.into(),
+        changed.into_iter().map(|(k, v)| (k, v.into())).collect(),
+        Vec::new().into(),
     )
     .await
 }
@@ -492,90 +631,54 @@ pub async fn publish(c: &Connection, a: &Audio, old: &Graph, new: &Graph) -> zbu
             .await?;
     }
     *a.graph.write().unwrap() = new.clone();
-    invalidate(
-        c,
-        ROOT,
-        "org.nidara.Audio1",
-        &[
-            "State",
-            "LastError",
-            "Generation",
-            "DefaultOutput",
-            "DefaultInput",
-            "VolumeLimit",
-            "RecordingStreams",
-            "InternalCapture",
-            "Streams",
-            "Capabilities",
-            "DefaultSwitchMode",
-        ],
-    )
-    .await?;
+    let root_changed = {
+        let mut previous = a.announced_root.lock().unwrap();
+        let current = root_props(new, &a.prefs.read().unwrap());
+        let changed = delta(&previous, &current);
+        *previous = current;
+        changed
+    };
+    emit(c, ROOT, "org.nidara.Audio1", root_changed).await?;
     for (k, n) in &new.nodes {
-        if old.nodes.get(k).is_some_and(|o| o != n) {
-            invalidate(
+        if let Some(old) = old.nodes.get(k).filter(|old| *old != n) {
+            emit(
                 c,
                 k,
                 "org.nidara.AudioNode1",
-                &[
-                    "Name",
-                    "Description",
-                    "MediaName",
-                    "ApplicationId",
-                    "ApplicationName",
-                    "IconName",
-                    "Device",
-                    "Volume",
-                    "Muted",
-                    "Channels",
-                    "Balance",
-                    "Capabilities",
-                    "State",
-                    "Targets",
-                    "RequestedTarget",
-                    "CaptureKind",
-                    "Routes",
-                    "ActiveRoute",
-                ],
+                delta(&node_props(old), &node_props(n)),
             )
             .await?;
         }
     }
     for (k, n) in &new.devices {
-        if old.devices.get(k).is_some_and(|o| o != n) {
-            invalidate(
+        if let Some(old) = old.devices.get(k).filter(|old| *old != n) {
+            emit(
                 c,
                 k,
                 "org.nidara.AudioDevice1",
-                &[
-                    "Name",
-                    "Description",
-                    "Profiles",
-                    "ActiveProfile",
-                    "Capabilities",
-                ],
+                delta(&device_props(old), &device_props(n)),
             )
             .await?;
         }
     }
     for (k, n) in &new.profiles {
-        if old.profiles.get(k).is_some_and(|o| o != n) {
-            invalidate(
+        if let Some(old) = old.profiles.get(k).filter(|old| *old != n) {
+            emit(
                 c,
                 k,
                 "org.nidara.AudioProfile1",
-                &["Name", "Description", "Availability", "Priority"],
+                delta(&profile_props(old), &profile_props(n)),
             )
             .await?;
         }
     }
     for (k, n) in &new.routes {
-        if old.routes.get(k).is_some_and(|o| o != n) {
-            invalidate(
+        if let Some(old) = old.routes.get(k).filter(|old| *old != n) {
+            emit(
                 c,
                 k,
                 "org.nidara.AudioRoute1",
-                &["Name", "Description", "Availability", "Profiles", "Active"],
+                delta(&route_props(old), &route_props(n)),
             )
             .await?;
         }
@@ -606,4 +709,70 @@ pub async fn publish(c: &Connection, a: &Audio, old: &Graph, new: &Graph) -> zbu
     }
     a.changed.notify_waiters();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn volume_drag_has_values_only_and_does_not_change_root_properties() {
+        let key = format!("{ROOT}/g1/nodes/n1");
+        let before = model::Node {
+            path: key.clone(),
+            kind: "output".into(),
+            volume: 0.4,
+            device: "/".into(),
+            requested_target: "/".into(),
+            active_route: "/".into(),
+            channels: vec![
+                model::Channel {
+                    position: "FL".into(),
+                    volume: 0.2,
+                },
+                model::Channel {
+                    position: "FR".into(),
+                    volume: 0.4,
+                },
+            ],
+            ..Default::default()
+        };
+        let mut after = before.clone();
+        after.volume = 0.8;
+        after.channels[0].volume = 0.4;
+        after.channels[1].volume = 0.8;
+        let changed = delta(&node_props(&before), &node_props(&after));
+        assert_eq!(
+            changed.keys().copied().collect::<Vec<_>>(),
+            vec!["Channels", "Volume"]
+        );
+        assert_eq!(f64::try_from(&changed["Volume"]).unwrap(), 0.8);
+        let mut old = Graph {
+            state: "degraded".into(),
+            defaults_available: true,
+            default_output: key.clone(),
+            ..Default::default()
+        };
+        old.nodes.insert(key.clone(), before);
+        let mut new = old.clone();
+        new.nodes.insert(key, after);
+        let prefs = Preferences::default();
+        assert!(delta(&root_props(&old, &prefs), &root_props(&new, &prefs)).is_empty());
+        assert_eq!(root_caps(&old), vec!["mixer", "defaults"]);
+        let no_defaults = Graph {
+            defaults_available: false,
+            ..old.clone()
+        };
+        assert_eq!(root_caps(&no_defaults), vec!["mixer"]);
+        let boosted = Preferences {
+            overamplification: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            delta(&root_props(&new, &prefs), &root_props(&new, &boosted))
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec!["VolumeLimit"]
+        );
+    }
 }

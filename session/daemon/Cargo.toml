@@ -20,8 +20,10 @@ glib = "0.22"
 futures-util = { version = "0.3", default-features = false }
 libc = "0.2"
 pipewire = { version = "0.10.1", features = ["v0_3_77"], optional = true }
+lewton = { version = "0.10.2", optional = true }
+hound = { version = "3.5.1", optional = true }
 
 [features]
 # The existing sessiond CI has no PipeWire headers; model/bus tests need none.
 # Release/development desktop builds opt in (the package already depends on PW).
-audio-native = ["dep:pipewire"]
+audio-native = ["dep:pipewire", "dep:lewton", "dep:hound"]

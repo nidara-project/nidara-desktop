@@ -171,6 +171,7 @@ impl Manager {
                     target: n.serial.to_string(),
                     positions: vec![],
                     capture: true,
+                    clip: None,
                     selected: None,
                     gain: 1.0,
                     frequency: 0.0,
@@ -252,53 +253,85 @@ impl Manager {
         if n.muted {
             return Err(Error::Failed("output muted".into()));
         }
-        let (frequency, duration, gain, selected) = match kind {
+        let (frequency, duration, gain, selected, clip, positions) = match kind {
             "test" => {
                 if !n.capabilities.iter().any(|s| s == "test-channels") {
                     return Err(Error::NotSupported("channel isolation unavailable".into()));
                 }
-                let index = n
+                let selected = n
                     .channels
                     .iter()
                     .position(|ch| ch.position == event)
                     .ok_or_else(|| {
                         Error::InvalidArgument("channel absent from output map".into())
                     })?;
-                (440.0, Duration::from_millis(700), 0.15, Some(index))
+                let positions = n
+                    .channels
+                    .iter()
+                    .map(|ch| {
+                        super::native::channel_id(&ch.position)
+                            .ok_or_else(|| Error::NotSupported("unsupported channel map".into()))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                (
+                    440.0,
+                    Duration::from_millis(700),
+                    0.15,
+                    Some(selected),
+                    None,
+                    positions,
+                )
             }
-            "feedback" => (1200.0, Duration::from_millis(25), 0.08, None),
-            "alert" => {
-                let hz = match event {
-                    "notification" => 880.0,
-                    "warning" => 660.0,
-                    "error" => 330.0,
-                    "complete" => 1046.5,
-                    _ => return Err(Error::InvalidArgument("unknown alert event".into())),
+            "alert" | "feedback" => {
+                if kind == "alert" && event == "audio-volume-change" {
+                    return Err(Error::InvalidArgument(
+                        "volume feedback uses PlayVolumeFeedback".into(),
+                    ));
+                }
+                let name = if kind == "feedback" {
+                    "audio-volume-change"
+                } else {
+                    event
+                };
+                let clip = super::sound::resolve(prefs.sound_theme.clone(), name.into()).await?;
+                // A disable acknowledged while decoding must still prevent playback.
+                a.backend
+                    .send(ROOT, g.generation, Action::Synchronize, 0)
+                    .await?;
+                let current = a.prefs.read().unwrap().clone();
+                if (kind == "alert" && !current.alerts_enabled)
+                    || (kind == "feedback" && !current.volume_feedback)
+                {
+                    return Err(Error::PermissionDenied(
+                        "sound disabled while decoding".into(),
+                    ));
+                }
+                let graph = a.snapshot();
+                if graph.generation != g.generation || !graph.nodes.contains_key(target.as_str()) {
+                    return Err(Error::Unavailable("output changed while decoding".into()));
+                }
+                let positions = if clip.channels == 1 {
+                    vec![spa::sys::SPA_AUDIO_CHANNEL_MONO]
+                } else {
+                    vec![
+                        spa::sys::SPA_AUDIO_CHANNEL_FL,
+                        spa::sys::SPA_AUDIO_CHANNEL_FR,
+                    ]
                 };
                 (
-                    hz,
-                    Duration::from_millis(180),
-                    prefs.alert_volume.powi(3) * 0.2,
+                    0.0,
+                    clip.duration(),
+                    if kind == "alert" {
+                        current.alert_volume.powi(3)
+                    } else {
+                        1.0
+                    },
                     None,
+                    Some(clip),
+                    positions,
                 )
             }
             _ => return Err(Error::InvalidArgument("unknown playback kind".into())),
-        };
-        let positions: Vec<u32> = n
-            .channels
-            .iter()
-            .map(|ch| {
-                super::native::channel_id(&ch.position)
-                    .ok_or_else(|| Error::NotSupported("unsupported channel map".into()))
-            })
-            .collect::<Result<_, _>>()?;
-        let positions = if positions.is_empty() {
-            vec![
-                spa::sys::SPA_AUDIO_CHANNEL_FL,
-                spa::sys::SPA_AUDIO_CHANNEL_FR,
-            ]
-        } else {
-            positions
         };
         let key = format!(
             "{ROOT}/playbacks/p{}",
@@ -331,6 +364,7 @@ impl Manager {
                 target: n.serial.to_string(),
                 positions,
                 capture: false,
+                clip,
                 selected,
                 gain,
                 frequency,
@@ -589,6 +623,7 @@ struct Job {
     target: String,
     positions: Vec<u32>,
     capture: bool,
+    clip: Option<Arc<super::sound::Clip>>,
     selected: Option<usize>,
     gain: f64,
     frequency: f64,
@@ -657,7 +692,7 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
         ids: job.ids.clone(),
         id: (cookie, client_id),
     };
-    let props = pw::properties::properties! {"media.type"=>"Audio","media.category"=>if job.capture{"Capture"}else{"Playback"},"media.role"=>if job.capture{"Monitor"}else{"Notification"},"application.name"=>"Nidara Audio","application.id"=>"org.nidara.Session","target.object"=>job.target.as_str(),"node.dont-reconnect"=>"true","node.dont-fallback"=>"true","node.dont-move"=>"true","stream.dont-remix"=>"true","state.restore-props"=>"false","state.restore-target"=>"false"};
+    let props = pw::properties::properties! {"media.type"=>"Audio","media.category"=>if job.capture{"Capture"}else{"Playback"},"media.role"=>if job.capture{"Monitor"}else{"Notification"},"application.name"=>"Nidara Audio","application.id"=>"org.nidara.Session","target.object"=>job.target.as_str(),"node.dont-reconnect"=>"true","node.dont-fallback"=>"true","node.dont-move"=>"true","stream.dont-remix"=>if job.capture||job.selected.is_some(){"true"}else{"false"},"state.restore-props"=>"false","state.restore-target"=>"false"};
     let stream = pw::stream::StreamBox::new(&core, "Nidara Audio", props)?;
     let count = Arc::new(AtomicU32::new(if job.capture {
         0
@@ -671,10 +706,12 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
     let selected = job.selected;
     let gain = job.gain;
     let frequency = job.frequency;
+    let clip = job.clip.clone();
+    let rate = clip.as_ref().map_or(48000, |c| c.rate);
     let (mut phase, mut frames) = (0.0_f64, 0_u64);
     let duration_frames = job
         .duration
-        .map(|d| (d.as_secs_f64() * 48000.0) as u64)
+        .map(|d| (d.as_secs_f64() * rate as f64).round() as u64)
         .unwrap_or(u64::MAX);
     let done = Arc::new(AtomicBool::new(false));
     let rt_done = done.clone();
@@ -740,24 +777,32 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
                             .min(capacity)
                     };
                     for frame in bytes[..frames_requested * (4 * n)].chunks_exact_mut(4 * n) {
-                        phase = (phase + std::f64::consts::TAU * frequency / 48000.0)
-                            % std::f64::consts::TAU;
-                        let envelope = if frames >= duration_frames {
-                            0.0
+                        let value = if clip.is_none() {
+                            phase = (phase + std::f64::consts::TAU * frequency / rate as f64)
+                                % std::f64::consts::TAU;
+                            let envelope = if frames >= duration_frames {
+                                0.0
+                            } else {
+                                (frames as f64 / 240.0).min(1.0)
+                                    * ((duration_frames - frames) as f64 / 240.0).min(1.0)
+                            };
+                            (phase.sin() * gain * envelope) as f32
                         } else {
-                            (frames as f64 / 240.0).min(1.0)
-                                * ((duration_frames - frames) as f64 / 240.0).min(1.0)
+                            0.0
                         };
-                        let value = (phase.sin() * gain * envelope) as f32;
                         for (i, b) in frame.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                            b.copy_from_slice(
-                                &(if selected.is_none_or(|c| c == i) {
-                                    value
-                                } else {
-                                    0.0
-                                })
-                                .to_le_bytes(),
-                            );
+                            let value = if let Some(pcm) = &clip {
+                                pcm.samples
+                                    .get((frames as usize).saturating_mul(n).saturating_add(i))
+                                    .copied()
+                                    .unwrap_or(0.0)
+                                    * gain as f32
+                            } else if selected.is_none_or(|c| c == i) {
+                                value
+                            } else {
+                                0.0
+                            };
+                            b.copy_from_slice(&value.to_le_bytes());
                         }
                         frames += 1;
                         written += 4 * n;
@@ -776,7 +821,7 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
     let mut info = spa::param::audio::AudioInfoRaw::new();
     info.set_format(spa::param::audio::AudioFormat::F32LE);
     if !job.capture {
-        info.set_rate(48000);
+        info.set_rate(rate);
         info.set_channels(job.positions.len() as u32);
         let mut map = [0; spa::param::audio::MAX_CHANNELS];
         map[..job.positions.len()].copy_from_slice(&job.positions);

@@ -22,7 +22,11 @@ updates in bus order, and discard all proxies on bus name-owner change. Object
 paths include a provider generation and PipeWire serial; provider numeric IDs
 are never client identity. Root defaults become `/` before removed interfaces
 are announced. Additions are installed before root references are published.
-PropertiesChanged invalidates changed records; clients fetch current properties.
+PropertiesChanged carries values only for changed fields, with no invalidated
+properties or getter round-trips. A volume drag does not announce unchanged root
+properties. The last root map is retained separately to detect preference changes.
+In degraded state, working mixer/default capabilities remain; only unavailable
+features are withdrawn (for example defaults after WP metadata disappears).
 A disappeared object is a `NotFound`, not a write redirected to its replacement.
 
 | Interface | Properties |
@@ -123,19 +127,41 @@ profile; it is not hidden behind the external-app recording list.
 Playback objects implement AudioTestPlayback1 (State, Error, Stop, Finished).
 They are sender-owned, unicast on completion and removed at completion. A muted
 output fails explicitly. Tests isolate a supported SPA channel without remix,
-use a bounded 700ms 440Hz tone and never unmute/change the master. The embedded
-fixed catalog (`notification`, `warning`, `error`, `complete`) synthesizes short
-soft tones, accepts no filesystem paths/URIs, and uses the configured alert
-volume. Feedback is a separate optional fixed click, capped globally to once
-per 100ms. Clients request feedback for their gesture; external volume changes
-do not trigger it. Playback is bounded per sender, 32 globally; only one channel
-test runs globally. Target removal never redirects a test to another output.
+use a bounded 700ms 440Hz tone and never unmute/change the master.
+
+Alerts use the XDG Sound Theme specification, **not synthesized tones**. The
+validated event names are `message-new-instant`, `dialog-warning`, `dialog-error`
+and `complete`; feedback uses `audio-volume-change` and its own enable switch.
+The existing `org.gnome.desktop.sound` theme-name key selects the theme, with
+`freedesktop` as default/fallback; no additional Config1 key is introduced.
+Search uses XDG data directories (including user overrides), the first
+index.theme, Inherits with cycle/depth bounds, event-name suffix fallback,
+locale fallback, stereo/unprofiled directories, freedesktop then unthemed sounds.
+A `.disabled` file stops lookup. Missing/disabled sounds return NotSupported;
+no generated sound replaces them. The package depends on sound-theme-freedesktop.
+
+Vorbis `.oga`/`.ogg` is decoded with lewton and `.wav` with hound, entirely in
+Rust on bounded blocking workers. Limits: 2 MiB encoded, mono/stereo at
+8–48 kHz, 10 seconds decoded, two concurrent decoder jobs, a five-second reply
+deadline and a 16-entry PCM cache keyed by file metadata. PCM is complete before
+playback starts; the RT callback only reads its immutable samples. Changing
+preferences while decoding is checked before launch. Malformed data, non-finite
+float PCM and chained Vorbis format changes fail explicitly. Theme paths are
+never accepted from D-Bus callers. Regular-file checks and nonblocking opens
+avoid hanging on substituted special files. No runtime sound package is installed
+by a test or daemon.
+
+Feedback is capped globally to once per 100ms and requested only for the client's
+volume gesture; external volume changes do not trigger it. Playback is bounded
+per sender, 32 globally; only one channel test runs globally. Target removal never
+redirects playback to another output. PipeWire remixes mono/stereo theme sounds
+into the target; explicit speaker tests use the target channel map without remix.
 
 ## Validation
 
 Existing `cargo test` includes pure gain/balance/identity tests and a private-bus
 Audio1 test using a fake backend. It verifies real ObjectManager/property/error
-behavior, finite bounds, last-wins before backend acknowledgment, withdrawal and
+behavior, sparse changed values without root churn, finite bounds, last-wins before backend acknowledgment, withdrawal and
 stale identity. No CI job, step or configuration was added. The dedicated sessiond job
 checks the bus/model without native PW headers. The existing Hyalo job also
 compiles the native backend through the package build; native clippy and audio
@@ -156,6 +182,7 @@ disables every physical WP monitor, loads the shipped hook privately, creates
 null sinks and a known virtual source, and cleans up only its processes. Logs
 stay under `target/audio-probe`. It checks cubic wpctl parity, proportional
 balance, app move/follow, Config1 limits/alert controls, real bounded peaks,
+XDG Vorbis playback, inherited/disabled/WAV theme fixtures, degraded mixer support,
 internal capture separation, owner cleanup, isolated test-channel PCM and
 provider restart. A short private runtime path avoids the Unix socket 108-byte
 limit. No packages are installed and no daily-session socket is used.

@@ -98,7 +98,7 @@ depends=(
   # Wp-0.5.typelib, which core/wireplumber.ts imports. It arrives as a
   # dependency of `wireplumber`, and that is exactly the accident this array
   # exists to stop relying on (#379).
-  pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber libpulse
+  pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libwireplumber libpulse sound-theme-freedesktop
   # `rtkit` is only an OPTIONAL dependency of pipewire, so nothing pulled it in:
   # a clean install ran pipewire and wireplumber at normal priority, with
   # "RTKit error: ServiceUnknown" in the journal (VM, 2026-09-13), and audio

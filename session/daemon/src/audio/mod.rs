@@ -5,6 +5,8 @@ mod model;
 #[cfg(feature = "audio-native")]
 mod native;
 #[cfg(feature = "audio-native")]
+mod sound;
+#[cfg(feature = "audio-native")]
 mod streams;
 use model::{Graph, Preferences};
 use std::collections::BTreeMap;
@@ -92,6 +94,7 @@ pub struct Audio {
     backend: Backend,
     changed: Arc<Notify>,
     sequence: Arc<AtomicU64>,
+    announced_root: Arc<std::sync::Mutex<bus::Props>>,
     pending: Arc<std::sync::Mutex<BTreeMap<String, PendingVolume>>>,
     #[cfg(feature = "audio-native")]
     streams: streams::Manager,
@@ -116,6 +119,11 @@ impl Audio {
             }
             Action::Default => {
                 let n = before.node(path, None)?;
+                if !before.defaults_available {
+                    return Err(Error::NotSupported(
+                        "default-node metadata unavailable".into(),
+                    ));
+                }
                 if !matches!(n.kind.as_str(), "input" | "output") {
                     return Err(Error::InvalidArgument("default must be an endpoint".into()));
                 }
@@ -147,6 +155,13 @@ impl Audio {
                 }
             }
             Action::ClearDefault(s) => {
+                if matches!(before.state.as_str(), "ready" | "degraded")
+                    && !before.defaults_available
+                {
+                    return Err(Error::NotSupported(
+                        "default-node metadata unavailable".into(),
+                    ));
+                }
                 if !matches!(s.as_str(), "input" | "output") {
                     return Err(Error::InvalidArgument("expected input or output".into()));
                 }
@@ -282,6 +297,7 @@ pub async fn serve(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> 
         backend: Backend { commands },
         changed: Arc::new(Notify::new()),
         sequence: Arc::new(AtomicU64::new(1)),
+        announced_root: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
         pending: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
         #[cfg(feature = "audio-native")]
         streams,
@@ -315,6 +331,7 @@ pub async fn serve(conn: &Connection) -> Result<(), Box<dyn std::error::Error>> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::StreamExt;
     use model::{Channel, Node};
     #[test]
     fn private_bus_contract_and_last_volume_wins() {
@@ -341,6 +358,7 @@ mod tests {
                 backend: Backend { commands: tx },
                 changed: Arc::new(Notify::new()),
                 sequence: Arc::new(AtomicU64::new(1)),
+                announced_root: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
                 pending: Arc::new(std::sync::Mutex::new(BTreeMap::new())),
                 #[cfg(feature = "audio-native")]
                 streams: streams::Manager::new(),
@@ -401,9 +419,26 @@ mod tests {
                 .unwrap();
             let snapshot = om.get_managed_objects().await.unwrap();
             assert!(snapshot.contains_key(&path(&key)));
-            let root = zbus::Proxy::new(&client, "org.nidara.Session", ROOT, "org.nidara.Audio1")
+            let root: zbus::Proxy<'_> = zbus::proxy::Builder::new(&client)
+                .destination("org.nidara.Session")
+                .unwrap()
+                .path(ROOT)
+                .unwrap()
+                .interface("org.nidara.Audio1")
+                .unwrap()
+                .cache_properties(zbus::proxy::CacheProperties::No)
+                .build()
                 .await
                 .unwrap();
+            let node_properties = zbus::fdo::PropertiesProxy::builder(&client)
+                .destination("org.nidara.Session")
+                .unwrap()
+                .path(key.as_str())
+                .unwrap()
+                .build()
+                .await
+                .unwrap();
+            let mut node_updates = node_properties.receive_properties_changed().await.unwrap();
             assert_eq!(
                 root.get_property::<Path>("DefaultOutput").await.unwrap(),
                 path(&key)
@@ -474,6 +509,15 @@ mod tests {
             g.nodes.get_mut(&key).unwrap().volume = 0.7;
             bus::publish(&c, &a, &before, &g).await.unwrap();
             second.await.unwrap().unwrap();
+            let signal = node_updates.next().await.unwrap();
+            let args = signal.args().unwrap();
+            assert!(args.invalidated_properties().is_empty());
+            assert_eq!(args.changed_properties().len(), 1);
+            assert_eq!(
+                f64::try_from(&args.changed_properties()["Volume"]).unwrap(),
+                0.7
+            );
+
             // Recycling a numeric ID inside the same connection must also withdraw
             // the old path, rather than redirect an old client to a different node.
             let mut replacement = g.clone();
