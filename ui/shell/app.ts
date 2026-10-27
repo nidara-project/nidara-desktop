@@ -28,7 +28,7 @@ import { exportScreenShareService } from "./surfaces/screenshare/ScreenShareServ
 import { startWifiSecretsDialogs } from "./common/WifiSecretsAgent"
 import { configLocations } from "./surfaces/settings/configLocations"
 import { initReduceMotion } from "./core/ReduceMotion"
-import { fireSessionStartedOnce, initBatteryLowHook } from "./core/Hooks"
+import { fireSessionStartedOnce } from "./core/Hooks"
 import { bindCursorThemeRefresh } from "./common/CursorRefresh"
 import { bindInterfaceIconRefresh } from "./common/IconThemeRefresh"
 import compositor, { onHyalo, settings as compositorSettings } from "./core/CompositorState"
@@ -1379,7 +1379,6 @@ app.start({
     // there, not that we are halfway through building it. It fires once per
     // LOGIN, not once per process — a UI reload re-enters main() and the stamp
     // in the runtime dir is what tells the two apart.
-    initBatteryLowHook()
     fireSessionStartedOnce()
 
   },

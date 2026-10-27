@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "Akku fast leer",
+    "power1.alert.critical": "Akku kritisch niedrig",
+    "power1.alert.remaining": "{percent} % verbleibend",
+    "power1.alert.unknown": "Das Gerät meldet einen niedrigen Akkustand",
+    "power1.alert.device-title": "{device}: {warning}",
+    "power1.menu.unavailable": "Energiemenü nicht verfügbar",
+    "power1.menu.not-shown": "Das registrierte Energiemenü hat seine Anzeige nicht bestätigt.",
+    "power1.device.computer": "Computer",
+    "power1.device.mouse": "Maus",
+    "power1.device.keyboard": "Tastatur",
+    "power1.device.headphones": "Kopfhörer",
+    "power1.device.phone": "Telefon",
+    "power1.device.peripheral": "Peripheriegerät",
+
     "settings.native.application": "Einstellungen",
     "settings.native.pages": "Einstellungsseiten",
     "settings.native.content": "Inhalt",

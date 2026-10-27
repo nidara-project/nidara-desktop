@@ -39,7 +39,7 @@ mkdir -p "$state/config/nidara"
 service_flags=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --network|--bluetooth|--audio|--media) service_flags+=" $1"; shift ;;
+        --network|--bluetooth|--audio|--media|--power|--power-read-only) service_flags+=" $1"; shift ;;
         *) break ;;
     esac
 done

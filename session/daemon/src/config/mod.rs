@@ -118,6 +118,7 @@ impl Config1 {
         let sender = header.sender().map(|s| s.to_string());
         let trusted = sender.is_some() && *self.settings_owner.lock().unwrap() == sender;
         let raw = raw(value);
+        let changes = self.changes.clone();
         self.store
             .call(move |st| {
                 if !trusted && !registry::agents_may_write(st) {
@@ -125,7 +126,20 @@ impl Config1 {
                         "config writes are disabled — enable them in Settings → AI".into(),
                     ));
                 }
-                registry::set(st, &key, &raw).map_err(|r| match r {
+                let before = registry::find(&key)
+                    .filter(|k| registry::available(st, k))
+                    .map(|k| registry::get(st, k));
+                let result = registry::set(st, &key, &raw);
+                if registry::idle_field(&key).is_some()
+                    && let Some(k) = registry::find(&key)
+                    && registry::available(st, k)
+                {
+                    let after = registry::get(st, k);
+                    if before.as_ref() != Some(&after) {
+                        changes.push(&key, after);
+                    }
+                }
+                result.map_err(|r| match r {
                     Refusal::Invalid(e) => ConfigError::Invalid(e),
                     Refusal::Failed(e) => ConfigError::Failed(e),
                 })

@@ -89,6 +89,7 @@ const APPEARANCE: &str = "org.nidara.appearance";
 const NIGHT: &str = "org.nidara.night-light";
 const MEDIA: &str = "org.nidara.media";
 const AUDIO: &str = "org.nidara.audio";
+const POWER: &str = "org.nidara.power";
 const AI: &str = "org.nidara.ai";
 
 /// The GSettings of this session, by schema; a schema not installed is simply absent.
@@ -97,13 +98,15 @@ pub struct Store {
     schemas: HashMap<&'static str, gio::SettingsSchema>,
     home: PathBuf,
     config: PathBuf,
+    pub idle: std::cell::RefCell<Json>,
+    pub idle_serial: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 impl Store {
     pub fn new() -> Self {
         let source = gio::SettingsSchemaSource::default();
         let (mut settings, mut schemas) = (HashMap::new(), HashMap::new());
         for id in [
-            INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO, MEDIA,
+            INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO, MEDIA, POWER,
         ] {
             if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
@@ -117,6 +120,8 @@ impl Store {
             schemas,
             home: glib::home_dir(),
             config: glib::user_config_dir(),
+            idle: std::cell::RefCell::new(read_idle()),
+            idle_serial: Default::default(),
         }
     }
     pub fn settings(&self, schema: &str) -> Option<&gio::Settings> {
@@ -194,7 +199,7 @@ pub fn keys() -> &'static [Key] {
 }
 
 fn table() -> Vec<Key> {
-    vec![
+    let mut keys = vec![
         Key {
             name: "appearance.darkMode",
             desc: "Dark mode (false = light). Propagates to GTK apps and the portal.",
@@ -743,7 +748,9 @@ fn table() -> Vec<Key> {
             watch: &[(AI, "allow-config-write")],
             file: false,
         },
-    ]
+    ];
+    keys.extend(power_keys());
+    keys
 }
 
 // ── The registry's rules ─────────────────────────────────────────────────────────────────
@@ -752,6 +759,9 @@ pub fn find(name: &str) -> Option<&'static Key> {
     keys().iter().find(|k| k.name == name)
 }
 pub fn available(st: &Store, key: &Key) -> bool {
+    if let Some(field) = idle_field(key.name) {
+        return st.idle.borrow()[field].is_u64();
+    }
     key.needs.iter().all(|s| st.settings(s).is_some())
         && key.watch.iter().all(|(schema, k)| st.has(schema, k))
 }
@@ -1205,6 +1215,263 @@ fn write_wallpaper(st: &Store, edit: impl FnOnce(&mut Json)) -> Result<(), Strin
     let next = file.with_extension("next");
     std::fs::write(&next, config.to_string()).map_err(|e| e.to_string())?;
     std::fs::rename(&next, &file).map_err(|e| e.to_string())
+}
+
+// Effective merged compositor values; Hyalo is the only TOML writer.
+pub fn read_idle() -> Json {
+    crate::hyalo::request(json!({"request":"config"}))
+        .ok()
+        .map(|v| v["config"]["idle"].clone())
+        .unwrap_or(Json::Null)
+}
+pub fn idle_field(name: &str) -> Option<&'static str> {
+    match name {
+        "power.screen-off-seconds" => Some("screen_off"),
+        "power.lock-seconds" => Some("lock"),
+        "power.suspend-battery-seconds" => Some("suspend_battery"),
+        "power.suspend-ac-seconds" => Some("suspend_ac"),
+        "power.dim-before-off-seconds" => Some("dim_before_off"),
+        _ => None,
+    }
+}
+fn power_keys() -> Vec<Key> {
+    vec![
+        Key {
+            name: "power.screen-off-seconds",
+            desc: "Idle seconds; zero disables. Hyalo owns the effective setting.",
+            kind: Kind::Number {
+                min: 0.,
+                max: 86400.,
+            },
+            writable: true,
+            needs: &[],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.idle.borrow()["screen_off"].as_u64().unwrap_or(0) as f64),
+            set: Some(|st, v| {
+                let Value::Number(n) = v else {
+                    return Err("expected seconds".into());
+                };
+                if n.fract() != 0. {
+                    return Err("expected whole seconds".into());
+                }
+                let result = crate::hyalo::set_idle("screen_off", *n as u32);
+                *st.idle.borrow_mut() = read_idle();
+                st.idle_serial
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                result
+            }),
+            ui: None,
+            watch: &[],
+            file: false,
+        },
+        Key {
+            name: "power.lock-seconds",
+            desc: "Idle seconds; zero disables. Hyalo owns the effective setting.",
+            kind: Kind::Number {
+                min: 0.,
+                max: 86400.,
+            },
+            writable: true,
+            needs: &[],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.idle.borrow()["lock"].as_u64().unwrap_or(0) as f64),
+            set: Some(|st, v| {
+                let Value::Number(n) = v else {
+                    return Err("expected seconds".into());
+                };
+                if n.fract() != 0. {
+                    return Err("expected whole seconds".into());
+                }
+                let result = crate::hyalo::set_idle("lock", *n as u32);
+                *st.idle.borrow_mut() = read_idle();
+                st.idle_serial
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                result
+            }),
+            ui: None,
+            watch: &[],
+            file: false,
+        },
+        Key {
+            name: "power.suspend-battery-seconds",
+            desc: "Idle seconds; zero disables. Hyalo owns the effective setting.",
+            kind: Kind::Number {
+                min: 0.,
+                max: 86400.,
+            },
+            writable: true,
+            needs: &[],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| {
+                Value::Number(st.idle.borrow()["suspend_battery"].as_u64().unwrap_or(0) as f64)
+            },
+            set: Some(|st, v| {
+                let Value::Number(n) = v else {
+                    return Err("expected seconds".into());
+                };
+                if n.fract() != 0. {
+                    return Err("expected whole seconds".into());
+                }
+                let result = crate::hyalo::set_idle("suspend_battery", *n as u32);
+                *st.idle.borrow_mut() = read_idle();
+                st.idle_serial
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                result
+            }),
+            ui: None,
+            watch: &[],
+            file: false,
+        },
+        Key {
+            name: "power.suspend-ac-seconds",
+            desc: "Idle seconds; zero disables. Hyalo owns the effective setting.",
+            kind: Kind::Number {
+                min: 0.,
+                max: 86400.,
+            },
+            writable: true,
+            needs: &[],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.idle.borrow()["suspend_ac"].as_u64().unwrap_or(0) as f64),
+            set: Some(|st, v| {
+                let Value::Number(n) = v else {
+                    return Err("expected seconds".into());
+                };
+                if n.fract() != 0. {
+                    return Err("expected whole seconds".into());
+                }
+                let result = crate::hyalo::set_idle("suspend_ac", *n as u32);
+                *st.idle.borrow_mut() = read_idle();
+                st.idle_serial
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                result
+            }),
+            ui: None,
+            watch: &[],
+            file: false,
+        },
+        Key {
+            name: "power.dim-before-off-seconds",
+            desc: "Idle seconds; zero disables. Hyalo owns the effective setting.",
+            kind: Kind::Number {
+                min: 0.,
+                max: 86400.,
+            },
+            writable: true,
+            needs: &[],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.idle.borrow()["dim_before_off"].as_u64().unwrap_or(0) as f64),
+            set: Some(|st, v| {
+                let Value::Number(n) = v else {
+                    return Err("expected seconds".into());
+                };
+                if n.fract() != 0. {
+                    return Err("expected whole seconds".into());
+                }
+                let result = crate::hyalo::set_idle("dim_before_off", *n as u32);
+                *st.idle.borrow_mut() = read_idle();
+                st.idle_serial
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                result
+            }),
+            ui: None,
+            watch: &[],
+            file: false,
+        },
+        Key {
+            name: "power.automatic-saver",
+            desc: "Power preference",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[POWER],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(POWER).boolean("automatic-saver")),
+            set: Some(|st, v| {
+                st.s(POWER)
+                    .set_boolean("automatic-saver", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(POWER, "automatic-saver")],
+            file: false,
+        },
+        Key {
+            name: "power.show-percentage",
+            desc: "Power preference",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[POWER],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(POWER).boolean("show-percentage")),
+            set: Some(|st, v| {
+                st.s(POWER)
+                    .set_boolean("show-percentage", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(POWER, "show-percentage")],
+            file: false,
+        },
+        Key {
+            name: "power.power-button-action",
+            desc: "Power action preference",
+            kind: Kind::Enum,
+            writable: true,
+            needs: &[POWER],
+            values: Some(|_| owned(&["menu", "suspend", "poweroff", "nothing"])),
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Text(string(st, POWER, "power-button-action")),
+            set: Some(|st, v| put_string(st, POWER, "power-button-action", text(v))),
+            ui: None,
+            watch: &[(POWER, "power-button-action")],
+            file: false,
+        },
+        Key {
+            name: "power.lid-action-on-battery",
+            desc: "Power action preference",
+            kind: Kind::Enum,
+            writable: true,
+            needs: &[POWER],
+            values: Some(|_| owned(&["suspend", "lock", "nothing"])),
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Text(string(st, POWER, "lid-action-on-battery")),
+            set: Some(|st, v| put_string(st, POWER, "lid-action-on-battery", text(v))),
+            ui: None,
+            watch: &[(POWER, "lid-action-on-battery")],
+            file: false,
+        },
+        Key {
+            name: "power.lid-action-on-ac",
+            desc: "Power action preference",
+            kind: Kind::Enum,
+            writable: true,
+            needs: &[POWER],
+            values: Some(|_| owned(&["suspend", "lock", "nothing"])),
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Text(string(st, POWER, "lid-action-on-ac")),
+            set: Some(|st, v| put_string(st, POWER, "lid-action-on-ac", text(v))),
+            ui: None,
+            watch: &[(POWER, "lid-action-on-ac")],
+            file: false,
+        },
+    ]
 }
 
 #[cfg(test)]

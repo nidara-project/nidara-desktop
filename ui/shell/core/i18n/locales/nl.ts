@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "Batterij bijna leeg",
+    "power1.alert.critical": "Batterij vrijwel leeg",
+    "power1.alert.remaining": "Nog {percent}%",
+    "power1.alert.unknown": "Het apparaat meldt een laag batterijniveau",
+    "power1.alert.device-title": "{device}: {warning}",
+    "power1.menu.unavailable": "Energiemenu niet beschikbaar",
+    "power1.menu.not-shown": "Het geregistreerde energiemenu heeft de weergave niet bevestigd.",
+    "power1.device.computer": "Computer",
+    "power1.device.mouse": "Muis",
+    "power1.device.keyboard": "Toetsenbord",
+    "power1.device.headphones": "Hoofdtelefoon",
+    "power1.device.phone": "Telefoon",
+    "power1.device.peripheral": "Randapparaat",
+
     "settings.native.application": "Instellingen",
     "settings.native.pages": "Instellingenpagina’s",
     "settings.native.content": "Inhoud",

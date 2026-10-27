@@ -359,7 +359,7 @@ package_nidara-desktop() {
   # /usr/bin — session launchers, helpers, agent toolkit (install.sh §5 list)
   local b
   for b in nidara nidara-ui nidara-settings nidara-greeter nidara-greeter-session nidara-lock nidara-before-sleep \
-           nidara-after-sleep nidara-media-key nidara-game-mode nidara-doctor nidara-portal nidara-share-chooser \
+           nidara-after-sleep nidara-power-key nidara-kbd-light nidara-media-key nidara-game-mode nidara-doctor nidara-portal nidara-share-chooser \
            nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click nidara-wm \
            nidara-hook nidara-update nidara-setup nidara-migrate nidara-language; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"

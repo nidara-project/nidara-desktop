@@ -1960,7 +1960,7 @@ pointing at the check's probe, or its relaunch step fails.
 
 ## Idle: Hyalo does it, there is no hypridle (owner, 2026-10-02)
 
-`idle.rs` + `[idle]` in the config (`screen_off`, `lock`, `suspend`: seconds without input, 0 =
+`idle.rs` + `[idle]` in the config (`screen_off`, `lock`, `suspend_battery`, `suspend_ac`, `dim_before_off`: seconds, 0 =
 never; Settings → Power writes them through `settings` — `CompositorSettings.readIdle/setIdle`,
 whose Hyprland side is still hypridle's file). Nothing else has to be alive for the session to
 lock.
@@ -1987,6 +1987,28 @@ lock.
   with `HYALO_CONFIG=/dev/null` (no autostart), never against the live session bus.
 - IPC: `nidara-hyalo msg idle` (`idle_secs`, `inhibited`, the config). Tested by
   `scripts/ci/hyalo-idle-check.sh` in the smoke (`hyalo-idle-inhibit-probe.c` is the inhibitor).
+
+Power1's idle extension keeps Hyalo as the owner. A UPower worker subscribes to signals
+before reading OnBattery; an unknown source disables only source-dependent suspend. A separate
+injectable suspend clock begins a fresh stretch on source/timeout changes or inhibitor release,
+so shortening a deadline cannot suspend retrospectively. Legacy suspend maps to both new fields
+per layer before merge. Config1 forwards settings IPC and reads effective merged values.
+
+Dim is a stable compositor render element per output, removed on input; saved brightness is
+untouched. Captures and screen sharing exclude the dim. An inhibited stretch preserves the
+physical screen-off flag until input wakes the outputs; do not clear it when resetting timers. If off is disabled or no greater than the dim lead time, dim is omitted. `power_info`
+exports source, dim, readiness and shown idle-inhibitor/ScreenSaver metadata, ineffective under
+lock. PowerStateChanged/IdleInhibitorsChanged join existing IPC events. `power_wake` wakes without
+unlock; `power_lock` is an explicit action (the existing `lock` request only queries state).
+
+Packaged XF86PowerOff calls nidara-power-key once, even under lock or shortcut inhibition;
+Power1 takes logind's handle-power-key FD only while this route is ready in a real active local
+session. This FD also inhibits logind SOFTWARE long press; no own long-press handler is added.
+FD loss restores logind defaults, possibly poweroff. The separate lid FD is only for a known
+source choosing lock/nothing; suspend and unknown source stay with logind, retaining its sleep
+inhibitor/dock/holdoff rules. No registered menu consumer means effective
+suspend; registered menu failure has no destructive fallback. Fn keyboard-light helpers call
+Power1 raw UPower brightness with serial relative steps, coalesced absolute writes and readback.
 
 ## Input methods (text-input-v3 + input-method-v2)
 

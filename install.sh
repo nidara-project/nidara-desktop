@@ -623,6 +623,8 @@ sudo cp "$REPO_DIR/bin/nidara-greeter"   /usr/bin/nidara-greeter
 sudo cp "$REPO_DIR/bin/nidara-lock"      /usr/bin/nidara-lock
 sudo cp "$REPO_DIR/bin/nidara-before-sleep" /usr/bin/nidara-before-sleep
 sudo cp "$REPO_DIR/bin/nidara-after-sleep"  /usr/bin/nidara-after-sleep
+sudo cp "$REPO_DIR/bin/nidara-power-key" /usr/bin/nidara-power-key
+sudo cp "$REPO_DIR/bin/nidara-kbd-light" /usr/bin/nidara-kbd-light
 sudo cp "$REPO_DIR/bin/nidara-media-key" /usr/bin/nidara-media-key
 sudo cp "$REPO_DIR/bin/nidara-game-mode" /usr/bin/nidara-game-mode
 sudo cp "$REPO_DIR/bin/nidara-doctor" /usr/bin/nidara-doctor

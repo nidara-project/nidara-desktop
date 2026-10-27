@@ -220,6 +220,9 @@ pub struct WorkspaceInfo {
 #[serde(tag = "request", rename_all = "snake_case")]
 pub enum Request {
     Version,
+    PowerInfo,
+    PowerWake,
+    PowerLock,
     Outputs,
     /// Fields left out keep their current value.
     SetOutput {
@@ -312,6 +315,7 @@ pub enum Reply {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Response {
     Handled,
+    PowerInfo { power: serde_json::Value },
     Version { version: String },
     Outputs { outputs: Vec<OutputInfo> },
     Windows { windows: Vec<WindowInfo> },
@@ -341,6 +345,8 @@ pub enum Event {
     FocusChanged { id: Option<WindowId> },
     WindowTitleChanged { id: WindowId, title: String },
     ConfigReloaded,
+    PowerStateChanged,
+    IdleInhibitorsChanged,
     ConfigError { message: String },
     /// The session was locked (the lock client was told so) or unlocked.
     LockChanged { locked: bool },

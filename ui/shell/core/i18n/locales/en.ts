@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "Battery low",
+    "power1.alert.critical": "Battery critically low",
+    "power1.alert.remaining": "{percent}% remaining",
+    "power1.alert.unknown": "The device reports a low battery",
+    "power1.alert.device-title": "{device}: {warning}",
+    "power1.menu.unavailable": "Power menu unavailable",
+    "power1.menu.not-shown": "The registered power menu did not confirm presentation.",
+    "power1.device.computer": "Computer",
+    "power1.device.mouse": "Mouse",
+    "power1.device.keyboard": "Keyboard",
+    "power1.device.headphones": "Headphones",
+    "power1.device.phone": "Phone",
+    "power1.device.peripheral": "Peripheral",
+
     "settings.input.title": "Devices",
 
     "settings.input.mouse.group": "Mouse",

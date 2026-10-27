@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "电池电量低",
+    "power1.alert.critical": "电池电量严重不足",
+    "power1.alert.remaining": "剩余 {percent}%",
+    "power1.alert.unknown": "设备报告电池电量低",
+    "power1.alert.device-title": "{device}：{warning}",
+    "power1.menu.unavailable": "电源菜单不可用",
+    "power1.menu.not-shown": "已注册的电源菜单未确认显示。",
+    "power1.device.computer": "计算机",
+    "power1.device.mouse": "鼠标",
+    "power1.device.keyboard": "键盘",
+    "power1.device.headphones": "耳机",
+    "power1.device.phone": "电话",
+    "power1.device.peripheral": "外设",
+
     "settings.native.application": "设置",
     "settings.native.pages": "设置页面",
     "settings.native.content": "内容",

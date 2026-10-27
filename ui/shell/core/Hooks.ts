@@ -24,7 +24,6 @@
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import * as battery from "./BatteryService"
 import { spawn } from "../../lib/process"
 
 let runnerMissingReported = false
@@ -90,41 +89,4 @@ function mtime(path: string): number {
     } catch {
         return 0
     }
-}
-
-// ── battery-low ──────────────────────────────────────────────────────────────
-// The only event with no natural firing site: nothing in the shell "decides" a
-// battery is low, so the crossing has to be detected here.
-
-const LOW = 20   // fires at or below this, while discharging
-const REARM = 25 // …and cannot fire again until it comes back above this
-
-/**
- * Watch the battery and fire `battery-low` on a downward crossing.
- *
- * Armed from the CURRENT level rather than optimistically: a shell started (or
- * reloaded) on an already-flat laptop must not announce a crossing it did not
- * see. It stays disarmed until the battery is charged past REARM or put on AC,
- * which is also what keeps one discharge from firing twice while the reading
- * jitters around the threshold.
- */
-export function initBatteryLowHook(): void {
-    if (!battery.present()) return
-
-    let armed = Math.round(battery.fraction() * 100) > LOW
-
-    battery.watch(() => {
-        if (!battery.present()) return
-        const pct = Math.round(battery.fraction() * 100)
-        const onPower = battery.charging() || battery.charged()
-
-        if (!armed) {
-            if (onPower || pct >= REARM) armed = true
-            return
-        }
-        if (!onPower && pct <= LOW) {
-            armed = false
-            fireHook("battery-low", String(pct))
-        }
-    })
 }

@@ -223,7 +223,7 @@ pub fn capture_output(state: &mut Hyalo, output: &Output, pointer: bool) -> Resu
 fn capture_output_at(state: &mut Hyalo, output: &Output, pointer: bool, when: std::time::Instant) -> Result<(u32, u32, Vec<u8>), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when);
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when, false);
     let captured = match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -251,7 +251,7 @@ pub fn draw_output_into(
 ) -> Result<(), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -266,7 +266,7 @@ pub fn draw_output_into(
 pub fn draw_upright_into(state: &mut Hyalo, output: &Output, dmabuf: &mut Dmabuf, pointer: bool) -> Result<(), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_upright_into(w.renderer(), &scene, output, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -332,7 +332,7 @@ pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scal
 /// A picture of `window` as it is now, at `scale`, to draw after it is gone (render/snapshot.rs).
 pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<crate::render::snapshot::Snapshot, String> {
     let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now());
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::render::snapshot::take(w.renderer(), &scene, window, scale),
         Backend::Tty(t) => {

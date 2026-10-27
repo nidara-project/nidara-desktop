@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "Batterie faible",
+    "power1.alert.critical": "Batterie presque vide",
+    "power1.alert.remaining": "{percent} % restants",
+    "power1.alert.unknown": "Le périphérique signale une batterie faible",
+    "power1.alert.device-title": "{device} : {warning}",
+    "power1.menu.unavailable": "Menu d’alimentation indisponible",
+    "power1.menu.not-shown": "Le menu d’alimentation enregistré n’a pas confirmé son affichage.",
+    "power1.device.computer": "Ordinateur",
+    "power1.device.mouse": "Souris",
+    "power1.device.keyboard": "Clavier",
+    "power1.device.headphones": "Casque",
+    "power1.device.phone": "Téléphone",
+    "power1.device.peripheral": "Périphérique",
+
     "settings.native.application": "Paramètres",
     "settings.native.pages": "Pages des paramètres",
     "settings.native.content": "Contenu",

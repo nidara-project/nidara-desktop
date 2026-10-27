@@ -111,6 +111,7 @@ impl Env {
         cmd.env_clear()
             .env("PATH", std::env::var("PATH").unwrap_or_default())
             .env("DBUS_SESSION_BUS_ADDRESS", &self.address)
+            .env("HYALO_SOCKET", self.dir.join("hyalo.sock"))
             .env("GSETTINGS_BACKEND", "keyfile")
             .env("GIO_USE_VFS", "local")
             .env("GSETTINGS_SCHEMA_DIR", self.dir.join("schemas"))
@@ -816,4 +817,133 @@ async fn media_preferences_and_optional_audio_backend() {
         .await
         .unwrap();
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn power_homes_and_effective_compositor_settings() {
+    use futures_util::StreamExt;
+    use std::sync::{Arc, Mutex};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let mut env = setup();
+    let listener = tokio::net::UnixListener::bind(env.dir.join("hyalo.sock")).unwrap();
+    let idle = Arc::new(Mutex::new(
+        serde_json::json!({"screen_off":300,"lock":600,"suspend_battery":0,"suspend_ac":0,"dim_before_off":10}),
+    ));
+    let state = idle.clone();
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let calls = requests.clone();
+    let task = tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            let state = state.clone();
+            let calls = calls.clone();
+            tokio::spawn(async move {
+                let (read, mut write) = stream.into_split();
+                let mut lines = tokio::io::BufReader::new(read).lines();
+                let line = lines.next_line().await.unwrap().unwrap();
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let reply = {
+                    let mut idle = state.lock().unwrap();
+                    calls.lock().unwrap().push(request.clone());
+                    if request["request"] == "settings" {
+                        if let Some(fields) = request["patch"]["idle"].as_object() {
+                            for (key, value) in fields {
+                                if key != "lock" {
+                                    idle[key] = value.clone();
+                                }
+                            }
+                        }
+                        serde_json::json!({"ok":{}})
+                    } else {
+                        serde_json::json!({"ok":{"config":{"idle":*idle}}})
+                    }
+                };
+                write
+                    .write_all(format!("{reply}\n").as_bytes())
+                    .await
+                    .unwrap();
+            });
+        }
+    });
+    env.start();
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let proxy = zbus::Proxy::new(
+        &conn,
+        "org.nidara.Config",
+        "/org/nidara/Config",
+        "org.nidara.Config1",
+    )
+    .await
+    .unwrap();
+    let mut updated = proxy.receive_signal("Updated").await.unwrap();
+    let (_, _, schema): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_str(&schema).unwrap();
+    assert_eq!(schema["keys"]["power.automatic-saver"]["value"], true);
+    assert_eq!(schema["keys"]["power.power-button-action"]["value"], "menu");
+    assert_eq!(schema["keys"]["power.lid-action-on-ac"]["value"], "suspend");
+    assert_eq!(schema["keys"]["power.screen-off-seconds"]["value"], 300.0);
+    let (revision, value): (u64, OwnedValue) = call(
+        &conn,
+        "Apply",
+        &("power.suspend-ac-seconds", Value::from(60.)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(f64::try_from(value).unwrap(), 60.);
+    assert!(revision > 0);
+    assert_eq!(idle.lock().unwrap()["suspend_ac"], 60);
+    assert_eq!(idle.lock().unwrap()["suspend_battery"], 0);
+    let error =
+        call::<(u64, OwnedValue)>(&conn, "Apply", &("power.lock-seconds", Value::from(30.)))
+            .await
+            .unwrap_err();
+    assert!(error.to_string().contains("overridden"));
+    assert_eq!(idle.lock().unwrap()["lock"], 600);
+    // The effective value, from another compositor writer, is announced independently.
+    idle.lock().unwrap()["screen_off"] = serde_json::json!(450);
+    let mut heard = false;
+    for _ in 0..10 {
+        let next = tokio::time::timeout(Duration::from_secs(5), updated.next())
+            .await
+            .unwrap()
+            .unwrap();
+        let (_, _, values): Updated = next.body().deserialize().unwrap();
+        if values
+            .get("power.screen-off-seconds")
+            .is_some_and(|v| f64::try_from(v).ok() == Some(450.))
+        {
+            heard = true;
+            break;
+        }
+    }
+    assert!(heard);
+    assert!(
+        requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|r| r["request"] == "settings")
+    );
+    assert!(
+        !env.dir.join("config/nidara/hyalo-settings.toml").exists(),
+        "only the compositor may persist its layer"
+    );
+    env.gsettings_set("org.nidara.power", "show-percentage", "false");
+    let mut heard = false;
+    for _ in 0..10 {
+        let next = tokio::time::timeout(Duration::from_secs(5), updated.next())
+            .await
+            .unwrap()
+            .unwrap();
+        let (_, _, values): Updated = next.body().deserialize().unwrap();
+        if values
+            .get("power.show-percentage")
+            .is_some_and(|v| bool::try_from(v).ok() == Some(false))
+        {
+            heard = true;
+            break;
+        }
+    }
+    assert!(heard);
+    task.abort();
 }

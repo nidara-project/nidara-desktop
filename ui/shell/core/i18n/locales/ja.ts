@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "バッテリー残量が少なくなっています",
+    "power1.alert.critical": "バッテリー残量がわずかです",
+    "power1.alert.remaining": "残り {percent}%",
+    "power1.alert.unknown": "デバイスのバッテリー残量が少なくなっています",
+    "power1.alert.device-title": "{device}：{warning}",
+    "power1.menu.unavailable": "電源メニューを利用できません",
+    "power1.menu.not-shown": "登録された電源メニューの表示を確認できませんでした。",
+    "power1.device.computer": "コンピューター",
+    "power1.device.mouse": "マウス",
+    "power1.device.keyboard": "キーボード",
+    "power1.device.headphones": "ヘッドホン",
+    "power1.device.phone": "電話",
+    "power1.device.peripheral": "周辺機器",
+
     "settings.native.application": "設定",
     "settings.native.pages": "設定ページ",
     "settings.native.content": "内容",

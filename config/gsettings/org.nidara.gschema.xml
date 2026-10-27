@@ -450,4 +450,11 @@
     <key name="lock-screen-controls" type="b"><default>true</default></key>
     <key name="pause-on-headphones-disconnect" type="b"><default>true</default></key>
   </schema>
+  <schema id="org.nidara.power" path="/org/nidara/power/">
+    <key name="automatic-saver" type="b"><default>true</default><summary>Power preference</summary></key>
+    <key name="show-percentage" type="b"><default>true</default><summary>Power preference</summary></key>
+    <key name="power-button-action" type="s"><default>'menu'</default><choices><choice value="menu"/><choice value="suspend"/><choice value="poweroff"/><choice value="nothing"/></choices><summary>Power action</summary></key>
+    <key name="lid-action-on-battery" type="s"><default>'suspend'</default><choices><choice value="suspend"/><choice value="lock"/><choice value="nothing"/></choices><summary>Power action</summary></key>
+    <key name="lid-action-on-ac" type="s"><default>'suspend'</default><choices><choice value="suspend"/><choice value="lock"/><choice value="nothing"/></choices><summary>Power action</summary></key>
+  </schema>
 </schemalist>

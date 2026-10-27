@@ -59,11 +59,11 @@ an event:
   existed swallowed every login after the first since boot. It is also the reason this one
   event cannot be tested by reloading alone — `nidara-hook --list` carries the command that clears
   the stamp, so nobody has to know the path.
-- **`battery-low` has no natural firing site**, because nothing in the shell *decides* a battery is
-  low. `initBatteryLowHook()` watches UPower and fires on a downward crossing only, armed from the
-  level it finds at startup — a shell reloaded on an already-flat laptop must not announce a
-  crossing it never saw — and re-armed above 25 % or on AC, which is also what stops one discharge
-  firing twice while the reading jitters.
+- **`battery-low` belongs to Rust sessiond Power1** (`session/daemon/src/power/model.rs`),
+  enabled by packaged `--power`. It spawns `nidara-hook` with fixed argv at a known downward
+  crossing <=20%, rearmed >=25% or known AC; startup already low does not fabricate a crossing.
+  The TS observer is removed. `--power-read-only` produces no hooks. The existing hook checker
+  also scans Rust's fixed argv firing sites; keep the declared table and real emitters in sync.
 
 One gap, stated rather than hidden: `update-completed` does **not** fire on the DEV update path.
 `nidara-update` `exec`s the registered clone's `install.sh` there — deliberately, so the updater
@@ -88,7 +88,7 @@ is what would close it.
 ## Adding an event
 
 1. Add its row to the `EVENTS` table in `bin/nidara-hook` (`name :: arguments :: what it means`).
-2. Fire it — `fireHook("name", …)` from the shell, or `nidara-hook name …` from a bash helper.
+2. Fire it — `fireHook("name", …)` from the shell, `nidara-hook name …` from a bash helper, or a direct Rust Command with fixed argv.
 3. `node scripts/ci/hook-events-check.mjs`.
 
 There is nothing else. The directory is created by the next `nidara-setup`, the README beside it

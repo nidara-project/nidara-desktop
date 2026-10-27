@@ -134,7 +134,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render(state: &mut Hyalo) {
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, idle, .. } = state;
     let Backend::Winit(w) = backend else { return };
     if !w.queued {
         return;
@@ -143,7 +143,7 @@ fn render(state: &mut Hyalo) {
     let output = w.output.clone();
     // The host compositor's timing is not ours to know: animations at the build (render/timing.rs).
     let when = std::time::Instant::now();
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when, idle.dimmed);
     // Instrumented (render/stats.rs, #766) as on the tty backend.
     let name = output.name();
     let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);

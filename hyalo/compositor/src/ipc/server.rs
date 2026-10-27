@@ -166,6 +166,16 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             scale: state.x11.scale,
             overrides: state.wm.x11_overrides.len(),
         }),
+        Request::PowerInfo => Reply::Ok(Response::PowerInfo { power: state.power_info() }),
+        Request::PowerLock => {
+            if !state.idle.nested { state.lock_session(); }
+            Reply::Ok(Response::Handled)
+        },
+        Request::PowerWake => {
+            state.note_activity();
+            let _ = crate::outputs::set_power(state, None, true);
+            Reply::Ok(Response::Handled)
+        },
         Request::Idle => {
             let (idle_secs, inhibited) = state.idle_info();
             Reply::Ok(Response::Idle { idle_secs, inhibited, config: state.config.idle.clone() })
