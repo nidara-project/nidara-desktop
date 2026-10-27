@@ -11,6 +11,9 @@ thread) and pipewire-rs for PCM streams. It explicitly selects the mixer plugin'
 **cubic enum**, not an integer GValue. Metadata uses `WpGlobalProxy` properties:
 `WpMetadata` does not implement `WpPipewireObject`. Neither API mistake is caught
 by compiling. Never install WirePlumber's process-wide GLib log writer.
+The negotiated channel count is decoded from SPA pods in Rust: calling
+AudioInfoRaw::parse introduced a generated-C-wrapper linker failure in the
+optimized package build, even though the development build passed.
 
 ## Client contract
 
@@ -37,7 +40,7 @@ Root methods: `SetVolume(o,d)`, `SetMuted(o,b)`, `SetBalance(o,d)`, `SetDefault(
 
 Volume 1.0 means 100%, using the same scale as wpctl. Scalar writes preserve
 channel ratios; a zero vector recovers equal gains. Balance attenuates left/right
-in **linear amplitude** (cube/cube-root at the UI boundary), keeping center/LFE.
+in **linear amplitude** (cube/cube-root at the UI boundary), keeping center/LFE and the front/rear ratios within each side.
 Mono and ambiguous channel maps do not claim balance support. Unsupported data
 is identified by missing capabilities, rather than presented as a known zero.
 External volumes above our write limit remain readable without truncation.
@@ -78,7 +81,9 @@ are never falsified. Other PipeWire clients can still change volume afterward.
 These preferences do not duplicate WirePlumber's persisted mixer state.
 
 `config/wireplumber/nidara-audio.lua` is the default-selection policy, shipped
-with its component fragment. It remains inert without an Audio1 controller.
+with its **optional** component fragment, weakly pulled in by `policy.standard`
+using `wants` (an optional profile entry alone does not load a component). A load failure leaves WirePlumber
+running and reports switch-on-connect unsupported. It remains inert without an Audio1 controller.
 The controller preference is metadata on the daemon's **own PW client ID**,
 withdrawn with the client, not a persistent root toggle. The hook establishes a
 baseline on enable, excludes virtual outputs, ignores profile reenumeration,
@@ -131,9 +136,10 @@ test runs globally. Target removal never redirects a test to another output.
 Existing `cargo test` includes pure gain/balance/identity tests and a private-bus
 Audio1 test using a fake backend. It verifies real ObjectManager/property/error
 behavior, finite bounds, last-wins before backend acknowledgment, withdrawal and
-stale identity. No CI job, step or configuration was added. The standard CI build
-has no native PW headers, so native checks are explicitly local; package and
-development release builds enable the native feature. Arch builds need
+stale identity. No CI job, step or configuration was added. The dedicated sessiond job
+checks the bus/model without native PW headers. The existing Hyalo job also
+compiles the native backend through the package build; native clippy and audio
+behavior checks are local. Package/development release builds enable the feature. Arch builds need
 `clang-libs` for bindgen, in addition to the existing PipeWire/WirePlumber deps.
 
 ```
@@ -141,6 +147,7 @@ cargo test --manifest-path session/Cargo.toml --locked
 cargo clippy --manifest-path session/Cargo.toml --features audio-native -- -D warnings
 cargo build --manifest-path session/Cargo.toml --features audio-native
 lua scripts/dev/audio-policy-test.lua
+NIDARA_AUDIO_POLICY_FAULT=1 /usr/bin/python3 scripts/dev/audio-test.py
 /usr/bin/python3 scripts/dev/audio-test.py
 ```
 

@@ -3,12 +3,17 @@
 local hooks = {}
 function Constraint(t) return t end
 function EventInterest(t) return t end
+function Interest(t) return t end
 function SimpleEventHook(t) t.register=function(self) hooks[self.name]=self.execute end; return t end
 package.preload['common-utils']=function() return {parseParam=function(p) return p end} end
 Json={Object=function(t) return {to_string=function() return t.name end} end}
 local devices, md = {}, {values={}, writes={}}
 function md:set(subject,key,kind,value) self.values[key]=value;self.writes[key]=value end
 function md:find(subject,key) return self.values[key] end
+function ObjectManager(t)
+  return {connect=function(self,signal,fn) self.callback=fn end,
+    activate=function(self) self.callback(self,md) end}
+end
 local source={}
 function source:call(method,kind)
   if method=='schedule-rescan' then return end

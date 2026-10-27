@@ -12,14 +12,15 @@ local function metadata(event)
     Constraint { "metadata.name", "=", "default" }
   }
 end
-SimpleEventHook {
-  name = "nidara/audio-announce",
-  interests = { EventInterest { Constraint { "event.type", "=", "metadata-added" },
-    Constraint { "metadata.name", "=", "default" } } },
-  execute = function(event)
-    event:get_subject():set(0, "nidara.audio.switch-policy", "Spa:Id", "1")
-  end
-}:register()
+-- Optional components may load after metadata-added was dispatched. An object
+-- manager announces existing metadata as well as metadata created in the future.
+local announce_om = ObjectManager {
+  Interest { type = "metadata", Constraint { "metadata.name", "=", "default" } }
+}
+announce_om:connect("object-added", function(_, object)
+  object:set(0, "nidara.audio.switch-policy", "Spa:Id", "1")
+end)
+announce_om:activate()
 SimpleEventHook {
   name = "nidara/audio-controller",
   interests = { EventInterest { Constraint { "event.type", "=", "metadata-changed" },

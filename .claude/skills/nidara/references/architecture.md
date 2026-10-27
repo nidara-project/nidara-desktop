@@ -3697,11 +3697,16 @@ capture/playback lifecycle and local test commands. It uses mixer-api with the
 profiles/routes. `WpMetadata` uses global-proxy properties, not pipewire-object
 properties. No TS bridge is added. Config1's five `audio.*` preferences live in
 `org.nidara.audio`; WP retains mixer/routing persistence. The native feature is
-enabled in package/dev builds; the existing CI build checks the bus/model with
-no new job or step. Bindgen needs `clang-libs` at build time.
+enabled in package/dev builds; the existing sessiond CI checks the bus/model,
+and the existing Hyalo job compiles the native feature through the package.
+No new CI job or step is added. Bindgen needs `clang-libs` at build time. Negotiate channel counts by reading
+SPA pods in Rust; `AudioInfoRaw::parse` pulled in a generated C wrapper that
+failed to link in the optimized package, despite a passing development build.
 
-Hotplug selection belongs to WP's `config/wireplumber/nidara-audio.lua`, inert
-without Audio1's client-scoped metadata control. It pairs an input only with an
+Hotplug selection belongs to WP's **optional** `config/wireplumber/nidara-audio.lua`, inert
+without Audio1's client-scoped metadata control. `policy.standard` weakly wants
+the hook: a profile's `optional` entry alone does not load it, and making the hook
+required could break all audio on a script failure. It pairs an input only with an
 unambiguous new output on the same Device; an integrated headset mic needs a
 newly available route in the same rescan. Standalone mics, virtual devices and
 profile reenumeration do not switch defaults. The policy fixture uses fake

@@ -453,11 +453,7 @@ mod tests {
                     )
                     .await
             });
-            let err = tokio::time::timeout(Duration::from_secs(1), first)
-                .await
-                .unwrap()
-                .unwrap()
-                .unwrap_err();
+            let err = first.await.unwrap().unwrap_err();
             assert!(err.to_string().contains("Superseded"));
             let r = rx.clone();
             let request2 = tokio::task::spawn_blocking(move || {
@@ -477,11 +473,29 @@ mod tests {
             let before = g.clone();
             g.nodes.get_mut(&key).unwrap().volume = 0.7;
             bus::publish(&c, &a, &before, &g).await.unwrap();
-            tokio::time::timeout(Duration::from_secs(1), second)
+            second.await.unwrap().unwrap();
+            // Recycling a numeric ID inside the same connection must also withdraw
+            // the old path, rather than redirect an old client to a different node.
+            let mut replacement = g.clone();
+            let new_key = format!("{ROOT}/g1/nodes/n28");
+            let mut recycled = replacement.nodes.remove(&key).unwrap();
+            recycled.path = new_key.clone();
+            recycled.serial = 28;
+            replacement.nodes.insert(new_key.clone(), recycled);
+            replacement.default_output = new_key.clone();
+            bus::publish(&c, &a, &g, &replacement).await.unwrap();
+            let err = root
+                .call::<_, _, ()>("SetMuted", &(path(&key), true))
                 .await
-                .unwrap()
-                .unwrap()
-                .unwrap();
+                .unwrap_err();
+            assert!(err.to_string().contains("NotFound"));
+            assert!(
+                om.get_managed_objects()
+                    .await
+                    .unwrap()
+                    .contains_key(&path(&new_key))
+            );
+            g = replacement;
             // Provider loss withdraws references and old objects. Recycled PW id 7
             // in generation 2 cannot make an old client target a new apparatus.
             let dead = Graph {

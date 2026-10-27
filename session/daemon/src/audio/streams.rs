@@ -14,6 +14,51 @@ use std::{
 };
 use zbus::{message::Header, object_server::SignalEmitter};
 const MAX_CHANNELS: usize = 64;
+// Read only this property, tolerating unrelated/extended format fields. Negotiated
+// formats may still wrap a fixed integer in Choice(None). All offsets are checked;
+// this avoids libspa's generated C parser wrapper in optimized builds.
+fn negotiated_channels(bytes: &[u8]) -> Option<u32> {
+    fn word(bytes: &[u8], at: usize) -> Option<u32> {
+        Some(u32::from_ne_bytes(
+            bytes.get(at..at.checked_add(4)?)?.try_into().ok()?,
+        ))
+    }
+    if word(bytes, 4)? != spa::sys::SPA_TYPE_Object {
+        return None;
+    }
+    let end = usize::try_from(word(bytes, 0)?).ok()?.checked_add(8)?;
+    let object = bytes.get(8..end)?;
+    if word(object, 0)? != spa::sys::SPA_TYPE_OBJECT_Format {
+        return None;
+    }
+    let mut at = 8_usize;
+    while at < object.len() {
+        let key = word(object, at)?;
+        let length = usize::try_from(word(object, at.checked_add(8)?)?).ok()?;
+        let kind = word(object, at.checked_add(12)?)?;
+        let start = at.checked_add(16)?;
+        let end = start.checked_add(length)?;
+        let value = object.get(start..end)?;
+        if key == spa::sys::SPA_FORMAT_AUDIO_channels {
+            let n = if kind == spa::sys::SPA_TYPE_Int && length == 4 {
+                word(value, 0)?
+            } else if kind == spa::sys::SPA_TYPE_Choice
+                && length == 20
+                && word(value, 0)? == spa::sys::SPA_CHOICE_None
+                && word(value, 8)? == 4
+                && word(value, 12)? == spa::sys::SPA_TYPE_Int
+            {
+                word(value, 16)?
+            } else {
+                return None;
+            };
+            return (1..=MAX_CHANNELS as u32).contains(&n).then_some(n);
+        }
+        at = end.checked_add(7)? & !7;
+    }
+    None
+}
+
 #[derive(Clone)]
 pub struct Manager {
     state: Arc<Mutex<State>>,
@@ -645,9 +690,10 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
             if id == spa::param::ParamType::Format.as_raw()
                 && let Some(p) = param
             {
-                let mut info = spa::param::audio::AudioInfoRaw::new();
-                if info.parse(p).is_ok() {
-                    let n = info.channels().min(MAX_CHANNELS as u32);
+                // Only the negotiated channel count is needed. Decode its SPA pod
+                // in Rust; AudioInfoRaw::parse pulls in a generated C wrapper that
+                // can be absent from optimized libspa-sys builds.
+                if let Some(n) = negotiated_channels(p.as_bytes()) {
                     count.store(n, Ordering::Release);
                     channels.store(n, Ordering::Release);
                 }
@@ -657,6 +703,7 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
             let Some(mut buffer) = stream.dequeue_buffer() else {
                 return;
             };
+            let requested = buffer.requested();
             let datas = buffer.datas_mut();
             if datas.is_empty() {
                 return;
@@ -684,7 +731,15 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 let mut written = 0;
                 if let Some(bytes) = data.data() {
-                    for frame in bytes.chunks_exact_mut(4 * n) {
+                    let capacity = bytes.len() / (4 * n);
+                    let frames_requested = if requested == 0 {
+                        capacity
+                    } else {
+                        usize::try_from(requested)
+                            .unwrap_or(usize::MAX)
+                            .min(capacity)
+                    };
+                    for frame in bytes[..frames_requested * (4 * n)].chunks_exact_mut(4 * n) {
                         phase = (phase + std::f64::consts::TAU * frequency / 48000.0)
                             % std::f64::consts::TAU;
                         let envelope = if frames >= duration_frames {
@@ -778,4 +833,58 @@ fn run(job: &Job) -> Result<(), Box<dyn std::error::Error>> {
     };
     let _ = stream.disconnect();
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn format(channels: spa::pod::Value) -> Vec<u8> {
+        let property = |key, value| spa::pod::Property {
+            key,
+            flags: spa::pod::PropertyFlags::empty(),
+            value,
+        };
+        spa::pod::serialize::PodSerializer::serialize(
+            std::io::Cursor::new(Vec::new()),
+            &spa::pod::Value::Object(spa::pod::Object {
+                type_: spa::sys::SPA_TYPE_OBJECT_Format,
+                id: spa::sys::SPA_PARAM_Format,
+                properties: vec![
+                    property(
+                        spa::sys::SPA_FORMAT_AUDIO_position,
+                        spa::pod::Value::ValueArray(spa::pod::ValueArray::Id(vec![
+                            spa::utils::Id(spa::sys::SPA_AUDIO_CHANNEL_FL),
+                            spa::utils::Id(spa::sys::SPA_AUDIO_CHANNEL_FR),
+                        ])),
+                    ),
+                    property(spa::sys::SPA_FORMAT_AUDIO_channels, channels),
+                ],
+            }),
+        )
+        .unwrap()
+        .0
+        .into_inner()
+    }
+    #[test]
+    fn negotiated_channel_property_handles_fixed_choices_and_skips_other_fields() {
+        let fixed = format(spa::pod::Value::Int(2));
+        assert_eq!(negotiated_channels(&fixed), Some(2));
+        let choice = format(spa::pod::Value::Choice(spa::pod::ChoiceValue::Int(
+            spa::utils::Choice(
+                spa::utils::ChoiceFlags::empty(),
+                spa::utils::ChoiceEnum::None(2),
+            ),
+        )));
+        assert_eq!(negotiated_channels(&choice), Some(2));
+        for n in [0, -1, 65] {
+            assert_eq!(negotiated_channels(&format(spa::pod::Value::Int(n))), None);
+        }
+        for length in 0..fixed.len() {
+            assert_eq!(negotiated_channels(&fixed[..length]), None);
+        }
+        assert_eq!(
+            negotiated_channels(&format(spa::pod::Value::Float(2.0))),
+            None
+        );
+    }
 }

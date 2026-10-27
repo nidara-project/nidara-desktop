@@ -865,12 +865,30 @@ impl Worker {
             }
         }
         let all = objects(&self.om);
-        let find = |id_: u32| {
+        let find = |device: &Device| {
             all.iter()
-                .find(|o| id(o) == id_)
+                .find(|o| {
+                    is(o, unsafe { wp_device_get_type() })
+                        && id(o) == device.id
+                        && device
+                            .path
+                            .ends_with(&format!("/d{}", prop(o, "object.serial")))
+                })
                 .ok_or_else(|| Error::NotFound("object removed".into()))
         };
         let node = self.graph.nodes.get(&r.path);
+        if let Some(n) = node {
+            let current = all
+                .iter()
+                .find(|o| is(o, unsafe { wp_node_get_type() }) && id(o) == n.id);
+            if !current
+                .is_some_and(|o| prop(o, "object.serial").parse::<u64>().ok() == Some(n.serial))
+            {
+                return Err(Error::NotFound(
+                    "node removed or provider ID recycled".into(),
+                ));
+            }
+        }
         let result = match &r.action {
             Action::Volume(value) | Action::Balance(value) => {
                 let mut n = node
@@ -977,7 +995,7 @@ impl Worker {
                 }
                 let d = &self.graph.devices[&p.device];
                 set_param(
-                    find(d.id)?,
+                    find(d)?,
                     "Profile",
                     spa::pod::Object {
                         type_: spa::sys::SPA_TYPE_OBJECT_ParamProfile,
@@ -1000,7 +1018,7 @@ impl Worker {
                 }
                 let d = &self.graph.devices[&p.device];
                 set_param(
-                    find(d.id)?,
+                    find(d)?,
                     "Route",
                     spa::pod::Object {
                         type_: spa::sys::SPA_TYPE_OBJECT_ParamRoute,
@@ -1135,35 +1153,6 @@ pub fn start(
                         }
                     }
                 }
-                let mut requests = Vec::new();
-                loop {
-                    match rx.try_recv() {
-                        Ok(r) => requests.push(r),
-                        Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                        Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
-                    }
-                }
-                // Coalesce before dispatch: an obsolete drag value is never written later.
-                let mut latest = BTreeMap::new();
-                for r in &requests {
-                    if matches!(r.action, Action::Volume(_)) {
-                        latest
-                            .entry(r.path.clone())
-                            .and_modify(|v: &mut u64| *v = (*v).max(r.sequence))
-                            .or_insert(r.sequence);
-                    }
-                }
-                for r in requests {
-                    let result =
-                        if matches!(r.action, Action::Volume(_)) && latest[&r.path] != r.sequence {
-                            Err(Error::Superseded("newer queued volume request".into()))
-                        } else if let Some(w) = &mut worker {
-                            w.execute(&r)
-                        } else {
-                            Err(Error::Unavailable("PipeWire unavailable".into()))
-                        };
-                    let _ = r.reply.send(result);
-                }
                 if let Some(w) = &mut worker
                     && (dirty.replace(false) || w.dirty.replace(false))
                 {
@@ -1201,6 +1190,35 @@ pub fn start(
                     if preference_changed || *snapshots.borrow() != graph {
                         let _ = snapshots.send(graph);
                     }
+                }
+                let mut requests = Vec::new();
+                loop {
+                    match rx.try_recv() {
+                        Ok(r) => requests.push(r),
+                        Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
+                    }
+                }
+                // Coalesce before dispatch: an obsolete drag value is never written later.
+                let mut latest = BTreeMap::new();
+                for r in &requests {
+                    if matches!(r.action, Action::Volume(_)) {
+                        latest
+                            .entry(r.path.clone())
+                            .and_modify(|v: &mut u64| *v = (*v).max(r.sequence))
+                            .or_insert(r.sequence);
+                    }
+                }
+                for r in requests {
+                    let result =
+                        if matches!(r.action, Action::Volume(_)) && latest[&r.path] != r.sequence {
+                            Err(Error::Superseded("newer queued volume request".into()))
+                        } else if let Some(w) = &mut worker {
+                            w.execute(&r)
+                        } else {
+                            Err(Error::Unavailable("PipeWire unavailable".into()))
+                        };
+                    let _ = r.reply.send(result);
                 }
                 std::thread::sleep(Duration::from_millis(5));
             }

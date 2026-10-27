@@ -43,6 +43,7 @@ def outer():
         shutil.copy(ROOT/'config/wireplumber/60-nidara-audio.conf',fragments)
         script=cfg/'scripts/nidara';script.mkdir(parents=True)
         shutil.copy(ROOT/'config/wireplumber/nidara-audio.lua',script/'audio.lua')
+        if os.environ.get('NIDARA_AUDIO_POLICY_FAULT')=='1':(script/'audio.lua').write_text("error('injected optional audio policy load failure')\n")
         env['WIREPLUMBER_DATA_DIR']=str(cfg)+':/usr/share/wireplumber'
         env['WIREPLUMBER_CONFIG_DIR']=str(cfg)
         env['GIO_USE_VFS']='local'
@@ -53,7 +54,9 @@ def outer():
         pfrag=pcfg/'pipewire.conf.d';pfrag.mkdir()
         (pfrag/'90-audiotest.conf').write_text('context.spa-libs = { audiotestsrc = audiotestsrc/libspa-audiotestsrc }\n')
         env['PIPEWIRE_CONFIG_DIR']=str(pcfg)
-        env['NIDARA_AUDIO_TEST_RUN']=str(run);env['NIDARA_AUDIO_TEST_LOG']=str(base)
+        log_dir=base/'policy-fault' if os.environ.get('NIDARA_AUDIO_POLICY_FAULT')=='1' else base
+        log_dir.mkdir(exist_ok=True)
+        env['NIDARA_AUDIO_TEST_RUN']=str(run);env['NIDARA_AUDIO_TEST_LOG']=str(log_dir)
         binary=Path(sys.argv[1] if len(sys.argv)>1 else ROOT/'session/target/debug/nidara-sessiond').resolve()
         return subprocess.run(['dbus-run-session','--',sys.executable,__file__,'--private',str(binary)],env=env).returncode
 
@@ -96,6 +99,16 @@ def private(binary):
         wp=spawn(['wireplumber'],'wireplumber')
         daemon=spawn([binary,'--config','--audio'],'audio')
         wait(lambda:root()['State']=='ready','Audio1 ready')
+        if os.environ.get('NIDARA_AUDIO_POLICY_FAULT')=='1':
+            assert root()['DefaultSwitchMode']=='unsupported'
+            assert wp.poll() is None
+            wait(lambda:'injected optional audio policy load failure' in (Path(os.environ['NIDARA_AUDIO_TEST_LOG'])/'wireplumber.log').read_text(),'fault control actually loaded and rejected the optional script')
+            make('fault-output','Audio/Sink')
+            output=wait(lambda:next((k for k,v in nodes().items() if v['Name']=='fault-output'),None),'output remains available after hook failure')
+            invoke('SetVolume','(od)',(output,.7))
+            assert abs(nodes()[output]['Volume']-.7)<.002
+            print('PASS: optional policy load failure leaves WirePlumber and Audio1 ready, with switch unsupported',flush=True)
+            return 0
         wait(lambda:root()['DefaultSwitchMode']=='wireplumber-policy','private hotplug policy loaded')
         assert not nodes(),'hardware disabled, graph initially empty'
         assert not any(x['type']=='PipeWire:Interface:Device' for x in json.loads(subprocess.check_output(['pw-dump']))),'physical devices must not enter the private test graph'

@@ -169,22 +169,49 @@ pub fn balance(channels: &[Channel]) -> f64 {
 }
 #[cfg(any(feature = "audio-native", test))]
 pub fn set_balance(channels: &[Channel], value: f64) -> Vec<Channel> {
-    let peak = channels
-        .iter()
-        .filter(|c| side(&c.position) != 0)
-        .map(|c| c.volume)
-        .fold(0.0_f64, f64::max);
+    let level = |s| {
+        channels
+            .iter()
+            .filter(|c| side(&c.position) == s)
+            .map(|c| c.volume)
+            .fold(0.0_f64, f64::max)
+    };
+    let left = level(-1);
+    let right = level(1);
+    let peak = left.max(right);
     channels
         .iter()
         .map(|c| {
-            let attenuation = match side(&c.position) {
-                -1 => 1.0 - value.max(0.0),
-                1 => 1.0 + value.min(0.0),
+            let group = side(&c.position);
+            let (own, other, attenuation) = match group {
+                -1 => (left, right, 1.0 - value.max(0.0)),
+                1 => (right, left, 1.0 + value.min(0.0)),
                 _ => return c.clone(),
+            };
+            let ratio = if own > 0.0 {
+                c.volume / own
+            } else if other > 0.0 {
+                let opposite = match c.position.as_str() {
+                    "FL" => "FR",
+                    "FR" => "FL",
+                    "RL" => "RR",
+                    "RR" => "RL",
+                    "SL" => "SR",
+                    "SR" => "SL",
+                    "FLC" => "FRC",
+                    "FRC" => "FLC",
+                    _ => "",
+                };
+                channels
+                    .iter()
+                    .find(|v| v.position == opposite)
+                    .map_or(1.0, |v| v.volume / other)
+            } else {
+                1.0
             };
             Channel {
                 position: c.position.clone(),
-                volume: peak * attenuation.cbrt(),
+                volume: peak * attenuation.cbrt() * ratio,
             }
         })
         .collect()
@@ -246,6 +273,31 @@ mod tests {
             position: "MONO".into(),
             volume: 1.0
         }]));
+    }
+    #[test]
+    fn surround_balance_keeps_front_rear_ratios_even_after_a_side_is_zero() {
+        let channels = [
+            ("FL", 0.8),
+            ("FR", 0.2),
+            ("RL", 0.4),
+            ("RR", 0.1),
+            ("FC", 0.6),
+            ("LFE", 0.3),
+        ]
+        .into_iter()
+        .map(|(position, volume)| Channel {
+            position: position.into(),
+            volume,
+        })
+        .collect::<Vec<_>>();
+        for balance in [-1.0, 0.0, 1.0] {
+            let changed = set_balance(&channels, balance);
+            let centered = set_balance(&changed, 0.0);
+            assert!((centered[2].volume / centered[0].volume - 0.5).abs() < 1e-9);
+            assert!((centered[3].volume / centered[1].volume - 0.5).abs() < 1e-9);
+            assert_eq!(centered[4], channels[4]);
+            assert_eq!(centered[5], channels[5]);
+        }
     }
     #[test]
     fn scalar_preserves_ratios_and_zero_recovers() {
