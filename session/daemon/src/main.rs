@@ -4,6 +4,7 @@
 mod audio;
 mod bluetooth;
 mod config;
+mod media;
 mod model;
 mod network;
 mod store;
@@ -294,6 +295,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if std::env::args().any(|a| a == "--audio") {
         audio::serve(&conn).await?;
+    }
+    if std::env::args().any(|a| a == "--media") {
+        media::serve(&conn).await?;
     }
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }

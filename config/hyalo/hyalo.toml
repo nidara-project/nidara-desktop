@@ -243,10 +243,10 @@ inactive = { range = 12, offset = 2, color = "#00000033" }
 "XF86AudioMicMute" = { action = "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle", locked = true }
 "XF86MonBrightnessUp" = { action = "spawn brightnessctl -n s 5%+", locked = true, repeat = true }
 "XF86MonBrightnessDown" = { action = "spawn brightnessctl -n s 5%-", locked = true, repeat = true }
-"XF86AudioPlay" = { action = "spawn playerctl play-pause", locked = true }
-"XF86AudioPause" = { action = "spawn playerctl play-pause", locked = true }
-"XF86AudioNext" = { action = "spawn playerctl next", locked = true }
-"XF86AudioPrev" = { action = "spawn playerctl previous", locked = true }
+"XF86AudioPlay" = { action = "spawn nidara-media-key play-pause", locked = true }
+"XF86AudioPause" = { action = "spawn nidara-media-key pause", locked = true }
+"XF86AudioNext" = { action = "spawn nidara-media-key next", locked = true }
+"XF86AudioPrev" = { action = "spawn nidara-media-key previous", locked = true }
 
 # When nobody touches the computer: seconds before each step, 0 = never (idle.rs). Settings →
 # Power writes the user's choice in hyalo-settings.toml; these are the defaults.

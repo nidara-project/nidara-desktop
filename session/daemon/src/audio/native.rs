@@ -678,6 +678,26 @@ impl Worker {
                 name: prop(obj, "node.name"),
                 description,
                 media_name: prop(obj, "media.name"),
+                process_id: prop(obj, "application.process.id").parse().unwrap_or(0),
+                endpoint_kind: {
+                    let dev = all
+                        .iter()
+                        .find(|o| id(o) == prop(obj, "device.id").parse().unwrap_or(u32::MAX));
+                    dev.map(|d| {
+                        if prop(d, "device.api") == "bluez5" || prop(d, "device.bus") == "bluetooth"
+                        {
+                            "bluetooth"
+                        } else {
+                            match prop(d, "device.form-factor").as_str() {
+                                "headphone" | "headset" => "headphones",
+                                "speaker" => "speaker",
+                                _ => "unknown",
+                            }
+                        }
+                    })
+                    .unwrap_or("unknown")
+                    .into()
+                },
                 application_id: prop(obj, "application.id"),
                 application_name: prop(obj, "application.name"),
                 icon_name: [

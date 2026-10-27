@@ -446,4 +446,8 @@
     </key>
   </schema>
 
+  <schema id="org.nidara.media" path="/org/nidara/media/">
+    <key name="lock-screen-controls" type="b"><default>true</default></key>
+    <key name="pause-on-headphones-disconnect" type="b"><default>true</default></key>
+  </schema>
 </schemalist>

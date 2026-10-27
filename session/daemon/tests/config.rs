@@ -725,3 +725,95 @@ if os.path.exists(os.path.join(os.environ['HOME'], 'awww-refuse')):
     );
     assert_eq!(calls().len(), before);
 }
+
+#[tokio::test]
+async fn media_preferences_and_optional_audio_backend() {
+    let mut env = setup();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_nidara-sessiond"));
+    command.args(["--config", "--media"]);
+    env.vars(&mut command);
+    env.daemon = Some(command.spawn().unwrap());
+    let conn = connect(&env.address).await;
+    wait_for_config(&conn).await;
+    let media = zbus::Proxy::new(
+        &conn,
+        "org.nidara.Session",
+        "/org/nidara/Media",
+        "org.nidara.Media1",
+    )
+    .await
+    .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if media.get_property::<String>("State").await.is_ok() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        media.get_property::<String>("State").await.unwrap(),
+        "Ready"
+    );
+    assert!(
+        !media
+            .get_property::<bool>("HeadphonePauseAvailable")
+            .await
+            .unwrap()
+    );
+    assert!(
+        !media
+            .get_property::<Vec<String>>("Capabilities")
+            .await
+            .unwrap()
+            .iter()
+            .any(|s| s == "headphone-fallback")
+    );
+    assert!(
+        media
+            .get_property::<String>("LastError")
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    for (key, property) in [
+        ("media.lock-screen-controls", "LockScreenControls"),
+        (
+            "media.pause-on-headphones-disconnect",
+            "PauseOnHeadphonesDisconnect",
+        ),
+    ] {
+        assert!(media.get_property::<bool>(property).await.unwrap());
+        let (_, value): (u64, OwnedValue) = call(&conn, "Apply", &(key, Value::from(false)))
+            .await
+            .unwrap();
+        assert!(!bool::try_from(value).unwrap());
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if !media.get_property::<bool>(property).await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        env.gsettings_set(
+            "org.nidara.media",
+            key.strip_prefix("media.").unwrap(),
+            "true",
+        );
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if media.get_property::<bool>(property).await.unwrap() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+}
