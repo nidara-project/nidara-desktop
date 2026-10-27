@@ -737,8 +737,10 @@ rm -rf "$AUTH_BUILD"
 # The session daemon is always compiled, including --dev: it is a separate
 # service and UI reloads do not rebuild or restart it.
 echo "  Building nidara-sessiond..."
-(cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked)
+(cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked --features audio-native)
 sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond
+sudo install -Dm644 "$REPO_DIR/config/wireplumber/nidara-audio.lua" /usr/share/wireplumber/scripts/nidara/audio.lua
+sudo install -Dm644 "$REPO_DIR/config/wireplumber/60-nidara-audio.conf" /usr/share/wireplumber/wireplumber.conf.d/60-nidara-audio.conf
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/nidara.service). NOT enabled by target: it's

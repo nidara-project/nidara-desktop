@@ -87,6 +87,7 @@ const WM: &str = "org.gnome.desktop.wm.preferences";
 const BACKGROUND: &str = "org.gnome.desktop.background";
 const APPEARANCE: &str = "org.nidara.appearance";
 const NIGHT: &str = "org.nidara.night-light";
+const AUDIO: &str = "org.nidara.audio";
 const AI: &str = "org.nidara.ai";
 
 /// The GSettings of this session, by schema; a schema not installed is simply absent.
@@ -100,7 +101,7 @@ impl Store {
     pub fn new() -> Self {
         let source = gio::SettingsSchemaSource::default();
         let (mut settings, mut schemas) = (HashMap::new(), HashMap::new());
-        for id in [INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI] {
+        for id in [INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO] {
             if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
                 schemas.insert(id, schema);
@@ -585,6 +586,104 @@ fn table() -> Vec<Key> {
                 |_| json!({"i18n": "settings.accessibility.reduce-transparency", "control": "toggle"}),
             ),
             watch: &[(APPEARANCE, "reduce-transparency")],
+            file: false,
+        },
+        Key {
+            name: "audio.overamplification",
+            desc: "Native session audio preference.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[AUDIO],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(AUDIO).boolean("overamplification")),
+            set: Some(|st, v| {
+                st.s(AUDIO)
+                    .set_boolean("overamplification", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(AUDIO, "overamplification")],
+            file: false,
+        },
+        Key {
+            name: "audio.alerts-enabled",
+            desc: "Native session audio preference.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[AUDIO],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(AUDIO).boolean("alerts-enabled")),
+            set: Some(|st, v| {
+                st.s(AUDIO)
+                    .set_boolean("alerts-enabled", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(AUDIO, "alerts-enabled")],
+            file: false,
+        },
+        Key {
+            name: "audio.volume-feedback",
+            desc: "Native session audio preference.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[AUDIO],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(AUDIO).boolean("volume-feedback")),
+            set: Some(|st, v| {
+                st.s(AUDIO)
+                    .set_boolean("volume-feedback", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(AUDIO, "volume-feedback")],
+            file: false,
+        },
+        Key {
+            name: "audio.switch-on-connect",
+            desc: "Native session audio preference.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[AUDIO],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(AUDIO).boolean("switch-on-connect")),
+            set: Some(|st, v| {
+                st.s(AUDIO)
+                    .set_boolean("switch-on-connect", *v == Value::Bool(true))
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(AUDIO, "switch-on-connect")],
+            file: false,
+        },
+        Key {
+            name: "audio.alert-volume",
+            desc: "Native session audio preference.",
+            kind: Kind::Number { min: 0.0, max: 1.0 },
+            writable: true,
+            needs: &[AUDIO],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.s(AUDIO).double("alert-volume")),
+            set: Some(|st, v| {
+                let Value::Number(n) = v else {
+                    return Err("expected number".into());
+                };
+                st.s(AUDIO)
+                    .set_double("alert-volume", *n)
+                    .map_err(|e| e.to_string())
+            }),
+            ui: None,
+            watch: &[(AUDIO, "alert-volume")],
             file: false,
         },
         Key {

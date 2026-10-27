@@ -6,13 +6,14 @@
 # directory below) and its own services: nidara-sessiond serves Config1 there. Nothing it
 # changes reaches the live session, and nothing of the live session serves it.
 #
-#   scripts/dev/rust-session.sh [--network] [--bluetooth] [COMMAND…]   default: native Settings
+#   scripts/dev/rust-session.sh [--network] [--bluetooth] [--audio] [COMMAND…]   default: native Settings
 # Network/Bluetooth are explicit: never use it alongside the daily TS shell agent. A test
 # must also provide a private DBUS_SYSTEM_BUS_ADDRESS, not the host NetworkManager/BlueZ.
 # OBEX must be a private fake on the nested session bus too.
 #
 # From a checkout: this checkout's Hyalo, nidara-sessiond, nk-settings and exports when they
-# are built (`cargo build --release` in hyalo/, session/ and toolkit/; `node
+# are built (`cargo build --release` in hyalo/ and toolkit/;
+# `cargo build --release --features audio-native` in session/; `node
 # --experimental-strip-types scripts/export-settings-data.mjs build/settings-data` +
 # export-tokens.mjs), the installed ones otherwise. Inside: `nidara-hyalo msg …` with the
 # HYALO_SOCKET this prints. The session's settings persist in $state; delete it to start over.
@@ -38,7 +39,7 @@ mkdir -p "$state/config/nidara"
 service_flags=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --network|--bluetooth) service_flags+=" $1"; shift ;;
+        --network|--bluetooth|--audio) service_flags+=" $1"; shift ;;
         *) break ;;
     esac
 done

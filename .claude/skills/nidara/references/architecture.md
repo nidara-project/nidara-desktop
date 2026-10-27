@@ -3687,3 +3687,45 @@ of the full match set. The ordinary results page uses existing rows and explicit
 routing; typing never replaces its current content. Builder-owned runtime objects
 without registry/manifest labels are not indexed yet. Both new labels are translated in
 all twelve catalogs with their ledger. No workflow step or PR gate was added.
+
+### Native Audio1 and WirePlumber policy
+
+`session/daemon/src/audio/` is the opt-in Rust audio service (`--audio`, built
+with `--features audio-native`); its README owns the D-Bus contract, bounded
+capture/playback lifecycle and local test commands. It uses mixer-api with the
+**cubic enum GValue** (an integer GValue panics), default-nodes-api and actual SPA
+profiles/routes. `WpMetadata` uses global-proxy properties, not pipewire-object
+properties. No TS bridge is added. Config1's five `audio.*` preferences live in
+`org.nidara.audio`; WP retains mixer/routing persistence. The native feature is
+enabled in package/dev builds; the existing sessiond CI checks the bus/model,
+and the existing Hyalo job compiles the native feature through the package.
+No new CI job or step is added. Bindgen needs `clang-libs` at build time. Negotiate channel counts by reading
+SPA pods in Rust; `AudioInfoRaw::parse` pulled in a generated C wrapper that
+failed to link in the optimized package, despite a passing development build.
+
+Hotplug selection belongs to WP's **optional** `config/wireplumber/nidara-audio.lua`, inert
+without Audio1's client-scoped metadata control. `policy.standard` weakly wants
+the hook: a profile's `optional` entry alone does not load it, and making the hook
+required could break all audio on a script failure. It pairs an input only with an
+unambiguous new output on the same Device; an integrated headset mic needs a
+newly available route in the same rescan. Standalone mics, virtual devices and
+profile reenumeration do not switch defaults. The policy fixture uses fake
+events, and `scripts/dev/audio-test.py` uses a private PW remote and bus with
+physical monitors disabled. Neither establishes hardware or live acceptance.
+Own meter streams are identified by actual PW client handles plus server cookie,
+exposed as InternalCapture, and excluded from app/recording lists. Do not decide
+privacy classification from an app-id claiming to be Nidara. **Ducking is
+intentionally absent**: moving an app directly to a sink bypasses WP's role
+loopback, and moving that loopback moves the role group. Do not enable role-based
+policy or alter installed WP configuration to work around it.
+
+Audio1 property signals carry **changed values only**, not whole-object
+invalidations; root maps are compared separately so volume drags do not trigger
+root Get calls. Degraded capabilities retain the working mixer independently of
+default-node metadata. Alerts/feedback resolve **XDG sound themes**, following
+`org.gnome.desktop.sound` theme-name (freedesktop fallback), index.theme/Inherits,
+locale/name/profile fallback and `.disabled`. Only TestChannel uses a generated
+tone. `sound.rs` owns bounded Vorbis/WAV decoding (lewton/hound), immutable PCM and
+the cache; no decoder, file lookup or allocation belongs in the RT callback.
+The package ships sound-theme-freedesktop as a runtime dependency. Theme tests
+use fixtures and private playback, never the user's audio graph.

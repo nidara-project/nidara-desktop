@@ -20,6 +20,15 @@
   until it is installed and compiled again.
 -->
 <schemalist>
+  <!-- Native Audio1 preferences. WirePlumber retains mixer and routing state. -->
+  <schema id="org.nidara.audio" path="/org/nidara/audio/">
+    <key name="overamplification" type="b"><default>false</default><summary>Allow volume up to 150 percent</summary></key>
+    <key name="alerts-enabled" type="b"><default>true</default><summary>Play alert sounds</summary></key>
+    <key name="alert-volume" type="d"><range min="0.0" max="1.0"/><default>0.5</default><summary>Alert volume in cubic scale</summary></key>
+    <key name="volume-feedback" type="b"><default>false</default><summary>Play feedback on a volume gesture</summary></key>
+    <key name="switch-on-connect" type="b"><default>true</default><summary>Prefer a newly available headset or external output</summary></key>
+  </schema>
+
 
   <schema id="org.nidara.notifications" path="/org/nidara/notifications/">
     <key name="popup-timeout" type="i">
