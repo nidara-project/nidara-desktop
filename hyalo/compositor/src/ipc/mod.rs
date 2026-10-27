@@ -315,7 +315,7 @@ pub enum Reply {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Response {
     Handled,
-    PowerInfo { power:serde_json::Value },
+    PowerInfo { power: serde_json::Value },
     Version { version: String },
     Outputs { outputs: Vec<OutputInfo> },
     Windows { windows: Vec<WindowInfo> },

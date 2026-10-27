@@ -172,13 +172,20 @@ struct ScreenSaver {
 }
 
 impl ScreenSaver {
-    fn report(&self, _n: usize) {
-        let items = self.inner.lock().unwrap().held.iter().map(|(cookie, (owner, app, reason))| {
-            serde_json::json!({
-                "id": format!("screensaver:{owner}:{cookie}"), "source": "screensaver",
-                "who": app, "reason": reason, "app_id": app, "pid": 0, "uid": 0, "identity_known": false,
+    fn report(&self) {
+        let items = self
+            .inner
+            .lock()
+            .unwrap()
+            .held
+            .iter()
+            .map(|(cookie, (owner, app, reason))| {
+                serde_json::json!({
+                    "id": format!("screensaver:{owner}:{cookie}"), "source": "screensaver",
+                    "who": app, "reason": reason, "app_id": app, "pid": 0, "uid": 0, "identity_known": false,
+                })
             })
-        }).collect();
+            .collect();
         if let Err(err) = self.tx.send(LoginEvent::Inhibitors(items)) {
             tracing::warn!(%err, "ScreenSaver: the event loop did not take the change");
         }
@@ -194,26 +201,22 @@ impl ScreenSaver {
         reason_for_inhibit: String,
     ) -> u32 {
         let sender = header.sender().map(|s| s.to_string()).unwrap_or_default();
-        let (cookie, n) = {
+        let cookie = {
             let mut i = self.inner.lock().unwrap();
             i.next = i.next.wrapping_add(1).max(1);
             let cookie = i.next;
             i.held
                 .insert(cookie, (sender, application_name.clone(), reason_for_inhibit.clone()));
-            (cookie, i.held.len())
+            cookie
         };
         tracing::info!(app = %application_name, reason = %reason_for_inhibit, cookie, "the screen is held on");
-        self.report(n);
+        self.report();
         cookie
     }
 
     fn un_inhibit(&self, cookie: u32) {
-        let n = {
-            let mut i = self.inner.lock().unwrap();
-            i.held.remove(&cookie);
-            i.held.len()
-        };
-        self.report(n);
+        self.inner.lock().unwrap().held.remove(&cookie);
+        self.report();
     }
 }
 
@@ -241,8 +244,8 @@ fn screensaver(tx: Sender<LoginEvent>) -> zbus::Result<()> {
             i.held.retain(|_, (s, _, _)| s != &gone);
             (i.held.len() != before).then_some(i.held.len())
         };
-        if let Some(n) = n {
-            service.report(n);
+        if n.is_some() {
+            service.report();
         }
     }
     Ok(())
@@ -342,12 +345,17 @@ fn power_source(tx: Sender<LoginEvent>) {
             dbus.add_match_rule(
                 zbus::MatchRule::builder()
                     .msg_type(zbus::message::Type::Signal)
+                    .sender("org.freedesktop.UPower")?
                     .path("/org/freedesktop/UPower")?
+                    .interface("org.freedesktop.DBus.Properties")?
+                    .member("PropertiesChanged")?
                     .build(),
             )?;
             dbus.add_match_rule(
                 zbus::MatchRule::builder()
                     .msg_type(zbus::message::Type::Signal)
+                    .sender("org.freedesktop.DBus")?
+                    .interface("org.freedesktop.DBus")?
                     .member("NameOwnerChanged")?
                     .add_arg("org.freedesktop.UPower")?
                     .build(),
@@ -364,9 +372,12 @@ fn power_source(tx: Sender<LoginEvent>) {
                 tx.send(LoginEvent::PowerSource(value)).ok();
             };
             read();
-            let signals = zbus::MatchRule::builder().msg_type(zbus::message::Type::Signal).build();
-            for message in zbus::blocking::MessageIterator::for_match_rule(signals, &conn, Some(64))? {
+            // Only the two explicit subscriptions above; method replies are ignored.
+            for message in zbus::blocking::MessageIterator::from(&conn) {
                 let message = message?;
+                if message.message_type() != zbus::message::Type::Signal {
+                    continue;
+                }
                 if message
                     .header()
                     .member()

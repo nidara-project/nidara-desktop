@@ -233,17 +233,21 @@ impl MenuCallback {
         Err(zbus::fdo::Error::Failed("fixture consumer failure".into()))
     }
 }
-async fn wait(mut predicate: impl FnMut() -> bool) {
-    for _ in 0..300 {
+async fn changed(stream: &mut zbus::MessageStream, mut predicate: impl FnMut() -> bool) {
+    loop {
         if predicate() {
             return;
         }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        stream
+            .next()
+            .await
+            .expect("fixture bus disconnected")
+            .unwrap();
     }
-    panic!("provider state did not converge");
 }
 fn power(conn: &Connection, system: &Connection, read_only: bool) -> Power {
     Power {
+        strings: Arc::new(i18n::Strings::load()),
         conn: conn.clone(),
         system: Arc::new(RwLock::new(Some(system.clone()))),
         state: Default::default(),
@@ -479,6 +483,11 @@ async fn run() {
     assert!(p.power_button().await.is_err());
     assert_eq!(fixture.calls.lock().await.len(), before);
     assert!(p.state.read().unwrap().menu.is_some());
+    assert_eq!(
+        p.property::<String>(ROOT, "State"),
+        "Ready",
+        "a consumer error is not degraded provider health"
+    );
     let foreign_menu = Proxy::new(
         &foreign,
         "org.nidara.Session",
@@ -528,6 +537,18 @@ async fn run() {
             .contains_key(&path(&physical))
     );
     assert_eq!(p.property::<String>(ROOT, "ActiveProfile"), "power-saver");
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .interface("org.freedesktop.DBus.Properties")
+        .unwrap()
+        .path_namespace(ROOT)
+        .unwrap()
+        .member("PropertiesChanged")
+        .unwrap()
+        .build();
+    let mut updates = zbus::MessageStream::for_match_rule(rule, &client, Some(256))
+        .await
+        .unwrap();
     // Signal paths, caller cleanup and automatic-saver manual override on the private bus.
     replacement
         .object_server()
@@ -537,15 +558,7 @@ async fn run() {
         )
         .await
         .unwrap();
-    provider::watch(p.clone()).await.unwrap();
-    wait(|| {
-        p.system
-            .read()
-            .unwrap()
-            .as_ref()
-            .is_some_and(|system| system.unique_name() != conn.unique_name())
-    })
-    .await;
+    provider::watch(p.clone()).await.unwrap().await.unwrap();
     p.refresh().await.unwrap();
     let ephemeral = Connection::session().await.unwrap();
     let name = ephemeral.unique_name().unwrap().to_string();
@@ -560,7 +573,10 @@ async fn run() {
         .await
         .unwrap();
     drop(ephemeral);
-    wait(|| !p.state.read().unwrap().holds.contains_key(hold.as_str())).await;
+    changed(&mut updates, || {
+        !p.state.read().unwrap().holds.contains_key(hold.as_str())
+    })
+    .await;
     let before = fixture.calls.lock().await.len();
     *fixture.brightness.write().unwrap() = 3;
     replacement
@@ -573,7 +589,7 @@ async fn run() {
         )
         .await
         .unwrap();
-    wait(|| {
+    changed(&mut updates, || {
         p.state.read().unwrap().objects.values().any(|o| {
             o.kind == "keyboard"
                 && o.props["LastChangeSource"] == "internal"
@@ -609,7 +625,7 @@ async fn run() {
     )
     .await
     .unwrap();
-    wait(|| {
+    changed(&mut updates, || {
         p.state.read().unwrap().policy.overridden
             && p.state.read().unwrap().holds.values().all(|h| !h.automatic)
     })
@@ -622,7 +638,7 @@ async fn run() {
         .await
         .unwrap();
     ppd2.request_name(provider::PPD).await.unwrap();
-    wait(|| {
+    changed(&mut updates, || {
         p.state.read().unwrap().providers["ppd"].epoch != epoch
             && !p.state.read().unwrap().providers["ppd"].owner.is_empty()
     })
@@ -650,6 +666,13 @@ async fn run() {
         }
     });
     p.refresh().await.unwrap();
+    assert!(
+        p.lid_fd.lock().await.is_none(),
+        "default suspend belongs to logind even with sleep inhibitors"
+    );
+    assert_eq!(p.property::<String>(ROOT, "LidHandling"), "logind");
+    p.prefs.write().unwrap().lid_battery = "lock".into();
+    p.refresh().await.unwrap();
     assert!(p.key_fd.lock().await.is_some());
     assert!(p.lid_fd.lock().await.is_some());
     assert_eq!(
@@ -661,19 +684,28 @@ async fn run() {
     assert!(p.key_fd.lock().await.is_none());
     assert!(p.lid_fd.lock().await.is_some());
     assert!(p.power_button().await.is_err());
+    p.state.write().unwrap().root["OnBatteryKnown"] = json!(false);
+    provider::arm_inputs(&p).await;
+    assert!(
+        p.lid_fd.lock().await.is_none(),
+        "unknown power source leaves logind in charge"
+    );
+    p.refresh().await.unwrap();
     *fixture.active.write().unwrap() = false;
     p.refresh().await.unwrap();
     assert!(p.lid_fd.lock().await.is_none());
-    wait(|| {
-        use std::io::Read;
-        fixture
-            .fd_peers
-            .lock()
-            .unwrap()
-            .iter()
-            .all(|mut peer| peer.read(&mut [0u8; 1]).ok() == Some(0))
-    })
-    .await;
+    let peers = fixture
+        .fd_peers
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|peer| peer.try_clone().unwrap())
+        .collect::<Vec<_>>();
+    for peer in peers {
+        let peer = tokio::net::UnixStream::from_std(peer).unwrap();
+        peer.readable().await.unwrap();
+        assert_eq!(peer.try_read(&mut [0u8; 1]).unwrap(), 0);
+    }
     *fixture.active.write().unwrap() = true;
     info.write().unwrap()["power_key_forwarding"] = json!(true);
     p.refresh().await.unwrap();
@@ -686,14 +718,11 @@ async fn run() {
         .call("RegisterMenuConsumer", &(path("/fixture/Accept"),))
         .await
         .unwrap();
+    let mut requests = root.receive_signal("MenuRequested").await.unwrap();
     let press = p.clone();
     let request = tokio::spawn(async move { press.power_button().await });
-    let id = loop {
-        if let Some(id) = p.menu_wait.lock().await.keys().next().copied() {
-            break id;
-        }
-        tokio::task::yield_now().await;
-    };
+    let signal = requests.next().await.unwrap();
+    let (id,) = signal.body().deserialize::<(u64,)>().unwrap();
     p.menu_shown(menu.as_str(), id, client.unique_name().unwrap().as_str())
         .await
         .unwrap();

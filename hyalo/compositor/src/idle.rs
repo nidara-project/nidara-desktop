@@ -46,6 +46,16 @@ struct Fired {
     suspend: bool,
 }
 
+impl Fired {
+    fn restart_inhibited_stretch(&mut self) {
+        self.dim = false;
+        self.suspend = false;
+    }
+    fn input(&mut self) -> bool {
+        std::mem::take(self).screen_off
+    }
+}
+
 /// The suspend stretch has its own clock: changing source or timeout must never
 /// apply an old stretch of inactivity to the new policy. `now` is injectable.
 struct SleepClock {
@@ -134,8 +144,7 @@ impl Hyalo {
         self.idle.last_activity = Instant::now();
         self.idle.sleep.reset(self.idle.last_activity);
         self.clear_idle_dim();
-        let fired = std::mem::take(&mut self.idle.fired);
-        if fired.screen_off {
+        if self.idle.fired.input() {
             tracing::info!("input: the screens come back on");
             let _ = crate::outputs::set_power(self, None, true);
             crate::ipc::server::outputs_changed(self);
@@ -188,14 +197,35 @@ impl Hyalo {
                         .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
                 })
             });
-        serde_json::json!({"session":self.idle.session,"nested":self.idle.nested,"locked":self.lock.is_locked(),"power_key_forwarding":ready,"docked_known":self.idle.session&&!self.idle.nested,"docked":external,"idle":self.config.idle,"dimmed":self.idle.dimmed,"on_battery":self.idle.sleep.source,"inhibitors":inhibitors})
+        serde_json::json!({
+            "session": self.idle.session,
+            "nested": self.idle.nested,
+            "locked": self.lock.is_locked(),
+            "power_key_forwarding": ready,
+            "docked_known": self.idle.session&&!self.idle.nested,
+            "docked": external,
+            "idle": self.config.idle,
+            "dimmed": self.idle.dimmed,
+            "on_battery": self.idle.sleep.source,
+            "inhibitors": inhibitors,
+        })
     }
     pub fn idle_inhibitors_info(&mut self) -> Vec<serde_json::Value> {
         self.idle.inhibitors.retain(|s| s.is_alive());
         let mut out=self.idle.inhibitors.iter().map(|surface| {
             let root=self.window_for_surface(surface);
             let app=root.as_ref().map(crate::wm::app_id).unwrap_or_default();
-            serde_json::json!({"id":format!("wayland:{:?}:{}",surface.client().map(|c|c.id()),surface.id().protocol_id()),"source":"wayland-idle","who":app,"reason":"Wayland idle-inhibit","app_id":app,"pid":0,"uid":0,"identity_known":false,"effective":!self.lock.is_locked()&&self.surface_is_shown(surface)})
+            serde_json::json!({
+                "id": format!("wayland:{:?}:{}",surface.client().map(|c|c.id()),surface.id().protocol_id()),
+                "source": "wayland-idle",
+                "who": app,
+                "reason": "Wayland idle-inhibit",
+                "app_id": app,
+                "pid": 0,
+                "uid": 0,
+                "identity_known": false,
+                "effective": !self.lock.is_locked()&&self.surface_is_shown(surface),
+            })
         }).collect::<Vec<_>>();
         if let Some(login) = &self.login {
             for item in &login.inhibitors {
@@ -226,9 +256,7 @@ impl Hyalo {
             return self.space.elements().any(|w| w == &window);
         }
         self.space.outputs().any(|o| {
-            smithay::desktop::layer_map_for_output(o)
-                .layers()
-                .any(|l| l.wl_surface() == &root)
+            smithay::desktop::layer_map_for_output(o).layers().any(|l| l.wl_surface() == &root)
         })
     }
 
@@ -244,7 +272,7 @@ impl Hyalo {
             // The time spent inhibited was not idle time: the stretch starts now.
             self.idle.last_activity = Instant::now();
             self.idle.sleep.reset(self.idle.last_activity);
-            self.idle.fired = Fired::default();
+            self.idle.fired.restart_inhibited_stretch();
             self.idle_rearm();
         }
     }
@@ -272,13 +300,11 @@ impl Hyalo {
         .map(|(seconds, _, start)| start + Duration::from_secs(seconds as u64))
         .min();
         let Some(deadline) = next else { return };
-        let token = self
-            .loop_handle
-            .insert_source(Timer::from_deadline(deadline), |_, _, state| {
-                state.idle.timer = None;
-                state.idle_check();
-                TimeoutAction::Drop
-            });
+        let token = self.loop_handle.insert_source(Timer::from_deadline(deadline), |_, _, state| {
+            state.idle.timer = None;
+            state.idle_check();
+            TimeoutAction::Drop
+        });
         self.idle.timer = token.ok();
     }
 
@@ -286,7 +312,7 @@ impl Hyalo {
         if self.idle_inhibited() {
             self.idle.last_activity = Instant::now();
             self.idle.sleep.reset(self.idle.last_activity);
-            self.idle.fired = Fired::default();
+            self.idle.fired.restart_inhibited_stretch();
             self.idle_rearm();
             return;
         }
@@ -366,6 +392,20 @@ fn dim_seconds(config: &crate::config::IdleConfig) -> u32 {
 #[cfg(test)]
 mod power_tests {
     use super::*;
+    #[test]
+    fn inhibition_after_screen_off_keeps_the_next_input_wake_pending() {
+        let mut fired = Fired {
+            screen_off: true,
+            ..Default::default()
+        };
+        // Off at 300s, ScreenSaver inhibition starts, the lock timer then fires.
+        fired.restart_inhibited_stretch();
+        assert!(fired.screen_off);
+        // Releasing inhibition also must not erase physical DPMS state.
+        fired.restart_inhibited_stretch();
+        assert!(fired.input());
+        assert!(!fired.input());
+    }
     #[test]
     fn source_timeout_input_and_inhibition_start_a_new_sleep_stretch() {
         let start = Instant::now();

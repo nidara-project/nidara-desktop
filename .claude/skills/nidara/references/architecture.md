@@ -3788,3 +3788,14 @@ ready forwarding. The power FD inhibits logind software long press as well; no o
 FD loss restores logind defaults, potentially poweroff. Locked short presses only wake screens.
 Charge protection is actual UPower state per physical battery, never globally forced off/on.
 No new polkit, governors or system installation belongs to this backend's development tests.
+
+Power1 lid suspension is delegated to logind; only known-source lock/nothing takes the separate
+lid FD. Unknown source therefore cannot suppress logind's lid handling. Provider State describes
+provider health; an action/caller error updates LastError/ActionFailed without degrading State.
+Notification text is `power1.*` in the twelve existing locale catalogs, embedded at build time
+from those same data files and optionally read from the installed settings-data i18n export.
+Sessiond's provider streams match specific senders/namespaces and name-owner changes; Hyalo's
+power worker subscribes only to UPower properties and UPower owner changes. Do not add a global
+signal subscription to combine those streams. Test readiness is acknowledged only after the
+subscriptions and initial snapshot; tests await actual properties/signals/FD EOF rather than
+sleeping until an arbitrary convergence deadline.

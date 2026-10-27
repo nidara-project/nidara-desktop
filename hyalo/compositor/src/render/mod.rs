@@ -304,7 +304,7 @@ fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Sca
 /// What a frame is made from: the parts of the state rendering reads, borrowed apart from the
 /// backend (which renders them).
 pub struct Scene<'a> {
-    pub dimmed:bool,
+    pub dimmed: bool,
     pub space: &'a Space<Window>,
     pub wm: &'a crate::wm::Wm,
     pub pointer: Point<f64, Logical>,

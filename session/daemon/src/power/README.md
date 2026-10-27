@@ -102,8 +102,11 @@ PowerButtonPressed, Suspend(interactive), PowerOff(interactive) and LockSession
 are explicit methods. Suspend/PowerOff confirm logind acceptance, not that a
 physical transition finished. Automatic effects never request interactive polkit.
 
-Power1 takes separate handle-power-key and handle-lid-switch FDs only for an
-active local real Hyalo session with the event route ready. Hyalo's power binding
+Power1 takes hardware FDs only for an active local real Hyalo session with the
+event route ready. The separate handle-lid-switch FD is taken only for a known
+power source whose chosen action is lock/nothing. Suspend (including the factory
+default) and unknown source stay with logind: its lid policy retains sleep-block
+inhibitor handling, dock detection and holdoff/re-evaluation on undock. Hyalo's power binding
 must be locked-capable, bypass shortcut inhibition, have no repeat/release, and
 its fixed helper must exist. No evdev grab. The low-level FD inhibits logind's
 SOFTWARE long press too; no separate long-press implementation is added. Firmware
@@ -121,7 +124,8 @@ A failing/timed-out/departed registered consumer produces an error with no
 suspend/poweroff fallback and no automatic unregister on timeout. MenuRequested
 is informational. Lease.Release and caller loss end registration.
 
-Lid actions are suspend/lock/nothing per known source. Opening cancels pending
+Lid actions are suspend/lock/nothing per known source; suspend is delegated to
+logind and follows its system configuration. Opening cancels pending
 work. Startup with the lid already closed does nothing. An external enabled
 physical output or logind Docked prevents lid suspend; unknown dock status does
 not mean undocked. Undocking with the lid closed re-evaluates after logind's
@@ -133,6 +137,12 @@ SetKeyboardBrightness checks bounds, coalesces superseded queued absolute writes
 and confirms observed state. StepPrimaryKeyboardBrightness serializes relative
 steps. Firmware internal/external source signals update state without echo writes.
 The fixed `nidara-kbd-light up|down` helper serves the Hyalo Fn bindings.
+
+Notifications use `power1.*` keys from all twelve canonical locales. The build
+embeds that subset directly from the same TS catalogs; installed settings-data
+JSON can override it through `/usr/share/nidara/settings-data/i18n` (or
+`NIDARA_I18N_DIR` in development). No separately maintained translation table.
+Peripheral notices name the provider model or a translated device type.
 
 Inhibitors are informational, with no termination API. logind ListInhibitors is
 a timestamped snapshot (InhibitorsMode), refreshed explicitly and on provider
@@ -148,6 +158,8 @@ permission denial, sender-scoped holds/menu, manual saver override/provider rest
 firmware no-echo and read-only effects. Config1 tests use separate homes and a fake
 Hyalo socket. Hyalo clock tests cover source/timeout/input/inhibition resets,
 unknown source, dim bounds, nested restrictions and legacy layer normalization.
+Tests synchronize through subscription readiness, PropertiesChanged, MenuRequested
+and FD EOF; they do not poll for convergence against a runner-speed deadline.
 Native builds, these tests and nested rendering do not establish real hardware,
 polkit, installed-package or live-session acceptance. No installed service is
 restarted by development or tests.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Native energy service. Mutations are opt-in; providers and object identities are independent.
 mod bus;
+mod i18n;
 mod model;
 mod prefs;
 mod provider;
@@ -109,6 +110,7 @@ struct State {
 type PendingMenus = BTreeMap<u64, (String, oneshot::Sender<()>)>;
 #[derive(Clone)]
 struct Power {
+    strings: Arc<i18n::Strings>,
     conn: Connection,
     system: Arc<RwLock<Option<Connection>>>,
     state: Arc<RwLock<State>>,
@@ -631,7 +633,7 @@ impl Power {
             let state = self.state.read().unwrap().clone();
             let mut root = state.root;
             root["LastError"] = json!(format!("{action}: {error}"));
-            root["State"] = json!("Degraded");
+            // Action errors do not change provider health; refresh owns State.
             let _ = bus::publish(self, state.objects, root).await;
         }
         if action == "menu"
@@ -648,11 +650,11 @@ impl Power {
                 .call(
                     "Notify",
                     &(
-                        "Nidara Power",
+                        "Nidara",
                         0u32,
-                        "dialog-error-symbolic",
-                        "Power menu unavailable",
-                        "The registered power menu did not confirm presentation.",
+                        "nd-dialog-warning",
+                        self.strings.text("power1.menu.unavailable"),
+                        self.strings.text("power1.menu.not-shown"),
                         Vec::<String>::new(),
                         HashMap::<String, OwnedValue>::new(),
                         10000i32,
@@ -729,21 +731,43 @@ impl Power {
             && let Ok(records) = serde_json::from_str::<Vec<Json>>(&records)
             && records.iter().any(|n| {
                 n["id"] == candidate
-                    && n["app_name"] == "Nidara Power"
+                    && n["app_name"] == "Nidara"
                     && n["hints"]["x-nidara-power-key"] == key
             })
         {
             replaces = candidate;
         }
         let urgency = if critical { 2u8 } else { 1u8 };
-        let title = if critical {
-            "Battery critically low"
+        let warning = self.strings.text(if critical {
+            "power1.alert.critical"
         } else {
-            "Battery low"
+            "power1.alert.low"
+        });
+        let object = self.state.read().unwrap().objects.get(device).cloned();
+        let title = if let Some(object) = object.filter(|o| o.props["Role"] == "peripheral") {
+            let model = object.props["Model"].as_str().unwrap_or("").trim();
+            let label = if model.is_empty() {
+                self.strings
+                    .device(object.props["Kind"].as_u64().unwrap_or(0) as u32)
+            } else {
+                model
+            };
+            self.strings.format(
+                "power1.alert.device-title",
+                &[
+                    ("device", &glib::markup_escape_text(label)),
+                    ("warning", warning),
+                ],
+            )
+        } else {
+            warning.into()
         };
         let body = pct
-            .map(|p| format!("{p:.0}% remaining"))
-            .unwrap_or_else(|| "Low battery warning reported by the device".into());
+            .map(|p| {
+                self.strings
+                    .format("power1.alert.remaining", &[("percent", &format!("{p:.0}"))])
+            })
+            .unwrap_or_else(|| self.strings.text("power1.alert.unknown").into());
         let hints = HashMap::<&str, OwnedValue>::from([
             ("urgency", urgency.into()),
             ("x-nidara-power-key", Value::from(key).try_into().unwrap()),
@@ -765,9 +789,9 @@ impl Power {
                 .call(
                     "Notify",
                     &(
-                        "Nidara Power",
+                        "Nidara",
                         replaces,
-                        "battery-low-symbolic",
+                        "nd-battery",
                         title,
                         body,
                         Vec::<String>::new(),
@@ -796,7 +820,7 @@ impl Power {
                         .hold(
                             self.conn.unique_name().unwrap().to_string(),
                             "power-saver".into(),
-                            "Low battery".into(),
+                            self.strings.text("power1.alert.low").into(),
                             "org.nidara.Session".into(),
                             true,
                         )
@@ -872,6 +896,7 @@ pub async fn serve(conn: &Connection, read_only: bool) -> zbus::Result<()> {
         .and_then(|s| serde_json::from_str::<Policy>(&s).ok())
         .unwrap_or_default();
     let power = Power {
+        strings: Arc::new(i18n::Strings::load()),
         conn: conn.clone(),
         system,
         state: Arc::new(RwLock::new(State {

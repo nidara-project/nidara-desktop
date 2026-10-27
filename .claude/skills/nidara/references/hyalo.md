@@ -1995,7 +1995,8 @@ so shortening a deadline cannot suspend retrospectively. Legacy suspend maps to 
 per layer before merge. Config1 forwards settings IPC and reads effective merged values.
 
 Dim is a stable compositor render element per output, removed on input; saved brightness is
-untouched. If off is disabled or no greater than the dim lead time, dim is omitted. `power_info`
+untouched. Captures and screen sharing exclude the dim. An inhibited stretch preserves the
+physical screen-off flag until input wakes the outputs; do not clear it when resetting timers. If off is disabled or no greater than the dim lead time, dim is omitted. `power_info`
 exports source, dim, readiness and shown idle-inhibitor/ScreenSaver metadata, ineffective under
 lock. PowerStateChanged/IdleInhibitorsChanged join existing IPC events. `power_wake` wakes without
 unlock; `power_lock` is an explicit action (the existing `lock` request only queries state).
@@ -2003,7 +2004,9 @@ unlock; `power_lock` is an explicit action (the existing `lock` request only que
 Packaged XF86PowerOff calls nidara-power-key once, even under lock or shortcut inhibition;
 Power1 takes logind's handle-power-key FD only while this route is ready in a real active local
 session. This FD also inhibits logind SOFTWARE long press; no own long-press handler is added.
-FD loss restores logind defaults, possibly poweroff. No registered menu consumer means effective
+FD loss restores logind defaults, possibly poweroff. The separate lid FD is only for a known
+source choosing lock/nothing; suspend and unknown source stay with logind, retaining its sleep
+inhibitor/dock/holdoff rules. No registered menu consumer means effective
 suspend; registered menu failure has no destructive fallback. Fn keyboard-light helpers call
 Power1 raw UPower brightness with serial relative steps, coalesced absolute writes and readback.
 

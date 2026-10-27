@@ -1,4 +1,19 @@
 export default {
+    // Native session energy notifications.
+    "power1.alert.low": "Низкий заряд батареи",
+    "power1.alert.critical": "Критически низкий заряд батареи",
+    "power1.alert.remaining": "Осталось {percent}%",
+    "power1.alert.unknown": "Устройство сообщает о низком заряде батареи",
+    "power1.alert.device-title": "{device}: {warning}",
+    "power1.menu.unavailable": "Меню питания недоступно",
+    "power1.menu.not-shown": "Зарегистрированное меню питания не подтвердило отображение.",
+    "power1.device.computer": "Компьютер",
+    "power1.device.mouse": "Мышь",
+    "power1.device.keyboard": "Клавиатура",
+    "power1.device.headphones": "Наушники",
+    "power1.device.phone": "Телефон",
+    "power1.device.peripheral": "Периферийное устройство",
+
     "settings.native.application": "Настройки",
     "settings.native.pages": "Страницы настроек",
     "settings.native.content": "Содержимое",

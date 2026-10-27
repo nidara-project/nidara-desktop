@@ -137,7 +137,41 @@ fn device_props(raw: &Props, display: bool) -> Json {
     if cycles >= 0 {
         caps.push("cycles")
     }
-    json!({"ProviderPath":raw.get("NativePath").and_then(|v|<&str>::try_from(v).ok()).unwrap_or(""),"Kind":kind,"Role":role,"Vendor":string(raw,"Vendor"),"Model":string(raw,"Model"),"IconName":string(raw,"IconName"),"Present":flag(raw,"IsPresent"),"PowerSupply":flag(raw,"PowerSupply"),"Rechargeable":flag(raw,"IsRechargeable"),"State":uint(raw,"State"),"PercentageKnown":percent.is_some(),"Percentage":percent.unwrap_or(0.0),"TimeToEmptyKnown":signed(raw,"TimeToEmpty").is_some_and(|v|v>0),"TimeToFullKnown":signed(raw,"TimeToFull").is_some_and(|v|v>0),"TimeToEmpty":signed(raw,"TimeToEmpty").unwrap_or(0).max(0),"TimeToFull":signed(raw,"TimeToFull").unwrap_or(0).max(0),"WarningLevel":uint(raw,"WarningLevel"),"BatteryLevel":uint(raw,"BatteryLevel"),"HealthKnown":health.is_some(),"HealthPercent":health.unwrap_or(0.0),"HealthSource":if health.is_none(){"unknown"}else if reported.is_some(){"reported"}else if calculated.is_some(){"calculated"}else{"unknown"},"CyclesKnown":cycles>=0,"Cycles":cycles,"ChargeProtectionSupported":support,"ChargeProtectionEnabled":flag(raw,"ChargeThresholdEnabled"),"StartThresholdKnown":uint(raw,"ChargeStartThreshold")>0,"EndThresholdKnown":uint(raw,"ChargeEndThreshold")>0,"StartThreshold":uint(raw,"ChargeStartThreshold"),"EndThreshold":uint(raw,"ChargeEndThreshold"),"Capabilities":caps,"BluetoothDevicePath":"/","BatteryOwner":"power1","DeduplicationState":"unlinked"})
+    json!({
+        "ProviderPath": raw.get("NativePath").and_then(|v|<&str>::try_from(v).ok()).unwrap_or(""),
+        "Kind": kind,
+        "Role": role,
+        "Vendor": string(raw,"Vendor"),
+        "Model": string(raw,"Model"),
+        "IconName": string(raw,"IconName"),
+        "Present": flag(raw,"IsPresent"),
+        "PowerSupply": flag(raw,"PowerSupply"),
+        "Rechargeable": flag(raw,"IsRechargeable"),
+        "State": uint(raw,"State"),
+        "PercentageKnown": percent.is_some(),
+        "Percentage": percent.unwrap_or(0.0),
+        "TimeToEmptyKnown": signed(raw,"TimeToEmpty").is_some_and(|v|v>0),
+        "TimeToFullKnown": signed(raw,"TimeToFull").is_some_and(|v|v>0),
+        "TimeToEmpty": signed(raw,"TimeToEmpty").unwrap_or(0).max(0),
+        "TimeToFull": signed(raw,"TimeToFull").unwrap_or(0).max(0),
+        "WarningLevel": uint(raw,"WarningLevel"),
+        "BatteryLevel": uint(raw,"BatteryLevel"),
+        "HealthKnown": health.is_some(),
+        "HealthPercent": health.unwrap_or(0.0),
+        "HealthSource": if health.is_none(){"unknown"}else if reported.is_some(){"reported"}else if calculated.is_some(){"calculated"}else{"unknown"},
+        "CyclesKnown": cycles>=0,
+        "Cycles": cycles,
+        "ChargeProtectionSupported": support,
+        "ChargeProtectionEnabled": flag(raw,"ChargeThresholdEnabled"),
+        "StartThresholdKnown": uint(raw,"ChargeStartThreshold")>0,
+        "EndThresholdKnown": uint(raw,"ChargeEndThreshold")>0,
+        "StartThreshold": uint(raw,"ChargeStartThreshold"),
+        "EndThreshold": uint(raw,"ChargeEndThreshold"),
+        "Capabilities": caps,
+        "BluetoothDevicePath": "/",
+        "BatteryOwner": "power1",
+        "DeduplicationState": "unlinked",
+    })
 }
 async fn upower(
     p: &Power,
@@ -217,7 +251,7 @@ async fn upower(
                 "upower",
                 raw.as_str(),
                 "keyboard",
-                json!({"Brightness":value,"MaxBrightness":max,"Known":true,"LastChangeSource":previous,"Capabilities":["brightness"]}),
+                json!({"Brightness": value,"MaxBrightness": max,"Known": true,"LastChangeSource": previous,"Capabilities": ["brightness"]}),
             );
             objects.insert(node.path.clone(), node);
         }
@@ -243,7 +277,13 @@ async fn ppd(
             "ppd",
             &format!("profile:{name}"),
             "profile",
-            json!({"Name":name,"Driver":string(&profile,"Driver"),"Available":true,"PerformanceDegraded":string(&values,"PerformanceDegraded"),"PerformanceInhibited":string(&values,"PerformanceInhibited")}),
+            json!({
+                "Name": name,
+                "Driver": string(&profile,"Driver"),
+                "Available": true,
+                "PerformanceDegraded": string(&values,"PerformanceDegraded"),
+                "PerformanceInhibited": string(&values,"PerformanceInhibited"),
+            }),
         );
         objects.insert(node.path.clone(), node);
     }
@@ -278,7 +318,7 @@ async fn ppd(
             "ppd",
             &format!("foreign-hold:{index}:{profile}:{app}:{reason}"),
             "hold",
-            json!({"Profile":profile,"Reason":reason,"ApplicationId":app,"Owner":"","OwnedByPower1":false,"State":"active"}),
+            json!({"Profile": profile,"Reason": reason,"ApplicationId": app,"Owner": "","OwnedByPower1": false,"State": "active"}),
         );
         objects.insert(node.path.clone(), node);
     }
@@ -330,7 +370,7 @@ async fn logind(
             "logind",
             &format!("inhibitor:{index}:{uid}:{pid}:{what}:{mode}"),
             "inhibitor",
-            json!({"Source":"logind","What":what.split(':').collect::<Vec<_>>(),"Who":who,"Reason":why,"ApplicationId":"","Pid":pid,"Uid":uid,"IdentityKnown":true,"Mode":mode,"Effective":true}),
+            json!({"Source": "logind","What": what.split(':').collect::<Vec<_>>(),"Who": who,"Reason": why,"ApplicationId": "","Pid": pid,"Uid": uid,"IdentityKnown": true,"Mode": mode,"Effective": true}),
         );
         objects.insert(node.path.clone(), node);
     }
@@ -339,7 +379,7 @@ async fn logind(
 }
 async fn hyalo(p: &Power, objects: &mut BTreeMap<String, Object>, root: &mut Json) -> Json {
     let result =
-        tokio::task::spawn_blocking(|| crate::hyalo::request(json!({"request":"power_info"})))
+        tokio::task::spawn_blocking(|| crate::hyalo::request(json!({"request": "power_info"})))
             .await;
     let value = match result {
         Ok(Ok(v)) => v,
@@ -377,7 +417,18 @@ async fn hyalo(p: &Power, objects: &mut BTreeMap<String, Object>, root: &mut Jso
             "hyalo",
             raw,
             "inhibitor",
-            json!({"Source":item["source"],"What":["idle"],"Who":item["who"],"Reason":item["reason"],"ApplicationId":item["app_id"],"Pid":item["pid"].as_u64().unwrap_or(0),"Uid":item["uid"].as_u64().unwrap_or(0),"IdentityKnown":item["identity_known"].as_bool().unwrap_or(false),"Mode":"idle","Effective":item["effective"].as_bool().unwrap_or(false)}),
+            json!({
+                "Source": item["source"],
+                "What": ["idle"],
+                "Who": item["who"],
+                "Reason": item["reason"],
+                "ApplicationId": item["app_id"],
+                "Pid": item["pid"].as_u64().unwrap_or(0),
+                "Uid": item["uid"].as_u64().unwrap_or(0),
+                "IdentityKnown": item["identity_known"].as_bool().unwrap_or(false),
+                "Mode": "idle",
+                "Effective": item["effective"].as_bool().unwrap_or(false),
+            }),
         );
         objects.insert(node.path.clone(), node);
     }
@@ -462,7 +513,24 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
         *p.key_fd.lock().await = None;
         *p.lid_fd.lock().await = None;
     }
-    let mut root = json!({"State":"Unavailable","LastError":"","Generation":p.epoch,"DisplayDevice":"/","OnBatteryKnown":false,"OnBattery":false,"LidKnown":false,"LidPresent":false,"LidClosed":false,"DockedKnown":false,"Docked":false,"CanSuspend":"na","CanPowerOff":"na","SessionActive":false,"LidHoldoffUSec":30_000_000,"EffectiveIdle":{}});
+    let mut root = json!({
+        "State": "Unavailable",
+        "LastError": "",
+        "Generation": p.epoch,
+        "DisplayDevice": "/",
+        "OnBatteryKnown": false,
+        "OnBattery": false,
+        "LidKnown": false,
+        "LidPresent": false,
+        "LidClosed": false,
+        "DockedKnown": false,
+        "Docked": false,
+        "CanSuspend": "na",
+        "CanPowerOff": "na",
+        "SessionActive": false,
+        "LidHoldoffUSec": 30_000_000,
+        "EffectiveIdle": {},
+    });
     let mut objects = BTreeMap::new();
     let mut caps = vec![];
     let battery = match upower(p, &mut objects, &mut root).await {
@@ -615,7 +683,7 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
                 .collect::<BTreeMap<_, _>>()
         );
         for h in state.holds.values() {
-            objects.insert(h.path.clone(),Object{path:h.path.clone(),kind:"hold",provider:"session",raw:h.path.clone(),epoch:p.epoch,props:json!({"Profile":h.profile,"Reason":h.reason,"ApplicationId":h.app,"Owner":h.owner,"OwnedByPower1":true,"State":"active"})});
+            objects.insert(h.path.clone(),Object{path:h.path.clone(),kind:"hold",provider:"session",raw:h.path.clone(),epoch:p.epoch,props:json!({"Profile": h.profile,"Reason": h.reason,"ApplicationId": h.app,"Owner": h.owner,"OwnedByPower1": true,"State": "active"})});
         }
         root["MenuAvailable"] = json!(state.menu.is_some());
         root["PowerButtonEffectiveAction"] = json!(model::effective_button(
@@ -630,7 +698,7 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
         root["ShowPercentage"] = json!(preferences.show_percentage);
         root["PolicyOwner"] = json!(if p.read_only { "none" } else { "sessiond" });
         if let Some(menu) = &state.menu {
-            objects.insert(menu.path.clone(),Object{path:menu.path.clone(),kind:"menu",provider:"session",raw:menu.path.clone(),epoch:p.epoch,props:json!({"Owner":menu.owner,"ConsumerPath":menu.consumer.as_str(),"Active":true})});
+            objects.insert(menu.path.clone(),Object{path:menu.path.clone(),kind:"menu",provider:"session",raw:menu.path.clone(),epoch:p.epoch,props:json!({"Owner": menu.owner,"ConsumerPath": menu.consumer.as_str(),"Active": true})});
         }
         effects
     };
@@ -738,12 +806,16 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
     p.effects(effects).await;
     Ok(())
 }
-async fn arm_inputs(p: &Power) {
+pub(super) async fn arm_inputs(p: &Power) {
     let info = p.state.read().unwrap().hyalo.clone();
     let active = p.active()
         && info["session"].as_bool().unwrap_or(false)
         && !info["nested"].as_bool().unwrap_or(true)
         && !p.read_only;
+    let source = p
+        .property::<bool>(ROOT, "OnBatteryKnown")
+        .then(|| p.property::<bool>(ROOT, "OnBattery"));
+    let owns_lid = model::owns_lid(&p.prefs.read().unwrap(), source);
     for (fd, what, ready) in [
         (
             &p.key_fd,
@@ -753,7 +825,7 @@ async fn arm_inputs(p: &Power) {
         (
             &p.lid_fd,
             "handle-lid-switch",
-            active && p.property::<bool>(ROOT, "LidKnown"),
+            active && owns_lid && p.property::<bool>(ROOT, "LidKnown"),
         ),
     ] {
         let mut lock = fd.lock().await;
@@ -850,10 +922,8 @@ async fn lid_changes(p: &Power) {
             } else {
                 return;
             };
-            if action == "suspend"
-                && (!state.root["DockedKnown"].as_bool().unwrap_or(false)
-                    || state.root["Docked"].as_bool().unwrap_or(true))
-            {
+            // Suspend is delegated to logind, including its inhibitor and dock rules.
+            if action == "suspend" {
                 return;
             }
             if let Err(e) = p.action(&action, false).await {
@@ -862,7 +932,8 @@ async fn lid_changes(p: &Power) {
         });
     }
 }
-pub async fn watch(p: Power) -> zbus::Result<()> {
+pub async fn watch(p: Power) -> zbus::Result<oneshot::Receiver<()>> {
+    let (ready_tx, ready_rx) = oneshot::channel();
     let session = zbus::fdo::DBusProxy::new(&p.conn).await?;
     let mut owners = session.receive_name_owner_changed().await?;
     let local = p.clone();
@@ -900,10 +971,23 @@ pub async fn watch(p: Power) -> zbus::Result<()> {
     // Bluetooth is optional and can appear after Power1; its identity changes must
     // re-evaluate deduplication even when UPower has no new battery sample.
     let bluetooth = p.clone();
-    let rule = zbus::MatchRule::builder()
+    let mut signals = futures_util::stream::SelectAll::new();
+    let updated = zbus::MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
+        .sender("org.nidara.Bluetooth")?
+        .path("/org/nidara/Bluetooth")?
+        .interface("org.nidara.Bluetooth1")?
+        .member("Updated")?
         .build();
-    let mut signals = zbus::MessageStream::for_match_rule(rule, &p.conn, Some(64)).await?;
+    let owners = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")?
+        .interface("org.freedesktop.DBus")?
+        .member("NameOwnerChanged")?
+        .add_arg("org.nidara.Bluetooth")?
+        .build();
+    signals.push(zbus::MessageStream::for_match_rule(updated, &p.conn, Some(64)).await?);
+    signals.push(zbus::MessageStream::for_match_rule(owners, &p.conn, Some(64)).await?);
     tokio::spawn(async move {
         while let Some(Ok(message)) = signals.next().await {
             let header = message.header();
@@ -966,6 +1050,7 @@ pub async fn watch(p: Power) -> zbus::Result<()> {
         }
     });
     tokio::spawn(async move {
+        let mut ready_tx = Some(ready_tx);
         loop {
             let system = match Connection::system().await {
                 Ok(c) => c,
@@ -975,15 +1060,40 @@ pub async fn watch(p: Power) -> zbus::Result<()> {
                 }
             };
             *p.system.write().unwrap() = Some(system.clone());
-            let rules = zbus::MatchRule::builder()
-                .msg_type(zbus::message::Type::Signal)
-                .build();
-            let Ok(mut stream) =
-                zbus::MessageStream::for_match_rule(rules, &system, Some(256)).await
-            else {
+            let subscribe = async {
+                let mut stream = futures_util::stream::SelectAll::new();
+                for (name, namespace) in [
+                    (UP, UP_PATH),
+                    (PPD, PPD_PATH),
+                    ("org.freedesktop.login1", LOGIN_PATH),
+                ] {
+                    let rule = zbus::MatchRule::builder()
+                        .msg_type(zbus::message::Type::Signal)
+                        .sender(name)?
+                        .path_namespace(namespace)?
+                        .build();
+                    stream
+                        .push(zbus::MessageStream::for_match_rule(rule, &system, Some(128)).await?);
+                    let rule = zbus::MatchRule::builder()
+                        .msg_type(zbus::message::Type::Signal)
+                        .sender("org.freedesktop.DBus")?
+                        .interface("org.freedesktop.DBus")?
+                        .member("NameOwnerChanged")?
+                        .add_arg(name)?
+                        .build();
+                    stream
+                        .push(zbus::MessageStream::for_match_rule(rule, &system, Some(16)).await?);
+                }
+                Ok::<_, zbus::Error>(stream)
+            }
+            .await;
+            let Ok(mut stream) = subscribe else {
                 continue;
             };
             let _ = p.refresh().await;
+            if let Some(tx) = ready_tx.take() {
+                let _ = tx.send(());
+            }
             while let Some(Ok(msg)) = stream.next().await {
                 let header = msg.header();
                 let member = header.member().map(|s| s.as_str()).unwrap_or("");
@@ -1118,7 +1228,7 @@ pub async fn watch(p: Power) -> zbus::Result<()> {
             tokio::time::sleep(Duration::from_secs(2)).await;
         }
     });
-    Ok(())
+    Ok(ready_rx)
 }
 
 async fn deduplicate(p: &Power, objects: &mut BTreeMap<String, Object>) {
@@ -1230,18 +1340,18 @@ mod tests {
     #[test]
     fn bluetooth_matching_requires_a_unique_actual_identity() {
         let devices = vec![
-            json!({"path":"/org/bluez/hci0/dev_AA","address":"AA:BB:CC:DD:EE:FF","name":"Mouse"}),
+            json!({"path": "/org/bluez/hci0/dev_AA","address": "AA:BB:CC:DD:EE:FF","name": "Mouse"}),
         ];
-        let mut props = json!({"NativePath":"Mouse","Serial":"Mouse"});
+        let mut props = json!({"NativePath": "Mouse","Serial": "Mouse"});
         link_bluetooth(&mut props, &devices);
         assert!(props["BluetoothDevicePath"].is_null());
         props["Serial"] = json!("aa:bb:cc:dd:ee:ff");
         link_bluetooth(&mut props, &devices);
         assert_eq!(props["BatteryOwner"], "bluetooth1");
-        let mut ambiguous = json!({"Serial":"AA:BB:CC:DD:EE:FF"});
+        let mut ambiguous = json!({"Serial": "AA:BB:CC:DD:EE:FF"});
         link_bluetooth(&mut ambiguous, &[devices[0].clone(), devices[0].clone()]);
         assert_eq!(ambiguous["DeduplicationState"], "unresolved");
-        let mut path = json!({"NativePath":"/org/bluez/hci0/dev_AA"});
+        let mut path = json!({"NativePath": "/org/bluez/hci0/dev_AA"});
         link_bluetooth(&mut path, &devices);
         assert_eq!(path["BatteryOwner"], "bluetooth1");
     }

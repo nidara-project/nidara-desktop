@@ -133,6 +133,19 @@ impl Policy {
         self.wants_hold = false;
     }
 }
+pub fn lid_action(preferences: &Preferences, on_battery: Option<bool>) -> Option<&str> {
+    match on_battery {
+        Some(true) => Some(&preferences.lid_battery),
+        Some(false) => Some(&preferences.lid_ac),
+        None => None,
+    }
+}
+pub fn owns_lid(preferences: &Preferences, on_battery: Option<bool>) -> bool {
+    matches!(
+        lid_action(preferences, on_battery),
+        Some("lock" | "nothing")
+    )
+}
 pub fn effective_button(preference: &str, menu_registered: bool, locked: bool) -> &str {
     if locked {
         "wake"
@@ -152,6 +165,18 @@ mod tests {
             percentage: Some(p),
             ..Default::default()
         }
+    }
+    #[test]
+    fn default_or_unknown_lid_policy_stays_with_logind() {
+        let mut prefs = Preferences::default();
+        assert!(!owns_lid(&prefs, Some(true)));
+        assert!(!owns_lid(&prefs, Some(false)));
+        assert!(!owns_lid(&prefs, None));
+        prefs.lid_ac = "nothing".into();
+        prefs.lid_battery = "lock".into();
+        assert!(owns_lid(&prefs, Some(true)));
+        assert!(owns_lid(&prefs, Some(false)));
+        assert!(!owns_lid(&prefs, None));
     }
     #[test]
     fn coarse_telemetry_and_restart_do_not_fabricate_crossings() {
