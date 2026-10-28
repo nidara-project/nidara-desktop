@@ -114,6 +114,22 @@ impl Backend {
     }
 }
 
+/// Enabled scanouts, including mirror followers that are not logical desktop outputs.
+pub fn physical_outputs(state: &Hyalo) -> Vec<Output> {
+    match &state.backend {
+        Backend::Tty(t) => t
+            .connectors()
+            .iter()
+            .filter_map(|(s, _)| s.map(|s| s.output.clone()))
+            .collect(),
+        Backend::Winit(_) => state.space.outputs().cloned().collect(),
+    }
+}
+pub fn physical_output(state: &Hyalo, name: &str) -> Option<Output> {
+    physical_outputs(state)
+        .into_iter()
+        .find(|o| o.name() == name)
+}
 /// Switches an output off for good (config `enabled = false`).
 pub fn tty_disable_output(state: &mut Hyalo, output: &Output) -> Result<(), String> {
     match state.backend {
@@ -131,12 +147,14 @@ pub fn tty_rescan_all(state: &mut Hyalo) {
 
 /// A picture of one output (`None` = the first), drawn again offscreen: a PNG, or a binary PPM
 /// when the path ends in `.ppm` (screenshot.rs, `write_ppm`).
-pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Path) -> Result<(), String> {
-    let output = state
-        .space
-        .outputs()
+pub fn screenshot(
+    state: &mut Hyalo,
+    output: Option<&str>,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let output = physical_outputs(state)
+        .into_iter()
         .find(|o| output.is_none_or(|n| o.name() == n))
-        .cloned()
         .ok_or_else(|| format!("no output {}", output.unwrap_or("at all")))?;
     if crate::control::enabled() {
         eprintln!("CAPTURE_BEGIN {:?} {}", state.clock.now(), path.display());
@@ -197,7 +215,13 @@ pub fn screenshot(state: &mut Hyalo, output: Option<&str>, path: &std::path::Pat
 /// it is on another output. Its image, the backend's themed one — a client's own cursor
 /// surface is drawn from the scene (render/mod.rs `push_cursor`).
 fn pointer_for(state: &Hyalo, output: &Output) -> Option<crate::cursor::CursorImage> {
-    let here = state.space.output_geometry(output)?.to_f64().contains(state.seat.get_pointer()?.current_location());
+    let source = crate::mirror::scene(output);
+    let output = &source;
+    let here = state
+        .space
+        .output_geometry(output)?
+        .to_f64()
+        .contains(state.seat.get_pointer()?.current_location());
     if !here {
         return None;
     }
@@ -426,6 +450,31 @@ pub fn tell_initial_scale(surface: &WlSurface, output: &Output) {
 
 /// After a frame on `output`: which surfaces it scanned out, frame callbacks, dmabuf feedback.
 pub fn post_repaint(
+    state: &mut Hyalo,
+    output: &Output,
+    states: &RenderElementStates,
+    feedback: Option<&SurfaceDmabufFeedback>,
+) {
+    if let Some(source) = crate::mirror::source(output) {
+        if crate::mirror::drives_scene(state, output)
+            && crate::render::mirror::ok(output)
+            && let Some(logical) = crate::render::mirror::states(output)
+        {
+            post_logical_repaint(state, &source, &logical, None);
+        }
+        state.complete_screencopy(output);
+        state.complete_capture_output(output);
+        return;
+    }
+    if crate::mirror::drives_scene(state, output) {
+        post_logical_repaint(state, output, states, feedback);
+    } else {
+        state.complete_screencopy(output);
+        state.complete_capture_output(output);
+    }
+}
+
+fn post_logical_repaint(
     state: &mut Hyalo,
     output: &Output,
     states: &RenderElementStates,

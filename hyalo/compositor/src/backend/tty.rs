@@ -111,6 +111,9 @@ pub struct Surface {
     /// The frame queued and not yet shown: when it began to be built, and when it was predicted
     /// to show — checked against the flip's timestamp (`msg stats` `presentation`).
     in_flight: Option<(Instant, Instant)>,
+    // Captures can refresh a canvas before vblank; use the queued frame's result/scene.
+    display_ready: bool,
+    in_flight_scene: Option<Output>,
 }
 
 impl Drop for Surface {
@@ -216,7 +219,62 @@ impl TtyBackend {
     }
 
     pub fn primary_renderer(&mut self) -> Result<render::UdevRenderer<'_>, String> {
-        self.gpus.single_renderer(&self.primary_gpu).map_err(|e| e.to_string())
+        self.gpus
+            .single_renderer(&self.primary_gpu)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Mirror composition stays on the primary GPU in this cut; fail before modesetting.
+    pub fn mirror_preflight(
+        &mut self,
+        layout: &crate::display::model::Layout,
+        outputs: &[crate::display::model::Output],
+    ) -> Result<(), String> {
+        use smithay::backend::renderer::{Bind, Offscreen};
+        let mut pixels = 0i64;
+        for group in &layout.mirror_groups {
+            for id in group {
+                let name = &outputs
+                    .iter()
+                    .find(|o| &o.id == id)
+                    .ok_or("mirror output missing")?
+                    .connector;
+                let node = self
+                    .devices
+                    .iter()
+                    .find_map(|(node, d)| {
+                        d.scanner
+                            .connectors()
+                            .values()
+                            .any(|c| {
+                                connector_name(c) == *name
+                                    && c.state() == connector::State::Connected
+                            })
+                            .then_some(d.render_node.unwrap_or(*node))
+                    })
+                    .ok_or("mirror connector unavailable")?;
+                if node != self.primary_gpu {
+                    return Err("mirroring requires outputs on the primary GPU".into());
+                }
+            }
+            let src = outputs.iter().find(|o| o.id == group[0]).unwrap();
+            let setting = layout.outputs.iter().find(|s| s.id == src.id).unwrap();
+            let (w, h) = crate::mirror::requested_size(setting, src)?;
+            pixels += (w as i64) * (h as i64) * (group.len() - 1) as i64;
+            if pixels > 16_777_216 {
+                return Err("mirror scene exceeds the supported texture budget".into());
+            }
+            let mut renderer = self
+                .gpus
+                .single_renderer(&self.primary_gpu)
+                .map_err(|e| e.to_string())?;
+            let gles: &mut GlesRenderer = renderer.as_mut();
+            let mut probe: smithay::backend::renderer::gles::GlesTexture = gles
+                .create_buffer(Fourcc::Abgr8888, (w, h).into())
+                .map_err(|e| e.to_string())?;
+            let _ = gles.bind(&mut probe).map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     pub fn early_import(&mut self, surface: &WlSurface) {
@@ -790,6 +848,8 @@ fn connector_connected(state: &mut Hyalo, node: DrmNode, connector: connector::I
             powered: true,
             last_vblank: None,
             in_flight: None,
+            display_ready: true,
+            in_flight_scene: None,
         },
     );
     // A new output starts neutral: the night light reaches it too.
@@ -881,6 +941,45 @@ fn connector_disconnected(state: &mut Hyalo, node: DrmNode, connector: connector
         }
     }
     crate::ipc::server::outputs_changed(state);
+}
+
+/// Followers have a physical scanout but no second wl_output/workspace/layer-shell scene.
+pub fn mirror_visibility(state: &mut Hyalo) {
+    let Backend::Tty(tty) = &mut state.backend else {
+        return;
+    };
+    for surface in tty
+        .devices
+        .values_mut()
+        .flat_map(|d| d.surfaces.values_mut())
+    {
+        let hidden = crate::mirror::follower(&surface.output);
+        if hidden {
+            state.space.unmap_output(&surface.output);
+            let map = smithay::desktop::layer_map_for_output(&surface.output);
+            for layer in map.layers() {
+                layer.layer_surface().send_close();
+            }
+            surface.output.leave_all();
+            if let Some(global) = surface.global.take() {
+                state.display_handle.disable_global::<Hyalo>(global.clone());
+                let dh = state.display_handle.clone();
+                state
+                    .loop_handle
+                    .insert_source(
+                        Timer::from_duration(Duration::from_secs(10)),
+                        move |_, _, _| {
+                            dh.remove_global::<Hyalo>(global.clone());
+                            TimeoutAction::Drop
+                        },
+                    )
+                    .ok();
+            }
+        } else if surface.global.is_none() {
+            surface.global = Some(surface.output.create_global::<Hyalo>(&state.display_handle));
+        }
+    }
+    state.space.refresh();
 }
 
 /// Switches a running output off for good (config `enabled = false`): its CRTC goes dark and
@@ -1101,6 +1200,12 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
+    let output = match &state.backend {
+        Backend::Tty(t) => t.devices.get(&node).and_then(|d| d.surfaces.get(&crtc)).map(|s| s.output.clone()),
+        _ => None,
+    };
+    let Some(output) = output else { return };
+    let drives_scene = crate::mirror::drives_scene(state, &output);
     let display_events=state.loop_handle.clone();
     let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config, idle, .. } = state;
     let cursor_status = &*cursor_status;
@@ -1134,10 +1239,15 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,
     };
-    let cursor = tty
-        .cursors
-        .image(icon, output.current_scale().fractional_scale(), start_time.elapsed().as_millis() as u32);
-    let pointer_here = space.output_geometry(&output).is_some_and(|g| g.to_f64().contains(scene.pointer));
+    let source = crate::mirror::scene(&output);
+    let cursor = tty.cursors.image(
+        icon,
+        source.current_scale().fractional_scale(),
+        start_time.elapsed().as_millis() as u32,
+    );
+    let pointer_here = space
+        .output_geometry(&source)
+        .is_some_and(|g| g.to_f64().contains(scene.pointer));
 
     let mut renderer = if primary_gpu == render_node {
         tty.gpus.single_renderer(&render_node)
@@ -1151,7 +1261,14 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     let area = output.current_mode().map_or(0, |m| m.size.w.max(0) as u64 * m.size.h.max(0) as u64);
     render::stats::frame_begin(&name, area);
     let built = std::time::Instant::now();
-    let elements = render::output_elements(&scene, &mut renderer, &output, pointer_here.then_some(&cursor));
+    let elements = render::output_elements(
+        &scene,
+        &mut renderer,
+        &output,
+        pointer_here.then_some(&cursor),
+    );
+    let display_ready = crate::render::mirror::ok(&output);
+    let drives_scene = drives_scene && display_ready;
     let build = built.elapsed();
     // The cursor plane always; the primary plane for a fullscreen window's direct scan-out unless
     // `[render] direct_scanout = false` (read every frame: a change applies at once). No overlay
@@ -1192,16 +1309,34 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     };
     render::stats::frame_done(&name, rendered, build, render_time, damage.as_deref());
     let feedback = surface.dmabuf_feedback.clone();
-    let layer_frame = rendered.then(|| crate::protocols::layers::presentation::sample(&scene, &output)).flatten();
+    let layer_frame = (rendered && drives_scene)
+        .then(|| crate::protocols::layers::presentation::sample(&scene, &source))
+        .flatten();
     if rendered {
-        let presentation = super::take_presentation_feedback(state, &output, &states);
-        let Backend::Tty(tty) = &mut state.backend else { return };
-        let Some(surface) = tty.devices.get_mut(&node).and_then(|d| d.surfaces.get_mut(&crtc)) else { return };
-        match surface.drm_output.queue_frame(Some(presentation)) {
+        let logical_states =
+            crate::render::mirror::states(&output).unwrap_or_else(|| states.clone());
+        let presentation = drives_scene.then(|| super::take_presentation_feedback(state, &source, &logical_states));
+        let Backend::Tty(tty) = &mut state.backend else {
+            return;
+        };
+        let Some(surface) = tty
+            .devices
+            .get_mut(&node)
+            .and_then(|d| d.surfaces.get_mut(&crtc))
+        else {
+            return;
+        };
+        match surface.drm_output.queue_frame(presentation) {
             Ok(()) => {
-                crate::protocols::layers::presentation::queued(&output, layer_frame);
-                surface.redraw = Redraw::WaitingForVBlank { redraw_needed: false };
+                if drives_scene {
+                    crate::protocols::layers::presentation::queued(&source, layer_frame);
+                }
+                surface.redraw = Redraw::WaitingForVBlank {
+                    redraw_needed: false,
+                };
                 surface.in_flight = Some((begun, when));
+                surface.display_ready = display_ready;
+                surface.in_flight_scene = drives_scene.then(|| source.clone());
             }
             Err(err) => {
                 let err: SwapBuffersError = err.into();
@@ -1264,6 +1399,8 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     // The kernel's timestamp of the flip, on our clock (both are CLOCK_MONOTONIC): the beat the
     // next frames are predicted on, and how far this one's prediction landed (render/timing.rs).
     let in_flight = surface.in_flight.take();
+    let display_ready = surface.display_ready;
+    let shown_scene = surface.in_flight_scene.take();
     if timed {
         let ago = Duration::from(state.clock.now()).saturating_sub(Duration::from(clock));
         if let Some(shown) = Instant::now().checked_sub(ago) {
@@ -1276,10 +1413,12 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     let seq = metadata.as_ref().map(|m| m.sequence).unwrap_or(0);
     let submitted = surface.drm_output.frame_submitted();
     let display_presented = submitted.is_ok();
-    if submitted.is_ok() {
-        crate::protocols::layers::presentation::presented(&output);
-    } else {
-        crate::protocols::layers::presentation::discard(&output);
+    if let Some(shown_scene) = shown_scene {
+        if submitted.is_ok() {
+            crate::protocols::layers::presentation::presented(&shown_scene);
+        } else {
+            crate::protocols::layers::presentation::discard(&shown_scene);
+        }
     }
     match submitted {
         Ok(Some(Some(mut feedback))) => {
@@ -1298,7 +1437,12 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     let redraw_needed = matches!(surface.redraw, Redraw::WaitingForVBlank { redraw_needed: true });
     surface.redraw = if redraw_needed { Redraw::Queued } else { Redraw::Idle };
     // The frame that just went on screen may be the first locked one there (lock.rs).
-    if display_presented && let Some((built,_))=in_flight { crate::display::presented(state, &output.name(), built); }
+    if display_presented
+        && display_ready
+        && let Some((built, _)) = in_flight
+    {
+        crate::display::presented(state, &output.name(), built);
+    }
     state.lock_frame_shown(&output);
     if redraw_needed {
         render_surface(state, node, crtc);

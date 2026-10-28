@@ -74,6 +74,7 @@ pub struct Hyalo {
     pub redraw_idle_queued: bool,
     pub ipc: IpcState,
     pub displays: crate::display::State,
+    pub mirrors: crate::mirror::State,
     /// Workspaces and windows (wm/).
     pub wm: crate::wm::Wm,
     pub binds: Vec<crate::binds::Binding>,
@@ -269,6 +270,7 @@ impl Hyalo {
             redraw_idle_queued: false,
             ipc: IpcState::default(),
             displays: crate::display::State::default(),
+            mirrors: crate::mirror::State::default(),
             wm: crate::wm::Wm::default(),
             binds,
             foreign_toplevel_list,
@@ -329,9 +331,16 @@ impl Hyalo {
     /// Something on `output` changed: draw it on its next opportunity. `None` = every output.
     pub fn queue_redraw(&mut self, output: Option<&Output>) {
         match output {
-            Some(o) => self.backend.queue_redraw(o),
+            Some(o) => {
+                self.backend.queue_redraw(o);
+                for target in crate::backend::physical_outputs(self) {
+                    if crate::mirror::source(&target).as_ref() == Some(o) {
+                        self.backend.queue_redraw(&target);
+                    }
+                }
+            }
             None => {
-                for o in self.space.outputs().cloned().collect::<Vec<_>>() {
+                for o in crate::backend::physical_outputs(self) {
                     self.backend.queue_redraw(&o);
                 }
             }

@@ -87,6 +87,11 @@ impl Display {
         if s.epoch != epoch || s.revision != revision {
             return Err(Error::StaleState("reread snapshot".into()));
         }
+        if !layout.mirror_groups.is_empty() && !s.capabilities.iter().any(|c| c == "mirror") {
+            return Err(Error::Unsupported(
+                "mirroring needs multiple physical scanouts".into(),
+            ));
+        }
         super::model::validate(layout, &s.outputs).map_err(Error::InvalidLayout)
     }
     fn preview(

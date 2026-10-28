@@ -49,6 +49,9 @@ enum KeyAction {
 pub struct KeyTracking {
     /// Keys whose press ran a binding: their release does not reach the client either.
     swallowed: Vec<u32>,
+    absolute_band: bool,
+    band_origin: Option<Point<f64, Logical>>,
+    band_buttons: Vec<u32>,
     /// A key with a release binding, held alone so far.
     release_candidate: Option<u32>,
     /// The binding repeating while its key is held.
@@ -56,19 +59,37 @@ pub struct KeyTracking {
 }
 
 impl Hyalo {
-    pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
-        if !matches!(event, InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. }) {
+    pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>)
+    where
+        I::Device: 'static,
+    {
+        if !matches!(
+            event,
+            InputEvent::DeviceAdded { .. } | InputEvent::DeviceRemoved { .. }
+        ) {
             self.note_activity();
         }
         match event {
             InputEvent::Keyboard { event } => self.on_key(event.key_code(), event.state(), Event::time(&event)),
             InputEvent::PointerMotion { event } => self.on_relative_motion::<I>(&event),
             InputEvent::PointerMotionAbsolute { event } => {
-                let Some(geo) = self.space.outputs().next().and_then(|o| self.space.output_geometry(o)) else {
+                let device = event.device();
+                let named = (&device as &dyn std::any::Any)
+                    .downcast_ref::<smithay::reexports::input::Device>()
+                    .and_then(|d| d.output_name().map(|n| n.into_owned()));
+                let output = named
+                    .as_deref()
+                    .and_then(|n| crate::backend::physical_output(self, n))
+                    .or_else(|| self.space.outputs().next().cloned());
+                let Some(output) = output else { return };
+                let Some(geo) = crate::mirror::physical_geometry(&output) else {
                     return;
                 };
-                let pos = event.position_transformed(geo.size) + geo.loc.to_f64();
-                self.pointer_moved_to(pos, Event::time(&event));
+                self.pointer_moved_on_output(
+                    &output,
+                    event.position_transformed(geo.size),
+                    Event::time(&event),
+                );
             }
             InputEvent::PointerButton { event } => {
                 self.pointer_button(event.button_code(), event.state(), Event::time(&event))
@@ -287,8 +308,10 @@ impl Hyalo {
     }
 
     fn on_relative_motion<I: InputBackend>(&mut self, event: &I::PointerMotionEvent) {
+        let mut pos = self.pointer_motion_origin();
+        self.keys.absolute_band = false;
+        self.keys.band_origin = None;
         let pointer = self.seat.get_pointer().unwrap();
-        let mut pos = pointer.current_location();
         let serial = SERIAL_COUNTER.next_serial();
         let under = self.surface_under(pos);
 
@@ -337,6 +360,8 @@ impl Hyalo {
 
     /// The pointer goes to `pos` (absolute devices, the control channel).
     pub fn pointer_moved_to(&mut self, pos: Point<f64, Logical>, time: InputTime) {
+        self.keys.absolute_band = false;
+        self.keys.band_origin = None;
         self.note_activity();
         let pos = self.clamp_to_outputs(pos);
         self.pointer_on_output(pos);
@@ -346,6 +371,57 @@ impl Hyalo {
         pointer.frame(self);
         self.update_controls_hover(pos);
         self.activate_constraint_under_pointer();
+        self.queue_redraw(None);
+    }
+
+    pub fn pointer_in_mirror_band(&self) -> bool {
+        self.keys.absolute_band
+    }
+
+    /// Relative input resumes from the last scene coordinate after leaving a black band.
+    pub fn pointer_motion_origin(&self) -> Point<f64, Logical> {
+        self.keys
+            .band_origin
+            .unwrap_or_else(|| self.seat.get_pointer().unwrap().current_location())
+    }
+
+    /// Output-targeted absolute input shares the projection used to paint/capture a mirror.
+    pub fn pointer_moved_on_output(&mut self, output: &smithay::output::Output, at: Point<f64, Logical>, time: InputTime) {
+        if let Some(pos) = crate::mirror::input(self, output, at) {
+            self.pointer_moved_to(pos, time);
+            return;
+        }
+        self.note_activity();
+        let pointer = self.seat.get_pointer().unwrap();
+        if !self.keys.absolute_band {
+            self.keys.band_origin = Some(pointer.current_location());
+        }
+        self.keys.absolute_band = true;
+        // An implicit grab must see an out-of-scene motion before its release, otherwise
+        // releasing in a band could click the widget at the previous scene coordinate.
+        let origins: Vec<_> = self
+            .space
+            .outputs()
+            .filter_map(|o| self.space.output_geometry(o).map(|g| g.loc))
+            .collect();
+        let pos = Point::from((
+            origins.iter().map(|p| p.x).min().unwrap_or(0) as f64 - 1.0,
+            origins.iter().map(|p| p.y).min().unwrap_or(0) as f64 - 1.0,
+        ));
+        if self.wm.controls_hover.is_some_and(|h| h.pressed) && !self.keys.band_buttons.contains(&crate::binds::BTN_LEFT) {
+            self.keys.band_buttons.push(crate::binds::BTN_LEFT);
+        }
+        self.update_controls_hover(pos);
+        pointer.motion(
+            self,
+            None,
+            &MotionEvent {
+                location: pos,
+                serial: SERIAL_COUNTER.next_serial(),
+                time,
+            },
+        );
+        pointer.frame(self);
         self.queue_redraw(None);
     }
 
@@ -382,6 +458,9 @@ impl Hyalo {
     }
 
     fn on_axis<I: InputBackend>(&mut self, event: &I::PointerAxisEvent) {
+        if self.keys.absolute_band {
+            return;
+        }
         let source = event.source();
         // A wheel binding (Super+wheel switches workspace) takes the notch; a touchpad's
         // continuous scroll is never a binding.
@@ -437,6 +516,17 @@ impl Hyalo {
     }
 
     pub fn pointer_button(&mut self, button: u32, button_state: ButtonState, time: InputTime) {
+        if button_state == ButtonState::Released && self.keys.band_buttons.contains(&button) {
+            self.keys.band_buttons.retain(|b| *b != button);
+            return;
+        }
+        if self.keys.absolute_band && button_state == ButtonState::Pressed {
+            if !self.keys.band_buttons.contains(&button) {
+                self.keys.band_buttons.push(button);
+            }
+            return;
+        }
+
         self.note_activity();
         let pointer = self.seat.get_pointer().unwrap();
         let keyboard = self.seat.get_keyboard().unwrap();
