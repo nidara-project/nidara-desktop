@@ -35,6 +35,25 @@ is the WHY and the traps.
 | `ui/shell/core/hyalo-ipc.ts`, `ui/shell/core/Displays.ts` | the shell's side (below) |
 | `ui/lib/nidara-kit/platform/material.ts`, `ui/lib/nidara-kit/platform/glass-material.ts` | the glass's client half: the shapes, and THE material's numbers — one for every bundle; the shell's `core/CompositorGlass.ts` and the lock's `app.ts` only say Reduce transparency and the panels' blur (below) |
 
+## Native Display1 and output recovery (#959)
+
+Hyalo owns `org.nidara.Display1` (`org.nidara.Display`, `/org/nidara/Display`), not sessiond.
+`hyalo/DISPLAY1.md` is the API, ownership and evidence contract; Rust records live in
+`hyalo/compositor/src/display/model.rs`. Preview is a whole-layout transaction with a
+unique-sender token. Its 15 seconds start only after new frames have reached every enabled
+output, with a separate bounded activation wait. The disk worker saves confirmed profiles;
+a UI timeout is not the recovery owner. Existing SetOutput/config reload paths validate the
+whole layout too. Manual compositor overrides win; conflicting edits fail explicitly.
+
+Power1 forwards a sequenced, owner-authenticated lid effect; it remains the sole lid/suspend
+policy owner. Hyalo inhibits the panel temporarily only with a usable external, restores on
+opening or provider loss, and never persists the closed-lid state. Docked counts connected
+externals, including disabled ones. Identify is passive compositor content. This first cut
+has no mirror, brightness, Settings page or Super+P consumer; primary does not move the old
+TS bar/dock, and there is no TS bridge. Duplicate connector names across GPUs are refused.
+`check-display1-headless.sh` proves private-bus recovery on one nested output, not physical
+multimonitor/lid/EDID acceptance. Keep that distinction in reviews.
+
 ## Smithay is a library we never patch
 
 Pinned by revision in `hyalo/Cargo.toml`, never forked or patched — Smithay's `AI.md`

@@ -802,6 +802,7 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
     drop(guard);
     arm_inputs(p).await;
     lid_changes(p).await;
+    display_lid_effect(p).await;
     peripheral_alerts(p).await;
     p.effects(effects).await;
     Ok(())
@@ -862,6 +863,34 @@ pub(super) async fn arm_inputs(p: &Power) {
     });
     let _ = bus::publish(p, state.objects, root).await;
 }
+// Display topology stays in Hyalo; Power1 remains the sole owner of lid policy.
+async fn display_lid_effect(p: &Power) {
+    if p.read_only {
+        return;
+    }
+    let closed = {
+        let state = p.state.read().unwrap();
+        state.root["LidKnown"].as_bool().unwrap_or(false)
+            && state.root["LidClosed"].as_bool().unwrap_or(false)
+            && state.root["SessionActive"].as_bool().unwrap_or(false)
+            && state.hyalo["session"].as_bool().unwrap_or(false)
+            && !state.hyalo["nested"].as_bool().unwrap_or(true)
+    };
+    let sequence = p.serial.fetch_add(1, Ordering::Relaxed);
+    if let Ok(proxy) = Proxy::new(
+        &p.conn,
+        "org.nidara.Display",
+        "/org/nidara/Display",
+        "org.nidara.Display1",
+    )
+    .await
+    {
+        // Missing Display1 in an older compositor is a capability absence, not a user alert.
+        let _: Result<(), _> =
+            bounded(proxy.call("SetLidState", &(p.epoch, sequence, closed))).await;
+    }
+}
+
 async fn lid_changes(p: &Power) {
     let closed = p.property::<bool>(ROOT, "LidClosed");
     let known = p.property::<bool>(ROOT, "LidKnown");

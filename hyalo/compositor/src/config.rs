@@ -789,9 +789,16 @@ pub fn layer_paths() -> Vec<PathBuf> {
 }
 
 /// The settings layer of this session, if it has one (`layer_paths`).
-fn settings_layer() -> Option<PathBuf> {
+pub(crate) fn settings_layer() -> Option<PathBuf> {
     let path = settings_config_path();
     layer_paths().contains(&path).then_some(path)
+}
+
+/// Layers that the generated Display1 profiles may never silently replace.
+pub(crate) fn display_overrides() -> Result<BTreeMap<String, OutputConfig>, String> {
+    let settings = settings_layer();
+    let paths: Vec<_> = layer_paths().into_iter().filter(|p| Some(p) != settings.as_ref()).collect();
+    load_from(&paths).map(|c| c.outputs).map_err(|e|e.to_string())
 }
 
 fn read_layer(path: &Path) -> Result<Option<toml::Table>, ConfigError> {
@@ -911,6 +918,10 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
             return Err(message);
         }
     };
+    if state.config.outputs != new.outputs {
+        crate::display::before_reload(state);
+        crate::display::validate_config(state,&new.outputs)?;
+    }
     let old = std::mem::replace(&mut state.config, new.clone());
     if old.input.keyboard != new.input.keyboard {
         let kb = &new.input.keyboard.with_system_defaults();
@@ -971,15 +982,9 @@ pub fn reload(state: &mut crate::Hyalo) -> Result<(), String> {
         }
         state.wm.dirty_workspaces = true;
     }
-    let names: std::collections::BTreeSet<String> =
-        old.outputs.keys().chain(new.outputs.keys()).cloned().collect();
-    for name in names {
-        if old.outputs.get(&name) != new.outputs.get(&name) {
-            let cfg = new.outputs.get(&name).cloned().unwrap_or_default();
-            if let Err(err) = crate::outputs::apply(state, &name, &cfg) {
-                tracing::warn!(%name, %err, "output setting not applied");
-            }
-        }
+    if old.outputs != new.outputs {
+        let overrides = display_overrides()?;
+        crate::display::config_changed(state, overrides);
     }
     crate::outputs::arrange(state);
     state.arrange_all();
@@ -1021,6 +1026,12 @@ pub fn apply_settings(state: &mut crate::Hyalo, patch: serde_json::Value) -> Res
     let serde_json::Value::Object(mut patch) = patch else {
         return Err("settings: the patch must be an object".into());
     };
+    if patch.contains_key("outputs") && crate::display::owns_profile(state) {
+        return Err("output profiles are owned by Display1; use Preview/Confirm".into());
+    }
+    if patch.contains_key("outputs") && crate::display::preview_pending(state) {
+        return Err("confirm or cancel Display1 preview before saving output settings".into());
+    }
     if let Some(idle) = patch.get_mut("idle").and_then(serde_json::Value::as_object_mut)
         && let Some(legacy) = idle.get("suspend").cloned()
     {
@@ -1044,7 +1055,8 @@ pub fn apply_settings(state: &mut crate::Hyalo, patch: serde_json::Value) -> Res
             layers.extend(read_layer(&p).map_err(|e| e.to_string())?);
         }
     }
-    from_layers(layers).map_err(|e| format!("settings refused: {e}"))?;
+    let proposed=from_layers(layers).map_err(|e| format!("settings refused: {e}"))?;
+    crate::display::validate_config(state,&proposed.outputs)?;
     let body = toml::to_string(&patched).map_err(|e| e.to_string())?;
     write_atomically(&path, &format!("{SETTINGS_HEADER}\n{body}")).map_err(|e| format!("{}: {e}", path.display()))?;
     reload(state)?;

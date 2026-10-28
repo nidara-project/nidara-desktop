@@ -30,6 +30,7 @@ pub struct WinitBackend {
 }
 
 impl WinitBackend {
+    pub fn display_redraw(&mut self) { self.damage_tracker=OutputDamageTracker::from_output(&self.output); }
     /// The window, and its event source (inserted by `init` once the state exists).
     pub fn new() -> Result<(Self, winit::WinitEventLoop), Box<dyn std::error::Error>> {
         let (graphics, source) = winit::init::<GlesRenderer>()?;
@@ -177,6 +178,7 @@ fn render(state: &mut Hyalo) {
                 Ok(()) if rendered => {
                     crate::protocols::layers::presentation::queued(&output, frame);
                     crate::protocols::layers::presentation::presented(&output);
+                    crate::display::presented(state, &output.name(), when);
                 }
                 Err(err) => tracing::warn!(?err, "winit: submit failed"),
                 _ => {}
