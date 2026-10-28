@@ -955,14 +955,24 @@ async fn lid_changes(p: &Power) {
 pub(super) fn brightness_resume(p: &Power, message: &zbus::Message) -> bool {
     let header = message.header();
     let sender = header.sender().map(|s| s.as_str()).unwrap_or("");
-    let logind = p.state.read().unwrap().providers.get("logind")
+    let logind = p
+        .state
+        .read()
+        .unwrap()
+        .providers
+        .get("logind")
         .is_some_and(|p| p.owner == sender);
     let wake = logind
         && message.message_type() == zbus::message::Type::Signal
         && header.path().is_some_and(|v| v.as_str() == LOGIN_PATH)
         && header.interface().is_some_and(|v| v.as_str() == LOGIN)
-        && header.member().is_some_and(|v| v.as_str() == "PrepareForSleep")
-        && message.body().deserialize::<(bool,)>().is_ok_and(|(sleeping,)| !sleeping);
+        && header
+            .member()
+            .is_some_and(|v| v.as_str() == "PrepareForSleep")
+        && message
+            .body()
+            .deserialize::<(bool,)>()
+            .is_ok_and(|(sleeping,)| !sleeping);
     if wake {
         p.brightness_wake.notify_one();
     }

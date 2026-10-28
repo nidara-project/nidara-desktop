@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Native energy service. Mutations are opt-in; providers and object identities are independent.
-mod bus;
 mod brightness;
+mod bus;
 mod display;
 mod i18n;
 mod model;
