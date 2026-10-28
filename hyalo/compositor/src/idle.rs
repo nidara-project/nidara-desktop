@@ -176,10 +176,8 @@ impl Hyalo {
     }
     pub fn power_info(&mut self) -> serde_json::Value {
         let inhibitors = self.idle_inhibitors_info();
-        let external = self.space.outputs().any(|o| {
-            let name = o.name();
-            !["eDP", "LVDS", "DSI"].iter().any(|prefix| name.starts_with(prefix))
-        });
+        // A docked monitor remains connected when Display1 temporarily inhibits a panel.
+        let external = crate::outputs::info(self).iter().any(|o| !crate::display::model::internal(&o.name));
         let binding = serde_json::to_value(self.config.binds.get("XF86PowerOff")).unwrap_or_default();
         let command = binding
             .as_str()

@@ -115,19 +115,9 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             let base = state.config.outputs.get(&name).cloned().unwrap_or_default();
             let cfg = super::merged_output_config(&base, &req);
             // Runtime only: the shell persists what the user chose in its own settings.
-            let previous = state.config.outputs.insert(name.clone(), cfg.clone());
-            match outputs::apply(state, &name, &cfg) {
-                Ok(()) => {
-                    outputs_changed(state);
-                    Reply::Ok(Response::Handled)
-                }
-                Err(e) => {
-                    match previous {
-                        Some(p) => state.config.outputs.insert(name, p),
-                        None => state.config.outputs.remove(&name),
-                    };
-                    Reply::Error(e)
-                }
+            match crate::display::legacy_apply(state, &name, &cfg) {
+                Ok(()) => { outputs_changed(state); Reply::Ok(Response::Handled) }
+                Err(e) => Reply::Error(e),
             }
         }
         Request::OutputPower { name, on } => match outputs::set_power(state, name.as_deref(), on) {
@@ -241,6 +231,8 @@ pub fn broadcast(state: &mut Hyalo, event: &Event) {
 }
 
 pub fn outputs_changed(state: &mut Hyalo) {
+    if crate::display::applying(state) { return; }
+    crate::display::changed(state);
     if state.ipc.subscribers.is_empty() {
         return;
     }
@@ -450,6 +442,7 @@ impl IpcState {
 impl Hyalo {
     /// `lock_changed` to every subscriber.
     pub fn ipc_broadcast_lock(&mut self, locked: bool) {
+        crate::display::changed(self);
         broadcast(self, &Event::LockChanged { locked });
     }
 }

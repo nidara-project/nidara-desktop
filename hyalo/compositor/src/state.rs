@@ -73,6 +73,7 @@ pub struct Hyalo {
     /// Set when a frame has to be drawn on some output soon (see `queue_redraw`).
     pub redraw_idle_queued: bool,
     pub ipc: IpcState,
+    pub displays: crate::display::State,
     /// Workspaces and windows (wm/).
     pub wm: crate::wm::Wm,
     pub binds: Vec<crate::binds::Binding>,
@@ -267,6 +268,7 @@ impl Hyalo {
             focus_grab: None,
             redraw_idle_queued: false,
             ipc: IpcState::default(),
+            displays: crate::display::State::default(),
             wm: crate::wm::Wm::default(),
             binds,
             foreign_toplevel_list,

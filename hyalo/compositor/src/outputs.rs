@@ -50,6 +50,7 @@ pub fn arrange(state: &mut Hyalo) {
         crate::shell::layer::arrange_output(o);
     }
     state.outputs_changed();
+    crate::display::changed(state);
     state.queue_redraw(None);
 }
 
@@ -132,6 +133,7 @@ pub fn set_power(state: &mut Hyalo, name: Option<&str>, on: bool) -> Result<(), 
     if on {
         state.queue_redraw(None);
     }
+    crate::display::changed(state);
     Ok(())
 }
 

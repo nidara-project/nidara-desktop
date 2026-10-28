@@ -363,6 +363,7 @@ pub fn output_elements<R: HyaloRenderer>(
 ) -> Vec<OutputElement<R>>
 {
     let mut out = Vec::new();
+    if !state.lock.is_locked() { out.extend(crate::display::identify::elements(renderer, output)); }
     let Some(output_geo) = state.space.output_geometry(output) else { return out };
     let scale = Scale::from(output.current_scale().fractional_scale());
     let output_size = output_geo.size.to_f64().to_physical_precise_round(scale);

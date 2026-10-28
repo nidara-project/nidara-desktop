@@ -11,6 +11,17 @@ struct Fixture {
     fd_peers: Arc<std::sync::Mutex<Vec<std::os::unix::net::UnixStream>>>,
     calls: Arc<Mutex<Vec<String>>>,
 }
+struct DisplayRecorder {
+    marker: u32,
+    calls: tokio::sync::mpsc::UnboundedSender<(u32, bool)>,
+}
+#[zbus::interface(name = "org.nidara.Display1")]
+impl DisplayRecorder {
+    async fn set_lid_state(&self, _generation: u64, _sequence: u64, closed: bool) {
+        self.calls.send((self.marker, closed)).unwrap();
+    }
+}
+
 struct Up;
 #[zbus::interface(name = "org.freedesktop.UPower")]
 impl Up {
@@ -266,8 +277,106 @@ fn power(conn: &Connection, system: &Connection, read_only: bool) -> Power {
         keyboard_write: Default::default(),
         keyboard_serial: Arc::new(AtomicU64::new(0)),
         menu_wait: Default::default(),
+        display_lid: Default::default(),
     }
 }
+async fn display_forwarding_run() {
+    let conn = Connection::session().await.unwrap();
+    let p = power(&conn, &conn, false);
+    super::display::watch(&p).await.unwrap();
+    super::display::update(&p, false);
+    // A real bus owner transition starts forwarding without a provider refresh.
+    let (display_tx, mut display_rx) = tokio::sync::mpsc::unbounded_channel();
+    let display = Connection::session().await.unwrap();
+    display
+        .object_server()
+        .at(
+            "/org/nidara/Display",
+            DisplayRecorder {
+                marker: 1,
+                calls: display_tx.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    display.request_name("org.nidara.Display").await.unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), display_rx.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        (1, false)
+    );
+    super::display::update(&p, true);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), display_rx.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        (1, true)
+    );
+    for _ in 0..100 {
+        super::display::update(&p, true);
+    }
+    super::display::update(&p, false);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), display_rx.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        (1, false)
+    );
+    display.release_name("org.nidara.Display").await.unwrap();
+    let replacement_display = Connection::session().await.unwrap();
+    replacement_display
+        .object_server()
+        .at(
+            "/org/nidara/Display",
+            DisplayRecorder {
+                marker: 2,
+                calls: display_tx,
+            },
+        )
+        .await
+        .unwrap();
+    replacement_display
+        .request_name("org.nidara.Display")
+        .await
+        .unwrap();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), display_rx.recv())
+            .await
+            .unwrap()
+            .unwrap(),
+        (2, false)
+    );
+}
+#[test]
+fn display_lid_forwarding_contract() {
+    if std::env::var_os("NIDARA_DISPLAY_LID_TEST_CHILD").is_none() {
+        assert!(
+            std::process::Command::new("/usr/bin/dbus-run-session")
+                .args(["--dbus-daemon=/usr/bin/dbus-daemon", "--"])
+                .arg(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "power::tests::display_lid_forwarding_contract",
+                    "--nocapture"
+                ])
+                .env("NIDARA_DISPLAY_LID_TEST_CHILD", "1")
+                .status()
+                .unwrap()
+                .success()
+        );
+        return;
+    }
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        tokio::time::timeout(Duration::from_secs(20), display_forwarding_run())
+            .await
+            .expect("Display1 forwarding fixture stalled");
+    });
+}
+
 async fn run() {
     let fixture = Fixture::default();
     *fixture.active.write().unwrap() = true;
@@ -560,6 +669,7 @@ async fn run() {
         .unwrap();
     provider::watch(p.clone()).await.unwrap().await.unwrap();
     p.refresh().await.unwrap();
+
     let ephemeral = Connection::session().await.unwrap();
     let name = ephemeral.unique_name().unwrap().to_string();
     let hold = p
@@ -797,5 +907,9 @@ fn private_provider_contract() {
             std::env::var("DBUS_SESSION_BUS_ADDRESS").unwrap(),
         );
     }
-    tokio::runtime::Runtime::new().unwrap().block_on(run());
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        tokio::time::timeout(Duration::from_secs(30), run())
+            .await
+            .expect("Power1 fixture stalled");
+    });
 }

@@ -18,6 +18,19 @@ and leave its line in the index at the bottom of this file. It must match realit
 predates the split; #102 was reused on 2026-09-04, both now resolved). Cite them by title, not by
 number alone.
 
+## Native Display1 consumers and hardware limits (#959, 2026-10-28)
+
+The first Display1 cut publishes primary and serves confirmed profiles, extended layouts,
+Identify and the Power1 lid effect. The TS bar/dock do not consume primary; the CC still uses
+brightnessctl. There is no TS bridge. Mirroring, DisplayBrightness1/DDC/Fn and native
+Settings/Super+P remain separate queued cuts. Legacy output persistence is refused once a
+Display1 profile owns that output set. Connector names duplicated across GPUs are refused
+before mutation until backend addressing is unambiguous. Private-bus/nested evidence does
+not establish physical multimonitor, EDID, dock, lid or installed-package acceptance.
+Lid closure does not enable a user-disabled external; with none enabled, Display1 leaves
+the internal configuration alone and existing Power1/logind lid policy remains in charge.
+See `hyalo/DISPLAY1.md` before changing output mutation or recovery paths.
+
 ## Native Power1 consumers and accepted legacy limits (#959, 2026-10-27)
 
 Power1 is the backend; Rust bar/island/menu consumers remain in the queued Rust shell work.

@@ -24,6 +24,7 @@ mod lock;
 mod logind;
 mod night_light;
 mod outputs;
+mod display;
 mod protocols;
 mod render;
 mod sandbox;
@@ -158,6 +159,7 @@ fn start(state: &mut Hyalo, session: bool, command: Option<String>) {
         logind::start(state);
     }
     state.idle_rearm();
+    display::start(state);
     // Only a session runs the autostart: `uwsm finalize` from a development window would
     // export this compositor's socket into the live session's services.
     if session {
