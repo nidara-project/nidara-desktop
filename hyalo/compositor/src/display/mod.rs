@@ -11,7 +11,7 @@ use crate::{
 use bus::{Error, Result};
 use model::*;
 use smithay::reexports::calloop::{
-    channel,
+    RegistrationToken, channel,
     timer::{TimeoutAction, Timer},
 };
 use std::{
@@ -116,6 +116,10 @@ pub struct State {
     loaded: bool,
     ready: bool,
     applying: bool,
+    notifying: bool,
+    event_queued: bool,
+    lease_timer: Option<RegistrationToken>,
+    signal: Option<mpsc::SyncSender<()>>,
     last_error: String,
     overrides: BTreeMap<String, OutputConfig>,
     legacy: BTreeMap<String, OutputConfig>,
@@ -161,7 +165,9 @@ pub fn start(state: &mut Hyalo) {
         .insert_source(rx, |event, _, state| {
             if let channel::Event::Msg(event) = event {
                 handle(state, event);
+                reconcile(state);
                 publish_if_changed(state);
+                arm_lease_timer(state);
             }
         })
         .expect("Display1 channel");
@@ -173,14 +179,9 @@ pub fn start(state: &mut Hyalo) {
     refresh(state);
     let snapshot = Arc::new(Mutex::new(snapshot(state)));
     state.displays.snapshot = Some(snapshot.clone());
-    std::thread::spawn(move || bus::serve(tx, snapshot));
-    state
-        .loop_handle
-        .insert_source(Timer::from_duration(Duration::from_millis(100)), |_, _, state| {
-            tick(state);
-            TimeoutAction::ToDuration(Duration::from_millis(100))
-        })
-        .expect("Display1 recovery timer");
+    let (signal_tx, signal_rx) = mpsc::sync_channel(1);
+    state.displays.signal = Some(signal_tx);
+    std::thread::spawn(move || bus::serve(tx, snapshot, signal_rx));
 }
 fn pending(state: &Hyalo) -> Pending {
     state
@@ -217,7 +218,12 @@ fn publish(state: &mut Hyalo) {
     if let Some(s) = &state.displays.snapshot {
         *s.lock().unwrap() = snapshot(state);
     }
+    if let Some(signal) = &state.displays.signal {
+        let _ = signal.try_send(());
+    }
+    state.displays.notifying = true;
     crate::ipc::server::outputs_changed(state);
+    state.displays.notifying = false;
 }
 fn mode_id(w: i32, h: i32, r: i32) -> String {
     format!("{w}x{h}@{r}")
@@ -358,7 +364,7 @@ fn refresh(state: &mut Hyalo) -> bool {
     }
     changed
 }
-fn tick(state: &mut Hyalo) {
+fn reconcile(state: &mut Hyalo) {
     if !state.displays.ready {
         return;
     }
@@ -455,7 +461,7 @@ fn handle(state: &mut Hyalo, event: Event) {
                 let _ = reply.send(Err(Error::Expired("request expired before execution".into())));
                 return;
             }
-            tick(state);
+            reconcile(state);
             let result = command_inner(state, owner, command, reply.clone());
             if let Some(result) = result {
                 let _ = reply.send(result);
@@ -638,6 +644,7 @@ pub fn presented(state: &mut Hyalo, name: &str, built: Instant) {
         if let Some(reply) = reply {
             let _ = reply.send(Ok(pending(state)));
         }
+        arm_lease_timer(state);
     }
 }
 fn rollback(state: &mut Hyalo, reason: &str) {
@@ -796,8 +803,7 @@ fn reconcile_lid(state: &mut Hyalo) {
         return;
     }
     let outputs = state.displays.outputs.clone();
-    let external = outputs.iter().any(|o| !o.internal && o.enabled && o.powered);
-    let inhibit = state.displays.lid_closed && external && outputs.iter().any(|o| o.internal);
+    let inhibit = lid_inhibited(&outputs, state.displays.lid_closed);
     if inhibit && state.displays.lid_before.is_none() {
         rollback(state, "lid policy changed");
         // Rollback may have removed the external enabled by an unconfirmed preview.
@@ -818,10 +824,11 @@ fn reconcile_lid(state: &mut Hyalo) {
     }
 }
 
+fn lid_inhibited(outputs: &[Output], closed: bool) -> bool {
+    closed && outputs.iter().any(|o| o.internal) && outputs.iter().any(|o| !o.internal && o.enabled)
+}
 fn lid_layout(outputs: &[Output], primary: &str) -> Option<Layout> {
-    if !outputs.iter().any(|o| o.internal && o.enabled)
-        || !outputs.iter().any(|o| !o.internal && o.enabled && o.powered)
-    {
+    if !outputs.iter().any(|o| o.internal && o.enabled) || !outputs.iter().any(|o| !o.internal && o.enabled) {
         return None;
     }
     let mut l = observed(outputs, primary);
@@ -830,11 +837,18 @@ fn lid_layout(outputs: &[Output], primary: &str) -> Option<Layout> {
             setting.enabled = false;
         }
     }
-    l.primary = outputs
-        .iter()
-        .find(|o| !o.internal && o.enabled && o.powered)?
-        .id
-        .clone();
+    l.primary = outputs.iter().find(|o| !o.internal && o.enabled)?.id.clone();
+    let min_x = l.outputs.iter().filter(|s| s.enabled).map(|s| s.x).min()?;
+    let min_y = l.outputs.iter().filter(|s| s.enabled).map(|s| s.y).min()?;
+    for setting in l.outputs.iter_mut().filter(|s| s.enabled) {
+        setting.x -= min_x;
+        setting.y -= min_y;
+    }
+    if let Ok(connected) = validate(l.clone(), outputs) {
+        return Some(connected);
+    }
+    // Removing a bridge panel can disconnect the remaining graph. Only then reflow.
+    l.outputs.sort_by_key(|s| (s.x, s.y, s.id.clone()));
     let mut x = 0;
     for setting in l.outputs.iter_mut().filter(|s| s.enabled) {
         setting.x = x;
@@ -1063,26 +1077,98 @@ pub fn owns_profile(state: &Hyalo) -> bool {
     state.displays.profiles.recall(&state.displays.outputs).is_some()
 }
 
+/// Coalesce compositor events into one reconciliation after the current mutation.
+/// No periodic inventory walk or wakeup exists when there is no event or lease.
+pub fn changed(state: &mut Hyalo) {
+    if !state.displays.ready || state.displays.applying || state.displays.notifying || state.displays.event_queued {
+        return;
+    }
+    state.displays.event_queued = true;
+    state.loop_handle.insert_idle(|state| {
+        state.displays.event_queued = false;
+        reconcile(state);
+        arm_lease_timer(state);
+    });
+}
+fn arm_lease_timer(state: &mut Hyalo) {
+    if let Some(token) = state.displays.lease_timer.take() {
+        state.loop_handle.remove(token);
+    }
+    let deadline = state
+        .displays
+        .lease
+        .as_ref()
+        .filter(|_| state.displays.commit.is_none())
+        .map(|l| l.deadline);
+    let Some(deadline) = deadline else { return };
+    let token = state
+        .loop_handle
+        .insert_source(Timer::from_deadline(deadline), |_, _, state| {
+            state.displays.lease_timer = None;
+            reconcile(state);
+            arm_lease_timer(state);
+            TimeoutAction::Drop
+        })
+        .expect("Display1 lease deadline");
+    state.displays.lease_timer = Some(token);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn lid_requires_a_powered_enabled_external_and_compacts_the_rest() {
+    fn closed_lid_stays_inhibited_across_dpms_idle_and_wake() {
         let mut outputs = vec![
             model::tests::output("internal", true, 100, 100),
             model::tests::output("external", false, 200, 100),
         ];
         outputs[1].x = 100;
         let l = lid_layout(&outputs, "internal").unwrap();
-        assert_eq!(l.primary, "external");
-        assert!(!l.outputs.iter().find(|s| s.id == "internal").unwrap().enabled);
-        assert_eq!(l.outputs.iter().find(|s| s.id == "external").unwrap().x, 0);
-        outputs[1].powered = false;
-        assert!(lid_layout(&outputs, "internal").is_none());
-        outputs[1].powered = true;
+        for o in &mut outputs {
+            let setting = l.outputs.iter().find(|s| s.id == o.id).unwrap();
+            o.enabled = setting.enabled;
+            o.x = setting.x;
+            o.y = setting.y;
+        }
+        assert!(lid_inhibited(&outputs, true));
+        assert!(!outputs[0].enabled);
+        for o in &mut outputs {
+            o.powered = false;
+        }
+        // This is the same predicate used on an output event: DPMS must not restore lid_before.
+        assert!(lid_inhibited(&outputs, true));
+        assert!(!outputs[0].enabled);
+        for o in &mut outputs {
+            o.powered = true;
+        }
+        assert!(lid_inhibited(&outputs, true));
+        assert!(!outputs[0].enabled);
+        assert!(!lid_inhibited(&outputs, false));
         outputs[1].enabled = false;
+        assert!(!lid_inhibited(&outputs, true));
+    }
+    #[test]
+    fn lid_preserves_stacked_externals_and_only_compacts_a_disconnected_graph() {
+        let mut outputs = vec![
+            model::tests::output("internal", true, 100, 100),
+            model::tests::output("a", false, 100, 100),
+            model::tests::output("b", false, 100, 100),
+        ];
+        outputs[0].x = 100;
+        outputs[2].y = 100;
+        let l = lid_layout(&outputs, "internal").unwrap();
+        let a = l.outputs.iter().find(|s| s.id == "a").unwrap();
+        let b = l.outputs.iter().find(|s| s.id == "b").unwrap();
+        assert_eq!((b.x - a.x, b.y - a.y), (0, 100));
+        outputs[0].x = 0;
+        outputs[1].x = -100;
+        outputs[2].x = 100;
+        outputs[2].y = 0;
+        let l = lid_layout(&outputs, "internal").unwrap();
+        assert!(validate(l, &outputs).is_ok());
+        outputs[1].enabled = false;
+        outputs[2].enabled = false;
         assert!(lid_layout(&outputs, "internal").is_none());
-        assert!(lid_layout(&outputs[..1], "internal").is_none());
     }
     #[test]
     fn lease_waits_for_all_new_frames_then_allows_exactly_fifteen_seconds() {

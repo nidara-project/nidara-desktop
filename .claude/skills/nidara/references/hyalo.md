@@ -46,8 +46,15 @@ a UI timeout is not the recovery owner. Existing SetOutput/config reload paths v
 whole layout too. Manual compositor overrides win; conflicting edits fail explicitly.
 
 Power1 forwards a sequenced, owner-authenticated lid effect; it remains the sole lid/suspend
-policy owner. Hyalo inhibits the panel temporarily only with a usable external, restores on
-opening or provider loss, and never persists the closed-lid state. Docked counts connected
+policy owner. Its forwarder sends only on desired-state or Display1-owner changes, outside
+provider refresh. Hyalo inhibits the panel temporarily only with a connected enabled external;
+DPMS never withdraws that inhibition. External relative positions survive unless removing
+the panel disconnects their graph. Opening/provider loss restores the previous layout, and
+the temporary state is never persisted. A user-disabled external stays disabled. Display1
+reconciles on output/lock/VT events and uses a deadline timer only while a lease exists;
+neither inventory nor its D-Bus Changed worker polls. In Power1, firmware brightness-source
+metadata shares the provider refresh mutex: writing it outside that ordering domain lets
+an in-flight snapshot erase `LastChangeSource` before clients can observe it. Docked counts connected
 externals, including disabled ones. Identify is passive compositor content. This first cut
 has no mirror, brightness, Settings page or Super+P consumer; primary does not move the old
 TS bar/dock, and there is no TS bridge. Duplicate connector names across GPUs are refused.

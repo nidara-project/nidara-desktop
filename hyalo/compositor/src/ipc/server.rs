@@ -232,6 +232,7 @@ pub fn broadcast(state: &mut Hyalo, event: &Event) {
 
 pub fn outputs_changed(state: &mut Hyalo) {
     if crate::display::applying(state) { return; }
+    crate::display::changed(state);
     if state.ipc.subscribers.is_empty() {
         return;
     }
@@ -441,6 +442,7 @@ impl IpcState {
 impl Hyalo {
     /// `lock_changed` to every subscriber.
     pub fn ipc_broadcast_lock(&mut self, locked: bool) {
+        crate::display::changed(self);
         broadcast(self, &Event::LockChanged { locked });
     }
 }

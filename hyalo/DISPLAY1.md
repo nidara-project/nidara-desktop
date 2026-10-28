@@ -5,7 +5,8 @@
 `compositor/src/display/model.rs`; introspection is the wire signature source.
 Methods returning records expose their fields as D-Bus output arguments. Clients
 must subscribe to `Changed(epoch, revision)` before reading `GetState` and reread
-the whole snapshot. Signals may coalesce intermediate revisions.
+the whole snapshot. Signals may coalesce intermediate revisions. The signal worker blocks on a change channel;
+it has no polling clock.
 
 This is the first Displays cut of #959. It implements extended layouts, output
 configuration, primary publication, transactions, profiles, Identify and the
@@ -56,7 +57,10 @@ only; this cut adds no user-facing translated text.
 
 D-Bus methods send typed commands to calloop. No D-Bus method mutates the scene
 from its worker. The disk worker owns durable profile I/O. Discovery reads EDID
-at connector events, not on every frame. A transaction prepares all target
+at connector events, not on every frame. Inventory reconciliation is scheduled by
+output/connector, lock and VT events. A single timer exists only while a preview
+is waiting for activation or confirmation, at its exact deadline. With no lease
+or external event there is no Display1 timer wakeup. A transaction prepares all target
 configs, enables destinations before disabling origins, and verifies observed
 mode/enabled state. The backend may change one GPU before another fails; this
 is recovery across GPUs, not a promise of atomic KMS across devices.
@@ -79,7 +83,7 @@ Confirm received before expiry reserves the transaction while the disk worker
 finishes the explicit confirmation. Concurrent mutations/cancel return Busy;
 client departure after that accepted Confirm does not undo a successful save.
 No new unconfirmed preview is saved. A failed save leaves the original token and
-deadline armed (if already expired, the next recovery tick reverts it). The worker
+deadline armed (if already expired, completion immediately reverts it). The worker
 uses an exclusive 0600 temporary file, file sync, rename and parent-directory sync;
 only a successful save disarms the preview. On compositor restart, the confirmed
 profile is loaded; pending preview tokens and temporary files are never replayed.
@@ -120,15 +124,33 @@ GPUs use the same layout machinery; physical coverage remains separate below.
 ## Lid policy
 
 Power1 remains the only lid/suspend/inhibitor policy owner. Its existing provider
-refresh sends the sequenced lid effect, including false when state is unknown or
-the session is inactive. Hyalo applies it only in a real active session, never in
-a nested compositor. It disables internal panels only when an enabled powered
-external exists, compacts the remaining desktop and chooses an external primary.
-Opening restores the previous layout. Losing the external/topology reconciles a
+refresh updates the desired lid effect, including false when state is unknown or
+the session is inactive. The forwarder sends only when that value changes, and
+replays the latest value when the bus owner of Display1 changes. A single task
+coalesces in-flight updates and uses a bounded direct D-Bus call to the unique
+owner, without property proxies; it does not await Hyalo from Power1 refresh.
+Failures do not retry on unrelated refreshes. Firmware keyboard-brightness source
+metadata is serialized with provider snapshots as well: a refresh must not replace
+a just-received source with its older copy.
+
+Hyalo applies the effect only in a real active session, never in a nested
+compositor. It disables internal panels only when a connected enabled external
+exists. DPMS is independent: inactivity may power every configured output off,
+without restoring the closed panel or changing the layout. The remaining external
+positions retain their relative arrangement and are translated to the origin.
+Only a graph disconnected by removing the internal panel is compacted into a row.
+An external primary is chosen. Opening restores the previous layout. Losing the external/topology reconciles a
 safe connected configuration; losing the Power1 bus owner withdraws the effect.
 The temporary panel state is never persisted. Docked reflects connected external
 outputs, including disabled ones, so panel inhibition cannot feed back into Docked.
 No new logind listener or suspend action is introduced.
+
+An external explicitly disabled by the user is kept disabled: lid closure does
+not implicitly enable it. With no enabled external, Display1 leaves the internal
+configuration alone and Power1/logind retain their existing lid/suspend policy.
+That can leave no visible screen with the physical lid closed; automatically
+using a disabled external would be a separate policy decision, not an implicit
+preference override in this cut.
 
 ## Evidence and limits
 

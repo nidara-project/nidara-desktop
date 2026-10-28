@@ -115,7 +115,7 @@ impl Display {
         self.request(header, Command::Identify { epoch, revision }).map(|_| ())
     }
 }
-pub fn serve(tx: Sender<Event>, snapshot: Arc<Mutex<Snapshot>>) {
+pub fn serve(tx: Sender<Event>, snapshot: Arc<Mutex<Snapshot>>, signals: mpsc::Receiver<()>) {
     let display = Display {
         tx: tx.clone(),
         snapshot: snapshot.clone(),
@@ -134,7 +134,7 @@ pub fn serve(tx: Sender<Event>, snapshot: Arc<Mutex<Snapshot>>) {
     let signal_conn = connection.clone();
     std::thread::spawn(move || {
         let mut last = 0;
-        loop {
+        while signals.recv().is_ok() {
             let (epoch, revision) = {
                 let s = snapshot.lock().unwrap();
                 (s.epoch, s.revision)
@@ -154,7 +154,6 @@ pub fn serve(tx: Sender<Event>, snapshot: Arc<Mutex<Snapshot>>) {
                 }
                 last = revision;
             }
-            std::thread::sleep(Duration::from_millis(50));
         }
     });
     let Ok(proxy) = zbus::blocking::fdo::DBusProxy::new(&connection) else {

@@ -269,24 +269,42 @@ impl TtyBackend {
                 v.push((Some(s), &s.connector));
             }
             // Include connected connectors with no assigned CRTC or failed setup as well.
-            for info in d.scanner.connectors().values().filter(|c|c.state()==connector::State::Connected) {
-                if !d.surfaces.values().any(|s|s.connector.handle()==info.handle()) {v.push((None,info));}
+            for info in d
+                .scanner
+                .connectors()
+                .values()
+                .filter(|c| c.state() == connector::State::Connected)
+            {
+                if !d.surfaces.values().any(|s| s.connector.handle() == info.handle()) {
+                    v.push((None, info));
+                }
             }
         }
         v
     }
 
     pub fn display_redraw(&mut self) {
-        for d in self.devices.values_mut(){for s in d.surfaces.values_mut(){s.drm_output.reset_buffers();}}
+        for d in self.devices.values_mut() {
+            for s in d.surfaces.values_mut() {
+                s.drm_output.reset_buffers();
+            }
+        }
     }
 
-    pub fn session_active(&self) -> bool { self.session.is_active() }
+    pub fn session_active(&self) -> bool {
+        self.session.is_active()
+    }
 
     pub fn display_identity(&self, connector: &connector::Info) -> crate::display::Identity {
-        self.devices.values().find_map(|d| {
-            let belongs = d.scanner.connectors().get(&connector.handle())==Some(connector);
-            belongs.then(|| d.identities.get(&connector.handle()).cloned()).flatten()
-        }).unwrap_or_default()
+        self.devices
+            .values()
+            .find_map(|d| {
+                let belongs = d.scanner.connectors().get(&connector.handle()) == Some(connector);
+                belongs
+                    .then(|| d.identities.get(&connector.handle()).cloned())
+                    .flatten()
+            })
+            .unwrap_or_default()
     }
 
     /// Does `output` put frames on screen now: powered, and this session on the active VT?
@@ -395,6 +413,7 @@ pub fn init(state: &mut Hyalo) -> Result<(), Box<dyn std::error::Error>> {
             for d in tty.devices.values_mut() {
                 d.drm_output_manager.pause();
             }
+            crate::display::changed(state);
         }
         SessionEvent::ActivateSession => {
             tracing::info!("session resumed");
@@ -413,6 +432,7 @@ pub fn init(state: &mut Hyalo) -> Result<(), Box<dyn std::error::Error>> {
             }
             // Another session had the screens: the night light's ramps are ours to put back.
             let _ = tty.apply_gamma();
+            crate::display::changed(state);
             state.queue_redraw(None);
         }
     })?;
@@ -575,7 +595,9 @@ fn device_added(state: &mut Hyalo, node: DrmNode, path: &Path) -> Result<(), Str
 /// Rescans a GPU's connectors: monitors plugged, unplugged, or whose modes changed.
 pub fn device_changed(state: &mut Hyalo, node: DrmNode) {
     let Backend::Tty(tty) = &mut state.backend else { return };
-    let Some(device) = tty.devices.get_mut(&node) else { return };
+    let Some(device) = tty.devices.get_mut(&node) else {
+        return;
+    };
     let events = match device.scanner.scan_connectors(device.drm_output_manager.device()) {
         Ok(r) => r.into_iter().collect::<Vec<_>>(),
         Err(err) => {
@@ -589,10 +611,10 @@ pub fn device_changed(state: &mut Hyalo, node: DrmNode) {
             DrmScanEvent::Disconnected { connector, crtc: Some(crtc) } => connector_disconnected(state, node, connector, crtc),
             DrmScanEvent::Changed { connector, crtc: Some(crtc) } => connector_changed(state, node, connector, crtc),
             DrmScanEvent::Connected { connector, crtc: None } | DrmScanEvent::Changed { connector, crtc: None } => {
-                let Backend::Tty(tty)=&mut state.backend else{return};
-                if let Some(device)=tty.devices.get_mut(&node){
-                    let identity=discover_identity(device.drm_output_manager.device(),&connector,node);
-                    device.identities.insert(connector.handle(),identity);
+                let Backend::Tty(tty) = &mut state.backend else { return };
+                if let Some(device) = tty.devices.get_mut(&node) {
+                    let identity = discover_identity(device.drm_output_manager.device(), &connector, node);
+                    device.identities.insert(connector.handle(), identity);
                 }
             }
             _ => {}
@@ -865,13 +887,20 @@ fn connector_disconnected(state: &mut Hyalo, node: DrmNode, connector: connector
 /// the connector waits in `disabled` to be switched back on.
 pub fn disable_output(state: &mut Hyalo, output: &Output) -> Result<(), String> {
     let id = *output.user_data().get::<OutputId>().ok_or("no such output")?;
-    let Backend::Tty(tty) = &mut state.backend else { return Err("not on hardware".into()) };
+    let Backend::Tty(tty) = &mut state.backend else {
+        return Err("not on hardware".into());
+    };
     let device = tty.devices.get_mut(&id.node).ok_or("no such GPU")?;
     let surface = device.surfaces.get(&id.crtc).ok_or("no such output")?;
-    surface.drm_output.with_compositor(|c| c.clear()).map_err(|e|format!("could not switch the CRTC off: {e}"))?;
+    surface
+        .drm_output
+        .with_compositor(|c| c.clear())
+        .map_err(|e| format!("could not switch the CRTC off: {e}"))?;
     let connector = surface.connector.clone();
     connector_disconnected(state, id.node, connector.clone(), id.crtc);
-    let Backend::Tty(tty) = &mut state.backend else { unreachable!() };
+    let Backend::Tty(tty) = &mut state.backend else {
+        unreachable!()
+    };
     if let Some(device) = tty.devices.get_mut(&id.node) {
         device.disabled.insert(connector.handle(), (connector, id.crtc));
     }
@@ -1035,9 +1064,9 @@ fn surface_feedback(
 /// and its closing without a hook in each. Only where the monitor takes it without a modeset
 /// (`VrrSupport::Supported`): one that needs a modeset would go black each time a game comes
 /// and goes, so there it stays off.
-fn vrr_for_games(surface: &mut Surface, vrr: Option<crate::config::Vrr>, game: bool) {
+fn vrr_for_games(surface: &mut Surface, vrr: Option<crate::config::Vrr>, game: bool) -> bool {
     if vrr != Some(crate::config::Vrr::Games) {
-        return;
+        return false;
     }
     let conn = surface.connector.handle();
     let name = surface.output.name();
@@ -1046,11 +1075,15 @@ fn vrr_for_games(surface: &mut Surface, vrr: Option<crate::config::Vrr>, game: b
         let want = game && matches!(c.vrr_supported(conn), Ok(VrrSupport::Supported));
         if want != c.vrr_enabled() {
             match c.use_vrr(want) {
-                Ok(()) => tracing::info!(output = %name, on = want, "VRR for a fullscreen game"),
+                Ok(()) => {
+                    tracing::info!(output = %name, on = want, "VRR for a fullscreen game");
+                    return true;
+                }
                 Err(err) => tracing::warn!(output = %name, ?err, "VRR not switched"),
             }
         }
-    });
+        false
+    })
 }
 
 /// Draws every output whose redraw is queued.
@@ -1068,6 +1101,7 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
+    let display_events=state.loop_handle.clone();
     let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config, idle, .. } = state;
     let cursor_status = &*cursor_status;
     let Backend::Tty(tty) = backend else { return };
@@ -1083,7 +1117,9 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         return;
     }
     let output = surface.output.clone();
-    vrr_for_games(surface, config.outputs.get(&output.name()).map(|c| c.vrr), wm.game_fullscreen_on(&output.name()));
+    if vrr_for_games(surface, config.outputs.get(&output.name()).map(|c| c.vrr), wm.game_fullscreen_on(&output.name())) {
+        display_events.insert_idle(crate::display::changed);
+    }
     // Hyalo's own animations are drawn as they are when this frame shows: the next vblank, on
     // the beat of the last one — unless VRR leaves no beat (render/timing.rs).
     let begun = Instant::now();

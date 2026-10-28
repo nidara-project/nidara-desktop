@@ -802,7 +802,7 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
     drop(guard);
     arm_inputs(p).await;
     lid_changes(p).await;
-    display_lid_effect(p).await;
+    display_lid_effect(p);
     peripheral_alerts(p).await;
     p.effects(effects).await;
     Ok(())
@@ -864,7 +864,7 @@ pub(super) async fn arm_inputs(p: &Power) {
     let _ = bus::publish(p, state.objects, root).await;
 }
 // Display topology stays in Hyalo; Power1 remains the sole owner of lid policy.
-async fn display_lid_effect(p: &Power) {
+fn display_lid_effect(p: &Power) {
     if p.read_only {
         return;
     }
@@ -876,19 +876,7 @@ async fn display_lid_effect(p: &Power) {
             && state.hyalo["session"].as_bool().unwrap_or(false)
             && !state.hyalo["nested"].as_bool().unwrap_or(true)
     };
-    let sequence = p.serial.fetch_add(1, Ordering::Relaxed);
-    if let Ok(proxy) = Proxy::new(
-        &p.conn,
-        "org.nidara.Display",
-        "/org/nidara/Display",
-        "org.nidara.Display1",
-    )
-    .await
-    {
-        // Missing Display1 in an older compositor is a capability absence, not a user alert.
-        let _: Result<(), _> =
-            bounded(proxy.call("SetLidState", &(p.epoch, sequence, closed))).await;
-    }
+    super::display::update(p, closed);
 }
 
 async fn lid_changes(p: &Power) {
@@ -965,6 +953,7 @@ pub async fn watch(p: Power) -> zbus::Result<oneshot::Receiver<()>> {
     let (ready_tx, ready_rx) = oneshot::channel();
     let session = zbus::fdo::DBusProxy::new(&p.conn).await?;
     let mut owners = session.receive_name_owner_changed().await?;
+    super::display::watch(&p).await?;
     let local = p.clone();
     tokio::spawn(async move {
         while let Some(event) = owners.next().await {
@@ -1214,6 +1203,18 @@ pub async fn watch(p: Power) -> zbus::Result<oneshot::Receiver<()>> {
                     && let Ok((value, source)) = msg.body().deserialize::<(i32, String)>()
                     && let Some(raw) = header.path()
                 {
+                    // Keep source metadata in the same ordering domain as refresh snapshots.
+                    // Otherwise an in-flight refresh can overwrite the source with its older copy.
+                    let source_guard = p.updates.lock().await;
+                    if p.state
+                        .read()
+                        .unwrap()
+                        .providers
+                        .get("upower")
+                        .is_none_or(|p| p.owner != sender)
+                    {
+                        continue;
+                    }
                     let keys = {
                         let mut state = p.state.write().unwrap();
                         state
@@ -1238,6 +1239,7 @@ pub async fn watch(p: Power) -> zbus::Result<oneshot::Receiver<()>> {
                             )
                             .await;
                     }
+                    drop(source_guard);
                 }
                 let _ = p.refresh().await;
             }
