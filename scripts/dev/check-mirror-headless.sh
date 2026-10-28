@@ -12,6 +12,13 @@ trap 'rm -rf "$runtime"' EXIT
 mkdir -m 700 "$out/config"
 export MIRROR_EVIDENCE="$out"
 export HYALO_CONTROL="$out/control"
+xdg_xml=$(pkg-config --variable=pkgdatadir wayland-protocols)/stable/xdg-shell/xdg-shell.xml
+wayland-scanner client-header "$xdg_xml" "$out/xdg-shell-client-protocol.h"
+wayland-scanner private-code "$xdg_xml" "$out/xdg-shell-protocol.c"
+cc -std=c11 -Wall -Wextra -Werror -I"$out" $(pkg-config --cflags wayland-client) \
+    "$repo/scripts/dev/mirror-frame-client.c" "$out/xdg-shell-protocol.c" \
+    $(pkg-config --libs wayland-client) -o "$out/mirror-frame-client"
+export MIRROR_FRAME_CLIENT="$out/mirror-frame-client"
 cargo build --locked --manifest-path "$repo/hyalo/Cargo.toml" -p nidara-hyalo >"$out/build.log" 2>&1
 probe=${CARGO_TARGET_DIR:-$repo/hyalo/target}/debug/nidara-hyalo
 env -u DISPLAY XDG_RUNTIME_DIR="$runtime" XDG_CONFIG_HOME="$out/config" \

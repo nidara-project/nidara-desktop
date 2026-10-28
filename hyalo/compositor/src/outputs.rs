@@ -134,9 +134,8 @@ pub fn set_power(state: &mut Hyalo, name: Option<&str>, on: bool) -> Result<(), 
     for o in &outputs {
         tty.set_power(o, on);
     }
-    if on {
-        state.queue_redraw(None);
-    }
+    // A source going dark transfers the scene clock to one powered follower.
+    state.queue_redraw(None);
     crate::display::changed(state);
     Ok(())
 }

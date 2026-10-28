@@ -456,13 +456,30 @@ pub fn post_repaint(
     feedback: Option<&SurfaceDmabufFeedback>,
 ) {
     if let Some(source) = crate::mirror::source(output) {
-        if let Some(logical) = crate::render::mirror::states(output) {
-            post_repaint(state, &source, &logical, None);
+        if crate::mirror::drives_scene(state, output)
+            && crate::render::mirror::ok(output)
+            && let Some(logical) = crate::render::mirror::states(output)
+        {
+            post_logical_repaint(state, &source, &logical, None);
         }
         state.complete_screencopy(output);
         state.complete_capture_output(output);
         return;
     }
+    if crate::mirror::drives_scene(state, output) {
+        post_logical_repaint(state, output, states, feedback);
+    } else {
+        state.complete_screencopy(output);
+        state.complete_capture_output(output);
+    }
+}
+
+fn post_logical_repaint(
+    state: &mut Hyalo,
+    output: &Output,
+    states: &RenderElementStates,
+    feedback: Option<&SurfaceDmabufFeedback>,
+) {
     if crate::render::glass_gl::take_ink_issued() {
         arm_ink_poll(state);
     }

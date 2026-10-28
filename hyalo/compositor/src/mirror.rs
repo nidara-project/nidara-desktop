@@ -25,6 +25,24 @@ pub fn scene(output: &Output) -> Output {
 pub fn follower(output: &Output) -> bool {
     source(output).is_some()
 }
+/// Exactly one powered scanout clocks a logical scene. DPMS of the source elects one
+/// stable follower; VT inactivity elects none. Render errors do not change ownership.
+fn driver(source_output: &Output, live: &[Output]) -> Option<Output> {
+    if live.contains(source_output) {
+        return Some(source_output.clone());
+    }
+    live.iter()
+        .filter(|o| source(o).as_ref() == Some(source_output))
+        .min_by_key(|o| o.name())
+        .cloned()
+}
+pub fn drives_scene(state: &Hyalo, output: &Output) -> bool {
+    let live: Vec<_> = crate::backend::physical_outputs(state)
+        .into_iter()
+        .filter(|o| state.backend.output_shows_frames(o))
+        .collect();
+    driver(&scene(output), &live).as_ref() == Some(output)
+}
 fn link(output: &Output, to: Option<Output>) {
     if source(output) != to {
         crate::render::mirror::reset(output);

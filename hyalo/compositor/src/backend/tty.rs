@@ -1200,6 +1200,12 @@ pub fn redraw_queued(state: &mut Hyalo) {
 }
 
 fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
+    let output = match &state.backend {
+        Backend::Tty(t) => t.devices.get(&node).and_then(|d| d.surfaces.get(&crtc)).map(|s| s.output.clone()),
+        _ => None,
+    };
+    let Some(output) = output else { return };
+    let drives_scene = crate::mirror::drives_scene(state, &output);
     let display_events=state.loop_handle.clone();
     let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config, idle, .. } = state;
     let cursor_status = &*cursor_status;
@@ -1262,6 +1268,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         pointer_here.then_some(&cursor),
     );
     let display_ready = crate::render::mirror::ok(&output);
+    let drives_scene = drives_scene && display_ready;
     let build = built.elapsed();
     // The cursor plane always; the primary plane for a fullscreen window's direct scan-out unless
     // `[render] direct_scanout = false` (read every frame: a change applies at once). No overlay
@@ -1302,13 +1309,13 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     };
     render::stats::frame_done(&name, rendered, build, render_time, damage.as_deref());
     let feedback = surface.dmabuf_feedback.clone();
-    let layer_frame = rendered
+    let layer_frame = (rendered && drives_scene)
         .then(|| crate::protocols::layers::presentation::sample(&scene, &source))
         .flatten();
     if rendered {
         let logical_states =
             crate::render::mirror::states(&output).unwrap_or_else(|| states.clone());
-        let presentation = super::take_presentation_feedback(state, &source, &logical_states);
+        let presentation = drives_scene.then(|| super::take_presentation_feedback(state, &source, &logical_states));
         let Backend::Tty(tty) = &mut state.backend else {
             return;
         };
@@ -1319,15 +1326,17 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         else {
             return;
         };
-        match surface.drm_output.queue_frame(Some(presentation)) {
+        match surface.drm_output.queue_frame(presentation) {
             Ok(()) => {
-                crate::protocols::layers::presentation::queued(&source, layer_frame);
+                if drives_scene {
+                    crate::protocols::layers::presentation::queued(&source, layer_frame);
+                }
                 surface.redraw = Redraw::WaitingForVBlank {
                     redraw_needed: false,
                 };
                 surface.in_flight = Some((begun, when));
                 surface.display_ready = display_ready;
-                surface.in_flight_scene = Some(source.clone());
+                surface.in_flight_scene = drives_scene.then(|| source.clone());
             }
             Err(err) => {
                 let err: SwapBuffersError = err.into();
@@ -1391,7 +1400,7 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     // next frames are predicted on, and how far this one's prediction landed (render/timing.rs).
     let in_flight = surface.in_flight.take();
     let display_ready = surface.display_ready;
-    let shown_scene = surface.in_flight_scene.take().unwrap_or_else(|| crate::mirror::scene(&output));
+    let shown_scene = surface.in_flight_scene.take();
     if timed {
         let ago = Duration::from(state.clock.now()).saturating_sub(Duration::from(clock));
         if let Some(shown) = Instant::now().checked_sub(ago) {
@@ -1404,10 +1413,12 @@ fn on_vblank(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle, metadata: &mu
     let seq = metadata.as_ref().map(|m| m.sequence).unwrap_or(0);
     let submitted = surface.drm_output.frame_submitted();
     let display_presented = submitted.is_ok();
-    if submitted.is_ok() {
-        crate::protocols::layers::presentation::presented(&shown_scene);
-    } else {
-        crate::protocols::layers::presentation::discard(&shown_scene);
+    if let Some(shown_scene) = shown_scene {
+        if submitted.is_ok() {
+            crate::protocols::layers::presentation::presented(&shown_scene);
+        } else {
+            crate::protocols::layers::presentation::discard(&shown_scene);
+        }
     }
     match submitted {
         Ok(Some(Some(mut feedback))) => {

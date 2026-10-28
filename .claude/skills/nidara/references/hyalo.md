@@ -61,7 +61,12 @@ scanouts but have no logical Space output/wl_output global/layer scene. `mirror.
 links and contain input mapping; `render/mirror.rs` retains source-pixel canvases with
 uniform scaling and black bands. Captures use that same projection. Do not enumerate
 Space for physical power, capture or lock acknowledgement: use backend::physical_outputs.
-Unlinking releases the cache; frame activation uses the composition result of the queued
+Only one scanout clocks each scene: source while powered, otherwise the first powered
+follower by connector name. Inactive VT elects none; render errors do not trigger election.
+Followers normally complete only their own captures: never recursively send source frames
+or consume its presentation/dmabuf feedback. DPMS queues a redraw to transfer ownership,
+and queued frames retain their owning scene. Same-context canvas commands need no CPU
+sync wait. Unlinking releases the cache; frame activation uses the composition result of the queued
 frame, not a later capture. Groups persist by identity and lid inhibition promotes a
 surviving external source. DRM preflight requires the primary GPU, VRR off and the aggregate
 texture budget documented in DISPLAY1.md. Nested winit does not advertise mirror. The

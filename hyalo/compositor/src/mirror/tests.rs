@@ -41,3 +41,37 @@ fn empty_viewports_fail_and_fractional_mapping_roundtrips() {
         }
     }
 }
+
+#[test]
+fn one_scene_clock_prefers_source_then_stable_powered_follower() {
+    use smithay::output::{PhysicalProperties, Subpixel};
+    let make = |name: &str| {
+        Output::new(
+            name.into(),
+            PhysicalProperties {
+                size: (0, 0).into(),
+                subpixel: Subpixel::Unknown,
+                make: String::new(),
+                model: String::new(),
+                serial_number: String::new(),
+            },
+        )
+    };
+    let source = make("source");
+    let a = make("a");
+    let b = make("b");
+    let unrelated = make("other");
+    link(&a, Some(source.clone()));
+    link(&b, Some(source.clone()));
+    assert_eq!(
+        driver(&source, &[b.clone(), source.clone(), a.clone()]),
+        Some(source.clone())
+    );
+    assert_eq!(
+        driver(&source, &[b.clone(), a.clone(), unrelated.clone()]),
+        Some(a)
+    );
+    assert_eq!(driver(&source, std::slice::from_ref(&b)), Some(b));
+    assert_eq!(driver(&source, &[]), None);
+    assert_eq!(driver(&source, &[unrelated]), None);
+}

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Local main-thread EGL probe; entered only through the explicit controlled dev command.
 use super::*;
+mod frames;
 use smithay::{
     output::{Mode, PhysicalProperties, Subpixel},
     utils::Transform,
@@ -247,6 +248,23 @@ pub fn run() {
             );
         }
         assert_eq!(std::fs::read_to_string(&clicks).unwrap(), "clicked\n");
+        // Relative virtual-pointer Motion uses this logical path; no physical follower
+        // rectangle exists to enter, even when the motion leaves the source's bounds.
+        state.pointer_moved_to(
+            state.pointer_motion_origin() + Point::from((5000.0, 0.0)),
+            InputTime::now(),
+        );
+        assert_eq!(state.space.outputs().count(), 1);
+        assert!(state.space.output_geometry(&target).is_none());
+        assert!(
+            state
+                .space
+                .output_geometry(&src)
+                .unwrap()
+                .to_f64()
+                .contains(pointer.current_location())
+        );
+        frames::run(&mut event_loop, &mut state, &src, &target, &out);
         assert!(crate::render::mirror::states(&target).is_some());
         link(&target, None);
         assert!(crate::render::mirror::states(&target).is_none());

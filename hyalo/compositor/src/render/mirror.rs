@@ -168,7 +168,8 @@ fn compose(
             .tracker
             .render_output(gles, &mut fb, 1, &elements, super::CLEAR_COLOR)
             .map_err(|e| format!("{e:?}"))?;
-        result.sync.wait().map_err(|e| format!("{e:?}"))?;
+        // Canvas rendering and subsequent sampling share this GlesRenderer/context.
+        // GL orders those commands; waiting for completion here would stall calloop.
         c.states = result.states;
         if result.damage.is_some() {
             let mut commit = c.picture.commit.get();

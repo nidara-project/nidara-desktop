@@ -82,6 +82,17 @@ the projected picture and black bands. Newly enumerated Wayland clients see logi
 sources only. Capture remains denied while locked; lock acknowledgement waits for
 all powered physical followers as well as logical outputs.
 
+Only the logical source normally sends frame callbacks, selects primary scanout/dmabuf
+feedback and owns presentation feedback. Follower repaint completes its own captures,
+without advancing the client's clock. If the source is DPMS-off, exactly one powered
+follower (connector-name order) takes over the logical scene clock, keeping the source
+as the logical output and using canvas states. Power changes queue redraws to transfer
+ownership. Restoring the source returns ownership immediately; an inactive VT has no
+clock. A rendering error does not elect another clock: normal recovery/error handling
+applies. Queueing records the owning scene with the frame; follower-only flips cannot
+consume source presentation feedback. The canvas and its sampling use the same GL
+context, so their commands are ordered without a CPU wait for GPU completion.
+
 This cut requires all group members on the primary rendering GPU, VRR `off` throughout
 the group, and at most 16,777,216 source pixels summed over follower canvases. Preview
 rejects unsupported GPU/texture combinations with Unsupported before modesetting;
@@ -227,3 +238,14 @@ bands, sampled scene pixels, mapped pointer focus, band presses and drag release
 It saves PNGs/logs under a fresh `target/mirror` evidence directory and has a bounded
 runtime. It is a local probe, not a CI job or physical KMS mirror acceptance. Headless
 hosting can use the machine's render GPU; no live output or installed session is used.
+
+The mirror runner also builds a disposable Wayland frame client with one outstanding
+wl_surface.frame request. One simulated second drives production post-repaint at 60 Hz
+source / 144 Hz follower, then 144 Hz / 60 Hz. It waits for each actual client request
+before the next opportunity and requires respectively 60 and 144 callbacks, never the
+sum. This is deterministic callback routing evidence, not a physical refresh benchmark.
+A temporary local control reintroducing follower callback delivery fails with 204
+callbacks instead of 60, proving the counter rejects the original duplication.
+It saves frame-callbacks.txt. Source-first/DPMS takeover/VT-none election is unit-tested;
+physical DPMS takeover and KMS presentation remain separate acceptance. The relative
+virtual-pointer motion path is checked to remain inside the source's logical geometry.
