@@ -253,6 +253,7 @@ fn hardware_snapshot(state: &Hyalo) -> hardware::Snapshot {
                 .or_insert(Some(tty.display_identity(c)));
         }
     }
+    let layout = current_layout(state);
     hardware::Snapshot {
         epoch: state.displays.epoch,
         revision: state.displays.revision,
@@ -262,7 +263,7 @@ fn hardware_snapshot(state: &Hyalo) -> hardware::Snapshot {
             .iter()
             .map(|o| {
                 let identity = identities.get(&o.connector).and_then(|i| i.as_ref()).cloned().unwrap_or_default();
-                let size = current_layout(state)
+                let size = layout
                     .outputs
                     .iter()
                     .find(|s| s.id == o.id)
@@ -281,6 +282,7 @@ fn hardware_snapshot(state: &Hyalo) -> hardware::Snapshot {
                     y: o.y,
                     width: size.0,
                     height: size.1,
+                    powered: o.powered,
                 }
             })
             .collect(),

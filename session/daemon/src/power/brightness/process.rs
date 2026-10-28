@@ -6,7 +6,15 @@ use tokio::{io::AsyncReadExt, sync::watch};
 pub async fn run(
     executable: &Path,
     args: &[String],
+    cancel: watch::Receiver<bool>,
+) -> Result<String, Error> {
+    run_with_timeout(executable, args, cancel, Duration::from_secs(2)).await
+}
+pub async fn run_with_timeout(
+    executable: &Path,
+    args: &[String],
     mut cancel: watch::Receiver<bool>,
+    budget: Duration,
 ) -> Result<String, Error> {
     if *cancel.borrow() {
         return Err(Error::Stale("channel withdrawn".into()));
@@ -42,7 +50,7 @@ pub async fn run(
         }
         String::from_utf8(out).map_err(|_| Error::Unavailable("invalid DDC output".into()))
     };
-    let result = tokio::select! {r=io=>r,_=tokio::time::sleep(Duration::from_secs(2))=>Err(Error::Unavailable("DDC deadline".into())),_=cancel.changed()=>Err(Error::Stale("channel withdrawn".into()))};
+    let result = tokio::select! {r=io=>r,_=tokio::time::sleep(budget)=>Err(Error::Unavailable("DDC deadline".into())),_=cancel.changed()=>Err(Error::Stale("channel withdrawn".into()))};
     if result.is_err() {
         let _ = child.kill().await;
         let _ = child.wait().await;

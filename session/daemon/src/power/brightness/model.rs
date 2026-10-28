@@ -44,3 +44,35 @@ pub fn vcp(text: &str) -> Option<(u32, u32)> {
     let max = fields[4].parse().ok()?;
     (max > 0 && value <= max && max <= 65535).then_some((value, max))
 }
+
+/// A finite read-only recovery budget. Healthy channels have no deadline.
+#[derive(Clone, Debug, Default)]
+pub struct Recovery {
+    next: usize,
+    due: Option<std::time::Instant>,
+}
+impl Recovery {
+    pub fn failed(&mut self, now: std::time::Instant) {
+        const DELAYS: [u64; 3] = [2, 10, 60];
+        if self.due.is_none()
+            && let Some(seconds) = DELAYS.get(self.next)
+        {
+            self.due = Some(now + std::time::Duration::from_secs(*seconds));
+            self.next += 1;
+        }
+    }
+    pub fn recovered(&mut self) {
+        *self = Self::default();
+    }
+    pub fn deadline(&self) -> Option<std::time::Instant> {
+        self.due
+    }
+    pub fn take_due(&mut self, now: std::time::Instant) -> bool {
+        if self.due.is_some_and(|d| d <= now) {
+            self.due = None;
+            true
+        } else {
+            false
+        }
+    }
+}

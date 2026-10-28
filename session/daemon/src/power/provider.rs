@@ -951,6 +951,23 @@ async fn lid_changes(p: &Power) {
         });
     }
 }
+/// Reuse the authenticated provider stream; brightness adds no logind listener/policy.
+pub(super) fn brightness_resume(p: &Power, message: &zbus::Message) -> bool {
+    let header = message.header();
+    let sender = header.sender().map(|s| s.as_str()).unwrap_or("");
+    let logind = p.state.read().unwrap().providers.get("logind")
+        .is_some_and(|p| p.owner == sender);
+    let wake = logind
+        && message.message_type() == zbus::message::Type::Signal
+        && header.path().is_some_and(|v| v.as_str() == LOGIN_PATH)
+        && header.interface().is_some_and(|v| v.as_str() == LOGIN)
+        && header.member().is_some_and(|v| v.as_str() == "PrepareForSleep")
+        && message.body().deserialize::<(bool,)>().is_ok_and(|(sleeping,)| !sleeping);
+    if wake {
+        p.brightness_wake.notify_one();
+    }
+    wake
+}
 pub async fn watch(p: Power) -> zbus::Result<oneshot::Receiver<()>> {
     let (ready_tx, ready_rx) = oneshot::channel();
     let session = zbus::fdo::DBusProxy::new(&p.conn).await?;
@@ -1135,6 +1152,7 @@ pub async fn watch(p: Power) -> zbus::Result<oneshot::Receiver<()>> {
                 if !ours && !names {
                     continue;
                 }
+                brightness_resume(&p, &msg);
                 let ppd_sender = p
                     .state
                     .read()

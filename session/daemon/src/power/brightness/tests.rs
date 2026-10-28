@@ -26,6 +26,29 @@ fn ranges_steps_and_ddc_parser_are_strict() {
         assert_eq!(model::vcp(text), None);
     }
 }
+#[test]
+fn recovery_is_finite_read_only_and_resets_after_success() {
+    let mut recovery = model::Recovery::default();
+    let mut now = Instant::now();
+    assert!(recovery.deadline().is_none());
+    for delay in [2, 10, 60] {
+        recovery.failed(now);
+        let due = now + Duration::from_secs(delay);
+        assert_eq!(recovery.deadline(), Some(due));
+        recovery.failed(now + Duration::from_millis(1));
+        assert_eq!(recovery.deadline(), Some(due));
+        assert!(!recovery.take_due(due - Duration::from_nanos(1)));
+        assert!(recovery.take_due(due));
+        assert!(!recovery.take_due(due));
+        now = due;
+    }
+    recovery.failed(now);
+    assert!(recovery.deadline().is_none());
+    recovery.recovered();
+    assert!(recovery.deadline().is_none());
+    recovery.failed(now);
+    assert_eq!(recovery.deadline(), Some(now + Duration::from_secs(2)));
+}
 static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Tree {
     root: PathBuf,
@@ -80,6 +103,7 @@ impl Tree {
                 y: 0,
                 width: 100,
                 height: 100,
+                powered: true,
             });
         }
         let panel = gpu.join("backlight/panel");
@@ -112,10 +136,17 @@ if mode=='hang':
     time.sleep(30)
 if mode=='fail':sys.exit(1)
 if a[2:]==['--terse','getvcp','10']:
+    with (root/'ddc-reads').open('a') as f:f.write(str(time.monotonic_ns())+'\n')
+    if (root/'ddc-pending').exists():
+        value,at=(root/'ddc-pending').read_text().split()
+        if time.monotonic()>=float(at):
+            (root/'ddc-value').write_text(value)
+            (root/'ddc-pending').unlink()
     print('VCP 10 C', (root/'ddc-value').read_text(),100)
 elif len(a)==6 and a[2:5]==['--noverify','setvcp','10']:
     with (root/'ddc-writes').open('a') as f:f.write(str(time.monotonic_ns())+' '+a[5]+'\n')
-    if mode!='mismatch':(root/'ddc-value').write_text(a[5])
+    if mode=='delayed':(root/'ddc-pending').write_text(a[5]+' '+str(time.monotonic()+0.25))
+    elif mode!='mismatch':(root/'ddc-value').write_text(a[5])
 else:sys.exit(2)
 "#,
             root.to_string_lossy()
@@ -148,6 +179,13 @@ fn associations_require_exact_gpu_port_edid_and_unique_channel() {
     for link in &links {
         discovery::verify(link).unwrap();
     }
+    let node = tree.paths.dev.join("i2c-7");
+    fs::remove_file(&node).unwrap();
+    let pending = discovery::discover(&tree.paths, &tree.hardware.outputs);
+    assert_eq!(pending.len(), 2);
+    assert!(discovery::verify(pending.iter().find(|l| !l.output.internal).unwrap()).is_err());
+    fs::write(&node, "").unwrap();
+    discovery::verify(pending.iter().find(|l| !l.output.internal).unwrap()).unwrap();
     fs::write(tree.external.join("edid"), "replacement").unwrap();
     assert!(discovery::verify(links.iter().find(|l| !l.output.internal).unwrap()).is_err());
     assert_eq!(
@@ -241,7 +279,49 @@ async fn run() {
         );
         s.root = serde_json::json!({"SessionActive":true,"SessionPath":"/session/one"});
     }
+    fs::write(tree.root.join("ddc-mode"), "fail").unwrap();
     let service = start(power.clone(), tree.paths.clone()).await.unwrap();
+    service.refresh(false).await.unwrap();
+    until(|| {
+        let state = service.state.lock().unwrap();
+        state
+            .entries
+            .values()
+            .any(|e| e.device.provider == "ddc" && !e.probing && e.recovery.deadline().is_some())
+    })
+    .await;
+    fs::write(tree.root.join("ddc-mode"), "normal").unwrap();
+    until(|| {
+        service
+            .snapshot()
+            .devices
+            .iter()
+            .filter(|d| d.available)
+            .count()
+            == 2
+    })
+    .await;
+    assert!(!tree.root.join("ddc-writes").exists());
+    // Healthy DDC has no timer; recovery after the initial failure issued reads only.
+    assert!(service.next_recovery().is_none());
+    let old_ids: Vec<_> = service
+        .snapshot()
+        .devices
+        .iter()
+        .map(|d| d.id.clone())
+        .collect();
+    hardware.lock().unwrap().outputs[1].powered = false;
+    service.refresh(false).await.unwrap();
+    assert!(
+        !service
+            .snapshot()
+            .devices
+            .iter()
+            .find(|d| d.provider == "ddc")
+            .unwrap()
+            .writable
+    );
+    hardware.lock().unwrap().outputs[1].powered = true;
     service.refresh(false).await.unwrap();
     until(|| {
         service
@@ -253,6 +333,53 @@ async fn run() {
             == 2
     })
     .await;
+    assert!(
+        service
+            .snapshot()
+            .devices
+            .iter()
+            .all(|d| !old_ids.contains(&d.id))
+    );
+    assert!(!tree.root.join("ddc-writes").exists());
+    // Only an authenticated PrepareForSleep(false) wakes the existing service.
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .interface("org.freedesktop.login1.Manager")
+        .unwrap()
+        .member("PrepareForSleep")
+        .unwrap()
+        .build();
+    let mut signals = zbus::MessageStream::for_match_rule(rule, &conn, Some(8))
+        .await
+        .unwrap();
+    for (emitter, sleeping, path, accepted) in [
+        (&conn, false, "/org/freedesktop/login1", false),
+        (&provider, true, "/org/freedesktop/login1", false),
+        (&provider, false, "/wrong", false),
+        (&provider, false, "/org/freedesktop/login1", true),
+    ] {
+        let old = service.snapshot().devices[0].id.clone();
+        emitter
+            .emit_signal(
+                None::<&str>,
+                path,
+                "org.freedesktop.login1.Manager",
+                "PrepareForSleep",
+                &(sleeping,),
+            )
+            .await
+            .unwrap();
+        let message = signals.next().await.unwrap().unwrap();
+        assert_eq!(provider::brightness_resume(&power, &message), accepted);
+        if accepted {
+            until(|| {
+                let snap = service.snapshot();
+                snap.devices.len() == 2 && snap.devices.iter().all(|d| d.available && d.id != old)
+            })
+            .await;
+        }
+    }
+    assert!(!tree.root.join("ddc-writes").exists());
     let client = Connection::session().await.unwrap();
     let proxy = zbus::Proxy::new(&client, "org.nidara.Session", ROOT, IFACE)
         .await
@@ -388,11 +515,30 @@ async fn run() {
             "write issues exceeded 4/s across callers or epochs"
         );
     }
+    fs::write(tree.root.join("ddc-mode"), "delayed").unwrap();
+    fs::write(tree.root.join("ddc-reads"), "").unwrap();
     let observed: Device = proxy
         .call("SetBrightness", &(&ddc.id, ddc.epoch, 77u32))
         .await
         .unwrap();
     assert_eq!(observed.current, 77);
+    let reads: Vec<u64> = fs::read_to_string(tree.root.join("ddc-reads"))
+        .unwrap()
+        .lines()
+        .map(|line| line.parse().unwrap())
+        .collect();
+    assert!(reads.len() >= 2);
+    for pair in reads.windows(2) {
+        assert!(pair[1] - pair[0] >= 100_000_000);
+    }
+    assert_eq!(
+        fs::read_to_string(tree.root.join("ddc-writes"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    fs::write(tree.root.join("ddc-mode"), "normal").unwrap();
     assert_eq!(
         fs::read_to_string(tree.root.join("ddc-value")).unwrap(),
         "77"
@@ -490,6 +636,23 @@ async fn run() {
             .find(|d| d.id == ddc2.id)
             .unwrap()
             .available
+    );
+    let writes = fs::read_to_string(tree.root.join("ddc-writes")).unwrap();
+    until(|| {
+        service
+            .snapshot()
+            .devices
+            .iter()
+            .any(|d| d.provider == "ddc" && d.available && d.epoch != ddc2.epoch)
+    })
+    .await;
+    assert_eq!(
+        fs::read_to_string(tree.root.join("ddc-writes")).unwrap(),
+        writes
+    );
+    assert_eq!(
+        fs::read_to_string(tree.root.join("ddc-value")).unwrap(),
+        "77"
     );
     let panel2 = replacement
         .devices

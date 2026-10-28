@@ -279,6 +279,7 @@ pub(super) fn power(conn: &Connection, system: &Connection, read_only: bool) -> 
         menu_wait: Default::default(),
         display_lid: Default::default(),
         brightness_notify: Default::default(),
+        brightness_wake: Default::default(),
     }
 }
 async fn display_forwarding_run() {

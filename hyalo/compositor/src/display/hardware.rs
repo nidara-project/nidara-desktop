@@ -16,6 +16,7 @@ pub struct Output {
     pub y: i32,
     pub width: i32,
     pub height: i32,
+    pub powered: bool,
 }
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct Snapshot {

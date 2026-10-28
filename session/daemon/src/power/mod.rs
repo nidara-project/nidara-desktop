@@ -130,6 +130,7 @@ struct Power {
     menu_wait: Arc<Mutex<PendingMenus>>,
     display_lid: Arc<std::sync::Mutex<display::Forwarder>>,
     brightness_notify: Arc<tokio::sync::Notify>,
+    brightness_wake: Arc<tokio::sync::Notify>,
 }
 impl Power {
     fn object(&self, p: &str) -> Result<Object, Error> {
@@ -921,6 +922,7 @@ pub async fn serve(conn: &Connection, read_only: bool) -> zbus::Result<()> {
         menu_wait: Default::default(),
         display_lid: Default::default(),
         brightness_notify: Default::default(),
+        brightness_wake: Default::default(),
     };
     power.state.write().unwrap().root =
         json!({"State":"Unavailable","Generation":power.epoch,"LastError":"","Capabilities":[]});

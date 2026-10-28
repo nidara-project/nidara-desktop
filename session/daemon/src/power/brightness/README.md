@@ -51,7 +51,7 @@ backlight changes update observations without an echo write.
 Hyalo adds `Display1.GetHardwareState()`, without changing GetState's existing
 wire records. Its independent snapshot has epoch/revision and output records:
 id, identity, connector, canonical GPU port, EDID fingerprint, internal/enabled,
-logical flag and logical geometry. It uses connector-event discovery already
+logical flag, logical geometry and powered state. It uses connector-event discovery already
 cached by the compositor; no sysfs brightness or DDC I/O runs on calloop. The
 shared `hyalo/compositor/src/display/hardware.rs` defines this additive wire model.
 Mirror followers are physical records with logical=false; pointer selection cannot
@@ -69,11 +69,14 @@ when available; panel observations are polled once per second, without writes.
 For an external output, use only its sysfs `ddc` I2C link and an accessible read/write
 `/dev/i2c-N`. Opening checks permission but sends no transaction. A successful VCP
 0x10 continuous read establishes the range before publishing availability. There is
-no broad `ddcutil detect` scan. Commands have fixed arguments, decimal bus/value and
+no broad `ddcutil detect` scan. A connector without a sysfs `ddc` route is
+unsupported, including MST/dock or proprietary NVIDIA configurations that do not
+expose that route; no alternative bus is guessed. Commands have fixed arguments, decimal bus/value and
 VCP 10, C locale, no shell or persistence command:
 
 - `ddcutil --bus N --terse getvcp 10`.
-- `ddcutil --bus N --noverify setvcp 10 VALUE`, followed by our explicit getvcp.
+- `ddcutil --bus N --noverify setvcp 10 VALUE`, followed by our explicit getvcp. Readback has a 600 ms window with at least
+  100 ms between DDC reads; this never resends the write.
 
 A child has a two-second deadline, bounded stdout/stderr, cancellation and kill/reap.
 Each worker I/O attempt has a five-second deadline; a pending call may also wait
@@ -81,9 +84,15 @@ for the previous bounded attempt and the rate gate. Caller timeout is uncertaint
 not proof that no write happened. A per-channel lock and last-write timestamp survive output
 retirement while I/O is in flight and across the 250 ms rate window. New device ids
 cannot reset the limiter or overlap replacement discovery.
-There are at most two simultaneous discovery probes; failed probes are cached until
-a new identity/session epoch or explicit rate-limited Refresh. There is no idle DDC
-polling, blind retry or VCP profile save. Repeated unrelated Power1 refreshes do
+There are at most two simultaneous discovery probes. A failed probe or I/O withdraws
+the channel and cancels pending writes. Read-only recovery runs after 2, 10 and 60
+seconds, then stays quiet. Success resets that budget; healthy DDC has no idle
+polling. Every recovery probe changes the device epoch and never replays a failed
+or pending write. The existing authenticated Power1 PrepareForSleep(false) stream,
+an output power-on edge, a new identity/session epoch, or explicit rate-limited
+Refresh starts fresh discovery and read-only probes. No second logind listener is
+added. Unpowered/inactive channels pause recovery. There is no blind write retry
+or VCP profile save. Repeated unrelated Power1 refreshes do
 not query Display1: only a changed shared session authority triggers that refresh;
 Display1 topology/owner signals handle its own changes. DDC timeouts, permission failures and bad
 readback withdraw the capability. Exact identity/connection/session checks run before

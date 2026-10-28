@@ -143,19 +143,14 @@ pub fn discover(paths: &Paths, outputs: &[hardware::Output]) -> Vec<Link> {
                 .and_then(|n| n.parse::<u32>().ok())
         {
             let node = paths.dev.join(format!("i2c-{bus}"));
-            // Opening checks the channel's permissions; it sends no I2C transaction.
-            if fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .open(&node)
-                .is_ok()
-            {
-                links.push(Link {
-                    output: output.clone(),
-                    connector,
-                    channel: Channel::Ddc { bus, node },
-                });
-            }
+            // Keep an exact candidate even if udev permissions are not ready yet.
+            // verify() checks access before every probe; only a successful read can
+            // publish availability. Recovery never invents a bus or sends a write.
+            links.push(Link {
+                output: output.clone(),
+                connector,
+                channel: Channel::Ddc { bus, node },
+            });
         }
     }
     // A bus/backlight must never be writable through two output identities.
@@ -190,6 +185,12 @@ pub fn verify(link: &Link) -> Result<(), Error> {
         {
             Err(Error::Stale("DDC bus changed".into()))
         }
+        Channel::Ddc { node, .. } => fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(node)
+            .map(|_| ())
+            .map_err(|e| Error::Unavailable(format!("DDC channel inaccessible: {e}"))),
         _ => Ok(()),
     }
 }

@@ -37,6 +37,12 @@ not fill the bounding rectangle. The compositor does not silently move a user's
 invalid layout; a future UI can snap edges before calling Validate.
 
 - `GetState()` reads a coherent snapshot.
+- `GetHardwareState()` is an additive cached mapping for sessiond brightness. Its
+  separate records (`compositor/src/display/hardware.rs`) carry epoch/revision,
+  output id/identity/connector, canonical GPU port, EDID fingerprint,
+  internal/enabled/logical flags, logical geometry and powered state. GetState's
+  wire records remain unchanged. The powered flag lets sessiond restart finite
+  read-only discovery when an output wakes; Hyalo performs no brightness I/O.
 - `Validate(epoch, revision, layout)` checks geometry/capabilities and sorts a layout
   without effects. GPU/resource preflight happens in Preview, before mutation.
 - `Preview(epoch, revision, layout)` starts one global transaction; returns

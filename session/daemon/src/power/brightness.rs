@@ -81,6 +81,8 @@ struct Entry {
     serial: u64,
     requested: u32,
     running: bool,
+    probing: bool,
+    recovery: model::Recovery,
 }
 #[derive(Default)]
 struct State {
@@ -101,6 +103,7 @@ struct Service {
     refresh: Arc<tokio::sync::Mutex<()>>,
     probes: Arc<tokio::sync::Semaphore>,
     io: Arc<Mutex<BTreeMap<String, ChannelLock>>>,
+    recovery_notify: Arc<tokio::sync::Notify>,
 }
 #[derive(Clone)]
 struct Target {
@@ -234,6 +237,7 @@ impl Service {
                     && o.port == target.link.output.port
                     && o.edid == target.link.output.edid
                     && o.enabled
+                    && o.powered
             })
         {
             return Err(Error::Stale("compositor output changed".into()));
@@ -242,6 +246,13 @@ impl Service {
         discovery::verify(&target.link)
     }
     async fn read(&self, target: &Target) -> Result<(u32, u32), Error> {
+        self.read_with_timeout(target, Duration::from_secs(2)).await
+    }
+    async fn read_with_timeout(
+        &self,
+        target: &Target,
+        budget: Duration,
+    ) -> Result<(u32, u32), Error> {
         discovery::verify(&target.link)?;
         let result = match &target.link.channel {
             Channel::Panel { path, max, .. } => {
@@ -252,7 +263,7 @@ impl Service {
                 (value, *max)
             }
             Channel::Ddc { bus, .. } => {
-                let text = process::run(
+                let text = process::run_with_timeout(
                     &self.paths.ddcutil,
                     &[
                         "--bus".into(),
@@ -262,6 +273,7 @@ impl Service {
                         "10".into(),
                     ],
                     target.cancel.clone(),
+                    budget,
                 )
                 .await?;
                 model::vcp(&text)
@@ -272,56 +284,126 @@ impl Service {
         discovery::verify(&target.link)?;
         Ok(result)
     }
+    fn withdraw(entry: &mut Entry) {
+        entry.device.available = false;
+        entry.device.writable = false;
+        let _ = entry.cancel.send(true);
+        if let Some(request) = entry.desired.take() {
+            let _ = request.reply.send(Err(Error::Unavailable(
+                "brightness channel withdrawn".into(),
+            )));
+        }
+        entry.running = false;
+        entry.recovery.failed(Instant::now());
+    }
+    fn next_recovery(&self) -> Option<Instant> {
+        let s = self.state.lock().unwrap();
+        if !s.context.active || s.context != context(&self.power) {
+            return None;
+        }
+        s.entries
+            .values()
+            .filter(|e| !e.probing && e.link.output.enabled && e.link.output.powered)
+            .filter_map(|e| e.recovery.deadline())
+            .min()
+    }
+    async fn recover_due(&self, now: Instant) {
+        let ids = {
+            let mut s = self.state.lock().unwrap();
+            if !s.context.active || s.context != context(&self.power) {
+                return;
+            }
+            let ids: Vec<_> = s
+                .entries
+                .iter()
+                .filter(|(_, e)| {
+                    !e.probing
+                        && e.link.output.enabled
+                        && e.link.output.powered
+                        && e.recovery.deadline().is_some_and(|t| t <= now)
+                })
+                .map(|(id, _)| id.clone())
+                .collect();
+            for id in &ids {
+                s.serial += 1;
+                let epoch = s.serial;
+                let e = s.entries.get_mut(id).unwrap();
+                e.recovery.take_due(now);
+                let _ = e.cancel.send(true);
+                if let Some(r) = e.desired.take() {
+                    let _ = r
+                        .reply
+                        .send(Err(Error::Stale("read-only recovery epoch".into())));
+                }
+                let (cancel, _) = watch::channel(false);
+                e.cancel = cancel;
+                e.device.epoch = epoch;
+                e.device.available = false;
+                e.device.writable = false;
+                e.running = false;
+                e.probing = true;
+            }
+            ids
+        };
+        if ids.is_empty() {
+            return;
+        }
+        self.publish().await;
+        for id in ids {
+            let service = self.clone();
+            tokio::spawn(async move {
+                service.probe(id).await;
+            });
+        }
+    }
+    async fn probe_attempt(&self, target: &Target) -> Result<(u32, u32), Error> {
+        if !target.context.active || !target.link.output.enabled || !target.link.output.powered {
+            return Err(Error::Unavailable("output or session inactive".into()));
+        }
+        self.valid(target)?;
+        let mut cancel = target.cancel.clone();
+        let _permit = tokio::select! {p=self.probes.acquire()=>p.map_err(|e|Error::Unavailable(e.to_string()))?,_=cancel.changed()=>return Err(Error::Stale("probe withdrawn".into()))};
+        let _io = tokio::select! {guard=target.io.lock()=>guard,_=cancel.changed()=>return Err(Error::Stale("probe withdrawn".into()))};
+        self.guard(target).await?;
+        let value = self.read(target).await?;
+        self.guard(target).await?;
+        Ok(value)
+    }
     async fn probe(&self, id: String) {
         let Ok(target) = self.target(&id) else {
             return;
         };
-        let mut cancel = target.cancel.clone();
-        if !target.context.active {
-            return;
-        }
-        let permit = tokio::select! {p=self.probes.acquire()=>p,_=cancel.changed()=>return};
-        let Ok(_permit) = permit else {
-            return;
-        };
-        let _io = tokio::select! {guard=target.io.lock()=>guard,_=cancel.changed()=>return};
-        let result = async {
-            self.guard(&target).await?;
-            let value = self.read(&target).await?;
-            self.guard(&target).await?;
-            Ok::<_, Error>(value)
-        }
-        .await;
-        let changed = {
+        let result = self.probe_attempt(&target).await;
+        {
             let mut s = self.state.lock().unwrap();
-            let Some(entry) = s
+            let Some(e) = s
                 .entries
                 .get_mut(&id)
                 .filter(|e| e.device.epoch == target.device.epoch)
             else {
                 return;
             };
+            e.probing = false;
             match result {
                 Ok((current, max)) => {
-                    entry.device.current = current;
-                    entry.device.max = max;
-                    entry.device.available = true;
-                    entry.device.writable = !self.power.read_only && entry.link.output.enabled;
-                    true
+                    e.device.current = current;
+                    e.device.max = max;
+                    e.device.available = true;
+                    e.device.writable =
+                        !self.power.read_only && e.link.output.enabled && e.link.output.powered;
+                    e.recovery.recovered();
                 }
                 Err(error) => {
-                    eprintln!("[brightness] {}: {error}", entry.device.id);
-                    false
+                    eprintln!("[brightness] {}: {error}", e.device.id);
+                    Self::withdraw(e);
                 }
             }
-        };
-        if changed {
-            self.publish().await;
         }
+        self.recovery_notify.notify_one();
+        self.publish().await;
     }
-    async fn refresh(&self, force: bool) -> Result<(), Error> {
-        let _serial = self.refresh.lock().await;
-        if force {
+    async fn manual_refresh(&self) -> Result<(), Error> {
+        {
             let mut s = self.state.lock().unwrap();
             if s.last_refresh
                 .is_some_and(|t| t.elapsed() < Duration::from_secs(2))
@@ -330,9 +412,25 @@ impl Service {
             }
             s.last_refresh = Some(Instant::now());
         }
+        self.refresh(true).await
+    }
+    async fn refresh(&self, mut force: bool) -> Result<(), Error> {
+        let _serial = self.refresh.lock().await;
         let fetched = self.hardware().await;
         let context = context(&self.power);
         let (owner, hardware) = fetched.unwrap_or_default();
+        // A DPMS rising edge starts a fresh bounded read-only probe series, including
+        // rediscovery of channels that were not yet accessible before the output woke.
+        force |= {
+            let s = self.state.lock().unwrap();
+            hardware.outputs.iter().any(|o| {
+                o.powered
+                    && s.hardware
+                        .outputs
+                        .iter()
+                        .any(|old| old.id == o.id && !old.powered)
+            })
+        };
         let key = format!(
             "{owner}:{context:?}:{:?}",
             hardware
@@ -341,23 +439,46 @@ impl Service {
                 .map(|o| (&o.id, &o.port, &o.edid, o.internal, o.enabled))
                 .collect::<Vec<_>>()
         );
-        {
+        let unchanged = {
             let mut s = self.state.lock().unwrap();
             if s.key == key && !force {
-                s.hardware = hardware;
-                return Ok(());
-            }
-            for e in s.entries.values_mut() {
-                let _ = e.cancel.send(true);
-                if let Some(r) = e.desired.take() {
-                    let _ = r.reply.send(Err(Error::Stale("channel withdrawn".into())));
+                let mut changed = false;
+                for e in s.entries.values_mut() {
+                    if let Some(output) =
+                        hardware.outputs.iter().find(|o| o.id == e.device.output_id)
+                    {
+                        e.link.output = output.clone();
+                        let writable = e.device.available
+                            && !self.power.read_only
+                            && output.enabled
+                            && output.powered
+                            && context.active;
+                        changed |= e.device.writable != writable;
+                        e.device.writable = writable;
+                    }
                 }
+                s.hardware = hardware.clone();
+                Some(changed)
+            } else {
+                for e in s.entries.values_mut() {
+                    let _ = e.cancel.send(true);
+                    if let Some(r) = e.desired.take() {
+                        let _ = r.reply.send(Err(Error::Stale("channel withdrawn".into())));
+                    }
+                }
+                s.entries.clear();
+                s.owner = owner;
+                s.hardware = hardware.clone();
+                s.context = context;
+                s.key = key;
+                None
             }
-            s.entries.clear();
-            s.owner = owner;
-            s.hardware = hardware.clone();
-            s.context = context;
-            s.key = key;
+        };
+        if let Some(changed) = unchanged {
+            if changed {
+                self.publish().await;
+            }
+            return Ok(());
         }
         self.publish().await;
         let paths = self.paths.clone();
@@ -409,6 +530,8 @@ impl Service {
                         serial: 0,
                         requested: 0,
                         running: false,
+                        probing: true,
+                        recovery: Default::default(),
                     },
                 );
                 ids.push(id);
@@ -422,6 +545,7 @@ impl Service {
                         .is_some_and(|t| t.elapsed() < Duration::from_millis(250))
                 })
         });
+        self.recovery_notify.notify_one();
         self.publish().await;
         for id in ids {
             let service = self.clone();
@@ -540,7 +664,15 @@ impl Service {
         }
         let deadline = Instant::now() + Duration::from_millis(600);
         loop {
-            let (observed, max) = self.read(target).await?;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err(Error::Unavailable(
+                    "brightness readback deadline; result uncertain".into(),
+                ));
+            }
+            // Let the process helper own its deadline so cancellation kills AND reaps
+            // the child before releasing the physical channel lock.
+            let (observed, max) = self.read_with_timeout(target, remaining).await?;
             if max != target.device.max {
                 return Err(Error::Stale("brightness range changed".into()));
             }
@@ -548,12 +680,17 @@ impl Service {
                 self.guard(target).await?;
                 return Ok(observed);
             }
-            if matches!(target.link.channel, Channel::Ddc { .. }) || Instant::now() >= deadline {
+            if Instant::now() >= deadline {
                 return Err(Error::Unavailable(
                     "brightness write was not confirmed".into(),
                 ));
             }
-            tokio::time::sleep(Duration::from_millis(30)).await;
+            let pause = if matches!(target.link.channel, Channel::Ddc { .. }) {
+                100
+            } else {
+                30
+            };
+            tokio::time::sleep(Duration::from_millis(pause)).await;
         }
     }
     async fn writer(&self, id: String) {
@@ -571,7 +708,11 @@ impl Service {
             tokio::select! {_=tokio::time::sleep(delay)=>{},_=cancel.changed()=>return}
             let request = {
                 let mut s = self.state.lock().unwrap();
-                let Some(e) = s.entries.get_mut(&id) else {
+                let Some(e) = s
+                    .entries
+                    .get_mut(&id)
+                    .filter(|e| e.device.epoch == target.device.epoch)
+                else {
                     return;
                 };
                 let Some(r) = e.desired.take() else {
@@ -609,14 +750,7 @@ impl Service {
                     }
                     Err(error) => {
                         eprintln!("[brightness] {}: {error}", e.device.id);
-                        e.device.available = false;
-                        e.device.writable = false;
-                        let _ = e.cancel.send(true);
-                        if let Some(r) = e.desired.take() {
-                            let _ = r.reply.send(Err(Error::Unavailable(
-                                "channel withdrawn after failed I/O".into(),
-                            )));
-                        }
+                        Self::withdraw(e);
                         Err(error)
                     }
                 };
@@ -627,6 +761,7 @@ impl Service {
                 (reply, again)
             };
             let _ = request.reply.send(reply);
+            self.recovery_notify.notify_one();
             self.publish().await;
             if !again {
                 return;
@@ -721,7 +856,11 @@ impl Service {
             let s = self.state.lock().unwrap();
             s.entries
                 .values()
-                .filter(|e| e.device.available && matches!(e.link.channel, Channel::Panel { .. }))
+                .filter(|e| {
+                    e.device.available
+                        && e.link.output.powered
+                        && matches!(e.link.channel, Channel::Panel { .. })
+                })
                 .map(|e| e.device.id.clone())
                 .collect::<Vec<_>>()
         };
@@ -743,15 +882,8 @@ impl Service {
                     changed = true;
                 }
                 Err(_) => {
-                    e.device.available = false;
-                    e.device.writable = false;
-                    let _ = e.cancel.send(true);
-                    if let Some(request) = e.desired.take() {
-                        let _ = request
-                            .reply
-                            .send(Err(Error::Unavailable("panel observation lost".into())));
-                    }
-                    e.running = false;
+                    Self::withdraw(e);
+                    self.recovery_notify.notify_one();
                     changed = true;
                 }
                 _ => {}
@@ -781,7 +913,7 @@ impl Root {
         self.0.step(direction).await
     }
     async fn refresh(&self) -> Result<u64, Error> {
-        self.0.refresh(true).await?;
+        self.0.manual_refresh().await?;
         Ok(self.0.snapshot().revision)
     }
     #[zbus(signal)]
@@ -802,6 +934,7 @@ async fn start(power: Power, paths: Paths) -> zbus::Result<Service> {
         refresh: Default::default(),
         probes: Arc::new(tokio::sync::Semaphore::new(2)),
         io: Default::default(),
+        recovery_notify: Default::default(),
     };
     power
         .conn
@@ -833,7 +966,21 @@ async fn start(power: Power, paths: Paths) -> zbus::Result<Service> {
         let mut interval = tokio::time::interval(Duration::from_secs(1));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
-            tokio::select! {message=streams.next()=>{if message.is_none(){return;}let _=service.refresh(false).await;},_=power.brightness_notify.notified()=>{let changed=context(&power)!=service.state.lock().unwrap().context;if changed{let _=service.refresh(false).await;}},_=interval.tick()=>service.panels().await}
+            let deadline = service.next_recovery();
+            let retry = async move {
+                match deadline {
+                    Some(d) => tokio::time::sleep_until(d.into()).await,
+                    None => std::future::pending::<()>().await,
+                }
+            };
+            tokio::select! {
+                message=streams.next()=>{if message.is_none(){return;}let _=service.refresh(false).await;},
+                _=power.brightness_notify.notified()=>{let changed=context(&power)!=service.state.lock().unwrap().context;if changed{let _=service.refresh(false).await;}},
+                _=power.brightness_wake.notified()=>{let _=service.refresh(true).await;},
+                _=service.recovery_notify.notified()=>{},
+                _=retry=>service.recover_due(Instant::now()).await,
+                _=interval.tick()=>service.panels().await,
+            }
         }
     });
     Ok(handle)
