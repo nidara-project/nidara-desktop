@@ -317,8 +317,10 @@ impl Hyalo {
         tracing::warn!(why, "Hyalo locks the session itself until a lock client takes it over");
         self.lock.surfaces.clear();
         self.lock.generation += 1;
-        let waiting: Vec<Output> =
-            self.space.outputs().filter(|o| self.backend.output_shows_frames(o)).cloned().collect();
+        let waiting: Vec<Output> = crate::backend::physical_outputs(self)
+            .into_iter()
+            .filter(|o| self.backend.output_shows_frames(o))
+            .collect();
         let nothing_to_show = waiting.is_empty();
         self.lock.mode = Mode::Guard { waiting };
         self.lock.flag.store(true, Ordering::Release);
@@ -425,8 +427,10 @@ impl SessionLockHandler for Hyalo {
         let relock = self.lock.is_locked();
         self.lock.surfaces.clear();
         self.lock.generation += 1;
-        let waiting: Vec<Output> =
-            self.space.outputs().filter(|o| self.backend.output_shows_frames(o)).cloned().collect();
+        let waiting: Vec<Output> = crate::backend::physical_outputs(self)
+            .into_iter()
+            .filter(|o| self.backend.output_shows_frames(o))
+            .collect();
         tracing::info!(relock, outputs = waiting.len(), "locking the session");
         let hold_until = (!relock).then(|| Instant::now() + HOLD_SESSION);
         self.lock.mode = Mode::Pending { locker: confirmation, waiting, hold_until };

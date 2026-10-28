@@ -22,8 +22,10 @@ number alone.
 
 The first Display1 cut publishes primary and serves confirmed profiles, extended layouts,
 Identify and the Power1 lid effect. The TS bar/dock do not consume primary; the CC still uses
-brightnessctl. There is no TS bridge. Mirroring, DisplayBrightness1/DDC/Fn and native
-Settings/Super+P remain separate queued cuts. Legacy output persistence is refused once a
+brightnessctl. There is no TS bridge. Mirroring is compositor-owned on the primary GPU
+with VRR off and a bounded source-canvas budget; cross-GPU/VRR mirror support and physical
+DRM acceptance remain outstanding. DisplayBrightness1/DDC/Fn and native Settings/Super+P
+remain separate queued cuts. Legacy output persistence is refused once a
 Display1 profile owns that output set. Connector names duplicated across GPUs are refused
 before mutation until backend addressing is unambiguous. Private-bus/nested evidence does
 not establish physical multimonitor, EDID, dock, lid or installed-package acceptance.

@@ -24,6 +24,7 @@ mod lock;
 mod logind;
 mod night_light;
 mod outputs;
+mod mirror;
 mod display;
 mod protocols;
 mod render;
@@ -41,6 +42,15 @@ pub use state::Hyalo;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--mirror-probe") {
+        if !control::enabled() || std::env::var_os("MIRROR_EVIDENCE").is_none() {
+            eprintln!("--mirror-probe requires scripts/dev/check-mirror-headless.sh");
+            std::process::exit(2);
+        }
+        init_logging();
+        mirror::probe::run();
+        return;
+    }
     if args.first().map(String::as_str) == Some("msg") {
         std::process::exit(ipc::client::main(&args[1..]));
     }

@@ -55,9 +55,20 @@ reconciles on output/lock/VT events and uses a deadline timer only while a lease
 neither inventory nor its D-Bus Changed worker polls. In Power1, firmware brightness-source
 metadata shares the provider refresh mutex: writing it outside that ordering domain lets
 an in-flight snapshot erase `LastChangeSource` before clients can observe it. Docked counts connected
-externals, including disabled ones. Identify is passive compositor content. This first cut
-has no mirror, brightness, Settings page or Super+P consumer; primary does not move the old
-TS bar/dock, and there is no TS bridge. Duplicate connector names across GPUs are refused.
+externals, including disabled ones. Identify is passive compositor content. Display1 now
+accepts ordered mirror groups: source first, followers next. Followers keep physical
+scanouts but have no logical Space output/wl_output global/layer scene. `mirror.rs` owns
+links and contain input mapping; `render/mirror.rs` retains source-pixel canvases with
+uniform scaling and black bands. Captures use that same projection. Do not enumerate
+Space for physical power, capture or lock acknowledgement: use backend::physical_outputs.
+Unlinking releases the cache; frame activation uses the composition result of the queued
+frame, not a later capture. Groups persist by identity and lid inhibition promotes a
+surviving external source. DRM preflight requires the primary GPU, VRR off and the aggregate
+texture budget documented in DISPLAY1.md. Nested winit does not advertise mirror. The
+local `check-mirror-headless.sh` probe exercises real GTK/GL with synthetic modes; it needs
+a main thread (winit cannot run in a Rust test worker). It proves no physical KMS result.
+Brightness, Settings and Super+P remain later cuts; primary does not move the old TS
+bar/dock and there is no TS bridge. Duplicate connector names across GPUs are refused.
 `check-display1-headless.sh` proves private-bus recovery on one nested output, not physical
 multimonitor/lid/EDID acceptance. Keep that distinction in reviews.
 

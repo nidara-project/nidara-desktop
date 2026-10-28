@@ -53,7 +53,7 @@ pub struct Setting {
 pub struct Layout {
     pub primary: String,
     pub outputs: Vec<Setting>,
-    /// Reserved for the mirror implementation. Nonempty groups are refused in this cut.
+    /// Ordered groups: the first output supplies the logical scene; the rest follow it.
     pub mirror_groups: Vec<Vec<String>>,
 }
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize, Type)]
@@ -138,8 +138,31 @@ pub fn dimensions(s: &Setting, o: &Output) -> Result<(i32, i32), String> {
 }
 
 pub fn validate(mut layout: Layout, outputs: &[Output]) -> Result<Layout, String> {
-    if !layout.mirror_groups.is_empty() {
-        return Err("mirror is not supported".into());
+    let mut followers = BTreeMap::new();
+    let mut members = BTreeSet::new();
+    for group in &layout.mirror_groups {
+        if group.len() < 2 {
+            return Err("a mirror group needs a source and a follower".into());
+        }
+        for id in group {
+            if !members.insert(id.clone()) {
+                return Err("mirror groups must be disjoint".into());
+            }
+            let setting = layout
+                .outputs
+                .iter()
+                .find(|s| &s.id == id && s.enabled)
+                .ok_or("mirror member must be connected and enabled")?;
+            if setting.vrr != "off" {
+                return Err("VRR must be off within a mirror group".into());
+            }
+        }
+        for id in group.iter().skip(1) {
+            followers.insert(id.clone(), group[0].clone());
+        }
+    }
+    if followers.contains_key(&layout.primary) {
+        return Err("primary must be a logical source, not a mirror follower".into());
     }
     if outputs.len() > 64 || layout.outputs.len() != outputs.len() {
         return Err("layout must name every connected output once".into());
@@ -168,7 +191,7 @@ pub fn validate(mut layout: Layout, outputs: &[Output]) -> Result<Layout, String
         if !matches!(s.vrr.as_str(), "off" | "on" | "games") || (s.enabled && s.vrr != "off" && !o.vrr_supported) {
             return Err("VRR is not supported".into());
         }
-        if s.enabled {
+        if s.enabled && !followers.contains_key(&s.id) {
             // Leave headroom for renderer arithmetic and union rectangles, as well as i32.
             if s.x.abs_diff(0) > 1_000_000 || s.y.abs_diff(0) > 1_000_000 {
                 return Err("position outside supported desktop".into());
@@ -206,7 +229,23 @@ pub fn validate(mut layout: Layout, outputs: &[Output]) -> Result<Layout, String
     if reached.len() != boxes.len() {
         return Err("outputs must touch along an edge".into());
     }
+    let locations: BTreeMap<_, _> = layout
+        .outputs
+        .iter()
+        .map(|s| (s.id.clone(), (s.x, s.y)))
+        .collect();
+    for setting in &mut layout.outputs {
+        if let Some(source) = followers.get(&setting.id) {
+            let (x, y) = locations[source];
+            setting.x = x;
+            setting.y = y;
+        }
+    }
     layout.outputs.sort_by(|a, b| a.id.cmp(&b.id));
+    for group in &mut layout.mirror_groups {
+        group[1..].sort();
+    }
+    layout.mirror_groups.sort_by(|a, b| a[0].cmp(&b[0]));
     Ok(layout)
 }
 
@@ -268,6 +307,11 @@ impl Profiles {
     pub fn remember(&mut self, outputs: &[Output], layout: &Layout) {
         // Persist stable identities; the bus ids are scoped to a connection epoch.
         let mut layout = layout.clone();
+        for id in layout.mirror_groups.iter_mut().flatten() {
+            if let Some(o) = outputs.iter().find(|o| o.id == *id) {
+                *id = o.identity.clone();
+            }
+        }
         for s in &mut layout.outputs {
             if let Some(o) = outputs.iter().find(|o| o.id == s.id) {
                 if layout.primary == s.id {
@@ -281,6 +325,9 @@ impl Profiles {
     }
     pub fn recall(&self, outputs: &[Output]) -> Option<Layout> {
         let mut l = self.sets.get(&profile_key(outputs))?.clone();
+        for id in l.mirror_groups.iter_mut().flatten() {
+            *id = outputs.iter().find(|o| o.identity == *id)?.id.clone();
+        }
         for s in &mut l.outputs {
             let o = outputs.iter().find(|o| o.identity == s.id)?;
             if l.primary == s.id {
@@ -412,6 +459,61 @@ pub(super) mod tests {
         let mut l = base;
         l.mirror_groups = vec![vec!["a".into()]];
         assert!(validate(l, &outputs).is_err());
+    }
+    #[test]
+    fn mirror_uses_one_logical_rectangle_and_keeps_native_modes() {
+        let outputs = vec![
+            output("a", true, 1920, 1080),
+            output("b", false, 1024, 768),
+            output("c", false, 800, 600),
+        ];
+        let mut layout = default_layout(&outputs);
+        layout.mirror_groups = vec![vec!["a".into(), "b".into()]];
+        layout.outputs[1].scale = 1.25;
+        layout.outputs[1].transform = "90".into();
+        layout.outputs[2].x = 1920;
+        let l = validate(layout.clone(), &outputs).unwrap();
+        assert_eq!(l.outputs[1].mode, "1024x768@60000");
+        assert_eq!((l.outputs[1].x, l.outputs[1].y), (0, 0));
+        assert_eq!(l.outputs[1].scale, 1.25);
+        layout.primary = "b".into();
+        assert!(validate(layout.clone(), &outputs).is_err());
+        layout.primary = "a".into();
+        layout.outputs[1].enabled = false;
+        assert!(validate(layout.clone(), &outputs).is_err());
+        layout.outputs[1].enabled = true;
+        layout.outputs[1].vrr = "on".into();
+        assert!(validate(layout.clone(), &outputs).is_err());
+        layout.outputs[1].vrr = "off".into();
+        layout.mirror_groups.push(vec!["c".into(), "b".into()]);
+        assert!(validate(layout, &outputs).is_err());
+    }
+    #[test]
+    fn mirror_profile_preserves_source_and_follows_stable_identities() {
+        let outputs = vec![
+            output("a", true, 1920, 1080),
+            output("b", false, 1024, 768),
+            output("c", false, 800, 600),
+        ];
+        let mut layout = default_layout(&outputs);
+        layout.primary = "b".into();
+        layout.mirror_groups = vec![vec!["b".into(), "c".into(), "a".into()]];
+        let layout = validate(layout, &outputs).unwrap();
+        let mut profiles = Profiles::default();
+        profiles.remember(&outputs, &layout);
+        let mut reconnected = outputs.clone();
+        for o in &mut reconnected {
+            o.id = format!("epoch2-{}", o.id);
+        }
+        reconnected.reverse();
+        let restored = profiles.recall(&reconnected).unwrap();
+        assert_eq!(restored.primary, "epoch2-b");
+        assert_eq!(
+            restored.mirror_groups,
+            vec![vec!["epoch2-b", "epoch2-a", "epoch2-c"]]
+        );
+        assert_eq!(restored.outputs.len(), 3);
+        assert!(!serde_json::to_string(&profiles).unwrap().contains("epoch2"));
     }
     #[test]
     fn profile_roundtrip_survives_epoch_and_connector_order_changes() {

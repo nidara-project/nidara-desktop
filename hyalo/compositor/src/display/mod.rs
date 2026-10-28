@@ -133,6 +133,19 @@ pub struct State {
     lid_sequence: u64,
     recovery: Option<Layout>,
 }
+impl State {
+    pub(crate) fn output_connector(&self, id: &str) -> Option<String> {
+        self.outputs
+            .iter()
+            .find(|o| o.id == id)
+            .map(|o| o.connector.clone())
+    }
+}
+fn current_layout(state: &Hyalo) -> Layout {
+    let mut layout = observed(&state.displays.outputs, &state.displays.primary);
+    layout.mirror_groups = crate::mirror::layout_groups(state, &state.displays.outputs);
+    layout
+}
 fn now_us(state: &Hyalo) -> u64 {
     Duration::from(state.clock.now()).as_micros() as u64
 }
@@ -206,9 +219,20 @@ fn snapshot(state: &Hyalo) -> Snapshot {
     Snapshot {
         epoch: state.displays.epoch,
         revision: state.displays.revision,
-        capabilities: vec!["extend".into(), "preview".into(), "profiles".into(), "identify".into()],
+        capabilities: {
+            let mut c = vec![
+                "extend".into(),
+                "preview".into(),
+                "profiles".into(),
+                "identify".into(),
+            ];
+            if matches!(state.backend, Backend::Tty(_)) {
+                c.push("mirror".into());
+            }
+            c
+        },
         outputs: state.displays.outputs.clone(),
-        layout: observed(&state.displays.outputs, &state.displays.primary),
+        layout: current_layout(state),
         pending: pending(state),
         last_error: state.displays.last_error.clone(),
     }
@@ -527,10 +551,19 @@ fn command_inner(state: &mut Hyalo, owner: String, command: Command, reply: Repl
                     "nested backend cannot disable, rotate or use VRR".into(),
                 )));
             }
+            if !layout.mirror_groups.is_empty() {
+                let result = match &mut state.backend {
+                    Backend::Tty(t) => t.mirror_preflight(&layout, &state.displays.outputs),
+                    Backend::Winit(_) => Err("mirroring needs multiple physical scanouts".into()),
+                };
+                if let Err(e) = result {
+                    return Some(Err(Error::Unsupported(e)));
+                }
+            }
             if let Err(e) = check_overrides(state, &layout) {
                 return Some(Err(Error::InvalidLayout(e)));
             }
-            let before = observed(&state.displays.outputs, &state.displays.primary);
+            let before = current_layout(state);
             state.displays.serial += 1;
             let token = format!("{}-{}", state.displays.epoch, state.displays.serial);
             let started = Instant::now();
@@ -668,6 +701,12 @@ fn rollback(state: &mut Hyalo, reason: &str) {
 }
 fn apply(state: &mut Hyalo, layout: &Layout) -> std::result::Result<(), String> {
     let outputs = state.displays.outputs.clone();
+    if !layout.mirror_groups.is_empty() {
+        match &mut state.backend {
+            Backend::Tty(t) => t.mirror_preflight(layout, &outputs)?,
+            Backend::Winit(_) => return Err("mirroring needs multiple physical scanouts".into()),
+        }
+    }
     // Refuse ambiguous connector names rather than applying a change to another GPU.
     let raw = crate::outputs::info(state);
     if raw.iter().map(|o| &o.name).collect::<BTreeSet<_>>().len() != raw.len() {
@@ -727,6 +766,7 @@ fn apply(state: &mut Hyalo, layout: &Layout) -> std::result::Result<(), String> 
             }
         }
         state.displays.primary = layout.primary.clone();
+        crate::mirror::install(state, layout)?;
         Ok(())
     })();
     state.displays.applying = false;
@@ -772,9 +812,14 @@ fn restore_profile(state: &mut Hyalo) {
 
 // Identify's render elements are compositor-owned and expire without a client.
 fn identify(state: &mut Hyalo) {
-    for o in state.space.outputs() {
-        if let Some(info) = state.displays.outputs.iter().find(|d| d.connector == o.name()) {
-            super::display::identify::show(o, info.number);
+    for o in crate::backend::physical_outputs(state) {
+        if let Some(info) = state
+            .displays
+            .outputs
+            .iter()
+            .find(|d| d.connector == o.name())
+        {
+            super::display::identify::show(&o, info.number);
         }
     }
     state.queue_redraw(None);
@@ -809,10 +854,14 @@ fn reconcile_lid(state: &mut Hyalo) {
         // Rollback may have removed the external enabled by an unconfirmed preview.
         // Re-read the restored state before deciding whether the panel can go dark.
         let outputs = state.displays.outputs.clone();
-        let Some(l) = lid_layout(&outputs, &state.displays.primary) else {
+        let Some(l) = lid_layout(
+            &outputs,
+            &state.displays.primary,
+            &current_layout(state).mirror_groups,
+        ) else {
             return;
         };
-        let before = observed(&outputs, &state.displays.primary);
+        let before = current_layout(state);
         if apply(state, &l).is_ok() {
             state.displays.lid_before = Some(before);
         }
@@ -827,8 +876,10 @@ fn reconcile_lid(state: &mut Hyalo) {
 fn lid_inhibited(outputs: &[Output], closed: bool) -> bool {
     closed && outputs.iter().any(|o| o.internal) && outputs.iter().any(|o| !o.internal && o.enabled)
 }
-fn lid_layout(outputs: &[Output], primary: &str) -> Option<Layout> {
-    if !outputs.iter().any(|o| o.internal && o.enabled) || !outputs.iter().any(|o| !o.internal && o.enabled) {
+fn lid_layout(outputs: &[Output], primary: &str, groups: &[Vec<String>]) -> Option<Layout> {
+    if !outputs.iter().any(|o| o.internal && o.enabled)
+        || !outputs.iter().any(|o| !o.internal && o.enabled)
+    {
         return None;
     }
     let mut l = observed(outputs, primary);
@@ -837,7 +888,25 @@ fn lid_layout(outputs: &[Output], primary: &str) -> Option<Layout> {
             setting.enabled = false;
         }
     }
-    l.primary = outputs.iter().find(|o| !o.internal && o.enabled)?.id.clone();
+    l.mirror_groups = groups
+        .iter()
+        .filter_map(|g| {
+            let remaining: Vec<_> = g
+                .iter()
+                .filter(|id| l.outputs.iter().any(|s| s.id == **id && s.enabled))
+                .cloned()
+                .collect();
+            (remaining.len() >= 2).then_some(remaining)
+        })
+        .collect();
+    l.primary = outputs
+        .iter()
+        .find(|o| !o.internal && o.enabled)?
+        .id
+        .clone();
+    if let Some(group) = l.mirror_groups.iter().find(|g| g.contains(&l.primary)) {
+        l.primary = group[0].clone();
+    }
     let min_x = l.outputs.iter().filter(|s| s.enabled).map(|s| s.x).min()?;
     let min_y = l.outputs.iter().filter(|s| s.enabled).map(|s| s.y).min()?;
     for setting in l.outputs.iter_mut().filter(|s| s.enabled) {
@@ -850,7 +919,16 @@ fn lid_layout(outputs: &[Output], primary: &str) -> Option<Layout> {
     // Removing a bridge panel can disconnect the remaining graph. Only then reflow.
     l.outputs.sort_by_key(|s| (s.x, s.y, s.id.clone()));
     let mut x = 0;
-    for setting in l.outputs.iter_mut().filter(|s| s.enabled) {
+    let followers: std::collections::BTreeSet<_> = l
+        .mirror_groups
+        .iter()
+        .flat_map(|g| g.iter().skip(1).cloned())
+        .collect();
+    for setting in l
+        .outputs
+        .iter_mut()
+        .filter(|s| s.enabled && !followers.contains(&s.id))
+    {
         setting.x = x;
         setting.y = 0;
         x += dimensions(setting, outputs.iter().find(|o| o.id == setting.id)?)
@@ -929,7 +1007,7 @@ pub fn legacy_apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> std::r
     if state.displays.lease.is_some() {
         return Err("confirm or cancel Display1 preview first".into());
     }
-    let before = observed(&state.displays.outputs, &state.displays.primary);
+    let before = current_layout(state);
     let mut layout = before.clone();
     let o = state
         .displays
@@ -1001,7 +1079,7 @@ pub fn validate_config(state: &Hyalo, configs: &BTreeMap<String, OutputConfig>) 
     if preview_pending(state) {
         return Err("confirm or cancel Display1 preview first".into());
     }
-    let mut layout = observed(&state.displays.outputs, &state.displays.primary);
+    let mut layout = current_layout(state);
     for s in &mut layout.outputs {
         let o = state.displays.outputs.iter().find(|o| o.id == s.id).unwrap();
         let Some(c) = configs.get(&o.connector) else { continue };
@@ -1123,7 +1201,7 @@ mod tests {
             model::tests::output("external", false, 200, 100),
         ];
         outputs[1].x = 100;
-        let l = lid_layout(&outputs, "internal").unwrap();
+        let l = lid_layout(&outputs, "internal", &[]).unwrap();
         for o in &mut outputs {
             let setting = l.outputs.iter().find(|s| s.id == o.id).unwrap();
             o.enabled = setting.enabled;
@@ -1156,7 +1234,7 @@ mod tests {
         ];
         outputs[0].x = 100;
         outputs[2].y = 100;
-        let l = lid_layout(&outputs, "internal").unwrap();
+        let l = lid_layout(&outputs, "internal", &[]).unwrap();
         let a = l.outputs.iter().find(|s| s.id == "a").unwrap();
         let b = l.outputs.iter().find(|s| s.id == "b").unwrap();
         assert_eq!((b.x - a.x, b.y - a.y), (0, 100));
@@ -1164,11 +1242,35 @@ mod tests {
         outputs[1].x = -100;
         outputs[2].x = 100;
         outputs[2].y = 0;
-        let l = lid_layout(&outputs, "internal").unwrap();
+        let l = lid_layout(&outputs, "internal", &[]).unwrap();
         assert!(validate(l, &outputs).is_ok());
         outputs[1].enabled = false;
         outputs[2].enabled = false;
-        assert!(lid_layout(&outputs, "internal").is_none());
+        assert!(lid_layout(&outputs, "internal", &[]).is_none());
+    }
+    #[test]
+    fn lid_promotes_an_external_mirror_source_without_overlapping_desktops() {
+        let outputs = vec![
+            model::tests::output("internal", true, 1920, 1080),
+            model::tests::output("a", false, 1024, 768),
+            model::tests::output("b", false, 800, 600),
+        ];
+        let groups = vec![vec!["internal".into(), "b".into(), "a".into()]];
+        let l = lid_layout(&outputs, "internal", &groups).unwrap();
+        assert_eq!(l.primary, "b");
+        assert_eq!(l.mirror_groups, vec![vec!["b", "a"]]);
+        assert!(
+            !l.outputs
+                .iter()
+                .find(|s| s.id == "internal")
+                .unwrap()
+                .enabled
+        );
+        assert!(validate(l, &outputs).is_ok());
+        let groups = vec![vec!["internal".into(), "a".into()]];
+        let l = lid_layout(&outputs[..2], "internal", &groups).unwrap();
+        assert!(l.mirror_groups.is_empty());
+        assert_eq!(l.primary, "a");
     }
     #[test]
     fn lease_waits_for_all_new_frames_then_allows_exactly_fifteen_seconds() {

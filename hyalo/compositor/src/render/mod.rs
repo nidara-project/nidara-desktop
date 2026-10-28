@@ -13,6 +13,7 @@ pub mod drawn;
 pub mod glass;
 pub mod glass_gl;
 pub mod glass_tokens;
+pub mod mirror;
 pub mod scrim;
 pub mod snapshot;
 pub mod stats;
@@ -360,11 +361,27 @@ pub fn output_elements<R: HyaloRenderer>(
     renderer: &mut R,
     output: &Output,
     cursor: Option<&crate::cursor::CursorImage>,
-) -> Vec<OutputElement<R>>
-{
+) -> Vec<OutputElement<R>> {
+    if crate::mirror::follower(output) {
+        return mirror::elements(state, renderer, output, cursor);
+    }
+    scene_elements(state, renderer, output, cursor, true)
+}
+
+fn scene_elements<R: HyaloRenderer>(
+    state: &Scene<'_>,
+    renderer: &mut R,
+    output: &Output,
+    cursor: Option<&crate::cursor::CursorImage>,
+    identify: bool,
+) -> Vec<OutputElement<R>> {
     let mut out = Vec::new();
-    if !state.lock.is_locked() { out.extend(crate::display::identify::elements(renderer, output)); }
-    let Some(output_geo) = state.space.output_geometry(output) else { return out };
+    if identify && !state.lock.is_locked() {
+        out.extend(crate::display::identify::elements(renderer, output));
+    }
+    let Some(output_geo) = state.space.output_geometry(output) else {
+        return out;
+    };
     let scale = Scale::from(output.current_scale().fractional_scale());
     let output_size = output_geo.size.to_f64().to_physical_precise_round(scale);
     if state.dimmed {

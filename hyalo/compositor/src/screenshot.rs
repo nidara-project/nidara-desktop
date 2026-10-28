@@ -30,13 +30,24 @@ pub fn capture(
     output: &Output,
     cursor: Option<&crate::cursor::CursorImage>,
 ) -> Result<(u32, u32, Vec<u8>), String> {
-    let geo = scene.space.output_geometry(output).ok_or("output not mapped")?;
+    let geo = scene
+        .space
+        .output_geometry(output)
+        .or_else(|| crate::mirror::physical_geometry(output))
+        .ok_or("output not mapped")?;
     let scale = output.current_scale().fractional_scale();
-    let size = geo.size.to_f64().to_physical_precise_round(scale);
+    let size = if crate::mirror::follower(output) {
+        crate::mirror::physical_size(output).ok_or("mirror target has no mode")?
+    } else {
+        geo.size.to_f64().to_physical_precise_round(scale)
+    };
     let mut texture: GlesTexture = renderer
         .create_buffer(Fourcc::Abgr8888, (size.w, size.h).into())
         .map_err(|e| e.to_string())?;
     let elements = render::picture_elements(scene, renderer, output, cursor);
+    if !render::mirror::ok(output) {
+        return Err("mirror composition failed".into());
+    }
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     {
         let mut fb = renderer.bind(&mut texture).map_err(|e| e.to_string())?;
@@ -84,6 +95,9 @@ pub fn draw_into(
     let scale = output.current_scale().fractional_scale();
     let transform = output.current_transform();
     let elements = render::picture_elements(scene, renderer, output, cursor);
+    if !render::mirror::ok(output) {
+        return Err("mirror composition failed".into());
+    }
     let Some(area) = area else {
         let mut tracker = OutputDamageTracker::new(size, scale, transform);
         let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
@@ -93,8 +107,16 @@ pub fn draw_into(
         // The client reads the buffer as soon as `ready` is sent.
         return result.sync.wait().map_err(|e| format!("{e:?}"));
     };
-    let geo = scene.space.output_geometry(output).ok_or("output not mapped")?;
-    let upright: Size<i32, Physical> = geo.size.to_f64().to_physical_precise_round(scale);
+    let geo = scene
+        .space
+        .output_geometry(output)
+        .or_else(|| crate::mirror::physical_geometry(output))
+        .ok_or("output not mapped")?;
+    let upright: Size<i32, Physical> = if crate::mirror::follower(output) {
+        crate::mirror::physical_size(output).ok_or("mirror target has no mode")?
+    } else {
+        geo.size.to_f64().to_physical_precise_round(scale)
+    };
     let full = transform.transform_size(upright);
     let mut texture: GlesTexture = renderer.create_buffer(Fourcc::Abgr8888, (full.w, full.h).into()).map_err(|e| e.to_string())?;
     {
@@ -123,10 +145,21 @@ pub fn draw_upright_into(
     dmabuf: &mut Dmabuf,
     cursor: Option<&crate::cursor::CursorImage>,
 ) -> Result<(), String> {
-    let geo = scene.space.output_geometry(output).ok_or("output not mapped")?;
+    let geo = scene
+        .space
+        .output_geometry(output)
+        .or_else(|| crate::mirror::physical_geometry(output))
+        .ok_or("output not mapped")?;
     let scale = output.current_scale().fractional_scale();
-    let size: Size<i32, Physical> = geo.size.to_f64().to_physical_precise_round(scale);
+    let size: Size<i32, Physical> = if crate::mirror::follower(output) {
+        crate::mirror::physical_size(output).ok_or("mirror target has no mode")?
+    } else {
+        geo.size.to_f64().to_physical_precise_round(scale)
+    };
     let elements = render::picture_elements(scene, renderer, output, cursor);
+    if !render::mirror::ok(output) {
+        return Err("mirror composition failed".into());
+    }
     let mut tracker = OutputDamageTracker::new(size, scale, Transform::Normal);
     let mut fb = renderer.bind(dmabuf).map_err(|e| e.to_string())?;
     let result = tracker

@@ -24,10 +24,14 @@ use crate::{
 /// Places every output: configured positions first, the rest in a row to their right.
 /// Then every workspace goes to its output (`wm::outputs_changed`).
 pub fn arrange(state: &mut Hyalo) {
-    let outputs: Vec<Output> = state.space.outputs().cloned().collect();
+    let outputs: Vec<Output> = crate::backend::physical_outputs(state);
     let mut placed: Vec<Rectangle<i32, Logical>> = Vec::new();
     let mut auto = Vec::new();
     for o in &outputs {
+        if crate::mirror::follower(o) {
+            state.space.unmap_output(o);
+            continue;
+        }
         match state.config.outputs.get(&o.name()).and_then(|c| c.position) {
             Some((x, y)) => {
                 state.space.map_output(o, (x, y));
@@ -47,7 +51,9 @@ pub fn arrange(state: &mut Hyalo) {
         x += state.space.output_geometry(o).map(|g| g.size.w).unwrap_or(0);
     }
     for o in &outputs {
-        crate::shell::layer::arrange_output(o);
+        if !crate::mirror::follower(o) {
+            crate::shell::layer::arrange_output(o);
+        }
     }
     state.outputs_changed();
     crate::display::changed(state);
@@ -60,7 +66,7 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
     if !(0.25..=4.0).contains(&cfg.scale) {
         return Err(format!("scale {} is outside 0.25..4", cfg.scale));
     }
-    let output = state.space.outputs().find(|o| o.name() == name).cloned();
+    let output = crate::backend::physical_output(state, name);
     match (&mut state.backend, output) {
         (Backend::Tty(_), None) => {
             // Off, or not connected: the config now says how it comes up.
@@ -114,11 +120,9 @@ pub fn apply(state: &mut Hyalo, name: &str, cfg: &OutputConfig) -> Result<(), St
 }
 
 pub fn set_power(state: &mut Hyalo, name: Option<&str>, on: bool) -> Result<(), String> {
-    let outputs: Vec<Output> = state
-        .space
-        .outputs()
+    let outputs: Vec<Output> = crate::backend::physical_outputs(state)
+        .into_iter()
         .filter(|o| name.is_none_or(|n| o.name() == n))
-        .cloned()
         .collect();
     if outputs.is_empty() {
         return Err(match name {

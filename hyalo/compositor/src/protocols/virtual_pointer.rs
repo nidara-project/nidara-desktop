@@ -106,7 +106,7 @@ impl Dispatch2<ZwlrVirtualPointerV1, Hyalo> for VirtualPointer {
         let now = InputTime::now();
         match request {
             Request::Motion { dx, dy, .. } => {
-                let at = state.seat.get_pointer().unwrap().current_location();
+                let at = state.pointer_motion_origin();
                 state.pointer_moved_to(at + Point::from((dx, dy)), now);
             }
             Request::MotionAbsolute { x, y, x_extent, y_extent, .. } => {
@@ -116,8 +116,12 @@ impl Dispatch2<ZwlrVirtualPointerV1, Hyalo> for VirtualPointer {
                 let Some(area) = self.area(state) else { return };
                 let fx = x as f64 / x_extent as f64;
                 let fy = y as f64 / y_extent as f64;
-                let pos = area.loc.to_f64() + Point::from((fx * area.size.w as f64, fy * area.size.h as f64));
-                state.pointer_moved_to(pos, now);
+                let local = Point::from((fx * area.size.w as f64, fy * area.size.h as f64));
+                if let Some(output) = &self.output {
+                    state.pointer_moved_on_output(output, local, now);
+                } else {
+                    state.pointer_moved_to(area.loc.to_f64() + local, now);
+                }
             }
             Request::Button { button, state: s, .. } => {
                 let s = match s {
@@ -150,7 +154,9 @@ impl Dispatch2<ZwlrVirtualPointerV1, Hyalo> for VirtualPointer {
             Request::Frame => {
                 let frame = self.axis.lock().unwrap().take();
                 let pointer = state.seat.get_pointer().unwrap();
-                if let Some(frame) = frame {
+                if let Some(frame) = frame
+                    && !state.pointer_in_mirror_band()
+                {
                     pointer.axis(state, frame);
                 }
                 pointer.frame(state);
@@ -165,7 +171,10 @@ impl VirtualPointer {
     /// What absolute coordinates span: the named output, or every output together.
     fn area(&self, state: &Hyalo) -> Option<Rectangle<i32, Logical>> {
         if let Some(o) = &self.output {
-            return state.space.output_geometry(o);
+            return state
+                .space
+                .output_geometry(o)
+                .or_else(|| crate::mirror::physical_geometry(o));
         }
         state
             .space

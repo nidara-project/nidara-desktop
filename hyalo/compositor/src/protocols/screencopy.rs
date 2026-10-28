@@ -142,8 +142,23 @@ impl Dispatch2<ZwlrScreencopyFrameV1, Hyalo> for ScreencopyFrame {
 }
 
 /// The region (or the whole output) as the user sees it: physical pixels at the output's scale.
-fn upright_size(state: &Hyalo, output: &Output, region: Option<Rectangle<i32, Logical>>) -> (i32, i32) {
-    let Some(geo) = state.space.output_geometry(output) else { return (0, 0) };
+fn upright_size(
+    state: &Hyalo,
+    output: &Output,
+    region: Option<Rectangle<i32, Logical>>,
+) -> (i32, i32) {
+    let Some(geo) = state
+        .space
+        .output_geometry(output)
+        .or_else(|| crate::mirror::physical_geometry(output))
+    else {
+        return (0, 0);
+    };
+    if region.is_none() && crate::mirror::follower(output) {
+        return crate::mirror::physical_size(output)
+            .map(|s| (s.w, s.h))
+            .unwrap_or_default();
+    }
     let scale = output.current_scale().fractional_scale();
     let area = region.unwrap_or(Rectangle::from_size(geo.size));
     let s = area.size.to_f64().to_physical_precise_round::<_, i32>(scale);

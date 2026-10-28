@@ -97,7 +97,7 @@ impl Hyalo {
 
     fn source_output(&self, source: &ImageCaptureSource) -> Option<smithay::output::Output> {
         let name = &source.user_data().get::<SourceOutput>()?.0;
-        self.space.outputs().find(|o| &o.name() == name).cloned()
+        crate::backend::physical_output(self, name)
     }
 
     fn source_window(&self, source: &ImageCaptureSource) -> Option<&Window> {
@@ -201,8 +201,17 @@ impl Hyalo {
     fn capture_size(&self, source: &ImageCaptureSource) -> Option<Size<i32, BufferCoords>> {
         let size: Size<i32, BufferCoords> = if let Some(output) = self.source_output(source) {
             // What screenshot.rs draws: the logical area at the output's scale, upright.
-            let geo = self.space.output_geometry(&output)?;
-            let s = geo.size.to_f64().to_physical_precise_round::<_, i32>(output.current_scale().fractional_scale());
+            let geo = self
+                .space
+                .output_geometry(&output)
+                .or_else(|| crate::mirror::physical_geometry(&output))?;
+            let s = if crate::mirror::follower(&output) {
+                crate::mirror::physical_size(&output)?
+            } else {
+                geo.size
+                    .to_f64()
+                    .to_physical_precise_round::<_, i32>(output.current_scale().fractional_scale())
+            };
             (s.w, s.h).into()
         } else {
             let window = self.source_window(source)?;

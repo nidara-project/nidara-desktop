@@ -8,10 +8,10 @@ must subscribe to `Changed(epoch, revision)` before reading `GetState` and rerea
 the whole snapshot. Signals may coalesce intermediate revisions. The signal worker blocks on a change channel;
 it has no polling clock.
 
-This is the first Displays cut of #959. It implements extended layouts, output
+The first two Displays cuts of #959 implement extended and mirrored layouts, output
 configuration, primary publication, transactions, profiles, Identify and the
-Power1 lid effect. Mirror groups are reserved and **rejected**. Mirroring,
-DisplayBrightness1/DDC/Fn, the native Settings page and Super+P are later cuts.
+Power1 lid effect. DisplayBrightness1/DDC/Fn, the native Settings page and Super+P
+remain separate cuts.
 No TS bridge is added. The TS bar/dock do not follow the published primary;
 the TS brightness widget continues using brightnessctl. No brightness OSD is added.
 
@@ -26,7 +26,7 @@ state and Identify number. A mode id contains width, height and **integer mHz**;
 callers must use the advertised opaque id, not construct a string in Hz.
 
 A layout names every connected output exactly once, plus an enabled `primary`
-and `mirror_groups` (empty in this cut). Per-output settings are id, enabled,
+and ordered `mirror_groups`. Per-output settings are id, enabled,
 mode, scale, transform, x, y and VRR (`off`, `on`, `games`). Coordinates are logical
 pixels after transform and scale. The validator rejects unknown modes/ids,
 nonfinite/out-of-range scales, unsupported VRR, excessive coordinates, overlaps,
@@ -36,7 +36,8 @@ not fill the bounding rectangle. The compositor does not silently move a user's
 invalid layout; a future UI can snap edges before calling Validate.
 
 - `GetState()` reads a coherent snapshot.
-- `Validate(epoch, revision, layout)` checks and sorts a layout without effects.
+- `Validate(epoch, revision, layout)` checks geometry/capabilities and sorts a layout
+  without effects. GPU/resource preflight happens in Preview, before mutation.
 - `Preview(epoch, revision, layout)` starts one global transaction; returns
   pending token, phase and absolute CLOCK_MONOTONIC deadline in microseconds.
 - `Confirm(token)` durably stores the accepted layout.
@@ -52,6 +53,52 @@ Busy, PermissionDenied, Expired, ApplyFailed, PersistenceFailed. Error strings
 are technical details, not translated UI messages. Future native consumers must
 map errors to the existing exported locale catalogue. Identify contains numbers
 only; this cut adds no user-facing translated text.
+
+## Mirrored layouts
+
+Each group is `[source_id, follower_id, ...]`, with at least two disjoint, enabled
+members. The first member supplies the one logical scene: its windows, workspace,
+wallpaper, layers, cursor and compositor material. Followers have no second desktop,
+workspace or layer-shell scene. Their wl_output globals are withdrawn while mirrored
+and restored when extended again; existing follower layers receive close. Physical
+outputs remain visible in Display1, so a future native client can select or identify
+them. Primary must be a logical source, never a follower.
+
+Every member retains its own advertised mode, scale and transform. No shared mode
+is required. Followers are excluded from desktop overlap/connectivity checks and
+their x/y normalize to the source origin. A retained GPU canvas renders the source
+scene in its upright physical pixels; each follower contains that canvas uniformly
+and centers it over opaque black bands. Identify numbers are physical overlays,
+so a follower shows its own number, never its source's number. Changing back to
+extended releases the mirror canvas and restores logical output globals.
+
+Associated absolute input and output-targeted virtual-pointer input use the same
+contain projection back to source logical coordinates. Bands have no pointer target
+and swallow presses and their matching releases; a grab begun in the scene receives an
+out-of-scene motion before release in a band, so it cancels a click without sticking.
+Relative input resumes from the last scene coordinate. Relative input traverses only logical desktops. Screenshots by
+physical connector and existing follower screencopy/image-capture handles include
+the projected picture and black bands. Newly enumerated Wayland clients see logical
+sources only. Capture remains denied while locked; lock acknowledgement waits for
+all powered physical followers as well as logical outputs.
+
+This cut requires all group members on the primary rendering GPU, VRR `off` throughout
+the group, and at most 16,777,216 source pixels summed over follower canvases. Preview
+rejects unsupported GPU/texture combinations with Unsupported before modesetting;
+validation does not promise a resource reservation against later driver failures.
+A failed composition cannot activate the preview: the normal bounded lease restores
+the previous layout. The mirror capability is advertised on DRM, never nested winit.
+These are explicit backend limits, not permission to fall back to distorted or
+independently rendered desktops. Duplicate connector names across GPUs remain refused.
+
+Groups use stable identities in confirmed profiles and connection ids on the bus.
+Cancel, timeout, owner loss and failed apply restore the complete previous grouping.
+Topology changes reconcile profiles or safe defaults; a disconnected source is never
+left as the authoritative desktop. Lid inhibition prunes the internal member and
+promotes a surviving external to source, preserving a group when two externals remain;
+opening restores the previous grouping. Legacy configuration cannot disable a group
+member or enable its VRR behind Display1 validation; use a complete Display1 layout
+to dissolve the group explicitly.
 
 ## Confirmation and recovery
 
@@ -171,3 +218,12 @@ are simulations, not DRM multimonitor, EDID/dock, lid, multi-GPU or installed-pa
 acceptance. Those require isolated vkms/hardware; do not infer them from compilation,
 private-bus success or the Identify screenshot. No hardware or system installation
 is performed by the runner.
+
+`scripts/dev/check-mirror-headless.sh` runs the controlled `--mirror-probe` command
+on its main thread under a private bus and headless Cage. It starts a real GTK shm
+client and uses production scene/GL/capture/input paths with synthetic output modes.
+The runner checks fractional source scale, normal/portrait/rotated followers, black
+bands, sampled scene pixels, mapped pointer focus, band presses and drag release against a real GTK button (including a positive click).
+It saves PNGs/logs under a fresh `target/mirror` evidence directory and has a bounded
+runtime. It is a local probe, not a CI job or physical KMS mirror acceptance. Headless
+hosting can use the machine's render GPU; no live output or installed session is used.
