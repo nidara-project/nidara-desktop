@@ -10,8 +10,9 @@ it has no polling clock.
 
 The first two Displays cuts of #959 implement extended and mirrored layouts, output
 configuration, primary publication, transactions, profiles, Identify and the
-Power1 lid effect. DisplayBrightness1/DDC/Fn, the native Settings page and Super+P
-remain separate cuts.
+Power1 lid effect. DisplayBrightness1/DDC/Fn is served separately by sessiond; see
+`../session/daemon/src/power/brightness/README.md`. The native Settings page and
+Super+P remain a separate cut.
 No TS bridge is added. The TS bar/dock do not follow the published primary;
 the TS brightness widget continues using brightnessctl. No brightness OSD is added.
 

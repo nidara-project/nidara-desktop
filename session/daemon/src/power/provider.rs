@@ -354,6 +354,7 @@ async fn logind(
         "org.freedesktop.login1.Session",
     )
     .await?;
+    root["SessionPath"] = json!(session.as_str());
     root["SessionActive"] =
         json!(flag(&session_props, "Active") && !flag(&session_props, "Remote"));
     for (method, key) in [("CanSuspend", "CanSuspend"), ("CanPowerOff", "CanPowerOff")] {
@@ -761,6 +762,7 @@ pub async fn refresh(p: &Power) -> Result<(), Error> {
         .unwrap_or("")
         .to_string();
     bus::publish(p, objects, root).await?;
+    p.brightness_notify.notify_one();
     p.state.write().unwrap().retired.clear();
     for hold in ended_holds {
         let cleanup = hold.clone();

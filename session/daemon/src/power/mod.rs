@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Native energy service. Mutations are opt-in; providers and object identities are independent.
 mod bus;
+mod brightness;
 mod display;
 mod i18n;
 mod model;
@@ -128,6 +129,7 @@ struct Power {
     keyboard_serial: Arc<AtomicU64>,
     menu_wait: Arc<Mutex<PendingMenus>>,
     display_lid: Arc<std::sync::Mutex<display::Forwarder>>,
+    brightness_notify: Arc<tokio::sync::Notify>,
 }
 impl Power {
     fn object(&self, p: &str) -> Result<Object, Error> {
@@ -918,6 +920,7 @@ pub async fn serve(conn: &Connection, read_only: bool) -> zbus::Result<()> {
         keyboard_serial: Arc::new(AtomicU64::new(0)),
         menu_wait: Default::default(),
         display_lid: Default::default(),
+        brightness_notify: Default::default(),
     };
     power.state.write().unwrap().root =
         json!({"State":"Unavailable","Generation":power.epoch,"LastError":"","Capabilities":[]});
@@ -927,6 +930,7 @@ pub async fn serve(conn: &Connection, read_only: bool) -> zbus::Result<()> {
     conn.object_server()
         .at(ROOT, bus::Root(power.clone()))
         .await?;
+    brightness::serve(power.clone()).await?;
     prefs::watch(power.clone());
     provider::watch(power).await?;
     Ok(())

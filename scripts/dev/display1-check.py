@@ -44,6 +44,11 @@ for _ in range(100):
 else:
     raise AssertionError('Display1 did not start')
 
+mapping = call(c, 'GetHardwareState')
+assert mapping[0] == state[0]
+assert {o[0] for o in mapping[2]} == {o[0] for o in state[3]}
+assert all(not o[3] and not o[4] and o[7] for o in mapping[2]), 'nested output invented physical mapping'
+
 xml = call(c, 'Introspect', iface='org.freedesktop.DBus.Introspectable')[0]
 node = ET.fromstring(xml).find(f"interface[@name='{IFACE}']")
 assert node is not None

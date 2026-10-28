@@ -623,6 +623,7 @@ sudo cp "$REPO_DIR/bin/nidara-greeter"   /usr/bin/nidara-greeter
 sudo cp "$REPO_DIR/bin/nidara-lock"      /usr/bin/nidara-lock
 sudo cp "$REPO_DIR/bin/nidara-before-sleep" /usr/bin/nidara-before-sleep
 sudo cp "$REPO_DIR/bin/nidara-after-sleep"  /usr/bin/nidara-after-sleep
+sudo install -Dm755 "$REPO_DIR/bin/nidara-display-brightness" /usr/bin/nidara-display-brightness
 sudo cp "$REPO_DIR/bin/nidara-power-key" /usr/bin/nidara-power-key
 sudo cp "$REPO_DIR/bin/nidara-kbd-light" /usr/bin/nidara-kbd-light
 sudo cp "$REPO_DIR/bin/nidara-media-key" /usr/bin/nidara-media-key

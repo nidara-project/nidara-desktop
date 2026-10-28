@@ -6,6 +6,10 @@
 it produces no holds, hooks, notifications, charge/backlight writes, hardware-key
 inhibitors or logind actions. Config1 and Hyalo idle remain independent.
 
+DisplayBrightness1 is also served under --power, sharing this logind session/owner/epoch
+and rejecting writes in read-only mode. Its mapping, coalescing, DDC process and Fn
+contract is in [brightness/README.md](brightness/README.md). It adds no energy policy.
+
 UPower, power-profiles-daemon 0.30 (`org.freedesktop.UPower.PowerProfiles`) and
 logind have independent unique owners and generations. Object paths are daemon
 identities, not raw provider paths; retain neither across removal/restart. Install
