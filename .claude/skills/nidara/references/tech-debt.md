@@ -29,8 +29,9 @@ composes a retained canvas with damage tracking. Sharing a source canvas with di
 is an optimization candidate if measured frame cost warrants it; no performance win is
 claimed or measured here. DisplayBrightness1/DDC/Fn now uses exact GPU-port/EDID
 association and shared Power1 logind authority. Physical backlight/DDC/USB-C/dock acceptance
-and unsupported/ambiguous platform-backlight association remain outstanding; do not infer them
-from the private fixtures. Native Settings/Super+P remain queued. Legacy output persistence is refused once a
+remain outstanding; do not infer them from the private fixtures. The unique
+firmware/platform fallback is supported only with one internal globally, no associated
+raw and one candidate. Multiple/unknown platform associations remain unsupported. Native Settings/Super+P remain queued. Legacy output persistence is refused once a
 Display1 profile owns that output set. Connector names duplicated across GPUs are refused
 before mutation until backend addressing is unambiguous. Private-bus/nested evidence does
 not establish physical multimonitor, EDID, dock, lid or installed-package acceptance.

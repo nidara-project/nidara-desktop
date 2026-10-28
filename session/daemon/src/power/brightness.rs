@@ -230,7 +230,9 @@ impl Service {
             return Err(Error::PermissionDenied("session inactive or remote".into()));
         }
         let (owner, hardware) = self.hardware().await?;
-        if owner != target.owner
+        if (target.link.platform_backlights.is_some()
+            && hardware.outputs.iter().filter(|o| o.internal).count() != 1)
+            || owner != target.owner
             || hardware.epoch != target.display_epoch
             || !hardware.outputs.iter().any(|o| {
                 o.id == target.link.output.id

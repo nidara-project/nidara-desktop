@@ -59,10 +59,17 @@ accidentally select an overlapping follower.
 
 Sessiond matches the exact canonical GPU port and EDID to a connected sysfs DRM
 connector. Empty EDID, duplicate ports/channels, multiple backlights without a
-unique association and unsupported platform backlights remain unavailable. It
-does not guess by model, serial, enumeration order or “the only global backlight”.
-Internal association requires the backlight below the connector, or its GPU with
-exactly one internal output and one backlight. Writes use the already resolved
+unique association remain unavailable. It does not guess by model, serial or
+enumeration order. Internal association normally requires the backlight below the
+connector, or its GPU with exactly one internal output and one backlight. One
+explicit fallback is allowed: exactly one internal output in the whole system
+(including disabled outputs), no associated raw backlight, and exactly one global
+backlight whose type is firmware or platform. Two firmware/platform candidates
+remain ambiguous even when one has an invalid range. Missing/unknown types and
+unassociated raw devices are never selected by that fallback. The exact GPU
+port/EDID match still applies. The candidate set and absence of an associated raw
+are rechecked before/after I/O, and fresh Display1 state must still contain only
+one internal output. Writes use the already resolved
 logind Session.SetBrightness("backlight", name, raw). Readback uses actual_brightness
 when available; panel observations are polled once per second, without writes.
 

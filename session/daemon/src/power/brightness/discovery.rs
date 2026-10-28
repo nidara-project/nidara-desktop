@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Only exact GPU port + EDID associations. No serial/model guesses and no DDC scans.
+//! Exact GPU port + EDID, plus the explicitly bounded firmware/platform fallback.
 use super::{Error, hardware};
 use std::{
     fs,
@@ -37,6 +37,9 @@ pub struct Link {
     pub output: hardware::Output,
     pub connector: PathBuf,
     pub channel: Channel,
+    /// Present only for the globally unique firmware/platform association. Recheck
+    /// the candidate set before/after I/O, not just at initial discovery.
+    pub platform_backlights: Option<PathBuf>,
 }
 pub fn edid_key(bytes: &[u8]) -> String {
     if bytes.is_empty() {
@@ -79,6 +82,47 @@ fn connector(paths: &Paths, output: &hardware::Output) -> Option<PathBuf> {
     }
     (matches.len() == 1).then(|| matches.remove(0))
 }
+fn associated(path: &Path, connector: &Path, gpu: &str, internal_count: usize) -> bool {
+    let parent = path
+        .join("device")
+        .canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf());
+    path.starts_with(connector)
+        || parent.starts_with(connector)
+        || (internal_count == 1 && (path.starts_with(gpu) || parent == Path::new(gpu)))
+}
+fn panel(item: &Path) -> Option<Channel> {
+    let path = item.canonicalize().ok()?;
+    let name = item.file_name()?.to_str()?.to_owned();
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "_-".contains(c))
+    {
+        return None;
+    }
+    let max = number(&path.join("max_brightness")).ok()?;
+    (max > 0).then_some(Channel::Panel { path, name, max })
+}
+fn platform_panel(backlights: &Path, connector: &Path, gpu: &str) -> Option<Channel> {
+    let mut candidates = Vec::new();
+    for item in fs::read_dir(backlights).ok()? {
+        let item = item.ok()?;
+        let path = item.path().canonicalize().ok()?;
+        let kind = fs::read_to_string(path.join("type")).unwrap_or_default();
+        if kind.trim() == "raw" && associated(&path, connector, gpu, 1) {
+            return None;
+        }
+        if matches!(kind.trim(), "firmware" | "platform") {
+            // Count before validating range/name: a broken second candidate must
+            // not turn ambiguity into permission to control the first one.
+            candidates.push(item.path());
+        }
+    }
+    if candidates.len() != 1 {
+        return None;
+    }
+    panel(&candidates[0])
+}
 pub fn discover(paths: &Paths, outputs: &[hardware::Output]) -> Vec<Link> {
     let mut links = Vec::new();
     for output in outputs {
@@ -92,47 +136,36 @@ pub fn discover(paths: &Paths, outputs: &[hardware::Output]) -> Vec<Link> {
                 .filter(|o| o.internal && o.port.rsplit_once(':').is_some_and(|(g, _)| g == gpu))
                 .count();
             let mut panels = Vec::new();
-            for item in fs::read_dir(paths.sys.join("class/backlight"))
-                .into_iter()
-                .flatten()
-                .flatten()
-            {
+            let mut raw_associated = false;
+            let backlights = paths.sys.join("class/backlight");
+            for item in fs::read_dir(&backlights).into_iter().flatten().flatten() {
                 let Ok(path) = item.path().canonicalize() else {
                     continue;
                 };
-                let parent = path
-                    .join("device")
-                    .canonicalize()
-                    .unwrap_or_else(|_| path.clone());
-                if !(path.starts_with(&connector)
-                    || parent.starts_with(&connector)
-                    || (internal_count == 1 && (path.starts_with(gpu) || parent == Path::new(gpu))))
-                {
+                if !associated(&path, &connector, gpu, internal_count) {
                     continue;
                 }
-                let Some(name) = item
-                    .file_name()
-                    .to_str()
-                    .filter(|n| {
-                        n.chars()
-                            .all(|c| c.is_ascii_alphanumeric() || "_-".contains(c))
-                    })
-                    .map(str::to_owned)
-                else {
-                    continue;
-                };
-                let Ok(max) = number(&path.join("max_brightness")) else {
-                    continue;
-                };
-                if max > 0 {
-                    panels.push(Channel::Panel { path, name, max });
+                raw_associated |=
+                    fs::read_to_string(path.join("type")).is_ok_and(|kind| kind.trim() == "raw");
+                if let Some(channel) = panel(&item.path()) {
+                    panels.push(channel);
                 }
+            }
+            let mut platform_backlights = None;
+            if panels.is_empty()
+                && !raw_associated
+                && outputs.iter().filter(|o| o.internal).count() == 1
+                && let Some(channel) = platform_panel(&backlights, &connector, gpu)
+            {
+                panels.push(channel);
+                platform_backlights = Some(backlights);
             }
             if panels.len() == 1 {
                 links.push(Link {
                     output: output.clone(),
                     connector,
                     channel: panels.remove(0),
+                    platform_backlights,
                 });
             }
         } else if let Ok(ddc) = connector.join("ddc").canonicalize()
@@ -150,6 +183,7 @@ pub fn discover(paths: &Paths, outputs: &[hardware::Output]) -> Vec<Link> {
                 output: output.clone(),
                 connector,
                 channel: Channel::Ddc { bus, node },
+                platform_backlights: None,
             });
         }
     }
@@ -169,6 +203,12 @@ pub fn verify(link: &Link) -> Result<(), Error> {
         fs::read(link.connector.join("edid")).is_ok_and(|b| edid_key(&b) == link.output.edid);
     if !connected || !same {
         return Err(Error::Stale("output identity changed".into()));
+    }
+    if let Some(backlights) = &link.platform_backlights {
+        let gpu = link.output.port.rsplit_once(':').map(|v| v.0).unwrap_or("");
+        if platform_panel(backlights, &link.connector, gpu).as_ref() != Some(&link.channel) {
+            return Err(Error::Stale("firmware/platform association changed".into()));
+        }
     }
     match &link.channel {
         Channel::Panel { path, max, .. } if number(&path.join("max_brightness"))? != *max => {

@@ -110,6 +110,7 @@ impl Tree {
         fs::create_dir_all(&panel).unwrap();
         symlink(&panel, sys.join("class/backlight/panel")).unwrap();
         for (file, value) in [
+            ("type", "raw"),
             ("max_brightness", "100"),
             ("brightness", "50"),
             ("actual_brightness", "50"),
@@ -196,6 +197,102 @@ fn associations_require_exact_gpu_port_edid_and_unique_channel() {
     wrong[0].port = "/other/gpu:eDP-1".into();
     assert!(discovery::discover(&tree.paths, &wrong).is_empty());
 }
+// A platform/firmware device has no path or device symlink to the DRM GPU.
+fn platform_backlight(tree: &Tree, name: &str, kind: &str) -> PathBuf {
+    use std::os::unix::fs::symlink;
+    let path = tree.paths.sys.join("devices/platform").join(name);
+    fs::create_dir_all(&path).unwrap();
+    for (file, value) in [
+        ("type", kind),
+        ("max_brightness", "100"),
+        ("brightness", "50"),
+        ("actual_brightness", "50"),
+    ] {
+        fs::write(path.join(file), value).unwrap();
+    }
+    symlink(&path, tree.paths.sys.join("class/backlight").join(name)).unwrap();
+    path
+}
+#[test]
+fn unique_platform_or_firmware_panel_has_a_revalidated_association() {
+    for kind in ["firmware", "platform"] {
+        let tree = Tree::new();
+        fs::remove_file(tree.paths.sys.join("class/backlight/panel")).unwrap();
+        let path = platform_backlight(&tree, "platform-panel", kind);
+        let links = discovery::discover(&tree.paths, &tree.hardware.outputs);
+        let link = links.iter().find(|l| l.output.internal).unwrap();
+        assert!(link.platform_backlights.is_some());
+        assert!(matches!(&link.channel, Channel::Panel { path:p, name, .. }
+            if p == &path && name == "platform-panel"));
+        discovery::verify(link).unwrap();
+        fs::write(path.join("type"), "raw").unwrap();
+        assert!(discovery::verify(link).is_err());
+        assert!(
+            !discovery::discover(&tree.paths, &tree.hardware.outputs)
+                .iter()
+                .any(|l| l.output.internal)
+        );
+        fs::write(path.join("type"), kind).unwrap();
+        // Count a second candidate even with a broken range; never select by order.
+        let second = platform_backlight(&tree, "other-panel", "firmware");
+        fs::write(second.join("max_brightness"), "invalid").unwrap();
+        assert!(discovery::verify(link).is_err());
+        assert!(
+            !discovery::discover(&tree.paths, &tree.hardware.outputs)
+                .iter()
+                .any(|l| l.output.internal)
+        );
+    }
+}
+#[test]
+fn platform_fallback_rejects_multiple_internals_and_associated_raw() {
+    let tree = Tree::new();
+    let path = platform_backlight(&tree, "platform-panel", "platform");
+    let links = discovery::discover(&tree.paths, &tree.hardware.outputs);
+    let raw = links.iter().find(|l| l.output.internal).unwrap();
+    assert!(raw.platform_backlights.is_none());
+    assert!(matches!(&raw.channel, Channel::Panel { path:p, .. } if p == &tree.panel));
+    // Even an unusable associated raw blocks fallback to a global device.
+    fs::write(tree.panel.join("max_brightness"), "invalid").unwrap();
+    assert!(
+        !discovery::discover(&tree.paths, &tree.hardware.outputs)
+            .iter()
+            .any(|l| l.output.internal)
+    );
+    fs::remove_file(tree.paths.sys.join("class/backlight/panel")).unwrap();
+    let mut outputs = tree.hardware.outputs.clone();
+    let mut second = outputs[0].clone();
+    second.id = "another-internal".into();
+    second.port = "/another-gpu:eDP-2".into();
+    second.enabled = false;
+    outputs.push(second);
+    assert!(
+        !discovery::discover(&tree.paths, &outputs)
+            .iter()
+            .any(|l| l.output.internal)
+    );
+    outputs.pop();
+    let links = discovery::discover(&tree.paths, &outputs);
+    let link = links.iter().find(|l| l.output.internal).unwrap();
+    discovery::verify(link).unwrap();
+    // A newly associated raw also invalidates an already discovered fallback.
+    use std::os::unix::fs::symlink;
+    symlink(&tree.panel, tree.paths.sys.join("class/backlight/panel")).unwrap();
+    assert!(discovery::verify(link).is_err());
+    fs::remove_file(tree.paths.sys.join("class/backlight/panel")).unwrap();
+    outputs[0].edid.clear();
+    assert!(
+        !discovery::discover(&tree.paths, &outputs)
+            .iter()
+            .any(|l| l.output.internal)
+    );
+    fs::write(path.join("type"), "unknown").unwrap();
+    assert!(
+        !discovery::discover(&tree.paths, &tree.hardware.outputs)
+            .iter()
+            .any(|l| l.output.internal)
+    );
+}
 #[derive(Clone)]
 struct FakeSession {
     active: Arc<AtomicBool>,
@@ -239,7 +336,9 @@ async fn until(mut predicate: impl FnMut() -> bool) {
     }
 }
 async fn run() {
-    let tree = Tree::new();
+    let mut tree = Tree::new();
+    fs::remove_file(tree.paths.sys.join("class/backlight/panel")).unwrap();
+    tree.panel = platform_backlight(&tree, "panel", "firmware");
     let provider = Connection::session().await.unwrap();
     let session = FakeSession {
         active: Arc::new(AtomicBool::new(true)),
@@ -380,6 +479,23 @@ async fn run() {
         }
     }
     assert!(!tree.root.join("ddc-writes").exists());
+    let internal = service
+        .snapshot()
+        .devices
+        .into_iter()
+        .find(|d| d.provider == "logind")
+        .unwrap();
+    let target = service.target(&internal.id).unwrap();
+    assert!(target.link.platform_backlights.is_some());
+    // Fresh compositor state must reject a second internal even before its signal
+    // reaches the service; never write using a cached global-uniqueness decision.
+    let mut second = tree.hardware.outputs[0].clone();
+    second.id = "second-gpu-internal".into();
+    second.port = "/other-gpu:eDP-2".into();
+    hardware.lock().unwrap().outputs.push(second);
+    assert!(matches!(service.guard(&target).await, Err(Error::Stale(_))));
+    hardware.lock().unwrap().outputs.pop();
+    assert!(session.calls.lock().unwrap().is_empty());
     let client = Connection::session().await.unwrap();
     let proxy = zbus::Proxy::new(&client, "org.nidara.Session", ROOT, IFACE)
         .await

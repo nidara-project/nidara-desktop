@@ -77,6 +77,9 @@ flag and powered state without changing GetState. Sessiond DisplayBrightness1 (-
 I/O, sharing Power1 logind session/owner/epoch; no second energy provider. Read its
 `session/daemon/src/power/brightness/README.md`: exact sysfs association, raw readback, per-channel
 locks across epochs, latest-wins/250ms writes, bounded/cancelled ddcutil, no idle DDC scans.
+Internal firmware/platform fallback requires exactly one internal globally, no
+associated raw and exactly one firmware/platform candidate. Revalidate that set
+and fresh output inventory before I/O; multiple candidates remain unsupported.
 Failed brightness channels get finite read-only recovery (2/10/60s), then quiet;
 Power1's authenticated resume signal and output power-on restart discovery. No
 failed/pending write is replayed. DDC readback waits up to 600ms with 100ms spacing.
