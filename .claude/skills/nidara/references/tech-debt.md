@@ -27,8 +27,11 @@ with VRR off and a bounded source-canvas budget; cross-GPU/VRR mirror support an
 DRM acceptance remain outstanding. The source is drawn directly and each follower also
 composes a retained canvas with damage tracking. Sharing a source canvas with direct output
 is an optimization candidate if measured frame cost warrants it; no performance win is
-claimed or measured here. DisplayBrightness1/DDC/Fn and native Settings/Super+P
-remain separate queued cuts. Legacy output persistence is refused once a
+claimed or measured here. DisplayBrightness1/DDC/Fn now uses exact GPU-port/EDID
+association and shared Power1 logind authority. Physical backlight/DDC/USB-C/dock acceptance
+remain outstanding; do not infer them from the private fixtures. The unique
+firmware/platform fallback is supported only with one internal globally, no associated
+raw and one candidate. Multiple/unknown platform associations remain unsupported. Native Settings/Super+P remain queued. Legacy output persistence is refused once a
 Display1 profile owns that output set. Connector names duplicated across GPUs are refused
 before mutation until backend addressing is unambiguous. Private-bus/nested evidence does
 not establish physical multimonitor, EDID, dock, lid or installed-package acceptance.

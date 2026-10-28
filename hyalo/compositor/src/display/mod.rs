@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Compositor-owned Display1. Rendering state stays on calloop; bus and disk do not.
 mod bus;
+pub mod hardware;
 pub mod model;
 mod store;
 use crate::{
@@ -124,6 +125,7 @@ pub struct State {
     overrides: BTreeMap<String, OutputConfig>,
     legacy: BTreeMap<String, OutputConfig>,
     snapshot: Option<Arc<Mutex<Snapshot>>>,
+    hardware: Option<Arc<Mutex<hardware::Snapshot>>>,
     store: Option<mpsc::Sender<store::Save>>,
     /// A temporary panel inhibition, not a saved preference.
     lid_closed: bool,
@@ -194,7 +196,9 @@ pub fn start(state: &mut Hyalo) {
     state.displays.snapshot = Some(snapshot.clone());
     let (signal_tx, signal_rx) = mpsc::sync_channel(1);
     state.displays.signal = Some(signal_tx);
-    std::thread::spawn(move || bus::serve(tx, snapshot, signal_rx));
+    let hardware = Arc::new(Mutex::new(hardware_snapshot(state)));
+    state.displays.hardware = Some(hardware.clone());
+    std::thread::spawn(move || bus::serve(tx, snapshot, hardware, signal_rx));
 }
 fn pending(state: &Hyalo) -> Pending {
     state
@@ -237,10 +241,61 @@ fn snapshot(state: &Hyalo) -> Snapshot {
         last_error: state.displays.last_error.clone(),
     }
 }
+fn hardware_snapshot(state: &Hyalo) -> hardware::Snapshot {
+    let mut identities = BTreeMap::new();
+    if let Backend::Tty(tty) = &state.backend {
+        for (_, c) in tty.connectors() {
+            let name = crate::backend::tty::connector_name(c);
+            // Ambiguous connector names must never acquire a writable channel.
+            identities
+                .entry(name)
+                .and_modify(|v: &mut Option<Identity>| *v = None)
+                .or_insert(Some(tty.display_identity(c)));
+        }
+    }
+    let layout = current_layout(state);
+    hardware::Snapshot {
+        epoch: state.displays.epoch,
+        revision: state.displays.revision,
+        outputs: state
+            .displays
+            .outputs
+            .iter()
+            .map(|o| {
+                let identity = identities.get(&o.connector).and_then(|i| i.as_ref()).cloned().unwrap_or_default();
+                let size = layout
+                    .outputs
+                    .iter()
+                    .find(|s| s.id == o.id)
+                    .and_then(|s| dimensions(s, o).ok())
+                    .unwrap_or_default();
+                hardware::Output {
+                    id: o.id.clone(),
+                    identity: o.identity.clone(),
+                    connector: o.connector.clone(),
+                    port: identity.port,
+                    edid: identity.edid,
+                    internal: o.internal,
+                    enabled: o.enabled,
+                    logical: crate::backend::physical_output(state, &o.connector).is_some_and(|p| !crate::mirror::follower(&p)),
+                    x: o.x,
+                    y: o.y,
+                    width: size.0,
+                    height: size.1,
+                    powered: o.powered,
+                }
+            })
+            .collect(),
+    }
+}
+
 fn publish(state: &mut Hyalo) {
     state.displays.revision += 1;
     if let Some(s) = &state.displays.snapshot {
         *s.lock().unwrap() = snapshot(state);
+    }
+    if let Some(hardware) = &state.displays.hardware {
+        *hardware.lock().unwrap() = hardware_snapshot(state);
     }
     if let Some(signal) = &state.displays.signal {
         let _ = signal.try_send(());

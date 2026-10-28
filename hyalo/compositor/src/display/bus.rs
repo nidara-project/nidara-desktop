@@ -26,6 +26,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 struct Display {
     tx: Sender<Event>,
     snapshot: Arc<Mutex<Snapshot>>,
+    hardware: Arc<Mutex<super::hardware::Snapshot>>,
 }
 impl Display {
     fn request(&self, header: zbus::message::Header<'_>, command: Command) -> Result<Pending> {
@@ -79,6 +80,9 @@ impl Display {
         )
         .map(|_| ())
     }
+    fn get_hardware_state(&self) -> super::hardware::Snapshot {
+        self.hardware.lock().unwrap().clone()
+    }
     fn get_state(&self) -> Snapshot {
         self.snapshot.lock().unwrap().clone()
     }
@@ -120,10 +124,16 @@ impl Display {
         self.request(header, Command::Identify { epoch, revision }).map(|_| ())
     }
 }
-pub fn serve(tx: Sender<Event>, snapshot: Arc<Mutex<Snapshot>>, signals: mpsc::Receiver<()>) {
+pub fn serve(
+    tx: Sender<Event>,
+    snapshot: Arc<Mutex<Snapshot>>,
+    hardware: Arc<Mutex<super::hardware::Snapshot>>,
+    signals: mpsc::Receiver<()>,
+) {
     let display = Display {
         tx: tx.clone(),
         snapshot: snapshot.clone(),
+        hardware,
     };
     let connection = match zbus::blocking::connection::Builder::session()
         .and_then(|b| b.name("org.nidara.Display"))

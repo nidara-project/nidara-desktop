@@ -256,7 +256,7 @@ async fn changed(stream: &mut zbus::MessageStream, mut predicate: impl FnMut() -
             .unwrap();
     }
 }
-fn power(conn: &Connection, system: &Connection, read_only: bool) -> Power {
+pub(super) fn power(conn: &Connection, system: &Connection, read_only: bool) -> Power {
     Power {
         strings: Arc::new(i18n::Strings::load()),
         conn: conn.clone(),
@@ -278,6 +278,8 @@ fn power(conn: &Connection, system: &Connection, read_only: bool) -> Power {
         keyboard_serial: Arc::new(AtomicU64::new(0)),
         menu_wait: Default::default(),
         display_lid: Default::default(),
+        brightness_notify: Default::default(),
+        brightness_wake: Default::default(),
     }
 }
 async fn display_forwarding_run() {

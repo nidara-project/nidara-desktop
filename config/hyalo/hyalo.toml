@@ -244,8 +244,8 @@ inactive = { range = 12, offset = 2, color = "#00000033" }
 "XF86PowerOff" = { action = "spawn nidara-power-key", locked = true, repeat = false, dont_inhibit = true }
 "XF86KbdBrightnessUp" = { action = "spawn nidara-kbd-light up", locked = true, repeat = true }
 "XF86KbdBrightnessDown" = { action = "spawn nidara-kbd-light down", locked = true, repeat = true }
-"XF86MonBrightnessUp" = { action = "spawn brightnessctl -n s 5%+", locked = true, repeat = true }
-"XF86MonBrightnessDown" = { action = "spawn brightnessctl -n s 5%-", locked = true, repeat = true }
+"XF86MonBrightnessUp" = { action = "spawn nidara-display-brightness up", locked = true, repeat = true }
+"XF86MonBrightnessDown" = { action = "spawn nidara-display-brightness down", locked = true, repeat = true }
 "XF86AudioPlay" = { action = "spawn nidara-media-key play-pause", locked = true }
 "XF86AudioPause" = { action = "spawn nidara-media-key pause", locked = true }
 "XF86AudioNext" = { action = "spawn nidara-media-key next", locked = true }

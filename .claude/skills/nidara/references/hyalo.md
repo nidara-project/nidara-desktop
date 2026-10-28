@@ -72,8 +72,22 @@ surviving external source. DRM preflight requires the primary GPU, VRR off and t
 texture budget documented in DISPLAY1.md. Nested winit does not advertise mirror. The
 local `check-mirror-headless.sh` probe exercises real GTK/GL with synthetic modes; it needs
 a main thread (winit cannot run in a Rust test worker). It proves no physical KMS result.
-Brightness, Settings and Super+P remain later cuts; primary does not move the old TS
-bar/dock and there is no TS bridge. Duplicate connector names across GPUs are refused.
+Display1.GetHardwareState adds cached GPU-port/EDID correspondence and a logical-output
+flag and powered state without changing GetState. Sessiond DisplayBrightness1 (--power/read-only) owns brightness
+I/O, sharing Power1 logind session/owner/epoch; no second energy provider. Read its
+`session/daemon/src/power/brightness/README.md`: exact sysfs association, raw readback, per-channel
+locks across epochs, latest-wins/250ms writes, bounded/cancelled ddcutil, no idle DDC scans.
+Internal firmware/platform fallback requires exactly one internal globally, no
+associated raw and exactly one firmware/platform candidate. Revalidate that set
+and fresh output inventory before I/O; multiple candidates remain unsupported.
+Failed brightness channels get finite read-only recovery (2/10/60s), then quiet;
+Power1's authenticated resume signal and output power-on restart discovery. No
+failed/pending write is replayed. DDC readback waits up to 600ms with 100ms spacing.
+Connectors without a sysfs ddc route (including some MST/dock/NVIDIA configurations)
+remain unsupported; never guess a bus.
+Fn invokes nidara-display-brightness; legacy fallback requires ServiceUnknown and confirmed
+absence of org.nidara.Session. Do not echo observed firmware changes or retry uncertain writes.
+No OSD/TS bridge is added. Settings/Super+P remain a later cut; primary does not move TS bar/dock. Duplicate connector names across GPUs are refused.
 `check-display1-headless.sh` proves private-bus recovery on one nested output, not physical
 multimonitor/lid/EDID acceptance. Keep that distinction in reviews.
 

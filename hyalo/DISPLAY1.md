@@ -10,8 +10,9 @@ it has no polling clock.
 
 The first two Displays cuts of #959 implement extended and mirrored layouts, output
 configuration, primary publication, transactions, profiles, Identify and the
-Power1 lid effect. DisplayBrightness1/DDC/Fn, the native Settings page and Super+P
-remain separate cuts.
+Power1 lid effect. DisplayBrightness1/DDC/Fn is served separately by sessiond; see
+`../session/daemon/src/power/brightness/README.md`. The native Settings page and
+Super+P remain a separate cut.
 No TS bridge is added. The TS bar/dock do not follow the published primary;
 the TS brightness widget continues using brightnessctl. No brightness OSD is added.
 
@@ -36,6 +37,12 @@ not fill the bounding rectangle. The compositor does not silently move a user's
 invalid layout; a future UI can snap edges before calling Validate.
 
 - `GetState()` reads a coherent snapshot.
+- `GetHardwareState()` is an additive cached mapping for sessiond brightness. Its
+  separate records (`compositor/src/display/hardware.rs`) carry epoch/revision,
+  output id/identity/connector, canonical GPU port, EDID fingerprint,
+  internal/enabled/logical flags, logical geometry and powered state. GetState's
+  wire records remain unchanged. The powered flag lets sessiond restart finite
+  read-only discovery when an output wakes; Hyalo performs no brightness I/O.
 - `Validate(epoch, revision, layout)` checks geometry/capabilities and sorts a layout
   without effects. GPU/resource preflight happens in Preview, before mutation.
 - `Preview(epoch, revision, layout)` starts one global transaction; returns

@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# No fallback after a possibly executed mutation. The service owns coalescing/readback.
+case "${1-}" in up) direction=1; legacy=5%+ ;; down) direction=-1; legacy=5%- ;; *) exit 2 ;; esac
+reply=$(gdbus call --session --timeout 10 --dest org.nidara.Session \
+    --object-path /org/nidara/DisplayBrightness \
+    --method org.nidara.DisplayBrightness1.StepBrightness -- "$direction" 2>&1)
+status=$?
+[ "$status" -eq 0 ] && exit 0
+case "$reply" in
+    *org.nidara.DisplayBrightness1.Error.Superseded:*) exit 0 ;;
+    *org.freedesktop.DBus.Error.ServiceUnknown:*)
+        owner=$(gdbus call --session --timeout 2 --dest org.freedesktop.DBus \
+            --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.NameHasOwner \
+            org.nidara.Session 2>/dev/null) || exit "$status"
+        [ "$owner" = '(false,)' ] || { printf '%s\n' "$reply" >&2; exit "$status"; }
+        exec brightnessctl -n s "$legacy" ;;
+    *) printf '%s\n' "$reply" >&2; exit "$status" ;;
+esac
