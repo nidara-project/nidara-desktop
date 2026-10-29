@@ -92,9 +92,13 @@ session; see toolkit/settings/src/display/README.md. Draft edits do not mutate,
 owned previews use a compact accessible confirmation with the server's monotonic
 deadline, and unmount closes a dedicated lease connection. The separate selector
 has app-id nidara-display-selector; Hyalo's display-selector action raises it from
-the shortcut and refuses while locked. Super+P is set only in rust-session.sh's
-private configuration when that binary is built. No factory shortcut, native app
-packaging or TS takeover is enabled. Primary does not move TS bar/dock. Duplicate connector names across GPUs are refused.
+the shortcut and refuses while locked. Factory Super+P launches the packaged
+standalone selector; pseudo is on Super+Shift+P. Its app-id rule keeps it floating
+and centered even in tiling. PKGBUILD/install.sh build/install only that selector,
+with required fonts and libraries; native Settings itself is not installed and no
+TS takeover is enabled. rust-session.sh uses the factory configuration unchanged,
+with a tracked wrapper for the exact development binary. Primary does not move TS
+bar/dock. Duplicate connector names across GPUs are refused.
 `check-display1-headless.sh` proves private-bus recovery on one nested output, not physical
 multimonitor/lid/EDID acceptance. Keep that distinction in reviews.
 

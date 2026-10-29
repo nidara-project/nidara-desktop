@@ -27,7 +27,7 @@ hyalo=$(pick "${HYALO_BIN:-}" "$repo/hyalo/target/release/nidara-hyalo" /usr/bin
     || { echo "no nidara-hyalo: build hyalo/ or install it" >&2; exit 1; }
 sessiond=$(pick "${SESSIOND_BIN:-}" "$repo/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond) \
     || { echo "no nidara-sessiond: build session/ or install it" >&2; exit 1; }
-selector=$(pick "${DISPLAY_SELECTOR_BIN:-}" "$repo/toolkit/target/release/nidara-display-selector" "$repo/toolkit/target/debug/nidara-display-selector") || selector=""
+selector=$(pick "${DISPLAY_SELECTOR_BIN:-}" "$repo/toolkit/target/release/nidara-display-selector" "$repo/toolkit/target/debug/nidara-display-selector" /usr/bin/nidara-display-selector) || selector=""
 settings=$(pick "${NK_SETTINGS_BIN:-}" "$repo/toolkit/target/release/nk-settings" /usr/lib/nidara/nidara-settings-native) || settings=""
 data="${NK_SETTINGS_DATA:-$repo/build/settings-data}"; [ -f "$data/version" ] || data=/usr/share/nidara/settings-data
 
@@ -74,11 +74,9 @@ echo "settings:  $state"
 echo "msg:       HYALO_SOCKET=$rt/nidara-hyalo.wayland-1.sock nidara-hyalo msg …"
 # HYALO_SETTINGS: the settings layer Hyalo writes, here and not in ~/.config. The glass
 # tokens of this checkout when it has them (an installed export may be older than Hyalo).
-# This shortcut belongs only to the development Rust session. Factory Hyalo and
-# packaging stay unchanged until the owner authorizes shipping the native selector.
-# Copy the factory source, replacing its conflicting Super+P binding in this private file.
+# Use the factory rules/bindings unchanged, with this checkout's selector and
+# child tracking. HYALO_CONFIG never falls through to the owner's live config.
 if [ -n "$selector" ]; then
-    sed 's/^"Super+P" = "pseudo"$/"Super+P" = "display-selector"/' "$repo/config/hyalo/hyalo.toml" > "$rt/hyalo-rust.toml"
     mkdir -p "$rt/bin"
     printf '%s\n' '#!/usr/bin/env bash' "echo \$\$ >>$(q "$children")" "exec $(q "$selector") \"\$@\"" > "$rt/bin/nidara-display-selector"
     chmod 700 "$rt/bin/nidara-display-selector"
@@ -88,8 +86,7 @@ else
 fi
 vars=(PATH="$selector_path:$repo/bin:$PATH" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
     XDG_CONFIG_HOME="$state/config" XDG_DATA_HOME="$state/data" XDG_CACHE_HOME="$state/cache"
-    XDG_STATE_HOME="$state/state" GSETTINGS_BACKEND=keyfile)
-[ -n "$selector" ] && vars+=(HYALO_CONFIG="$rt/hyalo-rust.toml")
+    XDG_STATE_HOME="$state/state" GSETTINGS_BACKEND=keyfile HYALO_CONFIG="$repo/config/hyalo/hyalo.toml")
 [ -f "$data/tokens/glass.json" ] && vars+=(HYALO_GLASS_TOKENS="$data/tokens/glass.json")
 leave() { xargs -r kill 2>/dev/null <"$children" || true; rm -f "$children"; }
 trap leave EXIT

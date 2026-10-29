@@ -8,6 +8,7 @@ if [ "${1:-}" = --inner ]; then
     export HYALO_CONTROL="$DISPLAY_SETTINGS_RUN/control"
     mkfifo "$HYALO_CONTROL"
     export HYALO_A11Y_MANAGER=1
+    export NK_DISPLAY_TEST_FRAMES=1
     exec "$repo/scripts/dev/rust-session.sh" python3 "$repo/scripts/dev/display-settings-check.py"
 fi
 : "${HYALO_BIN:?Set the exact built Hyalo binary}"

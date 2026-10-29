@@ -949,7 +949,9 @@ impl Application for App {
         // presentation evidence (winit does not deliver wp_presentation feedback).
         if matches!(event, Event::FrameDone) {
             let commit = window.commits();
-            if let Some(deadline) = self.display_commits.remove(&commit) {
+            if let Some(deadline) = self.display_commits.remove(&commit)
+                && std::env::var_os("NK_DISPLAY_TEST_FRAMES").is_some()
+            {
                 eprintln!("DISPLAY_CONFIRMATION_FRAME commit={commit} deadline={deadline}");
             }
         }

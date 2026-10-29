@@ -294,10 +294,20 @@ impl Hyalo {
         match action {
             Action::Spawn(cmd) => crate::spawn(&cmd),
             Action::DisplaySelector => {
-                if self.lock.is_locked() {return Err("display selector unavailable while locked".into());}
-                let existing=self.wm.windows.iter().find(|w|w.mapped && super::app_id(&w.window)=="nidara-display-selector").map(|w|w.id);
-                if let Some(id)=existing {self.focus_window(Some(id));}
-                else {crate::spawn("nidara-display-selector");}
+                if self.lock.is_locked() {
+                    return Err("display selector unavailable while locked".into());
+                }
+                let existing = self
+                    .wm
+                    .windows
+                    .iter()
+                    .find(|w| w.mapped && super::app_id(&w.window) == "nidara-display-selector")
+                    .map(|w| w.id);
+                if let Some(id) = existing {
+                    self.focus_window(Some(id));
+                } else {
+                    crate::spawn("nidara-display-selector");
+                }
             },
             Action::CloseWindow(w) => {
                 let id = self.any_target(w)?;

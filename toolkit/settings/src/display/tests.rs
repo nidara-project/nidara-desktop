@@ -153,6 +153,8 @@ pub(super) struct Fake {
     pub(super) calls: Mutex<Vec<String>>,
     pub(super) sender: Mutex<String>,
     pub(super) fail_confirm: AtomicBool,
+    pub(super) preview_error: AtomicUsize,
+    pub(super) hold_preview: AtomicBool,
     pub(super) brightness: Mutex<Brightness>,
 }
 #[derive(Clone)]
@@ -177,8 +179,16 @@ impl Display {
         layout: Layout,
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(connection)] conn: &zbus::Connection,
-    ) -> Pending {
+    ) -> zbus::fdo::Result<Pending> {
         self.0.calls.lock().unwrap().push("preview".into());
+        while self.0.hold_preview.load(Ordering::Acquire) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        match self.0.preview_error.load(Ordering::Acquire) {
+            1 => return Err(zbus::fdo::Error::Failed("busy".into())),
+            2 => return Err(zbus::fdo::Error::NoReply("uncertain".into())),
+            _ => {}
+        }
         *self.0.sender.lock().unwrap() = header.sender().unwrap().to_string();
         let pending = Pending {
             token: "lease-1".into(),
@@ -200,7 +210,7 @@ impl Display {
         )
         .await
         .unwrap();
-        pending
+        Ok(pending)
     }
     fn confirm(
         &self,
@@ -263,6 +273,8 @@ impl Fixture {
             calls: Mutex::new(vec![]),
             sender: Mutex::new(String::new()),
             fail_confirm: AtomicBool::new(false),
+            preview_error: AtomicUsize::new(0),
+            hold_preview: AtomicBool::new(false),
             brightness: Mutex::new(Brightness {
                 generation: 11,
                 revision: 1,
@@ -403,4 +415,61 @@ fn private_bus_client_lease_owner_refusal_and_final_brightness() {
             .name_has_owner(name.as_str().try_into().unwrap())
             .unwrap()
     });
+}
+
+#[test]
+fn definite_preview_refusal_can_retry_but_no_reply_releases_connection() {
+    let f = Fixture::new();
+    let dedicated = f.bus.connect();
+    let name = dedicated.unique_name().unwrap().to_string();
+    let c = Client::start(dedicated).unwrap();
+    let initial = state(&c, |s| s.snapshot.is_some());
+    let snapshot = initial.snapshot.unwrap();
+    let preview = || Command::Preview {
+        owner: initial.owner.clone(),
+        epoch: snapshot.epoch,
+        revision: snapshot.revision,
+        layout: snapshot.layout.clone(),
+    };
+    f.fake.preview_error.store(1, Ordering::Release);
+    f.fake.hold_preview.store(true, Ordering::Release);
+    // Leave a completed observation unread; receiving it must not clear a later
+    // in-flight action's busy state.
+    c.send(Command::Refresh).unwrap();
+    wait(|| c.notified.load(Ordering::Acquire));
+    c.send(preview()).unwrap();
+    wait(|| f.fake.calls.lock().unwrap().iter().any(|s| s == "preview"));
+    let stale = c.poll().unwrap();
+    assert!(c.busy(&stale));
+    f.fake.hold_preview.store(false, Ordering::Release);
+    let rejected = state(&c, |s| s.error.is_some() && s.snapshot.is_some());
+    assert!(!c.busy(&rejected));
+    assert!(c.busy(&stale));
+    f.fake.preview_error.store(0, Ordering::Release);
+    c.send(preview()).unwrap();
+    state(&c, |s| s.owned.is_some());
+    c.send(Command::Cancel).unwrap();
+    state(&c, |s| s.owned.is_none() && s.error.is_none());
+    let current = state_after_refresh(&c);
+    let snapshot = current.snapshot.unwrap();
+    f.fake.preview_error.store(2, Ordering::Release);
+    c.send(Command::Preview {
+        owner: current.owner,
+        epoch: snapshot.epoch,
+        revision: snapshot.revision,
+        layout: snapshot.layout,
+    })
+    .unwrap();
+    state(&c, |s| s.error.is_some() && s.snapshot.is_none());
+    let dbus = zbus::blocking::fdo::DBusProxy::new(&f.service).unwrap();
+    wait(|| {
+        !dbus
+            .name_has_owner(name.as_str().try_into().unwrap())
+            .unwrap()
+    });
+}
+
+fn state_after_refresh(client: &Client) -> State {
+    client.send(Command::Refresh).unwrap();
+    state(client, |s| s.snapshot.is_some())
 }

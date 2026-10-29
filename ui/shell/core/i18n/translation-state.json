@@ -325,6 +325,26 @@
     "settings.widgets.tooltip.cc-fixed": "114dc78d",
     "settings.widgets.tooltip.no-hardware": "51f7da74",
     "settings.display.error.no-monitors": "1bc1eb1f",
+    "settings.display.native.projection": "e4fcb1be",
+    "settings.display.native.arrangement": "0965eb3c",
+    "settings.display.native.enabled": "df174a3f",
+    "settings.display.native.primary-label": "a9a96ec0",
+    "settings.display.native.primary": "81d3a64e",
+    "settings.display.native.refresh": "384eb189",
+    "settings.display.native.internal": "a9289767",
+    "settings.display.native.external": "82c753ec",
+    "settings.display.native.extend": "281dd836",
+    "settings.display.native.mirror": "972d5737",
+    "settings.display.native.brightness": "e1a2b65d",
+    "settings.display.native.x": "12b3b6f3",
+    "settings.display.native.y": "f2a31e6a",
+    "settings.display.native.previous": "0affa75e",
+    "settings.display.native.next": "7dd5c7c0",
+    "settings.display.native.identify": "497bd93d",
+    "settings.display.native.apply": "441c2756",
+    "settings.display.native.busy": "d35fca0a",
+    "settings.display.native.error": "c1d3dbfe",
+    "settings.display.native.flipped": "014eb1dd",
     "settings.display.title": "574ff9b0",
     "settings.display.group.all": "5d51391d",
     "settings.display.scale.desc": "acd5576a",
@@ -880,8 +900,8 @@
   },
   "locales": {
     "de": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1004,14 +1024,14 @@
       "stale": []
     },
     "es": {
-      "translated": 876,
-      "of": 876,
+      "translated": 896,
+      "of": 896,
       "untranslated": [],
       "stale": []
     },
     "fr": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1134,8 +1154,8 @@
       "stale": []
     },
     "it": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1258,8 +1278,8 @@
       "stale": []
     },
     "ja": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1382,8 +1402,8 @@
       "stale": []
     },
     "nl": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1506,8 +1526,8 @@
       "stale": []
     },
     "pl": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1630,8 +1650,8 @@
       "stale": []
     },
     "pt-BR": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1754,8 +1774,8 @@
       "stale": []
     },
     "pt-PT": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1878,8 +1898,8 @@
       "stale": []
     },
     "ru": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2002,8 +2022,8 @@
       "stale": []
     },
     "zh-CN": {
-      "translated": 759,
-      "of": 876,
+      "translated": 779,
+      "of": 896,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",

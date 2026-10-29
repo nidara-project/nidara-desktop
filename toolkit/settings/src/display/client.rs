@@ -5,7 +5,7 @@
 use super::model::*;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc,
 };
 use std::time::Duration;
@@ -17,6 +17,8 @@ const BRIGHT: &str = "org.nidara.DisplayBrightness1";
 const BRIGHT_PATH: &str = "/org/nidara/DisplayBrightness";
 #[derive(Clone, Debug, Default)]
 pub struct State {
+    /// Number of UI actions completed before this particular observation.
+    pub completed: usize,
     pub owner: String,
     pub snapshot: Option<Snapshot>,
     pub brightness: Option<Brightness>,
@@ -52,6 +54,7 @@ pub struct Client {
     tx: mpsc::SyncSender<Command>,
     rx: mpsc::Receiver<State>,
     closed: Arc<AtomicBool>,
+    issued: AtomicUsize,
     pub notified: Arc<AtomicBool>,
 }
 fn proxy<'a>(
@@ -61,6 +64,12 @@ fn proxy<'a>(
     iface: &'a str,
 ) -> Result<Proxy<'a>, String> {
     Proxy::new(conn, name, path, iface).map_err(|e| e.to_string())
+}
+/// A method error is a definite remote refusal. NoReply/Timeout may hide a
+/// successful mutation, so they still require ending the connection-bound lease.
+fn uncertain(error: &zbus::Error) -> bool {
+    !matches!(error, zbus::Error::MethodError(name, ..)
+        if !matches!(name.as_str(), "org.freedesktop.DBus.Error.NoReply" | "org.freedesktop.DBus.Error.Timeout" | "org.freedesktop.DBus.Error.TimedOut"))
 }
 fn owner(conn: &Connection, name: &str) -> Result<String, String> {
     zbus::blocking::fdo::DBusProxy::new(conn)
@@ -182,6 +191,7 @@ impl Client {
                         continue;
                     };
                     let is_refresh = matches!(&cmd, Command::Refresh);
+                    let tracked = !matches!(&cmd, Command::Refresh | Command::Brightness { .. });
                     let mut uncertain_preview = false;
                     let result = (|| -> Result<(), String> {
                         match cmd {
@@ -202,7 +212,10 @@ impl Client {
                                 uncertain_preview = true;
                                 let pending: Pending = p
                                     .call("Preview", &(epoch, revision, validated))
-                                    .map_err(|e| e.to_string())?;
+                                    .map_err(|e| {
+                                        uncertain_preview = uncertain(&e);
+                                        e.to_string()
+                                    })?;
                                 uncertain_preview = false;
                                 state.owned = Some(pending);
                             }
@@ -286,6 +299,9 @@ impl Client {
                         }
                         logged = state.error.clone();
                     }
+                    if tracked {
+                        state.completed += 1;
+                    }
                     notice.store(true, Ordering::Release);
                     if updates.send(state.clone()).is_err() || uncertain_preview {
                         break;
@@ -307,6 +323,7 @@ impl Client {
             tx,
             rx,
             closed,
+            issued: AtomicUsize::new(0),
             notified,
         })
     }
@@ -327,8 +344,20 @@ impl Client {
                 Err(error) => Err(error.to_string()),
             }
         } else {
-            self.tx.try_send(command).map_err(|e| e.to_string())
+            let tracked = !matches!(&command, Command::Refresh);
+            if tracked {
+                self.issued.fetch_add(1, Ordering::AcqRel);
+            }
+            self.tx.try_send(command).map_err(|e| {
+                if tracked {
+                    self.issued.fetch_sub(1, Ordering::AcqRel);
+                }
+                e.to_string()
+            })
         }
+    }
+    pub fn busy(&self, observed: &State) -> bool {
+        observed.completed < self.issued.load(Ordering::Acquire)
     }
     pub fn poll(&self) -> Option<State> {
         self.notified.store(false, Ordering::Release);

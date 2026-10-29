@@ -24,7 +24,9 @@ never restarts the lease. Only the token returned to this client's own connectio
 can be confirmed or cancelled. Save failure retains that token for retry. A foreign
 preview can be observed but not adopted. Closing, unmounting, navigation away or an
 uncertain Preview closes the dedicated lease connection, including replies that
-arrive late. Hyalo owns rollback and the timeout, not a UI timer.
+arrive late. A definite remote MethodError leaves the connection usable for a
+corrected draft; NoReply/Timeout and transport/decoding errors remain uncertain.
+Hyalo owns rollback and the timeout, not a UI timer.
 
 `client::Client` subscribes to changes/owner changes before GetState and runs
 bounded calls on one worker. Its connection is separate from Config1/SettingsNative;
@@ -33,7 +35,9 @@ Brightness uses observed raw ranges and only renders a slider for an available,
 writable channel. Pending slider values coalesce per device/generation, retaining
 the final value. The worker rechecks generation/device/epoch/availability before
 SetBrightness; sessiond still owns the rate gate, policy and hardware readback.
-No UI error or timeout retries a mutation. There is no OSD or software brightness.
+Each observation carries the number of completed UI commands. An older Changed
+observation cannot release the busy state of a later queued action. No UI error or
+timeout retries a mutation. There is no OSD or software brightness.
 
 `nidara-display-selector` is a separate nk-wayland toplevel with app-id
 `nidara-display-selector`, an ordinary retained Tree and one shared AT-SPI Bridge.
@@ -42,15 +46,17 @@ while locked and focuses an existing mapped instance, otherwise starting the
 selector. It does not mint activation tokens or create compositor-owned controls
 without semantics.
 
-This cut runs in the separate Rust session. Build `nk-settings` and
+The page runs in the separate Rust session. Build `nk-settings` and
 `nidara-display-selector` and run `scripts/dev/rust-session.sh`, optionally with
 `HYALO_BIN`, `SESSIOND_BIN`, `NK_SETTINGS_BIN`, `DISPLAY_SELECTOR_BIN` and
-`NK_SETTINGS_DATA` selecting exact development binaries/exports. If the selector is
-available the script replaces Super+P only in its private Hyalo configuration;
-factory `hyalo.toml` and packaging/installation are unchanged. The wrapper records
+`NK_SETTINGS_DATA` selecting exact development binaries/exports. Its wrapper records
 shortcut-launched selector PIDs in the session's existing child cleanup list.
-Shipping the native Settings or factory selector shortcut needs a separate owner
-decision. The existing TS Display page is unchanged.
+The script loads the factory configuration without modifying its bindings.
+Factory Hyalo binds Super+P to the selector and Super+Shift+P to pseudo. Its
+app-id rule makes the selector floating and centered even in a tiling workspace.
+PKGBUILD and install.sh build/install only the standalone selector, with its
+existing complete data export and required fonts/libraries. Native Settings itself
+is not installed or routed globally. The existing TS Display page is unchanged.
 
 Verification uses pure preset/geometry/deadline tests, private Display1/brightness
 services, and retained Tree actions with real exports. The manual

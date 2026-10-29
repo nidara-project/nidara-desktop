@@ -135,7 +135,9 @@ impl Application for Selector {
     fn event(&mut self, event: Event, w: &mut Window) -> Result<()> {
         if matches!(event, Event::FrameDone) {
             let commit = w.commits();
-            if let Some(deadline) = self.confirmation_commits.remove(&commit) {
+            if let Some(deadline) = self.confirmation_commits.remove(&commit)
+                && std::env::var_os("NK_DISPLAY_TEST_FRAMES").is_some()
+            {
                 eprintln!("DISPLAY_CONFIRMATION_FRAME commit={commit} deadline={deadline}");
             }
         }
@@ -143,6 +145,7 @@ impl Application for Selector {
             return Err(error.clone());
         }
         if matches!(event, Event::Configure) {
+            w.set_title(self.exports.text("settings.display.title")?)?;
             self.configured = true;
         }
         if let Event::Focus(active) = event {

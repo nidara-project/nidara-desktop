@@ -63,7 +63,7 @@ panic occur during nested teardown, including the Appearance baseline. They are
 retained in logs and are not evidence of clean shutdown of every dependency.
 The private namespace bounds their lifetime; no nested Hyalo is left running.
 
-Final D7 binary SHA-256 values:
+Initial D7 binary SHA-256 values:
 
 | Binary | SHA-256 |
 | --- | --- |
@@ -91,4 +91,45 @@ NK_SETTINGS_DATA export. No CI configuration was added or changed.
 One winit output does not prove physical multi-monitor mirroring, EDID/DDC, docks,
 lid, multi-GPU or real backlight behavior. Brightness transport is covered with a
 private provider, not a real screen. AT-SPI actions are not Orca speech evidence.
-Packaging, installation and the factory Super+P binding remain a separate decision.
+Native Settings installation and global routing remain a separate decision.
+
+## Review corrections (2026-10-29)
+
+The owner explicitly authorized packaging the standalone selector, the factory
+binding and the floating/centered rule. Super+P launches the selector;
+Super+Shift+P retains pseudo. PKGBUILD fetches the locked toolkit dependencies in
+prepare(), builds only the selector offline, and installs it into nidara-desktop.
+The dev installer builds/installs the same binary. Required font discovery,
+keyboard and decoder build dependencies are explicit. No installer was executed
+and no package was installed on the owner's machine.
+
+Settings library/application rerun: 66 + 11 tests passed, one existing timing test
+ignored. Together with the previous 39 integration tests this is 116 passed.
+The new private-bus case proves an explicit Preview refusal can retry on the same
+connection, NoReply closes that connection, and an old observation cannot clear
+the busy state of a later action, even after the worker has completed it.
+The drag test now retains a perpendicular offset and clamps to positive contact.
+Settings and Hyalo all-target Clippy passed again. The translation ledger is fresh
+for all 11 non-source locales; pre-existing untranslated debt is preserved.
+
+`headless-review-frame` passed the actual D7 client sequence again with the new
+binaries and unchanged factory configuration. It explicitly sets the workspace
+to tiling and checks the selector is floating and centered before exercising
+keyboard activation and rollback. Its selector capture was visually inspected.
+One earlier attempt (`headless-review`) timed out in the initial screenshot after
+queueing it before the startup frame callback. The harness now waits for that
+callback and allows 30 seconds for read-only screenshots; the compositor's
+confirmation deadline is unchanged and every functional assertion is still
+required. Root confirmation frame diagnostics require NK_DISPLAY_TEST_FRAMES=1,
+set only by the harness.
+
+Updated binary hashes in the successful run (Hyalo/sessiond unchanged above):
+
+- nk-settings: cc4982e0c6d43e915dc6ac4ced1fd00eb3cb00a4abd3444f3a2b4e4c351cba2c
+- nidara-display-selector: b593950001f8daffe258a381566728a13aaf126014f972928ffa9d5987c8c006
+
+Package/install shell syntax and the installer's extracted dependency arrays were
+checked without installation. Full package build/installed acceptance is pending
+remote CI. The original remote Toolkit and sessiond jobs passed; smoke and Hyalo's
+package build failed because the Arch container's node could not load
+libsimdjson.so.34. The smoke job was relaunched without changing CI configuration.

@@ -642,7 +642,8 @@ impl Page {
         text: &mut ParleyBackend,
     ) -> Result<()> {
         if let Some(state) = self.client.poll() {
-            self.busy = false;
+            let was_busy = self.busy;
+            self.busy = self.client.busy(&state);
             let changed = state.snapshot != self.state.snapshot
                 || state.owned != self.state.owned
                 || state.error != self.state.error;
@@ -710,7 +711,7 @@ impl Page {
                     })
                     .collect::<Vec<_>>()
             });
-            let rebuild = changed || old_channels != new_channels;
+            let rebuild = changed || was_busy != self.busy || old_channels != new_channels;
             self.state = state;
             if rebuild {
                 self.render(tree, e, s, text)?;
@@ -1290,8 +1291,8 @@ impl Page {
         Ok(false)
     }
 }
-/// Attach at the nearest full edge, preserving nonoverlap/contact for the common
-/// two-output case. More complex graphs are still checked by server Validate.
+/// Attach at the nearest edge, retaining the perpendicular offset while ensuring
+/// positive shared-edge contact. Complex graphs still go through server Validate.
 fn snap(layout: &mut Layout, outputs: &[Output], id: &str) {
     let Some(selected) = layout.outputs.iter().find(|s| s.id == id).cloned() else {
         return;
@@ -1311,10 +1312,22 @@ fn snap(layout: &mut Layout, outputs: &[Output], id: &str) {
             .and_then(|o| dimensions(other, o))
         {
             options.extend([
-                (other.x + ow, other.y),
-                (other.x - w, other.y),
-                (other.x, other.y + oh),
-                (other.x, other.y - h),
+                (
+                    other.x + ow,
+                    selected.y.clamp(other.y - h + 1, other.y + oh - 1),
+                ),
+                (
+                    other.x - w,
+                    selected.y.clamp(other.y - h + 1, other.y + oh - 1),
+                ),
+                (
+                    selected.x.clamp(other.x - w + 1, other.x + ow - 1),
+                    other.y + oh,
+                ),
+                (
+                    selected.x.clamp(other.x - w + 1, other.x + ow - 1),
+                    other.y - h,
+                ),
             ]);
         }
     }
@@ -1516,7 +1529,18 @@ mod tests {
         external.y = 12;
         snap(&mut layout, &snapshot.outputs, "external");
         let external = layout.outputs.iter().find(|o| o.id == "external").unwrap();
-        assert_eq!((external.x, external.y), (1200, 0));
+        assert_eq!((external.x, external.y), (1200, 12));
+        let external = layout
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == "external")
+            .unwrap();
+        external.y = 100_000;
+        // Clamp the perpendicular offset to one logical unit of shared edge,
+        // rather than snapping the two origins together.
+        snap(&mut layout, &snapshot.outputs, "external");
+        let external = layout.outputs.iter().find(|o| o.id == "external").unwrap();
+        assert_eq!((external.x, external.y), (1199, 800));
         reorder(&mut layout, &snapshot.outputs, "external", -1);
         let panel = layout.outputs.iter().find(|o| o.id == "panel").unwrap();
         assert_eq!(panel.x, 1600);

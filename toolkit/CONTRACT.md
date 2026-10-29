@@ -1503,6 +1503,8 @@ with a fresh publication namespace. The native app still owns one Bridge.
 The separate `nidara-display-selector` binary uses nk-wayland/nk-widgets and one
 Bridge, with its own app-id. Hyalo's locked-state-guarded `display-selector` action
 raises a mapped instance instead of inventing a client activation token. Super+P
-is configured only by the isolated `scripts/dev/rust-session.sh` when the selector
-is built. Factory configuration, native app packaging and legacy Settings routing
-are not changed by this cut. There is no TS bridge or global Settings takeover.
+launches the packaged selector; Super+Shift+P retains pseudo. An app-id rule makes
+it floating and centered even in tiling. PKGBUILD and install.sh build/install
+only the standalone selector, not native Settings. The isolated rust-session.sh
+uses the same factory configuration, with exact binary overrides and child
+tracking. There is no TS bridge or global Settings takeover.

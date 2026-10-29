@@ -371,7 +371,7 @@ export default {
     "settings.display.native.refresh": "Actualizar pantallas",
     "settings.display.native.internal": "Solo integrada",
     "settings.display.native.external": "Solo externas",
-    "settings.display.native.extend": "Extender",
+    "settings.display.native.extend": "Unir",
     "settings.display.native.mirror": "Duplicar",
     "settings.display.native.brightness": "Brillo",
     "settings.display.native.x": "Posición horizontal",

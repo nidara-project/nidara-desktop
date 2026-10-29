@@ -26,7 +26,7 @@ bus=Gio.bus_get_sync(Gio.BusType.SESSION,None)
 def call(name,path,interface,method,args=None):
     return bus.call_sync(name,path,interface,method,args,None,Gio.DBusCallFlags.NONE,10000,None).unpack()
 def display(): return call('org.nidara.Display','/org/nidara/Display','org.nidara.Display1','GetState')
-def msg(*args):return json.loads(subprocess.check_output([os.environ['HYALO_BIN'],'msg',*map(str,args)],timeout=10))['ok']
+def msg(*args):return json.loads(subprocess.check_output([os.environ['HYALO_BIN'],'msg',*map(str,args)],timeout=30 if args[0]=='screenshot' else 10))['ok']
 def control(line):
     with open(os.environ['HYALO_CONTROL'],'w') as stream:stream.write(line+'\n')
 def chord():control('keydown 125\nkey 25\nkeyup 125')
@@ -84,6 +84,9 @@ try:
     with (OUT/'settings.log').open('w') as stream:
         process=subprocess.Popen([os.environ['NK_SETTINGS_BIN'],'page','appearance' if os.environ.get('DISPLAY_SETTINGS_BASELINE')=='appearance' else 'display'],stdout=stream,stderr=stream)
     wait(lambda:'CONTENT_READY' in (OUT/'settings.log').read_text(),'native display commit')
+    # CONTENT_READY is a commit, not a frame callback. Do not queue a synchronous
+    # software screenshot while the initial layered D7 frame is still rendering.
+    wait(lambda:'FIRST_FRAME_CALLBACK_MS=' in (OUT/'settings.log').read_text(),'native first frame callback')
     if os.environ.get('DISPLAY_SETTINGS_BASELINE')=='appearance':
         screenshot('appearance-baseline')
         report('ok: D7 Appearance baseline capture only; no Display acceptance')
@@ -117,8 +120,16 @@ try:
     call('org.nidara.SettingsNative','/org/nidara/Settings','org.nidara.Settings','Request',GLib.Variant('(as)',(['page','appearance'],)))
     wait(lambda:not pending(),'unmount rollback');assert display()[4]==confirmed
     report('ok: actual page, retained accessible selection, draft/no write, preview/countdown, cancel, confirm and unmount rollback')
+    native=next(w for w in msg('windows')['windows'] if w['pid']==process.pid)
+    msg('do',f"set-workspace-mode {native['workspace']} tiling")
     chord();selector=wait(lambda:next((w for w in msg('windows')['windows'] if w['app_id']=='nidara-display-selector'),None),'Super+P selector')
     wait(lambda:node('Display','External only'),'selector semantics')
+    selector=next(w for w in msg('windows')['windows'] if w['id']==selector['id'])
+    assert selector['floating'],'selector entered the tiling layout'
+    output=display()[3][0];mode=next(m for m in output[11] if m[0]==output[12])
+    logical_width=round(mode[1]/output[13]);logical_height=round(mode[2]/output[13])
+    assert abs(selector['x']+selector['width']/2-output[15]-logical_width/2)<=2,'selector not horizontally centered'
+    assert abs(selector['y']+selector['height']/2-output[16]-logical_height/2)<=36,'selector not vertically centered'
     duplicate=node('Display','Duplicate',Atspi.Role.LIST_ITEM);assert duplicate and not duplicate.get_state_set().contains(Atspi.StateType.ENABLED),'unsupported mirror was enabled'
     assert display()[4]==confirmed and not pending(),'opening selector mutated outputs'
     native=next(w for w in msg('windows')['windows'] if w['pid']==process.pid)
@@ -130,7 +141,7 @@ try:
     control('key 1');wait(lambda:not pending(),'Escape rollback')
     assert display()[4]==confirmed
     wait(lambda:not any(w['app_id']=='nidara-display-selector' for w in msg('windows')['windows']),'selector close')
-    report('ok: actual Super+P binding, app-id, accessible choices, unsupported mode refusal, repeated activation, Escape rollback')
+    report('ok: factory Super+P binding, floating/centered on a tiling workspace, app-id, accessible choices, unsupported mode refusal, repeated activation, Escape rollback')
     (OUT/'result.json').write_text(json.dumps({'passed':True,'scope':'private rust-session/winit/AT-SPI; no hardware/Orca/installation acceptance'},indent=2))
 finally:
     if process and process.poll() is None:
