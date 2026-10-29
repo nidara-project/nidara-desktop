@@ -10,6 +10,7 @@ mod model;
 mod network;
 mod power;
 mod store;
+mod tray;
 
 use model::{CAPABILITIES, MAX_ID, Notification, actions, allocate, now, scalar_hints, truthy};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -300,6 +301,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if std::env::args().any(|a| a == "--media") {
         media::serve(&conn).await?;
+    }
+    if std::env::args().any(|a| a == "--tray") {
+        tray::serve(&conn).await?;
     }
     let power_read_only = std::env::args().any(|a| a == "--power-read-only");
     if power_read_only || std::env::args().any(|a| a == "--power") {
