@@ -743,6 +743,13 @@ rm -rf "$AUTH_BUILD"
 echo "  Building nidara-sessiond..."
 (cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked --features audio-native)
 sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond
+# Register only this user's exact development executables, after an explicit dev
+# install/update. The helper atomically writes a root-owned 0644 access.d file;
+# package installations do not ship developer grants. No trust from .dev/env alone.
+if [ "$MODE" = "dev" ] || [ "$MODE" = "update-apply" ]; then
+    sudo /usr/bin/python3 "$REPO_DIR/scripts/dev/register-ipc-access.py" \
+        --repo "$REPO_DIR" --uid "$(id -u "$REAL_USER")"
+fi
 # The factory Super+P action launches this Rust toplevel. Build/install only the
 # selector; this does not install or take over the native Settings application.
 echo "  Building nidara-display-selector..."

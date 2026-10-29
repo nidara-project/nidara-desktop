@@ -9,12 +9,14 @@ use std::{
 use smithay::reexports::calloop::{Interest, Mode, PostAction, generic::Generic};
 
 use super::{Event, Reply, Request, Response};
+use nidara_access::{Consent, ConsentWatch, Operation, Peer};
 use crate::{config, outputs, state::Hyalo};
 
 #[derive(Default)]
 pub struct IpcState {
     path: Option<PathBuf>,
     subscribers: Vec<UnixStream>,
+    consent: ConsentWatch,
 }
 
 impl Drop for IpcState {
@@ -26,6 +28,7 @@ impl Drop for IpcState {
 }
 
 pub fn start(state: &mut Hyalo) {
+    state.ipc.consent = ConsentWatch::start();
     let path = super::socket_path(&state.socket_name.to_string_lossy());
     let _ = std::fs::remove_file(&path);
     let listener = match UnixListener::bind(&path) {
@@ -52,8 +55,10 @@ pub fn start(state: &mut Hyalo) {
 }
 
 fn accept(state: &mut Hyalo, stream: UnixStream) {
+    let peer = Peer::from_socket(&stream).map_err(|e| format!("AccessDenied: {e}"));
     let _ = stream.set_nonblocking(true);
     let mut buffer = Vec::new();
+    let mut warned = false;
     let source = Generic::new(stream, Interest::READ, Mode::Level);
     let _ = state.loop_handle.insert_source(source, move |_, stream, state| {
         let mut chunk = [0u8; 4096];
@@ -86,7 +91,16 @@ fn accept(state: &mut Hyalo, stream: UnixStream) {
                     // The connection is a stream from now on; nothing more is read from it.
                     return Ok(PostAction::Remove);
                 }
-                Ok(req) => handle(state, req),
+                Ok(req) => match authorize(&req, peer.as_ref().map_err(String::as_str), state.ipc.consent.get()) {
+                    Ok(()) => handle(state, req),
+                    Err(message) => {
+                        if !warned {
+                            tracing::warn!(%message, "IPC denied: development clients need an exact root-owned grant in /etc/nidara/access.d; register this checkout with install.sh --dev");
+                            warned = true;
+                        }
+                        Reply::AccessDenied { error: message, code: "AccessDenied" }
+                    },
+                },
                 Err(err) => Reply::Error(format!("cannot read the request: {err}")),
             };
             if write_line(s, &reply).is_err() {
@@ -104,6 +118,53 @@ fn write_line<T: serde::Serialize>(s: &mut UnixStream, value: &T) -> std::io::Re
     let r = s.write_all(text.as_bytes());
     let _ = s.set_nonblocking(true);
     r
+}
+
+/// Exhaustive classification: adding a Request requires an explicit policy decision.
+fn operation(req: &Request) -> Operation {
+    match req {
+        Request::Version
+        | Request::PowerInfo
+        | Request::Outputs
+        | Request::Windows
+        | Request::Workspaces
+        | Request::Layers
+        | Request::CursorPosition
+        | Request::Stats
+        | Request::Frames { .. }
+        | Request::Lock
+        | Request::Idle
+        | Request::Xwayland
+        | Request::Config
+        | Request::EventStream => Operation::Read,
+        Request::Screenshot { .. } => Operation::Capture,
+        Request::SetOutput { .. } => Operation::Outputs,
+        Request::OutputPower { .. } | Request::PowerWake | Request::PowerLock => Operation::Power,
+        Request::NightLight { .. } => Operation::NightLight,
+        Request::Settings { .. } | Request::ReloadConfig => Operation::Configure,
+        Request::MinimizeTargets { .. } => Operation::MinimizeTargets,
+        Request::DebugOverlay { .. } => Operation::WindowControl,
+        Request::Quit => Operation::EndSession,
+        Request::Do { command } => {
+            use crate::wm::actions::Action;
+            match command.parse::<Action>() {
+                Ok(Action::CloseWindow(_)) => Operation::CloseWindow,
+                Ok(Action::Quit) => Operation::EndSession,
+                Ok(Action::Spawn(_)) => Operation::Spawn,
+                Ok(Action::SetCursor { .. } | Action::ReloadConfig) => Operation::Configure,
+                Ok(Action::DisplaySelector) => Operation::OpenSurface,
+                // Includes spawn, quit and all future action variants: never a free bypass.
+                _ => Operation::WindowControl,
+            }
+        }
+    }
+}
+fn authorize(req: &Request, peer: Result<&Peer, &str>, consent: Consent) -> Result<(), String> {
+    let op = operation(req);
+    if matches!(op, Operation::Read | Operation::OpenSurface) {
+        return Ok(());
+    }
+    peer.map_err(str::to_owned)?.authorize(op, consent)
 }
 
 fn handle(state: &mut Hyalo, req: Request) -> Reply {
@@ -444,5 +505,29 @@ impl Hyalo {
     pub fn ipc_broadcast_lock(&mut self, locked: bool) {
         crate::display::changed(self);
         broadcast(self, &Event::LockChanged { locked });
+    }
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::*;
+    #[test]
+    fn untrusted_requests_are_checked_before_effects_and_denials_are_structured() {
+        let req = Request::Do { command: "spawn touch /should-never-exist".into() };
+        assert_eq!(operation(&req), Operation::Spawn);
+        assert!(authorize(&req, Err("identity unavailable"), Consent::default()).is_err());
+        assert!(authorize(&Request::Windows, Err("identity unavailable"), Consent::default()).is_ok());
+        assert_eq!(operation(&Request::Do { command: "close-window".into() }), Operation::CloseWindow);
+        assert_eq!(operation(&Request::Do { command: "reload-config".into() }), Operation::Configure);
+        assert_eq!(operation(&Request::Do { command: "display-selector".into() }), Operation::OpenSurface);
+        let (socket, _other) = UnixStream::pair().unwrap();
+        let peer = Peer::from_socket(&socket).unwrap();
+        let req = Request::Do { command: "pseudo".into() };
+        assert!(authorize(&req, Ok(&peer), Consent::default()).is_err());
+        assert!(authorize(&req, Ok(&peer), Consent { control: true, ..Consent::default() }).is_ok());
+        assert!(authorize(&req, Ok(&peer), Consent::default()).is_err(), "revocation is read per request");
+        let json = serde_json::to_value(Reply::AccessDenied { error: "enable computer control".into(), code: "AccessDenied" }).unwrap();
+        assert_eq!(json["code"], "AccessDenied");
+        assert_eq!(json["error"], "enable computer control");
     }
 }

@@ -954,9 +954,15 @@ Scroll. Read the README before extending this service or adding its consumers.
 
 `nidara-sessiond --config` serves `org.nidara.Config1` (`session/daemon/src/config/`) with the
 interface, members and rules of the TypeScript shell's `ConfigService.ts`: `Snapshot`/`Apply`/
-`Updated` with epoch and revision, `Describe`/`Get`/`Set`/`Changed`, the native Settings'
-owner trusted, any other sender gated by `ai.allowConfigWrite`, errors `Denied`/`Invalid`/
-`Failed`. Without `--config` this interface is absent (other service flags are independent);
+`Updated` with epoch and revision, `Describe`/`Get`/`Set`/`Changed`. Rust writes use
+`crates/nidara-access`: unique sender → bus credentials → pinned Linux process →
+installed executable permissions. Owning SettingsNative is not trust. External writes
+require computer control AND `ai.allowConfigWrite`; errors are `AccessDenied`/`Invalid`/
+`Failed`. The TypeScript service keeps its existing policy. Process credentials
+are cached by unique sender until disconnect; executable identity, consent and
+root-owned access.d development grants are checked per write. Dev installation
+registers exact per-UID paths; missing registration never falls back to env/HOME
+trust. See `crates/nidara-access/README.md`. Without `--config` this interface is absent (other service flags are independent);
 with it a name already owned
 (the TS shell's, in its session) is left alone — the daemon keeps running.
 

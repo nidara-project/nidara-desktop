@@ -741,6 +741,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-access"
+version = "0.1.0"
+dependencies = [
+ "gio",
+ "libc",
+]
+
+[[package]]
 name = "nidara-sessiond"
 version = "0.1.0"
 dependencies = [
@@ -751,6 +759,7 @@ dependencies = [
  "image",
  "lewton",
  "libc",
+ "nidara-access",
  "pipewire",
  "png",
  "serde",

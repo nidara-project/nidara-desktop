@@ -8,9 +8,9 @@
 //!   `Updated(t, t, a{sv})`; `Describe`/`Get`/`Set`/`Changed` kept for older clients.
 //! - `epoch` is this process's start (wall-clock µs); `revision` grows by one per announced
 //!   batch. Only real changes are announced, coalesced per scheduler turn.
-//! - The owner of `org.nidara.SettingsNative` writes freely (read-only keys excepted); any
-//!   other sender is an agent, refused unless `ai.allowConfigWrite`. Cooperative consent, not
-//!   a security boundary (owner, 2026-10-18).
+//! - Writes authenticate the unique sender's Linux process using nidara-access.
+//!   Authorized installed Settings writes freely; external callers require computer
+//!   control AND allowConfigWrite. Owning SettingsNative grants no privilege.
 //!
 //! Served only on request (`nidara-sessiond --config`): in a session where the TypeScript
 //! shell serves the name, this does not compete for it.
@@ -19,9 +19,10 @@ mod followers;
 pub mod registry;
 mod store;
 
+use nidara_access::{Operation, Peer};
 use registry::{Refusal, Value};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 use store::{Changes, Handle};
 use tokio::sync::Mutex;
 use zbus::object_server::SignalEmitter;
@@ -30,7 +31,6 @@ use zbus::{Connection, message::Header};
 
 pub const NAME: &str = "org.nidara.Config";
 pub const PATH: &str = "/org/nidara/Config";
-const SETTINGS_NAME: &str = "org.nidara.SettingsNative";
 const SCHEMA_VERSION: u64 = 1;
 
 #[derive(zbus::DBusError, Debug)]
@@ -38,7 +38,7 @@ const SCHEMA_VERSION: u64 = 1;
 pub enum ConfigError {
     #[zbus(error)]
     ZBus(zbus::Error),
-    Denied(String),
+    AccessDenied(String),
     Invalid(String),
     Failed(String),
 }
@@ -53,7 +53,7 @@ pub struct Config1 {
     store: Handle,
     changes: Arc<Changes>,
     announced: Arc<Mutex<Announced>>,
-    settings_owner: Arc<StdMutex<Option<String>>>,
+    peers: Arc<Mutex<HashMap<String, Arc<Peer>>>>,
 }
 
 fn variant(v: &Value) -> OwnedValue {
@@ -112,20 +112,49 @@ impl Config1 {
     async fn write(
         &self,
         header: &Header<'_>,
+        connection: &Connection,
         key: String,
         value: &Variant<'_>,
     ) -> Result<Value, ConfigError> {
-        let sender = header.sender().map(|s| s.to_string());
-        let trusted = sender.is_some() && *self.settings_owner.lock().unwrap() == sender;
+        let sender = header
+            .sender()
+            .ok_or_else(|| ConfigError::AccessDenied("missing unique sender".into()))?;
+        let cached = self.peers.lock().await.get(sender.as_str()).cloned();
+        let peer = if let Some(peer) = cached {
+            peer
+        } else {
+            let dbus = zbus::fdo::DBusProxy::new(connection).await.map_err(|e| {
+                ConfigError::AccessDenied(format!("credential service unavailable: {e}"))
+            })?;
+            let credentials = dbus
+                .get_connection_credentials(sender.clone().into())
+                .await
+                .map_err(|e| {
+                    ConfigError::AccessDenied(format!("caller credentials unavailable: {e}"))
+                })?;
+            let pid = credentials
+                .process_id()
+                .ok_or_else(|| ConfigError::AccessDenied("caller PID unavailable".into()))?;
+            let uid = credentials
+                .unix_user_id()
+                .ok_or_else(|| ConfigError::AccessDenied("caller UID unavailable".into()))?;
+            let peer = Peer::from_credentials(pid, uid).map_err(|e| {
+                ConfigError::AccessDenied(format!("caller identity unavailable: {e}"))
+            })?;
+            let peer = Arc::new(peer);
+            let mut peers = self.peers.lock().await;
+            if peers.len() >= 256 {
+                peers.clear();
+            }
+            peers.insert(sender.to_string(), peer.clone());
+            peer
+        };
         let raw = raw(value);
         let changes = self.changes.clone();
         self.store
             .call(move |st| {
-                if !trusted && !registry::agents_may_write(st) {
-                    return Err(ConfigError::Denied(
-                        "config writes are disabled — enable them in Settings → AI".into(),
-                    ));
-                }
+                peer.authorize(Operation::Configure, registry::consent(st))
+                    .map_err(ConfigError::AccessDenied)?;
                 let before = registry::find(&key)
                     .filter(|k| registry::available(st, k))
                     .map(|k| registry::get(st, k));
@@ -188,11 +217,12 @@ impl Config1 {
     async fn set(
         &self,
         #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
         key: String,
         value: OwnedValue,
     ) -> Result<(), ConfigError> {
-        self.write(&header, key, &value).await?;
+        self.write(&header, connection, key, &value).await?;
         flush(&self.changes, &self.announced, &emitter).await?;
         Ok(())
     }
@@ -215,11 +245,12 @@ impl Config1 {
     async fn apply(
         &self,
         #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
         key: String,
         value: OwnedValue,
     ) -> Result<(u64, OwnedValue), ConfigError> {
-        let canonical = self.write(&header, key, &value).await?;
+        let canonical = self.write(&header, connection, key, &value).await?;
         flush(&self.changes, &self.announced, &emitter).await?;
         let revision = self.announced.lock().await.revision;
         Ok((revision, variant(&canonical)))
@@ -262,7 +293,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<bool> {
         revision: 0,
         sent,
     }));
-    let settings_owner = Arc::new(StdMutex::new(None));
+    let peers = Arc::new(Mutex::new(HashMap::new()));
     conn.object_server()
         .at(
             PATH,
@@ -270,7 +301,7 @@ pub async fn serve(conn: &Connection) -> zbus::Result<bool> {
                 store: store.clone(),
                 changes: changes.clone(),
                 announced: announced.clone(),
-                settings_owner: settings_owner.clone(),
+                peers: peers.clone(),
             },
         )
         .await?;
@@ -285,20 +316,18 @@ pub async fn serve(conn: &Connection) -> zbus::Result<bool> {
         return Ok(false);
     }
     followers::start(store.clone(), changes.clone());
-    // The native Settings' owner, followed rather than asked on every write (every slider
-    // step paid a GetNameOwner).
+    // Only kernel-pinned process credentials are cached, never executable privilege.
+    // Drop entries as unique names disappear. authorize() rechecks local identity per write.
     let dbus = zbus::fdo::DBusProxy::new(conn).await?;
     let mut owners = dbus.receive_name_owner_changed().await?;
-    if let Ok(owner) = dbus.get_name_owner(SETTINGS_NAME.try_into()?).await {
-        *settings_owner.lock().unwrap() = Some(owner.to_string());
-    }
     tokio::spawn(async move {
         use futures_util::StreamExt;
         while let Some(signal) = owners.next().await {
             if let Ok(args) = signal.args()
-                && args.name().as_str() == SETTINGS_NAME
+                && args.name().as_str().starts_with(':')
+                && args.new_owner().is_none()
             {
-                *settings_owner.lock().unwrap() = args.new_owner().as_ref().map(|o| o.to_string());
+                peers.lock().await.remove(args.name().as_str());
             }
         }
     });

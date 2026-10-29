@@ -12,6 +12,7 @@ name = "nidara-hyalo"
 path = "src/main.rs"
 
 [dependencies]
+nidara-access = { path = "../../crates/nidara-access" }
 smithay.workspace = true
 smithay-drm-extras.workspace = true
 bitflags = "2.2.1"

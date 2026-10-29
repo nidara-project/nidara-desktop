@@ -38,7 +38,11 @@ pub fn request(value: Value) -> Result<Value, String> {
     }
     let reply: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
     if let Some(error) = reply.get("error") {
-        return Err(error.as_str().unwrap_or("compositor refused").into());
+        return Err(error
+            .as_str()
+            .or_else(|| error.get("message").and_then(Value::as_str))
+            .unwrap_or("compositor refused")
+            .into());
     }
     reply
         .get("ok")
