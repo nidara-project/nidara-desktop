@@ -133,3 +133,10 @@ checked without installation. Full package build/installed acceptance is pending
 remote CI. The original remote Toolkit and sessiond jobs passed; smoke and Hyalo's
 package build failed because the Arch container's node could not load
 libsimdjson.so.34. The smoke job was relaunched without changing CI configuration.
+
+The follow-up package review moved dav1d from build-only dependencies to runtime
+dependencies, which makepkg also supplies at build time. install.sh derives both
+arrays and therefore retains it. The current debug selector's ldd lists
+libxkbcommon, libgcc_s, libm and libc; it does not retain libdav1d (unused decoder
+code can be eliminated). No local release selector is available, so release
+linkage/package acceptance remains a remote CI check rather than a local claim.

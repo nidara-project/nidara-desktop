@@ -83,8 +83,9 @@ depends=(
   gnome-keyring libsecret
   # GTK/GJS runtime
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
-  # Native projection selector: keyboard mapping and required font discovery.
-  libxkbcommon fontconfig
+  # Native projection selector: keyboard mapping, required font discovery and
+  # the native image decoder linked by the Settings crate.
+  libxkbcommon fontconfig dav1d
   # (no libastal-* packages — all services, runtime, and PAM auth are native C/TS)
   # services the shell talks to. networkmanager is load-bearing TWICE over: the
   # daemon, and `libnm` (its dep) for the NM-1.0 typelib core/NetworkService.ts
@@ -204,7 +205,7 @@ _hyalo_makedepends=(
 )
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
-  wayland gtk4 gobject-introspection pkgconf rust clang-libs dav1d
+  wayland gtk4 gobject-introspection pkgconf rust clang-libs
   "${_hyalo_makedepends[@]}"
 )
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
