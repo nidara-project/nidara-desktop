@@ -23,6 +23,8 @@ pub enum Operation {
     Read,
     OpenSurface,
     RevokeControl,
+    Reload,
+    ActivateOwnWindow,
     WindowControl,
     Spawn,
     EndSession,
@@ -41,6 +43,7 @@ enum Role {
     Session,
     Shell,
     LegacyShell,
+    LegacySettings,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -63,10 +66,11 @@ impl Consent {
 }
 fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     use Operation::*;
-    if matches!(op, Read | OpenSurface | RevokeControl) {
+    if matches!(op, Read | OpenSurface | RevokeControl | Reload) {
         return true;
     }
     let own = match role {
+        Role::LegacySettings => matches!(op, ActivateOwnWindow),
         Role::Settings => matches!(op, Configure),
         Role::Session => matches!(op, Configure | Power | NightLight),
         Role::Shell => matches!(op, WindowControl | CloseWindow | MinimizeTargets),
@@ -103,6 +107,7 @@ pub struct Peer {
     pidfd: OwnedFd,
     proc: File,
     uid: u32,
+    pid: u32,
 }
 fn invalid() -> io::Error {
     io::Error::new(
@@ -141,7 +146,12 @@ impl Peer {
         }
         let pidfd = unsafe { OwnedFd::from_raw_fd(fd as i32) };
         let proc = File::open(format!("/proc/{pid}"))?;
-        let peer = Self { pidfd, proc, uid };
+        let peer = Self {
+            pidfd,
+            proc,
+            uid,
+            pid,
+        };
         peer.identity()?;
         Ok(peer)
     }
@@ -166,6 +176,7 @@ impl Peer {
             Some("/usr/bin/nidara-sessiond") => Some(Role::Session),
             Some("/usr/bin/nidara-shell") => Some(Role::Shell),
             Some("/usr/lib/nidara/nidara-shell") => Some(Role::LegacyShell),
+            Some("/usr/lib/nidara/nidara-settings") => Some(Role::LegacySettings),
             _ => None,
         };
         let role = if let Some(role) = installed_role {
@@ -197,10 +208,18 @@ impl Peer {
         }
         Ok(role)
     }
+    /// The compositor supplies a PID from the Wayland connection, never app-id/title
+    /// or an X11 _NET_WM_PID. Legacy Settings may activate only its own native window.
+    pub fn authorize_own_window(&self, owner_pid: Option<i32>) -> Result<(), String> {
+        if owner_pid.and_then(|p| u32::try_from(p).ok()) != Some(self.pid) {
+            return Err("AccessDenied: activation target does not belong to the caller".into());
+        }
+        self.authorize(Operation::ActivateOwnWindow, Consent::default())
+    }
     pub fn authorize(&self, op: Operation, consent: Consent) -> Result<(), String> {
         if matches!(
             op,
-            Operation::Read | Operation::OpenSurface | Operation::RevokeControl
+            Operation::Read | Operation::OpenSurface | Operation::RevokeControl | Operation::Reload
         ) {
             return Ok(());
         }
@@ -373,6 +392,32 @@ mod tests {
             Operation::Power,
             Consent::default()
         ));
+    }
+    #[test]
+    fn legacy_settings_has_no_general_window_or_config_privilege() {
+        assert!(permitted(
+            Role::LegacySettings,
+            Operation::ActivateOwnWindow,
+            Consent::default()
+        ));
+        for op in [
+            Operation::WindowControl,
+            Operation::CloseWindow,
+            Operation::Configure,
+            Operation::Capture,
+            Operation::Spawn,
+        ] {
+            assert!(!permitted(Role::LegacySettings, op, Consent::default()));
+        }
+        let peer = Peer::from_credentials(std::process::id(), unsafe { libc::geteuid() }).unwrap();
+        assert!(peer.authorize_own_window(None).is_err());
+        assert!(peer.authorize_own_window(Some(-1)).is_err());
+        assert!(peer.authorize_own_window(Some(1)).is_err());
+        assert!(
+            peer.authorize_own_window(Some(std::process::id() as i32))
+                .is_err(),
+            "an external executable still needs its role"
+        );
     }
     #[test]
     fn socket_uses_real_credentials_and_no_cli_trust() {

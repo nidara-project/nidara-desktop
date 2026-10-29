@@ -5,7 +5,10 @@ session. Hyalo checks it before JSON socket effects; Config1 checks it on its
 GLib store thread immediately before Set/Apply. It does not change the TS
 Shell.Request interface or forward anything to TS.
 
-Read state, open a shell surface and revoke control are public operations.
+Read state, open a shell surface, revoke control and reload the existing
+configuration are public operations. Hyalo already watches those configuration
+files, so public reload preserves nidara-wm/nidara-update without granting a new
+configuration-write capability.
 Other operations require `org.nidara.ai/allow-computer-control` or an installed
 Nidara process authorized for that operation. External configuration writes
 also require `allow-config-write`, captures `allow-screenshot`, and window
@@ -17,12 +20,13 @@ The explicit native executable roles are:
 | Executable | Operations without external consent |
 | --- | --- |
 | `/usr/lib/nidara/nidara-settings-native` | configuration |
+| `/usr/lib/nidara/nidara-settings` (dedicated TS host) | activate only a mapped native Wayland window belonging to its authenticated PID |
 | `/usr/bin/nidara-sessiond` | configuration, power, night light |
 | `/usr/bin/nidara-shell` (future Rust) | windows, close requests, minimize target rectangles |
 | `/usr/lib/nidara/nidara-shell` (existing dedicated TS host) | windows, close, minimize targets, configuration, capture, output layout, night light |
 
-The installed dedicated TS shell host is an explicit compatibility exception;
-its existing Request/agent gates remain unchanged. Generic interpreters, other
+The installed dedicated TS shell and Settings hosts are explicit compatibility
+exceptions; their existing Request/agent gates remain unchanged. Generic interpreters, other
 GJS hosts and computer-use helpers do not gain this role.
 A known path must match the running inode/device, and the file and every parent
 must be root-owned, without group/world write permission or symlinks. Missing,
@@ -71,8 +75,8 @@ installed-session check; checkout/headless tests alone do not prove it.
 
 Development grants live only in `/etc/nidara/access.d/*.conf`. Format is one
 `role<TAB>uid<TAB>/absolute/executable/path` per line; blank lines and lines
-starting with `#` are ignored. Roles are `legacy-shell`, `shell`, `settings` and
-`session`, with exactly the permissions above. UID is decimal and applies only
+starting with `#` are ignored. Roles are `legacy-shell`, `legacy-settings`, `shell`, `settings` and `session`,
+with exactly the permissions above. UID is decimal and applies only
 to that Unix user. Paths are exact, with spaces allowed, no glob/alias/dot/dotdot
 components, and no interpreter/script inference. The directory and its parents
 must be root-owned, not group/world writable and not symlinks. Files must be
@@ -93,7 +97,7 @@ worktree remain External. Hyalo logs the denial and the registration command.
 
 `install.sh --dev` and `--update-apply` invoke
 `scripts/dev/register-ipc-access.py` to atomically replace only `dev-UID.conf`
-after installing sessiond. They register this checkout's exact dedicated TS host,
+after installing sessiond. They register this checkout's exact dedicated TS shell/Settings hosts,
 release nk-settings and release sessiond paths, including paths not built yet.
 The helper validates root directory/file ownership and modes without following
 symlinks, writes/fsyncs an exclusive temporary file, sets 0644 and renames it.
@@ -128,6 +132,8 @@ Current client inventory (source review, no live-session inspection):
 | sessiond Power1/brightness | power_info/events/cursor reads; power_lock, power_wake | Session |
 | native Settings | Config1 Set/Apply; Display1 bus transaction methods (no direct JSON socket requests) | Settings for Config1 |
 | display selector | Display1 bus Validate/Preview/Confirm/Cancel; no direct JSON socket requests | existing Display1 lease/transaction rules |
+| legacy TS Settings (`ui/settings/app.ts`) | Do focus-window of its own mapped native Wayland window on relaunch | LegacySettings; PID from Wayland credentials must match IPC peer, never app-id/title/X11 PID |
+| nidara-wm/nidara-update | ReloadConfig (or Do reload-config); manual DPMS | reload public as file watcher already reloads; DPMS needs consent |
 | CLI, GJS helpers, MCP | any public entry they call | External (read or explicit consent) |
 
 No client in this inventory needs public quit or Do spawn without consent.

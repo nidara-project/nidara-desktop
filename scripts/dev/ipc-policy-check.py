@@ -36,6 +36,49 @@ def denied(reply):
     assert reply.get('code') == 'AccessDenied', reply
     assert reply['error'], reply
 
+if '--legacy-settings' in sys.argv:
+    # Two real Wayland clients: only one belongs to the registered Settings peer.
+    os.environ['WAYLAND_DISPLAY'] = paths[0].name.removeprefix('nidara-hyalo.').removesuffix('.sock')
+    os.environ['GDK_BACKEND'] = 'wayland'
+    os.environ['GTK_A11Y'] = 'none'  # focus/ownership fixture, no accessibility claim
+    import gi
+    gi.require_version('Gtk', '4.0')
+    from gi.repository import Gtk, GLib
+    Gtk.init()
+    window = Gtk.Window(title='Legacy Settings IPC fixture')
+    window.set_default_size(140, 100)
+    window.present()
+    other_code = "import gi; gi.require_version('Gtk','4.0'); from gi.repository import Gtk,GLib; Gtk.init(); w=Gtk.Window(title='Other process IPC fixture'); w.present(); GLib.MainLoop().run()"
+    other = subprocess.Popen(['/usr/bin/python3', '-c', other_code])
+    try:
+        until = time.monotonic() + 10
+        while True:
+            while GLib.MainContext.default().pending():
+                GLib.MainContext.default().iteration(False)
+            windows = call({'request': 'windows'})['ok']['windows']
+            own = next((w for w in windows if w['pid'] == os.getpid()), None)
+            foreign = next((w for w in windows if w['pid'] == other.pid), None)
+            if own and foreign:
+                break
+            assert time.monotonic() < until, windows
+            time.sleep(.02)
+        assert 'ok' in call({'request': 'do', 'command': f"focus-window {own['id']}"})
+        assert next(w for w in call({'request': 'windows'})['ok']['windows'] if w['id'] == own['id'])['focused']
+        denied(call({'request': 'do', 'command': f"focus-window {foreign['id']}"}))
+        denied(call({'request': 'do', 'command': f"close-window {own['id']}"}))
+        denied(call({'request': 'settings', 'patch': {'idle': {'screen_off': 0}}}))
+        assert next(w for w in call({'request': 'windows'})['ok']['windows'] if w['id'] == own['id'])['focused']
+        print('PASS: LegacySettings activates its own real Wayland window with control off; foreign-window focus, own close and configuration remain denied')
+    finally:
+        window.destroy()
+        other.terminate()
+        try:
+            other.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            other.kill()
+            other.wait()
+    sys.exit(0)
+
 if '--trusted-session' in sys.argv:
     for req in [{'request': 'power_wake'},
                 {'request': 'settings', 'patch': {'idle': {'screen_off': 0}}},
@@ -113,7 +156,6 @@ for req in [
     {'request': 'do', 'command': f'spawn touch {out}/unexpected-effect'},
     {'request': 'do', 'command': 'quit'},
     {'request': 'quit'},
-    {'request': 'reload_config'},
     {'request': 'settings', 'patch': {'idle': {'screen_off': 15}}},
     {'request': 'screenshot', 'path': str(out / 'denied.png')},
     {'request': 'night_light', 'temperature': 4500},
@@ -127,6 +169,10 @@ assert not (out / 'unexpected-effect').exists()
 assert not (out / 'denied.png').exists()
 assert not (out / 'config/hyalo-settings.toml').exists()
 assert 'ok' in call({'request': 'windows'}), 'read failed after multiple denials'
+assert 'ok' in call({'request': 'reload_config'}), 'update reload must remain public'
+assert 'ok' in call({'request': 'do', 'command': 'reload-config'}), 'Do reload must remain public'
+reload_cli = subprocess.run([os.environ['IPC_POLICY_REPO'] + '/bin/nidara-wm', 'reload'], env={**os.environ, 'HYALO_SOCKET': str(paths[0]), 'PATH': str(Path(os.environ['IPC_POLICY_BIN']).parent) + ':' + os.environ['PATH']}, capture_output=True, text=True)
+assert reload_cli.returncode == 0, reload_cli.stdout + reload_cli.stderr
 
 # The compositor's own CLI executable is NOT a privileged caller.
 cli = subprocess.run([os.environ['IPC_POLICY_BIN'], 'msg', 'raw', json.dumps({'request': 'quit'})],
@@ -180,6 +226,7 @@ assert 'ok' in call({'request': 'workspaces'})
 if Path('/nidara-access-fixture').exists():
     subprocess.run(['/work/fixture/python', __file__, '--trusted-shell'], check=True)
     subprocess.run(['/work/fixture/session', __file__, '--trusted-session'], check=True)
+    subprocess.run(['/work/fixture/legacy-settings', __file__, '--legacy-settings'], check=True)
     with (out / 'sessiond.log').open('w') as log:
         daemon = subprocess.Popen(['/repo/session/target/debug/nidara-sessiond', '--config'], stdout=log, stderr=log)
         try:

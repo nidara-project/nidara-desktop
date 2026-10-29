@@ -39,7 +39,13 @@ is the WHY and the traps.
 
 The JSON socket checks `crates/nidara-access` before effects, using SO_PEERCRED,
 pidfd lifetime and current installed executable identity, not CLI/bus names.
-Read requests stay public; external mutations require computer control, with
+Read and configuration reload requests stay public (the file watcher already
+reloads edits, and nidara-update depends on this). Manual nidara-wm DPMS needs
+consent. Legacy Settings has an explicit role limited to focusing its own mapped
+native Wayland window: authenticated peer PID must match the target's Wayland
+connection credentials; no app-id/title/X11-PID inference or general window
+control. Installed and exact registered dev hosts use this role.
+Other external mutations require computer control, with
 additional config/capture/close gates. Internal compositor binds are unchanged.
 Denied requests return a structured AccessDenied error without closing the socket.
 GSettings consent is followed on a private GLib thread, initially false until

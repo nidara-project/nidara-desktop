@@ -91,7 +91,7 @@ fn accept(state: &mut Hyalo, stream: UnixStream) {
                     // The connection is a stream from now on; nothing more is read from it.
                     return Ok(PostAction::Remove);
                 }
-                Ok(req) => match authorize(&req, peer.as_ref().map_err(String::as_str), state.ipc.consent.get()) {
+                Ok(req) => match authorize_request(state, &req, peer.as_ref().map_err(String::as_str), state.ipc.consent.get()) {
                     Ok(()) => handle(state, req),
                     Err(message) => {
                         if !warned {
@@ -141,7 +141,8 @@ fn operation(req: &Request) -> Operation {
         Request::SetOutput { .. } => Operation::Outputs,
         Request::OutputPower { .. } | Request::PowerWake | Request::PowerLock => Operation::Power,
         Request::NightLight { .. } => Operation::NightLight,
-        Request::Settings { .. } | Request::ReloadConfig => Operation::Configure,
+        Request::Settings { .. } => Operation::Configure,
+        Request::ReloadConfig => Operation::Reload,
         Request::MinimizeTargets { .. } => Operation::MinimizeTargets,
         Request::DebugOverlay { .. } => Operation::WindowControl,
         Request::Quit => Operation::EndSession,
@@ -151,7 +152,8 @@ fn operation(req: &Request) -> Operation {
                 Ok(Action::CloseWindow(_)) => Operation::CloseWindow,
                 Ok(Action::Quit) => Operation::EndSession,
                 Ok(Action::Spawn(_)) => Operation::Spawn,
-                Ok(Action::SetCursor { .. } | Action::ReloadConfig) => Operation::Configure,
+                Ok(Action::SetCursor { .. }) => Operation::Configure,
+                Ok(Action::ReloadConfig) => Operation::Reload,
                 Ok(Action::DisplaySelector) => Operation::OpenSurface,
                 // Includes spawn, quit and all future action variants: never a free bypass.
                 _ => Operation::WindowControl,
@@ -161,10 +163,25 @@ fn operation(req: &Request) -> Operation {
 }
 fn authorize(req: &Request, peer: Result<&Peer, &str>, consent: Consent) -> Result<(), String> {
     let op = operation(req);
-    if matches!(op, Operation::Read | Operation::OpenSurface) {
+    if matches!(op, Operation::Read | Operation::OpenSurface | Operation::Reload) {
         return Ok(());
     }
     peer.map_err(str::to_owned)?.authorize(op, consent)
+}
+
+/// Legacy Settings' existing focus-window call is limited to a window whose
+/// authenticated native Wayland connection belongs to this exact IPC peer.
+fn authorize_request(state: &Hyalo, req: &Request, peer: Result<&Peer, &str>, consent: Consent) -> Result<(), String> {
+    let denied = match authorize(req, peer, consent) { Ok(()) => return Ok(()), Err(e) => e };
+    if let (Request::Do { command }, Ok(peer)) = (req, peer)
+        && let Ok(crate::wm::actions::Action::FocusWindow(id)) = command.parse()
+        && let Some(m) = state.wm.get(id)
+        && m.mapped && m.window.x11_surface().is_none()
+    {
+        let pid = crate::wm::window_pid(&m.window, &state.display_handle);
+        return peer.authorize_own_window(pid);
+    }
+    Err(denied)
 }
 
 fn handle(state: &mut Hyalo, req: Request) -> Reply {
@@ -518,7 +535,7 @@ mod policy_tests {
         assert!(authorize(&req, Err("identity unavailable"), Consent::default()).is_err());
         assert!(authorize(&Request::Windows, Err("identity unavailable"), Consent::default()).is_ok());
         assert_eq!(operation(&Request::Do { command: "close-window".into() }), Operation::CloseWindow);
-        assert_eq!(operation(&Request::Do { command: "reload-config".into() }), Operation::Configure);
+        assert_eq!(operation(&Request::Do { command: "reload-config".into() }), Operation::Reload);
         assert_eq!(operation(&Request::Do { command: "display-selector".into() }), Operation::OpenSurface);
         let (socket, _other) = UnixStream::pair().unwrap();
         let peer = Peer::from_socket(&socket).unwrap();

@@ -92,6 +92,7 @@ fn parse(text: &str) -> io::Result<Vec<Entry>> {
                 "session" => Role::Session,
                 "shell" => Role::Shell,
                 "legacy-shell" => Role::LegacyShell,
+                "legacy-settings" => Role::LegacySettings,
                 _ => return Err(invalid()),
             };
             let uid = fields[1].parse::<u32>().map_err(|_| invalid())?;

@@ -17,6 +17,7 @@ def grants(repo, uid):
     repo = Path(repo).resolve(strict=True)
     paths = [
         ('legacy-shell', 'lib/nidara-host/build/nidara-shell'),
+        ('legacy-settings', 'lib/nidara-host/build/nidara-settings'),
         ('settings', 'toolkit/target/release/nk-settings'),
         ('session', 'session/target/release/nidara-sessiond'),
     ]
