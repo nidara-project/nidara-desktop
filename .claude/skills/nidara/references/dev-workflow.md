@@ -580,6 +580,12 @@ whole mechanism.** It said our identifiers "arrive LATE" and that a rule keyed o
 all**. The corrected version is below, and `scripts/ci/hypr-rule-check.mjs` now enforces it, so
 this paragraph is no longer the only thing standing between a rule and the window it means.
 
+The Hyalo side also derives native app-ids from literal `app_id` initializers in
+nk-wayland `Options` in toolkit Rust sources; there is no hand-maintained native
+allowlist. Build/target trees are excluded. A native app-id rename must update its
+factory rule in the same change. This does not change the legacy GTK birth/stamp
+checks below.
+
 **Hyprland splits a rule's effects in two, and they behave nothing alike** (Configuring →
 Window-Rules, quoted):
 

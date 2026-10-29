@@ -140,3 +140,13 @@ arrays and therefore retains it. The current debug selector's ldd lists
 libxkbcommon, libgcc_s, libm and libc; it does not retain libdav1d (unused decoder
 code can be eliminated). No local release selector is available, so release
 linkage/package acceptance remains a remote CI check rather than a local claim.
+
+The owner subsequently authorized extending hypr-rule-check.mjs to native windows.
+Its Hyalo identifier inventory now derives literal app_id fields from nk-wayland
+Options initializers in toolkit Rust sources, excluding target/build trees. The
+legacy GTK birth/stamp checks are unchanged. The checker passes with the real
+selector declaration and rule. Two temporary negative controls also passed:
+misspelling the factory rule is rejected, and renaming only the actual Options
+app-id is rejected even while the compositor action still contains the old name.
+Both controls restored the original files in finally blocks; the final check
+passes again. No CI job, permissions or workflow configuration was changed.

@@ -121,6 +121,19 @@ for (const file of walk("ui")) {
         for (const m of src.matchAll(re)) TITLES.set(m[1], file)
 }
 
+// Native nk-wayland toplevels declare their identity in Options, before mapping.
+// Derive literal initializers, not arbitrary `app_id` fields (wire records and
+// WM actions also use that name). These belong to the Hyalo check only; they do
+// not change the legacy GTK birth/stamp rules above.
+const NATIVE = new Map()   // app-id → source declaring nk-wayland Options
+for (const file of walk("toolkit")) {
+    if (!file.endsWith(".rs")) continue
+    const src = readFileSync(file, "utf8")
+    if (!/\bnk_wayland\b/.test(src)) continue
+    for (const m of src.matchAll(/\bOptions\s*\{[^{}]*?\bapp_id\s*:\s*"([^"\\]+)"/g))
+        NATIVE.set(m[1], file)
+}
+
 // ── Reading the rules out of the Lua ───────────────────────────────────────────
 
 // Brace matching, not a regex: a rule's `match = { … }` closes a brace in the middle
@@ -282,7 +295,7 @@ for (const r of rules) {
 // Hyalo applies a rule the first time it matches — at open OR when the window renames
 // itself (hyalo/compositor/src/wm/rules.rs) — so the birth/stamp timing trap above does not
 // exist there and a rule names a window by its real, stamped app id. What still holds is the
-// seam itself: the name in the TOML must be one a window in ui/ declares, and a matched title
+// seam itself: the name in the TOML must be one a TS or native window declares, and a matched title
 // a literal we set. (Hyalo checks the regexes compile when it loads the file; its unit tests
 // cover that.)
 const HYALO_CONFIG = "config/hyalo/hyalo.toml"
@@ -298,14 +311,15 @@ if (existsSync(HYALO_CONFIG)) {
         hyalo.push({ name: m[1], line, app_id: field("app_id"), initial_app_id: field("initial_app_id"), title: field("title"), initial_title: field("initial_title") })
     }
     console.log(`\n${hyalo.length} Hyalo rule(s) (${HYALO_CONFIG}):`)
-    const known = new Set([...BIRTH.keys(), ...STAMPED.keys()])
+    for (const [id, file] of [...NATIVE].sort()) console.log(`  native app-id ${id}: ${file}`)
+    const known = new Set([...BIRTH.keys(), ...STAMPED.keys(), ...NATIVE.keys()])
     for (const r of hyalo) {
         const where = `${HYALO_CONFIG}:${r.line}`
         for (const key of ["app_id", "initial_app_id"]) {
             if (r[key] === null) continue
             for (const a of alternatives(r[key]))
                 if (/^(org\.nidara\.|nidara-)/.test(a) && !known.has(a))
-                    fail(`Hyalo rule ${r.name} (${where}) names \`${a}\` in ${key}, which no window in ui/ declares.\n` +
+                    fail(`Hyalo rule ${r.name} (${where}) names \`${a}\` in ${key}, which no window in ui/ or toolkit/ declares.\n` +
                          `        The app ids that exist: ${[...known].join(", ")}`)
         }
         for (const key of ["title", "initial_title"]) {
@@ -334,7 +348,7 @@ console.log("birth class, dynamic rules name the stamped one, and every matched 
 function walk(dir) {
     const out = []
     for (const e of readdirSync(dir)) {
-        if (e === "node_modules" || e === "@girs" || e === "build") continue
+        if (e === "node_modules" || e === "@girs" || e === "build" || e === "target") continue
         const p = join(dir, e)
         if (statSync(p).isDirectory()) out.push(...walk(p))
         else out.push(p)
