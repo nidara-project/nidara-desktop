@@ -13,6 +13,7 @@ struct Probe {
     repositioned: bool,
     toplevel_control: bool,
     child_error: bool,
+    end_requested: bool,
 }
 impl Application for Probe {
     fn poll_interval_ms(&self) -> u32 {
@@ -24,7 +25,10 @@ impl Application for Probe {
             && std::env::var_os("NK_POPUP_FINISH")
                 .is_some_and(|p| std::path::Path::new(&p).exists())
         {
-            w.close();
+            if !self.end_requested {
+                self.end_requested = true;
+                w.protocol_barrier(92)?;
+            }
             return Ok(());
         }
         if self.child && self.ready && self.child_error {
@@ -43,12 +47,15 @@ impl Application for Probe {
             if !self.toplevel_control {
                 result?;
             }
+            w.protocol_barrier(91)?;
         }
         Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> Result<()> {
         match event {
             Event::Error(e) => return Err(e),
+            Event::ProtocolBarrier(91) => eprintln!("REPOSITION_BARRIER"),
+            Event::ProtocolBarrier(92) => w.close(),
             Event::Configure => {
                 eprintln!("CONFIGURE child={} size={:?}", self.child, w.size());
                 eprintln!(
@@ -69,6 +76,7 @@ impl Application for Probe {
                     repositioned: false,
                     toplevel_control: self.toplevel_control,
                     child_error: self.child_error,
+                    end_requested: false,
                 };
                 if self.toplevel_control {
                     nk_wayland::run_dialog(child, w)?;
@@ -121,6 +129,7 @@ fn main() {
             repositioned: false,
             toplevel_control: control,
             child_error: std::env::args().any(|a| a == "--child-error"),
+            end_requested: false,
         },
         Options {
             material: false,

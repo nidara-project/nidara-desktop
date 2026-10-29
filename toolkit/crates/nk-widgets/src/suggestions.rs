@@ -270,7 +270,7 @@ impl Suggestions {
                     parent.invalidate(self.input, Invalid::SEMANTICS);
                     self.changed = true;
                 }
-                PopupEvent::FrameDone => {}
+                PopupEvent::FrameDone | PopupEvent::Key(_) | PopupEvent::Repositioned(_) => {}
                 PopupEvent::Input(input) => {
                     let translated = match input {
                         LayerEvent::Motion(x, y) => Some(Event::Motion(*x, *y)),

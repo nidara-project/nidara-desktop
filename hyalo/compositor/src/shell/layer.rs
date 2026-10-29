@@ -67,6 +67,7 @@ impl WlrLayerShellHandler for Hyalo {
         // usable area may have grown.
         self.restore_keyboard_focus();
         self.arrange_all();
+        self.reconstrain_popups();
     }
 
     fn new_popup(&mut self, _parent: WlrLayerSurface, popup: smithay::wayland::shell::xdg::PopupSurface) {
@@ -146,6 +147,7 @@ impl Hyalo {
                 self.arrange_workspace(ws);
             }
             self.sync_space();
+            self.reconstrain_popups();
         }
     }
 
@@ -196,6 +198,7 @@ impl Hyalo {
         for output in self.space.outputs() {
             arrange_output(output);
         }
+        self.reconstrain_popups();
     }
 }
 

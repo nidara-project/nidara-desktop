@@ -321,3 +321,40 @@ against `server_controls_layout()`'s actual side/size and updates the registered
 capsule's root-local position, even while hidden. `server_controls_bounds()` is
 then the one box sent to Hyalo and excluded from title dragging. No content inset
 is added to a registered capsule. Ordinary titlebar fallback placement is unchanged.
+
+## Action menus and bounded popups (#959 B)
+
+`Tree::action_menu` supplies retained action/check/radio/submenu/separator rows,
+independent of dropdown Selection. It shares menu row measurement/paint and
+Tree focus/capture/clip machinery; leading vector/RGBA icons use the existing
+renderer. `ActionMenuStyle` supplies the row style, band height and symbolic
+up/down/submenu icons. Names of the two accessible scroll actions are caller
+inputs. Checkbox/radio values are controlled: activation emits Activated but
+never edits the application's model. `set_menu_action_kind` updates state
+without identity changes; a different AT-SPI role requires a new row.
+`set_menu_icon`, `set_name`, disabled/hidden and style/text setters preserve IDs.
+
+Allocate every popup level with the owning parent window's
+`action_menu_child`; it reserves IDs from that window's namespace, including
+after dismissal. Do not allocate grandchildren from a menu Tree. Compose
+`action_menu_snapshot(parent, views)` into that same window's provider, using
+each popup's actual configured origin. The function rejects overlapping IDs,
+disables parent actions during modality and keeps keyboard focus on the deepest
+menu, preserving action access to the visible ancestor levels. Requests still
+carry the publication revision and use Tree dispatch's availability/generation
+checks. No fabricated second accessibility window is introduced.
+
+Configure dimensions bound layout and content clipping. Up/Down/Home/End and
+PageUp/PageDown reveal focus; pointer scrolling preserves separate focus state.
+Two explicit scroll bands reserve a stable viewport while overflowing; an
+inactive band leaves semantics/hit testing. Bands, rows, pixels and AT-SPI share
+those bounds. The host handles Right/Left/Escape and child-model lifecycle using
+nk-wayland's popup stack. Parent resize and portal updates can re-layout menus
+while leaving their surviving IDs and offsets intact.
+
+The local diagnostic is `toolkit/settings/examples/bounded-menu-probe.rs`;
+`toolkit/settings/check-bounded-menu-headless.sh` runs it with real input/AT-SPI
+on private Cage/Hyalo, software rendering and disposable buses/settings. It tests
+1000 rows, child menus, output reservations, a live parent, fractional scale and
+reposition, plus deliberate no-clamp/no-reveal controls. This is not the Tray1
+adapter, Rust bar, live compositor or Orca speech acceptance.

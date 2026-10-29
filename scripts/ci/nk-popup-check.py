@@ -48,12 +48,19 @@ def run(control):
             pipe.write('key 28\n')
             wait(lambda: 'CHILD_READY' in log.read_text(), 'child root commit', process)
             wait(lambda: 'REPOSITION_REQUEST' in log.read_text(), 'reposition dispatch attempted', process)
-            # Bounded observation window, independent of whether the expected reply arrives.
-            time.sleep(.2)
+            # A common protocol-ordering barrier works for both popup and wrong-role
+            # control; renderer speed is not evidence that an acknowledgement is absent.
+            wait(lambda: 'REPOSITION_BARRIER' in log.read_text(), 'reposition protocol barrier', process)
             # Same input in baseline and control. Outside click dismisses the grabbing popup;
             # A diagnostic end file lets a wrong role complete setup independently too.
             pipe.write('click 0 0\n')
-            time.sleep(.1)
+            delivered = log.with_suffix('.input-delivered')
+            pipe.write(f'barrier {delivered}\n')
+            end = time.monotonic() + 8
+            while not delivered.exists() and time.monotonic() < end:
+                time.sleep(.01)
+            if not delivered.exists():
+                raise RuntimeError('input delivery barrier timed out')
             finish.write_text('end bounded observation\n')
             process.wait(timeout=8)
             text = log.read_text()

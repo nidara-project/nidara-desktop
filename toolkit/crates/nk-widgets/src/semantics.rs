@@ -33,6 +33,19 @@ impl Tree {
                 Kind::Choice { .. } => Role::RadioButton,
             };
             let mut n = Semantic::new(id, role, &widget.name);
+            if let Some(m) = &self.action_menu {
+                if m.scroll == id {
+                    n.role = Role::Menu;
+                }
+                if let Some(row) = m.rows.get(&id) {
+                    n.role = match row.kind {
+                        MenuActionKind::Action | MenuActionKind::Submenu { .. } => Role::MenuItem,
+                        MenuActionKind::Check(_) => Role::CheckMenuItem,
+                        MenuActionKind::Radio(_) => Role::RadioMenuItem,
+                        MenuActionKind::Separator => Role::Separator,
+                    };
+                }
+            }
             if self.suggestion_combos.values().any(|s| s.list == id) {
                 n.role = Role::ListBox;
             }
@@ -88,6 +101,23 @@ impl Tree {
                 offscreen: !intersects(r, self.visible_clip(id)),
                 ..Default::default()
             };
+            if let Some(kind) = self.menu_action_kind(id) {
+                n.states.checked = matches!(
+                    kind,
+                    MenuActionKind::Check(true) | MenuActionKind::Radio(true)
+                );
+                n.states.expandable = matches!(kind, MenuActionKind::Submenu { .. });
+                n.states.expanded = matches!(kind, MenuActionKind::Submenu { expanded: true });
+            }
+            if self.action_row(id) && !n.states.offscreen {
+                let clipped = intersect_rect(r, self.visible_clip(id));
+                n.bounds = Bounds {
+                    x: clipped.x as f64,
+                    y: clipped.y as f64,
+                    width: clipped.width as f64,
+                    height: clipped.height as f64,
+                };
+            }
             n.children = widget
                 .children
                 .iter()

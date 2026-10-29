@@ -190,6 +190,9 @@ impl Tree {
     /// and the arrows, Home and End on a focused choice: the next/previous/first/last available
     /// option of its group takes the focus AND the choice; it wraps at the ends.
     pub fn control_key(&mut self, sym: u32) -> Result<Option<Effect>> {
+        if self.action_menu.is_some() {
+            return self.action_menu_key(sym);
+        }
         let Some(id) = self.focused else {
             return Ok(None);
         };

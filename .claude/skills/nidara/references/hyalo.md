@@ -35,6 +35,24 @@ is the WHY and the traps.
 | `ui/shell/core/hyalo-ipc.ts`, `ui/shell/core/Displays.ts` | the shell's side (below) |
 | `ui/lib/nidara-kit/platform/material.ts`, `ui/lib/nidara-kit/platform/glass-material.ts` | the glass's client half: the shapes, and THE material's numbers — one for every bundle; the shell's `core/CompositorGlass.ts` and the lock's `app.ts` only say Reduce transparency and the panels' blur (below) |
 
+## Popup workareas and reactive geometry (#959 B)
+
+Normal-window xdg popups constrain against `shell::layer::usable_zone(output)`,
+translated through the output/global root/acknowledged popup ancestry into their
+immediate parent's geometry coordinates. Do not substitute Smithay's
+`non_exclusive_zone`: Hyalo owns arrangement and caches its actual reservations.
+Layer-shell popup roots use the whole output so their own bar/dock reservation
+does not exclude them. Positioner flip/slide/resize still chooses the result.
+
+The compositor re-constrains after layer reservations/destruction, output/root
+placement changes and popup acknowledgement commits (children must use the new
+acknowledged parent origin). `send_pending_configure` suppresses unchanged data;
+old/nonreactive clients retain their protocol limitations. Toolkit v3 popup
+positioners are reactive; client reposition keeps its real acknowledgement token.
+The bounded-menu private checker uses actual exclusive layers and verifies
+confirmed geometry, including changes while a menu is open, never physical
+DRM/hotplug or the owner's installed session.
+
 ## Native Display1 and output recovery (#959)
 
 Hyalo owns `org.nidara.Display1` (`org.nidara.Display`, `/org/nidara/Display`), not sessiond.
