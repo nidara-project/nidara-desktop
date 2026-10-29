@@ -11,8 +11,10 @@ mod foreign;
 mod ime;
 mod keyboard;
 pub use foreign::ForeignParent;
+mod bounded_popup;
 mod popup;
 mod popup_overlay;
+pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
 mod layers;
@@ -74,6 +76,8 @@ pub enum Event {
         event: PopupEvent,
     },
     PopupRepositioned(u32),
+    /// Server consumed earlier requests on this connection; not presentation evidence.
+    ProtocolBarrier(u32),
     ControlsLayout(ControlsLayout),
     Layer {
         id: LayerId,
@@ -165,7 +169,9 @@ pub struct Window {
     layers: Vec<layers::Layer>,
     pointer_layer: Option<LayerId>,
     pointer_popup: Option<PopupId>,
-    overlay: Option<popup_overlay::Overlay>,
+    overlay: Vec<popup_overlay::Overlay>,
+    block_popup_release: bool,
+    block_popup_repeat: bool,
     pointer_inside: bool,
     pointer_position: (f64, f64),
     ignore_input_before: Option<u32>,
@@ -675,7 +681,9 @@ fn run_inner(
         layers: Vec::new(),
         pointer_layer: None,
         pointer_popup: None,
-        overlay: None,
+        overlay: Vec::new(),
+        block_popup_release: false,
+        block_popup_repeat: false,
         pointer_inside: false,
         pointer_position: (0., 0.),
         ignore_input_before: None,
@@ -842,9 +850,50 @@ fn run_inner(
         queue.dispatch_pending(&mut w).map_err(err)?;
         w.transfers()?;
         if let Some(k) = w.keyboard.tick() {
-            w.events.push(Event::Key(k));
+            w.push_key(k);
         }
-        for event in std::mem::take(&mut w.events) {
+        for mut event in std::mem::take(&mut w.events) {
+            if let Event::PopupOverlay { id, .. } = &event
+                && !w.overlay.iter().any(|p| p.id == *id)
+            {
+                continue;
+            }
+            if let Event::Key(key) = &event {
+                if key.serial.is_none() && w.block_popup_repeat {
+                    continue;
+                }
+                if let Some(id) = w.active_menu_popup() {
+                    event = Event::PopupOverlay {
+                        id,
+                        event: PopupEvent::Key(key.clone()),
+                    };
+                }
+            }
+            if let Event::Button {
+                pressed, serial, ..
+            } = &event
+                && let Some(id) = w.active_menu_popup()
+            {
+                if !pressed {
+                    continue;
+                }
+                w.serial = *serial;
+                event = Event::PopupOverlay {
+                    id,
+                    event: PopupEvent::Done,
+                };
+            }
+            if w.active_menu_popup().is_some()
+                && matches!(
+                    event,
+                    Event::Motion(..)
+                        | Event::PointerLeave
+                        | Event::Scroll(_)
+                        | Event::HorizontalScroll(_)
+                )
+            {
+                continue;
+            }
             if let Event::Error(e) = event {
                 return Err(e);
             }
@@ -1254,7 +1303,8 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
                 if state == WEnum::Value(wl_keyboard::KeyState::Pressed) {
                     if let Some(mut k) = w.keyboard.press(key) {
                         k.serial = Some(serial);
-                        w.events.push(Event::Key(k));
+                        w.block_popup_repeat = false;
+                        w.push_key(k);
                     }
                 } else if w
                     .keyboard
@@ -1277,6 +1327,16 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for Window {
     }
 }
 impl Window {
+    fn push_key(&mut self, key: Key) {
+        if let Some(id) = self.active_menu_popup() {
+            self.events.push(Event::PopupOverlay {
+                id,
+                event: PopupEvent::Key(key),
+            });
+        } else {
+            self.events.push(Event::Key(key));
+        }
+    }
     fn pointer_motion(&mut self, x: f64, y: f64) {
         self.pointer_position = (x, y);
         if !self.pointer_inside {
@@ -1316,8 +1376,8 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 w.serial = serial;
                 w.pointer_popup = w
                     .overlay
-                    .as_ref()
-                    .filter(|p| p.surface == surface)
+                    .iter()
+                    .find(|p| p.surface == surface)
                     .map(|p| p.id);
                 w.pointer_layer = w.layers.iter().find(|l| l.surface == surface).map(|l| l.id);
                 w.pointer_inside = w.pointer_popup.is_some()
@@ -1360,6 +1420,24 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 }
                 w.serial = serial;
                 let pressed = state == WEnum::Value(wl_pointer::ButtonState::Pressed);
+                if !pressed && w.block_popup_release {
+                    w.block_popup_release = false;
+                    return;
+                }
+                if pressed {
+                    w.block_popup_release = false;
+                }
+                if w.pointer_popup.is_none()
+                    && let Some(id) = w.active_menu_popup()
+                {
+                    if pressed {
+                        w.events.push(Event::PopupOverlay {
+                            id,
+                            event: PopupEvent::Done,
+                        });
+                    }
+                    return;
+                }
                 if let Some(id) = w.pointer_popup {
                     let (x, y) = w.pointer_position;
                     w.events.push(Event::PopupOverlay {

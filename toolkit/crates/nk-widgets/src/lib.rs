@@ -16,7 +16,11 @@ mod dialog;
 mod dropdown_popup;
 pub use dialog::DialogTree;
 pub use dropdown_popup::{DropdownPopup, PopupSnapshot};
+mod action_menu;
 mod menu;
+pub use action_menu::{
+    ActionMenuRow, ActionMenuStyle, MenuActionKind, MenuIcon, action_menu_snapshot,
+};
 pub use menu::MenuStyle;
 
 mod capsule;
@@ -321,6 +325,7 @@ pub struct Tree {
     button_descriptions: BTreeMap<NodeId, String>,
     dialog_role: bool,
     menu_style: Option<MenuStyle>,
+    action_menu: Option<action_menu::ActionMenu>,
     list_styles: BTreeMap<NodeId, MenuStyle>,
     search_style: Option<SearchStyle>,
     searches: BTreeMap<NodeId, search::Search>,
@@ -415,6 +420,7 @@ impl Tree {
             button_descriptions: BTreeMap::new(),
             dialog_role: false,
             menu_style: None,
+            action_menu: None,
             list_styles: BTreeMap::new(),
             search_style: None,
             searches: BTreeMap::new(),
@@ -1099,6 +1105,9 @@ impl Tree {
         if !self.available(id) {
             return Err("unavailable activation".into());
         }
+        if self.activate_menu_band(id)? {
+            return Ok(Effect::None);
+        }
         match self.nodes[&id].kind {
             Kind::Switch { checked } => self.set_checked(id, !checked)?,
             Kind::Disclosure { expanded } => self.set_expanded(id, !expanded)?,
@@ -1159,7 +1168,11 @@ impl Tree {
     }
     pub fn pointer_motion(&mut self, point: Point) {
         let hit = self.hit_test(point);
-        if hit.is_some_and(|id| matches!(self.nodes[&id].kind, Kind::MenuOption { .. })) {
+        if hit.is_some_and(|id| {
+            matches!(self.nodes[&id].kind, Kind::MenuOption { .. })
+                || self.action_row(id)
+                || self.action_band(id)
+        }) {
             self.set_focus_visible(false);
         }
         self.set_hovered(hit);
@@ -1345,6 +1358,11 @@ impl Tree {
             for n in self.nodes.values_mut() {
                 n.dirty.layout = false;
             }
+            if self.action_menu.is_some()
+                && let Some(id) = self.focused.filter(|id| self.action_row(*id))
+            {
+                self.reveal(id);
+            }
         }
         Ok(())
     }
@@ -1354,7 +1372,16 @@ impl Tree {
             return Ok(Size::default());
         }
         let kind = self.nodes[&id].kind;
-        if matches!(kind, Kind::List { .. })
+        if self.action_band(id) {
+            let size = Size {
+                width,
+                height: self.menu_band_height(),
+            };
+            self.nodes.get_mut(&id).unwrap().measured = size;
+            return Ok(size);
+        }
+        if self.action_row(id)
+            || matches!(kind, Kind::List { .. })
             || (self.menu_style.is_some() && kind == Kind::Scroll)
             || matches!(kind, Kind::MenuOption { .. })
         {
@@ -1774,9 +1801,9 @@ impl Tree {
         if let Some(s) = &self.menu_style {
             return Rect {
                 x: s.border,
-                y: s.border,
+                y: s.border + self.menu_band_height(),
                 width: (self.size.width - 2. * s.border).max(0.),
-                height: (self.size.height - 2. * s.border).max(0.),
+                height: (self.size.height - 2. * (s.border + self.menu_band_height())).max(0.),
             };
         }
         let leading = self.leading;
@@ -1822,14 +1849,15 @@ impl Tree {
                 }
                 Kind::Scroll => Rect {
                     x: 0.,
-                    y: 0.,
+                    y: self.menu_band_height(),
                     width: size.width,
-                    height: size.height,
+                    height: (size.height - 2. * self.menu_band_height()).max(0.),
                 },
                 _ => continue,
             };
             self.place_node(child, r);
         }
+        self.place_action_bands();
     }
     fn place_node(&mut self, id: NodeId, r: Rect) {
         self.nodes.get_mut(&id).unwrap().bounds = r;
@@ -2088,6 +2116,9 @@ impl Tree {
         clip
     }
     fn outer_visible_clip(&self, id: NodeId) -> Rect {
+        if self.action_band(id) {
+            return self.nodes[&self.root].bounds;
+        }
         if self.in_pane(id) {
             let mut current = Some(id);
             while let Some(p) = current {

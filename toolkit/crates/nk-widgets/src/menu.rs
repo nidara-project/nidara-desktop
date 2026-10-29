@@ -24,7 +24,7 @@ pub struct MenuStyle {
     pub pressed_black: f32,
 }
 impl MenuStyle {
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         if ![
             self.border,
             self.radius,
@@ -125,7 +125,8 @@ impl Tree {
         Ok(())
     }
     fn menu_style_for(&self, id: NodeId) -> Result<&MenuStyle> {
-        let list = if matches!(self.nodes[&id].kind, Kind::MenuOption { .. }) {
+        let list = if self.action_row(id) || matches!(self.nodes[&id].kind, Kind::MenuOption { .. })
+        {
             self.nodes[&id].parent.ok_or("orphan menu option")?
         } else {
             id
@@ -236,12 +237,23 @@ impl Tree {
                     height,
                 }
             }
+        } else if self.menu_action_kind(id) == Some(MenuActionKind::Separator) {
+            Size {
+                width,
+                height: self.metrics.separator_width + 2. * s.padding_y,
+            }
         } else {
             let mut style = self.style.clone();
             style.size *= s.text_scale;
             style.weight = s.weight;
+            let icon_gutter = if self.action_row(id) {
+                s.check_gap + s.check_size
+            } else {
+                0.
+            };
             let n = self.nodes.get_mut(&id).unwrap();
-            let text_width = (width - 2. * s.padding_x - s.check_gap - s.check_size).max(1.);
+            let text_width =
+                (width - 2. * s.padding_x - s.check_gap - s.check_size - icon_gutter).max(1.);
             let layout = backend.layout(&n.name, &style, text_width)?;
             let height = layout.measured_size().height.max(s.check_size) + 2. * s.padding_y;
             n.layout = Some(layout);
@@ -315,6 +327,7 @@ impl Tree {
             .ok_or("menu scroll missing")?;
         self.paint_menu_rows(list, s, Point::default(), &mut canvas, palette, clip)?;
         canvas.pop_clip();
+        self.paint_action_bands(&mut canvas)?;
         Ok(canvas.finish())
     }
     pub(crate) fn paint_list(
@@ -352,13 +365,32 @@ impl Tree {
         let check = check_icon(s.check_stroke);
         for id in &self.nodes[&list].children {
             let node = &self.nodes[id];
-            let Kind::MenuOption { selected } = node.kind else {
-                continue;
+            let action = self.action_menu.as_ref().and_then(|m| m.rows.get(id));
+            let selected = match (node.kind, action) {
+                (Kind::MenuOption { selected }, _) => selected,
+                (_, Some(row)) => matches!(
+                    row.kind,
+                    MenuActionKind::Check(true) | MenuActionKind::Radio(true)
+                ),
+                _ => continue,
             };
             if self.is_hidden(*id) || !intersects(crate::paint::local(node.bounds, origin), clip) {
                 continue;
             }
             let r = crate::paint::local(node.bounds, origin);
+            if action.is_some_and(|a| a.kind == MenuActionKind::Separator) {
+                canvas.rounded_rect(
+                    Rect {
+                        x: r.x + s.padding_x,
+                        y: r.y + (r.height - self.metrics.separator_width) / 2.,
+                        width: (r.width - 2. * s.padding_x).max(0.),
+                        height: self.metrics.separator_width,
+                    },
+                    0.,
+                    palette.separator,
+                );
+                continue;
+            }
             let highlighted = self.available(*id)
                 && (self.hovered == Some(*id) || (self.focus_visible && self.focused == Some(*id)));
             let ink = if !self.available(*id) {
@@ -377,17 +409,62 @@ impl Tree {
                 }
                 canvas.rounded_rect(r, s.row_radius as f64, bg);
             }
+            if let Some(icon) = action.and_then(|a| a.icon.as_ref()) {
+                let bounds = Rect {
+                    x: r.x + s.padding_x,
+                    y: r.y + (r.height - s.check_size) / 2.,
+                    width: s.check_size,
+                    height: s.check_size,
+                };
+                match icon {
+                    MenuIcon::Vector(icon) => canvas.icon(icon, bounds, ink),
+                    MenuIcon::Raster(image) => {
+                        canvas.image(image, bounds, nk_render::ImageFit::Contain)
+                    }
+                }
+            }
             if let Some(layout) = &node.layout {
                 canvas.layout(
                     layout,
                     (
-                        r.x + s.padding_x,
+                        r.x + s.padding_x
+                            + if action.is_some() {
+                                s.check_gap + s.check_size
+                            } else {
+                                0.
+                            },
                         r.y + (r.height - layout.measured_size().height) / 2.,
                     ),
                     ink,
                 )?;
             }
-            if selected {
+            if let Some(action) = action
+                && matches!(action.kind, MenuActionKind::Submenu { .. })
+            {
+                canvas.icon(
+                    &self.action_menu.as_ref().unwrap().style.submenu,
+                    Rect {
+                        x: r.x + r.width - s.padding_x - s.check_size,
+                        y: r.y + (r.height - s.check_size) / 2.,
+                        width: s.check_size,
+                        height: s.check_size,
+                    },
+                    ink,
+                );
+            }
+            if selected && action.is_some_and(|a| matches!(a.kind, MenuActionKind::Radio(true))) {
+                let size = s.check_size / 2.;
+                canvas.rounded_rect(
+                    Rect {
+                        x: r.x + r.width - s.padding_x - s.check_size + (s.check_size - size) / 2.,
+                        y: r.y + (r.height - size) / 2.,
+                        width: size,
+                        height: size,
+                    },
+                    size as f64 / 2.,
+                    ink,
+                );
+            } else if selected {
                 canvas.icon(
                     &check,
                     Rect {

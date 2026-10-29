@@ -27,14 +27,34 @@ impl PopupPlacement {
     }
 
     pub(super) fn apply(self, positioner: &xdg_positioner::XdgPositioner) -> Result<()> {
+        self.apply_side(positioner, PopupSide::Below)
+    }
+    pub(super) fn apply_side(
+        self,
+        positioner: &xdg_positioner::XdgPositioner,
+        side: PopupSide,
+    ) -> Result<()> {
         self.validate()?;
         let [x, y, width, height] = self.anchor;
+        if positioner.version() >= 3 {
+            positioner.set_reactive();
+        }
         positioner.set_size(self.size.0 as i32, self.size.1 as i32);
         positioner.set_anchor_rect(x, y, width, height);
-        positioner.set_anchor(xdg_positioner::Anchor::BottomLeft);
-        positioner.set_gravity(xdg_positioner::Gravity::BottomRight);
+        match side {
+            PopupSide::Below => {
+                positioner.set_anchor(xdg_positioner::Anchor::BottomLeft);
+                positioner.set_gravity(xdg_positioner::Gravity::BottomRight);
+            }
+            PopupSide::Right => {
+                positioner.set_anchor(xdg_positioner::Anchor::TopRight);
+                positioner.set_gravity(xdg_positioner::Gravity::BottomRight);
+            }
+        }
         positioner.set_constraint_adjustment(
             xdg_positioner::ConstraintAdjustment::FlipY
+                | xdg_positioner::ConstraintAdjustment::FlipX
+                | xdg_positioner::ConstraintAdjustment::ResizeX
                 | xdg_positioner::ConstraintAdjustment::SlideX
                 | xdg_positioner::ConstraintAdjustment::SlideY
                 | xdg_positioner::ConstraintAdjustment::ResizeY,

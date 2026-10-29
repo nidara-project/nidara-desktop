@@ -1100,6 +1100,7 @@ impl Hyalo {
                 t.send_pending_configure();
             }
         }
+        self.reconstrain_popups();
         self.queue_redraw(None);
     }
 

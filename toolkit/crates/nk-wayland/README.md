@@ -197,3 +197,28 @@ The caller obtains/transfers the token and retires launch environment metadata;
 this API never reads environment or requests a token from the compositor.
 Capabilities.activation names exact optional global support. CPU dispatch/capability
 tests are not a native protocol/focus proof. Settings caller integration is separate.
+
+## Bounded action-popup stack (#959 B)
+
+Long menus use `open_menu_popup(MenuPopupPlacement)` on the parent's queue,
+not `run_popup`'s exclusive nested loop. Below/Right positioners request
+flip/slide/resize and v3 reactive constraints. An optional host workarea hint
+caps requested dimensions; compositor configure remains authoritative, including
+when no hint was supplied. IDs/actual geometry/frame/buffer releases are shared
+with the existing nonmodal overlay transport. Only one nonmodal Suggestions
+popup OR a chain of at most sixteen menu popups can exist on a Window.
+
+Each child names the currently active popup as parent. `PopupEvent::Key` routes
+physical keys/repeats to the active menu; pointer events retain the hit level's
+local coordinates. `Repositioned(token)` acknowledges reposition requests.
+`menu_popup_origin(id)` sums acknowledged parent geometry, never requested
+anchors. `close_menu_popup(id)` retires that level and descendants topmost
+first; queued dead-ID events and dismissal input cannot act on the parent.
+Nonmodal Suggestions keeps its original API and keyboard behavior.
+
+The app services popup events, paints only confirmed frames, updates its bounds
+hint on layout changes and restores a still-live trigger after close. Parent
+configure/repaint/idle and appearance polling continue. A real xdg parent is
+required here; the future layer-shell bar must supply its own compatible parent,
+never a hidden/disguised toplevel. Read CONTRACT.md and the bounded-menu-probe
+example for the retained action-menu/provider composition and private test.

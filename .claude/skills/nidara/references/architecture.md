@@ -3683,6 +3683,28 @@ forward Escape: preserve SearchInput's one-shot finished-composition boundary
 and FontChooser's matching close guard; otherwise one Escape also erases/closes.
 
 
+### Bounded native action menus (#959 B)
+
+Long action menus use the retained `Tree::action_menu` and nk-wayland's
+`open_menu_popup`, not the exclusive-parent `run_popup` dropdown loop. The
+existing popup overlay transport now admits one nonmodal Suggestions popup OR
+sixteen modal parented xdg popups on the parent's event queue. Configure,
+repaint, buffer releases and portal polling continue in the parent. Actual
+acknowledged geometry supplies layout and provider origins; hints only cap
+requested size and the compositor constrains the result. Right/Left/Escape
+and child model lifetime remain host decisions.
+
+Menu/check/radio/submenu/separator roles are distinct from dropdown Option
+Selection. Scroll bands, row clipping, focus/reveal and hit/AT-SPI bounds derive
+from the same Tree. Checks/radios are controlled, never toggled speculatively.
+Allocate every level from the owning parent with `action_menu_child`, not from
+a child menu; `action_menu_snapshot` projects those reserved IDs into the real
+parent's provider with publication/generation validation. Hidden/dead IDs cannot
+act, and dismissal keys/releases/repeats do not replay into the parent. Read the
+nk-widgets/nk-wayland READMEs and CONTRACT.md before adding a consumer. The native
+probe/checker supplies isolated evidence; Tray1 adapter, Rust bar and layer-shell
+parent support remain the next consumer step.
+
 ### Editable search suggestions (#915)
 
 `nk_widgets::suggestions::Suggestions` attaches to an existing SearchInput before

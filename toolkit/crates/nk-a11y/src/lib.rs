@@ -32,6 +32,11 @@ pub enum Role {
     Panel,
     List,
     ScrollPane,
+    Menu,
+    MenuItem,
+    CheckMenuItem,
+    RadioMenuItem,
+    Separator,
     /// One of a group's choices; the group is a `Panel` holding them. `checked` is the choice.
     RadioButton,
     /// A value on a range, moved by steps: carries `Node::value`.

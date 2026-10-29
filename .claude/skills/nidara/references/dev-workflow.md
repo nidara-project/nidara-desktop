@@ -3169,6 +3169,27 @@ whole per-window app-id a no-op that logs nothing); and the override must be
 applied at `map`, not `realize`, because GTK stamps the process-wide id on the
 `xdg_toplevel` it creates during the first `present()`.
 
+### Exercising bounded native menus (#959 B)
+
+Use `toolkit/settings/check-bounded-menu-headless.sh` with absolute HYALO_BIN,
+NK_WIDGETS_BIN (the built `bounded-menu-probe` example), NK_SETTINGS_DATA exports
+and a fresh NK_WIDGETS_LOG. It runs the existing private Cage/Hyalo harness, not
+the owner's Wayland socket/bus/settings. Check disk first; stop below 10 GiB.
+The two GTK reservation fixtures use Cairo/shm: default GTK GL/dmabuf on this
+software headless path can fail import and crash before the popup is tested.
+
+The diagnostic acknowledges AT-SPI publication tagged with the initiating key
+or request; an unrelated focus/configure publication is not an input barrier.
+Scale 1/1.25, 1000 rows, real wheel/key/AT-SPI, child menus, live parent resize,
+portal changes, live output scale changes, exclusive-zone changes with both
+popup levels open and reposition are checked with applied
+no-clamp/no-reveal controls. Setup failures never count as caught controls.
+Protocol barriers establish request ordering, not frame presentation; popup
+geometry checks also wait for the configured buffer commit.
+Evidence stays under target or the owner's task directory. No new CI step/job
+or installation is involved; Rust bar/Tray1 adaptation and live Orca speech are
+separate acceptance.
+
 ### Exercising native Tray1 in isolation (#959 A)
 
 The opt-in `--tray` service uses the real binary with a fake SNI/dbusmenu and

@@ -10,10 +10,15 @@ pub enum PopupEvent {
     Configure,
     Done,
     FrameDone,
+    Repositioned(u32),
+    Key(Key),
     Input(LayerEvent),
 }
 pub(super) struct Overlay {
     pub id: PopupId,
+    pub modal: bool,
+    pub parent: Option<PopupId>,
+    pub side: PopupSide,
     pub surface: wl_surface::WlSurface,
     xdg: xdg_surface::XdgSurface,
     popup: xdg_popup::XdgPopup,
@@ -46,11 +51,49 @@ impl Overlay {
 }
 impl Window {
     pub fn open_popup_overlay(&mut self, placement: PopupPlacement) -> Result<PopupId> {
-        placement.validate()?;
-        if self.overlay.is_some() {
-            return Err("a nonmodal popup is already open".into());
+        if !self.overlay.is_empty() {
+            return Err("a popup is already open".into());
         }
-        let parent = self.xdg.as_ref().ok_or("popup parent has no xdg surface")?;
+        self.open_overlay(placement, PopupSide::Below, None, None, false)
+    }
+    pub fn open_menu_popup(&mut self, options: MenuPopupPlacement) -> Result<PopupId> {
+        let placement = options.constrained()?;
+        if self.overlay.len() >= 16 {
+            return Err("popup depth limit".into());
+        }
+        if self.overlay.iter().any(|p| !p.modal) {
+            return Err("nonmodal popup is open".into());
+        }
+        if options.parent != self.overlay.last().map(|p| p.id) {
+            return Err("menu parent must be the active popup".into());
+        }
+        self.open_overlay(
+            placement,
+            options.side,
+            options.parent,
+            options.grab_serial,
+            true,
+        )
+    }
+    fn open_overlay(
+        &mut self,
+        placement: PopupPlacement,
+        side: PopupSide,
+        parent_id: Option<PopupId>,
+        grab: Option<u32>,
+        modal: bool,
+    ) -> Result<PopupId> {
+        placement.validate()?;
+        let parent = if let Some(id) = parent_id {
+            &self
+                .overlay
+                .iter()
+                .find(|p| p.id == id)
+                .ok_or("stale popup parent")?
+                .xdg
+        } else {
+            self.xdg.as_ref().ok_or("popup parent has no xdg surface")?
+        };
         let shell = self.wm.as_ref().ok_or("xdg shell missing")?;
         let compositor = self.compositor.as_ref().ok_or("compositor missing")?;
 
@@ -58,9 +101,15 @@ impl Window {
         let surface = compositor.create_surface(&self.qh, id);
         let xdg = shell.get_xdg_surface(&surface, &self.qh, id);
         let positioner = shell.create_positioner(&self.qh, ());
-        placement.apply(&positioner)?;
+        placement.apply_side(&positioner, side)?;
         let popup = xdg.get_popup(Some(parent), &positioner, &self.qh, id);
         positioner.destroy();
+        if let Some(serial) = grab {
+            popup.grab(
+                self.seat.as_ref().ok_or("popup grab requires a seat")?,
+                serial,
+            );
+        }
         let viewport = self
             .viewporter
             .as_ref()
@@ -76,8 +125,11 @@ impl Window {
             .filter(|_| self.capabilities.material)
             .map(|m| m.get_material(&surface, &self.qh, ()));
         surface.commit();
-        self.overlay = Some(Overlay {
+        self.overlay.push(Overlay {
             id,
+            modal,
+            parent: parent_id,
+            side,
             surface,
             xdg,
             popup,
@@ -100,8 +152,8 @@ impl Window {
         placement.validate()?;
         let p = self
             .overlay
-            .as_ref()
-            .filter(|p| p.id == id)
+            .iter()
+            .find(|p| p.id == id)
             .ok_or("stale popup")?;
         if p.popup.version() < 3 {
             return Err("nonmodal popup reposition requires xdg-shell v3".into());
@@ -111,29 +163,59 @@ impl Window {
             .as_ref()
             .ok_or("xdg shell missing")?
             .create_positioner(&self.qh, ());
-        placement.apply(&positioner)?;
+        placement.apply_side(&positioner, p.side)?;
         p.popup.reposition(&positioner, token);
         positioner.destroy();
         Ok(())
     }
     pub fn close_popup_overlay(&mut self) {
-        if let Some(p) = self.overlay.take() {
+        if let Some(id) = self.overlay.first().map(|p| p.id) {
+            self.close_menu_popup(id);
+        }
+    }
+    /// Retire a popup and descendants, topmost first. Suggestions uses the same
+    /// primitive but never applies modal keyboard/pointer dismissal barriers.
+    pub fn close_menu_popup(&mut self, id: PopupId) {
+        let Some(at) = self.overlay.iter().position(|p| p.id == id) else {
+            return;
+        };
+        let modal = self.overlay[at].modal;
+        for p in self.overlay.drain(at..).rev() {
             p.destroy();
         }
-        self.pointer_popup = None;
+        self.pointer_popup = self
+            .pointer_popup
+            .filter(|id| self.overlay.iter().any(|p| p.id == *id));
+        if modal {
+            self.keyboard.reset();
+            self.ignore_input_before = Some(self.serial);
+            self.block_popup_release = true;
+            self.block_popup_repeat = true;
+        }
+    }
+    pub fn active_menu_popup(&self) -> Option<PopupId> {
+        self.overlay.last().filter(|p| p.modal).map(|p| p.id)
+    }
+    /// Actual configured origin in root window-geometry coordinates, through all parents.
+    pub fn menu_popup_origin(&self, id: PopupId) -> Option<(i32, i32)> {
+        let mut id = Some(id);
+        let mut point = (0i32, 0i32);
+        while let Some(current) = id {
+            let p = self.overlay.iter().find(|p| p.id == current)?;
+            let [x, y, _, _] = p.geometry.current?;
+            point = (point.0.checked_add(x)?, point.1.checked_add(y)?);
+            id = p.parent;
+        }
+        Some(point)
     }
     pub fn popup_overlay_geometry(&self, id: PopupId) -> Option<[i32; 4]> {
-        self.overlay
-            .as_ref()
-            .filter(|p| p.id == id)?
-            .geometry
-            .current
+        self.overlay.iter().find(|p| p.id == id)?.geometry.current
     }
     pub fn popup_overlay_frame(&self, id: PopupId) -> Result<Option<Frame>> {
         let p = self
             .overlay
-            .as_ref()
-            .filter(|p| p.id == id)
+            .iter()
+            .find(|p| p.id == id)
             .ok_or("stale popup")?;
         let Some([_, _, w, h]) = p.geometry.current else {
             return Ok(None);
@@ -168,7 +250,7 @@ impl Window {
         if bytes.len() != usize::from(frame.pixel_width) * usize::from(frame.pixel_height) * 4 {
             return Err("popup buffer length".into());
         }
-        let p = self.overlay.as_mut().unwrap();
+        let p = self.overlay.iter_mut().find(|p| p.id == id).unwrap();
         p.buffers.retain(|b| {
             let keep = b.busy || (b.width == frame.pixel_width && b.height == frame.pixel_height);
             if !keep {
@@ -181,13 +263,13 @@ impl Window {
             Some(i) => i,
             None if p.buffers.len() < 2 => {
                 let buffer = self.new_buffer(frame)?;
-                let p = self.overlay.as_mut().unwrap();
+                let p = self.overlay.iter_mut().find(|p| p.id == id).unwrap();
                 p.buffers.push(buffer);
                 p.buffers.len() - 1
             }
             None => return Ok(false),
         };
-        let p = self.overlay.as_mut().unwrap();
+        let p = self.overlay.iter_mut().find(|p| p.id == id).unwrap();
         let b = &mut p.buffers[slot];
         b.map.copy_from_slice(bytes);
         b.busy = true;
@@ -221,7 +303,7 @@ impl Dispatch<xdg_surface::XdgSurface, PopupId> for Window {
     ) {
         if let xdg_surface::Event::Configure { serial } = e {
             p.ack_configure(serial);
-            if let Some(o) = w.overlay.as_mut().filter(|o| o.id == *id) {
+            if let Some(o) = w.overlay.iter_mut().find(|o| o.id == *id) {
                 o.geometry.commit();
                 w.events.push(Event::PopupOverlay {
                     id: *id,
@@ -240,7 +322,7 @@ impl Dispatch<xdg_popup::XdgPopup, PopupId> for Window {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let Some(o) = w.overlay.as_mut().filter(|o| o.id == *id) {
+        if let Some(o) = w.overlay.iter_mut().find(|o| o.id == *id) {
             match e {
                 xdg_popup::Event::Configure {
                     x,
@@ -252,6 +334,10 @@ impl Dispatch<xdg_popup::XdgPopup, PopupId> for Window {
                         w.events.push(Event::Error(error));
                     }
                 }
+                xdg_popup::Event::Repositioned { token } => w.events.push(Event::PopupOverlay {
+                    id: *id,
+                    event: PopupEvent::Repositioned(token),
+                }),
                 xdg_popup::Event::PopupDone => w.events.push(Event::PopupOverlay {
                     id: *id,
                     event: PopupEvent::Done,
@@ -273,8 +359,8 @@ impl Dispatch<wl_surface::WlSurface, PopupId> for Window {
         if let wl_surface::Event::PreferredBufferScale { factor } = event
             && let Some(p) = w
                 .overlay
-                .as_mut()
-                .filter(|p| p.id == *id && p.fractional.is_none())
+                .iter_mut()
+                .find(|p| p.id == *id && p.fractional.is_none())
         {
             if factor <= 0 || factor > 8 {
                 w.events.push(Event::Error("invalid popup scale".into()));
@@ -298,7 +384,7 @@ impl Dispatch<wp_fractional_scale_v1::WpFractionalScaleV1, PopupId> for Window {
         _: &QueueHandle<Self>,
     ) {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = e
-            && let Some(o) = w.overlay.as_mut().filter(|o| o.id == *id)
+            && let Some(o) = w.overlay.iter_mut().find(|o| o.id == *id)
         {
             if scale == 0 {
                 w.events.push(Event::Error("zero popup scale".into()));
@@ -321,7 +407,7 @@ impl Dispatch<wl_callback::WlCallback, PopupId> for Window {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let Some(o) = w.overlay.as_mut().filter(|o| o.id == *id) {
+        if let Some(o) = w.overlay.iter_mut().find(|o| o.id == *id) {
             o.pending = false;
             w.events.push(Event::PopupOverlay {
                 id: *id,
