@@ -23,12 +23,13 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 : "${WAYLAND_DISPLAY:?not in a Wayland session}"
 
 pick() { for f in "$@"; do [ -x "$f" ] && { echo "$f"; return; }; done; return 1; }
-hyalo=$(pick "$repo/hyalo/target/release/nidara-hyalo" /usr/bin/nidara-hyalo) \
+hyalo=$(pick "${HYALO_BIN:-}" "$repo/hyalo/target/release/nidara-hyalo" /usr/bin/nidara-hyalo) \
     || { echo "no nidara-hyalo: build hyalo/ or install it" >&2; exit 1; }
-sessiond=$(pick "$repo/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond) \
+sessiond=$(pick "${SESSIOND_BIN:-}" "$repo/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond) \
     || { echo "no nidara-sessiond: build session/ or install it" >&2; exit 1; }
-settings=$(pick "$repo/toolkit/target/release/nk-settings" /usr/lib/nidara/nidara-settings-native) || settings=""
-data="$repo/build/settings-data"; [ -f "$data/version" ] || data=/usr/share/nidara/settings-data
+selector=$(pick "${DISPLAY_SELECTOR_BIN:-}" "$repo/toolkit/target/release/nidara-display-selector" "$repo/toolkit/target/debug/nidara-display-selector") || selector=""
+settings=$(pick "${NK_SETTINGS_BIN:-}" "$repo/toolkit/target/release/nk-settings" /usr/lib/nidara/nidara-settings-native) || settings=""
+data="${NK_SETTINGS_DATA:-$repo/build/settings-data}"; [ -f "$data/version" ] || data=/usr/share/nidara/settings-data
 
 # A short path: a Unix socket's name is capped (SUN_LEN), and Hyalo's lives in here.
 rt="$XDG_RUNTIME_DIR/nr"
@@ -73,9 +74,22 @@ echo "settings:  $state"
 echo "msg:       HYALO_SOCKET=$rt/nidara-hyalo.wayland-1.sock nidara-hyalo msg …"
 # HYALO_SETTINGS: the settings layer Hyalo writes, here and not in ~/.config. The glass
 # tokens of this checkout when it has them (an installed export may be older than Hyalo).
-vars=(PATH="$repo/bin:$PATH" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
+# This shortcut belongs only to the development Rust session. Factory Hyalo and
+# packaging stay unchanged until the owner authorizes shipping the native selector.
+# Copy the factory source, replacing its conflicting Super+P binding in this private file.
+if [ -n "$selector" ]; then
+    sed 's/^"Super+P" = "pseudo"$/"Super+P" = "display-selector"/' "$repo/config/hyalo/hyalo.toml" > "$rt/hyalo-rust.toml"
+    mkdir -p "$rt/bin"
+    printf '%s\n' '#!/usr/bin/env bash' "echo \$\$ >>$(q "$children")" "exec $(q "$selector") \"\$@\"" > "$rt/bin/nidara-display-selector"
+    chmod 700 "$rt/bin/nidara-display-selector"
+    selector_path="$rt/bin"
+else
+    selector_path="$repo/bin"
+fi
+vars=(PATH="$selector_path:$repo/bin:$PATH" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
     XDG_CONFIG_HOME="$state/config" XDG_DATA_HOME="$state/data" XDG_CACHE_HOME="$state/cache"
     XDG_STATE_HOME="$state/state" GSETTINGS_BACKEND=keyfile)
+[ -n "$selector" ] && vars+=(HYALO_CONFIG="$rt/hyalo-rust.toml")
 [ -f "$data/tokens/glass.json" ] && vars+=(HYALO_GLASS_TOKENS="$data/tokens/glass.json")
 leave() { xargs -r kill 2>/dev/null <"$children" || true; rm -f "$children"; }
 trap leave EXIT

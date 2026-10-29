@@ -31,15 +31,17 @@ impl Bus {
             ));
         std::fs::create_dir_all(&directory).unwrap();
         let config = directory.join("bus.conf");
+        // Linux abstract sockets avoid sockaddr_un path-length failures in long
+        // worktrees. The pid/counter still names one private bus per fixture.
         // No service directories: an absent ENTRY must never activate a real app
         // from the installed desktop during this private-bus test.
         std::fs::write(
             &config,
             format!(
-                r#"<busconfig><type>session</type><listen>unix:path={}</listen>
+                r#"<busconfig><type>session</type><listen>unix:abstract={}</listen>
 <auth>EXTERNAL</auth><policy context="default"><allow send_destination="*"/>
 <allow receive_sender="*"/><allow own="*"/></policy></busconfig>"#,
-                directory.join("bus").display()
+                directory.file_name().unwrap().to_string_lossy()
             ),
         )
         .unwrap();

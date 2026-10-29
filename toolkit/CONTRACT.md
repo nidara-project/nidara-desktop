@@ -1479,3 +1479,30 @@ Only popup-local pointer events target the list. Configured popup geometry, neve
 its requested position, supplies accessible option bounds. Suggestion IDs and
 active descendant belong to the retained semantic tree; stale publications fail.
 Settings supplies its index and opens ordinary content results only on selection.
+
+
+### Native Display1 page and Super+P consumer (#959)
+
+`nk_settings::display` consumes Display1 and DisplayBrightness1, separately from
+Config1. `page::Page` mounts rows in the host's retained Tree and uses its shared
+Bridge; output LIST selection, spin controls, ordering and the draggable diagram
+share logical coordinates. Edits remain drafts until Validate/Preview. Styles and
+all labels come from the existing portal/exports; values and persistent display
+profiles remain service-owned. See `settings/src/display/README.md` for the wire,
+lease and lifecycle rules. `client::Client::start` takes a dedicated connection
+which it closes on Drop: never lend it the Config1 connection. Brightness pending
+values coalesce per device/generation, and discovery/observation never writes.
+
+An owned preview replaces the form with a compact confirmation. The countdown
+uses the server's monotonic deadline and tokens are never adopted from another
+client's GetState. Mount loss or uncertain Preview closes the connection so the
+compositor cancels even when a reply is late. Ordinary value edits keep semantic
+control IDs; topology/selection/confirmation replace the corresponding content
+with a fresh publication namespace. The native app still owns one Bridge.
+
+The separate `nidara-display-selector` binary uses nk-wayland/nk-widgets and one
+Bridge, with its own app-id. Hyalo's locked-state-guarded `display-selector` action
+raises a mapped instance instead of inventing a client activation token. Super+P
+is configured only by the isolated `scripts/dev/rust-session.sh` when the selector
+is built. Factory configuration, native app packaging and legacy Settings routing
+are not changed by this cut. There is no TS bridge or global Settings takeover.

@@ -56,6 +56,7 @@ struct View {
     search_matches: Vec<Match>,
     results: Option<Results>,
     results_cache: Option<(String, Vec<Match>)>,
+    selected: String,
 }
 impl View {
     fn new(exports: Exports, appearance: Appearance) -> Result<Self> {
@@ -119,6 +120,7 @@ impl View {
             search_matches: vec![],
             results: None,
             results_cache: None,
+            selected: "appearance".into(),
         })
     }
     fn status(&mut self, text: &str) -> Result<()> {
@@ -172,7 +174,8 @@ impl View {
         self.status("")
     }
     fn notices(&mut self, editor: &mut dyn Editor, notices: &[Notice]) -> Result<()> {
-        if notices.contains(&Notice::Ready)
+        if self.selected == "appearance"
+            && notices.contains(&Notice::Ready)
             && editor.session().available()
             && self.results.is_none()
         {
@@ -191,6 +194,9 @@ impl View {
                 },
                 notices,
             )?;
+        }
+        if self.selected != "appearance" {
+            return Ok(());
         }
         if let Some(Notice::Error(error)) =
             notices.iter().rev().find(|n| matches!(n, Notice::Error(_)))
@@ -296,6 +302,7 @@ struct External {
     portal: Portal,
     router: Router,
     portal_changed: bool,
+    display_notice: Option<Arc<std::sync::atomic::AtomicBool>>,
     incoming: Vec<Incoming>,
 }
 impl External {
@@ -321,6 +328,7 @@ impl Materials {
 }
 struct App {
     opaque_preview: bool,
+    display: Option<nk_settings::display::page::Page>,
     materials: Materials,
     view: View,
     client: Client,
@@ -338,6 +346,7 @@ struct App {
     configured: bool,
     startup_activation: Option<String>,
     activations: Vec<Incoming>,
+    display_commits: std::collections::BTreeMap<u64, u64>,
 }
 /// The reference theme's own name (`ui/shell/assets/icons/nidara`).
 const REFERENCE_THEME: &str = "nidara";
@@ -494,6 +503,14 @@ impl App {
         if let Some(appearance) = changed {
             self.view.invalidate_external(&mut self.client)?;
             self.view.restyle(appearance)?;
+            if let Some(display) = &mut self.display {
+                display.restyle(
+                    &mut self.view.shell.tree,
+                    &self.view.exports,
+                    &self.view.styles,
+                    &mut self.text,
+                )?;
+            }
             self.materials = Materials::load(&self.view)?;
             if let Some(native) = &mut self.native {
                 native.panel = Some(PanelMaterial::load(
@@ -510,6 +527,17 @@ impl App {
             .unwrap_or_default();
         notices.extend(self.client.poll());
         self.view.notices(&mut self.client, &notices)?;
+        if let Some(display) = &mut self.display {
+            display.poll(
+                &mut self.view.shell.tree,
+                &self.view.exports,
+                &self.view.styles,
+                &mut self.text,
+            )?;
+            self.external.borrow_mut().display_notice = Some(display.client.notified.clone());
+        } else {
+            self.external.borrow_mut().display_notice = None;
+        }
         self.dependencies()?;
         let incoming = std::mem::take(&mut self.external.borrow_mut().incoming);
         if !incoming.is_empty() {
@@ -530,10 +558,9 @@ impl App {
                 Route::Query(_) => {
                     "unsupported: native queryUI policy/serialization is not integrated".into()
                 }
-                Route::Navigate(page) if page == "appearance" => {
-                    // Navigation is real; raising is not silently advertised as successful.
-                    self.view.shell.selected(&self.view.exports, page)?;
-                    "appearance selected; activation token missing".into()
+                Route::Navigate(page) => {
+                    self.navigate(page.clone())?;
+                    format!("{page} selected; activation token missing")
                 }
                 _ => "unsupported native route".into(),
             };
@@ -666,7 +693,11 @@ impl App {
                     keep_open: Box::new(move || {
                         let mut ext = staged.borrow_mut();
                         ext.stage();
-                        Ok(!ext.portal_changed && ext.incoming.is_empty())
+                        Ok(!ext.portal_changed
+                            && ext.incoming.is_empty()
+                            && !ext.display_notice.as_ref().is_some_and(|flag| {
+                                flag.load(std::sync::atomic::Ordering::Acquire)
+                            }))
                     }),
                 });
             }
@@ -684,10 +715,44 @@ impl App {
     }
     fn navigate(&mut self, page: String) -> Result<()> {
         self.view.suggestions.dismiss(&mut self.view.shell.tree)?;
+        if page != "display"
+            && let Some(display) = self.display.take()
+        {
+            display.unmount(&mut self.view.shell.tree)?;
+        }
+        if page == "display" {
+            self.view.selected = page.clone();
+            if let Some(old) = self.view.page.take() {
+                old.unmount(Host {
+                    tree: &mut self.view.shell.tree,
+                    editor: &mut self.client,
+                    exports: &self.view.exports,
+                    styles: &self.view.styles,
+                    window: None,
+                    modal: None,
+                })?;
+            }
+            if let Some(results) = self.view.results.take() {
+                self.view.shell.tree.remove(results.root)?;
+            }
+            if self.display.is_none() {
+                self.display = Some(nk_settings::display::page::Page::mount(
+                    &mut self.view.shell.tree,
+                    self.view.shell.content,
+                    &self.view.exports,
+                    &self.view.styles,
+                    false,
+                )?);
+            }
+            self.view.status("")?;
+            return self.view.shell.selected(&self.view.exports, &page);
+        }
         if page == "search-results" {
+            self.view.selected = page.clone();
             return self.view.show_results(&mut self.client, true);
         }
         if page == "appearance" {
+            self.view.selected = page.clone();
             // Before Config1's snapshot there is nothing to draw yet; the first mount comes
             // with it, and the page selected here is the one it shows.
             if (self.view.results.is_some() || self.view.page.is_none())
@@ -712,6 +777,10 @@ impl App {
     }
     fn choose_search(&mut self, key: u64) -> Result<()> {
         if key == search::ALL {
+            if let Some(display) = self.display.take() {
+                display.unmount(&mut self.view.shell.tree)?;
+            }
+            self.view.selected = "search-results".into();
             return self.view.show_results(&mut self.client, false);
         }
         let target = self
@@ -749,6 +818,32 @@ impl App {
             Action::Page(page) => self.navigate(page)?,
             Action::Window(action) => window.window_action(action),
             Action::None => {
+                if let Some(display) = &mut self.display {
+                    let effect = if let Some(combo) = display.combo(effect) {
+                        if let Some(native) = &mut self.native {
+                            use nk_settings::render::Modal;
+                            native.dropdown(
+                                &mut self.view.shell.tree,
+                                window,
+                                &self.view.styles,
+                                &mut self.client,
+                                combo,
+                            )?
+                        } else {
+                            Effect::None
+                        }
+                    } else {
+                        effect
+                    };
+                    display.effect(
+                        &mut self.view.shell.tree,
+                        &self.view.exports,
+                        &self.view.styles,
+                        &mut self.text,
+                        effect,
+                    )?;
+                    self.publication = None;
+                }
                 if let Some(page) = &mut self.view.page {
                     page.renderer().effect(
                         Host {
@@ -849,6 +944,15 @@ impl Application for App {
             return Err(error.clone());
         }
         self.stage()?;
+        // nk-wayland permits only one pending root frame. FrameDone therefore
+        // acknowledges this exact root commit. This is a capture barrier, not KMS
+        // presentation evidence (winit does not deliver wp_presentation feedback).
+        if matches!(event, Event::FrameDone) {
+            let commit = window.commits();
+            if let Some(deadline) = self.display_commits.remove(&commit) {
+                eprintln!("DISPLAY_CONFIRMATION_FRAME commit={commit} deadline={deadline}");
+            }
+        }
         if matches!(event, Event::Configure) {
             window.set_title(self.view.exports.text("settings.native.application")?)?;
             self.configured = true;
@@ -884,8 +988,21 @@ impl Application for App {
                     self.choose_search(key)?;
                 }
             } else {
-                let effect = self.view.shell.event(&event, window)?;
-                self.effect(effect, window)?;
+                let consumed = if let Some(display) = &mut self.display {
+                    display.pointer(
+                        &mut self.view.shell.tree,
+                        &self.view.exports,
+                        &self.view.styles,
+                        &mut self.text,
+                        &event,
+                    )?
+                } else {
+                    false
+                };
+                if !consumed {
+                    let effect = self.view.shell.event(&event, window)?;
+                    self.effect(effect, window)?;
+                }
             }
         }
         self.stage()?;
@@ -909,7 +1026,20 @@ impl Application for App {
     }
     fn committed(&mut self, commit: u64) {
         self.view.shell.tree.acknowledge();
-        if !self.ready && self.view.page.is_some() && self.client.session().available() {
+        if let Some(pending) = self.display.as_ref().and_then(|d| d.state.owned.as_ref()) {
+            if pending.phase == "confirming" {
+                self.display_commits.insert(commit, pending.deadline_us);
+            }
+        } else {
+            self.display_commits.clear();
+        }
+        if !self.ready
+            && ((self.view.page.is_some() && self.client.session().available())
+                || self
+                    .display
+                    .as_ref()
+                    .is_some_and(|d| d.state.snapshot.is_some()))
+        {
             self.ready = true;
             eprintln!("CONTENT_READY commit={commit}");
         }
@@ -935,9 +1065,9 @@ pub fn run(activation: Option<String>) -> Result<()> {
         Ok(router) => router,
         Err(_) => return Ok(()),
     };
-    match route {
+    match &route {
         Route::Forward(args) => {
-            println!("{}", forward(&bus, args)?);
+            println!("{}", forward(&bus, args.clone())?);
             return Ok(());
         }
         Route::Query(_) => {
@@ -974,8 +1104,9 @@ pub fn run(activation: Option<String>) -> Result<()> {
         .tree
         .set_icon_theme(icons(REFERENCE_THEME, &reference)?);
     let materials = Materials::load(&view)?;
-    let app = App {
+    let mut app = App {
         opaque_preview,
+        display: None,
         view,
         client,
         materials,
@@ -983,6 +1114,7 @@ pub fn run(activation: Option<String>) -> Result<()> {
             portal,
             router,
             portal_changed: false,
+            display_notice: None,
             incoming: Vec::new(),
         })),
         native: None,
@@ -998,7 +1130,11 @@ pub fn run(activation: Option<String>) -> Result<()> {
         configured: false,
         startup_activation: activation,
         activations: Vec::new(),
+        display_commits: Default::default(),
     };
+    if let Route::Navigate(page) = route {
+        app.navigate(page)?;
+    }
     nk_wayland::run(
         app,
         Options {

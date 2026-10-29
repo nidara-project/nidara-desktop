@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! The native Settings (#915, `toolkit/PHASE1.md`). This crate holds no setting logic: every
-//! value it shows and every change it makes goes through `org.nidara.Config1` (D1), and it
-//! paints from the Settings portal alone (D4 [A8]).
+//! The native Settings (#915, `toolkit/PHASE1.md`). Configuration rows use Config1;
+//! the hardware Display page uses Display1/DisplayBrightness1 directly. Appearance
+//! always comes from the Settings portal alone (D4 [A8]).
 //!
 //! The data layer, which the renderer and the builders read:
 //!
@@ -49,3 +49,5 @@ pub mod file_chooser;
 pub mod wallpaper_picker;
 
 pub mod search;
+
+pub mod display;

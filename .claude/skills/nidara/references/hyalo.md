@@ -87,7 +87,14 @@ Connectors without a sysfs ddc route (including some MST/dock/NVIDIA configurati
 remain unsupported; never guess a bus.
 Fn invokes nidara-display-brightness; legacy fallback requires ServiceUnknown and confirmed
 absence of org.nidara.Session. Do not echo observed firmware changes or retry uncertain writes.
-No OSD/TS bridge is added. Settings/Super+P remain a later cut; primary does not move TS bar/dock. Duplicate connector names across GPUs are refused.
+No OSD/TS bridge is added. Native Settings now consumes Display1/DisplayBrightness1 in the separate Rust
+session; see toolkit/settings/src/display/README.md. Draft edits do not mutate,
+owned previews use a compact accessible confirmation with the server's monotonic
+deadline, and unmount closes a dedicated lease connection. The separate selector
+has app-id nidara-display-selector; Hyalo's display-selector action raises it from
+the shortcut and refuses while locked. Super+P is set only in rust-session.sh's
+private configuration when that binary is built. No factory shortcut, native app
+packaging or TS takeover is enabled. Primary does not move TS bar/dock. Duplicate connector names across GPUs are refused.
 `check-display1-headless.sh` proves private-bus recovery on one nested output, not physical
 multimonitor/lid/EDID acceptance. Keep that distinction in reviews.
 

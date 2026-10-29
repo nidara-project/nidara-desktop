@@ -28,6 +28,8 @@ pub enum Direction {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Spawn(String),
+    /// Accessible projection selector; compositor-owned activation, never on lock.
+    DisplaySelector,
     CloseWindow(Option<WindowId>),
     FocusWindow(WindowId),
     Focus(Direction),
@@ -118,6 +120,7 @@ impl std::str::FromStr for Action {
         let a = |i: usize| args.get(i);
         let none_after = |n: usize| if args.len() > n { Err(format!("{verb}: too many arguments")) } else { Ok(()) };
         Ok(match verb {
+            "display-selector" if rest.is_empty() => Action::DisplaySelector,
             "spawn" if !rest.is_empty() => Action::Spawn(rest.to_string()),
             "spawn" => return Err("spawn: what command?".into()),
             "close-window" => {
@@ -290,6 +293,12 @@ impl Hyalo {
     pub fn run_action(&mut self, action: Action) -> Result<(), String> {
         match action {
             Action::Spawn(cmd) => crate::spawn(&cmd),
+            Action::DisplaySelector => {
+                if self.lock.is_locked() {return Err("display selector unavailable while locked".into());}
+                let existing=self.wm.windows.iter().find(|w|w.mapped && super::app_id(&w.window)=="nidara-display-selector").map(|w|w.id);
+                if let Some(id)=existing {self.focus_window(Some(id));}
+                else {crate::spawn("nidara-display-selector");}
+            },
             Action::CloseWindow(w) => {
                 let id = self.any_target(w)?;
                 if let Some(w) = self.wm.get(id).map(|m| m.window.clone()) {
@@ -558,6 +567,8 @@ mod tests {
             p("move-to-workspace-silent 2 17"),
             Ok(Action::MoveToWorkspace { target: WorkspaceTarget::Number(2), window: Some(17), follow: false })
         );
+        assert_eq!(p("display-selector"), Ok(Action::DisplaySelector));
+        assert!(p("display-selector extra").is_err());
         assert_eq!(p("spawn uwsm app -t service -- kitty"), Ok(Action::Spawn("uwsm app -t service -- kitty".into())));
         assert_eq!(p("resize -30 0"), Ok(Action::Resize { dx: -30, dy: 0, window: None }));
         assert_eq!(p("toggle-special"), Ok(Action::ToggleSpecial("magic".into())));
