@@ -205,3 +205,14 @@ paint path, masks material/layer capabilities in the existing host and omits the
 window-background declaration. It is a launch opt-in, not a persisted preference.
 Controls still edit real Config1 if operated; simply opening makes no Apply.
 This mode does not establish that the normal D7/material path is stable.
+
+
+The native sidebar now also draws Display, using Display1 and DisplayBrightness1
+directly rather than Config1. The diagram, accessible controls, draft/preview/
+confirmation lifecycle and separate Super+P selector are described in
+[src/display/README.md](src/display/README.md). This is a consumer in the isolated
+Rust session; it does not enable a global Settings takeover. The standalone
+selector is packaged for factory Super+P, with pseudo on Super+Shift+P, and has a
+floating/centered window rule. Native Settings itself is not installed.
+`rust-session.sh` accepts exact binary overrides for reproducible tests and uses
+the factory configuration unchanged.

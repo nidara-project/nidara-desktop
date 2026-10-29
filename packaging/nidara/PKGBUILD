@@ -83,6 +83,9 @@ depends=(
   gnome-keyring libsecret
   # GTK/GJS runtime
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
+  # Native projection selector: keyboard mapping, required font discovery and
+  # the native image decoder linked by the Settings crate.
+  libxkbcommon fontconfig dav1d
   # (no libastal-* packages — all services, runtime, and PAM auth are native C/TS)
   # services the shell talks to. networkmanager is load-bearing TWICE over: the
   # daemon, and `libnm` (its dep) for the NM-1.0 typelib core/NetworkService.ts
@@ -141,7 +144,7 @@ depends=(
   # pixel heavier because the standalone font carries its own metrics
   # instead of being rescaled to the typeface's cell.
   ttf-jetbrains-mono ttf-nerd-fonts-symbols-mono
-  inter-font noto-fonts-emoji noto-fonts-cjk
+  inter-font noto-fonts noto-fonts-emoji noto-fonts-cjk
   # Input method. The installer offers 简体中文 and 日本語 as system languages, and
   # a CJK language is not typable without one: fonts render it, an IME WRITES it.
   # Without these the offer was a promise we could not keep — the desktop came up
@@ -223,6 +226,8 @@ prepare() {
   export RUSTUP_TOOLCHAIN=stable
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
   cd "$srcdir/nidara-desktop-$pkgver/session"
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+  cd "$srcdir/nidara-desktop-$pkgver/toolkit"
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
@@ -310,6 +315,10 @@ build() {
   cd "$srcdir/nidara-desktop-$pkgver/session"
   export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
   cargo build --release --locked --offline --features audio-native
+
+  # Standalone Super+P client only; native Settings is not installed by this cut.
+  cd "$srcdir/nidara-desktop-$pkgver/toolkit"
+  cargo build --release --locked --offline -p nk-settings --bin nidara-display-selector
 
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
@@ -462,6 +471,7 @@ package_nidara-desktop() {
   install -Dm644 config/bluetooth/obex-opp-only.conf \
     "$pkgdir/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf"
   install -Dm755 session/target/release/nidara-sessiond "$pkgdir/usr/bin/nidara-sessiond"
+  install -Dm755 toolkit/target/release/nidara-display-selector "$pkgdir/usr/bin/nidara-display-selector"
   install -Dm644 config/wireplumber/nidara-audio.lua "$pkgdir/usr/share/wireplumber/scripts/nidara/audio.lua"
   install -Dm644 config/wireplumber/60-nidara-audio.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/60-nidara-audio.conf"
 

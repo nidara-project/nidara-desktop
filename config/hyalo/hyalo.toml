@@ -63,6 +63,11 @@ match = { app_id = "^nidara-about$" }
 float = true
 center = true
 
+[rules.display-selector]
+match = { app_id = "^nidara-display-selector$" }
+float = true
+center = true
+
 # What a call may share of the screen (ui/shell/surfaces/screenshare/): it has no parent
 # window to sit on — the portal's chooser is a process of its own — so it opens centred.
 [rules.share-picker]
@@ -212,7 +217,8 @@ inactive = { range = 12, offset = 2, color = "#00000033" }
 "Super+Shift+Left" = { action = "resize -30 0", repeat = true }
 "Super+Shift+Up" = { action = "resize 0 -30", repeat = true }
 "Super+Shift+Down" = { action = "resize 0 30", repeat = true }
-"Super+P" = "pseudo"
+"Super+P" = "display-selector"
+"Super+Shift+P" = "pseudo"
 "Super+F" = "toggle-floating"
 "Super+Shift+F" = "fullscreen"
 "Super+M" = "maximize"
