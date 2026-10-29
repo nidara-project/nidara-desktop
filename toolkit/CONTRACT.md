@@ -459,6 +459,55 @@ While this nested loop is open, the parent does not repaint or service its
 configure, scale or appearance changes. Keep it bounded to short menus; a
 long-running child needs parent servicing that this primitive does not provide.
 
+### Bounded action popups (#959 B)
+
+Long action menus use nk-wayland's parent's event queue, never the nested
+`run_popup` loop. `open_menu_popup` creates a modal xdg_popup root or a child of
+the active popup (maximum 16 levels). Existing nonmodal Suggestions remains a
+single popup and cannot mix with that stack. IDs are never reused. Parent
+configure/repaint, appearance polling, buffer releases and popup scale/frame
+updates continue while menus are open. Destroy children before parents; discard
+queued events for destroyed IDs. Route physical keys and repeats to the active
+menu and consume dismissal input, with no release/key replay into the parent.
+
+`MenuPopupPlacement` carries Below/Right anchoring, an optional host workarea
+hint in the immediate parent's logical coordinates and an initiating physical
+grab serial (None is valid for accessibility). Bounds/anchors/sizes must be
+positive and representable. The hint caps requested dimensions; it does not
+replace compositor constraints. Each level requests flip/slide/resize, including
+horizontal flip for submenus. Viewport and semantic origin always use confirmed
+xdg_popup + xdg_surface configure geometry, never requested placement. Reposition
+requires xdg-shell v3 and reports the acknowledged token. The host updates its
+hint when output/workarea changes; the compositor also re-constrains live popups.
+
+Hyalo constrains normal-window popup roots to its actual arranged usable output
+area, including exclusive layer reservations. Layer-shell roots use the whole
+output so their own reserved bar does not exclude their menus. Reposition and
+output/layer arrangement changes reapply those constraints. No global coordinates
+or workarea are invented from a toplevel's size. B's diagnostic uses a real xdg
+parent; a future layer-shell bar must provide a compatible popup parent.
+
+Action menus have Menu/MenuItem/check/radio/submenu/separator semantics separate
+from dropdown Selection. All painting, hit testing, focus, clipping and AT-SPI
+bounds derive from the same retained rows. Each level owns its scroll offset.
+Confirmed height bounds the viewport: wheel, Up/Down/Home/End/PageUp/PageDown
+reveal focus; Right opens a submenu and Left/Escape returns/closes. Scroll bands
+show hidden content above/below, expose named accessible actions and share their
+paint/hit/semantic bounds. Style and band metrics are host inputs, never transport
+visual defaults. Model updates preserve surviving IDs and reject stale actions.
+The host restores focus only to a still-live available parent trigger.
+
+`Window::protocol_barrier(token)` emits `Event::ProtocolBarrier(token)` after the
+server consumes earlier requests on that connection. This orders diagnostics;
+it is not a frame/presentation acknowledgement. The legacy popup probe uses it
+instead of assuming reposition completes within a fixed sleep.
+
+The 1000-row/submenu diagnostic and private Cage/Hyalo checks must cover scale
+1/1.25, last-row reachability, scroll hit testing/semantics, parent resize/workarea
+changes and close without residual input, with clamp/reveal controls. No new CI
+job/step or installed/live-session operation is part of B. Tray1 adaptation,
+the actual Rust bar and Settings preferences remain C.
+
 This primitive alone is not a Dropdown, keyboard/Orca gate or native acceptance.
 
 ## nk-widgets (phase 1, #873)
