@@ -3169,6 +3169,24 @@ whole per-window app-id a no-op that logs nothing); and the override must be
 applied at `map`, not `realize`, because GTK stamps the process-wide id on the
 `xdg_toplevel` it creates during the first `present()`.
 
+### Exercising native Tray1 in isolation (#959 A)
+
+The opt-in `--tray` service uses the real binary with a fake SNI/dbusmenu and
+host on a disposable session bus, never the owner's session bus. Build after
+checking `df -h /` (stop below 10 GiB free), then run:
+
+```bash
+/usr/bin/python3 scripts/ci/sessiond-tray-test.py session/target/debug/nidara-sessiond
+```
+
+The same fixture runs from `cargo test --test tray` in `session/`. It tests both
+watcher names, conflict rollback/no queued takeover, both SNI interfaces, churn,
+icons, actions, menu revisions, 1000 rows and the 4096-node visible limit. This
+is service evidence, not Rust bar/popup scrolling or AT-SPI acceptance. No
+installed unit is changed and no new CI job or step is added. The full contract,
+limits and subsequent popup/host obligations are in
+`session/daemon/src/tray/README.md`.
+
 ### Exercising the system tray (`core/tray.ts` + `core/dbusmenu.ts`)
 
 The shell IS this desktop's StatusNotifierWatcher, so — like the notification

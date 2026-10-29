@@ -1,0 +1,431 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Real sessiond + SNI/dbusmenu fixture + host on a disposable session bus only."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import time
+from gi.repository import Gio, GLib
+
+N = 'org.nidara.Session'
+P = '/org/nidara/Tray'
+I = 'org.nidara.Tray1'
+W = 'org.kde.StatusNotifierWatcher'
+F = 'org.freedesktop.StatusNotifierWatcher'
+WP = '/StatusNotifierWatcher'
+S = 'org.kde.StatusNotifierItem'
+T = 'org.nidara.TrayFixture'
+TP = '/fixture'
+D = 'com.canonical.dbusmenu'
+
+def v(sig, value):
+    return GLib.Variant(sig, value)
+
+def conn(address):
+    return Gio.DBusConnection.new_for_address_sync(address,
+        Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
+
+def call(c, dest, path, iface, method, sig=None, args=(), timeout=8000):
+    return c.call_sync(dest, path, iface, method, v(sig, args) if sig else None,
+        None, Gio.DBusCallFlags.NO_AUTO_START, timeout, None).unpack()
+
+def check(ok, label):
+    if not ok:
+        raise AssertionError(label)
+    print('PASS: ' + label, flush=True)
+
+def wait(fn, label, timeout=8):
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        try:
+            result = fn()
+            if result:
+                return result
+        except GLib.Error:
+            pass
+        time.sleep(.02)
+    raise AssertionError('timeout: ' + label)
+
+def fails(fn, error):
+    try:
+        fn()
+    except GLib.Error as e:
+        check(error in str(e), 'refuses ' + error)
+        return
+    raise AssertionError('unexpected acceptance: ' + error)
+
+def method(name, ins=(), outs=()):
+    return '<method name="' + name + '">' + ''.join('<arg type="' + s + '" direction="in"/>' for s in ins) + ''.join('<arg type="' + s + '" direction="out"/>' for s in outs) + '</method>'
+
+def fixture():
+    c = conn(os.environ['DBUS_SESSION_BUS_ADDRESS'])
+    call(c, 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'RequestName', '(su)', (T, 4))
+    props = dict(Id=v('s', 'fixture'), Title=v('s', 'Fixture'), Status=v('s', 'Active'),
+        Category=v('s', 'ApplicationStatus'), IconName=v('s', 'fixture-icon'),
+        AttentionIconName=v('s', 'fixture-attention'), OverlayIconName=v('s', 'fixture-overlay'),
+        IconThemePath=v('s', '/fixture/icons'), Menu=v('o', '/menu'),
+        XAyatanaLabel=v('s', '42'), XAyatanaLabelGuide=v('s', '999'),
+        IconPixmap=v('a(iiay)', [(1, 1, [128, 10, 20, 30])]), ItemIsMenu=v('b', False),
+        ToolTip=v('(sa(iiay)ss)', ('fixture-icon', [], 'Tooltip title', 'Tooltip description')))
+    state = dict(events=[], about=[], length=1000, item_iface=S, path='/StatusNotifierItem', hang=False, race=False, get_only_all=False, fail_all=False, gets=0, get_alls=0, about_error='', burst=[], slow_started=False)
+    retained = []
+    registrations = []
+    def export(path, iface, methods, p=None, bus=None):
+        p = p or {}
+        bus = bus or c
+        xml = '<node><interface name="' + iface + '">' + ''.join(method(*m) for m in methods) + ''.join('<property name="' + k + '" type="' + value.get_type_string() + '" access="read"/>' for k, value in p.items()) + '</interface></node>'
+        info = Gio.DBusNodeInfo.new_for_xml(xml)
+        retained.append(info)
+        def getprop(*a):
+            key = a[-1]
+            if key == 'Status' and state['race']:
+                state['race'] = False
+                c.emit_signal(None, state['path'], state['item_iface'], 'NewStatus', v('(s)', ('NeedsAttention',)))
+            return p.get(key)
+        reg = bus.register_object(path, info.interfaces[0], dispatch, getprop, None)
+        registrations.append(reg)
+        return reg
+    def export_properties(bus, path, item_iface, p, delay=0, controlled=False):
+        xml = '<node><interface name="org.freedesktop.DBus.Properties">' + method('GetAll', ['s'], ['a{sv}']) + method('Get', ['s', 's'], ['v']) + '</interface></node>'
+        info = Gio.DBusNodeInfo.new_for_xml(xml)
+        retained.append(info)
+        def get(_c, _sender, _path, _iface, name, params, inv):
+            args = params.unpack()
+            if args[0] != item_iface:
+                inv.return_dbus_error('org.freedesktop.DBus.Error.UnknownInterface', 'fixture interface')
+                return
+            if name == 'Get':
+                state['gets'] += 1
+                if controlled and state['get_only_all']:
+                    inv.return_dbus_error('org.freedesktop.DBus.Error.NotSupported', 'GetAll only')
+                elif args[1] in p:
+                    answer(inv, '(v)', (p[args[1]],))
+                else:
+                    inv.return_dbus_error('org.freedesktop.DBus.Error.UnknownProperty', 'missing property')
+            elif name == 'GetAll':
+                if controlled:
+                    state['get_alls'] += 1
+                    if state['fail_all']:
+                        inv.return_dbus_error('org.freedesktop.DBus.Error.Failed', 'transient read failure')
+                        return
+                    if state['race']:
+                        state['race'] = False
+                        bus.emit_signal(None, path, item_iface, 'NewStatus', v('(s)', ('NeedsAttention',)))
+                def complete():
+                    answer(inv, '(a{sv})', (p,))
+                    return False
+                if delay:
+                    state['slow_started'] = True
+                    GLib.timeout_add(delay, complete)
+                else:
+                    complete()
+        registrations.append(bus.register_object(path, info.interfaces[0], get, None, None))
+    def burst(count):
+        state['burst'] = []
+        for index in range(count):
+            peer = conn(os.environ['DBUS_SESSION_BUS_ADDRESS'])
+            retained.append(peer)
+            p = dict(props, Id=v('s', 'burst-' + str(index)))
+            export('/burst', S, item_methods, p, peer)
+            export_properties(peer, '/burst', S, p, delay=1900 if index == 0 else 0)
+            def done(bus, result, index=index):
+                try:
+                    bus.call_finish(result)
+                    state['burst'].append([index, 'ok'])
+                except GLib.Error as e:
+                    state['burst'].append([index, str(e)])
+            peer.call(W, WP, W, 'RegisterStatusNotifierItem', v('(s)', ('/burst',)), None, Gio.DBusCallFlags.NONE, 15000, None, done)
+    def answer(inv, sig=None, args=()):
+        inv.return_value(v(sig, args) if sig else None)
+    def row(i):
+        p = {'label': v('s', 'Row ' + str(i))}
+        if i == 1:
+            p['children-display'] = v('s', 'submenu')
+        if i == 2:
+            p['enabled'] = v('b', False)
+        if i == 3:
+            p['type'] = v('s', 'separator')
+        if i == 4:
+            p['toggle-type'] = v('s', 'checkmark')
+            p['toggle-state'] = v('i', 1)
+        if i == 5:
+            # A genuine 1x1 RGBA PNG, generated by zlib below (no image tools).
+            p['icon-data'] = v('ay', png)
+        if i == 6:
+            p['icon-data'] = v('ay', b'not a PNG')
+        return v('(ia{sv}av)', (i, p, []))
+    def dispatch(_c, _sender, path, iface, name, params, inv):
+        a = params.unpack()
+        if iface in (S, 'org.freedesktop.StatusNotifierItem'):
+            if state['hang']:
+                retained.append(inv)
+                return
+            state['events'].append([name, list(a)])
+            answer(inv)
+        elif iface == D:
+            if name == 'AboutToShow':
+                state['about'].append(a[0])
+                if state['about_error'] == 'Timeout':
+                    retained.append(inv)
+                elif state['about_error']:
+                    inv.return_dbus_error('org.freedesktop.DBus.Error.' + state['about_error'], 'optional AboutToShow')
+                else:
+                    answer(inv, '(b)', (True,))
+            elif name == 'GetLayout':
+                parent, depth, fields = a
+                assert depth == 1 and 'icon-data' in fields
+                children = [row(i) for i in range(1, state['length'] + 1)] if parent == 0 else [row(10001), row(10002)]
+                answer(inv, '(u(ia{sv}av))', (1, (parent, {}, children)))
+            elif name == 'Event':
+                state['events'].append([name, list(a)])
+                answer(inv)
+        elif iface == T:
+            if name == 'State':
+                answer(inv, '(s)', (json.dumps(state),))
+            elif name in ('Set', 'SilentSet'):
+                key, value = a
+                props[key] = params.get_child_value(1).get_variant()
+                if name == 'Set':
+                    c.emit_signal(None, state['path'], 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', (state['item_iface'], {key: props[key]}, [])))
+                answer(inv)
+            elif name == 'Invalidate':
+                key = a[0]
+                props.pop(key, None)
+                c.emit_signal(None, state['path'], 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', (state['item_iface'], {}, [key])))
+                answer(inv)
+            elif name == 'Length':
+                state['length'] = a[0]
+                c.emit_signal(None, '/menu', D, 'LayoutUpdated', v('(ui)', (2, 0)))
+                answer(inv)
+            elif name == 'Register':
+                def done(bus, res):
+                    try:
+                        bus.call_finish(res)
+                        answer(inv)
+                    except GLib.Error as e:
+                        inv.return_dbus_error('org.nidara.Fixture.Error', str(e))
+                c.call(a[0], WP, a[0], 'RegisterStatusNotifierItem', v('(s)', (a[1],)), None, Gio.DBusCallFlags.NONE, 8000, None, done)
+            elif name == 'Replace':
+                c.unregister_object(registrations[0])
+                state['item_iface'] = 'org.freedesktop.StatusNotifierItem'
+                state['path'] = '/freedesktopItem'
+                export(state['path'], state['item_iface'], item_methods, props)
+                export_properties(c, state['path'], state['item_iface'], props, controlled=True)
+                answer(inv)
+            elif name == 'StatusSignal':
+                c.emit_signal(None, state['path'], state['item_iface'], 'NewStatus', v('(s)', (a[0],)))
+                answer(inv)
+            elif name == 'RaceStatus':
+                state['race'] = True
+                props['Status'] = v('s', 'Active')
+                c.emit_signal(None, state['path'], 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', (state['item_iface'], {}, ['Status'])))
+                answer(inv)
+            elif name == 'GetAllOnly':
+                state['get_only_all'] = a[0]
+                answer(inv)
+            elif name == 'FailAll':
+                state['fail_all'] = a[0]
+                answer(inv)
+            elif name == 'Signal':
+                c.emit_signal(None, state['path'], state['item_iface'], a[0], v('()', ()))
+                answer(inv)
+            elif name == 'AboutError':
+                state['about_error'] = a[0]
+                answer(inv)
+            elif name == 'Burst':
+                burst(a[0])
+                answer(inv)
+            elif name == 'Hang':
+                state['hang'] = a[0]
+                answer(inv)
+    import struct, zlib
+    def chunk(kind, data):
+        return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data))
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!2I5B', 1, 1, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(b'\x00\x0a\x14\x1e\x80')) + chunk(b'IEND', b'')
+    item_methods = [('Activate', ['i', 'i'], []), ('SecondaryActivate', ['i', 'i'], []), ('ContextMenu', ['i', 'i'], []), ('Scroll', ['i', 's'], [])]
+    export('/StatusNotifierItem', S, item_methods, props)
+    export_properties(c, '/StatusNotifierItem', S, props, controlled=True)
+    export('/menu', D, [('AboutToShow', ['i'], ['b']), ('GetLayout', ['i', 'i', 'as'], ['u', '(ia{sv}av)']), ('Event', ['i', 's', 'v', 'u'], [])])
+    export(TP, T, [('State', [], ['s']), ('Set', ['s', 'v'], []), ('SilentSet', ['s', 'v'], []), ('Invalidate', ['s'], []), ('Length', ['u'], []), ('Register', ['s', 's'], []), ('Replace', [], []), ('Hang', ['b'], []), ('StatusSignal', ['s'], []), ('RaceStatus', [], []), ('GetAllOnly', ['b'], []), ('FailAll', ['b'], []), ('Signal', ['s'], []), ('AboutError', ['s'], []), ('Burst', ['u'], [])])
+    GLib.MainLoop().run()
+
+def run(binary, root):
+    c = conn(os.environ['DBUS_SESSION_BUS_ADDRESS'])
+    others = []
+    def launch(args):
+        log = open(root / ('process-' + str(len(others)) + '.log'), 'w')
+        p = subprocess.Popen(args, stdout=log, stderr=log)
+        others.append((p, log))
+        return p
+    def own(name):
+        return call(c, 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'NameHasOwner', '(s)', (name,))[0]
+    def start(*flags):
+        p = launch([binary, *flags])
+        wait(lambda: own(N), 'sessiond start')
+        if flags:
+            wait(lambda: call(c, N, P, 'org.freedesktop.DBus.Properties', 'Get', '(ss)', (I, 'Available'))[0], 'Tray1 ready')
+        return p
+    def stop(p):
+        p.terminate()
+        p.wait(timeout=5)
+        wait(lambda: not own(N), 'sessiond stopped')
+    def tray(m, sig=None, args=(), peer=None):
+        return call(peer or c, N, P, I, m, sig, args)
+    def control(m, sig=None, args=()):
+        return call(c, T, TP, T, m, sig, args)
+    def items():
+        return tray('GetSnapshot')[1]
+    try:
+        p = start()
+        check(not own(W) and not own(F), 'tray disabled without --tray')
+        stop(p)
+        # An existing watcher is not replaced or queued behind, whichever alias it owns.
+        for occupied in (W, F):
+            blocker = conn(os.environ['DBUS_SESSION_BUS_ADDRESS'])
+            call(blocker, 'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'RequestName', '(su)', (occupied, 4))
+            p = launch([binary, '--tray'])
+            wait(lambda: own(N), 'sessiond alive with watcher conflict')
+            wait(lambda: call(c, N, P, 'org.freedesktop.DBus.Properties', 'Get', '(ss)', (I, 'UnavailableReason'))[0].startswith('watcher name'), 'conflict reported')
+            check(not own(F if occupied == W else W), 'partial alias claim rolled back')
+            blocker.close_sync(None)
+            wait(lambda: not own(W) and not own(F), 'no queued takeover')
+            stop(p)
+        p = start('--tray')
+        check(own(W) and own(F), 'both watcher aliases acquired')
+        check(not call(c, W, WP, 'org.freedesktop.DBus.Properties', 'Get', '(ss)', (W, 'IsStatusNotifierHostRegistered'))[0], 'no fictitious host')
+        tray('RegisterHost')
+        f = launch([sys.executable, __file__, '--fixture'])
+        wait(lambda: control('State'), 'fixture ready')
+        control('Register', '(ss)', (W, T))
+        first = wait(lambda: items(), 'item hydrated')[0]
+        h, g = first['Handle'], first['Generation']
+        check(first['Id'] == 'fixture' and first['XAyatanaLabelGuide'] == '999' and first['IconThemePath'] == '/fixture/icons', 'SNI metadata, label/guide/theme')
+        check(tray('GetIcon', '(stsu)', (h, g, 'normal', 16)) == (1, 1, [10, 20, 30, 128]), 'ARGB network order becomes RGBA')
+        control('Register', '(ss)', (F, T))
+        check(len(items()) == 1 and items()[0]['Generation'] == g, 'aliases and identical re-registration are idempotent')
+        for status in ('Passive', 'NeedsAttention', 'Active'):
+            control('Set', '(sv)', ('Status', v('s', status)))
+            wait(lambda: items()[0]['Status'] == status, status)
+        check(items()[0]['Status'] == 'Active', 'Passive/attention/active transitions retained for host policy')
+        control('StatusSignal', '(s)', ('NeedsAttention',))
+        wait(lambda: items()[0]['Status'] == 'NeedsAttention', 'inline NewStatus without a refetch')
+        check(True, 'NewStatus value is authoritative')
+        control('Set', '(sv)', ('Status', v('s', 'Active')))
+        control('RaceStatus')
+        wait(lambda: items()[0]['Status'] == 'NeedsAttention', 'new inline status wins over in-flight stale property read')
+        time.sleep(.15)
+        check(items()[0]['Status'] == 'NeedsAttention', 'late property result cannot overwrite a newer inline value')
+        control('Invalidate', '(s)', ('XAyatanaLabel',))
+        wait(lambda: items()[0].get('XAyatanaLabel') == '', 'invalidated label clears')
+        control('GetAllOnly', '(b)', (True,))
+        control('SilentSet', '(sv)', ('IconName', v('s', 'updated-fixture-icon')))
+        control('Signal', '(s)', ('NewIcon',))
+        wait(lambda: items()[0]['IconName'] == 'updated-fixture-icon', 'NewIcon updates through GetAll')
+        control('SilentSet', '(sv)', ('ToolTip', v('(sa(iiay)ss)', ('fixture-icon', [], 'Updated tooltip', 'Description'))))
+        control('Signal', '(s)', ('NewToolTip',))
+        wait(lambda: items()[0]['ToolTip'][1] == 'Updated tooltip', 'NewToolTip updates through GetAll')
+        check(items()[0]['IconName'] == 'updated-fixture-icon', 'GetAll-only item retains its icon across tooltip refresh')
+        check(json.loads(control('State')[0])['gets'] == 0, 'refresh never calls unsupported individual Get')
+        control('FailAll', '(b)', (True,))
+        before_all = json.loads(control('State')[0])['get_alls']
+        control('Signal', '(s)', ('NewIcon',))
+        wait(lambda: json.loads(control('State')[0])['get_alls'] > before_all, 'transient GetAll failure observed')
+        check(items()[0]['IconName'] == 'updated-fixture-icon', 'transient GetAll error preserves known icon')
+        control('FailAll', '(b)', (False,))
+        for method_name in ('Activate', 'SecondaryActivate', 'ContextMenu'):
+            tray(method_name, '(stii)', (h, g, -140, 230))
+        tray('Scroll', '(stis)', (h, g, -120, 'horizontal'))
+        recorded = json.loads(control('State')[0])['events']
+        check(recorded[-4:] == [[m, [-140, 230]] for m in ('Activate', 'SecondaryActivate', 'ContextMenu')] + [['Scroll', [-120, 'horizontal']]], 'real signed coordinates and scroll forwarded')
+        fails(lambda: tray('Scroll', '(stis)', (h, g, 1, 'bad')), 'InvalidArgument')
+        outsider = conn(os.environ['DBUS_SESSION_BUS_ADDRESS'])
+        fails(lambda: tray('OpenMenu', '(sti)', (h, g, 0), outsider), 'Denied')
+        token, rev, rows = tray('OpenMenu', '(sti)', (h, g, 0))
+        check(len(rows) == 1000 and rows[-1]['Id'] == 1000, '1000-row dbusmenu retained (no UI claim)')
+        check(rows[4]['IconRgba'] == [10, 20, 30, 128] and 'IconRgba' not in rows[5], 'menu PNG decoded; malformed icon ignored')
+        check(rows[3]['toggle-state'] == 1, 'menu checkmark retained')
+        fails(lambda: tray('ReadMenu', '(si)', (token, 0), outsider), 'Stale')
+        fails(lambda: tray('MenuEvent', '(suisvu)', (token, rev, 2, 'clicked', v('i', 0), 123)), 'InvalidArgument')
+        rev2, sub = tray('ReadMenu', '(si)', (token, 1))
+        check([r['Id'] for r in sub] == [10001, 10002], 'submenu fetched lazily')
+        fails(lambda: tray('MenuEvent', '(suisvu)', (token, rev, 4, 'clicked', v('i', 0), 123)), 'Stale')
+        tray('MenuEvent', '(suisvu)', (token, rev2, 4, 'clicked', v('i', 0), 123))
+        check(1 in json.loads(control('State')[0])['about'], 'AboutToShow runs per level')
+        control('Length', '(u)', (5000,))
+        time.sleep(.1)
+        fails(lambda: tray('MenuEvent', '(suisvu)', (token, rev2, 4, 'clicked', v('i', 0), 123)), 'Stale')
+        rev3, limited = tray('ReadMenu', '(si)', (token, 0))
+        rev3, again = tray('ReadMenu', '(si)', (token, 0))
+        check(len(again) == len(limited), 'rereading a capped level credits its replaced subtree')
+        check(len(limited) == 4097 and limited[-1]['LimitReached'] and not limited[-1]['enabled'], 'node limit represented by disabled visible ellipsis')
+        fails(lambda: tray('MenuEvent', '(suisvu)', (token, rev3, -2147483648, 'clicked', v('i', 0), 123)), 'Stale')
+        tray('CloseMenu', '(s)', (token,))
+        fails(lambda: tray('ReadMenu', '(si)', (token, 0)), 'Stale')
+        for error in ('UnknownMethod', 'NotSupported'):
+            control('AboutError', '(s)', (error,))
+            optional_token, _, optional_rows = tray('OpenMenu', '(sti)', (h, g, 0))
+            check(bool(optional_rows), 'GetLayout still opens after AboutToShow ' + error)
+            tray('CloseMenu', '(s)', (optional_token,))
+        control('AboutError', '(s)', ('Timeout',))
+        fails(lambda: tray('OpenMenu', '(sti)', (h, g, 0)), 'Timeout')
+        control('AboutError', '(s)', ('',))
+        control('Burst', '(u)', (20,))
+        wait(lambda: json.loads(control('State')[0])['slow_started'], 'slow burst hydration started')
+        tray('Activate', '(stii)', (h, g, 9, 10))
+        check(True, 'interactive actions remain available during a registration burst')
+        def burst_done():
+            results = json.loads(control('State')[0])['burst']
+            return results if len(results) == 20 else None
+        results = wait(burst_done, 'all 20 concurrent registrations completed', 15)
+        check(all(r[1] == 'ok' for r in results) and len(items()) == 21, '20 simultaneous registrations including 1.9s item all hydrate')
+
+        control('Hang', '(b)', (True,))
+        before = time.monotonic()
+        fails(lambda: tray('Activate', '(stii)', (h, g, 1, 2)), 'Timeout')
+        check(time.monotonic() - before < 4, 'hung application bounded by 2s deadline')
+        control('Hang', '(b)', (False,))
+        f.terminate()
+        f.wait(timeout=5)
+        wait(lambda: not items(), 'owner loss removes item')
+        fails(lambda: tray('Activate', '(stii)', (h, g, 1, 2)), 'Stale')
+        f = launch([sys.executable, __file__, '--fixture'])
+        wait(lambda: control('State'), 'fixture restart')
+        control('Replace')
+        control('Register', '(ss)', (F, '/freedesktopItem'))
+        newer = wait(lambda: items(), 'freedesktop SNI interface')[0]
+        check(newer['Generation'] != g and newer['Handle'] != h, 'owner churn generates a new item identity')
+        tray('UnregisterHost')
+        check(not call(c, F, WP, 'org.freedesktop.DBus.Properties', 'Get', '(ss)', (F, 'IsStatusNotifierHostRegistered'))[0], 'last host unregister clears host presence')
+        stop(p)
+        print('Tray1 private-bus integration PASS', flush=True)
+    finally:
+        for p, log in reversed(others):
+            if p.poll() is None:
+                p.terminate()
+                try:
+                    p.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    p.kill()
+                    p.wait()
+            log.close()
+
+def main():
+    if '--fixture' in sys.argv:
+        fixture()
+    elif '--inside' in sys.argv:
+        run(sys.argv[2], Path(sys.argv[3]))
+    else:
+        with tempfile.TemporaryDirectory(prefix='tray-test-') as d:
+            root = Path(d)
+            env = dict(os.environ, XDG_CACHE_HOME=str(root / 'cache'), XDG_CONFIG_HOME=str(root / 'config'), XDG_STATE_HOME=str(root / 'state'), GSETTINGS_BACKEND='keyfile')
+            result = subprocess.run(['dbus-run-session', '--', sys.executable, __file__, '--inside', str(Path(sys.argv[1]).resolve()), d], env=env)
+            if result.returncode:
+                for p in root.glob('*.log'):
+                    print(p.name + ':\n' + p.read_text(), file=sys.stderr)
+            sys.exit(result.returncode)
+
+if __name__ == '__main__':
+    main()

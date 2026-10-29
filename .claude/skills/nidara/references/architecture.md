@@ -928,6 +928,28 @@ graphical target also belongs to other desktops. There is deliberately **no D-Bu
 activation file** for the public notification name. Shell reloads restart only
 `nidara.service`; logout stops both. See dev-workflow.md for builds and integration.
 
+### Native tray service (`--tray`, #959 A)
+
+`session/daemon/src/tray/README.md` is the Tray1 wire/lifecycle contract. The
+opt-in daemon owns both KDE/freedesktop watcher names together without takeover
+or queueing, centralizes bounded SNI/pixmap/dbusmenu data and exposes it on
+`org.nidara.Session`, `/org/nidara/Tray`. Another watcher leaves Tray1 unavailable
+and other services running. A watcher is not a registered visualization host.
+Unique-owner generations and caller-bound menu tokens reject stale asynchronous
+actions. Registration bursts wait on a separate bounded hydration pool, outside
+the registry mutex, so actions retain their own slots. Refreshed field groups use
+GetAll (some Electron items reject Get); read errors preserve known state and
+only missing fields reset to typed defaults. Bus subscriptions match SNI/menu
+interfaces and SNI PropertiesChanged arg0, never every signal on the bus.
+Icon names/absolute theme paths go to the host; sessiond never walks
+application theme paths. PNG menu icons decode under central limits. Node-limit
+feedback is a visible disabled ellipsis row supplied to the host, never just a log.
+There is no TS bridge, default activation, Rust bar or toolkit popup in A.
+The future host owns Passive/attention/overflow policy, coordinates and PID-based
+raise through Hyalo. The popup step must service parent events: current run_popup
+suspends its parent and cannot satisfy the long-menu contract merely by adding
+Scroll. Read the README before extending this service or adding its consumers.
+
 ### `Config1` in the session daemon (`--config`, the Rust session)
 
 `nidara-sessiond --config` serves `org.nidara.Config1` (`session/daemon/src/config/`) with the
