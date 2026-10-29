@@ -178,3 +178,15 @@ pub fn fields(signal: &str) -> &'static [&'static str] {
         _ => &[],
     }
 }
+
+/// Wire-typed SNI defaults, applied only after a successful GetAll omits a field.
+pub fn property_default(field: &str) -> OwnedValue {
+    match field {
+        "ItemIsMenu" => val(false),
+        "Status" => val("Active"),
+        "Menu" => val(Path::try_from("/").expect("root path")),
+        "ToolTip" => val((String::new(), Pixmaps::new(), String::new(), String::new())),
+        "IconPixmap" | "AttentionIconPixmap" | "OverlayIconPixmap" => val(Pixmaps::new()),
+        _ => val(""),
+    }
+}

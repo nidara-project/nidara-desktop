@@ -81,3 +81,60 @@ fn snapshots_do_not_contain_sender_pixmaps() {
         "title"
     );
 }
+
+#[test]
+fn subscriptions_exclude_unrelated_session_traffic() {
+    let rules = signal_rules().unwrap();
+    let signal = |iface: &str, member: &str| {
+        zbus::message::Message::signal("/fixture", iface, member)
+            .unwrap()
+            .build(&())
+            .unwrap()
+    };
+    let accepts = |m: &zbus::Message| rules.iter().any(|r| r.matches(m).unwrap());
+    assert!(!accepts(&signal("org.example.Other", "Changed")));
+    assert!(!accepts(&signal("com.canonical.dbusmenu", "Unrelated")));
+    let properties = |iface: &str| {
+        zbus::message::Message::signal(
+            "/fixture",
+            "org.freedesktop.DBus.Properties",
+            "PropertiesChanged",
+        )
+        .unwrap()
+        .build(&(iface, Props::new(), Vec::<String>::new()))
+        .unwrap()
+    };
+    assert!(!accepts(&properties("org.mpris.MediaPlayer2.Player")));
+    for iface in ITEM_IFACES {
+        assert!(accepts(&signal(iface, "NewIcon")));
+        assert!(accepts(&properties(iface)));
+    }
+    for member in ["LayoutUpdated", "ItemsPropertiesUpdated"] {
+        assert!(accepts(&signal("com.canonical.dbusmenu", member)));
+    }
+}
+#[test]
+fn missing_properties_have_wire_typed_defaults() {
+    for field in ["IconPixmap", "AttentionIconPixmap", "OverlayIconPixmap"] {
+        assert!(
+            model::Pixmaps::try_from(model::property_default(field))
+                .unwrap()
+                .is_empty()
+        );
+    }
+    let (_, pixmap, title, description) =
+        <(String, model::Pixmaps, String, String)>::try_from(model::property_default("ToolTip"))
+            .unwrap();
+    assert!(pixmap.is_empty() && title.is_empty() && description.is_empty());
+    assert_eq!(
+        Path::try_from(model::property_default("Menu"))
+            .unwrap()
+            .as_str(),
+        "/"
+    );
+    assert!(!bool::try_from(model::property_default("ItemIsMenu")).unwrap());
+    assert_eq!(
+        String::try_from(model::property_default("Status")).unwrap(),
+        "Active"
+    );
+}

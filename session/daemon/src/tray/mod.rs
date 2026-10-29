@@ -111,6 +111,8 @@ struct Tray {
     publish: Arc<Mutex<()>>,
     calls: Arc<Semaphore>,
     registrations: Arc<Mutex<()>>,
+    registration_workers: Arc<Semaphore>,
+    registration_queue: Arc<Semaphore>,
 }
 impl Tray {
     fn item(&self, handle: &str, generation: u64) -> Result<Item, Error> {
@@ -250,8 +252,20 @@ impl Tray {
         Ok((owner.to_string(), path.into(), name.to_string()))
     }
     async fn register_item(&self, service: &str, caller: &str) -> Result<(), Error> {
-        let _slot = self.slot()?;
-        let _lock = self.registrations.lock().await;
+        // Registration bursts must wait, not lose icons until the next watcher
+        // restart. Separate admission/hydration from interactive action slots.
+        let _queued = self
+            .registration_queue
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| Error::Busy("registration admission quota".into()))?;
+        let _worker = self
+            .registration_workers
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| Error::Failed("registration workers stopped".into()))?;
+        let lock = self.registrations.lock().await;
         let (owner, path, name) = self.resolve(service, caller).await?;
         let key = format!("{owner}{path}");
         {
@@ -287,6 +301,7 @@ impl Tray {
                 },
             );
         }
+        drop(lock); // The ready=false reservation protects hydration outside the mutex.
         let result = async {
             let dbus = zbus::fdo::DBusProxy::new(&self.conn).await?;
             let pid = dbus
@@ -459,23 +474,22 @@ impl Tray {
                     "org.freedesktop.DBus.Properties",
                 )
                 .await?;
-                let mut data = Props::new();
-                for field in &fields {
-                    // Invalidated or removed properties return to protocol defaults.
-                    let v = p
-                        .call::<_, _, OwnedValue>("Get", &(i.interface.as_str(), field.as_str()))
-                        .await
-                        .unwrap_or_else(|_| {
-                            if field == "ItemIsMenu" {
-                                val(false)
-                            } else if field == "Status" {
-                                val("Active")
-                            } else {
-                                val("")
-                            }
-                        });
-                    data.insert(field.clone(), v);
-                }
+                // Electron variants may implement GetAll but reject individual
+                // Get. A failed RPC preserves the old values; only an absent
+                // field in a successful snapshot returns to its typed default.
+                let mut all = p
+                    .call::<_, _, Props>("GetAll", &(i.interface.as_str(),))
+                    .await?;
+                let data = fields
+                    .iter()
+                    .map(|field| {
+                        (
+                            field.clone(),
+                            all.remove(field)
+                                .unwrap_or_else(|| model::property_default(field)),
+                        )
+                    })
+                    .collect::<Props>();
                 Ok::<_, zbus::Error>(data)
             })
             .await;
@@ -514,6 +528,32 @@ impl Tray {
         self.state.write().unwrap().busy.remove(&handle);
     }
 }
+fn signal_rules() -> zbus::Result<Vec<zbus::MatchRule<'static>>> {
+    let mut rules = Vec::new();
+    for iface in ITEM_IFACES {
+        let rule = zbus::MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface(iface)?
+            .build();
+        rules.push(rule);
+        let rule = zbus::MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface("org.freedesktop.DBus.Properties")?
+            .member("PropertiesChanged")?
+            .arg(0, iface)?
+            .build();
+        rules.push(rule);
+    }
+    for member in ["LayoutUpdated", "ItemsPropertiesUpdated"] {
+        let rule = zbus::MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .interface("com.canonical.dbusmenu")?
+            .member(member)?
+            .build();
+        rules.push(rule);
+    }
+    Ok(rules)
+}
 pub async fn serve(conn: &Connection) -> zbus::Result<()> {
     let tray = Tray {
         conn: conn.clone(),
@@ -521,17 +561,20 @@ pub async fn serve(conn: &Connection) -> zbus::Result<()> {
         publish: Default::default(),
         calls: Arc::new(Semaphore::new(8)),
         registrations: Default::default(),
+        registration_workers: Arc::new(Semaphore::new(8)),
+        registration_queue: Arc::new(Semaphore::new(model::MAX_ITEMS)),
     };
     conn.object_server()
         .at(ROOT, bus::Root(tray.clone()))
         .await?;
     let dbus = zbus::fdo::DBusProxy::new(conn).await?;
     let mut owners = dbus.receive_name_owner_changed().await?;
-    // One bounded signal subscription, installed before any registration/snapshot.
-    let rule = zbus::MatchRule::builder()
-        .msg_type(zbus::message::Type::Signal)
-        .build();
-    let mut events = zbus::MessageStream::for_match_rule(rule, conn, Some(256)).await?;
+    // Match at the bus, before any registration/snapshot. Unrelated apps'
+    // signals must not wake this service or cause a refresh storm on overflow.
+    let mut events = futures_util::stream::SelectAll::new();
+    for rule in signal_rules()? {
+        events.push(zbus::MessageStream::for_match_rule(rule, conn, Some(256)).await?);
+    }
     // Applications react to NameOwnerChanged immediately. Export first and
     // hold registration calls until both names and subscriptions are ready.
     let startup = tray.registrations.lock().await;

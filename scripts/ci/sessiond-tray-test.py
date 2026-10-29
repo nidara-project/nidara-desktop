@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Real sessiond + SNI/dbusmenu fixture + host on a disposable session bus only."""
-import base64
 import json
 import os
 from pathlib import Path
@@ -69,12 +68,14 @@ def fixture():
         AttentionIconName=v('s', 'fixture-attention'), OverlayIconName=v('s', 'fixture-overlay'),
         IconThemePath=v('s', '/fixture/icons'), Menu=v('o', '/menu'),
         XAyatanaLabel=v('s', '42'), XAyatanaLabelGuide=v('s', '999'),
-        IconPixmap=v('a(iiay)', [(1, 1, [128, 10, 20, 30])]), ItemIsMenu=v('b', False))
-    state = dict(events=[], about=[], length=1000, item_iface=S, path='/StatusNotifierItem', hang=False, race=False)
+        IconPixmap=v('a(iiay)', [(1, 1, [128, 10, 20, 30])]), ItemIsMenu=v('b', False),
+        ToolTip=v('(sa(iiay)ss)', ('fixture-icon', [], 'Tooltip title', 'Tooltip description')))
+    state = dict(events=[], about=[], length=1000, item_iface=S, path='/StatusNotifierItem', hang=False, race=False, get_only_all=False, fail_all=False, gets=0, get_alls=0, about_error='', burst=[], slow_started=False)
     retained = []
     registrations = []
-    def export(path, iface, methods, p=None):
+    def export(path, iface, methods, p=None, bus=None):
         p = p or {}
+        bus = bus or c
         xml = '<node><interface name="' + iface + '">' + ''.join(method(*m) for m in methods) + ''.join('<property name="' + k + '" type="' + value.get_type_string() + '" access="read"/>' for k, value in p.items()) + '</interface></node>'
         info = Gio.DBusNodeInfo.new_for_xml(xml)
         retained.append(info)
@@ -84,9 +85,59 @@ def fixture():
                 state['race'] = False
                 c.emit_signal(None, state['path'], state['item_iface'], 'NewStatus', v('(s)', ('NeedsAttention',)))
             return p.get(key)
-        reg = c.register_object(path, info.interfaces[0], dispatch, getprop, None)
+        reg = bus.register_object(path, info.interfaces[0], dispatch, getprop, None)
         registrations.append(reg)
         return reg
+    def export_properties(bus, path, item_iface, p, delay=0, controlled=False):
+        xml = '<node><interface name="org.freedesktop.DBus.Properties">' + method('GetAll', ['s'], ['a{sv}']) + method('Get', ['s', 's'], ['v']) + '</interface></node>'
+        info = Gio.DBusNodeInfo.new_for_xml(xml)
+        retained.append(info)
+        def get(_c, _sender, _path, _iface, name, params, inv):
+            args = params.unpack()
+            if args[0] != item_iface:
+                inv.return_dbus_error('org.freedesktop.DBus.Error.UnknownInterface', 'fixture interface')
+                return
+            if name == 'Get':
+                state['gets'] += 1
+                if controlled and state['get_only_all']:
+                    inv.return_dbus_error('org.freedesktop.DBus.Error.NotSupported', 'GetAll only')
+                elif args[1] in p:
+                    answer(inv, '(v)', (p[args[1]],))
+                else:
+                    inv.return_dbus_error('org.freedesktop.DBus.Error.UnknownProperty', 'missing property')
+            elif name == 'GetAll':
+                if controlled:
+                    state['get_alls'] += 1
+                    if state['fail_all']:
+                        inv.return_dbus_error('org.freedesktop.DBus.Error.Failed', 'transient read failure')
+                        return
+                    if state['race']:
+                        state['race'] = False
+                        bus.emit_signal(None, path, item_iface, 'NewStatus', v('(s)', ('NeedsAttention',)))
+                def complete():
+                    answer(inv, '(a{sv})', (p,))
+                    return False
+                if delay:
+                    state['slow_started'] = True
+                    GLib.timeout_add(delay, complete)
+                else:
+                    complete()
+        registrations.append(bus.register_object(path, info.interfaces[0], get, None, None))
+    def burst(count):
+        state['burst'] = []
+        for index in range(count):
+            peer = conn(os.environ['DBUS_SESSION_BUS_ADDRESS'])
+            retained.append(peer)
+            p = dict(props, Id=v('s', 'burst-' + str(index)))
+            export('/burst', S, item_methods, p, peer)
+            export_properties(peer, '/burst', S, p, delay=1900 if index == 0 else 0)
+            def done(bus, result, index=index):
+                try:
+                    bus.call_finish(result)
+                    state['burst'].append([index, 'ok'])
+                except GLib.Error as e:
+                    state['burst'].append([index, str(e)])
+            peer.call(W, WP, W, 'RegisterStatusNotifierItem', v('(s)', ('/burst',)), None, Gio.DBusCallFlags.NONE, 15000, None, done)
     def answer(inv, sig=None, args=()):
         inv.return_value(v(sig, args) if sig else None)
     def row(i):
@@ -117,7 +168,12 @@ def fixture():
         elif iface == D:
             if name == 'AboutToShow':
                 state['about'].append(a[0])
-                answer(inv, '(b)', (True,))
+                if state['about_error'] == 'Timeout':
+                    retained.append(inv)
+                elif state['about_error']:
+                    inv.return_dbus_error('org.freedesktop.DBus.Error.' + state['about_error'], 'optional AboutToShow')
+                else:
+                    answer(inv, '(b)', (True,))
             elif name == 'GetLayout':
                 parent, depth, fields = a
                 assert depth == 1 and 'icon-data' in fields
@@ -129,10 +185,11 @@ def fixture():
         elif iface == T:
             if name == 'State':
                 answer(inv, '(s)', (json.dumps(state),))
-            elif name == 'Set':
+            elif name in ('Set', 'SilentSet'):
                 key, value = a
                 props[key] = params.get_child_value(1).get_variant()
-                c.emit_signal(None, state['path'], 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', (state['item_iface'], {key: props[key]}, [])))
+                if name == 'Set':
+                    c.emit_signal(None, state['path'], 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', (state['item_iface'], {key: props[key]}, [])))
                 answer(inv)
             elif name == 'Invalidate':
                 key = a[0]
@@ -156,6 +213,7 @@ def fixture():
                 state['item_iface'] = 'org.freedesktop.StatusNotifierItem'
                 state['path'] = '/freedesktopItem'
                 export(state['path'], state['item_iface'], item_methods, props)
+                export_properties(c, state['path'], state['item_iface'], props, controlled=True)
                 answer(inv)
             elif name == 'StatusSignal':
                 c.emit_signal(None, state['path'], state['item_iface'], 'NewStatus', v('(s)', (a[0],)))
@@ -164,6 +222,21 @@ def fixture():
                 state['race'] = True
                 props['Status'] = v('s', 'Active')
                 c.emit_signal(None, state['path'], 'org.freedesktop.DBus.Properties', 'PropertiesChanged', v('(sa{sv}as)', (state['item_iface'], {}, ['Status'])))
+                answer(inv)
+            elif name == 'GetAllOnly':
+                state['get_only_all'] = a[0]
+                answer(inv)
+            elif name == 'FailAll':
+                state['fail_all'] = a[0]
+                answer(inv)
+            elif name == 'Signal':
+                c.emit_signal(None, state['path'], state['item_iface'], a[0], v('()', ()))
+                answer(inv)
+            elif name == 'AboutError':
+                state['about_error'] = a[0]
+                answer(inv)
+            elif name == 'Burst':
+                burst(a[0])
                 answer(inv)
             elif name == 'Hang':
                 state['hang'] = a[0]
@@ -174,8 +247,9 @@ def fixture():
     png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('!2I5B', 1, 1, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(b'\x00\x0a\x14\x1e\x80')) + chunk(b'IEND', b'')
     item_methods = [('Activate', ['i', 'i'], []), ('SecondaryActivate', ['i', 'i'], []), ('ContextMenu', ['i', 'i'], []), ('Scroll', ['i', 's'], [])]
     export('/StatusNotifierItem', S, item_methods, props)
+    export_properties(c, '/StatusNotifierItem', S, props, controlled=True)
     export('/menu', D, [('AboutToShow', ['i'], ['b']), ('GetLayout', ['i', 'i', 'as'], ['u', '(ia{sv}av)']), ('Event', ['i', 's', 'v', 'u'], [])])
-    export(TP, T, [('State', [], ['s']), ('Set', ['s', 'v'], []), ('Invalidate', ['s'], []), ('Length', ['u'], []), ('Register', ['s', 's'], []), ('Replace', [], []), ('Hang', ['b'], []), ('StatusSignal', ['s'], []), ('RaceStatus', [], [])])
+    export(TP, T, [('State', [], ['s']), ('Set', ['s', 'v'], []), ('SilentSet', ['s', 'v'], []), ('Invalidate', ['s'], []), ('Length', ['u'], []), ('Register', ['s', 's'], []), ('Replace', [], []), ('Hang', ['b'], []), ('StatusSignal', ['s'], []), ('RaceStatus', [], []), ('GetAllOnly', ['b'], []), ('FailAll', ['b'], []), ('Signal', ['s'], []), ('AboutError', ['s'], []), ('Burst', ['u'], [])])
     GLib.MainLoop().run()
 
 def run(binary, root):
@@ -246,6 +320,21 @@ def run(binary, root):
         check(items()[0]['Status'] == 'NeedsAttention', 'late property result cannot overwrite a newer inline value')
         control('Invalidate', '(s)', ('XAyatanaLabel',))
         wait(lambda: items()[0].get('XAyatanaLabel') == '', 'invalidated label clears')
+        control('GetAllOnly', '(b)', (True,))
+        control('SilentSet', '(sv)', ('IconName', v('s', 'updated-fixture-icon')))
+        control('Signal', '(s)', ('NewIcon',))
+        wait(lambda: items()[0]['IconName'] == 'updated-fixture-icon', 'NewIcon updates through GetAll')
+        control('SilentSet', '(sv)', ('ToolTip', v('(sa(iiay)ss)', ('fixture-icon', [], 'Updated tooltip', 'Description'))))
+        control('Signal', '(s)', ('NewToolTip',))
+        wait(lambda: items()[0]['ToolTip'][1] == 'Updated tooltip', 'NewToolTip updates through GetAll')
+        check(items()[0]['IconName'] == 'updated-fixture-icon', 'GetAll-only item retains its icon across tooltip refresh')
+        check(json.loads(control('State')[0])['gets'] == 0, 'refresh never calls unsupported individual Get')
+        control('FailAll', '(b)', (True,))
+        before_all = json.loads(control('State')[0])['get_alls']
+        control('Signal', '(s)', ('NewIcon',))
+        wait(lambda: json.loads(control('State')[0])['get_alls'] > before_all, 'transient GetAll failure observed')
+        check(items()[0]['IconName'] == 'updated-fixture-icon', 'transient GetAll error preserves known icon')
+        control('FailAll', '(b)', (False,))
         for method_name in ('Activate', 'SecondaryActivate', 'ContextMenu'):
             tray(method_name, '(stii)', (h, g, -140, 230))
         tray('Scroll', '(stis)', (h, g, -120, 'horizontal'))
@@ -275,6 +364,24 @@ def run(binary, root):
         fails(lambda: tray('MenuEvent', '(suisvu)', (token, rev3, -2147483648, 'clicked', v('i', 0), 123)), 'Stale')
         tray('CloseMenu', '(s)', (token,))
         fails(lambda: tray('ReadMenu', '(si)', (token, 0)), 'Stale')
+        for error in ('UnknownMethod', 'NotSupported'):
+            control('AboutError', '(s)', (error,))
+            optional_token, _, optional_rows = tray('OpenMenu', '(sti)', (h, g, 0))
+            check(bool(optional_rows), 'GetLayout still opens after AboutToShow ' + error)
+            tray('CloseMenu', '(s)', (optional_token,))
+        control('AboutError', '(s)', ('Timeout',))
+        fails(lambda: tray('OpenMenu', '(sti)', (h, g, 0)), 'Timeout')
+        control('AboutError', '(s)', ('',))
+        control('Burst', '(u)', (20,))
+        wait(lambda: json.loads(control('State')[0])['slow_started'], 'slow burst hydration started')
+        tray('Activate', '(stii)', (h, g, 9, 10))
+        check(True, 'interactive actions remain available during a registration burst')
+        def burst_done():
+            results = json.loads(control('State')[0])['burst']
+            return results if len(results) == 20 else None
+        results = wait(burst_done, 'all 20 concurrent registrations completed', 15)
+        check(all(r[1] == 'ok' for r in results) and len(items()) == 21, '20 simultaneous registrations including 1.9s item all hydrate')
+
         control('Hang', '(b)', (True,))
         before = time.monotonic()
         fails(lambda: tray('Activate', '(stii)', (h, g, 1, 2)), 'Timeout')

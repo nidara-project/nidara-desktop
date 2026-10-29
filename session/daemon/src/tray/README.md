@@ -31,7 +31,11 @@ before registration/snapshot. Signals arriving during hydration are bounded and
 merged after the initial read; asynchronous property refreshes cannot overwrite
 newer inline signals. NewXxx signals invalidate only their property group;
 NewStatus and XAyatanaNewLabel carry values directly. PropertiesChanged and its
-invalidations are supported. Tooltip text is plain data; the sender's embedded
+invalidations are supported. Refreshed groups use GetAll and discard unrequested
+fields, for Electron shims that reject individual Get. Failed RPCs preserve
+known values; only missing fields in a successful response regain typed defaults.
+Six bus match rules restrict traffic to the two SNI interfaces, their
+PropertiesChanged arg0 and dbusmenu LayoutUpdated/ItemsPropertiesUpdated. Tooltip text is plain data; the sender's embedded
 tooltip pixmap is not retained.
 
 The read-only properties are `Available:b`, `UnavailableReason:s`, `Revision:t`,
@@ -75,7 +79,9 @@ generation and menu path. `CloseMenu(s token)` retires a session. Closing/unregi
 a host frees its caches. `MenuClosed(s token)` targets the owning host when the
 item disappears. Stale tokens cannot cross hosts or survive an owner change.
 
-Every level sends AboutToShow before GetLayout with recursionDepth=1. Rows
+Every level sends AboutToShow before GetLayout with recursionDepth=1.
+UnknownMethod/NotSupported from optional AboutToShow is tolerated; timeouts and
+other failures are reported. Rows
 include Id:i plus type/label/enabled/visible, icon-name, toggle-type/toggle-state,
 children-display, accessible-desc and shortcut when supplied. Defaults follow
 dbusmenu: missing enabled/visible mean true, missing type means standard.
@@ -95,7 +101,11 @@ Reads racing a newer revision fail Stale and must be retried. These are cache
 publication revisions, not the remote application's GetLayout revision.
 
 Limits: 256 items, 32 per unique owner; 64 registered hosts; eight concurrent
-application RPC/refresh/decode workers, no unbounded work queue. Property refresh
+application RPC/refresh/decode workers. Registration has its own eight hydration
+workers and bounded admission of 256 waiting/running registrations, so ordinary
+startup bursts wait instead of losing icons with Busy or starving actions. The
+registration mutex covers resolution/reservation only, not app hydration. No
+unbounded work queue is created. Property refresh
 requests coalesce by item/field and are debounced 25 ms. RPCs and whole refresh
 batches have a two-second deadline. Item strings are at most 4096 UTF-8 bytes.
 At most 16 pixmaps/property, each <=512x512 with exact checked byte length;
@@ -134,5 +144,8 @@ XEmbed/xembedsniproxy, or new CI job/step is involved. Unit tests cover bounds,
 UTF-8, icon wire format and metadata. Private-bus tests cover watcher collisions,
 hosts, aliases, both SNI interfaces, churn, property invalidation, signed actions,
 timeouts, PNGs, a 1000-row menu, submenus, revisions and the visible node limit.
+Regressions include 20 simultaneous registrations (one answering after 1.9 s)
+with actions still available, GetAll-only items, transient read errors, optional
+AboutToShow and a signal racing a stale read. Unit rules reject unrelated traffic.
 These checks establish the service contract; they do not establish visible bar,
 menu scrolling/focus/Orca, installed-package or live-compositor acceptance.

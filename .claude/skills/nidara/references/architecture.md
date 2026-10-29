@@ -936,7 +936,12 @@ or queueing, centralizes bounded SNI/pixmap/dbusmenu data and exposes it on
 `org.nidara.Session`, `/org/nidara/Tray`. Another watcher leaves Tray1 unavailable
 and other services running. A watcher is not a registered visualization host.
 Unique-owner generations and caller-bound menu tokens reject stale asynchronous
-actions. Icon names/absolute theme paths go to the host; sessiond never walks
+actions. Registration bursts wait on a separate bounded hydration pool, outside
+the registry mutex, so actions retain their own slots. Refreshed field groups use
+GetAll (some Electron items reject Get); read errors preserve known state and
+only missing fields reset to typed defaults. Bus subscriptions match SNI/menu
+interfaces and SNI PropertiesChanged arg0, never every signal on the bus.
+Icon names/absolute theme paths go to the host; sessiond never walks
 application theme paths. PNG menu icons decode under central limits. Node-limit
 feedback is a visible disabled ellipsis row supplied to the host, never just a log.
 There is no TS bridge, default activation, Rust bar or toolkit popup in A.

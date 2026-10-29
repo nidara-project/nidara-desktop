@@ -197,7 +197,11 @@ impl Tray {
         }
         let i = self.item(&m.handle, m.generation)?;
         let p = Proxy::new(&self.conn, i.owner.as_str(), m.path.as_str(), IFACE).await?;
-        let _: bool = deadline(p.call("AboutToShow", &(parent,))).await?;
+        match deadline(p.call::<_, _, bool>("AboutToShow", &(parent,))).await {
+            Ok(_) => {}
+            Err(e) if unsupported_about(&e) => {}
+            Err(e) => return Err(e),
+        }
         let (_, layout): (u32, Layout) =
             deadline(p.call("GetLayout", &(parent, 1i32, MENU_FIELDS))).await?;
         if layout.0 != parent {
@@ -424,5 +428,18 @@ fn descendants(m: &Session, parent: i32, out: &mut BTreeSet<i32>) {
                 descendants(m, *id, out);
             }
         }
+    }
+}
+
+fn unsupported_about(e: &Error) -> bool {
+    match e {
+        Error::ZBus(zbus::Error::MethodError(name, _, _)) => {
+            name.as_str().ends_with(".UnknownMethod") || name.as_str().ends_with(".NotSupported")
+        }
+        Error::ZBus(zbus::Error::FDO(e)) => matches!(
+            **e,
+            zbus::fdo::Error::UnknownMethod(_) | zbus::fdo::Error::NotSupported(_)
+        ),
+        _ => false,
     }
 }
