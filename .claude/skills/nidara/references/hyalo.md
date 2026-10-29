@@ -45,13 +45,19 @@ Layer-shell popup roots use the whole output so their own bar/dock reservation
 does not exclude them. Positioner flip/slide/resize still chooses the result.
 
 The compositor re-constrains after layer reservations/destruction, output/root
-placement changes and popup acknowledgement commits (children must use the new
-acknowledged parent origin). `send_pending_configure` suppresses unchanged data;
+placement changes. A popup commit only re-constrains its descendants, and only
+if its committed configured geometry changed (children use the new parent
+origin); ordinary repaint commits do not walk all session popups.
+`send_pending_configure` suppresses unchanged data;
 old/nonreactive clients retain their protocol limitations. Toolkit v3 popup
 positioners are reactive; client reposition keeps its real acknowledgement token.
 The bounded-menu private checker uses actual exclusive layers and verifies
 confirmed geometry, including changes while a menu is open, never physical
 DRM/hotplug or the owner's installed session.
+
+Interactive window moves map a temporary location during the pointer grab;
+`finish_grab` calls `sync_space`, so popups re-constrain when the window lands.
+They are not re-constrained on every intermediate drag frame.
 
 ## Native Display1 and output recovery (#959)
 

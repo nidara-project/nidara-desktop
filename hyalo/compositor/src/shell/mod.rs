@@ -28,7 +28,7 @@ use smithay::{
         input_method::InputMethodKeyboardGrab,
         shell::xdg::{
             PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
-            XdgToplevelSurfaceData,
+            XdgToplevelSurfaceData, XdgPopupSurfaceData,
         },
     },
 };
@@ -316,8 +316,19 @@ impl Hyalo {
             if !xdg.is_initial_configure_sent() {
                 self.unconstrain_popup(&xdg);
                 xdg.send_configure().expect("initial configure failed");
-            } else {
-                self.reconstrain_popups();
+            } else if popup_geometry_changed(&xdg) {
+                // A repaint is not a placement change. Only this popup's
+                // descendants depend on its newly committed configured geometry.
+                let kind = PopupKind::Xdg(xdg);
+                if let Ok(root) = find_popup_root_surface(&kind) {
+                    for (popup, _) in smithay::desktop::PopupManager::popups_for_surface(&root) {
+                        if let PopupKind::Xdg(popup) = popup
+                            && popup_has_ancestor(&popup, surface) {
+                                self.unconstrain_popup(&popup);
+                                if popup.is_initial_configure_sent() { let _ = popup.send_pending_configure(); }
+                            }
+                    }
+                }
             }
         }
     }
@@ -372,6 +383,37 @@ impl Hyalo {
     }
 }
 
+#[derive(Default)]
+struct CommittedPopupGeometry(std::sync::Mutex<Option<smithay::utils::Rectangle<i32, smithay::utils::Logical>>>);
+
+fn popup_geometry_changed(popup: &PopupSurface) -> bool {
+    let geometry = popup.with_committed_state(|state| state.map(|s| s.geometry));
+    with_states(popup.wl_surface(), |states| {
+        states.data_map.insert_if_missing_threadsafe(CommittedPopupGeometry::default);
+        let mut previous = states.data_map.get::<CommittedPopupGeometry>().unwrap().0.lock().unwrap();
+        update_popup_geometry(&mut previous, geometry)
+    })
+}
+
+fn update_popup_geometry(
+    previous: &mut Option<smithay::utils::Rectangle<i32, smithay::utils::Logical>>,
+    current: Option<smithay::utils::Rectangle<i32, smithay::utils::Logical>>,
+) -> bool {
+    let changed = *previous != current;
+    *previous = current;
+    changed
+}
+
+fn popup_has_ancestor(popup: &PopupSurface, ancestor: &WlSurface) -> bool {
+    let mut parent = popup.get_parent_surface();
+    while let Some(surface) = parent {
+        if &surface == ancestor { return true; }
+        parent = with_states(&surface, |states| states.data_map.get::<XdgPopupSurfaceData>()
+            .and_then(|data| data.lock().unwrap().parent.clone()));
+    }
+    false
+}
+
 /// The usable zone is output-local; both the window and popup ancestry are global
 /// offsets removed to reach the immediate parent's window-geometry coordinates.
 fn popup_target(
@@ -393,6 +435,15 @@ fn popup_target(
 mod popup_area_tests {
     use super::*;
     use smithay::{utils::Rectangle, reexports::wayland_protocols::xdg::shell::server::xdg_positioner as p};
+    #[test]
+    fn repaint_commits_do_not_reconstrain_descendants() {
+        let geometry = Rectangle::new((20, 30).into(), (200, 400).into());
+        let mut previous = None;
+        assert!(!update_popup_geometry(&mut previous, None));
+        assert!(update_popup_geometry(&mut previous, Some(geometry)));
+        for _ in 0..100 { assert!(!update_popup_geometry(&mut previous, Some(geometry))); }
+        assert!(update_popup_geometry(&mut previous, Some(Rectangle::new((30, 40).into(), geometry.size))));
+    }
     #[test]
     fn tall_popup_excludes_both_exclusive_zones_and_reconstrains_after_they_change() {
         let output = Rectangle::new((-1000, 200).into(), (800, 600).into());
