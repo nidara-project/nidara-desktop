@@ -33,17 +33,21 @@ impl WlrLayerShellHandler for Hyalo {
         _layer: Layer,
         namespace: String,
     ) {
-        // A surface with no output asked for goes to the one under the pointer.
+        // A surface with no output asked for goes to the one under the pointer. One that
+        // names an output that is gone (removed after the client bound it) closes: it is
+        // never moved to another monitor, nor to a newer output reusing the number.
         let pointer = self.seat.get_pointer().unwrap().current_location();
-        let output = wl_output.as_ref().and_then(Output::from_resource).or_else(|| {
-            self.space
+        let output = match wl_output.as_ref() {
+            Some(asked) => Output::from_resource(asked).filter(|o| self.space.outputs().any(|s| s == o)),
+            None => self
+                .space
                 .output_under(pointer)
                 .next()
                 .or_else(|| self.space.outputs().next())
-                .cloned()
-        });
+                .cloned(),
+        };
         let Some(output) = output else {
-            // No output at all (every monitor off): nothing can show it.
+            // No output at all (every monitor off), or the one asked for is gone.
             surface.send_close();
             return;
         };

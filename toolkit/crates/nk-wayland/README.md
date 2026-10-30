@@ -193,10 +193,22 @@ Window::activate(String) consumes the initiating client's opaque xdg_activation_
 means sent, not acknowledged focus. Unsupported means the optional global is
 absent; no repaint or synthetic serial is used. Empty/NUL tokens, popup/destroyed
 targets and supported activation before a configured painted buffer are errors.
-The caller obtains/transfers the token and retires launch environment metadata;
-this API never reads environment or requests a token from the compositor.
+The caller transfers the token and retires launch environment metadata; this
+side never reads the environment. To launch from a click, a layer root asks the
+compositor for one: `request_activation_token(serial, app_id)` returns
+`Result<TokenRequest, TokenFailure>` and later `Event::ActivationToken { request,
+token: ActivationToken }` (opaque; `as_str()` to pass on; Debug hides it) or
+`Event::ActivationTokenFailed` (SHELL-SURFACES.md §4).
 Capabilities.activation names exact optional global support. CPU dispatch/capability
 tests are not a native protocol/focus proof. Settings caller integration is separate.
+
+## Shell surfaces (#959 T1)
+
+The dock and the bar are layer roots: `run_layer(app, options, LayerSpec, wake,
+start)`, with `run` unchanged. `LayerSpec.output` is a single-use `LayerOutput` from
+`OutputWatch::bind_output`; `wake_channel()` lets another thread wake the loop
+(`Event::Wake`); `capture_window` returns `Result<CaptureId, CaptureFailure>` and one
+`Event::Capture` per capture. Contract, limits and evidence: `toolkit/SHELL-SURFACES.md`.
 
 ## Bounded action-popup stack (#959 B)
 
@@ -218,7 +230,8 @@ Nonmodal Suggestions keeps its original API and keyboard behavior.
 
 The app services popup events, paints only confirmed frames, updates its bounds
 hint on layout changes and restores a still-live trigger after close. Parent
-configure/repaint/idle and appearance polling continue. A real xdg parent is
-required here; the future layer-shell bar must supply its own compatible parent,
-never a hidden/disguised toplevel. Read CONTRACT.md and the bounded-menu-probe
+configure/repaint/idle and appearance polling continue. The parent is the
+window's real root: an xdg toplevel (`run`) or a layer root (`run_layer`, whose
+menus attach with `get_popup`; SHELL-SURFACES.md §3), never a hidden or disguised
+toplevel. Read CONTRACT.md and the bounded-menu-probe
 example for the retained action-menu/provider composition and private test.
