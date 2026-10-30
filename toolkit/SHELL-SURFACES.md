@@ -1,6 +1,7 @@
 # Shell surfaces in nk-wayland (T1)
 
-**Status: DESIGN for review, 2026-10-30.** This is step T1 of
+**Status: IMPLEMENTED in `crates/nk-wayland`, reviewed by Codex (#959 #728), 2026-10-30.
+The signatures below are the code's.** This is step T1 of
 [`session/design/APPLICATIONS1-DOCK.md`](../session/design/APPLICATIONS1-DOCK.md) §9–§10
 (contract closed by the owner, relayed in Palomar #959 #688). T1 adds only the transport
 primitives the Rust dock (D1/D2) consumes. It adds no dock, no shell process, no policy and
@@ -21,14 +22,19 @@ exactly the dock's case: layer surfaces never take the keyboard on a click),
 
 ## 1. Layer root
 
-`Options` gains `role: Role`, defaulting to `Role::Toplevel` (every existing caller keeps
-its behaviour unchanged).
+A separate entry point; `run` and every existing caller are unchanged.
 
 ```rust
-pub enum Role { Toplevel, Layer(LayerSpec) }
-pub struct LayerSpec {
+pub fn run_layer(
+    app: impl Application,
+    options: Options,                     // size = initial logical size; title unused
+    spec: LayerSpec,
+    wake: Option<WakeSource>,             // §2: another thread reaches the app
+    start: Instant,
+) -> Result<()>
+pub struct LayerSpec {                    // neither Clone nor Copy (one binding, one root)
     pub namespace: &'static str,          // fixed at creation (protocol)
-    pub output: Option<OutputId>,         // fixed at creation (protocol); None = compositor's choice
+    pub output: Option<LayerOutput>,      // §2, from OutputWatch::bind_output; None = compositor's choice
     pub layer: LayerLevel,                // Background | Bottom | Top | Overlay
     pub placement: LayerPlacement,        // everything below may change on the SAME surface
 }
@@ -56,7 +62,7 @@ pub struct LayerPlacement {
   fixed by the protocol, so a dock per output is one surface per output and hotplug creates
   a new one (contract §8: no reuse of stale handles).
 - Required globals for a layer root: `zwlr_layer_shell_v1` v3+ instead of `xdg_wm_base`
-  for the root (xdg_wm_base still required for its popups). Missing → `run` refuses with a
+  for the root (xdg_wm_base still required for its popups). Missing → `run_layer` refuses with a
   clear message, like `require_material`.
 - Material: `nidara-material-v1` attaches to any `wl_surface`; Hyalo paints the dock's
   glass exactly as it does for toplevels (the app never imitates it).
@@ -154,9 +160,12 @@ stays toplevel-only and refuses a layer parent explicitly.
 ## 4. Activation token producer
 
 ```rust
-window.request_activation_token(serial: u32, app_id: Option<&str>) -> TokenRequest
-// later: Event::ActivationToken { request: TokenRequest, token: String }
-//    or  Event::ActivationTokenFailed { request, reason }
+window.request_activation_token(serial: u32, app_id: Option<&str>)
+    -> Result<TokenRequest, TokenFailure>   // UndeliveredSerial, Busy, Unsupported, Closed at once
+window.cancel_activation_token(request)
+// later: Event::ActivationToken { request: TokenRequest, token: ActivationToken }
+//    or  Event::ActivationTokenFailed { request, reason: TokenFailure }
+// ActivationToken: opaque; as_str()/into_string() to pass it on; Debug prints <private>
 ```
 
 - `serial` must be one the window actually received (`Event::Button`/`Event::Key`
@@ -264,7 +273,8 @@ session, and recorded under `target/`:
    ready); the other five answered in tens of milliseconds.
    The drivers wait for nested Xwayland to be ready: it stalls software Hyalo for
    several seconds, which a 2 s deadline would otherwise measure.
-6. Existing toolkit tests and every existing `run` caller unchanged (`Role::Toplevel`).
+6. Existing toolkit tests and every existing `run` caller unchanged (`run_layer` is a
+   separate entry point).
 
 Not claimed by T1: the dock itself, drag and drop (T2), launch correlation and attention
 (H1), real monitor hotplug or physical input.
