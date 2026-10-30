@@ -7,6 +7,8 @@ use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::sync::Arc;
 
 /// Send it anywhere; every `wake` becomes at least one `Event::Wake` (wakes coalesce).
+/// Put the message in the app's channel BEFORE waking: the loop empties the pipe before
+/// the app reads its channel, so a wake sent meanwhile brings one more `Event::Wake`.
 #[derive(Clone)]
 pub struct Waker(Arc<OwnedFd>);
 /// Handed to `run_layer`; the loop owns it.
@@ -58,6 +60,21 @@ mod tests {
         }
         assert!(source.drain());
         assert!(!source.drain());
+    }
+    /// The loop drains, then the app reads its channel; a message sent in between
+    /// leaves a wake behind, so it is read on the next `Event::Wake`, never stranded.
+    #[test]
+    fn a_wake_during_the_apps_read_is_not_lost() {
+        let (waker, source) = wake_channel().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        tx.send(1).unwrap();
+        waker.wake().unwrap();
+        assert!(source.drain());
+        tx.send(2).unwrap();
+        waker.wake().unwrap();
+        assert_eq!(rx.try_iter().collect::<Vec<_>>(), vec![1, 2]);
+        assert!(source.drain(), "the second wake was lost");
+        assert!(rx.try_recv().is_err());
     }
     #[test]
     fn waking_an_ended_loop_fails() {

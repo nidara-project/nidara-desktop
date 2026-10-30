@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
 """Private nested-Hyalo check of SHELL-SURFACES.md §2: a layer root on the watcher's
-output, ended from another thread by its Waker; an absent output id is refused.
+connection and output instance, ended from another thread by its Waker.
 Same-number re-add, hotplug and watcher loss are unit tests (outputs.rs): nested Hyalo
 has one output and refuses to disable it. Not a CI job."""
 import json
@@ -22,8 +22,7 @@ assert first, 'the watcher reported no complete output'
 assert f'DOCK_READY id={first[1]}' in text, 'no layer root on the reported output'
 assert re.search(r'WOKE\n(.*\n)*WAKE_ENDED Ok\(\(\)\)', text), 'the Waker did not end the root cleanly'
 assert 'WAKE_AFTER_END true' in text, 'waking an ended loop did not fail'
-assert 'ABSENT_REFUSED' in text, 'an absent output id was not refused with OUTPUT_GONE'
 result = {'output': first[2], 'id': int(first[1]), 'logical': [int(first[3]), int(first[4])],
-          'wake_ended_cleanly': True, 'absent_refused': True}
+          'wake_ended_cleanly': True}
 (LOG / 'oracles.json').write_text(json.dumps(result, indent=2))
 print(json.dumps(result))

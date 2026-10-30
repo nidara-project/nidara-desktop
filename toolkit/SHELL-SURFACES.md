@@ -17,7 +17,7 @@ Hyalo already serves what T1 needs: `WlrLayerShellState`, `xdg_activation_v1` (a
 honoured when its serial came after the maker got keyboard **or pointer** focus, which is
 exactly the dock's case: layer surfaces never take the keyboard on a click),
 `ext_foreign_toplevel_list_v1` with the hex window ID as identifier, and
-`ext_image_copy_capture_v1` over `ext_image_capture_source_v1`. T1 changes no Hyalo code.
+`ext_image_copy_capture_v1` over `ext_image_capture_source_v1`. T1 changes no Hyalo code; §2 names one Hyalo fix that waits for the owner.
 
 ## 1. Layer root
 
@@ -66,46 +66,73 @@ pub struct LayerPlacement {
 ## 2. Several outputs: one connection per surface
 
 The dock needs one surface per output, and outputs come and go. The Window host is one
-connection, one queue, one root. T1 keeps that model and runs **one `run` per output on
-its own thread**, with:
+connection, one queue, one root. T1 keeps that model and runs **one `run_layer` per
+output, on its own thread and its own connection**, with:
 
 - `nk_wayland::outputs() -> Result<OutputWatch>`: a small connection that binds
   `wl_output` v4 (name, description, scale, logical geometry via `xdg_output` when present)
-  and reports `OutputEvent::{Added, Changed, Removed}` keyed by `OutputId`.
-- `OutputId` is the output's **wl_registry global name**, the same number on every
-  connection. `LayerSpec.output` carries it; the dock's own connection binds exactly that
-  global, and if it is absent `run_layer` fails with `OUTPUT_GONE`. No proxy crosses
-  connections (review by Codex, #704).
-- **The number alone is not identity.** Hyalo's server backend (wayland-backend's Rust
+  and reports `OutputEvent::{Added, Changed, Removed, Lost}` keyed by `OutputId`.
+- **The registry number is not identity.** Hyalo's server backend (wayland-backend's Rust
   implementation, no `server_system`) gives a new global the first free slot, so an
-  output removed and plugged back in can come back with the SAME number (test
-  `re_added_output_can_reuse_the_number_but_removal_comes_first`). Nothing in the
-  protocol tells two instances apart beyond that number, so identity rests on **order**:
-  the watcher's connection always reports `Removed(N)` before an `Added` that reuses N.
-- The rule for the shell: a dock lives from the watcher's `Added(N)` to its `Removed(N)`.
-  On `Removed` the shell ends that dock whatever it bound. If N was reused between
-  selection and binding, the dock may have bound the new instance; its `Removed` is
-  already queued and the following `Added` starts a fresh dock. Never two docks on one
-  output, and no binding outlives its `Removed`.
+  output removed and plugged back in can return with the SAME number (Codex found the
+  ABA in #704; the number-only fix was wrong, #712). Nothing in the protocol tells two
+  instances apart except the `wl_output` object a client bound.
+- `OutputId` = number + a generation never repeated in this process (across watches
+  too): a re-added output never compares equal to the one it replaces, so a late stop
+  or `Removed` for the old one cannot be taken for the new one. Its fields are private:
+  an `OutputId` cannot be made up.
+- `watch.bind_output(id, timeout) -> Result<LayerOutput, BindFailure>`, on the
+  watcher's thread (Codex's handshake, #713/#719):
+  1. a new connection for the dock binds global N and syncs (syncA: the bind was
+     processed);
+  2. only then the watcher syncs (syncB): every removal that happened before the bind
+     is now in the watcher's events, which stay queued for `next`;
+  3. if the SAME generation is still present, the bound object is that instance;
+     otherwise `Gone`.
+  Both syncs share one deadline (`Timeout`, never a hang). A failed watcher connection
+  is `Lost`, and `next` still reports `Lost` once. Every failure closes the dock
+  connection; nothing partial is returned.
+- `LayerOutput` is neither `Clone` nor `Copy`: one binding opens one root. It moves into
+  `LayerSpec.output` and `run_layer` runs alone on that connection, so input, IME and
+  cleanup are those of any root. When the dock ends, its connection closes and the
+  compositor frees everything.
+- A removal AFTER the check: the dock's object stays the old instance. The surface must
+  then close, not move. **Hyalo today moves it** (`shell/layer.rs`: an explicit output
+  that no longer resolves falls back to the output under the pointer). A one-line Hyalo
+  fix (close instead) is a separate commit, outside T1's "toolkit only" scope, and waits
+  for the owner's decision. Until then, the guarantee holds up to that window. Surfaces
+  that exist when an output is removed are already closed (`backend/tty.rs`).
 - `wake_channel() -> (Waker, WakeSource)`: `run_layer(app, options, spec, Some(source),
   start)`; `Waker::wake()` (Clone + Send, never blocks, coalesces) reaches the app as
-  `Event::Wake`, and the app reads its own channel (stop; D1's daemon data). It is a
-  nonblocking pipe in the loop's poll, so a quiet dock does not poll. Waking an ended loop
-  fails.
-- Losing the watcher's connection (compositor restart) reports `Lost` once and
-  invalidates every `OutputId` it handed out; the shell ends all docks and starts over
-  from a fresh watch.
-- Tests (in-process server on the same backend, `outputs.rs`): complete initial outputs,
-  same-name re-add with order, ordinary hotplug, watcher loss; `wake.rs`: coalescing and
-  waking an ended loop. Nested Hyalo (`output-check.py`): a root on the watcher's output
-  ended by its Waker, an absent id refused. Nested Hyalo cannot remove its only output
+  `Event::Wake`, and the app reads its own channel (stop; D1's daemon data). Put the
+  message in the channel before waking. It is a nonblocking pipe in the loop's poll, so
+  a quiet dock does not poll. Waking an ended loop fails.
+- The shell's lifecycle (D1, stated here because T1's primitives exist for it): on
+  `Removed(id)` wake that dock with stop and **join its thread before** starting the
+  dock for any later `Added`; key every message by `OutputId`, never by number. On
+  `Lost`, end every dock and start over from a fresh watch.
+- Tests, against an in-process server on Hyalo's backend (`outputs.rs`):
+  - complete initial outputs;
+  - same-name re-add: same number, different `OutputId`;
+  - remove and re-add between syncA and syncB → `Gone`, with the events still
+    delivered and the new instance binding (the server's instance 2);
+  - a removed id → `Gone`;
+  - a frozen compositor → `Timeout` within the deadline, then normal service;
+  - the watcher dying during a bind → `Lost`, reported once;
+  - 100 bind/drop cycles → 100 client disconnects on the server;
+  - ordinary hotplug and watcher loss.
+
+  `wake.rs`: coalescing, a wake during the app's read not lost, waking an ended loop.
+  Nested Hyalo (`output-check.py`): a dock on its own connection with the checked
+  instance, ended by its Waker and joined. Nested Hyalo cannot remove its only output
   ("cannot disable the last output"), so removal is not shown there.
 
-Why not one multi-surface `Window`: it would touch every per-surface field of the host
-(buffers, scale, input routing, IME, popups) for no user-visible gain. Separate
-connections from the same process share the same kernel identity, so #973's access
-policy is unaffected. This is reversible later without changing the dock's API, because
-the dock only sees `run(app, options)` per output.
+Why not one multi-surface `Window`, or several roots on one connection: both would
+touch every per-surface field of the host and route one client's keyboard to several
+roots (Codex, #715), for no user-visible gain. Separate connections from the same
+process share the same kernel identity, so #973's access policy is unaffected. This is
+reversible later without changing the dock's API, because the dock only sees
+`run_layer(app, options, spec, wake, start)` per output.
 
 ## 3. Popups whose parent is a layer surface
 
@@ -187,7 +214,8 @@ session, and recorded under `target/`:
    the exclusive zone moves with it (window workarea readback), input region honoured
    (pointer probe outside the region reaches the window below). At scales 1, 1.25 and 2.
 2. Output identity: the unit tests and the nested check listed in §2. Not shown live:
-   `Closed` on real output removal (nested Hyalo keeps its only output).
+   `Closed` on real output removal, and Hyalo's close for a removed output named at
+   creation (nested Hyalo keeps its only output).
 3. A bounded action menu opened from the layer surface: parented, positioned inside the
    usable area near each edge, dismissed by an outside click without the click reaching
    the dock.

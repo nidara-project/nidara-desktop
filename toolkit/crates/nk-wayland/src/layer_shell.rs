@@ -40,17 +40,41 @@ pub struct LayerPlacement {
     pub margin: [i32; 4],
     pub keyboard: KeyboardMode,
 }
-/// The wl_registry global name of one output instance. It is the same on every
-/// connection to the compositor and is never reused for a re-added output, so a
-/// stale id can only fail (`OUTPUT_GONE`), never bind the newer output.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub struct OutputId(pub u32);
+/// One output instance as one `OutputWatch` reported it. The registry global number
+/// alone is not identity (the server reuses freed numbers), so each `Added` gets a
+/// generation that is never repeated in this process: a re-added output never
+/// compares equal to the one it replaces, even with the same number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OutputId {
+    pub(crate) global: u32,
+    pub(crate) generation: u64,
+}
+impl OutputId {
+    /// The wl_registry global name, for logs; not identity.
+    pub fn global(&self) -> u32 {
+        self.global
+    }
+}
+/// A dock's own connection with one output instance bound on it, checked against the
+/// watcher (`OutputWatch::bind_output`). The dock runs alone on that connection, which
+/// closes with it. If the output is removed later, the surface closes (`Event::Closed`).
+#[derive(Debug)]
+pub struct LayerOutput {
+    pub(crate) id: OutputId,
+    pub(crate) connection: wayland_client::Connection,
+    pub(crate) proxy: wayland_client::protocol::wl_output::WlOutput,
+}
+impl LayerOutput {
+    pub fn id(&self) -> OutputId {
+        self.id
+    }
+}
 /// Namespace and output are fixed for the surface's lifetime (protocol).
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct LayerSpec {
     pub namespace: &'static str,
-    /// One output INSTANCE (see `OutputId`); None lets the compositor choose.
-    pub output: Option<OutputId>,
+    /// One output INSTANCE from the watcher; None lets the compositor choose.
+    pub output: Option<LayerOutput>,
     pub layer: LayerLevel,
     pub placement: LayerPlacement,
 }

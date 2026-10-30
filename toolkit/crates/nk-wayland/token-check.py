@@ -21,7 +21,8 @@ def msg(*args):
     return json.loads(subprocess.run([HYALO, 'msg', *args], capture_output=True, text=True, timeout=5).stdout)['ok']
 
 
-def wait(test, label, timeout=8):
+# Generous: nested Xwayland's start stalls software Hyalo for several seconds.
+def wait(test, label, timeout=20):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if test():
@@ -59,7 +60,15 @@ def scenario(name, real):
             else:
                 token_file.write_text('not-a-token-from-hyalo')
             wait(lambda: 'ACTIVATE' in logs['target'].read_text(), 'target consumed the token')
-            time.sleep(.5)
+            if real:
+                # Wait for the outcome, not a guess at how long Hyalo takes.
+                try:
+                    wait(lambda: focused() == ['nk-token-target'], 'target focused', timeout=5)
+                except RuntimeError:
+                    pass
+            else:
+                # A refusal has no event to wait for: give it the same time to go wrong.
+                time.sleep(2)
             return focused()
     finally:
         for p in procs:

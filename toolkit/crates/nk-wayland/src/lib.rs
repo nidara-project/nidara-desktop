@@ -19,12 +19,14 @@ pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
 mod layer_shell;
 mod outputs;
-pub use outputs::{OutputEvent, OutputInfo, OutputWatch, outputs};
+pub use outputs::{BindFailure, OutputEvent, OutputInfo, OutputWatch, outputs};
 mod token;
 mod wake;
-pub use wake::{WakeSource, Waker, wake_channel};
-pub use layer_shell::{Edges, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec, OutputId};
+pub use layer_shell::{
+    Edges, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec, OutputId,
+};
 pub use token::{ActivationToken, TokenFailure, TokenRequest};
+pub use wake::{WakeSource, Waker, wake_channel};
 mod layers;
 pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
@@ -63,8 +65,6 @@ use wayland_protocols::{
     xdg::shell::client::{xdg_popup, xdg_positioner, xdg_surface, xdg_toplevel, xdg_wm_base},
 };
 pub type Result<T> = std::result::Result<T, String>;
-/// `run_layer`'s error when its output instance vanished before the surface existed.
-pub const OUTPUT_GONE: &str = "layer output is gone";
 const MIME: &str = "text/plain;charset=utf-8";
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -646,7 +646,8 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
     run_inner(app, options, start, None, None, None).map(|_| ())
 }
-/// A layer-shell root (SHELL-SURFACES.md §1) on its own connection. `options.size`
+/// A layer-shell root (SHELL-SURFACES.md §1) on its own connection: the one
+/// `OutputWatch::bind_output` made when `layer.output` is set, else a new one. `options.size`
 /// is the initial logical size; `options.title` is unused. Ends on `Event::Closed` or
 /// `Window::close`. With `wake`, another thread can reach the app (`Event::Wake`): the
 /// shell ends a dock with it when the watcher reports its output removed.
@@ -703,8 +704,15 @@ fn run_inner(
     popup_options: Option<(PopupPlacement, Option<u32>)>,
     layer: Option<(LayerSpec, Option<WakeSource>)>,
 ) -> Result<u32> {
+    let own = layer
+        .as_ref()
+        .and_then(|(spec, _)| spec.output.as_ref())
+        .map(|o| o.connection.clone());
     let conn = if let Some(parent) = parent {
         parent.connection.clone()
+    } else if let Some(own) = own {
+        // The dock's own connection, where `OutputWatch::bind_output` bound its output.
+        own
     } else {
         Connection::connect_to_env().map_err(err)?
     };
@@ -850,20 +858,9 @@ fn run_inner(
     let mut xdg = None;
     if let Some((spec, wake)) = layer {
         w.wake = wake;
-        // The registry's global name is the compositor's identity for this output
-        // instance, the same on every connection; a re-added output gets a new one.
-        let output = match spec.output {
-            None => None,
-            Some(OutputId(global)) => Some(
-                w.globals
-                    .iter()
-                    .find(|(id, n, _)| *id == global && n == "wl_output")
-                    .map(|(id, _, v)| {
-                        registry.bind::<wl_output::WlOutput, _, _>(*id, (*v).min(4), &qh, ())
-                    })
-                    .ok_or(OUTPUT_GONE)?,
-            ),
-        };
+        // Bound by `OutputWatch::bind_output` and checked against the watcher: exactly
+        // the instance it reported, never a newer output that reused the number.
+        let output = spec.output.as_ref().map(|o| o.proxy.clone());
         let s = w.layer_shell.as_ref().unwrap().get_layer_surface(
             &surface,
             output.as_ref(),

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Diagnostic only (SHELL-SURFACES.md §2), as the shell will do it: a layer root on the
-//! output the watcher reports, on its own thread, ended from the main thread with its
-//! Waker; an output id that is not present is refused with OUTPUT_GONE. Same-number
-//! re-add needs a second output, which nested Hyalo lacks: unit tests in outputs.rs.
+//! Diagnostic only (SHELL-SURFACES.md §2), as the shell will do it: a layer root on its
+//! own connection with the output instance the watcher checked, on its own thread, ended
+//! from the main thread with its Waker, joined before anything else. Same-number re-add needs a second
+//! output, which nested Hyalo lacks: unit tests in outputs.rs.
 use nk_wayland::{
-    Application, Edges, Event, Frame, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec,
-    Material, OUTPUT_GONE, Options, OutputId, WakeSource, Window,
+    Application, Edges, Event, Frame, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement,
+    LayerSpec, Material, Options, WakeSource, Window,
 };
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -36,7 +36,7 @@ impl Application for Dock {
         None
     }
 }
-fn dock(output: OutputId, wake: Option<WakeSource>, ready: mpsc::Sender<()>) -> Result<()> {
+fn dock(output: LayerOutput, wake: Option<WakeSource>, ready: mpsc::Sender<()>) -> Result<()> {
     nk_wayland::run_layer(
         Dock(ready),
         Options {
@@ -64,27 +64,29 @@ fn dock(output: OutputId, wake: Option<WakeSource>, ready: mpsc::Sender<()>) -> 
     )
 }
 fn main() -> Result<()> {
-    let watch = nk_wayland::outputs()?;
+    let mut watch = nk_wayland::outputs()?;
     for o in watch.current() {
-        eprintln!("ADDED id={} name={} logical={:?}", o.id.0, o.name, o.logical);
+        eprintln!(
+            "ADDED id={} name={} logical={:?}",
+            o.id.global(),
+            o.name,
+            o.logical
+        );
     }
     let first = watch.current().first().cloned().ok_or("no output")?;
     let (waker, source) = nk_wayland::wake_channel()?;
     let (ready_tx, ready) = mpsc::channel();
-    let thread = std::thread::spawn(move || dock(first.id, Some(source), ready_tx));
+    let output = watch
+        .bind_output(first.id, Duration::from_secs(5))
+        .map_err(|e| format!("bind: {e:?}"))?;
+    let thread = std::thread::spawn(move || dock(output, Some(source), ready_tx));
     ready
         .recv_timeout(Duration::from_secs(10))
         .map_err(|e| format!("dock never configured: {e}"))?;
-    eprintln!("DOCK_READY id={}", first.id.0);
+    eprintln!("DOCK_READY id={}", first.id.global());
     waker.wake()?;
     let ended = thread.join().map_err(|_| "dock thread panicked")?;
     eprintln!("WAKE_ENDED {ended:?}");
     eprintln!("WAKE_AFTER_END {:?}", waker.wake().is_err());
-    let absent = OutputId(first.id.0 + 1000);
-    let (tx, _rx) = mpsc::channel();
-    match dock(absent, None, tx) {
-        Err(e) if e == OUTPUT_GONE => eprintln!("ABSENT_REFUSED"),
-        other => eprintln!("ABSENT_RESULT {other:?}"),
-    }
     Ok(())
 }
