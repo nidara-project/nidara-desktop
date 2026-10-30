@@ -230,7 +230,8 @@ Nonmodal Suggestions keeps its original API and keyboard behavior.
 
 The app services popup events, paints only confirmed frames, updates its bounds
 hint on layout changes and restores a still-live trigger after close. Parent
-configure/repaint/idle and appearance polling continue. A real xdg parent is
-required here; the future layer-shell bar must supply its own compatible parent,
-never a hidden/disguised toplevel. Read CONTRACT.md and the bounded-menu-probe
+configure/repaint/idle and appearance polling continue. The parent is the
+window's real root: an xdg toplevel (`run`) or a layer root (`run_layer`, whose
+menus attach with `get_popup`; SHELL-SURFACES.md §3), never a hidden or disguised
+toplevel. Read CONTRACT.md and the bounded-menu-probe
 example for the retained action-menu/provider composition and private test.

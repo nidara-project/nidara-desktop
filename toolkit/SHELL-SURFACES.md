@@ -7,12 +7,13 @@ The signatures below are the code's.** This is step T1 of
 primitives the Rust dock (D1/D2) consumes. It adds no dock, no shell process, no policy and
 no new CI job. T2 (drag and drop) is a separate step.
 
-## What exists, what is missing
+## Baseline before T1
 
-`nk_wayland::run` hosts exactly one root surface per connection: an `xdg_toplevel` (or an
+What the toolkit had when this design was written; T1 added the rest (§§1–5). Then,
+`nk_wayland::run` hosted exactly one root surface per connection: an `xdg_toplevel` (or an
 `xdg_popup` for the modal `run_popup`). Same-queue nonmodal popups (`popup_overlay`, the
-bounded action menus from #971) take that root's `xdg_surface` as parent. Activation tokens
-are only *consumed* (`activation.rs`). No `zwlr_layer_shell_v1` and no capture client exist.
+bounded action menus from #971) took that root's `xdg_surface` as parent. Activation tokens
+were only *consumed* (`activation.rs`); there was no `zwlr_layer_shell_v1` and no capture client.
 
 Hyalo already serves what T1 needs: `WlrLayerShellState`, `xdg_activation_v1` (a token is
 honoured when its serial came after the maker got keyboard **or pointer** focus, which is
