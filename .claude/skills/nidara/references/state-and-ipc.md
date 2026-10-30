@@ -1954,3 +1954,13 @@ So, for a new keyboard-driven overlay: leave `set_keyboard_mode` at `NONE` and c
 Key routing is unchanged and still worth copying: the Overview owns no text field — it exposes `onOpen()`/`handleKey()` on its widget, `ActivityIsland` routes them per-mode, and `Bar.tsx` adds a CAPTURE-phase `Gtk.EventControllerKey` on `win` that forwards keys to `island.handleKey` while `island_mode` is set (←/→ move a `.keyboard-focus` cursor, Enter switches + closes, Esc closes) — the exact pattern the app grid uses on its own window.
 
 *Historical, and the reason the old advice existed:* under layer-shell, `ON_DEMAND` made **Hyprland withhold keyboard focus from the surface until the pointer entered or clicked it**, so Prism's caret wouldn't blink until you moved the mouse — hence "EXCLUSIVE, not ON_DEMAND". The app grid was the last surface stuck on it, because an `EXCLUSIVE` layer won't let a child `Gtk.Popover` take keyboard focus and its context menus needed one; FocusGrab's popup SUSPEND (see `architecture.md` → "Focus grab") is what finally freed it. `ON_DEMAND` remains wrong for an unrelated reason — see "THE RULE: a shell surface rests in `NONE`, never in `ON_DEMAND`" above for what it does to the seat.
+
+
+## Proposed Applications1 and Rust dock contract (#959)
+
+The draft in `session/design/APPLICATIONS1-DOCK.md` covers the next independent
+Applications1/dock block: catalogue/launch/foreground usage, ordinary Apps and
+default Files pins, typed folders, and the required toolkit/Hyalo seams. It is
+**a proposal, not implemented behavior or permission to program**. Its closure
+section names the choices Claude and the owner must resolve before implementation.
+The existing TS model documented above is unchanged; IPC B is separate.
