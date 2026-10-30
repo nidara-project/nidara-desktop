@@ -139,13 +139,14 @@ window.cancel_capture(id)
   necessary.
 - Two separate limits (review #705). The **source buffer** is whatever size Hyalo
   announces (the window's full physical size; the protocol requires exactly that): T1
-  accepts up to 8192 px a side and 64 MiB (a 5K window at scale 2 is 59 MiB) with checked
-  width×height×stride arithmetic, and fails `TooLarge` above that, tested at the limit.
+  accepts up to 8192 px a side and 64 MiB (a 5120×2880 physical window is 56.25 MiB);
+  memory is stride×height, with stride ≥ width×4 checked and overflow-checked arithmetic,
+  and it fails `TooLarge` above that. Required test: exactly at and just over the limit.
   The **returned image** is RGBA8 straight alpha, downscaled in the client to fit `max`
   (aspect kept), at most 1024 px a side. The shm transport buffer is freed as soon as the
   image is made; the dock's thumbnail cache (contract: 32 MiB) is a separate budget.
 - Pixel formats: argb8888 is premultiplied and is un-premultiplied to straight alpha;
-  xrgb8888 gets alpha 255. Both are tested with non-opaque, non-gray pixels.
+  xrgb8888 gets alpha 255. Required tests: both, with non-opaque, non-gray pixels.
 - At most 8 captures in flight per window (more fail `Busy`), each with a 2 s deadline.
   Per window is per output in the dock, so the global limit of the contract (8, and the
   transport memory) is enforced by D2's scheduler across its outputs; T1 does not claim it.
