@@ -1,0 +1,423 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//! One output's dock (DOCK.md §2): a layer root on that output's own connection. It reads
+//! the hub's latest frame on `Event::Wake`, lays out, paints icons/dots/separators (the
+//! glass is Hyalo's), and sends what a click asks for back to the hub. It never calls a
+//! service from its own loop.
+use crate::actions::{Action, primary};
+use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, Position, Slot, layout};
+use crate::hub::{Frame, Request};
+use crate::model::{Item, Kind, View};
+use nk_render::{Canvas, ImageFit, rgba};
+use nk_text::Rect;
+use nk_wayland::{
+    Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
+    Material, Options, Pane, TokenRequest, WakeSource, Window,
+};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Instant;
+
+pub const NAMESPACE: &str = "nidara-dock";
+const LEFT_BUTTON: u32 = 0x110;
+
+pub struct Dock {
+    frames: Receiver<Arc<Frame>>,
+    hub: Sender<Request>,
+    output_name: String,
+    /// The output's logical size, as the supervisor last saw it.
+    output_size: (u32, u32),
+    frame: Arc<Frame>,
+    layout: Layout,
+    pointer: (f64, f64),
+    pressed: Option<usize>,
+    /// Token requests in flight, and what each will start once it has its token.
+    pending: HashMap<TokenRequest, Request>,
+    trash_icon: Option<Arc<nk_icons::Icon>>,
+    published: BTreeMap<u64, [f64; 4]>,
+}
+
+fn slots(view: &View) -> Vec<Slot> {
+    view.items
+        .iter()
+        .map(|i| {
+            if i.kind == Kind::Separator {
+                Slot::Separator
+            } else {
+                Slot::Icon
+            }
+        })
+        .collect()
+}
+
+pub fn placement(l: &Layout) -> LayerPlacement {
+    let gap = crate::geometry::SCREEN_GAP as i32;
+    let (anchor, margin) = match l.position {
+        Position::Bottom => (Edges::BOTTOM, [0, 0, gap, 0]),
+        Position::Left => (Edges::LEFT, [0, 0, 0, gap]),
+        Position::Right => (Edges::RIGHT, [0, gap, 0, 0]),
+    };
+    LayerPlacement {
+        anchor,
+        size: l.size,
+        exclusive_zone: l.exclusive_zone,
+        margin,
+        keyboard: KeyboardMode::None,
+    }
+}
+
+impl Dock {
+    pub fn new(
+        frames: Receiver<Arc<Frame>>,
+        hub: Sender<Request>,
+        output_name: String,
+        output_size: (u32, u32),
+        frame: Arc<Frame>,
+        trash_icon: Option<Arc<nk_icons::Icon>>,
+    ) -> Self {
+        let layout = Self::lay(&frame, output_size);
+        Self {
+            frames,
+            hub,
+            output_name,
+            output_size,
+            frame,
+            layout,
+            pointer: (0., 0.),
+            pressed: None,
+            pending: HashMap::new(),
+            trash_icon,
+            published: BTreeMap::new(),
+        }
+    }
+
+    fn lay(frame: &Frame, output: (u32, u32)) -> Layout {
+        let reserved = if frame.prefs.position.horizontal() {
+            0.
+        } else {
+            frame.reserved_top
+        };
+        layout(
+            &slots(&frame.view),
+            frame.prefs.icon_size,
+            frame.prefs.position,
+            output,
+            reserved,
+        )
+    }
+
+    /// The latest frame wins; a closed channel ends the dock.
+    fn drain(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let mut latest = None;
+        loop {
+            match self.frames.try_recv() {
+                Ok(f) => latest = Some(f),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    w.close();
+                    return Ok(());
+                }
+            }
+        }
+        let Some(frame) = latest else { return Ok(()) };
+        if let Some(size) = frame.output_sizes.get(&self.output_name) {
+            self.output_size = *size;
+        }
+        self.frame = frame;
+        let next = Self::lay(&self.frame, self.output_size);
+        if placement(&next) != placement(&self.layout) {
+            w.set_layer_placement(placement(&next))?;
+        }
+        self.layout = next;
+        self.apply(w)
+    }
+
+    /// Input region, targets and a repaint for the current layout, once the surface has
+    /// the size the layout asked for (a new size arrives with the configure).
+    fn apply(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if w.size() != self.layout.size {
+            return Ok(());
+        }
+        let (width, height) = self.layout.size;
+        if self.frame.hidden {
+            w.set_input_region(Some(&[]))?;
+        } else {
+            w.set_input_region(Some(&[[0, 0, width as i32, height as i32]]))?;
+        }
+        self.publish_targets();
+        w.redraw();
+        Ok(())
+    }
+
+    /// Where each minimized window this dock owns goes: its slot, in surface coordinates.
+    fn publish_targets(&mut self) {
+        let mut targets = BTreeMap::new();
+        for (n, item) in self.frame.view.items.iter().enumerate() {
+            if let Kind::Minimized { window, .. } = item.kind
+                && self.frame.targets.contains(&window)
+            {
+                targets.insert(window, self.layout.rects[n]);
+            }
+        }
+        if targets != self.published {
+            self.published = targets.clone();
+            let _ = self.hub.send(Request::Targets {
+                output: self.output_name.clone(),
+                targets,
+            });
+        }
+    }
+
+    fn click(&mut self, slot: usize, serial: u32, w: &mut Window) {
+        let item = &self.frame.view.items[slot];
+        let Some(action) = primary(item, self.frame.focused, self.frame.can_launch) else {
+            return;
+        };
+        let epoch = self.frame.hyalo_epoch;
+        let request = match action {
+            Action::Focus(id) => Request::Window {
+                verb: "focus-window",
+                id,
+                epoch,
+            },
+            Action::Minimize(id) => Request::Window {
+                verb: "minimize",
+                id,
+                epoch,
+            },
+            Action::Restore(id) => Request::Window {
+                verb: "unminimize",
+                id,
+                epoch,
+            },
+            Action::Launch { id, generation } => Request::Launch {
+                id,
+                generation,
+                token: None,
+            },
+            Action::OpenFolder(uri) => Request::OpenFolder { uri, token: None },
+            Action::OpenTrash => Request::OpenTrash { token: None },
+            Action::Unavailable => {
+                eprintln!("nidara-shell: {} cannot be opened now", item.label);
+                return;
+            }
+        };
+        // What starts something gets a token from this very click; focus and minimize do not.
+        if matches!(
+            request,
+            Request::Launch { .. } | Request::OpenFolder { .. } | Request::OpenTrash { .. }
+        ) {
+            let target = match &item.kind {
+                Kind::App { id, .. } => Some(id.trim_end_matches(".desktop").to_string()),
+                _ => None,
+            };
+            match w.request_activation_token(serial, target.as_deref()) {
+                Ok(t) => {
+                    self.pending.insert(t, request);
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("nidara-shell: no activation token ({e:?}); opening without one")
+                }
+            }
+        }
+        let _ = self.hub.send(request);
+    }
+
+    fn with_token(request: Request, token: Option<String>) -> Request {
+        match request {
+            Request::Launch { id, generation, .. } => Request::Launch {
+                id,
+                generation,
+                token,
+            },
+            Request::OpenFolder { uri, .. } => Request::OpenFolder { uri, token },
+            Request::OpenTrash { .. } => Request::OpenTrash { token },
+            other => other,
+        }
+    }
+
+    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item) {
+        let [x, y, w, h] = self.layout.rects[n];
+        let r = Rect {
+            x: x as f32,
+            y: y as f32,
+            width: w as f32,
+            height: h as f32,
+        };
+        let ink = if self.frame.dark {
+            rgba(255, 255, 255, 255)
+        } else {
+            rgba(0, 0, 0, 255)
+        };
+        let faint = if self.frame.dark {
+            rgba(255, 255, 255, 64)
+        } else {
+            rgba(0, 0, 0, 56)
+        };
+        match &item.kind {
+            Kind::Separator => c.rect(r, faint),
+            Kind::Trash => {
+                c.rounded_rect(r, w * 0.22, faint);
+                if let Some(icon) = &self.trash_icon {
+                    let inset = w * 0.22;
+                    let i = Rect {
+                        x: (x + inset) as f32,
+                        y: (y + inset) as f32,
+                        width: (w - 2. * inset) as f32,
+                        height: (h - 2. * inset) as f32,
+                    };
+                    c.icon(icon, i, ink);
+                }
+            }
+            kind => {
+                let id = match kind {
+                    Kind::App { id, .. } => Some(id.as_str()),
+                    Kind::Minimized { app, .. } => app.as_deref(),
+                    _ => None,
+                };
+                match id.and_then(|id| self.frame.icons.get(id)) {
+                    Some(icon) => c.image(icon, r, ImageFit::Contain),
+                    None => c.rounded_rect(r, w * 0.22, faint),
+                }
+            }
+        }
+        if self.frame.prefs.indicators
+            && item.running()
+            && !matches!(item.kind, Kind::Minimized { .. })
+        {
+            let (cx, cy) = self.layout.dot(n);
+            let d = DOT * self.layout.scale.max(0.4);
+            let dot = Rect {
+                x: (cx - d / 2.) as f32,
+                y: (cy - d / 2.) as f32,
+                width: d as f32,
+                height: d as f32,
+            };
+            c.rounded_rect(dot, d / 2., ink);
+        }
+    }
+}
+
+impl Application for Dock {
+    fn poll_interval_ms(&self) -> u32 {
+        // Everything arrives by Wake; nothing here needs a timer.
+        60_000
+    }
+    fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
+        match event {
+            Event::Error(e) => return Err(e),
+            Event::Wake => self.drain(w)?,
+            Event::Configure => self.apply(w)?,
+            Event::Motion(x, y) => self.pointer = (x, y),
+            Event::PointerLeave => self.pressed = None,
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: true,
+                ..
+            } if !self.frame.hidden => {
+                self.pressed = self.layout.hit(self.pointer.0, self.pointer.1);
+            }
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: false,
+                serial,
+                ..
+            } => {
+                let here = self.layout.hit(self.pointer.0, self.pointer.1);
+                if let Some(slot) = self.pressed.take().filter(|s| Some(*s) == here) {
+                    self.click(slot, serial, w);
+                }
+            }
+            Event::ActivationToken { request, token } => {
+                if let Some(r) = self.pending.remove(&request) {
+                    let _ = self
+                        .hub
+                        .send(Self::with_token(r, Some(token.into_string())));
+                }
+            }
+            Event::ActivationTokenFailed { request, reason } => {
+                if let Some(r) = self.pending.remove(&request) {
+                    eprintln!(
+                        "nidara-shell: activation token failed ({reason:?}); opening without one"
+                    );
+                    let _ = self.hub.send(Self::with_token(r, None));
+                }
+            }
+            Event::Closed => {}
+            _ => {}
+        }
+        Ok(())
+    }
+    fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {
+        let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+        if !self.frame.hidden && f.width == self.layout.size.0 && f.height == self.layout.size.1 {
+            if !f.material {
+                // No compositor glass (another compositor): an opaque base of our own (D5).
+                let (w, h) = (f.width as f32, f.height as f32);
+                let base = if self.frame.dark {
+                    rgba(40, 40, 44, 235)
+                } else {
+                    rgba(236, 236, 240, 235)
+                };
+                c.rounded_rect(
+                    Rect {
+                        x: 0.,
+                        y: 0.,
+                        width: w,
+                        height: h,
+                    },
+                    (w.min(h) / 2.) as f64,
+                    base,
+                );
+            }
+            for (n, item) in self.frame.view.items.iter().enumerate() {
+                self.paint_item(&mut c, n, item);
+            }
+        }
+        Ok(c.finish())
+    }
+    fn material(&self) -> Option<Material> {
+        if self.frame.hidden {
+            return None;
+        }
+        let (w, h) = (self.layout.size.0 as f64, self.layout.size.1 as f64);
+        let pane = Pane {
+            x: 0.,
+            y: 0.,
+            width: w,
+            height: h,
+            radius: w.min(h) / 2.,
+            exponent: CAPSULE_EXPONENT,
+        };
+        self.frame
+            .tokens
+            .as_ref()
+            .and_then(|t| crate::material::dock(t, self.frame.dark, false, pane))
+    }
+}
+
+/// One dock's whole life on its own thread; returns when its surface closes or the hub
+/// drops it.
+pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Result<()> {
+    let p = placement(&dock.layout);
+    nk_wayland::run_layer(
+        dock,
+        Options {
+            material: true,
+            map: true,
+            app_id: NAMESPACE,
+            title: "",
+            size: p.size,
+            require_material: None,
+        },
+        LayerSpec {
+            namespace: NAMESPACE,
+            output: Some(output),
+            layer: LayerLevel::Top,
+            placement: p,
+        },
+        Some(wake),
+        Instant::now(),
+    )
+}

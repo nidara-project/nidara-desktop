@@ -14,3 +14,7 @@ glib = "0.22"
 serde = "1"
 serde_json = "1"
 zbus = "5.19"
+nk-icons = { path = "../crates/nk-icons" }
+nk-render = { path = "../crates/nk-render" }
+nk-text = { path = "../crates/nk-text" }
+nk-wayland = { path = "../crates/nk-wayland" }
