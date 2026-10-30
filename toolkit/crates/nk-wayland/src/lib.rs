@@ -17,6 +17,8 @@ mod popup_overlay;
 pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
+mod layer_shell;
+pub use layer_shell::{Edges, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec, OutputId};
 mod layers;
 pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
@@ -55,6 +57,8 @@ use wayland_protocols::{
     xdg::shell::client::{xdg_popup, xdg_positioner, xdg_surface, xdg_toplevel, xdg_wm_base},
 };
 pub type Result<T> = std::result::Result<T, String>;
+/// `run_layer`'s error when its output instance vanished before the surface existed.
+pub const OUTPUT_GONE: &str = "layer output is gone";
 const MIME: &str = "text/plain;charset=utf-8";
 #[derive(Clone, Copy, Debug)]
 pub struct Frame {
@@ -70,6 +74,9 @@ pub struct Frame {
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
+    /// A layer root was closed by the compositor (its output went away). The run
+    /// loop ends after the app has seen this; a new output gets a new surface.
+    Closed,
     PopupDone,
     PopupOverlay {
         id: PopupId,
@@ -179,6 +186,8 @@ pub struct Window {
     surface: Option<wl_surface::WlSurface>,
     xdg: Option<xdg_surface::XdgSurface>,
     toplevel: Option<xdg_toplevel::XdgToplevel>,
+    layer_shell: Option<layer_shell::zwlr_layer_shell_v1::ZwlrLayerShellV1>,
+    layer_surface: Option<layer_shell::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1>,
     popup: Option<xdg_popup::XdgPopup>,
     positioner: Option<xdg_positioner::XdgPositioner>,
     shm: Option<wl_shm::WlShm>,
@@ -616,7 +625,21 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
-    run_inner(app, options, start, None, None).map(|_| ())
+    run_inner(app, options, start, None, None, None).map(|_| ())
+}
+/// A layer-shell root (SHELL-SURFACES.md §1) on its own connection. `options.size`
+/// is the initial logical size; `options.title` is unused. Ends on `Event::Closed`.
+pub fn run_layer(
+    app: impl Application,
+    options: Options,
+    layer: LayerSpec,
+    start: Instant,
+) -> Result<()> {
+    layer.placement.validate()?;
+    if layer.namespace.is_empty() || layer.namespace.contains('\0') {
+        return Err("layer namespace must be nonempty text".into());
+    }
+    run_inner(app, options, start, None, None, Some(layer)).map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -644,7 +667,7 @@ pub fn run_dialog_with_options(
         return Err("dialog needs a nonempty size".into());
     }
     options.app_id = parent.app_id;
-    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None)?;
+    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None, None)?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();
     Ok(())
@@ -656,6 +679,7 @@ fn run_inner(
     start: Instant,
     parent: Option<&Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
+    layer: Option<LayerSpec>,
 ) -> Result<u32> {
     let conn = if let Some(parent) = parent {
         parent.connection.clone()
@@ -691,6 +715,8 @@ fn run_inner(
         surface: None,
         xdg: None,
         toplevel: None,
+        layer_shell: None,
+        layer_surface: None,
         popup: None,
         positioner: None,
         shm: None,
@@ -782,6 +808,12 @@ fn run_inner(
         let output: wl_output::WlOutput = registry.bind(*id, (*v).min(4), &qh, ());
         w.outputs.insert(output.id(), 1);
     }
+    if layer.is_some() {
+        w.layer_shell = bind!(layer_shell::zwlr_layer_shell_v1::ZwlrLayerShellV1, 4);
+        if w.layer_shell.is_none() {
+            return Err("required Wayland protocol missing: zwlr_layer_shell_v1".into());
+        }
+    }
     w.text_manager = bind!(zwp_text_input_manager_v3::ZwpTextInputManagerV3, 1);
     w.data_manager = bind!(wl_data_device_manager::WlDataDeviceManager, 3);
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
@@ -791,8 +823,34 @@ fn run_inner(
         1
     );
     let surface = compositor.create_surface(&qh, ());
-    let xdg = base.get_xdg_surface(&surface, &qh, ());
-    if let Some((placement, grab_serial)) = popup_options {
+    let mut xdg = None;
+    if let Some(spec) = layer {
+        // The registry's global name is the compositor's identity for this output
+        // instance, the same on every connection; a re-added output gets a new one.
+        let output = match spec.output {
+            None => None,
+            Some(OutputId(global)) => Some(
+                w.globals
+                    .iter()
+                    .find(|(id, n, _)| *id == global && n == "wl_output")
+                    .map(|(id, _, v)| {
+                        registry.bind::<wl_output::WlOutput, _, _>(*id, (*v).min(4), &qh, ())
+                    })
+                    .ok_or(OUTPUT_GONE)?,
+            ),
+        };
+        let s = w.layer_shell.as_ref().unwrap().get_layer_surface(
+            &surface,
+            output.as_ref(),
+            layer_shell::level(spec.layer),
+            spec.namespace.into(),
+            &qh,
+            (),
+        );
+        spec.placement.send(&s);
+        w.layer_surface = Some(s);
+    } else if let Some((placement, grab_serial)) = popup_options {
+        let xdg = xdg.insert(base.get_xdg_surface(&surface, &qh, ()));
         let parent = parent.ok_or("popup requires a parent")?;
         let parent_xdg = parent
             .xdg
@@ -810,6 +868,7 @@ fn run_inner(
         w.popup = Some(popup);
         w.positioner = Some(positioner);
     } else {
+        let xdg = xdg.insert(base.get_xdg_surface(&surface, &qh, ()));
         let top = xdg.get_toplevel(&qh, ());
         top.set_app_id(options.app_id.into());
         top.set_title(options.title.into());
@@ -829,8 +888,8 @@ fn run_inner(
         w.fractional = Some(fraction.get_fractional_scale(&surface, &qh, ()));
     }
     w.surface = Some(surface);
-    w.xdg = Some(xdg);
-    if w.popup.is_none() && app.window_controls() {
+    w.xdg = xdg;
+    if w.toplevel.is_some() && app.window_controls() {
         w.request_window_controls();
     }
     // Seat and manager order in registry is unspecified.
@@ -926,8 +985,12 @@ fn run_inner(
             // An IME's own edit/caret echo must not look like an external
             // change: fcitx5 uses this cause to decide whether to reset preedit.
             w.input_from_ime = matches!(&event, Event::Ime(_));
+            let closed = matches!(event, Event::Closed);
             app.event(event, &mut w)?;
             w.input_from_ime = false;
+            if closed {
+                w.closed = true;
+            }
             if w.closed {
                 break;
             }
@@ -1020,6 +1083,12 @@ impl Window {
         }
         if let Some(t) = self.toplevel.take() {
             t.destroy();
+        }
+        if let Some(l) = self.layer_surface.take() {
+            l.destroy();
+        }
+        if let Some(l) = self.layer_shell.take() {
+            l.destroy();
         }
         if let Some(x) = self.xdg.take() {
             x.destroy();

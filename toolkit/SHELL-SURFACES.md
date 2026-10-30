@@ -71,12 +71,15 @@ its own thread**, with:
 
 - `nk_wayland::outputs() -> Result<OutputWatch>`: a small connection that binds
   `wl_output` v4 (name, description, scale, logical geometry via `xdg_output` when present)
-  and reports `OutputEvent::{Added, Changed, Removed}` with a stable `OutputId` (protocol
-  name + connection-local generation, never reused). The shell starts a dock thread on
-  Added and lets Closed end it.
-- `LayerSpec.output` names the output by its `wl_output.name` string, resolved on the
-  dock's own connection at bind time; an output that vanished in between gives
-  `Event::Closed` immediately.
+  and reports `OutputEvent::{Added, Changed, Removed}` keyed by `OutputId`.
+- `OutputId` is the output's **wl_registry global name**: the compositor's identity for
+  that output instance, the same number on every connection, and never reused when an
+  output with the same `wl_output.name` is removed and plugged back in. `LayerSpec.output`
+  carries it; the dock's own connection binds exactly that global. If it is gone by then,
+  `run_layer` fails with `OUTPUT_GONE` instead of binding a newer instance; later removal
+  arrives as `Event::Closed`. No proxy crosses connections (review by Codex, #704).
+- Test: remove and re-add an output with the SAME name between selection and creation,
+  besides ordinary hotplug.
 
 Why not one multi-surface `Window`: it would touch every per-surface field of the host
 (buffers, scale, input routing, IME, popups) for no user-visible gain. Separate
