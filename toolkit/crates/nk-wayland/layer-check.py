@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LGPL-3.0-or-later
-"""Private nested-Hyalo probe for the layer root (toolkit/SHELL-SURFACES.md §1)."""
+"""Private nested-Hyalo probe for the layer root (SHELL-SURFACES.md §1, §3). Run via
+check-layer-headless.sh; not a CI job."""
 import json
 import os
 from pathlib import Path

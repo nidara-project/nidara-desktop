@@ -78,8 +78,11 @@ its own thread**, with:
   carries it; the dock's own connection binds exactly that global. If it is gone by then,
   `run_layer` fails with `OUTPUT_GONE` instead of binding a newer instance; later removal
   arrives as `Event::Closed`. No proxy crosses connections (review by Codex, #704).
-- Test: remove and re-add an output with the SAME name between selection and creation,
-  besides ordinary hotplug.
+- "Never reused" holds for one compositor lifetime only: a global name is a bare u32.
+  Losing the watcher's connection (compositor restart) invalidates every `OutputId` it
+  handed out; the shell ends all docks and starts over from a fresh watch.
+- Tests: remove and re-add an output with the SAME name between selection and creation
+  (`OUTPUT_GONE`, never the new instance); ordinary hotplug; watcher disconnect.
 
 Why not one multi-surface `Window`: it would touch every per-surface field of the host
 (buffers, scale, input routing, IME, popups) for no user-visible gain. Separate
@@ -109,8 +112,14 @@ window.request_activation_token(serial: u32, app_id: Option<&str>) -> TokenReque
   and no "latest serial" shortcut that could pick up an unrelated event.
 - Sets seat, the root surface and the serial; `app_id` is the target's DesktopId without
   `.desktop` (a hint for future correlation, H1). Commits, waits for `done`.
-- The token is opaque and private: never logged, never in `Debug` output. The surface
-  closing cancels outstanding requests with `ActivationTokenFailed`.
+- The token is opaque and private: never logged, never in `Debug` output.
+- Bounds: at most 4 requests pending per window (more fail `Busy` at once) and a 2 s
+  deadline each (Hyalo answers in one roundtrip; a token older than its 10 s life is
+  useless anyway). Every request ends in **exactly one** terminal event: token, deadline,
+  surface closed or explicit cancel; the xdg_activation_token_v1 object is destroyed at
+  that moment, and a `done` arriving later for a finished request is dropped, never
+  published. The deadline is an active timer only while a request is pending; no idle
+  polling.
 - Hyalo decides validity (provenance + 10 s); a token is not a promise of focus. The
   dock passes it to Applications1 Launch untouched (contract §4).
 
@@ -128,11 +137,22 @@ window.cancel_capture(id)
   `ext_image_copy_capture_session_v1` per request, one frame, then destroyed. shm only in
   T1 (argb8888/xrgb8888 from the session's advertised formats); dmabuf later if measured
   necessary.
-- `Image` is RGBA8 straight alpha, downscaled to fit `max` (aspect kept) **in the
-  client**, with physical size capped at 1024 and buffer at 16 MiB. Larger source
-  constraints fail `TooLarge` rather than allocating.
-- At most 8 captures in flight per window; more fail `Busy` (contract §8: bounded). The
-  refresh policy (static minimized thumbnail, ≤5 Hz chooser) belongs to the dock, not here.
+- Two separate limits (review #705). The **source buffer** is whatever size Hyalo
+  announces (the window's full physical size; the protocol requires exactly that): T1
+  accepts up to 8192 px a side and 64 MiB (a 5K window at scale 2 is 59 MiB) with checked
+  width×height×stride arithmetic, and fails `TooLarge` above that, tested at the limit.
+  The **returned image** is RGBA8 straight alpha, downscaled in the client to fit `max`
+  (aspect kept), at most 1024 px a side. The shm transport buffer is freed as soon as the
+  image is made; the dock's thumbnail cache (contract: 32 MiB) is a separate budget.
+- Pixel formats: argb8888 is premultiplied and is un-premultiplied to straight alpha;
+  xrgb8888 gets alpha 255. Both are tested with non-opaque, non-gray pixels.
+- At most 8 captures in flight per window (more fail `Busy`), each with a 2 s deadline.
+  Per window is per output in the dock, so the global limit of the contract (8, and the
+  transport memory) is enforced by D2's scheduler across its outputs; T1 does not claim it.
+  The refresh policy (static minimized thumbnail, ≤5 Hz chooser) belongs to the dock.
+- Exactly one terminal event per `CaptureId`: ready, failure, deadline, cancel or window
+  closed. The frame, session and shm buffer are destroyed at that moment; a late `ready`
+  for a finished capture is dropped, never published as pixels.
 - Failure reasons map the protocol's: `Stopped` (window gone), `BufferConstraints`,
   `Unknown`, plus `NotFound`, `Busy`, `TooLarge`, `Unsupported` (globals absent). A
   failed capture never returns stale pixels.
@@ -156,8 +176,11 @@ session, and recorded under `target/`:
 4. Token round trip: token made from a real pointer click on the layer surface, consumed
    by a probe toplevel that Hyalo then focuses; a token made from a refused serial is
    refused (`ActivationTokenFailed` for an undelivered serial; Hyalo refusal for a stale one).
-5. Capture: a probe window captured to the expected size and a known colour; capture of
-   a closed window fails `Stopped`/`NotFound`; nine concurrent requests → one `Busy`.
+5. Capture: a 1920×1080 probe window captured down to a small `max`; premultiplied
+   argb and xrgb pixels converted correctly (translucent, coloured test pattern);
+   `TooLarge` at the source limit; capture of a closed window fails `Stopped`/`NotFound`;
+   nine concurrent requests → one `Busy`; cancel followed by a late ready publishes
+   nothing; deadline expiry ends the request once.
 6. Existing toolkit tests and every existing `run` caller unchanged (`Role::Toplevel`).
 
 Not claimed by T1: the dock itself, drag and drop (T2), launch correlation and attention
