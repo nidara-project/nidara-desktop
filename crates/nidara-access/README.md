@@ -148,3 +148,7 @@ explicitly design/add its launch operation. `launcher` is accepted as an exact
 dev-grant role, but no launcher grant or system entry is installed by A1. The
 actual future launcher path must be registered explicitly when its binary ships.
 See `session/daemon/src/applications/README.md`; no CLI/interpreter/bus-name trust.
+
+The Launcher inventory reserves `/usr/bin/nidara-apps` for D4's future native
+Apps executable. A1 does not ship or install that binary or a development grant;
+the role becomes active when D4 supplies the root-owned executable.

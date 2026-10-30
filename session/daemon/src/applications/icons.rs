@@ -55,6 +55,96 @@ pub fn roots() -> Vec<PathBuf> {
     v.extend(catalogue::data_dirs().into_iter().map(|p| p.join("icons")));
     v
 }
+/// Bounded recursive watches: GFileMonitor only covers direct children.
+/// Asset metadata is fingerprinted on events, never scanned on an idle timer.
+pub fn watches() -> (BTreeSet<PathBuf>, bool, String) {
+    let mut pending = roots().into_iter().map(|p| (p, 0)).collect::<Vec<_>>();
+    pending.extend(
+        catalogue::data_dirs()
+            .into_iter()
+            .map(|p| (p.join("pixmaps"), 0)),
+    );
+    let mut seen = BTreeSet::new();
+    let mut watches = BTreeSet::new();
+    let mut complete = true;
+    let mut inspected = 0;
+    let mut signatures = Vec::new();
+    while let Some((p, depth)) = pending.pop() {
+        if watches.len() >= 4096 || depth > 16 || inspected >= 65536 {
+            complete = false;
+            break;
+        }
+        watches.insert(p.clone());
+        let real = match p.canonicalize() {
+            Ok(p) => p,
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    complete = false;
+                }
+                continue;
+            }
+        };
+        if !seen.insert(real) {
+            continue;
+        }
+        let entries = match fs::read_dir(&p) {
+            Ok(e) => e,
+            Err(_) => {
+                complete = false;
+                continue;
+            }
+        };
+        for e in entries {
+            inspected += 1;
+            if inspected > 65536 {
+                complete = false;
+                break;
+            }
+            let Ok(e) = e else {
+                complete = false;
+                continue;
+            };
+            let Ok(m) = e.metadata() else {
+                complete = false;
+                continue;
+            };
+            let symlink = m.file_type().is_symlink();
+            let m = if symlink {
+                let Ok(target) = fs::metadata(e.path()) else {
+                    complete = false;
+                    continue;
+                };
+                target
+            } else {
+                m
+            };
+            if m.is_dir() {
+                // Theme size directories are commonly symlinks. Canonical
+                // deduplication above bounds cycles without losing their events.
+                pending.push((e.path(), depth + 1));
+            } else {
+                if symlink
+                    && let Ok(target) = e.path().canonicalize()
+                    && let Some(parent) = target.parent()
+                {
+                    watches.insert(parent.to_owned());
+                }
+                signatures.push(format!(
+                    "{}:{}:{:?}",
+                    e.path().display(),
+                    m.len(),
+                    m.modified()
+                ));
+            }
+        }
+    }
+    signatures.sort();
+    (
+        watches,
+        complete,
+        catalogue::hash(signatures.join(";").as_bytes()),
+    )
+}
 pub fn resolve(app: &App, theme: &str, size: u32) -> Option<PathBuf> {
     let own = app_override(&app.id);
     if own.is_file() {

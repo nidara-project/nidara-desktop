@@ -5,6 +5,7 @@ mod icons;
 mod layout;
 mod search;
 mod store;
+mod theme;
 use nidara_access::{Operation, Peer};
 use serde_json::{Value as Json, json};
 use std::{
@@ -750,42 +751,7 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
             }
         }
     });
-    let portal = conn.clone();
-    tokio::spawn(async move {
-        loop {
-            let result = tokio::time::timeout(Duration::from_secs(1), async {
-                let dbus = zbus::fdo::DBusProxy::new(&portal).await?;
-                let owner = dbus
-                    .get_name_owner("org.freedesktop.portal.Desktop".try_into().unwrap())
-                    .await?;
-                let p = zbus::Proxy::new(
-                    &portal,
-                    owner,
-                    "/org/freedesktop/portal/desktop",
-                    "org.freedesktop.portal.Settings",
-                )
-                .await?;
-                p.call::<_, _, OwnedValue>("Read", &("org.gnome.desktop.interface", "icon-theme"))
-                    .await
-            })
-            .await;
-            if let Ok(Ok(value)) = result
-                && let Ok(theme) = <&str>::try_from(&value)
-            {
-                let theme = theme.to_string();
-                let _ = store
-                    .call(move |s| {
-                        if s.theme != theme {
-                            s.theme = theme;
-                            s.icons_changed();
-                        }
-                        Ok(())
-                    })
-                    .await;
-            }
-            tokio::time::sleep(Duration::from_secs(2)).await;
-        }
-    });
+    theme::watch(conn, store).await?;
     eprintln!("[applications] serving {NAME} (A1, no launches)");
     Ok(true)
 }

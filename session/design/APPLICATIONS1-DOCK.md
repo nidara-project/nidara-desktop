@@ -397,9 +397,13 @@ removable; no silent pruning, remote traversal or stack UI. The future explorer
 can reuse this same folder entry for fan/grid stacks without a storage rewrite.
 **Trash alone is fixed**, derived at the trailing end, never in reorderable pins.
 
-Proposed persistence preserves the existing `org.nidara.dock pinned:as` home:
-version-1 typed tokens `app:<DesktopId>`, `default-handler:inode/directory`,
-`folder:<absolute-file-URI>`, with a separate `pinned-layout-version:u`. A missing
+Native persistence uses separate `org.nidara.dock layout:as` and `layout-version:u`
+keys. The TS dock continues to own its legacy `pinned:as` unchanged. Rust reads
+`pinned` once for import and **never writes it**, because the TS orphan-pruner
+would delete typed tokens and TS bare-ID writes would corrupt a version-1 list.
+This engineering isolation preserves coexistence while the TS shell ships.
+The native list stores version-1 typed tokens `app:<DesktopId>`, `default-handler:inode/directory`,
+`folder:<absolute-file-URI>`, with `layout-version=1`. A zero
 version imports old case-preserved bare IDs once, resolves them against the
 catalogue, prepends the formerly fixed Files and Apps in that order, then retains
 other pins/order. Strip only known old synthetic prefixes, never arbitrary paths
@@ -790,7 +794,8 @@ programming in this chat or expand the owner's standing permissions.
 1. **Visible dock earlier:** A1 → A2 → T1 → D1 → H1 → A3 → D2 → T2/D3 → D4.
    D1 has no usage/attention/Unity dependency; T1 is independent of series A.
 2. **Accepted:** movable/removable dynamic default-directory app pin, typed
-   pinned tokens plus version, one structured-write owner, ordinary preferences
+   layout tokens plus version (isolated native keys; legacy pinned read-only
+   import), one structured-write owner, ordinary preferences
    through Config1.
 3. **Accepted actual D-Bus unit. New-window changed:** unsupported means omit
    'Nueva ventana'; middle-click behaves as primary click, not a disabled row.

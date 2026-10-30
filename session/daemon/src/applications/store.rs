@@ -4,15 +4,13 @@ use super::{
     catalogue::{self, App},
     layout,
 };
+use futures_util::FutureExt;
 use gio::prelude::*;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::{Notify, oneshot};
@@ -35,7 +33,10 @@ pub struct Store {
     pins: Option<gio::Settings>,
     pub settings: super::super::config::registry::Store,
     monitors: Vec<gio::FileMonitor>,
-    dirty: Arc<AtomicBool>,
+    dirty: Arc<Notify>,
+    monitor_failed: bool,
+    _app_monitor: gio::AppInfoMonitor,
+    _volumes: gio::VolumeMonitor,
     pub notify: Arc<Notify>,
     domains: BTreeSet<String>,
 }
@@ -43,15 +44,27 @@ impl Store {
     fn new(notify: Arc<Notify>) -> Self {
         let schema = gio::SettingsSchemaSource::default()
             .and_then(|s| s.lookup("org.nidara.dock", true))
-            .filter(|s| s.has_key("pinned") && s.has_key("pinned-layout-version"));
+            .filter(|s| s.has_key("pinned") && s.has_key("layout") && s.has_key("layout-version"));
         let pins = schema.map(|s| gio::Settings::new_full(&s, None::<&gio::SettingsBackend>, None));
-        let dirty = Arc::new(AtomicBool::new(true));
+        let dirty = Arc::new(Notify::new());
         if let Some(p) = &pins {
             let d = dirty.clone();
-            p.connect_changed(None, move |_, _| {
-                d.store(true, Ordering::Release);
+            p.connect_changed(None, move |_, key| {
+                if key == "layout" || key == "layout-version" {
+                    d.notify_one();
+                }
             });
         }
+        let app_monitor = gio::AppInfoMonitor::get();
+        let d = dirty.clone();
+        app_monitor.connect_changed(move |_| d.notify_one());
+        let volumes = gio::VolumeMonitor::get();
+        let d = dirty.clone();
+        volumes.connect_mount_added(move |_, _| d.notify_one());
+        let d = dirty.clone();
+        volumes.connect_mount_removed(move |_, _| d.notify_one());
+        let d = dirty.clone();
+        volumes.connect_mount_changed(move |_, _| d.notify_one());
         Self {
             epoch: super::unique(),
             revision: 1,
@@ -72,6 +85,9 @@ impl Store {
             settings: super::super::config::registry::Store::new(),
             monitors: vec![],
             dirty,
+            monitor_failed: false,
+            _app_monitor: app_monitor,
+            _volumes: volumes,
             notify,
             domains: BTreeSet::new(),
         }
@@ -83,7 +99,8 @@ impl Store {
     }
     pub fn icons_changed(&mut self) {
         self.icon_revision += 1;
-        self.icon_fingerprint.clear();
+        // Keep the observed filesystem baseline. Clearing it could swallow the
+        // first real asset event after a theme/override invalidation.
         for a in self.apps.values_mut() {
             a.record["IconRevision"] = json!(self.icon_revision);
         }
@@ -120,26 +137,26 @@ impl Store {
     pub fn layout_available(&self) -> bool {
         self.pins
             .as_ref()
-            .is_some_and(|p| p.uint("pinned-layout-version") <= 1)
+            .is_some_and(|p| p.uint("layout-version") <= 1)
     }
     pub fn save_layout(&mut self, next: Vec<String>) -> Result<(), Error> {
         let pins = self
             .pins
             .as_ref()
             .ok_or_else(|| Error::Unavailable("typed dock schema missing".into()))?;
-        if pins.uint("pinned-layout-version") > 1 {
+        if pins.uint("layout-version") > 1 {
             return Err(Error::Unavailable(
                 "future layout version; no overwrite".into(),
             ));
         }
         let next = layout::validate(&next)?;
-        if next == self.layout && pins.uint("pinned-layout-version") == 1 {
+        if next == self.layout && pins.uint("layout-version") == 1 {
             return Ok(());
         }
         pins.delay();
         let result = pins
-            .set_strv("pinned", next.as_slice())
-            .and_then(|_| pins.set_uint("pinned-layout-version", 1));
+            .set_strv("layout", next.as_slice())
+            .and_then(|_| pins.set_uint("layout-version", 1));
         if let Err(e) = result {
             pins.revert();
             return Err(Error::Failed(e.to_string()));
@@ -147,12 +164,12 @@ impl Store {
         pins.apply();
         gio::Settings::sync();
         if pins
-            .strv("pinned")
+            .strv("layout")
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<_>>()
             != next
-            || pins.uint("pinned-layout-version") != 1
+            || pins.uint("layout-version") != 1
         {
             return Err(Error::Failed("layout write readback differs".into()));
         }
@@ -177,7 +194,7 @@ impl Store {
             scan.diagnostics
                 .push("root history corrupt or unreadable; pruning disabled".into());
         }
-        let mut signatures = String::new();
+        let (icon_watches, icon_complete, mut signatures) = super::icons::watches();
         let mut assets = std::collections::BTreeMap::new();
         for a in scan.apps.values() {
             let path = assets
@@ -231,12 +248,19 @@ impl Store {
         }
         let pending = self.pins.as_ref().map(|p| {
             let raw = p
-                .strv("pinned")
+                .strv("layout")
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>();
-            match p.uint("pinned-layout-version") {
-                0 => Ok(layout::migrate(&raw, &self.apps)),
+            match p.uint("layout-version") {
+                0 => {
+                    let legacy = p
+                        .strv("pinned")
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>();
+                    Ok(layout::migrate(&legacy, &self.apps))
+                }
                 1 => layout::validate(&raw),
                 _ => Err(Error::Invalid("future layout version".into())),
             }
@@ -258,26 +282,46 @@ impl Store {
         for m in self.monitors.drain(..) {
             m.cancel();
         }
-        for path in scan
-            .watches
-            .into_iter()
-            .chain(std::iter::once(catalogue::data_home().join("icons")))
-        {
-            let mut path = path;
+        // Watch asset trees (directory watches are not recursive), selected
+        // absolute assets, defaults and the root history. Missing roots watch
+        // their nearest existing ancestor so creation/remount can recover.
+        self.monitor_failed = !icon_complete;
+        let mut watches = scan.watches;
+        watches.extend(icon_watches);
+        for p in assets.values().flatten() {
+            if let Some(p) = p.parent() {
+                watches.insert(p.to_owned());
+            }
+        }
+        watches.insert(catalogue::home().join(".config"));
+        if let Some(p) = std::env::var_os("XDG_CONFIG_HOME") {
+            watches.insert(p.into());
+        }
+        watches.insert(catalogue::root_history_path().parent().unwrap().to_owned());
+        let mut installed = BTreeSet::new();
+        for mut path in watches {
             while !path.is_dir() {
                 if !path.pop() {
                     break;
                 }
             }
-            if let Ok(m) = gio::File::for_path(path).monitor_directory(
+            if !installed.insert(path.clone()) {
+                continue;
+            }
+            if installed.len() > 8192 {
+                self.monitor_failed = true;
+                break;
+            }
+            match gio::File::for_path(path).monitor_directory(
                 gio::FileMonitorFlags::WATCH_MOVES,
                 None::<&gio::Cancellable>,
             ) {
-                let d = self.dirty.clone();
-                m.connect_changed(move |_, _, _, _| {
-                    d.store(true, Ordering::Release);
-                });
-                self.monitors.push(m);
+                Ok(m) => {
+                    let d = self.dirty.clone();
+                    m.connect_changed(move |_, _, _, _| d.notify_one());
+                    self.monitors.push(m);
+                }
+                Err(_) => self.monitor_failed = true,
             }
         }
     }
@@ -288,7 +332,7 @@ impl Store {
 type Job = Box<dyn FnOnce(&mut Store) + Send>;
 #[derive(Clone)]
 pub struct Handle {
-    tx: std::sync::mpsc::SyncSender<Job>,
+    tx: tokio::sync::mpsc::Sender<Job>,
 }
 impl Handle {
     pub async fn call<T: Send + 'static>(
@@ -310,7 +354,7 @@ impl Handle {
     }
 }
 pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
-    let (tx, rx) = std::sync::mpsc::sync_channel::<Job>(256);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Job>(256);
     let (ready_tx, ready_rx) = oneshot::channel();
     let notify = Arc::new(Notify::new());
     let n = notify.clone();
@@ -322,32 +366,48 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
                 let mut store = Store::new(n);
                 store.refresh();
                 let _ = ready_tx.send(());
-                let mut last_scan = Instant::now();
-                let mut health = Instant::now();
-                loop {
-                    while ctx.pending() {
-                        ctx.iteration(false);
-                    }
-                    // Bound each batch and dispatch consent notifications before
-                    // every effect, even while callers keep the queue nonempty.
-                    for _ in 0..16 {
-                        while ctx.pending() {
-                            ctx.iteration(false);
+                let main_loop = glib::MainLoop::new(Some(&ctx), false);
+                let stop = main_loop.clone();
+                ctx.spawn_local(async move {
+                    let mut backoff = 1_u64;
+                    let mut recovery_at = Instant::now() + Duration::from_secs(1);
+                    loop {
+                        let dirty = store.dirty.clone();
+                        let recovery = async {
+                            if store.healthy && !store.monitor_failed {
+                                std::future::pending::<()>().await;
+                            } else {
+                                glib::timeout_future(recovery_at.saturating_duration_since(Instant::now())).await;
+                            }
+                        };
+                        tokio::select! {
+                            biased;
+                            _ = dirty.notified() => {
+                                // GLib timer coalesces an event burst without waking idle.
+                                glib::timeout_future(Duration::from_millis(100)).await;
+                                // Consume the notification accumulated during coalescing.
+                                let _ = dirty.notified().now_or_never();
+                                store.refresh();
+                                backoff = 1;
+                                recovery_at = Instant::now() + Duration::from_secs(backoff);
+                            }
+                            _ = recovery => {
+                                store.refresh();
+                                backoff = (backoff * 2).min(60);
+                                recovery_at = Instant::now() + Duration::from_secs(backoff);
+                            }
+                            job = rx.recv() => {
+                                let Some(job) = job else { break };
+                                // A ready queue must yield so normal-priority GSettings
+                                // consent notifications run before the next effect.
+                                glib::timeout_future_with_priority(glib::Priority::LOW, Duration::ZERO).await;
+                                job(&mut store);
+                            }
                         }
-                        let Ok(job) = rx.try_recv() else { break };
-                        job(&mut store);
                     }
-                    if store.dirty.load(Ordering::Acquire)
-                        && last_scan.elapsed() >= Duration::from_millis(100)
-                        || health.elapsed() >= Duration::from_secs(2)
-                    {
-                        store.dirty.store(false, Ordering::Release);
-                        store.refresh();
-                        last_scan = Instant::now();
-                        health = Instant::now();
-                    }
-                    std::thread::sleep(Duration::from_millis(5));
-                }
+                    stop.quit();
+                });
+                main_loop.run();
             });
         })
         .map_err(|e| Error::Failed(e.to_string()))?;

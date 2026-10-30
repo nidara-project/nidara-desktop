@@ -32,8 +32,15 @@ standard user/system, Flatpak and Snap export locations are included when
 present or previously observed. Explicit XDG_DATA_DIRS enables fully private
 profiles without traversing host exports. Watch the nearest existing ancestor
 for missing roots, all scanned directories, and atomic changes. Changes coalesce
-for 100 ms. A two-second health rescan also covers missed notifications and asset
-mtime changes. A scan failure/degraded root preserves the previous complete
+for 100 ms on the blocking GLib MainLoop. The bounded async job receiver wakes
+that context on demand and yields before each effect to service consent changes.
+A healthy, fully monitored catalogue has no periodic rescan or 5 ms loop. Failed
+scans/monitor installation use recovery backoff from 1 to 60 seconds; jobs do not
+reset its deadline. Recursive bounded icon watches and resolved asset parents
+cover artwork changes, including non-selected sizes. Icon traversal is bounded
+to 4096 directories/65536 entries/16 levels; combined installed directory watches
+are capped at 8192, with the same recovery backoff if coverage is incomplete. AppInfo/volume notifications
+cover default-handler/mount changes. A scan failure/degraded root preserves the previous complete
 in-process catalogue. Initial partial metadata is labelled incomplete. There is
 no empty-success claim or pruning on failed/partial/unmounted roots.
 
@@ -62,7 +69,7 @@ sessions per sender/256 global with a conservative 32 MiB allocation budget.
 Expired/foreign/out-of-range tokens fail Stale. No mutation is retried. Work is
 bounded to 64 in-flight calls per sender, 256 globally and a 256-job GLib queue;
 timed-out queued work is discarded before its effect. GLib notifications are
-serviced between jobs, so a stream of reads cannot starve consent updates.
+serviced before each job, so a stream of reads cannot starve consent updates.
 
 Catalogue bounds: 64 roots, 16 directory levels, 4096 monitored directories,
 65536 directory entries, 16384 desktop IDs, 256 KiB input per desktop file,
@@ -80,8 +87,11 @@ launch-count ranking masquerading as foreground usage; A3 adds that metric.
 
 ## Typed layout and policy
 
-The shared home remains `org.nidara.dock pinned:as`, with
-`pinned-layout-version:u`. Version0 imports known legacy prefixes once, preserves
+Native layout uses **separate** `org.nidara.dock layout:as` and
+`layout-version:u` keys, unseen by the TS dock. Rust only reads legacy `pinned`
+once at version0 and never writes it; later TS writes cannot replace native
+order. Sharing `pinned` would let the TS orphan-pruner erase typed tokens.
+Version0 imports known legacy prefixes once, preserves
 case/order, prepends the movable dynamic default-directory target and includes
 Apps only when its real entry ships. Version1 accepts `app:<DesktopId>`,
 `default-handler:inode/directory` and `folder:<absolute-local-file-URI>`.
@@ -94,7 +104,7 @@ EditLayout(epoch,expectedLayoutRevision,edit) edits stable keys using insert-app
 insert-folder, move or remove. Unknown keys/types and duplicates fail before a
 write. Inserts without BeforeKey append; already pinned targets are no-ops.
 CAS conflicts never replace another client's layout. All callers, including
-external GSettings writers, feed the same validated native state. Only after a
+external writers of the native keys, feed the same validated native state. Only after a
 complete healthy catalogue proves an app ID absent is its pin pruned (including
 migrated pins); folders and unresolved dynamic defaults are not uninstalled apps.
 Every actual layout change advances LayoutRevision; unrelated icon changes do not.
@@ -107,16 +117,19 @@ both; the narrow installed `/usr/bin/nidara-apps` Launcher role may only EditPin
 External callers need computer-control AND config-write. Launcher does not gain
 window control, capture, close, arbitrary config or spawn. Session/LegacySettings
 also gain none of these operations. No development grants are installed here;
+the Launcher path becomes active only when D4 ships that native executable;
 actual future launcher dev registration must be explicit. The original A policy
 for Hyalo/Config1 remains unchanged. This is cooperative same-UID consent, not a
 sandbox against a program that can already edit its own GSettings/files.
 
 ## Full-colour application icons
 
-A portal Settings Read of org.gnome.desktop.interface/icon-theme selects the
+A portal Settings ReadOne of org.gnome.desktop.interface/icon-theme selects the
 app theme; the service never activates a portal or reads Config1 for paint.
-Absent portal/theme uses hicolor/fallbacks. Poll the unique portal owner with a
-one-second RPC deadline and refresh every two seconds. Theme index directories,
+Absent portal/theme uses hicolor/fallbacks. Subscribe to owner/SettingChanged
+before the initial read, bound ReadOne to one second, and accept changes only
+from the current unique owner. Owner loss clears the theme; a returning owner
+gets one new read. No portal polling or activation. Theme index directories,
 size/scale and Inherits are bounded; then hicolor/pixmaps and absolute app icons.
 Nidara raw-icon overlays take precedence, with their original basename convention
 for path icons; dot-separated themed names retain their full key. Chrome-PWA
@@ -160,6 +173,8 @@ no service autoactivation, local GIO, private XDG roots/settings, no system bus,
 and >300 fake desktop entries. It covers opt-in/conflicting owner, immutable
 caller-bound pages, generations/search, layout/CAS/consent, actual root loss and
 restart, healthy uninstall pruning, RGBA/SVG text/overrides and revocation.
+It also checks TS/native key isolation, intentional empty layout after restart,
+and portal initial read/signals/owner restart/spoof rejection.
 Logs remain in target/applications1; only short-lived runtime sockets use /tmp.
 No system installer, /etc grant, daily session, physical monitor, visual dock or
 Orca validation is claimed. New tests run in the existing session workspace;
@@ -169,3 +184,24 @@ The opt-in flag was also exercised through `scripts/dev/rust-session.sh` inside
 a real private Hyalo window on headless cage: service snapshot, typed schema
 availability, and compositor identity were verified on the nested bus/socket.
 This is service/transport acceptance, not visible dock or hardware acceptance.
+
+Idle measurement uses the same private catalogue and no client traffic:
+`/usr/bin/python3 scripts/dev/applications1-check.py --idle <release-binary> 60`.
+It records process CPU ticks and per-surviving-thread context-switch deltas from `/proc`
+in `idle.json` (one-core CPU percent; started/exited thread counts are separate,
+and context switches are not hardware wakeups).
+No pidstat package is installed by this workflow.
+
+The initial >300-entry private idle sample used release A1 before the event-loop
+change: 0.59 CPU seconds/60.001 s (0.98% of one core), with about 12000 aggregate
+thread context switches. After the event-loop change, a 60.001 s private sample
+recorded 0 CPU ticks (0.00% at `/proc` tick resolution), 0 context-switch deltas in
+surviving threads and 1 exited thread. CPU counters are process-wide; the old
+aggregate context-switch subtraction can undercount exiting threads, so its
+switch count is only approximate. These are idle service measurements, not
+battery/hardware acceptance. Raw samples: `target/applications1/1793384108318425486`
+(before) and `target/applications1/1793384657918390847` (final after).
+The final sample's idle.json records the release binary SHA-256. The initial
+fixture had over 300 entries; the expanded final fixture also includes portal
+theme assets and symlink/cycle coverage. Neither interval sends client traffic
+or starts a portal. The after sample includes the final asset/watch fixes.

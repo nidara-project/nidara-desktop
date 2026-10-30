@@ -119,13 +119,17 @@
       <default>"bottom"</default>
       <summary>Screen edge the dock sits on</summary>
     </key>
-    <key name="pinned-layout-version" type="u">
+    <key name="layout-version" type="u">
       <default>0</default>
       <summary>Native dock typed layout version; zero imports legacy desktop ids once</summary>
     </key>
+    <key name="layout" type="as">
+      <default>[]</default>
+      <summary>Native dock typed app/folder targets; never shared with the TS dock</summary>
+    </key>
     <key name="pinned" type="as">
       <default>['nidara-settings', 'kitty', 'nidara-installer']</default>
-      <summary>Ordered dock pins: legacy desktop ids (version 0) or native typed app/folder targets (version 1)</summary>
+      <summary>Ordered legacy dock desktop ids; native Applications1 imports once without writing this key</summary>
     </key>
   </schema>
 
