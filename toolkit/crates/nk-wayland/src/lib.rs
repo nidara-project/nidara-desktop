@@ -18,7 +18,11 @@ pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
 mod layer_shell;
+mod outputs;
+pub use outputs::{OutputEvent, OutputInfo, OutputWatch, outputs};
 mod token;
+mod wake;
+pub use wake::{WakeSource, Waker, wake_channel};
 pub use layer_shell::{Edges, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec, OutputId};
 pub use token::{ActivationToken, TokenFailure, TokenRequest};
 mod layers;
@@ -79,6 +83,8 @@ pub enum Event {
     /// A layer root was closed by the compositor (its output went away). The run
     /// loop ends after the app has seen this; a new output gets a new surface.
     Closed,
+    /// A `Waker` of this loop was woken (layer roots started with a `WakeSource`).
+    Wake,
     PopupDone,
     PopupOverlay {
         id: PopupId,
@@ -176,6 +182,7 @@ pub struct Window {
     foreign: foreign::Foreign,
     activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
     tokens: token::Tokens,
+    wake: Option<WakeSource>,
     controls: controls::Controls,
     maximized: bool,
     wm: Option<xdg_wm_base::XdgWmBase>,
@@ -640,18 +647,21 @@ pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()
     run_inner(app, options, start, None, None, None).map(|_| ())
 }
 /// A layer-shell root (SHELL-SURFACES.md §1) on its own connection. `options.size`
-/// is the initial logical size; `options.title` is unused. Ends on `Event::Closed`.
+/// is the initial logical size; `options.title` is unused. Ends on `Event::Closed` or
+/// `Window::close`. With `wake`, another thread can reach the app (`Event::Wake`): the
+/// shell ends a dock with it when the watcher reports its output removed.
 pub fn run_layer(
     app: impl Application,
     options: Options,
     layer: LayerSpec,
+    wake: Option<WakeSource>,
     start: Instant,
 ) -> Result<()> {
     layer.placement.validate()?;
     if layer.namespace.is_empty() || layer.namespace.contains('\0') {
         return Err("layer namespace must be nonempty text".into());
     }
-    run_inner(app, options, start, None, None, Some(layer)).map(|_| ())
+    run_inner(app, options, start, None, None, Some((layer, wake))).map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -691,7 +701,7 @@ fn run_inner(
     start: Instant,
     parent: Option<&Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
-    layer: Option<LayerSpec>,
+    layer: Option<(LayerSpec, Option<WakeSource>)>,
 ) -> Result<u32> {
     let conn = if let Some(parent) = parent {
         parent.connection.clone()
@@ -706,6 +716,7 @@ fn run_inner(
         foreign: foreign::Foreign::default(),
         activation: None,
         tokens: Default::default(),
+        wake: None,
         controls: controls::Controls::default(),
         maximized: false,
         wm: None,
@@ -837,7 +848,8 @@ fn run_inner(
     );
     let surface = compositor.create_surface(&qh, ());
     let mut xdg = None;
-    if let Some(spec) = layer {
+    if let Some((spec, wake)) = layer {
+        w.wake = wake;
         // The registry's global name is the compositor's identity for this output
         // instance, the same on every connection; a re-added output gets a new one.
         let output = match spec.output {
@@ -1033,7 +1045,11 @@ fn run_inner(
         if let Some(guard) = queue.prepare_read() {
             use rustix::event::{PollFd, PollFlags, Timespec, poll};
             let fd = guard.connection_fd();
-            let mut fds = [PollFd::new(&fd, PollFlags::IN)];
+            let mut fds = vec![PollFd::new(&fd, PollFlags::IN)];
+            let wake = w.wake.as_ref().map(WakeSource::fd);
+            if let Some(wake) = &wake {
+                fds.push(PollFd::new(wake, PollFlags::IN));
+            }
             let mut ms =
                 if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
                     8
@@ -1048,8 +1064,15 @@ fn run_inner(
                 tv_sec: ms / 1000,
                 tv_nsec: (ms % 1000) * 1_000_000,
             };
-            match poll(&mut fds, Some(&timeout)) {
-                Ok(_) if fds[0].revents().intersects(PollFlags::IN) => match guard.read() {
+            let polled = poll(&mut fds, Some(&timeout));
+            let woke = fds.get(1).is_some_and(|f| !f.revents().is_empty());
+            let readable = fds[0].revents().intersects(PollFlags::IN);
+            drop(fds);
+            if woke && w.wake.as_ref().is_some_and(WakeSource::drain) {
+                w.events.push(Event::Wake);
+            }
+            match polled {
+                Ok(_) if readable => match guard.read() {
                     Ok(_) => {}
                     Err(wayland_client::backend::WaylandError::Io(e))
                         if e.kind() == std::io::ErrorKind::WouldBlock => {}

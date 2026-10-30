@@ -16,3 +16,7 @@ wayland-backend = "0.3"
 xkbcommon = { version = "0.9", features = ["wayland"] }
 memmap2 = "0.9"
 rustix = { version = "1", features = ["event", "fs", "pipe"] }
+
+[dev-dependencies]
+# The server backend Hyalo uses, for output-identity tests (SHELL-SURFACES.md §2).
+wayland-server = "0.31"

@@ -43,7 +43,7 @@ pub struct LayerPlacement {
 /// The wl_registry global name of one output instance. It is the same on every
 /// connection to the compositor and is never reused for a re-added output, so a
 /// stale id can only fail (`OUTPUT_GONE`), never bind the newer output.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct OutputId(pub u32);
 /// Namespace and output are fixed for the surface's lifetime (protocol).
 #[derive(Clone, Copy, Debug)]
@@ -180,6 +180,7 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for Window {
                 w.events.push(Event::Configure);
             }
             zwlr_layer_surface_v1::Event::Closed => {
+                w.tokens.close_all(&mut w.events);
                 w.events.push(Event::Closed);
             }
             _ => {}
