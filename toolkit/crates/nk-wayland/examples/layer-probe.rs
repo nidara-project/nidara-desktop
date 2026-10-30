@@ -56,6 +56,8 @@ fn menu(step: usize, x: f64, y: f64, serial: u32) -> MenuPopupPlacement {
     }
 }
 struct Probe {
+    /// --token: the first left click makes an activation token instead of moving.
+    token: bool,
     step: usize,
     pointer: (f64, f64),
     menu: Option<PopupId>,
@@ -110,6 +112,23 @@ impl Application for Probe {
             Event::Button {
                 button: 0x110,
                 pressed: true,
+                serial,
+                ..
+            } if self.token => {
+                let undelivered = w.request_activation_token(serial.wrapping_add(1000), None);
+                eprintln!("TOKEN_UNDELIVERED {undelivered:?}");
+                let r = w.request_activation_token(serial, Some("nk-token-target"));
+                eprintln!("TOKEN_REQUESTED {}", r.is_ok());
+            }
+            Event::ActivationToken { token, .. } => {
+                eprintln!("TOKEN_DONE {token:?}");
+                let path = std::env::var("NK_TOKEN_FILE").map_err(|e| e.to_string())?;
+                std::fs::write(&path, token.as_str()).map_err(|e| e.to_string())?;
+            }
+            Event::ActivationTokenFailed { reason, .. } => eprintln!("TOKEN_FAILED {reason:?}"),
+            Event::Button {
+                button: 0x110,
+                pressed: true,
                 ..
             } => {
                 eprintln!("BUTTON step={}", self.step);
@@ -146,6 +165,7 @@ impl Application for Probe {
 fn main() {
     let r = nk_wayland::run_layer(
         Probe {
+            token: std::env::args().any(|a| a == "--token"),
             step: 0,
             pointer: (0., 0.),
             menu: None,

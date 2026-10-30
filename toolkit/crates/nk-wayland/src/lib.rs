@@ -18,7 +18,9 @@ pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
 mod layer_shell;
+mod token;
 pub use layer_shell::{Edges, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec, OutputId};
+pub use token::{ActivationToken, TokenFailure, TokenRequest};
 mod layers;
 pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
@@ -91,6 +93,15 @@ pub enum Event {
         event: LayerEvent,
     },
     FrameDone,
+    /// The answer to `request_activation_token`: exactly one of these two per request.
+    ActivationToken {
+        request: TokenRequest,
+        token: ActivationToken,
+    },
+    ActivationTokenFailed {
+        request: TokenRequest,
+        reason: TokenFailure,
+    },
     Focus(bool),
     Key(Key),
     Motion(f64, f64),
@@ -164,6 +175,7 @@ pub struct Window {
     connection: Connection,
     foreign: foreign::Foreign,
     activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
+    tokens: token::Tokens,
     controls: controls::Controls,
     maximized: bool,
     wm: Option<xdg_wm_base::XdgWmBase>,
@@ -693,6 +705,7 @@ fn run_inner(
         connection: conn.clone(),
         foreign: foreign::Foreign::default(),
         activation: None,
+        tokens: Default::default(),
         controls: controls::Controls::default(),
         maximized: false,
         wm: None,
@@ -911,7 +924,17 @@ fn run_inner(
         if let Some(k) = w.keyboard.tick() {
             w.push_key(k);
         }
+        w.tokens.expire(Instant::now(), &mut w.events);
         for mut event in std::mem::take(&mut w.events) {
+            // Serials the app may later turn into an activation token (§4).
+            match &event {
+                Event::Button { serial, .. } => w.tokens.delivered(*serial),
+                Event::Key(Key {
+                    serial: Some(serial),
+                    ..
+                }) => w.tokens.delivered(*serial),
+                _ => {}
+            }
             if let Event::PopupOverlay { id, .. } = &event
                 && !w.overlay.iter().any(|p| p.id == *id)
             {
@@ -1011,11 +1034,16 @@ fn run_inner(
             use rustix::event::{PollFd, PollFlags, Timespec, poll};
             let fd = guard.connection_fd();
             let mut fds = [PollFd::new(&fd, PollFlags::IN)];
-            let ms = if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
-                8
-            } else {
-                i64::from(app.poll_interval_ms().clamp(1, 1000))
-            };
+            let mut ms =
+                if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
+                    8
+                } else {
+                    i64::from(app.poll_interval_ms().clamp(1, 1000))
+                };
+            // A pending token's deadline is an active timer only while it waits.
+            if let Some(wait) = w.tokens.wait(Instant::now()) {
+                ms = ms.min(wait.as_millis() as i64 + 1);
+            }
             let timeout = Timespec {
                 tv_sec: ms / 1000,
                 tv_nsec: (ms % 1000) * 1_000_000,
@@ -1048,6 +1076,7 @@ impl Window {
     fn destroy_surfaces(&mut self) {
         self.close_popup_overlay();
         self.foreign.destroy();
+        self.tokens.destroy();
         if let Some(activation) = self.activation.take() {
             activation.destroy();
         }

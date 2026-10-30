@@ -13,5 +13,5 @@ exec bwrap --die-with-parent --unshare-pid --bind / / --dev-bind /dev /dev --pro
     --tmpfs "/run/user/$(id -u)" \
     --setenv TMPDIR "$repo/toolkit/target/popup-runtime-tmp" \
     --setenv LIBGL_ALWAYS_SOFTWARE 1 --setenv WLR_RENDERER pixman \
-    --setenv NK_WIDGETS_CHECK ../../toolkit/crates/nk-wayland/layer-check.py \
+    --setenv NK_WIDGETS_CHECK "../../toolkit/crates/nk-wayland/${NK_LAYER_CHECK:-layer-check.py}" \
     "$repo/toolkit/widgets-demo/check-headless.sh"
