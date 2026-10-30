@@ -295,6 +295,21 @@ phase0 stays independent. The fixed-data demo and libatspi controls live in
 `toolkit/widgets-demo` and `scripts/ci/nk-widgets-check.py`. Builds, evidence and
 logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 
+### Applications1 catalogue and native dock pins
+
+`nidara-sessiond --applications` opts into A1's catalogue, search, full-colour app
+icons/overrides and typed app/folder pin layout. Start at
+`session/daemon/src/applications/README.md` and `session/design/APPLICATIONS1-DOCK.md`.
+A1 launches nothing and advertises no usage/Unity/window-observation capability.
+The ordinary session and TS UI remain unchanged. Native pins share the existing
+GSettings home plus a layout-version key; only a complete healthy catalogue may
+prune a missing app, including migrated pins. Known export-root/mount loss must
+survive restart as degraded state, never uninstall. Desktop Generation, icon
+revision and layout CAS are independent; do not use an icon refresh to overwrite
+another client's order. App art uses the full-colour resolver, not nk-icons'
+symbolic-shape parser. All mutations retain original kernel sender identity and
+scoped nidara-access policy; Launcher gains no general Shell privileges.
+
 ## Keep this skill current (part of "done", not a follow-up)
 
 This skill is only useful if it matches reality. **When a change introduces or alters

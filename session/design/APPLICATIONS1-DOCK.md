@@ -5,7 +5,8 @@ authorized by this file.** The owner authorized preparing and revising the desig
 in Codex's chat. Scope was relayed in Palomar #959 messages #681/#684; Claude's
 review #688 reports the owner's closure of §12 with the amendments incorporated
 below. This records that review and its provenance, not fresh authorization to
-program. A1 still requires the owner's explicit go-ahead in this chat. IPC B
+program. The owner subsequently authorized A1 implementation directly in Codex's chat;
+later implementation stages still need their own authorization. IPC B
 (`f080c73b`) remains separate. No publication, installation or session change.
 
 The implementation order puts a visible dock before usage/attention/Unity:
@@ -807,9 +808,9 @@ programming in this chat or expand the owner's standing permissions.
    failed/partial/degraded scans, provider loss or unmounted export roots; this
    protects migrated pins too.
 
-Final reread and the owner's explicit implementation go-ahead here remain
-separate steps. No programming, publication, installation, queue or merge action
-is authorized by recording this review.
+The owner subsequently gave the explicit A1 implementation go-ahead in Codex's
+chat. That authorization is separate from this relayed review and does not cover
+later PR stages, publication, installation, queue or merge.
 
 ## 13. Sources checked for this draft
 

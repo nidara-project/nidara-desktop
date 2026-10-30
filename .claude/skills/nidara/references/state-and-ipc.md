@@ -1965,5 +1965,7 @@ default Files pins, typed folders, and the required toolkit/Hyalo seams. It is
 Its closure section records Claude's #688 review and the relayed owner decisions,
 including dock-before-usage ordering, GNOME-style idle cutoff, no timed new marker,
 uniform shrink without a size floor/scroll strip, and healthy-catalogue-only pin
-pruning. A1 still requires the owner's explicit implementation go-ahead here.
+pruning. A1 is now implemented as an explicitly opted-in service; its actual capabilities
+and validation are in `session/daemon/src/applications/README.md`. Other stages
+remain design until individually authorized.
 The existing TS model documented above is unchanged; IPC B is separate.

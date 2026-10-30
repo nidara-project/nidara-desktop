@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The server outlives shell reloads. DnD and the user's banner timeout remain UI
 // policy; only the sender's positive expire_timeout belongs here (#819).
+mod applications;
 mod audio;
 mod bluetooth;
 mod config;
@@ -286,6 +287,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TypeScript shell serves it, and the daemon leaves it alone.
     if std::env::args().any(|a| a == "--config") {
         config::serve(&conn).await?;
+    }
+    if std::env::args().any(|a| a == "--applications") {
+        applications::serve(&conn).await?;
     }
     // Opt-in only; the normal TS shell already registers its own NM secret agent.
     let read_only = std::env::args().any(|a| a == "--network-read-only");

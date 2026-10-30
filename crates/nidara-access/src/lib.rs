@@ -30,6 +30,8 @@ pub enum Operation {
     EndSession,
     CloseWindow,
     Configure,
+    EditPins,
+    AppIcon,
     Capture,
     Outputs,
     Power,
@@ -44,6 +46,7 @@ enum Role {
     Shell,
     LegacyShell,
     LegacySettings,
+    Launcher,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -71,9 +74,13 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     let own = match role {
         Role::LegacySettings => matches!(op, ActivateOwnWindow),
-        Role::Settings => matches!(op, Configure),
+        Role::Settings => matches!(op, Configure | EditPins | AppIcon),
+        Role::Launcher => matches!(op, EditPins),
         Role::Session => matches!(op, Configure | Power | NightLight),
-        Role::Shell => matches!(op, WindowControl | CloseWindow | MinimizeTargets),
+        Role::Shell => matches!(
+            op,
+            WindowControl | CloseWindow | MinimizeTargets | EditPins | AppIcon
+        ),
         // Compatibility for the dedicated installed TS shell host. Generic GJS hosts
         // and computer-use helpers never receive this role.
         Role::LegacyShell => matches!(
@@ -94,7 +101,7 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     own || consent.control
         && match op {
-            Configure => consent.config,
+            Configure | EditPins | AppIcon => consent.config,
             Capture => consent.capture,
             CloseWindow => consent.close,
             _ => true,
@@ -175,6 +182,7 @@ impl Peer {
             Some("/usr/lib/nidara/nidara-settings-native") => Some(Role::Settings),
             Some("/usr/bin/nidara-sessiond") => Some(Role::Session),
             Some("/usr/bin/nidara-shell") => Some(Role::Shell),
+            Some("/usr/bin/nidara-apps") => Some(Role::Launcher),
             Some("/usr/lib/nidara/nidara-shell") => Some(Role::LegacyShell),
             Some("/usr/lib/nidara/nidara-settings") => Some(Role::LegacySettings),
             _ => None,
@@ -231,7 +239,7 @@ impl Peer {
                 "computer control is disabled (Settings → AI)"
             } else {
                 match op {
-                    Operation::Configure => {
+                    Operation::Configure | Operation::EditPins | Operation::AppIcon => {
                         "configuration writes are disabled (allow-config-write)"
                     }
                     Operation::Capture => "screenshots are disabled (allow-screenshot)",
@@ -314,6 +322,48 @@ impl ConsentWatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn application_roles_are_scoped() {
+        let no = Consent::default();
+        for role in [Role::Shell, Role::Settings, Role::Launcher] {
+            assert!(permitted(role, Operation::EditPins, no));
+        }
+        assert!(permitted(Role::Shell, Operation::AppIcon, no));
+        assert!(permitted(Role::Settings, Operation::AppIcon, no));
+        assert!(!permitted(Role::Launcher, Operation::AppIcon, no));
+        for op in [
+            Operation::Configure,
+            Operation::Capture,
+            Operation::CloseWindow,
+            Operation::Spawn,
+            Operation::WindowControl,
+        ] {
+            assert!(!permitted(Role::Launcher, op, no));
+        }
+        for op in [Operation::EditPins, Operation::AppIcon] {
+            for (control, config) in [(false, false), (true, false), (false, true)] {
+                assert!(!permitted(
+                    Role::External,
+                    op,
+                    Consent {
+                        control,
+                        config,
+                        ..no
+                    }
+                ));
+            }
+            assert!(permitted(
+                Role::External,
+                op,
+                Consent {
+                    control: true,
+                    config: true,
+                    ..no
+                }
+            ));
+            assert!(!permitted(Role::Session, op, no));
+        }
+    }
     #[test]
     fn scope_and_consent_are_both_enforced() {
         let no = Consent::default();
