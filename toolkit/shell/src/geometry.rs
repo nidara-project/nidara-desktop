@@ -8,8 +8,9 @@
 /// `DOCK_SCREEN_GAP`, Hyalo's `gaps_out`, the bar's margin).
 pub const SCREEN_GAP: f64 = 4.;
 /// The top bar's region a side dock must stay below while no Rust bar reports its real
-/// reservation (APPLICATIONS1-DOCK.md §8): the TS bar's capsule (36) and its margin (4).
-pub const BAR_RESERVATION: f64 = 40.;
+/// reservation (APPLICATIONS1-DOCK.md §8): the TS bar's exclusive zone (`BAR_H`), which
+/// already holds its own top margin. The hub owns this value and passes it in.
+pub const BAR_RESERVATION: f64 = 36.;
 pub const PAD_RATIO: f64 = 0.22;
 pub const GAP_RATIO: f64 = 0.16;
 /// The capsule's superellipse exponent (the TS dock's glass shape).

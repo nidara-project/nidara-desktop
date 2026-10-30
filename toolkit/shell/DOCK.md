@@ -1,6 +1,6 @@
 # The Rust dock, D1 (#959)
 
-**Status: DESIGN for review, 2026-10-31.** The owner authorized D1 in Claude's chat
+**Status: DESIGN, reviewed by Codex (Palomar #959 #741), 2026-10-31.** The owner authorized D1 in Claude's chat
 ("fusiona A1 y empieza D1"). The contract it implements is
 `session/design/APPLICATIONS1-DOCK.md` (A1, #976) §8 and the D1 row of §10. This file only
 says how D1 is built and what it leaves to D2/D3/D4; where the two disagree, the contract
@@ -56,18 +56,24 @@ A source that fails marks its part of the view unavailable; nothing waits foreve
 - **Applications1.** Subscribe to `Changed` and `NameOwnerChanged`, then `GetSnapshot`;
   follow `AppsNext` with `ReadSnapshotPage` and `CloseSnapshot` when done; queue
   signals during hydration and reread if a newer revision arrived (contract §2).
-  Icons with `GetIcon(epoch, id, generation, size, scale)` at the dock's effective
-  size, cached by (id, generation, iconRevision, pixel size); a miss shows a neutral
-  placeholder, never another app's art. A lost owner or a new epoch drops pending
-  handles and rereads. `Launchable` and the capability list decide whether a click may
-  launch (A1 has none; see §6).
-- **Hyalo.** `windows` then `event_stream` on a second connection, subscribing before
-  hydrating (contract §2, "Before H1"): `WindowsChanged`, `FocusChanged`,
+  Icons with `GetIcon(epoch, id, generation, size, scale)`: the service takes 16..512
+  logical and scale 1..4 (at most 1024 physical), so a dock shrunk below 16 asks for 16
+  and scales the art down itself; the layout has no 16 floor. The pixels are straight
+  alpha and are converted to the renderer's format once, when cached by (id, generation,
+  IconRevision, pixel size). A miss shows a neutral placeholder, never another app's
+  art. A lost owner or a new epoch drops pending handles and rereads. A click may
+  launch only when the app is `Launchable` AND the service advertises `launch` (A2's
+  capability; `open-directory` for folders). `LauncherAvailable` is Unity's and stays
+  false in D1; it says nothing about launching.
+- **Hyalo.** `event_stream` first, and only after its acknowledgement `windows` on a
+  second connection; events that arrive during hydration are reconciled, not dropped
+  (contract §2, "Before H1"). Each event carries the whole list, so the newest wins: `WindowsChanged`, `FocusChanged`,
   `OutputsChanged`, lock and fullscreen state. A disconnect marks windows unknown and
   reconnects with backoff; window IDs from an old connection are never reused.
-- **Preferences.** Read `org.nidara.dock` position and icon-size through Config1 (the
-  same client as Settings) and follow their changes. Magnification, indicators and
-  auto-hide are read but only position, size and indicators act in D1.
+- **Preferences.** Read-only from GSettings `org.nidara.dock` on a GLib thread with its
+  change signals (Config1 has no `dock.*` keys yet; it becomes the writer in D2). Never
+  `pinned`/`layout`: the layout is Applications1's alone. Only position, icon size and
+  indicators act in D1.
 
 ## 4. The model (pure, unit-tested)
 
@@ -94,8 +100,12 @@ client paints only icons, dots and the separator (commandment 12).
 Fit (contract §8): with L the allowed main-axis length (output minus 2 × gap, and for a
 side dock minus the top-bar reservation), use the largest `0 < s <= 1` with `W(s) <= L`
 applied to every icon, gap, padding, separator, minimized slot and Trash. No minimum
-size, no scrolling, no dropped items. Until a Rust bar exists the reservation is a named
-constant equal to the current bar region, in one place.
+size, no scrolling, no dropped items. Until a Rust bar exists, the top reservation is
+ONE provisional value held by the hub (the TS bar's `BAR_H` = 36, its exclusive zone,
+which already includes its own top margin), replaced by the real reservation later. It
+is never inferred from a layer's height, the 4 px gap is not added twice, and it is not
+subtracted again when the configured size already left it out. Checked with corners at
+scales 1, 1.25 and 2.
 
 Position changes go through `set_layer_placement` on the same surface (T1); no
 recreation. The input region is the resting capsule.
@@ -104,7 +114,8 @@ recreation. The input region is the resting capsule.
 
 - **Launch.** Applications1 `Launch(epoch, id, generation, {Mode: activate, ActivationToken,
   RequestId})` with a token from the click's real serial (`request_activation_token`).
-  Until A2 advertises `launch-exec`/`launch-dbus`, a click on an app with no windows
+  The answer is admission only, never focus or a ready window. Until A2 advertises
+  `launch`, a click on an app with no windows
   reports the launch as unavailable (a visible, accessible state) and does nothing
   else: there is no fallback through Exec, uwsm, gtk-launch or the TS shell (Codex,
   Palomar #959 #739). Tests use a fake Applications1 on a private bus.
@@ -114,18 +125,26 @@ recreation. The input region is the resting capsule.
   only minimized → restore the most recently minimized; two or more visible → focus the
   most recently focused (the chooser is D2).
 - **Minimize targets.** `minimize_targets(output, "nidara-dock", {id: rect})` from the
-  laid-out slots, in layer-local logical coordinates, one owner per window.
-- **Folders and Trash.** Open through Applications1 `OpenDirectory` (A2). Trash shows its
-  slot always; full/empty comes from GIO's trash monitor when available, else the slot
-  says it cannot tell. Emptying is D2 (it needs the menu).
+  laid-out slots, in layer-local logical coordinates. Every dock shows every app, so the
+  HUB picks one dock per window (its current output's, else a fixed remaining one) and
+  only that dock publishes it; docks never overwrite each other's targets.
+- **Folders.** Applications1 `OpenDirectory` (A2, `open-directory`), local directories only.
+- **Trash.** Its slot is always there. Opening it is `Launch` of the DefaultDirectoryApp
+  with `Mode: open` and `Uris: [trash:///]`, which A2 accepts only when that handler
+  takes URIs/inode-directory; otherwise the slot says it cannot open (A2 closes this in
+  the contract, #741). Never the physical Trash/files folder, never xdg-open.
+  Full/empty comes from GIO's trash monitor when available, else the slot says it cannot
+  tell. Emptying is D2 (it needs the menu).
 
 ## 7. Keyboard and accessibility
 
 One roving focus with a visible ring; arrows along the axis, Tab/Shift+Tab wrap,
 Enter/Space act, Escape leaves. `nk-a11y` exposes the dock as a toolbar of buttons with
 name, state (running, minimized, launch unavailable) and the same action dispatch as a
-click. `Super+Ctrl+D` reaches it through `Shell1` `focus:dock` once the shell owns that
-name; if IPC B has not landed, D1 says so and the binding waits for it.
+click. `Super+Ctrl+D` reaches it through `Shell1` `focus:dock`, the typed contract of
+`crates/nidara-shell-ipc` (IPC B). B is not published yet: D1 is checked against it on
+a private bus and PATH, without copying its types or protocol, and the binding waits for
+B to land.
 
 ## 8. Evidence for D1
 
