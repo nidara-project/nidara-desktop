@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/nk-a11y", "crates/nk-text", "crates/nk-render", "crates/nk-wayland", "phase0", "settings-slice", "crates/nk-widgets", "widgets-demo", "settings", "crates/nk-icons"]
+members = ["crates/nk-a11y", "crates/nk-text", "crates/nk-render", "crates/nk-wayland", "phase0", "settings-slice", "crates/nk-widgets", "widgets-demo", "settings", "crates/nk-icons", "shell"]
 
 [workspace.package]
 version = "0.1.0"

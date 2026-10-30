@@ -1042,6 +1042,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-shell"
+version = "0.1.0"
+
+[[package]]
 name = "nk-a11y"
 version = "0.1.0"
 dependencies = [
