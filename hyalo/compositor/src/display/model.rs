@@ -273,8 +273,10 @@ pub fn default_layout(outputs: &[Output]) -> Layout {
         } else {
             96.0
         };
+        // Down to the quarter step, never up: the density alone must ask for the larger size.
+        // The epsilon keeps an exact step (192 dpi = 2.0) from flooring a step below.
         let scale = if dpi.is_finite() && (50.0..=400.0).contains(&dpi) {
-            ((dpi / 96.0 * 4.0).round() / 4.0).clamp(1.0, 3.0)
+            ((dpi / 96.0 * 4.0 + 1e-9).floor() / 4.0).clamp(1.0, 3.0)
         } else {
             1.0
         };
@@ -570,7 +572,24 @@ pub(super) mod tests {
         assert_eq!(default_layout(&outputs).outputs[0].scale, 1.0);
         outputs[0].physical_width_mm = 200;
         assert_eq!(default_layout(&outputs).outputs[0].scale, 1.0);
-        outputs[0].physical_width_mm = 340;
+        outputs[0].physical_width_mm = 330;
         assert_eq!(default_layout(&outputs).outputs[0].scale, 3.0);
+    }
+    #[test]
+    fn dpi_scale_rounds_down_to_the_quarter_step() {
+        // (panel, width px, height px, width mm, scale)
+        for (name, w, h, mm, want) in [
+            ("24in 1080p", 1920, 1080, 531, 1.0),
+            ("27in 1440p", 2560, 1440, 600, 1.0),
+            ("32in 4K", 3840, 2160, 708, 1.25),
+            ("27in 4K", 3840, 2160, 597, 1.5),
+            ("27in 5K", 5120, 2880, 597, 2.25),
+            ("14in 1080p laptop", 1920, 1080, 310, 1.5),
+            ("exactly 192 dpi", 1920, 1080, 254, 2.0),
+        ] {
+            let mut outputs = vec![output("a", false, w, h)];
+            outputs[0].physical_width_mm = mm;
+            assert_eq!(default_layout(&outputs).outputs[0].scale, want, "{name}");
+        }
     }
 }

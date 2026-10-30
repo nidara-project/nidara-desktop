@@ -168,7 +168,8 @@ Connection ids change on a topology/mode-list epoch; persisted profiles contain
 identities instead. An obsolete/unsupported profile is not rewritten by fallback.
 A new set defaults to Unir: internal first and primary, external outputs to its
 right in stable order, top edges aligned. Without an internal, use a deterministic
-external. Reliable physical DPI chooses a supported quarter-step scale; unknown
+external. Reliable physical DPI chooses a quarter-step scale, rounded down (DPI/96, so a
+27" 2560×1440 panel at ~108 DPI stays at 1.0 and a 27" 4K at ~163 gets 1.5); unknown
 or implausible dimensions fall back to 1.0. Existing generated legacy settings
 remain usable before Display1 first confirms that set. Explicit compositor layers
 other than the generated settings layer constrain profiles and mutations; a
