@@ -91,6 +91,7 @@ fn parse(text: &str) -> io::Result<Vec<Entry>> {
                 "settings" => Role::Settings,
                 "session" => Role::Session,
                 "shell" => Role::Shell,
+                "launcher" => Role::Launcher,
                 "legacy-shell" => Role::LegacyShell,
                 "legacy-settings" => Role::LegacySettings,
                 _ => return Err(invalid()),

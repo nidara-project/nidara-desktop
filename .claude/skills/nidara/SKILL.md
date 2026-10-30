@@ -295,6 +295,26 @@ phase0 stays independent. The fixed-data demo and libatspi controls live in
 `toolkit/widgets-demo` and `scripts/ci/nk-widgets-check.py`. Builds, evidence and
 logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 
+### Applications1 catalogue and native dock pins
+
+`nidara-sessiond --applications` opts into A1's catalogue, search, full-colour app
+icons/overrides and typed app/folder pin layout. Start at
+`session/daemon/src/applications/README.md` and `session/design/APPLICATIONS1-DOCK.md`.
+A1 launches nothing and advertises no usage/Unity/window-observation capability.
+The ordinary session and TS UI remain unchanged. Native pins use separate
+`org.nidara.dock layout`/`layout-version`; legacy `pinned` is read once, never
+written by Rust (the TS orphan-pruner would erase typed tokens). A blocking
+GLib MainLoop handles bounded jobs/monitors, coalesces events for 100 ms and retries
+only failed scans/monitors with 1–60 s backoff; no healthy rescan or portal polling.
+Portal theme follows ReadOne + current-owner SettingChanged. Only a complete healthy catalogue may
+prune a missing app, including migrated pins. Known export-root/mount loss must
+survive restart as degraded state, never uninstall. Desktop Generation, icon
+revision and layout CAS are independent; do not use an icon refresh to overwrite
+another client's order. App art uses the full-colour resolver, not nk-icons'
+symbolic-shape parser. All mutations retain original kernel sender identity and
+scoped nidara-access policy; Launcher gains no general Shell privileges and its
+installed path becomes active only when D4 ships nidara-apps.
+
 ### Shell surfaces (the Rust dock and bar)
 
 `nk-wayland` hosts layer-shell roots too (#959 T1): `run_layer(app, options, LayerSpec,
