@@ -32,6 +32,8 @@ pub enum Operation {
     Configure,
     EditPins,
     AppIcon,
+    AppLaunch,
+    AppAutostart,
     Capture,
     Outputs,
     Power,
@@ -74,12 +76,18 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     let own = match role {
         Role::LegacySettings => matches!(op, ActivateOwnWindow),
-        Role::Settings => matches!(op, Configure | EditPins | AppIcon),
-        Role::Launcher => matches!(op, EditPins),
+        Role::Settings => matches!(op, Configure | EditPins | AppIcon | AppAutostart),
+        Role::Launcher => matches!(op, EditPins | AppLaunch),
         Role::Session => matches!(op, Configure | Power | NightLight),
         Role::Shell => matches!(
             op,
-            WindowControl | CloseWindow | MinimizeTargets | EditPins | AppIcon
+            WindowControl
+                | CloseWindow
+                | MinimizeTargets
+                | EditPins
+                | AppIcon
+                | AppLaunch
+                | AppAutostart
         ),
         // Compatibility for the dedicated installed TS shell host. Generic GJS hosts
         // and computer-use helpers never receive this role.
@@ -101,7 +109,7 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     own || consent.control
         && match op {
-            Configure | EditPins | AppIcon => consent.config,
+            Configure | EditPins | AppIcon | AppAutostart => consent.config,
             Capture => consent.capture,
             CloseWindow => consent.close,
             _ => true,
@@ -239,7 +247,10 @@ impl Peer {
                 "computer control is disabled (Settings → AI)"
             } else {
                 match op {
-                    Operation::Configure | Operation::EditPins | Operation::AppIcon => {
+                    Operation::Configure
+                    | Operation::EditPins
+                    | Operation::AppIcon
+                    | Operation::AppAutostart => {
                         "configuration writes are disabled (allow-config-write)"
                     }
                     Operation::Capture => "screenshots are disabled (allow-screenshot)",
@@ -331,6 +342,22 @@ mod tests {
         assert!(permitted(Role::Shell, Operation::AppIcon, no));
         assert!(permitted(Role::Settings, Operation::AppIcon, no));
         assert!(!permitted(Role::Launcher, Operation::AppIcon, no));
+        assert!(permitted(Role::Launcher, Operation::AppLaunch, no));
+        assert!(permitted(Role::Shell, Operation::AppLaunch, no));
+        assert!(permitted(Role::Shell, Operation::AppAutostart, no));
+        assert!(permitted(Role::Settings, Operation::AppAutostart, no));
+        assert!(!permitted(Role::Settings, Operation::AppLaunch, no));
+        assert!(!permitted(Role::Launcher, Operation::AppAutostart, no));
+        assert!(!permitted(Role::Session, Operation::AppLaunch, no));
+        assert!(!permitted(Role::External, Operation::AppLaunch, no));
+        assert!(permitted(
+            Role::External,
+            Operation::AppLaunch,
+            Consent {
+                control: true,
+                ..no
+            }
+        ));
         for op in [
             Operation::Configure,
             Operation::Capture,
@@ -340,7 +367,11 @@ mod tests {
         ] {
             assert!(!permitted(Role::Launcher, op, no));
         }
-        for op in [Operation::EditPins, Operation::AppIcon] {
+        for op in [
+            Operation::EditPins,
+            Operation::AppIcon,
+            Operation::AppAutostart,
+        ] {
             for (control, config) in [(false, false), (true, false), (false, true)] {
                 assert!(!permitted(
                     Role::External,

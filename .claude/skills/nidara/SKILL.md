@@ -300,7 +300,13 @@ logs for this work belong in target/ or ~/Nidara/ChatGPT/, never /tmp.
 `nidara-sessiond --applications` opts into A1's catalogue, search, full-colour app
 icons/overrides and typed app/folder pin layout. Start at
 `session/daemon/src/applications/README.md` and `session/design/APPLICATIONS1-DOCK.md`.
-A1 launches nothing and advertises no usage/Unity/window-observation capability.
+A2 adds launch/actions/open/default-directory and XDG autostart preferences;
+read `session/daemon/src/applications/A2.md`. Exec uses systemd transient services
+with literal argv, per-launch token and explicit environment; D-Bus activation
+never falls back to Exec. Admission/dispatch never confirms a window or focus.
+`LaunchAvailable` is distinct from Unity's `LauncherAvailable`. No usage/Unity/
+window-observation capability is advertised. Autostart changes preferences only;
+the existing session runner executes them, never a second daemon startup loop.
 The ordinary session and TS UI remain unchanged. Native pins use separate
 `org.nidara.dock layout`/`layout-version`; legacy `pinned` is read once, never
 written by Rust (the TS orphan-pruner would erase typed tokens). A blocking
@@ -314,6 +320,18 @@ another client's order. App art uses the full-colour resolver, not nk-icons'
 symbolic-shape parser. All mutations retain original kernel sender identity and
 scoped nidara-access policy; Launcher gains no general Shell privileges and its
 installed path becomes active only when D4 ships nidara-apps.
+
+### Rust shell IPC client
+
+`session/ipc` builds the installed Rust `nidara-ipc` (#959 B); default TS Request
+compatibility is unchanged. `NIDARA_SESSION=rust` / `--session=rust` routes directly
+to Config1, Hyalo and the typed contract in `crates/nidara-shell-ipc`; there is no
+fallback, broker or TS bridge. B runs no Shell1 renderer: visual actions are
+Unavailable until their renderer exists (C is OSD only). A2 routes listApps/launchApp
+to Applications1 as External and waits only for dispatch. Wallpaper preview remains
+Unavailable. Start at `references/state-and-ipc.md` → "The native Rust
+routes" and `session/ipc/README.md` before extending a route. The CLI grants no
+privilege; owners retain the shared consent policy. No OSD over ext-session-lock.
 
 ### Shell surfaces (the Rust dock and bar)
 

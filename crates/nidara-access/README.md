@@ -19,11 +19,11 @@ The explicit native executable roles are:
 
 | Executable | Operations without external consent |
 | --- | --- |
-| `/usr/lib/nidara/nidara-settings-native` | configuration, native pin layout and app icons |
+| `/usr/lib/nidara/nidara-settings-native` | configuration, native pin layout, app icons and app autostart |
 | `/usr/lib/nidara/nidara-settings` (dedicated TS host) | activate only a mapped native Wayland window belonging to its authenticated PID |
 | `/usr/bin/nidara-sessiond` | configuration, power, night light |
-| `/usr/bin/nidara-shell` (future Rust) | windows, close requests, minimize target rectangles, native pin layout and app icons |
-| `/usr/bin/nidara-apps` (future native launcher) | native pin layout only (A1); no capture/windows/general config/spawn |
+| `/usr/bin/nidara-shell` (future Rust) | windows, close requests, minimize target rectangles, native pin layout, app icons, app launch and autostart |
+| `/usr/bin/nidara-apps` (future native launcher) | native pin layout and app launch (A2); no autostart/capture/windows/general config/spawn |
 | `/usr/lib/nidara/nidara-shell` (existing dedicated TS host) | windows, close, minimize targets, configuration, capture, output layout, night light |
 
 The installed dedicated TS shell and Settings hosts are explicit compatibility
@@ -119,8 +119,9 @@ scripts/dev/check-ipc-policy-headless.sh
 scripts/dev/check-access-list-namespace.sh
 ```
 
-B (typed Shell1/CLI routing), C (Rust OSD only), Applications1 and the Rust bar
-are separate work. There is no OSD above ext-session-lock until the Rust lock
+B is the Rust CLI in `session/ipc` and typed contract in
+`crates/nidara-shell-ipc`: direct owner calls, no CLI privilege or TS fallback.
+C (Rust OSD only), Applications1 and the Rust bar remain separate work. There is no OSD above ext-session-lock until the Rust lock
 screen paints its own in step 2.
 
 Current client inventory (source review, no live-session inspection):
@@ -143,8 +144,10 @@ by the JS entry file, SettingsNative owner name or generic interpreter identity.
 
 Applications1 A1 adds EditPins and AppIcon operations. External callers require
 computer-control plus config-write for both, checked at the effect. The native
-Launcher role is distinct from Shell and permits only EditPins in A1; A2 must
-explicitly design/add its launch operation. `launcher` is accepted as an exact
+Launcher role is distinct from Shell and permits EditPins and AppLaunch. A2
+adds AppLaunch for Shell/Launcher (external computer-control) and AppAutostart
+for Shell/Settings (external computer-control plus config-write). These grant
+no generic Spawn operation, window focus or trusted CLI exemption. `launcher` is accepted as an exact
 dev-grant role, but no launcher grant or system entry is installed by A1. The
 actual future launcher path must be registered explicitly when its binary ships.
 See `session/daemon/src/applications/README.md`; no CLI/interpreter/bus-name trust.

@@ -13,7 +13,7 @@
 #
 # From a checkout: this checkout's Hyalo, nidara-sessiond, nk-settings and exports when they
 # are built (`cargo build --release` in hyalo/ and toolkit/;
-# `cargo build --release --features audio-native` in session/; `node
+# `cargo build --release --workspace --features audio-native` in session/; `node
 # --experimental-strip-types scripts/export-settings-data.mjs build/settings-data` +
 # export-tokens.mjs), the installed ones otherwise. Inside: `nidara-hyalo msg â€¦` with the
 # HYALO_SOCKET this prints. The session's settings persist in $state; delete it to start over.
@@ -28,6 +28,11 @@ hyalo=$(pick "${HYALO_BIN:-}" "$repo/hyalo/target/release/nidara-hyalo" /usr/bin
 sessiond=$(pick "${SESSIOND_BIN:-}" "$repo/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond) \
     || { echo "no nidara-sessiond: build session/ or install it" >&2; exit 1; }
 selector=$(pick "${DISPLAY_SELECTOR_BIN:-}" "$repo/toolkit/target/release/nidara-display-selector" "$repo/toolkit/target/debug/nidara-display-selector" /usr/bin/nidara-display-selector) || selector=""
+ipc=$(pick "${NIDARA_IPC_BIN:-}" "$repo/session/target/release/nidara-ipc" "$repo/session/target/debug/nidara-ipc" /usr/bin/nidara-ipc) \
+    || { echo "no native nidara-ipc: cargo build --manifest-path session/Cargo.toml -p nidara-ipc" >&2; exit 1; }
+if ! "$ipc" --help | grep -q -- '--session=ts|rust'; then
+    echo "nidara-ipc is too old: build session/ (including -p nidara-ipc)" >&2; exit 1
+fi
 settings=$(pick "${NK_SETTINGS_BIN:-}" "$repo/toolkit/target/release/nk-settings" /usr/lib/nidara/nidara-settings-native) || settings=""
 data="${NK_SETTINGS_DATA:-$repo/build/settings-data}"; [ -f "$data/version" ] || data=/usr/share/nidara/settings-data
 
@@ -76,15 +81,16 @@ echo "msg:       HYALO_SOCKET=$rt/nidara-hyalo.wayland-1.sock nidara-hyalo msg â
 # tokens of this checkout when it has them (an installed export may be older than Hyalo).
 # Use the factory rules/bindings unchanged, with this checkout's selector and
 # child tracking. HYALO_CONFIG never falls through to the owner's live config.
+mkdir -p "$rt/bin"
+if [ -n "$ipc" ]; then
+    printf '%s\n' '#!/usr/bin/env bash' "exec $(q "$ipc") --session=rust \"\$@\"" > "$rt/bin/nidara-ipc"
+    chmod 700 "$rt/bin/nidara-ipc"
+fi
 if [ -n "$selector" ]; then
-    mkdir -p "$rt/bin"
     printf '%s\n' '#!/usr/bin/env bash' "echo \$\$ >>$(q "$children")" "exec $(q "$selector") \"\$@\"" > "$rt/bin/nidara-display-selector"
     chmod 700 "$rt/bin/nidara-display-selector"
-    selector_path="$rt/bin"
-else
-    selector_path="$repo/bin"
 fi
-vars=(PATH="$selector_path:$repo/bin:$PATH" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
+vars=(NIDARA_SESSION=rust PATH="$rt/bin:$repo/bin:$PATH" XDG_RUNTIME_DIR="$rt" WAYLAND_DISPLAY="$parent" HYALO_SETTINGS="$rt/hyalo-settings.toml"
     XDG_CONFIG_HOME="$state/config" XDG_DATA_HOME="$state/data" XDG_CACHE_HOME="$state/cache"
     XDG_STATE_HOME="$state/state" GSETTINGS_BACKEND=keyfile HYALO_CONFIG="$repo/config/hyalo/hyalo.toml")
 [ -f "$data/tokens/glass.json" ] && vars+=(HYALO_GLASS_TOKENS="$data/tokens/glass.json")

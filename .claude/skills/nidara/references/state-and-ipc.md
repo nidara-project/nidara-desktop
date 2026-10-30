@@ -68,9 +68,53 @@ busctl --user call org.nidara.Shell /org/nidara/Shell \
        org.nidara.Shell Request as 1 dumpState
 ```
 
-**Use `nidara-ipc <cmd>`.** It is `bin/nidara-ipc.c`, a ~145-line C client compiled by install.sh
-§5 and the PKGBUILD (same idiom as `bin/nidara-input.c`). It skips one leading `--`, because
-`ags request -- <cmd>` needed one and people paste it.
+**Use `nidara-ipc <cmd>`.** The installed client is Rust (`session/ipc/`), built
+with the session workspace by install.sh and PKGBUILD. TS compatibility remains the default:
+exact argv to `org.nidara.Shell.Request(as) → s`, verbatim reply plus newline. One leading `--`
+is still accepted. `bin/nidara-ipc.c` remains only for the unchanged TS headless smoke fixture;
+installation no longer compiles it.
+
+### The native Rust routes (#959 B)
+
+`NIDARA_SESSION=rust` or `--session=rust` explicitly selects native owners; `--session=ts`
+selects compatibility. Only the exact environment value rust selects native;
+unknown environment values warn and use TS, so an unrelated session marker cannot
+break installed shortcuts. An invalid explicit --session value still exits 2.
+Never infer the session from HYALO_SOCKET (TS also runs on Hyalo),
+and never retry or fall back between TS and Rust after a failure. The Rust session launcher
+sets the mode and selects this checkout's built client on its private PATH. Missing services
+are not auto-activated: the client pins each D-Bus call to the resolved unique owner.
+
+Config reads/writes and wallpaper set/transition go directly to Config1 (Apply returns
+revision/canonical value); the wallpaper follower applies awww. Preview has no ephemeral
+API and returns Unavailable. Hyalo owns window/workspace operations, screenshot and reload;
+the CLI remains External, so the common `nidara-access` policy from A applies at each effect.
+Window selectors are exact id/address or an unambiguous app/title, and focus is read back.
+Revocation is always free: `disableComputerControl` writes only false to the session's
+allow-computer-control GSettings and syncs, even without a renderer.
+
+The typed `org.nidara.Shell1` contract lives in `crates/nidara-shell-ipc/`: its renderer owns
+Available, per-function Capabilities and authoritative state, surface toggles/focus, Settings
+presentation and ShowOSD. **B starts no Shell1 server**: absent surface renderers return
+Unavailable. C may implement only volume/brightness OSD; no OSD over ext-session-lock.
+No broker, sessiond mirror, renderer registration, ACK or TS bridge. Applications1 is a
+separate opt-in service; A2 routes listApps/launchApp directly to it, as External,
+with dispatch-only confirmation (never window/focus success). Native helper,
+agent and UI introspection routes lacking an implementation also explicitly refuse; B does
+not promise the helpers/MCP or full TS dumpState schema in Rust. See `session/ipc/README.md`
+for the exhaustive route inventory and `crates/nidara-shell-ipc/README.md` for the wire members.
+
+Native errors exit 1 with AccessDenied/Unavailable/Invalid/Failed on stderr; CLI usage exits 2.
+Successful payloads remain on stdout. TS retains its existing reply/exit behavior. Each bus
+or socket reply has a 15 s deadline, socket replies are capped at 4 MiB, and no timeout causes
+an effect to be retried. Wallpaper transition/current are separate per-key Apply calls:
+a later failure leaves a successful earlier transition in force. Missing transition retains
+the current selection. Wayland screencopy/image-copy-capture remains outside the ACL by the
+owner's decision; do not claim general capture protection.
+
+Local checks: `cargo test --manifest-path session/Cargo.toml -p nidara-ipc`, Clippy on that
+package, and `scripts/dev/check-shell-ipc-headless.sh` (real private Hyalo/Config1 in cage,
+private bus/HOME/keyfile settings, no live session; evidence under target/shell-ipc).
 
 🪦 **The AGS door is CLOSED (owner, 2026-09-23 — tech-debt #76).** From the day the AGS host went
 (2026-08-18) the shell also served AGS's bus name `io.Astal.ags`, and `nidara-ipc` fell back to
@@ -82,7 +126,7 @@ the user's own `hyprland-user.lua` (current and legacy locations, symlinks follo
 so `bags request` is not a call). Do not reopen it: the `ags` CLI itself has not been installed
 since 2026-08-18.
 
-⚠️ **C on purpose, and this is the one thing not to "clean up" into GJS.** Every other
+⚠️ **Native on purpose; never put an interpreter back on a keybind.** Every other
 `nidara-*` helper is GJS; this one is on a KEYBIND — `hyprland.lua` binds Super+Space, Super+A and
 five more to it, so it runs on every press. Measured 2026-08-18, cheapest possible request, per
 invocation:
@@ -94,9 +138,8 @@ invocation:
 The first version of this file WAS GJS and was rewritten the moment that number appeared: shipping
 it would have made every keybind ten times slower than the `ags request` it replaces. The other
 helpers stay GJS because an agent step already costs hundreds of milliseconds, so 27 ms is noise
-there and decisive here. The client still walks a LIST of doors, and moves to the next only on
-`NameHasNoOwner`/`ServiceUnknown` — any other failure came from a shell that DID answer, and
-retrying would run the command twice. Keep that rule if a door is ever added.
+there and decisive here. The installed Rust client selects its session explicitly and never falls back. The retained
+C smoke fixture has the historical single-door list; neither path retries an answered call.
 
 Why a bus name of our own, beyond the CLI — and this half is now **finished**: `AstalIO.Daemon`
 used to **overwrite** the `applicationId` passed to `app.start()` with `io.Astal.<instance>`, and
@@ -1965,7 +2008,13 @@ default Files pins, typed folders, and the required toolkit/Hyalo seams. It is
 Its closure section records Claude's #688 review and the relayed owner decisions,
 including dock-before-usage ordering, GNOME-style idle cutoff, no timed new marker,
 uniform shrink without a size floor/scroll strip, and healthy-catalogue-only pin
-pruning. A1 is now implemented as an explicitly opted-in service; its actual capabilities
-and validation are in `session/daemon/src/applications/README.md`. Other stages
+pruning. A1/A2 are implemented as an explicitly opted-in service; their actual capabilities
+and validation are in `session/daemon/src/applications/README.md` and `A2.md`.
+A2 uses literal ExecStartEx transient services or org.freedesktop.Application,
+revalidates original sender/generation before effects, and never retries ambiguous
+delivery. Autostart writes preserve effective XDG preferences; the existing session
+runner remains the only executor. The standalone A2 Cargo integration test builds
+its sibling CLI first; CARGO_TARGET_DIR relocates build artifacts, while fixture
+evidence stays in the source worktree's target/applications1. Other stages
 remain design until individually authorized.
 The existing TS model documented above is unchanged; IPC B is separate.

@@ -661,15 +661,8 @@ for host in "$HOST_BUILD"/nidara-*; do
 done
 rm -rf "$HOST_BUILD"
 
-# Compile the IPC client (nidara-ipc): `Request(as) -> s` on the shell's D-Bus
-# name, and the thing every keybind in hyprland.lua runs. C rather than GJS for
-# that reason alone — measured 2026-08-18, a GJS build of the same 90 lines cost
-# 30 ms per invocation against 2.9 ms here, all of it interpreter startup, paid
-# before the shell hears anything. gio-2.0 is already a dependency (glib2).
-IPC_BUILD="$(mktemp -d)"
-cc -O2 "$REPO_DIR/bin/nidara-ipc.c" $(pkg-config --cflags --libs gio-2.0) -o "$IPC_BUILD/nidara-ipc"
-sudo install -m755 "$IPC_BUILD/nidara-ipc" /usr/bin/nidara-ipc
-rm -rf "$IPC_BUILD"
+# The native nidara-ipc client is built with sessiond below. Its default TS
+# Request(as) compatibility route stays unchanged; Rust sessions opt in explicitly.
 
 # Compile the synthetic-pointer backend (nidara-input): a tiny zwlr_virtual_pointer_v1
 # Wayland client. wayland-scanner generates the protocol glue from wlr-protocols, then cc
@@ -741,8 +734,9 @@ rm -rf "$AUTH_BUILD"
 # The session daemon is always compiled, including --dev: it is a separate
 # service and UI reloads do not rebuild or restart it.
 echo "  Building nidara-sessiond..."
-(cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked --features audio-native)
+(cd "$REPO_DIR/session" && run_user env CARGO_TARGET_DIR=target RUSTUP_TOOLCHAIN=stable cargo build --release --locked --workspace --features audio-native)
 sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-sessiond" /usr/bin/nidara-sessiond
+sudo install -Dm755 "$REPO_DIR/session/target/release/nidara-ipc" /usr/bin/nidara-ipc
 # Register only this user's exact development executables, after an explicit dev
 # install/update. The helper atomically writes a root-owned 0644 access.d file;
 # package installations do not ship developer grants. No trust from .dev/env alone.

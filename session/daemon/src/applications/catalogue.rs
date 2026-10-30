@@ -22,6 +22,8 @@ pub struct App {
     pub id: String,
     pub generation: u64,
     pub digest: String,
+    pub source_hash: String,
+    pub exec_hash: String,
     pub record: Value,
     pub executable: String,
     pub keywords: Vec<String>,
@@ -104,7 +106,7 @@ pub fn bounded(path: &Path, max: u64) -> Result<Vec<u8>, String> {
 pub fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-fn strv(k: &glib::KeyFile, group: &str, key: &str) -> Vec<String> {
+pub fn strv(k: &glib::KeyFile, group: &str, key: &str) -> Vec<String> {
     k.string_list(group, key)
         .map(|v| v.iter().map(|s| s.to_string()).collect())
         .unwrap_or_default()
@@ -258,6 +260,21 @@ fn parse(path: &Path, id: &str) -> Result<Option<App>, String> {
     if !entry_available {
         let _ = k.remove_key(g, "TryExec");
     }
+    let dbus = k.boolean(g, "DBusActivatable").unwrap_or(false);
+    let raw_exec = s(&k, g, "Exec");
+    let unavailable_reason = if !entry_available {
+        "TryExec is unavailable"
+    } else if !dbus && raw_exec.trim().is_empty() {
+        "no Exec or D-Bus activation"
+    } else {
+        ""
+    };
+    let entry_available = unavailable_reason.is_empty();
+    // GIO's from_keyfile lacks the filename needed for a D-Bus-only app id. A
+    // synthetic Exec is ONLY for metadata parsing; never a launch fallback.
+    if dbus && raw_exec.is_empty() {
+        k.set_string(g, "Exec", "/usr/bin/true");
+    }
     let ptr = unsafe { g_desktop_app_info_new_from_keyfile(k.to_glib_none().0) };
     if ptr.is_null() {
         return Err("GIO rejected desktop entry (Exec/TryExec/required fields)".into());
@@ -291,13 +308,35 @@ fn parse(path: &Path, id: &str) -> Result<Option<App>, String> {
     let icon = s(&k, g, "Icon");
     let dbus = k.boolean(g, "DBusActivatable").unwrap_or(false);
     let single = k.boolean(g, "SingleMainWindow").unwrap_or(false);
-    let exec = app.executable();
+    // GIO accepts Exec-less entries, but gio-rs' non-optional executable()
+    // dereferences NULL for them. Keep the nullable C contract at this seam.
+    let executable_ptr = unsafe { gio::ffi::g_app_info_get_executable(app.to_glib_none().0) };
+    let exec: Option<PathBuf> = if raw_exec.is_empty() || executable_ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { glib::translate::from_glib_none(executable_ptr) })
+    };
     let executable = exec
-        .file_name()
+        .as_ref()
+        .and_then(|p| p.file_name())
         .and_then(|s| s.to_str())
         .unwrap_or("")
         .to_string();
-    let record = json!({"DesktopId":id,"Name":name,"GenericName":k.locale_string(g,"GenericName",None).unwrap_or_default().to_string(),"Comment":comment,"Keywords":keywords,"Visible":entry_available&&app.should_show(),"EntryAvailable":entry_available,"Launchable":false,"UnavailableReason":if entry_available{"Application launch is A2"}else{"TryExec is unavailable"},"Origin":origin,"OriginId":fp,"DesktopPath":path.to_string_lossy(),"DBusActivatable":dbus,"StartupWMClass":s(&k,g,"StartupWMClass"),"Terminal":k.boolean(g,"Terminal").unwrap_or(false),"SingleMainWindow":single,"SupportsOpen":app.supports_files()||app.supports_uris(),"NewWindowMode":"unsupported","Actions":actions,"RawIcon":icon,"IconRef":{"Kind":"desktop","Value":icon},"ForegroundScore":0.0,"NewlyObservedAt":0.0,"IsNew":false,"Autostart":{"Available":false,"Reason":"Application autostart is A2"}});
+    let new_action = actions.iter().any(|a| {
+        a["Id"]
+            .as_str()
+            .is_some_and(|s| s.eq_ignore_ascii_case("new-window") || s == "NewWindow")
+    });
+    let new_window = if single || !entry_available {
+        "unsupported"
+    } else if new_action {
+        "declared-action"
+    } else if dbus {
+        "unsupported"
+    } else {
+        "relaunch"
+    };
+    let record = json!({"DesktopId":id,"Name":name,"GenericName":k.locale_string(g,"GenericName",None).unwrap_or_default().to_string(),"Comment":comment,"Keywords":keywords,"Visible":entry_available&&app.should_show(),"EntryAvailable":entry_available,"Launchable":entry_available,"UnavailableReason":unavailable_reason,"Origin":origin,"OriginId":fp,"DesktopPath":path.to_string_lossy(),"DBusActivatable":dbus,"StartupWMClass":s(&k,g,"StartupWMClass"),"Terminal":k.boolean(g,"Terminal").unwrap_or(false),"SingleMainWindow":single,"SupportsOpen":app.supports_files()||app.supports_uris()||(dbus&&!strv(&k,g,"MimeType").is_empty()),"NewWindowMode":new_window,"Actions":actions,"RawIcon":icon,"IconRef":{"Kind":"desktop","Value":icon},"ForegroundScore":0.0,"NewlyObservedAt":0.0,"IsNew":false,"Autostart":{"Available":false,"Reason":"Application autostart is A2"}});
     if record.to_string().len() > 32768 {
         return Err("desktop record budget".into());
     }
@@ -306,6 +345,8 @@ fn parse(path: &Path, id: &str) -> Result<Option<App>, String> {
         id: id.into(),
         generation: 0,
         digest,
+        source_hash: hash(&bytes),
+        exec_hash: hash(raw_exec.as_bytes()),
         record,
         executable,
         keywords,

@@ -108,11 +108,15 @@ def inside(binary, out):
         assert owner==second.get_unique_name()
         stop()
         second.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','ReleaseName',GLib.Variant('(s)',(NAME,)),None,Gio.DBusCallFlags.NONE,1000,None)
-        start('--applications');wait(snap,'Applications1 ready')
+        start('--applications')
+        wait(lambda:bus.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','NameHasOwner',GLib.Variant('(s)',(NAME,)),None,Gio.DBusCallFlags.NONE,1000,None).unpack()[0],'Applications owner ready')
+        snap()  # Name publication must expose an already registered/hydrated object.
         e,r,s,apps=all_apps()
         assert s['CatalogueComplete'],s
         assert len(apps)>300,len(apps)
         assert 'Case.desktop' in apps and 'case.desktop' in apps
+        assert not apps['NoExec.desktop']['EntryAvailable'] and not apps['NoExec.desktop']['Launchable']
+        assert apps['DbusNoExec.desktop']['Launchable'] and apps['DbusNoExec.desktop']['DBusActivatable']
         assert 'Masked.desktop' not in apps and not apps['Hidden.desktop']['Visible']
         assert 'nested-Tool.desktop' in apps
         assert 'TryMissing.desktop' in apps and not apps['TryMissing.desktop']['EntryAvailable'] and not apps['TryMissing.desktop']['Visible']
@@ -130,8 +134,8 @@ def inside(binary, out):
         time.sleep(.25)
         assert [x['Key'] for x in snap()[2]['Layout']]==native_before
         assert ast.literal_eval(dock_get('pinned'))==['case']
-        assert not apps['Sample.desktop']['Launchable'] and not apps['Sample.desktop']['IsNew']
-        for method,sig,args in [('Launch','(tsta{sv})',(e,'Sample.desktop',apps['Sample.desktop']['Generation'],{})),('ResolveWindow','(tst)',(e,'private',1)),('AcknowledgeNew','(tas)',(e,['Sample.desktop']))]:fail(method,sig,args,'Unavailable')
+        assert apps['Sample.desktop']['Launchable'] and not apps['Sample.desktop']['IsNew']
+        for method,sig,args in [('ResolveWindow','(tst)',(e,'private',1)),('AcknowledgeNew','(tas)',(e,['Sample.desktop']))]:fail(method,sig,args,'Unavailable')
         # Hidden list filtering, accent folding, no full-Exec argument matching.
         rev=s['CatalogueRevision']
         _,hits=call('Search','(tts ub)'.replace(' ',''),(e,rev,'configuracion',10,False))
@@ -298,7 +302,7 @@ def idle(binary, out, seconds):
             print(json.dumps(result))
         finally:daemon.terminate();daemon.wait(timeout=5)
 
-def outer(binary, idle_seconds=None):
+def outer(binary, idle_seconds=None, driver=None, setup=None):
     repo=Path(__file__).resolve().parents[2]
     out=repo/'target/applications1'/str(time.time_ns());out.mkdir(parents=True)
     for directory in ['home','data/applications','system/share/applications','config','state','cache','schemas']:(out/directory).mkdir(parents=True,exist_ok=True)
@@ -310,6 +314,8 @@ def outer(binary, idle_seconds=None):
     appdir=out/'system/share/applications';user=out/'data/applications'
     def desktop(root,id,name,extra=''):
         p=root/id;p.parent.mkdir(parents=True,exist_ok=True);p.write_text('[Desktop Entry]\nType=Application\nName='+name+'\nExec=/usr/bin/true %U\nIcon='+str(out/'red.svg')+'\n'+extra)
+    (appdir/'NoExec.desktop').write_text('[Desktop Entry]\nType=Application\nName=No Exec\nNoDisplay=true\n')
+    (appdir/'DbusNoExec.desktop').write_text('[Desktop Entry]\nType=Application\nName=D-Bus No Exec\nDBusActivatable=true\n')
     for i in range(310):desktop(appdir,f'Fixture{i:03d}.desktop',f'Fixture {i:03d}')
     for id in ['Case.desktop','case.desktop','Sample.desktop','Masked.desktop']:desktop(appdir,id,id)
     desktop(appdir,'TryMissing.desktop','Try Missing','TryExec=/nonexistent/nidara-a1-binary\n')
@@ -336,14 +342,16 @@ def outer(binary, idle_seconds=None):
         env.pop('HYALO_SOCKET',None);env.pop('WAYLAND_DISPLAY',None)
         env['GIO_USE_VFS']='local'
         config=out/'bus.xml'
-        config.write_text('<busconfig><type>session</type><listen>'+address+'</listen><auth>EXTERNAL</auth><policy context="default"><allow send_destination="*"/><allow receive_sender="*"/><allow own="*"/></policy></busconfig>')
+        if setup:setup(out,env)
+        services='<servicedir>'+str(out/'services')+'</servicedir>' if driver else ''
+        config.write_text('<busconfig><type>session</type><listen>'+address+'</listen><auth>EXTERNAL</auth>'+services+'<policy context="default"><allow send_destination="*"/><allow receive_sender="*"/><allow own="*"/></policy></busconfig>')
         bus=subprocess.Popen(['dbus-daemon','--nofork','--config-file='+str(config)],env=env,stdout=subprocess.DEVNULL)
         try:
             for _ in range(100):
                 if Path(rt+'/bus').exists():break
                 time.sleep(.01)
             subprocess.run(['gsettings','set','org.nidara.dock','pinned',"['pinned-Sample','deleted','Case']"],env=env,check=True)
-            result=subprocess.run(['/usr/bin/python3',__file__,'--idle-inside' if idle_seconds else '--inside',str(Path(binary).resolve()),str(out)]+([str(idle_seconds)] if idle_seconds else []),env=env)
+            result=subprocess.run(['/usr/bin/python3',driver or __file__,'--idle-inside' if idle_seconds else '--inside',str(Path(binary).resolve()),str(out)]+([str(idle_seconds)] if idle_seconds else []),env=env)
             if result.returncode:print((out/'daemon.log').read_text(),file=sys.stderr)
             print('Evidence:',out)
             return result.returncode
