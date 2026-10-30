@@ -69,11 +69,11 @@ pub enum BindFailure {
     Lost,
 }
 
-/// Connect and report the outputs present now as `Added`.
-pub fn outputs() -> Result<OutputWatch> {
-    watch(Connection::connect_to_env().map_err(err)?)
+/// Connect and report the outputs present now as `Added`, or fail after `timeout`.
+pub fn outputs(timeout: Duration) -> Result<OutputWatch> {
+    watch(Connection::connect_to_env().map_err(err)?, timeout)
 }
-fn watch(connection: Connection) -> Result<OutputWatch> {
+fn watch(connection: Connection, timeout: Duration) -> Result<OutputWatch> {
     let mut queue = connection.new_event_queue::<State>();
     let qh = queue.handle();
     let display = connection.display();
@@ -84,8 +84,12 @@ fn watch(connection: Connection) -> Result<OutputWatch> {
         events: Vec::new(),
     };
     // Globals, then each output's initial burst (and its xdg-output) up to `done`.
+    let deadline = Instant::now() + timeout;
     for _ in 0..3 {
-        queue.roundtrip(&mut state).map_err(err)?;
+        sync(&connection, &mut queue, &mut state, deadline).map_err(|e| match e {
+            SyncError::Timeout => "the compositor did not list its outputs in time".to_string(),
+            SyncError::Failed(e) => e,
+        })?;
     }
     // The initial outputs are reported once, complete (xdg-output may finish after
     // wl_output.done when its manager was bound later in registry order).
@@ -648,7 +652,11 @@ mod tests {
                 done_tx.send(()).unwrap();
             }
         });
-        let watch = watch(Connection::from_socket(ours).unwrap()).unwrap();
+        let watch = watch(
+            Connection::from_socket(ours).unwrap(),
+            Duration::from_secs(5),
+        )
+        .unwrap();
         (watch, tx, done_rx, released, disconnects)
     }
     fn added(e: &OutputEvent) -> &OutputInfo {
@@ -790,6 +798,17 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert_eq!(closed(), 100);
+    }
+    #[test]
+    fn a_silent_compositor_fails_the_watch_in_time() {
+        let (ours, _silent) = UnixStream::pair().unwrap();
+        let started = std::time::Instant::now();
+        let r = watch(
+            Connection::from_socket(ours).unwrap(),
+            Duration::from_millis(100),
+        );
+        assert!(r.is_err());
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
     #[test]
     fn ordinary_hotplug() {

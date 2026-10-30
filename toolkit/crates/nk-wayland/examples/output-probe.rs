@@ -64,7 +64,7 @@ fn dock(output: LayerOutput, wake: Option<WakeSource>, ready: mpsc::Sender<()>) 
     )
 }
 fn main() -> Result<()> {
-    let mut watch = nk_wayland::outputs()?;
+    let mut watch = nk_wayland::outputs(Duration::from_secs(5))?;
     for o in watch.current() {
         eprintln!(
             "ADDED id={} name={} logical={:?}",

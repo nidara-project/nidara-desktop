@@ -69,7 +69,7 @@ The dock needs one surface per output, and outputs come and go. The Window host 
 connection, one queue, one root. T1 keeps that model and runs **one `run_layer` per
 output, on its own thread and its own connection**, with:
 
-- `nk_wayland::outputs() -> Result<OutputWatch>`: a small connection that binds
+- `nk_wayland::outputs(timeout) -> Result<OutputWatch>`: a small connection that binds
   `wl_output` v4 (name, description, scale, logical geometry via `xdg_output` when present)
   and reports `OutputEvent::{Added, Changed, Removed, Lost}` keyed by `OutputId`.
 - **The registry number is not identity.** Hyalo's server backend (wayland-backend's Rust
