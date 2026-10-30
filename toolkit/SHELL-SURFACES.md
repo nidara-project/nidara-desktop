@@ -178,10 +178,14 @@ window.request_activation_token(serial: u32, app_id: Option<&str>) -> TokenReque
 ## 5. Per-window capture client
 
 ```rust
-window.capture_window(identifier: &str, max: (u32, u32)) -> CaptureId
+window.capture_window(identifier: &str, max: (u32, u32)) -> Result<CaptureId, CaptureFailure>
 // later: Event::Capture { id, result: Result<Image, CaptureFailure> }
 window.cancel_capture(id)
 ```
+
+`Unsupported`, `NotFound` and `Busy` are answered at once, before any object exists; every
+accepted capture then ends in exactly one `Event::Capture`. Only layer roots bind the
+window list and the capture managers: an app's window never sees the compositor's windows.
 
 - Binds `ext_foreign_toplevel_list_v1` and keeps the live handle set (identifier, app_id,
   title). An identifier that is not in the list fails `NotFound` without a request.
@@ -230,11 +234,22 @@ session, and recorded under `target/`:
 4. Token round trip: token made from a real pointer click on the layer surface, consumed
    by a probe toplevel that Hyalo then focuses; a token made from a refused serial is
    refused (`ActivationTokenFailed` for an undelivered serial; Hyalo refusal for a stale one).
-5. Capture: a 1920×1080 probe window captured down to a small `max`; premultiplied
-   argb and xrgb pixels converted correctly (translucent, coloured test pattern);
-   `TooLarge` at the source limit; capture of a closed window fails `Stopped`/`NotFound`;
-   nine concurrent requests → one `Busy`; cancel followed by a late ready publishes
-   nothing; deadline expiry ends the request once.
+5. Capture, nested (`capture-check.py`, 5/5 runs): a 640×360 window (nested output is
+   1272×688) captured to `max` 64×64 gives 64×36. Its translucent orange half reads back
+   (199, 100, 50, 128), and its opaque green half (10, 200, 30, 255). Nine at once gives
+   exactly one `Busy` and eight answers; the cancelled one ends `Cancelled` and the rest
+   are images. An unknown id gives `NotFound`, and so does the window after it closed.
+   Unit tests (`capture.rs`):
+   - lifecycle: ninth `Busy` before any object exists; cancel then a late ready; a ready
+     past its deadline and a second expire end once, never as pixels; `Closed` before a
+     ready in the same batch;
+   - limits: 4096×4096 (exactly 64 MiB) accepted; 4096×4097, 8193 a side and u32::MAX
+     refused `TooLarge`;
+   - pixels: premultiplied argb to straight alpha, xrgb opaque whatever its fourth byte,
+     and premultiplied averaging when downscaling, so transparency does not darken;
+   - `fit` (aspect, never enlarged, 1024 cap), and `Image`'s Debug prints no pixels.
+   The drivers wait for nested Xwayland to be ready: it stalls software Hyalo for
+   several seconds, which a 2 s deadline would otherwise measure.
 6. Existing toolkit tests and every existing `run` caller unchanged (`Role::Toplevel`).
 
 Not claimed by T1: the dock itself, drag and drop (T2), launch correlation and attention

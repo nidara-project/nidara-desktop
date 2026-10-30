@@ -76,6 +76,9 @@ def scenario(name, real):
             p.wait(timeout=5)
 
 
+# Nested Hyalo stops drawing for seconds while its Xwayland starts: start after that, so
+# deadlines (2 s for tokens and captures) measure the protocol, not the start-up stall.
+wait(lambda: 'Xwayland ready' in (LOG / 'hyalo.log').read_text(), 'Xwayland ready', timeout=30)
 real = scenario('real', True)
 assert real == ['nk-token-target'], f'real token did not bring the target forward: {real}'
 fake = scenario('fake', False)

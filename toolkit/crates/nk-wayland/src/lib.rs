@@ -17,6 +17,8 @@ mod popup_overlay;
 pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
+mod capture;
+pub use capture::{CaptureFailure, CaptureId, Image};
 mod connect;
 mod layer_shell;
 mod outputs;
@@ -109,6 +111,11 @@ pub enum Event {
         request: TokenRequest,
         reason: TokenFailure,
     },
+    /// The answer to `capture_window`: exactly one per capture.
+    Capture {
+        id: CaptureId,
+        result: std::result::Result<Image, CaptureFailure>,
+    },
     Focus(bool),
     Key(Key),
     Motion(f64, f64),
@@ -183,6 +190,8 @@ pub struct Window {
     foreign: foreign::Foreign,
     activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
     tokens: token::Tokens,
+    toplevels: capture::Toplevels,
+    captures: capture::Captures,
     wake: Option<WakeSource>,
     controls: controls::Controls,
     maximized: bool,
@@ -725,6 +734,8 @@ fn run_inner(
         foreign: foreign::Foreign::default(),
         activation: None,
         tokens: Default::default(),
+        toplevels: Default::default(),
+        captures: Default::default(),
         wake: None,
         controls: controls::Controls::default(),
         maximized: false,
@@ -842,6 +853,17 @@ fn run_inner(
         w.outputs.insert(output.id(), 1);
     }
     if layer.is_some() {
+        // Window capture is the shell's: only layer roots list the compositor's windows.
+        use wayland_protocols::ext::{
+            foreign_toplevel_list::v1::client::ext_foreign_toplevel_list_v1 as list,
+            image_capture_source::v1::client::ext_foreign_toplevel_image_capture_source_manager_v1 as sources,
+            image_copy_capture::v1::client::ext_image_copy_capture_manager_v1 as copy,
+        };
+        w.toplevels.sources = bind!(sources::ExtForeignToplevelImageCaptureSourceManagerV1, 1);
+        w.toplevels.copy = bind!(copy::ExtImageCopyCaptureManagerV1, 1);
+        if w.toplevels.sources.is_some() && w.toplevels.copy.is_some() {
+            w.toplevels.list = bind!(list::ExtForeignToplevelListV1, 1);
+        }
         w.layer_shell = bind!(layer_shell::zwlr_layer_shell_v1::ZwlrLayerShellV1, 4);
         if w.layer_shell.is_none() {
             return Err("required Wayland protocol missing: zwlr_layer_shell_v1".into());
@@ -941,6 +963,7 @@ fn run_inner(
             w.push_key(k);
         }
         w.tokens.expire(Instant::now(), &mut w.events);
+        w.captures.expire(Instant::now(), &mut w.events);
         for mut event in std::mem::take(&mut w.events) {
             // Serials the app may later turn into an activation token (§4).
             match &event {
@@ -1061,6 +1084,9 @@ fn run_inner(
                     i64::from(app.poll_interval_ms().clamp(1, 1000))
                 };
             // A pending token's deadline is an active timer only while it waits.
+            if let Some(wait) = w.captures.wait(Instant::now()) {
+                ms = ms.min(wait.as_millis() as i64 + 1);
+            }
             if let Some(wait) = w.tokens.wait(Instant::now()) {
                 ms = ms.min(wait.as_millis() as i64 + 1);
             }
@@ -1104,6 +1130,8 @@ impl Window {
         self.close_popup_overlay();
         self.foreign.destroy();
         self.tokens.destroy();
+        self.captures.destroy();
+        self.toplevels.destroy();
         if let Some(activation) = self.activation.take() {
             activation.destroy();
         }

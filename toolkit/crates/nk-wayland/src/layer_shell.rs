@@ -205,6 +205,7 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for Window {
             }
             zwlr_layer_surface_v1::Event::Closed => {
                 w.tokens.close_all(&mut w.events);
+                w.captures.close_all(&mut w.events);
                 w.events.push(Event::Closed);
             }
             _ => {}
