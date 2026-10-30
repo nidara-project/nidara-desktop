@@ -17,6 +17,7 @@ mod popup_overlay;
 pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
+mod connect;
 mod layer_shell;
 mod outputs;
 pub use outputs::{BindFailure, OutputEvent, OutputInfo, OutputWatch, outputs};
@@ -871,6 +872,12 @@ fn run_inner(
         );
         spec.placement.send(&s);
         w.layer_surface = Some(s);
+        // The surface holds its output now; the dock has no other use for the object.
+        if let Some(o) = &output
+            && o.version() >= 3
+        {
+            o.release();
+        }
     } else if let Some((placement, grab_serial)) = popup_options {
         let xdg = xdg.insert(base.get_xdg_surface(&surface, &qh, ()));
         let parent = parent.ok_or("popup requires a parent")?;

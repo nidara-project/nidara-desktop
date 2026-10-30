@@ -2,9 +2,11 @@
 //! Which outputs exist, on a small connection of its own (SHELL-SURFACES.md §2). The
 //! shell starts one `run_layer` per output it reports, naming it by `OutputId`.
 use crate::{LayerOutput, OutputId, Result, err};
+use std::os::fd::OwnedFd;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use wayland_client::backend::{Backend, ObjectData, ObjectId, protocol::Message};
 use wayland_client::{
     Connection, Dispatch, EventQueue, Proxy, QueueHandle,
     protocol::{wl_callback, wl_output, wl_registry},
@@ -71,9 +73,10 @@ pub enum BindFailure {
 
 /// Connect and report the outputs present now as `Added`, or fail after `timeout`.
 pub fn outputs(timeout: Duration) -> Result<OutputWatch> {
-    watch(Connection::connect_to_env().map_err(err)?, timeout)
+    let deadline = Instant::now() + timeout;
+    watch(crate::connect::connect_within(deadline)?, deadline)
 }
-fn watch(connection: Connection, timeout: Duration) -> Result<OutputWatch> {
+fn watch(connection: Connection, deadline: Instant) -> Result<OutputWatch> {
     let mut queue = connection.new_event_queue::<State>();
     let qh = queue.handle();
     let display = connection.display();
@@ -84,7 +87,6 @@ fn watch(connection: Connection, timeout: Duration) -> Result<OutputWatch> {
         events: Vec::new(),
     };
     // Globals, then each output's initial burst (and its xdg-output) up to `done`.
-    let deadline = Instant::now() + timeout;
     for _ in 0..3 {
         sync(&connection, &mut queue, &mut state, deadline).map_err(|e| match e {
             SyncError::Timeout => "the compositor did not list its outputs in time".to_string(),
@@ -120,9 +122,15 @@ impl OutputWatch {
         id: OutputId,
         timeout: Duration,
     ) -> std::result::Result<LayerOutput, BindFailure> {
-        let connection =
-            Connection::connect_to_env().map_err(|e| BindFailure::Connection(e.to_string()))?;
-        self.bind_output_with(connection, id, Instant::now() + timeout, || {})
+        let deadline = Instant::now() + timeout;
+        let connection = crate::connect::connect_within(deadline).map_err(|e| {
+            if e.ends_with("in time") {
+                BindFailure::Timeout
+            } else {
+                BindFailure::Connection(e)
+            }
+        })?;
+        self.bind_output_with(connection, id, deadline, || {})
     }
     fn bind_output_with(
         &mut self,
@@ -141,20 +149,31 @@ impl OutputWatch {
             SyncError::Timeout => BindFailure::Timeout,
             SyncError::Failed(e) => BindFailure::Connection(e),
         };
-        let mut queue = connection.new_event_queue::<Globals>();
-        let qh = queue.handle();
-        let registry = connection.display().get_registry(&qh, ());
-        let mut globals = Globals::default();
-        sync(&connection, &mut queue, &mut globals, deadline).map_err(dock)?;
-        let version = globals
-            .0
-            .iter()
-            .find(|(name, (interface, _))| *name == id.global && interface == "wl_output")
-            .map(|(_, (_, version))| *version)
-            .ok_or(BindFailure::Gone)?;
-        let proxy: wl_output::WlOutput = registry.bind(id.global, version.min(4), &qh, ());
+        // No event queue on the dock connection: these handlers keep only what the check
+        // needs and drop everything after, so nothing piles up while the dock lives.
+        let failed = |e: wayland_client::backend::InvalidId| BindFailure::Connection(e.to_string());
+        let globals = Arc::new(RawRegistry::default());
+        let registry = connection
+            .display()
+            .send_constructor::<wl_registry::WlRegistry>(
+                wayland_client::protocol::wl_display::Request::GetRegistry {},
+                globals.clone(),
+            )
+            .map_err(failed)?;
+        raw_sync(&connection, deadline).map_err(dock)?;
+        let version = globals.version(id.global).ok_or(BindFailure::Gone)?;
+        globals.sealed.store(true, Ordering::Release);
+        let proxy = registry
+            .send_constructor::<wl_output::WlOutput>(
+                wl_registry::Request::Bind {
+                    name: id.global,
+                    id: (wl_output::WlOutput::interface(), version.min(4)),
+                },
+                Arc::new(Ignore),
+            )
+            .map_err(failed)?;
         // syncA: the compositor has processed the bind.
-        sync(&connection, &mut queue, &mut globals, deadline).map_err(dock)?;
+        raw_sync(&connection, deadline).map_err(dock)?;
         after_bind();
         // syncB, sent after syncA returned: every removal before the bind is now read.
         match sync(&self.connection, &mut self.queue, &mut self.state, deadline) {
@@ -226,17 +245,11 @@ impl OutputWatch {
     }
 }
 
-/// Flush, wait up to `timeout` for the socket, read and dispatch what came.
-fn read_once<S: 'static>(
-    connection: &Connection,
-    queue: &mut EventQueue<S>,
-    state: &mut S,
+/// Wait up to `timeout` for the socket, then read what came.
+fn poll_read(
+    guard: wayland_client::backend::ReadEventsGuard,
     timeout: Option<Duration>,
 ) -> Result<()> {
-    connection.flush().map_err(err)?;
-    let Some(guard) = queue.prepare_read() else {
-        return queue.dispatch_pending(state).map(|_| ()).map_err(err);
-    };
     use rustix::event::{PollFd, PollFlags, Timespec, poll};
     let fd = guard.connection_fd();
     let mut fds = [PollFd::new(&fd, PollFlags::IN)];
@@ -261,7 +274,119 @@ fn read_once<S: 'static>(
         Err(e) if e == rustix::io::Errno::INTR => drop(guard),
         Err(e) => return Err(err(e)),
     }
+    Ok(())
+}
+
+/// Flush, wait up to `timeout` for the socket, read and dispatch what came.
+fn read_once<S: 'static>(
+    connection: &Connection,
+    queue: &mut EventQueue<S>,
+    state: &mut S,
+    timeout: Option<Duration>,
+) -> Result<()> {
+    connection.flush().map_err(err)?;
+    let Some(guard) = queue.prepare_read() else {
+        return queue.dispatch_pending(state).map(|_| ()).map_err(err);
+    };
+    poll_read(guard, timeout)?;
     queue.dispatch_pending(state).map(|_| ()).map_err(err)
+}
+
+/// The dock connection's registry during `bind_output`: the globals until the check
+/// is done (`sealed`), nothing after.
+#[derive(Default)]
+struct RawRegistry {
+    globals: std::sync::Mutex<Vec<(u32, String, u32)>>,
+    sealed: AtomicBool,
+}
+impl RawRegistry {
+    fn version(&self, name: u32) -> Option<u32> {
+        self.globals
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(n, interface, _)| *n == name && interface == "wl_output")
+            .map(|(_, _, v)| *v)
+    }
+}
+impl ObjectData for RawRegistry {
+    fn event(
+        self: Arc<Self>,
+        _: &Backend,
+        msg: Message<ObjectId, OwnedFd>,
+    ) -> Option<Arc<dyn ObjectData>> {
+        use wayland_client::backend::protocol::Argument;
+        if self.sealed.load(Ordering::Acquire) {
+            return None;
+        }
+        let mut globals = self.globals.lock().unwrap();
+        match (msg.opcode, msg.args.as_slice()) {
+            (
+                0,
+                [
+                    Argument::Uint(name),
+                    Argument::Str(Some(interface)),
+                    Argument::Uint(v),
+                ],
+            ) => {
+                globals.push((*name, interface.to_string_lossy().into_owned(), *v));
+            }
+            (1, [Argument::Uint(name)]) => globals.retain(|(n, _, _)| n != name),
+            _ => {}
+        }
+        None
+    }
+    fn destroyed(&self, _: ObjectId) {}
+}
+/// The dock's wl_output: its events are of no use to anyone.
+struct Ignore;
+impl ObjectData for Ignore {
+    fn event(
+        self: Arc<Self>,
+        _: &Backend,
+        _: Message<ObjectId, OwnedFd>,
+    ) -> Option<Arc<dyn ObjectData>> {
+        None
+    }
+    fn destroyed(&self, _: ObjectId) {}
+}
+#[derive(Default)]
+struct Done(AtomicBool);
+impl ObjectData for Done {
+    fn event(
+        self: Arc<Self>,
+        _: &Backend,
+        _: Message<ObjectId, OwnedFd>,
+    ) -> Option<Arc<dyn ObjectData>> {
+        self.0.store(true, Ordering::Release);
+        None
+    }
+    fn destroyed(&self, _: ObjectId) {}
+}
+/// `sync` for a connection with no event queue: events go straight to the handlers.
+fn raw_sync(connection: &Connection, deadline: Instant) -> std::result::Result<(), SyncError> {
+    let failed = SyncError::Failed;
+    let done = Arc::new(Done::default());
+    connection
+        .display()
+        .send_constructor::<wl_callback::WlCallback>(
+            wayland_client::protocol::wl_display::Request::Sync {},
+            done.clone(),
+        )
+        .map_err(|e| failed(e.to_string()))?;
+    loop {
+        if done.0.load(Ordering::Acquire) {
+            return Ok(());
+        }
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(SyncError::Timeout);
+        }
+        connection.flush().map_err(|e| failed(e.to_string()))?;
+        if let Some(guard) = connection.prepare_read() {
+            poll_read(guard, Some(left)).map_err(failed)?;
+        }
+    }
 }
 
 enum SyncError {
@@ -301,18 +426,6 @@ fn callback_done(done: &AtomicBool, e: wl_callback::Event) {
     }
 }
 impl Dispatch<wl_callback::WlCallback, Arc<AtomicBool>> for State {
-    fn event(
-        _: &mut Self,
-        _: &wl_callback::WlCallback,
-        e: wl_callback::Event,
-        done: &Arc<AtomicBool>,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        callback_done(done, e);
-    }
-}
-impl Dispatch<wl_callback::WlCallback, Arc<AtomicBool>> for Globals {
     fn event(
         _: &mut Self,
         _: &wl_callback::WlCallback,
@@ -410,31 +523,6 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
         }
     }
 }
-/// The registry of a dock's connection while `bind_output` checks it: name → (interface,
-/// version).
-#[derive(Default)]
-struct Globals(Vec<(u32, (String, u32))>);
-impl Dispatch<wl_registry::WlRegistry, ()> for Globals {
-    fn event(
-        g: &mut Self,
-        _: &wl_registry::WlRegistry,
-        e: wl_registry::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        match e {
-            wl_registry::Event::Global {
-                name,
-                interface,
-                version,
-            } => g.0.push((name, (interface, version))),
-            wl_registry::Event::GlobalRemove { name } => g.0.retain(|(n, _)| *n != name),
-            _ => {}
-        }
-    }
-}
-wayland_client::delegate_noop!(Globals: ignore wl_output::WlOutput);
 impl Dispatch<wl_output::WlOutput, ()> for State {
     fn event(
         s: &mut Self,
@@ -652,11 +740,7 @@ mod tests {
                 done_tx.send(()).unwrap();
             }
         });
-        let watch = watch(
-            Connection::from_socket(ours).unwrap(),
-            Duration::from_secs(5),
-        )
-        .unwrap();
+        let watch = watch(Connection::from_socket(ours).unwrap(), soon()).unwrap();
         (watch, tx, done_rx, released, disconnects)
     }
     fn added(e: &OutputEvent) -> &OutputInfo {
@@ -805,7 +889,7 @@ mod tests {
         let started = std::time::Instant::now();
         let r = watch(
             Connection::from_socket(ours).unwrap(),
-            Duration::from_millis(100),
+            started + Duration::from_millis(100),
         );
         assert!(r.is_err());
         assert!(started.elapsed() < Duration::from_secs(1));

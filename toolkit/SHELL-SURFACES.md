@@ -89,7 +89,13 @@ output, on its own thread and its own connection**, with:
      is now in the watcher's events, which stay queued for `next`;
   3. if the SAME generation is still present, the bound object is that instance;
      otherwise `Gone`.
-  Both syncs share one deadline (`Timeout`, never a hang). A failed watcher connection
+  One deadline covers the connect and both syncs (`Timeout`, never a hang). The
+  connect is our own nonblocking one, retried while the compositor's backlog is full:
+  `UnixStream::connect` blocks there (Codex, #722). `outputs(timeout)` uses the same.
+  The dock connection has no event queue during the check: its registry, output and
+  sync callback have handlers that keep only what the check needs, so no orphaned
+  queue fills while the dock lives. The dock releases its `wl_output` once the layer
+  surface exists. A failed watcher connection
   is `Lost`, and `next` still reports `Lost` once. Every failure closes the dock
   connection; nothing partial is returned.
 - `LayerOutput` is neither `Clone` nor `Copy`: one binding opens one root. It moves into
@@ -120,6 +126,8 @@ output, on its own thread and its own connection**, with:
   - a frozen compositor → `Timeout` within the deadline, then normal service;
   - the watcher dying during a bind → `Lost`, reported once;
   - 100 bind/drop cycles → 100 client disconnects on the server;
+  - (`connect.rs`) a listener whose backlog is full and that never accepts → error at
+    the deadline (a blocking connect hangs that test); no listener → error at once;
   - ordinary hotplug and watcher loss.
 
   `wake.rs`: coalescing, a wake during the app's read not lost, waking an ended loop.
