@@ -299,6 +299,10 @@ phase_run() {
     # check hands Hyalo one that never locks.
     export HYALO_LOCK_RELAUNCH="LOCK_LOG=/tmp/hyalo/lock sh $REPO/scripts/ci/hyalo-lock-client.sh"
     mkdir -p /tmp/hyalo/lock
+    # The disposable CI user's own settings, on its private session bus. Start
+    # denied so the public CLI cannot silently bypass the session IPC policy.
+    export GSETTINGS_BACKEND=dconf
+    gsettings set org.nidara.ai allow-computer-control false
     HYALO_A11Y_MANAGER=1 HYALO_CONFIG=/usr/share/nidara/hyalo/hyalo.toml RUST_LOG=info nidara-hyalo --tty >"$hyalo_log" 2>&1 &
     hyalo_pid=$!
     local sock="" i
@@ -323,6 +327,24 @@ phase_run() {
     nidara-hyalo msg workspaces > /tmp/hyalo/workspaces.json
     jq -e '.ok.workspaces | map(select(.active)) | length > 0' /tmp/hyalo/workspaces.json >/dev/null \
         || { log "FAIL: no output shows a workspace"; cat /tmp/hyalo/workspaces.json; exit 1; }
+    if nidara-hyalo msg do workspace 2 > /tmp/hyalo/ipc-denied.json; then
+        log "FAIL: external window control succeeded without consent"; exit 1
+    fi
+    jq -e '.code == "AccessDenied" and (.error | type == "string")' /tmp/hyalo/ipc-denied.json >/dev/null \
+        || { log "FAIL: missing structured IPC permission denial"; exit 1; }
+    gsettings set org.nidara.ai allow-computer-control true
+    # Wait for the settings notification, using an invalid command that cannot
+    # produce an effect. Never retry an actual workspace/window mutation.
+    local permitted=false
+    for i in $(seq 1 50); do
+        nidara-hyalo msg raw '{"request":"do","command":"__ipc_permission_probe__"}' \
+            > /tmp/hyalo/ipc-permission.json || true
+        if jq -e '.code == null and (.error | type == "string")' /tmp/hyalo/ipc-permission.json >/dev/null; then
+            permitted=true; break
+        fi
+        sleep 0.1
+    done
+    [ "$permitted" = true ] || { log "FAIL: private CI consent never reached Hyalo"; exit 1; }
     nidara-hyalo msg do workspace 2 >/dev/null || { log "FAIL: 'do workspace 2' refused"; exit 1; }
     nidara-hyalo msg workspaces | jq -e '.ok.workspaces | map(select(.id == 2 and .active)) | length == 1' >/dev/null \
         || { log "FAIL: workspace 2 is not shown after 'do workspace 2'"; exit 1; }

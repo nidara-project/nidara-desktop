@@ -103,7 +103,9 @@ fn setup_without(without: Option<&str>) -> Env {
 }
 
 fn setup() -> Env {
-    setup_without(None)
+    let env = setup_without(None);
+    env.gsettings_set("org.nidara.ai", "allow-computer-control", "true");
+    env
 }
 
 impl Env {
@@ -191,7 +193,8 @@ type Updated = (u64, u64, HashMap<String, OwnedValue>);
 #[tokio::test(flavor = "multi_thread")]
 async fn config1_snapshot_apply_gate_and_other_writers() {
     let mut env = setup();
-    // The gate is open by default; closed here, so an agent's write is refused.
+    // Both gates are closed here, so an external writer is refused.
+    env.gsettings_set("org.nidara.ai", "allow-computer-control", "false");
     env.gsettings_set("org.nidara.ai", "allow-config-write", "false");
     env.start();
     let conn = connect(&env.address).await;
@@ -238,28 +241,55 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
             .await;
     assert_eq!(
         error_name(denied.unwrap_err()),
-        "org.nidara.Config1.Error.Denied"
+        "org.nidara.Config1.Error.AccessDenied"
     );
 
-    // The native Settings writes freely.
+    // A bus name is not executable identity. Spoofing SettingsNative grants nothing.
     conn.request_name("org.nidara.SettingsNative")
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    let denied =
+        call::<(u64, OwnedValue)>(&conn, "Apply", &("appearance.darkMode", Value::from(true)))
+            .await;
+    assert_eq!(
+        error_name(denied.unwrap_err()),
+        "org.nidara.Config1.Error.AccessDenied"
+    );
+    // The legacy specific gate alone is insufficient; control must also be granted.
+    env.gsettings_set("org.nidara.ai", "allow-config-write", "true");
+    let denied = call::<()>(&conn, "Set", &("appearance.darkMode", Value::from(true))).await;
+    assert_eq!(
+        error_name(denied.unwrap_err()),
+        "org.nidara.Config1.Error.AccessDenied"
+    );
+    env.gsettings_set("org.nidara.ai", "allow-computer-control", "true");
+    // Consume permission changes before measuring the next write's revision.
+    let (_, baseline, _): (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
+    use futures_util::StreamExt;
+    while tokio::time::timeout(Duration::from_millis(100), updated.next())
+        .await
+        .is_ok()
+    {}
     let (rev, value): (u64, OwnedValue) =
         call(&conn, "Apply", &("appearance.darkMode", Value::from(true)))
             .await
             .unwrap();
-    assert_eq!(rev, 1);
+    assert_eq!(rev, baseline + 1);
     assert!(bool::try_from(value).unwrap());
-    use futures_util::StreamExt;
     let signal = tokio::time::timeout(Duration::from_secs(5), updated.next())
         .await
         .unwrap()
         .unwrap();
     let (e, r, values): Updated = signal.body().deserialize().unwrap();
-    assert_eq!((e, r), (epoch, 1));
+    assert_eq!((e, r), (epoch, baseline + 1));
     assert!(bool::try_from(values["appearance.darkMode"].clone()).unwrap());
+
+    // A no-op, before unrelated external-file notifications can advance revision.
+    let (same_rev, _): (u64, OwnedValue) =
+        call(&conn, "Apply", &("appearance.darkMode", Value::from(true)))
+            .await
+            .unwrap();
+    assert_eq!(same_rev, rev);
 
     // Canonical answers: whole kelvins; a file URI made a path.
     let (_, value): (u64, OwnedValue) = call(
@@ -302,13 +332,7 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
         assert_eq!(error_name(err), "org.nidara.Config1.Error.Invalid", "{key}");
     }
 
-    // A no-op answers the current revision and announces nothing.
     let before: (u64, u64, String) = call(&conn, "Snapshot", &()).await.unwrap();
-    let (rev, _): (u64, OwnedValue) =
-        call(&conn, "Apply", &("appearance.darkMode", Value::from(true)))
-            .await
-            .unwrap();
-    assert_eq!(rev, before.1);
 
     // Another writer (gsettings, a script, the TypeScript shell): heard and announced.
     while tokio::time::timeout(Duration::from_millis(200), updated.next())
@@ -349,6 +373,17 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
         }
     }
     assert_eq!(heard.as_deref(), Some("wave"));
+    // Revocation is effective on the same connection, even while it owns SettingsNative.
+    env.gsettings_set("org.nidara.ai", "allow-computer-control", "false");
+    let denied = call::<()>(&conn, "Set", &("appearance.darkMode", Value::from(false))).await;
+    assert_eq!(
+        error_name(denied.unwrap_err()),
+        "org.nidara.Config1.Error.AccessDenied"
+    );
+    let values: HashMap<String, OwnedValue> = call(&conn, "Get", &(vec!["appearance.darkMode"],))
+        .await
+        .unwrap();
+    assert!(bool::try_from(values["appearance.darkMode"].clone()).unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -376,6 +411,7 @@ async fn a_second_server_leaves_the_name_alone() {
 async fn a_key_its_schema_lacks_is_unavailable_not_fatal() {
     // GLib aborts the process on a key the schema lacks; an older GNOME has no accent-color.
     let mut env = setup_without(Some("accent-color"));
+    env.gsettings_set("org.nidara.ai", "allow-computer-control", "true");
     env.start();
     let conn = connect(&env.address).await;
     wait_for_config(&conn).await;

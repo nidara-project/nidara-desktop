@@ -771,9 +771,12 @@ pub fn get(st: &Store, key: &Key) -> Value {
 fn writable(key: &Key) -> bool {
     key.writable && key.set.is_some()
 }
-/// Whether agents may write (`ai.allowConfigWrite`); the native Settings is not asked.
-pub fn agents_may_write(st: &Store) -> bool {
-    st.has(AI, "allow-config-write") && st.s(AI).boolean("allow-config-write")
+/// Read consent at the point of effect on the GLib thread; no cached bus-name trust.
+pub fn consent(st: &Store) -> nidara_access::Consent {
+    match (st.settings(AI), st.schemas.get(AI)) {
+        (Some(settings), Some(schema)) => nidara_access::Consent::from_settings(settings, schema),
+        _ => nidara_access::Consent::default(),
+    }
 }
 
 /// The raw text of a value as the registry parses it (`setConfigValue(key, String(v))`).

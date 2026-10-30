@@ -35,6 +35,32 @@ is the WHY and the traps.
 | `ui/shell/core/hyalo-ipc.ts`, `ui/shell/core/Displays.ts` | the shell's side (below) |
 | `ui/lib/nidara-kit/platform/material.ts`, `ui/lib/nidara-kit/platform/glass-material.ts` | the glass's client half: the shapes, and THE material's numbers — one for every bundle; the shell's `core/CompositorGlass.ts` and the lock's `app.ts` only say Reduce transparency and the panels' blur (below) |
 
+## Rust IPC consent (#959 A)
+
+The JSON socket checks `crates/nidara-access` before effects, using SO_PEERCRED,
+pidfd lifetime and current installed executable identity, not CLI/bus names.
+Read and configuration reload requests stay public (the file watcher already
+reloads edits, and nidara-update depends on this). Manual nidara-wm DPMS needs
+consent. Legacy Settings has an explicit role limited to focusing its own mapped
+native Wayland window: authenticated peer PID must match the target's Wayland
+connection credentials; no app-id/title/X11-PID inference or general window
+control. Installed and exact registered dev hosts use this role.
+Other external mutations require computer control, with
+additional config/capture/close gates. Internal compositor binds are unchanged.
+Denied requests return a structured AccessDenied error without closing the socket.
+GSettings consent is followed on a private GLib thread, initially false until
+its snapshot arrives. Config1 uses the same crate at the store write point.
+See `crates/nidara-access/README.md` for executable permissions, test commands
+and the explicit limit: Wayland screencopy/image-copy-capture remains outside
+this ACL. Do not present socket enforcement as a general capture boundary.
+Checkout programs require either private test consent or an explicit root-owned
+`/etc/nidara/access.d/*.conf` grant for their exact path, UID and role. The dev
+installer writes those grants atomically; no HOME/env trust override. Missing
+registration leaves dev clients External and logs `install.sh --dev` guidance.
+Revocation applies per request; replacing a running binary requires restarting
+that client. The namespace checker exercises real UID0 policy files and all
+existing TS request families with control off, without booting or touching TS.
+
 ## Popup workareas and reactive geometry (#959 B)
 
 Normal-window xdg popups constrain against `shell::layer::usable_zone(output)`,

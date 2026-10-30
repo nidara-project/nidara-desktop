@@ -309,6 +309,9 @@ pub enum Request {
 pub enum Reply {
     Ok(Response),
     Error(String),
+    /// Structured denial; the connection remains usable after a refused operation.
+    #[serde(untagged)]
+    AccessDenied { error: String, code: &'static str },
 }
 
 #[derive(Debug, Clone, Serialize)]

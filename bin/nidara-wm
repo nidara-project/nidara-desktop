@@ -29,6 +29,15 @@
 #                      while locked, and Hyalo's lock is block #683.
 set -euo pipefail
 
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    cat <<'HELP'
+usage: nidara-wm activewindow|clients|monitors|cursorpos | dpms on|off | reload | lock-binds on|off
+Reads and reload are public on Hyalo. Reload applies the already watched configuration.
+Manual dpms on/off on Hyalo requires Settings → AI → computer control enabled.
+HELP
+    exit 0
+fi
+
 what="${1:-}"
 arg="${2:-}"
 usage() { echo "usage: nidara-wm activewindow|clients|monitors|cursorpos | dpms on|off | reload | lock-binds on|off" >&2; exit 2; }

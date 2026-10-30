@@ -18,6 +18,17 @@ and leave its line in the index at the bottom of this file. It must match realit
 predates the split; #102 was reused on 2026-09-04, both now resolved). Cite them by title, not by
 number alone.
 
+## Rust IPC capture boundary and pending consumers (#959 A, 2026-10-30)
+
+The shared access policy covers Rust Config1 writes and Hyalo JSON socket effects.
+Wayland screencopy/image-copy-capture is explicitly declared outside A by the owner;
+no general capture isolation is claimed. Existing Display1 bus transaction rules
+are not replaced. Same-UID hostile code is outside cooperative consent's boundary.
+B adds typed CLI/Shell1, C only OSD; Applications1 and the bar are separate blocks.
+Checkout executables require consent or an exact root-owned access.d grant;
+install.sh's dev path writes the grant on an explicit install/update. Installed
+session acceptance remains unverified by the private user/mount namespace tests. See `crates/nidara-access/README.md`.
+
 ## Native Display1 consumers and hardware limits (#959, 2026-10-28)
 
 The first Display1 cut publishes primary and serves confirmed profiles, extended layouts,
