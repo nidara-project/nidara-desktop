@@ -37,7 +37,8 @@ def output_size():
 
 log = LOG / 'layer.log'
 W, H = output_size()
-LONG, SHORT, GAP = 400, 64, 4
+# The dock's long side: 400 where it fits, shorter on a small logical output (scale 2).
+LONG, SHORT, GAP = min(400, (H - 64) // 8 * 8), 64, 4
 # (outside region, inside region) per step, in output coordinates.
 mid_x, mid_y = W // 2, H // 2
 points = [
@@ -49,7 +50,7 @@ points = [
 roots = [(mid_x - LONG // 2, H - GAP - SHORT), (GAP, mid_y - LONG // 2), (W - GAP - SHORT, mid_y - LONG // 2)]
 menus = []
 with log.open('w') as out, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
-    process = subprocess.Popen([str(BIN)], stdout=out, stderr=out, env={**os.environ, 'WAYLAND_DEBUG': 'client'})
+    process = subprocess.Popen([str(BIN)], stdout=out, stderr=out, env={**os.environ, 'WAYLAND_DEBUG': 'client', 'NK_LAYER_LONG': str(LONG)})
     try:
         for step, (outside, inside) in enumerate(points):
             wait(log, f'READY step={step}', process)

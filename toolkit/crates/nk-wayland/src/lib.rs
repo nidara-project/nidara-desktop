@@ -284,8 +284,21 @@ impl Window {
     pub fn capabilities(&self) -> Capabilities {
         self.capabilities
     }
+    /// End the run loop. Pending activation tokens and captures still get their one
+    /// terminal event (`Closed`) before it ends, and none of them succeeds after this.
     pub fn close(&mut self) {
         self.closed = true;
+    }
+    /// After the loop: every request still open, or answered in a batch the app did not
+    /// read, ends `Closed` exactly once (a success the app never saw becomes `Closed` too).
+    fn end_requests(&mut self, rest: Vec<Event>, app: &mut impl Application) -> Result<()> {
+        let mut tail = terminals_on_close(rest.into_iter().chain(std::mem::take(&mut self.events)));
+        self.tokens.close_all(&mut tail);
+        self.captures.close_all(&mut tail);
+        for e in tail {
+            app.event(e, self)?;
+        }
+        Ok(())
     }
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
@@ -596,6 +609,62 @@ impl Window {
             height: frame.pixel_height,
             busy: false,
         })
+    }
+}
+/// Of what the app did not read before closing, only the requests' terminals remain,
+/// and none of them a success.
+fn terminals_on_close(events: impl IntoIterator<Item = Event>) -> Vec<Event> {
+    events
+        .into_iter()
+        .filter_map(|e| match e {
+            Event::ActivationToken { request, .. } => Some(Event::ActivationTokenFailed {
+                request,
+                reason: TokenFailure::Closed,
+            }),
+            Event::Capture { id, result: Ok(_) } => Some(Event::Capture {
+                id,
+                result: Err(CaptureFailure::Closed),
+            }),
+            e @ (Event::ActivationTokenFailed { .. } | Event::Capture { .. }) => Some(e),
+            _ => None,
+        })
+        .collect()
+}
+#[cfg(test)]
+mod close_tests {
+    use super::*;
+    #[test]
+    fn closing_keeps_one_terminal_per_request_and_no_success() {
+        let image = Image {
+            width: 1,
+            height: 1,
+            rgba: vec![0; 4],
+        };
+        let out = terminals_on_close([
+            Event::Motion(1., 2.),
+            Event::Capture {
+                id: CaptureId(1),
+                result: Ok(image),
+            },
+            Event::Capture {
+                id: CaptureId(2),
+                result: Err(CaptureFailure::Stopped),
+            },
+            Event::FrameDone,
+        ]);
+        assert!(matches!(
+            out.as_slice(),
+            [
+                Event::Capture {
+                    id: CaptureId(1),
+                    result: Err(CaptureFailure::Closed)
+                },
+                Event::Capture {
+                    id: CaptureId(2),
+                    result: Err(CaptureFailure::Stopped)
+                }
+            ]
+        ));
     }
 }
 fn err(e: impl std::fmt::Display) -> String {
@@ -956,6 +1025,8 @@ fn run_inner(
     }
     let mut first = true;
     let mut first_callback = true;
+    // What a batch still held when the app closed: its requests' terminals still count.
+    let mut rest = Vec::new();
     while !w.closed {
         queue.dispatch_pending(&mut w).map_err(err)?;
         w.transfers()?;
@@ -964,7 +1035,8 @@ fn run_inner(
         }
         w.tokens.expire(Instant::now(), &mut w.events);
         w.captures.expire(Instant::now(), &mut w.events);
-        for mut event in std::mem::take(&mut w.events) {
+        let mut batch = std::mem::take(&mut w.events).into_iter();
+        while let Some(mut event) = batch.next() {
             // Serials the app may later turn into an activation token (§4).
             match &event {
                 Event::Button { serial, .. } => w.tokens.delivered(*serial),
@@ -1054,6 +1126,7 @@ fn run_inner(
                 w.closed = true;
             }
             if w.closed {
+                rest.extend(batch.by_ref());
                 break;
             }
         }
@@ -1118,6 +1191,7 @@ fn run_inner(
             }
         }
     }
+    w.end_requests(rest, &mut app)?;
     w.destroy_surfaces();
     conn.flush().map_err(|e| format!("Wayland flush: {e}"))?;
     Ok(w.serial)

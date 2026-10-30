@@ -2,6 +2,8 @@
 //! Diagnostic only (SHELL-SURFACES.md §5): a dock-shaped layer root captures the window
 //! the driver names in NK_CAPTURE_ID (Hyalo's window id in hex), then shows the limits:
 //! nine at once (one Busy), a cancel, an unknown id, and the window after it closed.
+//! With NK_CAPTURE_CLOSE=1 it starts one capture and closes itself at once: the capture
+//! must still end, exactly once, as Closed.
 use nk_wayland::{
     Application, CaptureFailure, CaptureId, Edges, Event, Frame, KeyboardMode, LayerLevel,
     LayerPlacement, LayerSpec, Material, Options, Window,
@@ -11,6 +13,7 @@ use std::time::Instant;
 type Result<T> = std::result::Result<T, String>;
 #[derive(Default)]
 struct Probe {
+    close_at_once: bool,
     configured: bool,
     target: Option<String>,
     step: u32,
@@ -39,6 +42,12 @@ impl Application for Probe {
                 match w.capture_window(&id, (64, 64)) {
                     Err(CaptureFailure::NotFound) => return Ok(()),
                     r => eprintln!("CAPTURE_STARTED {r:?}"),
+                }
+                if self.close_at_once {
+                    w.close();
+                    eprintln!("AFTER_CLOSE_REQUEST {:?}", w.capture_window(&id, (64, 64)));
+                    self.step = 9;
+                    return Ok(());
                 }
                 self.target = Some(id);
                 self.step = 1;
@@ -87,6 +96,9 @@ impl Application for Probe {
         match event {
             Event::Error(e) => return Err(e),
             Event::Configure => self.configured = true,
+            Event::Capture { id, result } if self.step == 9 => {
+                eprintln!("TERMINAL {id:?} {:?}", result.map(|_| "image"))
+            }
             Event::Capture { id, result } => match self.step {
                 1 => {
                     match &result {
@@ -147,7 +159,10 @@ impl Application for Probe {
 }
 fn main() {
     let r = nk_wayland::run_layer(
-        Probe::default(),
+        Probe {
+            close_at_once: std::env::var("NK_CAPTURE_CLOSE").is_ok_and(|v| v == "1"),
+            ..Default::default()
+        },
         Options {
             material: false,
             map: true,

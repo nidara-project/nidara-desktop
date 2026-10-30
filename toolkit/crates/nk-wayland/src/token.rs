@@ -28,7 +28,8 @@ pub enum TokenFailure {
     /// No answer within DEADLINE.
     Deadline,
     Cancelled,
-    /// The layer root was closed by the compositor (its output went away).
+    /// The window was closed, by the compositor (a layer root's output went away) or by
+    /// `Window::close`.
     Closed,
 }
 /// Opaque and private: `Debug` never shows it; pass it on untouched.
@@ -188,6 +189,9 @@ impl Window {
         else {
             return Err(TokenFailure::Unsupported);
         };
+        if self.closed {
+            return Err(TokenFailure::Closed);
+        }
         let request = self.tokens.admit(serial)?;
         let proxy = activation.get_activation_token(&self.qh, request);
         proxy.set_serial(serial, seat);

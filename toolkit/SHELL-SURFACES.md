@@ -208,7 +208,14 @@ window list and the capture managers: an app's window never sees the compositor'
   transport memory) is enforced by D2's scheduler across its outputs; T1 does not claim it.
   The refresh policy (static minimized thumbnail, ≤5 Hz chooser) belongs to the dock.
 - Exactly one terminal event per `CaptureId`: ready, failure, deadline, cancel or window
-  closed. The frame, session and shm buffer are destroyed at that moment; a late `ready`
+  closed. The captured window's `closed` (its list handle) fails its captures `Stopped`
+  before any later `ready` in the same batch. Constraints that arrive past the deadline
+  allocate nothing. Only an upright frame is an image: any other `transform`, an unknown
+  one or none fails `Transformed` (Hyalo sends `normal` for windows).
+- `Window::close()` by the app: new captures and tokens are refused `Closed`. Every
+  pending one, and every answer the app had not read yet, ends with one `Closed` (a
+  success it never saw included) before the loop returns. An error return from the loop
+  invalidates everything instead. The frame, session and shm buffer are destroyed at that moment; a late `ready`
   for a finished capture is dropped, never published as pixels.
 - Failure reasons map the protocol's: `Stopped` (window gone), `BufferConstraints`,
   `Unknown`, plus `NotFound`, `Busy`, `TooLarge`, `Unsupported` (globals absent). A
@@ -224,7 +231,9 @@ session, and recorded under `target/`:
 1. `layer-probe` example: a dock-shaped layer surface on each of bottom/left/right in
    turn; the `wl_surface` protocol id and Hyalo's layer id are identical across all three,
    the exclusive zone moves with it (window workarea readback), input region honoured
-   (pointer probe outside the region reaches the window below). At scales 1, 1.25 and 2.
+   (pointer probe outside the region reaches the window below). At scales 1, 1.25 and 2
+   (nested Hyalo started with `[outputs.winit] scale`). At 2 the logical output is
+   636×344, so the driver gives the probe a dock that fits: 280 long.
 2. Output identity: the unit tests and the nested check listed in §2. Not shown live:
    `Closed` on real output removal, and Hyalo's close for a removed output named at
    creation (nested Hyalo keeps its only output).
@@ -248,6 +257,11 @@ session, and recorded under `target/`:
    - pixels: premultiplied argb to straight alpha, xrgb opaque whatever its fourth byte,
      and premultiplied averaging when downscaling, so transparency does not darken;
    - `fit` (aspect, never enlarged, 1024 cap), and `Image`'s Debug prints no pixels.
+   Also: the app closing with a capture pending gets exactly one `Closed`, no image, and a
+   new request after `close()` is refused `Closed`. At scale 2 the window is resized to
+   fit, and the image follows its aspect. One scale-2 run out of six hit the deadline
+   while nested Hyalo stalled 3.5 s on the probe's first frame (Xwayland was already
+   ready); the other five answered in tens of milliseconds.
    The drivers wait for nested Xwayland to be ready: it stalls software Hyalo for
    several seconds, which a 2 s deadline would otherwise measure.
 6. Existing toolkit tests and every existing `run` caller unchanged (`Role::Toplevel`).

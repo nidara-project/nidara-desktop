@@ -55,8 +55,10 @@ pub enum CaptureFailure {
     /// No frame within DEADLINE.
     Deadline,
     Cancelled,
-    /// The layer root was closed by the compositor.
+    /// The layer root was closed, by the compositor or by `Window::close`.
     Closed,
+    /// The frame is rotated or flipped (or did not say): never returned the wrong way up.
+    Transformed,
 }
 /// RGBA8, straight (not premultiplied) alpha, rows packed.
 #[derive(Clone, PartialEq, Eq)]
@@ -174,6 +176,10 @@ pub(crate) struct Target {
     format: wl_shm::Format,
 }
 pub(crate) struct Wire {
+    /// The listed window this capture is of: when it closes, the capture is Stopped.
+    handle: handle_v1::ExtForeignToplevelHandleV1,
+    /// The frame's `transform`, sent before `ready`.
+    transform: Option<wayland_client::WEnum<wayland_client::protocol::wl_output::Transform>>,
     source: source_v1::ExtImageCaptureSourceV1,
     session: session_v1::ExtImageCopyCaptureSessionV1,
     frame: Option<frame_v1::ExtImageCopyCaptureFrameV1>,
@@ -233,6 +239,17 @@ impl<P: Handle> Captures<P> {
     }
     fn get(&mut self, id: CaptureId) -> Option<&mut Pending<P>> {
         self.pending.iter_mut().find(|p| p.id == id)
+    }
+    /// Its deadline has passed (checked before allocating anything for it).
+    fn due(&self, id: CaptureId, now: Instant) -> bool {
+        self.pending.iter().any(|p| p.id == id && p.deadline <= now)
+    }
+    fn ids_where(&self, f: impl Fn(&P) -> bool) -> Vec<CaptureId> {
+        self.pending
+            .iter()
+            .filter(|p| f(&p.wire))
+            .map(|p| p.id)
+            .collect()
     }
     pub(crate) fn wait(&self, now: Instant) -> Option<Duration> {
         self.pending
@@ -336,6 +353,9 @@ impl Window {
         identifier: &str,
         max: (u32, u32),
     ) -> Result<CaptureId, CaptureFailure> {
+        if self.closed {
+            return Err(CaptureFailure::Closed);
+        }
         let t = &self.toplevels;
         let (Some(sources), Some(copy)) = (&t.sources, &t.copy) else {
             return Err(CaptureFailure::Unsupported);
@@ -354,6 +374,8 @@ impl Window {
             id,
             max,
             Wire {
+                handle: handle.clone(),
+                transform: None,
                 source,
                 session,
                 frame: None,
@@ -375,6 +397,9 @@ impl Window {
     fn start_frame(&mut self, id: CaptureId) -> Result<(), CaptureFailure> {
         let qh = self.qh.clone();
         let shm = self.shm.clone().ok_or(CaptureFailure::Unsupported)?;
+        if self.captures.due(id, Instant::now()) {
+            return Err(CaptureFailure::Deadline);
+        }
         let Some(p) = self.captures.get(id) else {
             return Ok(());
         };
@@ -422,7 +447,18 @@ impl Window {
         Ok(())
     }
 }
+/// Only an upright frame is returned; the protocol sends the transform before `ready`.
+fn upright(
+    t: Option<wayland_client::WEnum<wayland_client::protocol::wl_output::Transform>>,
+) -> Result<(), CaptureFailure> {
+    use wayland_client::{WEnum, protocol::wl_output::Transform};
+    match t {
+        Some(WEnum::Value(Transform::Normal)) => Ok(()),
+        _ => Err(CaptureFailure::Transformed),
+    }
+}
 fn read(wire: &Wire, max: (u32, u32)) -> Result<Image, CaptureFailure> {
+    upright(wire.transform)?;
     let t = wire.target.as_ref().ok_or(CaptureFailure::Unknown)?;
     Ok(to_image(&t.map, t.width, t.height, t.stride, t.format, max))
 }
@@ -469,6 +505,10 @@ impl Dispatch<handle_v1::ExtForeignToplevelHandleV1, ()> for Window {
             handle_v1::Event::Done => handles[at].2 = true,
             handle_v1::Event::Closed => {
                 let (p, _, _) = handles.swap_remove(at);
+                // Before any later `ready` in this batch: no pixels of a closed window.
+                for id in w.captures.ids_where(|wire| wire.handle == p) {
+                    w.captures.fail(id, CaptureFailure::Stopped, &mut w.events);
+                }
                 p.destroy();
             }
             _ => {}
@@ -521,6 +561,11 @@ impl Dispatch<frame_v1::ExtImageCopyCaptureFrameV1, CaptureId> for Window {
         _: &QueueHandle<Self>,
     ) {
         match e {
+            frame_v1::Event::Transform { transform } => {
+                if let Some(p) = w.captures.get(*id) {
+                    p.wire.transform = Some(transform);
+                }
+            }
             frame_v1::Event::Ready => w.captures.ready(*id, Instant::now(), &mut w.events, read),
             frame_v1::Event::Failed { reason } => {
                 use frame_v1::FailureReason;
@@ -557,7 +602,7 @@ mod tests {
     use super::*;
     use std::cell::Cell;
     use std::rc::Rc;
-    struct Fake(Rc<Cell<u32>>);
+    struct Fake(Rc<Cell<u32>>, u32);
     impl Handle for Fake {
         fn destroy(&self) {
             self.0.set(self.0.get() + 1);
@@ -565,7 +610,13 @@ mod tests {
     }
     fn add(c: &mut Captures<Fake>, d: &Rc<Cell<u32>>, now: Instant) -> CaptureId {
         let id = c.admit().unwrap();
-        c.insert(id, (64, 64), Fake(d.clone()), now + DEADLINE);
+        c.insert(id, (64, 64), Fake(d.clone(), 0), now + DEADLINE);
+        id
+    }
+    /// A capture of window `window`.
+    fn add_for(c: &mut Captures<Fake>, d: &Rc<Cell<u32>>, now: Instant, window: u32) -> CaptureId {
+        let id = c.admit().unwrap();
+        c.insert(id, (64, 64), Fake(d.clone(), window), now + DEADLINE);
         id
     }
     fn image() -> Result<Image, CaptureFailure> {
@@ -679,6 +730,66 @@ mod tests {
         assert_eq!(d.get(), 1);
     }
 
+    /// The captured window closes while its capture waits: Stopped, before a ready in
+    /// the same batch, and a capture of another window is untouched.
+    #[test]
+    fn the_captured_window_closing_stops_only_its_captures() {
+        let (mut c, d, now) = (
+            Captures::<Fake>::default(),
+            Rc::new(Cell::new(0)),
+            Instant::now(),
+        );
+        let closing = add_for(&mut c, &d, now, 7);
+        let other = add_for(&mut c, &d, now, 8);
+        let mut events = Vec::new();
+        // What the handle's `closed` does, then the batch's late `ready` for it.
+        for id in c.ids_where(|f| f.1 == 7) {
+            c.fail(id, CaptureFailure::Stopped, &mut events);
+        }
+        c.ready(closing, now, &mut events, |_, _| image());
+        c.ready(other, now, &mut events, |_, _| image());
+        assert_eq!(terminals(&events, closing), 1);
+        assert!(matches!(
+            events[0],
+            Event::Capture { id, result: Err(CaptureFailure::Stopped) } if id == closing
+        ));
+        assert!(matches!(&events[1], Event::Capture { id, result: Ok(_) } if *id == other));
+        assert_eq!(d.get(), 2);
+    }
+    #[test]
+    fn constraints_after_the_deadline_allocate_nothing() {
+        let (mut c, d, now) = (
+            Captures::<Fake>::default(),
+            Rc::new(Cell::new(0)),
+            Instant::now(),
+        );
+        let id = add(&mut c, &d, now);
+        assert!(!c.due(id, now));
+        assert!(c.due(id, now + DEADLINE));
+        assert!(!c.due(CaptureId(999), now + DEADLINE));
+    }
+    #[test]
+    fn only_an_upright_frame_is_an_image() {
+        use wayland_client::{WEnum, protocol::wl_output::Transform};
+        assert_eq!(upright(Some(WEnum::Value(Transform::Normal))), Ok(()));
+        for t in [
+            Transform::_90,
+            Transform::_180,
+            Transform::_270,
+            Transform::Flipped,
+            Transform::Flipped90,
+        ] {
+            assert_eq!(
+                upright(Some(WEnum::Value(t))),
+                Err(CaptureFailure::Transformed)
+            );
+        }
+        assert_eq!(
+            upright(Some(WEnum::Unknown(42))),
+            Err(CaptureFailure::Transformed)
+        );
+        assert_eq!(upright(None), Err(CaptureFailure::Transformed));
+    }
     #[test]
     fn source_limits_exactly_at_and_just_over() {
         // 4096×4096×4 is exactly 64 MiB.

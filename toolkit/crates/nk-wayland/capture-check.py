@@ -38,13 +38,24 @@ wait(lambda: 'Xwayland ready' in (LOG / 'hyalo.log').read_text(), 'Xwayland read
 env = {**os.environ, 'NK_CAPTURE_ID': str(ids), 'NK_CLOSED': str(closed)}
 tlog, plog = LOG / 'target.log', LOG / 'probe.log'
 target = subprocess.Popen([str(TARGET)], stdout=tlog.open('w'), stderr=subprocess.STDOUT, env=env)
-probe = subprocess.Popen([str(PROBE)], stdout=plog.open('w'), stderr=subprocess.STDOUT, env=env)
+probe = subprocess.Popen([str(PROBE)], stdout=plog.open('w'), stderr=subprocess.STDOUT,
+                         env={**env, **({'WAYLAND_DEBUG': 'client'} if os.environ.get('NK_CAPTURE_DEBUG') else {})})
 try:
     wait(lambda: 'TARGET_READY' in tlog.read_text(), 'target painted')
     wait(lambda: any(w['app_id'] == 'nk-capture-target' for w in windows()), 'target listed')
-    wid = next(w['id'] for w in windows() if w['app_id'] == 'nk-capture-target')
+    shown = next(w for w in windows() if w['app_id'] == 'nk-capture-target')
+    # Hyalo may resize it to fit a small output (scale 2): the image follows the window.
+    wid, box = shown['id'], (shown['width'], shown['height'])
     ids.write_text(f'{wid:x}\n')
     wait(lambda: 'BATCH_DONE' in plog.read_text(), 'batch answered')
+    # The app closes with a capture pending: one Closed, no image, a clean exit.
+    clog = LOG / 'probe-close.log'
+    rc = subprocess.run([str(PROBE)], stdout=clog.open('w'), stderr=subprocess.STDOUT,
+                        env={**env, 'NK_CAPTURE_CLOSE': '1'}, timeout=30).returncode
+    closing = clog.read_text()
+    assert rc == 0, f'closing probe failed:\n{closing}'
+    assert re.findall(r'TERMINAL CaptureId\(\d+\) (.*)', closing) == ['Err(Closed)'], closing
+    assert 'AFTER_CLOSE_REQUEST Err(Closed)' in closing, closing
     target.terminate()
     target.wait(timeout=5)
     wait(lambda: not any(w['app_id'] == 'nk-capture-target' for w in windows()), 'target gone')
@@ -60,7 +71,10 @@ m = re.search(r'IMAGE (\d+)x(\d+) left=\[(\d+), (\d+), (\d+), (\d+)\] right=\[(\
 assert m, f'no image:\n{text}'
 w, h, *px = map(int, m.groups())
 left, right = px[:4], px[4:]
-assert (w, h) == (64, 36), f'not fitted to 64x64 with aspect kept: {w}x{h}'
+long_side, short_side = max(box), min(box)
+expected_short = round(64 * short_side / long_side)
+fitted = (64, expected_short) if box[0] >= box[1] else (expected_short, 64)
+assert abs(w - fitted[0]) <= 1 and abs(h - fitted[1]) <= 1, f'not fitted to 64x64 with the window\'s aspect {box}: {w}x{h}'
 assert all(abs(a - b) <= 2 for a, b in zip(left, [200, 100, 50, 128])), f'translucent half wrong: {left}'
 assert right == [10, 200, 30, 255], f'opaque half wrong: {right}'
 assert text.count('BATCH_REFUSED Busy') == 1, 'nine at once did not refuse exactly one'
@@ -71,7 +85,7 @@ assert 'UNKNOWN Err(NotFound)' in text
 after = text.split('BATCH_DONE')[1]
 assert re.search(r'AFTER_CLOSE NotFound|BATCH_RESULT cancelled=false Stopped', after), f'closed window still captured:\n{after}'
 assert 'UNEXPECTED' not in text
-result = {'image': [w, h], 'left': left, 'right': right, 'busy_refused': 1, 'answers': len(results),
-          'cancelled': 1, 'unknown': 'NotFound', 'after_close': re.search(r'(NotFound|Stopped)', after)[1]}
+result = {'window': list(box), 'image': [w, h], 'left': left, 'right': right, 'busy_refused': 1, 'answers': len(results),
+          'cancelled': 1, 'app_close': 'Closed', 'unknown': 'NotFound', 'after_close': re.search(r'(NotFound|Stopped)', after)[1]}
 (LOG / 'oracles.json').write_text(json.dumps(result, indent=2))
 print(json.dumps(result))

@@ -8,15 +8,24 @@ use nk_wayland::{
 };
 use std::time::Instant;
 type Result<T> = std::result::Result<T, String>;
-const LONG: u32 = 400;
 const SHORT: u32 = 64;
+/// The long side: 400, or what the driver says fits its output (NK_LAYER_LONG).
+fn long() -> u32 {
+    static LONG: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *LONG.get_or_init(|| {
+        std::env::var("NK_LAYER_LONG")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(400)
+    })
+}
 const GAP: i32 = 4;
 
 fn placement(step: usize) -> LayerPlacement {
     let (anchor, size, margin) = match step {
-        0 => (Edges::BOTTOM, (LONG, SHORT), [0, 0, GAP, 0]),
-        1 => (Edges::LEFT, (SHORT, LONG), [0, 0, 0, GAP]),
-        _ => (Edges::RIGHT, (SHORT, LONG), [0, GAP, 0, 0]),
+        0 => (Edges::BOTTOM, (long(), SHORT), [0, 0, GAP, 0]),
+        1 => (Edges::LEFT, (SHORT, long()), [0, 0, 0, GAP]),
+        _ => (Edges::RIGHT, (SHORT, long()), [0, GAP, 0, 0]),
     };
     LayerPlacement {
         anchor,
@@ -28,7 +37,7 @@ fn placement(step: usize) -> LayerPlacement {
 }
 /// The resting shape is the middle half of the long axis.
 fn region(step: usize) -> [i32; 4] {
-    let (l, s) = (LONG as i32, SHORT as i32);
+    let (l, s) = (long() as i32, SHORT as i32);
     if step == 0 {
         [l / 4, 0, l / 2, s]
     } else {
@@ -175,7 +184,7 @@ fn main() {
             map: true,
             app_id: "nk-layer-probe",
             title: "",
-            size: (LONG, SHORT),
+            size: (long(), SHORT),
             require_material: None,
         },
         LayerSpec {
