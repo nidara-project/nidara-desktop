@@ -5,6 +5,9 @@ use super::*;
 pub enum PopupSide {
     Below,
     Right,
+    /// Above / Left of the anchor: menus from a bottom or right-edge dock.
+    Above,
+    Left,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct MenuPopupPlacement {

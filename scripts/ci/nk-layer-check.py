@@ -44,6 +44,9 @@ points = [
     ((GAP + SHORT // 2, mid_y - LONG // 2 + 20), (GAP + SHORT // 2, mid_y)),
     ((W - GAP - SHORT // 2, mid_y - LONG // 2 + 20), (W - GAP - SHORT // 2, mid_y)),
 ]
+# Root origins in output coordinates, per step.
+roots = [(mid_x - LONG // 2, H - GAP - SHORT), (GAP, mid_y - LONG // 2), (W - GAP - SHORT, mid_y - LONG // 2)]
+menus = []
 with log.open('w') as out, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
     process = subprocess.Popen([str(BIN)], stdout=out, stderr=out, env={**os.environ, 'WAYLAND_DEBUG': 'client'})
     try:
@@ -59,6 +62,19 @@ with log.open('w') as out, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) a
             assert barrier.exists(), 'input barrier timed out'
             time.sleep(.1)
             assert f'BUTTON step={step}' not in log.read_text(), f'click outside the input region arrived (step {step})'
+            # Menu on the outward side; the click that dismisses it must not reach the dock.
+            pipe.write(f'rclick {inside[0]} {inside[1]}\n')
+            wait(log, f'MENU_GEOMETRY step={step} rect=Some', process)
+            rect = [int(v) for v in re.findall(rf'MENU_GEOMETRY step={step} rect=Some\(\[(-?\d+), (-?\d+), (\d+), (\d+)\]\)', log.read_text())[-1]]
+            menus.append(rect)
+            x, y, w, h = rect
+            origin = roots[step]
+            assert 0 <= origin[0] + x and origin[0] + x + w <= W and 0 <= origin[1] + y and origin[1] + y + h <= H, f'menu outside the output: {rect}'
+            assert [y + h <= 0, x >= SHORT, x + w <= 0][step], f'menu not on the outward side at step {step}: {rect}'
+            pipe.write(f'click {inside[0]} {inside[1]}\n')
+            wait(log, f'MENU_DONE step={step}', process)
+            time.sleep(.2)
+            assert f'BUTTON step={step}' not in log.read_text(), f'dismissing click reached the dock (step {step})'
             pipe.write(f'click {inside[0]} {inside[1]}\n')
             wait(log, f'BUTTON step={step}', process)
         process.wait(timeout=8)
@@ -69,6 +85,8 @@ with log.open('w') as out, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) a
         layer_id, surface_id = made[0]
         anchors = re.findall(rf'zwlr_layer_surface_v1@{layer_id}\.set_anchor\((\d+)\)', text)
         assert anchors == ['2', '4', '8'], f'anchors on the same layer surface: {anchors}'
+        assert text.count('.get_popup(') >= 6, 'menus were not xdg popups attached to the layer'
+        assert re.search(rf'zwlr_layer_surface_v1@{layer_id}\.get_popup\(', text), 'popup not attached with zwlr_layer_surface_v1.get_popup'
         destroyed = text.find(f'wl_surface@{surface_id}.destroy(')
         assert destroyed == -1 or destroyed > text.index('DONE'), 'root surface destroyed before the end'
         configured = re.findall(rf'zwlr_layer_surface_v1@{layer_id}\.configure, \(\d+, (\d+), (\d+)\)', text)
@@ -76,7 +94,8 @@ with log.open('w') as out, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) a
         for expected in [(LONG, SHORT), (SHORT, LONG)]:
             assert expected in sizes, f'no configure with {expected}: {sizes}'
         result = {'output': [W, H], 'layer_surface': int(layer_id), 'wl_surface': int(surface_id),
-                  'anchors': anchors, 'configured': sizes, 'outside_region_clicks_blocked': 3}
+                  'anchors': anchors, 'configured': sizes, 'outside_region_clicks_blocked': 3,
+                  'menus': menus, 'menu_dismiss_not_delivered': 3}
         (LOG / 'oracles.json').write_text(json.dumps(result, indent=2))
         print(json.dumps(result))
     finally:

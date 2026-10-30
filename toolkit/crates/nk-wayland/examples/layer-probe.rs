@@ -4,7 +4,7 @@
 //! driver also clicks inside the surface but outside the region, which must not arrive.
 use nk_wayland::{
     Application, Edges, Event, Frame, KeyboardMode, LayerLevel, LayerPlacement, LayerSpec,
-    Material, Options, Window,
+    Material, MenuPopupPlacement, Options, PopupEvent, PopupId, PopupPlacement, PopupSide, Window,
 };
 use std::time::Instant;
 type Result<T> = std::result::Result<T, String>;
@@ -35,8 +35,30 @@ fn region(step: usize) -> [i32; 4] {
         [0, l / 4, s, l / 2]
     }
 }
+/// A right click opens a bounded menu on the outward side: above a bottom dock,
+/// right of a left dock, left of a right dock (SHELL-SURFACES.md §3).
+fn menu(step: usize, x: f64, y: f64, serial: u32) -> MenuPopupPlacement {
+    let (x, y) = (x as i32, y as i32);
+    let (anchor, side) = match step {
+        0 => ([x - 24, 0, 48, SHORT as i32], PopupSide::Above),
+        1 => ([0, y - 24, SHORT as i32, 48], PopupSide::Right),
+        _ => ([0, y - 24, SHORT as i32, 48], PopupSide::Left),
+    };
+    MenuPopupPlacement {
+        placement: PopupPlacement {
+            anchor,
+            size: (180, 120),
+        },
+        workarea: None,
+        side,
+        parent: None,
+        grab_serial: Some(serial),
+    }
+}
 struct Probe {
     step: usize,
+    pointer: (f64, f64),
+    menu: Option<PopupId>,
 }
 impl Application for Probe {
     fn event(&mut self, event: Event, w: &mut Window) -> Result<()> {
@@ -50,6 +72,41 @@ impl Application for Probe {
                     eprintln!("READY step={}", self.step);
                 }
             }
+            Event::Motion(x, y) => self.pointer = (x, y),
+            Event::Button {
+                button: 0x111,
+                pressed: true,
+                serial,
+                ..
+            } => {
+                let id =
+                    w.open_menu_popup(menu(self.step, self.pointer.0, self.pointer.1, serial))?;
+                self.menu = Some(id);
+                eprintln!("MENU_OPEN step={}", self.step);
+            }
+            Event::PopupOverlay { id, event } if Some(id) == self.menu => match event {
+                PopupEvent::Configure => {
+                    if let Some(frame) = w.popup_overlay_frame(id)? {
+                        let bytes =
+                            vec![
+                                0xffu8;
+                                frame.pixel_width as usize * frame.pixel_height as usize * 4
+                            ];
+                        w.paint_popup_overlay(id, frame, &bytes, None)?;
+                    }
+                    eprintln!(
+                        "MENU_GEOMETRY step={} rect={:?}",
+                        self.step,
+                        w.popup_overlay_geometry(id)
+                    );
+                }
+                PopupEvent::Done => {
+                    w.close_menu_popup(id);
+                    self.menu = None;
+                    eprintln!("MENU_DONE step={}", self.step);
+                }
+                _ => {}
+            },
             Event::Button {
                 button: 0x110,
                 pressed: true,
@@ -88,7 +145,11 @@ impl Application for Probe {
 }
 fn main() {
     let r = nk_wayland::run_layer(
-        Probe { step: 0 },
+        Probe {
+            step: 0,
+            pointer: (0., 0.),
+            menu: None,
+        },
         Options {
             material: false,
             map: true,
