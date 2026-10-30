@@ -9,3 +9,8 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+gio = "0.22"
+glib = "0.22"
+serde = "1"
+serde_json = "1"
+zbus = "5.19"
