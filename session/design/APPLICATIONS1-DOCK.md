@@ -1,13 +1,17 @@
 # Applications1 and the first Rust dock — proposed contract
 
-**Status: PROPOSAL, 2026-10-30. Design only; no implementation authorized by this
-file.** The owner authorized preparing this proposal in Codex's chat. Product
-scope was relayed in Palomar #959 messages #681/#684. Claude reviews this draft;
-the owner closes the design before programming. IPC B (`f080c73b`) remains a
-separate change. This proposal does not publish, install or modify a session.
+**Status: REVISED DESIGN FOR FINAL REREAD, 2026-10-30. No implementation
+authorized by this file.** The owner authorized preparing and revising the design
+in Codex's chat. Scope was relayed in Palomar #959 messages #681/#684; Claude's
+review #688 reports the owner's closure of §12 with the amendments incorporated
+below. This records that review and its provenance, not fresh authorization to
+program. A1 still requires the owner's explicit go-ahead in this chat. IPC B
+(`f080c73b`) remains separate. No publication, installation or session change.
 
-The initial implementation order is Applications1, the missing native transport
-capabilities, then the dock. It uses the Rust toolkit and Hyalo, with no TS
+The implementation order puts a visible dock before usage/attention/Unity:
+A1 → A2 → T1 → D1 → H1 → A3 → D2 → T2/D3 → D4. T1 is independent of the
+Applications series; H1/A3 are required only by D2, not by the basic D1 dock.
+It uses the Rust toolkit and Hyalo, with no TS
 adapter, no duplicate widget implementation and no new CI job. An intermediate
 PR may advertise fewer capabilities; the block is complete only when the
 acceptance table below passes. No bar, Control Center or replacement lockscreen
@@ -160,7 +164,13 @@ only derived matching/usage, not a second WM. A Hyalo disconnect changes
 matching availability, clears runtime links and stops accrual. Reconnect assigns
 a fresh connection epoch even if numeric window IDs recur. Focus/window events
 need a gap-free initial snapshot seam or an explicit resync event; there must be
-no race between reading Windows and starting EventStream. H1 provides it.
+no race between reading Windows and starting EventStream. H1 provides the
+coherent observation seam for usage/correlation in A3/D2. Before H1, D1 takes
+window truth directly from Hyalo, subscribes before hydrating and refreshes on
+invalidation/reconnect; it does not depend on Applications1's later matching
+stream or claim timestamped usage/launch-correlation guarantees. Exact catalogue
+matching remains available as a pure lookup shared with the dock, without a TS
+bridge or a second WM.
 
 ## 3. Catalogue, search and icons
 
@@ -257,16 +267,19 @@ keeps its actual unit; a newly bus-activated app runs in its D-Bus/systemd servi
 not the Exec launcher's uwsm unit. Report that actual unit (or unknown) and test
 portal identity there. Do not invent portal AppId success or move another
 process's cgroup to make the report look consistent. This is an explicit design
-tradeoff requiring closure, not a reason to silently ignore DBusActivatable.
+tradeoff accepted in the review relayed by #688, not a reason to silently
+ignore DBusActivatable.
 
 New-window uses a declared new-window desktop action when available. Otherwise
 an Exec multi-window app may be launched again; the application decides whether
 it produces another window. DBusActivatable apps lacking a new-window action,
 and SingleMainWindow apps, report NewWindowMode=unsupported; do not guess flags
-or call Activate while claiming 'new window'. The menu disables the action with
-a reason; middle-click invokes the same capability and exposes failure. This
-limitation needs owner acceptance: no standard can force every app to open a new
-window. A later app-specific adapter would be explicit data, not dock code.
+or call Activate while claiming 'new window'. When unsupported, **omit “Nueva
+ventana” from the menu**; do not show a disabled row. Middle-click then performs
+the same action as primary click (launch, focus/minimize/restore or chooser as
+appropriate), without claiming that a new window was requested. Supported apps
+use the same new-window capability for the menu and middle-click. A later
+app-specific adapter would be explicit data, not dock code.
 
 A Launch reply is admission, **not window shown/focused**. RequestId deduplicates
 same-sender repeated calls for 30 s (bounded 64 IDs; argument mismatch → Conflict);
@@ -286,12 +299,24 @@ Launch status/Changed never exposes ActivationToken or opened URIs.
 Frequency is **foreground active time**, not launch count. Use Hyalo's observed
 focus, window mapping and match, plus logind session-active, lock, suspend and
 idle status. Accrue only for a matched focused unminimized app in the active,
-unlocked session; exclude idle after 5 minutes. A minimized/hidden/no-focus window
-adds no time. Monotonic intervals, never wall-clock deltas; split at every
-focus/lock/idle/session/suspend boundary. No accrual through disconnect, process
-restart or suspend gaps. H1 supplies timestamped boundaries or usage remains
-unavailable; client-reported 'I am focused' is never accepted. Snapshot/replay
-cannot add the same interval twice.
+unlocked session. Follow GNOME shell-app-usage.c's idle-transition rule: the
+session becomes idle after 5 minutes, but entering idle credits only a maximum
+30 seconds of the **pending uninterrupted focus watch**, not that entire
+five-minute wait. GNOME computes its cutoff as watch_start_time +
+IDLE_TIME_TRANSITION_SECONDS (30), not idle_event_time minus 30. In our monotonic
+accounting, cap that pending watch at min(idle boundary, watch start + 30 s),
+without adding another 30 seconds to already committed usage. Resume at a fresh
+watch start when active again; focus changes while idle add no usage. Persistence
+checkpoints must not prematurely commit the pending watch as five-minute usage;
+retain tentative versus committed accounting so the cap remains possible and
+cannot double-count or drive the score negative. This adopts GNOME's idle rule,
+not its unrelated score-normalization or seven-second focus quantization.
+
+A minimized/hidden/no-focus window adds no time. Monotonic intervals, never
+wall-clock deltas; split at every focus/lock/idle/session/suspend boundary. No
+accrual through disconnect, process restart or suspend gaps. H1 supplies
+timestamped boundaries or usage remains unavailable; client-reported 'I am
+focused' is never accepted. Snapshot/replay cannot add an interval twice.
 
 Store aggregated seconds per DesktopId, last decay checkpoint and new-app
 acknowledgements in `$XDG_STATE_HOME/nidara/applications-v1.json` with a version,
@@ -299,20 +324,25 @@ acknowledgements in `$XDG_STATE_HOME/nidara/applications-v1.json` with a version
 Retain the existing 14-day half-life, now in seconds; expose a normalized score,
 not browsing history or window titles. No arbitrary conversion from the old
 launch counts to seconds: leave app-frequency.json untouched and start the new
-metric at zero. No cross-device or network telemetry. A crash may lose only the
-last unflushed interval; it never invents elapsed usage. Decay uses wall time
+metric at zero. No cross-device or network telemetry. A crash may lose unflushed
+committed usage and the unresolved tentative watch; restart never credits that
+watch using elapsed wall time. Checkpointing must preserve the idle cap rather
+than promise at most 30 seconds of lost usage. Decay uses wall time
 only between checkpoints, clamps backward clocks at zero and never accrues use.
 
 'New' means **newly observed desktop identity**, not proven package installation
 time. The first successful catalogue establishes a baseline without marking every
-existing app new. Later new IDs get firstObservedAt and IsNew for up to seven
-days; persist across restart, clear on confirmed first foreground use or explicit
-AcknowledgeNew. Name/icon/package updates, user overrides and locale changes are
-not new installs. Keep 30-day tombstones so a brief export disappearance or
-reinstall of the same ID does not repeatedly badge it; after expiry reappearance
-is new observation. New IDs discovered while the service was stopped are marked
-at observation time, labelled accordingly. Presentation translates the badge;
-search ranking is unaffected. These timing defaults are proposals for closure.
+existing app new. Later new IDs get firstObservedAt and IsNew **without time
+expiry**: the marker persists across restart until confirmed first foreground
+use or explicit AcknowledgeNew. Name/icon/package updates, user overrides and
+locale changes are not new installs. There is no seven-day badge expiry or
+30-day tombstone product rule. Preserve the last complete healthy catalogue
+while a scan/provider/root is degraded; its recovery is not disappearance and
+reinstallation. Replace that baseline only after a complete healthy scan. Thus
+a brief unavailable export root does not re-mark apps, without timed tombstones.
+An ID absent from a healthy baseline and later genuinely re-added is a new
+observation. New IDs discovered while stopped are marked at observation time,
+labelled accordingly. Presentation translates the badge; ranking is unaffected.
 
 Unity metadata is ingested by Applications1 once, not independently by every
 dock. Listen for the **signal** `com.canonical.Unity.LauncherEntry.Update(s
@@ -374,10 +404,22 @@ catalogue, prepends the formerly fixed Files and Apps in that order, then retain
 other pins/order. Strip only known old synthetic prefixes, never arbitrary paths
 or case-folded IDs. A version-1 empty list is intentional and remains empty.
 Fresh default order: Files, Apps, remaining factory app pins; Trash is derived
-last. Uninstalled app pins stay stored with unavailable state and an unpin action
-(instead of TS's eager orphan pruning), so temporary catalogue/provider loss
-cannot erase preferences. No `.desktop` file or app is fabricated for a missing
-factory entry; Apps is seeded only when its binary/entry ships.
+last. **An uninstalled app pin is removed**, but only after a **complete, healthy
+catalogue** proves its exact DesktopId absent. A failed/partial/degraded scan,
+provider outage, watch overflow awaiting recovery, unreadable root or unmounted
+Flatpak/Snap export root can never trigger pruning. Record root health/availability
+and retain the last good baseline; never interpret unavailable roots as healthy
+empty directories. Canonical snapshot completeness requires all configured
+catalogue roots to have a successful scan or a verified healthy absence, rather
+than an I/O or mount failure. If health is uncertain, defer pruning. The same
+rule applies to migrated pins: import first, prune only with that evidence, not
+against a partial startup cache. A fresh healthy absence removes the pin in the
+shared layout transaction and publishes its new LayoutRevision, so an in-flight
+drag receives Conflict rather than restoring a stale pin. Folder entries retain
+the distinct missing-folder behavior above; a dynamic default-directory pin is
+not pruned merely because handler resolution is temporarily unavailable. No
+.desktop file or app is fabricated for a missing factory entry; Apps is seeded
+only when its binary/entry ships.
 
 Only one module writes this structured home. Applications1 domain EditLayout and
 Config1's future structured-layout facade call the **same** transaction helper
@@ -386,8 +428,8 @@ Ordinary dock settings remain Config1 keys: icon size 32..96 (default 64), maxim
 magnification size 64..128 (128), magnification true, indicators true, autoHide
 false, delay0..2000 ms (500), position bottom/left/right (bottom). If both APIs are
 exposed, no generic Config1 raw string setter may bypass layout invariants/CAS.
-The exception for structured domain editing, versus all ordinary settings through
-Config1, requires explicit closure with the owner.
+The structured-domain owner and ordinary-preference Config1 boundary were
+accepted in the closure relayed by #688.
 
 EditLayout request schema is one of insert-app (DesktopId or the default target,
 beforeKey optional), insert-folder (URI,beforeKey optional), move (key,beforeKey
@@ -504,13 +546,14 @@ than shift the whole resting dock or clip a clickable icon. Respect the configur
 maximum size and reduced motion. Every item shrinks uniformly; no exempt Trash
 or minimized thumbnail.
 
-For a pathological number of windows, unlimited shrinking would make targets
-unusable. Proposed floor: 24 logical px rest icon size, then a bounded scrollable
-main-axis strip for **all** content (Trash stays its last item). Wheel on an app
-cycles windows; over the separator/empty strip scrolls overflow; keyboard focus
-reveals its item. This overflow escape is a proposal requiring owner closure,
-not permission to drop items or silently exceed the margin. Ordinary fitting
-continues to shrink uniformly above that floor.
+There is **no minimum effective icon size and no scrollable dock strip**.
+Shrink uniformly as far as needed to fit every item inside the margins;
+magnification helps targeting and remains bounded near output/bar edges. The
+user's configured preferred size remains subject to its existing setting bounds,
+but the fit scale may produce a smaller effective size. Do not clamp it to 24 px,
+drop items, introduce an overflow menu or change order to avoid shrinking.
+The wheel is used only for cycling windows, never scrolling the dock. Keyboard
+and accessibility actions must still reach every item in the shared model.
 
 The current dynamic bar reservation must be available before dock geometry is
 placed. Until a Rust bar exists, reserve the configured top-bar design region
@@ -542,13 +585,15 @@ supplies painted pixels, input rectangles, anchors and AT-SPI coordinates.
 - At least two eligible nonminimized windows: primary click opens the bounded
   thumbnail chooser; select one to focus and dismiss. If one visible plus
   minimized windows exists, that single normal window retains single-click
-  behavior; minimized entries remain separate. This eligible-window definition
-  needs owner closure if '≥2 windows' should include minimized duplicates.
-- Middle click and 'Nueva ventana' share NewWindowMode. Wheel over an app cycles
+  behavior; minimized entries remain separate. The review accepts this selector
+  eligibility: only nonminimized windows, without minimized duplicates.
+- When NewWindowMode is supported, middle-click and 'Nueva ventana' share that
+  operation. Otherwise omit that menu row and route middle-click through the
+  same action as primary click. Wheel over an app cycles
   its eligible windows in stable MRU order, with one accumulated step per notch;
   high-resolution scroll is rate-bounded and never launches/closes. Zero windows
   is a no-op; keyboard equivalents expose the same actions.
-- App menu: open/new window, declared desktop actions, current window list,
+- App menu: open, new window only when supported, declared desktop actions, current window list,
   focus/minimize/restore, close window(s), keep/remove pin, and 'Abrir al iniciar
   sesión' with confirmed state/writability. All close actions remain requests
   to the app via Hyalo, preserving save prompts and close consent. Do not use kill.
@@ -652,7 +697,7 @@ seam before dock implementation depends on it. No protocol version is declared
 supported just because a global binds; paint, input, popup parent, lifecycle and
 scale behavior must be exercised.
 
-## 10. Sequential PR proposal
+## 10. Sequential PR order revised by #688
 
 These are implementation boundaries, **not authorization** to start or publish
 any of them. Prefix A is Applications work, D is dock work; IPC B and OSD C retain
@@ -661,20 +706,23 @@ stacked independent branches and reports capability/acceptance limits accurately
 
 | Order | Change | Concrete completion evidence |
 | --- | --- | --- |
-| A1 | Applications1 catalogue, immutable snapshots/pages, generations, search, icon resolver/override import, structured pins/migration, scoped access operations | private XDG trees/bus/settings, duplicate/case/Hidden/NoDisplay/locale/field-code parsing fixtures; icons decoded; CAS/restart/role negatives; no UI or launch claim |
+| A1 | Applications1 catalogue, immutable snapshots/pages, generations, search, icon resolver/override import, structured pins/migration, scoped access operations | private XDG trees/bus/settings, duplicate/case/Hidden/NoDisplay/locale/field-code parsing fixtures; icons decoded; CAS/restart/role negatives; healthy-only pruning including migrated pins, outage/unmounted-root negatives; no UI or launch claim |
 | A2 | Launch/actions/open/default directory, real D-Bus activation, Exec systemd lifetime/env, autostart preference handling; CLI listApps/launchApp routes | fake app bus/systemd/launcher, token/argv/URI fidelity, ambiguous timeout never retries; DBus and Exec unit/portal identity integration in private session; no window-ready claim yet |
-| H1 | Hyalo coherent observation/epoch/timestamps, launch correlation and demands-attention, native activation producer prerequisites | private compositor tests for concurrent startup, stale/foreign token, rejected activation without stolen focus, gap/restart/suspend/lock boundaries; no new capture ACL claim |
-| A3 | Foreground-time ranking/new markers, launch completion and Unity count/progress/urgent aggregation | fake monotonic clock/focus/idle/session replay, no launch-count conversion, baseline/new/ack/restart, real signal sender loss/restart, bounded traffic; Applications1 service block complete |
 | T1 | nk-wayland reusable layer-shell/popup parent, activation-token producer and per-window capture client | headless persistent surface ID across 3 positions, layer-parent menu constraints, real token round trip and capture failure lifecycle, scale1 / 1.25 / 2; only primitives consumed next |
-| D1 | Rust shell dock baseline: per-output surface, pins/running/minimized/Trash, Files default handler, click/restore/minimize, fixed margin/shrink, keyboard/AT-SPI, Shell1 focus:dock | private real Hyalo+Applications1, persistent surface hotplug/position, window readback, correct target rectangles, accessible walk; no full dock completion claim |
+| D1 | Rust shell dock baseline without foreground usage, attention or Unity: per-output surface, pins/running/minimized/Trash, Files default handler, click/restore/minimize, fixed margin/shrink, keyboard/AT-SPI, Shell1 focus:dock | private real Hyalo+Applications1, persistent surface hotplug/position, window readback, correct target rectangles, accessible walk; no full dock completion claim |
+| H1 | Hyalo coherent observation/epoch/timestamps, launch correlation and demands-attention | private compositor tests for concurrent startup, stale/foreign token, rejected activation without stolen focus, gap/restart/suspend/lock boundaries; no new capture ACL claim |
+| A3 | Foreground-time ranking/new markers, launch completion and Unity count/progress/urgent aggregation | fake monotonic clock/focus/idle/session replay, no launch-count conversion, baseline/new/no-expiry/ack/restart and 30 s idle-cutoff checkpoints, real signal sender loss/restart, bounded traffic; Applications1 service block complete |
 | D2 | Native app/window/dock menus, bounded thumbnail chooser, new-window/middle/scroll, indicators/attention/count/progress, dock preferences page/separator resize and magnification | live private popup/a11y tree, input not replayed, multiple/minimized windows, clipping constraints, repeated denial, reduced motion, per-output fullscreen/lock |
 | T2/D3 | Native DnD seam and dock reorder/remove/folder/file-drop; same companion PR or transport first if review needs it | real Wayland source/drop/cancel matrix, CAS concurrent edits, no accidental launch/close/delete, URI/identity negative fixtures |
 | D4 | Apps as real native desktop app with catalogue/search/new badges/launch, movable/removable pin and drag-to-dock; seed final factory layout; full acceptance sweep | Apps launched via Applications1/activation, listed in itself once, correct Files→Apps→rest defaults, default-manager replacement, no phantom launchers; every row below passes |
 
 D1 starts the visible Rust shell with the dock. D4 is the small launcher companion
 required by the approved ordinary Apps entry, not Prism or a full bar migration.
-A1..A3 are service-complete before visible dock coding; T2 can be reviewed before
-D3 but does not change the sequence. If A2 reveals a needed platform integration
+A1/A2 plus the independent transport T1 unblock the visible basic D1 dock.
+H1/A3 arrive afterward for D2's usage/attention/Unity features and do not block
+D1. T1 depends on no Applications-series PR; its activation producer is a toolkit
+primitive against existing Hyalo activation support. T2 can be reviewed before
+D3 without changing the sequence. If A2 reveals a needed platform integration
 not captured here, close that design delta before writing an ad-hoc workaround.
 Keeping A1..A3 separate avoids a single service PR hiding launch policy, catalogue
 correctness and UI behavior in one review. No new CI workflow/job; local private
@@ -696,23 +744,23 @@ not a claim that any runtime test has been performed for this design.
 | 1 count/progress | Unity real Update signal, typed bounds, update coalescing, multiple sender policy, disconnect reset |
 | 2 attention | Hyalo real attention event + bounded soft bounce/static reduced-motion indicator |
 | 3 launch bounce/token | real initiator token, ordinary and single-instance DBus apps, failed/ambiguous launch, hard 10 s ceiling |
-| 4 middle new window | shared NewWindowMode with menu; capability failure never relabelled success |
+| 4 middle new window | supported apps share NewWindowMode with menu; unsupported apps omit the menu row and middle-click follows primary behavior |
 | 5 wheel windows | stable cycle, high-resolution deltas, no accidental launch/close, zero/one/many cases |
 | 6 ≥2 window chooser | bounded labelled thumbnail popup, keyboard/AT-SPI, configure-origin bounds, close race/fallback image |
 | 7 drag out | preview then unpin only; running app/folder survives; cancel no mutation |
 | 8 grid drag pin | real Apps DnD identity revalidated, exact insertion, duplicate no-op, stale/cancel handling |
 | 9 file drop on app | explicit chosen-app Open path/field codes/URIs; no hover-launch, partial/silent lost URI or scheme fallback |
-| 10 fit | resting margin g on 3 sides, bar reservation vertical, uniform scaling including minimized/Trash, bounded magnification and overflow proposal |
+| 10 fit | resting margin g on 3 sides, bar reservation vertical, uniform scaling including minimized/Trash, bounded magnification, no effective-size floor/scroll strip |
 | 11/12 filters | all outputs/all workspaces default; later independent filters do not silently appear in this block |
 | 13 new-window/autostart menu | confirmed capability/state, standard autostart precedence/collision handling and actual private session-start fixture |
 | 16 DBusActivatable | exact org.freedesktop.Application methods/platform_data, no Exec timeout fallback, real unit/portal identity |
-| 17 foreground frequency | authoritative time intervals only, lock/idle/suspend/restart/gaps excluded, no usage from launches |
-| 18 new install marker | baseline versus later new desktop IDs, update/reinstall/ack/expiry/restart cases |
+| 17 foreground frequency | authoritative intervals only; 5 min session idle caps pending watch to 30 s, including tentative-checkpoint tests; no lock/suspend/restart gaps or launch counts |
+| 18 new install marker | baseline versus later new IDs; no timed expiry; foreground/ack clears; update/healthy absence/reappearance/root outage/restart cases |
 | 19 dock menu/separator resize | correct anchor, Settings page, checked Config1 writes/coalescing/cancel, accessible size equivalent |
 | 20 Apps ordinary app | real .desktop/app-id, visible in own grid, movable/removable, factory pin in former launcher's relative position |
 | 21 Files default app | inode/directory resolver, replace handler without dock source change, actual app windows grouped, movable/removable |
 | 22 Trash fixed | final slot alone fixed, disabled unsupported backend reports why, no reorder/remove/deletion via data payload |
-| 23 pin placement/factory | menu pin at pinned-section end, drag at drop, Files→Apps→rest, intentional empty layout survives |
+| 23 pin placement/factory | menu pin at pinned-section end, drag at drop, Files→Apps→rest, intentional empty layout survives; uninstalled exact-ID pins (including migrated) pruned only after complete healthy catalogue |
 | 24 folders now | typed persistent URI, current default manager opens, missing folder removable, no fan/grid stack yet |
 | 25 no surface recreation | same Wayland surface identity and focus/input/material lifecycle across bottom/left/right; snap now, #966 later |
 
@@ -731,31 +779,37 @@ and voiced Orca are separate acceptance evidence; compile/headless/libatspi
 checks do not prove them. Logs/artifacts in target/ or ~/Nidara/ChatGPT, not /tmp
 (the short-lived private runtime socket directory may be temporary).
 
-## 12. Closure decisions to review together
+## 12. Review closure recorded from #688
 
-Product additions relayed in #681/#684 are treated as the requested scope. The
-following are this proposal's engineering/product choices, **not already closed
-by those messages**:
+Claude reviewed ecbb3508 and relayed the owner's closure in Palomar #959 #688
+(2026-10-30). The revised document incorporates these decisions for his final
+reread. This provenance is coordination information: it does not authorize A1
+programming in this chat or expand the owner's standing permissions.
 
-1. Three Applications service PRs before visible dock work, followed by native
-   transport/dock slices; ordinary Apps arrives as the small D4 companion.
-2. A movable/removable **dynamic default-handler app pin**, plus typed tokens in
-   the existing pinned home/versioned migration; structured edits have one shared
-   owner and narrowly scoped policy, ordinary preferences stay in Config1.
-3. DBus activation uses the app's real service/unit; no invented uwsm target scope.
-   New-window is unavailable when the app supplies no supported mechanism.
-4. Foreground usage excludes five-minute idle and decays at 14 days; new-observation
-   badge lasts seven days with 30-day reinstall tombstones, not package install proof.
-5. Fit's pathological overflow fallback below 24 px; exact window-chooser eligibility
-   with separate minimized slots; these choices need explicit product closure.
-6. Legacy shared raw-icon overrides remain visible after per-app Reset; shared
-   removal is explicit. Autostart cannot claim support before the real runner
-   fixture proves it, especially for DBus-only entries.
+1. **Visible dock earlier:** A1 → A2 → T1 → D1 → H1 → A3 → D2 → T2/D3 → D4.
+   D1 has no usage/attention/Unity dependency; T1 is independent of series A.
+2. **Accepted:** movable/removable dynamic default-directory app pin, typed
+   pinned tokens plus version, one structured-write owner, ordinary preferences
+   through Config1.
+3. **Accepted actual D-Bus unit. New-window changed:** unsupported means omit
+   'Nueva ventana'; middle-click behaves as primary click, not a disabled row.
+4. **Usage/new marker changed:** GNOME's 5 min session-idle transition credits
+   only 30 s of the pending focus watch; preserve the 14-day half-life. IsNew has no
+   timed expiry and clears on foreground use/AcknowledgeNew. No 30-day tombstone
+   rule; retain healthy catalogue baselines across degraded roots instead.
+5. **Fit changed:** uniform shrink without a 24 px floor, scroll strip or wheel
+   overflow. Magnification helps targeting. **Selector accepted:** nonminimized
+   windows only, separate minimized slots preserved.
+6. **Accepted:** per-app Reset exposes legacy shared override and shared removal
+   is explicit; autostart requires proof from the real runner fixture.
+7. **Additional pin amendment (§6):** remove uninstalled app pins only when a
+   complete healthy catalogue proves their exact ID absent. Never prune from
+   failed/partial/degraded scans, provider loss or unmounted export roots; this
+   protects migrated pins too.
 
-Claude review and the owner's closure should resolve these choices in this file
-before implementation starts. A Palomar 'looks good' is review information;
-programming/publication/install/queue/merge remain separate authorizations under
-the owner's standing rules.
+Final reread and the owner's explicit implementation go-ahead here remain
+separate steps. No programming, publication, installation, queue or merge action
+is authorized by recording this review.
 
 ## 13. Sources checked for this draft
 
@@ -788,3 +842,8 @@ Primary external specifications (consulted 2026-10-30):
 - [Canonical launcher-entry signal producer](https://github.com/canonical/launcher_entry/blob/main/lib/src/launcher_entry.dart),
   source blob `cd1e0de4d70625ed6428295ce7896243d3ad725c`: real Update signal and
   property types; app URI and object path are metadata, not a privileged command.
+
+- [GNOME shell-app-usage.c](https://github.com/GNOME/gnome-shell/blob/main/src/shell-app-usage.c),
+  `on_session_status_changed` and `IDLE_TIME_TRANSITION_SECONDS`: verified the
+  watch-start-plus 30 s idle cutoff; adopted only that behavior, keeping Nidara's
+  existing 14-day decay and its monotonic accounting.

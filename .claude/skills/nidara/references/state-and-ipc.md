@@ -1958,9 +1958,12 @@ Key routing is unchanged and still worth copying: the Overview owns no text fiel
 
 ## Proposed Applications1 and Rust dock contract (#959)
 
-The draft in `session/design/APPLICATIONS1-DOCK.md` covers the next independent
+The revised design in `session/design/APPLICATIONS1-DOCK.md` covers the next independent
 Applications1/dock block: catalogue/launch/foreground usage, ordinary Apps and
 default Files pins, typed folders, and the required toolkit/Hyalo seams. It is
-**a proposal, not implemented behavior or permission to program**. Its closure
-section names the choices Claude and the owner must resolve before implementation.
+**design documentation, not implemented behavior or permission to program**.
+Its closure section records Claude's #688 review and the relayed owner decisions,
+including dock-before-usage ordering, GNOME-style idle cutoff, no timed new marker,
+uniform shrink without a size floor/scroll strip, and healthy-catalogue-only pin
+pruning. A1 still requires the owner's explicit implementation go-ahead here.
 The existing TS model documented above is unchanged; IPC B is separate.
