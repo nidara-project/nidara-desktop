@@ -166,7 +166,7 @@ stale identity. No CI job, step or configuration was added. The dedicated sessio
 checks the bus/model without native PW headers. The existing Hyalo job also
 compiles the native backend through the package build; native clippy and audio
 behavior checks are local. Package/development release builds enable the feature. Arch builds need
-`clang-libs` for bindgen, in addition to the existing PipeWire/WirePlumber deps.
+`clang` for bindgen (the binary: `clang-libs` alone fails on `stdbool.h`), in addition to the existing PipeWire/WirePlumber deps.
 
 ```
 cargo test --manifest-path session/Cargo.toml --locked
