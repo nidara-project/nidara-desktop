@@ -17,6 +17,19 @@ mod popup_overlay;
 pub use bounded_popup::{MenuPopupPlacement, PopupSide};
 pub use popup::{PopupPlacement, run_popup};
 pub use popup_overlay::{PopupEvent, PopupId};
+mod capture;
+pub use capture::{CaptureFailure, CaptureId, Image};
+mod connect;
+mod layer_shell;
+mod outputs;
+pub use outputs::{BindFailure, OutputEvent, OutputInfo, OutputWatch, outputs};
+mod token;
+mod wake;
+pub use layer_shell::{
+    Edges, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec, OutputId,
+};
+pub use token::{ActivationToken, TokenFailure, TokenRequest};
+pub use wake::{WakeSource, Waker, wake_channel};
 mod layers;
 pub use layers::{Curve, LayerEvent, LayerId, Property};
 mod material;
@@ -70,6 +83,11 @@ pub struct Frame {
 #[derive(Clone, Debug)]
 pub enum Event {
     Configure,
+    /// A layer root was closed by the compositor (its output went away). The run
+    /// loop ends after the app has seen this; a new output gets a new surface.
+    Closed,
+    /// A `Waker` of this loop was woken (layer roots started with a `WakeSource`).
+    Wake,
     PopupDone,
     PopupOverlay {
         id: PopupId,
@@ -84,6 +102,20 @@ pub enum Event {
         event: LayerEvent,
     },
     FrameDone,
+    /// The answer to `request_activation_token`: exactly one of these two per request.
+    ActivationToken {
+        request: TokenRequest,
+        token: ActivationToken,
+    },
+    ActivationTokenFailed {
+        request: TokenRequest,
+        reason: TokenFailure,
+    },
+    /// The answer to `capture_window`: exactly one per capture.
+    Capture {
+        id: CaptureId,
+        result: std::result::Result<Image, CaptureFailure>,
+    },
     Focus(bool),
     Key(Key),
     Motion(f64, f64),
@@ -157,6 +189,10 @@ pub struct Window {
     connection: Connection,
     foreign: foreign::Foreign,
     activation: Option<activation::xdg_activation_v1::XdgActivationV1>,
+    tokens: token::Tokens,
+    toplevels: capture::Toplevels,
+    captures: capture::Captures,
+    wake: Option<WakeSource>,
     controls: controls::Controls,
     maximized: bool,
     wm: Option<xdg_wm_base::XdgWmBase>,
@@ -179,6 +215,8 @@ pub struct Window {
     surface: Option<wl_surface::WlSurface>,
     xdg: Option<xdg_surface::XdgSurface>,
     toplevel: Option<xdg_toplevel::XdgToplevel>,
+    layer_shell: Option<layer_shell::zwlr_layer_shell_v1::ZwlrLayerShellV1>,
+    layer_surface: Option<layer_shell::zwlr_layer_surface_v1::ZwlrLayerSurfaceV1>,
     popup: Option<xdg_popup::XdgPopup>,
     positioner: Option<xdg_positioner::XdgPositioner>,
     shm: Option<wl_shm::WlShm>,
@@ -246,8 +284,21 @@ impl Window {
     pub fn capabilities(&self) -> Capabilities {
         self.capabilities
     }
+    /// End the run loop. Pending activation tokens and captures still get their one
+    /// terminal event (`Closed`) before it ends, and none of them succeeds after this.
     pub fn close(&mut self) {
         self.closed = true;
+    }
+    /// After the loop: every request still open, or answered in a batch the app did not
+    /// read, ends `Closed` exactly once (a success the app never saw becomes `Closed` too).
+    fn end_requests(&mut self, rest: Vec<Event>, app: &mut impl Application) -> Result<()> {
+        let mut tail = terminals_on_close(rest.into_iter().chain(std::mem::take(&mut self.events)));
+        self.tokens.close_all(&mut tail);
+        self.captures.close_all(&mut tail);
+        for e in tail {
+            app.event(e, self)?;
+        }
+        Ok(())
     }
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
@@ -560,6 +611,62 @@ impl Window {
         })
     }
 }
+/// Of what the app did not read before closing, only the requests' terminals remain,
+/// and none of them a success.
+fn terminals_on_close(events: impl IntoIterator<Item = Event>) -> Vec<Event> {
+    events
+        .into_iter()
+        .filter_map(|e| match e {
+            Event::ActivationToken { request, .. } => Some(Event::ActivationTokenFailed {
+                request,
+                reason: TokenFailure::Closed,
+            }),
+            Event::Capture { id, result: Ok(_) } => Some(Event::Capture {
+                id,
+                result: Err(CaptureFailure::Closed),
+            }),
+            e @ (Event::ActivationTokenFailed { .. } | Event::Capture { .. }) => Some(e),
+            _ => None,
+        })
+        .collect()
+}
+#[cfg(test)]
+mod close_tests {
+    use super::*;
+    #[test]
+    fn closing_keeps_one_terminal_per_request_and_no_success() {
+        let image = Image {
+            width: 1,
+            height: 1,
+            rgba: vec![0; 4],
+        };
+        let out = terminals_on_close([
+            Event::Motion(1., 2.),
+            Event::Capture {
+                id: CaptureId(1),
+                result: Ok(image),
+            },
+            Event::Capture {
+                id: CaptureId(2),
+                result: Err(CaptureFailure::Stopped),
+            },
+            Event::FrameDone,
+        ]);
+        assert!(matches!(
+            out.as_slice(),
+            [
+                Event::Capture {
+                    id: CaptureId(1),
+                    result: Err(CaptureFailure::Closed)
+                },
+                Event::Capture {
+                    id: CaptureId(2),
+                    result: Err(CaptureFailure::Stopped)
+                }
+            ]
+        ));
+    }
+}
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -616,7 +723,25 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
-    run_inner(app, options, start, None, None).map(|_| ())
+    run_inner(app, options, start, None, None, None).map(|_| ())
+}
+/// A layer-shell root (SHELL-SURFACES.md §1) on its own connection: the one
+/// `OutputWatch::bind_output` made when `layer.output` is set, else a new one. `options.size`
+/// is the initial logical size; `options.title` is unused. Ends on `Event::Closed` or
+/// `Window::close`. With `wake`, another thread can reach the app (`Event::Wake`): the
+/// shell ends a dock with it when the watcher reports its output removed.
+pub fn run_layer(
+    app: impl Application,
+    options: Options,
+    layer: LayerSpec,
+    wake: Option<WakeSource>,
+    start: Instant,
+) -> Result<()> {
+    layer.placement.validate()?;
+    if layer.namespace.is_empty() || layer.namespace.contains('\0') {
+        return Err("layer namespace must be nonempty text".into());
+    }
+    run_inner(app, options, start, None, None, Some((layer, wake))).map(|_| ())
 }
 /// A modal xdg toplevel on the SAME connection; set_parent cannot name a
 /// surface from another connection. The parent event queue resumes on close.
@@ -644,7 +769,7 @@ pub fn run_dialog_with_options(
         return Err("dialog needs a nonempty size".into());
     }
     options.app_id = parent.app_id;
-    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None)?;
+    let last_serial = run_inner(app, options, Instant::now(), Some(parent), None, None)?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();
     Ok(())
@@ -656,9 +781,17 @@ fn run_inner(
     start: Instant,
     parent: Option<&Window>,
     popup_options: Option<(PopupPlacement, Option<u32>)>,
+    layer: Option<(LayerSpec, Option<WakeSource>)>,
 ) -> Result<u32> {
+    let own = layer
+        .as_ref()
+        .and_then(|(spec, _)| spec.output.as_ref())
+        .map(|o| o.connection.clone());
     let conn = if let Some(parent) = parent {
         parent.connection.clone()
+    } else if let Some(own) = own {
+        // The dock's own connection, where `OutputWatch::bind_output` bound its output.
+        own
     } else {
         Connection::connect_to_env().map_err(err)?
     };
@@ -669,6 +802,10 @@ fn run_inner(
         connection: conn.clone(),
         foreign: foreign::Foreign::default(),
         activation: None,
+        tokens: Default::default(),
+        toplevels: Default::default(),
+        captures: Default::default(),
+        wake: None,
         controls: controls::Controls::default(),
         maximized: false,
         wm: None,
@@ -691,6 +828,8 @@ fn run_inner(
         surface: None,
         xdg: None,
         toplevel: None,
+        layer_shell: None,
+        layer_surface: None,
         popup: None,
         positioner: None,
         shm: None,
@@ -782,6 +921,23 @@ fn run_inner(
         let output: wl_output::WlOutput = registry.bind(*id, (*v).min(4), &qh, ());
         w.outputs.insert(output.id(), 1);
     }
+    if layer.is_some() {
+        // Window capture is the shell's: only layer roots list the compositor's windows.
+        use wayland_protocols::ext::{
+            foreign_toplevel_list::v1::client::ext_foreign_toplevel_list_v1 as list,
+            image_capture_source::v1::client::ext_foreign_toplevel_image_capture_source_manager_v1 as sources,
+            image_copy_capture::v1::client::ext_image_copy_capture_manager_v1 as copy,
+        };
+        w.toplevels.sources = bind!(sources::ExtForeignToplevelImageCaptureSourceManagerV1, 1);
+        w.toplevels.copy = bind!(copy::ExtImageCopyCaptureManagerV1, 1);
+        if w.toplevels.sources.is_some() && w.toplevels.copy.is_some() {
+            w.toplevels.list = bind!(list::ExtForeignToplevelListV1, 1);
+        }
+        w.layer_shell = bind!(layer_shell::zwlr_layer_shell_v1::ZwlrLayerShellV1, 4);
+        if w.layer_shell.is_none() {
+            return Err("required Wayland protocol missing: zwlr_layer_shell_v1".into());
+        }
+    }
     w.text_manager = bind!(zwp_text_input_manager_v3::ZwpTextInputManagerV3, 1);
     w.data_manager = bind!(wl_data_device_manager::WlDataDeviceManager, 3);
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
@@ -791,8 +947,30 @@ fn run_inner(
         1
     );
     let surface = compositor.create_surface(&qh, ());
-    let xdg = base.get_xdg_surface(&surface, &qh, ());
-    if let Some((placement, grab_serial)) = popup_options {
+    let mut xdg = None;
+    if let Some((spec, wake)) = layer {
+        w.wake = wake;
+        // Bound by `OutputWatch::bind_output` and checked against the watcher: exactly
+        // the instance it reported, never a newer output that reused the number.
+        let output = spec.output.as_ref().map(|o| o.proxy.clone());
+        let s = w.layer_shell.as_ref().unwrap().get_layer_surface(
+            &surface,
+            output.as_ref(),
+            layer_shell::level(spec.layer),
+            spec.namespace.into(),
+            &qh,
+            (),
+        );
+        spec.placement.send(&s);
+        w.layer_surface = Some(s);
+        // The surface holds its output now; the dock has no other use for the object.
+        if let Some(o) = &output
+            && o.version() >= 3
+        {
+            o.release();
+        }
+    } else if let Some((placement, grab_serial)) = popup_options {
+        let xdg = xdg.insert(base.get_xdg_surface(&surface, &qh, ()));
         let parent = parent.ok_or("popup requires a parent")?;
         let parent_xdg = parent
             .xdg
@@ -810,6 +988,7 @@ fn run_inner(
         w.popup = Some(popup);
         w.positioner = Some(positioner);
     } else {
+        let xdg = xdg.insert(base.get_xdg_surface(&surface, &qh, ()));
         let top = xdg.get_toplevel(&qh, ());
         top.set_app_id(options.app_id.into());
         top.set_title(options.title.into());
@@ -829,8 +1008,8 @@ fn run_inner(
         w.fractional = Some(fraction.get_fractional_scale(&surface, &qh, ()));
     }
     w.surface = Some(surface);
-    w.xdg = Some(xdg);
-    if w.popup.is_none() && app.window_controls() {
+    w.xdg = xdg;
+    if w.toplevel.is_some() && app.window_controls() {
         w.request_window_controls();
     }
     // Seat and manager order in registry is unspecified.
@@ -846,13 +1025,27 @@ fn run_inner(
     }
     let mut first = true;
     let mut first_callback = true;
+    // What a batch still held when the app closed: its requests' terminals still count.
+    let mut rest = Vec::new();
     while !w.closed {
         queue.dispatch_pending(&mut w).map_err(err)?;
         w.transfers()?;
         if let Some(k) = w.keyboard.tick() {
             w.push_key(k);
         }
-        for mut event in std::mem::take(&mut w.events) {
+        w.tokens.expire(Instant::now(), &mut w.events);
+        w.captures.expire(Instant::now(), &mut w.events);
+        let mut batch = std::mem::take(&mut w.events).into_iter();
+        while let Some(mut event) = batch.next() {
+            // Serials the app may later turn into an activation token (§4).
+            match &event {
+                Event::Button { serial, .. } => w.tokens.delivered(*serial),
+                Event::Key(Key {
+                    serial: Some(serial),
+                    ..
+                }) => w.tokens.delivered(*serial),
+                _ => {}
+            }
             if let Event::PopupOverlay { id, .. } = &event
                 && !w.overlay.iter().any(|p| p.id == *id)
             {
@@ -926,9 +1119,14 @@ fn run_inner(
             // An IME's own edit/caret echo must not look like an external
             // change: fcitx5 uses this cause to decide whether to reset preedit.
             w.input_from_ime = matches!(&event, Event::Ime(_));
+            let closed = matches!(event, Event::Closed);
             app.event(event, &mut w)?;
             w.input_from_ime = false;
+            if closed {
+                w.closed = true;
+            }
             if w.closed {
+                rest.extend(batch.by_ref());
                 break;
             }
         }
@@ -947,18 +1145,37 @@ fn run_inner(
         if let Some(guard) = queue.prepare_read() {
             use rustix::event::{PollFd, PollFlags, Timespec, poll};
             let fd = guard.connection_fd();
-            let mut fds = [PollFd::new(&fd, PollFlags::IN)];
-            let ms = if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
-                8
-            } else {
-                i64::from(app.poll_interval_ms().clamp(1, 1000))
-            };
+            let mut fds = vec![PollFd::new(&fd, PollFlags::IN)];
+            let wake = w.wake.as_ref().map(WakeSource::fd);
+            if let Some(wake) = &wake {
+                fds.push(PollFd::new(wake, PollFlags::IN));
+            }
+            let mut ms =
+                if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
+                    8
+                } else {
+                    i64::from(app.poll_interval_ms().clamp(1, 1000))
+                };
+            // A pending token's deadline is an active timer only while it waits.
+            if let Some(wait) = w.captures.wait(Instant::now()) {
+                ms = ms.min(wait.as_millis() as i64 + 1);
+            }
+            if let Some(wait) = w.tokens.wait(Instant::now()) {
+                ms = ms.min(wait.as_millis() as i64 + 1);
+            }
             let timeout = Timespec {
                 tv_sec: ms / 1000,
                 tv_nsec: (ms % 1000) * 1_000_000,
             };
-            match poll(&mut fds, Some(&timeout)) {
-                Ok(_) if fds[0].revents().intersects(PollFlags::IN) => match guard.read() {
+            let polled = poll(&mut fds, Some(&timeout));
+            let woke = fds.get(1).is_some_and(|f| !f.revents().is_empty());
+            let readable = fds[0].revents().intersects(PollFlags::IN);
+            drop(fds);
+            if woke && w.wake.as_ref().is_some_and(WakeSource::drain) {
+                w.events.push(Event::Wake);
+            }
+            match polled {
+                Ok(_) if readable => match guard.read() {
                     Ok(_) => {}
                     Err(wayland_client::backend::WaylandError::Io(e))
                         if e.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -974,6 +1191,7 @@ fn run_inner(
             }
         }
     }
+    w.end_requests(rest, &mut app)?;
     w.destroy_surfaces();
     conn.flush().map_err(|e| format!("Wayland flush: {e}"))?;
     Ok(w.serial)
@@ -985,6 +1203,9 @@ impl Window {
     fn destroy_surfaces(&mut self) {
         self.close_popup_overlay();
         self.foreign.destroy();
+        self.tokens.destroy();
+        self.captures.destroy();
+        self.toplevels.destroy();
         if let Some(activation) = self.activation.take() {
             activation.destroy();
         }
@@ -1020,6 +1241,12 @@ impl Window {
         }
         if let Some(t) = self.toplevel.take() {
             t.destroy();
+        }
+        if let Some(l) = self.layer_surface.take() {
+            l.destroy();
+        }
+        if let Some(l) = self.layer_shell.take() {
+            l.destroy();
         }
         if let Some(x) = self.xdg.take() {
             x.destroy();

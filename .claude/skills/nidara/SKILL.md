@@ -315,6 +315,24 @@ symbolic-shape parser. All mutations retain original kernel sender identity and
 scoped nidara-access policy; Launcher gains no general Shell privileges and its
 installed path becomes active only when D4 ships nidara-apps.
 
+### Shell surfaces (the Rust dock and bar)
+
+`nk-wayland` hosts layer-shell roots too (#959 T1): `run_layer(app, options, LayerSpec,
+wake, start)`, with `run` unchanged. Read `toolkit/SHELL-SURFACES.md` before building a
+dock or bar. Its gotchas:
+- A `wl_output` global number is NOT identity. Hyalo reuses freed numbers, so a removed
+  and re-added screen can get the same one. Use `OutputId`, from `OutputWatch`.
+- A dock on one screen gets that exact instance with `OutputWatch::bind_output`. The
+  `LayerOutput` it returns is single-use and brings the dock's own connection.
+- Another thread reaches the loop only through `wake_channel()` (`Event::Wake`), never
+  by blocking it.
+- Every wait in it has a deadline.
+- Hyalo closes a layer surface whose named output is gone; it never moves it to the
+  output under the pointer.
+
+The checks are nested, not in CI: `toolkit/crates/nk-wayland/check-layer-headless.sh`
+with `NK_LAYER_CHECK`. Before acting, they wait for Hyalo's "Xwayland ready".
+
 ## Keep this skill current (part of "done", not a follow-up)
 
 This skill is only useful if it matches reality. **When a change introduces or alters

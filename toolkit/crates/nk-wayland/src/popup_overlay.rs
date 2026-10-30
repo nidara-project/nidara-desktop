@@ -84,15 +84,22 @@ impl Window {
         modal: bool,
     ) -> Result<PopupId> {
         placement.validate()?;
+        // A layer root has no xdg_surface: its first-level popup is created without
+        // a parent and attached with zwlr_layer_surface_v1.get_popup before its
+        // initial commit (SHELL-SURFACES.md §3). Deeper levels keep the xdg chain.
         let parent = if let Some(id) = parent_id {
-            &self
-                .overlay
-                .iter()
-                .find(|p| p.id == id)
-                .ok_or("stale popup parent")?
-                .xdg
+            Some(
+                &self
+                    .overlay
+                    .iter()
+                    .find(|p| p.id == id)
+                    .ok_or("stale popup parent")?
+                    .xdg,
+            )
+        } else if self.layer_surface.is_some() {
+            None
         } else {
-            self.xdg.as_ref().ok_or("popup parent has no xdg surface")?
+            Some(self.xdg.as_ref().ok_or("popup parent has no xdg surface")?)
         };
         let shell = self.wm.as_ref().ok_or("xdg shell missing")?;
         let compositor = self.compositor.as_ref().ok_or("compositor missing")?;
@@ -102,7 +109,12 @@ impl Window {
         let xdg = shell.get_xdg_surface(&surface, &self.qh, id);
         let positioner = shell.create_positioner(&self.qh, ());
         placement.apply_side(&positioner, side)?;
-        let popup = xdg.get_popup(Some(parent), &positioner, &self.qh, id);
+        let popup = xdg.get_popup(parent, &positioner, &self.qh, id);
+        if parent.is_none()
+            && let Some(layer) = &self.layer_surface
+        {
+            layer.get_popup(&popup);
+        }
         positioner.destroy();
         if let Some(serial) = grab {
             popup.grab(

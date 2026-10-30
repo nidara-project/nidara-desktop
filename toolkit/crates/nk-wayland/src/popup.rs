@@ -50,6 +50,14 @@ impl PopupPlacement {
                 positioner.set_anchor(xdg_positioner::Anchor::TopRight);
                 positioner.set_gravity(xdg_positioner::Gravity::BottomRight);
             }
+            PopupSide::Above => {
+                positioner.set_anchor(xdg_positioner::Anchor::TopLeft);
+                positioner.set_gravity(xdg_positioner::Gravity::TopRight);
+            }
+            PopupSide::Left => {
+                positioner.set_anchor(xdg_positioner::Anchor::TopLeft);
+                positioner.set_gravity(xdg_positioner::Gravity::BottomLeft);
+            }
         }
         positioner.set_constraint_adjustment(
             xdg_positioner::ConstraintAdjustment::FlipY
@@ -72,6 +80,10 @@ pub fn run_popup(
     grab_serial: Option<u32>,
 ) -> Result<()> {
     placement.validate()?;
+    // A modal nested loop would starve a dock; layer roots use popup overlays.
+    if parent.is_layer() {
+        return Err("run_popup needs an xdg parent; use a popup overlay on a layer root".into());
+    }
     let last_serial = run_inner(
         app,
         Options {
@@ -85,6 +97,7 @@ pub fn run_popup(
         Instant::now(),
         Some(parent),
         Some((placement, grab_serial)),
+        None,
     )?;
     parent.ignore_input_before = Some(last_serial);
     parent.keyboard.reset();
