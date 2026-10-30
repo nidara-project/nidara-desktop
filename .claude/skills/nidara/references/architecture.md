@@ -3750,7 +3750,7 @@ properties. No TS bridge is added. Config1's five `audio.*` preferences live in
 `org.nidara.audio`; WP retains mixer/routing persistence. The native feature is
 enabled in package/dev builds; the existing sessiond CI checks the bus/model,
 and the existing Hyalo job compiles the native feature through the package.
-No new CI job or step is added. Bindgen needs `clang-libs` at build time. Negotiate channel counts by reading
+No new CI job or step is added. Bindgen needs `clang` (the binary, not only `clang-libs`) at build time: it asks the binary for the builtin headers, and without it `stdbool.h` is not found. Negotiate channel counts by reading
 SPA pods in Rust; `AudioInfoRaw::parse` pulled in a generated C wrapper that
 failed to link in the optimized package, despite a passing development build.
 

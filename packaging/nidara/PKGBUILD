@@ -203,9 +203,12 @@ depends=(
 _hyalo_makedepends=(
   libinput seatd libdisplay-info libxkbcommon mesa systemd-libs pango cairo
 )
+# `clang`, not just `clang-libs`: libspa-sys's bindgen finds the compiler's builtin headers
+# (stdbool.h) by asking the clang BINARY; with only libclang it fails in sessiond's build.
+# The Hyalo smoke job installs clang itself, which is why CI never saw it.
 makedepends=(
   nodejs npm esbuild wlr-protocols wayland-protocols hyprland-protocols
-  wayland gtk4 gobject-introspection pkgconf rust clang-libs
+  wayland gtk4 gobject-introspection pkgconf rust clang
   "${_hyalo_makedepends[@]}"
 )
 # etc/pam.d/nidara-lock is tracked so a local customization survives an upgrade —
