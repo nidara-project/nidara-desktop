@@ -19,7 +19,7 @@ Hyalo already serves what T1 needs: `WlrLayerShellState`, `xdg_activation_v1` (a
 honoured when its serial came after the maker got keyboard **or pointer** focus, which is
 exactly the dock's case: layer surfaces never take the keyboard on a click),
 `ext_foreign_toplevel_list_v1` with the hex window ID as identifier, and
-`ext_image_copy_capture_v1` over `ext_image_capture_source_v1`. T1 changes no Hyalo code; §2 names one Hyalo fix that waits for the owner.
+`ext_image_copy_capture_v1` over `ext_image_capture_source_v1`. T1's one Hyalo change is §2's close of a layer surface whose named output is gone (approved by the owner).
 
 ## 1. Layer root
 
@@ -110,11 +110,12 @@ output, on its own thread and its own connection**, with:
   cleanup are those of any root. When the dock ends, its connection closes and the
   compositor frees everything.
 - A removal AFTER the check: the dock's object stays the old instance. The surface must
-  then close, not move. **Hyalo today moves it** (`shell/layer.rs`: an explicit output
-  that no longer resolves falls back to the output under the pointer). A one-line Hyalo
-  fix (close instead) is a separate commit, outside T1's "toolkit only" scope, and waits
-  for the owner's decision. Until then, the guarantee holds up to that window. Surfaces
-  that exist when an output is removed are already closed (`backend/tty.rs`).
+  then close, not move. Hyalo used to move it (`shell/layer.rs`: an explicit output that
+  no longer resolved fell back to the output under the pointer); T1 makes it close
+  (`Event::Closed`), with a null output keeping the pointer fallback. This is T1's only
+  Hyalo change, a separate commit approved by the owner; it is not shown live (nested
+  Hyalo cannot remove its only output). Surfaces that exist when an output is removed
+  were already closed (`backend/tty.rs`).
 - `wake_channel() -> (Waker, WakeSource)`: `run_layer(app, options, spec, Some(source),
   start)`; `Waker::wake()` (Clone + Send, never blocks, coalesces) reaches the app as
   `Event::Wake`, and the app reads its own channel (stop; D1's daemon data). Put the
