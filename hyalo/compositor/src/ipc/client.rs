@@ -37,7 +37,8 @@ nidara-hyalo msg <request>        talk to the running Hyalo (prints JSON)
   settings '<json>'               persist and apply a change in the settings layer, as a
                                     JSON merge patch: '{"input":{"keyboard":{"numlock":true}}}'
                                     (null removes a key; your hyalo.toml still wins)
-  events                          stream events, one JSON object per line
+  events [--snapshot]             stream events, one JSON object per line; --snapshot
+                                    sends the whole state first (ipc/observe.rs)
   quit                            end the session
   raw '<json>'                    send a request as written
 
@@ -142,7 +143,7 @@ fn parse(args: &[String]) -> Result<Option<String>, String> {
             Request::Settings { patch }
         }
         "quit" => Request::Quit,
-        "events" => Request::EventStream,
+        "events" => Request::EventStream { snapshot: args.get(1).is_some_and(|a| a == "--snapshot") },
         "screenshot" => {
             let path = args.get(1).ok_or("screenshot needs a path")?;
             // Hyalo writes the file; a relative path would land in ITS working directory.

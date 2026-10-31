@@ -472,9 +472,11 @@ pub fn init(state: &mut Hyalo) -> Result<(), Box<dyn std::error::Error>> {
                 d.drm_output_manager.pause();
             }
             crate::display::changed(state);
+            state.session_active_changed(false);
         }
         SessionEvent::ActivateSession => {
             tracing::info!("session resumed");
+            state.session_active_changed(true);
             let Backend::Tty(tty) = &mut state.backend else { return };
             if tty.libinput.resume().is_err() {
                 tracing::error!("libinput did not resume");

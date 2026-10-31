@@ -252,10 +252,11 @@ fn screensaver(tx: Sender<LoginEvent>) -> zbus::Result<()> {
 }
 
 impl Hyalo {
-    fn on_login_event(&mut self, event: LoginEvent) {
+    pub(crate) fn on_login_event(&mut self, event: LoginEvent) {
         match event {
             LoginEvent::PrepareForSleep(true) => {
                 tracing::info!("the computer is going to sleep: locking first");
+                self.sleep_changed(true);
                 if self.lock.is_locked() {
                     self.release_sleep_delay();
                     return;
@@ -294,6 +295,7 @@ impl Hyalo {
             }
             LoginEvent::PrepareForSleep(false) => {
                 tracing::info!("back from sleep");
+                self.sleep_changed(false);
                 if let Some(l) = &mut self.login {
                     l.sleep_pending = false;
                 }

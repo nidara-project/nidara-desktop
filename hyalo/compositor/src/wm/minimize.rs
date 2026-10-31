@@ -220,7 +220,7 @@ impl Hyalo {
         // The focus goes back to the window focused before it — or before its dialog.
         let focused_hidden = self.wm.focused.and_then(|f| self.wm.get(f)).is_some_and(|f| self.wm.is_hidden(f));
         if focused_hidden {
-            self.wm.focused = None;
+            self.set_focused(None);
             let next = self.wm.last_focused_on(ws);
             self.focus_window(next);
         }

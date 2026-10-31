@@ -9,6 +9,7 @@
 //! thing for scripts. Runtime changes go through here, never by rewriting a file.
 
 pub mod client;
+pub mod observe;
 pub mod server;
 
 use serde::{Deserialize, Serialize};
@@ -54,6 +55,10 @@ pub struct WindowInfo {
     pub drawn: Option<[f64; 4]>,
     /// Higher = focused more recently; 0 = never focused.
     pub focus_order: u64,
+    /// It asks for the user's attention: an activation it asked for was refused (it did not
+    /// come from what the user did), or an X11 urgency hint. Cleared when it gets the focus
+    /// (observe.rs, #959 H1).
+    pub demands_attention: bool,
     /// The window's own box (no border), global logical pixels.
     pub x: i32,
     pub y: i32,
@@ -300,7 +305,16 @@ pub enum Request {
     /// (config::apply_settings). Answers whether anything changed.
     Settings { patch: serde_json::Value },
     Quit,
-    EventStream,
+    /// The connection becomes a stream of `Event`s. With `snapshot`, the first one is a
+    /// `snapshot` of the whole state as of its serial (ipc/observe.rs).
+    EventStream {
+        #[serde(default)]
+        snapshot: bool,
+    },
+    /// What becomes of the launch that carries this activation token: answered with a launch
+    /// number, then a `launch_outcome` event for it (ipc/observe.rs). The token is never sent
+    /// back, logged or broadcast.
+    ObserveLaunch { token: String },
 }
 
 // Replies and events are only written by Hyalo; the CLI prints them as they come.
@@ -333,6 +347,9 @@ pub enum Response {
     Xwayland { display: Option<String>, ready: bool, scale: f64, overrides: usize },
     Config { config: Box<crate::config::Config> },
     Settings { changed: bool },
+    /// `already`: what became of it, when its token had been used before it was asked about;
+    /// otherwise a `launch_outcome` event says so later.
+    LaunchObserved { launch: u64, already: Option<observe::Outcome> },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -353,6 +370,38 @@ pub enum Event {
     ConfigError { message: String },
     /// The session was locked (the lock client was told so) or unlocked.
     LockChanged { locked: bool },
+    /// The whole state at once, as of this event's serial: only to the subscriber that asked
+    /// for it (`event_stream` with `snapshot`), and first on its stream.
+    Snapshot {
+        windows: Vec<WindowInfo>,
+        workspaces: Vec<WorkspaceInfo>,
+        focus: Option<WindowId>,
+        locked: bool,
+        idle: bool,
+        /// CLOCK_MONOTONIC µs of the last input; meaningful while `idle`.
+        idle_since_us: u64,
+        session_active: bool,
+        sleeping: bool,
+    },
+    /// The keyboard went to another window, or to none, at this event's time: one per change,
+    /// in order with the other boundaries (observe.rs `set_focused`). `focus_changed` is the
+    /// same, coalesced to once per round after the window list.
+    FocusTransition { id: Option<WindowId>, app_id: Option<String> },
+    /// A window began or stopped demanding attention (`WindowInfo::demands_attention`).
+    AttentionChanged { id: WindowId, demands: bool },
+    /// The session went idle for usage (observe.rs USAGE_IDLE without input, nothing holding
+    /// idle off) or came back. `since_us`: the last input's CLOCK_MONOTONIC µs.
+    IdleChanged { idle: bool, since_us: u64 },
+    /// This seat lost the screens to another VT, or got them back.
+    SessionActiveChanged { active: bool },
+    /// logind announced sleep (`sleeping`), or the computer came back from it.
+    SleepChanged { sleeping: bool },
+    /// What became of a launch asked about with `observe_launch`.
+    LaunchOutcome {
+        launch: u64,
+        #[serde(flatten)]
+        outcome: observe::Outcome,
+    },
 }
 
 pub fn socket_path(wayland_display: &str) -> std::path::PathBuf {

@@ -15,8 +15,50 @@ use crate::{config, outputs, state::Hyalo};
 #[derive(Default)]
 pub struct IpcState {
     path: Option<PathBuf>,
-    subscribers: Vec<UnixStream>,
+    subscribers: Vec<Subscriber>,
+    /// Retries the subscribers with a backlog while any has one (`flush_subscribers`).
+    flush_timer: Option<smithay::reexports::calloop::RegistrationToken>,
     consent: ConsentWatch,
+    /// Epoch, serial, session boundaries and watched launches (observe.rs).
+    pub observe: super::observe::Observation,
+}
+
+/// What a subscriber still has to read, and since when it has been behind. Never written to
+/// blocking: a subscriber is either drained a little at a time from the event loop or dropped.
+struct Subscriber {
+    stream: UnixStream,
+    out: Vec<u8>,
+    behind_since: Option<std::time::Instant>,
+}
+
+/// A subscriber more than this behind, in bytes or in time, is closed — never thinned: what it
+/// got stays contiguous, and its end of the stream says it must resubscribe (observe.rs).
+const MAX_BACKLOG: usize = 1 << 20;
+const MAX_LAG: std::time::Duration = std::time::Duration::from_secs(2);
+const FLUSH_EVERY: std::time::Duration = std::time::Duration::from_millis(20);
+
+impl Subscriber {
+    /// Writes what it can without blocking. False: close it.
+    fn flush(&mut self, now: std::time::Instant) -> bool {
+        let _ = self.stream.set_nonblocking(true);
+        while !self.out.is_empty() {
+            match self.stream.write(&self.out) {
+                Ok(0) => return false,
+                Ok(n) => {
+                    self.out.drain(..n);
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => return false,
+            }
+        }
+        if self.out.is_empty() {
+            self.behind_since = None;
+            return true;
+        }
+        let since = *self.behind_since.get_or_insert(now);
+        self.out.len() <= MAX_BACKLOG && now.duration_since(since) < MAX_LAG
+    }
 }
 
 impl Drop for IpcState {
@@ -80,11 +122,30 @@ fn accept(state: &mut Hyalo, stream: UnixStream) {
                 continue;
             }
             let reply = match serde_json::from_str::<Request>(line) {
-                Ok(Request::EventStream) => {
+                Ok(Request::EventStream { snapshot }) => {
                     match s.try_clone() {
                         Ok(clone) => {
                             let _ = write_line(s, &Reply::Ok(Response::Handled));
-                            state.ipc.subscribers.push(clone);
+                            // Queued before it joins the subscribers, in this same dispatch:
+                            // nothing can be broadcast in between (observe.rs, the barrier),
+                            // and nothing is written to it blocking, however large.
+                            let mut out = Vec::new();
+                            if snapshot {
+                                let event = state.snapshot_event();
+                                let serial = state.ipc.observe.serial();
+                                if let Ok(text) = serde_json::to_vec(&state.stamped(&event, serial)) {
+                                    out = text;
+                                    out.push(b'\n');
+                                }
+                            }
+                            let mut sub = Subscriber { stream: clone, out, behind_since: None };
+                            if sub.flush(std::time::Instant::now()) {
+                                let behind = !sub.out.is_empty();
+                                state.ipc.subscribers.push(sub);
+                                if behind {
+                                    arm_flush(state);
+                                }
+                            }
                         }
                         Err(_) => return Ok(PostAction::Remove),
                     }
@@ -136,7 +197,9 @@ fn operation(req: &Request) -> Operation {
         | Request::Idle
         | Request::Xwayland
         | Request::Config
-        | Request::EventStream => Operation::Read,
+        | Request::EventStream { .. } => Operation::Read,
+        // The token is the authority: a secret Hyalo made, good once, for 10 s (observe.rs).
+        Request::ObserveLaunch { .. } => Operation::Read,
         Request::Screenshot { .. } => Operation::Capture,
         Request::SetOutput { .. } => Operation::Outputs,
         Request::OutputPower { .. } | Request::PowerWake | Request::PowerLock => Operation::Power,
@@ -293,19 +356,48 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             state.loop_signal.stop();
             Reply::Ok(Response::Handled)
         }
-        Request::EventStream => unreachable!("handled by the connection"),
+        Request::ObserveLaunch { token } => state.observe_launch(&token),
+        Request::EventStream { .. } => unreachable!("handled by the connection"),
     }
 }
 
 /// Sends an event to every subscriber. Never blocks: a subscriber that does not keep up
 /// (its socket buffer full) is dropped rather than allowed to stall the compositor.
+/// Every event carries the epoch, the next serial and the time (observe.rs).
 pub fn broadcast(state: &mut Hyalo, event: &Event) {
-    let Ok(mut text) = serde_json::to_string(event) else { return };
-    text.push('\n');
+    if state.ipc.subscribers.is_empty() {
+        return;
+    }
+    let serial = state.ipc.observe.next_serial();
+    let Ok(mut text) = serde_json::to_vec(&state.stamped(event, serial)) else { return };
+    text.push(b'\n');
+    let now = std::time::Instant::now();
     state.ipc.subscribers.retain_mut(|s| {
-        let _ = s.set_nonblocking(true);
-        s.write_all(text.as_bytes()).is_ok()
+        s.out.extend_from_slice(&text);
+        s.flush(now)
     });
+    if state.ipc.subscribers.iter().any(|s| !s.out.is_empty()) {
+        arm_flush(state);
+    }
+}
+
+/// Keeps draining the subscribers that are behind, from the event loop, until none is.
+fn arm_flush(state: &mut Hyalo) {
+    use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+    if state.ipc.flush_timer.is_some() {
+        return;
+    }
+    let token = state.loop_handle.insert_source(Timer::from_duration(FLUSH_EVERY), |_, _, state| {
+        let now = std::time::Instant::now();
+        state.ipc.subscribers.retain_mut(|s| s.flush(now));
+        if state.ipc.subscribers.iter().any(|s| !s.out.is_empty()) {
+            TimeoutAction::ToDuration(FLUSH_EVERY)
+        } else {
+            state.ipc.flush_timer = None;
+            TimeoutAction::Drop
+        }
+    });
+    state.ipc.flush_timer = token.ok();
 }
 
 pub fn outputs_changed(state: &mut Hyalo) {
@@ -354,6 +446,7 @@ impl Hyalo {
                         [p.origin.x, p.origin.y, frame.size.w * p.scale, frame.size.h * p.scale]
                     }),
                     focus_order: m.focus_serial,
+                    demands_attention: m.demands_attention(),
                     x: m.rect.loc.x,
                     y: m.rect.loc.y,
                     width: m.rect.size.w,

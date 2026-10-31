@@ -139,12 +139,20 @@ pub struct Managed {
     /// (`msg frames ID`): an app's smoothness is the gaps between them while it scrolls or
     /// follows a drag (toolkit/PHASE1.md, gate 4).
     pub frames: std::collections::VecDeque<f64>,
+    /// An activation it asked for was refused while it was shown (activation.rs): it demands
+    /// attention until it gets the focus (ipc/observe.rs, #959 H1).
+    pub attention: bool,
+    /// Its X11 urgency hint (WM_HINTS), set while it did not have the focus.
+    pub x11_urgent: bool,
 }
 
 /// How far back `Managed::frames` reaches: a 2 s scroll or drag, and the second before it.
 pub const FRAMES_KEPT_MS: f64 = 10_000.;
 
 impl Managed {
+    pub fn demands_attention(&self) -> bool {
+        self.attention || self.x11_urgent
+    }
     /// The height of Hyalo's title bar over it, logical px: 0 when it has none, and in
     /// fullscreen, where nothing is drawn over a window.
     pub fn bar(&self) -> i32 {
@@ -709,6 +717,8 @@ impl Hyalo {
             controls: None,
             poked_geometry: None,
             minimized: None,
+            attention: false,
+            x11_urgent: false,
         });
     }
 
@@ -845,6 +855,7 @@ impl Hyalo {
         if !(fx.workspace.is_some() && fx.silent) {
             self.focus_window(Some(id));
         }
+        self.window_shown_with_token(id, window);
         self.arrange_workspace(ws);
         self.sync_space();
         self.start_opening(id);
@@ -873,8 +884,9 @@ impl Hyalo {
         self.wm.windows.retain(|m| m.id != id);
         self.wm.animations.retain(|a| a.id != id);
         self.wm.dirty_windows = true;
+        self.launch_window_gone(id);
         if self.wm.focused == Some(id) {
-            self.wm.focused = None;
+            self.set_focused(None);
             // The keyboard goes to the window focused before it on the same workspace.
             let next = self.wm.last_focused_on(ws);
             self.focus_window(next);
@@ -1114,7 +1126,7 @@ impl Hyalo {
     pub fn focus_window(&mut self, id: Option<WindowId>) {
         let serial = SERIAL_COUNTER.next_serial();
         let Some(id) = id else {
-            self.wm.focused = None;
+            self.set_focused(None);
             self.set_keyboard_focus(None, serial);
             self.sync_space();
             return;
@@ -1124,6 +1136,7 @@ impl Hyalo {
         if self.wm.get(id).is_some_and(|m| self.wm.is_hidden(m)) {
             self.unminimize(id);
         }
+        let asked = id;
         let id = self.modal_target(id);
         let Some(m) = self.wm.get(id) else { return };
         let ws = m.workspace;
@@ -1163,9 +1176,15 @@ impl Hyalo {
         }
         // To the top of the stack (tiled windows stay under floating ones: `sync_space`).
         self.wm.windows.push(m);
-        self.wm.focused = Some(id);
+        self.set_focused(Some(id));
         self.wm.focused_output = self.wm.workspaces.get(&ws).map(|w| w.output.clone());
         self.set_keyboard_focus(surface, serial);
+        // The user is at it now: what it asked attention for is answered (ipc/observe.rs). The
+        // window they asked for too, when its dialog took the focus in its place.
+        self.set_attention(id, Some(false), Some(false));
+        if asked != id {
+            self.set_attention(asked, Some(false), Some(false));
+        }
         self.arrange_workspace(ws);
         self.sync_space();
     }
