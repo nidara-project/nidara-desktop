@@ -2,7 +2,7 @@
 //! `nidara-shell`: the supervisor (DOCK.md §2). It watches the outputs, gives each one a
 //! dock on its own thread and connection, and joins a dock before anything else happens
 //! to its output. The sources and the hub run on threads of their own.
-use nidara_shell::{apps, dock, hub, hyalo, material, prefs};
+use nidara_shell::{apps, dock, hub, hyalo, material, prefs, shell1};
 use nk_wayland::{OutputEvent, OutputId, OutputInfo, Waker};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -137,11 +137,17 @@ fn main() {
     spawn("prefs", move || {
         prefs::watch(move |p| drop(t.send(hub::HubEvent::Prefs(p))))
     });
+    let status = Arc::new(shell1::Status::default());
+    let shell1 = shell1::serve(status.clone(), hub_tx.clone())
+        .map_err(|e| eprintln!("nidara-shell: Shell1 not served: {e}"))
+        .ok();
     let hub = hub::Hub::new(
         prefs::Prefs::default(),
         icon_jobs,
         apps_conn,
         tokens.clone(),
+        status,
+        shell1,
     );
     spawn("hub", move || hub.run(hub_rx));
     let (req_tx, req_rx) = channel();
@@ -154,24 +160,6 @@ fn main() {
         }
     });
 
-    // Until Shell1 (IPC B) is served here, a private check reaches `focus:dock` through a
-    // fifo it names; nothing listens without the variable.
-    if let Some(path) = std::env::var_os("NK_DOCK_CONTROL") {
-        let t = hub_tx.clone();
-        spawn("dock-control", move || {
-            use std::io::BufRead;
-            loop {
-                let Ok(file) = std::fs::File::open(&path) else {
-                    return;
-                };
-                for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
-                    if line.trim() == "focus-dock" {
-                        let _ = t.send(hub::HubEvent::Request(hub::Request::FocusDock));
-                    }
-                }
-            }
-        });
-    }
     let trash = trash_icon();
     let mut watch = match nk_wayland::outputs(Duration::from_secs(5)) {
         Ok(w) => w,

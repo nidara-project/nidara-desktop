@@ -1163,6 +1163,7 @@ version = "0.1.0"
 dependencies = [
  "gio",
  "glib",
+ "nidara-shell-ipc",
  "nk-a11y",
  "nk-icons",
  "nk-render",
@@ -1170,6 +1171,14 @@ dependencies = [
  "nk-wayland",
  "serde",
  "serde_json",
+ "zbus",
+]
+
+[[package]]
+name = "nidara-shell-ipc"
+version = "0.1.0"
+dependencies = [
+ "serde",
  "zbus",
 ]
 

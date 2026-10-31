@@ -103,6 +103,19 @@ def walk():
     return items
 
 
+def shell1(method, args=None, quiet=True):
+    """A Shell1 call on the private bus; None while nobody owns the name (quiet)."""
+    try:
+        reply = Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+            'org.nidara.Shell', '/org/nidara/Shell', 'org.nidara.Shell1', method, args,
+            None, Gio.DBusCallFlags.NONE, 3000, None)
+    except GLib.Error:
+        if quiet:
+            return None
+        raise
+    return reply.unpack()[0] if reply.n_children() == 1 else reply.unpack()
+
+
 def start(name, argv, **env):
     out = (LOG / f'{name}.log').open('w')
     p = subprocess.Popen(argv, stdout=out, stderr=out, env={**os.environ, **env})
@@ -149,15 +162,26 @@ try:
                            capture_output=True, text=True, timeout=10)
         return r.returncode == 0 and r.stdout
     (LOG / 'snapshot.json').write_text(until('Applications1 answering', snapshot))
-    control = RUN / 'dock-control'
-    os.mkfifo(control)
-    shell = start('shell', [SHELL], NK_DOCK_CONTROL=str(control))
+    result = {}
+    shell = start('shell', [SHELL])
     first = until('a dock layer', docks)
+    # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
+    # and refuses what it cannot rather than doing nothing.
+    until('Shell1 answering', lambda: shell1('GetState') is not None)
+    state = shell1('GetState')
+    assert state == (False, [], ''), state
+    for surface, error in [('bar', 'Unavailable'), ('Dock', 'Invalid')]:
+        try:
+            shell1('FocusSurface', GLib.Variant('(s)', (surface,)), quiet=False)
+            raise AssertionError(f'FocusSurface({surface}) was accepted')
+        except GLib.Error as e:
+            assert f'org.nidara.Shell1.Error.{error}' in e.message, e.message
+    result['shell1'] = {'state': list(state), 'refusals': 'bar Unavailable, Dock Invalid'}
     # Software Hyalo cannot take a GL client's dmabufs here (it crashes); draw on the CPU.
     start('client', ['gtk4-demo'], GDK_BACKEND='wayland', GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
     until('a client window', lambda: ipc('windows').get('ok', {}).get('windows'))
     time.sleep(1.5)  # icons, the running dot and the glass settle
-    result = {'first': first}
+    result['first'] = first
     for position in ['bottom', 'left', 'right']:
         gsettings('position', position)
         time.sleep(1.0)
@@ -168,12 +192,18 @@ try:
     time.sleep(1.0)
     result['icon48'] = docks()
     shot(LOG / 'dock-48.png')
-    # Keyboard (DOCK.md §7): focus:dock through the private trigger, Right, then Escape.
+    # Keyboard (DOCK.md §7): focus:dock over Shell1 — through the real CLI when one is
+    # given (NK_IPC_BIN, built from session/), else straight on the bus — Right, Escape.
     gsettings('icon-size', '64')
     time.sleep(1.0)
-    with open(control, 'w') as c, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
-        c.write('focus-dock\n')
-        c.flush()
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        if os.environ.get('NK_IPC_BIN'):
+            r = subprocess.run([os.environ['NK_IPC_BIN'], '--session=rust', 'focusDock'],
+                               capture_output=True, text=True, timeout=10)
+            assert r.returncode == 0, (r.returncode, r.stdout, r.stderr)
+            result['shell1']['cli'] = 'nidara-ipc --session=rust focusDock'
+        else:
+            shell1('FocusSurface', GLib.Variant('(s)', ('dock',)), quiet=False)
         until('the dock takes the keyboard', lambda: 'takes the keyboard' in (LOG / 'shell.log').read_text())
         time.sleep(.5)
         pipe.write('key 106\n')  # Right: the ring moves to kitty

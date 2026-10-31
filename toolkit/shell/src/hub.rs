@@ -7,11 +7,13 @@ use crate::geometry::BAR_RESERVATION;
 use crate::hyalo::{HyaloUpdate, HyaloWindow};
 use crate::model::{Inputs, Model, View, Window};
 use crate::prefs::Prefs;
+use crate::shell1::{self, Status};
 use nk_render::Raster;
 use nk_wayland::{OutputId, Waker};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, Sender};
 
 /// What one dock needs to draw and act; the same view for every dock.
@@ -141,6 +143,9 @@ pub struct Hub {
     tokens: Option<Arc<Value>>,
     /// The latest keyboard-focus request: its number and the dock it went to.
     keyboard: (u64, String),
+    /// What Shell1 answers from, and its connection for StateChanged.
+    status: Arc<Status>,
+    shell1: Option<zbus::blocking::Connection>,
 }
 
 /// Which dock a keyboard-focus request goes to: the focused window's output's, else the
@@ -180,6 +185,8 @@ impl Hub {
         icon_jobs: Option<Sender<IconJob>>,
         apps_conn: Option<zbus::blocking::Connection>,
         tokens: Option<Arc<Value>>,
+        status: Arc<Status>,
+        shell1: Option<zbus::blocking::Connection>,
     ) -> Self {
         Hub {
             model: Model::default(),
@@ -195,6 +202,8 @@ impl Hub {
             apps_conn,
             tokens,
             keyboard: (0, String::new()),
+            status,
+            shell1,
         }
     }
 
@@ -245,7 +254,15 @@ impl Hub {
                 self.hyalo_epoch = epoch;
                 self.windows = windows;
             }
-            HubEvent::Hyalo(HyaloUpdate::Lock(locked)) => self.locked = locked,
+            HubEvent::Hyalo(HyaloUpdate::Lock(locked)) => {
+                if locked != self.locked {
+                    self.status.locked.store(locked, Ordering::Release);
+                    if let Some(conn) = &self.shell1 {
+                        shell1::changed(conn, locked);
+                    }
+                }
+                self.locked = locked;
+            }
             HubEvent::Hyalo(HyaloUpdate::Unavailable(why)) => {
                 eprintln!("nidara-shell: Hyalo unavailable: {why}");
                 self.windows.clear();
@@ -272,6 +289,7 @@ impl Hub {
                         waker,
                     },
                 );
+                self.status.docks.store(self.docks.len(), Ordering::Release);
                 self.request_icons();
             }
             HubEvent::DockChanged {
@@ -287,6 +305,7 @@ impl Hub {
             }
             HubEvent::DockDown(id) => {
                 self.docks.remove(&id);
+                self.status.docks.store(self.docks.len(), Ordering::Release);
             }
             HubEvent::Request(Request::FocusDock) => {
                 let names: Vec<String> = self.docks.values().map(|d| d.name.clone()).collect();

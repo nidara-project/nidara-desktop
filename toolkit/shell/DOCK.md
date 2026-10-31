@@ -142,17 +142,20 @@ One roving focus with a visible ring; arrows along the axis, Tab/Shift+Tab wrap,
 Enter/Space act, Escape leaves. `nk-a11y` exposes the dock as a toolbar of buttons with
 name, state (running, minimized, launch unavailable) and the same action dispatch as a
 click. `Super+Ctrl+D` reaches it through `Shell1` `focus:dock`, the typed contract of
-`crates/nidara-shell-ipc` (IPC B). B is not published yet: D1 is checked against it on
-a private bus and PATH, without copying its types or protocol, and the binding waits for
-B to land.
+`crates/nidara-shell-ipc` (IPC B, merged in #978).
 
 As built:
 - The focus is drawn as an ink ring just outside the icon (the dark skin's white), not the
   accent. The dock takes the keyboard (layer-shell `exclusive`) only on a focus request and
   gives it back on Escape, after acting, or when the compositor moves the focus away. A
   click never takes it from the app.
-- Until Shell1 is served here, a private check reaches `focus:dock` through a fifo named
-  by `NK_DOCK_CONTROL`; nothing listens without that variable.
+- This process serves Shell1 (`shell1.rs`) on a connection of its own: capabilities
+  `focus:dock` only; `FocusSurface("dock")` goes to the focused window's output's dock,
+  Unavailable while locked or with no dock, `bar` Unavailable, anything else Invalid; the
+  other members answer Unavailable, never a silent no-op. GetState is the hub's lock with
+  no surfaces and no island; StateChanged follows the lock. Both are the common
+  Read/OpenSurface policy, open to any caller. When the name is taken (the TS shell owns
+  `org.nidara.Shell` in its session) the dock runs without it.
 - Hyalo gives an `exclusive` top/overlay layer the keyboard at once and keeps it there
   (as sway, KDE and niri do), so the dock gives it back itself: Escape, acting, losing
   the focus, or the focused window changing under it (a click on another window).
