@@ -7,6 +7,7 @@ pub mod dock;
 pub mod geometry;
 pub mod hub;
 pub mod hyalo;
+pub mod keys;
 pub mod material;
 pub mod model;
 pub mod prefs;

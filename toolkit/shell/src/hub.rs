@@ -31,7 +31,12 @@ pub struct Frame {
     pub targets: HashSet<u64>,
     pub output_sizes: HashMap<String, (u32, u32)>,
     pub tokens: Option<Arc<Value>>,
+    /// Always true: the shell wears the dark skin whatever the system mode (owner's
+    /// decision); kept as a field so the paint code says which skin it draws.
     pub dark: bool,
+    /// Raised by each keyboard-focus request aimed at THIS dock (0: never); the dock takes
+    /// the keyboard when it sees a number it has not seen.
+    pub keyboard: u64,
 }
 impl Frame {
     pub fn empty(prefs: Prefs, tokens: Option<Arc<Value>>) -> Self {
@@ -48,6 +53,7 @@ impl Frame {
             output_sizes: HashMap::new(),
             tokens,
             dark: true,
+            keyboard: 0,
         }
     }
 }
@@ -77,6 +83,8 @@ pub enum Request {
         output: String,
         targets: BTreeMap<u64, [f64; 4]>,
     },
+    /// Keyboard focus to the dock (Shell1 `focus:dock`).
+    FocusDock,
 }
 
 pub enum HubEvent {
@@ -131,6 +139,22 @@ pub struct Hub {
     icon_jobs: Option<Sender<IconJob>>,
     apps_conn: Option<zbus::blocking::Connection>,
     tokens: Option<Arc<Value>>,
+    /// The latest keyboard-focus request: its number and the dock it went to.
+    keyboard: (u64, String),
+}
+
+/// Which dock a keyboard-focus request goes to: the focused window's output's, else the
+/// first by name.
+pub fn focus_output<'a>(windows: &[HyaloWindow], outputs: &'a [String]) -> Option<&'a str> {
+    let focused = windows
+        .iter()
+        .find(|w| w.window.focused)
+        .map(|w| w.output.as_str());
+    outputs
+        .iter()
+        .find(|o| Some(o.as_str()) == focused)
+        .or_else(|| outputs.iter().min())
+        .map(String::as_str)
 }
 
 /// Every window gets ONE publishing dock: its own output's, else the first remaining one.
@@ -170,6 +194,7 @@ impl Hub {
             icon_jobs,
             apps_conn,
             tokens,
+            keyboard: (0, String::new()),
         }
     }
 
@@ -262,6 +287,13 @@ impl Hub {
             }
             HubEvent::DockDown(id) => {
                 self.docks.remove(&id);
+            }
+            HubEvent::Request(Request::FocusDock) => {
+                let names: Vec<String> = self.docks.values().map(|d| d.name.clone()).collect();
+                let Some(output) = focus_output(&self.windows, &names) else {
+                    return false;
+                };
+                self.keyboard = (self.keyboard.0 + 1, output.to_string());
             }
             HubEvent::Request(r) => {
                 self.act(r);
@@ -386,6 +418,11 @@ impl Hub {
                 output_sizes: sizes.clone(),
                 tokens: self.tokens.clone(),
                 dark: true,
+                keyboard: if self.keyboard.1 == dock.name {
+                    self.keyboard.0
+                } else {
+                    0
+                },
             });
             if dock.frames.send(frame).is_ok() {
                 let _ = dock.waker.wake();
@@ -529,6 +566,19 @@ mod tests {
             output: output.into(),
             fullscreen: false,
         }
+    }
+    #[test]
+    fn keyboard_focus_goes_to_the_focused_windows_dock() {
+        let mut windows = [hw(1, "DP-1", false), hw(2, "HDMI-A-1", false)];
+        let outputs = ["HDMI-A-1".to_string(), "DP-1".to_string()];
+        assert_eq!(
+            focus_output(&windows, &outputs),
+            Some("DP-1"),
+            "none focused: first by name"
+        );
+        windows[1].window.focused = true;
+        assert_eq!(focus_output(&windows, &outputs), Some("HDMI-A-1"));
+        assert_eq!(focus_output(&windows, &[]), None);
     }
     #[test]
     fn one_dock_publishes_each_minimized_window() {

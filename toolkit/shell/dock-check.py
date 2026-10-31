@@ -99,7 +99,9 @@ try:
                            capture_output=True, text=True, timeout=10)
         return r.returncode == 0 and r.stdout
     (LOG / 'snapshot.json').write_text(until('Applications1 answering', snapshot))
-    shell = start('shell', [SHELL])
+    control = RUN / 'dock-control'
+    os.mkfifo(control)
+    shell = start('shell', [SHELL], NK_DOCK_CONTROL=str(control))
     first = until('a dock layer', docks)
     # Software Hyalo cannot take a GL client's dmabufs here (it crashes); draw on the CPU.
     start('client', ['gtk4-demo'], GDK_BACKEND='wayland', GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
@@ -116,6 +118,22 @@ try:
     time.sleep(1.0)
     result['icon48'] = docks()
     shot(LOG / 'dock-48.png')
+    # Keyboard (DOCK.md §7): focus:dock through the private trigger, Right, then Escape.
+    gsettings('icon-size', '64')
+    time.sleep(1.0)
+    with open(control, 'w') as c, open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        c.write('focus-dock\n')
+        c.flush()
+        until('the dock takes the keyboard', lambda: 'takes the keyboard' in (LOG / 'shell.log').read_text())
+        time.sleep(.5)
+        shot(LOG / 'dock-keyboard.png')
+        # Hyalo hands a layer the keyboard only on a click, never for keyboard-interactivity
+        # exclusive, so keys cannot reach the dock yet: report it instead of failing.
+        pipe.write('key 106\n')  # Right
+        pipe.write('key 1\n')  # Escape
+        time.sleep(1.0)
+        left = 'lets the keyboard go' in (LOG / 'shell.log').read_text()
+    result['keyboard'] = {'took': True, 'keys_reached_the_dock': left}
     assert shell.poll() is None, 'the dock exited'
     (LOG / 'layers.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))

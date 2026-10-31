@@ -35,6 +35,10 @@ pub struct Dock {
     pending: HashMap<TokenRequest, Request>,
     trash_icon: Option<Arc<nk_icons::Icon>>,
     published: BTreeMap<u64, [f64; 4]>,
+    /// The last keyboard-focus request taken, and the item holding the focus while the dock
+    /// has the keyboard (by key: items move between frames).
+    keyboard_seen: u64,
+    focus: Option<String>,
 }
 
 fn slots(view: &View) -> Vec<Slot> {
@@ -50,7 +54,9 @@ fn slots(view: &View) -> Vec<Slot> {
         .collect()
 }
 
-pub fn placement(l: &Layout) -> LayerPlacement {
+/// The keyboard is the dock's only while it holds the roving focus (Shell1 `focus:dock`);
+/// a click never takes it from the app.
+pub fn placement(l: &Layout, keyboard: bool) -> LayerPlacement {
     let gap = crate::geometry::SCREEN_GAP as i32;
     let (anchor, margin) = match l.position {
         Position::Bottom => (Edges::BOTTOM, [0, 0, gap, 0]),
@@ -62,7 +68,11 @@ pub fn placement(l: &Layout) -> LayerPlacement {
         size: l.size,
         exclusive_zone: l.exclusive_zone,
         margin,
-        keyboard: KeyboardMode::None,
+        keyboard: if keyboard {
+            KeyboardMode::Exclusive
+        } else {
+            KeyboardMode::None
+        },
     }
 }
 
@@ -88,6 +98,8 @@ impl Dock {
             pending: HashMap::new(),
             trash_icon,
             published: BTreeMap::new(),
+            keyboard_seen: 0,
+            focus: None,
         }
     }
 
@@ -123,13 +135,71 @@ impl Dock {
         if let Some(size) = frame.output_sizes.get(&self.output_name) {
             self.output_size = *size;
         }
+        let had_keyboard = self.focus.is_some();
+        if frame.keyboard > self.keyboard_seen {
+            self.keyboard_seen = frame.keyboard;
+            self.focus =
+                crate::keys::first(&frame.view.items).map(|n| frame.view.items[n].key.clone());
+            eprintln!(
+                "nidara-shell: the dock on {} takes the keyboard",
+                self.output_name
+            );
+        }
         self.frame = frame;
+        if self.frame.hidden || self.focused_slot().is_none() {
+            self.focus = None;
+        }
         let next = Self::lay(&self.frame, self.output_size);
-        if placement(&next) != placement(&self.layout) {
-            w.set_layer_placement(placement(&next))?;
+        let keyboard = self.focus.is_some();
+        if placement(&next, keyboard) != placement(&self.layout, had_keyboard) {
+            w.set_layer_placement(placement(&next, keyboard))?;
         }
         self.layout = next;
         self.apply(w)
+    }
+
+    fn focused_slot(&self) -> Option<usize> {
+        let key = self.focus.as_ref()?;
+        self.frame.view.items.iter().position(|i| &i.key == key)
+    }
+
+    fn leave_keyboard(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if self.focus.take().is_some() {
+            eprintln!(
+                "nidara-shell: the dock on {} lets the keyboard go",
+                self.output_name
+            );
+            w.set_layer_placement(placement(&self.layout, false))?;
+            w.redraw();
+        }
+        Ok(())
+    }
+
+    fn key(&mut self, key: nk_wayland::Key, w: &mut Window) -> nk_wayland::Result<()> {
+        let Some(slot) = self.focused_slot() else {
+            return Ok(());
+        };
+        let Some(nav) = crate::keys::nav(key.sym, key.shift, self.layout.position.horizontal())
+        else {
+            return Ok(());
+        };
+        match nav {
+            crate::keys::Nav::Leave => self.leave_keyboard(w)?,
+            crate::keys::Nav::Act => {
+                // A repeat has no serial, so no token: only a real press acts.
+                if let Some(serial) = key.serial {
+                    self.click(slot, serial, w);
+                    self.leave_keyboard(w)?;
+                }
+            }
+            nav => {
+                if let Some(to) = crate::keys::moved(&self.frame.view.items, slot, nav) {
+                    self.focus = Some(self.frame.view.items[to].key.clone());
+                    w.redraw();
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Input region, targets and a repaint for the current layout, once the surface has
@@ -282,6 +352,17 @@ impl Dock {
                 }
             }
         }
+        if self.focused_slot() == Some(n) {
+            // The roving focus: an ink ring just outside the icon.
+            let grow = (3. * self.layout.scale.max(0.5)) as f32;
+            let ring = Rect {
+                x: r.x - grow,
+                y: r.y - grow,
+                width: r.width + 2. * grow,
+                height: r.height + 2. * grow,
+            };
+            c.rounded_ring(ring, w * 0.22 + grow as f64, 2., ink);
+        }
         if self.frame.prefs.indicators
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
@@ -310,6 +391,9 @@ impl Application for Dock {
             Event::Wake => self.drain(w)?,
             Event::Configure => self.apply(w)?,
             Event::Motion(x, y) => self.pointer = (x, y),
+            Event::Key(key) => self.key(key, w)?,
+            // The compositor gave the keyboard elsewhere: the roving focus ends with it.
+            Event::Focus(false) => self.leave_keyboard(w)?,
             Event::PointerLeave => self.pressed = None,
             Event::Button {
                 button: LEFT_BUTTON,
@@ -390,17 +474,21 @@ impl Application for Dock {
             radius: w.min(h) / 2.,
             exponent: CAPSULE_EXPONENT,
         };
-        self.frame
-            .tokens
-            .as_ref()
-            .and_then(|t| crate::material::dock(t, self.frame.dark, false, pane))
+        self.frame.tokens.as_ref().and_then(|t| {
+            crate::material::dock(
+                t,
+                self.frame.dark,
+                self.frame.prefs.reduce_transparency,
+                pane,
+            )
+        })
     }
 }
 
 /// One dock's whole life on its own thread; returns when its surface closes or the hub
 /// drops it.
 pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Result<()> {
-    let p = placement(&dock.layout);
+    let p = placement(&dock.layout, false);
     nk_wayland::run_layer(
         dock,
         Options {

@@ -153,6 +153,24 @@ fn main() {
         }
     });
 
+    // Until Shell1 (IPC B) is served here, a private check reaches `focus:dock` through a
+    // fifo it names; nothing listens without the variable.
+    if let Some(path) = std::env::var_os("NK_DOCK_CONTROL") {
+        let t = hub_tx.clone();
+        spawn("dock-control", move || {
+            use std::io::BufRead;
+            loop {
+                let Ok(file) = std::fs::File::open(&path) else {
+                    return;
+                };
+                for line in std::io::BufReader::new(file).lines().map_while(Result::ok) {
+                    if line.trim() == "focus-dock" {
+                        let _ = t.send(hub::HubEvent::Request(hub::Request::FocusDock));
+                    }
+                }
+            }
+        });
+    }
     let trash = trash_icon();
     let mut watch = match nk_wayland::outputs(Duration::from_secs(5)) {
         Ok(w) => w,
