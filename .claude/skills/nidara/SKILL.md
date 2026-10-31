@@ -309,8 +309,8 @@ snapshot barrier and focus_transition for usage/matching/correlation; never use
 coalesced focus_changed for accounting. Read `session/daemon/src/applications/A3.md`.
 Keep tentative watch time out of persistence so idle caps watch-start +30 s. Unity
 is a signal on arbitrary object paths, never an Update method; retire its actual
-sender and use one ordered stream so a queued signal cannot resurrect a dead owner. Autostart changes preferences only;
-the existing session runner executes them, never a second daemon startup loop.
+sender and use one ordered stream so a queued signal cannot resurrect a dead owner.
+Autostart changes preferences only; the existing session runner executes them, never a second daemon startup loop.
 The ordinary session and TS UI remain unchanged. Native pins use separate
 `org.nidara.dock layout`/`layout-version`; legacy `pinned` is read once, never
 written by Rust (the TS orphan-pruner would erase typed tokens). A blocking
