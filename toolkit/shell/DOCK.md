@@ -146,6 +146,26 @@ click. `Super+Ctrl+D` reaches it through `Shell1` `focus:dock`, the typed contra
 a private bus and PATH, without copying its types or protocol, and the binding waits for
 B to land.
 
+As built:
+- The focus is drawn as an ink ring just outside the icon (the dark skin's white), not the
+  accent. The dock takes the keyboard (layer-shell `exclusive`) only on a focus request and
+  gives it back on Escape, after acting, or when the compositor moves the focus away. A
+  click never takes it from the app.
+- Until Shell1 is served here, a private check reaches `focus:dock` through a fifo named
+  by `NK_DOCK_CONTROL`; nothing listens without that variable.
+- ⚠️ Hyalo gives a layer surface the keyboard only when it is CLICKED; it ignores
+  `exclusive` (sway, KDE and niri give it at once, as the protocol says). So the request
+  shows the ring, but keys do not reach the dock yet. The fix is in Hyalo and needs the
+  owner's yes.
+- The tree (`semantics.rs`): a `Window` named Dock, one `Button` per item in drawn order
+  (separators as `Separator`), the state in the description (running, minimized window,
+  has minimized windows, not installed, cannot be opened now), disabled when a click
+  would do nothing, the roving focus as `focused`. Activate does what a click does, with
+  no activation token (there is no input event behind it). Requests made against an
+  older tree are dropped. The strings are English until the Rust shell has i18n.
+- The skin stays dark whatever the system mode (owner's decision). Reduce transparency
+  (`org.nidara.appearance`) picks the tokens' solid variant.
+
 ## 8. Evidence for D1
 
 - Unit tests: matching, sections, ordering, fit scale, view diffing, Applications1

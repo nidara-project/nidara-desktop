@@ -11,7 +11,7 @@ use nk_render::{Canvas, ImageFit, rgba};
 use nk_text::Rect;
 use nk_wayland::{
     Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
-    Material, Options, Pane, TokenRequest, WakeSource, Window,
+    Material, Options, Pane, TokenRequest, WakeSource, Waker, Window,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -39,6 +39,12 @@ pub struct Dock {
     /// has the keyboard (by key: items move between frames).
     keyboard_seen: u64,
     focus: Option<String>,
+    /// The screen reader's view (DOCK.md §7), published after every change it can see.
+    a11y: Option<nk_a11y::bridge::Bridge>,
+    a11y_requests: Option<Receiver<(u64, nk_a11y::Request)>>,
+    ids: crate::semantics::Ids,
+    revision: u64,
+    waker: Waker,
 }
 
 fn slots(view: &View) -> Vec<Slot> {
@@ -84,6 +90,7 @@ impl Dock {
         output_size: (u32, u32),
         frame: Arc<Frame>,
         trash_icon: Option<Arc<nk_icons::Icon>>,
+        waker: Waker,
     ) -> Self {
         let layout = Self::lay(&frame, output_size);
         Self {
@@ -100,6 +107,11 @@ impl Dock {
             published: BTreeMap::new(),
             keyboard_seen: 0,
             focus: None,
+            a11y: None,
+            a11y_requests: None,
+            ids: Default::default(),
+            revision: 0,
+            waker,
         }
     }
 
@@ -171,6 +183,7 @@ impl Dock {
             );
             w.set_layer_placement(placement(&self.layout, false))?;
             w.redraw();
+            self.publish_semantics();
         }
         Ok(())
     }
@@ -188,7 +201,7 @@ impl Dock {
             crate::keys::Nav::Act => {
                 // A repeat has no serial, so no token: only a real press acts.
                 if let Some(serial) = key.serial {
-                    self.click(slot, serial, w);
+                    self.click(slot, Some(serial), w);
                     self.leave_keyboard(w)?;
                 }
             }
@@ -196,6 +209,7 @@ impl Dock {
                 if let Some(to) = crate::keys::moved(&self.frame.view.items, slot, nav) {
                     self.focus = Some(self.frame.view.items[to].key.clone());
                     w.redraw();
+                    self.publish_semantics();
                 }
             }
         }
@@ -216,6 +230,84 @@ impl Dock {
         }
         self.publish_targets();
         w.redraw();
+        self.publish_semantics();
+        Ok(())
+    }
+
+    fn publish_semantics(&mut self) {
+        let focus = self.focused_slot();
+        let tree = crate::semantics::tree(
+            &mut self.ids,
+            &crate::semantics::Input {
+                items: &self.frame.view.items,
+                rects: &self.layout.rects,
+                size: self.layout.size,
+                focus,
+                focused_window: self.frame.focused,
+                can_launch: self.frame.can_launch,
+                hidden: self.frame.hidden,
+            },
+        );
+        self.revision += 1;
+        match &self.a11y {
+            Some(bridge) => {
+                // Publication receipts are only for checks that wait on them.
+                while bridge.published.try_recv().is_ok() {}
+                if let Err(e) = bridge.update(self.revision, tree) {
+                    eprintln!("nidara-shell: accessibility stopped: {e}");
+                }
+            }
+            None => {
+                let mut bridge = nk_a11y::bridge::Bridge::new(self.revision, tree);
+                // The bridge queues requests on a channel nobody wakes for: forward them
+                // with this dock's waker, so a request is handled at once without polling.
+                let (requests, rx) = std::sync::mpsc::channel();
+                let from = std::mem::replace(&mut bridge.requests, std::sync::mpsc::channel().1);
+                let waker = self.waker.clone();
+                let _ = std::thread::Builder::new()
+                    .name("dock-a11y".into())
+                    .spawn(move || {
+                        for r in from {
+                            if requests.send(r).is_err() {
+                                return;
+                            }
+                            let _ = waker.wake();
+                        }
+                    });
+                self.a11y = Some(bridge);
+                self.a11y_requests = Some(rx);
+            }
+        }
+    }
+
+    /// Requests made against an older tree are dropped: the item may be another by now.
+    fn a11y(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let Some(rx) = &self.a11y_requests else {
+            return Ok(());
+        };
+        let requests: Vec<_> = rx.try_iter().collect();
+        for (revision, request) in requests {
+            if revision != self.revision {
+                continue;
+            }
+            let (nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id)) = request else {
+                continue;
+            };
+            let Some(key) = self.ids.key(id).map(str::to_string) else {
+                continue;
+            };
+            let Some(slot) = self.frame.view.items.iter().position(|i| i.key == key) else {
+                continue;
+            };
+            if matches!(request, nk_a11y::Request::Activate(_)) {
+                // No input event behind it, so no activation token.
+                self.click(slot, None, w);
+            } else if self.focus.is_some() {
+                self.focus = Some(key);
+                w.redraw();
+                self.publish_semantics();
+            }
+        }
         Ok(())
     }
 
@@ -238,7 +330,7 @@ impl Dock {
         }
     }
 
-    fn click(&mut self, slot: usize, serial: u32, w: &mut Window) {
+    fn click(&mut self, slot: usize, serial: Option<u32>, w: &mut Window) {
         let item = &self.frame.view.items[slot];
         let Some(action) = primary(item, self.frame.focused, self.frame.can_launch) else {
             return;
@@ -281,13 +373,15 @@ impl Dock {
                 Kind::App { id, .. } => Some(id.trim_end_matches(".desktop").to_string()),
                 _ => None,
             };
-            match w.request_activation_token(serial, target.as_deref()) {
-                Ok(t) => {
-                    self.pending.insert(t, request);
-                    return;
-                }
-                Err(e) => {
-                    eprintln!("nidara-shell: no activation token ({e:?}); opening without one")
+            if let Some(serial) = serial {
+                match w.request_activation_token(serial, target.as_deref()) {
+                    Ok(t) => {
+                        self.pending.insert(t, request);
+                        return;
+                    }
+                    Err(e) => {
+                        eprintln!("nidara-shell: no activation token ({e:?}); opening without one")
+                    }
                 }
             }
         }
@@ -388,7 +482,10 @@ impl Application for Dock {
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
         match event {
             Event::Error(e) => return Err(e),
-            Event::Wake => self.drain(w)?,
+            Event::Wake => {
+                self.drain(w)?;
+                self.a11y(w)?;
+            }
             Event::Configure => self.apply(w)?,
             Event::Motion(x, y) => self.pointer = (x, y),
             Event::Key(key) => self.key(key, w)?,
@@ -410,7 +507,7 @@ impl Application for Dock {
             } => {
                 let here = self.layout.hit(self.pointer.0, self.pointer.1);
                 if let Some(slot) = self.pressed.take().filter(|s| Some(*s) == here) {
-                    self.click(slot, serial, w);
+                    self.click(slot, Some(serial), w);
                 }
             }
             Event::ActivationToken { request, token } => {

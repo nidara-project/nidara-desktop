@@ -8,6 +8,10 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import gi
+
+gi.require_version('Atspi', '2.0')
+from gi.repository import Atspi, Gio, GLib
 
 LOG = Path(os.environ['NK_WIDGETS_LOG']).resolve()
 RUN = Path(os.environ['NK_WIDGETS_RUN']).resolve()
@@ -54,6 +58,51 @@ def gsettings(key, value):
 procs = []
 
 
+def accessibility():
+    """The private bus's own a11y bus and registry, as the kit's check sets them up."""
+    session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    address = session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.a11y.Bus', 'GetAddress', None,
+                                GLib.VariantType.new('(s)'), Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
+    os.environ['AT_SPI_BUS_ADDRESS'] = address
+    registry = next(p for p in [Path('/usr/lib/at-spi2-registryd'), Path('/usr/libexec/at-spi2-registryd')] if p.exists())
+    start('registry', [str(registry)])
+    time.sleep(.5)
+    session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.freedesktop.DBus.Properties', 'Set',
+                      GLib.Variant('(ssv)', ('org.a11y.Status', 'IsEnabled', GLib.Variant('b', True))),
+                      None, Gio.DBusCallFlags.NONE, 5000, None)
+
+
+def children(node):
+    node.clear_cache()
+    return [node.get_child_at_index(i) for i in range(node.get_child_count())]
+
+
+def dock_node():
+    for app in children(Atspi.get_desktop(0)):
+        try:
+            app.set_cache_mask(Atspi.Cache.NONE)
+            for node in children(app):
+                if node and node.get_name() == 'Dock':
+                    return node
+        except GLib.Error:
+            continue
+    return None
+
+
+def walk():
+    """Every item as a reader sees it: role, name, description, states."""
+    dock = dock_node()
+    if not dock:
+        return None
+    items = []
+    for n in children(dock):
+        states = n.get_state_set()
+        items.append({'role': n.get_role_name(), 'name': n.get_name(), 'description': n.get_description(),
+                      'focused': states.contains(Atspi.StateType.FOCUSED),
+                      'enabled': states.contains(Atspi.StateType.ENABLED)})
+    return items
+
+
 def start(name, argv, **env):
     out = (LOG / f'{name}.log').open('w')
     p = subprocess.Popen(argv, stdout=out, stderr=out, env={**os.environ, **env})
@@ -92,6 +141,7 @@ def schemas():
 
 try:
     os.environ['GSETTINGS_SCHEMA_DIR'] = schemas()
+    accessibility()
     start('sessiond', [SESSIOND, '--applications'], XDG_DATA_DIRS=catalogue())
     def snapshot():
         r = subprocess.run(['busctl', '--user', '--json=short', 'call', 'org.nidara.Applications',
@@ -134,6 +184,18 @@ try:
         time.sleep(1.0)
         left = 'lets the keyboard go' in (LOG / 'shell.log').read_text()
     result['keyboard'] = {'took': True, 'keys_reached_the_dock': left}
+    # The screen reader's view: one button per item, the app's window running, and Activate
+    # on the running app asks Hyalo to focus its window (as a click does).
+    items = until('the dock in AT-SPI', lambda: (w := walk()) and len(w) >= 6 and w)
+    result['atspi'] = items
+    names = [i['name'] for i in items if i['role'] in ('push button', 'button')]
+    assert names[:2] == ['Files', 'kitty'] and names[-1] == 'Trash', items
+    assert any(i['description'] == 'running' for i in items), items
+    dock = dock_node()
+    running = next(n for n in children(dock) if n.get_description() == 'running')
+    running.get_action_iface().do_action(0)  # "click": Activate
+    until('the activation reaches the dock', lambda: 'focus-window' in (LOG / 'shell.log').read_text()
+          or 'request failed' in (LOG / 'shell.log').read_text())
     assert shell.poll() is None, 'the dock exited'
     (LOG / 'layers.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))

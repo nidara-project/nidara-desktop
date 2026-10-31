@@ -83,6 +83,7 @@ fn start(
         size,
         first,
         trash.clone(),
+        waker.clone(),
     );
     let name = info.name.clone();
     let thread = spawn(&format!("dock-{name}"), move || {
