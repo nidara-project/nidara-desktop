@@ -2038,8 +2038,10 @@ alone could not give:
   XDG_ACTIVATION_TOKEN, before its first frame), `activated {window}`, `refused {window}` or
   `expired` (unused by the token's deadline). Every record lives until the TOKEN's deadline (made +
   10 s), never reset by a late ask or use; a window not shown yet keeps only a launch record, not
-  the token, and only until then; an expiry is announced exactly once (`take_expired`) whoever
-  finds it first. Asked AFTER the use (the app was quicker than the asker), the answer
+  the token, and only until then (or until it goes); an expiry is announced exactly once
+  (`take_expired`) whoever finds it first. ONE timer, re-armed after every change at the soonest
+  deadline of watches, uses AND waiting windows (`announce_expired`): a timer per watch armed
+  at the minimum left later watches unannounced. Asked AFTER the use (the app was quicker than the asker), the answer
   is in `already`. Only a token Hyalo has and in time can be observed; holding it is the
   authority (Operation::Read). The token is never sent back, broadcast or logged. X11: a
   `_NET_STARTUP_ID` equal to a Hyalo token counts as that window's token. ⚠️ nk-wayland refuses

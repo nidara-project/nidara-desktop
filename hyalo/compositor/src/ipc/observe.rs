@@ -171,9 +171,18 @@ impl Launches {
         std::mem::take(&mut self.expired)
     }
 
-    /// The soonest deadline of a watched launch: when to look again.
+    /// The soonest deadline of anything kept — a watch to announce, a use or a waiting window
+    /// to forget: when to look again, so nothing outlives its token.
     pub fn next_deadline(&self) -> Option<Instant> {
-        self.watched.iter().map(|w| w.deadline).min()
+        let watched = self.watched.iter().map(|w| w.deadline);
+        let used = self.used.iter().map(|u| u.deadline);
+        let waiting = self.waiting.iter().map(|w| w.deadline);
+        watched.chain(used).chain(waiting).min()
+    }
+
+    /// A window that went before it was shown: its launch, if watched, expires at the deadline.
+    pub fn forget_window(&mut self, window: WindowId) {
+        self.waiting.retain(|w| w.window != window);
     }
 
     /// Forgets what is past its deadline; a watched launch moves to `expired`, to be announced.
@@ -205,11 +214,13 @@ pub struct Observation {
     /// Between logind's PrepareForSleep(true) and (false).
     pub sleeping: bool,
     pub launches: Launches,
+    /// The one timer at `launches.next_deadline()`, re-armed after every change.
+    launch_timer: Option<smithay::reexports::calloop::RegistrationToken>,
 }
 
 impl Default for Observation {
     fn default() -> Self {
-        Self { epoch: epoch(), serial: 0, session_active: true, sleeping: false, launches: Launches::default() }
+        Self { epoch: epoch(), serial: 0, session_active: true, sleeping: false, launches: Launches::default(), launch_timer: None }
     }
 }
 
@@ -292,26 +303,34 @@ impl Hyalo {
         self.announce_expired();
         match watched {
             Err(e) => Reply::Error(e.into()),
-            Ok((launch, already)) => {
-                if already.is_none()
-                    && let Some(at) = self.ipc.observe.launches.next_deadline()
-                {
-                    // The answer if nobody uses it: a timer at the token's own deadline.
-                    let _ = self.loop_handle.insert_source(Timer::from_deadline(at), |_, _, state| {
-                        state.announce_expired();
-                        TimeoutAction::Drop
-                    });
-                }
-                Reply::Ok(Response::LaunchObserved { launch, already })
-            }
+            Ok((launch, already)) => Reply::Ok(Response::LaunchObserved { launch, already }),
         }
     }
 
-    /// Every launch that expired unused and was not yet said to have: said now, once.
+    /// Every launch that expired unused and was not yet said to have: said now, once. Then the
+    /// one timer is set at the next deadline of whatever is still kept. Every change to the
+    /// launches ends here.
     fn announce_expired(&mut self) {
         for launch in self.ipc.observe.launches.take_expired(Instant::now()) {
             broadcast(self, &Event::LaunchOutcome { launch, outcome: Outcome::Expired });
         }
+        if let Some(token) = self.ipc.observe.launch_timer.take() {
+            self.loop_handle.remove(token);
+        }
+        if let Some(at) = self.ipc.observe.launches.next_deadline() {
+            let token = self.loop_handle.insert_source(Timer::from_deadline(at), |_, _, state| {
+                state.ipc.observe.launch_timer = None;
+                state.announce_expired();
+                TimeoutAction::Drop
+            });
+            self.ipc.observe.launch_timer = token.ok();
+        }
+    }
+
+    /// A window went: a launch waiting for it to be shown no longer can be.
+    pub fn launch_window_gone(&mut self, window: WindowId) {
+        self.ipc.observe.launches.forget_window(window);
+        self.announce_expired();
     }
 
     /// An activation token, good until `deadline`, was used (activation.rs).
@@ -464,6 +483,26 @@ mod tests {
         l.used("c", Outcome::Activated { window: 1 }, t0 + T * 2, t0 + T);
         assert_eq!(l.take_expired(t0 + T), vec![a]);
         assert!(l.take_expired(t0 + T).is_empty());
+    }
+
+    #[test]
+    fn the_next_deadline_covers_every_record_so_each_expires_on_its_own() {
+        let mut l = Launches::default();
+        let t0 = Instant::now();
+        let (a, _) = l.watch("a", Some(t0 + T), t0).unwrap();
+        let (b, _) = l.watch("b", Some(t0 + T + Duration::from_secs(1)), t0).unwrap();
+        assert_eq!(l.take_expired(t0 + T), vec![a]);
+        // What re-arms after A: B's own deadline, so B is announced with no other call.
+        assert_eq!(l.next_deadline(), Some(t0 + T + Duration::from_secs(1)));
+        assert_eq!(l.take_expired(t0 + T + Duration::from_secs(1)), vec![b]);
+        // A use nobody asked about and a waiting window are deadlines too: they are forgotten.
+        l.used("u", Outcome::Activated { window: 1 }, t0 + T * 3, t0 + T * 2);
+        l.wait_shown("w", 2, true, t0 + T * 4, t0 + T * 2);
+        assert_eq!(l.next_deadline(), Some(t0 + T * 3));
+        l.take_expired(t0 + T * 3);
+        assert_eq!(l.next_deadline(), Some(t0 + T * 4));
+        l.forget_window(2);
+        assert_eq!(l.next_deadline(), None);
     }
 
     #[test]

@@ -884,6 +884,7 @@ impl Hyalo {
         self.wm.windows.retain(|m| m.id != id);
         self.wm.animations.retain(|a| a.id != id);
         self.wm.dirty_windows = true;
+        self.launch_window_gone(id);
         if self.wm.focused == Some(id) {
             self.set_focused(None);
             // The keyboard goes to the window focused before it on the same workspace.
