@@ -42,7 +42,12 @@ pub enum AppsUpdate {
     Unavailable(String),
 }
 
-/// An icon job: (epoch, DesktopId, generation, logical size, scale).
+/// The Trash's art travels as two pseudo-ids beside the apps' (no DesktopId has this
+/// shape: they end in `.desktop`), fetched with GetTrashIcon instead of GetIcon.
+pub const TRASH_EMPTY: &str = "trash:empty";
+pub const TRASH_FULL: &str = "trash:full";
+
+/// An icon job: (epoch, DesktopId or a Trash pseudo-id, generation, logical size, scale).
 #[derive(Clone, Debug, PartialEq)]
 pub struct IconJob {
     pub epoch: u64,
@@ -303,7 +308,7 @@ pub fn icon_request(logical: f64, scale: f64) -> (u32, f64) {
     ((logical.ceil() as u32).clamp(16, 512), scale.clamp(1., 4.))
 }
 
-/// Runs forever on its own thread: one GetIcon per job, in order.
+/// Runs forever on its own thread: one GetIcon (or GetTrashIcon) per job, in order.
 pub fn icons(
     conn: Connection,
     jobs: Receiver<IconJob>,
@@ -311,11 +316,18 @@ pub fn icons(
 ) {
     for job in jobs {
         let (logical, scale) = icon_request(job.logical as f64, job.scale);
-        let icon = call::<_, (String, u32, u32, Vec<u8>)>(
-            &conn,
-            "GetIcon",
-            &(job.epoch, job.id.as_str(), job.generation, logical, scale),
-        )
+        let icon = match job.id.as_str() {
+            TRASH_EMPTY | TRASH_FULL => call::<_, (String, u32, u32, Vec<u8>)>(
+                &conn,
+                "GetTrashIcon",
+                &(job.epoch, job.id == TRASH_FULL, logical, scale),
+            ),
+            id => call::<_, (String, u32, u32, Vec<u8>)>(
+                &conn,
+                "GetIcon",
+                &(job.epoch, id, job.generation, logical, scale),
+            ),
+        }
         .ok()
         .filter(|(_, w, h, rgba)| *w > 0 && *h > 0 && rgba.len() == *w as usize * *h as usize * 4)
         .map(|(_, width, height, rgba)| Icon {

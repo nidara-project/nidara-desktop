@@ -42,11 +42,18 @@ pub struct Input<'a> {
     pub focused_window: Option<u64>,
     pub can_launch: bool,
     pub hidden: bool,
+    pub trash: Option<crate::trash::TrashState>,
 }
 
-fn state(item: &Item, click: Option<&Click>) -> String {
+fn state(item: &Item, click: Option<&Click>, trash: Option<crate::trash::TrashState>) -> String {
     let mut words = vec![];
     match &item.kind {
+        Kind::Trash => words.push(match trash {
+            Some(t) if t.full => "contains items",
+            Some(t) if t.partial => "empty in the home folder",
+            Some(_) => "empty",
+            None => "cannot tell whether it holds items",
+        }),
         Kind::Minimized { .. } => words.push("minimized window"),
         Kind::MissingApp { .. } => words.push("not installed"),
         _ => {
@@ -92,7 +99,7 @@ pub fn tree(ids: &mut Ids, input: &Input) -> Tree {
             if matches!(click, Some(Click::OpenTrash | Click::OpenFolder(_))) && !input.can_launch {
                 click = Some(Click::Unavailable);
             }
-            node.description = state(item, click.as_ref());
+            node.description = state(item, click.as_ref(), input.trash);
             node.states.disabled = matches!(click, None | Some(Click::Unavailable));
             node.states.focused = input.focus == Some(n);
             node.actions = vec![Action::Focus, Action::Activate];
@@ -154,6 +161,10 @@ mod tests {
             focused_window: None,
             can_launch: false,
             hidden: false,
+            trash: Some(crate::trash::TrashState {
+                full: true,
+                partial: false,
+            }),
         };
         let t = tree(&mut ids, &input);
         t.validate().unwrap();
@@ -167,6 +178,7 @@ mod tests {
             [Role::Button, Role::Separator, Role::Button, Role::Button]
         );
         assert_eq!(kids[3].name, "Trash");
+        assert!(kids[3].description.starts_with("contains items"));
         assert!(
             kids[3].states.disabled,
             "no launch service: the Trash cannot open either"

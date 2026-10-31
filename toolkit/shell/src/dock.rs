@@ -4,6 +4,7 @@
 //! glass is Hyalo's), and sends what a click asks for back to the hub. It never calls a
 //! service from its own loop.
 use crate::actions::{Action, primary};
+use crate::apps::{TRASH_EMPTY, TRASH_FULL};
 use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, Position, Slot, layout};
 use crate::hub::{Frame, Request};
 use crate::model::{Item, Kind, View};
@@ -259,6 +260,7 @@ impl Dock {
                 focused_window: self.frame.focused,
                 can_launch: self.frame.can_launch,
                 hidden: self.frame.hidden,
+                trash: self.frame.trash,
             },
         );
         self.revision += 1;
@@ -448,16 +450,24 @@ impl Dock {
                 }
             }
             Kind::Trash => {
-                c.rounded_rect(r, w * 0.22, faint);
-                if let Some(icon) = &self.trash_icon {
-                    let inset = w * 0.22;
-                    let i = Rect {
-                        x: (x + inset) as f32,
-                        y: (y + inset) as f32,
-                        width: (w - 2. * inset) as f32,
-                        height: (h - 2. * inset) as f32,
-                    };
-                    c.icon(icon, i, ink);
+                // The theme's Trash, full or empty as it is; Nidara's own symbol on a faint
+                // tile only when the theme has none (or Applications1 cannot say).
+                let full = self.frame.trash.is_some_and(|t| t.full);
+                let key = if full { TRASH_FULL } else { TRASH_EMPTY };
+                if let Some(art) = self.frame.icons.get(key) {
+                    c.image(art, r, ImageFit::Contain);
+                } else {
+                    c.rounded_rect(r, w * 0.22, faint);
+                    if let Some(icon) = &self.trash_icon {
+                        let inset = w * 0.22;
+                        let i = Rect {
+                            x: (x + inset) as f32,
+                            y: (y + inset) as f32,
+                            width: (w - 2. * inset) as f32,
+                            height: (h - 2. * inset) as f32,
+                        };
+                        c.icon(icon, i, ink);
+                    }
                 }
             }
             kind => {

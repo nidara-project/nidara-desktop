@@ -2,7 +2,7 @@
 //! `nidara-shell`: the supervisor (DOCK.md §2). It watches the outputs, gives each one a
 //! dock on its own thread and connection, and joins a dock before anything else happens
 //! to its output. The sources and the hub run on threads of their own.
-use nidara_shell::{apps, dock, hub, hyalo, material, prefs, shell1};
+use nidara_shell::{apps, dock, hub, hyalo, material, prefs, shell1, trash};
 use nk_wayland::{OutputEvent, OutputId, OutputInfo, Waker};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -150,6 +150,12 @@ fn main() {
         shell1,
     );
     spawn("hub", move || hub.run(hub_rx));
+    let t = hub_tx.clone();
+    spawn("trash", move || {
+        trash::watch(move |state| {
+            let _ = t.send(hub::HubEvent::Trash(state));
+        })
+    });
     let (req_tx, req_rx) = channel();
     let t = hub_tx.clone();
     spawn("requests", move || {

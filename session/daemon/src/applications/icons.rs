@@ -213,6 +213,21 @@ pub fn resolve(app: &App, theme: &str, size: u32) -> Option<PathBuf> {
             None
         })
 }
+/// The Trash's themed names, first found wins: the freedesktop name, then the older
+/// spellings themes still ship; a full Trash falls back to the empty art.
+pub fn trash_names(full: bool) -> &'static [&'static str] {
+    if full {
+        &[
+            "user-trash-full",
+            "trashcan-full",
+            "user-trash",
+            "trashcan-empty",
+            "trash",
+        ]
+    } else {
+        &["user-trash", "trashcan-empty", "trash"]
+    }
+}
 pub fn resolve_name(name: &str, theme: &str, size: u32) -> Option<PathBuf> {
     if name.starts_with("file:") {
         let (p, host) = glib::filename_from_uri(name).ok()?;

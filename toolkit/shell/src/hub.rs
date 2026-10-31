@@ -2,7 +2,7 @@
 //! The hub (DOCK.md §2): it owns every source and the model, builds one immutable frame per
 //! change and hands it to every dock, and carries out what the docks ask for. Service calls
 //! run on short-lived workers so a slow one never holds the frames back.
-use crate::apps::{AppsState, AppsUpdate, Icon, IconJob};
+use crate::apps::{AppsState, AppsUpdate, Icon, IconJob, TRASH_EMPTY, TRASH_FULL};
 use crate::geometry::BAR_RESERVATION;
 use crate::hyalo::{HyaloUpdate, HyaloWindow};
 use crate::model::{Inputs, Model, View, Window};
@@ -24,6 +24,7 @@ pub struct Frame {
     /// The provisional top reservation a side dock stays below (BAR_RESERVATION).
     pub reserved_top: f64,
     pub icons: HashMap<String, Arc<Raster>>,
+    pub trash: Option<crate::trash::TrashState>,
     pub focused: Option<u64>,
     pub hyalo_epoch: u64,
     pub can_launch: bool,
@@ -47,6 +48,7 @@ impl Frame {
             prefs,
             reserved_top: BAR_RESERVATION,
             icons: HashMap::new(),
+            trash: None,
             focused: None,
             hyalo_epoch: 0,
             can_launch: false,
@@ -92,6 +94,8 @@ pub enum Request {
 pub enum HubEvent {
     Apps(AppsUpdate),
     Icon(IconJob, Option<Icon>),
+    /// None: the Trash's fill cannot be told.
+    Trash(Option<crate::trash::TrashState>),
     Hyalo(HyaloUpdate),
     Prefs(Prefs),
     DockUp {
@@ -137,6 +141,7 @@ pub struct Hub {
     prefs: Prefs,
     docks: HashMap<OutputId, DockHandle>,
     icons: HashMap<String, Cached>,
+    trash: Option<crate::trash::TrashState>,
     pending_icons: HashSet<(String, u64, u64, u32, u64)>,
     icon_jobs: Option<Sender<IconJob>>,
     apps_conn: Option<zbus::blocking::Connection>,
@@ -197,6 +202,7 @@ impl Hub {
             prefs,
             docks: HashMap::new(),
             icons: HashMap::new(),
+            trash: None,
             pending_icons: HashSet::new(),
             icon_jobs,
             apps_conn,
@@ -250,6 +256,7 @@ impl Hub {
                     },
                 );
             }
+            HubEvent::Trash(trash) => self.trash = trash,
             HubEvent::Hyalo(HyaloUpdate::Windows { epoch, windows }) => {
                 self.hyalo_epoch = epoch;
                 self.windows = windows;
@@ -336,28 +343,39 @@ impl Hub {
         };
         let scale = self.docks.values().map(|d| d.scale).fold(1., f64::max);
         let logical = self.prefs.icon_size;
-        for app in &apps.apps {
-            let fresh = self.icons.get(&app.id).is_some_and(|c| {
-                c.generation == app.generation
+        // The shown apps, and the Trash's two looks: both are fetched, so filling or
+        // emptying the Trash swaps art the dock already has.
+        let mut wanted: Vec<(&str, u64)> = apps
+            .apps
+            .iter()
+            .filter(|app| self.shown(&app.id))
+            .map(|app| (app.id.as_str(), app.generation))
+            .collect();
+        if apps.can("trash-icon") {
+            wanted.extend([(TRASH_EMPTY, 0), (TRASH_FULL, 0)]);
+        }
+        for (id, generation) in wanted {
+            let fresh = self.icons.get(id).is_some_and(|c| {
+                c.generation == generation
                     && c.revision == apps.icon_revision
                     && c.logical == logical
                     && c.scale == scale
             });
             let key = (
-                app.id.clone(),
-                app.generation,
+                id.to_string(),
+                generation,
                 apps.icon_revision,
                 logical,
                 scale.to_bits(),
             );
-            if fresh || self.pending_icons.contains(&key) || !self.shown(&app.id) {
+            if fresh || self.pending_icons.contains(&key) {
                 continue;
             }
             self.pending_icons.insert(key);
             let _ = jobs.send(IconJob {
                 epoch: apps.epoch,
-                id: app.id.clone(),
-                generation: app.generation,
+                id: id.to_string(),
+                generation,
                 logical,
                 scale,
             });
@@ -428,6 +446,7 @@ impl Hub {
                 prefs: self.prefs,
                 reserved_top: BAR_RESERVATION,
                 icons: icons.clone(),
+                trash: self.trash,
                 focused,
                 hyalo_epoch: self.hyalo_epoch,
                 can_launch: self.can("launch"),

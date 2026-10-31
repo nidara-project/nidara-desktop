@@ -384,6 +384,7 @@ impl Applications {
             "catalogue",
             "search",
             "icons",
+            "trash-icon",
             "icon-overrides",
             "launch",
             "open-directory",
@@ -595,6 +596,68 @@ impl Applications {
             })
             .await?;
         Ok((token, w, h, rgba))
+    }
+    /// The Trash's art from the user's icon theme (§8 Trash), the one dock slot with no
+    /// desktop entry. Fixed freedesktop names only, never a generic named-icon lookup, and
+    /// Unavailable when the theme has none: the dock then keeps its own symbol.
+    async fn get_trash_icon(
+        &self,
+        epoch: u64,
+        full: bool,
+        logical_size: u32,
+        scale: f64,
+        #[zbus(header)] header: Header<'_>,
+    ) -> Result<(String, u32, u32, Vec<u8>), Error> {
+        let _admission = self.admit(&header)?;
+        if !(16..=512).contains(&logical_size)
+            || !scale.is_finite()
+            || !(1.0..=4.0).contains(&scale)
+        {
+            return Err(Error::Invalid("icon size/scale bounds".into()));
+        }
+        let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
+        let _permit = self
+            .decode
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| Error::Busy("icon workers occupied".into()))?;
+        let (revision, theme) = self
+            .store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                Ok((s.icon_revision, s.theme.clone()))
+            })
+            .await?;
+        let found = tokio::task::spawn_blocking(move || {
+            let path = icons::trash_names(full)
+                .iter()
+                .find_map(|n| icons::resolve_name(n, &theme, side))?;
+            let pixels = icons::read(&path, side).ok()?;
+            Some((path, pixels))
+        })
+        .await
+        .map_err(|e| Error::Failed(e.to_string()))?;
+        let Some((path, (w, h, rgba))) = found else {
+            return Err(Error::Unavailable("the icon theme has no Trash".into()));
+        };
+        let token = catalogue::hash(
+            format!(
+                "trash:{full}:{revision}:{logical_size}:{scale}:{}:{}",
+                path.to_string_lossy(),
+                catalogue::hash(&rgba)
+            )
+            .as_bytes(),
+        );
+        self.store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                if revision != s.icon_revision {
+                    return Err(Error::Stale("icon changed during decode".into()));
+                }
+                Ok(())
+            })
+            .await?;
+        Ok((format!("asset:{token}"), w, h, rgba))
     }
     async fn set_icon_override(
         &self,
