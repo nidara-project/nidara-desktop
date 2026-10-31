@@ -187,6 +187,9 @@ As built:
 - A nested check (`toolkit/shell/check-dock-headless.sh`, the T1 harness): private Hyalo
   + private sessiond `--applications` + fake desktop files; the dock surface persists
   across bottom/left/right, follows output hotplug, reads back windows, publishes target
-  rectangles inside its slots, and libatspi walks every item.
+  rectangles inside its slots, and libatspi walks every item. It also requires the Trash's
+  theme art (both looks) and its fill (a file trashed in the private session), and a
+  minimized window's picture. Other output scales: pass a Hyalo config with
+  `[outputs.winit] scale = 1.25` (or 2) as `NK_WIDGETS_HYALO_CONFIG`; 1, 1.25 and 2 pass.
 - A private nested session (`scripts/dev/rust-session.sh --applications nidara-shell`)
   for the owner to look at. Not the daily session, no install, no sudo.
