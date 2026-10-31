@@ -2258,6 +2258,16 @@ verbatim (`Hyprland-…`; a lowercase `hyprland-xdg-terminals.list` is never rea
 data dir under `$HOME` — so testing with the repo's `config/` on `XDG_DATA_DIRS` silently tests
 nothing; copy the file somewhere outside home.
 
+**The folder handler is Nautilus by default in the Nidara session**, by the same kind of SYSTEM
+list: `config/mimeapps/nidara-mimeapps.list` → `/usr/share/applications/` (PKGBUILD + install.sh),
+read only when `XDG_CURRENT_DESKTOP=Nidara`. The person's own `~/.config/mimeapps.list` (what
+Settings → Default Apps writes) still wins. Without it the handler was whichever installed app
+claimed `inode/directory` first — Amberol, a music player, measured 2026-10-31 — so the dock's
+Files item and the Trash opened it; `nidara-setup`'s first-login seeding only replaces an EMPTY or
+kitty default, so it missed that case. Unlike the terminal list, this prefix is LOWERCASED
+(`nidara-…`, mime-apps spec; GIO and `xdg-mime` both read it, measured). Nautilus until Nidara has
+a file manager of its own (owner, 2026-10-31).
+
 🔑 **Why it matters beyond "the window opens":** the XDG portal does not ask an unsandboxed app who it
 is. It reads the systemd unit the process lives in, accepts `app-<launcher>-<id>@<random>.service`
 or `app-<launcher>-<id>-<random>.scope`, and only when `<id>.desktop` exists; anything else is the anonymous app

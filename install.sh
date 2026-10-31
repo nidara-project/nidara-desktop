@@ -774,6 +774,10 @@ sudo install -Dm644 "$REPO_DIR/config/uwsm/nidara-browser" /usr/share/uwsm/env-h
 # the pacman package): a system default, so a user's own xdg-terminals.list still wins.
 sudo install -Dm644 "$REPO_DIR/config/xdg-terminal-exec/Hyprland-xdg-terminals.list" \
     /usr/share/xdg-terminal-exec/Hyprland-xdg-terminals.list
+# Default apps in the Nidara session (config/mimeapps/, also shipped by the pacman
+# package): a system default, so a user's own mimeapps.list still wins.
+sudo install -Dm644 "$REPO_DIR/config/mimeapps/nidara-mimeapps.list" \
+    /usr/share/applications/nidara-mimeapps.list
 
 # Application entries
 sudo mkdir -p /usr/share/applications

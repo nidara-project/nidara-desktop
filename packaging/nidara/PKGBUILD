@@ -464,6 +464,8 @@ package_nidara-desktop() {
     "$pkgdir/usr/share/xdg-terminal-exec/Hyprland-xdg-terminals.list"
   mkdir -p "$pkgdir/usr/share/applications"
   install -m644 config/applications/*.desktop "$pkgdir/usr/share/applications/"
+  # Default apps in the Nidara session (folders → Nautilus); a user's own list wins.
+  install -m644 config/mimeapps/nidara-mimeapps.list "$pkgdir/usr/share/applications/"
 
   # systemd user unit (started by the Nidara Hyprland config, never enabled —
   # see the unit's NOTE)
