@@ -383,6 +383,10 @@ pub enum Event {
         session_active: bool,
         sleeping: bool,
     },
+    /// The keyboard went to another window, or to none, at this event's time: one per change,
+    /// in order with the other boundaries (observe.rs `set_focused`). `focus_changed` is the
+    /// same, coalesced to once per round after the window list.
+    FocusTransition { id: Option<WindowId>, app_id: Option<String> },
     /// A window began or stopped demanding attention (`WindowInfo::demands_attention`).
     AttentionChanged { id: WindowId, demands: bool },
     /// The session went idle for usage (observe.rs USAGE_IDLE without input, nothing holding

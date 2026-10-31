@@ -144,9 +144,6 @@ pub struct Managed {
     pub attention: bool,
     /// Its X11 urgency hint (WM_HINTS), set while it did not have the focus.
     pub x11_urgent: bool,
-    /// An activation token it came with before it was shown, and whether it came from the
-    /// user: its launch is answered when it is shown (`Hyalo::window_shown_with_token`).
-    pub shown_with: Option<(String, bool)>,
 }
 
 /// How far back `Managed::frames` reaches: a 2 s scroll or drag, and the second before it.
@@ -722,7 +719,6 @@ impl Hyalo {
             minimized: None,
             attention: false,
             x11_urgent: false,
-            shown_with: None,
         });
     }
 
@@ -889,7 +885,7 @@ impl Hyalo {
         self.wm.animations.retain(|a| a.id != id);
         self.wm.dirty_windows = true;
         if self.wm.focused == Some(id) {
-            self.wm.focused = None;
+            self.set_focused(None);
             // The keyboard goes to the window focused before it on the same workspace.
             let next = self.wm.last_focused_on(ws);
             self.focus_window(next);
@@ -1129,7 +1125,7 @@ impl Hyalo {
     pub fn focus_window(&mut self, id: Option<WindowId>) {
         let serial = SERIAL_COUNTER.next_serial();
         let Some(id) = id else {
-            self.wm.focused = None;
+            self.set_focused(None);
             self.set_keyboard_focus(None, serial);
             self.sync_space();
             return;
@@ -1179,7 +1175,7 @@ impl Hyalo {
         }
         // To the top of the stack (tiled windows stay under floating ones: `sync_space`).
         self.wm.windows.push(m);
-        self.wm.focused = Some(id);
+        self.set_focused(Some(id));
         self.wm.focused_output = self.wm.workspaces.get(&ws).map(|w| w.output.clone());
         self.set_keyboard_focus(surface, serial);
         // The user is at it now: what it asked attention for is answered (ipc/observe.rs). The

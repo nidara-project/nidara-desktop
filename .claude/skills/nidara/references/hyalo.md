@@ -2019,7 +2019,10 @@ alone could not give:
 - **Every event carries `epoch`, `serial`, `time_us`.** Epoch: random per Hyalo run (< 2^53, so
   JS reads it exactly); window ids mean something only with it. Serial: ONE counter for all
   subscribers, +1 per event sent, so each subscriber's sequence is contiguous — a gap can only be
-  a dropped stream, and `broadcast` CLOSES a subscriber that falls behind, never thins it.
+  a dropped stream. ⚠️ Nothing is ever written to a subscriber BLOCKING (a big snapshot to a
+  client that does not read would freeze the compositor): each has a queue drained from the event
+  loop (server.rs `Subscriber`, a 20 ms timer while any is behind), and one more than 1 MiB or 2 s
+  behind is CLOSED, never thinned.
   `time_us`: CLOCK_MONOTONIC µs (`state.clock`), the clock Python's `time.monotonic()` reads.
 - **The barrier.** `{"request":"event_stream","snapshot":true}` (CLI: `msg events --snapshot`)
   answers, then writes a `snapshot` event (windows, workspaces, focus, locked, idle,
@@ -2033,7 +2036,10 @@ alone could not give:
   launch_observed, launch, already}`; then `launch_outcome {launch, outcome}` with outcome
   `window {window, honoured}` (a window NOT YET SHOWN asked with it — GTK does, from
   XDG_ACTIVATION_TOKEN, before its first frame), `activated {window}`, `refused {window}` or
-  `expired` (unused in 10 s). Asked AFTER the use (the app was quicker than the asker), the answer
+  `expired` (unused by the token's deadline). Every record lives until the TOKEN's deadline (made +
+  10 s), never reset by a late ask or use; a window not shown yet keeps only a launch record, not
+  the token, and only until then; an expiry is announced exactly once (`take_expired`) whoever
+  finds it first. Asked AFTER the use (the app was quicker than the asker), the answer
   is in `already`. Only a token Hyalo has and in time can be observed; holding it is the
   authority (Operation::Read). The token is never sent back, broadcast or logged. X11: a
   `_NET_STARTUP_ID` equal to a Hyalo token counts as that window's token. ⚠️ nk-wayland refuses
@@ -2041,6 +2047,10 @@ alone could not give:
 - **Attention.** `WindowInfo.demands_attention` + `attention_changed {id, demands}` on each edge:
   a refused activation of a shown, unfocused window, or an X11 urgency hint (WM_HINTS, on change
   and at map); cleared by focus (of it, or of the window whose dialog took it).
+- **Focus, per change.** `focus_transition {id, app_id}` is sent AT each change of the keyboard
+  focus (`Hyalo::set_focused`, the only writer of `wm.focused`), so A→B→A in one dispatch is two
+  events, in order with lock/idle/sleep. `focus_changed` stays coalesced after the round's window
+  list for the consumers that read it as "re-read the windows".
 - **Boundaries.** `idle_changed {idle, since_us}`: usage idle after `USAGE_IDLE` (300 s, GNOME's
   presence default, independent of the configured steps) with no inhibitor; `since_us` is the
   last input. `session_active_changed` (libseat pause/activate, tty only), `sleep_changed`
@@ -2048,7 +2058,8 @@ alone could not give:
 
 Check: `hyalo/scripts/check-observe-headless.sh` (observe-check.py; private cage + software
 Hyalo + private bus; not CI). It needs nk-wayland's `layer-probe` and `token-target` examples.
-It covers the barrier under three windows starting at once, foreign/stale/real tokens for shown
+It covers the barrier under three windows starting at once, A→B→A focus in one write and focus
+before sleep in one write, a request answered while a subscriber is stuck, foreign/stale/real tokens for shown
 and new windows, refusal → attention with the focus kept → cleared by a click, a subscriber that
 does not read being closed with what it got contiguous, usage idle, sleep → lock. For that the
 test channel (control.rs, HYALO_CONTROL only) gained `lock` and `sleep 1|0`, and

@@ -299,6 +299,13 @@ with open(CONTROL, 'w', buffering=1) as pipe:
         click(pipe, *centre(other if n % 2 else mine))
     pipe.write(f'barrier {LOG / "slow.barrier"}\n')
     wait(lambda: (LOG / 'slow.barrier').exists(), 'clicks delivered', timeout=60)
+    # Hyalo still answers while that subscriber is stuck: nothing waits on it.
+    asked = time.monotonic()
+    windows()
+    answered = time.monotonic() - asked
+    assert answered < 1, f'a request waited {answered:.2f} s behind a stuck subscriber'
+    # Behind for longer than Hyalo lets a subscriber be (server.rs MAX_LAG, 2 s).
+    time.sleep(3)
     slow.start()
     wait(lambda: slow.closed, 'the slow subscriber was closed')
     got = [e for e in slow.events]
@@ -307,8 +314,23 @@ with open(CONTROL, 'w', buffering=1) as pipe:
     again = Stream()
     wait(lambda: again.events, 'resubscribed')
     assert again.events[0]['serial'] > got[-1]['serial'] and again.events[0]['epoch'] == got[0]['epoch']
-    results['slow_subscriber'] = {'received': len(got), 'last_serial': got[-1]['serial'],
+    results['slow_subscriber'] = {'received': len(got), 'last_serial': got[-1]['serial'], 'request_s': round(answered, 3),
                                   'resync_snapshot_serial': again.events[0]['serial']}
+
+    # 6b. Focus changes inside one dispatch are each said, in order: A → B → A in one write.
+    a, b = by_app('nk-token-target')[0], by_app('nk-other')[0]
+    click(pipe, *centre(a))
+    wait(lambda: focused() == ['nk-token-target'], 'A focused')
+    time.sleep(.3)
+    mark = s.events[-1]['serial']
+    pa, pb = centre(a), centre(b)
+    pipe.write(f'click {pb[0]} {pb[1]}\nclick {pa[0]} {pa[1]}\nbarrier {LOG / "aba.barrier"}\n')
+    wait(lambda: (LOG / 'aba.barrier').exists(), 'A-B-A delivered')
+    time.sleep(.3)
+    moves = [(e['id'], e['serial'], e['time_us']) for e in s.events if e['event'] == 'focus_transition' and e['serial'] > mark]
+    assert [m[0] for m in moves] == [b['id'], a['id']], f'A→B→A transitions: {moves}'
+    assert moves[0][2] <= moves[1][2]
+    results['focus_aba'] = moves
 
     # 7. Usage idle: no input for HYALO_TEST_USAGE_IDLE_MS, then input again.
     pipe.write('move 5 5\n')
@@ -324,8 +346,13 @@ with open(CONTROL, 'w', buffering=1) as pipe:
 
     # 8. Sleep: the boundary each way, and the lock it brings (no lock client here: Hyalo's
     # guard). The snapshot of a new subscriber says the same.
-    pipe.write('sleep 1\n')
+    # The focus moved just before sleep, in the same dispatch: it is said first.
+    pb = centre(by_app('nk-other')[0])
+    mark = s.events[-1]['serial']
+    pipe.write(f'click {pb[0]} {pb[1]}\nsleep 1\n')
     sl = s.wait_for('sleeping', lambda e: e['event'] == 'sleep_changed' and e['sleeping'])
+    moved = [e for e in s.events if e['event'] == 'focus_transition' and mark < e['serial']]
+    assert moved and moved[0]['serial'] < sl['serial'], f'focus after sleep: {moved} {sl}'
     lk = s.wait_for('locked', lambda e: e['event'] == 'lock_changed' and e['locked'], timeout=15)
     during = Stream()
     wait(lambda: during.events, 'snapshot while asleep')

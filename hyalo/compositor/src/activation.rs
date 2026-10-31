@@ -65,27 +65,26 @@ impl XdgActivationHandler for Hyalo {
 
     fn request_activation(&mut self, token: XdgActivationToken, token_data: XdgActivationTokenData, surface: WlSurface) {
         let valid = from_the_user(&token_data);
+        let deadline = token_data.timestamp + ACTIVATION_TIMEOUT;
         self.activation_state.remove_token(&token);
         let Some((id, mapped)) = self.wm.by_surface(&surface).map(|m| (m.id, m.mapped)) else { return };
         if !mapped {
             // Not shown yet: Hyalo focuses a new window anyway, and its launch is answered when
-            // it is shown (`window_shown_with_token`).
-            if let Some(m) = self.wm.get_mut(id) {
-                m.shown_with = Some((token.as_str().to_owned(), valid));
-            }
+            // it is shown, if in time (`window_shown_with_token`).
+            self.launch_waits_for(token.as_str(), id, valid, deadline);
             return;
         }
         if valid {
             tracing::debug!(id, "activation honoured");
             self.focus_window(Some(id));
-            self.launch_used(token.as_str(), Outcome::Activated { window: id });
+            self.launch_used(token.as_str(), Outcome::Activated { window: id }, deadline);
         } else {
             // It does not take the front; it asks for the user instead (the dock shows it).
             tracing::debug!(id, "activation refused: the token did not come from what the user did");
             if self.wm.focused != Some(id) {
                 self.set_attention(id, Some(true), None);
             }
-            self.launch_used(token.as_str(), Outcome::Refused { window: id });
+            self.launch_used(token.as_str(), Outcome::Refused { window: id }, deadline);
         }
     }
 }
@@ -98,12 +97,13 @@ fn from_the_user(data: &XdgActivationTokenData) -> bool {
 impl Hyalo {
     /// An X11 window shown with a startup id that is a token Hyalo made (`_NET_STARTUP_ID`,
     /// which a launcher sets from the token): the token, used up, and whether it came from the
-    /// user. A classic startup-notification id Hyalo did not make is not one.
-    pub fn take_x11_startup(&mut self, window: &smithay::desktop::Window) -> Option<(String, bool)> {
+    /// user, and its deadline. A classic startup-notification id Hyalo did not make is not one.
+    pub fn take_x11_startup(&mut self, window: &smithay::desktop::Window) -> Option<(String, bool, std::time::Instant)> {
         let id = window.x11_surface()?.startup_id()?;
         let token = XdgActivationToken::from(id);
-        let valid = from_the_user(self.activation_state.data_for_token(&token)?);
+        let data = self.activation_state.data_for_token(&token)?;
+        let (valid, deadline) = (from_the_user(data), data.timestamp + ACTIVATION_TIMEOUT);
         self.activation_state.remove_token(&token);
-        Some((token.into(), valid))
+        Some((token.into(), valid, deadline))
     }
 }
