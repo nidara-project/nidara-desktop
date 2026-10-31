@@ -48,6 +48,18 @@ impl Raster {
     pub fn size(&self) -> (u16, u16) {
         (self.width, self.height)
     }
+    /// Overwrites the pixels with zeros before they are freed, for a picture that must
+    /// not linger in memory (a window's content). False when another holder still shares
+    /// them: they are freed when the last one lets go, unwiped.
+    pub fn wipe(self) -> bool {
+        match Arc::try_unwrap(self.pixels) {
+            Ok(mut pixmap) => {
+                pixmap.data_as_u8_slice_mut().fill(0);
+                true
+            }
+            Err(_) => false,
+        }
+    }
 }
 pub struct Canvas {
     context: RenderContext,

@@ -84,6 +84,15 @@ first observed live window, a separator, **minimized** windows (one slot each, d
 minimized with their parent folded in), and **Trash** last. Empty sections and their
 separators vanish. Focus changes never reorder.
 
+A minimized slot draws the window's **picture** (`thumbs.rs`): captured once per minimize
+through nk-wayland's capture client (Hyalo lists the window under its id in hex and keeps
+its last frame), at most 256 px a side, its proportions kept, with the app's icon at 45 %
+in the bottom-right corner. Each dock captures only the minimized slots it shows: at most 8
+pending and 32 MiB kept. A restored or closed window loses its picture; a lock or a
+fullscreen window hides the dock and wipes every picture (zeroed before it is freed). A
+failed capture keeps the app's icon for that minimize and is not retried; never an older
+picture.
+
 Window → app matching before H1 is a pure lookup against the catalogue, in the
 contract's order: exact current app_id as DesktopId (with and without `.desktop`), exact
 StartupWMClass, verified Flatpak ID, then initial app_id. Ambiguous stays ambiguous and

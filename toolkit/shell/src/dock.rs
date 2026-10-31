@@ -8,7 +8,7 @@ use crate::apps::{TRASH_EMPTY, TRASH_FULL};
 use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, Position, Slot, layout};
 use crate::hub::{Frame, Request};
 use crate::model::{Item, Kind, View};
-use nk_render::{Canvas, ImageFit, rgba};
+use nk_render::{Canvas, ImageFit, Raster, rgba};
 use nk_text::Rect;
 use nk_wayland::{
     Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
@@ -35,6 +35,8 @@ pub struct Dock {
     /// Token requests in flight, and what each will start once it has its token.
     pending: HashMap<TokenRequest, Request>,
     trash_icon: Option<Arc<nk_icons::Icon>>,
+    /// The minimized windows' pictures this dock shows (thumbs.rs).
+    thumbs: crate::thumbs::Thumbs,
     published: BTreeMap<u64, [f64; 4]>,
     /// The last keyboard-focus request taken, and the item holding the focus while the dock
     /// has the keyboard (by key: items move between frames).
@@ -50,6 +52,12 @@ pub struct Dock {
     revision: u64,
     waker: Waker,
 }
+
+/// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
+/// scale 2), and 256 KiB at most each.
+const THUMB_SIDE: u32 = 256;
+/// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
+const BADGE: f64 = 0.45;
 
 fn slots(view: &View) -> Vec<Slot> {
     view.items
@@ -108,6 +116,7 @@ impl Dock {
             pressed: None,
             pending: HashMap::new(),
             trash_icon,
+            thumbs: Default::default(),
             published: BTreeMap::new(),
             keyboard_seen: 0,
             focus: None,
@@ -181,7 +190,32 @@ impl Dock {
             w.set_layer_placement(placement(&next, keyboard))?;
         }
         self.layout = next;
+        self.capture(w);
         self.apply(w)
+    }
+
+    /// Pictures for the minimized slots shown; each answer is one `Event::Capture`. Hyalo
+    /// lists a window under its id in hex, and a minimized window still has its last frame.
+    fn capture(&mut self, w: &mut Window) {
+        let shown: Vec<u64> = self
+            .frame
+            .view
+            .items
+            .iter()
+            .filter_map(|i| match i.kind {
+                Kind::Minimized { window, .. } => Some(window),
+                _ => None,
+            })
+            .collect();
+        for window in self.thumbs.sync(&shown, self.frame.hidden) {
+            match w.capture_window(&format!("{window:x}"), (THUMB_SIDE, THUMB_SIDE)) {
+                Ok(id) => self.thumbs.started(id, window),
+                Err(e) => {
+                    eprintln!("nidara-shell: no picture of window {window:x}: {e:?}");
+                    self.thumbs.refused(window);
+                }
+            }
+        }
     }
 
     fn focused_slot(&self) -> Option<usize> {
@@ -470,6 +504,24 @@ impl Dock {
                     }
                 }
             }
+            // A minimized window: its picture, proportions kept, with the app's icon small at
+            // the bottom-right corner (the TS dock's BADGE share), so two windows of one app
+            // tell which app and which window. The app's icon alone until the picture comes.
+            Kind::Minimized { window, app } if self.thumbs.get(*window).is_some() => {
+                if let Some(picture) = self.thumbs.get(*window) {
+                    c.image(picture, r, ImageFit::Contain);
+                }
+                if let Some(icon) = app.as_deref().and_then(|a| self.frame.icons.get(a)) {
+                    let b = (w.min(h) * BADGE) as f32;
+                    let badge = Rect {
+                        x: r.x + r.width - b,
+                        y: r.y + r.height - b,
+                        width: b,
+                        height: b,
+                    };
+                    c.image(icon, badge, ImageFit::Contain);
+                }
+            }
             kind => {
                 let id = match kind {
                     Kind::App { id, .. } => Some(id.as_str()),
@@ -557,6 +609,18 @@ impl Application for Dock {
                         "nidara-shell: activation token failed ({reason:?}); opening without one"
                     );
                     let _ = self.hub.send(Self::with_token(r, None));
+                }
+            }
+            Event::Capture { id, result } => {
+                let picture = match result {
+                    Ok(i) => Raster::from_rgba(i.width as u16, i.height as u16, i.rgba).ok(),
+                    Err(e) => {
+                        eprintln!("nidara-shell: a window picture failed: {e:?}");
+                        None
+                    }
+                };
+                if self.thumbs.finished(id, picture) {
+                    w.redraw();
                 }
             }
             Event::Closed => {}

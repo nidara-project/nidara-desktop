@@ -55,6 +55,20 @@ def gsettings(key, value):
     subprocess.run(['gsettings', 'set', 'org.nidara.dock', key, value], check=True, timeout=5)
 
 
+MINIMIZER = """
+import gi
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk, GLib
+app = Gtk.Application(application_id='org.nidara.DockCheckMinimizer')
+def up(app):
+    w = Gtk.ApplicationWindow(application=app, title='Minimized', default_width=480, default_height=320)
+    w.set_child(Gtk.Label(label='A minimized window'))
+    w.present()
+    GLib.timeout_add(1500, lambda: (w.minimize(), False)[1])
+app.connect('activate', up)
+app.run()
+"""
+
 procs = []
 
 
@@ -255,6 +269,19 @@ try:
     running.get_action_iface().do_action(0)  # "click": Activate
     until('the activation reaches the dock', lambda: 'focus-window' in (LOG / 'shell.log').read_text()
           or 'request failed' in (LOG / 'shell.log').read_text())
+    # Minimized: the window gets its own slot, drawn from its picture (thumbs.rs), and no
+    # capture fails on the way.
+    # (Hyalo's own `do minimize` is refused to an unidentified caller in this harness: the
+    # window minimizes itself, as its minimize button would.)
+    start('minimizer', ['python3', '-I', '-c', MINIMIZER], GDK_BACKEND='wayland',
+          GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
+    until('a minimized slot', lambda: any(
+        i['description'] == 'minimized window' for i in (walk() or [])))
+    time.sleep(1)
+    log = (LOG / 'shell.log').read_text()
+    assert 'no picture of window' not in log and 'window picture failed' not in log, log[-2000:]
+    shot(LOG / 'dock-minimized.png')
+    result['minimized'] = 'slot with its picture'
     assert shell.poll() is None, 'the dock exited'
     (LOG / 'layers.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))
