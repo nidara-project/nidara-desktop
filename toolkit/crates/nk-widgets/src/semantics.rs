@@ -149,7 +149,13 @@ impl Tree {
                 n.relations.push(Relation::LabelledBy(*label));
                 n.name = self.nodes[label].name.clone();
             }
+            // A menu row is heard by its own label: its siblings' Labels are separators.
+            let menu_row = self
+                .action_menu
+                .as_ref()
+                .is_some_and(|m| m.rows.contains_key(&id));
             if widget.kind.row_control()
+                && !menu_row
                 && let Some(parent) = widget.parent
                 && let Some(label) = self.nodes[&parent]
                     .children
