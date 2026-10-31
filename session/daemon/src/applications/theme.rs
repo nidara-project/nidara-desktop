@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Portal icon-theme events. Never activates a portal or polls an absent owner.
+//! Portal icon-theme events. Never activates a portal or polls an absent owner; while
+//! none answers, the store reads the same setting itself (`Store::set_portal_theme`).
 use super::store::Handle;
 use futures_util::{StreamExt, stream::SelectAll};
 use std::time::Duration;
@@ -8,13 +9,10 @@ const NAME: &str = "org.freedesktop.portal.Desktop";
 const PATH: &str = "/org/freedesktop/portal/desktop";
 const IFACE: &str = "org.freedesktop.portal.Settings";
 const NAMESPACE: &str = "org.gnome.desktop.interface";
-async fn set(store: &Handle, theme: String) {
+async fn set(store: &Handle, theme: Option<String>) {
     let _ = store
         .call(move |s| {
-            if s.theme != theme {
-                s.theme = theme;
-                s.icons_changed();
-            }
+            s.set_portal_theme(theme);
             Ok(())
         })
         .await;
@@ -36,8 +34,7 @@ async fn read(conn: &Connection, owner: &str, store: &Handle) {
     })
     .await
     .ok()
-    .flatten()
-    .unwrap_or_default();
+    .flatten();
     set(store, theme).await;
 }
 pub async fn watch(conn: &Connection, store: Handle) -> zbus::Result<()> {
@@ -82,7 +79,7 @@ pub async fn watch(conn: &Connection, store: Handle) -> zbus::Result<()> {
                 && let Ok(value) = <&str>::try_from(&value)
                 && value.len() <= 1024
             {
-                set(&store, value.to_owned()).await;
+                set(&store, Some(value.to_owned())).await;
             }
         }
     });

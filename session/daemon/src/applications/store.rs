@@ -21,7 +21,10 @@ pub struct Store {
     pub catalogue_revision: u64,
     pub layout_revision: u64,
     pub icon_revision: u64,
+    /// The icon theme app icons resolve against (`apply_theme`).
     pub theme: String,
+    portal_theme: Option<String>,
+    interface: Option<gio::Settings>,
     pub apps: BTreeMap<String, App>,
     pub layout: Vec<String>,
     pub healthy: bool,
@@ -56,6 +59,17 @@ impl Store {
                 }
             });
         }
+        // The theme the portal publishes is this key (bin/nidara-portal serves the schema).
+        // It is read here only while no portal answers: the portal starts on demand, and
+        // until some app asks for it every icon would resolve against hicolor alone.
+        let interface = gio::SettingsSchemaSource::default()
+            .and_then(|s| s.lookup("org.gnome.desktop.interface", true))
+            .filter(|s| s.has_key("icon-theme"))
+            .map(|s| gio::Settings::new_full(&s, None::<&gio::SettingsBackend>, None));
+        if let Some(i) = &interface {
+            let d = dirty.clone();
+            i.connect_changed(Some("icon-theme"), move |_, _| d.notify_one());
+        }
         let app_monitor = gio::AppInfoMonitor::get();
         let d = dirty.clone();
         app_monitor.connect_changed(move |_| d.notify_one());
@@ -74,6 +88,8 @@ impl Store {
             layout_revision: 1,
             icon_revision: 1,
             theme: String::new(),
+            portal_theme: None,
+            interface,
             apps: BTreeMap::new(),
             layout: vec![],
             healthy: false,
@@ -92,6 +108,22 @@ impl Store {
             _volumes: volumes,
             notify,
             domains: BTreeSet::new(),
+        }
+    }
+    /// What the portal answered for the icon theme; None while no portal answers.
+    pub fn set_portal_theme(&mut self, theme: Option<String>) {
+        self.portal_theme = theme;
+        self.apply_theme();
+    }
+    fn apply_theme(&mut self) {
+        let local = self
+            .interface
+            .as_ref()
+            .map(|i| i.string("icon-theme").to_string());
+        let theme = effective_theme(self.portal_theme.as_deref(), local);
+        if theme != self.theme {
+            self.theme = theme;
+            self.icons_changed();
         }
     }
     pub fn invalidate(&self) {
@@ -184,6 +216,7 @@ impl Store {
         Ok(())
     }
     pub fn refresh(&mut self) {
+        self.apply_theme();
         let previous = self.present.clone();
         let mut scan = catalogue::scan(&self.roots, &mut self.present);
         if previous != self.present
@@ -427,4 +460,24 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
         .map_err(|_| Error::Timeout("catalogue startup".into()))?
         .map_err(|_| Error::Unavailable("catalogue worker failed".into()))?;
     Ok((Handle { tx }, notify))
+}
+
+/// The portal's answer while it gives one; else the setting it would publish; else none
+/// (hicolor and pixmaps only).
+fn effective_theme(portal: Option<&str>, local: Option<String>) -> String {
+    portal.map(str::to_owned).or(local).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::effective_theme;
+    #[test]
+    fn the_icon_theme_is_known_before_any_portal_starts() {
+        assert_eq!(effective_theme(None, Some("Papirus".into())), "Papirus");
+        assert_eq!(
+            effective_theme(Some("Adwaita"), Some("Papirus".into())),
+            "Adwaita"
+        );
+        assert_eq!(effective_theme(None, None), "");
+    }
 }
