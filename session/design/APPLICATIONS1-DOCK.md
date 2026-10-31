@@ -63,9 +63,9 @@ entry changes or is removed/recreated. Locale changes also republish labels and
 search data. A missing provider never becomes an empty successful snapshot.
 
 Capabilities use this closed vocabulary: `catalogue`, `search`, `window-matching`,
-`icons`, `icon-overrides`, `layout-apps`, `layout-folders`, `launch-exec`,
-`launch-dbus`, `desktop-actions`, `open-uris`, `default-directory`, `autostart`,
-`foreground-usage`, `new-apps`, `launcher-badges`. A1/A2 advertise only the ones
+`icons`, `trash-icon`, `icon-overrides`, `layout-apps`, `layout-folders`, `launch`,
+`open-directory`, `autostart`, `launch-correlation`, `foreground-usage`, `new-apps`,
+`launcher-badges`. A1–A3 advertise only the ones
 actually implemented and available; individual app records can further restrict
 launch/open/new-window/autostart. Provider loss changes availability/reason, not
 an unsupported feature into a successful no-op. A1 starts no app; A2 does not
@@ -152,7 +152,9 @@ root/metadata, not a substring in an app name. No assumption that all Snap apps
 have the same confinement.
 
 WindowMatch: HyaloEpoch, WindowId, DesktopId (empty if unknown), AppGeneration,
-MatchKind and Candidates. Exact current app_id/desktop ID first, then exact
+MatchKind and Candidates. A3 bounds ambiguity diagnostics to 16 candidates/8 KiB,
+with CandidateCount:t and CandidatesComplete:b; a partial diagnostic never picks
+a winner. Exact current app_id/desktop ID first, then exact
 StartupWMClass, verified Flatpak ID, then initial app_id. Bounded verified PID
 ancestry/systemd metadata can disambiguate; title and executable substring alone
 never choose an app. Ambiguous matches remain ambiguous. Same-executable web

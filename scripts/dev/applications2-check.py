@@ -155,7 +155,7 @@ def inside(binary,out):
         with (out/'daemon.log').open('w') as log:
             daemon=subprocess.Popen([binary,'--applications'],stdout=log,stderr=log)
             wait(snap,'Applications1 ready');e,_,state,apps=snap()
-            assert state['CatalogueComplete'] and state['LaunchAvailable'] and not state['LauncherAvailable']
+            assert state['CatalogueComplete'] and state['LaunchAvailable']  # Unity availability is independent (A3).
             assert apps['org.example.NoExec.desktop']['DBusActivatable'] and apps['org.example.NoExec.desktop']['Launchable']
             fail('Launch','(tsta{sv})',(e,'Files.desktop',apps['Files.desktop']['Generation'],{}),'AccessDenied')
             setting('allow-config-write',False)
