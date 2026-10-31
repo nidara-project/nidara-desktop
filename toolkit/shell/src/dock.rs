@@ -433,7 +433,20 @@ impl Dock {
             rgba(0, 0, 0, 56)
         };
         match &item.kind {
-            Kind::Separator => c.rect(r, faint),
+            // One physical pixel, on the grid: a hairline between pixels reads as a thick
+            // blurred one. Its ink is the TS dock's `--nidara-text-disabled` (white at 0.3).
+            Kind::Separator => {
+                let line = if self.frame.dark {
+                    rgba(255, 255, 255, 77)
+                } else {
+                    rgba(0, 0, 0, 77)
+                };
+                if self.layout.position.horizontal() {
+                    c.vertical_rule(r, 1., line)
+                } else {
+                    c.horizontal_rule(r, 1., line)
+                }
+            }
             Kind::Trash => {
                 c.rounded_rect(r, w * 0.22, faint);
                 if let Some(icon) = &self.trash_icon {
@@ -474,15 +487,13 @@ impl Dock {
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            let (cx, cy) = self.layout.dot(n);
-            let d = DOT * self.layout.scale.max(0.4);
-            let dot = Rect {
-                x: (cx - d / 2.) as f32,
-                y: (cy - d / 2.) as f32,
-                width: d as f32,
-                height: d as f32,
+            // The kit's `INK.solid` (0.9), as the TS dock's running dot.
+            let mark = if self.frame.dark {
+                rgba(255, 255, 255, 230)
+            } else {
+                rgba(0, 0, 0, 230)
             };
-            c.rounded_rect(dot, d / 2., ink);
+            c.dot(self.layout.dot(n), DOT * self.layout.scale.max(0.4), mark);
         }
     }
 }

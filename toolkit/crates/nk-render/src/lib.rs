@@ -129,6 +129,19 @@ impl Canvas {
         r.height = (pixels / self.scale) as f32;
         self.rect(r, color);
     }
+    /// Vertical separator thickness is specified in physical pixels.
+    pub fn vertical_rule(&mut self, mut r: Rect, pixels: f64, color: Color) {
+        r.x = ((r.x as f64 * self.scale).round() / self.scale) as f32;
+        r.width = (pixels / self.scale) as f32;
+        self.rect(r, color);
+    }
+    /// A round dot about `diameter` across, rounded to whole physical pixels on the device
+    /// grid nearest `center`, so its edge is the same on every side (a dot between pixels
+    /// comes out blurred and uneven).
+    pub fn dot(&mut self, center: (f64, f64), diameter: f64, color: Color) {
+        let r = snapped_dot(center, diameter, self.scale);
+        self.rounded_rect(r, f64::from(r.width) / 2., color);
+    }
     pub fn caret(&mut self, mut r: Rect, color: Color) {
         // Exactly one physical pixel at every fractional scale.
         r.x = ((r.x as f64 * self.scale).round() / self.scale) as f32;
@@ -266,6 +279,17 @@ fn rect(r: Rect) -> BoxRect {
         (r.y + r.height) as f64,
     )
 }
+/// A whole number of physical pixels across, its corner on a physical pixel.
+pub fn snapped_dot(center: (f64, f64), diameter: f64, scale: f64) -> Rect {
+    let d = (diameter * scale).round().max(1.);
+    let corner = |v: f64| (v * scale - d / 2.).round() / scale;
+    Rect {
+        x: corner(center.0) as f32,
+        y: corner(center.1) as f32,
+        width: (d / scale) as f32,
+        height: (d / scale) as f32,
+    }
+}
 pub fn offset(mut r: Rect, origin: (f32, f32)) -> Rect {
     r.x += origin.0;
     r.y += origin.1;
@@ -275,6 +299,23 @@ pub fn offset(mut r: Rect, origin: (f32, f32)) -> Rect {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dots_land_on_whole_physical_pixels() {
+        for scale in [1., 1.25, 1.5, 2.] {
+            for center in [(46., 85.), (46.3, 84.9), (10.5, 10.5)] {
+                let r = snapped_dot(center, 5., scale);
+                for v in [r.x, r.y, r.width, r.height] {
+                    let px = f64::from(v) * scale;
+                    assert!((px - px.round()).abs() < 1e-4, "{scale} {center:?} {r:?}");
+                }
+                let mid = f64::from(r.x) + f64::from(r.width) / 2.;
+                assert!(
+                    (mid - center.0).abs() <= 0.5 / scale + 1e-4,
+                    "stays put: {mid}"
+                );
+            }
+        }
+    }
     #[test]
     fn alpha_and_caret_are_physical_pixels() {
         let mut c = Canvas::new(16, 16, 1.25);
