@@ -16,6 +16,19 @@ use std::{
 use tokio::sync::{Notify, oneshot};
 pub struct Store {
     pub launches: super::launch::Book,
+    pub usage: super::usage::Usage,
+    pub unity: super::unity::Unity,
+    pub observation: super::observation::Model,
+    pub index: super::observation::Index,
+    pub usage_revision: u64,
+    pub launcher_revision: u64,
+    matches: Vec<Value>,
+    observation_reason: String,
+    unity_publish_at: Option<Instant>,
+    persist_at: Option<Instant>,
+    last_persist: Instant,
+    decay_at: Instant,
+    early_outcomes: BTreeMap<u64, (Instant, Value)>,
     pub epoch: u64,
     pub revision: u64,
     pub catalogue_revision: u64,
@@ -82,6 +95,19 @@ impl Store {
         volumes.connect_mount_changed(move |_, _| d.notify_one());
         Self {
             launches: super::launch::Book::default(),
+            usage: super::usage::Usage::new(),
+            unity: super::unity::Unity::default(),
+            observation: super::observation::Model::default(),
+            index: super::observation::Index::default(),
+            usage_revision: 1,
+            launcher_revision: 1,
+            matches: vec![],
+            observation_reason: "H1 not connected".into(),
+            unity_publish_at: None,
+            persist_at: None,
+            last_persist: Instant::now(),
+            decay_at: Instant::now() + Duration::from_secs(30),
+            early_outcomes: BTreeMap::new(),
             epoch: super::unique(),
             revision: 1,
             catalogue_revision: 1,
@@ -261,9 +287,20 @@ impl Store {
         } else {
             self.apps.clone()
         };
+        let ids = apps.keys().cloned().collect::<BTreeSet<_>>();
+        if self.usage.catalogue(ids.clone(), self.healthy, wall()) {
+            let _ = self.usage.save();
+            self.last_persist = Instant::now();
+        }
+        self.unity.retain(&ids);
         let autostarts = super::autostart::Index::scan();
         for (id, a) in &mut apps {
             a.record["Autostart"] = autostarts.state(a);
+            let (score, observed, is_new) = self.usage.fields(id);
+            a.record["ForegroundScore"] = json!(score);
+            a.record["NewlyObservedAt"] = json!(observed);
+            a.record["IsNew"] = json!(is_new);
+            a.record["Launcher"] = self.unity.record(id);
             if let Some(old) = self.apps.get(id).filter(|old| old.digest == a.digest) {
                 a.generation = old.generation;
             } else {
@@ -322,6 +359,16 @@ impl Store {
         if previous_health != self.healthy || previous_diagnostics != self.diagnostics {
             self.mark("catalogue");
         }
+        self.index = super::observation::Index::new(&self.apps);
+        self.refresh_matches();
+        self.usage.boundary(
+            self.observation.eligible(&self.index),
+            monotonic_us(),
+            false,
+            false,
+            wall(),
+        );
+        self.project_usage();
         for m in self.monitors.drain(..) {
             m.cancel();
         }
@@ -370,7 +417,7 @@ impl Store {
         }
     }
     pub fn metadata(&self) -> Value {
-        json!({"CatalogueRevision":self.catalogue_revision,"LayoutRevision":self.layout_revision,"UsageRevision":0_u64,"LauncherRevision":0_u64,"IconRevision":self.icon_revision,"CatalogueComplete":self.healthy,"Diagnostics":self.diagnostics,"Apps":self.apps.values().map(|a|a.record.clone()).collect::<Vec<_>>(),"LayoutAvailable":self.layout_available(),"Layout":layout::records(&self.layout,&self.apps,&self.default),"DefaultDirectoryApp":self.default,"WindowMatches":[],"ActiveLaunches":self.launches.active(),"MatchingAvailable":false,"UsageAvailable":false,"LauncherAvailable":false,"LaunchAvailable":true,"LaunchObservationAvailable":false})
+        json!({"CatalogueRevision":self.catalogue_revision,"LayoutRevision":self.layout_revision,"UsageRevision":self.usage_revision,"LauncherRevision":self.launcher_revision,"IconRevision":self.icon_revision,"CatalogueComplete":self.healthy,"Diagnostics":self.diagnostics,"Apps":self.apps.values().map(|a|a.record.clone()).collect::<Vec<_>>(),"LayoutAvailable":self.layout_available(),"Layout":layout::records(&self.layout,&self.apps,&self.default),"DefaultDirectoryApp":self.default,"WindowMatches":self.matches,"HyaloEpoch":self.observation.epoch,"ActiveLaunches":self.launches.active(),"MatchingAvailable":self.observation.live,"UsageAvailable":self.observation.live&&self.usage.available(),"UsageReason":if self.usage.available(){&self.observation_reason}else{self.usage.unavailable_reason()},"NewAppsAvailable":self.usage.baseline_available(),"NewAppsReason":self.usage.unavailable_reason(),"LauncherAvailable":self.unity.available,"LauncherHydrationIncomplete":self.unity.incomplete,"LaunchAvailable":true,"LaunchObservationAvailable":self.observation.live})
     }
 }
 type Job = Box<dyn FnOnce(&mut Store) + Send>;
@@ -424,6 +471,8 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
                                 glib::timeout_future(recovery_at.saturating_duration_since(Instant::now())).await;
                             }
                         };
+                        let deadline=store.tracking_deadline();
+                        let tracking=async {match deadline {Some(at)=>glib::timeout_future(at.saturating_duration_since(Instant::now())).await,None=>std::future::pending::<()>().await}};
                         tokio::select! {
                             biased;
                             _ = dirty.notified() => {
@@ -440,6 +489,7 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
                                 backoff = (backoff * 2).min(60);
                                 recovery_at = Instant::now() + Duration::from_secs(backoff);
                             }
+                            _ = tracking => {store.tracking_tick();}
                             job = rx.recv() => {
                                 let Some(job) = job else { break };
                                 // A ready queue must yield so normal-priority GSettings
@@ -466,6 +516,228 @@ pub async fn spawn() -> Result<(Handle, Arc<Notify>), Error> {
 /// (hicolor and pixmaps only).
 fn effective_theme(portal: Option<&str>, local: Option<String>) -> String {
     portal.map(str::to_owned).or(local).unwrap_or_default()
+}
+
+pub fn wall() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs_f64()
+}
+pub fn monotonic_us() -> u64 {
+    let mut t = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut t) };
+    t.tv_sec as u64 * 1_000_000 + t.tv_nsec as u64 / 1000
+}
+impl Store {
+    pub fn project_usage(&mut self) {
+        let ids = self.usage.take_changed();
+        let mut foreground_ack = false;
+        for id in &ids {
+            if let Some(a) = self.apps.get_mut(id) {
+                let (score, observed, is_new) = self.usage.fields(id);
+                foreground_ack |= a.record["IsNew"] == true && !is_new;
+                a.record["ForegroundScore"] = json!(score);
+                a.record["NewlyObservedAt"] = json!(observed);
+                a.record["IsNew"] = json!(is_new);
+            }
+        }
+        if foreground_ack {
+            let _ = self.usage.save();
+            self.last_persist = Instant::now();
+        }
+        if !ids.is_empty() {
+            self.usage_revision += 1;
+            self.mark("usage");
+        }
+        if self.usage.dirty && self.persist_at.is_none() {
+            self.persist_at =
+                Some((self.last_persist + Duration::from_secs(1)).max(Instant::now()));
+        }
+    }
+    fn refresh_matches(&mut self) {
+        let next = if self.observation.live {
+            self.observation.matches(&self.index)
+        } else {
+            vec![]
+        };
+        if next != self.matches {
+            self.matches = next;
+            self.mark("matching");
+        }
+    }
+    pub fn observation_start(&mut self, snapshot: Value) -> Result<(), Error> {
+        self.usage.disconnect();
+        self.early_outcomes.clear();
+        self.observation
+            .bootstrap(snapshot)
+            .map_err(Error::Unavailable)?;
+        self.observation_reason.clear();
+        self.refresh_matches();
+        self.mark("matching");
+        self.mark("usage");
+        self.usage.boundary(
+            self.observation.eligible(&self.index),
+            self.observation.time,
+            false,
+            true,
+            wall(),
+        );
+        self.project_usage();
+        Ok(())
+    }
+    pub fn observation_event(&mut self, event: Value) -> Result<(), Error> {
+        let effect = self.observation.event(event).map_err(Error::Unavailable)?;
+        if effect.boundary {
+            self.refresh_matches();
+            self.usage.boundary(
+                self.observation.eligible(&self.index),
+                self.observation.time,
+                effect.idle_cap,
+                effect.force,
+                wall(),
+            );
+            self.project_usage();
+        }
+        if effect.stop {
+            self.launches.stop_observation("session locked or sleeping");
+            self.mark("launches");
+        }
+        if let Some((number, outcome)) = effect.outcome {
+            self.launch_outcome(number, outcome);
+        }
+        if self.launches.reconcile(
+            &self.observation.epoch,
+            &self.matches,
+            self.observation.focus,
+        ) {
+            self.mark("launches");
+        }
+        Ok(())
+    }
+    pub fn observation_lost(&mut self, reason: String) {
+        let was = self.observation.live;
+        self.observation.disconnect();
+        self.usage.disconnect();
+        self.early_outcomes.clear();
+        self.observation_reason = reason;
+        if was {
+            self.refresh_matches();
+            self.launches.stop_observation("H1 observation lost");
+            self.mark("matching");
+            self.mark("usage");
+            self.mark("launches");
+        }
+    }
+    pub fn unity_status(&mut self, available: bool, incomplete: bool) {
+        let change = self.unity.status(available, incomplete);
+        let ids = if !available {
+            self.unity.flush()
+        } else {
+            BTreeSet::new()
+        };
+        self.project_unity(ids, change);
+    }
+    pub fn unity_update(
+        &mut self,
+        owner: String,
+        path: String,
+        id: String,
+        patch: super::unity::Patch,
+    ) {
+        self.unity.update(owner, path, id, patch);
+        if self.unity.pending() && self.unity_publish_at.is_none() {
+            self.unity_publish_at = Some(Instant::now() + Duration::from_millis(100));
+        }
+    }
+    pub fn unity_lost(&mut self, owner: &str) {
+        let ids = self.unity.lost(owner);
+        self.project_unity(ids, false);
+    }
+    fn project_unity(&mut self, ids: BTreeSet<String>, status: bool) {
+        for id in &ids {
+            if let Some(a) = self.apps.get_mut(id) {
+                a.record["Launcher"] = self.unity.record(id);
+            }
+        }
+        if status || !ids.is_empty() {
+            self.launcher_revision += 1;
+            self.mark("launcher");
+        }
+    }
+    fn tracking_deadline(&self) -> Option<Instant> {
+        self.unity_publish_at
+            .into_iter()
+            .chain(self.persist_at)
+            .chain(self.usage.needs_decay().then_some(self.decay_at))
+            .min()
+    }
+    fn tracking_tick(&mut self) {
+        let now = Instant::now();
+        if self.unity_publish_at.is_some_and(|at| at <= now) {
+            self.unity_publish_at = None;
+            let ids = self.unity.flush();
+            self.project_unity(ids, false);
+        }
+        if self.decay_at <= now {
+            self.decay_at = now + Duration::from_secs(30);
+            self.usage.decay(wall());
+            self.project_usage();
+        }
+        if self.persist_at.is_some_and(|at| at <= now) {
+            let was = self.usage.available();
+            let _ = self.usage.save();
+            self.last_persist = now;
+            self.persist_at = if self.usage.dirty {
+                Some(now + Duration::from_secs(30))
+            } else {
+                None
+            };
+            if was != self.usage.available() {
+                self.mark("usage");
+            }
+        }
+    }
+    fn launch_outcome(&mut self, number: u64, outcome: Value) {
+        self.early_outcomes
+            .retain(|_, (at, _)| at.elapsed() < Duration::from_secs(10));
+        if self.launches.outcome(
+            &self.observation.epoch,
+            number,
+            &outcome,
+            self.observation.focus,
+        ) {
+            self.mark("launches");
+        } else if self.early_outcomes.len() < 128 {
+            self.early_outcomes
+                .insert(number, (Instant::now(), outcome));
+        }
+    }
+    pub fn bind_launch(
+        &mut self,
+        id: &str,
+        connection: &str,
+        run: u64,
+        number: u64,
+        already: Option<Value>,
+    ) {
+        if !self.observation.live
+            || self.observation.epoch != connection
+            || self.observation.run != run
+        {
+            return;
+        }
+        self.early_outcomes
+            .retain(|_, (at, _)| at.elapsed() < Duration::from_secs(10));
+        self.launches.bind(id, connection, number);
+        let result = already.or_else(|| self.early_outcomes.remove(&number).map(|(_, v)| v));
+        if let Some(v) = result {
+            self.launch_outcome(number, v);
+        }
+    }
 }
 
 #[cfg(test)]

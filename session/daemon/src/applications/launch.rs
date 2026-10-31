@@ -27,6 +27,9 @@ pub struct Entry {
     fingerprint: String,
     created: Instant,
     active: bool,
+    dispatch_allowed: bool,
+    baseline: Option<(String, std::collections::BTreeSet<u64>)>,
+    correlation: Option<(String, u64)>,
     pub public: Json,
 }
 #[derive(Default)]
@@ -73,7 +76,12 @@ impl Book {
         token: Option<String>,
     ) -> Result<String, Error> {
         self.cleanup();
-        if self.entries.values().filter(|e| e.active).count() >= ACTIVE
+        if self
+            .entries
+            .values()
+            .filter(|e| e.active || e.public["DispatchFinished"] != true)
+            .count()
+            >= ACTIVE
             || self.entries.len() >= 1024
             || (!nonce.is_empty()
                 && self
@@ -92,7 +100,7 @@ impl Book {
             self.tokens.insert(token, Instant::now());
         }
         let id = format!("launch-{}", super::unique());
-        let public = json!({"LaunchId":id,"DesktopId":app.id,"AppGeneration":app.generation,"Mode":mode,"State":"accepted","EffectStarted":false,"DispatchFinished":false,"OutcomeUnknown":false,"FocusConfirmed":false,"WindowConfirmed":false,"ActualUnit":"","DispatchUnits":[],"PortalIdentityVerified":false,"Error":"","CreatedMonotonic":monotonic()});
+        let public = json!({"LaunchId":id,"DesktopId":app.id,"AppGeneration":app.generation,"Mode":mode,"State":"accepted","EffectStarted":false,"DispatchFinished":false,"OutcomeUnknown":false,"FocusConfirmed":false,"WindowConfirmed":false,"ActualUnit":"","DispatchUnits":[],"PortalIdentityVerified":false,"HyaloEpoch":"","WindowId":0_u64,"Correlation":"none","CausalConfirmed":false,"ObservationReason":"no coherent correlation","Error":"","CreatedMonotonic":monotonic()});
         self.entries.insert(
             id.clone(),
             Entry {
@@ -101,6 +109,9 @@ impl Book {
                 fingerprint,
                 created: Instant::now(),
                 active: true,
+                dispatch_allowed: true,
+                baseline: None,
+                correlation: None,
                 public,
             },
         );
@@ -129,20 +140,25 @@ impl Book {
         unit: Option<String>,
     ) {
         if let Some(e) = self.entries.get_mut(id) {
+            if let Some(unit) = unit {
+                let units = e.public["DispatchUnits"].as_array_mut().unwrap();
+                if !units.contains(&json!(unit)) {
+                    units.push(json!(unit));
+                }
+            }
             if !e.active {
+                if state == "failed" {
+                    e.public["Error"] = json!(error);
+                    e.dispatch_allowed = false;
+                }
                 return;
             }
             e.public["State"] = json!(state);
             e.public["Error"] = json!(error);
             e.public["OutcomeUnknown"] = json!(unknown);
-            if let Some(unit) = unit {
-                e.public["DispatchUnits"]
-                    .as_array_mut()
-                    .unwrap()
-                    .push(json!(unit));
-            }
             if ["failed", "timed-out-unknown"].contains(&state) {
                 e.active = false;
+                e.dispatch_allowed = false;
             }
         }
     }
@@ -164,7 +180,7 @@ impl Book {
     pub fn may_dispatch(&self, id: &str) -> bool {
         self.entries
             .get(id)
-            .is_some_and(|e| e.active && e.created.elapsed() < LIFETIME)
+            .is_some_and(|e| e.dispatch_allowed && e.created.elapsed() < LIFETIME)
     }
     pub fn invalidate_apps(&mut self, apps: &std::collections::BTreeMap<String, App>) -> bool {
         let mut changed = false;
@@ -185,6 +201,124 @@ impl Book {
                 e.active = false;
                 changed = true;
             }
+        }
+        changed
+    }
+    pub fn baseline(&mut self, id: &str, epoch: String, windows: std::collections::BTreeSet<u64>) {
+        if let Some(e) = self.entries.get_mut(id) {
+            e.baseline = Some((epoch, windows));
+        }
+    }
+    pub fn bind(&mut self, id: &str, epoch: &str, number: u64) {
+        if let Some(e) = self.entries.get_mut(id).filter(|e| e.active) {
+            e.correlation = Some((epoch.into(), number));
+            e.public["ObservationReason"] = json!("");
+        }
+    }
+    pub fn outcome(
+        &mut self,
+        epoch: &str,
+        number: u64,
+        outcome: &Json,
+        focus: Option<u64>,
+    ) -> bool {
+        let Some(e) = self.entries.values_mut().find(|e| {
+            e.active
+                && e.correlation
+                    .as_ref()
+                    .is_some_and(|(ep, n)| ep == epoch && *n == number)
+        }) else {
+            return false;
+        };
+        let kind = outcome["outcome"].as_str().unwrap_or_default();
+        match kind {
+            "window" | "activated" => {
+                let Some(window) = outcome["window"].as_u64() else {
+                    return false;
+                };
+                e.public["State"] = json!(if kind == "window" {
+                    "window-observed"
+                } else {
+                    "existing-window-activated"
+                });
+                e.public["HyaloEpoch"] = json!(epoch);
+                e.public["WindowId"] = json!(window);
+                e.public["WindowConfirmed"] = json!(true);
+                e.public["FocusConfirmed"] = json!(focus == Some(window));
+                e.public["Correlation"] = json!("activation-token");
+                e.public["CausalConfirmed"] = json!(true);
+                e.public["OutcomeUnknown"] = json!(false);
+                e.public["ObservationReason"] = json!("");
+            }
+            "refused" => {
+                e.public["State"] = json!("failed");
+                e.public["Error"] = json!("activation refused by compositor");
+                e.public["ObservationReason"] = json!("activation refused");
+            }
+            "expired" => {
+                e.public["State"] = json!("timed-out-unknown");
+                e.public["OutcomeUnknown"] = json!(true);
+                e.public["ObservationReason"] = json!("activation token expired");
+            }
+            _ => return false,
+        }
+        e.active = false;
+        true
+    }
+    pub fn stop_observation(&mut self, reason: &str) {
+        for e in self.entries.values_mut().filter(|e| e.active) {
+            e.active = false;
+            e.public["State"] = json!("timed-out-unknown");
+            e.public["OutcomeUnknown"] = json!(true);
+            e.public["ObservationReason"] = json!(reason);
+        }
+    }
+    pub fn reconcile(&mut self, epoch: &str, matches: &[Json], focus: Option<u64>) -> bool {
+        let counts = self.entries.values().filter(|e| e.active).fold(
+            HashMap::<String, usize>::new(),
+            |mut c, e| {
+                *c.entry(e.public["DesktopId"].as_str().unwrap_or_default().into())
+                    .or_default() += 1;
+                c
+            },
+        );
+        let mut changed = false;
+        for e in self
+            .entries
+            .values_mut()
+            .filter(|e| e.active && e.correlation.is_none() && e.public["EffectStarted"] == true)
+        {
+            if counts.get(e.public["DesktopId"].as_str().unwrap_or_default()) != Some(&1) {
+                continue;
+            }
+            let Some((base_epoch, base)) = &e.baseline else {
+                continue;
+            };
+            if base_epoch != epoch {
+                continue;
+            }
+            let candidates = matches
+                .iter()
+                .filter(|m| {
+                    m["DesktopId"] == e.public["DesktopId"]
+                        && m["AppGeneration"] == e.public["AppGeneration"]
+                        && m["WindowId"].as_u64().is_some_and(|id| !base.contains(&id))
+                })
+                .collect::<Vec<_>>();
+            if candidates.len() != 1 {
+                continue;
+            }
+            let window = candidates[0]["WindowId"].as_u64().unwrap();
+            e.public["State"] = json!("window-observed");
+            e.public["HyaloEpoch"] = json!(epoch);
+            e.public["WindowId"] = json!(window);
+            e.public["WindowConfirmed"] = json!(true);
+            e.public["FocusConfirmed"] = json!(focus == Some(window));
+            e.public["Correlation"] = json!("app-match-after-launch");
+            e.public["CausalConfirmed"] = json!(false);
+            e.public["ObservationReason"] = json!("weaker app match; causality unconfirmed");
+            e.active = false;
+            changed = true;
         }
         changed
     }
@@ -692,6 +826,23 @@ pub fn run(
                 .acquire_owned()
                 .await
                 .map_err(|_| Error::Unavailable("launch workers unavailable".into()))?;
+            if !plan.token.is_empty() {
+                let context = store
+                    .call(|s| Ok(s.observation.live.then(|| s.observation.epoch.clone())))
+                    .await?;
+                if let Some(context) = context
+                    && let Ok((run, number, already)) =
+                        super::observation::launch(&plan.token).await
+                {
+                    let launch_id = id.clone();
+                    let _ = store
+                        .call(move |s| {
+                            s.bind_launch(&launch_id, &context, run, number, already);
+                            Ok(())
+                        })
+                        .await;
+                }
+            }
             dispatch(&plan, &id, &peer, &store, &conn).await
         })
         .await;
@@ -802,6 +953,7 @@ mod tests {
             )
             .is_err()
         );
+        b.finished(&id);
         b.update(&id, "failed", "refused", false, None);
         assert!(
             b.insert(
@@ -851,5 +1003,78 @@ mod tests {
         assert!(!unset.contains(&"XDG_ACTIVATION_TOKEN".to_owned()));
         let state = json!(Book::default().active());
         assert!(!state.to_string().contains("private"));
+    }
+    #[test]
+    fn correlation_does_not_cancel_the_rest_of_a_multi_file_dispatch() {
+        let mut b = Book::default();
+        let a = app();
+        let id = b
+            .insert(":1".into(), "".into(), "".into(), &a, "open", None)
+            .unwrap();
+        b.bind(&id, "epoch", 4);
+        assert!(b.outcome(
+            "epoch",
+            4,
+            &json!({"outcome":"window","window":12}),
+            Some(12)
+        ));
+        assert!(b.may_dispatch(&id));
+        b.update(&id, "accepted", "", false, Some("unit-2".into()));
+        b.finished(&id);
+        b.update(&id, "dispatched", "", false, None);
+        let state = b.state(&id).unwrap();
+        assert_eq!(state["State"], "window-observed");
+        assert_eq!(state["DispatchUnits"], json!(["unit-2"]));
+        assert_eq!(state["CausalConfirmed"], true);
+    }
+    #[test]
+    fn weak_matching_needs_a_baseline_and_does_not_claim_simultaneous_launches() {
+        let mut b = Book::default();
+        let a = app();
+        let id = b
+            .insert(":1".into(), "".into(), "".into(), &a, "activate", None)
+            .unwrap();
+        b.started(&id);
+        let matches = vec![json!({"WindowId":8,"DesktopId":a.id,"AppGeneration":a.generation})];
+        assert!(!b.reconcile("epoch", &matches, Some(8)));
+        b.baseline(&id, "epoch".into(), [1].into());
+        let other = b
+            .insert(":2".into(), "".into(), "".into(), &a, "activate", None)
+            .unwrap();
+        b.started(&other);
+        assert!(!b.reconcile("epoch", &matches, Some(8)));
+        b.update(&other, "failed", "denied", false, None);
+        assert!(b.reconcile("epoch", &matches, Some(8)));
+        assert_eq!(b.state(&id).unwrap()["CausalConfirmed"], false);
+    }
+    #[test]
+    fn finishing_observation_does_not_free_the_dispatch_admission_budget() {
+        let mut b = Book::default();
+        let a = app();
+        let mut first = String::new();
+        for n in 0..ACTIVE {
+            let id = b
+                .insert(":1".into(), "".into(), "".into(), &a, "activate", None)
+                .unwrap();
+            b.bind(&id, "epoch", n as u64);
+            assert!(b.outcome(
+                "epoch",
+                n as u64,
+                &json!({"outcome":"activated","window":1}),
+                Some(1)
+            ));
+            if n == 0 {
+                first = id;
+            }
+        }
+        assert!(
+            b.insert(":1".into(), "".into(), "".into(), &a, "activate", None)
+                .is_err()
+        );
+        b.finished(&first);
+        assert!(
+            b.insert(":1".into(), "".into(), "".into(), &a, "activate", None)
+                .is_ok()
+        );
     }
 }

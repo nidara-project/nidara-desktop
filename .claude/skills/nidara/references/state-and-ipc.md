@@ -2008,8 +2008,8 @@ default Files pins, typed folders, and the required toolkit/Hyalo seams. It is
 Its closure section records Claude's #688 review and the relayed owner decisions,
 including dock-before-usage ordering, GNOME-style idle cutoff, no timed new marker,
 uniform shrink without a size floor/scroll strip, and healthy-catalogue-only pin
-pruning. A1/A2 are implemented as an explicitly opted-in service; their actual capabilities
-and validation are in `session/daemon/src/applications/README.md` and `A2.md`.
+pruning. A1–A3 are implemented as an explicitly opted-in service; their actual capabilities
+and validation are in `session/daemon/src/applications/README.md`, `A2.md` and `A3.md`.
 A2 uses literal ExecStartEx transient services or org.freedesktop.Application,
 revalidates original sender/generation before effects, and never retries ambiguous
 delivery. Autostart writes preserve effective XDG preferences; the existing session
@@ -2018,3 +2018,19 @@ its sibling CLI first; CARGO_TARGET_DIR relocates build artifacts, while fixture
 evidence stays in the source worktree's target/applications1. Other stages
 remain design until individually authorized.
 The existing TS model documented above is unchanged; IPC B is separate.
+
+### Applications1 A3 observation rules
+
+A3 consumes H1 focus_transition at its monotonic boundary, preserving every
+focus/lock/idle/seat/sleep split. Never account from coalesced focus_changed or
+from the client's receipt time. Snapshot + serial/epoch validation are mandatory;
+on loss discard the tentative watch and resync with a fresh connection identity.
+Only committed aggregate seconds persist. Idle caps the current watch at its
+start +30 s, including across checkpoints; no last-input or wall-time accrual.
+
+New markers use a durable healthy catalogue baseline, not installation timestamps
+or a timer. Metadata changes and degraded roots cannot re-mark old apps. Clear
+on confirmed foreground use or scoped AppAcknowledge only. UI counts/progress
+read Launcher from app records and Changed(launcher), with independent revision.
+One snapshot session owns both Apps and WindowMatches continuations: read both
+domains before CloseSnapshot; closing ANY token frees that session.

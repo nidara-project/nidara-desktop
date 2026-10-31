@@ -135,7 +135,8 @@ def inside(binary, out):
         assert [x['Key'] for x in snap()[2]['Layout']]==native_before
         assert ast.literal_eval(dock_get('pinned'))==['case']
         assert apps['Sample.desktop']['Launchable'] and not apps['Sample.desktop']['IsNew']
-        for method,sig,args in [('ResolveWindow','(tst)',(e,'private',1)),('AcknowledgeNew','(tas)',(e,['Sample.desktop']))]:fail(method,sig,args,'Unavailable')
+        fail('ResolveWindow','(tst)',(e,'private',1),'Unavailable')
+        fail('AcknowledgeNew','(tas)',(e,['Sample.desktop']),'AccessDenied')
         # Hidden list filtering, accent folding, no full-Exec argument matching.
         rev=s['CatalogueRevision']
         _,hits=call('Search','(tts ub)'.replace(' ',''),(e,rev,'configuracion',10,False))

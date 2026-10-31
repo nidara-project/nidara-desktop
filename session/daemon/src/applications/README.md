@@ -1,4 +1,4 @@
-# Applications1 A1/A2
+# Applications1 A1–A3
 
 `nidara-sessiond --applications` serves `org.nidara.Applications1` on
 `org.nidara.Applications`, `/org/nidara/Applications`. It is explicitly opt-in;
@@ -11,8 +11,10 @@ search, app icon rendering/overrides and typed pin/folder layout. A2 adds
 launch/actions/open/default directories and typed XDG autostart preferences;
 read [A2.md](A2.md) before using or extending those effects. Launchable now
 reflects entry availability, with request/provider failures still explicit.
-There is no usage/new-app tracker, Unity listener, window watcher, dock or TS
-bridge. ResolveWindow and AcknowledgeNew remain Unavailable before H1/A3.
+A3 adds coherent H1 observation/window matching, foreground-time ranking,
+durable new markers, launch correlation and a bounded Unity signal listener;
+read [A3.md](A3.md). ResolveWindow requires live H1; AcknowledgeNew is a scoped,
+authenticated persistent mutation. There is no dock, second WM or TS bridge.
 `LauncherAvailable` refers to Unity, not app launching: use `LaunchAvailable`
 and the `launch` capability; neither implies observed window/focus success.
 
@@ -57,7 +59,7 @@ profile's history rather than treating a different filesystem as uninstall.
 GetSnapshot returns `(t epoch, t revision, a{sv} state)`. State includes independent
 CatalogueRevision/LayoutRevision, zero UsageRevision/LauncherRevision, IconRevision,
 CatalogueComplete/Diagnostics, Apps, AppsNext, ordered Layout, LayoutAvailable,
-DefaultDirectoryApp, ActiveLaunches and explicitly unavailable window matching.
+DefaultDirectoryApp, ActiveLaunches and explicitly available/unavailable H1 matching.
 Subscribe to Changed and owner changes before reading. PropertiesChanged
 invalidates root property caches as well. A daemon restart gives a new epoch;
 changed/recreated desktop entries receive new monotonic generations within it.
@@ -114,7 +116,7 @@ Every actual layout change advances LayoutRevision; unrelated icon changes do no
 D-Bus mutations authenticate the unique sender's real PID/UID, cache only pinned
 Peer handles and revalidate executable identity/grants and current consent at
 the effect. Claiming SettingsNative or invoking an interpreter grants nothing.
-New shared operations are EditPins and AppIcon: native Shell/Settings may use
+The A1 operations are EditPins and AppIcon: native Shell/Settings may use
 both; the narrow installed `/usr/bin/nidara-apps` Launcher role may only EditPins.
 External callers need computer-control AND config-write. Launcher does not gain
 window control, capture, close, arbitrary config or spawn. Session/LegacySettings
@@ -207,3 +209,9 @@ The final sample's idle.json records the release binary SHA-256. The initial
 fixture had over 300 entries; the expanded final fixture also includes portal
 theme assets and symlink/cycle coverage. Neither interval sends client traffic
 or starts a portal. The after sample includes the final asset/watch fixes.
+
+A3 extends the historical A1 idle sample above. With no H1 provider it uses
+bounded reconnect backoff (1–30 s); Unity has no healthy polling. Nonzero usage
+decays/checkpoints every 30 s; ordinary committed-time writes coalesce at up to
+1 Hz. Baseline/new-marker transitions commit before publication.
+These new workloads are not covered by the historical A1 zero-tick sample.

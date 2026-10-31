@@ -34,6 +34,7 @@ pub enum Operation {
     AppIcon,
     AppLaunch,
     AppAutostart,
+    AppAcknowledge,
     Capture,
     Outputs,
     Power,
@@ -76,8 +77,11 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     let own = match role {
         Role::LegacySettings => matches!(op, ActivateOwnWindow),
-        Role::Settings => matches!(op, Configure | EditPins | AppIcon | AppAutostart),
-        Role::Launcher => matches!(op, EditPins | AppLaunch),
+        Role::Settings => matches!(
+            op,
+            Configure | EditPins | AppIcon | AppAutostart | AppAcknowledge
+        ),
+        Role::Launcher => matches!(op, EditPins | AppLaunch | AppAcknowledge),
         Role::Session => matches!(op, Configure | Power | NightLight),
         Role::Shell => matches!(
             op,
@@ -88,6 +92,7 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
                 | AppIcon
                 | AppLaunch
                 | AppAutostart
+                | AppAcknowledge
         ),
         // Compatibility for the dedicated installed TS shell host. Generic GJS hosts
         // and computer-use helpers never receive this role.
@@ -109,7 +114,7 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     own || consent.control
         && match op {
-            Configure | EditPins | AppIcon | AppAutostart => consent.config,
+            Configure | EditPins | AppIcon | AppAutostart | AppAcknowledge => consent.config,
             Capture => consent.capture,
             CloseWindow => consent.close,
             _ => true,
@@ -250,7 +255,8 @@ impl Peer {
                     Operation::Configure
                     | Operation::EditPins
                     | Operation::AppIcon
-                    | Operation::AppAutostart => {
+                    | Operation::AppAutostart
+                    | Operation::AppAcknowledge => {
                         "configuration writes are disabled (allow-config-write)"
                     }
                     Operation::Capture => "screenshots are disabled (allow-screenshot)",
@@ -338,6 +344,7 @@ mod tests {
         let no = Consent::default();
         for role in [Role::Shell, Role::Settings, Role::Launcher] {
             assert!(permitted(role, Operation::EditPins, no));
+            assert!(permitted(role, Operation::AppAcknowledge, no));
         }
         assert!(permitted(Role::Shell, Operation::AppIcon, no));
         assert!(permitted(Role::Settings, Operation::AppIcon, no));
@@ -371,6 +378,7 @@ mod tests {
             Operation::EditPins,
             Operation::AppIcon,
             Operation::AppAutostart,
+            Operation::AppAcknowledge,
         ] {
             for (control, config) in [(false, false), (true, false), (false, true)] {
                 assert!(!permitted(

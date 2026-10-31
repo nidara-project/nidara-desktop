@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Opt-in Applications1 A1/A2. No WM, usage tracker, renderer or TS bridge.
+//! Opt-in Applications1 A1–A3. Coherent H1 consumption, no WM, renderer or TS bridge.
 mod autostart;
 mod catalogue;
 mod desktop;
 mod icons;
 mod launch;
 mod layout;
+mod observation;
 mod search;
 mod store;
 mod theme;
+mod unity;
+mod usage;
 use nidara_access::{Operation, Peer};
 use serde_json::{Value as Json, json};
 use std::{
@@ -57,6 +60,7 @@ fn unique() -> u64 {
 fn variant(v: &Json, key: &str) -> OwnedValue {
     let value: Variant = match v {
         Json::Bool(b) => (*b).into(),
+        Json::Number(n) if key == "Count" => n.as_i64().unwrap_or_default().into(),
         Json::Number(n) if n.is_u64() => n.as_u64().unwrap().into(),
         Json::Number(n) => n.as_f64().unwrap_or_default().into(),
         Json::String(s) => s.as_str().into(),
@@ -117,6 +121,8 @@ struct Snapshot {
     epoch: u64,
     expires: Instant,
     apps: Vec<Json>,
+    windows: Vec<Json>,
+    apps_anchor: bool,
     bytes: usize,
 }
 #[derive(Default)]
@@ -145,13 +151,19 @@ impl Pages {
         owner: String,
         epoch: u64,
         apps: Vec<Json>,
-    ) -> Result<(Vec<Json>, String), Error> {
+        windows: Vec<Json>,
+    ) -> Result<(Vec<Json>, String, Vec<Json>, String), Error> {
         self.cleanup();
-        let (first, end) = page(&apps, 0);
-        if end == apps.len() {
-            return Ok((first, String::new()));
+        let (first, a) = page(&apps, 0);
+        let (first_windows, w) = page(&windows, 0);
+        if a == apps.len() && w == windows.len() {
+            return Ok((first, String::new(), first_windows, String::new()));
         }
-        let bytes = apps.iter().map(|a| a.to_string().len() * 4).sum::<usize>();
+        let bytes = apps
+            .iter()
+            .chain(&windows)
+            .map(|a| a.to_string().len() * 4)
+            .sum::<usize>();
         if self.sessions.values().filter(|s| s.owner == owner).count() >= 16
             || self.sessions.len() >= 256
             || self.sessions.values().map(|s| s.bytes).sum::<usize>() + bytes > 32 * 1024 * 1024
@@ -159,46 +171,70 @@ impl Pages {
             return Err(Error::Busy("snapshot retention budget".into()));
         }
         let id = format!("{:x}", unique());
+        // Legacy consumers close AppsNext only. Give them one empty terminal
+        // app page when only WindowMatches needs retention, so they can free
+        // the shared session without knowing this additive result collection.
+        let apps_anchor = a == apps.len() && w < windows.len();
+        let next = if a < apps.len() || apps_anchor {
+            format!("{id}:a:{a}")
+        } else {
+            String::new()
+        };
+        let next_windows = if w < windows.len() {
+            format!("{id}:w:{w}")
+        } else {
+            String::new()
+        };
         self.sessions.insert(
-            id.clone(),
+            id,
             Snapshot {
                 owner,
                 epoch,
                 expires: Instant::now() + Duration::from_secs(10),
                 apps,
+                windows,
+                apps_anchor,
                 bytes,
             },
         );
-        Ok((first, format!("{id}:{end}")))
+        Ok((first, next, first_windows, next_windows))
     }
     fn read(&mut self, owner: &str, epoch: u64, token: &str) -> Result<(Records, String), Error> {
         self.cleanup();
-        let (id, cursor) = token
-            .split_once(':')
-            .ok_or_else(|| Error::Stale("invalid page token".into()))?;
-        let at = cursor
+        let parts = token.split(':').collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return Err(Error::Stale("invalid page token".into()));
+        }
+        let id = parts[0];
+        let at = parts[2]
             .parse::<usize>()
-            .map_err(|_| Error::Stale("invalid page cursor".into()))?;
+            .map_err(|_| Error::Stale("invalid cursor".into()))?;
         let s = self
             .sessions
             .get(id)
             .filter(|s| s.owner == owner && s.epoch == epoch)
-            .ok_or_else(|| Error::Stale("expired or foreign snapshot".into()))?;
-        if at >= s.apps.len() {
+            .ok_or_else(|| Error::Stale("expired/foreign snapshot".into()))?;
+        let records = match parts[1] {
+            "a" => &s.apps,
+            "w" => &s.windows,
+            _ => return Err(Error::Stale("invalid snapshot domain".into())),
+        };
+        if parts[1] == "a" && s.apps_anchor && at == records.len() {
+            return Ok((vec![], String::new()));
+        }
+        if at >= records.len() {
             return Err(Error::Stale("snapshot cursor out of range".into()));
         }
-        let (rows, end) = page(&s.apps, at);
-        Ok((
-            rows.iter().map(dict).collect(),
-            if end == s.apps.len() {
-                String::new()
-            } else {
-                format!("{id}:{end}")
-            },
-        ))
+        let (rows, end) = page(records, at);
+        let next = if end == records.len() {
+            String::new()
+        } else {
+            format!("{id}:{}:{end}", parts[1])
+        };
+        Ok((rows.iter().map(dict).collect(), next))
     }
     fn close(&mut self, owner: &str, epoch: u64, token: &str) {
-        let id = token.split(':').next().unwrap_or("");
+        let id = token.split(':').next().unwrap_or_default();
         if self
             .sessions
             .get(id)
@@ -292,6 +328,13 @@ impl Applications {
                 let id =
                     s.launches
                         .insert(owner, nonce, fingerprint, &app, &mode, plan.token_hash())?;
+                if s.observation.live {
+                    s.launches.baseline(
+                        &id,
+                        s.observation.epoch.clone(),
+                        s.observation.windows.keys().copied().collect(),
+                    );
+                }
                 s.mark("launches");
                 Ok((id, Some(plan)))
             })
@@ -401,6 +444,29 @@ impl Applications {
         {
             result.extend(["layout-apps".into(), "layout-folders".into()]);
         }
+        if let Ok(extra) = self
+            .store
+            .call(|s| {
+                let mut v = vec![];
+                if s.observation.live {
+                    v.push("window-matching".to_string());
+                    v.push("launch-correlation".into());
+                    if s.usage.available() {
+                        v.push("foreground-usage".into());
+                    }
+                }
+                if s.usage.baseline_available() {
+                    v.push("new-apps".into());
+                }
+                if s.unity.available {
+                    v.push("launcher-badges".into());
+                }
+                Ok(v)
+            })
+            .await
+        {
+            result.extend(extra);
+        }
         result
     }
     #[zbus(property)]
@@ -426,12 +492,15 @@ impl Applications {
             .unwrap_or(0)
     }
     #[zbus(property)]
-    fn usage_revision(&self) -> u64 {
-        0
+    async fn usage_revision(&self) -> u64 {
+        self.store.call(|s| Ok(s.usage_revision)).await.unwrap_or(0)
     }
     #[zbus(property)]
-    fn launcher_revision(&self) -> u64 {
-        0
+    async fn launcher_revision(&self) -> u64 {
+        self.store
+            .call(|s| Ok(s.launcher_revision))
+            .await
+            .unwrap_or(0)
     }
     async fn get_snapshot(
         &self,
@@ -447,10 +516,25 @@ impl Applications {
             .as_array_mut()
             .map(std::mem::take)
             .unwrap_or_default();
-        let (first, next) = self.pages.lock().await.start(owner, e, apps)?;
+        let windows = state["WindowMatches"]
+            .as_array_mut()
+            .map(std::mem::take)
+            .unwrap_or_default();
+        let (first, next, first_windows, next_windows) =
+            self.pages
+                .lock()
+                .await
+                .start(owner.clone(), e, apps, windows)?;
         state["Apps"] = json!(first);
         state["AppsNext"] = json!(next);
-        state["WindowMatchesNext"] = json!("");
+        state["WindowMatches"] = json!(first_windows);
+        state["WindowMatchesNext"] = json!(next_windows);
+        if state.to_string().len() * 2 > 2 * 1024 * 1024 {
+            let mut pages = self.pages.lock().await;
+            pages.close(&owner, e, &next);
+            pages.close(&owner, e, &next_windows);
+            return Err(Error::Busy("root snapshot budget".into()));
+        }
         Ok((e, r, dict(&state)))
     }
     async fn read_snapshot_page(
@@ -490,7 +574,7 @@ impl Applications {
                     return Err(Error::Stale("catalogue changed".into()));
                 }
                 Ok((
-                    0,
+                    s.usage_revision,
                     search::rank(&query, s.apps.values(), include_hidden, limit as usize)
                         .iter()
                         .map(|a| dict(&a.record))
@@ -766,13 +850,29 @@ impl Applications {
     }
     async fn resolve_window(
         &self,
-        _epoch: u64,
-        _hyalo_epoch: String,
-        _window_id: u64,
+        epoch: u64,
+        hyalo_epoch: String,
+        window_id: u64,
+        #[zbus(header)] header: Header<'_>,
     ) -> Result<Dict, Error> {
-        Err(Error::Unavailable(
-            "coherent window observation is H1/A3".into(),
-        ))
+        let _admission = self.admit(&header)?;
+        self.store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                if !s.observation.live {
+                    return Err(Error::Unavailable("H1 observation unavailable".into()));
+                }
+                if s.observation.epoch != hyalo_epoch {
+                    return Err(Error::Stale("Hyalo connection changed".into()));
+                }
+                let w = s
+                    .observation
+                    .windows
+                    .get(&window_id)
+                    .ok_or_else(|| Error::NotFound("window unavailable".into()))?;
+                Ok(dict(&s.index.resolve(w, &hyalo_epoch)))
+            })
+            .await
     }
     async fn launch(
         &self,
@@ -855,8 +955,32 @@ impl Applications {
             })
             .await
     }
-    async fn acknowledge_new(&self, _epoch: u64, _ids: Vec<String>) -> Result<u64, Error> {
-        Err(Error::Unavailable("new app markers are A3".into()))
+    async fn acknowledge_new(
+        &self,
+        epoch: u64,
+        ids: Vec<String>,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
+    ) -> Result<u64, Error> {
+        let _admission = self.admit(&header)?;
+        if ids.len() > 256 || ids.iter().map(String::len).sum::<usize>() > 128 * 1024 {
+            return Err(Error::Invalid("acknowledgement budget".into()));
+        }
+        let peer = self.peer(&header, conn).await?;
+        self.store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                for id in &ids {
+                    if !s.apps.contains_key(id) {
+                        return Err(Error::NotFound("app unavailable".into()));
+                    }
+                }
+                s.authorize(&peer, Operation::AppAcknowledge)?;
+                s.usage.acknowledge(&ids)?;
+                s.project_usage();
+                Ok(s.usage_revision)
+            })
+            .await
     }
     #[zbus(signal)]
     async fn changed(
@@ -962,6 +1086,8 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
                                 "Revision",
                                 "CatalogueRevision",
                                 "LayoutRevision",
+                                "UsageRevision",
+                                "LauncherRevision",
                             ],
                         ),
                     )
@@ -969,7 +1095,29 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
             }
         }
     });
+    observation::spawn(store.clone());
+    unity::spawn(store.clone());
     theme::watch(conn, store).await?;
-    eprintln!("[applications] serving {NAME} (A1/A2, no renderer)");
+    eprintln!("[applications] serving {NAME} (A1/A2/A3, no renderer)");
     Ok(true)
+}
+
+#[cfg(test)]
+mod page_tests {
+    use super::*;
+    #[test]
+    fn app_only_clients_can_close_a_window_only_paged_snapshot() {
+        let mut p = Pages::default();
+        let apps = vec![json!({"DesktopId":"A.desktop"})];
+        let windows = (0..300).map(|id| json!({"WindowId":id})).collect();
+        let (_, a, _, w) = p.start(":1".into(), 1, apps, windows).unwrap();
+        assert!(!a.is_empty() && !w.is_empty());
+        let (rows, next) = p.read(":1", 1, &a).unwrap();
+        assert!(rows.is_empty() && next.is_empty());
+        assert!(!p.read(":1", 1, &w).unwrap().0.is_empty());
+        assert!(p.read(":2", 1, &w).is_err());
+        p.close(":1", 1, &a);
+        assert!(p.read(":1", 1, &w).is_err());
+        assert!(p.sessions.is_empty());
+    }
 }

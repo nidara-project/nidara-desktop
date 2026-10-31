@@ -19,11 +19,11 @@ The explicit native executable roles are:
 
 | Executable | Operations without external consent |
 | --- | --- |
-| `/usr/lib/nidara/nidara-settings-native` | configuration, native pin layout, app icons and app autostart |
+| `/usr/lib/nidara/nidara-settings-native` | configuration, native pin layout, app icons, app autostart and new-marker acknowledgement |
 | `/usr/lib/nidara/nidara-settings` (dedicated TS host) | activate only a mapped native Wayland window belonging to its authenticated PID |
 | `/usr/bin/nidara-sessiond` | configuration, power, night light |
-| `/usr/bin/nidara-shell` (future Rust) | windows, close requests, minimize target rectangles, native pin layout, app icons, app launch and autostart |
-| `/usr/bin/nidara-apps` (future native launcher) | native pin layout and app launch (A2); no autostart/capture/windows/general config/spawn |
+| `/usr/bin/nidara-shell` (future Rust) | windows, close requests, minimize target rectangles, native pin layout, app icons, app launch, autostart and new-marker acknowledgement |
+| `/usr/bin/nidara-apps` (future native launcher) | native pin layout, app launch and new-marker acknowledgement (A3); no autostart/capture/windows/general config/spawn |
 | `/usr/lib/nidara/nidara-shell` (existing dedicated TS host) | windows, close, minimize targets, configuration, capture, output layout, night light |
 
 The installed dedicated TS shell and Settings hosts are explicit compatibility
@@ -155,3 +155,9 @@ See `session/daemon/src/applications/README.md`; no CLI/interpreter/bus-name tru
 The Launcher inventory reserves `/usr/bin/nidara-apps` for D4's future native
 Apps executable. A1 does not ship or install that binary or a development grant;
 the role becomes active when D4 supplies the root-owned executable.
+
+A3 adds AppAcknowledge only for clearing newly-observed markers. Native Shell,
+Launcher and Settings may use it; external callers need computer-control plus
+config-write. It does not grant Launcher generic Configure, Spawn or window
+control. Foreground observation can clear a marker internally from Hyalo truth,
+never from a client assertion of focus.

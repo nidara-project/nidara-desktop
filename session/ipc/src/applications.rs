@@ -165,7 +165,15 @@ pub fn run(client: &Client, cmd: &str, args: &[String]) -> Result<String, Fault>
         std::thread::sleep(std::time::Duration::from_millis(25));
     };
     let phase = text(&state, "State")?;
-    if phase != "dispatched" {
+    if ![
+        "dispatched",
+        "window-observed",
+        "existing-window-activated",
+        "completed",
+    ]
+    .contains(&phase)
+        || !text(&state, "Error")?.is_empty()
+    {
         return Err(Fault::new(
             if phase == "timed-out-unknown" {
                 "Timeout"
@@ -175,5 +183,9 @@ pub fn run(client: &Client, cmd: &str, args: &[String]) -> Result<String, Fault>
             format!("launch {launch_id}: {}", text(&state, "Error")?),
         ));
     }
-    Ok(json!({"launchId":launch_id,"desktopId":id,"state":"dispatched","windowConfirmed":false,"focusConfirmed":false}).to_string())
+    let correlation = state
+        .get("Correlation")
+        .and_then(|v| <&str>::try_from(v).ok())
+        .unwrap_or("none");
+    Ok(json!({"launchId":launch_id,"desktopId":id,"state":phase,"windowConfirmed":flag(&state,"WindowConfirmed"),"focusConfirmed":flag(&state,"FocusConfirmed"),"causalConfirmed":flag(&state,"CausalConfirmed"),"correlation":correlation}).to_string())
 }

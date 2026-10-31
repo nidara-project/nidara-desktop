@@ -117,11 +117,24 @@ pub fn rank<'a>(
         .filter(|a| hidden || a.visible())
         .filter_map(|a| {
             let s = score(q, a);
-            (q.trim().is_empty() || s > 0.0).then_some((a, s))
+            (q.trim().is_empty() || s > 0.0).then_some((
+                a,
+                s + if q.trim().is_empty() {
+                    0.0
+                } else {
+                    a.record["ForegroundScore"].as_f64().unwrap_or(0.0) * 0.45
+                },
+            ))
         })
         .collect();
     matches.sort_by(|(a, sa), (b, sb)| {
         sb.total_cmp(sa)
+            .then_with(|| {
+                b.record["ForegroundScore"]
+                    .as_f64()
+                    .unwrap_or(0.0)
+                    .total_cmp(&a.record["ForegroundScore"].as_f64().unwrap_or(0.0))
+            })
             .then_with(|| {
                 glib::CollationKey::from(a.name()).cmp(&glib::CollationKey::from(b.name()))
             })
@@ -141,5 +154,29 @@ mod tests {
         assert!(
             field("calc", "Calculator", true, true) > field("calc", "My calculator", true, true)
         );
+    }
+    #[test]
+    fn usage_is_bounded_below_lexical_tiers_and_new_is_not_a_rank() {
+        fn app(id: &str, name: &str, score: f64) -> App {
+            App {
+                id: id.into(),
+                generation: 1,
+                digest: String::new(),
+                source_hash: String::new(),
+                exec_hash: String::new(),
+                record: serde_json::json!({"Name":name,"Visible":true,"ForegroundScore":score,"IsNew":false}),
+                executable: String::new(),
+                keywords: vec![],
+                icon: String::new(),
+            }
+        }
+        let mut apps = [
+            app("A.desktop", "Calc", 0.0),
+            app("B.desktop", "Calculator", 1.0),
+        ];
+        assert_eq!(rank("Calc", apps.iter(), false, 10)[0].id, "A.desktop");
+        assert_eq!(rank("", apps.iter(), false, 10)[0].id, "B.desktop");
+        apps[0].record["IsNew"] = serde_json::json!(true);
+        assert_eq!(rank("", apps.iter(), false, 10)[0].id, "B.desktop");
     }
 }

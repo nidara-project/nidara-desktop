@@ -52,7 +52,10 @@ Omitting transition retains the current choice.
 then its stem, then a unique Search/name match. Ambiguity asks for an exact ID.
 It keeps the original authenticated process alive while waiting at most 12 s
 for dispatch, never for a window or focus. JSON success explicitly leaves
-windowConfirmed/focusConfirmed false. An ambiguous timeout never retries.
+windowConfirmed/focusConfirmed explicitly. With A3 these can become true only
+from H1 observation; state can be window-observed/existing-window-activated.
+The JSON also supplies correlation and causalConfirmed, so an app match cannot
+be mistaken for a token-confirmed causal result. An ambiguous timeout never retries.
 See `session/daemon/src/applications/A2.md` for launch policy and limitations.
 
 Wallpaper preview is Unavailable: no ephemeral follower API exists, and no config write simulates it.
