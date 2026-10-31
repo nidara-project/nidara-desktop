@@ -30,6 +30,8 @@ pub enum Operation {
     EndSession,
     CloseWindow,
     Configure,
+    /// Only the dock's own preferences (`dock.*` in Config1): the shell's dock menu.
+    ConfigureDock,
     EditPins,
     AppIcon,
     AppLaunch,
@@ -86,6 +88,7 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
         Role::Shell => matches!(
             op,
             WindowControl
+                | ConfigureDock
                 | CloseWindow
                 | MinimizeTargets
                 | EditPins
@@ -114,7 +117,7 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     own || consent.control
         && match op {
-            Configure | EditPins | AppIcon | AppAutostart | AppAcknowledge => consent.config,
+            Configure | ConfigureDock | EditPins | AppIcon | AppAutostart | AppAcknowledge => consent.config,
             Capture => consent.capture,
             CloseWindow => consent.close,
             _ => true,
@@ -253,6 +256,7 @@ impl Peer {
             } else {
                 match op {
                     Operation::Configure
+                    | Operation::ConfigureDock
                     | Operation::EditPins
                     | Operation::AppIcon
                     | Operation::AppAutostart
@@ -411,6 +415,10 @@ mod tests {
         assert!(!permitted(Role::Settings, Operation::Capture, no));
         assert!(!permitted(Role::Session, Operation::WindowControl, no));
         assert!(!permitted(Role::Shell, Operation::Configure, no));
+        // The dock menu writes the dock's preferences, and nothing else.
+        assert!(permitted(Role::Shell, Operation::ConfigureDock, no));
+        assert!(!permitted(Role::Launcher, Operation::ConfigureDock, no));
+        assert!(!permitted(Role::External, Operation::ConfigureDock, no));
         let yes = Consent {
             control: true,
             config: true,

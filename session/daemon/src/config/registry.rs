@@ -91,6 +91,7 @@ const MEDIA: &str = "org.nidara.media";
 const AUDIO: &str = "org.nidara.audio";
 const POWER: &str = "org.nidara.power";
 const AI: &str = "org.nidara.ai";
+const DOCK: &str = "org.nidara.dock";
 
 /// The GSettings of this session, by schema; a schema not installed is simply absent.
 pub struct Store {
@@ -106,7 +107,7 @@ impl Store {
         let source = gio::SettingsSchemaSource::default();
         let (mut settings, mut schemas) = (HashMap::new(), HashMap::new());
         for id in [
-            INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO, MEDIA, POWER,
+            INTERFACE, WM, BACKGROUND, APPEARANCE, NIGHT, AI, AUDIO, MEDIA, POWER, DOCK,
         ] {
             if let Some(schema) = source.as_ref().and_then(|s| s.lookup(id, true)) {
                 settings.insert(id, gio::Settings::new(id));
@@ -750,6 +751,7 @@ fn table() -> Vec<Key> {
         },
     ];
     keys.extend(power_keys());
+    keys.extend(dock_keys());
     keys
 }
 
@@ -1541,4 +1543,151 @@ mod tests {
         assert!(valid_wallpaper(txt.to_str().unwrap()).is_err());
         std::fs::remove_dir_all(dir).unwrap();
     }
+}
+
+const DOCK_POSITIONS: &[&str] = &["bottom", "left", "right"];
+fn whole(v: &Value) -> Result<i32, String> {
+    match v {
+        Value::Number(n) => Ok(n.round() as i32),
+        _ => Err("not a number".into()),
+    }
+}
+fn put_bool(st: &Store, schema: &str, key: &str, v: &Value) -> Result<(), String> {
+    st.s(schema)
+        .set_boolean(key, *v == Value::Bool(true))
+        .map_err(|e| e.to_string())
+}
+fn put_int(st: &Store, schema: &str, key: &str, v: &Value) -> Result<(), String> {
+    st.s(schema)
+        .set_int(key, whole(v)?)
+        .map_err(|e| e.to_string())
+}
+
+/// The dock's ordinary preferences (APPLICATIONS1-DOCK.md §8): the same names, bounds and
+/// controls as the TypeScript shell's (`ui/shell/config-entries.ts`), in `org.nidara.dock`.
+/// The pinned layout is not here: it is Applications1's.
+fn dock_keys() -> Vec<Key> {
+    vec![
+        Key {
+            name: "dock.position",
+            desc: "Dock screen position.",
+            kind: Kind::Enum,
+            writable: true,
+            needs: &[DOCK],
+            values: Some(|_| owned(DOCK_POSITIONS)),
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Text(string(st, DOCK, "position")),
+            set: Some(|st, v| put_string(st, DOCK, "position", text(v))),
+            ui: Some(|_| {
+                json!({"i18n": "settings.dock.position", "control": "segmented",
+                    "options": options_i18n(&owned(DOCK_POSITIONS), "settings.dock.opt")})
+            }),
+            watch: &[(DOCK, "position")],
+            file: false,
+        },
+        Key {
+            name: "dock.iconSize",
+            desc: "Dock icon size in pixels (32, 48, 64, 80, 96).",
+            kind: Kind::Number { min: 32., max: 96. },
+            writable: true,
+            needs: &[DOCK],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.s(DOCK).int("icon-size") as f64),
+            set: Some(|st, v| put_int(st, DOCK, "icon-size", v)),
+            ui: Some(|_| {
+                json!({"i18n": "settings.dock.icon-size", "control": "preset",
+                    "presets": [32, 48, 64, 80, 96], "presetUnit": "px"})
+            }),
+            watch: &[(DOCK, "icon-size")],
+            file: false,
+        },
+        Key {
+            name: "dock.magnification",
+            desc: "Magnify dock icons on hover.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[DOCK],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(DOCK).boolean("magnification")),
+            set: Some(|st, v| put_bool(st, DOCK, "magnification", v)),
+            ui: Some(|_| json!({"i18n": "settings.dock.magnification", "control": "toggle"})),
+            watch: &[(DOCK, "magnification")],
+            file: false,
+        },
+        Key {
+            name: "dock.maxIconSize",
+            desc: "Maximum icon size on hover when magnification is enabled.",
+            kind: Kind::Number {
+                min: 64.,
+                max: 128.,
+            },
+            writable: true,
+            needs: &[DOCK],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.s(DOCK).int("max-icon-size") as f64),
+            set: Some(|st, v| put_int(st, DOCK, "max-icon-size", v)),
+            ui: Some(|_| {
+                json!({"i18n": "settings.dock.max-size", "control": "slider", "slider": {"unit": "px"}})
+            }),
+            watch: &[(DOCK, "max-icon-size")],
+            file: false,
+        },
+        Key {
+            name: "dock.autoHide",
+            desc: "Automatically hide the dock when windows overlap it.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[DOCK],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(DOCK).boolean("auto-hide")),
+            set: Some(|st, v| put_bool(st, DOCK, "auto-hide", v)),
+            ui: Some(|_| json!({"i18n": "settings.dock.autohide", "control": "toggle"})),
+            watch: &[(DOCK, "auto-hide")],
+            file: false,
+        },
+        Key {
+            name: "dock.indicators",
+            desc: "Show running-application indicator dots under dock icons.",
+            kind: Kind::Boolean,
+            writable: true,
+            needs: &[DOCK],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Bool(st.s(DOCK).boolean("show-indicators")),
+            set: Some(|st, v| put_bool(st, DOCK, "show-indicators", v)),
+            ui: Some(|_| json!({"i18n": "settings.dock.indicators", "control": "toggle"})),
+            watch: &[(DOCK, "show-indicators")],
+            file: false,
+        },
+        Key {
+            name: "dock.hideDelay",
+            desc: "Delay in milliseconds before hiding the dock.",
+            kind: Kind::Number {
+                min: 0.,
+                max: 2000.,
+            },
+            writable: true,
+            needs: &[DOCK],
+            values: None,
+            catalogue: None,
+            validate: None,
+            get: |st| Value::Number(st.s(DOCK).int("hide-delay") as f64),
+            set: Some(|st, v| put_int(st, DOCK, "hide-delay", v)),
+            ui: Some(|_| {
+                json!({"i18n": "settings.dock.hide-delay", "control": "slider", "slider": {"unit": "ms"}})
+            }),
+            watch: &[(DOCK, "hide-delay")],
+            file: false,
+        },
+    ]
 }

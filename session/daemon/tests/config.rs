@@ -227,6 +227,11 @@ async fn config1_snapshot_apply_gate_and_other_writers() {
         schema["keys"]["appearance.windowControls"]["value"],
         "right"
     );
+    // The dock's preferences, with the TS shell's names and bounds.
+    assert_eq!(schema["keys"]["dock.position"]["value"], "bottom");
+    assert_eq!(schema["keys"]["dock.iconSize"]["value"], 64.);
+    assert_eq!(schema["keys"]["dock.maxIconSize"]["max"], 128.);
+    assert_eq!(schema["keys"]["dock.hideDelay"]["ui"]["control"], "slider");
     assert!(
         schema["keys"]["wallpaper.transition"]["values"]
             .as_array()
