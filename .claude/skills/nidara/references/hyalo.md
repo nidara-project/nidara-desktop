@@ -1789,6 +1789,16 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   (`modal_target`, down a chain of modals). CI: `scripts/ci/hyalo-dialog-check.sh` (modal: the
   parent gives way; a plain dialog: it does not — the control). Without the redirect the first
   half fails (checked, 2026-10-01).
+- **A layer that asks for the keyboard EXCLUSIVELY gets it at once** (layer-shell
+  `keyboard_interactivity = exclusive`, on the top or overlay layer), and keeps it until it asks
+  for less or goes away — sway's, KDE's and niri's rule, the protocol's own words.
+  `restore_keyboard_focus` (`wm/mod.rs`, after every dispatch) looks for one
+  (`exclusive_keyboard_layer`, overlay before top, the topmost per output) and focuses it; when
+  it lets go, the keyboard goes back to the focused window. An open focus grab (the shell's
+  search) wins, and the lock wins over both (it runs first). `on_demand` layers still get the
+  keyboard only from a click. Until 2026-10-31 Hyalo ignored `exclusive`, so the Rust dock's
+  `focus:dock` drew its ring but no key reached it; the dock's headless check (#959 D1) fails
+  at "Right moves the focus to kitty" on a Hyalo without this (checked).
 - **Client maximize requests are granted** (`shell/mod.rs`, owner 2026-10-04) — the maximize
   button an app draws itself, or a double click on its own header (Chrome's web apps, Telegram),
   does what Hyalo's title bar and capsule do; unmaximize restores. Until then they were refused,
@@ -1982,8 +1992,8 @@ monitor's rate (tty).
 
 `activation.rs`. An app asks for one of its windows to come forward with a token. The rule is
 GNOME's, KDE's and niri's: honoured only if the token came from what the user just did — the
-client that asked for it has the keyboard OR the pointer (the dock and the notifications never
-take the keyboard; their click is under the pointer), its serial is no older than that focus's
+client that asked for it has the keyboard OR the pointer (the dock and the notifications do not
+take the keyboard on a click; their click is under the pointer), its serial is no older than that focus's
 `last_enter` (niri's test: an old click says nothing about now), and it is used within 10 s.
 Anything else changes nothing. A NEW window needs none of this — Hyalo focuses it when it maps.
 

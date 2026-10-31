@@ -1201,7 +1201,31 @@ impl Hyalo {
             return;
         }
         let keyboard = self.seat.get_keyboard().unwrap();
-        if keyboard.current_focus().and_then(|f| f.surface()).is_some_and(|f| f.is_alive()) {
+        let current = keyboard.current_focus().and_then(|f| f.surface());
+        // A layer that asks for the keyboard exclusively has it, unless a focus grab holds it
+        // (the grab is the newer, explicit request).
+        if self.focus_grab.is_none()
+            && let Some(layer) = self.exclusive_keyboard_layer()
+        {
+            if current.as_ref() != Some(&layer) {
+                self.set_keyboard_focus(Some(layer.clone()), SERIAL_COUNTER.next_serial());
+            }
+            self.exclusive_keyboard = Some(layer);
+            return;
+        }
+        // It stopped asking (or went away) while holding the keyboard: back to the window.
+        if let Some(layer) = self.exclusive_keyboard.take()
+            && current.as_ref() == Some(&layer)
+        {
+            self.focus_window_keyboard();
+            // No focused window to take it: the keyboard goes nowhere, not left on a layer
+            // that no longer wants it.
+            if keyboard.current_focus().and_then(|f| f.surface()).as_ref() == Some(&layer) {
+                self.set_keyboard_focus(None, SERIAL_COUNTER.next_serial());
+            }
+            return;
+        }
+        if current.is_some_and(|f| f.is_alive()) {
             return;
         }
         self.focus_window_keyboard();

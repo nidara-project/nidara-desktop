@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use smithay::{
     desktop::{LayerMap, LayerSurface, PopupManager, WindowSurfaceType, layer_map_for_output},
     output::Output,
-    reexports::wayland_server::protocol::{wl_output::WlOutput, wl_surface::WlSurface},
+    reexports::wayland_server::{Resource, protocol::{wl_output::WlOutput, wl_surface::WlSurface}},
     utils::{Logical, Point, Rectangle, Size},
     wayland::{
         compositor::{TraversalAction, with_states, with_surface_tree_downward},
@@ -186,6 +186,24 @@ impl Hyalo {
     /// A layer that asked for the keyboard gets it when clicked.
     pub fn layer_wants_keyboard(layer: &LayerSurface) -> bool {
         layer.cached_state().keyboard_interactivity != KeyboardInteractivity::None
+    }
+
+    /// The layer surface that asked for the keyboard EXCLUSIVELY on a layer above windows,
+    /// topmost first (overlay, then top): it gets the keyboard at once, as wlr-layer-shell
+    /// says, not only when clicked (sway, KDE and niri do the same). Below windows,
+    /// `exclusive` is only a wish and a click still decides.
+    pub fn exclusive_keyboard_layer(&self) -> Option<WlSurface> {
+        for layer in [Layer::Overlay, Layer::Top] {
+            for output in self.space.outputs() {
+                let map = layer_map_for_output(output);
+                if let Some(l) = map.layers_on(layer).rev().find(|l| {
+                    l.wl_surface().is_alive() && l.cached_state().keyboard_interactivity == KeyboardInteractivity::Exclusive
+                }) {
+                    return Some(l.wl_surface().clone());
+                }
+            }
+        }
+        None
     }
 
     /// Whether `surface` may hold the keyboard: a window always, a layer surface only if it

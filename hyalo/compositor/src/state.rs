@@ -70,6 +70,9 @@ pub struct Hyalo {
     /// (`WindowManager::chrome_cursor`).
     pub client_cursor: CursorImageStatus,
     pub focus_grab: Option<focus_grab::ActiveGrab>,
+    /// The layer surface holding the keyboard because it asked for it exclusively
+    /// (shell/layer.rs, `exclusive_keyboard_layer`); handed back when it stops asking.
+    pub exclusive_keyboard: Option<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     /// Set when a frame has to be drawn on some output soon (see `queue_redraw`).
     pub redraw_idle_queued: bool,
     pub ipc: IpcState,
@@ -267,6 +270,7 @@ impl Hyalo {
             cursor_status: CursorImageStatus::default_named(),
             client_cursor: CursorImageStatus::default_named(),
             focus_grab: None,
+            exclusive_keyboard: None,
             redraw_idle_queued: false,
             ipc: IpcState::default(),
             displays: crate::display::State::default(),
