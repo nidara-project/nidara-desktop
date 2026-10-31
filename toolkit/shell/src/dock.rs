@@ -39,6 +39,9 @@ pub struct Dock {
     /// has the keyboard (by key: items move between frames).
     keyboard_seen: u64,
     focus: Option<String>,
+    /// The focused window when the dock took the keyboard: once another window is focused
+    /// (a click on it), the dock lets go, since an exclusive layer keeps the keys otherwise.
+    focus_window: Option<u64>,
     /// The screen reader's view (DOCK.md §7), published after every change it can see.
     a11y: Option<nk_a11y::bridge::Bridge>,
     a11y_requests: Option<Receiver<(u64, nk_a11y::Request)>>,
@@ -107,6 +110,7 @@ impl Dock {
             published: BTreeMap::new(),
             keyboard_seen: 0,
             focus: None,
+            focus_window: None,
             a11y: None,
             a11y_requests: None,
             ids: Default::default(),
@@ -150,6 +154,7 @@ impl Dock {
         let had_keyboard = self.focus.is_some();
         if frame.keyboard > self.keyboard_seen {
             self.keyboard_seen = frame.keyboard;
+            self.focus_window = frame.focused;
             self.focus =
                 crate::keys::first(&frame.view.items).map(|n| frame.view.items[n].key.clone());
             eprintln!(
@@ -158,7 +163,15 @@ impl Dock {
             );
         }
         self.frame = frame;
-        if self.frame.hidden || self.focused_slot().is_none() {
+        if self.focus.is_some()
+            && (self.frame.hidden
+                || self.focused_slot().is_none()
+                || self.frame.focused != self.focus_window)
+        {
+            eprintln!(
+                "nidara-shell: the dock on {} lets the keyboard go",
+                self.output_name
+            );
             self.focus = None;
         }
         let next = Self::lay(&self.frame, self.output_size);

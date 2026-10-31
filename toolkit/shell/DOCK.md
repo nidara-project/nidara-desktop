@@ -153,10 +153,9 @@ As built:
   click never takes it from the app.
 - Until Shell1 is served here, a private check reaches `focus:dock` through a fifo named
   by `NK_DOCK_CONTROL`; nothing listens without that variable.
-- ⚠️ Hyalo gives a layer surface the keyboard only when it is CLICKED; it ignores
-  `exclusive` (sway, KDE and niri give it at once, as the protocol says). So the request
-  shows the ring, but keys do not reach the dock yet. The fix is in Hyalo and needs the
-  owner's yes.
+- Hyalo gives an `exclusive` top/overlay layer the keyboard at once and keeps it there
+  (as sway, KDE and niri do), so the dock gives it back itself: Escape, acting, losing
+  the focus, or the focused window changing under it (a click on another window).
 - The tree (`semantics.rs`): a `Window` named Dock, one `Button` per item in drawn order
   (separators as `Separator`), the state in the description (running, minimized window,
   has minimized windows, not installed, cannot be opened now), disabled when a click

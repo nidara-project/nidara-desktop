@@ -1163,6 +1163,11 @@ version = "0.1.0"
 dependencies = [
  "gio",
  "glib",
+ "nk-a11y",
+ "nk-icons",
+ "nk-render",
+ "nk-text",
+ "nk-wayland",
  "serde",
  "serde_json",
  "zbus",

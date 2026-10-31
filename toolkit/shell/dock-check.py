@@ -176,14 +176,14 @@ try:
         c.flush()
         until('the dock takes the keyboard', lambda: 'takes the keyboard' in (LOG / 'shell.log').read_text())
         time.sleep(.5)
+        pipe.write('key 106\n')  # Right: the ring moves to kitty
+        until('Right moves the focus to kitty', lambda: any(
+            i['focused'] and i['name'] == 'kitty' for i in (walk() or [])))
         shot(LOG / 'dock-keyboard.png')
-        # Hyalo hands a layer the keyboard only on a click, never for keyboard-interactivity
-        # exclusive, so keys cannot reach the dock yet: report it instead of failing.
-        pipe.write('key 106\n')  # Right
         pipe.write('key 1\n')  # Escape
-        time.sleep(1.0)
-        left = 'lets the keyboard go' in (LOG / 'shell.log').read_text()
-    result['keyboard'] = {'took': True, 'keys_reached_the_dock': left}
+        until('the dock lets the keyboard go', lambda: 'lets the keyboard go' in (LOG / 'shell.log').read_text())
+        # The keyboard goes back to the window: a key now reaches the client, not the dock.
+    result['keyboard'] = {'took': True, 'escape_released': True}
     # The screen reader's view: one button per item, the app's window running, and Activate
     # on the running app asks Hyalo to focus its window (as a click does).
     items = until('the dock in AT-SPI', lambda: (w := walk()) and len(w) >= 6 and w)
