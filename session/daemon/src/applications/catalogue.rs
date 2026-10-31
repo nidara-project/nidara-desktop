@@ -262,17 +262,29 @@ fn parse(path: &Path, id: &str) -> Result<Option<App>, String> {
     }
     let dbus = k.boolean(g, "DBusActivatable").unwrap_or(false);
     let raw_exec = s(&k, g, "Exec");
+    // GIO refuses an entry whose Exec program is not installed, as it does a missing
+    // TryExec. That is an entry read successfully and found unavailable, never a failed
+    // scan: one such file (another package's panel for a tool that is not installed)
+    // must not keep the whole catalogue unhealthy and block every prune.
+    let exec_missing = !raw_exec.trim().is_empty()
+        && !glib::shell_parse_argv(&raw_exec)
+            .ok()
+            .and_then(|argv| argv.into_iter().next())
+            .is_some_and(|program| glib::find_program_in_path(program).is_some());
     let unavailable_reason = if !entry_available {
         "TryExec is unavailable"
     } else if !dbus && raw_exec.trim().is_empty() {
         "no Exec or D-Bus activation"
+    } else if exec_missing {
+        "Exec program is unavailable"
     } else {
         ""
     };
     let entry_available = unavailable_reason.is_empty();
-    // GIO's from_keyfile lacks the filename needed for a D-Bus-only app id. A
-    // synthetic Exec is ONLY for metadata parsing; never a launch fallback.
-    if dbus && raw_exec.is_empty() {
+    // GIO's from_keyfile lacks the filename needed for a D-Bus-only app id, and refuses
+    // a missing Exec program. A synthetic Exec is ONLY for metadata parsing; never a
+    // launch fallback (the entry is then not Launchable).
+    if (dbus && raw_exec.is_empty()) || exec_missing {
         k.set_string(g, "Exec", "/usr/bin/true");
     }
     let ptr = unsafe { g_desktop_app_info_new_from_keyfile(k.to_glib_none().0) };
@@ -461,6 +473,29 @@ mod tests {
         assert!(scan(std::slice::from_ref(&root), &mut history).healthy);
         history.insert(root.clone(), "previous-mounted-export".into());
         assert!(!scan(std::slice::from_ref(&root), &mut history).healthy);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn an_entry_whose_program_is_not_installed_keeps_the_catalogue_healthy() {
+        let dir = std::env::current_dir()
+            .unwrap()
+            .join(format!("target/a1-exec-{}", super::super::unique()));
+        let root = dir.join("applications");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("absent-panel.desktop"),
+            "[Desktop Entry]\nType=Application\nName=Panel\nNoDisplay=true\n\
+             Exec=nidara-no-such-program-anywhere panel\n",
+        )
+        .unwrap();
+        let scan = scan(std::slice::from_ref(&root), &mut BTreeMap::new());
+        assert!(scan.healthy, "{:?}", scan.diagnostics);
+        let record = &scan.apps["absent-panel.desktop"].record;
+        assert_eq!(record["Launchable"], json!(false));
+        assert_eq!(
+            record["UnavailableReason"],
+            json!("Exec program is unavailable")
+        );
         fs::remove_dir_all(dir).unwrap();
     }
 }
