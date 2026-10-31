@@ -29,6 +29,17 @@ Checkout executables require consent or an exact root-owned access.d grant;
 install.sh's dev path writes the grant on an explicit install/update. Installed
 session acceptance remains unverified by the private user/mount namespace tests. See `crates/nidara-access/README.md`.
 
+## Applications1 A2 acceptance boundaries (#959, 2026-10-31)
+
+The opt-in A2 implementation has private-service launch/autostart coverage, not
+installed-session acceptance. Real user-manager cgroups, portal attribution,
+physical activation serials, terminal appearance and login autostart remain to
+be checked in an explicitly authorized session. D-Bus/Terminal/Flatpak/Snap
+autostart stays unavailable until its runner/portal integration is established.
+H1/A3 still own launch-window correlation, focus/usage/new markers; dispatch
+must never stand in for those observations. See
+`session/daemon/src/applications/A2.md`. No second autostart loop or TS bridge.
+
 ## Native Display1 consumers and hardware limits (#959, 2026-10-28)
 
 The first Display1 cut publishes primary and serves confirmed profiles, extended layouts,

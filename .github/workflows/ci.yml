@@ -1112,7 +1112,7 @@ jobs:
           git diff --exit-code -- session/daemon/src/model.rs
       - name: Locked build, lint and unit tests (must succeed)
         run: |
-          cargo fmt --manifest-path session/Cargo.toml --check
+          cargo fmt --manifest-path session/Cargo.toml --all --check
           cargo build --manifest-path session/Cargo.toml --locked
           cargo clippy --manifest-path session/Cargo.toml --locked --all-targets -- -D warnings
           cargo test --manifest-path session/Cargo.toml --locked

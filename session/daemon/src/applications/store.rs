@@ -15,6 +15,7 @@ use std::{
 };
 use tokio::sync::{Notify, oneshot};
 pub struct Store {
+    pub launches: super::launch::Book,
     pub epoch: u64,
     pub revision: u64,
     pub catalogue_revision: u64,
@@ -66,6 +67,7 @@ impl Store {
         let d = dirty.clone();
         volumes.connect_mount_changed(move |_, _| d.notify_one());
         Self {
+            launches: super::launch::Book::default(),
             epoch: super::unique(),
             revision: 1,
             catalogue_revision: 1,
@@ -91,6 +93,9 @@ impl Store {
             notify,
             domains: BTreeSet::new(),
         }
+    }
+    pub fn invalidate(&self) {
+        self.dirty.notify_one();
     }
     pub fn mark(&mut self, domain: &str) {
         self.revision += 1;
@@ -223,7 +228,9 @@ impl Store {
         } else {
             self.apps.clone()
         };
+        let autostarts = super::autostart::Index::scan();
         for (id, a) in &mut apps {
+            a.record["Autostart"] = autostarts.state(a);
             if let Some(old) = self.apps.get(id).filter(|old| old.digest == a.digest) {
                 a.generation = old.generation;
             } else {
@@ -235,6 +242,9 @@ impl Store {
         }
         if apps != self.apps {
             self.apps = apps;
+            if self.launches.invalidate_apps(&self.apps) {
+                self.mark("launches");
+            }
             self.catalogue_revision += 1;
             self.mark("catalogue");
         }
@@ -293,6 +303,7 @@ impl Store {
                 watches.insert(p.to_owned());
             }
         }
+        watches.extend(super::autostart::roots());
         watches.insert(catalogue::home().join(".config"));
         if let Some(p) = std::env::var_os("XDG_CONFIG_HOME") {
             watches.insert(p.into());
@@ -326,7 +337,7 @@ impl Store {
         }
     }
     pub fn metadata(&self) -> Value {
-        json!({"CatalogueRevision":self.catalogue_revision,"LayoutRevision":self.layout_revision,"UsageRevision":0_u64,"LauncherRevision":0_u64,"IconRevision":self.icon_revision,"CatalogueComplete":self.healthy,"Diagnostics":self.diagnostics,"Apps":self.apps.values().map(|a|a.record.clone()).collect::<Vec<_>>(),"LayoutAvailable":self.layout_available(),"Layout":layout::records(&self.layout,&self.apps,&self.default),"DefaultDirectoryApp":self.default,"WindowMatches":[],"ActiveLaunches":[],"MatchingAvailable":false,"UsageAvailable":false,"LauncherAvailable":false})
+        json!({"CatalogueRevision":self.catalogue_revision,"LayoutRevision":self.layout_revision,"UsageRevision":0_u64,"LauncherRevision":0_u64,"IconRevision":self.icon_revision,"CatalogueComplete":self.healthy,"Diagnostics":self.diagnostics,"Apps":self.apps.values().map(|a|a.record.clone()).collect::<Vec<_>>(),"LayoutAvailable":self.layout_available(),"Layout":layout::records(&self.layout,&self.apps,&self.default),"DefaultDirectoryApp":self.default,"WindowMatches":[],"ActiveLaunches":self.launches.active(),"MatchingAvailable":false,"UsageAvailable":false,"LauncherAvailable":false,"LaunchAvailable":true,"LaunchObservationAvailable":false})
     }
 }
 type Job = Box<dyn FnOnce(&mut Store) + Send>;

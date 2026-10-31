@@ -20,7 +20,7 @@ sha2 = "0.10"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # GSettings, the settings' home, on a GLib thread of its own (config/store.rs).
 gio = "0.22"
-glib = "0.22"
+glib = { version = "0.22", features = ["v2_66"] }
 futures-util = { version = "0.3", default-features = false }
 libc = "0.2"
 pipewire = { version = "0.10.1", features = ["v0_3_77"], optional = true }

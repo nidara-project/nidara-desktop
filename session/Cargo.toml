@@ -1,7 +1,7 @@
 # Session services live independently of the shell and of the compositor (#819).
 [workspace]
 resolver = "3"
-members = ["daemon"]
+members = ["daemon", "ipc"]
 
 [workspace.package]
 version = "0.1.0"

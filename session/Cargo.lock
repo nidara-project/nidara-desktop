@@ -874,6 +874,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-ipc"
+version = "0.1.0"
+dependencies = [
+ "gio",
+ "nidara-shell-ipc",
+ "serde_json",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "nidara-sessiond"
 version = "0.1.0"
 dependencies = [
@@ -893,6 +904,14 @@ dependencies = [
  "sha2",
  "tokio",
  "unicode-normalization",
+ "zbus",
+]
+
+[[package]]
+name = "nidara-shell-ipc"
+version = "0.1.0"
+dependencies = [
+ "serde",
  "zbus",
 ]
 

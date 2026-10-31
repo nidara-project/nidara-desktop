@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Opt-in Applications1 A1. No launch, WM, usage tracker or TS bridge.
+//! Opt-in Applications1 A1/A2. No WM, usage tracker, renderer or TS bridge.
+mod autostart;
 mod catalogue;
+mod desktop;
 mod icons;
+mod launch;
 mod layout;
 mod search;
 mod store;
@@ -232,8 +235,79 @@ struct Applications {
     pages: Arc<Mutex<Pages>>,
     peers: Arc<Mutex<HashMap<String, Arc<Peer>>>>,
     decode: Arc<Semaphore>,
+    launch_workers: Arc<Semaphore>,
+}
+enum LaunchTarget {
+    App(String, u64),
+    Directory(String),
 }
 impl Applications {
+    async fn submit(
+        &self,
+        epoch: u64,
+        target: LaunchTarget,
+        mut request: desktop::Request,
+        peer: Arc<Peer>,
+        owner: String,
+        conn: &Connection,
+    ) -> Result<String, Error> {
+        let check = peer.clone();
+        let (id, plan) = self
+            .store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                s.authorize(&check, Operation::AppLaunch)?;
+                let fingerprint = match &target {
+                    LaunchTarget::App(id, generation) => request.fingerprint(id, *generation),
+                    LaunchTarget::Directory(uri) => {
+                        request.fingerprint(&format!("directory:{uri}"), 0)
+                    }
+                };
+                if let Some(id) = s.launches.existing(&owner, &request.nonce, &fingerprint)? {
+                    return Ok((id, None));
+                }
+                let app = match target {
+                    LaunchTarget::App(id, g) => s.app(&id, g)?.clone(),
+                    LaunchTarget::Directory(uri) => {
+                        let path = desktop::local_file(&uri)?;
+                        if !path.is_dir() {
+                            return Err(Error::NotFound("directory is unavailable".into()));
+                        }
+                        request.mode = "open".into();
+                        request.uris = vec![
+                            glib::filename_to_uri(path, None)
+                                .map_err(|_| Error::Invalid("directory URI".into()))?
+                                .to_string(),
+                        ];
+                        s.apps.get(&s.default).cloned().ok_or_else(|| {
+                            Error::Unavailable(
+                                "default directory handler is absent from catalogue".into(),
+                            )
+                        })?
+                    }
+                };
+                let nonce = request.nonce.clone();
+                let mode = request.mode.clone();
+                let plan = launch::prepare(&app, request, &s.apps, &s.default)?;
+                let id =
+                    s.launches
+                        .insert(owner, nonce, fingerprint, &app, &mode, plan.token_hash())?;
+                s.mark("launches");
+                Ok((id, Some(plan)))
+            })
+            .await?;
+        if let Some(plan) = plan {
+            launch::run(
+                self.store.clone(),
+                conn.clone(),
+                self.launch_workers.clone(),
+                id.clone(),
+                peer,
+                plan,
+            );
+        }
+        Ok(id)
+    }
     fn admit(&self, header: &Header<'_>) -> Result<Admitted, Error> {
         let owner = sender(header)?;
         let mut s = self.admission.lock().unwrap();
@@ -306,10 +380,18 @@ impl Applications {
     }
     #[zbus(property)]
     async fn capabilities(&self) -> Vec<String> {
-        let mut result = vec!["catalogue", "search", "icons", "icon-overrides"]
-            .into_iter()
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
+        let mut result = vec![
+            "catalogue",
+            "search",
+            "icons",
+            "icon-overrides",
+            "launch",
+            "open-directory",
+            "autostart",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
         if self
             .store
             .call(|s| Ok(s.layout_available()))
@@ -631,32 +713,84 @@ impl Applications {
     }
     async fn launch(
         &self,
-        _epoch: u64,
-        _desktop_id: String,
-        _generation: u64,
-        _request: Dict,
+        epoch: u64,
+        desktop_id: String,
+        generation: u64,
+        request: Dict,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
     ) -> Result<String, Error> {
-        Err(Error::Unavailable("application launching is A2".into()))
+        let _admission = self.admit(&header)?;
+        let peer = self.peer(&header, conn).await?;
+        self.submit(
+            epoch,
+            LaunchTarget::App(desktop_id, generation),
+            desktop::Request::parse(request, false)?,
+            peer,
+            sender(&header)?,
+            conn,
+        )
+        .await
     }
     async fn open_directory(
         &self,
-        _epoch: u64,
-        _uri: String,
-        _context: Dict,
+        epoch: u64,
+        uri: String,
+        context: Dict,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
     ) -> Result<String, Error> {
-        Err(Error::Unavailable("directory launching is A2".into()))
+        let _admission = self.admit(&header)?;
+        if uri.len() > 8192 {
+            return Err(Error::Invalid("directory URI budget".into()));
+        }
+        let peer = self.peer(&header, conn).await?;
+        self.submit(
+            epoch,
+            LaunchTarget::Directory(uri),
+            desktop::Request::parse(context, true)?,
+            peer,
+            sender(&header)?,
+            conn,
+        )
+        .await
     }
-    async fn get_launch(&self, _epoch: u64, _launch_id: String) -> Result<Dict, Error> {
-        Err(Error::Unavailable("launch observation is A2/H1/A3".into()))
+    async fn get_launch(
+        &self,
+        epoch: u64,
+        launch_id: String,
+        #[zbus(header)] header: Header<'_>,
+    ) -> Result<Dict, Error> {
+        let _admission = self.admit(&header)?;
+        self.store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                Ok(dict(&s.launches.state(&launch_id)?))
+            })
+            .await
     }
     async fn set_autostart(
         &self,
-        _epoch: u64,
-        _desktop_id: String,
-        _generation: u64,
-        _enabled: bool,
+        epoch: u64,
+        desktop_id: String,
+        generation: u64,
+        enabled: bool,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
     ) -> Result<Dict, Error> {
-        Err(Error::Unavailable("app autostart is A2".into()))
+        let _admission = self.admit(&header)?;
+        let peer = self.peer(&header, conn).await?;
+        self.store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                s.authorize(&peer, Operation::AppAutostart)?;
+                let app = s.app(&desktop_id, generation)?.clone();
+                let state = autostart::set(&app, enabled)?;
+                s.mark("autostart");
+                s.invalidate();
+                Ok(dict(&state))
+            })
+            .await
     }
     async fn acknowledge_new(&self, _epoch: u64, _ids: Vec<String>) -> Result<u64, Error> {
         Err(Error::Unavailable("new app markers are A3".into()))
@@ -670,12 +804,14 @@ impl Applications {
     ) -> zbus::Result<()>;
 }
 pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>> {
-    let owned = matches!(
-        conn.request_name_with_flags(NAME, zbus::fdo::RequestNameFlags::DoNotQueue.into())
-            .await,
-        Ok(zbus::fdo::RequestNameReply::PrimaryOwner)
-    );
-    if !owned {
+    // Avoid even constructing/migrating a store for an already competing owner.
+    // Register the ready object before publishing the well-known name: clients
+    // hydrate on NameOwnerChanged and must never race UnknownObject.
+    if zbus::fdo::DBusProxy::new(conn)
+        .await?
+        .name_has_owner(NAME.try_into()?)
+        .await?
+    {
         eprintln!("[applications] competing name owner; not serving");
         return Ok(false);
     }
@@ -691,6 +827,7 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
                 pages: pages.clone(),
                 peers: peers.clone(),
                 decode: Arc::new(Semaphore::new(8)),
+                launch_workers: Arc::new(Semaphore::new(8)),
             },
         )
         .await?;
@@ -698,6 +835,17 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
         .await?
         .receive_name_owner_changed()
         .await?;
+    let owned = matches!(
+        conn.request_name_with_flags(NAME, zbus::fdo::RequestNameFlags::DoNotQueue.into())
+            .await,
+        Ok(zbus::fdo::RequestNameReply::PrimaryOwner)
+    );
+    if !owned {
+        conn.object_server().remove::<Applications, _>(PATH).await?;
+        eprintln!("[applications] competing name owner; not serving");
+        return Ok(false);
+    }
+    let owner_store = store.clone();
     tokio::spawn(async move {
         use futures_util::StreamExt;
         while let Some(signal) = owners.next().await {
@@ -705,6 +853,13 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
                 && a.name().as_str().starts_with(':')
                 && a.new_owner().is_none()
             {
+                let lost = a.name().to_string();
+                let _ = owner_store
+                    .call(move |s| {
+                        s.launches.sender_lost(&lost);
+                        Ok(())
+                    })
+                    .await;
                 peers.lock().await.remove(a.name().as_str());
                 pages
                     .lock()
@@ -752,6 +907,6 @@ pub async fn serve(conn: &Connection) -> Result<bool, Box<dyn std::error::Error>
         }
     });
     theme::watch(conn, store).await?;
-    eprintln!("[applications] serving {NAME} (A1, no launches)");
+    eprintln!("[applications] serving {NAME} (A1/A2, no renderer)");
     Ok(true)
 }

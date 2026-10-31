@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // nidara-ipc — the shell's command surface, spoken directly.
-// Compiled to /usr/bin/nidara-ipc (install.sh §5, PKGBUILD build()).
+// Legacy TS headless-smoke fixture only. The installed client is now Rust
+// (session/ipc); install.sh and PKGBUILD do not compile this fixture.
 //
 //   nidara-ipc listActions              # discover every command
 //   nidara-ipc dumpState                # live shell state as JSON

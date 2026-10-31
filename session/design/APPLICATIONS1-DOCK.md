@@ -234,6 +234,11 @@ once through tested desktop parsing; respect %f/%F versus %u/%U and multiplicity
 Unsupported URI schemes/file drops produce Unsupported, not silent omission or
 a generic `xdg-open` redirection to a different app. The folder-click path is a
 separate default-handler operation, not a file drop on a chosen app.
+Trash is the one fixed virtual resource: launch the snapshot's DefaultDirectoryApp
+with Mode=open and Uris=["trash:///"]. It must still be the current default,
+declare inode/directory and accept URI opening; otherwise return Stale/Unsupported.
+OpenDirectory continues to accept only absolute local directory URIs. Do not use
+the physical Trash/files folder or an xdg-open fallback.
 
 The initiator obtains a **real xdg-activation token** using its surface, seat and
 input serial; it passes the opaque token through Applications1 unchanged. The

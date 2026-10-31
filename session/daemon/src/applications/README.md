@@ -1,4 +1,4 @@
-# Applications1 A1
+# Applications1 A1/A2
 
 `nidara-sessiond --applications` serves `org.nidara.Applications1` on
 `org.nidara.Applications`, `/org/nidara/Applications`. It is explicitly opt-in;
@@ -6,13 +6,15 @@ the normal installed daemon, TS shell and systemd units are unchanged. The
 private Rust-session runner accepts `--applications`. A competing owner is
 neither replaced nor queued behind; restart the opt-in daemon when appropriate.
 
-This is A1 of [the contract](../../../design/APPLICATIONS1-DOCK.md): catalogue,
-search, app icon rendering/overrides and typed pin/folder layout. There is no
-application launch, autostart writer, usage/new-app tracker, Unity listener,
-window watcher, dock or TS bridge. Those method names return explicit
-`org.nidara.Applications1.Error.Unavailable` and their capabilities are absent.
-Each app's Launchable is false. ResolveWindow remains unavailable before H1/A3;
-the catalogue supplies exact identity/StartupWMClass/Flatpak metadata now.
+A1 of [the contract](../../../design/APPLICATIONS1-DOCK.md) supplies catalogue,
+search, app icon rendering/overrides and typed pin/folder layout. A2 adds
+launch/actions/open/default directories and typed XDG autostart preferences;
+read [A2.md](A2.md) before using or extending those effects. Launchable now
+reflects entry availability, with request/provider failures still explicit.
+There is no usage/new-app tracker, Unity listener, window watcher, dock or TS
+bridge. ResolveWindow and AcknowledgeNew remain Unavailable before H1/A3.
+`LauncherAvailable` refers to Unity, not app launching: use `LaunchAvailable`
+and the `launch` capability; neither implies observed window/focus success.
 
 ## Data and lifecycle
 
@@ -55,7 +57,7 @@ profile's history rather than treating a different filesystem as uninstall.
 GetSnapshot returns `(t epoch, t revision, a{sv} state)`. State includes independent
 CatalogueRevision/LayoutRevision, zero UsageRevision/LauncherRevision, IconRevision,
 CatalogueComplete/Diagnostics, Apps, AppsNext, ordered Layout, LayoutAvailable,
-DefaultDirectoryApp and explicitly unavailable empty window/launch state.
+DefaultDirectoryApp, ActiveLaunches and explicitly unavailable window matching.
 Subscribe to Changed and owner changes before reading. PropertiesChanged
 invalidates root property caches as well. A daemon restart gives a new epoch;
 changed/recreated desktop entries receive new monotonic generations within it.
