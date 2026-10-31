@@ -91,6 +91,7 @@ menus, launch IDs and mutations. Never retry a mutation after an ambiguous timeo
 | OpenDirectory | `(t epoch, s absoluteLocalDirectoryUri, a{sv} context) → s launchId`; context accepts only ActivationToken/RequestId, resolves current inode/directory handler |
 | GetLaunch | `(t epoch, s launchId) → a{sv} status`; launch is not a focus acknowledgement |
 | EditLayout | `(t epoch, t expectedLayoutRevision, a{sv} edit) → (t newLayoutRevision, aa{sv} canonicalLayout)`; insert/remove/move by stable entry keys, not whole stale snapshots |
+| GetTrashIcon | `(t epoch, b full, u logicalSize, d scale) → (s token, u width, u height, ay rgba)`; the Trash's art from the icon theme (`user-trash-full`/`user-trash` and older spellings), never a generic named-icon lookup; Unavailable when the theme has none; capability `trash-icon` |
 | SetIconOverride | `(t epoch, s desktopId, t generation, a{sv} source) → t iconRevision`; source file URI or themed name, no destination path |
 | ResetIconOverride | `(t epoch, s desktopId, t generation) → t iconRevision` |
 | SetAutostart | `(t epoch, s desktopId, t generation, b enabled) → a{sv} confirmedState` |

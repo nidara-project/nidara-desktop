@@ -351,6 +351,19 @@ dock or bar. Its gotchas:
 The checks are nested, not in CI: `toolkit/crates/nk-wayland/check-layer-headless.sh`
 with `NK_LAYER_CHECK`. Before acting, they wait for Hyalo's "Xwayland ready".
 
+The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1 of #959). Read
+`toolkit/shell/DOCK.md` first: what each step of the series owns, and what D1 does not.
+- Look at it with `scripts/dev/rust-session.sh --applications nidara-shell`. Check it with
+  `toolkit/shell/check-dock-headless.sh`; other scales take
+  `NK_WIDGETS_HYALO_CONFIG` = a Hyalo config with `[outputs.winit] scale = 1.25`.
+- A private schema overlay must link `*.enums.xml` too. Without them, every schema that
+  names an enum is silently dropped, `org.gnome.desktop.interface` among them, and the
+  icon theme reads as none (hicolor only). This cost two rounds.
+- In the headless harness Hyalo refuses `msg do …` from an unidentified caller
+  (AccessDenied). A check makes the client act itself, e.g. a window that minimizes itself.
+- Window pictures come from each dock's own layer root (`capture_window`, id in hex); the
+  pixels are wiped on lock (`Raster::wipe`).
+
 ## Keep this skill current (part of "done", not a follow-up)
 
 This skill is only useful if it matches reality. **When a change introduces or alters
