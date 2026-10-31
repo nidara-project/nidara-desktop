@@ -1479,72 +1479,6 @@ fn power_keys() -> Vec<Key> {
     ]
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn button_layout_round_trips_like_the_shell() {
-        assert_eq!(
-            parse_button_layout("appmenu:minimize,maximize,close"),
-            ("right", vec!["minimize", "maximize", "close"])
-        );
-        assert_eq!(
-            parse_button_layout("close,maximize:"),
-            ("left", vec!["maximize", "close"])
-        );
-        assert_eq!(parse_button_layout(":"), ("right", vec![]));
-        assert_eq!(
-            format_button_layout("left", &["minimize", "maximize", "close"]),
-            "close,minimize,maximize:appmenu"
-        );
-        assert_eq!(
-            format_button_layout("right", &["maximize", "close"]),
-            "appmenu:maximize,close"
-        );
-    }
-
-    #[test]
-    fn times_and_fonts_are_checked_as_the_registry_does() {
-        assert_eq!(valid_time(" 07:30 "), Ok(Value::Text("07:30".into())));
-        for bad in ["7:30", "24:00", "12:60", "8pm", "ab:cd"] {
-            assert!(valid_time(bad).is_err(), "{bad}");
-        }
-        assert_eq!(
-            font_parts("Inter Variable 11"),
-            Some(("Inter Variable".into(), 11., false))
-        );
-        assert_eq!(
-            font_parts("JetBrainsMono Nerd Font Medium 11"),
-            Some(("JetBrainsMono Nerd Font".into(), 11., false))
-        );
-        assert_eq!(
-            font_parts("Cantarell Bold Italic 14px"),
-            Some(("Cantarell".into(), 14., true))
-        );
-        assert_eq!(font_parts("Inter"), None);
-        assert_eq!(font_parts("Inter 0"), None);
-    }
-
-    #[test]
-    fn wallpapers_take_paths_and_file_uris() {
-        let dir = std::env::temp_dir().join(format!("nidara-wp-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let img = dir.join("a b.png");
-        std::fs::write(&img, b"x").unwrap();
-        let uri = glib::filename_to_uri(&img, None).unwrap();
-        assert_eq!(
-            valid_wallpaper(&uri),
-            Ok(Value::Text(img.to_string_lossy().into()))
-        );
-        assert!(valid_wallpaper("relative.png").is_err());
-        let txt = dir.join("a.txt");
-        std::fs::write(&txt, b"x").unwrap();
-        assert!(valid_wallpaper(txt.to_str().unwrap()).is_err());
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-}
-
 const DOCK_POSITIONS: &[&str] = &["bottom", "left", "right"];
 fn whole(v: &Value) -> Result<i32, String> {
     match v {
@@ -1633,9 +1567,9 @@ fn dock_keys() -> Vec<Key> {
             validate: None,
             get: |st| Value::Number(st.s(DOCK).int("max-icon-size") as f64),
             set: Some(|st, v| put_int(st, DOCK, "max-icon-size", v)),
-            ui: Some(|_| {
-                json!({"i18n": "settings.dock.max-size", "control": "slider", "slider": {"unit": "px"}})
-            }),
+            ui: Some(
+                |_| json!({"i18n": "settings.dock.max-size", "control": "slider", "slider": {"unit": "px"}}),
+            ),
             watch: &[(DOCK, "max-icon-size")],
             file: false,
         },
@@ -1683,11 +1617,77 @@ fn dock_keys() -> Vec<Key> {
             validate: None,
             get: |st| Value::Number(st.s(DOCK).int("hide-delay") as f64),
             set: Some(|st, v| put_int(st, DOCK, "hide-delay", v)),
-            ui: Some(|_| {
-                json!({"i18n": "settings.dock.hide-delay", "control": "slider", "slider": {"unit": "ms"}})
-            }),
+            ui: Some(
+                |_| json!({"i18n": "settings.dock.hide-delay", "control": "slider", "slider": {"unit": "ms"}}),
+            ),
             watch: &[(DOCK, "hide-delay")],
             file: false,
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn button_layout_round_trips_like_the_shell() {
+        assert_eq!(
+            parse_button_layout("appmenu:minimize,maximize,close"),
+            ("right", vec!["minimize", "maximize", "close"])
+        );
+        assert_eq!(
+            parse_button_layout("close,maximize:"),
+            ("left", vec!["maximize", "close"])
+        );
+        assert_eq!(parse_button_layout(":"), ("right", vec![]));
+        assert_eq!(
+            format_button_layout("left", &["minimize", "maximize", "close"]),
+            "close,minimize,maximize:appmenu"
+        );
+        assert_eq!(
+            format_button_layout("right", &["maximize", "close"]),
+            "appmenu:maximize,close"
+        );
+    }
+
+    #[test]
+    fn times_and_fonts_are_checked_as_the_registry_does() {
+        assert_eq!(valid_time(" 07:30 "), Ok(Value::Text("07:30".into())));
+        for bad in ["7:30", "24:00", "12:60", "8pm", "ab:cd"] {
+            assert!(valid_time(bad).is_err(), "{bad}");
+        }
+        assert_eq!(
+            font_parts("Inter Variable 11"),
+            Some(("Inter Variable".into(), 11., false))
+        );
+        assert_eq!(
+            font_parts("JetBrainsMono Nerd Font Medium 11"),
+            Some(("JetBrainsMono Nerd Font".into(), 11., false))
+        );
+        assert_eq!(
+            font_parts("Cantarell Bold Italic 14px"),
+            Some(("Cantarell".into(), 14., true))
+        );
+        assert_eq!(font_parts("Inter"), None);
+        assert_eq!(font_parts("Inter 0"), None);
+    }
+
+    #[test]
+    fn wallpapers_take_paths_and_file_uris() {
+        let dir = std::env::temp_dir().join(format!("nidara-wp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let img = dir.join("a b.png");
+        std::fs::write(&img, b"x").unwrap();
+        let uri = glib::filename_to_uri(&img, None).unwrap();
+        assert_eq!(
+            valid_wallpaper(&uri),
+            Ok(Value::Text(img.to_string_lossy().into()))
+        );
+        assert!(valid_wallpaper("relative.png").is_err());
+        let txt = dir.join("a.txt");
+        std::fs::write(&txt, b"x").unwrap();
+        assert!(valid_wallpaper(txt.to_str().unwrap()).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }
