@@ -48,7 +48,7 @@ mkdir -p "$state/config/nidara"
 schemas="$state/schemas"
 if [ -f "$repo/config/gsettings/org.nidara.gschema.xml" ]; then
     rm -rf "$schemas"; mkdir -p "$schemas"
-    cp /usr/share/glib-2.0/schemas/*.gschema.xml "$schemas/" 2>/dev/null || true
+    cp /usr/share/glib-2.0/schemas/*.gschema.xml /usr/share/glib-2.0/schemas/*.enums.xml "$schemas/" 2>/dev/null || true
     cp "$repo/config/gsettings/org.nidara.gschema.xml" "$schemas/"
     glib-compile-schemas "$schemas" && export GSETTINGS_SCHEMA_DIR="$schemas"
 fi
