@@ -144,7 +144,10 @@ def schemas():
     than what is installed."""
     out = RUN / 'schemas'
     out.mkdir()
-    for f in Path('/usr/share/glib-2.0/schemas').glob('*.gschema.xml'):
+    # The enums too: without them every schema that names one (org.gnome.desktop.interface,
+    # the icon theme's home) is dropped, and the service resolves icons with no theme.
+    installed = Path('/usr/share/glib-2.0/schemas')
+    for f in [*installed.glob('*.gschema.xml'), *installed.glob('*.enums.xml')]:
         if f.name != 'org.nidara.gschema.xml':
             (out / f.name).symlink_to(f)
     (out / 'org.nidara.gschema.xml').symlink_to(REPO / 'config/gsettings/org.nidara.gschema.xml')
@@ -163,6 +166,20 @@ try:
         return r.returncode == 0 and r.stdout
     (LOG / 'snapshot.json').write_text(until('Applications1 answering', snapshot))
     result = {}
+    # The Trash's art comes from the icon theme (GetTrashIcon), both looks.
+    epoch = json.loads((LOG / 'snapshot.json').read_text())['data'][0]
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    result['trash_art'] = {}
+    for full in (False, True):
+        try:
+            _, w, h, px = bus.call_sync(
+                'org.nidara.Applications', '/org/nidara/Applications', 'org.nidara.Applications1',
+                'GetTrashIcon', GLib.Variant('(tbud)', (epoch, full, 64, 1.0)),
+                GLib.VariantType('(suuay)'), Gio.DBusCallFlags.NONE, 5000, None).unpack()
+            result['trash_art']['full' if full else 'empty'] = f'{w}x{h}'
+        except GLib.Error as e:
+            result['trash_art']['full' if full else 'empty'] = e.message
+    assert result['trash_art'] == {'empty': '64x64', 'full': '64x64'}, result['trash_art']
     shell = start('shell', [SHELL])
     first = until('a dock layer', docks)
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
@@ -221,6 +238,18 @@ try:
     names = [i['name'] for i in items if i['role'] in ('push button', 'button')]
     assert names[:2] == ['Files', 'kitty'] and names[-1] == 'Trash', items
     assert any(i['description'] == 'running' for i in items), items
+    # The Trash says whether it holds anything (or that it cannot tell), never nothing.
+    trash = next(i for i in items if i['name'] == 'Trash')
+    assert trash['description'].split(',')[0] in ('empty', 'empty in the home folder'), trash
+    # Filling it (the check's own file, into the private session's Trash) is seen and said.
+    junk = RUN / 'junk.txt'
+    junk.write_text('x')
+    subprocess.run(['gio', 'trash', str(junk)], check=True, timeout=10)
+    until('the Trash says it holds items', lambda: any(
+        i['name'] == 'Trash' and i['description'].startswith('contains items')
+        for i in (walk() or [])))
+    shot(LOG / 'dock-trash-full.png')
+    result['trash'] = 'empty, then contains items'
     dock = dock_node()
     running = next(n for n in children(dock) if n.get_description() == 'running')
     running.get_action_iface().do_action(0)  # "click": Activate

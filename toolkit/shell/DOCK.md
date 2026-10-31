@@ -133,8 +133,11 @@ recreation. The input region is the resting capsule.
   with `Mode: open` and `Uris: [trash:///]`, which A2 accepts only when that handler
   takes URIs/inode-directory; otherwise the slot says it cannot open (A2 closes this in
   the contract, #741). Never the physical Trash/files folder, never xdg-open.
-  Full/empty comes from GIO's trash monitor when available, else the slot says it cannot
-  tell. Emptying is D2 (it needs the menu).
+  Full/empty comes from GIO's `trash:///` item count (every volume, gvfs); without gvfs, the
+  home Trash alone, which the accessible description calls partial; unknown is said too.
+  Its art is the icon theme's, both looks fetched up front (Applications1 `GetTrashIcon`),
+  so filling or emptying swaps it at once; Nidara's `nd-user-trash` on a faint tile only when
+  the theme has none. Emptying is D2 (it needs the menu).
 
 ## 7. Keyboard and accessibility
 
