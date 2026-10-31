@@ -42,6 +42,16 @@ mkdir -p "$rt"; chmod 700 "$rt"
 # On disk, not in the runtime directory (RAM): the session's settings outlive a run.
 state="${XDG_DATA_HOME:-$HOME/.local/share}/nidara/rust-session"
 mkdir -p "$state/config/nidara"
+# This checkout's settings schema over the installed ones: an installed copy older than the
+# checkout lacks its new keys, and a service reading one (Applications1's dock layout) then
+# reports itself unavailable — the dock showed only the Trash.
+schemas="$state/schemas"
+if [ -f "$repo/config/gsettings/org.nidara.gschema.xml" ]; then
+    rm -rf "$schemas"; mkdir -p "$schemas"
+    cp /usr/share/glib-2.0/schemas/*.gschema.xml "$schemas/" 2>/dev/null || true
+    cp "$repo/config/gsettings/org.nidara.gschema.xml" "$schemas/"
+    glib-compile-schemas "$schemas" && export GSETTINGS_SCHEMA_DIR="$schemas"
+fi
 service_flags=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -68,7 +78,10 @@ children="$rt/children"
 : >"$children"
 q() { printf '%q' "$1"; }
 bg() { echo "$* & echo \$! >>$(q "$children");"; }
-cmd="$(bg "$(q "$sessiond") --config$service_flags") $(bg "$(q "$registryd") --use-gnome-session")"
+# D-Bus activation starts an app with the BUS's environment, and the bus came up before Hyalo:
+# without this an activated app (Amberol from the dock) opened on the live screen instead.
+cmd="dbus-update-activation-environment WAYLAND_DISPLAY \${DISPLAY:+DISPLAY} 2>/dev/null; "
+cmd+="$(bg "$(q "$sessiond") --config$service_flags") $(bg "$(q "$registryd") --use-gnome-session")"
 awww=$(command -v awww-daemon) && cmd+=" $(bg "$(q "$awww")")"
 cmd+=" echo \$\$ >>$(q "$children"); exec $app"
 
