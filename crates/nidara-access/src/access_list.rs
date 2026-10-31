@@ -110,6 +110,12 @@ pub(super) fn role(path: &Path, uid: u32) -> io::Result<Option<Role>> {
     lookup(Path::new(DIRECTORY), path, uid)
 }
 fn lookup(config: &Path, path: &Path, uid: u32) -> io::Result<Option<Role>> {
+    // In a user namespace (bwrap, a private check) root's files belong to the overflow
+    // user, so no grant can be proven: none is given and the caller is External. This only
+    // ever lowers trust; a real root-owned tree that is wrong still refuses below.
+    if File::open("/")?.metadata()?.uid() != 0 {
+        return Ok(None);
+    }
     let dir = match directory(config) {
         Ok(dir) => dir,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
