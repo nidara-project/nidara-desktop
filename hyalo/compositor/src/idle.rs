@@ -36,7 +36,7 @@ use smithay::{
     },
 };
 
-use crate::state::Hyalo;
+use crate::{ipc::observe::usage_idle_after, state::Hyalo};
 
 #[derive(Default, Clone, Copy)]
 struct Fired {
@@ -44,12 +44,15 @@ struct Fired {
     screen_off: bool,
     lock: bool,
     suspend: bool,
+    /// Idle for usage accounting (ipc/observe.rs USAGE_IDLE), announced on the event stream.
+    usage: bool,
 }
 
 impl Fired {
     fn restart_inhibited_stretch(&mut self) {
         self.dim = false;
         self.suspend = false;
+        self.usage = false;
     }
     fn input(&mut self) -> bool {
         std::mem::take(self).screen_off
@@ -144,15 +147,32 @@ impl Hyalo {
         self.idle.last_activity = Instant::now();
         self.idle.sleep.reset(self.idle.last_activity);
         self.clear_idle_dim();
+        let was_usage_idle = self.idle.fired.usage;
+        if was_usage_idle {
+            self.usage_idle_changed(false);
+        }
         if self.idle.fired.input() {
             tracing::info!("input: the screens come back on");
             let _ = crate::outputs::set_power(self, None, true);
             crate::ipc::server::outputs_changed(self);
         }
-        // Every step had fired, so no timer was waiting: this stretch needs one again.
-        if self.idle.timer.is_none() {
+        // Every step had fired, so no timer was waiting: this stretch needs one again. Nor is
+        // a waiting one enough once usage idle fired: its next boundary is the soonest of all.
+        if self.idle.timer.is_none() || was_usage_idle {
             self.idle_rearm();
         }
+    }
+
+    /// Idle for usage (`Fired::usage`), and the last input's CLOCK_MONOTONIC µs: for the
+    /// event stream's snapshot (ipc/observe.rs).
+    pub fn usage_idle(&self) -> (bool, u64) {
+        (self.idle.fired.usage, crate::ipc::observe::instant_us(self.now_us(), self.idle.last_activity))
+    }
+
+    fn usage_idle_changed(&mut self, idle: bool) {
+        self.idle.fired.usage = idle;
+        let (_, since_us) = self.usage_idle();
+        crate::ipc::server::broadcast(self, &crate::ipc::Event::IdleChanged { idle, since_us });
     }
 
     fn clear_idle_dim(&mut self) {
@@ -263,6 +283,9 @@ impl Hyalo {
         let inhibited = self.idle_inhibited();
         if inhibited {
             self.clear_idle_dim();
+            if self.idle.fired.usage {
+                self.usage_idle_changed(false);
+            }
         }
         crate::ipc::server::broadcast(self, &crate::ipc::Event::IdleInhibitorsChanged);
         self.idle.notifier.set_is_inhibited(inhibited);
@@ -296,6 +319,7 @@ impl Hyalo {
         .into_iter()
         .filter(|(seconds, fired, _)| *seconds > 0 && !*fired)
         .map(|(seconds, _, start)| start + Duration::from_secs(seconds as u64))
+        .chain((!fired.usage).then(|| self.idle.last_activity + usage_idle_after()))
         .min();
         let Some(deadline) = next else { return };
         let token = self.loop_handle.insert_source(Timer::from_deadline(deadline), |_, _, state| {
@@ -308,6 +332,9 @@ impl Hyalo {
 
     fn idle_check(&mut self) {
         if self.idle_inhibited() {
+            if self.idle.fired.usage {
+                self.usage_idle_changed(false);
+            }
             self.idle.last_activity = Instant::now();
             self.idle.sleep.reset(self.idle.last_activity);
             self.idle.fired.restart_inhibited_stretch();
@@ -317,6 +344,9 @@ impl Hyalo {
         let idle = self.idle.last_activity.elapsed();
         let cfg = self.config.idle.clone();
         let due = |t: u32| t > 0 && idle >= Duration::from_secs(t as u64);
+        if idle >= usage_idle_after() && !self.idle.fired.usage {
+            self.usage_idle_changed(true);
+        }
         if due(dim_seconds(&cfg)) && !self.idle.fired.dim {
             self.idle.fired.dim = true;
             self.idle.dimmed = true;

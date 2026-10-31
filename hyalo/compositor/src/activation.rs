@@ -22,11 +22,15 @@ use smithay::{
     wayland::xdg_activation::{XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData},
 };
 
-use crate::state::Hyalo;
+use crate::{ipc::observe::Outcome, state::Hyalo};
 
 /// How long a token stays good after it was made: a launch takes a moment, a stale token is a
 /// request nobody is waiting for any more.
 pub const ACTIVATION_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long a token is remembered unused: past ACTIVATION_TIMEOUT it is refused, past this
+/// it is unknown (and its request ignored, as any made-up token's).
+pub const TOKEN_KEPT: Duration = Duration::from_secs(60);
 
 /// Attached to a token when it is made: whether the user was in the client that made it.
 struct FromTheUser(bool);
@@ -52,21 +56,54 @@ impl XdgActivationHandler for Hyalo {
         let valid = keyboard.as_ref().is_some_and(|k| since(k.current_focus().and_then(|f| f.surface()), k.last_enter()))
             || pointer.as_ref().is_some_and(|p| since(p.current_focus(), p.last_enter()));
         data.user_data.insert_if_missing(|| FromTheUser(valid));
+        // Smithay keeps every token until it is used: forget those long past their time. Not
+        // at once: a late request must still be known to be refused, and ask for attention.
+        self.activation_state.retain_tokens(|_, d| d.timestamp.elapsed() < TOKEN_KEPT);
         // Kept either way: a request with a token we know is refused knowingly, and said so.
         true
     }
 
     fn request_activation(&mut self, token: XdgActivationToken, token_data: XdgActivationTokenData, surface: WlSurface) {
-        let valid = token_data.user_data.get::<FromTheUser>().is_some_and(|v| v.0)
-            && token_data.timestamp.elapsed() < ACTIVATION_TIMEOUT;
+        let valid = from_the_user(&token_data);
         self.activation_state.remove_token(&token);
-        let Some(m) = self.wm.by_surface(&surface).filter(|m| m.mapped) else { return };
-        let id = m.id;
+        let Some((id, mapped)) = self.wm.by_surface(&surface).map(|m| (m.id, m.mapped)) else { return };
+        if !mapped {
+            // Not shown yet: Hyalo focuses a new window anyway, and its launch is answered when
+            // it is shown (`window_shown_with_token`).
+            if let Some(m) = self.wm.get_mut(id) {
+                m.shown_with = Some((token.as_str().to_owned(), valid));
+            }
+            return;
+        }
         if valid {
             tracing::debug!(id, "activation honoured");
             self.focus_window(Some(id));
+            self.launch_used(token.as_str(), Outcome::Activated { window: id });
         } else {
+            // It does not take the front; it asks for the user instead (the dock shows it).
             tracing::debug!(id, "activation refused: the token did not come from what the user did");
+            if self.wm.focused != Some(id) {
+                self.set_attention(id, Some(true), None);
+            }
+            self.launch_used(token.as_str(), Outcome::Refused { window: id });
         }
+    }
+}
+
+/// Whether the token was made from what the user did, and is still in time.
+fn from_the_user(data: &XdgActivationTokenData) -> bool {
+    data.user_data.get::<FromTheUser>().is_some_and(|v| v.0) && data.timestamp.elapsed() < ACTIVATION_TIMEOUT
+}
+
+impl Hyalo {
+    /// An X11 window shown with a startup id that is a token Hyalo made (`_NET_STARTUP_ID`,
+    /// which a launcher sets from the token): the token, used up, and whether it came from the
+    /// user. A classic startup-notification id Hyalo did not make is not one.
+    pub fn take_x11_startup(&mut self, window: &smithay::desktop::Window) -> Option<(String, bool)> {
+        let id = window.x11_surface()?.startup_id()?;
+        let token = XdgActivationToken::from(id);
+        let valid = from_the_user(self.activation_state.data_for_token(&token)?);
+        self.activation_state.remove_token(&token);
+        Some((token.into(), valid))
     }
 }

@@ -17,6 +17,8 @@ pub struct IpcState {
     path: Option<PathBuf>,
     subscribers: Vec<UnixStream>,
     consent: ConsentWatch,
+    /// Epoch, serial, session boundaries and watched launches (observe.rs).
+    pub observe: super::observe::Observation,
 }
 
 impl Drop for IpcState {
@@ -80,10 +82,19 @@ fn accept(state: &mut Hyalo, stream: UnixStream) {
                 continue;
             }
             let reply = match serde_json::from_str::<Request>(line) {
-                Ok(Request::EventStream) => {
+                Ok(Request::EventStream { snapshot }) => {
                     match s.try_clone() {
                         Ok(clone) => {
                             let _ = write_line(s, &Reply::Ok(Response::Handled));
+                            // Written before it joins the subscribers, in this same dispatch:
+                            // nothing can be broadcast in between (observe.rs, the barrier).
+                            if snapshot {
+                                let event = state.snapshot_event();
+                                let serial = state.ipc.observe.serial();
+                                if write_line(s, &state.stamped(&event, serial)).is_err() {
+                                    return Ok(PostAction::Remove);
+                                }
+                            }
                             state.ipc.subscribers.push(clone);
                         }
                         Err(_) => return Ok(PostAction::Remove),
@@ -136,7 +147,9 @@ fn operation(req: &Request) -> Operation {
         | Request::Idle
         | Request::Xwayland
         | Request::Config
-        | Request::EventStream => Operation::Read,
+        | Request::EventStream { .. } => Operation::Read,
+        // The token is the authority: a secret Hyalo made, good once, for 10 s (observe.rs).
+        Request::ObserveLaunch { .. } => Operation::Read,
         Request::Screenshot { .. } => Operation::Capture,
         Request::SetOutput { .. } => Operation::Outputs,
         Request::OutputPower { .. } | Request::PowerWake | Request::PowerLock => Operation::Power,
@@ -293,14 +306,20 @@ fn handle(state: &mut Hyalo, req: Request) -> Reply {
             state.loop_signal.stop();
             Reply::Ok(Response::Handled)
         }
-        Request::EventStream => unreachable!("handled by the connection"),
+        Request::ObserveLaunch { token } => state.observe_launch(&token),
+        Request::EventStream { .. } => unreachable!("handled by the connection"),
     }
 }
 
 /// Sends an event to every subscriber. Never blocks: a subscriber that does not keep up
 /// (its socket buffer full) is dropped rather than allowed to stall the compositor.
+/// Every event carries the epoch, the next serial and the time (observe.rs).
 pub fn broadcast(state: &mut Hyalo, event: &Event) {
-    let Ok(mut text) = serde_json::to_string(event) else { return };
+    if state.ipc.subscribers.is_empty() {
+        return;
+    }
+    let serial = state.ipc.observe.next_serial();
+    let Ok(mut text) = serde_json::to_string(&state.stamped(event, serial)) else { return };
     text.push('\n');
     state.ipc.subscribers.retain_mut(|s| {
         let _ = s.set_nonblocking(true);
@@ -354,6 +373,7 @@ impl Hyalo {
                         [p.origin.x, p.origin.y, frame.size.w * p.scale, frame.size.h * p.scale]
                     }),
                     focus_order: m.focus_serial,
+                    demands_attention: m.demands_attention(),
                     x: m.rect.loc.x,
                     y: m.rect.loc.y,
                     width: m.rect.size.w,

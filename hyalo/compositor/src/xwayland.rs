@@ -384,6 +384,11 @@ impl XwmHandler for Hyalo {
         match property {
             WmWindowProperty::Title => self.window_title_changed(id),
             WmWindowProperty::Class => self.window_app_id_changed(id),
+            // ICCCM urgency: attention while it does not have the focus (ipc/observe.rs).
+            WmWindowProperty::Hints => {
+                let urgent = x.hints().is_some_and(|h| h.urgent);
+                self.set_attention(id, None, Some(urgent && self.wm.focused != Some(id)));
+            }
             WmWindowProperty::MotifHints => {
                 let window = self.wm.get(id).unwrap().window.clone();
                 self.window_committed(&window);

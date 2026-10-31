@@ -18,7 +18,7 @@ is the WHY and the traps.
 | `hyalo/compositor/src/config.rs` | the TOML layers and the watcher |
 | `hyalo/compositor/src/wm/` | the window manager: workspaces, focus, floating/tiling, fullscreen (`mod.rs`), the commands (`actions.rs`), pointer move/resize (`grabs.rs`), tiling layouts (`layout/`), window rules (`rules.rs`), which windows are games (`games.rs`), minimizing (`minimize.rs`), opening and closing (`motion.rs`) |
 | `hyalo/compositor/src/binds.rs` | key and pointer bindings from the config's `[binds]` |
-| `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg` |
+| `hyalo/compositor/src/ipc/` | the JSON socket and `nidara-hyalo msg`; `observe.rs`: epoch/serial/time, snapshot, launches, attention (#959 H1) |
 | `hyalo/compositor/src/capture.rs` | capture of a window or an output (ext-foreign-toplevel-list + ext-image-copy-capture): the shell's thumbnails, grim, and a screen or window shared in a call |
 | `hyalo/compositor/src/sandbox.rs` | what a sandboxed (Flatpak) client is not offered |
 | `hyalo/compositor/src/shell/` | windows and popups (xdg-shell, `mod.rs`), layer surfaces (`layer.rs`), who draws a title bar (`decoration.rs`) |
@@ -1995,7 +1995,10 @@ GNOME's, KDE's and niri's: honoured only if the token came from what the user ju
 client that asked for it has the keyboard OR the pointer (the dock and the notifications do not
 take the keyboard on a click; their click is under the pointer), its serial is no older than that focus's
 `last_enter` (niri's test: an old click says nothing about now), and it is used within 10 s.
-Anything else changes nothing. A NEW window needs none of this — Hyalo focuses it when it maps.
+Anything else does not take the focus: a shown window that asked is marked **demands attention**
+instead (until it gets the focus), as GNOME does. A NEW window needs none of this — Hyalo
+focuses it when it maps. Tokens are remembered unused for 60 s (`TOKEN_KEPT`), so a late request
+is refused knowingly (attention), not ignored like a made-up one.
 
 The Hyprland session honours none (`misc:focus_on_activate` is off by default), so there a
 link clicked in a terminal leaves the browser behind; on Hyalo it comes forward.
@@ -2006,6 +2009,56 @@ workspace asks to come forward (refused — the user stays where they are). A Hy
 every token fails the second half (checked, 2026-10-01). ⚠️ The check CLICKS: run it only inside a
 nested Hyalo or the smoke, and with the freshly built `nidara-hyalo` first in `PATH` —
 `bin/nidara-wm` asks `nidara-hyalo msg`, and an older installed one does not know `workspaces`.
+
+## One coherent observation: epoch, serial, launches, attention (#959 H1)
+
+`ipc/observe.rs`. What a consumer that ACCOUNTS for things (A3's foreground usage, the dock's
+launch bounce and attention) needs from the event stream, and what `windows` + `event_stream`
+alone could not give:
+
+- **Every event carries `epoch`, `serial`, `time_us`.** Epoch: random per Hyalo run (< 2^53, so
+  JS reads it exactly); window ids mean something only with it. Serial: ONE counter for all
+  subscribers, +1 per event sent, so each subscriber's sequence is contiguous — a gap can only be
+  a dropped stream, and `broadcast` CLOSES a subscriber that falls behind, never thins it.
+  `time_us`: CLOCK_MONOTONIC µs (`state.clock`), the clock Python's `time.monotonic()` reads.
+- **The barrier.** `{"request":"event_stream","snapshot":true}` (CLI: `msg events --snapshot`)
+  answers, then writes a `snapshot` event (windows, workspaces, focus, locked, idle,
+  idle_since_us, session_active, sleeping) BEFORE the connection joins the subscribers, in the
+  same dispatch: nothing can be broadcast in between (one thread). Every windows/workspaces/focus
+  event is full state, so a snapshot taken mid-round followed by that round's events is still
+  right. Without `snapshot` the stream is as before; every consumer parses events loosely, so the
+  added fields and events break none (checked: toolkit/shell/src/hyalo.rs, sessiond's followers
+  and power provider, ui/shell/core/hyalo-ipc.ts).
+- **Launch correlation without the token.** `{"request":"observe_launch","token":…}` → `{kind:
+  launch_observed, launch, already}`; then `launch_outcome {launch, outcome}` with outcome
+  `window {window, honoured}` (a window NOT YET SHOWN asked with it — GTK does, from
+  XDG_ACTIVATION_TOKEN, before its first frame), `activated {window}`, `refused {window}` or
+  `expired` (unused in 10 s). Asked AFTER the use (the app was quicker than the asker), the answer
+  is in `already`. Only a token Hyalo has and in time can be observed; holding it is the
+  authority (Operation::Read). The token is never sent back, broadcast or logged. X11: a
+  `_NET_STARTUP_ID` equal to a Hyalo token counts as that window's token. ⚠️ nk-wayland refuses
+  `activate` before the first painted buffer, so nk apps report `activated`, never `window`.
+- **Attention.** `WindowInfo.demands_attention` + `attention_changed {id, demands}` on each edge:
+  a refused activation of a shown, unfocused window, or an X11 urgency hint (WM_HINTS, on change
+  and at map); cleared by focus (of it, or of the window whose dialog took it).
+- **Boundaries.** `idle_changed {idle, since_us}`: usage idle after `USAGE_IDLE` (300 s, GNOME's
+  presence default, independent of the configured steps) with no inhibitor; `since_us` is the
+  last input. `session_active_changed` (libseat pause/activate, tty only), `sleep_changed`
+  (logind PrepareForSleep), and the existing `lock_changed`.
+
+Check: `hyalo/scripts/check-observe-headless.sh` (observe-check.py; private cage + software
+Hyalo + private bus; not CI). It needs nk-wayland's `layer-probe` and `token-target` examples.
+It covers the barrier under three windows starting at once, foreign/stale/real tokens for shown
+and new windows, refusal → attention with the focus kept → cleared by a click, a subscriber that
+does not read being closed with what it got contiguous, usage idle, sleep → lock. For that the
+test channel (control.rs, HYALO_CONTROL only) gained `lock` and `sleep 1|0`, and
+`HYALO_TEST_USAGE_IDLE_MS` shortens USAGE_IDLE when it is on. ⚠️ Run its GTK client with
+`GSK_RENDERER=cairo`: a GL client's dmabufs in nested software Hyalo crashed Mesa's llvmpipe
+INSIDE Hyalo (SIGSEGV in libgallium) as the window went away. Not exercised: a real VT switch
+(winit has no seat) and logind's own PrepareForSleep (the system bus).
+
+⚠️ Idle trap fixed with it: after usage idle fired, input must re-arm the idle timer even if a
+later step's timer is waiting — that timer's deadline is not the next boundary any more.
 
 ## The lock screen (ext-session-lock-v1)
 

@@ -8,7 +8,11 @@
 //!   key KEYCODE · keydown KEYCODE · keyup KEYCODE      (evdev codes: 125 = Super, 42 = Shift)
 //!   barrier PATH                                       (acknowledge prior FIFO delivery)
 //!   pinch X Y SCALE                                    (two fingers, to SCALE in ten steps)
+//!   lock                                               (what Super+L does)
+//!   sleep 1|0                                          (logind's PrepareForSleep, true/false)
 //!
+//! With it on, HYALO_TEST_USAGE_IDLE_MS shortens the usage idle (ipc/observe.rs USAGE_IDLE),
+//! so a check need not wait five minutes for the boundary it tests.
 //! Keys go through the same path as a keyboard's, bindings included.
 use std::io::BufRead;
 
@@ -87,6 +91,8 @@ impl Hyalo {
                     self.on_key(code, KeyState::Released, time);
                 }
             }
+            Some("lock") => self.lock_session(),
+            Some("sleep") => self.on_login_event(crate::logind::LoginEvent::PrepareForSleep(num(1) != 0.0)),
             Some("pinch") => {
                 self.control_move(num(1), num(2), time);
                 self.control_pinch(num(3), time);
