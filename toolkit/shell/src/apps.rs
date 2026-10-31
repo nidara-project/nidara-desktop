@@ -3,7 +3,7 @@
 //! Changed and the owner first, then the snapshot and its pages; a newer revision that
 //! arrived meanwhile rereads. Icons come on demand from their own worker. Every call has
 //! the connection's deadline; a failure is an explicit Unavailable, never an empty dock.
-use crate::model::{App, Pin};
+use crate::model::{App, Autostart, DesktopAction, Pin};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
@@ -29,6 +29,8 @@ pub struct AppsState {
     pub default_directory: Option<String>,
     pub capabilities: Vec<String>,
     pub icon_revision: u64,
+    /// EditLayout's compare-and-swap token.
+    pub layout_revision: u64,
 }
 impl AppsState {
     pub fn can(&self, capability: &str) -> bool {
@@ -243,6 +245,25 @@ fn parse(
                 String::new()
             },
             launchable: flag(a, "Launchable"),
+            new_window: matches!(
+                text(a, "NewWindowMode").as_str(),
+                "declared-action" | "relaunch"
+            ),
+            actions: records(a, "Actions")
+                .iter()
+                .map(|d| DesktopAction {
+                    id: text(d, "Id"),
+                    name: text(d, "Name"),
+                })
+                .filter(|d| !d.id.is_empty() && !d.name.is_empty())
+                .collect(),
+            autostart: dict(a, "Autostart")
+                .map(|d| Autostart {
+                    available: flag(&d, "Available"),
+                    writable: flag(&d, "Writable"),
+                    enabled: flag(&d, "Enabled"),
+                })
+                .unwrap_or_default(),
         })
         .filter(|a| !a.id.is_empty())
         .collect();
@@ -276,6 +297,7 @@ fn parse(
         default_directory: (!default.is_empty()).then_some(default),
         capabilities,
         icon_revision: number(state, "IconRevision"),
+        layout_revision: number(state, "LayoutRevision"),
     }
 }
 
@@ -294,6 +316,11 @@ fn flag(d: &Dict, key: &str) -> bool {
     d.get(key)
         .and_then(|v| bool::try_from(v).ok())
         .unwrap_or_default()
+}
+fn dict(d: &Dict, key: &str) -> Option<Dict> {
+    d.get(key)
+        .and_then(|v| v.try_clone().ok())
+        .and_then(|v| Dict::try_from(v).ok())
 }
 fn records(d: &Dict, key: &str) -> Vec<Dict> {
     d.get(key)

@@ -5,14 +5,17 @@
 //! service from its own loop.
 use crate::actions::{Action, primary};
 use crate::apps::{TRASH_EMPTY, TRASH_FULL};
+use crate::chooser::{Candidate, Chooser};
 use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, Position, Slot, layout};
 use crate::hub::{Frame, Request};
+use crate::menu::Command;
 use crate::model::{Item, Kind, View};
+use crate::popup::{Look, Outcome, Overlay, Popup};
 use nk_render::{Canvas, ImageFit, Raster, rgba};
 use nk_text::Rect;
 use nk_wayland::{
     Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
-    Material, Options, Pane, TokenRequest, WakeSource, Waker, Window,
+    Material, Options, Pane, PopupSide, TokenRequest, WakeSource, Waker, Window,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -21,6 +24,10 @@ use std::time::Instant;
 
 pub const NAMESPACE: &str = "nidara-dock";
 const LEFT_BUTTON: u32 = 0x110;
+/// Between the capsule and a popup it opens, logical pixels.
+const POPUP_GAP: i32 = 6;
+const RIGHT_BUTTON: u32 = 0x111;
+const MIDDLE_BUTTON: u32 = 0x112;
 
 pub struct Dock {
     frames: Receiver<Arc<Frame>>,
@@ -32,6 +39,10 @@ pub struct Dock {
     layout: Layout,
     pointer: (f64, f64),
     pressed: Option<usize>,
+    /// The middle button's press, released on the same slot to act.
+    middle: Option<usize>,
+    /// The wheel's walk through an app's windows (cycle.rs).
+    cycle: crate::cycle::Cycle,
     /// Token requests in flight, and what each will start once it has its token.
     pending: HashMap<TokenRequest, Request>,
     trash_icon: Option<Arc<nk_icons::Icon>>,
@@ -50,12 +61,23 @@ pub struct Dock {
     a11y_requests: Option<Receiver<(u64, nk_a11y::Request)>>,
     ids: crate::semantics::Ids,
     revision: u64,
+    /// What a request is checked against: every node with its role and actions. The
+    /// revision moves only when this does (a popup opened or closed, items came or went),
+    /// not on every repaint, so an action a reader took is not lost to a frame drawn after.
+    shape: Vec<(nk_a11y::NodeId, nk_a11y::Role, Vec<nk_a11y::Action>)>,
     waker: Waker,
+    /// The one popup (a menu), and what draws it: loaded with the first one.
+    popup: Option<Overlay>,
+    look: Option<Look>,
+    /// Popups opened so far: each takes its own semantic ID range.
+    popups: u64,
+    /// A press that closed the popup is consumed, its release too: never replayed.
+    swallow: bool,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
 /// scale 2), and 256 KiB at most each.
-const THUMB_SIDE: u32 = 256;
+pub const THUMB_SIDE: u32 = 256;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
 
@@ -114,6 +136,8 @@ impl Dock {
             layout,
             pointer: (0., 0.),
             pressed: None,
+            middle: None,
+            cycle: Default::default(),
             pending: HashMap::new(),
             trash_icon,
             thumbs: Default::default(),
@@ -125,7 +149,12 @@ impl Dock {
             a11y_requests: None,
             ids: Default::default(),
             revision: 0,
+            shape: vec![],
             waker,
+            popup: None,
+            look: None,
+            popups: 0,
+            swallow: false,
         }
     }
 
@@ -190,8 +219,271 @@ impl Dock {
             w.set_layer_placement(placement(&next, keyboard))?;
         }
         self.layout = next;
+        self.follow_popup(w);
         self.capture(w);
         self.apply(w)
+    }
+
+    /// The popup follows its item to wherever it is now, or closes with it (gone, hidden).
+    fn follow_popup(&mut self, w: &mut Window) {
+        let Some(popup) = &self.popup else { return };
+        let at = match popup.anchor() {
+            Some(key) => self.frame.view.items.iter().position(|i| &i.key == key),
+            None => None,
+        };
+        if self.frame.hidden || (popup.anchor().is_some() && at.is_none()) {
+            self.close_popup(w);
+            return;
+        }
+        // The chooser keeps only windows still there; under two, it has nothing to choose.
+        if let (Some(Overlay::Chooser(c)), Some(n)) = (self.popup.as_mut(), at)
+            && !c.retain(&self.frame.view.items[n].windows)
+        {
+            self.close_popup(w);
+            return;
+        }
+        if let Some(n) = at {
+            let (rect, side) = (self.anchor_rect(n), self.side());
+            let popup = self.popup.as_mut().unwrap();
+            if let Err(e) = popup.follow(w, rect, side) {
+                eprintln!("nidara-shell: the menu cannot follow its item ({e}); closing it");
+                self.close_popup(w);
+            }
+        }
+    }
+
+    fn side(&self) -> PopupSide {
+        match self.layout.position {
+            Position::Bottom => PopupSide::AboveCentered,
+            Position::Left => PopupSide::RightCentered,
+            Position::Right => PopupSide::LeftCentered,
+        }
+    }
+
+    /// Slot `n`'s place along the dock, across the whole capsule and a gap beyond it, so a
+    /// popup opens clear of the capsule rather than over its edge.
+    fn anchor_rect(&self, n: usize) -> [i32; 4] {
+        let [x, y, w, h] = self.layout.rects[n];
+        let (sw, sh) = (self.layout.size.0 as i32, self.layout.size.1 as i32);
+        let g = POPUP_GAP;
+        match self.layout.position {
+            Position::Bottom => [x.floor() as i32, -g, (w.ceil() as i32).max(1), sh + 2 * g],
+            Position::Left | Position::Right => {
+                [-g, y.floor() as i32, sw + 2 * g, (h.ceil() as i32).max(1)]
+            }
+        }
+    }
+
+    fn close_popup(&mut self, w: &mut Window) {
+        if let Some(p) = self.popup.take() {
+            p.close(w);
+            self.publish_semantics(w);
+        }
+    }
+
+    /// The menu of slot `n`, or the dock's own (None: the separator or empty space).
+    fn open_menu(
+        &mut self,
+        w: &mut Window,
+        slot: Option<usize>,
+        serial: Option<u32>,
+        keyboard: bool,
+    ) {
+        self.close_popup(w);
+        if self.look.is_none() {
+            let look = zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus));
+            match look {
+                Ok(l) => self.look = Some(l),
+                Err(e) => {
+                    eprintln!("nidara-shell: no menus: {e}");
+                    return;
+                }
+            }
+        }
+        let item = slot
+            .map(|n| &self.frame.view.items[n])
+            .filter(|i| i.kind != Kind::Separator);
+        let rows = match item {
+            Some(item) => {
+                let app = match &item.kind {
+                    Kind::App { id, .. } => self.frame.catalogue.get(id),
+                    _ => None,
+                };
+                crate::menu::item_menu(
+                    item,
+                    &crate::menu::Context {
+                        app,
+                        titles: &self.frame.titles,
+                        can_launch: self.frame.can_launch,
+                        can_edit_layout: self.frame.can_edit_layout,
+                        can_autostart: self.frame.can_autostart,
+                        can_open_directory: self.frame.can_open_directory,
+                        can_empty_trash: self.frame.trash.is_some_and(|t| !t.partial),
+                        trash_full: self.frame.trash.is_some_and(|t| t.full),
+                    },
+                )
+            }
+            None => crate::menu::dock_menu(&self.frame.prefs, self.frame.can_settings),
+        };
+        if rows.is_empty() {
+            return;
+        }
+        let rect = match (item, slot) {
+            (Some(_), Some(n)) => self.anchor_rect(n),
+            // The dock's own menu opens where it was asked for, along the dock.
+            _ => {
+                let (x, y) = (self.pointer.0 as i32, self.pointer.1 as i32);
+                let (width, height) = (self.layout.size.0 as i32, self.layout.size.1 as i32);
+                let g = POPUP_GAP;
+                if self.layout.position.horizontal() {
+                    [x.clamp(0, width - 1), -g, 1, height + 2 * g]
+                } else {
+                    [-g, y.clamp(0, height - 1), width + 2 * g, 1]
+                }
+            }
+        };
+        let title = item.map_or("Dock", |i| i.label.as_str()).to_string();
+        let anchor = item.map(|i| i.key.clone());
+        let side = self.side();
+        self.popups += 1;
+        let look = self.look.as_mut().unwrap();
+        look.refresh();
+        let opened = Popup::open(
+            w,
+            look,
+            crate::popup::Request {
+                rows: &rows,
+                title: &title,
+                anchor,
+                rect,
+                side,
+                serial,
+                keyboard,
+                ordinal: self.popups,
+            },
+        );
+        match opened {
+            Ok(p) => self.popup = Some(Overlay::Menu(Box::new(p))),
+            Err(e) => eprintln!("nidara-shell: the menu did not open: {e}"),
+        }
+    }
+
+    /// The window chooser over slot `n`: its visible windows, each by its picture and title.
+    fn open_chooser(
+        &mut self,
+        w: &mut Window,
+        slot: usize,
+        windows: Vec<u64>,
+        serial: Option<u32>,
+        keyboard: bool,
+    ) {
+        self.close_popup(w);
+        if self.look.is_none() {
+            match zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus))
+            {
+                Ok(look) => self.look = Some(look),
+                Err(e) => {
+                    eprintln!("nidara-shell: no look for the chooser: {e}");
+                    return;
+                }
+            }
+        }
+        let item = &self.frame.view.items[slot];
+        let icon = match &item.kind {
+            Kind::App { id, .. } => self.frame.icons.get(id).cloned(),
+            _ => None,
+        };
+        let candidates = windows
+            .into_iter()
+            .map(|window| Candidate {
+                window,
+                title: self.frame.titles.get(&window).cloned().unwrap_or_default(),
+            })
+            .collect();
+        let request = crate::chooser::Request {
+            app: item.label.clone(),
+            icon,
+            candidates,
+            anchor: item.key.clone(),
+            rect: self.anchor_rect(slot),
+            side: self.side(),
+            serial,
+            keyboard,
+            first_id: {
+                self.popups += 1;
+                crate::popup::first_id(self.popups)
+            },
+        };
+        self.look.as_mut().unwrap().refresh();
+        match Chooser::open(w, request) {
+            Ok(c) => self.popup = Some(Overlay::Chooser(Box::new(c))),
+            Err(e) => eprintln!("nidara-shell: the chooser did not open: {e}"),
+        }
+    }
+
+    fn popup_event(
+        &mut self,
+        w: &mut Window,
+        outcome: Result<Outcome, String>,
+    ) -> nk_wayland::Result<()> {
+        match outcome {
+            Ok(Outcome::None) => {}
+            Ok(Outcome::Closed) => self.close_popup(w),
+            Ok(Outcome::Chosen(command, serial)) => {
+                self.close_popup(w);
+                self.choose(command, serial, w)?;
+            }
+            Err(e) => {
+                eprintln!("nidara-shell: the menu failed: {e}");
+                self.close_popup(w);
+            }
+        }
+        Ok(())
+    }
+
+    /// A chosen row goes to the hub; what starts something gets a token from the input
+    /// that chose it, and ends the dock's keyboard focus first, as a click does.
+    fn choose(
+        &mut self,
+        command: Command,
+        serial: Option<u32>,
+        w: &mut Window,
+    ) -> nk_wayland::Result<()> {
+        let starts = matches!(
+            command,
+            Command::Launch { .. }
+                | Command::OpenFolder(_)
+                | Command::OpenTrash
+                | Command::DockSettings
+        );
+        if starts || matches!(command, Command::Window { .. } | Command::CloseAll(_)) {
+            self.leave_keyboard(w)?;
+        }
+        let request = Request::Menu {
+            command: command.clone(),
+            token: None,
+        };
+        if starts && let Some(serial) = serial {
+            let target = match &command {
+                Command::Launch { id, .. } => Some(id.trim_end_matches(".desktop").to_string()),
+                _ => None,
+            };
+            match w.request_activation_token(serial, target.as_deref()) {
+                Ok(t) => {
+                    self.pending.insert(t, request);
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("nidara-shell: no activation token ({e:?}); opening without one")
+                }
+            }
+        }
+        let _ = self.hub.send(request);
+        Ok(())
     }
 
     /// Pictures for the minimized slots shown; each answer is one `Event::Capture`. Hyalo
@@ -231,7 +523,7 @@ impl Dock {
             );
             w.set_layer_placement(placement(&self.layout, false))?;
             w.redraw();
-            self.publish_semantics();
+            self.publish_semantics(w);
         }
         Ok(())
     }
@@ -240,12 +532,17 @@ impl Dock {
         let Some(slot) = self.focused_slot() else {
             return Ok(());
         };
-        let Some(nav) = crate::keys::nav(key.sym, key.shift, self.layout.position.horizontal())
-        else {
+        let Some(nav) = crate::keys::nav(key.sym, key.shift, self.layout.position) else {
             return Ok(());
         };
         match nav {
             crate::keys::Nav::Leave => self.leave_keyboard(w)?,
+            // A repeat has no serial: only a real press opens it, with its grab.
+            crate::keys::Nav::Menu => {
+                if let Some(serial) = key.serial {
+                    self.open_menu(w, Some(slot), Some(serial), true);
+                }
+            }
             crate::keys::Nav::Act => {
                 // A repeat has no serial, so no token: only a real press acts.
                 if let Some(serial) = key.serial {
@@ -257,7 +554,7 @@ impl Dock {
                 if let Some(to) = crate::keys::moved(&self.frame.view.items, slot, nav) {
                     self.focus = Some(self.frame.view.items[to].key.clone());
                     w.redraw();
-                    self.publish_semantics();
+                    self.publish_semantics(w);
                 }
             }
         }
@@ -278,13 +575,13 @@ impl Dock {
         }
         self.publish_targets();
         w.redraw();
-        self.publish_semantics();
+        self.publish_semantics(w);
         Ok(())
     }
 
-    fn publish_semantics(&mut self) {
+    fn publish_semantics(&mut self, w: &Window) {
         let focus = self.focused_slot();
-        let tree = crate::semantics::tree(
+        let mut tree = crate::semantics::tree(
             &mut self.ids,
             &crate::semantics::Input {
                 items: &self.frame.view.items,
@@ -297,7 +594,34 @@ impl Dock {
                 trash: self.frame.trash,
             },
         );
-        self.revision += 1;
+        // An open popup's rows join the dock's tree, under its root: the dock's own items
+        // keep their place but lose the focus and their actions while it is open (#971).
+        if let Some(menu) = self.popup.as_mut().and_then(|p| p.semantics(w)) {
+            for node in tree.nodes.values_mut() {
+                node.actions.clear();
+                node.states.focused = false;
+            }
+            let children = menu.nodes[&menu.root].children.clone();
+            tree.nodes
+                .get_mut(&tree.root)
+                .unwrap()
+                .children
+                .extend(children);
+            for (id, node) in menu.nodes {
+                if id != menu.root {
+                    tree.nodes.insert(id, node);
+                }
+            }
+        }
+        let shape: Vec<_> = tree
+            .nodes
+            .values()
+            .map(|n| (n.id, n.role, n.actions.clone()))
+            .collect();
+        if shape != self.shape || self.revision == 0 {
+            self.shape = shape;
+            self.revision += 1;
+        }
         match &self.a11y {
             Some(bridge) => {
                 // Publication receipts are only for checks that wait on them.
@@ -342,6 +666,13 @@ impl Dock {
             let (nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id)) = request else {
                 continue;
             };
+            let activate = matches!(request, nk_a11y::Request::Activate(_));
+            if let Some(popup) = self.popup.as_mut().filter(|p| p.owns(id)) {
+                let outcome = popup.request(id, activate);
+                self.popup_event(w, outcome)?;
+                self.sync_popup(w);
+                continue;
+            }
             let Some(key) = self.ids.key(id).map(str::to_string) else {
                 continue;
             };
@@ -354,10 +685,24 @@ impl Dock {
             } else if self.focus.is_some() {
                 self.focus = Some(key);
                 w.redraw();
-                self.publish_semantics();
+                self.publish_semantics(w);
             }
         }
         Ok(())
+    }
+
+    fn sync_popup(&mut self, w: &mut Window) {
+        let (Some(popup), Some(look)) = (self.popup.as_mut(), self.look.as_mut()) else {
+            return;
+        };
+        match popup.sync(w, look) {
+            Ok(true) => self.publish_semantics(w),
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("nidara-shell: the menu cannot be drawn: {e}");
+                self.close_popup(w);
+            }
+        }
     }
 
     /// Where each minimized window this dock owns goes: its slot, in surface coordinates.
@@ -406,6 +751,11 @@ impl Dock {
                 generation,
                 token: None,
             },
+            Action::Choose(windows) => {
+                let keyboard = self.focus.is_some();
+                self.open_chooser(w, slot, windows, serial, keyboard);
+                return;
+            }
             Action::OpenFolder(uri) => Request::OpenFolder { uri, token: None },
             Action::OpenTrash => Request::OpenTrash { token: None },
             Action::Unavailable => {
@@ -437,6 +787,49 @@ impl Dock {
         let _ = self.hub.send(request);
     }
 
+    /// Middle-click: a new window where the app has one (the menu's own row), else what a
+    /// primary click does.
+    fn middle_click(&mut self, slot: usize, serial: u32, w: &mut Window) -> nk_wayland::Result<()> {
+        let item = &self.frame.view.items[slot];
+        if let Kind::App {
+            id,
+            generation,
+            launchable: true,
+            ..
+        } = &item.kind
+            && self.frame.can_launch
+            && self.frame.catalogue.get(id).is_some_and(|a| a.new_window)
+        {
+            let command = Command::Launch {
+                id: id.clone(),
+                generation: *generation,
+                mode: crate::menu::Launch::NewWindow,
+            };
+            return self.choose(command, Some(serial), w);
+        }
+        self.click(slot, Some(serial), w);
+        Ok(())
+    }
+
+    /// The wheel over an app focuses its windows one by one; elsewhere it does nothing.
+    fn wheel(&mut self, delta: f64) {
+        let Some(slot) = self.layout.hit(self.pointer.0, self.pointer.1) else {
+            self.cycle.reset();
+            return;
+        };
+        let item = &self.frame.view.items[slot];
+        if let Some(id) = self
+            .cycle
+            .scroll(item, self.frame.focused, delta, Instant::now())
+        {
+            let _ = self.hub.send(Request::Window {
+                verb: "focus-window",
+                id,
+                epoch: self.frame.hyalo_epoch,
+            });
+        }
+    }
+
     fn with_token(request: Request, token: Option<String>) -> Request {
         match request {
             Request::Launch { id, generation, .. } => Request::Launch {
@@ -446,6 +839,7 @@ impl Dock {
             },
             Request::OpenFolder { uri, .. } => Request::OpenFolder { uri, token },
             Request::OpenTrash { .. } => Request::OpenTrash { token },
+            Request::Menu { command, .. } => Request::Menu { command, token },
             other => other,
         }
     }
@@ -562,8 +956,17 @@ impl Dock {
 
 impl Application for Dock {
     fn poll_interval_ms(&self) -> u32 {
-        // Everything arrives by Wake; nothing here needs a timer.
-        60_000
+        // Everything arrives by Wake; only an open chooser refreshes its pictures.
+        match self.popup {
+            Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
+            _ => 60_000,
+        }
+    }
+    fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if let Some(Overlay::Chooser(c)) = self.popup.as_mut() {
+            c.refresh(w);
+        }
+        Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
         match event {
@@ -575,9 +978,54 @@ impl Application for Dock {
             Event::Configure => self.apply(w)?,
             Event::Motion(x, y) => self.pointer = (x, y),
             Event::Key(key) => self.key(key, w)?,
-            // The compositor gave the keyboard elsewhere: the roving focus ends with it.
-            Event::Focus(false) => self.leave_keyboard(w)?,
-            Event::PointerLeave => self.pressed = None,
+            // The compositor gave the keyboard elsewhere: the roving focus ends with it. Not
+            // to the dock's own popup, which holds it for as long as it is open.
+            Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
+            Event::PointerLeave => {
+                self.pressed = None;
+                self.middle = None;
+                self.cycle.reset();
+            }
+            Event::Scroll(delta) if !self.frame.hidden && self.popup.is_none() => self.wheel(delta),
+            Event::PopupOverlay { id, event } => {
+                if let Some(popup) = self.popup.as_mut().filter(|p| p.id() == id) {
+                    let outcome = popup.event(w, event);
+                    self.popup_event(w, outcome)?;
+                }
+            }
+            // A press while the popup is open only closes it.
+            Event::Button { pressed: true, .. } if self.popup.is_some() => {
+                self.close_popup(w);
+                self.swallow = true;
+            }
+            Event::Button { pressed: false, .. } if self.swallow => self.swallow = false,
+            Event::Button {
+                button: RIGHT_BUTTON,
+                pressed: true,
+                serial,
+                ..
+            } if !self.frame.hidden => {
+                let slot = self.layout.hit(self.pointer.0, self.pointer.1);
+                self.open_menu(w, slot, Some(serial), false);
+            }
+            Event::Button {
+                button: MIDDLE_BUTTON,
+                pressed: true,
+                ..
+            } if !self.frame.hidden => {
+                self.middle = self.layout.hit(self.pointer.0, self.pointer.1);
+            }
+            Event::Button {
+                button: MIDDLE_BUTTON,
+                pressed: false,
+                serial,
+                ..
+            } => {
+                let here = self.layout.hit(self.pointer.0, self.pointer.1);
+                if let Some(slot) = self.middle.take().filter(|s| Some(*s) == here) {
+                    self.middle_click(slot, serial, w)?;
+                }
+            }
             Event::Button {
                 button: LEFT_BUTTON,
                 pressed: true,
@@ -619,6 +1067,15 @@ impl Application for Dock {
                         None
                     }
                 };
+                let picture = match self.popup.as_mut() {
+                    Some(Overlay::Chooser(c)) if c.captures.contains_key(&id) => {
+                        if c.captured(id, picture) {
+                            self.sync_popup(w);
+                        }
+                        return Ok(());
+                    }
+                    _ => picture,
+                };
                 if self.thumbs.finished(id, picture) {
                     w.redraw();
                 }
@@ -626,6 +1083,7 @@ impl Application for Dock {
             Event::Closed => {}
             _ => {}
         }
+        self.sync_popup(w);
         Ok(())
     }
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {

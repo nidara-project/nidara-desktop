@@ -5,7 +5,8 @@
 use crate::apps::{AppsState, AppsUpdate, Icon, IconJob, TRASH_EMPTY, TRASH_FULL};
 use crate::geometry::BAR_RESERVATION;
 use crate::hyalo::{HyaloUpdate, HyaloWindow};
-use crate::model::{Inputs, Model, View, Window};
+use crate::menu::{Command, Launch};
+use crate::model::{App, Inputs, Model, View, Window};
 use crate::prefs::Prefs;
 use crate::shell1::{self, Status};
 use nk_render::Raster;
@@ -28,6 +29,14 @@ pub struct Frame {
     pub focused: Option<u64>,
     pub hyalo_epoch: u64,
     pub can_launch: bool,
+    /// What the menus may offer: the catalogue's records, window titles, and the services.
+    pub catalogue: Arc<HashMap<String, App>>,
+    pub titles: Arc<HashMap<u64, String>>,
+    pub can_edit_layout: bool,
+    pub can_autostart: bool,
+    pub can_open_directory: bool,
+    /// The Dock page of Settings can be asked for.
+    pub can_settings: bool,
     /// Locked, or a fullscreen window on this dock's output: no dock.
     pub hidden: bool,
     /// The minimized windows whose target this dock publishes.
@@ -52,6 +61,12 @@ impl Frame {
             focused: None,
             hyalo_epoch: 0,
             can_launch: false,
+            catalogue: Default::default(),
+            titles: Default::default(),
+            can_edit_layout: false,
+            can_autostart: false,
+            can_open_directory: false,
+            can_settings: false,
             hidden: false,
             targets: HashSet::new(),
             output_sizes: HashMap::new(),
@@ -89,6 +104,12 @@ pub enum Request {
     },
     /// Keyboard focus to the dock (Shell1 `focus:dock`).
     FocusDock,
+    /// A menu row (menu.rs); `token` from the click or key that chose it, when it starts
+    /// something.
+    Menu {
+        command: Command,
+        token: Option<String>,
+    },
 }
 
 pub enum HubEvent {
@@ -151,6 +172,8 @@ pub struct Hub {
     /// What Shell1 answers from, and its connection for StateChanged.
     status: Arc<Status>,
     shell1: Option<zbus::blocking::Connection>,
+    /// Settings can be reached on the bus (owned or activatable), checked at start.
+    can_settings: bool,
 }
 
 /// Which dock a keyboard-focus request goes to: the focused window's output's, else the
@@ -210,7 +233,14 @@ impl Hub {
             keyboard: (0, String::new()),
             status,
             shell1,
+            can_settings: false,
         }
+    }
+
+    /// Whether `org.nidara.Settings` answers: owned now, or activatable.
+    pub fn with_settings(mut self, reachable: bool) -> Self {
+        self.can_settings = reachable;
+        self
     }
 
     pub fn run(mut self, rx: Receiver<HubEvent>) {
@@ -436,6 +466,14 @@ impl Hub {
             .iter()
             .find(|w| w.window.focused)
             .map(|w| w.window.id);
+        let catalogue: Arc<HashMap<String, App>> =
+            Arc::new(apps.iter().map(|a| (a.id.clone(), a.clone())).collect());
+        let titles: Arc<HashMap<u64, String>> = Arc::new(
+            self.windows
+                .iter()
+                .map(|w| (w.window.id, w.window.title.clone()))
+                .collect(),
+        );
         for dock in self.docks.values() {
             let fullscreen = self
                 .windows
@@ -450,6 +488,12 @@ impl Hub {
                 focused,
                 hyalo_epoch: self.hyalo_epoch,
                 can_launch: self.can("launch"),
+                catalogue: catalogue.clone(),
+                titles: titles.clone(),
+                can_edit_layout: self.can("layout-apps"),
+                can_autostart: self.can("autostart"),
+                can_open_directory: self.can("open-directory"),
+                can_settings: self.can_settings,
                 hidden: self.locked || fullscreen,
                 targets: owners
                     .iter()
@@ -476,6 +520,9 @@ impl Hub {
             Request::Window { verb, id, epoch } => {
                 // A window from an older connection, or gone since: never act on its number.
                 if epoch != self.hyalo_epoch || !self.windows.iter().any(|w| w.window.id == id) {
+                    eprintln!(
+                        "nidara-shell: {verb} {id:x} not sent: the window is gone or from an older Hyalo"
+                    );
                     return;
                 }
                 worker(move || crate::hyalo::act(verb, id));
@@ -498,8 +545,9 @@ impl Hub {
                 let Some((conn, epoch)) = self.service() else {
                     return;
                 };
-                worker(move || launch(&conn, epoch, &id, generation, "activate", &[], token));
+                worker(move || launch(&conn, epoch, &id, generation, "activate", None, &[], token));
             }
+            Request::Menu { command, token } => self.menu(command, token),
             Request::OpenFolder { uri, token } if self.can("open-directory") => {
                 let Some((conn, epoch)) = self.service() else {
                     return;
@@ -541,6 +589,7 @@ impl Hub {
                         &handler,
                         generation,
                         "open",
+                        None,
                         &["trash:///"],
                         token,
                     )
@@ -553,20 +602,144 @@ impl Hub {
     fn service(&self) -> Option<(zbus::blocking::Connection, u64)> {
         Some((self.apps_conn.clone()?, self.apps.as_ref()?.epoch))
     }
+
+    /// A menu row's command. Window verbs go through the same epoch and liveness check
+    /// as a click; everything else names its target by id and generation, which the
+    /// service checks again.
+    fn menu(&self, command: Command, token: Option<String>) {
+        let epoch = self.hyalo_epoch;
+        let window = |verb, id| Request::Window { verb, id, epoch };
+        match command {
+            Command::None => {}
+            Command::Window { verb, id } => self.act(window(verb, id)),
+            Command::CloseAll(ids) => {
+                for id in ids {
+                    self.act(window("close-window", id));
+                }
+            }
+            Command::OpenFolder(uri) => self.act(Request::OpenFolder { uri, token }),
+            Command::OpenTrash => self.act(Request::OpenTrash { token }),
+            Command::Launch {
+                id,
+                generation,
+                mode,
+            } if self.can("launch") => {
+                let Some((conn, epoch)) = self.service() else {
+                    return;
+                };
+                worker(move || {
+                    let (mode, action) = match &mode {
+                        Launch::Activate => ("activate", None),
+                        Launch::NewWindow => ("new-window", None),
+                        Launch::Action(a) => ("action", Some(a.as_str())),
+                    };
+                    launch(&conn, epoch, &id, generation, mode, action, &[], token)
+                });
+            }
+            Command::Pin { id } => {
+                self.edit_layout(&[("Operation", "insert-app"), ("DesktopId", &id)])
+            }
+            Command::Unpin { key } => self.edit_layout(&[("Operation", "remove"), ("Key", &key)]),
+            Command::Autostart {
+                id,
+                generation,
+                enabled,
+            } if self.can("autostart") => {
+                let Some((conn, epoch)) = self.service() else {
+                    return;
+                };
+                worker(move || {
+                    conn.call_method(
+                        Some(crate::apps::DEST),
+                        crate::apps::PATH,
+                        Some(crate::apps::IFACE),
+                        "SetAutostart",
+                        &(epoch, id.as_str(), generation, enabled),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+                });
+            }
+            Command::EmptyTrash => worker(crate::trash::empty),
+            Command::Pref { key, value } => {
+                let Some(conn) = self.apps_conn.clone() else {
+                    return;
+                };
+                worker(move || crate::prefs::apply(&conn, key, &value));
+            }
+            Command::DockSettings => {
+                let Some(conn) = self.apps_conn.clone() else {
+                    return;
+                };
+                worker(move || {
+                    let mut args = vec!["page".to_string(), "dock".to_string()];
+                    if let Some(t) = token {
+                        args.extend(["--xdg-activation-token".to_string(), t]);
+                    }
+                    conn.call_method(
+                        Some("org.nidara.Settings"),
+                        "/org/nidara/Settings",
+                        Some("org.nidara.Settings"),
+                        "Request",
+                        &(args,),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| format!("Settings: {e}"))
+                });
+            }
+            other => eprintln!("nidara-shell: {other:?} is not available now"),
+        }
+    }
+
+    /// One EditLayout against the revision this hub last read: a concurrent edit is a
+    /// Conflict the service reports, never a silent overwrite.
+    fn edit_layout(&self, edit: &[(&str, &str)]) {
+        let (Some((conn, epoch)), Some(apps)) = (self.service(), self.apps.as_ref()) else {
+            return;
+        };
+        if !apps.can("layout-apps") {
+            return;
+        }
+        let revision = apps.layout_revision;
+        let edit: HashMap<String, zbus::zvariant::OwnedValue> = edit
+            .iter()
+            .filter_map(|(k, v)| {
+                zbus::zvariant::OwnedValue::try_from(zbus::zvariant::Value::from(*v))
+                    .ok()
+                    .map(|v| (k.to_string(), v))
+            })
+            .collect();
+        worker(move || {
+            conn.call_method(
+                Some(crate::apps::DEST),
+                crate::apps::PATH,
+                Some(crate::apps::IFACE),
+                "EditLayout",
+                &(epoch, revision, edit),
+            )
+            .map(|_| ())
+            .map_err(|e| format!("EditLayout: {e}"))
+        });
+    }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch(
     conn: &zbus::blocking::Connection,
     epoch: u64,
     id: &str,
     generation: u64,
     mode: &str,
+    action: Option<&str>,
     uris: &[&str],
     token: Option<String>,
 ) -> Result<(), String> {
     use zbus::zvariant::Value as V;
     let mut request: HashMap<&str, V> = HashMap::new();
     request.insert("Mode", mode.into());
+    if let Some(a) = action {
+        request.insert("Action", a.into());
+    }
     if !uris.is_empty() {
         request.insert("Uris", uris.to_vec().into());
     }
@@ -626,6 +799,7 @@ mod tests {
             startup_wm_class: String::new(),
             flatpak_id: String::new(),
             launchable: true,
+            ..Default::default()
         };
         hub.handle(HubEvent::Apps(AppsUpdate::State(AppsState {
             epoch: 1,
@@ -635,6 +809,7 @@ mod tests {
             default_directory: None,
             capabilities: vec![],
             icon_revision: 1,
+            layout_revision: 0,
         })));
         assert!(requested.try_recv().is_err(), "not shown yet: no art");
         let mut w = hw(6, "DP-1", false);

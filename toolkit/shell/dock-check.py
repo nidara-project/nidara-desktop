@@ -28,6 +28,14 @@ def ipc(*args):
     return json.loads(out)
 
 
+def focused_title():
+    """The title of the window Hyalo says holds the focus."""
+    for w in ipc('windows').get('ok', {}).get('windows', []):
+        if w.get('focused'):
+            return w.get('title')
+    return None
+
+
 def until(what, check, timeout=10):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
@@ -69,6 +77,20 @@ app.connect('activate', up)
 app.run()
 """
 
+TWINS = """
+import gi
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk
+app = Gtk.Application(application_id='org.nidara.DockCheckTwins')
+def up(app):
+    for title in ('First twin', 'Second twin'):
+        w = Gtk.ApplicationWindow(application=app, title=title, default_width=360, default_height=240)
+        w.set_child(Gtk.Label(label=title))
+        w.present()
+app.connect('activate', up)
+app.run()
+"""
+
 procs = []
 
 
@@ -88,7 +110,9 @@ def accessibility():
 
 def children(node):
     node.clear_cache()
-    return [node.get_child_at_index(i) for i in range(node.get_child_count())]
+    # A child can go between the count and the fetch (the tree updates under the walk).
+    found = (node.get_child_at_index(i) for i in range(node.get_child_count()))
+    return [c for c in found if c is not None]
 
 
 def dock_node():
@@ -115,6 +139,34 @@ def walk():
                       'focused': states.contains(Atspi.StateType.FOCUSED),
                       'enabled': states.contains(Atspi.StateType.ENABLED)})
     return items
+
+
+def menu_rows():
+    """An open popup's rows, as the dock's tree carries them: (node, what a reader hears)."""
+    dock = dock_node()
+    found = []
+
+    def visit(node, depth):
+        for c in children(node):
+            role = c.get_role_name()
+            if 'menu item' in role:
+                st = c.get_state_set()
+                found.append((c, {'role': role, 'name': c.get_name(),
+                                  'enabled': st.contains(Atspi.StateType.ENABLED),
+                                  'checked': st.contains(Atspi.StateType.CHECKED)}))
+            elif depth < 3:
+                visit(c, depth + 1)
+    if dock:
+        visit(dock, 0)
+    return found
+
+
+def item_point(name):
+    """The middle of a dock item, in global logical pixels."""
+    layer = docks()[0]
+    node = next(n for n in children(dock_node()) if n.get_name() == name)
+    r = node.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+    return layer['x'] + r.x + r.width // 2, layer['y'] + r.y + r.height // 2
 
 
 def shell1(method, args=None, quiet=True):
@@ -172,7 +224,11 @@ def schemas():
 try:
     os.environ['GSETTINGS_SCHEMA_DIR'] = schemas()
     accessibility()
-    start('sessiond', [SESSIOND, '--applications'], XDG_DATA_DIRS=catalogue())
+    # The dock menu writes its preferences through Config1; an unidentified development
+    # binary is External there, so the private session grants the consent gates.
+    subprocess.run(['gsettings', 'set', 'org.nidara.ai', 'allow-computer-control', 'true'], check=True, timeout=5)
+    subprocess.run(['gsettings', 'set', 'org.nidara.ai', 'allow-config-write', 'true'], check=True, timeout=5)
+    start('sessiond', [SESSIOND, '--applications', '--config'], XDG_DATA_DIRS=catalogue())
     def snapshot():
         r = subprocess.run(['busctl', '--user', '--json=short', 'call', 'org.nidara.Applications',
                             '/org/nidara/Applications', 'org.nidara.Applications1', 'GetSnapshot'],
@@ -264,11 +320,65 @@ try:
         for i in (walk() or [])))
     shot(LOG / 'dock-trash-full.png')
     result['trash'] = 'empty, then contains items'
+    # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
+    # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
+    # Config1 and shows what Config1 took.
+    result['menus'] = {}
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        def open_menu(x, y, what):
+            # A hand moves there first: Hyalo ends a closed menu's pointer grab on the first
+            # motion, which the dock then does not see (hyalo shell/mod.rs).
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\nrclick {x} {y}\n')
+            return until(what, lambda: (r := menu_rows()) and r)
+
+        def close_menu():
+            pipe.write('key 1\n')  # Escape
+            until('the menu closes', lambda: not menu_rows())
+
+        rows = open_menu(*item_point('Trash'), 'the Trash menu')
+        shot(LOG / 'dock-menu-trash.png')
+        heard = [r for _, r in rows]
+        empty = next((r for r in heard if r["name"] in ("Vaciar papelera", "Empty trash", "Empty Trash")), None)
+        assert empty, heard
+        assert empty['enabled'], heard
+        result['menus']['trash'] = heard
+        close_menu()
+        rows = open_menu(*item_point('kitty'), 'the kitty menu')
+        shot(LOG / 'dock-menu-app.png')
+        heard = [r for _, r in rows]
+        names = [r['name'] for r in heard]
+        assert names[0] in ('Abrir', 'Open') or 'kitty' in (LOG / 'shell.log').read_text(), heard
+        assert any(n in ('Desanclar del dock', 'Unpin from dock') for n in names), heard
+        result['menus']['app'] = heard
+        close_menu()
+        layer = docks()[0]
+        rows = open_menu(layer['x'] + 3, layer['y'] + layer['height'] // 2, 'the dock menu')
+        shot(LOG / 'dock-menu-dock.png')
+        result['menus']['dock'] = [r for _, r in rows]
+        left = next(n for n, r in rows if r['name'] in ('Izquierda', 'Left'))
+        left.get_action_iface().do_action(0)
+        until('Config1 moves the dock left', lambda: (d := docks()) and d[0]['height'] > d[0]['width'])
+        stored = subprocess.run(['gsettings', 'get', 'org.nidara.dock', 'position'],
+                                capture_output=True, text=True, timeout=5).stdout.strip()
+        assert stored == "'left'", stored
+        until('the menu closed after its choice', lambda: not menu_rows())
+        shot(LOG / 'dock-menu-left.png')
+        result['menus']['chosen'] = 'left, through Config1'
+    gsettings('position', 'bottom')
+    time.sleep(1.0)
     dock = dock_node()
     running = next(n for n in children(dock) if n.get_description() == 'running')
+    # A click focuses the window, or puts it away when it already has the focus (D1).
+    def demo():
+        return next(w for w in ipc('windows')['ok']['windows'] if w.get('title') == 'GTK Demo')
+    had_focus = demo()['focused']
     running.get_action_iface().do_action(0)  # "click": Activate
-    until('the activation reaches the dock', lambda: 'focus-window' in (LOG / 'shell.log').read_text()
-          or 'request failed' in (LOG / 'shell.log').read_text())
+    if had_focus:
+        until('the click puts the focused demo away', lambda: demo()['minimized'])
+        result['activate'] = 'minimized the focused window'
+    else:
+        until('the click focuses the demo', lambda: demo()['focused'])
+        result['activate'] = 'focused the window'
     # Minimized: the window gets its own slot, drawn from its picture (thumbs.rs), and no
     # capture fails on the way.
     # (Hyalo's own `do minimize` is refused to an unidentified caller in this harness: the
@@ -282,6 +392,44 @@ try:
     assert 'no picture of window' not in log and 'window picture failed' not in log, log[-2000:]
     shot(LOG / 'dock-minimized.png')
     result['minimized'] = 'slot with its picture'
+    # The chooser (D2): a click on an app with two visible windows offers both, by picture
+    # and title, as a list of buttons in the dock's tree; choosing one focuses it.
+    start('twins', ['python3', '-I', '-c', TWINS], GDK_BACKEND='wayland',
+          GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
+
+    def twins():
+        return next((n for n in children(dock_node())
+                     if 'twin' in (n.get_name() or '').lower()), None)
+
+    def chooser():
+        for c in children(dock_node()):
+            if c.get_role_name() == 'list':
+                return {b.get_name(): b for b in children(c)}
+        return None
+    until('both twins mapped', lambda: {'First twin', 'Second twin'} <= {
+        w.get('title') for w in ipc('windows')['ok']['windows']})
+    until('the twins in the dock', twins)
+    time.sleep(1)
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        x, y = item_point(twins().get_name())
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\nclick {x} {y}\n')
+        offered = until('the chooser offers both windows',
+                        lambda: (c := chooser()) and {'First twin', 'Second twin'} <= set(c) and c)
+        time.sleep(4)  # the pictures (software Hyalo is slow to draw them)
+        shot(LOG / 'dock-chooser.png')
+        pipe.write('key 1\n')  # Escape
+        until('Escape closes the chooser', lambda: not chooser())
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\nclick {x} {y}\n')
+        try:
+            offered = until('the chooser again', lambda: (c := chooser()) and len(c) == 2 and c)
+        except RuntimeError:
+            shot(LOG / 'dock-chooser-again-failed.png')
+            raise
+        other = next(t for t in ('First twin', 'Second twin') if t != focused_title())
+        offered[other].get_action_iface().do_action(0)
+        until('the chooser closes on a choice', lambda: not chooser())
+        until('the chosen window is focused', lambda: focused_title() == other)
+    result['chooser'] = sorted(offered)
     assert shell.poll() is None, 'the dock exited'
     (LOG / 'layers.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))

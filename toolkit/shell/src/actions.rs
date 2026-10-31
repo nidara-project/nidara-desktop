@@ -12,6 +12,8 @@ pub enum Action {
     Focus(u64),
     Minimize(u64),
     Restore(u64),
+    /// Two or more visible windows: the chooser offers them, most recent first.
+    Choose(Vec<u64>),
     OpenFolder(String),
     OpenTrash,
     /// Nothing can happen, and the dock says why (no launch service yet, a missing app).
@@ -30,12 +32,8 @@ pub fn primary(item: &Item, focused: Option<u64>, can_launch: bool) -> Option<Ac
             // One visible window: focus it, or put it away if it already has the keyboard.
             ([only], _) if focused == Some(*only) => Action::Minimize(*only),
             ([only], _) => Action::Focus(*only),
-            // Two or more (the chooser is D2): the most recent, or the next if it is focused.
-            ([first, second, ..], _) => Action::Focus(if focused == Some(*first) {
-                *second
-            } else {
-                *first
-            }),
+            // Two or more: the chooser (APPLICATIONS1-DOCK.md §8).
+            (windows @ [_, _, ..], _) => Action::Choose(windows.to_vec()),
             ([], Some(newest)) => Action::Restore(*newest),
             ([], None) => match kind {
                 Kind::App {
@@ -89,8 +87,14 @@ mod tests {
         assert_eq!(primary(&item(&[], &[9, 2]), None, true), Some(Restore(9)));
         // One visible plus minimized ones: the visible one keeps the single-window rule.
         assert_eq!(primary(&item(&[4], &[9]), Some(4), true), Some(Minimize(4)));
-        assert_eq!(primary(&item(&[5, 4], &[]), None, true), Some(Focus(5)));
-        assert_eq!(primary(&item(&[5, 4], &[]), Some(5), true), Some(Focus(4)));
+        assert_eq!(
+            primary(&item(&[5, 4], &[]), None, true),
+            Some(Choose(vec![5, 4]))
+        );
+        assert_eq!(
+            primary(&item(&[5, 4], &[]), Some(5), true),
+            Some(Choose(vec![5, 4]))
+        );
         let mut not_launchable = item(&[], &[]);
         not_launchable.kind = Kind::App {
             id: "a.desktop".into(),

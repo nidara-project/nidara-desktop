@@ -47,7 +47,10 @@ impl Tree {
     ) -> Result<(Self, Vec<NodeId>)> {
         Self::action_menu_at(title, metrics, text, style, rows, band_names, 1)
     }
-    fn action_menu_at(
+    /// An action menu whose IDs start at `first`, for an owner whose accessibility provider
+    /// is not a `Tree` (the dock's own semantics): the owner reserves the range so popup
+    /// and parent IDs never collide. A `Tree` owner uses [`Tree::action_menu_child`].
+    pub fn action_menu_at(
         title: &str,
         metrics: Metrics,
         text: TextStyle,

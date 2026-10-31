@@ -18,5 +18,7 @@ nidara-shell-ipc = { path = "../../crates/nidara-shell-ipc" }
 nk-a11y = { path = "../crates/nk-a11y" }
 nk-icons = { path = "../crates/nk-icons" }
 nk-render = { path = "../crates/nk-render" }
-nk-text = { path = "../crates/nk-text" }
+nk-settings = { path = "../settings" }
+nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
 nk-wayland = { path = "../crates/nk-wayland" }
+nk-widgets = { path = "../crates/nk-widgets" }

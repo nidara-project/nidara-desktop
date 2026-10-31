@@ -5,7 +5,6 @@
 use nidara_shell::{apps, dock, hub, hyalo, material, prefs, shell1, trash};
 use nk_wayland::{OutputEvent, OutputId, OutputInfo, Waker};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
@@ -39,20 +38,26 @@ fn spawn<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) 
 }
 
 fn trash_icon() -> Option<Arc<nk_icons::Icon>> {
-    let reference = std::env::var_os("NK_ICON_REFERENCE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let installed = PathBuf::from("/usr/share/nidara/ui/shell/assets/icons/nidara");
-            if installed.is_dir() {
-                installed
-            } else {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../ui/shell/assets/icons/nidara")
-            }
-        });
-    nk_icons::Icons::new("", &[], &reference)
+    nk_icons::Icons::new("", &[], &nidara_shell::paths::icon_reference())
         .and_then(|mut i| i.get("nd-user-trash", 64))
         .map_err(|e| eprintln!("nidara-shell: no Trash icon: {e}"))
         .ok()
+}
+
+/// Settings answers `Request` on the session bus: running now, or activatable.
+fn settings_reachable(conn: &zbus::blocking::Connection) -> bool {
+    const NAME: &str = "org.nidara.Settings";
+    let Ok(bus) = zbus::blocking::fdo::DBusProxy::new(conn) else {
+        return false;
+    };
+    let owned = zbus::names::BusName::try_from(NAME)
+        .ok()
+        .and_then(|n| bus.name_has_owner(n).ok())
+        .unwrap_or(false);
+    owned
+        || bus
+            .list_activatable_names()
+            .is_ok_and(|names| names.iter().any(|n| n.as_str() == NAME))
 }
 
 fn start(
@@ -76,17 +81,19 @@ fn start(
     let (frames_tx, frames_rx) = channel();
     let size = size_of(info);
     let first = Arc::new(hub::Frame::empty(prefs::Prefs::default(), tokens.clone()));
-    let d = dock::Dock::new(
-        frames_rx,
-        requests.clone(),
-        info.name.clone(),
-        size,
-        first,
-        trash.clone(),
-        waker.clone(),
-    );
     let name = info.name.clone();
+    let (requests, trash, dock_waker) = (requests.clone(), trash.clone(), waker.clone());
+    // Made on its own thread: what draws its popups (text shaping) stays there.
     let thread = spawn(&format!("dock-{name}"), move || {
+        let d = dock::Dock::new(
+            frames_rx,
+            requests,
+            name.clone(),
+            size,
+            first,
+            trash,
+            dock_waker,
+        );
         if let Err(e) = dock::run(d, output, source) {
             eprintln!("nidara-shell: the dock on {name} ended: {e}");
         }
@@ -141,6 +148,7 @@ fn main() {
     let shell1 = shell1::serve(status.clone(), hub_tx.clone())
         .map_err(|e| eprintln!("nidara-shell: Shell1 not served: {e}"))
         .ok();
+    let settings = apps_conn.as_ref().is_some_and(settings_reachable);
     let hub = hub::Hub::new(
         prefs::Prefs::default(),
         icon_jobs,
@@ -148,7 +156,8 @@ fn main() {
         tokens.clone(),
         status,
         shell1,
-    );
+    )
+    .with_settings(settings);
     spawn("hub", move || hub.run(hub_rx));
     let t = hub_tx.clone();
     spawn("trash", move || {

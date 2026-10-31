@@ -13,6 +13,25 @@ pub struct App {
     /// Flatpak's own application ID when Origin is flatpak; empty otherwise.
     pub flatpak_id: String,
     pub launchable: bool,
+    /// NewWindowMode is `declared-action` or `relaunch`: 'Nueva ventana' and middle-click.
+    pub new_window: bool,
+    /// The entry's declared desktop actions, in its order.
+    pub actions: Vec<DesktopAction>,
+    pub autostart: Autostart,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopAction {
+    pub id: String,
+    pub name: String,
+}
+
+/// 'Abrir al iniciar sesión' as Applications1 confirms it: never assumed.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Autostart {
+    pub available: bool,
+    pub writable: bool,
+    pub enabled: bool,
 }
 
 /// A stored layout entry with its stable key (APPLICATIONS1-DOCK.md §6).

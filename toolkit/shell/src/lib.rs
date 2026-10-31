@@ -3,13 +3,18 @@
 //! the contract it implements is session/design/APPLICATIONS1-DOCK.md.
 pub mod actions;
 pub mod apps;
+pub mod chooser;
+pub mod cycle;
 pub mod dock;
 pub mod geometry;
 pub mod hub;
 pub mod hyalo;
 pub mod keys;
 pub mod material;
+pub mod menu;
 pub mod model;
+pub mod paths;
+pub mod popup;
 pub mod prefs;
 pub mod semantics;
 pub mod shell1;
