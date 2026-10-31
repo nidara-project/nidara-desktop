@@ -253,6 +253,9 @@ impl Hub {
             HubEvent::Hyalo(HyaloUpdate::Windows { epoch, windows }) => {
                 self.hyalo_epoch = epoch;
                 self.windows = windows;
+                // A window of an app that is not pinned brings that app into the dock: its
+                // art is fetched now, not at the next unrelated catalogue or settings change.
+                self.request_icons();
             }
             HubEvent::Hyalo(HyaloUpdate::Lock(locked)) => {
                 if locked != self.locked {
@@ -585,6 +588,46 @@ mod tests {
             output: output.into(),
             fullscreen: false,
         }
+    }
+    #[test]
+    fn a_new_window_of_an_unpinned_app_fetches_its_icon() {
+        let (jobs, requested) = std::sync::mpsc::channel();
+        let mut hub = Hub::new(
+            Prefs::default(),
+            Some(jobs),
+            None,
+            None,
+            Arc::new(Status::default()),
+            None,
+        );
+        let terminal = crate::model::App {
+            id: "org.gnome.Terminal.desktop".into(),
+            generation: 1,
+            name: "Terminal".into(),
+            startup_wm_class: String::new(),
+            flatpak_id: String::new(),
+            launchable: true,
+        };
+        hub.handle(HubEvent::Apps(AppsUpdate::State(AppsState {
+            epoch: 1,
+            revision: 1,
+            apps: vec![terminal],
+            pins: vec![],
+            default_directory: None,
+            capabilities: vec![],
+            icon_revision: 1,
+        })));
+        assert!(requested.try_recv().is_err(), "not shown yet: no art");
+        let mut w = hw(6, "DP-1", false);
+        w.window.app_id = "org.gnome.Terminal".into();
+        hub.handle(HubEvent::Hyalo(HyaloUpdate::Windows {
+            epoch: 1,
+            windows: vec![w],
+        }));
+        let job = requested
+            .try_recv()
+            .expect("its window opened: the icon is asked for");
+        assert_eq!(job.id, "org.gnome.Terminal.desktop");
     }
     #[test]
     fn keyboard_focus_goes_to_the_focused_windows_dock() {
