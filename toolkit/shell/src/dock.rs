@@ -1864,14 +1864,14 @@ fn follow(snapped: f32, rest: f64, now: f64) -> f32 {
 /// A one-pixel line at device coordinate `at`: the pixel it starts in and the share of its
 /// ink that the next pixel takes. Split evenly by coverage, a line between two pixels is
 /// two faint ones, which reads blurred while it moves; instead it stays whole in one pixel
-/// for most of the way and crosses to the next over the middle `HAND_OVER` of a pixel, so
-/// it moves continuously, never jumps, and is split only briefly.
+/// near either edge and crosses to the next over the middle `HAND_OVER` of a pixel, easing
+/// in and out of the crossing so it never visibly kicks off or lands: it moves continuously,
+/// never jumps, and a line that stops split settles onto a pixel (`settle`).
 fn hand_over(at: f64) -> (f64, f64) {
-    const HAND_OVER: f64 = 0.3;
+    const HAND_OVER: f64 = 0.6;
     let pixel = at.floor();
-    let f = at - pixel;
-    let next = ((f - 0.5) / HAND_OVER + 0.5).clamp(0., 1.);
-    (pixel, next)
+    let t = ((at - pixel - 0.5) / HAND_OVER + 0.5).clamp(0., 1.);
+    (pixel, t * t * (3. - 2. * t))
 }
 
 /// How long the strip must not have moved to count as still.
@@ -1928,14 +1928,16 @@ mod anchor_tests {
         use super::hand_over;
         // On a pixel and up to just before the middle, all of it in one pixel.
         assert_eq!(hand_over(10.), (10., 0.));
-        assert_eq!(hand_over(10.3), (10., 0.));
+        assert_eq!(hand_over(10.2), (10., 0.));
         // Across the middle it crosses over, continuously.
         assert_eq!(hand_over(10.5), (10., 0.5));
         let (_, a) = hand_over(10.45);
         let (_, b) = hand_over(10.55);
         assert!(a < 0.5 && b > 0.5 && b - a < 0.4);
         // Then it is whole in the next pixel, as at the start of the next.
-        assert_eq!(hand_over(10.7), (10., 1.));
+        assert_eq!(hand_over(10.8), (10., 1.));
+        // It eases in: just past the edge of the crossing it has barely begun.
+        assert!(hand_over(10.25).1 < 0.03);
         assert_eq!(hand_over(11.), (11., 0.));
         // The way the mark goes never turns back.
         let mut last = 0.;
