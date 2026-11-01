@@ -2798,7 +2798,11 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   It also installs the native dock at `/usr/bin/nidara-shell`; `org.nidara.dock
   native-preview` swaps it in for the TS dock from the next login (`hyalo/session/start-shell`,
   `toolkit/shell/DOCK.md` §1) — the only way to see the Rust dock outside a nested window
-  before #959 D4.
+  before #959 D4. 🔴 There the dock and the TS shell start together and both claim
+  `org.nidara.Shell`: the dock allows replacement and the TS shell replaces, so the name ends
+  with the TS shell (DOCK.md). An AT-SPI marker per update (`A11Y_PUBLISHED`) flooded the
+  journal there at hundreds of lines a second; it now prints only with `NK_A11Y_TRACE` set,
+  which the nk-* checks set.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
   boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied

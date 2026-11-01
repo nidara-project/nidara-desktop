@@ -1026,7 +1026,8 @@ function exportShellBusName(): void {
     Gio.bus_own_name(
       Gio.BusType.SESSION,
       NIDARA_BUS_NAME,
-      Gio.BusNameOwnerFlags.NONE,
+      // The native dock (Hyalo preview, #959) may have claimed it first; it allows replacement.
+      Gio.BusNameOwnerFlags.REPLACE,
       (conn: Gio.DBusConnection) => {
         try {
           exported.export(conn, NIDARA_BUS_PATH)

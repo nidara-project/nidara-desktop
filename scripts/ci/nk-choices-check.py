@@ -117,6 +117,7 @@ session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 address = session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.a11y.Bus', 'GetAddress',
                            None, GLib.VariantType.new('(s)'), Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
 os.environ['AT_SPI_BUS_ADDRESS'] = address
+os.environ['NK_A11Y_TRACE'] = '1'  # the bridge's A11Y_PUBLISHED marker, off by default
 registry_path = next(p for p in [Path('/usr/lib/at-spi2-registryd'), Path('/usr/libexec/at-spi2-registryd')] if p.exists())
 registry_log = (LOG / 'registry.log').open('w')
 registry = subprocess.Popen([str(registry_path)], stdout=registry_log, stderr=registry_log)

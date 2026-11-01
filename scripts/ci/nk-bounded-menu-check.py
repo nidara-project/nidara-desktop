@@ -79,6 +79,7 @@ def geometry_by_id(text):
 session = Gio.bus_get_sync(Gio.BusType.SESSION, None)
 address = session.call_sync('org.a11y.Bus', '/org/a11y/bus', 'org.a11y.Bus', 'GetAddress', None, GLib.VariantType.new('(s)'), Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
 os.environ['AT_SPI_BUS_ADDRESS'] = address
+os.environ['NK_A11Y_TRACE'] = '1'  # the bridge's A11Y_PUBLISHED marker, off by default
 registry_log = (LOG / 'registry.log').open('w')
 registry = subprocess.Popen(['/usr/lib/at-spi2-registryd'], stdout=registry_log, stderr=registry_log)
 private = Gio.DBusConnection.new_for_address_sync(address, Gio.DBusConnectionFlags.AUTHENTICATION_CLIENT | Gio.DBusConnectionFlags.MESSAGE_BUS_CONNECTION, None, None)
