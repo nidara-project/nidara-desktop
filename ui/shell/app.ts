@@ -113,6 +113,16 @@ function isSettingsClient(c: { class: string; title: string }): boolean {
   return c.class === "nidara-settings" && c.title === "Nidara Settings"
 }
 
+// The Hyalo preview's switch to the native (Rust) dock, org.nidara.dock native-preview:
+// start-shell (hyalo/session/start-shell) reads it at login and starts that dock, so this
+// shell leaves its own out. Hyalo only; a schema without the key (an older install) is off.
+function readNativeDockPreview(): boolean {
+  if (!onHyalo() || !GLib.file_test("/usr/bin/nidara-shell", GLib.FileTest.IS_EXECUTABLE)) return false
+  const schema = Gio.SettingsSchemaSource.get_default()?.lookup("org.nidara.dock", true)
+  if (!schema?.has_key("native-preview")) return false
+  return new Gio.Settings({ settings_schema: schema }).get_boolean("native-preview")
+}
+
 // ── The widget catalogue seam ────────────────────────────────────────────────
 // Settings → Widgets reads the widgets as data through this, never by importing
 // them: a Settings process that imported widgets/ would run a second copy of every
@@ -1126,6 +1136,7 @@ app.start({
       } catch (err) { console.error(`[UI] Failed to init ${ctor.name}:`, err) }
     }
 
+    const nativeDockPreview = readNativeDockPreview()
     const createUI = (monitor: Gdk.Monitor, idx: number) => {
       try {
         // The dock stays clickable through the bar's grab while the app grid is
@@ -1140,17 +1151,20 @@ app.start({
           })
           return docks
         })
-        const dockWin = Dock(monitor)
+        // The Hyalo preview can run the native dock instead (org.nidara.dock native-preview,
+        // read at login by start-shell, which starts it): then this shell draws none.
+        const dockWin = nativeDockPreview ? null : Dock(monitor)
         // Fake AI cursor (created UNMAPPED — zero cost until an action plays)
         const pointerWin = AgentPointer(monitor)
 
         windows.add(barWin);
-        windows.add(dockWin);
+        if (dockWin) windows.add(dockWin);
         windows.add(pointerWin as any);
 
         // Dock rebuild on settings or pinned list change
         let rebuildTimer: number | null = null
         const scheduleDockRebuild = () => {
+          if (nativeDockPreview) return
           if (rebuildTimer) GLib.source_remove(rebuildTimer)
           rebuildTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
             rebuildTimer = null

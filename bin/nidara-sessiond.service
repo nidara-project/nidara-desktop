@@ -10,7 +10,9 @@ StartLimitBurst=5
 [Service]
 Type=dbus
 BusName=org.nidara.Session
-ExecStart=/usr/bin/nidara-sessiond --media --power
+# $NIDARA_SESSIOND_PREVIEW: unset (no word at all) unless the Hyalo preview's start-shell set it
+# to --applications for the native dock (org.nidara.dock native-preview, #959 until D4).
+ExecStart=/usr/bin/nidara-sessiond --media --power $NIDARA_SESSIOND_PREVIEW
 Restart=on-failure
 RestartSec=1
 TimeoutStopSec=3

@@ -138,6 +138,29 @@ export function describeForSettings(): Record<string, object> {
     return schema
 }
 
+/** The Hyalo preview's native dock (/usr/bin/nidara-shell, started by start-shell with
+ *  org.nidara.dock native-preview) writes its own `dock.*` keys from its menus, as the TS
+ *  dock does in-process. Told by the sender's executable — the same cooperative check as
+ *  the Settings name above, not a security boundary (#840). Goes when Config1 moves to
+ *  nidara-sessiond, which authenticates it as the shell (#959). */
+const NATIVE_DOCK = "/usr/bin/nidara-shell"
+function isNativeDock(sender: string): Promise<boolean> {
+    return new Promise(resolve => {
+        Gio.DBus.session.call(
+            "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+            "GetConnectionUnixProcessID", new GLib.Variant("(s)", [sender]),
+            new GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, -1, null,
+            (conn, res) => {
+                try {
+                    const [pid] = conn!.call_finish(res).deepUnpack() as [number]
+                    resolve(GLib.file_read_link(`/proc/${pid}/exe`) === NATIVE_DOCK)
+                } catch {
+                    resolve(false)
+                }
+            })
+    })
+}
+
 export function exportConfigService(): void {
     let exported: any = null
     // The serving process's instance: a client that sees it change knows the server restarted.
@@ -176,7 +199,8 @@ export function exportConfigService(): void {
     /** The gate, the registry's validation and setter; resolves with the error or null. */
     const write = async (sender: string | null, key: string, value: GLib.Variant): Promise<[string, string] | null> => {
         const fromSettings = !!sender && sender === settingsOwner
-        if (!fromSettings && !agentConfig.allowConfigWrite)
+        if (!fromSettings && !agentConfig.allowConfigWrite
+            && !(key.startsWith("dock.") && sender && await isNativeDock(sender)))
             return [`${ERROR}.Denied`, "config writes are disabled — enable them in Settings → AI"]
         // Read-only keys (the ai.* gate itself) are refused by the registry for every caller
         // here; the Settings window that changes them is still the GTK one.

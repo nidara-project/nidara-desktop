@@ -2795,6 +2795,10 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   without their glass, and nothing said so) — and `measure-session.sh`, run once per session, gives the
   like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
   step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
+  It also installs the native dock at `/usr/bin/nidara-shell`; `org.nidara.dock
+  native-preview` swaps it in for the TS dock from the next login (`hyalo/session/start-shell`,
+  `toolkit/shell/DOCK.md` §1) — the only way to see the Rust dock outside a nested window
+  before #959 D4.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
   boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied
