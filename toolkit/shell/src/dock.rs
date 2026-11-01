@@ -321,6 +321,11 @@ impl Dock {
             }
             self.input = input;
         }
+        // The tooltip stays centred on its icon as magnification moves it: the strip
+        // grows centred, so the icon under a still pointer shifts as it grows.
+        if moved {
+            self.follow_tooltip(w);
+        }
         w.redraw();
     }
 
