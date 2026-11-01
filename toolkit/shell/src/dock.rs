@@ -93,6 +93,9 @@ pub struct Dock {
     /// Where the pointer rests, and the tooltip it brought (tooltip.rs).
     hover: crate::tooltip::Hover,
     tooltip: Option<crate::tooltip::Tooltip>,
+    /// Auto-hide's state and slide (autohide.rs), and the placement last sent.
+    hide: crate::autohide::Hide,
+    placed: Option<LayerPlacement>,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
@@ -126,9 +129,9 @@ fn slots(view: &View) -> Vec<Slot> {
 }
 
 /// The keyboard is the dock's only while it holds the roving focus (Shell1 `focus:dock`);
-/// a click never takes it from the app.
-pub fn placement(l: &Layout, keyboard: bool) -> LayerPlacement {
-    let gap = crate::geometry::SCREEN_GAP as i32;
+/// a click never takes it from the app. `gap` is the margin on the anchored edge: the
+/// screen gap, less however far auto-hide has slid the dock out (autohide.rs).
+pub fn placement(l: &Layout, keyboard: bool, gap: i32) -> LayerPlacement {
     let (anchor, margin) = match l.position {
         Position::Bottom => (Edges::BOTTOM, [0, 0, gap, 0]),
         Position::Left => (Edges::LEFT, [0, 0, 0, gap]),
@@ -158,6 +161,7 @@ impl Dock {
         waker: Waker,
     ) -> Self {
         let layout = Self::lay(&frame, output_size);
+        let hide = crate::autohide::Hide::new(frame.prefs.auto_hide);
         Self {
             frames,
             hub,
@@ -196,7 +200,41 @@ impl Dock {
             look_tried: false,
             hover: Default::default(),
             tooltip: None,
+            hide,
+            placed: None,
         }
+    }
+
+    fn hide_delay(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.frame.prefs.hide_delay_ms as u64)
+    }
+
+    /// Send the placement when it changed: the layout, the keyboard, or the slide.
+    fn place(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let p = placement(
+            &self.layout,
+            self.focus.is_some(),
+            crate::autohide::margin(&self.layout, self.hide.slide),
+        );
+        if self.placed.as_ref() != Some(&p) {
+            w.set_layer_placement(p)?;
+            self.placed = Some(p);
+        }
+        Ok(())
+    }
+
+    /// Auto-hide's clock: hide when due unless a popup or the keyboard holds the dock,
+    /// and slide toward where it is wanted.
+    fn slide(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let held = self.popup.is_some() || self.focus.is_some();
+        if self
+            .hide
+            .tick(Instant::now(), held, self.frame.prefs.reduce_motion)
+        {
+            self.place(w)?;
+            self.reshape(w);
+        }
+        Ok(())
     }
 
     fn lay(frame: &Frame, output: (u32, u32)) -> Layout {
@@ -213,11 +251,16 @@ impl Dock {
             output,
             reserved,
         );
-        if frame.prefs.magnification {
+        let mut l = if frame.prefs.magnification {
             envelope(rest, &slots, frame.prefs.max_icon_size, output, reserved)
         } else {
             rest
+        };
+        if frame.prefs.auto_hide {
+            // A dock that hides reserves nothing: windows keep the whole output.
+            l.exclusive_zone = 0;
         }
+        l
     }
 
     /// Magnify around the pointer as things stand, and send the input region it covers.
@@ -239,6 +282,10 @@ impl Dock {
         }
         let input = if self.frame.hidden {
             vec![]
+        } else if self.hide.out() {
+            // Out of sight: only the strip along the screen edge calls it back.
+            let m = crate::autohide::margin(&self.layout, self.hide.slide);
+            vec![crate::autohide::band(&self.layout, m)]
         } else {
             self.shown.input(&slots)
         };
@@ -328,12 +375,17 @@ impl Dock {
             );
             self.focus = None;
         }
-        let next = Self::lay(&self.frame, self.output_size);
-        let keyboard = self.focus.is_some();
-        if placement(&next, keyboard) != placement(&self.layout, had_keyboard) {
-            w.set_layer_placement(placement(&next, keyboard))?;
+        let now = Instant::now();
+        self.hide
+            .set_auto(self.frame.prefs.auto_hide, self.hide_delay(), now);
+        match (had_keyboard, self.focus.is_some()) {
+            (false, true) => self.hide.reveal(),
+            (true, false) => self.hide.release(self.hide_delay(), now),
+            _ => {}
         }
-        self.layout = next;
+        self.layout = Self::lay(&self.frame, self.output_size);
+        self.place(w)?;
+        self.slide(w)?;
         self.reshape(w);
         self.follow_tooltip(w);
         self.follow_popup(w);
@@ -500,6 +552,7 @@ impl Dock {
         if let Some(p) = self.popup.take() {
             p.close(w);
             self.publish_semantics(w);
+            self.hide.release(self.hide_delay(), Instant::now());
         }
     }
 
@@ -743,7 +796,8 @@ impl Dock {
                 "nidara-shell: the dock on {} lets the keyboard go",
                 self.output_name
             );
-            w.set_layer_placement(placement(&self.layout, false))?;
+            self.place(w)?;
+            self.hide.release(self.hide_delay(), Instant::now());
             w.redraw();
             self.publish_semantics(w);
         }
@@ -1302,6 +1356,11 @@ impl Application for Dock {
         if self.presence != self.presence_target {
             return crate::attention::FRAME.as_millis() as u32;
         }
+        // Auto-hide: a frame while it slides, else wake when the hide is due.
+        let base = match self.hide.wait(Instant::now(), crate::attention::FRAME) {
+            Some(wait) => base.min(wait.as_millis() as u32 + 1),
+            None => base,
+        };
         // A pending tooltip wakes the loop when its dwell is over.
         match self
             .hover
@@ -1323,6 +1382,7 @@ impl Application for Dock {
             w.redraw();
         }
         self.ease(w);
+        self.slide(w)?;
         self.show_tooltip(w);
         self.sync_tooltip(w);
         Ok(())
@@ -1342,6 +1402,10 @@ impl Application for Dock {
             Event::Configure => self.apply(w)?,
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
+                if !self.frame.hidden {
+                    self.hide.enter();
+                    self.slide(w)?;
+                }
                 if self.layout.mag.is_some() {
                     self.presence_target = if self.frame.hidden { 0. } else { 1. };
                     self.ease(w);
@@ -1354,6 +1418,7 @@ impl Application for Dock {
             // to the dock's own popup, which holds it for as long as it is open.
             Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
             Event::PointerLeave => {
+                self.hide.leave(self.hide_delay(), Instant::now());
                 self.presence_target = 0.;
                 self.presence_at = Instant::now();
                 self.hover.over(None, Instant::now());
@@ -1538,7 +1603,11 @@ impl Application for Dock {
 /// One dock's whole life on its own thread; returns when its surface closes or the hub
 /// drops it.
 pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Result<()> {
-    let p = placement(&dock.layout, false);
+    let p = placement(
+        &dock.layout,
+        false,
+        crate::autohide::margin(&dock.layout, dock.hide.slide),
+    );
     nk_wayland::run_layer(
         dock,
         Options {

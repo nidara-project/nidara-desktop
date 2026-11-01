@@ -4,6 +4,7 @@
 pub mod actions;
 pub mod apps;
 pub mod attention;
+pub mod autohide;
 pub mod chooser;
 pub mod cycle;
 pub mod dock;

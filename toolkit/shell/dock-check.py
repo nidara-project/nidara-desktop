@@ -381,6 +381,30 @@ try:
         pipe.write(f'move {x} {layer["y"] - 300}\n')
         until('kitty back at rest', lambda: extent('kitty') == rest)
     result['magnification'] = {'rest': rest, 'grown': grown}
+    # Auto-hide (D2): on, the dock slides out past the screen edge once the pointer is
+    # away; the pointer at that edge, along the dock, brings it back; away again, it hides
+    # after the delay; off, it stays.
+    placed = docks()[0]
+    edge = placed['y'] + placed['height'] + 4  # the screen gap below the surface
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        gsettings('hide-delay', '300')
+        gsettings('auto-hide', 'true')
+        out = until('the dock slides out', lambda: (d := docks()[0])['y'] >= placed['y'] + 40 and d)
+        time.sleep(.6)  # settled
+        out = docks()[0]
+        assert out['y'] + out['height'] > edge, (placed, out)
+        shot(LOG / 'dock-hidden.png')
+        mid = placed['x'] + placed['width'] // 2
+        pipe.write(f'move {mid} {edge - 1}\nmove {mid + 1} {edge - 1}\n')
+        until('the screen edge brings it back', lambda: docks()[0]['y'] == placed['y'])
+        time.sleep(.4)
+        shot(LOG / 'dock-revealed.png')
+        pipe.write(f'move {mid} {placed["y"] - 300}\n')
+        until('it hides again after the delay', lambda: docks()[0]['y'] == out['y'])
+        gsettings('auto-hide', 'false')
+        gsettings('hide-delay', '500')
+        until('off: the dock stays', lambda: docks()[0]['y'] == placed['y'])
+    result['auto_hide'] = {'rest_y': placed['y'], 'out_y': out['y']}
     # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
     # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
     # Config1 and shows what Config1 took.

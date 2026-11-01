@@ -137,6 +137,16 @@ an exponential approach with a 60 ms time constant (snapped under reduced motion
 100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
 rects.
 
+**Auto-hide (D2).** With `auto-hide` on the dock reserves nothing (exclusive zone 0)
+and slides out past its screen edge once the pointer has been gone `hide-delay` ms
+(`autohide.rs`). It slides as the TS dock did, by the layer's margin on its anchored
+edge, eased with an 80 ms time constant (snapped under reduced motion), so the surface
+and its layout never change for it. Once out, its input region is only a 2 px strip
+along the screen edge, as long as the glass: the pointer pressed against that edge
+brings it back. An open menu, the chooser or the keyboard (Shell1 `focus:dock`) keeps
+it out until they let go, and the delay starts again from then. Turning the
+preference off brings it back. A fullscreen window hides it either way.
+
 **Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
 (`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the
