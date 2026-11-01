@@ -21,6 +21,7 @@ pub mod prefs;
 pub mod resize;
 pub mod semantics;
 pub mod shell1;
+pub mod spring;
 pub mod thumbs;
 pub mod tooltip;
 pub mod trash;

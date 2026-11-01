@@ -11,6 +11,7 @@ use crate::hub::{Frame, Request};
 use crate::menu::Command;
 use crate::model::{Item, Kind, View};
 use crate::popup::{Look, Outcome, Overlay, Popup};
+use crate::spring::Spring;
 use nk_render::{Canvas, ImageFit, Raster, rgba};
 use nk_text::{Rect, TextBackend};
 use nk_wayland::{
@@ -42,7 +43,7 @@ pub struct Dock {
     /// What is drawn, hit and given to the screen reader now: `layout` magnified around
     /// the pointer, `presence` of the way in (geometry.rs `magnify`).
     shown: Layout,
-    presence: f64,
+    presence: Spring,
     presence_target: f64,
     presence_at: Instant,
     /// The input region last sent: the glass and the icons that grew out of it.
@@ -105,8 +106,6 @@ pub struct Dock {
 pub const THUMB_SIDE: u32 = 256;
 /// The reader's bounds follow magnification at most this often while it moves.
 const SEMANTICS_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
-/// Magnification's easing time constant, seconds: settled in about a quarter second.
-const EASE: f64 = 0.06;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
 /// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
@@ -171,7 +170,7 @@ impl Dock {
             output_size,
             frame,
             shown: layout.clone(),
-            presence: 0.,
+            presence: Spring::default(),
             presence_target: 0.,
             presence_at: Instant::now(),
             input: vec![],
@@ -288,7 +287,9 @@ impl Dock {
     /// Magnify around the pointer as things stand, and send the input region it covers.
     fn reshape(&mut self, w: &mut Window) {
         let slots = slots(&self.frame.view);
-        let shown = self.layout.magnify(&slots, self.pointer, self.presence);
+        let shown = self
+            .layout
+            .magnify(&slots, self.pointer, self.presence.value.max(0.));
         let moved = shown.rects != self.shown.rects;
         self.shown = shown;
         if w.size() != self.layout.size {
@@ -296,7 +297,7 @@ impl Dock {
         }
         let now = Instant::now();
         if moved
-            && (self.presence == self.presence_target
+            && (self.presence.value == self.presence_target
                 || now.saturating_duration_since(self.semantics_at) >= SEMANTICS_EVERY)
         {
             self.semantics_at = now;
@@ -309,7 +310,10 @@ impl Dock {
             let m = crate::autohide::margin(&self.layout, self.hide.slide);
             vec![crate::autohide::band(&self.layout, m)]
         } else {
-            self.shown.input(&slots)
+            // What is drawn, and the reach beside the resting glass that magnifies first.
+            let mut input = self.shown.input(&slots);
+            input.extend(self.layout.reach());
+            input
         };
         if input != self.input {
             if let Err(e) = w.set_input_region(Some(&input)) {
@@ -317,31 +321,30 @@ impl Dock {
             }
             self.input = input;
         }
+        // The tooltip stays centred on its icon as magnification moves it: the strip
+        // grows centred, so the icon under a still pointer shifts as it grows.
+        if moved {
+            self.follow_tooltip(w);
+        }
         w.redraw();
     }
 
-    /// Magnification eases in under the pointer and out when it leaves (the TS dock's
-    /// spring, settled); reduced motion keeps the enlargement as a state change.
+    /// Magnification eases in under the pointer and out when it leaves, on the TS dock's
+    /// spring (spring.rs); reduced motion keeps the enlargement as a state change.
     fn ease(&mut self, w: &mut Window) {
         let now = Instant::now();
         let dt = now
             .saturating_duration_since(self.presence_at)
             .as_secs_f64();
         self.presence_at = now;
-        if self.presence == self.presence_target {
+        if self.presence.value == self.presence_target {
             return;
         }
-        self.presence = if self.frame.prefs.reduce_motion {
-            self.presence_target
+        if self.frame.prefs.reduce_motion {
+            self.presence.snap(self.presence_target);
         } else {
-            let next =
-                self.presence + (self.presence_target - self.presence) * (1. - (-dt / EASE).exp());
-            if (next - self.presence_target).abs() < 0.01 {
-                self.presence_target
-            } else {
-                next
-            }
-        };
+            self.presence.advance(self.presence_target, dt);
+        }
         self.reshape(w);
     }
 
@@ -451,16 +454,28 @@ impl Dock {
         }
     }
 
-    /// Slot `n`'s place along the dock, across the whole capsule and a gap beyond it, so a
-    /// popup opens clear of the capsule rather than over its edge.
+    /// Slot `n`'s place along the dock, from the screen edge to a gap beyond whichever
+    /// reaches further out, the capsule or the icon as magnified now: a popup opens clear
+    /// of the capsule at rest and keeps the same gap over a grown icon, as the TS dock's
+    /// do from the icon itself. Across the whole surface instead, it kept the gap of the
+    /// largest icon the surface has room for, however small the icon was.
     fn anchor_rect(&self, n: usize) -> [i32; 4] {
         let [x, y, w, h] = self.shown.rects[n];
+        let [gx, gy, gw, _] = self.shown.glass;
         let (sw, sh) = (self.shown.size.0 as i32, self.shown.size.1 as i32);
         let g = POPUP_GAP;
         match self.layout.position {
-            Position::Bottom => [x.floor() as i32, -g, (w.ceil() as i32).max(1), sh + 2 * g],
-            Position::Left | Position::Right => {
-                [-g, y.floor() as i32, sw + 2 * g, (h.ceil() as i32).max(1)]
+            Position::Bottom => {
+                let top = y.min(gy).floor() as i32 - g;
+                [x.floor() as i32, top, (w.ceil() as i32).max(1), sh - top]
+            }
+            Position::Left => {
+                let right = (x + w).max(gx + gw).ceil() as i32 + g;
+                [0, y.floor() as i32, right, (h.ceil() as i32).max(1)]
+            }
+            Position::Right => {
+                let left = x.min(gx).floor() as i32 - g;
+                [left, y.floor() as i32, sw - left, (h.ceil() as i32).max(1)]
             }
         }
     }
@@ -633,11 +648,19 @@ impl Dock {
             _ => {
                 let (x, y) = (self.pointer.0 as i32, self.pointer.1 as i32);
                 let (width, height) = (self.layout.size.0 as i32, self.layout.size.1 as i32);
+                let [gx, gy, gw, _] = self.shown.glass;
                 let g = POPUP_GAP;
-                if self.layout.position.horizontal() {
-                    [x.clamp(0, width - 1), -g, 1, height + 2 * g]
-                } else {
-                    [-g, y.clamp(0, height - 1), width + 2 * g, 1]
+                // From the screen edge to a gap beyond the capsule, as an item's.
+                match self.layout.position {
+                    Position::Bottom => {
+                        let top = gy.floor() as i32 - g;
+                        [x.clamp(0, width - 1), top, 1, height - top]
+                    }
+                    Position::Left => [0, y.clamp(0, height - 1), (gx + gw).ceil() as i32 + g, 1],
+                    Position::Right => {
+                        let left = gx.floor() as i32 - g;
+                        [left, y.clamp(0, height - 1), width - left, 1]
+                    }
                 }
             }
         };
@@ -1405,7 +1428,7 @@ impl Application for Dock {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
         };
-        if self.presence != self.presence_target {
+        if self.presence.value != self.presence_target {
             return crate::attention::FRAME.as_millis() as u32;
         }
         // Auto-hide: a frame while it slides, else wake when the hide is due.
@@ -1467,7 +1490,13 @@ impl Application for Dock {
                     self.slide(w)?;
                 }
                 if self.layout.mag.is_some() {
-                    self.presence_target = if self.frame.hidden { 0. } else { 1. };
+                    let target = if self.frame.hidden { 0. } else { 1. };
+                    // The clock starts with the change: measured from the last settled
+                    // frame, the first step spanned the whole pause and landed at once.
+                    if target != self.presence_target {
+                        self.presence_target = target;
+                        self.presence_at = Instant::now();
+                    }
                     self.ease(w);
                     self.reshape(w);
                 }
@@ -1528,7 +1557,12 @@ impl Application for Dock {
                 ..
             } if !self.frame.hidden => {
                 let slot = self.shown.hit(self.pointer.0, self.pointer.1);
-                self.open_menu(w, slot, Some(serial), false);
+                // Off an item, only the glass opens the dock's menu, not the reach beside it.
+                let [gx, gy, gw, gh] = self.shown.glass;
+                let (px, py) = self.pointer;
+                if slot.is_some() || (px >= gx && px < gx + gw && py >= gy && py < gy + gh) {
+                    self.open_menu(w, slot, Some(serial), false);
+                }
             }
             Event::Button {
                 button: MIDDLE_BUTTON,

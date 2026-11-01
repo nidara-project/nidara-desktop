@@ -136,10 +136,23 @@ the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons t
 dock (at most a third of the output) and slack at both ends of the main axis, so a grown
 icon never needs a new surface size; the exclusive zone stays the rest capsule's. Only
 the glass and the grown icons take input (the input region follows the strip), so the
-envelope's empty room passes clicks through. Positions are anchored at the pointer
-within its rest slot: the item under the pointer stays under it as the strip grows, so a
-point measured at rest still lands on its item. Presence eases in on entry and out on leave,
-an exponential approach with a 60 ms time constant (snapped under reduced motion); the reader's bounds follow what is drawn, throttled to
+envelope's empty room passes clicks through, except a **reach** beside the resting glass,
+at its height, three sigmas long (where the bell is down to about 1 %): there the pointer
+coming in from a side already grows the end icons, as on the TS dock (which took the
+pointer 250 px past each end). A press there does nothing; only the glass opens the dock
+menu. The strip stays **centred** where it rests and grows the same on both sides,
+whichever side the pointer comes from, as on the TS dock (owner, 2026-11-01). It was
+anchored at the pointer until then: it grew only away from it, followed the pointer out
+by a side and jumped back to the middle once the magnification eased out. Centred, the
+item under the pointer still stays under it (the bell grows it more than its neighbours
+push it), which the unit tests check at both ends and in the middle. Presence eases in on entry and out on leave on
+the TS dock's spring (`spring.rs`: stiffness 320, damping 38, from rest, no overshoot;
+snapped under reduced motion) at the TS dock's speed, 2.4× wall time (`SIM_SPEED`, so
+mostly there in 125 ms), its clock started with the change and a frame advancing at most
+1/25 s of it (`MAX_DT`). At the nested session's 25–30 frames a second that cap slows it
+about threefold, as it would the TS dock; at 144 Hz it never bites. The 60 ms exponential it replaced started at full speed,
+and its first step was measured from the last settled frame, so it landed at once
+(owner, 2026-11-01); the reader's bounds follow what is drawn, throttled to
 100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
 rects.
 
@@ -177,7 +190,9 @@ makes the delay sensitive, and switching it off brings the dock back.
 **Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
 (`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the
-tooltip follows the grown icon. When the compositor dismisses it the dock retires the
+tooltip keeps a fixed gap over the grown icon (popups anchor from the screen edge to
+`POPUP_GAP` past the icon or the capsule, whichever reaches further), following it frame by frame as magnification moves it (the strip grows
+centred, so the icon under a still pointer shifts). When the compositor dismisses it the dock retires the
 popup at once, or the next menu would find a stale parent.
 
 Fit (contract §8): with L the allowed main-axis length (output minus 2 × gap, and for a

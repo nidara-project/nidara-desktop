@@ -84,6 +84,10 @@ pub struct Mag {
 /// The TS dock's bell width, in slots, and how much a separator widens at its peak.
 pub const SIGMA_SLOTS: f64 = 1.1;
 const SEPARATOR_GROWTH: f64 = 0.4;
+/// How far past each end of the glass the pointer already magnifies, in sigmas: where the
+/// bell has fallen to about 1 %. The TS dock took the pointer 250 px past each end, so its
+/// icons start growing as the pointer comes in from a side, before it reaches one.
+const REACH_SIGMAS: f64 = 3.;
 
 /// `output` is the output's logical size; `reserved_top` what a side dock must stay below.
 pub fn layout(
@@ -242,7 +246,10 @@ pub fn envelope(
     if m.amp < 1e-3 {
         return l;
     }
-    let ext = (extra / 2. * m.amp).min(slack).ceil();
+    // Room for the growth, and for the reach the pointer magnifies from beside the glass.
+    let ext = (extra / 2. * m.amp + REACH_SIGMAS * m.sigma)
+        .min(slack)
+        .ceil();
     let head = (grow * m.amp).ceil();
     let (ox, oy) = match l.position {
         Position::Bottom => (ext, head),
@@ -267,9 +274,9 @@ pub fn envelope(
 
 impl Layout {
     /// What is drawn and hit now: the resting layout magnified around the pointer `p`
-    /// (surface coordinates), `presence` 0..1 of the way in. The slot under the pointer
-    /// keeps the pointer where it is in it; its neighbours make room on both sides, inside
-    /// the surface. Icons grow from their edge-side base. Order never changes.
+    /// (surface coordinates), `presence` 0..1 of the way in. The strip stays centred where
+    /// it rests and grows the same on both sides, inside the surface. Icons grow from their
+    /// edge-side base. Order never changes.
     pub fn magnify(&self, slots: &[Slot], p: (f64, f64), presence: f64) -> Layout {
         let Some(m) = self.mag.filter(|_| presence > 0.) else {
             return self.clone();
@@ -280,30 +287,15 @@ impl Layout {
         let g = growth(self, slots, &m, pm, presence.min(1.));
         let lens: Vec<f64> = self.hits.iter().map(|r| along(r).1).collect();
         let grown: Vec<f64> = lens.iter().zip(&g).map(|(l, g)| l * g).collect();
-        // The slot under the pointer, or the nearest: the pointer keeps its place in it.
-        let k = self
-            .hits
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                let d = |r: &[f64; 4]| {
-                    let (s, l) = along(r);
-                    (pm - s.clamp(pm - l, pm))
-                        .abs()
-                        .min((s + l / 2. - pm).abs())
-                        + if pm >= s && pm < s + l { 0. } else { 1e6 }
-                };
-                d(a).partial_cmp(&d(b)).unwrap()
-            })
-            .map_or(0, |(n, _)| n);
-        let (sk, lk) = along(&self.hits[k]);
-        let f = ((pm - sk) / lk).clamp(0., 1.);
+        // Centred on the resting strip, as on the TS dock: it grows the same on both sides
+        // whichever side the pointer comes from (owner, 2026-11-01). Anchored at the
+        // pointer instead, it grew only away from it, followed it out by a side and jumped
+        // back to the middle once the magnification eased out.
+        let first_start = along(&self.hits[0]).0;
+        let mid = first_start + lens.iter().sum::<f64>() / 2.;
         let mut starts = vec![0.; lens.len()];
-        starts[k] = pm - f * grown[k];
-        for n in (0..k).rev() {
-            starts[n] = starts[n + 1] - grown[n];
-        }
-        for n in k + 1..lens.len() {
+        starts[0] = mid - grown.iter().sum::<f64>() / 2.;
+        for n in 1..lens.len() {
             starts[n] = starts[n - 1] + grown[n - 1];
         }
         let (g0, glen) = along(&self.glass);
@@ -380,6 +372,27 @@ impl Layout {
                 .map(|(r, _)| px(r)),
         );
         out
+    }
+
+    /// Beside the resting glass, at its height: where the pointer, coming in from a side,
+    /// already magnifies (`REACH_SIGMAS`). Inside the surface; none without magnification.
+    pub fn reach(&self) -> Option<[i32; 4]> {
+        let m = self.mag?;
+        let r = REACH_SIGMAS * m.sigma;
+        let [x, y, w, h] = self.glass;
+        let (sw, sh) = (self.size.0 as f64, self.size.1 as f64);
+        let (x0, y0, x1, y1) = if self.position.horizontal() {
+            ((x - r).max(0.), y, (x + w + r).min(sw), y + h)
+        } else {
+            (x, (y - r).max(0.), x + w, (y + h + r).min(sh))
+        };
+        let (x0, y0) = (x0.floor(), y0.floor());
+        Some([
+            x0 as i32,
+            y0 as i32,
+            x1.ceil() as i32 - x0 as i32,
+            y1.ceil() as i32 - y0 as i32,
+        ])
     }
 
     /// The slot under a surface point, if any.
@@ -539,6 +552,67 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn it_grows_centred_and_the_reach_magnifies() {
+        let slots = vec![Slot::Icon; 8];
+        for pos in [Position::Bottom, Position::Left, Position::Right] {
+            let rest = layout(&slots, 64, pos, (1920, 1080), BAR_RESERVATION);
+            let e = envelope(rest, &slots, 128, (1920, 1080), BAR_RESERVATION);
+            let h = pos.horizontal();
+            let along = |r: [f64; 4]| if h { (r[0], r[2]) } else { (r[1], r[3]) };
+            let (gs, gl) = along(e.glass);
+            let (first, _) = along(e.hits[0]);
+            let (ls, ll) = along(e.hits[7]);
+            let sigma = e.mag.unwrap().sigma;
+            let at = |m: f64| {
+                let c = if h { e.glass[1] } else { e.glass[0] } + 1.;
+                if h { (m, c) } else { (c, m) }
+            };
+            // The reach: beside the glass, inside the surface, at its height.
+            let [rx, ry, rw, rh] = e.reach().unwrap().map(f64::from);
+            let (r0, rl) = if h { (rx, rw) } else { (ry, rh) };
+            assert!(r0 < gs - sigma && r0 + rl > gs + gl + sigma, "{pos:?}");
+            assert!(
+                rx >= 0. && ry >= 0. && rx + rw <= e.size.0 as f64 && ry + rh <= e.size.1 as f64
+            );
+            let centre = |m: &Layout| {
+                let (s0, _) = along(m.hits[0]);
+                let (s7, l7) = along(m.hits[7]);
+                (s0 + s7 + l7) / 2.
+            };
+            let rest_centre = (first + ls + ll) / 2.;
+            for p in [
+                gs - sigma,
+                first + 3.,
+                rest_centre + 20.,
+                ls + ll - 3.,
+                gs + gl + sigma,
+                gs + gl + 2. * sigma,
+            ] {
+                for presence in [1., 0.5, 1e-9] {
+                    // Wherever the pointer is, the strip grows the same on both sides.
+                    let m = e.magnify(&slots, at(p), presence);
+                    assert!(
+                        (centre(&m) - rest_centre).abs() < 1e-6,
+                        "{pos:?} {p} {presence}"
+                    );
+                }
+                // And as it settles, every item is back where it rests: no jump at the end.
+                let m = e.magnify(&slots, at(p), 1e-9);
+                for n in 0..8 {
+                    let (a, b) = (m.rects[n], e.rects[n]);
+                    assert!(
+                        (0..4).all(|i| (a[i] - b[i]).abs() < 1e-6),
+                        "{pos:?} {p} {n}"
+                    );
+                }
+            }
+            // A sigma out from a side, the end icon already grows.
+            let m = e.magnify(&slots, at(gs - sigma), 1.);
+            assert!(m.rects[0][2] > 64. + 1., "{pos:?}");
         }
     }
 }
