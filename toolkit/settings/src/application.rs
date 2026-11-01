@@ -57,6 +57,8 @@ struct View {
     results: Option<Results>,
     results_cache: Option<(String, Vec<Match>)>,
     selected: String,
+    /// The manifest page mounted now (`routing::MANIFEST`).
+    mounted: String,
 }
 impl View {
     fn new(exports: Exports, appearance: Appearance) -> Result<Self> {
@@ -121,6 +123,7 @@ impl View {
             results: None,
             results_cache: None,
             selected: "appearance".into(),
+            mounted: String::new(),
         })
     }
     fn status(&mut self, text: &str) -> Result<()> {
@@ -140,10 +143,16 @@ impl View {
             .mount
             .checked_add(1)
             .ok_or("page mount token exhausted")?;
+        // The selected page when it is drawn from its manifest; Appearance otherwise.
+        let id = if routing::MANIFEST.contains(&self.selected.as_str()) {
+            self.selected.clone()
+        } else {
+            "appearance".to_owned()
+        };
         let page = self
             .exports
-            .page("appearance")
-            .ok_or("Appearance manifest missing")?;
+            .page(&id)
+            .ok_or_else(|| format!("{id} manifest missing"))?;
         let replacement = Mounted::build(
             Host {
                 tree: &mut self.shell.tree,
@@ -170,11 +179,12 @@ impl View {
                 modal: None,
             })?;
         }
-        self.shell.selected(&self.exports, "appearance")?;
+        self.shell.selected(&self.exports, &id)?;
+        self.mounted = id;
         self.status("")
     }
     fn notices(&mut self, editor: &mut dyn Editor, notices: &[Notice]) -> Result<()> {
-        if self.selected == "appearance"
+        if routing::MANIFEST.contains(&self.selected.as_str())
             && notices.contains(&Notice::Ready)
             && editor.session().available()
             && self.results.is_none()
@@ -195,7 +205,7 @@ impl View {
                 notices,
             )?;
         }
-        if self.selected != "appearance" {
+        if !routing::MANIFEST.contains(&self.selected.as_str()) {
             return Ok(());
         }
         if let Some(Notice::Error(error)) =
@@ -751,11 +761,13 @@ impl App {
             self.view.selected = page.clone();
             return self.view.show_results(&mut self.client, true);
         }
-        if page == "appearance" {
+        if routing::MANIFEST.contains(&page.as_str()) {
             self.view.selected = page.clone();
             // Before Config1's snapshot there is nothing to draw yet; the first mount comes
             // with it, and the page selected here is the one it shows.
-            if (self.view.results.is_some() || self.view.page.is_none())
+            if (self.view.results.is_some()
+                || self.view.page.is_none()
+                || self.view.mounted != page)
                 && self.client.session().available()
             {
                 self.view.mount(&mut self.client)?;

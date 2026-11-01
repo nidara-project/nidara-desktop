@@ -1,4 +1,4 @@
-# The Rust dock, D1 (#959)
+# The Rust dock, D1–D2 (#959)
 
 **Status: DESIGN, reviewed by Codex (Palomar #959 #741), 2026-10-31.** The owner authorized D1 in Claude's chat
 ("fusiona A1 y empieza D1"). The contract it implements is
@@ -9,9 +9,14 @@ wins and this file is wrong.
 D1 is the visible baseline: one dock per output with pins, running apps, minimized
 windows and Trash; Files as the default directory handler; click to launch, focus,
 minimize and restore; the fixed margin and uniform shrink; keyboard and AT-SPI;
-`Shell1` `focus:dock`. It has **no** foreground usage, attention, Unity counts,
-magnification, menus, thumbnail chooser, drag and drop or preferences page (D2/D3), and
-no Apps launcher (D4).
+`Shell1` `focus:dock`.
+
+D2 adds what the contract's D2 row lists: the app, window and dock menus; the bounded
+window chooser; new window, middle click and scroll; indicators, attention, Unity counts
+and progress; tooltips; magnification; auto-hide; resizing from the separator, with its
+accessible adjuster; and the Dock page of the native Settings. Each has its paragraph
+below. Still to come: foreground usage and drag and drop (D3), and the Apps launcher
+(D4).
 
 ## 1. Where it lives
 
@@ -98,6 +103,23 @@ contract's order: exact current app_id as DesktopId (with and without `.desktop`
 StartupWMClass, verified Flatpak ID, then initial app_id. Ambiguous stays ambiguous and
 gets its own `window:<epoch>:<id>` group; title and executable never choose an app.
 
+**Signals (D2).** Each slot carries a `Signal` beside its windows: a **count** and a
+**progress** from the app's Unity record in Applications1 (`Launcher`, shown only while
+the app makes it visible; a zero count is no badge), and **attention**, true when Hyalo
+flags any of the slot's windows (`demands_attention`, refreshed on `attention_changed`)
+or the app's Unity `urgent` is set. Display only: attention never focuses anything. The
+count is a pill in `--nidara-danger` (carried into the glass tokens as `danger`) out of
+the icon's top-right corner, its figure in the menus' font and weight (the fonts have no
+bold, and the text engine refuses to fake one); the progress is a bar along the icon's
+foot, a dark rim around a faint ink track so it reads over light and dark art. Attention
+draws the dot out to a dash whatever the indicators preference, and each new false→true
+edge lifts the icon three times in 3 s (`attention.rs`), by at most half the capsule's
+padding so the icon and its count stay inside the surface; repeated `true` restarts
+nothing. Reduced motion (`org.gnome.desktop.interface` `enable-animations` off, the key
+the appearance portal reads) keeps the dash and drops the lift. A reader hears the
+same: "3 pending, 50% done, wants attention". The private check sends a real
+`LauncherEntry.Update` signal and checks that all of it goes when the sender does.
+
 ## 5. Geometry
 
 From the existing TS dock, so the Rust one keeps its proportions: padding = 0.22 × icon,
@@ -105,6 +127,57 @@ gap = 0.16 × icon, capsule radius = half the cross size with exponent 3.2, scre
 `DOCK_SCREEN_GAP` = 4 logical px, dot 5 px. The glass is Hyalo's: one `Pane` per dock
 with the exported `dock` tone (`tokens/glass.json`, by mode and reduce transparency); the
 client paints only icons, dots and the separator (commandment 12).
+
+**Magnification (D2).** With `magnification` on, resting the pointer on the strip grows
+the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons toward
+`max-icon-size` (absolute logical px), separators growing 0.4 of that. The surface is an
+**envelope** laid out once per configure (`geometry::envelope`): headroom across the
+dock (at most a third of the output) and slack at both ends of the main axis, so a grown
+icon never needs a new surface size; the exclusive zone stays the rest capsule's. Only
+the glass and the grown icons take input (the input region follows the strip), so the
+envelope's empty room passes clicks through. Positions are anchored at the pointer
+within its rest slot: the item under the pointer stays under it as the strip grows, so a
+point measured at rest still lands on its item. Presence eases in on entry and out on leave,
+an exponential approach with a 60 ms time constant (snapped under reduced motion); the reader's bounds follow what is drawn, throttled to
+100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
+rects.
+
+**Auto-hide (D2).** With `auto-hide` on the dock reserves nothing (exclusive zone 0)
+and slides out past its screen edge once the pointer has been gone `hide-delay` ms
+(`autohide.rs`). It slides as the TS dock did, by the layer's margin on its anchored
+edge, eased with an 80 ms time constant (snapped under reduced motion), so the surface
+and its layout never change for it. Once out, its input region is only a 2 px strip
+along the screen edge, as long as the glass: the pointer pressed against that edge
+brings it back. An open menu, the chooser or the keyboard (Shell1 `focus:dock`) keeps
+it out until they let go, and the delay starts again from then. Turning the
+preference off brings it back. A fullscreen window hides it either way.
+
+**Resize (D2).** A separator is the dock's size adjuster (`resize.rs`). Pressed and
+dragged away from the screen edge or toward it, it changes the `icon-size` preference
+one logical pixel for one, within Config1's 32..96, measured from the anchored edge so
+the surface resizing under the pointer does not feed back. The dock shows only what
+Config1 committed: the hub keeps one Apply in flight and the latest value waiting,
+dropping the ones in between. Escape or another button mid-drag asks for the size the
+gesture started from, through the same Apply. The fit's shrink never writes the
+preference. For the keyboard and readers the separator takes the roving focus (the
+focus never starts on one); there the arrow away from the edge grows the icons by 8 px
+and the arrow toward it shrinks them, and a reader's `SetValue` is clamped and sent the
+same way. No resize cursor yet: the toolkit has no cursor shapes.
+
+**The Dock page (D2).** The native Settings draws `dock` from its manifest page alone
+(`routing::MANIFEST`, beside `appearance`): position, icon size, magnification and its
+maximum, indicators, auto-hide and its delay, all Config1 keys. The maximum is
+insensitive while magnification is off and the delay while auto-hide is off. The dock
+menu's "Dock Settings…" opens it. The private check drives it when given
+`NK_SETTINGS_BIN` (with a stand-in for the portal's Settings on the private bus): every
+row is there, the delay is insensitive, the page's auto-hide switch hides the dock and
+makes the delay sensitive, and switching it off brings the dock back.
+
+**Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
+(`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
+by any press. Moving to a neighbour while one is shown switches at once (warm), and the
+tooltip follows the grown icon. When the compositor dismisses it the dock retires the
+popup at once, or the next menu would find a stale parent.
 
 Fit (contract §8): with L the allowed main-axis length (output minus 2 × gap, and for a
 side dock minus the top-bar reservation), use the largest `0 < s <= 1` with `W(s) <= L`
@@ -172,7 +245,8 @@ As built:
   (as sway, KDE and niri do), so the dock gives it back itself: Escape, acting, losing
   the focus, or the focused window changing under it (a click on another window).
 - The tree (`semantics.rs`): a `Window` named Dock, one `Button` per item in drawn order
-  (separators as `Separator`), the state in the description (running, minimized window,
+  (separators as a `Slider` named Icon size, the size adjuster: its value is the
+  committed size in px, `SetValue` asks Config1 for a new one), the state in the description (running, minimized window,
   has minimized windows, not installed, cannot be opened now), disabled when a click
   would do nothing, the roving focus as `focused`. Activate does what a click does, with
   no activation token (there is no input event behind it). Requests made against an
@@ -190,6 +264,9 @@ As built:
   rectangles inside its slots, and libatspi walks every item. It also requires the Trash's
   theme art (both looks) and its fill (a file trashed in the private session), and a
   minimized window's picture. Other output scales: pass a Hyalo config with
-  `[outputs.winit] scale = 1.25` (or 2) as `NK_WIDGETS_HYALO_CONFIG`; 1, 1.25 and 2 pass.
+  `[outputs.winit] scale = 1.25` (or 2) as `NK_WIDGETS_HYALO_CONFIG`; 1, 1.25 and 2 pass. D2's steps
+  pass at all three too (2026-11-01); at scale 2 the nested output is only 636×344
+  logical, so magnification grows a 64 px icon to 85 rather than 121, as the envelope's
+  bounds say, and the check asks only that it grows.
 - A private nested session (`scripts/dev/rust-session.sh --applications nidara-shell`)
   for the owner to look at. Not the daily session, no install, no sudo.

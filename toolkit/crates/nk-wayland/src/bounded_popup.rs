@@ -8,6 +8,11 @@ pub enum PopupSide {
     /// Above / Left of the anchor: menus from a bottom or right-edge dock.
     Above,
     Left,
+    /// Centred on the anchor, on its outward side: a dock's menus and chooser open over
+    /// their item, from a bottom, left or right dock.
+    AboveCentered,
+    RightCentered,
+    LeftCentered,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct MenuPopupPlacement {

@@ -790,6 +790,11 @@ export default {
     "dock.menu.open": "Open",
     "dock.menu.close-window": "Close window",
     "dock.menu.window-of": "Window of",
+    "dock.menu.new-window": "New Window",
+    "dock.menu.open-at-login": "Open at Login",
+    "dock.menu.minimize": "Minimize",
+    "dock.menu.restore": "Restore",
+    "dock.menu.dock-settings": "Dock Settings…",
 
     // System menu
     "bar.system-menu.about": "About this computer",

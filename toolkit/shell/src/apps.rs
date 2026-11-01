@@ -3,7 +3,7 @@
 //! Changed and the owner first, then the snapshot and its pages; a newer revision that
 //! arrived meanwhile rereads. Icons come on demand from their own worker. Every call has
 //! the connection's deadline; a failure is an explicit Unavailable, never an empty dock.
-use crate::model::{App, Pin};
+use crate::model::{App, Autostart, DesktopAction, Launcher, Pin};
 use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
@@ -29,6 +29,8 @@ pub struct AppsState {
     pub default_directory: Option<String>,
     pub capabilities: Vec<String>,
     pub icon_revision: u64,
+    /// EditLayout's compare-and-swap token.
+    pub layout_revision: u64,
 }
 impl AppsState {
     pub fn can(&self, capability: &str) -> bool {
@@ -243,6 +245,28 @@ fn parse(
                 String::new()
             },
             launchable: flag(a, "Launchable"),
+            new_window: matches!(
+                text(a, "NewWindowMode").as_str(),
+                "declared-action" | "relaunch"
+            ),
+            actions: records(a, "Actions")
+                .iter()
+                .map(|d| DesktopAction {
+                    id: text(d, "Id"),
+                    name: text(d, "Name"),
+                })
+                .filter(|d| !d.id.is_empty() && !d.name.is_empty())
+                .collect(),
+            autostart: dict(a, "Autostart")
+                .map(|d| Autostart {
+                    available: flag(&d, "Available"),
+                    writable: flag(&d, "Writable"),
+                    enabled: flag(&d, "Enabled"),
+                })
+                .unwrap_or_default(),
+            launcher: dict(a, "Launcher")
+                .map(|d| launcher(&d))
+                .unwrap_or_default(),
         })
         .filter(|a| !a.id.is_empty())
         .collect();
@@ -276,6 +300,23 @@ fn parse(
         default_directory: (!default.is_empty()).then_some(default),
         capabilities,
         icon_revision: number(state, "IconRevision"),
+        layout_revision: number(state, "LayoutRevision"),
+    }
+}
+
+/// Unity's record (APPLICATIONS1-DOCK.md §5): a count or a progress only while its
+/// visibility says so; a zero count is no badge.
+fn launcher(d: &Dict) -> Launcher {
+    let count = d.get("Count").and_then(|v| i64::try_from(v).ok());
+    let progress = d.get("Progress").and_then(|v| f64::try_from(v).ok());
+    Launcher {
+        count: count
+            .filter(|n| flag(d, "CountVisible") && *n > 0)
+            .map(|n| n as u64),
+        progress: progress
+            .filter(|p| flag(d, "ProgressVisible") && p.is_finite())
+            .map(|p| p.clamp(0., 1.)),
+        urgent: flag(d, "Urgent"),
     }
 }
 
@@ -294,6 +335,11 @@ fn flag(d: &Dict, key: &str) -> bool {
     d.get(key)
         .and_then(|v| bool::try_from(v).ok())
         .unwrap_or_default()
+}
+fn dict(d: &Dict, key: &str) -> Option<Dict> {
+    d.get(key)
+        .and_then(|v| v.try_clone().ok())
+        .and_then(|v| Dict::try_from(v).ok())
 }
 fn records(d: &Dict, key: &str) -> Vec<Dict> {
     d.get(key)
@@ -411,6 +457,34 @@ mod tests {
         );
         assert_eq!((s.default_directory.as_deref(), s.icon_revision), (None, 9));
         assert!(!s.can("launch"));
+    }
+
+    #[test]
+    fn unity_shows_only_what_the_app_makes_visible() {
+        let rec = |count: i64, cv: bool, progress: f64, pv: bool, urgent: bool| {
+            launcher(&dict(&[
+                ("Count", v(count)),
+                ("CountVisible", v(cv)),
+                ("Progress", v(progress)),
+                ("ProgressVisible", v(pv)),
+                ("Urgent", v(urgent)),
+            ]))
+        };
+        assert_eq!(
+            rec(4, true, 0.25, true, true),
+            Launcher {
+                count: Some(4),
+                progress: Some(0.25),
+                urgent: true
+            }
+        );
+        assert_eq!(rec(4, false, 0.25, false, false), Launcher::default());
+        assert_eq!(
+            rec(0, true, 0., false, false).count,
+            None,
+            "zero is no badge"
+        );
+        assert_eq!(launcher(&Dict::new()), Launcher::default());
     }
 
     fn state(epoch: u64, revision: u64) -> AppsState {

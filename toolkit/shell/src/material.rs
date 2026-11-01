@@ -13,10 +13,34 @@ pub fn exports_root() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/usr/share/nidara/settings-data"))
 }
 
+/// The glass tokens, with the one colour the dock paints beside its icons carried in as
+/// `danger` (`tokens/colors.json` `--nidara-danger`: a count's badge). Without it the
+/// badge is drawn in ink.
 pub fn load() -> Result<Value, String> {
-    let path = exports_root().join("tokens/glass.json");
-    let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))
+    let read = |name: &str| -> Result<Value, String> {
+        let path = exports_root().join(name);
+        let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))
+    };
+    let mut glass = read("tokens/glass.json")?;
+    match read("tokens/colors.json").map(|c| danger(&c)) {
+        Ok(Some(rgb)) => glass["danger"] = serde_json::json!(rgb),
+        Ok(None) => eprintln!("nidara-shell: no --nidara-danger in the colour tokens"),
+        Err(e) => eprintln!("nidara-shell: {e}"),
+    }
+    Ok(glass)
+}
+
+/// `--nidara-danger` of the dark skin (the shell's, whatever the mode).
+pub fn danger(colors: &Value) -> Option<[u8; 3]> {
+    let hex = colors["sets"]
+        .as_array()?
+        .iter()
+        .find(|s| s["dark"].as_bool() == Some(true))?["tokens"]["--nidara-danger"]
+        .as_str()?
+        .strip_prefix('#')?;
+    let byte = |n: usize| u8::from_str_radix(hex.get(n..n + 2)?, 16).ok();
+    (hex.len() == 6).then_some([byte(0)?, byte(2)?, byte(4)?])
 }
 
 fn tone(t: &Value) -> Option<Tone> {
@@ -89,6 +113,20 @@ pub fn dock(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_danger_is_the_dark_sets_and_only_a_whole_hex() {
+        let colors = |hex: &str| {
+            serde_json::json!({"sets": [
+                {"dark": false, "tokens": {"--nidara-danger": "#000000"}},
+                {"dark": true, "tokens": {"--nidara-danger": hex}},
+            ]})
+        };
+        assert_eq!(danger(&colors("#ff3b30")), Some([255, 59, 48]));
+        assert_eq!(danger(&colors("#ff3b3")), None);
+        assert_eq!(danger(&colors("ff3b30")), None);
+        assert_eq!(danger(&serde_json::json!({})), None);
+    }
     use serde_json::json;
     fn step(from: f64, saturation: f64) -> Value {
         let t = json!({"saturation": saturation, "ceiling": 1, "lift": 0, "gain": 1,

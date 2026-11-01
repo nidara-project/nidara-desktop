@@ -100,6 +100,11 @@ fn thousand_action_rows_clip_reveal_and_keep_controlled_semantics() {
     .unwrap();
     let semantics = menu.semantics();
     assert_eq!(semantics.nodes[&ids[0]].role, Role::MenuItem);
+    assert_eq!(
+        semantics.nodes[&ids[0]].name, "Action 0",
+        "a row is heard by its own label"
+    );
+    assert_eq!(semantics.nodes[&ids[4]].name, "Action 4");
     assert_eq!(semantics.nodes[&ids[1]].role, Role::CheckMenuItem);
     assert!(semantics.nodes[&ids[1]].states.checked);
     assert_eq!(semantics.nodes[&ids[2]].role, Role::RadioMenuItem);

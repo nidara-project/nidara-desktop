@@ -153,7 +153,16 @@ impl Config1 {
         let changes = self.changes.clone();
         self.store
             .call(move |st| {
-                peer.authorize(Operation::Configure, registry::consent(st))
+                let consent = registry::consent(st);
+                // The shell may write the dock's own keys (its dock menu), never the rest.
+                peer.authorize(Operation::Configure, consent)
+                    .or_else(|e| {
+                        if key.starts_with("dock.") {
+                            peer.authorize(Operation::ConfigureDock, consent)
+                        } else {
+                            Err(e)
+                        }
+                    })
                     .map_err(ConfigError::AccessDenied)?;
                 let before = registry::find(&key)
                     .filter(|k| registry::available(st, k))

@@ -43,30 +43,45 @@ pub struct Input<'a> {
     pub can_launch: bool,
     pub hidden: bool,
     pub trash: Option<crate::trash::TrashState>,
+    /// The committed icon-size preference: what each separator, the size adjuster, says.
+    pub icon_size: u32,
 }
 
 fn state(item: &Item, click: Option<&Click>, trash: Option<crate::trash::TrashState>) -> String {
-    let mut words = vec![];
+    let mut words: Vec<String> = vec![];
     match &item.kind {
-        Kind::Trash => words.push(match trash {
-            Some(t) if t.full => "contains items",
-            Some(t) if t.partial => "empty in the home folder",
-            Some(_) => "empty",
-            None => "cannot tell whether it holds items",
-        }),
-        Kind::Minimized { .. } => words.push("minimized window"),
-        Kind::MissingApp { .. } => words.push("not installed"),
+        Kind::Trash => words.push(
+            match trash {
+                Some(t) if t.full => "contains items",
+                Some(t) if t.partial => "empty in the home folder",
+                Some(_) => "empty",
+                None => "cannot tell whether it holds items",
+            }
+            .into(),
+        ),
+        Kind::Minimized { .. } => words.push("minimized window".into()),
+        Kind::MissingApp { .. } => words.push("not installed".into()),
         _ => {
             if item.running() {
-                words.push("running");
+                words.push("running".into());
             }
             if !item.minimized.is_empty() {
-                words.push("has minimized windows");
+                words.push("has minimized windows".into());
             }
         }
     }
+    // What the app signals (DOCK.md §6): said, not only painted.
+    if let Some(n) = item.signal.count {
+        words.push(format!("{n} pending"));
+    }
+    if let Some(p) = item.signal.progress {
+        words.push(format!("{}% done", (p * 100.).round()));
+    }
+    if item.signal.attention {
+        words.push("wants attention".into());
+    }
     if matches!(click, Some(Click::Unavailable)) {
-        words.push("cannot be opened now");
+        words.push("cannot be opened now".into());
     }
     words.join(", ")
 }
@@ -86,7 +101,21 @@ pub fn tree(ids: &mut Ids, input: &Input) -> Tree {
         let id = ids.of(&item.key);
         let [x, y, width, height] = input.rects[n];
         let mut node = if item.kind == Kind::Separator {
-            Node::new(id, Role::Separator, "")
+            // The separator is the dock's size adjuster (resize.rs): dragged, stepped by
+            // the arrows across the dock, or set by a reader.
+            let mut node = Node::new(id, Role::Slider, "Icon size");
+            node.value = Some(nk_a11y::ValueInfo {
+                min: crate::resize::MIN as f64,
+                max: crate::resize::MAX as f64,
+                current: (input
+                    .icon_size
+                    .clamp(crate::resize::MIN, crate::resize::MAX)) as f64,
+                step: crate::resize::STEP as f64,
+                text: format!("{} px", input.icon_size),
+            });
+            node.states.focused = input.focus == Some(n);
+            node.actions = vec![Action::Focus, Action::SetValue];
+            node
         } else {
             let label = if item.kind == Kind::Trash {
                 "Trash"
@@ -129,6 +158,7 @@ mod tests {
             label: key.into(),
             windows,
             minimized: vec![],
+            signal: Default::default(),
         }
     }
     #[test]
@@ -161,6 +191,7 @@ mod tests {
             focused_window: None,
             can_launch: false,
             hidden: false,
+            icon_size: 64,
             trash: Some(crate::trash::TrashState {
                 full: true,
                 partial: false,
@@ -175,7 +206,7 @@ mod tests {
             .collect();
         assert_eq!(
             kids.iter().map(|n| n.role).collect::<Vec<_>>(),
-            [Role::Button, Role::Separator, Role::Button, Role::Button]
+            [Role::Button, Role::Slider, Role::Button, Role::Button]
         );
         assert_eq!(kids[3].name, "Trash");
         assert!(kids[3].description.starts_with("contains items"));

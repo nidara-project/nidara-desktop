@@ -5,14 +5,17 @@
 //! service from its own loop.
 use crate::actions::{Action, primary};
 use crate::apps::{TRASH_EMPTY, TRASH_FULL};
-use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, Position, Slot, layout};
+use crate::chooser::{Candidate, Chooser};
+use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD_RATIO, Position, Slot, envelope, layout};
 use crate::hub::{Frame, Request};
+use crate::menu::Command;
 use crate::model::{Item, Kind, View};
+use crate::popup::{Look, Outcome, Overlay, Popup};
 use nk_render::{Canvas, ImageFit, Raster, rgba};
-use nk_text::Rect;
+use nk_text::{Rect, TextBackend};
 use nk_wayland::{
     Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
-    Material, Options, Pane, TokenRequest, WakeSource, Waker, Window,
+    Material, Options, Pane, PopupSide, TokenRequest, WakeSource, Waker, Window,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
@@ -21,6 +24,10 @@ use std::time::Instant;
 
 pub const NAMESPACE: &str = "nidara-dock";
 const LEFT_BUTTON: u32 = 0x110;
+/// Between the capsule and a popup it opens, logical pixels.
+const POPUP_GAP: i32 = 6;
+const RIGHT_BUTTON: u32 = 0x111;
+const MIDDLE_BUTTON: u32 = 0x112;
 
 pub struct Dock {
     frames: Receiver<Arc<Frame>>,
@@ -29,9 +36,26 @@ pub struct Dock {
     /// The output's logical size, as the supervisor last saw it.
     output_size: (u32, u32),
     frame: Arc<Frame>,
+    /// The resting layout (placement, exclusive zone, minimize targets), with room to
+    /// magnify in when magnification is on.
     layout: Layout,
+    /// What is drawn, hit and given to the screen reader now: `layout` magnified around
+    /// the pointer, `presence` of the way in (geometry.rs `magnify`).
+    shown: Layout,
+    presence: f64,
+    presence_target: f64,
+    presence_at: Instant,
+    /// The input region last sent: the glass and the icons that grew out of it.
+    input: Vec<[i32; 4]>,
+    /// When the reader last heard where things are: at most 10 times a second while
+    /// magnification moves them, and always once it settles.
+    semantics_at: Instant,
     pointer: (f64, f64),
     pressed: Option<usize>,
+    /// The middle button's press, released on the same slot to act.
+    middle: Option<usize>,
+    /// The wheel's walk through an app's windows (cycle.rs).
+    cycle: crate::cycle::Cycle,
     /// Token requests in flight, and what each will start once it has its token.
     pending: HashMap<TokenRequest, Request>,
     trash_icon: Option<Arc<nk_icons::Icon>>,
@@ -50,14 +74,48 @@ pub struct Dock {
     a11y_requests: Option<Receiver<(u64, nk_a11y::Request)>>,
     ids: crate::semantics::Ids,
     revision: u64,
+    /// What a request is checked against: every node with its role and actions. The
+    /// revision moves only when this does (a popup opened or closed, items came or went),
+    /// not on every repaint, so an action a reader took is not lost to a frame drawn after.
+    shape: Vec<(nk_a11y::NodeId, nk_a11y::Role, Vec<nk_a11y::Action>)>,
     waker: Waker,
+    /// The one popup (a menu), and what draws it: loaded with the first one.
+    popup: Option<Overlay>,
+    look: Option<Look>,
+    /// Popups opened so far: each takes its own semantic ID range.
+    popups: u64,
+    /// A press that closed the popup is consumed, its release too: never replayed.
+    swallow: bool,
+    /// The attention bounce of each slot (attention.rs).
+    attention: crate::attention::Attention,
+    /// The look was asked for once (counts, tooltips), whether or not it came.
+    look_tried: bool,
+    /// Where the pointer rests, and the tooltip it brought (tooltip.rs).
+    hover: crate::tooltip::Hover,
+    tooltip: Option<crate::tooltip::Tooltip>,
+    /// Auto-hide's state and slide (autohide.rs), and the placement last sent.
+    hide: crate::autohide::Hide,
+    placed: Option<LayerPlacement>,
+    /// A separator's drag resizing the dock, while the button is held (resize.rs).
+    drag: Option<crate::resize::Drag>,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
 /// scale 2), and 256 KiB at most each.
-const THUMB_SIDE: u32 = 256;
+pub const THUMB_SIDE: u32 = 256;
+/// The reader's bounds follow magnification at most this often while it moves.
+const SEMANTICS_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+/// Magnification's easing time constant, seconds: settled in about a quarter second.
+const EASE: f64 = 0.06;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
+/// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
+/// count stay inside the capsule, so the surface never grows for it.
+const LIFT: f64 = 0.5;
+/// A count's pill, as a share of the icon: its height, and how far it sits out of the
+/// icon's top-right corner.
+const COUNT: f64 = 0.36;
+const COUNT_OUT: f64 = 0.25;
 
 fn slots(view: &View) -> Vec<Slot> {
     view.items
@@ -73,9 +131,9 @@ fn slots(view: &View) -> Vec<Slot> {
 }
 
 /// The keyboard is the dock's only while it holds the roving focus (Shell1 `focus:dock`);
-/// a click never takes it from the app.
-pub fn placement(l: &Layout, keyboard: bool) -> LayerPlacement {
-    let gap = crate::geometry::SCREEN_GAP as i32;
+/// a click never takes it from the app. `gap` is the margin on the anchored edge: the
+/// screen gap, less however far auto-hide has slid the dock out (autohide.rs).
+pub fn placement(l: &Layout, keyboard: bool, gap: i32) -> LayerPlacement {
     let (anchor, margin) = match l.position {
         Position::Bottom => (Edges::BOTTOM, [0, 0, gap, 0]),
         Position::Left => (Edges::LEFT, [0, 0, 0, gap]),
@@ -105,15 +163,24 @@ impl Dock {
         waker: Waker,
     ) -> Self {
         let layout = Self::lay(&frame, output_size);
+        let hide = crate::autohide::Hide::new(frame.prefs.auto_hide);
         Self {
             frames,
             hub,
             output_name,
             output_size,
             frame,
+            shown: layout.clone(),
+            presence: 0.,
+            presence_target: 0.,
+            presence_at: Instant::now(),
+            input: vec![],
+            semantics_at: Instant::now(),
             layout,
             pointer: (0., 0.),
             pressed: None,
+            middle: None,
+            cycle: Default::default(),
             pending: HashMap::new(),
             trash_icon,
             thumbs: Default::default(),
@@ -125,8 +192,71 @@ impl Dock {
             a11y_requests: None,
             ids: Default::default(),
             revision: 0,
+            shape: vec![],
             waker,
+            popup: None,
+            look: None,
+            popups: 0,
+            swallow: false,
+            attention: Default::default(),
+            look_tried: false,
+            hover: Default::default(),
+            tooltip: None,
+            hide,
+            placed: None,
+            drag: None,
         }
+    }
+
+    /// The pointer's distance from the dock's screen edge (resize.rs `depth`).
+    fn depth(&self, w: &Window) -> f64 {
+        crate::resize::depth(self.layout.position, w.size(), self.pointer)
+    }
+
+    /// Ask for an icon size; the hub sends it through Config1, one Apply at a time.
+    fn ask_icon_size(&self, size: u32) {
+        let _ = self.hub.send(Request::IconSize(size));
+    }
+
+    /// Escape or a second button during a drag: back to the size it started from, through
+    /// the same checked Apply.
+    fn cancel_drag(&mut self) {
+        if let Some(d) = self.drag.take() {
+            eprintln!("nidara-shell: the resize was cancelled");
+            self.ask_icon_size(d.start());
+        }
+    }
+
+    fn hide_delay(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.frame.prefs.hide_delay_ms as u64)
+    }
+
+    /// Send the placement when it changed: the layout, the keyboard, or the slide.
+    fn place(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let p = placement(
+            &self.layout,
+            self.focus.is_some(),
+            crate::autohide::margin(&self.layout, self.hide.slide),
+        );
+        if self.placed.as_ref() != Some(&p) {
+            w.set_layer_placement(p)?;
+            self.placed = Some(p);
+        }
+        Ok(())
+    }
+
+    /// Auto-hide's clock: hide when due unless a popup or the keyboard holds the dock,
+    /// and slide toward where it is wanted.
+    fn slide(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        let held = self.popup.is_some() || self.focus.is_some();
+        if self
+            .hide
+            .tick(Instant::now(), held, self.frame.prefs.reduce_motion)
+        {
+            self.place(w)?;
+            self.reshape(w);
+        }
+        Ok(())
     }
 
     fn lay(frame: &Frame, output: (u32, u32)) -> Layout {
@@ -135,13 +265,84 @@ impl Dock {
         } else {
             frame.reserved_top
         };
-        layout(
-            &slots(&frame.view),
+        let slots = slots(&frame.view);
+        let rest = layout(
+            &slots,
             frame.prefs.icon_size,
             frame.prefs.position,
             output,
             reserved,
-        )
+        );
+        let mut l = if frame.prefs.magnification {
+            envelope(rest, &slots, frame.prefs.max_icon_size, output, reserved)
+        } else {
+            rest
+        };
+        if frame.prefs.auto_hide {
+            // A dock that hides reserves nothing: windows keep the whole output.
+            l.exclusive_zone = 0;
+        }
+        l
+    }
+
+    /// Magnify around the pointer as things stand, and send the input region it covers.
+    fn reshape(&mut self, w: &mut Window) {
+        let slots = slots(&self.frame.view);
+        let shown = self.layout.magnify(&slots, self.pointer, self.presence);
+        let moved = shown.rects != self.shown.rects;
+        self.shown = shown;
+        if w.size() != self.layout.size {
+            return;
+        }
+        let now = Instant::now();
+        if moved
+            && (self.presence == self.presence_target
+                || now.saturating_duration_since(self.semantics_at) >= SEMANTICS_EVERY)
+        {
+            self.semantics_at = now;
+            self.publish_semantics(w);
+        }
+        let input = if self.frame.hidden {
+            vec![]
+        } else if self.hide.out() {
+            // Out of sight: only the strip along the screen edge calls it back.
+            let m = crate::autohide::margin(&self.layout, self.hide.slide);
+            vec![crate::autohide::band(&self.layout, m)]
+        } else {
+            self.shown.input(&slots)
+        };
+        if input != self.input {
+            if let Err(e) = w.set_input_region(Some(&input)) {
+                eprintln!("nidara-shell: the dock's input region: {e}");
+            }
+            self.input = input;
+        }
+        w.redraw();
+    }
+
+    /// Magnification eases in under the pointer and out when it leaves (the TS dock's
+    /// spring, settled); reduced motion keeps the enlargement as a state change.
+    fn ease(&mut self, w: &mut Window) {
+        let now = Instant::now();
+        let dt = now
+            .saturating_duration_since(self.presence_at)
+            .as_secs_f64();
+        self.presence_at = now;
+        if self.presence == self.presence_target {
+            return;
+        }
+        self.presence = if self.frame.prefs.reduce_motion {
+            self.presence_target
+        } else {
+            let next =
+                self.presence + (self.presence_target - self.presence) * (1. - (-dt / EASE).exp());
+            if (next - self.presence_target).abs() < 0.01 {
+                self.presence_target
+            } else {
+                next
+            }
+        };
+        self.reshape(w);
     }
 
     /// The latest frame wins; a closed channel ends the dock.
@@ -173,6 +374,18 @@ impl Dock {
             );
         }
         self.frame = frame;
+        self.attention
+            .update(&self.frame.view.items, Instant::now());
+        if self
+            .frame
+            .view
+            .items
+            .iter()
+            .any(|i| i.signal.count.is_some())
+        {
+            // A count's figure is text: the menus' look carries the fonts.
+            self.ensure_look("counts without figures");
+        }
         if self.focus.is_some()
             && (self.frame.hidden
                 || self.focused_slot().is_none()
@@ -184,14 +397,390 @@ impl Dock {
             );
             self.focus = None;
         }
-        let next = Self::lay(&self.frame, self.output_size);
-        let keyboard = self.focus.is_some();
-        if placement(&next, keyboard) != placement(&self.layout, had_keyboard) {
-            w.set_layer_placement(placement(&next, keyboard))?;
+        let now = Instant::now();
+        self.hide
+            .set_auto(self.frame.prefs.auto_hide, self.hide_delay(), now);
+        match (had_keyboard, self.focus.is_some()) {
+            (false, true) => self.hide.reveal(),
+            (true, false) => self.hide.release(self.hide_delay(), now),
+            _ => {}
         }
-        self.layout = next;
+        self.layout = Self::lay(&self.frame, self.output_size);
+        self.place(w)?;
+        self.slide(w)?;
+        self.reshape(w);
+        self.follow_tooltip(w);
+        self.follow_popup(w);
         self.capture(w);
         self.apply(w)
+    }
+
+    /// The popup follows its item to wherever it is now, or closes with it (gone, hidden).
+    fn follow_popup(&mut self, w: &mut Window) {
+        let Some(popup) = &self.popup else { return };
+        let at = match popup.anchor() {
+            Some(key) => self.frame.view.items.iter().position(|i| &i.key == key),
+            None => None,
+        };
+        if self.frame.hidden || (popup.anchor().is_some() && at.is_none()) {
+            self.close_popup(w);
+            return;
+        }
+        // The chooser keeps only windows still there; under two, it has nothing to choose.
+        if let (Some(Overlay::Chooser(c)), Some(n)) = (self.popup.as_mut(), at)
+            && !c.retain(&self.frame.view.items[n].windows)
+        {
+            self.close_popup(w);
+            return;
+        }
+        if let Some(n) = at {
+            let (rect, side) = (self.anchor_rect(n), self.side());
+            let popup = self.popup.as_mut().unwrap();
+            if let Err(e) = popup.follow(w, rect, side) {
+                eprintln!("nidara-shell: the menu cannot follow its item ({e}); closing it");
+                self.close_popup(w);
+            }
+        }
+    }
+
+    fn side(&self) -> PopupSide {
+        match self.layout.position {
+            Position::Bottom => PopupSide::AboveCentered,
+            Position::Left => PopupSide::RightCentered,
+            Position::Right => PopupSide::LeftCentered,
+        }
+    }
+
+    /// Slot `n`'s place along the dock, across the whole capsule and a gap beyond it, so a
+    /// popup opens clear of the capsule rather than over its edge.
+    fn anchor_rect(&self, n: usize) -> [i32; 4] {
+        let [x, y, w, h] = self.shown.rects[n];
+        let (sw, sh) = (self.shown.size.0 as i32, self.shown.size.1 as i32);
+        let g = POPUP_GAP;
+        match self.layout.position {
+            Position::Bottom => [x.floor() as i32, -g, (w.ceil() as i32).max(1), sh + 2 * g],
+            Position::Left | Position::Right => {
+                [-g, y.floor() as i32, sw + 2 * g, (h.ceil() as i32).max(1)]
+            }
+        }
+    }
+
+    /// The look, loaded once on the first thing that needs it; false when it cannot be.
+    fn ensure_look(&mut self, why: &str) -> bool {
+        if self.look.is_none() && !self.look_tried {
+            self.look_tried = true;
+            match zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus))
+            {
+                Ok(look) => self.look = Some(look),
+                Err(e) => eprintln!("nidara-shell: {why}: {e}"),
+            }
+        }
+        self.look.is_some()
+    }
+
+    /// The pointer moved: which item it rests on now (none over a separator, a hidden
+    /// dock, or while a menu is open); a tooltip of another item goes.
+    fn hover(&mut self, w: &mut Window) {
+        let key = (!self.frame.hidden && self.popup.is_none())
+            .then(|| self.shown.hit(self.pointer.0, self.pointer.1))
+            .flatten()
+            .map(|n| &self.frame.view.items[n])
+            .filter(|i| i.kind != Kind::Separator)
+            .map(|i| i.key.clone());
+        if self.hover.over(key.as_deref(), Instant::now())
+            && self
+                .tooltip
+                .as_ref()
+                .is_some_and(|t| Some(&t.anchor) != key.as_ref())
+        {
+            self.close_tooltip(w);
+        }
+    }
+
+    fn close_tooltip(&mut self, w: &mut Window) {
+        if let Some(t) = self.tooltip.take() {
+            t.close(w);
+        }
+    }
+
+    /// The tooltip that is due, if none shows and no other popup is open.
+    fn show_tooltip(&mut self, w: &mut Window) {
+        if self.tooltip.is_some() || self.popup.is_some() || self.frame.hidden {
+            return;
+        }
+        let Some(key) = self.hover.due(Instant::now()).map(str::to_string) else {
+            return;
+        };
+        let Some(n) = self.frame.view.items.iter().position(|i| i.key == key) else {
+            return;
+        };
+        if !self.ensure_look("no tooltips") {
+            return;
+        }
+        let item = &self.frame.view.items[n];
+        let look = self.look.as_mut().unwrap();
+        let text = if item.kind == Kind::Trash {
+            look.text_of(&crate::menu::Label::Key("dock.special.trash.name"))
+        } else {
+            item.label.clone()
+        };
+        if text.is_empty() {
+            return;
+        }
+        let (rect, side) = (self.anchor_rect(n), self.side());
+        let look = self.look.as_mut().unwrap();
+        match crate::tooltip::Tooltip::open(w, look, &text, key, rect, side) {
+            Ok(t) => {
+                self.tooltip = Some(t);
+                self.hover.shown();
+            }
+            Err(e) => {
+                eprintln!("nidara-shell: no tooltip: {e}");
+                self.hover.press();
+            }
+        }
+    }
+
+    /// The tooltip follows its item, or goes with it.
+    fn follow_tooltip(&mut self, w: &mut Window) {
+        let Some(t) = &self.tooltip else { return };
+        let at = self.frame.view.items.iter().position(|i| i.key == t.anchor);
+        match at.filter(|_| !self.frame.hidden) {
+            Some(n) => {
+                let (rect, side) = (self.anchor_rect(n), self.side());
+                if let Err(e) = self.tooltip.as_mut().unwrap().follow(w, rect, side) {
+                    eprintln!("nidara-shell: the tooltip cannot follow its item ({e})");
+                    self.close_tooltip(w);
+                }
+            }
+            None => self.close_tooltip(w),
+        }
+    }
+
+    fn sync_tooltip(&mut self, w: &mut Window) {
+        if let (Some(t), Some(look)) = (self.tooltip.as_mut(), self.look.as_ref())
+            && let Err(e) = t.sync(w, look)
+        {
+            eprintln!("nidara-shell: the tooltip: {e}");
+            self.close_tooltip(w);
+        }
+    }
+
+    fn close_popup(&mut self, w: &mut Window) {
+        // One popup at a time: a menu or the chooser takes the tooltip's place.
+        self.close_tooltip(w);
+        if let Some(p) = self.popup.take() {
+            p.close(w);
+            self.publish_semantics(w);
+            self.hide.release(self.hide_delay(), Instant::now());
+        }
+    }
+
+    /// The menu of slot `n`, or the dock's own (None: the separator or empty space).
+    fn open_menu(
+        &mut self,
+        w: &mut Window,
+        slot: Option<usize>,
+        serial: Option<u32>,
+        keyboard: bool,
+    ) {
+        self.close_popup(w);
+        if self.look.is_none() {
+            let look = zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus));
+            match look {
+                Ok(l) => self.look = Some(l),
+                Err(e) => {
+                    eprintln!("nidara-shell: no menus: {e}");
+                    return;
+                }
+            }
+        }
+        let item = slot
+            .map(|n| &self.frame.view.items[n])
+            .filter(|i| i.kind != Kind::Separator);
+        let rows = match item {
+            Some(item) => {
+                let app = match &item.kind {
+                    Kind::App { id, .. } => self.frame.catalogue.get(id),
+                    _ => None,
+                };
+                crate::menu::item_menu(
+                    item,
+                    &crate::menu::Context {
+                        app,
+                        titles: &self.frame.titles,
+                        can_launch: self.frame.can_launch,
+                        can_edit_layout: self.frame.can_edit_layout,
+                        can_autostart: self.frame.can_autostart,
+                        can_open_directory: self.frame.can_open_directory,
+                        can_empty_trash: self.frame.trash.is_some_and(|t| !t.partial),
+                        trash_full: self.frame.trash.is_some_and(|t| t.full),
+                    },
+                )
+            }
+            None => crate::menu::dock_menu(&self.frame.prefs, self.frame.can_settings),
+        };
+        if rows.is_empty() {
+            return;
+        }
+        let rect = match (item, slot) {
+            (Some(_), Some(n)) => self.anchor_rect(n),
+            // The dock's own menu opens where it was asked for, along the dock.
+            _ => {
+                let (x, y) = (self.pointer.0 as i32, self.pointer.1 as i32);
+                let (width, height) = (self.layout.size.0 as i32, self.layout.size.1 as i32);
+                let g = POPUP_GAP;
+                if self.layout.position.horizontal() {
+                    [x.clamp(0, width - 1), -g, 1, height + 2 * g]
+                } else {
+                    [-g, y.clamp(0, height - 1), width + 2 * g, 1]
+                }
+            }
+        };
+        let title = item.map_or("Dock", |i| i.label.as_str()).to_string();
+        let anchor = item.map(|i| i.key.clone());
+        let side = self.side();
+        self.popups += 1;
+        let look = self.look.as_mut().unwrap();
+        look.refresh();
+        let opened = Popup::open(
+            w,
+            look,
+            crate::popup::Request {
+                rows: &rows,
+                title: &title,
+                anchor,
+                rect,
+                side,
+                serial,
+                keyboard,
+                ordinal: self.popups,
+            },
+        );
+        match opened {
+            Ok(p) => self.popup = Some(Overlay::Menu(Box::new(p))),
+            Err(e) => eprintln!("nidara-shell: the menu did not open: {e}"),
+        }
+    }
+
+    /// The window chooser over slot `n`: its visible windows, each by its picture and title.
+    fn open_chooser(
+        &mut self,
+        w: &mut Window,
+        slot: usize,
+        windows: Vec<u64>,
+        serial: Option<u32>,
+        keyboard: bool,
+    ) {
+        self.close_popup(w);
+        if self.look.is_none() {
+            match zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus))
+            {
+                Ok(look) => self.look = Some(look),
+                Err(e) => {
+                    eprintln!("nidara-shell: no look for the chooser: {e}");
+                    return;
+                }
+            }
+        }
+        let item = &self.frame.view.items[slot];
+        let icon = match &item.kind {
+            Kind::App { id, .. } => self.frame.icons.get(id).cloned(),
+            _ => None,
+        };
+        let candidates = windows
+            .into_iter()
+            .map(|window| Candidate {
+                window,
+                title: self.frame.titles.get(&window).cloned().unwrap_or_default(),
+            })
+            .collect();
+        let request = crate::chooser::Request {
+            app: item.label.clone(),
+            icon,
+            candidates,
+            anchor: item.key.clone(),
+            rect: self.anchor_rect(slot),
+            side: self.side(),
+            serial,
+            keyboard,
+            first_id: {
+                self.popups += 1;
+                crate::popup::first_id(self.popups)
+            },
+        };
+        self.look.as_mut().unwrap().refresh();
+        match Chooser::open(w, request) {
+            Ok(c) => self.popup = Some(Overlay::Chooser(Box::new(c))),
+            Err(e) => eprintln!("nidara-shell: the chooser did not open: {e}"),
+        }
+    }
+
+    fn popup_event(
+        &mut self,
+        w: &mut Window,
+        outcome: Result<Outcome, String>,
+    ) -> nk_wayland::Result<()> {
+        match outcome {
+            Ok(Outcome::None) => {}
+            Ok(Outcome::Closed) => self.close_popup(w),
+            Ok(Outcome::Chosen(command, serial)) => {
+                self.close_popup(w);
+                self.choose(command, serial, w)?;
+            }
+            Err(e) => {
+                eprintln!("nidara-shell: the menu failed: {e}");
+                self.close_popup(w);
+            }
+        }
+        Ok(())
+    }
+
+    /// A chosen row goes to the hub; what starts something gets a token from the input
+    /// that chose it, and ends the dock's keyboard focus first, as a click does.
+    fn choose(
+        &mut self,
+        command: Command,
+        serial: Option<u32>,
+        w: &mut Window,
+    ) -> nk_wayland::Result<()> {
+        let starts = matches!(
+            command,
+            Command::Launch { .. }
+                | Command::OpenFolder(_)
+                | Command::OpenTrash
+                | Command::DockSettings
+        );
+        if starts || matches!(command, Command::Window { .. } | Command::CloseAll(_)) {
+            self.leave_keyboard(w)?;
+        }
+        let request = Request::Menu {
+            command: command.clone(),
+            token: None,
+        };
+        if starts && let Some(serial) = serial {
+            let target = match &command {
+                Command::Launch { id, .. } => Some(id.trim_end_matches(".desktop").to_string()),
+                _ => None,
+            };
+            match w.request_activation_token(serial, target.as_deref()) {
+                Ok(t) => {
+                    self.pending.insert(t, request);
+                    return Ok(());
+                }
+                Err(e) => {
+                    eprintln!("nidara-shell: no activation token ({e:?}); opening without one")
+                }
+            }
+        }
+        let _ = self.hub.send(request);
+        Ok(())
     }
 
     /// Pictures for the minimized slots shown; each answer is one `Event::Capture`. Hyalo
@@ -229,23 +818,44 @@ impl Dock {
                 "nidara-shell: the dock on {} lets the keyboard go",
                 self.output_name
             );
-            w.set_layer_placement(placement(&self.layout, false))?;
+            self.place(w)?;
+            self.hide.release(self.hide_delay(), Instant::now());
             w.redraw();
-            self.publish_semantics();
+            self.publish_semantics(w);
         }
         Ok(())
     }
 
     fn key(&mut self, key: nk_wayland::Key, w: &mut Window) -> nk_wayland::Result<()> {
+        let nav = crate::keys::nav(key.sym, key.shift, self.layout.position);
+        if self.drag.is_some() {
+            if nav == Some(crate::keys::Nav::Leave) {
+                self.cancel_drag();
+            }
+            return Ok(());
+        }
         let Some(slot) = self.focused_slot() else {
             return Ok(());
         };
-        let Some(nav) = crate::keys::nav(key.sym, key.shift, self.layout.position.horizontal())
-        else {
+        let Some(nav) = nav else {
             return Ok(());
         };
+        let on_separator = self.frame.view.items[slot].kind == Kind::Separator;
         match nav {
             crate::keys::Nav::Leave => self.leave_keyboard(w)?,
+            // The size adjuster: away from the edge grows the icons, toward it shrinks
+            // them, from the committed size (repeats included: it is a stepper).
+            crate::keys::Nav::Outward | crate::keys::Nav::Inward if on_separator => {
+                let up = nav == crate::keys::Nav::Outward;
+                self.ask_icon_size(crate::resize::step(self.frame.prefs.icon_size, up));
+            }
+            crate::keys::Nav::Inward => {}
+            // A repeat has no serial: only a real press opens it, with its grab.
+            crate::keys::Nav::Menu | crate::keys::Nav::Outward => {
+                if let Some(serial) = key.serial {
+                    self.open_menu(w, Some(slot), Some(serial), true);
+                }
+            }
             crate::keys::Nav::Act => {
                 // A repeat has no serial, so no token: only a real press acts.
                 if let Some(serial) = key.serial {
@@ -257,7 +867,7 @@ impl Dock {
                 if let Some(to) = crate::keys::moved(&self.frame.view.items, slot, nav) {
                     self.focus = Some(self.frame.view.items[to].key.clone());
                     w.redraw();
-                    self.publish_semantics();
+                    self.publish_semantics(w);
                 }
             }
         }
@@ -270,34 +880,58 @@ impl Dock {
         if w.size() != self.layout.size {
             return Ok(());
         }
-        let (width, height) = self.layout.size;
-        if self.frame.hidden {
-            w.set_input_region(Some(&[]))?;
-        } else {
-            w.set_input_region(Some(&[[0, 0, width as i32, height as i32]]))?;
-        }
+        self.input = vec![[-1, -1, -1, -1]];
+        self.reshape(w);
         self.publish_targets();
         w.redraw();
-        self.publish_semantics();
+        self.publish_semantics(w);
         Ok(())
     }
 
-    fn publish_semantics(&mut self) {
+    fn publish_semantics(&mut self, w: &Window) {
         let focus = self.focused_slot();
-        let tree = crate::semantics::tree(
+        let mut tree = crate::semantics::tree(
             &mut self.ids,
             &crate::semantics::Input {
                 items: &self.frame.view.items,
-                rects: &self.layout.rects,
-                size: self.layout.size,
+                rects: &self.shown.rects,
+                size: self.shown.size,
                 focus,
                 focused_window: self.frame.focused,
                 can_launch: self.frame.can_launch,
                 hidden: self.frame.hidden,
                 trash: self.frame.trash,
+                icon_size: self.frame.prefs.icon_size,
             },
         );
-        self.revision += 1;
+        // An open popup's rows join the dock's tree, under its root: the dock's own items
+        // keep their place but lose the focus and their actions while it is open (#971).
+        if let Some(menu) = self.popup.as_mut().and_then(|p| p.semantics(w)) {
+            for node in tree.nodes.values_mut() {
+                node.actions.clear();
+                node.states.focused = false;
+            }
+            let children = menu.nodes[&menu.root].children.clone();
+            tree.nodes
+                .get_mut(&tree.root)
+                .unwrap()
+                .children
+                .extend(children);
+            for (id, node) in menu.nodes {
+                if id != menu.root {
+                    tree.nodes.insert(id, node);
+                }
+            }
+        }
+        let shape: Vec<_> = tree
+            .nodes
+            .values()
+            .map(|n| (n.id, n.role, n.actions.clone()))
+            .collect();
+        if shape != self.shape || self.revision == 0 {
+            self.shape = shape;
+            self.revision += 1;
+        }
         match &self.a11y {
             Some(bridge) => {
                 // Publication receipts are only for checks that wait on them.
@@ -339,9 +973,30 @@ impl Dock {
             if revision != self.revision {
                 continue;
             }
+            if let nk_a11y::Request::SetValue(id, value) = request {
+                // A reader sets the size adjuster: clamped, sent like a key's step.
+                let separator = self.ids.key(id).is_some_and(|key| {
+                    self.frame
+                        .view
+                        .items
+                        .iter()
+                        .any(|i| i.key == key && i.kind == Kind::Separator)
+                });
+                if separator && value.is_finite() {
+                    self.ask_icon_size(crate::resize::clamp(value));
+                }
+                continue;
+            }
             let (nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id)) = request else {
                 continue;
             };
+            let activate = matches!(request, nk_a11y::Request::Activate(_));
+            if let Some(popup) = self.popup.as_mut().filter(|p| p.owns(id)) {
+                let outcome = popup.request(id, activate);
+                self.popup_event(w, outcome)?;
+                self.sync_popup(w);
+                continue;
+            }
             let Some(key) = self.ids.key(id).map(str::to_string) else {
                 continue;
             };
@@ -354,10 +1009,24 @@ impl Dock {
             } else if self.focus.is_some() {
                 self.focus = Some(key);
                 w.redraw();
-                self.publish_semantics();
+                self.publish_semantics(w);
             }
         }
         Ok(())
+    }
+
+    fn sync_popup(&mut self, w: &mut Window) {
+        let (Some(popup), Some(look)) = (self.popup.as_mut(), self.look.as_mut()) else {
+            return;
+        };
+        match popup.sync(w, look) {
+            Ok(true) => self.publish_semantics(w),
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("nidara-shell: the menu cannot be drawn: {e}");
+                self.close_popup(w);
+            }
+        }
     }
 
     /// Where each minimized window this dock owns goes: its slot, in surface coordinates.
@@ -406,6 +1075,11 @@ impl Dock {
                 generation,
                 token: None,
             },
+            Action::Choose(windows) => {
+                let keyboard = self.focus.is_some();
+                self.open_chooser(w, slot, windows, serial, keyboard);
+                return;
+            }
             Action::OpenFolder(uri) => Request::OpenFolder { uri, token: None },
             Action::OpenTrash => Request::OpenTrash { token: None },
             Action::Unavailable => {
@@ -437,6 +1111,49 @@ impl Dock {
         let _ = self.hub.send(request);
     }
 
+    /// Middle-click: a new window where the app has one (the menu's own row), else what a
+    /// primary click does.
+    fn middle_click(&mut self, slot: usize, serial: u32, w: &mut Window) -> nk_wayland::Result<()> {
+        let item = &self.frame.view.items[slot];
+        if let Kind::App {
+            id,
+            generation,
+            launchable: true,
+            ..
+        } = &item.kind
+            && self.frame.can_launch
+            && self.frame.catalogue.get(id).is_some_and(|a| a.new_window)
+        {
+            let command = Command::Launch {
+                id: id.clone(),
+                generation: *generation,
+                mode: crate::menu::Launch::NewWindow,
+            };
+            return self.choose(command, Some(serial), w);
+        }
+        self.click(slot, Some(serial), w);
+        Ok(())
+    }
+
+    /// The wheel over an app focuses its windows one by one; elsewhere it does nothing.
+    fn wheel(&mut self, delta: f64) {
+        let Some(slot) = self.shown.hit(self.pointer.0, self.pointer.1) else {
+            self.cycle.reset();
+            return;
+        };
+        let item = &self.frame.view.items[slot];
+        if let Some(id) = self
+            .cycle
+            .scroll(item, self.frame.focused, delta, Instant::now())
+        {
+            let _ = self.hub.send(Request::Window {
+                verb: "focus-window",
+                id,
+                epoch: self.frame.hyalo_epoch,
+            });
+        }
+    }
+
     fn with_token(request: Request, token: Option<String>) -> Request {
         match request {
             Request::Launch { id, generation, .. } => Request::Launch {
@@ -446,12 +1163,28 @@ impl Dock {
             },
             Request::OpenFolder { uri, .. } => Request::OpenFolder { uri, token },
             Request::OpenTrash { .. } => Request::OpenTrash { token },
+            Request::Menu { command, .. } => Request::Menu { command, token },
             other => other,
         }
     }
 
-    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item) {
-        let [x, y, w, h] = self.layout.rects[n];
+    /// Where attention has lifted a slot now, away from the screen edge.
+    fn lift(&self, item: &Item, now: Instant) -> (f64, f64) {
+        let share = self
+            .attention
+            .lift(&item.key, now, self.frame.prefs.reduce_motion);
+        let d = share * LIFT * PAD_RATIO * self.layout.icon;
+        match self.layout.position {
+            Position::Bottom => (0., -d),
+            Position::Left => (d, 0.),
+            Position::Right => (-d, 0.),
+        }
+    }
+
+    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
+        let [x, y, w, h] = self.shown.rects[n];
+        let (dx, dy) = self.lift(item, now);
+        let (x, y) = (x + dx, y + dy);
         let r = Rect {
             x: x as f32,
             y: y as f32,
@@ -545,27 +1278,173 @@ impl Dock {
             };
             c.rounded_ring(ring, w * 0.22 + grow as f64, 2., ink);
         }
-        if self.frame.prefs.indicators
+        if let Some(p) = item.signal.progress {
+            // Along the icon's foot: a dark rim, so it reads over light art, around a faint
+            // ink track, so it reads over dark art; an ink fill.
+            let bar = (h * 0.09).max(2.);
+            let track = Rect {
+                x: (x + w * 0.12) as f32,
+                y: (y + h * 0.88 - bar) as f32,
+                width: (w * 0.76) as f32,
+                height: bar as f32,
+            };
+            let rim = (bar * 0.3) as f32;
+            let outer = Rect {
+                x: track.x - rim,
+                y: track.y - rim,
+                width: track.width + 2. * rim,
+                height: track.height + 2. * rim,
+            };
+            c.rounded_rect(outer, bar / 2. + rim as f64, rgba(0, 0, 0, 150));
+            c.rounded_rect(track, bar / 2., rgba(255, 255, 255, 70));
+            if p > 0. {
+                let fill = Rect {
+                    width: (track.width as f64 * p).max(bar) as f32,
+                    ..track
+                };
+                c.rounded_rect(fill, bar / 2., ink);
+            }
+        }
+        // The kit's `INK.solid` (0.9), as the TS dock's running dot.
+        let mark = if self.frame.dark {
+            rgba(255, 255, 255, 230)
+        } else {
+            rgba(0, 0, 0, 230)
+        };
+        let d = DOT * self.layout.scale.max(0.4);
+        if item.signal.attention {
+            // Attention's still mark, with or without motion: the dot drawn out to a dash
+            // along the dock, whatever the indicators preference (it is not a running dot).
+            let (cx, cy) = self.shown.dot(n);
+            let (lw, lh) = if self.layout.position.horizontal() {
+                (3. * d, d)
+            } else {
+                (d, 3. * d)
+            };
+            let dash = Rect {
+                x: (cx - lw / 2.) as f32,
+                y: (cy - lh / 2.) as f32,
+                width: lw as f32,
+                height: lh as f32,
+            };
+            c.rounded_rect(dash, d / 2., mark);
+        } else if self.frame.prefs.indicators
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            // The kit's `INK.solid` (0.9), as the TS dock's running dot.
-            let mark = if self.frame.dark {
-                rgba(255, 255, 255, 230)
-            } else {
-                rgba(0, 0, 0, 230)
-            };
-            c.dot(self.layout.dot(n), DOT * self.layout.scale.max(0.4), mark);
+            c.dot(self.shown.dot(n), d, mark);
+        }
+    }
+
+    /// A count: a pill out of the icon's top-right corner, the danger colour with a white
+    /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
+    /// it reaches into the next slot's gap.
+    fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
+        let [x, y, w, _] = self.shown.rects[n];
+        let (dx, dy) = self.lift(item, now);
+        let (x, y) = (x + dx, y + dy);
+        let pill = w * COUNT;
+        let (back, figure) = match self.frame.tokens.as_ref().and_then(|t| {
+            let c = t["danger"].as_array()?;
+            let b = |n: usize| c.get(n)?.as_u64().map(|v| v as u8);
+            Some([b(0)?, b(1)?, b(2)?])
+        }) {
+            Some([r, g, b]) => (rgba(r, g, b, 255), rgba(255, 255, 255, 255)),
+            None => (rgba(255, 255, 255, 235), rgba(0, 0, 0, 255)),
+        };
+        let text = if count > 999 {
+            "999+".to_string()
+        } else {
+            count.to_string()
+        };
+        let layout = self.look.as_mut().and_then(|look| {
+            let mut style = look.styles.text.clone();
+            style.size = (pill * 0.62) as f32;
+            // The menus' weight: the fonts have no bold of their own to reach for, and the
+            // text engine refuses to fake one.
+            style.weight = look.style.row.weight;
+            look.text
+                .layout(&text, &style, 4096.)
+                .map_err(|e| eprintln!("nidara-shell: a count's figure: {e}"))
+                .ok()
+        });
+        let size = layout.as_ref().map(|l| l.measured_size());
+        let width = size.map_or(pill, |s| (s.width as f64 + pill * 0.6).max(pill));
+        let bx = x + w - width + pill * COUNT_OUT;
+        let by = y - pill * COUNT_OUT;
+        let r = Rect {
+            x: bx as f32,
+            y: by as f32,
+            width: width as f32,
+            height: pill as f32,
+        };
+        c.rounded_rect(r, pill / 2., back);
+        if let (Some(layout), Some(size)) = (layout, size) {
+            let origin = (
+                (bx + (width - size.width as f64) / 2.) as f32,
+                (by + (pill - size.height as f64) / 2.) as f32,
+            );
+            if let Err(e) = c.layout(&layout, origin, figure) {
+                eprintln!("nidara-shell: a count's figure: {e}");
+            }
         }
     }
 }
 
 impl Application for Dock {
     fn poll_interval_ms(&self) -> u32 {
-        // Everything arrives by Wake; nothing here needs a timer.
-        60_000
+        // Everything arrives by Wake; an open chooser refreshes its pictures, and a bounce
+        // wants its frames.
+        if self
+            .attention
+            .wants_frames(Instant::now(), self.frame.prefs.reduce_motion)
+        {
+            return crate::attention::FRAME.as_millis() as u32;
+        }
+        let base = match self.popup {
+            Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
+            _ => 60_000,
+        };
+        if self.presence != self.presence_target {
+            return crate::attention::FRAME.as_millis() as u32;
+        }
+        // Auto-hide: a frame while it slides, else wake when the hide is due.
+        let base = match self.hide.wait(Instant::now(), crate::attention::FRAME) {
+            Some(wait) => base.min(wait.as_millis() as u32 + 1),
+            None => base,
+        };
+        // A pending tooltip wakes the loop when its dwell is over.
+        match self
+            .hover
+            .wait(Instant::now())
+            .filter(|_| self.tooltip.is_none())
+        {
+            Some(wait) => base.min(wait.as_millis() as u32 + 1),
+            None => base,
+        }
+    }
+    fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
+        if let Some(Overlay::Chooser(c)) = self.popup.as_mut() {
+            c.refresh(w);
+        }
+        if self
+            .attention
+            .tick(Instant::now(), self.frame.prefs.reduce_motion)
+        {
+            w.redraw();
+        }
+        self.ease(w);
+        self.slide(w)?;
+        self.show_tooltip(w);
+        self.sync_tooltip(w);
+        Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
+        if let Event::Button { pressed: true, .. } = event {
+            // A press, wherever: no tooltip, and none again on this item.
+            self.hover.press();
+            self.close_tooltip(w);
+        }
         match event {
             Event::Error(e) => return Err(e),
             Event::Wake => {
@@ -573,17 +1452,121 @@ impl Application for Dock {
                 self.a11y(w)?;
             }
             Event::Configure => self.apply(w)?,
-            Event::Motion(x, y) => self.pointer = (x, y),
+            Event::Motion(x, y) if self.drag.is_some() => {
+                // Resizing: the size follows the pointer; nothing magnifies or names.
+                self.pointer = (x, y);
+                let depth = self.depth(w);
+                if let Some(size) = self.drag.as_mut().and_then(|d| d.to(depth)) {
+                    self.ask_icon_size(size);
+                }
+            }
+            Event::Motion(x, y) => {
+                self.pointer = (x, y);
+                if !self.frame.hidden {
+                    self.hide.enter();
+                    self.slide(w)?;
+                }
+                if self.layout.mag.is_some() {
+                    self.presence_target = if self.frame.hidden { 0. } else { 1. };
+                    self.ease(w);
+                    self.reshape(w);
+                }
+                self.hover(w);
+            }
             Event::Key(key) => self.key(key, w)?,
-            // The compositor gave the keyboard elsewhere: the roving focus ends with it.
-            Event::Focus(false) => self.leave_keyboard(w)?,
-            Event::PointerLeave => self.pressed = None,
+            // The compositor gave the keyboard elsewhere: the roving focus ends with it. Not
+            // to the dock's own popup, which holds it for as long as it is open.
+            Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
+            Event::PointerLeave => {
+                self.hide.leave(self.hide_delay(), Instant::now());
+                self.presence_target = 0.;
+                self.presence_at = Instant::now();
+                self.hover.over(None, Instant::now());
+                self.close_tooltip(w);
+                self.pressed = None;
+                self.middle = None;
+                self.cycle.reset();
+            }
+            Event::Scroll(delta) if !self.frame.hidden && self.popup.is_none() => self.wheel(delta),
+            Event::PopupOverlay { id, event }
+                if self.tooltip.as_ref().is_some_and(|t| t.id == id) =>
+            {
+                // Dismissed by the compositor: retired here too, and not shown again on
+                // this item.
+                if !self.tooltip.as_mut().unwrap().event(event) {
+                    eprintln!("nidara-shell: the compositor dismissed the tooltip");
+                    self.close_tooltip(w);
+                    self.hover.press();
+                }
+            }
+            Event::PopupOverlay { id, event } => {
+                if let Some(popup) = self.popup.as_mut().filter(|p| p.id() == id) {
+                    let outcome = popup.event(w, event);
+                    self.popup_event(w, outcome)?;
+                }
+            }
+            // Another button during a drag cancels it; its release ends it.
+            Event::Button { pressed: true, .. } if self.drag.is_some() => self.cancel_drag(),
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: false,
+                ..
+            } if self.drag.is_some() => {
+                self.drag = None;
+                self.pressed = None;
+            }
+            // A press while the popup is open only closes it.
+            Event::Button { pressed: true, .. } if self.popup.is_some() => {
+                self.close_popup(w);
+                self.swallow = true;
+            }
+            Event::Button { pressed: false, .. } if self.swallow => self.swallow = false,
+            Event::Button {
+                button: RIGHT_BUTTON,
+                pressed: true,
+                serial,
+                ..
+            } if !self.frame.hidden => {
+                let slot = self.shown.hit(self.pointer.0, self.pointer.1);
+                self.open_menu(w, slot, Some(serial), false);
+            }
+            Event::Button {
+                button: MIDDLE_BUTTON,
+                pressed: true,
+                ..
+            } if !self.frame.hidden => {
+                self.middle = self.shown.hit(self.pointer.0, self.pointer.1);
+            }
+            Event::Button {
+                button: MIDDLE_BUTTON,
+                pressed: false,
+                serial,
+                ..
+            } => {
+                let here = self.shown.hit(self.pointer.0, self.pointer.1);
+                if let Some(slot) = self.middle.take().filter(|s| Some(*s) == here) {
+                    self.middle_click(slot, serial, w)?;
+                }
+            }
             Event::Button {
                 button: LEFT_BUTTON,
                 pressed: true,
                 ..
             } if !self.frame.hidden => {
-                self.pressed = self.layout.hit(self.pointer.0, self.pointer.1);
+                self.pressed = self.shown.hit(self.pointer.0, self.pointer.1);
+                // A separator's press starts the resize: the size follows the pointer
+                // away from the edge or toward it until the button comes up.
+                if let Some(n) = self.pressed
+                    && self.frame.view.items[n].kind == Kind::Separator
+                {
+                    self.pressed = None;
+                    self.drag = Some(crate::resize::Drag::new(
+                        self.depth(w),
+                        self.frame.prefs.icon_size,
+                    ));
+                    self.presence_target = 0.;
+                    self.presence_at = Instant::now();
+                }
             }
             Event::Button {
                 button: LEFT_BUTTON,
@@ -591,7 +1574,7 @@ impl Application for Dock {
                 serial,
                 ..
             } => {
-                let here = self.layout.hit(self.pointer.0, self.pointer.1);
+                let here = self.shown.hit(self.pointer.0, self.pointer.1);
                 if let Some(slot) = self.pressed.take().filter(|s| Some(*s) == here) {
                     self.click(slot, Some(serial), w);
                 }
@@ -619,6 +1602,15 @@ impl Application for Dock {
                         None
                     }
                 };
+                let picture = match self.popup.as_mut() {
+                    Some(Overlay::Chooser(c)) if c.captures.contains_key(&id) => {
+                        if c.captured(id, picture) {
+                            self.sync_popup(w);
+                        }
+                        return Ok(());
+                    }
+                    _ => picture,
+                };
                 if self.thumbs.finished(id, picture) {
                     w.redraw();
                 }
@@ -626,6 +1618,8 @@ impl Application for Dock {
             Event::Closed => {}
             _ => {}
         }
+        self.sync_popup(w);
+        self.sync_tooltip(w);
         Ok(())
     }
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {
@@ -633,7 +1627,8 @@ impl Application for Dock {
         if !self.frame.hidden && f.width == self.layout.size.0 && f.height == self.layout.size.1 {
             if !f.material {
                 // No compositor glass (another compositor): an opaque base of our own (D5).
-                let (w, h) = (f.width as f32, f.height as f32);
+                let [x, y, w, h] = self.shown.glass;
+                let (x, y, w, h) = (x as f32, y as f32, w as f32, h as f32);
                 let base = if self.frame.dark {
                     rgba(40, 40, 44, 235)
                 } else {
@@ -641,8 +1636,8 @@ impl Application for Dock {
                 };
                 c.rounded_rect(
                     Rect {
-                        x: 0.,
-                        y: 0.,
+                        x,
+                        y,
                         width: w,
                         height: h,
                     },
@@ -650,8 +1645,15 @@ impl Application for Dock {
                     base,
                 );
             }
-            for (n, item) in self.frame.view.items.iter().enumerate() {
-                self.paint_item(&mut c, n, item);
+            let now = Instant::now();
+            let frame = self.frame.clone();
+            for (n, item) in frame.view.items.iter().enumerate() {
+                self.paint_item(&mut c, n, item, now);
+            }
+            for (n, item) in frame.view.items.iter().enumerate() {
+                if let Some(count) = item.signal.count {
+                    self.paint_count(&mut c, n, item, count, now);
+                }
             }
         }
         Ok(c.finish())
@@ -660,10 +1662,11 @@ impl Application for Dock {
         if self.frame.hidden {
             return None;
         }
-        let (w, h) = (self.layout.size.0 as f64, self.layout.size.1 as f64);
+        // The capsule, wherever magnification has stretched it to.
+        let [x, y, w, h] = self.shown.glass;
         let pane = Pane {
-            x: 0.,
-            y: 0.,
+            x,
+            y,
             width: w,
             height: h,
             radius: w.min(h) / 2.,
@@ -683,7 +1686,11 @@ impl Application for Dock {
 /// One dock's whole life on its own thread; returns when its surface closes or the hub
 /// drops it.
 pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Result<()> {
-    let p = placement(&dock.layout, false);
+    let p = placement(
+        &dock.layout,
+        false,
+        crate::autohide::margin(&dock.layout, dock.hide.slide),
+    );
     nk_wayland::run_layer(
         dock,
         Options {

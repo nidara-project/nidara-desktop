@@ -355,8 +355,8 @@ dock or bar. Its gotchas:
 The checks are nested, not in CI: `toolkit/crates/nk-wayland/check-layer-headless.sh`
 with `NK_LAYER_CHECK`. Before acting, they wait for Hyalo's "Xwayland ready".
 
-The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1 of #959). Read
-`toolkit/shell/DOCK.md` first: what each step of the series owns, and what D1 does not.
+The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1–D2 of #959). Read
+`toolkit/shell/DOCK.md` first: what each step of the series owns, and what is not there yet.
 - Look at it with `scripts/dev/rust-session.sh --applications nidara-shell`. Check it with
   `toolkit/shell/check-dock-headless.sh`; other scales take
   `NK_WIDGETS_HYALO_CONFIG` = a Hyalo config with `[outputs.winit] scale = 1.25`.
@@ -367,6 +367,20 @@ The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1 of #959). Read
   (AccessDenied). A check makes the client act itself, e.g. a window that minimizes itself.
 - Window pictures come from each dock's own layer root (`capture_window`, id in hex); the
   pixels are wiped on lock (`Raster::wipe`).
+- With magnification on, measure an item AT REST: move the pointer away and wait for an
+  item's extent to equal its rest one before reading where anything is. Read under the
+  pointer, the strip is magnified around it, and the click lands on a neighbour (the
+  separator menu and the chooser steps each cost a round to this).
+- A popup the compositor dismisses (Done) must still be closed by the client
+  (`close_menu_popup`); a stale overlay makes the next menu fail with "menu parent must
+  be the active popup". The tooltip is a passive popup (`open_passive_popup`): no grab,
+  and only while no other popup is open.
+- Never build while the headless check runs: on this machine the load alone makes
+  `nidara-hyalo msg` time out and the check fail for no reason of its own.
+- The fonts have no bold and the text engine refuses to fake one: a figure that must
+  stand out (a count) uses the menus' weight.
+- `NK_SETTINGS_BIN` adds the native Settings' Dock page to the check. Settings paints from
+  the portal's Settings, so the check serves a stand-in for it on the private bus.
 
 ## Keep this skill current (part of "done", not a follow-up)
 

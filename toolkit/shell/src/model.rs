@@ -13,6 +13,46 @@ pub struct App {
     /// Flatpak's own application ID when Origin is flatpak; empty otherwise.
     pub flatpak_id: String,
     pub launchable: bool,
+    /// NewWindowMode is `declared-action` or `relaunch`: 'Nueva ventana' and middle-click.
+    pub new_window: bool,
+    /// The entry's declared desktop actions, in its order.
+    pub actions: Vec<DesktopAction>,
+    pub autostart: Autostart,
+    pub launcher: Launcher,
+}
+
+/// What the app says of itself through Unity (APPLICATIONS1-DOCK.md §5), as Applications1
+/// publishes it: a count or a progress only while the app makes it visible.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Launcher {
+    /// Visible and above zero.
+    pub count: Option<u64>,
+    /// Visible, 0..1.
+    pub progress: Option<f64>,
+    pub urgent: bool,
+}
+
+/// What a slot shows beside its running dot (DOCK.md §6). Attention is Hyalo's flag on
+/// any of the slot's windows, or the app's Unity `urgent`: display only, never focus.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Signal {
+    pub count: Option<u64>,
+    pub progress: Option<f64>,
+    pub attention: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct DesktopAction {
+    pub id: String,
+    pub name: String,
+}
+
+/// 'Abrir al iniciar sesión' as Applications1 confirms it: never assumed.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Autostart {
+    pub available: bool,
+    pub writable: bool,
+    pub enabled: bool,
 }
 
 /// A stored layout entry with its stable key (APPLICATIONS1-DOCK.md §6).
@@ -45,6 +85,8 @@ pub struct Window {
     pub minimized_order: u64,
     pub focus_order: u64,
     pub focused: bool,
+    /// Hyalo's `demands_attention`: a refused activation, or X11 urgency.
+    pub attention: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -97,6 +139,7 @@ pub struct Item {
     pub windows: Vec<u64>,
     /// Its minimized windows, most recently minimized first.
     pub minimized: Vec<u64>,
+    pub signal: Signal,
 }
 impl Item {
     /// The running dot: live windows, minimized ones included.
@@ -198,6 +241,7 @@ impl Model {
                         label: name.clone(),
                         windows: vec![],
                         minimized: vec![],
+                        signal: Default::default(),
                     });
                     continue;
                 }
@@ -212,6 +256,7 @@ impl Model {
                             label: String::new(),
                             windows: vec![],
                             minimized: vec![],
+                            signal: Default::default(),
                         });
                         continue;
                     }
@@ -236,6 +281,7 @@ impl Model {
                     label: i.apps[n].name.clone(),
                     windows,
                     minimized,
+                    signal: Default::default(),
                 },
                 None => Item {
                     key: key.clone(),
@@ -243,6 +289,7 @@ impl Model {
                     label: id.trim_end_matches(".desktop").to_string(),
                     windows,
                     minimized,
+                    signal: Default::default(),
                 },
             });
         }
@@ -280,6 +327,7 @@ impl Model {
                 label,
                 windows,
                 minimized,
+                signal: Default::default(),
             });
         }
 
@@ -307,6 +355,7 @@ impl Model {
                 label: w.title.clone(),
                 windows: vec![],
                 minimized: vec![w.id],
+                signal: Default::default(),
             })
             .collect();
 
@@ -323,12 +372,30 @@ impl Model {
         if !out.is_empty() {
             out.push(separator(out.len()));
         }
+        for item in &mut out {
+            let launcher = match &item.kind {
+                Kind::App { id, .. } => by_id.get(id.as_str()).map(|&n| i.apps[n].launcher),
+                _ => None,
+            }
+            .unwrap_or_default();
+            let attention = item
+                .windows
+                .iter()
+                .chain(&item.minimized)
+                .any(|w| windows.get(w).is_some_and(|w| w.attention));
+            item.signal = Signal {
+                count: launcher.count,
+                progress: launcher.progress,
+                attention: attention || launcher.urgent,
+            };
+        }
         out.push(Item {
             key: "trash".into(),
             kind: Kind::Trash,
             label: String::new(),
             windows: vec![],
             minimized: vec![],
+            signal: Default::default(),
         });
         View { items: out }
     }
@@ -341,6 +408,7 @@ fn separator(n: usize) -> Item {
         label: String::new(),
         windows: vec![],
         minimized: vec![],
+        signal: Default::default(),
     }
 }
 
@@ -583,5 +651,51 @@ mod tests {
         );
         // The app's running state still counts all three; newest minimized first.
         assert_eq!(v.items[0].minimized, [3, 2, 1]);
+    }
+
+    #[test]
+    fn signals_come_from_the_app_and_its_windows_only() {
+        let mut a = app("a.desktop");
+        a.launcher = Launcher {
+            count: Some(3),
+            progress: Some(0.5),
+            urgent: false,
+        };
+        let mut b = app("b.desktop");
+        b.launcher.urgent = true;
+        let mut w = win(1, "c");
+        w.attention = true;
+        let mut hidden = win(2, "a");
+        (hidden.minimized, hidden.attention) = (true, true);
+        let v = view(
+            &[a, b, app("c.desktop")],
+            &[pin("a.desktop"), pin("b.desktop")],
+            &[w, hidden],
+        );
+        let at = |key: &str| v.items.iter().find(|i| i.key == key).unwrap().signal;
+        assert_eq!(
+            at("app:a.desktop"),
+            Signal {
+                count: Some(3),
+                progress: Some(0.5),
+                attention: true
+            },
+            "a minimized window that demands attention marks its app"
+        );
+        assert_eq!(
+            at("minimized:0:2").count,
+            None,
+            "the count is the app slot's alone"
+        );
+        assert!(at("minimized:0:2").attention);
+        assert!(
+            at("app:b.desktop").attention,
+            "Unity urgent, no window at all"
+        );
+        assert!(
+            at("app:c.desktop").attention,
+            "Hyalo's flag on a running app"
+        );
+        assert_eq!(at("trash"), Signal::default());
     }
 }

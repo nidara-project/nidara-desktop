@@ -58,6 +58,18 @@ impl PopupPlacement {
                 positioner.set_anchor(xdg_positioner::Anchor::TopLeft);
                 positioner.set_gravity(xdg_positioner::Gravity::BottomLeft);
             }
+            PopupSide::AboveCentered => {
+                positioner.set_anchor(xdg_positioner::Anchor::Top);
+                positioner.set_gravity(xdg_positioner::Gravity::Top);
+            }
+            PopupSide::RightCentered => {
+                positioner.set_anchor(xdg_positioner::Anchor::Right);
+                positioner.set_gravity(xdg_positioner::Gravity::Right);
+            }
+            PopupSide::LeftCentered => {
+                positioner.set_anchor(xdg_positioner::Anchor::Left);
+                positioner.set_gravity(xdg_positioner::Gravity::Left);
+            }
         }
         positioner.set_constraint_adjustment(
             xdg_positioner::ConstraintAdjustment::FlipY

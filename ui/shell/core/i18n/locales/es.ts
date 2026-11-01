@@ -537,6 +537,11 @@ export default {
     "dock.menu.open": "Abrir",
     "dock.menu.close-window": "Cerrar ventana",
     "dock.menu.window-of": "Ventana de",
+    "dock.menu.new-window": "Nueva ventana",
+    "dock.menu.open-at-login": "Abrir al iniciar sesión",
+    "dock.menu.minimize": "Minimizar",
+    "dock.menu.restore": "Restaurar",
+    "dock.menu.dock-settings": "Ajustes del Dock…",
 
     "settings.network.group.ethernet": "Cableada (Ethernet)",
     "settings.network.group.wireless": "Inalámbrica",

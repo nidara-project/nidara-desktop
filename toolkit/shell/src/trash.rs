@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Whether the Trash holds anything (APPLICATIONS1-DOCK.md §8 Trash): GIO's `trash:///`,
 //! every volume's Trash, when gvfs serves it; else the home Trash alone, said to be
-//! partial; else nothing, and the slot says it cannot tell. Read-only: emptying is D2.
+//! partial; else nothing, and the slot says it cannot tell. Emptying is the dock menu's
+//! named action, through the same backend, and only where that backend is GIO's own.
 use gio::prelude::*;
 use std::path::Path;
 
@@ -43,6 +44,31 @@ fn count(trash: &gio::File) -> Option<u32> {
         .ok()
         .filter(|info| info.has_attribute(COUNT))
         .map(|info| info.attribute_uint32(COUNT))
+}
+
+/// Empties the Trash through GIO's `trash:///` (every volume's), as `gio trash --empty`
+/// does: each top-level entry deleted by the backend, no path of our own ever removed.
+/// The first failure stops it and is reported.
+pub fn empty() -> Result<(), String> {
+    let trash = gio::File::for_uri("trash:///");
+    if count(&trash).is_none() {
+        return Err("the Trash's backend (gvfs) is not available".into());
+    }
+    let entries = trash
+        .enumerate_children(
+            "standard::name",
+            gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            gio::Cancellable::NONE,
+        )
+        .map_err(|e| e.to_string())?;
+    for info in entries {
+        let info = info.map_err(|e| e.to_string())?;
+        trash
+            .child(info.name())
+            .delete(gio::Cancellable::NONE)
+            .map_err(|e| format!("{}: {e}", info.name().display()))?;
+    }
+    Ok(())
 }
 
 /// Runs forever on its own thread: sends the state at start and at every change.
