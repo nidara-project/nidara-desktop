@@ -152,6 +152,8 @@ Added **inside v1** (the protocol rule: never bump; old members stay as they are
 - **Allowlist, not inference:** the native Settings draws only the pages it lists — phase 1:
   `appearance`. Every other page, whatever its `kind`, is D3. Nothing is inferred from
   `kind: "preference"`.
+  Since then: `display` (its own code) and `dock` (#959 D2, its manifest page alone,
+  `routing::MANIFEST`), each added to the list by name.
 - **The schema is versioned** (`schemaVersion` in `Snapshot`/`Describe`) and the renderer
   handles exactly these, everything else being a CI failure for an allowlisted page:
   controls `toggle`, `dropdown`, `segmented`, `slider` (unit, pct, decimals, step,

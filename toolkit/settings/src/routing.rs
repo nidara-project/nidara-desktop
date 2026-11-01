@@ -28,7 +28,9 @@ pub const LEGACY: &str = "org.nidara.SettingsLegacy";
 pub const PATH: &str = "/org/nidara/Settings";
 
 /// The pages the native Settings draws (D2: an allowlist, never inferred from `kind`).
-pub const DRAWN: &[&str] = &["appearance", "display"];
+pub const DRAWN: &[&str] = &["appearance", "display", "dock"];
+/// Of those, the ones drawn from their manifest page alone (the rest have code of their own).
+pub const MANIFEST: &[&str] = &["appearance", "dock"];
 
 /// How long a started legacy Settings has to take its name (its cold start is ~1 s).
 pub const LEGACY_START: Duration = Duration::from_secs(20);
@@ -364,6 +366,10 @@ mod tests {
         assert_eq!(
             route(&args(&["page", "display"]), DRAWN),
             Ok(Route::Navigate("display".into()))
+        );
+        assert_eq!(
+            route(&args(&["page", "dock"]), DRAWN),
+            Ok(Route::Navigate("dock".into()))
         );
         assert_eq!(
             route(&args(&["page", "network"]), DRAWN),

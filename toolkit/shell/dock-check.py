@@ -63,6 +63,32 @@ def gsettings(key, value):
     subprocess.run(['gsettings', 'set', 'org.nidara.dock', key, value], check=True, timeout=5)
 
 
+# A stand-in for the desktop portal's Settings, on the private bus: the native Settings
+# paints from it (the same answer scripts/dev/display-settings-check.py serves).
+PORTAL = """
+import gi
+gi.require_version('Gio', '2.0')
+from gi.repository import Gio, GLib
+xml = ('<node><interface name="org.freedesktop.portal.Settings"><method name="ReadAll">'
+       '<arg type="as" direction="in"/><arg type="a{sa{sv}}" direction="out"/></method>'
+       '<signal name="SettingChanged"><arg type="s"/><arg type="s"/><arg type="v"/></signal>'
+       '</interface></node>')
+def answer(conn, sender, path, iface, method, params, invocation):
+    invocation.return_value(GLib.Variant('(a{sa{sv}})', ({
+        'org.freedesktop.appearance': {'accent-color': GLib.Variant('(ddd)', (0., 136/255, 1.)),
+                                       'color-scheme': GLib.Variant('u', 1),
+                                       'reduced-motion': GLib.Variant('u', 0)},
+        'org.nidara.appearance': {'reduce-transparency': GLib.Variant('b', False),
+                                  'window-background': GLib.Variant('s', 'opaque')},
+        'org.gnome.desktop.interface': {'font-name': GLib.Variant('s', 'Inter Variable 11'),
+                                        'text-scaling-factor': GLib.Variant('d', 1.)}},)))
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+bus.register_object('/org/freedesktop/portal/desktop',
+                    Gio.DBusNodeInfo.new_for_xml(xml).interfaces[0], answer, None, None)
+Gio.bus_own_name_on_connection(bus, 'org.freedesktop.portal.Desktop', 0, None, None)
+GLib.MainLoop().run()
+"""
+
 MINIMIZER = """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -446,6 +472,77 @@ try:
     adjuster().get_value_iface().set_current_value(64)
     until('and back to 64', lambda: icon_size() == '64')
     result['resize'] = {'dragged': 80, 'cancelled_to': 80, 'reader': 56}
+    # The Dock page of the native Settings (D2): every preference row is there, a row that
+    # only matters with another one on is insensitive until it is, and a switch on the
+    # page writes through Config1 to the dock.
+    if os.environ.get('NK_SETTINGS_BIN'):
+        strings = {}
+        for locale in ('en', 'es'):
+            path = Path(os.environ['NK_SETTINGS_DATA']) / 'i18n' / f'{locale}.json'
+            if path.exists():
+                for k, v in json.loads(path.read_text()).items():
+                    strings.setdefault(k, set()).add(v)
+
+        def names(key):
+            return strings.get(key, set())
+
+        def settings_nodes():
+            found = []
+
+            def visit(node, depth):
+                for c in children(node):
+                    if c is None:
+                        continue
+                    found.append(c)
+                    if depth < 40:
+                        visit(c, depth + 1)
+            for app in children(Atspi.get_desktop(0)):
+                if app and app.get_name() not in ('nidara-shell',):
+                    app.set_cache_mask(Atspi.Cache.NONE)
+                    visit(app, 0)
+            return found
+
+        def row(key, role=None):
+            return next((n for n in settings_nodes() if n.get_name() in names(key)
+                         and (role is None or n.get_role_name() == role)), None)
+        start('portal', ['python3', '-I', '-c', PORTAL])
+        until('the portal stand-in', lambda: Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+            'org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus', 'NameHasOwner',
+            GLib.Variant('(s)', ('org.freedesktop.portal.Desktop',)), None,
+            Gio.DBusCallFlags.NONE, 3000, None).unpack()[0])
+        start('settings', [os.environ['NK_SETTINGS_BIN'], 'page', 'dock'])
+        toggle = until('the Dock page with its auto-hide switch',
+                       lambda: row('settings.dock.autohide', 'toggle button')
+                       or row('settings.dock.autohide', 'check box')
+                       or row('settings.dock.autohide', 'switch'), 60)
+        present = {key: row(key) is not None for key in (
+            'settings.dock.position', 'settings.dock.icon-size', 'settings.dock.magnification',
+            'settings.dock.max-size', 'settings.dock.indicators', 'settings.dock.autohide',
+            'settings.dock.hide-delay')}
+        assert all(present.values()), present
+
+        def states(key):
+            return [(n.get_role_name(), n.get_state_set().contains(Atspi.StateType.ENABLED),
+                     n.get_state_set().contains(Atspi.StateType.SENSITIVE))
+                    for n in settings_nodes() if n.get_name() in names(key)]
+
+        def enabled(key):
+            return any(e for role, e, _ in states(key)
+                       if role not in ('label', 'static', 'heading', 'panel', 'filler'))
+        assert not enabled('settings.dock.hide-delay'), states('settings.dock.hide-delay')
+        time.sleep(1)
+        shot(LOG / 'settings-dock.png')
+        assert toggle.get_action_iface().do_action(0), 'the switch refused'
+        until('the page turns auto-hide on', lambda: subprocess.run(
+            ['gsettings', 'get', 'org.nidara.dock', 'auto-hide'], capture_output=True,
+            text=True, timeout=5).stdout.strip() == 'true')
+        until('the dock slides out', lambda: docks()[0]['y'] > placed['y'])
+        until('hide delay sensitive once it is on', lambda: enabled('settings.dock.hide-delay'))
+        shot(LOG / 'settings-dock-autohide.png')
+        toggle = row('settings.dock.autohide', toggle.get_role_name())
+        assert toggle.get_action_iface().do_action(0), 'the switch refused'
+        until('and off again', lambda: docks()[0]['y'] == placed['y'])
+        result['settings_page'] = present
     # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
     # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
     # Config1 and shows what Config1 took.

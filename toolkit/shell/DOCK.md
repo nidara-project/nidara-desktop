@@ -159,6 +159,15 @@ focus never starts on one); there the arrow away from the edge grows the icons b
 and the arrow toward it shrinks them, and a reader's `SetValue` is clamped and sent the
 same way. No resize cursor yet: the toolkit has no cursor shapes.
 
+**The Dock page (D2).** The native Settings draws `dock` from its manifest page alone
+(`routing::MANIFEST`, beside `appearance`): position, icon size, magnification and its
+maximum, indicators, auto-hide and its delay, all Config1 keys. The maximum is
+insensitive while magnification is off and the delay while auto-hide is off. The dock
+menu's "Dock Settings…" opens it. The private check drives it when given
+`NK_SETTINGS_BIN` (with a stand-in for the portal's Settings on the private bus): every
+row is there, the delay is insensitive, the page's auto-hide switch hides the dock and
+makes the delay sensitive, and switching it off brings the dock back.
+
 **Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
 (`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the

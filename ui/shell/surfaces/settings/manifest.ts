@@ -186,8 +186,6 @@ export const manifest = [
         groups: [
             {
                 i18n: "settings.dock.group.position",
-                footer: "settings.dock.side-autohide-note",
-                footerWhen: { key: "dock.position", in: ["left", "right"] },
                 items: [
                     "dock.position",
                 ],
@@ -202,7 +200,7 @@ export const manifest = [
                 i18n: "settings.dock.group.effects",
                 items: [
                     "dock.magnification",
-                    "dock.maxIconSize",
+                    { key: "dock.maxIconSize", sensitiveWhen: { key: "dock.magnification", in: ["true"] } },
                 ],
             },
             {
@@ -210,7 +208,7 @@ export const manifest = [
                 items: [
                     "dock.indicators",
                     "dock.autoHide",
-                    "dock.hideDelay",
+                    { key: "dock.hideDelay", sensitiveWhen: { key: "dock.autoHide", in: ["true"] } },
                 ],
             },
         ],
