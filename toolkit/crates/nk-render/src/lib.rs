@@ -76,10 +76,6 @@ impl Canvas {
             scale,
         }
     }
-    /// Device pixels per logical pixel.
-    pub fn scale(&self) -> f64 {
-        self.scale
-    }
     pub fn image(&mut self, image: &Raster, bounds: Rect, fit: ImageFit) {
         if bounds.width <= 0. || bounds.height <= 0. {
             return;

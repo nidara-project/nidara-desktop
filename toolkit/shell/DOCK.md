@@ -157,11 +157,7 @@ whichever side the pointer comes from, as on the TS dock (owner, 2026-11-01). It
 anchored at the pointer until then: it grew only away from it, followed the pointer out
 by a side and jumped back to the middle once the magnification eased out. Centred, the
 item under the pointer still stays under it (the bell grows it more than its neighbours
-push it), which the unit tests check at both ends and in the middle. Each icon is drawn on
-whole device pixels along the dock, as its running dot and the separator are: left
-between pixels while they stepped, the first fraction of a pixel the strip moved as it
-started to grow made every dot and the separator jump aside without their icons
-(owner, 2026-11-01). Presence eases in on entry and out on leave on
+push it), which the unit tests check at both ends and in the middle. Presence eases in on entry and out on leave on
 the TS dock's spring (`spring.rs`: stiffness 320, damping 38, from rest, no overshoot;
 snapped under reduced motion) at the TS dock's speed, 2.4× wall time (`SIM_SPEED`, so
 mostly there in 125 ms), its clock started with the change and a frame advancing at most
