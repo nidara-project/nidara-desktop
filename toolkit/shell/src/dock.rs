@@ -75,8 +75,11 @@ pub struct Dock {
     swallow: bool,
     /// The attention bounce of each slot (attention.rs).
     attention: crate::attention::Attention,
-    /// The look was asked for once for a count's text, whether or not it came.
+    /// The look was asked for once (counts, tooltips), whether or not it came.
     look_tried: bool,
+    /// Where the pointer rests, and the tooltip it brought (tooltip.rs).
+    hover: crate::tooltip::Hover,
+    tooltip: Option<crate::tooltip::Tooltip>,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
@@ -168,6 +171,8 @@ impl Dock {
             swallow: false,
             attention: Default::default(),
             look_tried: false,
+            hover: Default::default(),
+            tooltip: None,
         }
     }
 
@@ -217,24 +222,15 @@ impl Dock {
         self.frame = frame;
         self.attention
             .update(&self.frame.view.items, Instant::now());
-        if !self.look_tried
-            && self.look.is_none()
-            && self
-                .frame
-                .view
-                .items
-                .iter()
-                .any(|i| i.signal.count.is_some())
+        if self
+            .frame
+            .view
+            .items
+            .iter()
+            .any(|i| i.signal.count.is_some())
         {
             // A count's figure is text: the menus' look carries the fonts.
-            self.look_tried = true;
-            match zbus::blocking::Connection::session()
-                .map_err(|e| e.to_string())
-                .and_then(|bus| Look::load(&bus))
-            {
-                Ok(look) => self.look = Some(look),
-                Err(e) => eprintln!("nidara-shell: counts without figures: {e}"),
-            }
+            self.ensure_look("counts without figures");
         }
         if self.focus.is_some()
             && (self.frame.hidden
@@ -253,6 +249,7 @@ impl Dock {
             w.set_layer_placement(placement(&next, keyboard))?;
         }
         self.layout = next;
+        self.follow_tooltip(w);
         self.follow_popup(w);
         self.capture(w);
         self.apply(w)
@@ -308,7 +305,112 @@ impl Dock {
         }
     }
 
+    /// The look, loaded once on the first thing that needs it; false when it cannot be.
+    fn ensure_look(&mut self, why: &str) -> bool {
+        if self.look.is_none() && !self.look_tried {
+            self.look_tried = true;
+            match zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus))
+            {
+                Ok(look) => self.look = Some(look),
+                Err(e) => eprintln!("nidara-shell: {why}: {e}"),
+            }
+        }
+        self.look.is_some()
+    }
+
+    /// The pointer moved: which item it rests on now (none over a separator, a hidden
+    /// dock, or while a menu is open); a tooltip of another item goes.
+    fn hover(&mut self, w: &mut Window) {
+        let key = (!self.frame.hidden && self.popup.is_none())
+            .then(|| self.layout.hit(self.pointer.0, self.pointer.1))
+            .flatten()
+            .map(|n| &self.frame.view.items[n])
+            .filter(|i| i.kind != Kind::Separator)
+            .map(|i| i.key.clone());
+        if self.hover.over(key.as_deref(), Instant::now())
+            && self
+                .tooltip
+                .as_ref()
+                .is_some_and(|t| Some(&t.anchor) != key.as_ref())
+        {
+            self.close_tooltip(w);
+        }
+    }
+
+    fn close_tooltip(&mut self, w: &mut Window) {
+        if let Some(t) = self.tooltip.take() {
+            t.close(w);
+        }
+    }
+
+    /// The tooltip that is due, if none shows and no other popup is open.
+    fn show_tooltip(&mut self, w: &mut Window) {
+        if self.tooltip.is_some() || self.popup.is_some() || self.frame.hidden {
+            return;
+        }
+        let Some(key) = self.hover.due(Instant::now()).map(str::to_string) else {
+            return;
+        };
+        let Some(n) = self.frame.view.items.iter().position(|i| i.key == key) else {
+            return;
+        };
+        if !self.ensure_look("no tooltips") {
+            return;
+        }
+        let item = &self.frame.view.items[n];
+        let look = self.look.as_mut().unwrap();
+        let text = if item.kind == Kind::Trash {
+            look.text_of(&crate::menu::Label::Key("dock.special.trash.name"))
+        } else {
+            item.label.clone()
+        };
+        if text.is_empty() {
+            return;
+        }
+        let (rect, side) = (self.anchor_rect(n), self.side());
+        let look = self.look.as_mut().unwrap();
+        match crate::tooltip::Tooltip::open(w, look, &text, key, rect, side) {
+            Ok(t) => {
+                self.tooltip = Some(t);
+                self.hover.shown();
+            }
+            Err(e) => {
+                eprintln!("nidara-shell: no tooltip: {e}");
+                self.hover.press();
+            }
+        }
+    }
+
+    /// The tooltip follows its item, or goes with it.
+    fn follow_tooltip(&mut self, w: &mut Window) {
+        let Some(t) = &self.tooltip else { return };
+        let at = self.frame.view.items.iter().position(|i| i.key == t.anchor);
+        match at.filter(|_| !self.frame.hidden) {
+            Some(n) => {
+                let (rect, side) = (self.anchor_rect(n), self.side());
+                if let Err(e) = self.tooltip.as_mut().unwrap().follow(w, rect, side) {
+                    eprintln!("nidara-shell: the tooltip cannot follow its item ({e})");
+                    self.close_tooltip(w);
+                }
+            }
+            None => self.close_tooltip(w),
+        }
+    }
+
+    fn sync_tooltip(&mut self, w: &mut Window) {
+        if let (Some(t), Some(look)) = (self.tooltip.as_mut(), self.look.as_ref())
+            && let Err(e) = t.sync(w, look)
+        {
+            eprintln!("nidara-shell: the tooltip: {e}");
+            self.close_tooltip(w);
+        }
+    }
+
     fn close_popup(&mut self, w: &mut Window) {
+        // One popup at a time: a menu or the chooser takes the tooltip's place.
+        self.close_tooltip(w);
         if let Some(p) = self.popup.take() {
             p.close(w);
             self.publish_semantics(w);
@@ -1111,9 +1213,18 @@ impl Application for Dock {
         {
             return crate::attention::FRAME.as_millis() as u32;
         }
-        match self.popup {
+        let base = match self.popup {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
+        };
+        // A pending tooltip wakes the loop when its dwell is over.
+        match self
+            .hover
+            .wait(Instant::now())
+            .filter(|_| self.tooltip.is_none())
+        {
+            Some(wait) => base.min(wait.as_millis() as u32 + 1),
+            None => base,
         }
     }
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
@@ -1126,9 +1237,16 @@ impl Application for Dock {
         {
             w.redraw();
         }
+        self.show_tooltip(w);
+        self.sync_tooltip(w);
         Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
+        if let Event::Button { pressed: true, .. } = event {
+            // A press, wherever: no tooltip, and none again on this item.
+            self.hover.press();
+            self.close_tooltip(w);
+        }
         match event {
             Event::Error(e) => return Err(e),
             Event::Wake => {
@@ -1136,17 +1254,33 @@ impl Application for Dock {
                 self.a11y(w)?;
             }
             Event::Configure => self.apply(w)?,
-            Event::Motion(x, y) => self.pointer = (x, y),
+            Event::Motion(x, y) => {
+                self.pointer = (x, y);
+                self.hover(w);
+            }
             Event::Key(key) => self.key(key, w)?,
             // The compositor gave the keyboard elsewhere: the roving focus ends with it. Not
             // to the dock's own popup, which holds it for as long as it is open.
             Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
             Event::PointerLeave => {
+                self.hover.over(None, Instant::now());
+                self.close_tooltip(w);
                 self.pressed = None;
                 self.middle = None;
                 self.cycle.reset();
             }
             Event::Scroll(delta) if !self.frame.hidden && self.popup.is_none() => self.wheel(delta),
+            Event::PopupOverlay { id, event }
+                if self.tooltip.as_ref().is_some_and(|t| t.id == id) =>
+            {
+                // Dismissed by the compositor: retired here too, and not shown again on
+                // this item.
+                if !self.tooltip.as_mut().unwrap().event(event) {
+                    eprintln!("nidara-shell: the compositor dismissed the tooltip");
+                    self.close_tooltip(w);
+                    self.hover.press();
+                }
+            }
             Event::PopupOverlay { id, event } => {
                 if let Some(popup) = self.popup.as_mut().filter(|p| p.id() == id) {
                     let outcome = popup.event(w, event);
@@ -1244,6 +1378,7 @@ impl Application for Dock {
             _ => {}
         }
         self.sync_popup(w);
+        self.sync_tooltip(w);
         Ok(())
     }
     fn paint(&mut self, f: nk_wayland::Frame) -> nk_wayland::Result<Vec<u8>> {

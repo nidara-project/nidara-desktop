@@ -56,6 +56,18 @@ impl Window {
         }
         self.open_overlay(placement, PopupSide::Below, None, None, false)
     }
+    /// A passive popup beside its anchor (a tooltip): no grab and not modal, so it never
+    /// takes input and closing it never swallows the next press. The only popup while open.
+    pub fn open_passive_popup(
+        &mut self,
+        placement: PopupPlacement,
+        side: PopupSide,
+    ) -> Result<PopupId> {
+        if !self.overlay.is_empty() {
+            return Err("a popup is already open".into());
+        }
+        self.open_overlay(placement, side, None, None, false)
+    }
     pub fn open_menu_popup(&mut self, options: MenuPopupPlacement) -> Result<PopupId> {
         let placement = options.constrained()?;
         if self.overlay.len() >= 16 {

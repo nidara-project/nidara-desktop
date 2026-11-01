@@ -20,4 +20,5 @@ pub mod prefs;
 pub mod semantics;
 pub mod shell1;
 pub mod thumbs;
+pub mod tooltip;
 pub mod trash;

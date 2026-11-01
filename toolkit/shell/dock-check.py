@@ -352,6 +352,19 @@ try:
     until('the sender gone, nothing stale stays', lambda: 'pending' not in kitty()
           and 'attention' not in kitty())
     result['unity']['after_exit'] = kitty()
+    # Tooltip (D2): resting on an item names it beside the dock after the dwell; it takes
+    # no input (no grab), so the dock's own walk and clicks are unchanged under it.
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        x, y = item_point('kitty')
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        time.sleep(1.2)
+        shot(LOG / 'dock-tooltip.png')
+        bx, by = item_point('Trash')
+        pipe.write(f'move {bx} {by}\n')
+        time.sleep(.4)  # warm: the next item at once
+        shot(LOG / 'dock-tooltip-next.png')
+        pipe.write(f'move {bx} {by - 200}\n')
+    result['tooltip'] = 'shown, see dock-tooltip.png'
     # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
     # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
     # Config1 and shows what Config1 took.
@@ -360,7 +373,9 @@ try:
         def open_menu(x, y, what):
             # A hand moves there first: Hyalo ends a closed menu's pointer grab on the first
             # motion, which the dock then does not see (hyalo shell/mod.rs).
-            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\nrclick {x} {y}\n')
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+            time.sleep(.3)  # the pointer is the dock's again before the press
+            pipe.write(f'rclick {x} {y}\n')
             return until(what, lambda: (r := menu_rows()) and r)
 
         def close_menu():
@@ -444,17 +459,30 @@ try:
     time.sleep(1)
     with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
         x, y = item_point(twins().get_name())
-        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\nclick {x} {y}\n')
-        offered = until('the chooser offers both windows',
-                        lambda: (c := chooser()) and {'First twin', 'Second twin'} <= set(c) and c)
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        time.sleep(.3)  # after a grab ends, Hyalo gives the pointer back on motion
+        pipe.write(f'click {x} {y}\n')
+        try:
+            offered = until('the chooser offers both windows',
+                            lambda: (c := chooser()) and {'First twin', 'Second twin'} <= set(c) and c)
+        except RuntimeError:
+            # What the dock and Hyalo held when the click did not offer a choice.
+            (LOG / 'chooser-failed.json').write_text(json.dumps(
+                {'dock': walk(), 'windows': ipc('windows'), 'focused': focused_title()}, indent=2))
+            shot(LOG / 'dock-chooser-failed.png')
+            raise
         time.sleep(4)  # the pictures (software Hyalo is slow to draw them)
         shot(LOG / 'dock-chooser.png')
         pipe.write('key 1\n')  # Escape
         until('Escape closes the chooser', lambda: not chooser())
-        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\nclick {x} {y}\n')
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        time.sleep(.3)  # after a grab ends, Hyalo gives the pointer back on motion
+        pipe.write(f'click {x} {y}\n')
         try:
             offered = until('the chooser again', lambda: (c := chooser()) and len(c) == 2 and c)
         except RuntimeError:
+            (LOG / 'chooser-again-failed.json').write_text(json.dumps(
+                {'dock': walk(), 'windows': ipc('windows'), 'focused': focused_title()}, indent=2))
             shot(LOG / 'dock-chooser-again-failed.png')
             raise
         other = next(t for t in ('First twin', 'Second twin') if t != focused_title())
