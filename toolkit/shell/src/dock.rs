@@ -1227,12 +1227,17 @@ impl Dock {
         [x + dx, y + dy, w, h]
     }
 
-    /// The running dot's centre, moved off its resting place in whole device pixels (see
-    /// `steady`).
-    fn dot(&self, n: usize, scale: f64) -> (f64, f64) {
-        let (rx, ry) = self.layout.dot(n);
-        let (x, y) = self.shown.dot(n);
-        (steady(rx, x, scale), steady(ry, y, scale))
+    /// The running dot: on whole device pixels where it rests, carried from there exactly
+    /// as far as its icon has moved (see `follow`).
+    fn dot(&self, n: usize, d: f64, scale: f64) -> Rect {
+        let rest = self.layout.dot(n);
+        let now = self.shown.dot(n);
+        let r = nk_render::snapped_dot(rest, d, scale);
+        Rect {
+            x: follow(r.x, rest.0, now.0),
+            y: follow(r.y, rest.1, now.1),
+            ..r
+        }
     }
 
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
@@ -1254,25 +1259,42 @@ impl Dock {
             rgba(0, 0, 0, 56)
         };
         match &item.kind {
-            // One physical pixel, on the grid: a hairline between pixels reads as a thick
-            // blurred one. Its ink is the TS dock's `--nidara-text-disabled` (white at 0.3).
+            // One physical pixel, on the grid where it rests (a hairline between pixels reads
+            // as a thick blurred one) and carried from there as its neighbours move, handed
+            // from pixel to pixel by `hand_over`. Its ink is the TS dock's
+            // `--nidara-text-disabled` (white at 0.3).
             Kind::Separator => {
-                let line = if self.frame.dark {
-                    rgba(255, 255, 255, 77)
-                } else {
-                    rgba(0, 0, 0, 77)
-                };
+                let (v, alpha) = (if self.frame.dark { 255 } else { 0 }, 77.);
                 let [rx, ry, _, _] = self.layout.rects[n];
                 let s = c.scale();
-                let r = Rect {
-                    x: steady(rx, x, s) as f32,
-                    y: steady(ry, y, s) as f32,
-                    ..r
-                };
-                if self.layout.position.horizontal() {
-                    c.vertical_rule(r, 1., line)
+                let grid = |v: f64| ((v * s).round() / s) as f32;
+                let horizontal = self.layout.position.horizontal();
+                let at = if horizontal {
+                    follow(grid(rx), rx, x)
                 } else {
-                    c.horizontal_rule(r, 1., line)
+                    follow(grid(ry), ry, y)
+                };
+                let (pixel, next) = hand_over(f64::from(at) * s);
+                for (k, share) in [(pixel, 1. - next), (pixel + 1., next)] {
+                    if share <= 0. {
+                        continue;
+                    }
+                    let along = (k / s) as f32;
+                    let px = (1. / s) as f32;
+                    let line = if horizontal {
+                        Rect {
+                            x: along,
+                            width: px,
+                            ..r
+                        }
+                    } else {
+                        Rect {
+                            y: along,
+                            height: px,
+                            ..r
+                        }
+                    };
+                    c.rect(line, rgba(v, v, v, (alpha * share).round() as u8));
                 }
             }
             Kind::Trash => {
@@ -1374,7 +1396,10 @@ impl Dock {
         if item.signal.attention {
             // Attention's still mark, with or without motion: the dot drawn out to a dash
             // along the dock, whatever the indicators preference (it is not a running dot).
-            let (cx, cy) = self.dot(n, c.scale());
+            let dot = self.dot(n, d, c.scale());
+            let d = f64::from(dot.width);
+            let cx = f64::from(dot.x) + d / 2.;
+            let cy = f64::from(dot.y) + d / 2.;
             let (lw, lh) = if self.layout.position.horizontal() {
                 (3. * d, d)
             } else {
@@ -1391,7 +1416,8 @@ impl Dock {
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            c.dot(self.dot(n, c.scale()), d, mark);
+            let dot = self.dot(n, d, c.scale());
+            c.rounded_rect(dot, f64::from(dot.width) / 2., mark);
         }
     }
 
@@ -1781,13 +1807,24 @@ pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Res
     )
 }
 
-/// `now`, moved off `rest` only in whole device pixels. The dots and the separator are
-/// drawn on the pixel grid, and at rest they sit right on a rounding edge (a centre between
-/// two pixels), so rounding where they are flips them a whole pixel at the first hundredth
-/// of movement, long before their icon visibly moves. Rounding the movement instead keeps
-/// them still until their icon has moved half a pixel, and then a pixel at a time with it.
-fn steady(rest: f64, now: f64, scale: f64) -> f64 {
-    rest + ((now - rest) * scale).round() / scale
+/// A mark placed on the pixel grid at rest (`snapped`, for `rest`), carried to `now` by
+/// exactly what its icon moved: no rounding while it moves, so it glides with the icon
+/// instead of stepping a pixel at a time, and keeps the same sub-pixel offset from it.
+fn follow(snapped: f32, rest: f64, now: f64) -> f32 {
+    (f64::from(snapped) + now - rest) as f32
+}
+
+/// A one-pixel line at device coordinate `at`: the pixel it starts in and the share of its
+/// ink that the next pixel takes. Split evenly by coverage, a line between two pixels is
+/// two faint ones, which reads blurred while it moves; instead it stays whole in one pixel
+/// for most of the way and crosses to the next over the middle `HAND_OVER` of a pixel, so
+/// it moves continuously, never jumps, and is split only briefly.
+fn hand_over(at: f64) -> (f64, f64) {
+    const HAND_OVER: f64 = 0.3;
+    let pixel = at.floor();
+    let f = at - pixel;
+    let next = ((f - 0.5) / HAND_OVER + 0.5).clamp(0., 1.);
+    (pixel, next)
 }
 
 /// Along the dock, an even span centred on `start + len / 2` rounded: the compositor
@@ -1801,20 +1838,46 @@ fn centred_span(start: f64, len: f64) -> (i32, i32) {
 #[cfg(test)]
 mod anchor_tests {
     #[test]
-    fn a_dot_on_a_rounding_edge_stays_put_until_its_icon_moves() {
+    fn a_dot_moves_exactly_as_far_as_its_icon() {
         use nk_render::snapped_dot;
-        // The rest centre puts a 5 px dot's corner on a half pixel: rounding where the dot
-        // is moves it a whole pixel when the row has moved a hundredth.
+        // At rest a 5 px dot's corner falls on a half pixel; it is drawn on the grid.
         let rest = 100.;
-        let x = |c: f64| snapped_dot((c, 0.), 5., 1.).x;
-        assert_eq!(x(rest - 0.01), x(rest) - 1.);
-        // Rounding the movement does not, and follows the icon a pixel at a time.
-        for (moved, by) in [(0.01, 0.), (0.4, 0.), (0.6, 1.), (2.4, 2.), (2.6, 3.)] {
-            assert_eq!(x(super::steady(rest, rest - moved, 1.)), x(rest) - by, "{moved}");
+        let r = snapped_dot((rest, 0.), 5., 1.);
+        assert_eq!(super::follow(r.x, rest, rest), r.x);
+        // Snapping where it is would jump it a whole pixel at a hundredth of movement.
+        assert_eq!(snapped_dot((rest - 0.01, 0.), 5., 1.).x, r.x - 1.);
+        // Carried, it moves by what the icon moved, no more and no less, at any scale.
+        for moved in [0.01, 0.3, 0.5, 0.7, 2.6] {
+            let x = super::follow(r.x, rest, rest - moved);
+            assert!((f64::from(r.x - x) - moved).abs() < 1e-4, "{moved}");
         }
-        // At scale 2 the steps are device pixels, half a logical one.
-        let x2 = |c: f64| snapped_dot((c, 0.), 5., 2.).x;
-        assert_eq!(x2(super::steady(rest, rest - 0.3, 2.)), x2(rest) - 0.5);
+        let r2 = snapped_dot((rest, 0.), 5., 2.);
+        let x2 = super::follow(r2.x, rest, rest - 0.3);
+        assert!((f64::from(r2.x - x2) - 0.3).abs() < 1e-4);
+    }
+
+    #[test]
+    fn the_separator_moves_whole_most_of_the_way() {
+        use super::hand_over;
+        // On a pixel and up to just before the middle, all of it in one pixel.
+        assert_eq!(hand_over(10.), (10., 0.));
+        assert_eq!(hand_over(10.3), (10., 0.));
+        // Across the middle it crosses over, continuously.
+        assert_eq!(hand_over(10.5), (10., 0.5));
+        let (_, a) = hand_over(10.45);
+        let (_, b) = hand_over(10.55);
+        assert!(a < 0.5 && b > 0.5 && b - a < 0.4);
+        // Then it is whole in the next pixel, as at the start of the next.
+        assert_eq!(hand_over(10.7), (10., 1.));
+        assert_eq!(hand_over(11.), (11., 0.));
+        // The way the mark goes never turns back.
+        let mut last = 0.;
+        for i in 0..=100 {
+            let (p, n) = hand_over(10. + f64::from(i) / 100.);
+            let pos = p + n;
+            assert!(pos >= last, "{i}");
+            last = pos;
+        }
     }
 
     #[test]
