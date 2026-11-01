@@ -6,7 +6,7 @@
 use crate::actions::{Action, primary};
 use crate::apps::{TRASH_EMPTY, TRASH_FULL};
 use crate::chooser::{Candidate, Chooser};
-use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD_RATIO, Position, Slot, layout};
+use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD_RATIO, Position, Slot, envelope, layout};
 use crate::hub::{Frame, Request};
 use crate::menu::Command;
 use crate::model::{Item, Kind, View};
@@ -36,7 +36,20 @@ pub struct Dock {
     /// The output's logical size, as the supervisor last saw it.
     output_size: (u32, u32),
     frame: Arc<Frame>,
+    /// The resting layout (placement, exclusive zone, minimize targets), with room to
+    /// magnify in when magnification is on.
     layout: Layout,
+    /// What is drawn, hit and given to the screen reader now: `layout` magnified around
+    /// the pointer, `presence` of the way in (geometry.rs `magnify`).
+    shown: Layout,
+    presence: f64,
+    presence_target: f64,
+    presence_at: Instant,
+    /// The input region last sent: the glass and the icons that grew out of it.
+    input: Vec<[i32; 4]>,
+    /// When the reader last heard where things are: at most 10 times a second while
+    /// magnification moves them, and always once it settles.
+    semantics_at: Instant,
     pointer: (f64, f64),
     pressed: Option<usize>,
     /// The middle button's press, released on the same slot to act.
@@ -85,6 +98,10 @@ pub struct Dock {
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
 /// scale 2), and 256 KiB at most each.
 pub const THUMB_SIDE: u32 = 256;
+/// The reader's bounds follow magnification at most this often while it moves.
+const SEMANTICS_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+/// Magnification's easing time constant, seconds: settled in about a quarter second.
+const EASE: f64 = 0.06;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
 /// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
@@ -147,6 +164,12 @@ impl Dock {
             output_name,
             output_size,
             frame,
+            shown: layout.clone(),
+            presence: 0.,
+            presence_target: 0.,
+            presence_at: Instant::now(),
+            input: vec![],
+            semantics_at: Instant::now(),
             layout,
             pointer: (0., 0.),
             pressed: None,
@@ -182,13 +205,75 @@ impl Dock {
         } else {
             frame.reserved_top
         };
-        layout(
-            &slots(&frame.view),
+        let slots = slots(&frame.view);
+        let rest = layout(
+            &slots,
             frame.prefs.icon_size,
             frame.prefs.position,
             output,
             reserved,
-        )
+        );
+        if frame.prefs.magnification {
+            envelope(rest, &slots, frame.prefs.max_icon_size, output, reserved)
+        } else {
+            rest
+        }
+    }
+
+    /// Magnify around the pointer as things stand, and send the input region it covers.
+    fn reshape(&mut self, w: &mut Window) {
+        let slots = slots(&self.frame.view);
+        let shown = self.layout.magnify(&slots, self.pointer, self.presence);
+        let moved = shown.rects != self.shown.rects;
+        self.shown = shown;
+        if w.size() != self.layout.size {
+            return;
+        }
+        let now = Instant::now();
+        if moved
+            && (self.presence == self.presence_target
+                || now.saturating_duration_since(self.semantics_at) >= SEMANTICS_EVERY)
+        {
+            self.semantics_at = now;
+            self.publish_semantics(w);
+        }
+        let input = if self.frame.hidden {
+            vec![]
+        } else {
+            self.shown.input(&slots)
+        };
+        if input != self.input {
+            if let Err(e) = w.set_input_region(Some(&input)) {
+                eprintln!("nidara-shell: the dock's input region: {e}");
+            }
+            self.input = input;
+        }
+        w.redraw();
+    }
+
+    /// Magnification eases in under the pointer and out when it leaves (the TS dock's
+    /// spring, settled); reduced motion keeps the enlargement as a state change.
+    fn ease(&mut self, w: &mut Window) {
+        let now = Instant::now();
+        let dt = now
+            .saturating_duration_since(self.presence_at)
+            .as_secs_f64();
+        self.presence_at = now;
+        if self.presence == self.presence_target {
+            return;
+        }
+        self.presence = if self.frame.prefs.reduce_motion {
+            self.presence_target
+        } else {
+            let next =
+                self.presence + (self.presence_target - self.presence) * (1. - (-dt / EASE).exp());
+            if (next - self.presence_target).abs() < 0.01 {
+                self.presence_target
+            } else {
+                next
+            }
+        };
+        self.reshape(w);
     }
 
     /// The latest frame wins; a closed channel ends the dock.
@@ -249,6 +334,7 @@ impl Dock {
             w.set_layer_placement(placement(&next, keyboard))?;
         }
         self.layout = next;
+        self.reshape(w);
         self.follow_tooltip(w);
         self.follow_popup(w);
         self.capture(w);
@@ -294,8 +380,8 @@ impl Dock {
     /// Slot `n`'s place along the dock, across the whole capsule and a gap beyond it, so a
     /// popup opens clear of the capsule rather than over its edge.
     fn anchor_rect(&self, n: usize) -> [i32; 4] {
-        let [x, y, w, h] = self.layout.rects[n];
-        let (sw, sh) = (self.layout.size.0 as i32, self.layout.size.1 as i32);
+        let [x, y, w, h] = self.shown.rects[n];
+        let (sw, sh) = (self.shown.size.0 as i32, self.shown.size.1 as i32);
         let g = POPUP_GAP;
         match self.layout.position {
             Position::Bottom => [x.floor() as i32, -g, (w.ceil() as i32).max(1), sh + 2 * g],
@@ -324,7 +410,7 @@ impl Dock {
     /// dock, or while a menu is open); a tooltip of another item goes.
     fn hover(&mut self, w: &mut Window) {
         let key = (!self.frame.hidden && self.popup.is_none())
-            .then(|| self.layout.hit(self.pointer.0, self.pointer.1))
+            .then(|| self.shown.hit(self.pointer.0, self.pointer.1))
             .flatten()
             .map(|n| &self.frame.view.items[n])
             .filter(|i| i.kind != Kind::Separator)
@@ -703,12 +789,8 @@ impl Dock {
         if w.size() != self.layout.size {
             return Ok(());
         }
-        let (width, height) = self.layout.size;
-        if self.frame.hidden {
-            w.set_input_region(Some(&[]))?;
-        } else {
-            w.set_input_region(Some(&[[0, 0, width as i32, height as i32]]))?;
-        }
+        self.input = vec![[-1, -1, -1, -1]];
+        self.reshape(w);
         self.publish_targets();
         w.redraw();
         self.publish_semantics(w);
@@ -721,8 +803,8 @@ impl Dock {
             &mut self.ids,
             &crate::semantics::Input {
                 items: &self.frame.view.items,
-                rects: &self.layout.rects,
-                size: self.layout.size,
+                rects: &self.shown.rects,
+                size: self.shown.size,
                 focus,
                 focused_window: self.frame.focused,
                 can_launch: self.frame.can_launch,
@@ -949,7 +1031,7 @@ impl Dock {
 
     /// The wheel over an app focuses its windows one by one; elsewhere it does nothing.
     fn wheel(&mut self, delta: f64) {
-        let Some(slot) = self.layout.hit(self.pointer.0, self.pointer.1) else {
+        let Some(slot) = self.shown.hit(self.pointer.0, self.pointer.1) else {
             self.cycle.reset();
             return;
         };
@@ -994,7 +1076,7 @@ impl Dock {
     }
 
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
-        let [x, y, w, h] = self.layout.rects[n];
+        let [x, y, w, h] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
         let (x, y) = (x + dx, y + dy);
         let r = Rect {
@@ -1127,7 +1209,7 @@ impl Dock {
         if item.signal.attention {
             // Attention's still mark, with or without motion: the dot drawn out to a dash
             // along the dock, whatever the indicators preference (it is not a running dot).
-            let (cx, cy) = self.layout.dot(n);
+            let (cx, cy) = self.shown.dot(n);
             let (lw, lh) = if self.layout.position.horizontal() {
                 (3. * d, d)
             } else {
@@ -1144,7 +1226,7 @@ impl Dock {
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            c.dot(self.layout.dot(n), d, mark);
+            c.dot(self.shown.dot(n), d, mark);
         }
     }
 
@@ -1152,7 +1234,7 @@ impl Dock {
     /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
     /// it reaches into the next slot's gap.
     fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
-        let [x, y, w, _] = self.layout.rects[n];
+        let [x, y, w, _] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
         let (x, y) = (x + dx, y + dy);
         let pill = w * COUNT;
@@ -1217,6 +1299,9 @@ impl Application for Dock {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
         };
+        if self.presence != self.presence_target {
+            return crate::attention::FRAME.as_millis() as u32;
+        }
         // A pending tooltip wakes the loop when its dwell is over.
         match self
             .hover
@@ -1237,6 +1322,7 @@ impl Application for Dock {
         {
             w.redraw();
         }
+        self.ease(w);
         self.show_tooltip(w);
         self.sync_tooltip(w);
         Ok(())
@@ -1256,6 +1342,11 @@ impl Application for Dock {
             Event::Configure => self.apply(w)?,
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
+                if self.layout.mag.is_some() {
+                    self.presence_target = if self.frame.hidden { 0. } else { 1. };
+                    self.ease(w);
+                    self.reshape(w);
+                }
                 self.hover(w);
             }
             Event::Key(key) => self.key(key, w)?,
@@ -1263,6 +1354,8 @@ impl Application for Dock {
             // to the dock's own popup, which holds it for as long as it is open.
             Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
             Event::PointerLeave => {
+                self.presence_target = 0.;
+                self.presence_at = Instant::now();
                 self.hover.over(None, Instant::now());
                 self.close_tooltip(w);
                 self.pressed = None;
@@ -1299,7 +1392,7 @@ impl Application for Dock {
                 serial,
                 ..
             } if !self.frame.hidden => {
-                let slot = self.layout.hit(self.pointer.0, self.pointer.1);
+                let slot = self.shown.hit(self.pointer.0, self.pointer.1);
                 self.open_menu(w, slot, Some(serial), false);
             }
             Event::Button {
@@ -1307,7 +1400,7 @@ impl Application for Dock {
                 pressed: true,
                 ..
             } if !self.frame.hidden => {
-                self.middle = self.layout.hit(self.pointer.0, self.pointer.1);
+                self.middle = self.shown.hit(self.pointer.0, self.pointer.1);
             }
             Event::Button {
                 button: MIDDLE_BUTTON,
@@ -1315,7 +1408,7 @@ impl Application for Dock {
                 serial,
                 ..
             } => {
-                let here = self.layout.hit(self.pointer.0, self.pointer.1);
+                let here = self.shown.hit(self.pointer.0, self.pointer.1);
                 if let Some(slot) = self.middle.take().filter(|s| Some(*s) == here) {
                     self.middle_click(slot, serial, w)?;
                 }
@@ -1325,7 +1418,7 @@ impl Application for Dock {
                 pressed: true,
                 ..
             } if !self.frame.hidden => {
-                self.pressed = self.layout.hit(self.pointer.0, self.pointer.1);
+                self.pressed = self.shown.hit(self.pointer.0, self.pointer.1);
             }
             Event::Button {
                 button: LEFT_BUTTON,
@@ -1333,7 +1426,7 @@ impl Application for Dock {
                 serial,
                 ..
             } => {
-                let here = self.layout.hit(self.pointer.0, self.pointer.1);
+                let here = self.shown.hit(self.pointer.0, self.pointer.1);
                 if let Some(slot) = self.pressed.take().filter(|s| Some(*s) == here) {
                     self.click(slot, Some(serial), w);
                 }
@@ -1386,7 +1479,8 @@ impl Application for Dock {
         if !self.frame.hidden && f.width == self.layout.size.0 && f.height == self.layout.size.1 {
             if !f.material {
                 // No compositor glass (another compositor): an opaque base of our own (D5).
-                let (w, h) = (f.width as f32, f.height as f32);
+                let [x, y, w, h] = self.shown.glass;
+                let (x, y, w, h) = (x as f32, y as f32, w as f32, h as f32);
                 let base = if self.frame.dark {
                     rgba(40, 40, 44, 235)
                 } else {
@@ -1394,8 +1488,8 @@ impl Application for Dock {
                 };
                 c.rounded_rect(
                     Rect {
-                        x: 0.,
-                        y: 0.,
+                        x,
+                        y,
                         width: w,
                         height: h,
                     },
@@ -1420,10 +1514,11 @@ impl Application for Dock {
         if self.frame.hidden {
             return None;
         }
-        let (w, h) = (self.layout.size.0 as f64, self.layout.size.1 as f64);
+        // The capsule, wherever magnification has stretched it to.
+        let [x, y, w, h] = self.shown.glass;
         let pane = Pane {
-            x: 0.,
-            y: 0.,
+            x,
+            y,
             width: w,
             height: h,
             radius: w.min(h) / 2.,

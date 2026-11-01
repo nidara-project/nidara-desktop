@@ -123,6 +123,26 @@ gap = 0.16 × icon, capsule radius = half the cross size with exponent 3.2, scre
 with the exported `dock` tone (`tokens/glass.json`, by mode and reduce transparency); the
 client paints only icons, dots and the separator (commandment 12).
 
+**Magnification (D2).** With `magnification` on, resting the pointer on the strip grows
+the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons toward
+`max-icon-size` (absolute logical px), separators growing 0.4 of that. The surface is an
+**envelope** laid out once per configure (`geometry::envelope`): headroom across the
+dock (at most a third of the output) and slack at both ends of the main axis, so a grown
+icon never needs a new surface size; the exclusive zone stays the rest capsule's. Only
+the glass and the grown icons take input (the input region follows the strip), so the
+envelope's empty room passes clicks through. Positions are anchored at the pointer
+within its rest slot: the item under the pointer stays under it as the strip grows, so a
+point measured at rest still lands on its item. Presence eases in on entry and out on leave,
+an exponential approach with a 60 ms time constant (snapped under reduced motion); the reader's bounds follow what is drawn, throttled to
+100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
+rects.
+
+**Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
+(`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
+by any press. Moving to a neighbour while one is shown switches at once (warm), and the
+tooltip follows the grown icon. When the compositor dismisses it the dock retires the
+popup at once, or the next menu would find a stale parent.
+
 Fit (contract §8): with L the allowed main-axis length (output minus 2 × gap, and for a
 side dock minus the top-bar reservation), use the largest `0 < s <= 1` with `W(s) <= L`
 applied to every icon, gap, padding, separator, minimized slot and Trash. No minimum

@@ -365,6 +365,22 @@ try:
         shot(LOG / 'dock-tooltip-next.png')
         pipe.write(f'move {bx} {by - 200}\n')
     result['tooltip'] = 'shown, see dock-tooltip.png'
+    # Magnification (D2): resting on an item grows it toward the configured maximum, its
+    # neighbours making room; the reader's bounds follow what is drawn; leaving undoes it.
+    def extent(name):
+        node = next(n for n in children(dock_node()) if n.get_name() == name)
+        return node.get_component_iface().get_extents(Atspi.CoordType.WINDOW).width
+    rest = extent('kitty')
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        x, y = item_point('kitty')
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        grown = until('kitty grows under the pointer', lambda: (e := extent('kitty')) > rest * 1.5 and e)
+        time.sleep(.3)
+        shot(LOG / 'dock-magnified.png')
+        layer = docks()[0]
+        pipe.write(f'move {x} {layer["y"] - 300}\n')
+        until('kitty back at rest', lambda: extent('kitty') == rest)
+    result['magnification'] = {'rest': rest, 'grown': grown}
     # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
     # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
     # Config1 and shows what Config1 took.
@@ -398,8 +414,16 @@ try:
         assert any(n in ('Desanclar del dock', 'Unpin from dock') for n in names), heard
         result['menus']['app'] = heard
         close_menu()
+        # The separator opens the dock's own menu (the surface's edges are room for
+        # magnification, outside the glass, and take no input).
+        # Read it at rest: under the pointer the strip is magnified around it.
         layer = docks()[0]
-        rows = open_menu(layer['x'] + 3, layer['y'] + layer['height'] // 2, 'the dock menu')
+        pipe.write(f'move {layer["x"] + layer["width"] // 2} {layer["y"] - 300}\n')
+        until('the dock at rest', lambda: extent('kitty') == rest)
+        sep = next(n for n in children(dock_node()) if n.get_role_name() == 'separator')
+        r = sep.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+        rows = open_menu(layer['x'] + r.x + r.width // 2, layer['y'] + r.y + r.height // 2,
+                         'the dock menu')
         shot(LOG / 'dock-menu-dock.png')
         result['menus']['dock'] = [r for _, r in rows]
         left = next(n for n, r in rows if r['name'] in ('Izquierda', 'Left'))
@@ -458,6 +482,11 @@ try:
     until('the twins in the dock', twins)
     time.sleep(1)
     with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        # Measured at rest: the dock anchors magnification at the pointer within its rest
+        # slot, so a point read from the rest strip stays on its item once the strip grows.
+        layer = docks()[0]
+        pipe.write(f'move {layer["x"] + layer["width"] // 2} {layer["y"] - 300}\n')
+        until('the dock at rest', lambda: extent('kitty') == rest)
         x, y = item_point(twins().get_name())
         pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
         time.sleep(.3)  # after a grab ends, Hyalo gives the pointer back on motion
