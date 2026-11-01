@@ -3536,6 +3536,17 @@ module, which reads closer to the dock than to a long capsule.
 ladder in #86, not derived from the tile, and visibly tighter than the circle next to it. The Rust
 Control Center keeps the rule.
 
+## The dock's measures — a fixed air and gap, whatever the icon size
+
+🔑 **The air round the dock's icons is 10 and the gap between two is 4, at every icon size**
+(owner, 2026-11-01, PR #988). The reference dock keeps both fixed: measured by accessibility on
+2026-10-08, at the same icon size each time, it is 84 tall at icon 64 and its radius stops near
+24. Ours were 22 % and 16 % of the icon until then. That matched at 48, but the dock grew 8 px
+taller at 64 and 20 px at 96. The two docks share the numbers: TS `DockPhysics.deriveConstants`
+(`PILL_PAD`, `GAP_TOTAL`) and Rust `toolkit/shell/src/geometry.rs` (`PAD`, `GAP`). Change them
+together. The capsule (radius half the cross size, exponent 3.2) is still ours, not the
+reference's. That one is left as it is for now.
+
 ## The bar launcher mark — plain geometry, no SVG filter
 
 The bar launcher (system-menu) icon is the **Nidara mark**, `assets/nidara/assets/nidara-symbolic.svg`,

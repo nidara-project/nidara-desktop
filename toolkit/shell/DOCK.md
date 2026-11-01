@@ -122,8 +122,9 @@ same: "3 pending, 50% done, wants attention". The private check sends a real
 
 ## 5. Geometry
 
-From the existing TS dock, so the Rust one keeps its proportions: padding = 0.22 × icon,
-gap = 0.16 × icon, capsule radius = half the cross size with exponent 3.2, screen gap
+From the existing TS dock, so the two look alike: padding 10 and gap 4 at every icon size
+(owner, 2026-11-01, after the reference dock, which keeps both fixed; they were 0.22 and
+0.16 × icon), capsule radius = half the cross size with exponent 3.2, screen gap
 `DOCK_SCREEN_GAP` = 4 logical px, dot 5 px. The glass is Hyalo's: one `Pane` per dock
 with the exported `dock` tone (`tokens/glass.json`, by mode and reduce transparency); the
 client paints only icons, dots and the separator (commandment 12).
