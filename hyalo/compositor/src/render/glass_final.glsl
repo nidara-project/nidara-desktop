@@ -85,34 +85,6 @@ float sdf_box(vec2 px, vec2 half_size, float r) {
 // The shape's signed distance.
 float sdf(vec2 px) { return sdf_box(px, rect.zw * 0.5, radius); }
 
-// The outline moved `t` inward, its corners rounder by as much (radius r + t, until the shape
-// is too thin for it): the bevel's contour at depth t. At t = 0 it is the corner itself.
-float inset_sdf(vec2 px, float t) {
-    vec2 h = rect.zw * 0.5 - vec2(t);
-    return sdf_box(px, h, max(min(radius + LAB_MUL(11, t), min(h.x, h.y)), 0.0));
-}
-
-// How deep into the bevel a point is: the t whose contour passes through it, up to w.
-float lens_depth(vec2 px, float w) {
-    vec2 h = rect.zw * 0.5;
-    vec2 q = abs(px - rect.xy - h);
-    float r = min(radius + LAB_MUL(11, w), min(h.x, h.y));
-    // Clear of every corner at every depth up to w (the deepest contour's is the roundest):
-    // the distance to the nearest side.
-    if (q.x <= h.x - w - r || q.y <= h.y - w - r) return clamp(min(h.x - q.x, h.y - q.y), 0.0, w);
-    if (inset_sdf(px, 0.0) >= 0.0) return 0.0;
-    if (inset_sdf(px, w) < 0.0) return w;
-    float lo = 0.0;
-    float hi = w;
-    for (int i = 0; i < 12; i++) {
-        float m = 0.5 * (lo + hi);
-        if (inset_sdf(px, m) < 0.0) lo = m; else hi = m;
-    }
-    return 0.5 * (lo + hi);
-}
-
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-
 // A triangle's signed distance (Inigo Quilez's, exact): negative inside, either winding.
 float sd_triangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
     vec2 e0 = p1 - p0, e1 = p2 - p1, e2 = p0 - p2;
@@ -127,18 +99,49 @@ float sd_triangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
     return -sqrt(d.x) * sign(d.y);
 }
 
-// The whole silhouette: the shape, and its pointer if it has one — the inset triangle grown
-// back by the tip radius (a round tip, straight sides where they were), joined to the body
-// by a concave arc of the base radius (hg_sdf's round union).
-float shape_sdf(vec2 px) {
-    float d = sdf(px);
+// The outline moved `t` inward, its corners rounder by as much (radius r + t, until the shape
+// is too thin for it): the bevel's contour at depth t. At t = 0 it is the corner itself. A
+// pointer moves inward with it and stays joined by the same concave arc, so the bevel runs
+// round the pointer: drawn for the body alone, it crossed the pointer's base as a seam.
+float inset_sdf(vec2 px, float t) {
+    vec2 h = rect.zw * 0.5 - vec2(t);
+    float d = sdf_box(px, h, max(min(radius + LAB_MUL(11, t), min(h.x, h.y)), 0.0));
     if (has_pointer > 0.5) {
-        float p = sd_triangle(px, ptr_a, ptr_b, ptr_t) - ptr_tip_r;
+        float p = sd_triangle(px, ptr_a, ptr_b, ptr_t) - ptr_tip_r + t;
         vec2 u = max(vec2(ptr_base_r - d, ptr_base_r - p), vec2(0.0));
         d = max(ptr_base_r, min(d, p)) - length(u);
     }
     return d;
 }
+
+// How deep into the bevel a point is: the t whose contour passes through it, up to w.
+float lens_depth(vec2 px, float w) {
+    vec2 h = rect.zw * 0.5;
+    vec2 q = abs(px - rect.xy - h);
+    float r = min(radius + LAB_MUL(11, w), min(h.x, h.y));
+    // Clear of every corner at every depth up to w (the deepest contour's is the roundest):
+    // the distance to the nearest side.
+    // (Not with a pointer: its bevel reaches into the body's straight sides.)
+    if (has_pointer < 0.5 && (q.x <= h.x - w - r || q.y <= h.y - w - r))
+        return clamp(min(h.x - q.x, h.y - q.y), 0.0, w);
+    if (inset_sdf(px, 0.0) >= 0.0) return 0.0;
+    if (inset_sdf(px, w) < 0.0) return w;
+    float lo = 0.0;
+    float hi = w;
+    for (int i = 0; i < 12; i++) {
+        float m = 0.5 * (lo + hi);
+        if (inset_sdf(px, m) < 0.0) lo = m; else hi = m;
+    }
+    return 0.5 * (lo + hi);
+}
+
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+
+
+// The whole silhouette: the shape, and its pointer if it has one — the inset triangle grown
+// back by the tip radius (a round tip, straight sides where they were), joined to the body
+// by a concave arc of the base radius (hg_sdf's round union).
+float shape_sdf(vec2 px) { return inset_sdf(px, 0.0); }
 
 // ── Fusion ──────────────────────────────────────────────────────────────────
 // The polynomial smooth minimum (Inigo Quilez's): min(a, b) where they are k apart or more,
