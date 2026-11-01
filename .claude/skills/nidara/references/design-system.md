@@ -1032,9 +1032,8 @@ or a capsule EXACTLY. Give the painted widget its shape's radius on the base rul
 only makes the container focusable. Why not Cairo: a DrawingArea's cairo node is clipped to its
 allocation, so a painted ring can never sit OUTSIDE the glass with the 2px gap — it landed on the
 glass edge and melted into the volume tile's accent fill — while an outline is drawn outside the
-widget. The CC tiles: pill radius (1×1, 2×1, 1×2, 4×1), the 2×2 squircle gets `xl + 2px` (a
-rounded rectangle a hair off a superellipse — the one shape CSS cannot draw), offset 0 because the
-glass is already inset 2px in the box. The one ring still painted is the slider THUMB's: the thumb
+widget. The CC tiles: pill radius (1×1, 2×1, 1×2, 4×1), the 2×2 gets half a cell (`UNIT / 2`,
+restated in the SCSS because CSS cannot read it) — the same circular corner its glass draws. The one ring still painted is the slider THUMB's: the thumb
 is ours, drawn in Cairo, and GTK knows nothing of where it is.
 
 ⚠️ **`@include nidara-reset` clears `outline` too.** A state that resets and then paints its own
@@ -3526,6 +3525,16 @@ circular ghost; a 2×1 → a perfect capsule; a 2×2 → a squircle — always w
 would render, because both draw from the same two resolvers BaseIsland itself uses. `drawSquircle`
 also grew an optional trailing `dash?: number[]` param (only the ghost passes it) so the border
 keeps its dashed "phantom" look without a CSS-only dashed-stroke escape hatch.
+
+🔑 **The CC tiles draw the 1×1's corner: half a cell (owner, 2026-11-01).** `UNIT / 2`
+(38 px), with circular arcs: a 1×1 is that corner all the way round (a circle), a 2×1 or 1×2 a
+capsule of it, a 2×2 a square with it — tiles side by side read as one family. **The 4×1 is the
+exception**: the dock's profile (half its height at exponent 3.2), like the reference's full-width
+module, which reads closer to the dock than to a long capsule.
+`resolveIslandShape` takes the corner from `IslandGrid` (a widget never reads `UNIT`). Until then the
+2×2 took `RADIUS.xl` (32) at 3.2: a token picked from the radius
+ladder in #86, not derived from the tile, and visibly tighter than the circle next to it. The Rust
+Control Center keeps the rule.
 
 ## The bar launcher mark — plain geometry, no SVG filter
 

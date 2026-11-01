@@ -2,14 +2,14 @@ import Gtk from "gi://Gtk?version=4.0"
 import Gdk from "gi://Gdk?version=4.0"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"
-import { RADIUS, ON_WHITE } from "../../../lib/nidara-kit/platform/tokens"
+import { ON_WHITE } from "../../../lib/nidara-kit/platform/tokens"
 import { bindWhileRealized } from "../../../lib/nidara-kit/lifetime"
 import { WidgetSize } from "../../common/widget-kit"
 
 /**
- *  BaseIsland: Geometric Identity
- * - 2x1 (WIDE): Force perfect Capsules 💊
- * - 2x2/4x1: Sync with Dock System (n=3.2)
+ *  BaseIsland: Geometric Identity — the tiles share the 1×1's corner, half a cell (owner,
+ *  2026-11-01): 1×1 a circle, 2×1/1×2 capsules, 2×2 a square with that corner. The 4×1
+ *  keeps the dock's profile (n=3.2), as the reference's full-width module does.
  */
 // The island's inner padding per size, from its glass — single source for BaseIsland
 // itself AND for IslandGrid's ContentBudget math (tile span − 2·padding). TALL slider
@@ -20,26 +20,27 @@ export function islandPadding(size: WidgetSize): number {
     return size === WidgetSize.TALL ? 2 : 10
 }
 
-// Per-size shape identity — SINGLE: full circle, WIDE/TALL: perfect capsule,
-// FULL_WIDTH: dock-profile pill, SQUARE: squircle. Exported so anything that
-// needs to preview a tile's silhouette outside BaseIsland itself (the CC drag
-// ghost) stays a single source of truth with what actually renders.
-export function resolveIslandShape(size: WidgetSize, width: number, height: number): { shape: Shape; radius: number } {
+// Per-size shape identity — the tiles draw the 1×1's corner: half a cell (`corner`,
+// handed in by IslandGrid, which owns UNIT), with circular arcs. SINGLE: that corner
+// all round (a circle); WIDE/TALL: capsules of it; SQUARE: a square with it (until
+// 2026-11-01 RADIUS.xl, 32, at 3.2 — a ladder token, visibly tighter than the circle
+// beside it). FULL_WIDTH is the exception: the dock's profile, half its height at 3.2.
+// Exported so the CC drag ghost previews exactly what renders.
+export function resolveIslandShape(
+    size: WidgetSize, width: number, height: number, corner: number,
+): { shape: Shape; radius: number; perfect: boolean } {
     if (size === WidgetSize.SINGLE) {
-        return { shape: Shape.CIRCLE, radius: width / 2 }
-    } else if (size === WidgetSize.WIDE) {
-        // 🔒 2x1: CAPSULAS PERFECTAS (Semicircles)
-        return { shape: Shape.CAPSULE, radius: height / 2 }
+        return { shape: Shape.CIRCLE, radius: width / 2, perfect: true }
     } else if (size === WidgetSize.TALL) {
         // 1x2: vertical capsule — the slider fills it edge-to-edge (CAPSULE auto-
         // computes radius = min(w,h)/2, so the pill is rounded on the short axis).
-        return { shape: Shape.CAPSULE, radius: width / 2 }
+        return { shape: Shape.CAPSULE, radius: width / 2, perfect: true }
+    } else if (size === WidgetSize.WIDE) {
+        return { shape: Shape.CAPSULE, radius: height / 2, perfect: true }
     } else if (size === WidgetSize.FULL_WIDTH) {
-        // 4x1: Sync with Dock profile
-        return { shape: Shape.DOCK_PILL, radius: height / 2 }
+        return { shape: Shape.DOCK_PILL, radius: height / 2, perfect: false }
     } else {
-        // 2x2: Squircle with Dock profile
-        return { shape: Shape.SQUIRCLE, radius: RADIUS.xl }
+        return { shape: Shape.SQUIRCLE, radius: corner, perfect: true }
     }
 }
 
@@ -49,6 +50,8 @@ interface BaseIslandProps {
     width: number
     height: number
     size: WidgetSize
+    /** Half a cell: the one corner every tile size draws (resolveIslandShape). */
+    corner: number
     alpha?: number
     gloss?: boolean
     centerContent?: boolean
@@ -67,6 +70,7 @@ export default function BaseIsland({
     width,
     height,
     size,
+    corner,
     alpha,
     gloss = true,
     centerContent = false,
@@ -79,8 +83,8 @@ export default function BaseIsland({
 }: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
-    const { shape, radius } = resolveIslandShape(size, width, height)
-    const n = 3.2 // squircle superellipse exponent
+    const { shape, radius, perfect } = resolveIslandShape(size, width, height, corner)
+    const n = 3.2 // the superellipse exponent of a shape that is not `perfect`
 
     // WIDE capsules: pin content to the LEFT. halign FILL doesn't stretch a
     // shrink-wrapping box — GTK centres it instead, so the icon x drifts with the
@@ -112,6 +116,7 @@ export default function BaseIsland({
         child,
         radius,
         n,
+        perfect,
         borderWidth: 1.5,
         gloss,
         alpha,
