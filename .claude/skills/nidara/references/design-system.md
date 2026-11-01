@@ -3526,11 +3526,13 @@ would render, because both draw from the same two resolvers BaseIsland itself us
 also grew an optional trailing `dash?: number[]` param (only the ghost passes it) so the border
 keeps its dashed "phantom" look without a CSS-only dashed-stroke escape hatch.
 
-🔑 **Every CC tile size draws the same corner: half a cell (owner, 2026-11-01).** `UNIT / 2`
-(38 px), with circular arcs: a 1×1 is that corner all the way round (a circle), a 2×1, 1×2 or 4×1
-a capsule of it, a 2×2 a square with it — tiles side by side read as one family.
+🔑 **The CC tiles draw the 1×1's corner: half a cell (owner, 2026-11-01).** `UNIT / 2`
+(38 px), with circular arcs: a 1×1 is that corner all the way round (a circle), a 2×1 or 1×2 a
+capsule of it, a 2×2 a square with it — tiles side by side read as one family. **The 4×1 is the
+exception**: the dock's profile (half its height at exponent 3.2), like the reference's full-width
+module, which reads closer to the dock than to a long capsule.
 `resolveIslandShape` takes the corner from `IslandGrid` (a widget never reads `UNIT`). Until then the
-4×1 took the dock's 3.2 profile and the 2×2 `RADIUS.xl` (32) at 3.2: a token picked from the radius
+2×2 took `RADIUS.xl` (32) at 3.2: a token picked from the radius
 ladder in #86, not derived from the tile, and visibly tighter than the circle next to it. The Rust
 Control Center keeps the rule.
 

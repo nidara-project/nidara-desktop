@@ -71,7 +71,8 @@
         // drawn outside the tile, where the Cairo ring this replaced could not reach
         // (it sat on the glass edge and melted into the volume tile's fill).
         // The radius has to be the SHAPE's, on the base rule (an outline follows it, grown by
-        // its offset): a pill is exact for the circle (1×1) and the capsules (2×1, 1×2, 4×1);
+        // its offset): a pill is exact for the circle (1×1) and the capsules (2×1, 1×2, the
+        // 4×1 dock-profile pill, a hair off);
         // the 2×2 is a square with the same circular corner, half a cell — UNIT / 2 in
         // CCLayoutManager.ts, which CSS cannot read, so it is restated here.
         border-radius: $nidara-radius-pill;

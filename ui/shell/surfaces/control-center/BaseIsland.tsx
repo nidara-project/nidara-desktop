@@ -7,8 +7,9 @@ import { bindWhileRealized } from "../../../lib/nidara-kit/lifetime"
 import { WidgetSize } from "../../common/widget-kit"
 
 /**
- *  BaseIsland: Geometric Identity — every tile size has the SAME corner, half a cell
- *  (owner, 2026-11-01): 1×1 a circle, 2×1/1×2/4×1 capsules, 2×2 a square with that corner.
+ *  BaseIsland: Geometric Identity — the tiles share the 1×1's corner, half a cell (owner,
+ *  2026-11-01): 1×1 a circle, 2×1/1×2 capsules, 2×2 a square with that corner. The 4×1
+ *  keeps the dock's profile (n=3.2), as the reference's full-width module does.
  */
 // The island's inner padding per size, from its glass — single source for BaseIsland
 // itself AND for IslandGrid's ContentBudget math (tile span − 2·padding). TALL slider
@@ -19,12 +20,12 @@ export function islandPadding(size: WidgetSize): number {
     return size === WidgetSize.TALL ? 2 : 10
 }
 
-// Per-size shape identity — every size draws the same corner: half a cell (`corner`,
+// Per-size shape identity — the tiles draw the 1×1's corner: half a cell (`corner`,
 // handed in by IslandGrid, which owns UNIT), with circular arcs. SINGLE: that corner
-// all round (a circle); WIDE/TALL/FULL_WIDTH: capsules of it; SQUARE: a square with it.
-// Until 2026-11-01 the 4×1 took the dock's 3.2 profile and the 2×2 RADIUS.xl (32) at
-// 3.2 — a ladder token, visibly tighter than the circle beside it. Exported so the CC
-// drag ghost previews exactly what renders.
+// all round (a circle); WIDE/TALL: capsules of it; SQUARE: a square with it (until
+// 2026-11-01 RADIUS.xl, 32, at 3.2 — a ladder token, visibly tighter than the circle
+// beside it). FULL_WIDTH is the exception: the dock's profile, half its height at 3.2.
+// Exported so the CC drag ghost previews exactly what renders.
 export function resolveIslandShape(
     size: WidgetSize, width: number, height: number, corner: number,
 ): { shape: Shape; radius: number; perfect: boolean } {
@@ -34,8 +35,10 @@ export function resolveIslandShape(
         // 1x2: vertical capsule — the slider fills it edge-to-edge (CAPSULE auto-
         // computes radius = min(w,h)/2, so the pill is rounded on the short axis).
         return { shape: Shape.CAPSULE, radius: width / 2, perfect: true }
-    } else if (size === WidgetSize.WIDE || size === WidgetSize.FULL_WIDTH) {
+    } else if (size === WidgetSize.WIDE) {
         return { shape: Shape.CAPSULE, radius: height / 2, perfect: true }
+    } else if (size === WidgetSize.FULL_WIDTH) {
+        return { shape: Shape.DOCK_PILL, radius: height / 2, perfect: false }
     } else {
         return { shape: Shape.SQUIRCLE, radius: corner, perfect: true }
     }
@@ -81,7 +84,7 @@ export default function BaseIsland({
 
     //  GEOMETRIC RULES:
     const { shape, radius, perfect } = resolveIslandShape(size, width, height, corner)
-    const n = 3.2 // unused while every shape is `perfect`; SquircleContainer still takes one
+    const n = 3.2 // the superellipse exponent of a shape that is not `perfect`
 
     // WIDE capsules: pin content to the LEFT. halign FILL doesn't stretch a
     // shrink-wrapping box — GTK centres it instead, so the icon x drifts with the
