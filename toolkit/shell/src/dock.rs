@@ -464,18 +464,22 @@ impl Dock {
         let [gx, gy, gw, _] = self.shown.glass;
         let (sw, sh) = (self.shown.size.0 as i32, self.shown.size.1 as i32);
         let g = POPUP_GAP;
+        let along = centred_span;
         match self.layout.position {
             Position::Bottom => {
                 let top = y.min(gy).floor() as i32 - g;
-                [x.floor() as i32, top, (w.ceil() as i32).max(1), sh - top]
+                let (ax, aw) = along(x, w);
+                [ax, top, aw, sh - top]
             }
             Position::Left => {
                 let right = (x + w).max(gx + gw).ceil() as i32 + g;
-                [0, y.floor() as i32, right, (h.ceil() as i32).max(1)]
+                let (ay, ah) = along(y, h);
+                [0, ay, right, ah]
             }
             Position::Right => {
                 let left = x.min(gx).floor() as i32 - g;
-                [left, y.floor() as i32, sw - left, (h.ceil() as i32).max(1)]
+                let (ay, ah) = along(y, h);
+                [left, ay, sw - left, ah]
             }
         }
     }
@@ -1216,10 +1220,35 @@ impl Dock {
         }
     }
 
-    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
+    /// Slot `n` where it is drawn: lifted by attention, and moved along the dock onto
+    /// whole device pixels. The dots and the separator land on whole pixels anyway; an
+    /// icon left between them stayed put while they stepped as the strip started to
+    /// grow, and they seemed to slide off on their own.
+    fn placed(&self, scale: f64, n: usize, item: &Item, now: Instant) -> [f64; 4] {
         let [x, y, w, h] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
-        let (x, y) = (x + dx, y + dy);
+        let snap = |v: f64| (v * scale).round() / scale;
+        if self.layout.position.horizontal() {
+            [snap(x) + dx, y + dy, w, h]
+        } else {
+            [x + dx, snap(y) + dy, w, h]
+        }
+    }
+
+    /// The running dot of slot `n`, moved along with its icon onto the pixel grid.
+    fn dot_at(&self, scale: f64, n: usize) -> (f64, f64) {
+        let [x, y, ..] = self.shown.rects[n];
+        let snap = |v: f64| (v * scale).round() / scale - v;
+        let (cx, cy) = self.shown.dot(n);
+        if self.layout.position.horizontal() {
+            (cx + snap(x), cy)
+        } else {
+            (cx, cy + snap(y))
+        }
+    }
+
+    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
+        let [x, y, w, h] = self.placed(c.scale(), n, item, now);
         let r = Rect {
             x: x as f32,
             y: y as f32,
@@ -1350,7 +1379,7 @@ impl Dock {
         if item.signal.attention {
             // Attention's still mark, with or without motion: the dot drawn out to a dash
             // along the dock, whatever the indicators preference (it is not a running dot).
-            let (cx, cy) = self.shown.dot(n);
+            let (cx, cy) = self.dot_at(c.scale(), n);
             let (lw, lh) = if self.layout.position.horizontal() {
                 (3. * d, d)
             } else {
@@ -1367,7 +1396,7 @@ impl Dock {
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            c.dot(self.shown.dot(n), d, mark);
+            c.dot(self.dot_at(c.scale(), n), d, mark);
         }
     }
 
@@ -1375,9 +1404,7 @@ impl Dock {
     /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
     /// it reaches into the next slot's gap.
     fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
-        let [x, y, w, _] = self.shown.rects[n];
-        let (dx, dy) = self.lift(item, now);
-        let (x, y) = (x + dx, y + dy);
+        let [x, y, w, _] = self.placed(c.scale(), n, item, now);
         let pill = w * COUNT;
         let (back, figure) = match self.frame.tokens.as_ref().and_then(|t| {
             let c = t["danger"].as_array()?;
@@ -1757,4 +1784,29 @@ pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Res
         Some(wake),
         Instant::now(),
     )
+}
+
+/// Along the dock, an even span centred on `start + len / 2` rounded: the compositor
+/// halves an anchor in whole pixels to find its centre (xdg_positioner), so the floor and
+/// ceil of its ends put a popup up to a pixel off to one side.
+fn centred_span(start: f64, len: f64) -> (i32, i32) {
+    let span = 2 * ((len / 2.).ceil() as i32).max(1);
+    ((start + len / 2.).round() as i32 - span / 2, span)
+}
+
+#[cfg(test)]
+mod anchor_tests {
+    #[test]
+    fn a_popup_anchor_halves_to_the_icons_centre() {
+        for (start, len) in [(878.6, 100.3), (10., 64.), (100.25, 63.5), (5.5, 1.)] {
+            let (x, w) = super::centred_span(start, len);
+            assert_eq!(w % 2, 0, "{start} {len}");
+            assert!(w as f64 >= len);
+            assert_eq!(
+                x + w / 2,
+                (start + len / 2.).round() as i32,
+                "{start} {len}"
+            );
+        }
+    }
 }

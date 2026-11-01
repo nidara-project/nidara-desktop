@@ -14,13 +14,18 @@ pub const ARROW_H: f64 = 8.;
 const TIP_R: f64 = 4.;
 const BASE_R: f64 = 8.;
 
-/// A popup's size with room for its pointer on the side toward the anchor.
+/// A popup's size with room for its pointer on the side toward the anchor, and even
+/// across it: the compositor centres a popup by halving its size in whole pixels, so an
+/// odd one came out half a pixel to one side of its pointer's icon.
 pub fn with_pointer(size: (u32, u32), side: PopupSide) -> (u32, u32) {
     let h = ARROW_H as u32;
+    let even = |v: u32| v + v % 2;
     match side {
-        PopupSide::Below | PopupSide::Above | PopupSide::AboveCentered => (size.0, size.1 + h),
+        PopupSide::Below | PopupSide::Above | PopupSide::AboveCentered => {
+            (even(size.0), size.1 + h)
+        }
         PopupSide::Right | PopupSide::Left | PopupSide::RightCentered | PopupSide::LeftCentered => {
-            (size.0 + h, size.1)
+            (size.0 + h, even(size.1))
         }
     }
 }
@@ -184,6 +189,9 @@ mod tests {
         assert_eq!(pane.pointer.unwrap().tip.0, 108.);
         assert_eq!(with_pointer((100, 22), PopupSide::AboveCentered), (100, 30));
         assert_eq!(with_pointer((100, 32), PopupSide::RightCentered), (108, 32));
+        // Odd across: one pixel more, so the compositor halves it exactly.
+        assert_eq!(with_pointer((57, 22), PopupSide::AboveCentered), (58, 30));
+        assert_eq!(with_pointer((100, 31), PopupSide::LeftCentered), (108, 32));
     }
 
     #[test]

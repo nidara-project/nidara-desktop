@@ -157,7 +157,11 @@ whichever side the pointer comes from, as on the TS dock (owner, 2026-11-01). It
 anchored at the pointer until then: it grew only away from it, followed the pointer out
 by a side and jumped back to the middle once the magnification eased out. Centred, the
 item under the pointer still stays under it (the bell grows it more than its neighbours
-push it), which the unit tests check at both ends and in the middle. Presence eases in on entry and out on leave on
+push it), which the unit tests check at both ends and in the middle. Each icon is drawn on
+whole device pixels along the dock, as its running dot and the separator are: left
+between pixels while they stepped, the first fraction of a pixel the strip moved as it
+started to grow made every dot and the separator jump aside without their icons
+(owner, 2026-11-01). Presence eases in on entry and out on leave on
 the TS dock's spring (`spring.rs`: stiffness 320, damping 38, from rest, no overshoot;
 snapped under reduced motion) at the TS dock's speed, 2.4× wall time (`SIM_SPEED`, so
 mostly there in 125 ms), its clock started with the change and a frame advancing at most
@@ -214,7 +218,11 @@ compositor glass the opaque fallback has no pointer (D5).
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the
 tooltip keeps a fixed gap over the grown icon (popups anchor from the screen edge to
 `POPUP_GAP` past the icon or the capsule, whichever reaches further), following it frame by frame as magnification moves it (the strip grows
-centred, so the icon under a still pointer shifts). When the compositor dismisses it the dock retires the
+centred, so the icon under a still pointer shifts). Every popup (tooltip, menu, chooser)
+anchors on an even span centred on the icon's rounded centre and has an even size across
+it: the compositor halves both in whole pixels, and the floor and ceil of the icon's ends
+put popups up to a pixel and a half to its left. Icon art that is not centred in its own
+square (Papirus' Trash sits 1.6 % right) still reads off-centre. When the compositor dismisses it the dock retires the
 popup at once, or the next menu would find a stale parent.
 
 Fit (contract §8): with L the allowed main-axis length (output minus 2 × gap, and for a
