@@ -190,7 +190,8 @@ makes the delay sensitive, and switching it off brings the dock back.
 **Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
 (`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the
-tooltip follows the grown icon, frame by frame as magnification moves it (the strip grows
+tooltip keeps a fixed gap over the grown icon (popups anchor from the screen edge to
+`POPUP_GAP` past the icon or the capsule, whichever reaches further), following it frame by frame as magnification moves it (the strip grows
 centred, so the icon under a still pointer shifts). When the compositor dismisses it the dock retires the
 popup at once, or the next menu would find a stale parent.
 

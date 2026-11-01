@@ -454,16 +454,28 @@ impl Dock {
         }
     }
 
-    /// Slot `n`'s place along the dock, across the whole capsule and a gap beyond it, so a
-    /// popup opens clear of the capsule rather than over its edge.
+    /// Slot `n`'s place along the dock, from the screen edge to a gap beyond whichever
+    /// reaches further out, the capsule or the icon as magnified now: a popup opens clear
+    /// of the capsule at rest and keeps the same gap over a grown icon, as the TS dock's
+    /// do from the icon itself. Across the whole surface instead, it kept the gap of the
+    /// largest icon the surface has room for, however small the icon was.
     fn anchor_rect(&self, n: usize) -> [i32; 4] {
         let [x, y, w, h] = self.shown.rects[n];
+        let [gx, gy, gw, gh] = self.shown.glass;
         let (sw, sh) = (self.shown.size.0 as i32, self.shown.size.1 as i32);
         let g = POPUP_GAP;
         match self.layout.position {
-            Position::Bottom => [x.floor() as i32, -g, (w.ceil() as i32).max(1), sh + 2 * g],
-            Position::Left | Position::Right => {
-                [-g, y.floor() as i32, sw + 2 * g, (h.ceil() as i32).max(1)]
+            Position::Bottom => {
+                let top = y.min(gy).floor() as i32 - g;
+                [x.floor() as i32, top, (w.ceil() as i32).max(1), sh - top]
+            }
+            Position::Left => {
+                let right = (x + w).max(gx + gw).ceil() as i32 + g;
+                [0, y.floor() as i32, right, (h.ceil() as i32).max(1)]
+            }
+            Position::Right => {
+                let left = x.min(gx).floor() as i32 - g;
+                [left, y.floor() as i32, sw - left, (h.ceil() as i32).max(1)]
             }
         }
     }
@@ -636,11 +648,19 @@ impl Dock {
             _ => {
                 let (x, y) = (self.pointer.0 as i32, self.pointer.1 as i32);
                 let (width, height) = (self.layout.size.0 as i32, self.layout.size.1 as i32);
+                let [gx, gy, gw, _] = self.shown.glass;
                 let g = POPUP_GAP;
-                if self.layout.position.horizontal() {
-                    [x.clamp(0, width - 1), -g, 1, height + 2 * g]
-                } else {
-                    [-g, y.clamp(0, height - 1), width + 2 * g, 1]
+                // From the screen edge to a gap beyond the capsule, as an item's.
+                match self.layout.position {
+                    Position::Bottom => {
+                        let top = gy.floor() as i32 - g;
+                        [x.clamp(0, width - 1), top, 1, height - top]
+                    }
+                    Position::Left => [0, y.clamp(0, height - 1), (gx + gw).ceil() as i32 + g, 1],
+                    Position::Right => {
+                        let left = gx.floor() as i32 - g;
+                        [left, y.clamp(0, height - 1), width - left, 1]
+                    }
                 }
             }
         };
