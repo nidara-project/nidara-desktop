@@ -131,6 +131,11 @@
       <default>['nidara-settings', 'kitty', 'nidara-installer']</default>
       <summary>Ordered legacy dock desktop ids; native Applications1 imports once without writing this key</summary>
     </key>
+    <key name="native-preview" type="b">
+      <default>false</default>
+      <summary>Hyalo preview only: the native (Rust) dock in place of this one, from the next login</summary>
+      <description>Read once at login by /usr/lib/nidara-hyalo/start-shell. Removed when the native dock replaces this one for everybody (#959 D4).</description>
+    </key>
   </schema>
 
   <schema id="org.nidara.workspaces" path="/org/nidara/workspaces/">

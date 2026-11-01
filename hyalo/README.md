@@ -67,6 +67,11 @@ The `nidara-hyalo` package needs the `nidara-desktop` package, which a dev insta
 this script puts the same files where the package would and touches nothing else. The greeter
 lists "Nidara — Hyalo preview" from its next start.
 
+It also installs the native (Rust) dock, which the preview session runs instead of the TS one
+from the next login with `gsettings set org.nidara.dock native-preview true` (`false` to go
+back; `toolkit/shell/DOCK.md` §1). It needs nidara-sessiond's unit from the same checkout,
+which `install.sh` installs.
+
     hyalo/scripts/measure-session.sh [seconds]    # run once on Hyprland, once on Hyalo
 
 The same scene in either session — the shell with the Control Center open, blur off, your

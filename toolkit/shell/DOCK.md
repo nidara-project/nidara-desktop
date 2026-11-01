@@ -27,6 +27,16 @@ layer roots, outputs, tokens, captures), `nk-render`/`nk-text` (pixels, labels),
 `nk-a11y` (the semantic tree), plus `zbus` for Applications1/Config1 and the existing
 JSON socket for Hyalo. No second Wayland host, no TS bridge, no GTK.
 
+**In a real session, before D4.** `hyalo/scripts/install-preview.sh` installs it at
+`/usr/bin/nidara-shell` (the path nidara-access grants the shell role) with
+`bin/nidara-dock.service`. `gsettings set org.nidara.dock native-preview true` makes the
+Hyalo preview session use it from the next login: `/usr/lib/nidara-hyalo/start-shell` (Hyalo's
+autostart) reads the key, starts nidara-sessiond with `--applications` through
+`NIDARA_SESSIOND_PREVIEW` and starts this dock; the TS shell, reading the same key, draws no
+dock. Config1 is still the TS shell's there: it takes this dock's `dock.*` writes by its
+executable (`ui/shell/core/ConfigService.ts`). Hyprland and the package are untouched; the
+key and the unit go at D4.
+
 ## 2. Threads and data flow
 
 ```

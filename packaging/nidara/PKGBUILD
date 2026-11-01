@@ -634,6 +634,9 @@ package_nidara-hyalo() {
   install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"
   install -Dm755 bin/nidara-hyalo-session "$pkgdir/usr/bin/nidara-hyalo-session"
   install -Dm755 hyalo/session/restore-wallpaper "$pkgdir/usr/lib/nidara-hyalo/restore-wallpaper"
+  # Starts the shell. The native dock it can start instead of the TS one is not packaged:
+  # only hyalo/scripts/install-preview.sh installs it (#959, until D4).
+  install -Dm755 hyalo/session/start-shell "$pkgdir/usr/lib/nidara-hyalo/start-shell"
   install -Dm644 config/hyalo/hyalo.toml "$pkgdir/usr/share/nidara/hyalo/hyalo.toml"
   install -Dm644 config/wayland-sessions/nidara-hyalo.desktop \
     "$pkgdir/usr/share/wayland-sessions/nidara-hyalo.desktop"

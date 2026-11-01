@@ -14,9 +14,10 @@ autostart = [
   # IPC socket to the session's services and activates graphical-session.target. Must come first — uwsm ends
   # the session if this does not arrive.
   "uwsm finalize HYALO_SOCKET",
-  # The shell, as a systemd user unit, so a crash restarts it rather than leaving a bare
-  # compositor (bin/nidara.service).
-  "systemctl --user start nidara-sessiond.service nidara.service",
+  # The shell, as systemd user units, so a crash restarts it rather than leaving a bare
+  # compositor (bin/nidara.service); with the preview's native dock, that dock too
+  # (hyalo/session/start-shell).
+  "/usr/lib/nidara-hyalo/start-shell",
   # The wallpaper: awww draws it; the user's choice is in ~/.config/nidara/wallpaper.
   "uwsm app -s b -- awww-daemon",
   "/usr/lib/nidara-hyalo/restore-wallpaper",

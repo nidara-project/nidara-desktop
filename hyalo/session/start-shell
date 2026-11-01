@@ -1,0 +1,16 @@
+#!/bin/sh
+# The shell on a Hyalo session — /usr/lib/nidara-hyalo/start-shell, run from Hyalo's autostart
+# right after `uwsm finalize`.
+#
+# The session services and the shell, as systemd user units so a crash restarts them
+# (bin/nidara-sessiond.service, bin/nidara.service). With org.nidara.dock native-preview on,
+# also the native (Rust) dock: the services start with Applications1, which it reads, and the
+# TS shell, seeing the same key, draws no dock of its own. Read once, here: a change applies
+# from the next login. The preview's switch until the native dock replaces the TS one (#959 D4).
+if [ "$(gsettings get org.nidara.dock native-preview 2>/dev/null)" = true ] \
+    && [ -x /usr/bin/nidara-shell ]; then
+    systemctl --user set-environment NIDARA_SESSIOND_PREVIEW=--applications
+    exec systemctl --user start nidara-sessiond.service nidara.service nidara-dock.service
+fi
+systemctl --user unset-environment NIDARA_SESSIOND_PREVIEW
+exec systemctl --user start nidara-sessiond.service nidara.service
