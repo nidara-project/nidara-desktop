@@ -75,7 +75,9 @@ A source that fails marks its part of the view unavailable; nothing waits foreve
   logical and scale 1..4 (at most 1024 physical), so a dock shrunk below 16 asks for 16
   and scales the art down itself; the layout has no 16 floor. The pixels are straight
   alpha and are converted to the renderer's format once, when cached by (id, generation,
-  IconRevision, pixel size). A miss shows a neutral placeholder, never another app's
+  IconRevision, pixel size). With magnification on, each icon is fetched twice, at the
+  icon size and at the largest magnified size, and drawn from the second once it grows
+  past the first: the resting art stretched to twice its size came out pixelated. A miss shows a neutral placeholder, never another app's
   art. A lost owner or a new epoch drops pending handles and rereads. A click may
   launch only when the app is `Launchable` AND the service advertises `launch` (A2's
   capability; `open-directory` for folders). `LauncherAvailable` is Unity's and stays

@@ -25,6 +25,8 @@ pub struct Frame {
     /// The provisional top reservation a side dock stays below (BAR_RESERVATION).
     pub reserved_top: f64,
     pub icons: HashMap<String, Arc<Raster>>,
+    /// The same art at the largest magnified size, for icons drawn bigger than `icons`.
+    pub large_icons: HashMap<String, Arc<Raster>>,
     pub trash: Option<crate::trash::TrashState>,
     pub focused: Option<u64>,
     pub hyalo_epoch: u64,
@@ -57,6 +59,7 @@ impl Frame {
             prefs,
             reserved_top: BAR_RESERVATION,
             icons: HashMap::new(),
+            large_icons: HashMap::new(),
             trash: None,
             focused: None,
             hyalo_epoch: 0,
@@ -166,6 +169,7 @@ pub struct Hub {
     prefs: Prefs,
     docks: HashMap<OutputId, DockHandle>,
     icons: HashMap<String, Cached>,
+    large_icons: HashMap<String, Cached>,
     trash: Option<crate::trash::TrashState>,
     pending_icons: HashSet<(String, u64, u64, u32, u64)>,
     icon_jobs: Option<Sender<IconJob>>,
@@ -233,6 +237,7 @@ impl Hub {
             prefs,
             docks: HashMap::new(),
             icons: HashMap::new(),
+            large_icons: HashMap::new(),
             trash: None,
             pending_icons: HashSet::new(),
             icon_jobs,
@@ -305,7 +310,7 @@ impl Hub {
             }
             HubEvent::Icon(job, icon) => {
                 self.pending_icons
-                    .retain(|p| !(p.0 == job.id && p.1 == job.generation));
+                    .retain(|p| !(p.0 == job.id && p.1 == job.generation && p.3 == job.logical));
                 let current = self.apps.as_ref().is_some_and(|a| a.epoch == job.epoch);
                 let Some(icon) = icon.filter(|_| current) else {
                     return false;
@@ -316,7 +321,12 @@ impl Hub {
                     return false;
                 };
                 let revision = self.apps.as_ref().map_or(0, |a| a.icon_revision);
-                self.icons.insert(
+                let cache = if Some(job.logical) == self.large_logical() {
+                    &mut self.large_icons
+                } else {
+                    &mut self.icons
+                };
+                cache.insert(
                     job.id,
                     Cached {
                         generation: job.generation,
@@ -418,13 +428,35 @@ impl Hub {
         self.apps.as_ref().is_some_and(|a| a.can(capability))
     }
 
-    /// Icons at the preferred size and the largest dock scale; docks scale down from there.
+    /// The size magnification draws icons up to, when it is bigger than the resting one.
+    fn large_logical(&self) -> Option<u32> {
+        let p = &self.prefs;
+        (p.magnification && p.max_icon_size > p.icon_size).then_some(p.max_icon_size)
+    }
+
+    /// Icons at the preferred size and the largest dock scale, and again at the magnified
+    /// size: a magnified icon drawn from the resting art came out blurred and pixelated.
+    /// Docks scale down from there.
     fn request_icons(&mut self) {
+        if self.large_logical().is_none() {
+            self.large_icons.clear();
+        }
+        self.request_icons_at(self.prefs.icon_size, false);
+        if let Some(large) = self.large_logical() {
+            self.request_icons_at(large, true);
+        }
+    }
+
+    fn request_icons_at(&mut self, logical: u32, large: bool) {
         let (Some(apps), Some(jobs)) = (self.apps.as_ref(), self.icon_jobs.as_ref()) else {
             return;
         };
         let scale = self.docks.values().map(|d| d.scale).fold(1., f64::max);
-        let logical = self.prefs.icon_size;
+        let cache = if large {
+            &self.large_icons
+        } else {
+            &self.icons
+        };
         // The shown apps, and the Trash's two looks: both are fetched, so filling or
         // emptying the Trash swaps art the dock already has.
         let mut wanted: Vec<(&str, u64)> = apps
@@ -437,7 +469,7 @@ impl Hub {
             wanted.extend([(TRASH_EMPTY, 0), (TRASH_FULL, 0)]);
         }
         for (id, generation) in wanted {
-            let fresh = self.icons.get(id).is_some_and(|c| {
+            let fresh = cache.get(id).is_some_and(|c| {
                 c.generation == generation
                     && c.revision == apps.icon_revision
                     && c.logical == logical
@@ -501,11 +533,13 @@ impl Hub {
             windows: &windows,
             hyalo_epoch: self.hyalo_epoch,
         });
-        let icons: HashMap<String, Arc<Raster>> = self
-            .icons
-            .iter()
-            .map(|(k, c)| (k.clone(), c.raster.clone()))
-            .collect();
+        let rasters = |cache: &HashMap<String, Cached>| -> HashMap<String, Arc<Raster>> {
+            cache
+                .iter()
+                .map(|(k, c)| (k.clone(), c.raster.clone()))
+                .collect()
+        };
+        let (icons, large_icons) = (rasters(&self.icons), rasters(&self.large_icons));
         let names: Vec<String> = self.docks.values().map(|d| d.name.clone()).collect();
         let owners = target_owners(&self.windows, &names);
         let sizes: HashMap<String, (u32, u32)> = self
@@ -536,6 +570,7 @@ impl Hub {
                 prefs: self.prefs,
                 reserved_top: BAR_RESERVATION,
                 icons: icons.clone(),
+                large_icons: large_icons.clone(),
                 trash: self.trash,
                 focused,
                 hyalo_epoch: self.hyalo_epoch,
@@ -874,6 +909,66 @@ mod tests {
             .try_recv()
             .expect("its window opened: the icon is asked for");
         assert_eq!(job.id, "org.gnome.Terminal.desktop");
+    }
+    #[test]
+    fn a_magnifying_dock_fetches_its_art_at_both_sizes() {
+        for magnification in [true, false] {
+            let (jobs, requested) = std::sync::mpsc::channel();
+            let prefs = Prefs {
+                icon_size: 64,
+                max_icon_size: 128,
+                magnification,
+                ..Prefs::default()
+            };
+            let mut hub = Hub::new(
+                prefs,
+                Some(jobs),
+                None,
+                None,
+                Arc::new(Status::default()),
+                None,
+            );
+            let kitty = crate::model::App {
+                id: "kitty.desktop".into(),
+                generation: 1,
+                name: "kitty".into(),
+                launchable: true,
+                ..Default::default()
+            };
+            hub.handle(HubEvent::Apps(AppsUpdate::State(AppsState {
+                epoch: 1,
+                revision: 1,
+                apps: vec![kitty],
+                pins: vec![crate::model::Pin::App {
+                    id: "kitty.desktop".into(),
+                    key: "app:kitty.desktop".into(),
+                }],
+                default_directory: None,
+                capabilities: vec![],
+                icon_revision: 1,
+                layout_revision: 0,
+            })));
+            let asked: Vec<IconJob> = requested.try_iter().collect();
+            let sizes: Vec<u32> = asked.iter().map(|j| j.logical).collect();
+            if !magnification {
+                assert_eq!(sizes, [64]);
+                continue;
+            }
+            assert_eq!(sizes, [64, 128]);
+            for job in asked {
+                let side = job.logical;
+                hub.handle(HubEvent::Icon(
+                    job,
+                    Some(crate::apps::Icon {
+                        width: side,
+                        height: side,
+                        rgba: vec![0; (side * side * 4) as usize],
+                    }),
+                ));
+            }
+            assert_eq!(hub.icons["kitty.desktop"].logical, 64);
+            assert_eq!(hub.large_icons["kitty.desktop"].logical, 128);
+        }
     }
     #[test]
     fn keyboard_focus_goes_to_the_focused_windows_dock() {

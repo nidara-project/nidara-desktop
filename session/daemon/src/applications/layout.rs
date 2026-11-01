@@ -54,17 +54,39 @@ pub fn migrate(old: &[String], apps: &BTreeMap<String, App>) -> Vec<String> {
         if id.is_empty() || id.contains('/') {
             continue;
         }
-        let id = if id.ends_with(".desktop") {
-            id.to_string()
-        } else {
-            format!("{id}.desktop")
-        };
+        let id = resolve_legacy(id, apps);
         let t = format!("app:{id}");
         if canonical(&t).is_ok() && !result.contains(&t) && result.len() < 256 {
             result.push(t);
         }
     }
     result
+}
+/// The TS dock kept a pin as the desktop ID lowercased with every `.desktop` cut off
+/// (`org.telegram` for `org.telegram.desktop.desktop`, `chrome-…-default` for
+/// `chrome-…-Default.desktop`), so the catalogue entry it names is the one that reads the
+/// same that way. An exact ID wins; with no entry, the ID as written (`prune` decides).
+fn resolve_legacy(id: &str, apps: &BTreeMap<String, App>) -> String {
+    let exact = if id.ends_with(".desktop") {
+        id.to_string()
+    } else {
+        format!("{id}.desktop")
+    };
+    if apps.contains_key(&exact) {
+        return exact;
+    }
+    let key = |s: &str| {
+        let mut s = s.to_lowercase();
+        while let Some(t) = s.strip_suffix(".desktop") {
+            s = t.to_string();
+        }
+        s
+    };
+    let wanted = key(id);
+    apps.keys()
+        .find(|k| key(k) == wanted)
+        .cloned()
+        .unwrap_or(exact)
 }
 pub fn validate(raw: &[String]) -> Result<Vec<String>, Error> {
     if raw.len() > 256 || raw.iter().map(String::len).sum::<usize>() > 128 * 1024 {
@@ -192,5 +214,51 @@ mod tests {
         assert!(validate(&[DEFAULT.into(), DEFAULT.into()]).is_err());
         assert!(canonical("app:../../bad.desktop").is_err());
         assert!(canonical("folder:file://remote/tmp").is_err());
+    }
+    #[test]
+    fn migration_finds_the_entry_the_ts_dock_pinned() {
+        let app = |id: &str| {
+            (
+                id.to_string(),
+                App {
+                    id: id.into(),
+                    generation: 1,
+                    digest: String::new(),
+                    source_hash: String::new(),
+                    exec_hash: String::new(),
+                    record: json!({}),
+                    executable: String::new(),
+                    keywords: vec![],
+                    icon: String::new(),
+                },
+            )
+        };
+        let apps: BTreeMap<String, App> = [
+            app("org.telegram.desktop.desktop"),
+            app("io.missioncenter.MissionCenter.desktop"),
+            app("chrome-abc-Default.desktop"),
+            app("kitty.desktop"),
+        ]
+        .into();
+        let old = [
+            "org.telegram",
+            "io.missioncenter.missioncenter",
+            "pinned-chrome-abc-default",
+            "kitty",
+            "gone",
+        ]
+        .map(String::from);
+        let mut l = migrate(&old, &apps);
+        prune(&mut l, &apps, true);
+        assert_eq!(
+            l,
+            [
+                DEFAULT,
+                "app:org.telegram.desktop.desktop",
+                "app:io.missioncenter.MissionCenter.desktop",
+                "app:chrome-abc-Default.desktop",
+                "app:kitty.desktop",
+            ]
+        );
     }
 }

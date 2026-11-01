@@ -1204,6 +1204,18 @@ impl Dock {
         }
     }
 
+    /// An app's art for an icon `side` logical pixels across: the resting art (fetched at
+    /// the icon size) while the icon is no bigger, the magnified art once it grows past it.
+    fn art(&self, id: &str, side: f64) -> Option<&Arc<Raster>> {
+        let base = self.frame.icons.get(id);
+        match self.frame.large_icons.get(id) {
+            Some(large) if base.is_none() || side > f64::from(self.frame.prefs.icon_size) + 0.5 => {
+                Some(large)
+            }
+            _ => base,
+        }
+    }
+
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
         let [x, y, w, h] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
@@ -1244,7 +1256,7 @@ impl Dock {
                 // tile only when the theme has none (or Applications1 cannot say).
                 let full = self.frame.trash.is_some_and(|t| t.full);
                 let key = if full { TRASH_FULL } else { TRASH_EMPTY };
-                if let Some(art) = self.frame.icons.get(key) {
+                if let Some(art) = self.art(key, w) {
                     c.image(art, r, ImageFit::Contain);
                 } else {
                     c.rounded_rect(r, w * 0.22, faint);
@@ -1284,7 +1296,7 @@ impl Dock {
                     Kind::Minimized { app, .. } => app.as_deref(),
                     _ => None,
                 };
-                match id.and_then(|id| self.frame.icons.get(id)) {
+                match id.and_then(|id| self.art(id, w)) {
                     Some(icon) => c.image(icon, r, ImageFit::Contain),
                     None => c.rounded_rect(r, w * 0.22, faint),
                 }
