@@ -140,11 +140,12 @@ envelope's empty room passes clicks through, except a **reach** beside the resti
 at its height, three sigmas long (where the bell is down to about 1 %): there the pointer
 coming in from a side already grows the end icons, as on the TS dock (which took the
 pointer 250 px past each end). A press there does nothing; only the glass opens the dock
-menu. Positions are anchored at the pointer within its rest slot: the item under the
-pointer stays under it as the strip grows, so a point measured at rest still lands on its
-item. Off the strip (its end padding, or the reach) the nearer end stays where it rests:
-anchored at the pointer instead, the strip followed it out by a side and jumped back to
-the middle once the magnification eased out (owner, 2026-11-01). Presence eases in on entry and out on leave,
+menu. The strip stays **centred** where it rests and grows the same on both sides,
+whichever side the pointer comes from, as on the TS dock (owner, 2026-11-01). It was
+anchored at the pointer until then: it grew only away from it, followed the pointer out
+by a side and jumped back to the middle once the magnification eased out. Centred, the
+item under the pointer still stays under it (the bell grows it more than its neighbours
+push it), which the unit tests check at both ends and in the middle. Presence eases in on entry and out on leave,
 an exponential approach with a 60 ms time constant (snapped under reduced motion); the reader's bounds follow what is drawn, throttled to
 100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
 rects.

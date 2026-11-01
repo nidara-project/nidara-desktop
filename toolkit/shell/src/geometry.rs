@@ -274,9 +274,9 @@ pub fn envelope(
 
 impl Layout {
     /// What is drawn and hit now: the resting layout magnified around the pointer `p`
-    /// (surface coordinates), `presence` 0..1 of the way in. The slot under the pointer
-    /// keeps the pointer where it is in it; its neighbours make room on both sides, inside
-    /// the surface. Icons grow from their edge-side base. Order never changes.
+    /// (surface coordinates), `presence` 0..1 of the way in. The strip stays centred where
+    /// it rests and grows the same on both sides, inside the surface. Icons grow from their
+    /// edge-side base. Order never changes.
     pub fn magnify(&self, slots: &[Slot], p: (f64, f64), presence: f64) -> Layout {
         let Some(m) = self.mag.filter(|_| presence > 0.) else {
             return self.clone();
@@ -287,30 +287,15 @@ impl Layout {
         let g = growth(self, slots, &m, pm, presence.min(1.));
         let lens: Vec<f64> = self.hits.iter().map(|r| along(r).1).collect();
         let grown: Vec<f64> = lens.iter().zip(&g).map(|(l, g)| l * g).collect();
-        // The slot under the pointer keeps the pointer where it is in it. Off the strip (its
-        // end padding, or the reach past it) the nearer end stays where it rests: anchored
-        // at the pointer, the strip followed it out by a side and then jumped back to the
-        // middle once the magnification was gone.
-        let last = lens.len() - 1;
+        // Centred on the resting strip, as on the TS dock: it grows the same on both sides
+        // whichever side the pointer comes from (owner, 2026-11-01). Anchored at the
+        // pointer instead, it grew only away from it, followed it out by a side and jumped
+        // back to the middle once the magnification eased out.
         let first_start = along(&self.hits[0]).0;
-        let (sl, ll) = along(&self.hits[last]);
-        let pa = pm.clamp(first_start, sl + ll);
-        let k = self
-            .hits
-            .iter()
-            .position(|r| {
-                let (s, l) = along(r);
-                pa < s + l
-            })
-            .unwrap_or(last);
-        let (sk, lk) = along(&self.hits[k]);
-        let f = ((pa - sk) / lk).clamp(0., 1.);
+        let mid = first_start + lens.iter().sum::<f64>() / 2.;
         let mut starts = vec![0.; lens.len()];
-        starts[k] = pa - f * grown[k];
-        for n in (0..k).rev() {
-            starts[n] = starts[n + 1] - grown[n];
-        }
-        for n in k + 1..lens.len() {
+        starts[0] = mid - grown.iter().sum::<f64>() / 2.;
+        for n in 1..lens.len() {
             starts[n] = starts[n - 1] + grown[n - 1];
         }
         let (g0, glen) = along(&self.glass);
@@ -571,7 +556,7 @@ mod tests {
     }
 
     #[test]
-    fn off_the_strip_its_nearer_end_stays_and_the_reach_magnifies() {
+    fn it_grows_centred_and_the_reach_magnifies() {
         let slots = vec![Slot::Icon; 8];
         for pos in [Position::Bottom, Position::Left, Position::Right] {
             let rest = layout(&slots, 64, pos, (1920, 1080), BAR_RESERVATION);
@@ -593,17 +578,27 @@ mod tests {
             assert!(
                 rx >= 0. && ry >= 0. && rx + rw <= e.size.0 as f64 && ry + rh <= e.size.1 as f64
             );
+            let centre = |m: &Layout| {
+                let (s0, _) = along(m.hits[0]);
+                let (s7, l7) = along(m.hits[7]);
+                (s0 + s7 + l7) / 2.
+            };
+            let rest_centre = (first + ls + ll) / 2.;
             for p in [
-                ls + ll + 3.,
-                gs + gl - 1.,
+                gs - sigma,
+                first + 3.,
+                rest_centre + 20.,
+                ls + ll - 3.,
                 gs + gl + sigma,
                 gs + gl + 2. * sigma,
             ] {
                 for presence in [1., 0.5, 1e-9] {
+                    // Wherever the pointer is, the strip grows the same on both sides.
                     let m = e.magnify(&slots, at(p), presence);
-                    // The far end stays where it rests: leaving by a side does not drag it.
-                    let (s, l) = along(m.hits[7]);
-                    assert!((s + l - ls - ll).abs() < 1e-6, "{pos:?} {p} {presence}");
+                    assert!(
+                        (centre(&m) - rest_centre).abs() < 1e-6,
+                        "{pos:?} {p} {presence}"
+                    );
                 }
                 // And as it settles, every item is back where it rests: no jump at the end.
                 let m = e.magnify(&slots, at(p), 1e-9);
@@ -615,9 +610,8 @@ mod tests {
                     );
                 }
             }
-            // From the other side the near end stays, and a sigma out the first icon grows.
+            // A sigma out from a side, the end icon already grows.
             let m = e.magnify(&slots, at(gs - sigma), 1.);
-            assert!((along(m.hits[0]).0 - first).abs() < 1e-6, "{pos:?}");
             assert!(m.rects[0][2] > 64. + 1., "{pos:?}");
         }
     }
