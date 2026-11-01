@@ -11,6 +11,7 @@ use crate::hub::{Frame, Request};
 use crate::menu::Command;
 use crate::model::{Item, Kind, View};
 use crate::popup::{Look, Outcome, Overlay, Popup};
+use crate::spring::Spring;
 use nk_render::{Canvas, ImageFit, Raster, rgba};
 use nk_text::{Rect, TextBackend};
 use nk_wayland::{
@@ -42,7 +43,7 @@ pub struct Dock {
     /// What is drawn, hit and given to the screen reader now: `layout` magnified around
     /// the pointer, `presence` of the way in (geometry.rs `magnify`).
     shown: Layout,
-    presence: f64,
+    presence: Spring,
     presence_target: f64,
     presence_at: Instant,
     /// The input region last sent: the glass and the icons that grew out of it.
@@ -105,8 +106,9 @@ pub struct Dock {
 pub const THUMB_SIDE: u32 = 256;
 /// The reader's bounds follow magnification at most this often while it moves.
 const SEMANTICS_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
-/// Magnification's easing time constant, seconds: settled in about a quarter second.
-const EASE: f64 = 0.06;
+/// The longest step the magnification spring takes at once, seconds (DockCore.tsx
+/// `MAX_DT`): a late frame slows it rather than jumping it.
+const MAX_STEP: f64 = 0.04;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
 /// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
@@ -171,7 +173,7 @@ impl Dock {
             output_size,
             frame,
             shown: layout.clone(),
-            presence: 0.,
+            presence: Spring::default(),
             presence_target: 0.,
             presence_at: Instant::now(),
             input: vec![],
@@ -288,7 +290,9 @@ impl Dock {
     /// Magnify around the pointer as things stand, and send the input region it covers.
     fn reshape(&mut self, w: &mut Window) {
         let slots = slots(&self.frame.view);
-        let shown = self.layout.magnify(&slots, self.pointer, self.presence);
+        let shown = self
+            .layout
+            .magnify(&slots, self.pointer, self.presence.value.max(0.));
         let moved = shown.rects != self.shown.rects;
         self.shown = shown;
         if w.size() != self.layout.size {
@@ -296,7 +300,7 @@ impl Dock {
         }
         let now = Instant::now();
         if moved
-            && (self.presence == self.presence_target
+            && (self.presence.value == self.presence_target
                 || now.saturating_duration_since(self.semantics_at) >= SEMANTICS_EVERY)
         {
             self.semantics_at = now;
@@ -323,28 +327,23 @@ impl Dock {
         w.redraw();
     }
 
-    /// Magnification eases in under the pointer and out when it leaves (the TS dock's
-    /// spring, settled); reduced motion keeps the enlargement as a state change.
+    /// Magnification eases in under the pointer and out when it leaves, on the TS dock's
+    /// spring (spring.rs); reduced motion keeps the enlargement as a state change.
     fn ease(&mut self, w: &mut Window) {
         let now = Instant::now();
         let dt = now
             .saturating_duration_since(self.presence_at)
-            .as_secs_f64();
+            .as_secs_f64()
+            .min(MAX_STEP);
         self.presence_at = now;
-        if self.presence == self.presence_target {
+        if self.presence.value == self.presence_target {
             return;
         }
-        self.presence = if self.frame.prefs.reduce_motion {
-            self.presence_target
+        if self.frame.prefs.reduce_motion {
+            self.presence.snap(self.presence_target);
         } else {
-            let next =
-                self.presence + (self.presence_target - self.presence) * (1. - (-dt / EASE).exp());
-            if (next - self.presence_target).abs() < 0.01 {
-                self.presence_target
-            } else {
-                next
-            }
-        };
+            self.presence.step(self.presence_target, dt);
+        }
         self.reshape(w);
     }
 
@@ -1408,7 +1407,7 @@ impl Application for Dock {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
         };
-        if self.presence != self.presence_target {
+        if self.presence.value != self.presence_target {
             return crate::attention::FRAME.as_millis() as u32;
         }
         // Auto-hide: a frame while it slides, else wake when the hide is due.
@@ -1470,7 +1469,13 @@ impl Application for Dock {
                     self.slide(w)?;
                 }
                 if self.layout.mag.is_some() {
-                    self.presence_target = if self.frame.hidden { 0. } else { 1. };
+                    let target = if self.frame.hidden { 0. } else { 1. };
+                    // The clock starts with the change: measured from the last settled
+                    // frame, the first step spanned the whole pause and landed at once.
+                    if target != self.presence_target {
+                        self.presence_target = target;
+                        self.presence_at = Instant::now();
+                    }
                     self.ease(w);
                     self.reshape(w);
                 }
