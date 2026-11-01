@@ -407,18 +407,20 @@ impl Chooser {
             self.placed = Some((geometry, self.rect));
             let (width, height) = (geometry[2].max(1) as f64, geometry[3].max(1) as f64);
             let radius = f64::from(look.styles.menu.radius);
-            let (body, pane) = crate::bubble::place(geometry, self.rect, radius, 2.).unwrap_or((
-                [0., 0., width, height],
-                Pane {
-                    x: 0.,
-                    y: 0.,
-                    width,
-                    height,
-                    radius,
-                    exponent: 2.,
-                    pointer: None,
-                },
-            ));
+            let (body, pane) =
+                crate::bubble::place(geometry, self.rect, radius, crate::popup::MENU_EXPONENT)
+                    .unwrap_or((
+                        [0., 0., width, height],
+                        Pane {
+                            x: 0.,
+                            y: 0.,
+                            width,
+                            height,
+                            radius,
+                            exponent: crate::popup::MENU_EXPONENT,
+                            pointer: None,
+                        },
+                    ));
             self.body = body;
             self.scroll = self.scroll.min(self.max_scroll());
             self.material = look
