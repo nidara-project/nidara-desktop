@@ -1,4 +1,4 @@
-# The Rust dock, D1 (#959)
+# The Rust dock, D1–D2 (#959)
 
 **Status: DESIGN, reviewed by Codex (Palomar #959 #741), 2026-10-31.** The owner authorized D1 in Claude's chat
 ("fusiona A1 y empieza D1"). The contract it implements is
@@ -9,9 +9,14 @@ wins and this file is wrong.
 D1 is the visible baseline: one dock per output with pins, running apps, minimized
 windows and Trash; Files as the default directory handler; click to launch, focus,
 minimize and restore; the fixed margin and uniform shrink; keyboard and AT-SPI;
-`Shell1` `focus:dock`. It has **no** foreground usage, attention, Unity counts,
-magnification, menus, thumbnail chooser, drag and drop or preferences page (D2/D3), and
-no Apps launcher (D4).
+`Shell1` `focus:dock`.
+
+D2 adds what the contract's D2 row lists: the app, window and dock menus; the bounded
+window chooser; new window, middle click and scroll; indicators, attention, Unity counts
+and progress; tooltips; magnification; auto-hide; resizing from the separator, with its
+accessible adjuster; and the Dock page of the native Settings. Each has its paragraph
+below. Still to come: foreground usage and drag and drop (D3), and the Apps launcher
+(D4).
 
 ## 1. Where it lives
 
@@ -259,6 +264,9 @@ As built:
   rectangles inside its slots, and libatspi walks every item. It also requires the Trash's
   theme art (both looks) and its fill (a file trashed in the private session), and a
   minimized window's picture. Other output scales: pass a Hyalo config with
-  `[outputs.winit] scale = 1.25` (or 2) as `NK_WIDGETS_HYALO_CONFIG`; 1, 1.25 and 2 pass.
+  `[outputs.winit] scale = 1.25` (or 2) as `NK_WIDGETS_HYALO_CONFIG`; 1, 1.25 and 2 pass. D2's steps
+  pass at all three too (2026-11-01); at scale 2 the nested output is only 636×344
+  logical, so magnification grows a 64 px icon to 85 rather than 121, as the envelope's
+  bounds say, and the check asks only that it grows.
 - A private nested session (`scripts/dev/rust-session.sh --applications nidara-shell`)
   for the owner to look at. Not the daily session, no install, no sudo.
