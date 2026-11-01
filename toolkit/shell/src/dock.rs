@@ -1220,25 +1220,35 @@ impl Dock {
         }
     }
 
-    /// Slot `n` where it is drawn: lifted by attention.
-    fn placed(&self, n: usize, item: &Item, now: Instant) -> [f64; 4] {
+    /// Slot `n` where it is drawn: lifted by attention, and moved along the dock onto
+    /// whole device pixels. The dots and the separator land on whole pixels anyway; an
+    /// icon left between them stayed put while they stepped as the strip started to
+    /// grow, and they seemed to slide off on their own.
+    fn placed(&self, scale: f64, n: usize, item: &Item, now: Instant) -> [f64; 4] {
         let [x, y, w, h] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
-        [x + dx, y + dy, w, h]
+        let snap = |v: f64| (v * scale).round() / scale;
+        if self.layout.position.horizontal() {
+            [snap(x) + dx, y + dy, w, h]
+        } else {
+            [x + dx, snap(y) + dy, w, h]
+        }
     }
 
-    /// No magnification, nor any easing in or out: the dots and the separator may land on
-    /// whole device pixels, sharp. While the strip moves they follow their icons to the
-    /// fraction instead: snapped, they stepped a whole pixel at a time while the icons
-    /// glided, and the first fraction the strip moved as it started to grow made every
-    /// dot and the separator jump aside without their icons (owner, 2026-11-01). The
-    /// icons are never snapped, or magnification would move them in steps.
-    fn still(&self) -> bool {
-        self.presence.value == 0. && self.presence_target == 0.
+    /// The running dot of slot `n`, moved along with its icon onto the pixel grid.
+    fn dot_at(&self, scale: f64, n: usize) -> (f64, f64) {
+        let [x, y, ..] = self.shown.rects[n];
+        let snap = |v: f64| (v * scale).round() / scale - v;
+        let (cx, cy) = self.shown.dot(n);
+        if self.layout.position.horizontal() {
+            (cx + snap(x), cy)
+        } else {
+            (cx, cy + snap(y))
+        }
     }
 
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
-        let [x, y, w, h] = self.placed(n, item, now);
+        let [x, y, w, h] = self.placed(c.scale(), n, item, now);
         let r = Rect {
             x: x as f32,
             y: y as f32,
@@ -1264,16 +1274,7 @@ impl Dock {
                 } else {
                     rgba(0, 0, 0, 77)
                 };
-                if !self.still() {
-                    // One physical pixel wide, wherever the strip has carried it.
-                    let px = (1. / c.scale()) as f32;
-                    let r = if self.layout.position.horizontal() {
-                        Rect { width: px, ..r }
-                    } else {
-                        Rect { height: px, ..r }
-                    };
-                    c.rect(r, line)
-                } else if self.layout.position.horizontal() {
+                if self.layout.position.horizontal() {
                     c.vertical_rule(r, 1., line)
                 } else {
                     c.horizontal_rule(r, 1., line)
@@ -1378,7 +1379,7 @@ impl Dock {
         if item.signal.attention {
             // Attention's still mark, with or without motion: the dot drawn out to a dash
             // along the dock, whatever the indicators preference (it is not a running dot).
-            let (cx, cy) = self.shown.dot(n);
+            let (cx, cy) = self.dot_at(c.scale(), n);
             let (lw, lh) = if self.layout.position.horizontal() {
                 (3. * d, d)
             } else {
@@ -1395,18 +1396,7 @@ impl Dock {
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            let (cx, cy) = self.shown.dot(n);
-            if self.still() {
-                c.dot((cx, cy), d, mark);
-            } else {
-                let dot = Rect {
-                    x: (cx - d / 2.) as f32,
-                    y: (cy - d / 2.) as f32,
-                    width: d as f32,
-                    height: d as f32,
-                };
-                c.rounded_rect(dot, d / 2., mark);
-            }
+            c.dot(self.dot_at(c.scale(), n), d, mark);
         }
     }
 
@@ -1414,7 +1404,7 @@ impl Dock {
     /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
     /// it reaches into the next slot's gap.
     fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
-        let [x, y, w, _] = self.placed(n, item, now);
+        let [x, y, w, _] = self.placed(c.scale(), n, item, now);
         let pill = w * COUNT;
         let (back, figure) = match self.frame.tokens.as_ref().and_then(|t| {
             let c = t["danger"].as_array()?;
