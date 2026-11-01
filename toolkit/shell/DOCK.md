@@ -140,6 +140,10 @@ From the existing TS dock, so the two look alike: padding 10 and gap 4 at every 
 `DOCK_SCREEN_GAP` = 4 logical px, dot 5 px. The glass is Hyalo's: one `Pane` per dock
 with the exported `dock` tone (`tokens/glass.json`, by mode and reduce transparency); the
 client paints only icons, dots and the separator (commandment 12).
+Dots and the separator land on whole device pixels, but at rest they sit on a rounding
+edge (a 5 px dot, a 1 px line), so they snap their movement from rest, never where they
+are (`steady` in `dock.rs`): snapping the position flipped them a pixel at the first
+hundredth of movement, as the pointer came within reach and before any icon moved.
 
 **Magnification (D2).** With `magnification` on, resting the pointer on the strip grows
 the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons toward
