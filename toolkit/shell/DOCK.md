@@ -146,9 +146,11 @@ anchored at the pointer until then: it grew only away from it, followed the poin
 by a side and jumped back to the middle once the magnification eased out. Centred, the
 item under the pointer still stays under it (the bell grows it more than its neighbours
 push it), which the unit tests check at both ends and in the middle. Presence eases in on entry and out on leave on
-the TS dock's spring (`spring.rs`: stiffness 320, damping 38, from rest, nearly there in
-300 ms, no overshoot; snapped under reduced motion), its clock started with the change
-and each step at most 40 ms. The 60 ms exponential it replaced started at full speed,
+the TS dock's spring (`spring.rs`: stiffness 320, damping 38, from rest, no overshoot;
+snapped under reduced motion) at the TS dock's speed, 2.4× wall time (`SIM_SPEED`, so
+mostly there in 125 ms), its clock started with the change and a frame advancing at most
+1/25 s of it (`MAX_DT`). At the nested session's 25–30 frames a second that cap slows it
+about threefold, as it would the TS dock; at 144 Hz it never bites. The 60 ms exponential it replaced started at full speed,
 and its first step was measured from the last settled frame, so it landed at once
 (owner, 2026-11-01); the reader's bounds follow what is drawn, throttled to
 100 ms while moving and exact once settled. Targets published to Hyalo stay the rest

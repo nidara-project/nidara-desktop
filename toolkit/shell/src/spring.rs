@@ -1,7 +1,12 @@
 //! The TS dock's magnification spring (DockPhysics.ts `springStep`): it starts from rest and
-//! is nearly there in 300 ms, without overshoot, so the growth is seen as it happens.
+//! is nearly there in 300 ms of its time (125 ms of wall time), without overshoot, so the growth is seen as it happens.
 //! An exponential ease starts at full speed instead, and read as a jump (owner, 2026-11-01).
 
+/// The TS dock's simulation runs 2.4× real time (DockCore.tsx `SIM_SPEED`): its springs
+/// were tuned by eye at 144 Hz stepping a fixed 1/60 s, and that feel is the approved one.
+const SIM_SPEED: f64 = 2.4;
+/// The most simulated time one frame advances after a gap (DockCore.tsx `MAX_DT`).
+const MAX_DT: f64 = 1. / 25.;
 /// DockPhysics.ts `STIFFNESS` and `DAMPING`: a little over critical damping.
 const STIFFNESS: f64 = 320.;
 const DAMPING: f64 = 38.;
@@ -36,6 +41,11 @@ impl Spring {
             rem -= h;
         }
         true
+    }
+
+    /// Advances `real` seconds of wall time toward `target`, at the TS dock's speed.
+    pub fn advance(&mut self, target: f64, real: f64) -> bool {
+        self.step(target, (real * SIM_SPEED).min(MAX_DT))
     }
 
     /// Lands on `target` at once (reduced motion).
@@ -76,6 +86,25 @@ mod tests {
         assert!(settled < 0.8, "{settled}");
         assert!(path.iter().all(|v| *v <= 1. + 1e-3));
         assert_eq!(*path.last().unwrap(), 1.);
+    }
+
+    #[test]
+    fn at_the_ts_docks_speed_it_is_mostly_there_in_an_eighth_of_a_second() {
+        let mut s = Spring::default();
+        let mut path = vec![];
+        while s.advance(1., 1. / 144.) {
+            path.push(s.value);
+        }
+        let at = |ms: f64| path[(ms / 1000. * 144.) as usize - 1];
+        assert!(at(25.) < 0.35, "{}", at(25.));
+        assert!(at(125.) > 0.9, "{}", at(125.));
+        assert!((path.len() as f64 / 144.) < 0.34);
+        // A frame after a long gap advances at most MAX_DT of its time.
+        let mut s = Spring::default();
+        let mut t = Spring::default();
+        s.advance(1., 5.);
+        t.step(1., MAX_DT);
+        assert_eq!(s, t);
     }
 
     #[test]

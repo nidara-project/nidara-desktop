@@ -106,9 +106,6 @@ pub struct Dock {
 pub const THUMB_SIDE: u32 = 256;
 /// The reader's bounds follow magnification at most this often while it moves.
 const SEMANTICS_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
-/// The longest step the magnification spring takes at once, seconds (DockCore.tsx
-/// `MAX_DT`): a late frame slows it rather than jumping it.
-const MAX_STEP: f64 = 0.04;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
 /// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
@@ -333,8 +330,7 @@ impl Dock {
         let now = Instant::now();
         let dt = now
             .saturating_duration_since(self.presence_at)
-            .as_secs_f64()
-            .min(MAX_STEP);
+            .as_secs_f64();
         self.presence_at = now;
         if self.presence.value == self.presence_target {
             return;
@@ -342,7 +338,7 @@ impl Dock {
         if self.frame.prefs.reduce_motion {
             self.presence.snap(self.presence_target);
         } else {
-            self.presence.step(self.presence_target, dt);
+            self.presence.advance(self.presence_target, dt);
         }
         self.reshape(w);
     }
