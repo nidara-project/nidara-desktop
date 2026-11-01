@@ -461,7 +461,7 @@ impl Dock {
     /// largest icon the surface has room for, however small the icon was.
     fn anchor_rect(&self, n: usize) -> [i32; 4] {
         let [x, y, w, h] = self.shown.rects[n];
-        let [gx, gy, gw, gh] = self.shown.glass;
+        let [gx, gy, gw, _] = self.shown.glass;
         let (sw, sh) = (self.shown.size.0 as i32, self.shown.size.1 as i32);
         let g = POPUP_GAP;
         match self.layout.position {
