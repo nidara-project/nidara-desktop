@@ -38,7 +38,7 @@ pub use ime::{ImeBatch, TextInput};
 pub use keyboard::Key;
 use keyboard::Keyboard;
 pub use material::{
-    Blur, Glass, GradedPane, Material, Pane, Shadow, Tone, WindowBackground, WindowLevel,
+    Blur, Glass, GradedPane, Material, Pane, Pointer, Shadow, Tone, WindowBackground, WindowLevel,
 };
 use material::{send_background, send_material};
 use memmap2::MmapMut;

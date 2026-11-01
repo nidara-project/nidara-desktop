@@ -152,8 +152,13 @@ pub struct Popup {
     pub anchor: Option<String>,
     pub side: PopupSide,
     pub rect: [i32; 4],
+    /// The rows' size, and the popup's: that and the pointer toward its item (bubble.rs).
+    natural: (u32, u32),
     size: (u32, u32),
-    geometry: Option<[i32; 4]>,
+    /// Where it was placed, and for which anchor: the body and its pointer follow both.
+    placed: Option<([i32; 4], [i32; 4])>,
+    /// The rows' place in the popup, beside the pointer's room.
+    body: [f64; 4],
     material: Option<Material>,
     dirty: bool,
 }
@@ -215,7 +220,8 @@ impl Popup {
         {
             tree.focus(*id)?;
         }
-        let size = Self::natural(&mut tree, look, &rows)?;
+        let natural = Self::natural(&mut tree, look, &rows)?;
+        let size = crate::bubble::with_pointer(natural, r.side);
         let id = w.open_menu_popup(MenuPopupPlacement {
             placement: PopupPlacement {
                 anchor: r.rect,
@@ -234,8 +240,10 @@ impl Popup {
             anchor: r.anchor,
             side: r.side,
             rect: r.rect,
+            natural,
             size,
-            geometry: None,
+            placed: None,
+            body: [0., 0., natural.0 as f64, natural.1 as f64],
             material: None,
             dirty: true,
         })
@@ -284,6 +292,7 @@ impl Popup {
             return Ok(());
         }
         (self.rect, self.side) = (rect, side);
+        self.size = crate::bubble::with_pointer(self.natural, side);
         w.reposition_popup_overlay(
             self.id,
             PopupPlacement {
@@ -315,8 +324,10 @@ impl Popup {
                 (effect, serial)
             }
             PopupEvent::Input(input) => {
+                // The rows are laid out in the body, beside the pointer's room.
+                let (bx, by) = (self.body[0], self.body[1]);
                 let (event, serial) = match input {
-                    LayerEvent::Motion(x, y) => (Event::Motion(x, y), None),
+                    LayerEvent::Motion(x, y) => (Event::Motion(x - bx, y - by), None),
                     LayerEvent::Leave => (Event::PointerLeave, None),
                     LayerEvent::Scroll(d) => (Event::Scroll(d), None),
                     LayerEvent::HorizontalScroll(d) => (Event::HorizontalScroll(d), None),
@@ -328,7 +339,8 @@ impl Popup {
                         x,
                         y,
                     } => {
-                        self.input.event(&mut self.tree, &Event::Motion(x, y))?;
+                        self.input
+                            .event(&mut self.tree, &Event::Motion(x - bx, y - by))?;
                         (
                             Event::Button {
                                 button,
@@ -386,22 +398,29 @@ impl Popup {
         let Some(geometry) = w.popup_overlay_geometry(self.id) else {
             return Ok(false);
         };
-        if self.geometry != Some(geometry) {
-            self.geometry = Some(geometry);
+        if self.placed != Some((geometry, self.rect)) {
+            self.placed = Some((geometry, self.rect));
             let (width, height) = (geometry[2].max(1) as f64, geometry[3].max(1) as f64);
+            let radius = f64::from(look.styles.menu.radius);
+            let (body, pane) = crate::bubble::place(geometry, self.rect, radius, 2.).unwrap_or((
+                [0., 0., width, height],
+                Pane {
+                    x: 0.,
+                    y: 0.,
+                    width,
+                    height,
+                    radius,
+                    exponent: 2.,
+                    pointer: None,
+                },
+            ));
+            self.body = body;
             self.material = look
                 .panel
                 .as_ref()
-                .and_then(|p| p.at(width.min(height)).ok())
+                .and_then(|p| p.at(pane.width.min(pane.height)).ok())
                 .map(|mut m| {
-                    m.shapes = vec![Pane {
-                        x: 0.,
-                        y: 0.,
-                        width,
-                        height,
-                        radius: f64::from(look.styles.menu.radius),
-                        exponent: 2.,
-                    }];
+                    m.shapes = vec![pane];
                     m
                 });
             self.dirty = true;
@@ -411,8 +430,8 @@ impl Popup {
         }
         self.tree.layout(
             Size {
-                width: geometry[2] as f32,
-                height: geometry[3] as f32,
+                width: self.body[2] as f32,
+                height: self.body[3] as f32,
             },
             false,
             &mut look.text,
@@ -421,9 +440,12 @@ impl Popup {
             return Ok(false);
         };
         frame.material &= self.material.is_some();
+        // The rows fill the body; the pointer's room beside it stays clear.
+        let (inner, at) = crate::bubble::inset(frame, self.body);
         let bytes = self
             .tree
-            .paint(frame, Surface::Content, look.styles.palette)?;
+            .paint(inner, Surface::Content, look.styles.palette)?;
+        let bytes = crate::bubble::blit(frame, inner, at, &bytes);
         if w.paint_popup_overlay(self.id, frame, &bytes, self.material.as_ref())? {
             self.tree.acknowledge();
             self.dirty = false;
@@ -438,8 +460,8 @@ impl Popup {
         let (x, y) = w.menu_popup_origin(self.id)?;
         let mut tree = self.tree.semantics();
         for node in tree.nodes.values_mut() {
-            node.bounds.x += f64::from(x);
-            node.bounds.y += f64::from(y);
+            node.bounds.x += f64::from(x) + self.body[0];
+            node.bounds.y += f64::from(y) + self.body[1];
         }
         self.tree.acknowledge_semantics();
         Some(tree)

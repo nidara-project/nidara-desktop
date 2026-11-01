@@ -42,6 +42,47 @@ pub struct Pane {
     pub height: f64,
     pub radius: f64,
     pub exponent: f64,
+    /// A pointer spliced into one side (a tooltip's or a menu's, toward what it belongs
+    /// to): the compositor draws body and pointer as one glass (`add_shape_pointed`).
+    pub pointer: Option<Pointer>,
+}
+/// A pane's pointer, in the pane's coordinates: a triangle from its base, centred on the
+/// pane's edge at `base`, `width` wide, to `tip`; the tip a circular arc of `tip_radius`,
+/// meeting the edge in a concave arc of `base_radius`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pointer {
+    pub base: (f64, f64),
+    pub tip: (f64, f64),
+    pub width: f64,
+    pub tip_radius: f64,
+    pub base_radius: f64,
+}
+
+/// One pane to the compositor, with its pointer when it has one.
+pub(crate) fn add_pane(m: &crate::nidara_material_v1::NidaraMaterialV1, p: &Pane) {
+    match p.pointer {
+        None => m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent),
+        Some(q) => m.add_shape_pointed(
+            p.x,
+            p.y,
+            p.width,
+            p.height,
+            p.radius,
+            p.exponent,
+            1.,
+            0.,
+            0.,
+            0.,
+            0.,
+            q.base.0,
+            q.base.1,
+            q.tip.0,
+            q.tip.1,
+            q.width,
+            q.tip_radius,
+            q.base_radius,
+        ),
+    }
 }
 
 pub(super) fn send_material(
@@ -77,7 +118,7 @@ pub(super) fn send_material(
         s.offset,
     );
     for p in &material.shapes {
-        m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
+        add_pane(m, p);
     }
 }
 

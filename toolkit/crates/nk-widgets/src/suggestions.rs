@@ -476,6 +476,7 @@ impl Suggestions {
                         height: f64::from(h),
                         radius: f64::from(self.style.radius),
                         exponent: 2.,
+                        pointer: None,
                     }];
                     m
                 });

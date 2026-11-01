@@ -132,6 +132,7 @@ impl Application for Menu<'_, '_> {
                     height: f64::from(height),
                     radius: f64::from(self.styles.menu.radius),
                     exponent: 2.,
+                    pointer: None,
                 }];
             }
         }

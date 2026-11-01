@@ -139,6 +139,7 @@ impl ControlRecipe {
                     height: 1.,
                     radius: 0.,
                     exponent: 2.,
+                    pointer: None,
                 },
                 false,
             )?;
@@ -230,6 +231,7 @@ mod tests {
                     height: 35.,
                     radius: 17.5,
                     exponent: 2.,
+                    pointer: None,
                 };
                 let material = style.for_pane(pane, true).unwrap();
                 if let Some(r) = material.response {
@@ -296,6 +298,7 @@ mod tests {
                                 height: 35.,
                                 radius: 17.5,
                                 exponent: 2.,
+                                pointer: None,
                             },
                             false,
                         )

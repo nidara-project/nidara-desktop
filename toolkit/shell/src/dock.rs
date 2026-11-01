@@ -1671,6 +1671,7 @@ impl Application for Dock {
             height: h,
             radius: w.min(h) / 2.,
             exponent: CAPSULE_EXPONENT,
+            pointer: None,
         };
         self.frame.tokens.as_ref().and_then(|t| {
             crate::material::dock(
