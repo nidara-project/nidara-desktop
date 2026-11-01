@@ -96,7 +96,10 @@ Native layout uses **separate** `org.nidara.dock layout:as` and
 once at version0 and never writes it; later TS writes cannot replace native
 order. Sharing `pinned` would let the TS orphan-pruner erase typed tokens.
 Version0 imports known legacy prefixes once, preserves
-case/order, prepends the movable dynamic default-directory target and includes
+order, maps each legacy ID to its catalogue entry the way the TS dock wrote it
+(lowercased, every `.desktop` cut: `org.telegram` is
+`org.telegram.desktop.desktop`; an exact ID wins; read literally, those pins were
+pruned as unknown apps), prepends the movable dynamic default-directory target and includes
 Apps only when its real entry ships. Version1 accepts `app:<DesktopId>`,
 `default-handler:inode/directory` and `folder:<absolute-local-file-URI>`.
 An intentional version1 empty layout stays empty. Future versions are read-only;

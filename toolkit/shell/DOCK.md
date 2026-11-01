@@ -75,7 +75,9 @@ A source that fails marks its part of the view unavailable; nothing waits foreve
   logical and scale 1..4 (at most 1024 physical), so a dock shrunk below 16 asks for 16
   and scales the art down itself; the layout has no 16 floor. The pixels are straight
   alpha and are converted to the renderer's format once, when cached by (id, generation,
-  IconRevision, pixel size). A miss shows a neutral placeholder, never another app's
+  IconRevision, pixel size). With magnification on, each icon is fetched twice, at the
+  icon size and at the largest magnified size, and drawn from the second once it grows
+  past the first: the resting art stretched to twice its size came out pixelated. A miss shows a neutral placeholder, never another app's
   art. A lost owner or a new epoch drops pending handles and rereads. A click may
   launch only when the app is `Launchable` AND the service advertises `launch` (A2's
   capability; `open-directory` for folders). `LauncherAvailable` is Unity's and stays
@@ -138,6 +140,18 @@ From the existing TS dock, so the two look alike: padding 10 and gap 4 at every 
 `DOCK_SCREEN_GAP` = 4 logical px, dot 5 px. The glass is Hyalo's: one `Pane` per dock
 with the exported `dock` tone (`tokens/glass.json`, by mode and reduce transparency); the
 client paints only icons, dots and the separator (commandment 12).
+Dots and the separator are placed on whole device pixels where they rest (crisp), and from
+there are carried exactly as far as their icon moves, never rounded again (`follow` in
+`dock.rs`): they glide with the icons and keep one constant sub-pixel offset from them.
+At rest they sit on a rounding edge (a 5 px dot, a 1 px line), so snapping where they are
+flipped them a pixel at the first hundredth of movement, and snapping the movement still
+stepped them while the icons glided.
+The separator, a single pixel, would read blurred split evenly between two pixels while it
+moves; it stays whole in one pixel most of the way and crosses to the next over the
+middle 0.6 of a pixel, easing in and out (`hand_over`): continuous, never a jump, split only briefly.
+Stopped mid hand-over (the pointer resting with the strip grown) it would stay split, so
+once the strip has not moved for 50 ms it slides onto the nearer whole pixel over a few
+frames, and back as soon as the strip moves again (`settle`).
 
 **Magnification (D2).** With `magnification` on, resting the pointer on the strip grows
 the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons toward
@@ -212,7 +226,11 @@ compositor glass the opaque fallback has no pointer (D5).
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the
 tooltip keeps a fixed gap over the grown icon (popups anchor from the screen edge to
 `POPUP_GAP` past the icon or the capsule, whichever reaches further), following it frame by frame as magnification moves it (the strip grows
-centred, so the icon under a still pointer shifts). When the compositor dismisses it the dock retires the
+centred, so the icon under a still pointer shifts). Every popup (tooltip, menu, chooser)
+anchors on an even span centred on the icon's rounded centre and has an even size across
+it: the compositor halves both in whole pixels, and the floor and ceil of the icon's ends
+put popups up to a pixel and a half to its left. Icon art that is not centred in its own
+square (Papirus' Trash sits 1.6 % right) still reads off-centre. When the compositor dismisses it the dock retires the
 popup at once, or the next menu would find a stale parent.
 
 Fit (contract §8): with L the allowed main-axis length (output minus 2 × gap, and for a

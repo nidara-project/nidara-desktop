@@ -141,6 +141,10 @@ impl Canvas {
         r.height = (pixels / self.scale) as f32;
         self.rect(r, color);
     }
+    /// Device pixels per logical pixel.
+    pub fn scale(&self) -> f64 {
+        self.scale
+    }
     /// Vertical separator thickness is specified in physical pixels.
     pub fn vertical_rule(&mut self, mut r: Rect, pixels: f64, color: Color) {
         r.x = ((r.x as f64 * self.scale).round() / self.scale) as f32;
