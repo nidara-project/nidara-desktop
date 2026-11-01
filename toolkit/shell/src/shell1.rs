@@ -106,11 +106,13 @@ impl Shell1 {
 }
 
 /// Owns `org.nidara.Shell` on a connection of its own. Fails, and the dock carries on
-/// without it, when the name is already owned (the TS shell owns it in its session).
+/// without it, when the name is already owned (the TS shell owns it in its session). It
+/// yields the name to the TS shell even when it got there first: both start together in
+/// the preview, and the TS shell answers for everything but the dock.
 pub fn serve(status: Arc<Status>, hub: Sender<HubEvent>) -> Result<Connection, String> {
     zbus::blocking::connection::Builder::session()
         .and_then(|b| b.serve_at(PATH, Shell1 { status, hub }))
-        .and_then(|b| b.name(NAME))
+        .and_then(|b| b.allow_name_replacements(true).name(NAME))
         .and_then(|b| b.build())
         .map_err(|e| e.to_string())
 }

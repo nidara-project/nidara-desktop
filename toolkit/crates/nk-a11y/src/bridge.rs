@@ -19,6 +19,9 @@ impl Bridge {
         let (actions, requests) = mpsc::channel();
         let (status, check) = mpsc::channel();
         let (published, commits) = mpsc::channel();
+        // One marker per update is for the checks that wait on it: a live session would log
+        // one per animated frame.
+        let trace = std::env::var_os("NK_A11Y_TRACE").is_some();
         std::thread::spawn(move || {
             let run = || -> Result<()> {
                 let callback = Arc::new(move |revision, request| {
@@ -29,12 +32,16 @@ impl Bridge {
                     crate::atspi_backend::Backend::new_versioned(tree.clone(), revision, callback)?;
                 backend.update_versioned(revision, tree)?;
                 let _ = published.send(revision);
-                eprintln!("A11Y_PUBLISHED");
+                if trace {
+                    eprintln!("A11Y_PUBLISHED");
+                }
                 let _ = status.send(Ok(()));
                 while let Ok((revision, tree)) = rx.recv() {
                     backend.update_versioned(revision, tree)?;
                     let _ = published.send(revision);
-                    eprintln!("A11Y_PUBLISHED");
+                    if trace {
+                        eprintln!("A11Y_PUBLISHED");
+                    }
                 }
                 Ok(())
             };

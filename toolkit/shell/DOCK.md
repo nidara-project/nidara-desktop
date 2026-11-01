@@ -276,7 +276,11 @@ As built:
   other members answer Unavailable, never a silent no-op. GetState is the hub's lock with
   no surfaces and no island; StateChanged follows the lock. Both are the common
   Read/OpenSurface policy, open to any caller. When the name is taken (the TS shell owns
-  `org.nidara.Shell` in its session) the dock runs without it.
+  `org.nidara.Shell` in its session) the dock runs without it. In the preview both start at
+  once and either may get there first, so the dock asks with AllowReplacement and the TS
+  shell with REPLACE: the name always ends with the TS shell, which `nidara-ipc`, the
+  portal's consent and the screen-share chooser need. Without that, a lost race left
+  `nidara-ipc` answering UnknownInterface for the whole session.
 - Hyalo gives an `exclusive` top/overlay layer the keyboard at once and keeps it there
   (as sway, KDE and niri do), so the dock gives it back itself: Escape, acting, losing
   the focus, or the focused window changing under it (a click on another window).
