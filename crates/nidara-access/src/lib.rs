@@ -117,7 +117,9 @@ fn permitted(role: Role, op: Operation, consent: Consent) -> bool {
     }
     own || consent.control
         && match op {
-            Configure | ConfigureDock | EditPins | AppIcon | AppAutostart | AppAcknowledge => consent.config,
+            Configure | ConfigureDock | EditPins | AppIcon | AppAutostart | AppAcknowledge => {
+                consent.config
+            }
             Capture => consent.capture,
             CloseWindow => consent.close,
             _ => true,
