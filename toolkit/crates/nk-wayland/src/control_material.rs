@@ -202,7 +202,7 @@ impl ControlMaterial {
         let b = self.dark_ink;
         m.set_ink_colors(a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
         for p in &self.base.shapes {
-            m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
+            crate::material::add_pane(m, p);
         }
         for region in &self.states {
             let p = region.bounds;
@@ -266,6 +266,7 @@ mod tests {
                     height: 32.,
                     radius: 16.,
                     exponent: 2.,
+                    pointer: None,
                 }],
             },
             blur: Blur {

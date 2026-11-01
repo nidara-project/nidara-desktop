@@ -284,7 +284,7 @@ impl Window {
         for graded in panes {
             let p = graded.pane;
             m.set_shape_grade(graded.top, graded.bottom);
-            m.add_shape(p.x, p.y, p.width, p.height, p.radius, p.exponent);
+            crate::material::add_pane(m, &p);
         }
         layer.pending = true;
         Ok(())

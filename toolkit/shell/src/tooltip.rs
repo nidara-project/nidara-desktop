@@ -4,7 +4,8 @@
 //! once. A popup of the dock's layer with NO grab: it never takes the pointer, the keyboard
 //! or a click, and it gives way to a menu or the chooser (one popup at a time). Its
 //! measures are the kit's tooltip's (tooltip.ts): 11 × 6 padding, 13 px text, radius 13.
-//! Hyalo paints the glass (the menus' panel material); the text is ours.
+//! Hyalo paints the glass (the menus' panel material) and its pointer toward the item
+//! (bubble.rs); the text is ours.
 use crate::popup::Look;
 use nk_render::{Canvas, rgba};
 use nk_text::{Layout, TextBackend};
@@ -23,9 +24,13 @@ pub struct Tooltip {
     pub anchor: String,
     rect: [i32; 4],
     side: PopupSide,
+    /// The text's bubble, and the popup's size: that and its pointer.
+    natural: (u32, u32),
     size: (u32, u32),
     layout: Layout,
-    geometry: Option<[i32; 4]>,
+    /// Where it was placed, and for which anchor: the body and its pointer follow both.
+    placed: Option<([i32; 4], [i32; 4])>,
+    body: [f64; 4],
     material: Option<Material>,
     dirty: bool,
 }
@@ -43,19 +48,22 @@ impl Tooltip {
         style.size = TEXT;
         let layout = look.text.layout(text, &style, 4096.)?;
         let m = layout.measured_size();
-        let size = (
+        let natural = (
             (m.width as f64 + 2. * PAD_X).ceil() as u32,
             (m.height as f64 + 2. * PAD_Y).ceil() as u32,
         );
+        let size = crate::bubble::with_pointer(natural, side);
         let id = w.open_passive_popup(PopupPlacement { anchor: rect, size }, side)?;
         Ok(Self {
             id,
             anchor,
             rect,
             side,
+            natural,
             size,
             layout,
-            geometry: None,
+            placed: None,
+            body: [0., 0., natural.0 as f64, natural.1 as f64],
             material: None,
             dirty: true,
         })
@@ -71,6 +79,7 @@ impl Tooltip {
             return Ok(());
         }
         (self.rect, self.side) = (rect, side);
+        self.size = crate::bubble::with_pointer(self.natural, side);
         w.reposition_popup_overlay(
             self.id,
             PopupPlacement {
@@ -101,22 +110,28 @@ impl Tooltip {
         let Some(geometry) = w.popup_overlay_geometry(self.id) else {
             return Ok(());
         };
-        if self.geometry != Some(geometry) {
-            self.geometry = Some(geometry);
+        if self.placed != Some((geometry, self.rect)) {
+            self.placed = Some((geometry, self.rect));
             let (width, height) = (geometry[2].max(1) as f64, geometry[3].max(1) as f64);
+            let pane = crate::bubble::place(geometry, self.rect, RADIUS, 2.).unwrap_or((
+                [0., 0., width, height],
+                Pane {
+                    x: 0.,
+                    y: 0.,
+                    width,
+                    height,
+                    radius: RADIUS.min(width.min(height) / 2.),
+                    exponent: 2.,
+                    pointer: None,
+                },
+            ));
+            self.body = pane.0;
             self.material = look
                 .panel
                 .as_ref()
-                .and_then(|p| p.at(width.min(height)).ok())
+                .and_then(|p| p.at(pane.1.width.min(pane.1.height)).ok())
                 .map(|mut m| {
-                    m.shapes = vec![Pane {
-                        x: 0.,
-                        y: 0.,
-                        width,
-                        height,
-                        radius: RADIUS.min(width.min(height) / 2.),
-                        exponent: 2.,
-                    }];
+                    m.shapes = vec![pane.1];
                     m
                 });
             self.dirty = true;
@@ -128,13 +143,13 @@ impl Tooltip {
             return Ok(());
         };
         let mut c = Canvas::new(frame.pixel_width, frame.pixel_height, frame.scale);
-        let (width, height) = (frame.width as f64, frame.height as f64);
+        let [bx, by, width, height] = self.body;
         if self.material.is_none() || !frame.material {
-            // No compositor glass: an opaque bubble of our own (D5).
+            // No compositor glass: an opaque bubble of our own, without its pointer (D5).
             c.rounded_rect(
                 nk_text::Rect {
-                    x: 0.,
-                    y: 0.,
+                    x: bx as f32,
+                    y: by as f32,
                     width: width as f32,
                     height: height as f32,
                 },
@@ -144,8 +159,8 @@ impl Tooltip {
         }
         let m = self.layout.measured_size();
         let origin = (
-            ((width - m.width as f64) / 2.) as f32,
-            ((height - m.height as f64) / 2.) as f32,
+            (bx + (width - m.width as f64) / 2.) as f32,
+            (by + (height - m.height as f64) / 2.) as f32,
         );
         // The shell's dark skin: white text (the kit's `.nidara-tooltip.dark`).
         c.layout(&self.layout, origin, rgba(255, 255, 255, 255))?;

@@ -507,6 +507,7 @@ impl Application for Picker<'_, '_> {
                     height: height.into(),
                     radius: self.styles.menu.radius.into(),
                     exponent: 2.,
+                    pointer: None,
                 }];
             }
         }

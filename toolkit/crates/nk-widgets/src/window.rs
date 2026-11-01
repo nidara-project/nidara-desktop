@@ -51,6 +51,7 @@ impl TitlebarStyle {
                         height: bottom - y,
                         radius: 0.,
                         exponent: 2.,
+                        pointer: None,
                     },
                     top: values[0],
                     bottom: values[1],
@@ -451,6 +452,7 @@ impl Composition {
                     height: sidebar_size.1 as f64,
                     radius: tree.sidebar_radius as f64,
                     exponent: 2.,
+                    pointer: None,
                 }];
                 window.set_layer_material(sidebar, Some(&material))?;
                 if let Some(style) = &self.title_style {

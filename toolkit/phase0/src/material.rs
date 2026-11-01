@@ -35,6 +35,7 @@ pub fn panel(width: f32, height: f32) -> Material {
             height: (height - 16.) as f64,
             radius: 24.,
             exponent: 2.,
+            pointer: None,
         }],
     }
 }

@@ -123,7 +123,10 @@ pub struct Chooser {
     focus: Option<usize>,
     pressed: Option<usize>,
     scroll: f64,
-    geometry: Option<[i32; 4]>,
+    /// Where it was placed, and for which anchor: the body and its pointer follow both.
+    placed: Option<([i32; 4], [i32; 4])>,
+    /// The tiles' place in the popup, beside the pointer's room (bubble.rs).
+    body: [f64; 4],
     material: Option<Material>,
     dirty: bool,
     first_id: NodeId,
@@ -144,7 +147,8 @@ pub struct Request {
 impl Chooser {
     pub fn open(w: &mut Window, r: Request) -> Result<Self, String> {
         let grid = Grid::new(r.candidates.len());
-        let size = grid.size();
+        let natural = grid.size();
+        let size = crate::bubble::with_pointer(natural, r.side);
         let id = w.open_menu_popup(MenuPopupPlacement {
             placement: PopupPlacement {
                 anchor: r.rect,
@@ -172,7 +176,8 @@ impl Chooser {
             focus: r.keyboard.then_some(0),
             pressed: None,
             scroll: 0.,
-            geometry: None,
+            placed: None,
+            body: [0., 0., natural.0 as f64, natural.1 as f64],
             material: None,
             dirty: true,
             first_id: r.first_id,
@@ -253,6 +258,7 @@ impl Chooser {
             return Ok(());
         }
         (self.rect, self.side) = (rect, side);
+        self.size = crate::bubble::with_pointer(self.grid.size(), side);
         w.reposition_popup_overlay(
             self.id,
             PopupPlacement {
@@ -281,11 +287,11 @@ impl Chooser {
     }
 
     fn view_height(&self) -> f64 {
-        self.geometry.map_or(self.size.1 as f64, |g| g[3] as f64)
+        self.body[3]
     }
 
     fn max_scroll(&self) -> f64 {
-        (self.size.1 as f64 - self.view_height()).max(0.)
+        (self.grid.size().1 as f64 - self.view_height()).max(0.)
     }
 
     /// Keep tile `n` in view.
@@ -324,8 +330,10 @@ impl Chooser {
                     }
                 }
             },
+            // The tiles sit in the body, beside the pointer's room.
             PopupEvent::Input(input) => match input {
                 LayerEvent::Motion(x, y) => {
+                    let (x, y) = (x - self.body[0], y - self.body[1]);
                     let hover = self.grid.hit(n, x, y + self.scroll);
                     if hover != self.hover {
                         self.hover = hover;
@@ -353,6 +361,7 @@ impl Chooser {
                     y,
                     ..
                 } => {
+                    let (x, y) = (x - self.body[0], y - self.body[1]);
                     let at = self.grid.hit(n, x, y + self.scroll);
                     if pressed {
                         self.pressed = at;
@@ -394,23 +403,32 @@ impl Chooser {
         let Some(geometry) = w.popup_overlay_geometry(self.id) else {
             return Ok(false);
         };
-        if self.geometry != Some(geometry) {
-            self.geometry = Some(geometry);
+        if self.placed != Some((geometry, self.rect)) {
+            self.placed = Some((geometry, self.rect));
             let (width, height) = (geometry[2].max(1) as f64, geometry[3].max(1) as f64);
+            let radius = f64::from(look.styles.menu.radius);
+            let (body, pane) =
+                crate::bubble::place(geometry, self.rect, radius, crate::popup::MENU_EXPONENT)
+                    .unwrap_or((
+                        [0., 0., width, height],
+                        Pane {
+                            x: 0.,
+                            y: 0.,
+                            width,
+                            height,
+                            radius,
+                            exponent: crate::popup::MENU_EXPONENT,
+                            pointer: None,
+                        },
+                    ));
+            self.body = body;
             self.scroll = self.scroll.min(self.max_scroll());
             self.material = look
                 .panel
                 .as_ref()
-                .and_then(|p| p.at(width.min(height)).ok())
+                .and_then(|p| p.at(pane.width.min(pane.height)).ok())
                 .map(|mut m| {
-                    m.shapes = vec![Pane {
-                        x: 0.,
-                        y: 0.,
-                        width,
-                        height,
-                        radius: f64::from(look.styles.menu.radius),
-                        exponent: 2.,
-                    }];
+                    m.shapes = vec![pane];
                     m
                 });
             self.dirty = true;
@@ -421,7 +439,10 @@ impl Chooser {
         let Some(frame) = w.popup_overlay_frame(self.id)? else {
             return Ok(false);
         };
-        let bytes = self.paint(frame, look)?;
+        // The tiles fill the body; the pointer's room beside it stays clear.
+        let (inner, at) = crate::bubble::inset(frame, self.body);
+        let bytes = self.paint(inner, look)?;
+        let bytes = crate::bubble::blit(frame, inner, at, &bytes);
         if w.paint_popup_overlay(self.id, frame, &bytes, self.material.as_ref())? {
             self.dirty = false;
             return Ok(true);
@@ -524,13 +545,13 @@ impl Chooser {
     /// A list of buttons, one per window, for the dock's tree at the popup's place.
     pub fn semantics(&self, w: &Window) -> Option<Tree> {
         let (ox, oy) = w.menu_popup_origin(self.id)?;
-        let (ox, oy) = (f64::from(ox), f64::from(oy));
+        let (ox, oy) = (f64::from(ox) + self.body[0], f64::from(oy) + self.body[1]);
         let view = self.view_height();
         let mut list = Node::new(self.first_id + 1, Role::List, self.app.clone());
         list.bounds = Bounds {
             x: ox,
             y: oy,
-            width: f64::from(self.size.0),
+            width: self.body[2],
             height: view,
         };
         let mut nodes = BTreeMap::new();

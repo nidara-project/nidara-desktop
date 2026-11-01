@@ -187,6 +187,16 @@ menu's "Dock Settings…" opens it. The private check drives it when given
 row is there, the delay is insensitive, the page's auto-hide switch hides the dock and
 makes the delay sensitive, and switching it off brings the dock back.
 
+**Pointers.** The tooltip, the menus and the chooser point at their item, as the TS
+kit's glass bubble does (`bubble.rs`, after glass-bubble.ts `bubbleGeometry`: 16 × 8, tip
+radius 4, base radius 8). Each opens 8 px larger toward its item; once Hyalo has placed
+it, the pointer goes on the side that faces the item (Hyalo may have flipped it) and
+slides to the item's centre (Hyalo may have slid it), never into the corner arcs. Hyalo
+draws body and pointer as one glass (`Pane::pointer`, `add_shape_pointed`). A menu's rows
+and the chooser's tiles are laid out and painted for the body alone and copied beside the
+pointer's room; their input and accessible bounds move by the same offset. Without
+compositor glass the opaque fallback has no pointer (D5).
+
 **Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
 (`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the

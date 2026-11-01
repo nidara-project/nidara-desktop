@@ -264,6 +264,7 @@ impl Tree {
                 height: pane.height as f64,
                 radius: (pane.height / 2.) as f64,
                 exponent: 2.,
+                pointer: None,
             },
             reduce_motion,
         )?;
