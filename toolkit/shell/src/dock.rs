@@ -6,7 +6,7 @@
 use crate::actions::{Action, primary};
 use crate::apps::{TRASH_EMPTY, TRASH_FULL};
 use crate::chooser::{Candidate, Chooser};
-use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD_RATIO, Position, Slot, envelope, layout};
+use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD, Position, Slot, envelope, layout};
 use crate::hub::{Frame, Request};
 use crate::menu::Command;
 use crate::model::{Item, Kind, View};
@@ -1173,7 +1173,7 @@ impl Dock {
         let share = self
             .attention
             .lift(&item.key, now, self.frame.prefs.reduce_motion);
-        let d = share * LIFT * PAD_RATIO * self.layout.icon;
+        let d = share * LIFT * PAD * self.layout.scale;
         match self.layout.position {
             Position::Bottom => (0., -d),
             Position::Left => (d, 0.),

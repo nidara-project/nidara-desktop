@@ -35,14 +35,12 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
     // which silently dropped the dock's outermost interactive pixel at the screen wall.
     iconSize  = Math.round(iconSize)
     maxSize   = Math.round(maxSize)
-    // ── PROPORTIONAL RATIOS (Based on user-provided table) ──
-    // V24000: SLIGHT GAP BOOST
-    // External padding (22%) balanced with slightly wider gap (16%).
-    const PAD_RATIO = 0.22                               // ~10.5px for 48px
-    const GAP_RATIO = 0.16                               // ~7.7px for 48px
-    
-    const PILL_PAD = Math.round(iconSize * PAD_RATIO)    // Top/Bottom air
-    const GAP_TOTAL = Math.round(iconSize * GAP_RATIO)   // Total gap between icons
+    // ── FIXED AIR AND GAP (owner, 2026-11-01) ──
+    // The air round the icons and the gap between them stay the same at every icon size,
+    // as on the reference dock (measured 2026-10-08: air 10 at T=64 → 84 tall, gap 4).
+    // They were 22 % and 16 % of the icon until then: equal at 48, 8 px taller at 64.
+    const PILL_PAD = 10                                  // Top/Bottom air
+    const GAP_TOTAL = 4                                  // Total gap between icons
     const IM = GAP_TOTAL / 2                             // Margin each side
     const BASE_MARGIN = PILL_PAD - IM                    // Result: Side Air == PILL_PAD
     

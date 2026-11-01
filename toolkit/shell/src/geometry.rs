@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Where every slot goes, and how far the dock shrinks to fit (DOCK.md §5,
-//! APPLICATIONS1-DOCK.md §8 "Fit"). Proportions are the TS dock's (DockPhysics.ts), so
-//! the two look alike: padding 0.22 × icon, gap 0.16 × icon, a capsule whose radius is
-//! half its cross size. Everything scales by ONE factor; nothing has a minimum size.
+//! APPLICATIONS1-DOCK.md §8 "Fit"). Measures are the TS dock's (DockPhysics.ts), so
+//! the two look alike: a fixed padding of 10 and gap of 4 at every icon size, a capsule
+//! whose radius is half its cross size. Everything scales by ONE factor; nothing has a
+//! minimum size.
 
 /// From the dock's glass to the screen edge: the desktop's one edge gap (the TS dock's
 /// `DOCK_SCREEN_GAP`, Hyalo's `gaps_out`, the bar's margin).
@@ -11,8 +12,11 @@ pub const SCREEN_GAP: f64 = 4.;
 /// reservation (APPLICATIONS1-DOCK.md §8): the TS bar's exclusive zone (`BAR_H`), which
 /// already holds its own top margin. The hub owns this value and passes it in.
 pub const BAR_RESERVATION: f64 = 36.;
-pub const PAD_RATIO: f64 = 0.22;
-pub const GAP_RATIO: f64 = 0.16;
+/// The air round the icons and the gap between two, the same at every icon size (owner,
+/// 2026-11-01, after the reference dock: 84 tall at icon 64). They were 0.22 and 0.16 of
+/// the icon until then.
+pub const PAD: f64 = 10.;
+pub const GAP: f64 = 4.;
 /// The capsule's superellipse exponent (the TS dock's glass shape).
 pub const CAPSULE_EXPONENT: f64 = 3.2;
 pub const DOT: f64 = 5.;
@@ -90,8 +94,7 @@ pub fn layout(
     reserved_top: f64,
 ) -> Layout {
     let i = icon_size as f64;
-    let pad = (i * PAD_RATIO).round();
-    let gap = (i * GAP_RATIO).round();
+    let (pad, gap) = (PAD, GAP);
     let main_of = |s: &Slot| match s {
         Slot::Icon => i + gap,
         Slot::Separator => 2. * gap,
@@ -405,17 +408,17 @@ mod tests {
     #[test]
     fn at_rest_it_keeps_the_ts_proportions() {
         let l = layout(&ICONS, 64, Position::Bottom, (1920, 1080), 0.);
-        // pad 14, gap 10: 2×(14−5) + 3×74 + 20 = 260 wide, 64 + 28 = 92 high.
-        assert_eq!((l.scale, l.size), (1., (260, 92)));
-        assert_eq!(l.rects[0], [14., 14., 64., 64.]);
-        assert_eq!(l.rects[1], [88., 14., 64., 64.]);
-        assert_eq!(l.rects[2], [166.5, 11.5, 1., 69.]);
-        assert_eq!(l.rects[3], [182., 14., 64., 64.]);
-        assert_eq!(l.exclusive_zone, 96);
+        // pad 10, gap 4: 2×(10−2) + 3×68 + 8 = 228 wide, 64 + 20 = 84 high.
+        assert_eq!((l.scale, l.size), (1., (228, 84)));
+        assert_eq!(l.rects[0], [10., 10., 64., 64.]);
+        assert_eq!(l.rects[1], [78., 10., 64., 64.]);
+        assert_eq!(l.rects[2], [147.5, 10.5, 1., 63.]);
+        assert_eq!(l.rects[3], [154., 10., 64., 64.]);
+        assert_eq!(l.exclusive_zone, 88);
         // A side dock is the same strip, turned.
         let v = layout(&ICONS, 64, Position::Left, (1920, 1080), BAR_RESERVATION);
-        assert_eq!(v.size, (92, 260));
-        assert_eq!(v.rects[1], [14., 88., 64., 64.]);
+        assert_eq!(v.size, (84, 228));
+        assert_eq!(v.rects[1], [10., 78., 64., 64.]);
     }
 
     #[test]
@@ -462,16 +465,16 @@ mod tests {
     fn hits_cover_the_strip_and_dots_sit_toward_the_edge() {
         let l = layout(&ICONS, 64, Position::Bottom, (1920, 1080), 0.);
         assert_eq!(l.hit(20., 50.), Some(0));
-        assert_eq!(l.hit(158., 5.), Some(2));
+        assert_eq!(l.hit(148., 5.), Some(2));
         // The end padding is capsule, not an item.
-        assert_eq!(l.hit(255., 50.), None);
-        assert_eq!(l.hit(250., 91.), Some(3));
-        assert_eq!(l.hit(260., 50.), None);
-        assert_eq!(l.dot(0), (46., 85.));
+        assert_eq!(l.hit(225., 50.), None);
+        assert_eq!(l.hit(218., 83.), Some(3));
+        assert_eq!(l.hit(228., 50.), None);
+        assert_eq!(l.dot(0), (42., 79.));
         let r = layout(&ICONS, 64, Position::Right, (1920, 1080), 0.);
-        assert_eq!(r.dot(0).0, 85.);
+        assert_eq!(r.dot(0).0, 79.);
         let left = layout(&ICONS, 64, Position::Left, (1920, 1080), 0.);
-        assert_eq!(left.dot(0).0, 7.);
+        assert_eq!(left.dot(0).0, 5.);
     }
 
     #[test]
@@ -483,10 +486,10 @@ mod tests {
         // Headroom for a 128 px icon above a 64 px one; the exclusive zone is the capsule's.
         let head = e.glass[1];
         assert_eq!(head, 64.);
-        assert_eq!(e.size.1 as f64, 92. + head);
+        assert_eq!(e.size.1 as f64, 84. + head);
         assert_eq!(e.exclusive_zone, rest.exclusive_zone);
-        assert_eq!([e.glass[2], e.glass[3]], [260., 92.]);
-        assert_eq!(e.rects[0], [14. + e.glass[0], 14. + head, 64., 64.]);
+        assert_eq!([e.glass[2], e.glass[3]], [228., 84.]);
+        assert_eq!(e.rects[0], [10. + e.glass[0], 10. + head, 64., 64.]);
         // At presence 0, nothing moves.
         assert_eq!(e.magnify(&ICONS, (100., 100.), 0.), e);
         // No room (a 64 px maximum), or no magnification: the resting layout itself.
