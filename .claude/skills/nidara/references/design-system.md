@@ -3527,6 +3527,15 @@ would render, because both draw from the same two resolvers BaseIsland itself us
 also grew an optional trailing `dash?: number[]` param (only the ghost passes it) so the border
 keeps its dashed "phantom" look without a CSS-only dashed-stroke escape hatch.
 
+🔑 **The 2×2's corner is the 1×1's corner (owner, 2026-11-01) — not yet built.** Every CC tile size
+shares one corner curvature: half a cell, `(UNIT − 2·GLASS_INSET) / 2` (36 px today). A 1×1 is that
+corner all the way round (a circle), a 2×1 or 1×2 is a capsule of it, and a 2×2 is a square with
+that same corner, so tiles side by side read as one family. The TS shell still gives the 2×2
+`RADIUS.xl` (32) at exponent 3.2: a token picked from the radius ladder in #86, not derived from
+the tile, and visibly tighter than the circle next to it. TS gets no fix (Rust only); **the Rust
+Control Center derives the 2×2 radius from the cell**, and its focus ring follows (see "focus ring"
+above, where `xl + 2px` is the TS value).
+
 ## The bar launcher mark — plain geometry, no SVG filter
 
 The bar launcher (system-menu) icon is the **Nidara mark**, `assets/nidara/assets/nidara-symbolic.svg`,
