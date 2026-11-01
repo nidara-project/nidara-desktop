@@ -1227,6 +1227,14 @@ impl Dock {
         [x + dx, y + dy, w, h]
     }
 
+    /// The running dot's centre, moved off its resting place in whole device pixels (see
+    /// `steady`).
+    fn dot(&self, n: usize, scale: f64) -> (f64, f64) {
+        let (rx, ry) = self.layout.dot(n);
+        let (x, y) = self.shown.dot(n);
+        (steady(rx, x, scale), steady(ry, y, scale))
+    }
+
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
         let [x, y, w, h] = self.placed(n, item, now);
         let r = Rect {
@@ -1253,6 +1261,13 @@ impl Dock {
                     rgba(255, 255, 255, 77)
                 } else {
                     rgba(0, 0, 0, 77)
+                };
+                let [rx, ry, _, _] = self.layout.rects[n];
+                let s = c.scale();
+                let r = Rect {
+                    x: steady(rx, x, s) as f32,
+                    y: steady(ry, y, s) as f32,
+                    ..r
                 };
                 if self.layout.position.horizontal() {
                     c.vertical_rule(r, 1., line)
@@ -1359,7 +1374,7 @@ impl Dock {
         if item.signal.attention {
             // Attention's still mark, with or without motion: the dot drawn out to a dash
             // along the dock, whatever the indicators preference (it is not a running dot).
-            let (cx, cy) = self.shown.dot(n);
+            let (cx, cy) = self.dot(n, c.scale());
             let (lw, lh) = if self.layout.position.horizontal() {
                 (3. * d, d)
             } else {
@@ -1376,7 +1391,7 @@ impl Dock {
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            c.dot(self.shown.dot(n), d, mark);
+            c.dot(self.dot(n, c.scale()), d, mark);
         }
     }
 
@@ -1766,6 +1781,15 @@ pub fn run(dock: Dock, output: LayerOutput, wake: WakeSource) -> nk_wayland::Res
     )
 }
 
+/// `now`, moved off `rest` only in whole device pixels. The dots and the separator are
+/// drawn on the pixel grid, and at rest they sit right on a rounding edge (a centre between
+/// two pixels), so rounding where they are flips them a whole pixel at the first hundredth
+/// of movement, long before their icon visibly moves. Rounding the movement instead keeps
+/// them still until their icon has moved half a pixel, and then a pixel at a time with it.
+fn steady(rest: f64, now: f64, scale: f64) -> f64 {
+    rest + ((now - rest) * scale).round() / scale
+}
+
 /// Along the dock, an even span centred on `start + len / 2` rounded: the compositor
 /// halves an anchor in whole pixels to find its centre (xdg_positioner), so the floor and
 /// ceil of its ends put a popup up to a pixel off to one side.
@@ -1776,6 +1800,23 @@ fn centred_span(start: f64, len: f64) -> (i32, i32) {
 
 #[cfg(test)]
 mod anchor_tests {
+    #[test]
+    fn a_dot_on_a_rounding_edge_stays_put_until_its_icon_moves() {
+        use nk_render::snapped_dot;
+        // The rest centre puts a 5 px dot's corner on a half pixel: rounding where the dot
+        // is moves it a whole pixel when the row has moved a hundredth.
+        let rest = 100.;
+        let x = |c: f64| snapped_dot((c, 0.), 5., 1.).x;
+        assert_eq!(x(rest - 0.01), x(rest) - 1.);
+        // Rounding the movement does not, and follows the icon a pixel at a time.
+        for (moved, by) in [(0.01, 0.), (0.4, 0.), (0.6, 1.), (2.4, 2.), (2.6, 3.)] {
+            assert_eq!(x(super::steady(rest, rest - moved, 1.)), x(rest) - by, "{moved}");
+        }
+        // At scale 2 the steps are device pixels, half a logical one.
+        let x2 = |c: f64| snapped_dot((c, 0.), 5., 2.).x;
+        assert_eq!(x2(super::steady(rest, rest - 0.3, 2.)), x2(rest) - 0.5);
+    }
+
     #[test]
     fn a_popup_anchor_halves_to_the_icons_centre() {
         for (start, len) in [(878.6, 100.3), (10., 64.), (100.25, 63.5), (5.5, 1.)] {
