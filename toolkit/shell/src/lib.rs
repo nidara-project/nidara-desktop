@@ -18,6 +18,7 @@ pub mod model;
 pub mod paths;
 pub mod popup;
 pub mod prefs;
+pub mod resize;
 pub mod semantics;
 pub mod shell1;
 pub mod thumbs;

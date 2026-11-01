@@ -147,6 +147,18 @@ brings it back. An open menu, the chooser or the keyboard (Shell1 `focus:dock`) 
 it out until they let go, and the delay starts again from then. Turning the
 preference off brings it back. A fullscreen window hides it either way.
 
+**Resize (D2).** A separator is the dock's size adjuster (`resize.rs`). Pressed and
+dragged away from the screen edge or toward it, it changes the `icon-size` preference
+one logical pixel for one, within Config1's 32..96, measured from the anchored edge so
+the surface resizing under the pointer does not feed back. The dock shows only what
+Config1 committed: the hub keeps one Apply in flight and the latest value waiting,
+dropping the ones in between. Escape or another button mid-drag asks for the size the
+gesture started from, through the same Apply. The fit's shrink never writes the
+preference. For the keyboard and readers the separator takes the roving focus (the
+focus never starts on one); there the arrow away from the edge grows the icons by 8 px
+and the arrow toward it shrinks them, and a reader's `SetValue` is clamped and sent the
+same way. No resize cursor yet: the toolkit has no cursor shapes.
+
 **Tooltip (D2).** Hovering an item 500 ms names it in a small panel-material capsule
 (`tooltip.rs`) on a **passive** popup: no grab, opened only while no menu is up, closed
 by any press. Moving to a neighbour while one is shown switches at once (warm), and the
@@ -219,7 +231,8 @@ As built:
   (as sway, KDE and niri do), so the dock gives it back itself: Escape, acting, losing
   the focus, or the focused window changing under it (a click on another window).
 - The tree (`semantics.rs`): a `Window` named Dock, one `Button` per item in drawn order
-  (separators as `Separator`), the state in the description (running, minimized window,
+  (separators as a `Slider` named Icon size, the size adjuster: its value is the
+  committed size in px, `SetValue` asks Config1 for a new one), the state in the description (running, minimized window,
   has minimized windows, not installed, cannot be opened now), disabled when a click
   would do nothing, the roving focus as `focused`. Activate does what a click does, with
   no activation token (there is no input event behind it). Requests made against an

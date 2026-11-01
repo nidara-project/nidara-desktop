@@ -157,7 +157,8 @@ fn main() {
         status,
         shell1,
     )
-    .with_settings(settings);
+    .with_settings(settings)
+    .with_inbox(hub_tx.clone());
     spawn("hub", move || hub.run(hub_rx));
     let t = hub_tx.clone();
     spawn("trash", move || {

@@ -96,6 +96,8 @@ pub struct Dock {
     /// Auto-hide's state and slide (autohide.rs), and the placement last sent.
     hide: crate::autohide::Hide,
     placed: Option<LayerPlacement>,
+    /// A separator's drag resizing the dock, while the button is held (resize.rs).
+    drag: Option<crate::resize::Drag>,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
@@ -202,6 +204,26 @@ impl Dock {
             tooltip: None,
             hide,
             placed: None,
+            drag: None,
+        }
+    }
+
+    /// The pointer's distance from the dock's screen edge (resize.rs `depth`).
+    fn depth(&self, w: &Window) -> f64 {
+        crate::resize::depth(self.layout.position, w.size(), self.pointer)
+    }
+
+    /// Ask for an icon size; the hub sends it through Config1, one Apply at a time.
+    fn ask_icon_size(&self, size: u32) {
+        let _ = self.hub.send(Request::IconSize(size));
+    }
+
+    /// Escape or a second button during a drag: back to the size it started from, through
+    /// the same checked Apply.
+    fn cancel_drag(&mut self) {
+        if let Some(d) = self.drag.take() {
+            eprintln!("nidara-shell: the resize was cancelled");
+            self.ask_icon_size(d.start());
         }
     }
 
@@ -805,16 +827,31 @@ impl Dock {
     }
 
     fn key(&mut self, key: nk_wayland::Key, w: &mut Window) -> nk_wayland::Result<()> {
+        let nav = crate::keys::nav(key.sym, key.shift, self.layout.position);
+        if self.drag.is_some() {
+            if nav == Some(crate::keys::Nav::Leave) {
+                self.cancel_drag();
+            }
+            return Ok(());
+        }
         let Some(slot) = self.focused_slot() else {
             return Ok(());
         };
-        let Some(nav) = crate::keys::nav(key.sym, key.shift, self.layout.position) else {
+        let Some(nav) = nav else {
             return Ok(());
         };
+        let on_separator = self.frame.view.items[slot].kind == Kind::Separator;
         match nav {
             crate::keys::Nav::Leave => self.leave_keyboard(w)?,
+            // The size adjuster: away from the edge grows the icons, toward it shrinks
+            // them, from the committed size (repeats included: it is a stepper).
+            crate::keys::Nav::Outward | crate::keys::Nav::Inward if on_separator => {
+                let up = nav == crate::keys::Nav::Outward;
+                self.ask_icon_size(crate::resize::step(self.frame.prefs.icon_size, up));
+            }
+            crate::keys::Nav::Inward => {}
             // A repeat has no serial: only a real press opens it, with its grab.
-            crate::keys::Nav::Menu => {
+            crate::keys::Nav::Menu | crate::keys::Nav::Outward => {
                 if let Some(serial) = key.serial {
                     self.open_menu(w, Some(slot), Some(serial), true);
                 }
@@ -864,6 +901,7 @@ impl Dock {
                 can_launch: self.frame.can_launch,
                 hidden: self.frame.hidden,
                 trash: self.frame.trash,
+                icon_size: self.frame.prefs.icon_size,
             },
         );
         // An open popup's rows join the dock's tree, under its root: the dock's own items
@@ -933,6 +971,20 @@ impl Dock {
         let requests: Vec<_> = rx.try_iter().collect();
         for (revision, request) in requests {
             if revision != self.revision {
+                continue;
+            }
+            if let nk_a11y::Request::SetValue(id, value) = request {
+                // A reader sets the size adjuster: clamped, sent like a key's step.
+                let separator = self.ids.key(id).is_some_and(|key| {
+                    self.frame
+                        .view
+                        .items
+                        .iter()
+                        .any(|i| i.key == key && i.kind == Kind::Separator)
+                });
+                if separator && value.is_finite() {
+                    self.ask_icon_size(crate::resize::clamp(value));
+                }
                 continue;
             }
             let (nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id)) = request else {
@@ -1400,6 +1452,14 @@ impl Application for Dock {
                 self.a11y(w)?;
             }
             Event::Configure => self.apply(w)?,
+            Event::Motion(x, y) if self.drag.is_some() => {
+                // Resizing: the size follows the pointer; nothing magnifies or names.
+                self.pointer = (x, y);
+                let depth = self.depth(w);
+                if let Some(size) = self.drag.as_mut().and_then(|d| d.to(depth)) {
+                    self.ask_icon_size(size);
+                }
+            }
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
                 if !self.frame.hidden {
@@ -1445,6 +1505,16 @@ impl Application for Dock {
                     self.popup_event(w, outcome)?;
                 }
             }
+            // Another button during a drag cancels it; its release ends it.
+            Event::Button { pressed: true, .. } if self.drag.is_some() => self.cancel_drag(),
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: false,
+                ..
+            } if self.drag.is_some() => {
+                self.drag = None;
+                self.pressed = None;
+            }
             // A press while the popup is open only closes it.
             Event::Button { pressed: true, .. } if self.popup.is_some() => {
                 self.close_popup(w);
@@ -1484,6 +1554,19 @@ impl Application for Dock {
                 ..
             } if !self.frame.hidden => {
                 self.pressed = self.shown.hit(self.pointer.0, self.pointer.1);
+                // A separator's press starts the resize: the size follows the pointer
+                // away from the edge or toward it until the button comes up.
+                if let Some(n) = self.pressed
+                    && self.frame.view.items[n].kind == Kind::Separator
+                {
+                    self.pressed = None;
+                    self.drag = Some(crate::resize::Drag::new(
+                        self.depth(w),
+                        self.frame.prefs.icon_size,
+                    ));
+                    self.presence_target = 0.;
+                    self.presence_at = Instant::now();
+                }
             }
             Event::Button {
                 button: LEFT_BUTTON,

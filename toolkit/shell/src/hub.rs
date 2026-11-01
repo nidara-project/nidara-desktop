@@ -110,6 +110,8 @@ pub enum Request {
         command: Command,
         token: Option<String>,
     },
+    /// The icon size a separator's drag, a key or a reader asked for (resize.rs).
+    IconSize(u32),
 }
 
 pub enum HubEvent {
@@ -135,6 +137,8 @@ pub enum HubEvent {
     },
     DockDown(OutputId),
     Request(Request),
+    /// The icon-size Apply in flight answered, taken or refused.
+    IconSizeDone,
 }
 
 struct DockHandle {
@@ -174,6 +178,10 @@ pub struct Hub {
     shell1: Option<zbus::blocking::Connection>,
     /// Settings can be reached on the bus (owned or activatable), checked at start.
     can_settings: bool,
+    /// The hub's own inbox, for a worker to say its Apply answered; and the icon-size
+    /// Applies, one in flight and the latest waiting (resize.rs).
+    inbox: Option<Sender<HubEvent>>,
+    resize: crate::resize::Coalesce,
 }
 
 /// Which dock a keyboard-focus request goes to: the focused window's output's, else the
@@ -234,6 +242,8 @@ impl Hub {
             status,
             shell1,
             can_settings: false,
+            inbox: None,
+            resize: Default::default(),
         }
     }
 
@@ -241,6 +251,37 @@ impl Hub {
     pub fn with_settings(mut self, reachable: bool) -> Self {
         self.can_settings = reachable;
         self
+    }
+
+    pub fn with_inbox(mut self, inbox: Sender<HubEvent>) -> Self {
+        self.inbox = Some(inbox);
+        self
+    }
+
+    /// One Config1 Apply of the icon size; the next waits until it answers. What the docks
+    /// show comes back through the GSettings watcher: only what Config1 committed.
+    fn icon_size(&mut self, size: u32) {
+        let Some(size) = self.resize.want(size) else {
+            return;
+        };
+        self.send_icon_size(size);
+    }
+
+    fn send_icon_size(&mut self, size: u32) {
+        let (Some(conn), Some(inbox)) = (self.apps_conn.clone(), self.inbox.clone()) else {
+            // Nowhere to send it: nothing in flight, nothing waiting.
+            self.resize = Default::default();
+            return;
+        };
+        let _ = std::thread::Builder::new()
+            .name("dock-icon-size".into())
+            .spawn(move || {
+                let value = crate::menu::PrefValue::Number(size as f64);
+                if let Err(e) = crate::prefs::apply(&conn, "dock.iconSize", &value) {
+                    eprintln!("nidara-shell: request failed: {e}");
+                }
+                let _ = inbox.send(HubEvent::IconSizeDone);
+            });
     }
 
     pub fn run(mut self, rx: Receiver<HubEvent>) {
@@ -353,6 +394,17 @@ impl Hub {
                     return false;
                 };
                 self.keyboard = (self.keyboard.0 + 1, output.to_string());
+            }
+            HubEvent::Request(Request::IconSize(size)) => {
+                self.icon_size(size);
+                return false;
+            }
+            HubEvent::IconSizeDone => {
+                // The waiting value takes the slot the answer freed.
+                if let Some(next) = self.resize.done() {
+                    self.send_icon_size(next);
+                }
+                return false;
             }
             HubEvent::Request(r) => {
                 self.act(r);

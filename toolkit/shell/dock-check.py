@@ -405,6 +405,47 @@ try:
         gsettings('hide-delay', '500')
         until('off: the dock stays', lambda: docks()[0]['y'] == placed['y'])
     result['auto_hide'] = {'rest_y': placed['y'], 'out_y': out['y']}
+    # Resize (D2): a separator is the size adjuster. Dragged away from the edge it grows
+    # the icons through Config1, which the dock then shows; another button mid-drag puts
+    # back the size it started from; a reader sets it through its Value.
+    def icon_size():
+        return subprocess.run(['gsettings', 'get', 'org.nidara.dock', 'icon-size'],
+                              capture_output=True, text=True, timeout=5).stdout.strip()
+
+    def adjuster():
+        return next(n for n in children(dock_node()) if n.get_role_name() == 'slider')
+    assert icon_size() == '64', icon_size()
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        assert adjuster().get_name() == 'Icon size', adjuster().get_name()
+        x, y = item_point(adjuster().get_name())
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        time.sleep(.3)
+        pipe.write(f'press {x} {y} 272\n')
+        for dy in range(2, 18, 2):
+            pipe.write(f'move {x} {y - dy}\n')
+            time.sleep(.05)
+        pipe.write('release 272\n')
+        until('the drag grows the icons to 80', lambda: icon_size() == '80')
+        until('the dock shows 80', lambda: adjuster().get_value_iface().get_current_value() == 80)
+        shot(LOG / 'dock-resized.png')
+        pipe.write(f'move {x} {y - 300}\n')
+        time.sleep(.8)  # at rest
+        x, y = item_point(adjuster().get_name())
+        pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+        time.sleep(.3)
+        pipe.write(f'press {x} {y} 272\n')
+        for dy in range(4, 24, 4):
+            pipe.write(f'move {x} {y + dy}\n')
+            time.sleep(.05)
+        until('the drag shrinks the icons', lambda: int(icon_size()) < 80)
+        pipe.write(f'press {x} {y + 20} 273\nrelease 273\nrelease 272\n')
+        until('cancel puts back 80', lambda: icon_size() == '80')
+        pipe.write(f'move {x} {y - 300}\n')
+    adjuster().get_value_iface().set_current_value(56)
+    until('a reader sets 56', lambda: icon_size() == '56')
+    adjuster().get_value_iface().set_current_value(64)
+    until('and back to 64', lambda: icon_size() == '64')
+    result['resize'] = {'dragged': 80, 'cancelled_to': 80, 'reader': 56}
     # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
     # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
     # Config1 and shows what Config1 took.
@@ -444,7 +485,7 @@ try:
         layer = docks()[0]
         pipe.write(f'move {layer["x"] + layer["width"] // 2} {layer["y"] - 300}\n')
         until('the dock at rest', lambda: extent('kitty') == rest)
-        sep = next(n for n in children(dock_node()) if n.get_role_name() == 'separator')
+        sep = next(n for n in children(dock_node()) if n.get_role_name() == 'slider')
         r = sep.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
         rows = open_menu(layer['x'] + r.x + r.width // 2, layer['y'] + r.y + r.height // 2,
                          'the dock menu')

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Keyboard rules (DOCK.md §7): one roving focus; arrows along the dock's axis stop at the
 //! ends, Tab/Shift+Tab wrap, Home/End jump, Enter/Space act, Menu/Shift+F10/the arrow away
-//! from the edge open the item's menu, Escape leaves. Separators never take the focus.
+//! from the edge open the item's menu, Escape leaves. A separator takes the focus as the
+//! dock's size adjuster (resize.rs): there the arrow away from the edge grows the icons
+//! and the arrow toward it shrinks them. The focus starts on the first item, never on one.
 use crate::geometry::Position;
 use crate::model::{Item, Kind};
 
@@ -33,6 +35,10 @@ pub enum Nav {
     Act,
     /// The focused item's menu.
     Menu,
+    /// The arrow away from the dock's edge (an item's menu; a separator grows the icons),
+    /// and toward it (a separator shrinks them).
+    Outward,
+    Inward,
     Leave,
 }
 
@@ -43,15 +49,16 @@ pub fn nav(sym: u32, shift: bool, position: Position) -> Option<Nav> {
         (UP, DOWN)
     };
     // Away from the edge the dock sits on: where its menus open.
-    let outward = match position {
-        Position::Bottom => UP,
-        Position::Left => RIGHT,
-        Position::Right => LEFT,
+    let (outward, inward) = match position {
+        Position::Bottom => (UP, DOWN),
+        Position::Left => (RIGHT, LEFT),
+        Position::Right => (LEFT, RIGHT),
     };
     Some(match sym {
         MENU => Nav::Menu,
         F10 if shift => Nav::Menu,
-        s if s == outward => Nav::Menu,
+        s if s == outward => Nav::Outward,
+        s if s == inward => Nav::Inward,
         TAB if shift => Nav::Back { wrap: true },
         LEFT_TAB => Nav::Back { wrap: true },
         TAB => Nav::Forward { wrap: true },
@@ -66,13 +73,11 @@ pub fn nav(sym: u32, shift: bool, position: Position) -> Option<Nav> {
 }
 
 fn focusable(items: &[Item]) -> Vec<usize> {
-    (0..items.len())
-        .filter(|&n| items[n].kind != Kind::Separator)
-        .collect()
+    (0..items.len()).collect()
 }
 
 pub fn first(items: &[Item]) -> Option<usize> {
-    focusable(items).first().copied()
+    items.iter().position(|i| i.kind != Kind::Separator)
 }
 
 /// Where the focus goes from `from`; None for Act/Leave or an empty dock.
@@ -97,7 +102,7 @@ pub fn moved(items: &[Item], from: usize, nav: Nav) -> Option<usize> {
         }
         Nav::First => 0,
         Nav::Last => last,
-        Nav::Act | Nav::Menu | Nav::Leave => return None,
+        Nav::Act | Nav::Menu | Nav::Outward | Nav::Inward | Nav::Leave => return None,
     };
     Some(slots[to])
 }
@@ -116,7 +121,7 @@ mod tests {
         }
     }
     #[test]
-    fn arrows_stop_tab_wraps_and_separators_are_skipped() {
+    fn arrows_stop_tab_wraps_and_separators_are_stops() {
         let app = || {
             item(Kind::Folder {
                 uri: "file:///".into(),
@@ -130,9 +135,14 @@ mod tests {
             item(Kind::Trash),
         ];
         assert_eq!(first(&items), Some(0));
+        assert_eq!(first(&items[1..]), Some(1), "never starts on a separator");
         let forward = nav(RIGHT, false, Position::Bottom).unwrap();
-        assert_eq!(moved(&items, 0, forward), Some(2));
-        assert_eq!(moved(&items, 2, forward), Some(4));
+        assert_eq!(
+            moved(&items, 0, forward),
+            Some(1),
+            "the separator is a stop"
+        );
+        assert_eq!(moved(&items, 3, forward), Some(4));
         assert_eq!(moved(&items, 4, forward), Some(4), "arrows stop at the end");
         assert_eq!(
             moved(&items, 4, nav(TAB, false, Position::Bottom).unwrap()),
@@ -160,16 +170,17 @@ mod tests {
             moved(&items, 4, nav(HOME, false, Position::Bottom).unwrap()),
             Some(0)
         );
-        // A side dock moves with Up/Down; Left/Right mean nothing there.
+        // A side dock moves with Up/Down; Left/Right go across it.
         assert_eq!(
             nav(DOWN, false, Position::Left),
             Some(Nav::Forward { wrap: false })
         );
-        assert_eq!(nav(LEFT, false, Position::Left), None);
-        // The arrow away from the edge, Menu and Shift+F10 open the menu.
-        assert_eq!(nav(RIGHT, false, Position::Left), Some(Nav::Menu));
-        assert_eq!(nav(LEFT, false, Position::Right), Some(Nav::Menu));
-        assert_eq!(nav(UP, false, Position::Bottom), Some(Nav::Menu));
+        assert_eq!(nav(LEFT, false, Position::Left), Some(Nav::Inward));
+        // Menu and Shift+F10 open the menu; the arrows across the dock are told apart.
+        assert_eq!(nav(RIGHT, false, Position::Left), Some(Nav::Outward));
+        assert_eq!(nav(LEFT, false, Position::Right), Some(Nav::Outward));
+        assert_eq!(nav(UP, false, Position::Bottom), Some(Nav::Outward));
+        assert_eq!(nav(DOWN, false, Position::Bottom), Some(Nav::Inward));
         assert_eq!(nav(MENU, false, Position::Bottom), Some(Nav::Menu));
         assert_eq!(nav(F10, true, Position::Bottom), Some(Nav::Menu));
         assert_eq!(nav(F10, false, Position::Bottom), None);
