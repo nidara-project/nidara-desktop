@@ -149,6 +149,9 @@ stepped them while the icons glided.
 The separator, a single pixel, would read blurred split evenly between two pixels while it
 moves; it stays whole in one pixel most of the way and crosses to the next over the
 middle 0.3 of a pixel (`hand_over`): continuous, never a jump, split only briefly.
+Stopped mid hand-over (the pointer resting with the strip grown) it would stay split, so
+once the strip has not moved for 50 ms it slides onto the nearer whole pixel over a few
+frames, and back as soon as the strip moves again (`settle`).
 
 **Magnification (D2).** With `magnification` on, resting the pointer on the strip grows
 the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons toward

@@ -21,7 +21,7 @@ use nk_wayland::{
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub const NAMESPACE: &str = "nidara-dock";
 const LEFT_BUTTON: u32 = 0x110;
@@ -46,6 +46,12 @@ pub struct Dock {
     presence: Spring,
     presence_target: f64,
     presence_at: Instant,
+    /// When `shown` last moved, and each separator's offset (device pixels) from where it
+    /// moved to: it settles onto a whole pixel once the strip stands still (`settle`).
+    moved_at: Instant,
+    rules: HashMap<usize, f64>,
+    rules_at: Instant,
+    settling: bool,
     /// The input region last sent: the glass and the icons that grew out of it.
     input: Vec<[i32; 4]>,
     /// When the reader last heard where things are: at most 10 times a second while
@@ -173,6 +179,10 @@ impl Dock {
             presence: Spring::default(),
             presence_target: 0.,
             presence_at: Instant::now(),
+            moved_at: Instant::now(),
+            rules: HashMap::new(),
+            rules_at: Instant::now(),
+            settling: false,
             input: vec![],
             semantics_at: Instant::now(),
             layout,
@@ -291,6 +301,9 @@ impl Dock {
             .layout
             .magnify(&slots, self.pointer, self.presence.value.max(0.));
         let moved = shown.rects != self.shown.rects;
+        if moved {
+            self.moved_at = Instant::now();
+        }
         self.shown = shown;
         if w.size() != self.layout.size {
             return;
@@ -1240,6 +1253,42 @@ impl Dock {
         }
     }
 
+    /// Where separator `n`, placed at `(x, y)`, starts along the dock in device pixels: on
+    /// the grid where it rests, carried by what its neighbours moved (see `follow`).
+    fn rule_at(&self, n: usize, (x, y): (f64, f64), scale: f64) -> f64 {
+        let [rx, ry, _, _] = self.layout.rects[n];
+        let grid = |v: f64| ((v * scale).round() / scale) as f32;
+        let at = if self.layout.position.horizontal() {
+            follow(grid(rx), rx, x)
+        } else {
+            follow(grid(ry), ry, y)
+        };
+        f64::from(at) * scale
+    }
+
+    /// Each separator's offset, a frame further on: none while the strip moves, and once it
+    /// stands still, whatever puts the separator on a whole pixel (see `settle`).
+    fn settle_rules(&mut self, scale: f64, now: Instant) {
+        let dt = now.saturating_duration_since(self.rules_at).as_secs_f64();
+        self.rules_at = now;
+        let still = now.saturating_duration_since(self.moved_at) >= STILL;
+        let mut settling = !still;
+        let mut rules = HashMap::new();
+        for (n, item) in self.frame.view.items.iter().enumerate() {
+            if item.kind != Kind::Separator || n >= self.shown.rects.len() {
+                continue;
+            }
+            let [x, y, _, _] = self.shown.rects[n];
+            let at = self.rule_at(n, (x, y), scale);
+            let was = self.rules.get(&n).copied().unwrap_or(0.);
+            let (offset, done) = settle(was, at, still, dt);
+            settling |= !done;
+            rules.insert(n, offset);
+        }
+        self.rules = rules;
+        self.settling = settling;
+    }
+
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
         let [x, y, w, h] = self.placed(n, item, now);
         let r = Rect {
@@ -1265,16 +1314,10 @@ impl Dock {
             // `--nidara-text-disabled` (white at 0.3).
             Kind::Separator => {
                 let (v, alpha) = (if self.frame.dark { 255 } else { 0 }, 77.);
-                let [rx, ry, _, _] = self.layout.rects[n];
                 let s = c.scale();
-                let grid = |v: f64| ((v * s).round() / s) as f32;
                 let horizontal = self.layout.position.horizontal();
-                let at = if horizontal {
-                    follow(grid(rx), rx, x)
-                } else {
-                    follow(grid(ry), ry, y)
-                };
-                let (pixel, next) = hand_over(f64::from(at) * s);
+                let at = self.rule_at(n, (x, y), s) + self.rules.get(&n).copied().unwrap_or(0.);
+                let (pixel, next) = hand_over(at);
                 for (k, share) in [(pixel, 1. - next), (pixel + 1., next)] {
                     if share <= 0. {
                         continue;
@@ -1488,7 +1531,7 @@ impl Application for Dock {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
         };
-        if self.presence.value != self.presence_target {
+        if self.presence.value != self.presence_target || self.settling {
             return crate::attention::FRAME.as_millis() as u32;
         }
         // Auto-hide: a frame while it slides, else wake when the hide is due.
@@ -1514,6 +1557,9 @@ impl Application for Dock {
             .attention
             .tick(Instant::now(), self.frame.prefs.reduce_motion)
         {
+            w.redraw();
+        }
+        if self.settling {
             w.redraw();
         }
         self.ease(w);
@@ -1740,6 +1786,7 @@ impl Application for Dock {
                 );
             }
             let now = Instant::now();
+            self.settle_rules(f.scale, now);
             let frame = self.frame.clone();
             for (n, item) in frame.view.items.iter().enumerate() {
                 self.paint_item(&mut c, n, item, now);
@@ -1827,6 +1874,26 @@ fn hand_over(at: f64) -> (f64, f64) {
     (pixel, next)
 }
 
+/// How long the strip must not have moved to count as still.
+const STILL: Duration = Duration::from_millis(50);
+/// The time constant a separator settles onto (or leaves) a whole pixel with.
+const SETTLE: f64 = 0.04;
+
+/// A separator's offset (device pixels) from `at`, `dt` seconds after it was `was`: easing
+/// to nothing while the strip moves, and once it is `still`, to what puts it on a whole
+/// pixel. Stopped mid hand-over a line would stay split between two pixels, faint and
+/// doubled; it slides the rest of the way in a few frames instead (never a jump), and back
+/// as soon as the strip moves again. Also says whether it has arrived.
+fn settle(was: f64, at: f64, still: bool, dt: f64) -> (f64, bool) {
+    let target = if still { at.round() - at } else { 0. };
+    let offset = was + (target - was) * (1. - (-dt / SETTLE).exp());
+    if (target - offset).abs() < 0.005 {
+        (target, true)
+    } else {
+        (offset, false)
+    }
+}
+
 /// Along the dock, an even span centred on `start + len / 2` rounded: the compositor
 /// halves an anchor in whole pixels to find its centre (xdg_positioner), so the floor and
 /// ceil of its ends put a popup up to a pixel off to one side.
@@ -1878,6 +1945,31 @@ mod anchor_tests {
             assert!(pos >= last, "{i}");
             last = pos;
         }
+    }
+
+    #[test]
+    fn a_separator_stopped_between_pixels_settles_onto_one() {
+        use super::{hand_over, settle};
+        // Stopped mid hand-over: split between two pixels.
+        let at = 10.5;
+        assert_eq!(hand_over(at), (10., 0.5));
+        // Still, it slides onto a whole pixel over a few frames, never in one step.
+        let (first, done) = settle(0., at, true, 0.016);
+        assert!(!done && first.abs() > 0. && first.abs() < 0.25, "{first}");
+        let mut offset = first;
+        for _ in 0..30 {
+            offset = settle(offset, at, true, 0.016).0;
+        }
+        let (pixel, next) = hand_over(at + offset);
+        assert!(next == 0. || next == 1., "{pixel} {next}");
+        // Moving again, it eases back to where it is carried to.
+        let (back, _) = settle(offset, at, false, 0.016);
+        assert!(back.abs() < offset.abs() && back.signum() == offset.signum());
+        let mut back = back;
+        for _ in 0..30 {
+            back = settle(back, at, false, 0.016).0;
+        }
+        assert_eq!(back, 0.);
     }
 
     #[test]
