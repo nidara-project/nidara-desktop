@@ -103,11 +103,19 @@ float sd_triangle(vec2 p, vec2 p0, vec2 p1, vec2 p2) {
 // is too thin for it): the bevel's contour at depth t. At t = 0 it is the corner itself. A
 // pointer moves inward with it and stays joined by the same concave arc, so the bevel runs
 // round the pointer: drawn for the body alone, it crossed the pointer's base as a seam.
+// Only the pointer's two sides move in: its base lies inside the body, so it reaches 2t
+// deeper along those sides (within its own width), or a deep bevel would part it from the
+// body's contour and leave a notch above it.
 float inset_sdf(vec2 px, float t) {
     vec2 h = rect.zw * 0.5 - vec2(t);
     float d = sdf_box(px, h, max(min(radius + LAB_MUL(11, t), min(h.x, h.y)), 0.0));
     if (has_pointer > 0.5) {
-        float p = sd_triangle(px, ptr_a, ptr_b, ptr_t) - ptr_tip_r + t;
+        vec2 mid = (ptr_a + ptr_b) * 0.5;
+        float k = 2.0 * t / max(length(mid - ptr_t), 1e-3);
+        vec2 a = ptr_a + (ptr_a - ptr_t) * k;
+        vec2 b = ptr_b + (ptr_b - ptr_t) * k;
+        float slab = abs(dot(px - mid, normalize(ptr_b - ptr_a))) - length(ptr_b - ptr_a) * 0.5;
+        float p = max(sd_triangle(px, a, b, ptr_t), slab) - ptr_tip_r + t;
         vec2 u = max(vec2(ptr_base_r - d, ptr_base_r - p), vec2(0.0));
         d = max(ptr_base_r, min(d, p)) - length(u);
     }
