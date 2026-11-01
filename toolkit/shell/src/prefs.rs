@@ -2,12 +2,15 @@
 //! The dock's ordinary preferences (DOCK.md §3): GSettings `org.nidara.dock` read on a GLib
 //! thread of its own, following its change signals. Writes go through Config1 (the dock
 //! menu, the Settings page), never here; `pinned`/`layout` are never read here (the layout
-//! is Applications1's). Reduce transparency is `org.nidara.appearance`'s, read the same way.
+//! is Applications1's). Reduce transparency is `org.nidara.appearance`'s, read the same way;
+//! reduced motion is `org.gnome.desktop.interface` `enable-animations` off, the key the
+//! appearance portal reads for its own `reduced-motion`.
 use crate::geometry::Position;
 use gio::prelude::*;
 
 pub const SCHEMA: &str = "org.nidara.dock";
 pub const APPEARANCE: &str = "org.nidara.appearance";
+pub const INTERFACE: &str = "org.gnome.desktop.interface";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Prefs {
@@ -22,6 +25,8 @@ pub struct Prefs {
     pub hide_delay_ms: u32,
     /// The glass becomes solid (the tokens' reduce-transparency variant).
     pub reduce_transparency: bool,
+    /// No travelling animation: attention is a still mark (APPLICATIONS1-DOCK.md §5).
+    pub reduce_motion: bool,
 }
 impl Default for Prefs {
     fn default() -> Self {
@@ -34,6 +39,7 @@ impl Default for Prefs {
             auto_hide: false,
             hide_delay_ms: 500,
             reduce_transparency: false,
+            reduce_motion: false,
         }
     }
 }
@@ -49,6 +55,7 @@ pub struct Stored {
     pub auto_hide: bool,
     pub hide_delay: i32,
     pub reduce_transparency: bool,
+    pub reduce_motion: bool,
 }
 
 /// The schema's own bounds; an out-of-range stored value is read at its nearest bound.
@@ -62,6 +69,7 @@ pub fn read(s: &Stored) -> Prefs {
         auto_hide: s.auto_hide,
         hide_delay_ms: s.hide_delay.clamp(0, 2000) as u32,
         reduce_transparency: s.reduce_transparency,
+        reduce_motion: s.reduce_motion,
     }
 }
 
@@ -82,8 +90,10 @@ pub fn watch(emit: impl Fn(Prefs) + 'static) {
     let _ = ctx.with_thread_default(|| {
         let dock = settings(SCHEMA, "position");
         let appearance = settings(APPEARANCE, "reduce-transparency");
+        let interface = settings(INTERFACE, "enable-animations");
         let get = {
-            let (dock, appearance) = (dock.clone(), appearance.clone());
+            let (dock, appearance, interface) =
+                (dock.clone(), appearance.clone(), interface.clone());
             move || {
                 let d = Prefs::default();
                 let int = |key, default: u32| dock.as_ref().map_or(default as i32, |s| s.int(key));
@@ -101,6 +111,9 @@ pub fn watch(emit: impl Fn(Prefs) + 'static) {
                     reduce_transparency: appearance
                         .as_ref()
                         .is_some_and(|s| s.boolean("reduce-transparency")),
+                    reduce_motion: interface
+                        .as_ref()
+                        .is_some_and(|s| !s.boolean("enable-animations")),
                 })
             }
         };
@@ -121,6 +134,7 @@ pub fn watch(emit: impl Fn(Prefs) + 'static) {
                 ][..],
             ),
             (appearance, &["reduce-transparency"][..]),
+            (interface, &["enable-animations"][..]),
         ];
         for (s, keys) in watched.iter() {
             if let Some(s) = s {
@@ -174,6 +188,7 @@ mod tests {
             auto_hide: false,
             hide_delay: 500,
             reduce_transparency: true,
+            reduce_motion: false,
         }
     }
     #[test]

@@ -415,6 +415,7 @@ mod tests {
             label: "Editor".into(),
             windows: windows.to_vec(),
             minimized: minimized.to_vec(),
+            signal: Default::default(),
         }
     }
     fn cx<'a>(app: Option<&'a App>, titles: &'a HashMap<u64, String>) -> Context<'a> {
@@ -544,6 +545,7 @@ mod tests {
             label: "Trash".into(),
             windows: vec![],
             minimized: vec![],
+            signal: Default::default(),
         };
         let rows = item_menu(&trash, &c);
         assert_eq!(

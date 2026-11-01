@@ -6,13 +6,13 @@
 use crate::actions::{Action, primary};
 use crate::apps::{TRASH_EMPTY, TRASH_FULL};
 use crate::chooser::{Candidate, Chooser};
-use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, Position, Slot, layout};
+use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD_RATIO, Position, Slot, layout};
 use crate::hub::{Frame, Request};
 use crate::menu::Command;
 use crate::model::{Item, Kind, View};
 use crate::popup::{Look, Outcome, Overlay, Popup};
 use nk_render::{Canvas, ImageFit, Raster, rgba};
-use nk_text::Rect;
+use nk_text::{Rect, TextBackend};
 use nk_wayland::{
     Application, Edges, Event, KeyboardMode, LayerLevel, LayerOutput, LayerPlacement, LayerSpec,
     Material, Options, Pane, PopupSide, TokenRequest, WakeSource, Waker, Window,
@@ -73,6 +73,10 @@ pub struct Dock {
     popups: u64,
     /// A press that closed the popup is consumed, its release too: never replayed.
     swallow: bool,
+    /// The attention bounce of each slot (attention.rs).
+    attention: crate::attention::Attention,
+    /// The look was asked for once for a count's text, whether or not it came.
+    look_tried: bool,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
@@ -80,6 +84,13 @@ pub struct Dock {
 pub const THUMB_SIDE: u32 = 256;
 /// The app's icon on a minimized window's picture, as a share of the slot (DockIcon.ts).
 const BADGE: f64 = 0.45;
+/// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
+/// count stay inside the capsule, so the surface never grows for it.
+const LIFT: f64 = 0.5;
+/// A count's pill, as a share of the icon: its height, and how far it sits out of the
+/// icon's top-right corner.
+const COUNT: f64 = 0.36;
+const COUNT_OUT: f64 = 0.25;
 
 fn slots(view: &View) -> Vec<Slot> {
     view.items
@@ -155,6 +166,8 @@ impl Dock {
             look: None,
             popups: 0,
             swallow: false,
+            attention: Default::default(),
+            look_tried: false,
         }
     }
 
@@ -202,6 +215,27 @@ impl Dock {
             );
         }
         self.frame = frame;
+        self.attention
+            .update(&self.frame.view.items, Instant::now());
+        if !self.look_tried
+            && self.look.is_none()
+            && self
+                .frame
+                .view
+                .items
+                .iter()
+                .any(|i| i.signal.count.is_some())
+        {
+            // A count's figure is text: the menus' look carries the fonts.
+            self.look_tried = true;
+            match zbus::blocking::Connection::session()
+                .map_err(|e| e.to_string())
+                .and_then(|bus| Look::load(&bus))
+            {
+                Ok(look) => self.look = Some(look),
+                Err(e) => eprintln!("nidara-shell: counts without figures: {e}"),
+            }
+        }
         if self.focus.is_some()
             && (self.frame.hidden
                 || self.focused_slot().is_none()
@@ -844,8 +878,23 @@ impl Dock {
         }
     }
 
-    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item) {
+    /// Where attention has lifted a slot now, away from the screen edge.
+    fn lift(&self, item: &Item, now: Instant) -> (f64, f64) {
+        let share = self
+            .attention
+            .lift(&item.key, now, self.frame.prefs.reduce_motion);
+        let d = share * LIFT * PAD_RATIO * self.layout.icon;
+        match self.layout.position {
+            Position::Bottom => (0., -d),
+            Position::Left => (d, 0.),
+            Position::Right => (-d, 0.),
+        }
+    }
+
+    fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
         let [x, y, w, h] = self.layout.rects[n];
+        let (dx, dy) = self.lift(item, now);
+        let (x, y) = (x + dx, y + dy);
         let r = Rect {
             x: x as f32,
             y: y as f32,
@@ -939,24 +988,129 @@ impl Dock {
             };
             c.rounded_ring(ring, w * 0.22 + grow as f64, 2., ink);
         }
-        if self.frame.prefs.indicators
+        if let Some(p) = item.signal.progress {
+            // Along the icon's foot: a dark rim, so it reads over light art, around a faint
+            // ink track, so it reads over dark art; an ink fill.
+            let bar = (h * 0.09).max(2.);
+            let track = Rect {
+                x: (x + w * 0.12) as f32,
+                y: (y + h * 0.88 - bar) as f32,
+                width: (w * 0.76) as f32,
+                height: bar as f32,
+            };
+            let rim = (bar * 0.3) as f32;
+            let outer = Rect {
+                x: track.x - rim,
+                y: track.y - rim,
+                width: track.width + 2. * rim,
+                height: track.height + 2. * rim,
+            };
+            c.rounded_rect(outer, bar / 2. + rim as f64, rgba(0, 0, 0, 150));
+            c.rounded_rect(track, bar / 2., rgba(255, 255, 255, 70));
+            if p > 0. {
+                let fill = Rect {
+                    width: (track.width as f64 * p).max(bar) as f32,
+                    ..track
+                };
+                c.rounded_rect(fill, bar / 2., ink);
+            }
+        }
+        // The kit's `INK.solid` (0.9), as the TS dock's running dot.
+        let mark = if self.frame.dark {
+            rgba(255, 255, 255, 230)
+        } else {
+            rgba(0, 0, 0, 230)
+        };
+        let d = DOT * self.layout.scale.max(0.4);
+        if item.signal.attention {
+            // Attention's still mark, with or without motion: the dot drawn out to a dash
+            // along the dock, whatever the indicators preference (it is not a running dot).
+            let (cx, cy) = self.layout.dot(n);
+            let (lw, lh) = if self.layout.position.horizontal() {
+                (3. * d, d)
+            } else {
+                (d, 3. * d)
+            };
+            let dash = Rect {
+                x: (cx - lw / 2.) as f32,
+                y: (cy - lh / 2.) as f32,
+                width: lw as f32,
+                height: lh as f32,
+            };
+            c.rounded_rect(dash, d / 2., mark);
+        } else if self.frame.prefs.indicators
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
-            // The kit's `INK.solid` (0.9), as the TS dock's running dot.
-            let mark = if self.frame.dark {
-                rgba(255, 255, 255, 230)
-            } else {
-                rgba(0, 0, 0, 230)
-            };
-            c.dot(self.layout.dot(n), DOT * self.layout.scale.max(0.4), mark);
+            c.dot(self.layout.dot(n), d, mark);
+        }
+    }
+
+    /// A count: a pill out of the icon's top-right corner, the danger colour with a white
+    /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
+    /// it reaches into the next slot's gap.
+    fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
+        let [x, y, w, _] = self.layout.rects[n];
+        let (dx, dy) = self.lift(item, now);
+        let (x, y) = (x + dx, y + dy);
+        let pill = w * COUNT;
+        let (back, figure) = match self.frame.tokens.as_ref().and_then(|t| {
+            let c = t["danger"].as_array()?;
+            let b = |n: usize| c.get(n)?.as_u64().map(|v| v as u8);
+            Some([b(0)?, b(1)?, b(2)?])
+        }) {
+            Some([r, g, b]) => (rgba(r, g, b, 255), rgba(255, 255, 255, 255)),
+            None => (rgba(255, 255, 255, 235), rgba(0, 0, 0, 255)),
+        };
+        let text = if count > 999 {
+            "999+".to_string()
+        } else {
+            count.to_string()
+        };
+        let layout = self.look.as_mut().and_then(|look| {
+            let mut style = look.styles.text.clone();
+            style.size = (pill * 0.62) as f32;
+            // The menus' weight: the fonts have no bold of their own to reach for, and the
+            // text engine refuses to fake one.
+            style.weight = look.style.row.weight;
+            look.text
+                .layout(&text, &style, 4096.)
+                .map_err(|e| eprintln!("nidara-shell: a count's figure: {e}"))
+                .ok()
+        });
+        let size = layout.as_ref().map(|l| l.measured_size());
+        let width = size.map_or(pill, |s| (s.width as f64 + pill * 0.6).max(pill));
+        let bx = x + w - width + pill * COUNT_OUT;
+        let by = y - pill * COUNT_OUT;
+        let r = Rect {
+            x: bx as f32,
+            y: by as f32,
+            width: width as f32,
+            height: pill as f32,
+        };
+        c.rounded_rect(r, pill / 2., back);
+        if let (Some(layout), Some(size)) = (layout, size) {
+            let origin = (
+                (bx + (width - size.width as f64) / 2.) as f32,
+                (by + (pill - size.height as f64) / 2.) as f32,
+            );
+            if let Err(e) = c.layout(&layout, origin, figure) {
+                eprintln!("nidara-shell: a count's figure: {e}");
+            }
         }
     }
 }
 
 impl Application for Dock {
     fn poll_interval_ms(&self) -> u32 {
-        // Everything arrives by Wake; only an open chooser refreshes its pictures.
+        // Everything arrives by Wake; an open chooser refreshes its pictures, and a bounce
+        // wants its frames.
+        if self
+            .attention
+            .wants_frames(Instant::now(), self.frame.prefs.reduce_motion)
+        {
+            return crate::attention::FRAME.as_millis() as u32;
+        }
         match self.popup {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
@@ -965,6 +1119,12 @@ impl Application for Dock {
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         if let Some(Overlay::Chooser(c)) = self.popup.as_mut() {
             c.refresh(w);
+        }
+        if self
+            .attention
+            .tick(Instant::now(), self.frame.prefs.reduce_motion)
+        {
+            w.redraw();
         }
         Ok(())
     }
@@ -1108,8 +1268,15 @@ impl Application for Dock {
                     base,
                 );
             }
-            for (n, item) in self.frame.view.items.iter().enumerate() {
-                self.paint_item(&mut c, n, item);
+            let now = Instant::now();
+            let frame = self.frame.clone();
+            for (n, item) in frame.view.items.iter().enumerate() {
+                self.paint_item(&mut c, n, item, now);
+            }
+            for (n, item) in frame.view.items.iter().enumerate() {
+                if let Some(count) = item.signal.count {
+                    self.paint_count(&mut c, n, item, count, now);
+                }
             }
         }
         Ok(c.finish())

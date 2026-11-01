@@ -112,6 +112,7 @@ mod tests {
             label: String::new(),
             windows: vec![],
             minimized: vec![],
+            signal: Default::default(),
         }
     }
     #[test]

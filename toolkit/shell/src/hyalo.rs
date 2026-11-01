@@ -109,6 +109,7 @@ pub fn parse_windows(ok: &Value) -> Vec<HyaloWindow> {
                     minimized_order: n(w, "minimized_order"),
                     focus_order: n(w, "focus_order"),
                     focused: b(w, "focused"),
+                    attention: b(w, "demands_attention"),
                 },
                 output: s(w, "output"),
                 fullscreen: w["fullscreen"].as_str() == Some("fullscreen"),
@@ -175,7 +176,8 @@ fn stream(epoch: u64, emit: &impl Fn(HyaloUpdate)) -> Result<(), String> {
                     event["locked"].as_bool().unwrap_or(false),
                 )),
                 Some(
-                    "windows_changed" | "focus_changed" | "outputs_changed" | "workspaces_changed",
+                    "windows_changed" | "focus_changed" | "outputs_changed" | "workspaces_changed"
+                    | "attention_changed",
                 ) => stale = true,
                 _ => {}
             }
@@ -205,7 +207,7 @@ mod tests {
     fn windows_parse_from_the_reply_shape() {
         let ok = json!({"kind": "windows", "windows": [
             {"id": 7, "app_id": "foot", "initial_app_id": "foot", "title": "~", "parent": null,
-             "minimized": true, "minimized_order": 3, "focus_order": 9, "focused": false,
+             "minimized": true, "minimized_order": 3, "focus_order": 9, "focused": false, "demands_attention": true,
              "output": "HDMI-A-1", "fullscreen": "none"},
             {"id": 8, "app_id": "mpv", "parent": 7, "fullscreen": "fullscreen", "output": "DP-1"},
             {"app_id": "no id"}
@@ -222,6 +224,10 @@ mod tests {
         );
         assert_eq!((w[0].output.as_str(), w[0].fullscreen), ("HDMI-A-1", false));
         assert_eq!((w[1].window.parent, w[1].fullscreen), (Some(7), true));
+        assert_eq!(
+            (w[0].window.attention, w[1].window.attention),
+            (true, false)
+        );
     }
 
     #[test]

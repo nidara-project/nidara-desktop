@@ -3,6 +3,7 @@
 //! the contract it implements is session/design/APPLICATIONS1-DOCK.md.
 pub mod actions;
 pub mod apps;
+pub mod attention;
 pub mod chooser;
 pub mod cycle;
 pub mod dock;

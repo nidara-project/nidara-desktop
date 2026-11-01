@@ -46,27 +46,40 @@ pub struct Input<'a> {
 }
 
 fn state(item: &Item, click: Option<&Click>, trash: Option<crate::trash::TrashState>) -> String {
-    let mut words = vec![];
+    let mut words: Vec<String> = vec![];
     match &item.kind {
-        Kind::Trash => words.push(match trash {
-            Some(t) if t.full => "contains items",
-            Some(t) if t.partial => "empty in the home folder",
-            Some(_) => "empty",
-            None => "cannot tell whether it holds items",
-        }),
-        Kind::Minimized { .. } => words.push("minimized window"),
-        Kind::MissingApp { .. } => words.push("not installed"),
+        Kind::Trash => words.push(
+            match trash {
+                Some(t) if t.full => "contains items",
+                Some(t) if t.partial => "empty in the home folder",
+                Some(_) => "empty",
+                None => "cannot tell whether it holds items",
+            }
+            .into(),
+        ),
+        Kind::Minimized { .. } => words.push("minimized window".into()),
+        Kind::MissingApp { .. } => words.push("not installed".into()),
         _ => {
             if item.running() {
-                words.push("running");
+                words.push("running".into());
             }
             if !item.minimized.is_empty() {
-                words.push("has minimized windows");
+                words.push("has minimized windows".into());
             }
         }
     }
+    // What the app signals (DOCK.md §6): said, not only painted.
+    if let Some(n) = item.signal.count {
+        words.push(format!("{n} pending"));
+    }
+    if let Some(p) = item.signal.progress {
+        words.push(format!("{}% done", (p * 100.).round()));
+    }
+    if item.signal.attention {
+        words.push("wants attention".into());
+    }
     if matches!(click, Some(Click::Unavailable)) {
-        words.push("cannot be opened now");
+        words.push("cannot be opened now".into());
     }
     words.join(", ")
 }
@@ -129,6 +142,7 @@ mod tests {
             label: key.into(),
             windows,
             minimized: vec![],
+            signal: Default::default(),
         }
     }
     #[test]

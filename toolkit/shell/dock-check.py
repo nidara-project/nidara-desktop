@@ -91,6 +91,21 @@ app.connect('activate', up)
 app.run()
 """
 
+# A Unity sender (APPLICATIONS1-DOCK.md §5): the real LauncherEntry.Update SIGNAL, from a
+# process that stays on the bus until it is stopped (losing it retires its entry).
+UNITY = """
+import sys
+from gi.repository import Gio, GLib
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+bus.emit_signal(None, '/org/nidara/DockCheck', 'com.canonical.Unity.LauncherEntry', 'Update',
+                GLib.Variant('(sa{sv})', ('application://' + sys.argv[1], {
+                    'count': GLib.Variant('x', 3), 'count-visible': GLib.Variant('b', True),
+                    'progress': GLib.Variant('d', 0.5), 'progress-visible': GLib.Variant('b', True),
+                    'urgent': GLib.Variant('b', True)})))
+bus.flush_sync(None)
+GLib.MainLoop().run()
+"""
+
 procs = []
 
 
@@ -320,6 +335,23 @@ try:
         for i in (walk() or [])))
     shot(LOG / 'dock-trash-full.png')
     result['trash'] = 'empty, then contains items'
+    # Unity (D2, DOCK.md §6): a count, a progress and urgency reach kitty's slot through
+    # Applications1, painted and said; the sender's exit takes them all away.
+    def kitty():
+        return next((i['description'] for i in (walk() or []) if i['name'] == 'kitty'), '')
+    unity = start('unity', ['python3', '-I', '-c', UNITY, 'kitty.desktop'])
+    until('kitty says its count, progress and attention', lambda: all(
+        w in kitty() for w in ('3 pending', '50% done', 'wants attention')))
+    time.sleep(.5)  # a lift of the bounce, mid-way
+    shot(LOG / 'dock-unity-bounce.png')
+    time.sleep(3)  # the bounce is over: the still mark stays
+    shot(LOG / 'dock-unity.png')
+    result['unity'] = {'said': kitty()}
+    unity.terminate()
+    unity.wait(timeout=5)
+    until('the sender gone, nothing stale stays', lambda: 'pending' not in kitty()
+          and 'attention' not in kitty())
+    result['unity']['after_exit'] = kitty()
     # Menus (D2, DOCK.md §8): a right click opens the item's menu on the dock's own popup,
     # its rows in the dock's tree; Escape closes it; the dock's own menu writes through
     # Config1 and shows what Config1 took.

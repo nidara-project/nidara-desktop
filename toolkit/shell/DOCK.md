@@ -98,6 +98,23 @@ contract's order: exact current app_id as DesktopId (with and without `.desktop`
 StartupWMClass, verified Flatpak ID, then initial app_id. Ambiguous stays ambiguous and
 gets its own `window:<epoch>:<id>` group; title and executable never choose an app.
 
+**Signals (D2).** Each slot carries a `Signal` beside its windows: a **count** and a
+**progress** from the app's Unity record in Applications1 (`Launcher`, shown only while
+the app makes it visible; a zero count is no badge), and **attention**, true when Hyalo
+flags any of the slot's windows (`demands_attention`, refreshed on `attention_changed`)
+or the app's Unity `urgent` is set. Display only: attention never focuses anything. The
+count is a pill in `--nidara-danger` (carried into the glass tokens as `danger`) out of
+the icon's top-right corner, its figure in the menus' font and weight (the fonts have no
+bold, and the text engine refuses to fake one); the progress is a bar along the icon's
+foot, a dark rim around a faint ink track so it reads over light and dark art. Attention
+draws the dot out to a dash whatever the indicators preference, and each new false→true
+edge lifts the icon three times in 3 s (`attention.rs`), by at most half the capsule's
+padding so the icon and its count stay inside the surface; repeated `true` restarts
+nothing. Reduced motion (`org.gnome.desktop.interface` `enable-animations` off, the key
+the appearance portal reads) keeps the dash and drops the lift. A reader hears the
+same: "3 pending, 50% done, wants attention". The private check sends a real
+`LauncherEntry.Update` signal and checks that all of it goes when the sender does.
+
 ## 5. Geometry
 
 From the existing TS dock, so the Rust one keeps its proportions: padding = 0.22 × icon,

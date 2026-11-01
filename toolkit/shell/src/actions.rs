@@ -66,6 +66,7 @@ mod tests {
             label: "a".into(),
             windows: windows.to_vec(),
             minimized: minimized.to_vec(),
+            signal: Default::default(),
         }
     }
 
