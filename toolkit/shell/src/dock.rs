@@ -309,7 +309,10 @@ impl Dock {
             let m = crate::autohide::margin(&self.layout, self.hide.slide);
             vec![crate::autohide::band(&self.layout, m)]
         } else {
-            self.shown.input(&slots)
+            // What is drawn, and the reach beside the resting glass that magnifies first.
+            let mut input = self.shown.input(&slots);
+            input.extend(self.layout.reach());
+            input
         };
         if input != self.input {
             if let Err(e) = w.set_input_region(Some(&input)) {
@@ -1528,7 +1531,12 @@ impl Application for Dock {
                 ..
             } if !self.frame.hidden => {
                 let slot = self.shown.hit(self.pointer.0, self.pointer.1);
-                self.open_menu(w, slot, Some(serial), false);
+                // Off an item, only the glass opens the dock's menu, not the reach beside it.
+                let [gx, gy, gw, gh] = self.shown.glass;
+                let (px, py) = self.pointer;
+                if slot.is_some() || (px >= gx && px < gx + gw && py >= gy && py < gy + gh) {
+                    self.open_menu(w, slot, Some(serial), false);
+                }
             }
             Event::Button {
                 button: MIDDLE_BUTTON,

@@ -136,9 +136,15 @@ the icons under it on the TS dock's bell: a gaussian of sigma 1.1 slots, icons t
 dock (at most a third of the output) and slack at both ends of the main axis, so a grown
 icon never needs a new surface size; the exclusive zone stays the rest capsule's. Only
 the glass and the grown icons take input (the input region follows the strip), so the
-envelope's empty room passes clicks through. Positions are anchored at the pointer
-within its rest slot: the item under the pointer stays under it as the strip grows, so a
-point measured at rest still lands on its item. Presence eases in on entry and out on leave,
+envelope's empty room passes clicks through, except a **reach** beside the resting glass,
+at its height, three sigmas long (where the bell is down to about 1 %): there the pointer
+coming in from a side already grows the end icons, as on the TS dock (which took the
+pointer 250 px past each end). A press there does nothing; only the glass opens the dock
+menu. Positions are anchored at the pointer within its rest slot: the item under the
+pointer stays under it as the strip grows, so a point measured at rest still lands on its
+item. Off the strip (its end padding, or the reach) the nearer end stays where it rests:
+anchored at the pointer instead, the strip followed it out by a side and jumped back to
+the middle once the magnification eased out (owner, 2026-11-01). Presence eases in on entry and out on leave,
 an exponential approach with a 60 ms time constant (snapped under reduced motion); the reader's bounds follow what is drawn, throttled to
 100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
 rects.
