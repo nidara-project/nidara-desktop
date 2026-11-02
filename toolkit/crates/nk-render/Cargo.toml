@@ -10,3 +10,4 @@ publish.workspace = true
 nk-text = { path = "../nk-text" }
 nk-icons = { path = "../nk-icons" }
 vello_cpu = "0.3"
+nidara-corner = { path = "../../../crates/nidara-corner" }

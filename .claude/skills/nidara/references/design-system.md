@@ -725,6 +725,51 @@ on screen. The same defect shaved the tops of flat glyphs (T E F H I L) everywhe
 "Text is only crisp when the line box lands on WHOLE PIXELS" (at the end of this file) for the
 fix and the measurements; tech-debt §29 for why the wrong diagnosis held for a month.
 
+## The corner — ONE curve, continuous, for every shape (owner, 2026-11-02)
+
+> "Tiene que ser de forma que no haya un salto entre la recta y la curva" · "el diseño
+> unificado, no hacer una cosa de una forma y otra de otra" — the owner, on a 2×2 tile that
+> read as a square with a radius.
+
+Every rounded shape of the desktop — a capsule, a tile, a menu, the dock, a window, a toolkit
+widget — has the same corner, defined ONCE in `crates/nidara-corner`. A shape states only its
+**radius**; nobody picks a curve.
+
+- **Continuous.** A circular arc meets a straight edge with a jump in curvature, and the eye
+  sees the joint. Our corner ramps the curvature up from the edge and back down (clothoid ramps
+  around a circular arc, smoothing 0.6 — `reference.rs`, the exact construction). It leaves the
+  edge about 1.5 radii from the box's corner and reads as a circle of radius `r` from a
+  distance. The 0.6 is chosen, not measured.
+- **Drawn as** a two-exponent superellipse quadrant fitted to that reference (within 0.2 % of the
+  radius): cheap enough for every shader, which matters — the exact curve unrolled in GLSL hung
+  llvmpipe's compiler (the headless harness).
+- **A pill** (radius = half the short side: bar capsules, 2×1 tiles, buttons) keeps a ROUND tip:
+  exponent 2 at the tip, flat-meeting where it leaves the long edge. A single exponent above 2
+  flattens the tip — the old dock squircle, rejected for capsules.
+- **Containers are concentric**: radius = what is inside's radius + the padding between. The
+  dock: icon corner (14/64 of the icon, not measured) + its air `PAD` 10 → 24 at icon 64
+  (`capsule_radius` in `toolkit/shell/src/geometry.rs`, option "C" chosen by the owner).
+- **Circles** are a square with `r ≥ half its side` — exact.
+- **Radii read 1.5× larger than the same number on a circular arc.** Windows and menus are 16,
+  which covers what 24 did before (owner, 2026-11-02: "16, as before"); a radius carried over
+  from the old curve must be checked the same way. Checked and KEPT: the Control Center's 2×2 at 38
+  (half a cell, the 1×1's corner) — the owner prefers those tiles rounder (2026-11-02).
+
+Who draws it: Hyalo's glass, window corners, title bars and the line/shadow (`corner_sdf`,
+injected by `glass_gl::with_corner`); the toolkit's CPU paint (`nk-render`, every
+`rounded_rect`/`rounded_ring`/`clip_rounded_rect`). The protocol's `exponent` stays in
+`nidara-material-v1` (protocols stay v1) and Hyalo ignores it: send 2. Hyalo's
+`[windows] rounding_power` is parsed and ignored the same way.
+
+⚠️ **A corner reaches PAST its radius** — up to `MAX_REACH` (1.52) radii along each edge. Anything
+that treats "the corner" as an r×r square (opaque regions, skipped interiors, damage) must use
+`nidara_corner::reach`, or the last half radius of the curve is drawn as if it were square.
+
+Not done, by decision: the TS fallback painters (`DrawingUtils`'s `createSquirclePath`, CSS
+`border-radius`) keep their old curves — TS gets no new work (owner, 2026-10-26), and on Hyalo
+the TS shell's glass is Hyalo's, so it already wears the new corner; only its GTK content clip
+and the Hyprland fallback do not.
+
 ## Radii — ONE ladder, in `ui/lib/nidara-kit/platform/tokens.ts` (audited 2026-08-03)
 
 `RADIUS` in `ui/lib/nidara-kit/platform/tokens.ts` is the source; `--nidara-radius-*` in `_base.scss` is a

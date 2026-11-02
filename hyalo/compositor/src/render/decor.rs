@@ -26,8 +26,9 @@ use smithay::{
 use super::{HyaloRenderer, glass_gl};
 use crate::config::{WindowsConfig, parse_color};
 
-/// The box's distance field is the corner shader's (render/window.rs): a superellipse of
-/// `exponent` in the corner squares, straight edges between — negative inside, output px.
+/// The box's distance field is the desktop's one corner (crates/nidara-corner, put in by
+/// glass_gl.rs `with_corner`), as render/window.rs cuts it — negative inside, output px.
+/// `exponent` is no longer read.
 pub const FS_DECOR: &str = r#"#version 100
 precision highp float;
 uniform vec4 rect;        // the window's box, output px
@@ -46,13 +47,7 @@ varying vec2 v_out;
 varying vec2 v_fb;
 float sdf(vec2 p, vec4 r) {
     vec2 h = r.zw * 0.5;
-    vec2 q = abs(p - r.xy - h);
-    vec2 inner = h - vec2(radius);
-    if (radius > 0.0 && q.x > inner.x && q.y > inner.y) {
-        vec2 k = (q - inner) / radius;
-        return (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * radius;
-    }
-    return max(q.x - h.x, q.y - h.y);
+    return corner_sdf(p - r.xy - h, h, radius);
 }
 void main() {
     float d = sdf(v_out, rect);
@@ -216,7 +211,7 @@ impl DecorElement {
             gl.Uniform4f(p.loc(gl, c"fill"), l.fill[0], l.fill[1], l.fill[2], l.fill[3]);
             // Never the inside of the box without a background, where every pixel would be
             // discarded: a video playing in the window damages it every frame.
-            let r = l.radius.ceil() as i32 + 1;
+            let r = nidara_corner::reach(f64::from(rect[2]), f64::from(rect[3]), f64::from(l.radius)).ceil() as i32 + 1;
             let inner = if l.fill[3] > 0.0 {
                 Rectangle::<i32, Physical>::default()
             } else {

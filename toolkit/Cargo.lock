@@ -1158,6 +1158,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-corner"
+version = "0.1.0"
+
+[[package]]
 name = "nidara-shell"
 version = "0.1.0"
 dependencies = [
@@ -1218,6 +1222,7 @@ dependencies = [
 name = "nk-render"
 version = "0.1.0"
 dependencies = [
+ "nidara-corner",
  "nk-icons",
  "nk-text",
  "vello_cpu",

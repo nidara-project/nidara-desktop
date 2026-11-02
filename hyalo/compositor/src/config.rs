@@ -121,9 +121,12 @@ impl Default for RenderConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct WindowsConfig {
-    /// Corner radius, logical pixels; 0 = square. A fullscreen window is never rounded.
+    /// Corner radius, logical pixels; 0 = square. A fullscreen window is never rounded. 16: the
+    /// continuous corner reaches 1.5 radii, so 16 covers what Hyprland's 24 did (owner,
+    /// 2026-11-02).
     pub rounding: f64,
-    /// The corner's curve: 2 is a circle, higher is a squircle (Hyprland's `rounding_power`).
+    /// Hyprland's corner curve, still read so a config that names it loads; it shapes nothing
+    /// since 2026-11-02 — every corner is the desktop's one corner (crates/nidara-corner).
     pub rounding_power: f64,
     pub backdrop: BackdropConfig,
     pub background: BackgroundConfig,
@@ -136,7 +139,7 @@ pub struct WindowsConfig {
 impl Default for WindowsConfig {
     fn default() -> Self {
         Self {
-            rounding: 24.0,
+            rounding: 16.0,
             rounding_power: 3.2,
             backdrop: BackdropConfig::default(),
             background: BackgroundConfig::default(),

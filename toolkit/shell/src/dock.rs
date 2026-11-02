@@ -6,7 +6,7 @@
 use crate::actions::{Action, primary};
 use crate::apps::{TRASH_EMPTY, TRASH_FULL};
 use crate::chooser::{Candidate, Chooser};
-use crate::geometry::{CAPSULE_EXPONENT, DOT, Layout, PAD, Position, Slot, envelope, layout};
+use crate::geometry::{DOT, Layout, PAD, Position, Slot, capsule_radius, envelope, layout};
 use crate::hub::{Frame, Request};
 use crate::menu::Command;
 use crate::model::{Item, Kind, View};
@@ -2693,8 +2693,8 @@ impl Application for Dock {
             y,
             width: w,
             height: h,
-            radius: w.min(h) / 2.,
-            exponent: CAPSULE_EXPONENT,
+            radius: capsule_radius(self.shown.icon),
+            exponent: 2.,
             pointer: None,
         };
         self.frame.tokens.as_ref().and_then(|t| {

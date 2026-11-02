@@ -705,7 +705,19 @@ pub(super) struct Programs {
 
 type Trash = Rc<RefCell<Vec<(u32, u32)>>>;
 
+/// A fragment shader that calls `corner_sdf` gets the desktop's one corner
+/// (crates/nidara-corner) put in after its precision line.
+pub(super) fn with_corner(fs: &str) -> std::borrow::Cow<'_, str> {
+    const PRECISION: &str = "precision highp float;\n";
+    if !fs.contains("corner_sdf(") || fs.contains("float corner_sdf(") {
+        return std::borrow::Cow::Borrowed(fs);
+    }
+    let at = fs.find(PRECISION).map_or(0, |i| i + PRECISION.len());
+    std::borrow::Cow::Owned(format!("{}{}{}", &fs[..at], nidara_corner::glsl(), &fs[at..]))
+}
+
 pub(super) unsafe fn try_compile(gl: &Gles2, vs: &str, fs: &str) -> Result<Program, String> {
+    let fs = &*with_corner(fs);
     unsafe {
         let shader = |kind, src: &str| -> Result<u32, String> {
             let s = gl.CreateShader(kind);

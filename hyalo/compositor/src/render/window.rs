@@ -7,8 +7,8 @@
 //!
 //! - **Corners**: the window's surfaces are drawn through a texture shader of ours (Smithay's
 //!   `override_default_tex_program`, public API) that cuts the corners of the window's box with
-//!   the same superellipse as the glass (`rounding_power` 2 = a circle). Only inside the box's
-//!   corner squares; a fullscreen window is never rounded, and neither is one whose surface
+//!   the desktop's one corner, as the glass's (crates/nidara-corner; `rounding_power` is read and
+//!   no longer shapes it). Only inside the box's corner squares; a fullscreen window is never rounded, and neither is one whose surface
 //!   reaches past its geometry — a client-side decoration with a shadow margin draws its own
 //!   corners. Popups are not cut.
 //! - **Backdrop** (#708 point 1, "A, automatic"): the WINDOW material — blur and Hyprland's
@@ -96,15 +96,14 @@ void main() {
         }
     }
 
-    // Only inside the corner squares: the superellipse of the glass (glass_gl.rs `sdf_box`),
+    // Only near the corners: the desktop's one corner, as the glass's (crates/nidara-corner),
     // anti-aliased over one pixel.
     if (p.x < clip.x || p.y < clip.y || p.x >= clip.x + clip.z || p.y >= clip.y + clip.w) discard;
     vec2 h = geo.zw * 0.5;
     vec2 q = abs(p - geo.xy - h);
-    vec2 inner = h - vec2(radius);
+    vec2 inner = h - vec2(NC_MAX_REACH * min(radius, min(h.x, h.y)));
     if (radius > 0.0 && q.x > inner.x && q.y > inner.y) {
-        vec2 k = (q - inner) / radius;
-        float d = (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * radius;
+        float d = corner_sdf(p - geo.xy - h, h, radius);
         color *= clamp(0.5 - d, 0.0, 1.0);
     }
 
@@ -191,7 +190,7 @@ fn rounded_program<R: HyaloRenderer>(renderer: &mut R) -> Option<GlesTexProgram>
     }
     let compiled = gles
         .compile_custom_texture_shader(
-            FS_ROUNDED,
+            super::glass_gl::with_corner(FS_ROUNDED),
             &[
                 UniformName::new("fb_to_out", UniformType::Matrix3x3),
                 UniformName::new("geo", UniformType::_4f),
@@ -347,10 +346,10 @@ impl<R: smithay::backend::renderer::Renderer> std::fmt::Debug for RoundedElement
 }
 
 impl<R: HyaloRenderer> RoundedElement<R> {
-    /// The parts of the box's corner squares the curve leaves out, output pixels, whole pixels
-    /// grown outward: what is no longer opaque.
+    /// The squares in the box's corners the curve cuts (`nidara_corner::reach`, past the radius),
+    /// output pixels, whole pixels grown outward: what is no longer opaque.
     fn corners(&self) -> [Rectangle<i32, Physical>; 4] {
-        let r = self.radius.ceil() as i32;
+        let r = nidara_corner::reach(self.geo.size.w, self.geo.size.h, self.radius).ceil() as i32;
         let g = self.geo.to_i32_round::<i32>();
         let (x0, y0, x1, y1) = (g.loc.x, g.loc.y, g.loc.x + g.size.w - r, g.loc.y + g.size.h - r);
         [(x0, y0), (x1, y0), (x0, y1), (x1, y1)].map(|(x, y)| Rectangle::new((x, y).into(), (r, r).into()))
@@ -528,7 +527,7 @@ pub(super) fn inked_element<R: HyaloRenderer>(
 struct BackdropState(RefCell<Option<(Id, CommitCounter, String)>>);
 
 /// Whether `surface` lets anything through inside `geo` (surface-local logical), beyond the
-/// corner squares of `radius`: its opaque region leaves part of the box uncovered.
+/// corner squares the curve cuts: its opaque region leaves part of the box uncovered.
 pub fn translucent(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f64) -> bool {
     let opaque: Vec<Rectangle<i32, Logical>> = with_states(surface, |states| {
         states
@@ -537,7 +536,7 @@ pub fn translucent(surface: &WlSurface, geo: Rectangle<i32, Logical>, radius: f6
             .and_then(|s| s.lock().unwrap().opaque_regions().map(|r| r.to_vec()))
             .unwrap_or_default()
     });
-    let r = radius.ceil() as i32;
+    let r = nidara_corner::reach(f64::from(geo.size.w), f64::from(geo.size.h), radius).ceil() as i32;
     let in_a_corner = |u: &Rectangle<i32, Logical>| {
         let (x0, y0, x1, y1) = (geo.loc.x, geo.loc.y, geo.loc.x + geo.size.w, geo.loc.y + geo.size.h);
         let left = u.loc.x + u.size.w <= x0 + r;
@@ -678,8 +677,7 @@ pub fn push<R: HyaloRenderer>(
     // A client-side frame with a shadow margin (Chrome's web apps, Telegram) is cut to its box,
     // the margin dropped, and its corners to the window's — as every desktop rounds a web page
     // (owner, 2026-10-04, over a ring of Hyalo's own: it stretched the client's edges, and what
-    // touched them streaked). What lies in the corners' outer 4.7 px along the diagonal
-    // (`rounding` 24, `rounding_power` 3.2) is not shown.
+    // touched them streaked). What lies outside the window's corner (`rounding`) is not shown.
     // A client may keep its minimum-size buffer in a smaller tile. The layout's
     // visible geometry, supplied by push_window, clips that buffer too.
     // A window whose layers Hyalo animates (protocols/layers.rs) shows them only inside its box:

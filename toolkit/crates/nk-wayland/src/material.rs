@@ -41,6 +41,8 @@ pub struct Pane {
     pub width: f64,
     pub height: f64,
     pub radius: f64,
+    /// Carried by `nidara-material-v1`, which stays at v1; Hyalo draws every corner with the
+    /// desktop's one corner (`nidara_corner`) and reads only `radius`. Send 2.
     pub exponent: f64,
     /// A pointer spliced into one side (a tooltip's or a menu's, toward what it belongs
     /// to): the compositor draws body and pointer as one glass (`add_shape_pointed`).

@@ -34,8 +34,6 @@ pub fn first_id(ordinal: u64) -> NodeId {
     FIRST_ID + (ordinal % (1 << 20)) * ID_RANGE
 }
 const ESCAPE: u32 = 0xff1b;
-/// The corners of the dock's menus and chooser: the kit's bubble menu's squircle (menu.ts `n`).
-pub const MENU_EXPONENT: f64 = 3.2;
 
 /// Everything a popup is drawn with, loaded on the first one a dock opens.
 pub struct Look {
@@ -93,12 +91,12 @@ impl Look {
             ..appearance.clone()
         };
         let mut styles = Styles::new(exports, &skin)?;
-        // The dock's menus are the kit's bubble menu (menu.ts), not the settings dropdown's:
-        // the window radius on a `MENU_EXPONENT` squircle, and no rim of our own: Hyalo draws
-        // the glass's edge, around the pointer too.
-        styles.menu.radius = exports.statics["ts"]["RADIUS"]["lg"]
+        // The shell's menus have the window's radius, the settings dropdown's: 16 (owner,
+        // 2026-11-02 — the continuous corner reaches 1.5 radii, so 24 read too round), and no
+        // rim of our own: Hyalo draws the glass's edge, around the pointer too.
+        styles.menu.radius = exports.statics["ts"]["RADIUS"]["md"]
             .as_f64()
-            .ok_or("tokens: RADIUS.lg missing")? as f32;
+            .ok_or("tokens: RADIUS.md missing")? as f32;
         styles.menu.border = 0.;
         let panel = PanelMaterial::load(exports.glass.clone(), true, skin.reduce_transparency)
             .map_err(|e| eprintln!("nidara-shell: no menu glass ({e}); an opaque menu instead"))
@@ -427,7 +425,7 @@ impl Popup {
             let radius = f64::from(look.styles.menu.radius);
             let (body, pane) = self
                 .pointer
-                .then(|| crate::bubble::place(geometry, self.rect, radius, MENU_EXPONENT))
+                .then(|| crate::bubble::place(geometry, self.rect, radius))
                 .flatten()
                 .unwrap_or((
                     [0., 0., width, height],
@@ -437,7 +435,7 @@ impl Popup {
                         width,
                         height,
                         radius,
-                        exponent: MENU_EXPONENT,
+                        exponent: 2.,
                         pointer: None,
                     },
                 ));

@@ -61,7 +61,6 @@ const SEARCH_GAP: f64 = 16.;
 /// The panel's corners, and the tiles'.
 const RADIUS: f64 = 34.;
 const TILE_RADIUS: f64 = 14.;
-const EXPONENT: f64 = 3.2;
 /// How far a held tile must move to become a drag.
 const DRAG_SLOP: f64 = 6.;
 const SEARCH_LIMIT: u32 = 100;
@@ -1090,7 +1089,7 @@ impl Application for Launcher {
             width: g.panel[2],
             height: g.panel[3],
             radius: RADIUS,
-            exponent: EXPONENT,
+            exponent: 2.,
             pointer: None,
         };
         self.look

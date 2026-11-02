@@ -7,7 +7,7 @@ use vello_cpu::{
     Glyph, Pixmap, RenderContext, Resources,
     color::AlphaColor,
     color::Srgb,
-    kurbo::{Affine, BezPath, Cap, Join, Rect as BoxRect, RoundedRect, Shape, Stroke},
+    kurbo::{Affine, BezPath, Cap, Join, Rect as BoxRect, Stroke},
     peniko::{Blob, Fill, FontData},
 };
 
@@ -111,7 +111,7 @@ impl Canvas {
     pub fn rounded_rect(&mut self, r: Rect, radius: f64, color: Color) {
         self.context.set_paint(color);
         self.context
-            .fill_path(&RoundedRect::from_rect(rect(r), radius).to_path(0.1));
+            .fill_path(&corner_path(rect(r), radius, self.scale));
     }
     /// An inward stroke follows the element silhouette without changing hit geometry.
     pub fn rounded_ring(&mut self, r: Rect, radius: f64, width: f64, color: Color) {
@@ -123,14 +123,14 @@ impl Canvas {
         self.context.set_stroke(Stroke::new(width));
         self.context.set_paint(color);
         self.context
-            .stroke_path(&RoundedRect::from_rect(bounds, (radius - inset).max(0.)).to_path(0.1));
+            .stroke_path(&corner_path(bounds, (radius - inset).max(0.), self.scale));
     }
     pub fn clip(&mut self, r: Rect) {
         self.context.push_clip_rect(&rect(r));
     }
     pub fn clip_rounded_rect(&mut self, r: Rect, radius: f64) {
         self.context
-            .push_clip_path(&RoundedRect::from_rect(rect(r), radius).to_path(0.1));
+            .push_clip_path(&corner_path(rect(r), radius, self.scale));
     }
     pub fn pop_clip(&mut self) {
         self.context.pop_clip();
@@ -285,6 +285,22 @@ fn bez(segments: &[nk_icons::Segment]) -> BezPath {
             S::Close => path.close_path(),
         }
     }
+    path
+}
+/// A box with the desktop's one corner (`nidara_corner`): no jump in curvature where the
+/// edge turns, the same curve Hyalo draws the glass with.
+fn corner_path(b: BoxRect, radius: f64, scale: f64) -> BezPath {
+    let points = nidara_corner::outline(b.width(), b.height(), radius, 0.5 / scale.max(1.));
+    let mut path = BezPath::new();
+    for (i, p) in points.iter().enumerate() {
+        let p = (b.x0 + p[0], b.y0 + p[1]);
+        if i == 0 {
+            path.move_to(p);
+        } else {
+            path.line_to(p);
+        }
+    }
+    path.close_path();
     path
 }
 fn rect(r: Rect) -> BoxRect {

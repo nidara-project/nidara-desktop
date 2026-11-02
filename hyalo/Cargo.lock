@@ -1346,11 +1346,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nidara-corner"
+version = "0.1.0"
+
+[[package]]
 name = "nidara-hyalo"
 version = "0.1.0"
 dependencies = [
  "bitflags",
  "nidara-access",
+ "nidara-corner",
  "pangocairo",
  "png",
  "regex-automata",

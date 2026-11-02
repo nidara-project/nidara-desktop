@@ -159,7 +159,7 @@ mod tests {
             width: 400.,
             height: h,
             radius: h / 2.,
-            exponent: 3.2,
+            exponent: 2.,
             pointer: None,
         };
         let m = dock(&tokens, true, false, pane(92.)).unwrap();
