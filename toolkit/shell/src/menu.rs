@@ -38,7 +38,8 @@ pub enum Command {
         generation: u64,
         mode: Launch,
     },
-    /// A Hyalo window verb: focus-window, minimize, unminimize, close-window.
+    /// A Hyalo window verb: focus-window (which also restores a minimized window), minimize,
+    /// close-window. Never `unminimize`: it brings a window back without the focus.
     Window {
         verb: &'static str,
         id: u64,
@@ -170,7 +171,7 @@ pub fn item_menu(item: &Item, cx: &Context) -> Vec<Row> {
             groups.push(vec![row(
                 Label::Key("dock.menu.restore"),
                 Command::Window {
-                    verb: "unminimize",
+                    verb: "focus-window",
                     id: *window,
                 },
             )]);
@@ -270,7 +271,7 @@ fn app_menu(item: &Item, cx: &Context, groups: &mut Vec<Vec<Row>>) {
         row(
             Label::Text(title(id)),
             Command::Window {
-                verb: "unminimize",
+                verb: "focus-window",
                 id: *id,
             },
         )
@@ -290,7 +291,7 @@ fn app_menu(item: &Item, cx: &Context, groups: &mut Vec<Vec<Row>>) {
         state.push(row(
             Label::Key("dock.menu.restore"),
             Command::Window {
-                verb: "unminimize",
+                verb: "focus-window",
                 id: *id,
             },
         ));
@@ -521,7 +522,7 @@ mod tests {
         assert_eq!(
             rows[4].command,
             Command::Window {
-                verb: "unminimize",
+                verb: "focus-window",
                 id: 9
             }
         );

@@ -218,12 +218,15 @@ the theme's icon for them, by layout key (`GetLayoutIcon`: a special folder's ow
 file's content type).
 
 **Drops (D3).** Files and folders dragged from a file manager (`text/uri-list`, local
-`file:` URIs only, at most 128) are taken by the strip (`drops.rs`). Past the centre of the
-last app, running app or minimized window, a slot opens in the folders' and files' section
+`file:` URIs only, at most 128) are taken by the strip (`drops.rs`). From the separator
+after the last app, running app or minimized window on, a slot opens in the folders' and files' section
 where they would land, and the drop pins them there (`insert-folder`/`insert-file`, one after
 another, each against the revision the previous one made). Over an app that opens files
-(`SupportsOpen`), the drop opens them with it (Launch, `open` mode); Applications1 refuses
-types the app does not declare. Anywhere else the drag is refused, and the source shows it.
+(`SupportsOpen`), the whole of its icon, the drop opens them with it (Launch, `open` mode);
+Applications1 refuses types the app does not declare. Never half an icon for the slot, as a
+pin being moved has: a file over an app is the app's to open (owner). The launch carries
+an activation token made with the drop's serial, so the app comes to the front; Hyalo
+honours it for the drop's target, once, shortly after the drop (`activation.rs`). Anywhere else the drag is refused, and the source shows it.
 Nothing is launched or written while hovering. Dragging an app from the Apps grid comes
 with the grid itself (D4).
 
@@ -313,8 +316,10 @@ recreation. The input region is the resting capsule.
   reports the launch as unavailable (a visible, accessible state) and does nothing
   else: there is no fallback through Exec, uwsm, gtk-launch or the TS shell (Codex,
   Palomar #959 #739). Tests use a fake Applications1 on a private bus.
-- **Focus, minimize, restore.** Hyalo `do focus-window ID`, `do minimize ID`, `do
-  unminimize ID`, re-reading the window first so a reused ID is never acted on. The
+- **Focus, minimize, restore.** Hyalo `do focus-window ID` and `do minimize ID`,
+  re-reading the window first so a reused ID is never acted on. A restore is
+  `focus-window` too, which brings a minimized window back AND focuses it; `unminimize`
+  alone leaves the focus where it was (owner: a restored window must take it). The
   rules of contract §8 "Clicks": one visible window → focus, or minimize if focused;
   only minimized → restore the most recently minimized; two or more visible → focus the
   most recently focused (the chooser is D2).
