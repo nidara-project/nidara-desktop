@@ -67,18 +67,14 @@ uniform float s_radius[STATE_MAX]; // its corners, circular, output px
 varying vec2 v_out;
 varying vec2 v_fb;
 
-// A box of half size `half_size` centred on `c`, corners superellipse quadrants of radius `r`
-// and exponent `e`: signed distance in output pixels, negative inside.
+// A box of half size `half_size` centred on `c`, with the desktop's one corner of radius `r`
+// (crates/nidara-corner, `corner_sdf`): signed distance in output pixels, negative inside.
+// `e`, the exponent the protocol still carries, no longer shapes anything (owner, 2026-11-02:
+// one corner for everything).
 float box_sdf(vec2 px, vec2 c, vec2 half_size, float r, float e) {
-    vec2 q = abs(px - c);
-    vec2 inner = half_size - vec2(r);
-    if (q.x > inner.x && q.y > inner.y && r > 0.0) {
-        vec2 k = (q - inner) / r;
-        return (pow(pow(k.x, e) + pow(k.y, e), 1.0 / e) - 1.0) * r;
-    }
-    return max(q.x - half_size.x, q.y - half_size.y);
+    return corner_sdf(px - c, half_size, r);
 }
-// The same, centred on the shape and with its corners' exponent.
+// The same, centred on the shape.
 float sdf_box(vec2 px, vec2 half_size, float r) {
     return box_sdf(px, rect.xy + rect.zw * 0.5, half_size, r, exponent);
 }
@@ -127,10 +123,10 @@ float lens_depth(vec2 px, float w) {
     vec2 h = rect.zw * 0.5;
     vec2 q = abs(px - rect.xy - h);
     float r = min(radius + LAB_MUL(11, w), min(h.x, h.y));
-    // Clear of every corner at every depth up to w (the deepest contour's is the roundest):
-    // the distance to the nearest side.
-    // (Not with a pointer: its bevel reaches into the body's straight sides.)
-    if (has_pointer < 0.5 && (q.x <= h.x - w - r || q.y <= h.y - w - r))
+    // Clear of every corner at every depth up to w (the deepest contour's is the roundest; a
+    // corner reaches up to NC_MAX_REACH of its radius along an edge): the distance to the
+    // nearest side. (Not with a pointer: its bevel reaches into the body's straight sides.)
+    if (has_pointer < 0.5 && (q.x <= h.x - w - NC_MAX_REACH * r || q.y <= h.y - w - NC_MAX_REACH * r))
         return clamp(min(h.x - q.x, h.y - q.y), 0.0, w);
     if (inset_sdf(px, 0.0) >= 0.0) return 0.0;
     if (inset_sdf(px, w) < 0.0) return w;

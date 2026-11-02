@@ -123,7 +123,8 @@ impl Default for RenderConfig {
 pub struct WindowsConfig {
     /// Corner radius, logical pixels; 0 = square. A fullscreen window is never rounded.
     pub rounding: f64,
-    /// The corner's curve: 2 is a circle, higher is a squircle (Hyprland's `rounding_power`).
+    /// Hyprland's corner curve, still read so a config that names it loads; it shapes nothing
+    /// since 2026-11-02 — every corner is the desktop's one corner (crates/nidara-corner).
     pub rounding_power: f64,
     pub backdrop: BackdropConfig,
     pub background: BackgroundConfig,

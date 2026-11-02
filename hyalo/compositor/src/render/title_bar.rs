@@ -103,13 +103,12 @@ void main() {
         }
     }
     if (has_controls > 0.5) c = over(controls(p, dark), c);
-    // The window's top corners: the glass's superellipse, as render/window.rs cuts them.
+    // The window's top corners: the desktop's one corner, as render/window.rs cuts them.
     vec2 h = frame.zw * 0.5;
     vec2 q = abs(p - frame.xy - h);
-    vec2 inner = h - vec2(radius);
+    vec2 inner = h - vec2(NC_MAX_REACH * min(radius, min(h.x, h.y)));
     if (radius > 0.0 && q.x > inner.x && q.y > inner.y) {
-        vec2 k = (q - inner) / radius;
-        float d = (pow(pow(k.x, exponent) + pow(k.y, exponent), 1.0 / exponent) - 1.0) * radius;
+        float d = corner_sdf(p - frame.xy - h, h, radius);
         c *= clamp(0.5 - d, 0.0, 1.0);
     }
     gl_FragColor = c;

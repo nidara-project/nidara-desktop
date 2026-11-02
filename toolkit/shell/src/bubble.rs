@@ -33,12 +33,7 @@ pub fn with_pointer(size: (u32, u32), side: PopupSide) -> (u32, u32) {
 /// The body (popup-local `[x, y, w, h]`) and the glass to draw for a popup placed at
 /// `geometry` (parent coordinates) for `anchor` (parent coordinates). None when it is too
 /// small for a body.
-pub fn place(
-    geometry: [i32; 4],
-    anchor: [i32; 4],
-    radius_max: f64,
-    exponent: f64,
-) -> Option<([f64; 4], Pane)> {
+pub fn place(geometry: [i32; 4], anchor: [i32; 4], radius_max: f64) -> Option<([f64; 4], Pane)> {
     let [gx, gy, gw, gh] = geometry.map(f64::from);
     let (ax, ay) = (
         f64::from(anchor[0]) + f64::from(anchor[2]) / 2.,
@@ -93,7 +88,7 @@ pub fn place(
             width: bw,
             height: bh,
             radius: r,
-            exponent,
+            exponent: 2.,
             pointer: Some(Pointer {
                 base,
                 tip,
@@ -158,17 +153,17 @@ mod tests {
     fn above_its_icon_it_points_down_at_the_icons_centre() {
         // A 100 × 30 popup (22 + the pointer) centred above an icon at x 200..264.
         let anchor = [200, -6, 64, 96];
-        let (body, pane) = place([182, -40, 100, 30], anchor, 13., 2.).unwrap();
+        let (body, pane) = place([182, -40, 100, 30], anchor, 13.).unwrap();
         assert_eq!(body, [0., 0., 100., 22.]);
         let p = pane.pointer.unwrap();
         assert_eq!(p.base, (50., 22.));
         assert_eq!(p.tip, (50., 30.));
         assert_eq!(p.width, ARROW_W);
         // Slid toward the screen edge by the compositor: the pointer still finds the icon.
-        let (_, pane) = place([170, -40, 100, 30], anchor, 13., 2.).unwrap();
+        let (_, pane) = place([170, -40, 100, 30], anchor, 13.).unwrap();
         assert_eq!(pane.pointer.unwrap().tip.0, 232. - 170.);
         // Never into the corner arc.
-        let (_, pane) = place([0, -40, 100, 30], [900, -6, 64, 96], 13., 2.).unwrap();
+        let (_, pane) = place([0, -40, 100, 30], [900, -6, 64, 96], 13.).unwrap();
         let p = pane.pointer.unwrap();
         assert!(p.base.0 + p.width / 2. <= 100. - pane.radius - 2. + 1e-9);
     }
@@ -176,16 +171,16 @@ mod tests {
     #[test]
     fn flipped_or_beside_it_the_pointer_faces_the_anchor() {
         // Below the anchor: the pointer on top.
-        let (body, pane) = place([0, 100, 100, 30], [18, 0, 64, 90], 13., 2.).unwrap();
+        let (body, pane) = place([0, 100, 100, 30], [18, 0, 64, 90], 13.).unwrap();
         assert_eq!(body[1], ARROW_H);
         assert_eq!(pane.pointer.unwrap().tip, (50., 0.));
         // Right of a left dock's icon: on the left side, at the icon's height.
         let anchor = [-6, 300, 96, 64];
-        let (body, pane) = place([90, 300, 108, 60], anchor, 13., 2.).unwrap();
+        let (body, pane) = place([90, 300, 108, 60], anchor, 13.).unwrap();
         assert_eq!(body[0], ARROW_H);
         assert_eq!(pane.pointer.unwrap().tip, (0., 332. - 300.));
         // Left of a right dock's icon: on the right side.
-        let (_, pane) = place([-120, 310, 108, 40], [0, 300, 96, 64], 13., 2.).unwrap();
+        let (_, pane) = place([-120, 310, 108, 40], [0, 300, 96, 64], 13.).unwrap();
         assert_eq!(pane.pointer.unwrap().tip.0, 108.);
         assert_eq!(with_pointer((100, 22), PopupSide::AboveCentered), (100, 30));
         assert_eq!(with_pointer((100, 32), PopupSide::RightCentered), (108, 32));

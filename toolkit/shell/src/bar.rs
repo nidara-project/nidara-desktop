@@ -28,8 +28,6 @@ use unicode_segmentation::UnicodeSegmentation;
 pub const NAMESPACE: &str = "nidara-bar";
 /// The surface: the strip it reserves and room below it for the glass's shadow.
 const HEIGHT: u32 = 48;
-/// The capsules are true capsules: circular ends, not the dock's squircle.
-const EXPONENT: f64 = 2.;
 const LEFT_BUTTON: u32 = 0x110;
 const RIGHT_BUTTON: u32 = 0x111;
 const MIDDLE_BUTTON: u32 = 0x112;
@@ -1216,7 +1214,7 @@ impl Application for Bar {
                 width: g[2],
                 height: g[3],
                 radius: g[3] / 2.,
-                exponent: EXPONENT,
+                exponent: 2.,
                 pointer: None,
             })
             .collect();

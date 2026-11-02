@@ -113,7 +113,7 @@ impl Tooltip {
         if self.placed != Some((geometry, self.rect)) {
             self.placed = Some((geometry, self.rect));
             let (width, height) = (geometry[2].max(1) as f64, geometry[3].max(1) as f64);
-            let pane = crate::bubble::place(geometry, self.rect, RADIUS, 2.).unwrap_or((
+            let pane = crate::bubble::place(geometry, self.rect, RADIUS).unwrap_or((
                 [0., 0., width, height],
                 Pane {
                     x: 0.,

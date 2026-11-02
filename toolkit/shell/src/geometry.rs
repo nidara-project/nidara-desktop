@@ -17,8 +17,14 @@ pub const BAR_RESERVATION: f64 = 36.;
 /// the icon until then.
 pub const PAD: f64 = 10.;
 pub const GAP: f64 = 4.;
-/// The capsule's superellipse exponent (the TS dock's glass shape).
-pub const CAPSULE_EXPONENT: f64 = 3.2;
+/// The corner of an app icon's own shape, in icons: 14 at icon 64 (not measured).
+pub const ICON_CORNER: f64 = 14. / 64.;
+/// The capsule's corner radius at `icon`: concentric with the icons' corners, their radius
+/// plus the air round them (owner, 2026-11-02: 24 at icon 64). The corner itself is the
+/// desktop's one corner, Hyalo's to draw.
+pub fn capsule_radius(icon: f64) -> f64 {
+    icon * ICON_CORNER + PAD
+}
 pub const DOT: f64 = 5.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

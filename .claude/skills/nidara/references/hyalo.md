@@ -998,7 +998,8 @@ the border and the shadow to the compositor (`window.nidara-app-window` in the k
 `_components.scss`) — Hyprland drew them. On Hyalo, until 2026-10-03, nothing did: Settings was a
 square box, and kitty at `background_opacity 0.5` showed the desktop SHARP behind it ("kitty
 looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/hyalo.toml`):
-- **Corners**: `rounding` 24, `rounding_power` 3.2 — the glass's superellipse. Drawn by a texture
+- **Corners**: `rounding` 24, the desktop's one corner (design-system.md → "The corner";
+  `rounding_power` is still parsed and shapes nothing since 2026-11-02). Drawn by a texture
   shader of ours on the window's surfaces (`RoundedElement`, through Smithay's
   `override_default_tex_program` — public API, no patch), only inside the box's corner squares;
   its opaque regions drop those squares, so what is behind a corner is still drawn, and it is
@@ -1086,7 +1087,7 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   wp_viewport, and the bar, which averaged the whole buffer row, came out half its colour.
 - **The line and the shadow** (`render/decor.rs`, `DecorElement`, 2026-10-04): one pass of a
   shader of ours, behind everything of the window but IN FRONT of its backdrop, drawing only
-  OUTSIDE the box (the corner shader's distance field, so it follows the superellipse). The line:
+  OUTSIDE the box (the corner shader's distance field, so it follows the corner). The line:
   `[windows.border]`, Hyprland's for Nidara — 1 px, `#ffffff4d`→`#ffffff1a` at 45° on the focused
   window, `#59595933` on the others; its room is `[layout] border`. The shadow: `[windows.shadow]`,
   `(1 − t)^power` over `range` (Hyprland's `render_power`), `offset` down; deeper on the focused
