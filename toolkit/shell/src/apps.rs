@@ -199,6 +199,39 @@ where
         .map_err(|e| format!("{method}: {e}"))
 }
 
+/// The ids Applications1's Search ranks for `query` (its tiers, APPLICATIONS1-DOCK.md §3),
+/// best first, at most `limit` (1..=100). Asked against the catalogue revision it has now;
+/// a catalogue that changed between the two is asked again, once.
+pub fn search(
+    conn: &Connection,
+    epoch: u64,
+    query: &str,
+    limit: u32,
+) -> Result<Vec<String>, String> {
+    let props = zbus::blocking::Proxy::new(conn, DEST, PATH, IFACE).map_err(|e| e.to_string())?;
+    let mut last = String::new();
+    for _ in 0..2 {
+        let revision: u64 = props
+            .get_property("CatalogueRevision")
+            .map_err(|e| e.to_string())?;
+        match call::<_, (u64, Vec<Dict>)>(
+            conn,
+            "Search",
+            &(epoch, revision, query, limit.clamp(1, 100), false),
+        ) {
+            Ok((_, records)) => {
+                return Ok(records
+                    .iter()
+                    .map(|r| text(r, "DesktopId"))
+                    .filter(|id| !id.is_empty())
+                    .collect());
+            }
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
 fn snapshot(conn: &Connection) -> Result<AppsState, String> {
     let props = zbus::blocking::Proxy::new(conn, DEST, PATH, IFACE).map_err(|e| e.to_string())?;
     let capabilities: Vec<String> = props
@@ -268,6 +301,8 @@ fn parse(
             launcher: dict(a, "Launcher")
                 .map(|d| launcher(&d))
                 .unwrap_or_default(),
+            visible: flag(a, "Visible"),
+            is_new: flag(a, "IsNew"),
         })
         .filter(|a| !a.id.is_empty())
         .collect();

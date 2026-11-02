@@ -14,6 +14,7 @@ pub mod geometry;
 pub mod hub;
 pub mod hyalo;
 pub mod keys;
+pub mod launcher;
 pub mod material;
 pub mod menu;
 pub mod model;

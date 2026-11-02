@@ -66,3 +66,71 @@ pub trait Shell {
     #[zbus(signal)]
     fn state_changed(&self, state: State) -> zbus::Result<()>;
 }
+
+/// An app dragged from Apps to the dock (APPLICATIONS1-DOCK.md §8, "Drag sources"): the
+/// intra-session drag type and its data. It names an app, nothing more: the dock checks
+/// the id against its own Applications1 view and pins it at the drop, so the data grants
+/// no launch and no write by itself, whoever offers it.
+pub mod drag {
+    /// The type Apps offers and the dock takes.
+    pub const APP_MIME: &str = "application/x-nidara-app";
+    const HEADER: &str = "nidara-app-v1";
+    /// The longest data taken: a DesktopId is far shorter.
+    pub const MAX: usize = 1024;
+
+    /// An app's DesktopId and the catalogue generation it was dragged from.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct App {
+        pub id: String,
+        pub generation: u64,
+    }
+
+    pub fn encode(app: &App) -> Vec<u8> {
+        format!("{HEADER}\n{}\n{}\n", app.id, app.generation).into_bytes()
+    }
+
+    /// None for anything that is not exactly one well-formed record of this version.
+    pub fn decode(data: &[u8]) -> Option<App> {
+        if data.len() > MAX {
+            return None;
+        }
+        let text = std::str::from_utf8(data).ok()?;
+        let mut lines = text.strip_suffix('\n')?.split('\n');
+        if lines.next()? != HEADER {
+            return None;
+        }
+        let id = lines.next()?;
+        let generation = lines.next()?.parse().ok()?;
+        let valid =
+            id.ends_with(".desktop") && !id.contains(['/', '\0']) && id.len() > ".desktop".len();
+        (valid && lines.next().is_none()).then(|| App {
+            id: id.to_owned(),
+            generation,
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn round_trip_and_refusals() {
+            let app = App {
+                id: "org.gnome.Nautilus.desktop".into(),
+                generation: 7,
+            };
+            assert_eq!(decode(&encode(&app)), Some(app));
+            for bad in [
+                &b"nidara-app-v2\na.desktop\n1\n"[..],
+                b"nidara-app-v1\na.desktop\n1",
+                b"nidara-app-v1\n../a.desktop\n1\n",
+                b"nidara-app-v1\na\n1\n",
+                b"nidara-app-v1\na.desktop\nx\n",
+                b"nidara-app-v1\na.desktop\n1\nmore\n",
+                b"",
+            ] {
+                assert_eq!(decode(bad), None, "{:?}", String::from_utf8_lossy(bad));
+            }
+        }
+    }
+}

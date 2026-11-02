@@ -22,3 +22,4 @@ nk-settings = { path = "../settings" }
 nk-text = { path = "../crates/nk-text", features = ["system-fonts"] }
 nk-wayland = { path = "../crates/nk-wayland" }
 nk-widgets = { path = "../crates/nk-widgets" }
+unicode-segmentation = "1.12"
