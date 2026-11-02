@@ -245,6 +245,7 @@ fn parse(
                 String::new()
             },
             launchable: flag(a, "Launchable"),
+            opens: flag(a, "SupportsOpen"),
             new_window: matches!(
                 text(a, "NewWindowMode").as_str(),
                 "declared-action" | "relaunch"

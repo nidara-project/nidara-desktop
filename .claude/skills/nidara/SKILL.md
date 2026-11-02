@@ -349,6 +349,8 @@ dock or bar. Its gotchas:
 - Another thread reaches the loop only through `wake_channel()` (`Event::Wake`), never
   by blocking it.
 - Every wait in it has a deadline.
+- Drops from other apps reach the ROOT surface only (`Event::DragEnter`…`Drop`), never a
+  layer or a popup; nothing is taken until the app calls `accept_drop`.
 - Hyalo closes a layer surface whose named output is gone; it never moves it to the
   output under the pointer.
 
