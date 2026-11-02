@@ -228,6 +228,43 @@ pub fn trash_names(full: bool) -> &'static [&'static str] {
         &["user-trash", "trashcan-empty", "trash"]
     }
 }
+/// A local file's content type, as the file manager reads it.
+pub fn content_type(path: &Path) -> Option<String> {
+    use gio::prelude::*;
+    gio::File::for_path(path)
+        .query_info(
+            "standard::content-type",
+            gio::FileQueryInfoFlags::NONE,
+            gio::Cancellable::NONE,
+        )
+        .ok()?
+        .content_type()
+        .map(|t| t.to_string())
+}
+/// The icon names to try for a pinned `folder:` or `file:` key, best first: the ones the
+/// file manager shows (a special folder's own, a file's content type), then the plain
+/// folder or file. None for any other key.
+pub fn layout_names(key: &str) -> Option<Vec<String>> {
+    use gio::prelude::*;
+    let (uri, plain): (&str, &[&str]) = if let Some(uri) = key.strip_prefix("folder:") {
+        (uri, &["folder"])
+    } else {
+        (key.strip_prefix("file:")?, &["text-x-generic", "unknown"])
+    };
+    let mut names: Vec<String> = gio::File::for_uri(uri)
+        .query_info(
+            "standard::icon",
+            gio::FileQueryInfoFlags::NONE,
+            gio::Cancellable::NONE,
+        )
+        .ok()
+        .and_then(|i| i.icon())
+        .and_then(|i| i.downcast::<gio::ThemedIcon>().ok())
+        .map(|t| t.names().iter().map(|n| n.to_string()).collect())
+        .unwrap_or_default();
+    names.extend(plain.iter().map(|n| n.to_string()));
+    Some(names)
+}
 pub fn resolve_name(name: &str, theme: &str, size: u32) -> Option<PathBuf> {
     if name.starts_with("file:") {
         let (p, host) = glib::filename_from_uri(name).ok()?;

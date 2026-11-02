@@ -125,7 +125,11 @@ pub fn tree(ids: &mut Ids, input: &Input) -> Tree {
             let mut node = Node::new(id, Role::Button, label);
             let mut click = primary(item, input.focused_window, input.can_launch);
             // The Trash and folders open through the launch service too.
-            if matches!(click, Some(Click::OpenTrash | Click::OpenFolder(_))) && !input.can_launch {
+            if matches!(
+                click,
+                Some(Click::OpenTrash | Click::OpenFolder(_) | Click::OpenFile(_))
+            ) && !input.can_launch
+            {
                 click = Some(Click::Unavailable);
             }
             node.description = state(item, click.as_ref(), input.trash);

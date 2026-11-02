@@ -15,6 +15,7 @@ pub enum Action {
     /// Two or more visible windows: the chooser offers them, most recent first.
     Choose(Vec<u64>),
     OpenFolder(String),
+    OpenFile(String),
     OpenTrash,
     /// Nothing can happen, and the dock says why (no launch service yet, a missing app).
     Unavailable,
@@ -26,6 +27,7 @@ pub fn primary(item: &Item, focused: Option<u64>, can_launch: bool) -> Option<Ac
     match &item.kind {
         Kind::Separator => None,
         Kind::Folder { uri } => Some(Action::OpenFolder(uri.clone())),
+        Kind::File { uri } => Some(Action::OpenFile(uri.clone())),
         Kind::Trash => Some(Action::OpenTrash),
         Kind::Minimized { window, .. } => Some(Action::Restore(*window)),
         kind => Some(match (item.windows.as_slice(), item.minimized.first()) {

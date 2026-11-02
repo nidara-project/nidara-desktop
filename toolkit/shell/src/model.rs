@@ -71,6 +71,12 @@ pub enum Pin {
         uri: String,
         name: String,
     },
+    /// A pinned file: a click opens it with the default app for its content type.
+    File {
+        key: String,
+        uri: String,
+        name: String,
+    },
 }
 
 /// A window as Hyalo reports it, as much as the dock reads.
@@ -118,6 +124,9 @@ pub enum Kind {
         app_id: String,
     },
     Folder {
+        uri: String,
+    },
+    File {
         uri: String,
     },
     /// One minimized window in the trailing section.
@@ -243,13 +252,19 @@ impl Model {
         };
 
         let mut items = vec![];
+        // Pinned folders and files: their own section, after the minimized windows and
+        // before the Trash (owner, 2026-11-02), in their stored order.
+        let mut places = vec![];
         let mut used: Vec<String> = vec![];
         for pin in i.pins {
             let (key, id) = match pin {
-                Pin::Folder { key, uri, name } => {
-                    items.push(Item {
+                Pin::Folder { key, uri, name } | Pin::File { key, uri, name } => {
+                    places.push(Item {
                         key: key.clone(),
-                        kind: Kind::Folder { uri: uri.clone() },
+                        kind: match pin {
+                            Pin::Folder { .. } => Kind::Folder { uri: uri.clone() },
+                            _ => Kind::File { uri: uri.clone() },
+                        },
                         label: name.clone(),
                         windows: vec![],
                         minimized: vec![],
@@ -372,7 +387,7 @@ impl Model {
             .collect();
 
         let mut out = vec![];
-        for section in [items, tail, minimized] {
+        for section in [items, tail, minimized, places] {
             if section.is_empty() {
                 continue;
             }
@@ -602,6 +617,50 @@ mod tests {
     }
 
     #[test]
+    fn folders_and_files_sit_after_the_minimized_windows() {
+        // Pinned apps, running apps, minimized windows, pinned folders and files, Trash
+        // (owner, 2026-11-02): a place pinned among the apps still shows on the right.
+        let apps = [app("files.desktop"), app("foot.desktop")];
+        let place = |kind: &str, uri: &str| {
+            let (key, uri, name) = (format!("{kind}:{uri}"), uri.to_string(), String::new());
+            if kind == "folder" {
+                Pin::Folder { key, uri, name }
+            } else {
+                Pin::File { key, uri, name }
+            }
+        };
+        let pins = [
+            place("file", "file:///home/u/a.pdf"),
+            pin("files.desktop"),
+            place("folder", "file:///home/u/Docs"),
+        ];
+        let mut m = win(7, "foot");
+        m.minimized = true;
+        let v = view(&apps, &pins, &[win(5, "foot"), m]);
+        assert_eq!(
+            keys(&v),
+            [
+                "app:files.desktop",
+                "separator:1",
+                "app:foot.desktop",
+                "separator:3",
+                "minimized:0:7",
+                "separator:5",
+                "file:file:///home/u/a.pdf",
+                "folder:file:///home/u/Docs",
+                "separator:8",
+                "trash"
+            ]
+        );
+        assert_eq!(
+            v.items[6].kind,
+            Kind::File {
+                uri: "file:///home/u/a.pdf".into()
+            }
+        );
+    }
+
+    #[test]
     fn pins_never_vanish_and_resolve_to_one_slot() {
         // A pin the catalogue lacks stays visible; two pins for one app keep one slot.
         let apps = [app("files.desktop")];
@@ -628,8 +687,9 @@ mod tests {
             [
                 "default-handler:inode/directory",
                 "app:gone.desktop",
+                "separator:2",
                 "folder:file:///home/u/Docs",
-                "separator:3",
+                "separator:4",
                 "trash"
             ]
         );
