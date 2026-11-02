@@ -209,8 +209,17 @@ focus never starts on one); there the arrow away from the edge grows the icons b
 and the arrow toward it shrinks them, and a reader's `SetValue` is clamped and sent the
 same way. No resize cursor yet: the toolkit has no cursor shapes.
 
+**Folders and files (D3).** Pinned folders and files sit in a section of their own, after
+the minimized windows and before the Trash (owner, 2026-11-02): pinned apps, running apps,
+minimized windows, folders and files, Trash. The stored layout is one list; `model.rs` puts
+each kind in its section and keeps its order. A click opens a folder with the folder app
+(`OpenDirectory`) and a file with the default app for its type (`OpenFile`); their art is
+the theme's icon for them, by layout key (`GetLayoutIcon`: a special folder's own icon, a
+file's content type).
+
 **Reorder (D3).** A long press (`reorder::LONG_PRESS`, 400 ms within `SLOP` 6 px) picks
-up a pin, or a running app that is not pinned (`reorder.rs`). The picked icon leaves the
+up a pin, or a running app that is not pinned (`reorder.rs`). A folder or file moves only
+among the folders and files (`reorder::section`), an app pin only among the apps. The picked icon leaves the
 strip for a layer of its own (nk-wayland `create_layer`, an empty input region so the strip
 keeps the pointer), follows the pointer, and the others slide to make room where it would
 land (`reslot`: each eases from where it was drawn, `SLIDE`; the strip is laid out again

@@ -63,8 +63,8 @@ entry changes or is removed/recreated. Locale changes also republish labels and
 search data. A missing provider never becomes an empty successful snapshot.
 
 Capabilities use this closed vocabulary: `catalogue`, `search`, `window-matching`,
-`icons`, `trash-icon`, `icon-overrides`, `layout-apps`, `layout-folders`, `launch`,
-`open-directory`, `autostart`, `launch-correlation`, `foreground-usage`, `new-apps`,
+`icons`, `trash-icon`, `layout-icon`, `icon-overrides`, `layout-apps`, `layout-folders`,
+`layout-files`, `launch`, `open-directory`, `open-file`, `autostart`, `launch-correlation`, `foreground-usage`, `new-apps`,
 `launcher-badges`. A1–A3 advertise only the ones
 actually implemented and available; individual app records can further restrict
 launch/open/new-window/autostart. Provider loss changes availability/reason, not
@@ -89,8 +89,10 @@ menus, launch IDs and mutations. Never retry a mutation after an ambiguous timeo
 | GetIcon | `(t epoch, s desktopId, t generation, u logicalSize, d scale) → (s token, u width, u height, ay rgba)`; bounded on-demand resolved asset |
 | Launch | `(t epoch, s desktopId, t generation, a{sv} request) → s launchId`; modes activate/new-window/action/open; request schema closed below |
 | OpenDirectory | `(t epoch, s absoluteLocalDirectoryUri, a{sv} context) → s launchId`; context accepts only ActivationToken/RequestId, resolves current inode/directory handler |
+| OpenFile | `(t epoch, s absoluteLocalFileUri, a{sv} context) → s launchId`; the same context; a regular local file only, opened by the default app for its content type, which must be in the catalogue; capability `open-file` |
 | GetLaunch | `(t epoch, s launchId) → a{sv} status`; launch is not a focus acknowledgement |
 | EditLayout | `(t epoch, t expectedLayoutRevision, a{sv} edit) → (t newLayoutRevision, aa{sv} canonicalLayout)`; insert/remove/move by stable entry keys, not whole stale snapshots |
+| GetLayoutIcon | `(t epoch, s layoutKey, u logicalSize, d scale) → (s token, u width, u height, ay rgba)`; a pinned `folder:`/`file:` entry's art: the theme icons the file manager shows for it (a special folder's own, the file's content type), then the plain folder/file icon; only a key in the current layout; capability `layout-icon` |
 | GetTrashIcon | `(t epoch, b full, u logicalSize, d scale) → (s token, u width, u height, ay rgba)`; the Trash's art from the icon theme (`user-trash-full`/`user-trash` and older spellings), never a generic named-icon lookup; Unavailable when the theme has none; capability `trash-icon` |
 | SetIconOverride | `(t epoch, s desktopId, t generation, a{sv} source) → t iconRevision`; source file URI or themed name, no destination path |
 | ResetIconOverride | `(t epoch, s desktopId, t generation) → t iconRevision` |
@@ -388,7 +390,12 @@ no sound or forced foreground.
 
 ## 6. Pins, folders, default Files and autostart
 
-The ordered layout stores **typed entries with stable keys**: app or folder.
+The ordered layout stores **typed entries with stable keys**: app, folder or file.
+A file target is an absolute local file URI (`file:<uri>`); a click opens it with the
+default app for its content type (`OpenFile`), and a file that is gone stays,
+unavailable, until removed. **The dock shows folders and files in their own section,
+after the minimized windows and before the Trash** (owner, 2026-11-02); the stored
+list stays one ordered list, the dock splits it by kind and keeps each kind's order.
 App target is an exact DesktopId or `default-handler:inode/directory`; the latter
 resolves to the current default app and otherwise behaves as an ordinary app
 (movable, removable, grouped with that app's windows). This follows a future
@@ -447,7 +454,8 @@ The structured-domain owner and ordinary-preference Config1 boundary were
 accepted in the closure relayed by #688.
 
 EditLayout request schema is one of insert-app (DesktopId or the default target,
-beforeKey optional), insert-folder (URI,beforeKey optional), move (key,beforeKey
+beforeKey optional), insert-folder (URI,beforeKey optional), insert-file (URI of a
+regular file, beforeKey optional), move (key,beforeKey
 optional), remove(key). Missing beforeKey appends to the pinned section, never
 a numeric screen index. Menu pinning inserts at the end of pinned apps adjacent
 to their separator: no unshift/jump to the beginning. Dragging inserts at the
@@ -520,9 +528,9 @@ No new polkit rule, secret store access or privileged system mutation is needed.
 ## 8. Dock model, geometry and interaction
 
 The retained dock view is a projection of shared layout + current Hyalo windows
-+ Applications1 matching. It contains ordered pinned apps/folders, running
-unpinned app groups after a separator, minimized-window slots in their own
-trailing section, and Trash last. Empty section separators vanish. A minimized
++ Applications1 matching. It contains ordered pinned apps, running unpinned app
+groups after a separator, minimized-window slots in their own section, pinned
+folders and files in theirs, and Trash last. Empty section separators vanish. A minimized
 window is not simultaneously a normal group-choice item; dialogs minimized with
 their parent do not produce duplicate slots. App running dots still mean the app
 has live windows, including its minimized windows. Maintain one deterministic

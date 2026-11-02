@@ -276,6 +276,8 @@ struct Applications {
 enum LaunchTarget {
     App(String, u64),
     Directory(String),
+    /// A local file, opened by the default app for its content type.
+    File(String),
 }
 impl Applications {
     async fn submit(
@@ -298,6 +300,7 @@ impl Applications {
                     LaunchTarget::Directory(uri) => {
                         request.fingerprint(&format!("directory:{uri}"), 0)
                     }
+                    LaunchTarget::File(uri) => request.fingerprint(&format!("file:{uri}"), 0),
                 };
                 if let Some(id) = s.launches.existing(&owner, &request.nonce, &fingerprint)? {
                     return Ok((id, None));
@@ -318,6 +321,30 @@ impl Applications {
                         s.apps.get(&s.default).cloned().ok_or_else(|| {
                             Error::Unavailable(
                                 "default directory handler is absent from catalogue".into(),
+                            )
+                        })?
+                    }
+                    LaunchTarget::File(uri) => {
+                        use gio::prelude::*;
+                        let path = desktop::local_file(&uri)?;
+                        if !path.is_file() {
+                            return Err(Error::NotFound("file is unavailable".into()));
+                        }
+                        let handler = icons::content_type(&path)
+                            .and_then(|t| gio::AppInfo::default_for_type(&t, false))
+                            .and_then(|a| a.id())
+                            .ok_or_else(|| {
+                                Error::Unavailable("no default app for this file".into())
+                            })?;
+                        request.mode = "open".into();
+                        request.uris = vec![
+                            glib::filename_to_uri(path, None)
+                                .map_err(|_| Error::Invalid("file URI".into()))?
+                                .to_string(),
+                        ];
+                        s.apps.get(handler.as_str()).cloned().ok_or_else(|| {
+                            Error::Unavailable(
+                                "the file's default app is absent from catalogue".into(),
                             )
                         })?
                     }
@@ -431,6 +458,8 @@ impl Applications {
             "icon-overrides",
             "launch",
             "open-directory",
+            "open-file",
+            "layout-icon",
             "autostart",
         ]
         .into_iter()
@@ -442,7 +471,11 @@ impl Applications {
             .await
             .unwrap_or(false)
         {
-            result.extend(["layout-apps".into(), "layout-folders".into()]);
+            result.extend([
+                "layout-apps".into(),
+                "layout-folders".into(),
+                "layout-files".into(),
+            ]);
         }
         if let Ok(extra) = self
             .store
@@ -743,6 +776,75 @@ impl Applications {
             .await?;
         Ok((format!("asset:{token}"), w, h, rgba))
     }
+    /// The theme's icon for a pinned folder or file: what the file manager shows for it
+    /// (a special folder's own icon, a file's content type), the plain folder or file icon
+    /// when the entry is gone. Only for a key in the layout.
+    async fn get_layout_icon(
+        &self,
+        epoch: u64,
+        key: String,
+        logical_size: u32,
+        scale: f64,
+        #[zbus(header)] header: Header<'_>,
+    ) -> Result<(String, u32, u32, Vec<u8>), Error> {
+        let _admission = self.admit(&header)?;
+        if !(16..=512).contains(&logical_size)
+            || !scale.is_finite()
+            || !(1.0..=4.0).contains(&scale)
+        {
+            return Err(Error::Invalid("icon size/scale bounds".into()));
+        }
+        let side = (logical_size as f64 * scale).ceil().min(1024.0) as u32;
+        let _permit = self
+            .decode
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| Error::Busy("icon workers occupied".into()))?;
+        let k = key.clone();
+        let (revision, theme) = self
+            .store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                if !s.layout.contains(&k) {
+                    return Err(Error::NotFound("layout key missing".into()));
+                }
+                Ok((s.icon_revision, s.theme.clone()))
+            })
+            .await?;
+        let k = key.clone();
+        let found = tokio::task::spawn_blocking(move || {
+            let path = icons::layout_names(&k)?
+                .iter()
+                .find_map(|n| icons::resolve_name(n, &theme, side))?;
+            let pixels = icons::read(&path, side).ok()?;
+            Some((path, pixels))
+        })
+        .await
+        .map_err(|e| Error::Failed(e.to_string()))?;
+        let Some((path, (w, h, rgba))) = found else {
+            return Err(Error::Unavailable(
+                "the icon theme has no icon for it".into(),
+            ));
+        };
+        let token = catalogue::hash(
+            format!(
+                "layout:{key}:{revision}:{logical_size}:{scale}:{}:{}",
+                path.to_string_lossy(),
+                catalogue::hash(&rgba)
+            )
+            .as_bytes(),
+        );
+        self.store
+            .call(move |s| {
+                s.epoch(epoch)?;
+                if revision != s.icon_revision {
+                    return Err(Error::Stale("icon changed during decode".into()));
+                }
+                Ok(())
+            })
+            .await?;
+        Ok((format!("asset:{token}"), w, h, rgba))
+    }
     async fn set_icon_override(
         &self,
         epoch: u64,
@@ -911,6 +1013,29 @@ impl Applications {
         self.submit(
             epoch,
             LaunchTarget::Directory(uri),
+            desktop::Request::parse(context, true)?,
+            peer,
+            sender(&header)?,
+            conn,
+        )
+        .await
+    }
+    async fn open_file(
+        &self,
+        epoch: u64,
+        uri: String,
+        context: Dict,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
+    ) -> Result<String, Error> {
+        let _admission = self.admit(&header)?;
+        if uri.len() > 8192 {
+            return Err(Error::Invalid("file URI budget".into()));
+        }
+        let peer = self.peer(&header, conn).await?;
+        self.submit(
+            epoch,
+            LaunchTarget::File(uri),
             desktop::Request::parse(context, true)?,
             peer,
             sender(&header)?,

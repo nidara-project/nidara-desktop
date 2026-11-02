@@ -280,6 +280,11 @@ fn parse(
                     uri: text(e, "Uri"),
                     name: text(e, "Name"),
                 }),
+                "file" => Some(Pin::File {
+                    key,
+                    uri: text(e, "Uri"),
+                    name: text(e, "Name"),
+                }),
                 "app" if key == DEFAULT_DIRECTORY && text(e, "DesktopId").is_empty() => {
                     Some(Pin::DefaultDirectory { key })
                 }
@@ -348,6 +353,11 @@ fn records(d: &Dict, key: &str) -> Vec<Dict> {
         .unwrap_or_default()
 }
 
+/// A pinned folder's or file's layout key: its art comes from GetLayoutIcon, by that key.
+pub fn is_place(key: &str) -> bool {
+    key.starts_with("folder:") || key.starts_with("file:")
+}
+
 /// The service's bounds (APPLICATIONS1-DOCK.md §2 GetIcon): 16..512 logical, scale 1..4.
 /// Below 16 the dock asks for 16 and scales the art down itself.
 pub fn icon_request(logical: f64, scale: f64) -> (u32, f64) {
@@ -367,6 +377,11 @@ pub fn icons(
                 &conn,
                 "GetTrashIcon",
                 &(job.epoch, job.id == TRASH_FULL, logical, scale),
+            ),
+            key if is_place(key) => call::<_, (String, u32, u32, Vec<u8>)>(
+                &conn,
+                "GetLayoutIcon",
+                &(job.epoch, key, logical, scale),
             ),
             id => call::<_, (String, u32, u32, Vec<u8>)>(
                 &conn,

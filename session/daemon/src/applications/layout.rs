@@ -26,15 +26,19 @@ pub fn canonical(token: &str) -> Result<String, Error> {
         }
         return Ok(token.into());
     }
-    if let Some(uri) = token.strip_prefix("folder:") {
+    // A pinned folder or file: an absolute local file URI, kept in one canonical spelling.
+    for kind in ["folder", "file"] {
+        let Some(uri) = token.strip_prefix(kind).and_then(|t| t.strip_prefix(':')) else {
+            continue;
+        };
         let (p, host) = glib::filename_from_uri(uri).map_err(|e| Error::Invalid(e.to_string()))?;
         if host.is_some_and(|h| h != "localhost") || !p.is_absolute() {
-            return Err(Error::Invalid(
-                "folder must be an absolute local file URI".into(),
-            ));
+            return Err(Error::Invalid(format!(
+                "{kind} must be an absolute local file URI"
+            )));
         }
         return Ok(format!(
-            "folder:{}",
+            "{kind}:{}",
             glib::filename_to_uri(p, None).map_err(|e| Error::Invalid(e.to_string()))?
         ));
     }
@@ -125,7 +129,7 @@ pub fn edit(
         .ok_or_else(|| Error::Invalid("Operation is required".into()))?;
     let allowed: &[&str] = match op {
         "insert-app" => &["Operation", "DesktopId", "BeforeKey"],
-        "insert-folder" => &["Operation", "Uri", "BeforeKey"],
+        "insert-folder" | "insert-file" => &["Operation", "Uri", "BeforeKey"],
         "move" => &["Operation", "Key", "BeforeKey"],
         "remove" => &["Operation", "Key"],
         _ => return Err(Error::Invalid("unknown layout edit".into())),
@@ -161,6 +165,14 @@ pub fn edit(
             }
             format!("folder:{uri}")
         }
+        "insert-file" => {
+            let uri = get("Uri")?;
+            let (p, _) = glib::filename_from_uri(uri).map_err(|e| Error::Invalid(e.to_string()))?;
+            if !p.is_file() {
+                return Err(Error::NotFound("file does not exist".into()));
+            }
+            format!("file:{uri}")
+        }
         _ => get("Key")?.to_string(),
     };
     let key = canonical(&key)?;
@@ -194,6 +206,7 @@ pub fn edit(
 pub fn records(layout: &[String], apps: &BTreeMap<String, App>, default: &str) -> Vec<Value> {
     let mut resolved = BTreeSet::new();
     layout.iter().map(|t|{
+        if let Some(uri)=t.strip_prefix("file:"){let path=glib::filename_from_uri(uri).ok().map(|v|v.0).unwrap_or_default();return json!({"Key":t,"Kind":"file","Uri":uri,"Name":path.file_name().and_then(|n|n.to_str()).unwrap_or("File"),"Available":Path::new(&path).is_file()});}
         if let Some(uri)=t.strip_prefix("folder:"){let path=glib::filename_from_uri(uri).ok().map(|v|v.0).unwrap_or_else(home);return json!({"Key":t,"Kind":"folder","Uri":uri,"Name":path.file_name().and_then(|n|n.to_str()).unwrap_or("Folder"),"Available":Path::new(&path).is_dir()});}
         let id=t.strip_prefix("app:").unwrap_or(default);let app=apps.get(id);let duplicate=!id.is_empty()&&!resolved.insert(id.to_string());
         json!({"Key":t,"Kind":"app","DesktopId":id,"Available":app.is_some_and(|a|a.record["EntryAvailable"]!=false),"DuplicateResolvedTarget":duplicate,"Name":app.map(App::name).unwrap_or(if t==DEFAULT{"Files"}else{id}),"UnavailableReason":if id.is_empty(){"No default directory handler"}else if app.is_none(){"App unavailable in catalogue"}else if app.is_some_and(|a|a.record["EntryAvailable"]==false){"TryExec is unavailable"}else{""}})
@@ -214,6 +227,33 @@ mod tests {
         assert!(validate(&[DEFAULT.into(), DEFAULT.into()]).is_err());
         assert!(canonical("app:../../bad.desktop").is_err());
         assert!(canonical("folder:file://remote/tmp").is_err());
+    }
+    #[test]
+    fn a_file_is_pinned_like_a_folder() {
+        let dir = std::env::temp_dir().join(format!("nidara-layout-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("notes.txt");
+        std::fs::write(&file, "x").unwrap();
+        let uri = |p: &Path| glib::filename_to_uri(p, None).unwrap().to_string();
+        let apps = BTreeMap::new();
+        let insert = |old: &[String], op: &str, p: &Path| {
+            edit(old, json!({"Operation": op, "Uri": uri(p)}), &apps)
+        };
+        let l = insert(&[], "insert-file", &file).unwrap();
+        assert_eq!(l, [format!("file:{}", uri(&file))]);
+        // A folder is not a file, and a file is not a folder.
+        assert!(insert(&l, "insert-file", &dir).is_err());
+        assert!(insert(&l, "insert-folder", &file).is_err());
+        let l = insert(&l, "insert-folder", &dir).unwrap();
+        let r = records(&l, &apps, "");
+        assert_eq!(r[0]["Kind"], "file");
+        assert_eq!(r[0]["Name"], "notes.txt");
+        assert_eq!(r[0]["Available"], true);
+        assert_eq!(r[1]["Kind"], "folder");
+        assert!(canonical("file:file://remote/tmp/x").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+        let r = records(&l, &apps, "");
+        assert_eq!(r[0]["Available"], false, "a file gone stays, unavailable");
     }
     #[test]
     fn migration_finds_the_entry_the_ts_dock_pinned() {

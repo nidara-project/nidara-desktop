@@ -68,6 +68,7 @@ pub enum Command {
         enabled: bool,
     },
     OpenFolder(String),
+    OpenFile(String),
     OpenTrash,
     EmptyTrash,
     /// A Config1 dock key and the value to apply.
@@ -119,6 +120,7 @@ pub struct Context<'a> {
     pub can_edit_layout: bool,
     pub can_autostart: bool,
     pub can_open_directory: bool,
+    pub can_open_file: bool,
     /// The Trash can be emptied here (its backend is GIO's trash:///).
     pub can_empty_trash: bool,
     pub trash_full: bool,
@@ -139,13 +141,14 @@ pub fn item_menu(item: &Item, cx: &Context) -> Vec<Row> {
                 )
             }]);
         }
-        Kind::Folder { uri } => {
+        Kind::Folder { uri } | Kind::File { uri } => {
+            let (enabled, open) = match &item.kind {
+                Kind::Folder { .. } => (cx.can_open_directory, Command::OpenFolder(uri.clone())),
+                _ => (cx.can_open_file, Command::OpenFile(uri.clone())),
+            };
             groups.push(vec![Row {
-                enabled: cx.can_open_directory,
-                ..row(
-                    Label::Key("dock.menu.open"),
-                    Command::OpenFolder(uri.clone()),
-                )
+                enabled,
+                ..row(Label::Key("dock.menu.open"), open)
             }]);
             if cx.can_edit_layout {
                 groups.push(vec![unpin(item)]);
@@ -437,6 +440,7 @@ mod tests {
             can_edit_layout: true,
             can_autostart: true,
             can_open_directory: true,
+            can_open_file: true,
             can_empty_trash: true,
             trash_full: true,
         }

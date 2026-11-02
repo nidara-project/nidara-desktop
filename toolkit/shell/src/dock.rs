@@ -745,6 +745,7 @@ impl Dock {
                         can_edit_layout: self.frame.can_edit_layout,
                         can_autostart: self.frame.can_autostart,
                         can_open_directory: self.frame.can_open_directory,
+                        can_open_file: self.frame.can_open_file,
                         can_empty_trash: self.frame.trash.is_some_and(|t| !t.partial),
                         trash_full: self.frame.trash.is_some_and(|t| t.full),
                     },
@@ -890,6 +891,7 @@ impl Dock {
             command,
             Command::Launch { .. }
                 | Command::OpenFolder(_)
+                | Command::OpenFile(_)
                 | Command::OpenTrash
                 | Command::DockSettings
         );
@@ -1228,6 +1230,7 @@ impl Dock {
                 return;
             }
             Action::OpenFolder(uri) => Request::OpenFolder { uri, token: None },
+            Action::OpenFile(uri) => Request::OpenFile { uri, token: None },
             Action::OpenTrash => Request::OpenTrash { token: None },
             Action::Unavailable => {
                 eprintln!("nidara-shell: {} cannot be opened now", item.label);
@@ -1237,7 +1240,10 @@ impl Dock {
         // What starts something gets a token from this very click; focus and minimize do not.
         if matches!(
             request,
-            Request::Launch { .. } | Request::OpenFolder { .. } | Request::OpenTrash { .. }
+            Request::Launch { .. }
+                | Request::OpenFolder { .. }
+                | Request::OpenFile { .. }
+                | Request::OpenTrash { .. }
         ) {
             let target = match &item.kind {
                 Kind::App { id, .. } => Some(id.trim_end_matches(".desktop").to_string()),
@@ -1309,6 +1315,7 @@ impl Dock {
                 token,
             },
             Request::OpenFolder { uri, .. } => Request::OpenFolder { uri, token },
+            Request::OpenFile { uri, .. } => Request::OpenFile { uri, token },
             Request::OpenTrash { .. } => Request::OpenTrash { token },
             Request::Menu { command, .. } => Request::Menu { command, token },
             other => other,
@@ -1355,8 +1362,12 @@ impl Dock {
         }
         if let Some((key, at)) = &self.gone
             && (at.elapsed() >= crate::reorder::HOLD
-                || !crate::reorder::pins(&self.source.view)
-                    .any(|n| self.source.view.items[n].key == *key))
+                || !self
+                    .source
+                    .view
+                    .items
+                    .iter()
+                    .any(|i| i.key == *key && crate::reorder::is_pin(&i.kind)))
         {
             self.gone = None;
         }
@@ -1366,8 +1377,11 @@ impl Dock {
         if let Some((key, _)) = &self.gone {
             // Its slot closes at once: the pin is in the air (Landing) or a puff (Poof).
             let mut v = view.unwrap_or_else(|| self.source.view.clone());
-            let pins = crate::reorder::pins(&v);
-            if let Some(n) = pins.clone().find(|&n| v.items[n].key == *key) {
+            if let Some(n) = v
+                .items
+                .iter()
+                .position(|i| i.key == *key && crate::reorder::is_pin(&i.kind))
+            {
                 v.items.remove(n);
             }
             view = Some(v);
@@ -1761,11 +1775,17 @@ impl Dock {
         } else {
             self.pointer.1
         };
-        let Some(key) = self.reorder.as_ref().map(|r| r.key.clone()) else {
+        let Some((key, places)) = self.reorder.as_ref().map(|r| (r.key.clone(), r.places)) else {
             return;
         };
-        let (to, into) =
-            crate::reorder::aim(&self.frame.view, &self.shown.hits, horizontal, &key, along);
+        let (to, into) = crate::reorder::aim(
+            &self.frame.view,
+            places,
+            &self.shown.hits,
+            horizontal,
+            &key,
+            along,
+        );
         let trash = self
             .frame
             .view
@@ -2003,6 +2023,8 @@ impl Dock {
                 let id = match kind {
                     Kind::App { id, .. } => Some(id.as_str()),
                     Kind::Minimized { app, .. } => app.as_deref(),
+                    // A pinned folder or file: its art is fetched by its layout key.
+                    Kind::Folder { .. } | Kind::File { .. } => Some(item.key.as_str()),
                     _ => None,
                 };
                 match id.and_then(|id| self.art(id, w)) {

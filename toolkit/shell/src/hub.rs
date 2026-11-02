@@ -37,6 +37,7 @@ pub struct Frame {
     pub can_edit_layout: bool,
     pub can_autostart: bool,
     pub can_open_directory: bool,
+    pub can_open_file: bool,
     /// The Dock page of Settings can be asked for.
     pub can_settings: bool,
     /// Locked, or a fullscreen window on this dock's output: no dock.
@@ -69,6 +70,7 @@ impl Frame {
             can_edit_layout: false,
             can_autostart: false,
             can_open_directory: false,
+            can_open_file: false,
             can_settings: false,
             hidden: false,
             targets: HashSet::new(),
@@ -95,6 +97,10 @@ pub enum Request {
         token: Option<String>,
     },
     OpenFolder {
+        uri: String,
+        token: Option<String>,
+    },
+    OpenFile {
         uri: String,
         token: Option<String>,
     },
@@ -468,6 +474,15 @@ impl Hub {
         if apps.can("trash-icon") {
             wanted.extend([(TRASH_EMPTY, 0), (TRASH_FULL, 0)]);
         }
+        // Pinned folders and files, by their layout key.
+        if apps.can("layout-icon") {
+            wanted.extend(apps.pins.iter().filter_map(|p| match p {
+                crate::model::Pin::Folder { key, .. } | crate::model::Pin::File { key, .. } => {
+                    Some((key.as_str(), 0))
+                }
+                _ => None,
+            }));
+        }
         for (id, generation) in wanted {
             let fresh = cache.get(id).is_some_and(|c| {
                 c.generation == generation
@@ -494,6 +509,29 @@ impl Hub {
                 scale,
             });
         }
+    }
+
+    /// A pinned folder or file, opened by Applications1 (`OpenDirectory`, `OpenFile`) with
+    /// the default app for it.
+    fn open_place(&self, method: &'static str, uri: String, token: Option<String>) {
+        let Some((conn, epoch)) = self.service() else {
+            return;
+        };
+        worker(move || {
+            let mut context: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+            if let Some(t) = &token {
+                context.insert("ActivationToken", t.as_str().into());
+            }
+            conn.call_method(
+                Some(crate::apps::DEST),
+                crate::apps::PATH,
+                Some(crate::apps::IFACE),
+                method,
+                &(epoch, uri.as_str(), context),
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+        });
     }
 
     /// Only the apps the dock shows get their art fetched.
@@ -580,6 +618,7 @@ impl Hub {
                 can_edit_layout: self.can("layout-apps"),
                 can_autostart: self.can("autostart"),
                 can_open_directory: self.can("open-directory"),
+                can_open_file: self.can("open-file"),
                 can_settings: self.can_settings,
                 hidden: self.locked || fullscreen,
                 targets: owners
@@ -636,24 +675,10 @@ impl Hub {
             }
             Request::Menu { command, token } => self.menu(command, token),
             Request::OpenFolder { uri, token } if self.can("open-directory") => {
-                let Some((conn, epoch)) = self.service() else {
-                    return;
-                };
-                worker(move || {
-                    let mut context: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
-                    if let Some(t) = &token {
-                        context.insert("ActivationToken", t.as_str().into());
-                    }
-                    conn.call_method(
-                        Some(crate::apps::DEST),
-                        crate::apps::PATH,
-                        Some(crate::apps::IFACE),
-                        "OpenDirectory",
-                        &(epoch, uri.as_str(), context),
-                    )
-                    .map(|_| ())
-                    .map_err(|e| e.to_string())
-                });
+                self.open_place("OpenDirectory", uri, token)
+            }
+            Request::OpenFile { uri, token } if self.can("open-file") => {
+                self.open_place("OpenFile", uri, token)
             }
             Request::OpenTrash { token } if self.can("launch") => {
                 let Some((conn, epoch)) = self.service() else {
@@ -705,6 +730,7 @@ impl Hub {
                 }
             }
             Command::OpenFolder(uri) => self.act(Request::OpenFolder { uri, token }),
+            Command::OpenFile(uri) => self.act(Request::OpenFile { uri, token }),
             Command::OpenTrash => self.act(Request::OpenTrash { token }),
             Command::Launch {
                 id,
