@@ -48,6 +48,11 @@ pub struct Store {
     next_generation: u64,
     icon_fingerprint: String,
     pins: Option<gio::Settings>,
+    /// The layout this service last wrote. GSettings tells us of our own write too, and
+    /// that is not a change to read again: answered with a full refresh, it held the
+    /// `Changed` of every pin, unpin and move back by the refresh, 1.3–1.75 s measured
+    /// (owner, 2026-11-02: pinning felt slow).
+    written: Arc<std::sync::Mutex<Option<Vec<String>>>>,
     pub settings: super::super::config::registry::Store,
     monitors: Vec<gio::FileMonitor>,
     dirty: Arc<Notify>,
@@ -64,10 +69,24 @@ impl Store {
             .filter(|s| s.has_key("pinned") && s.has_key("layout") && s.has_key("layout-version"));
         let pins = schema.map(|s| gio::Settings::new_full(&s, None::<&gio::SettingsBackend>, None));
         let dirty = Arc::new(Notify::new());
+        let written: Arc<std::sync::Mutex<Option<Vec<String>>>> = Arc::default();
         if let Some(p) = &pins {
             let d = dirty.clone();
-            p.connect_changed(None, move |_, key| {
-                if key == "layout" || key == "layout-version" {
+            let own = written.clone();
+            p.connect_changed(None, move |s, key| {
+                if key != "layout" && key != "layout-version" {
+                    return;
+                }
+                let ours = own.lock().is_ok_and(|w| {
+                    w.as_ref().is_some_and(|w| {
+                        s.uint("layout-version") == 1
+                            && s.strv("layout")
+                                .iter()
+                                .map(|v| v.as_str())
+                                .eq(w.iter().map(String::as_str))
+                    })
+                });
+                if !ours {
                     d.notify_one();
                 }
             });
@@ -129,6 +148,7 @@ impl Store {
             settings: super::super::config::registry::Store::new(),
             monitors: vec![],
             dirty,
+            written,
             monitor_failed: false,
             _app_monitor: app_monitor,
             _volumes: volumes,
@@ -215,6 +235,9 @@ impl Store {
         let next = layout::validate(&next)?;
         if next == self.layout && pins.uint("layout-version") == 1 {
             return Ok(());
+        }
+        if let Ok(mut w) = self.written.lock() {
+            *w = Some(next.clone());
         }
         pins.delay();
         let result = pins

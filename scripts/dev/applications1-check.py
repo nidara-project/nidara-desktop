@@ -177,6 +177,20 @@ def inside(binary, out):
         folder=out/'a folder';folder.mkdir()
         lr,rows=call('EditLayout','(tta{sv})',(e,lr,{'Operation':GLib.Variant('s','insert-folder'),'Uri':GLib.Variant('s',folder.as_uri())}))
         assert rows[-1]['Kind']=='folder'
+        # An edit's Changed is not held back by the refresh our own GSettings write sets off
+        # (it waited for a full rescan: 1.3-1.75 s live, owner 2026-11-02, pinning felt slow).
+        got=[];ctx=GLib.MainContext.default()
+        sub=bus.signal_subscribe(None,IFACE,'Changed',PATH,None,Gio.DBusSignalFlags.NONE,lambda *a:got.append(time.monotonic()))
+        while ctx.iteration(False):pass
+        time.sleep(.3)
+        while ctx.iteration(False):pass
+        got.clear();t0=time.monotonic()
+        lr,rows=call('EditLayout','(tta{sv})',(e,lr,{'Operation':GLib.Variant('s','move'),'Key':GLib.Variant('s','app:Added.desktop')}))
+        assert rows[-1]['Key']=='app:Added.desktop'
+        while not got and time.monotonic()<t0+3:
+            ctx.iteration(False);time.sleep(.002)
+        bus.signal_unsubscribe(sub)
+        assert got and got[0]-t0<.09,f'Changed {(got[0]-t0)*1000 if got else -1:.0f} ms after an edit: held behind a refresh'
         # Healthy uninstall removes a pin; lost root must preserve it, including restart.
         saved=appdir.with_name('applications-offline');appdir.rename(saved)
         wait(lambda:not snap()[2]['CatalogueComplete'],'provider/root outage degrades catalogue')
