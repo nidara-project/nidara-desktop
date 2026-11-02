@@ -161,6 +161,8 @@ pub struct Popup {
     pub anchor: Option<String>,
     pub side: PopupSide,
     pub rect: [i32; 4],
+    /// It points at its item (the dock's); the bar's hang flush with their capsule instead.
+    pointer: bool,
     /// The rows' size, and the popup's: that and the pointer toward its item (bubble.rs).
     natural: (u32, u32),
     size: (u32, u32),
@@ -185,6 +187,11 @@ pub struct Request<'a> {
     pub keyboard: bool,
     /// Which popup of this dock's life it is (its ID range).
     pub ordinal: u64,
+    /// A pointer toward the item (the dock's menus). Without one the popup is the body
+    /// alone, its top-left corner at `rect`'s bottom-left (`PopupSide::Below`).
+    pub pointer: bool,
+    /// `rect`'s right edge is the popup's right edge, not its left (the bar's right side).
+    pub align_end: bool,
 }
 
 impl Popup {
@@ -230,12 +237,18 @@ impl Popup {
             tree.focus(*id)?;
         }
         let natural = Self::natural(&mut tree, look, &rows)?;
-        let size = crate::bubble::with_pointer(natural, r.side);
+        let size = sized(natural, r.side, r.pointer);
+        let mut rect = r.rect;
+        if r.align_end {
+            rect = [
+                rect[0] + rect[2] - size.0 as i32,
+                rect[1],
+                size.0 as i32,
+                rect[3],
+            ];
+        }
         let id = w.open_menu_popup(MenuPopupPlacement {
-            placement: PopupPlacement {
-                anchor: r.rect,
-                size,
-            },
+            placement: PopupPlacement { anchor: rect, size },
             workarea: None,
             side: r.side,
             parent: None,
@@ -248,7 +261,8 @@ impl Popup {
             input: Default::default(),
             anchor: r.anchor,
             side: r.side,
-            rect: r.rect,
+            rect,
+            pointer: r.pointer,
             natural,
             size,
             placed: None,
@@ -301,7 +315,7 @@ impl Popup {
             return Ok(());
         }
         (self.rect, self.side) = (rect, side);
-        self.size = crate::bubble::with_pointer(self.natural, side);
+        self.size = sized(self.natural, side, self.pointer);
         w.reposition_popup_overlay(
             self.id,
             PopupPlacement {
@@ -411,7 +425,10 @@ impl Popup {
             self.placed = Some((geometry, self.rect));
             let (width, height) = (geometry[2].max(1) as f64, geometry[3].max(1) as f64);
             let radius = f64::from(look.styles.menu.radius);
-            let (body, pane) = crate::bubble::place(geometry, self.rect, radius, MENU_EXPONENT)
+            let (body, pane) = self
+                .pointer
+                .then(|| crate::bubble::place(geometry, self.rect, radius, MENU_EXPONENT))
+                .flatten()
                 .unwrap_or((
                     [0., 0., width, height],
                     Pane {
@@ -528,5 +545,15 @@ impl Overlay {
     }
     pub fn semantics(&mut self, w: &Window) -> Option<nk_a11y::Tree> {
         each!(self, p => p.semantics(w))
+    }
+}
+
+/// The popup's size: the rows', with the pointer's room when it has one; even across, so
+/// the compositor's whole-pixel centring does not shift it half a pixel.
+fn sized(natural: (u32, u32), side: PopupSide, pointer: bool) -> (u32, u32) {
+    if pointer {
+        crate::bubble::with_pointer(natural, side)
+    } else {
+        (natural.0 + natural.0 % 2, natural.1)
     }
 }

@@ -92,6 +92,116 @@ Gio.bus_own_name_on_connection(bus, 'org.freedesktop.portal.Desktop', 0, None, N
 GLib.MainLoop().run()
 """
 
+# A stand-in for Network1 (status.rs reads it): one Wi-Fi adapter on a network whose
+# signal is the number in the file named by argv[1], announced through Updated when it
+# changes. The real service would read this machine's NetworkManager, which may have no
+# Wi-Fi at all.
+NETWORK = """
+import json, sys
+import gi
+gi.require_version('Gio', '2.0')
+from gi.repository import Gio, GLib
+xml = ('<node><interface name="org.nidara.Network1"><method name="Snapshot">'
+       '<arg type="t" direction="out"/><arg type="t" direction="out"/><arg type="s" direction="out"/>'
+       '</method><signal name="Updated"><arg type="t"/><arg type="t"/><arg type="s"/></signal>'
+       '</interface></node>')
+state = {'revision': 1, 'strength': None}
+def doc():
+    return json.dumps({'schemaVersion': 1, 'wirelessEnabled': True, 'devices': [
+        {'kind': 2, 'state': 100, 'activeAp': '/ap/1',
+         'accessPoints': [{'path': '/ap/1', 'strength': state['strength']}]}]})
+def read():
+    try:
+        return int(open(sys.argv[1]).read())
+    except (OSError, ValueError):
+        return 90
+state['strength'] = read()
+def answer(conn, sender, path, iface, method, params, invocation):
+    invocation.return_value(GLib.Variant('(tts)', (1, state['revision'], doc())))
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+bus.register_object('/org/nidara/Network', Gio.DBusNodeInfo.new_for_xml(xml).interfaces[0],
+                    answer, None, None)
+def poll():
+    s = read()
+    if s != state['strength']:
+        state['strength'] = s
+        state['revision'] += 1
+        bus.emit_signal(None, '/org/nidara/Network', 'org.nidara.Network1', 'Updated',
+                        GLib.Variant('(tts)', (1, state['revision'], doc())))
+    return True
+GLib.timeout_add(200, poll)
+Gio.bus_own_name_on_connection(bus, 'org.nidara.Network', 0, None, None)
+GLib.MainLoop().run()
+"""
+
+# An app's tray icon (StatusNotifierItem + dbusmenu), registered with Tray1's watcher:
+# its icon from its own IconThemePath, a menu with a submenu, and every call it gets
+# written to the file named by argv[1] (one JSON line each).
+TRAY_ITEM = """
+import json, sys
+import gi
+gi.require_version('Gio', '2.0')
+from gi.repository import Gio, GLib
+log, icons = sys.argv[1], sys.argv[2]
+def note(*what):
+    with open(log, 'a') as f:
+        f.write(json.dumps(what) + '\\n')
+v = GLib.Variant
+props = {'Id': v('s', 'check-item'), 'Title': v('s', 'Check item'), 'Status': v('s', 'Active'),
+         'Category': v('s', 'ApplicationStatus'), 'IconName': v('s', 'check-tray'),
+         'IconThemePath': v('s', icons), 'Menu': v('o', '/menu'), 'ItemIsMenu': v('b', False)}
+def m(name, ins=(), outs=()):
+    return ('<method name="%s">' % name + ''.join('<arg type="%s" direction="in"/>' % t for t in ins)
+            + ''.join('<arg type="%s" direction="out"/>' % t for t in outs) + '</method>')
+sni = ('<node><interface name="org.kde.StatusNotifierItem">' + m('Activate', 'ii') + m('SecondaryActivate', 'ii')
+       + m('ContextMenu', 'ii') + m('Scroll', 'is')
+       + ''.join('<property name="%s" type="%s" access="read"/>' % (k, x.get_type_string()) for k, x in props.items())
+       + '</interface></node>')
+menu = ('<node><interface name="com.canonical.dbusmenu">' + m('AboutToShow', 'i', 'b')
+        + m('GetLayout', ['i', 'i', 'as'], ['u', '(ia{sv}av)']) + m('Event', ['i', 's', 'v', 'u']) + '</interface></node>')
+def row(i, label, **more):
+    p = {'label': v('s', label)}
+    p.update(more)
+    return v('(ia{sv}av)', (i, p, []))
+def item(c, sender, path, iface, name, params, inv):
+    note(name, *params.unpack())
+    inv.return_value(None)
+def dbusmenu(c, sender, path, iface, name, params, inv):
+    a = params.unpack()
+    if name == 'AboutToShow':
+        inv.return_value(v('(b)', (False,)))
+    elif name == 'GetLayout':
+        if a[0] == 0:
+            rows = [row(1, '_Open window'), row(2, 'More', **{'children-display': v('s', 'submenu')}),
+                    row(3, '', type=v('s', 'separator')),
+                    row(4, 'Muted', **{'toggle-type': v('s', 'checkmark'), 'toggle-state': v('i', 1)})]
+        else:
+            rows = [row(10, 'Inner')]
+        inv.return_value(v('(u(ia{sv}av))', (1, (a[0], {}, rows))))
+    else:
+        note('Event', a[0], a[1])
+        inv.return_value(None)
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+keep = [Gio.DBusNodeInfo.new_for_xml(sni), Gio.DBusNodeInfo.new_for_xml(menu)]
+bus.register_object('/StatusNotifierItem', keep[0].interfaces[0], item, lambda *a: props.get(a[-1]), None)
+bus.register_object('/menu', keep[1].interfaces[0], dbusmenu, None, None)
+# Asynchronously, as apps do: the watcher reads the item's properties back before it
+# answers, and a main loop blocked in a synchronous call could not reply.
+def register():
+    def done(bus, result):
+        try:
+            bus.call_finish(result)
+            note('registered')
+        except GLib.Error as e:
+            print('register:', e, file=sys.stderr, flush=True)
+            GLib.timeout_add(250, register)
+    bus.call('org.kde.StatusNotifierWatcher', '/StatusNotifierWatcher', 'org.kde.StatusNotifierWatcher',
+             'RegisterStatusNotifierItem', v('(s)', ('/StatusNotifierItem',)), None, 0, 3000, None, done)
+    return False
+register()
+GLib.MainLoop().run()
+"""
+
 MINIMIZER = """
 import gi
 gi.require_version('Gtk', '4.0')
@@ -159,12 +269,12 @@ def children(node):
     return [c for c in found if c is not None]
 
 
-def dock_node():
+def dock_node(name='Dock'):
     for app in children(Atspi.get_desktop(0)):
         try:
             app.set_cache_mask(Atspi.Cache.NONE)
             for node in children(app):
-                if node and node.get_name() == 'Dock':
+                if node and node.get_name() == name:
                     return node
         except GLib.Error:
             continue
@@ -185,9 +295,9 @@ def walk():
     return items
 
 
-def menu_rows():
-    """An open popup's rows, as the dock's tree carries them: (node, what a reader hears)."""
-    dock = dock_node()
+def menu_rows(owner='Dock'):
+    """An open popup's rows, as its owner's tree carries them: (node, what a reader hears)."""
+    dock = dock_node(owner)
     found = []
 
     def visit(node, depth):
@@ -272,7 +382,10 @@ try:
     # binary is External there, so the private session grants the consent gates.
     subprocess.run(['gsettings', 'set', 'org.nidara.ai', 'allow-computer-control', 'true'], check=True, timeout=5)
     subprocess.run(['gsettings', 'set', 'org.nidara.ai', 'allow-config-write', 'true'], check=True, timeout=5)
-    start('sessiond', [SESSIOND, '--applications', '--config'], XDG_DATA_DIRS=catalogue())
+    # With the bar, its widgets' services too: Power1 read-only (it only reads this
+    # machine's UPower), Network1 the stand-in above.
+    readers = ['--power-read-only', '--tray'] if os.environ.get('NK_SHELL_BAR') == '1' else []
+    start('sessiond', [SESSIOND, '--applications', '--config', *readers], XDG_DATA_DIRS=catalogue())
     def snapshot():
         r = subprocess.run(['busctl', '--user', '--json=short', 'call', 'org.nidara.Applications',
                             '/org/nidara/Applications', 'org.nidara.Applications1', 'GetSnapshot'],
@@ -294,8 +407,17 @@ try:
         except GLib.Error as e:
             result['trash_art']['full' if full else 'empty'] = e.message
     assert result['trash_art'] == {'empty': '64x64', 'full': '64x64'}, result['trash_art']
-    shell = start('shell', [SHELL])
+    # NK_SHELL_BAR=1 (check-bar-headless.sh): the bar too (bar.rs, B1), along the top.
+    with_bar = os.environ.get('NK_SHELL_BAR') == '1'
+    shell = start('shell', [SHELL, '--bar'] if with_bar else [SHELL])
     first = until('a dock layer', docks)
+    if with_bar:
+        bars = until('a bar layer', lambda: [l for l in ipc('layers').get('ok', {}).get('layers', [])
+                                             if l.get('namespace') == 'nidara-bar'])
+        assert bars[0]['y'] == 0 and bars[0]['height'] == 48, bars
+        time.sleep(1.5)  # the glass and the text (software Hyalo)
+        shot(LOG / 'bar.png')
+        result['bar'] = {'layer': bars}
     # Shell1 (crates/nidara-shell-ipc): this process owns the name, says what it can do,
     # and refuses what it cannot rather than doing nothing.
     until('Shell1 answering', lambda: shell1('GetState') is not None)
@@ -308,6 +430,117 @@ try:
         except GLib.Error as e:
             assert f'org.nidara.Shell1.Error.{error}' in e.message, e.message
     result['shell1'] = {'state': list(state), 'refusals': 'bar Unavailable, Dock Invalid'}
+    if with_bar:
+        # The bar's tree (bar.rs): its items in the order drawn; the mark opens the system
+        # menu, whose ending rows ask first; the island waits for the overview (disabled).
+        bar = until('the bar in the reader', lambda: dock_node('Bar'))
+        heard = [(n.get_role_name(), n.get_name()) for n in children(bar)]
+        assert [h[1] for h in heard][:1] == ['System menu'], heard
+        assert ('button', 'Desktops') in heard, heard
+        result['bar']['atspi'] = heard
+        layer = bars[0]
+
+        def bar_point(name):
+            node = next(n for n in children(dock_node('Bar')) if n.get_name() == name)
+            e = node.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+            return layer['x'] + e.x + e.width // 2, layer['y'] + e.y + e.height // 2
+
+        with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+            x, y = bar_point('System menu')
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+            time.sleep(.3)
+            pipe.write(f'click {x} {y}\n')
+            rows = until('the system menu', lambda: (r := menu_rows('Bar')) and r)
+            shot(LOG / 'bar-menu.png')
+            names = [r['name'] for _, r in rows]
+            assert any(n in ('Bloquear pantalla', 'Lock Screen', 'Lock screen') for n in names), names
+            result['bar']['menu'] = names
+            ending = next(n for n, r in rows if r['name'] in ('Cerrar sesión…', 'Log Out…', 'Log out…',
+                                                              'Cerrar sesión', 'Log Out', 'Log out'))
+            ending.get_action_iface().do_action(0)
+            confirm = until('the confirmation', lambda: (r := menu_rows('Bar')) and r != rows and r)
+            shot(LOG / 'bar-confirm.png')
+            asked = [r['name'] for _, r in confirm]
+            result['bar']['confirm'] = asked
+            cancel = next(n for n, r in confirm if r['name'] in ('Cancelar', 'Cancel'))
+            cancel.get_action_iface().do_action(0)
+            until('the confirmation closes', lambda: not menu_rows('Bar'))
+            assert 'uwsm' not in (LOG / 'shell.log').read_text()
+        island = next(n for n in children(dock_node('Bar')) if n.get_name() == 'Desktops')
+        assert not island.get_state_set().contains(Atspi.StateType.ENABLED), 'the island acts'
+        result['bar']['island'] = 'disabled until the overview'
+        # The widgets (status.rs): Wi-Fi only with an adapter, the battery only with one;
+        # focus only while Do Not Disturb is on, and its click turns it off.
+        def bar_names():
+            return [n.get_name() for n in children(dock_node('Bar'))]
+        signal = RUN / 'wifi-strength'
+        signal.write_text('90')
+        start('network', ['python3', '-I', '-c', NETWORK, str(signal)])
+        has_wifi = True
+        has_battery = any(Path(p, 'type').read_text().strip() == 'Battery'
+                          for p in Path('/sys/class/power_supply').glob('*'))
+        until('the widgets this machine has', lambda: (('Wi-Fi' in bar_names()) == has_wifi
+                                                       and ('Battery' in bar_names()) == has_battery))
+        assert 'Do Not Disturb' not in bar_names(), bar_names()
+        subprocess.run(['gsettings', 'set', 'org.nidara.notifications', 'do-not-disturb', 'true'],
+                       check=True, timeout=5)
+        until('focus while Do Not Disturb is on', lambda: 'Do Not Disturb' in bar_names())
+        time.sleep(1.5)  # software Hyalo draws the answer late
+        shot(LOG / 'bar-widgets.png')
+        result['bar']['widgets'] = [(n.get_name(), n.get_description()) for n in children(dock_node('Bar'))]
+
+        def wifi_said():
+            return next((n.get_description() for n in children(dock_node('Bar')) if n.get_name() == 'Wi-Fi'), None)
+        assert wifi_said() == 'connected, signal 3 of 3', wifi_said()
+        signal.write_text('40')
+        until('the Wi-Fi icon follows Updated', lambda: wifi_said() == 'connected, signal 1 of 3')
+        time.sleep(1.5)  # software Hyalo draws the answer late
+        shot(LOG / 'bar-wifi-weak.png')
+        focus = next(n for n in children(dock_node('Bar')) if n.get_name() == 'Do Not Disturb')
+        focus.get_action_iface().do_action(0)
+        until('its click turns it off', lambda: 'Do Not Disturb' not in bar_names())
+        stored = subprocess.run(['gsettings', 'get', 'org.nidara.notifications', 'do-not-disturb'],
+                                capture_output=True, text=True, timeout=5).stdout.strip()
+        assert stored == 'false', stored
+        # The tray (tray.rs): an app's item, its icon from its own theme path; a click asks
+        # the app (no window of its process); a right click opens its menu, a submenu in
+        # its place, a row clicked through dbusmenu.
+        calls = RUN / 'tray-calls'
+        icons = RUN / 'tray-icons'
+        icons.mkdir()
+        (icons / 'check-tray.svg').write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16">'
+            '<circle cx="8" cy="8" r="7" fill="#ff9500"/></svg>')
+        start('tray-item', ['python3', '-I', '-c', TRAY_ITEM, str(calls), str(icons)])
+
+        def tray_calls():
+            return [json.loads(l) for l in calls.read_text().splitlines()] if calls.exists() else []
+        until('the tray item in the bar', lambda: 'Check item' in bar_names())
+        time.sleep(1.5)  # software Hyalo draws the answer late
+        shot(LOG / 'bar-tray.png')
+        node = next(n for n in children(dock_node('Bar')) if n.get_name() == 'Check item')
+        node.get_action_iface().do_action(0)
+        until('a click asks the app', lambda: any(c[0] == 'Activate' for c in tray_calls()))
+        with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+            x, y = bar_point('Check item')
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+            time.sleep(.3)
+            pipe.write(f'rclick {x} {y}\n')
+            rows = until('the item\'s menu', lambda: (r := menu_rows('Bar')) and r)
+            time.sleep(1.5)
+            shot(LOG / 'bar-tray-menu.png')
+            heard = [r for _, r in rows]
+            assert [r['name'] for r in heard] == ['Open window', 'More  ›', 'Muted'], heard
+            assert heard[2]['checked'], heard
+            more = next(n for n, r in rows if r['name'] == 'More  ›')
+            more.get_action_iface().do_action(0)
+            inner = until('the submenu in its place', lambda: (r := menu_rows('Bar'))
+                          and [x['name'] for _, x in r] == ['Inner'] and r)
+            inner[0][0].get_action_iface().do_action(0)
+            until('the row clicked through dbusmenu', lambda: ['Event', 10, 'clicked'] in tray_calls())
+            until('and the menu closed', lambda: not menu_rows('Bar'))
+        result['bar']['tray'] = {'menu': [r['name'] for r in heard],
+                                 'calls': [c[0] for c in tray_calls() if c[0] != 'registered']}
     # Software Hyalo cannot take a GL client's dmabufs here (it crashes); draw on the CPU.
     start('client', ['gtk4-demo'], GDK_BACKEND='wayland', GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
     until('a client window', lambda: ipc('windows').get('ok', {}).get('windows'))
@@ -722,7 +955,9 @@ try:
     with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
         for code in (37, 23, 20):  # k i t
             pipe.write(f'key {code}\n')
-        narrowed = until('typing narrows Apps', lambda: (a := apps_shown()) and len(a) < len(every) and a)
+        # A list read mid-update carries rows without their names yet: wait for a settled one.
+        narrowed = until('typing narrows Apps',
+                         lambda: (a := apps_shown()) and len(a) < len(every) and all(a) and a)
         assert narrowed[0] == 'kitty', narrowed
         time.sleep(1.5)  # software Hyalo draws the answer late
         shot(LOG / 'apps-search.png')

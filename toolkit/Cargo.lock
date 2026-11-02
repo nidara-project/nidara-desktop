@@ -1171,6 +1171,8 @@ dependencies = [
  "nk-text",
  "nk-wayland",
  "nk-widgets",
+ "png 0.18.1",
+ "resvg",
  "serde",
  "serde_json",
  "unicode-segmentation",

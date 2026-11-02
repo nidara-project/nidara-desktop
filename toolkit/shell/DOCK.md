@@ -34,6 +34,8 @@ locking closes it. A tile held and moved becomes a drag of that app: the panel s
 AT-SPI tree: a window "Apps", the search field, a list of the apps shown. The nested check
 (§8) opens it, finds the apps, types, clears and closes it.
 
+**The bar (B1) is in the same process**, started with `--bar`: [`BAR.md`](BAR.md).
+
 ## 1. Where it lives
 
 `toolkit/shell`, package and binary **`nidara-shell`** (the contract's working name; the

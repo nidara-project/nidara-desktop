@@ -123,6 +123,12 @@ pub enum Request {
     IconSize(u32),
     /// Open Apps, or close it when it is open (Shell1 `surface:app-grid`).
     ToggleApps,
+    /// A tray item's left click, at a global logical point: its owner's window comes
+    /// forward, or the app is asked (tray.rs).
+    TrayActivate {
+        item: crate::tray::TrayItem,
+        at: (i32, i32),
+    },
 }
 
 pub enum HubEvent {
@@ -147,6 +153,18 @@ pub enum HubEvent {
         scale: f64,
     },
     DockDown(OutputId),
+    /// A bar is up on an output (bar.rs); it takes its frames from `frames`.
+    BarUp {
+        id: OutputId,
+        name: String,
+        frames: Sender<Arc<crate::bar::BarFrame>>,
+        waker: Waker,
+    },
+    BarDown(OutputId),
+    Region(crate::barmodel::Region),
+    /// What the bar's widgets show (status.rs).
+    Widgets(crate::status::Update),
+    Tray(Arc<Vec<crate::tray::TrayItem>>),
     Request(Request),
     /// The icon-size Apply in flight answered, taken or refused.
     IconSizeDone,
@@ -166,6 +184,12 @@ struct DockHandle {
     size: (u32, u32),
     scale: f64,
     frames: Sender<Arc<Frame>>,
+    waker: Waker,
+}
+
+struct BarHandle {
+    name: String,
+    frames: Sender<Arc<crate::bar::BarFrame>>,
     waker: Waker,
 }
 
@@ -205,6 +229,11 @@ pub struct Hub {
     resize: crate::resize::Coalesce,
     launcher: Option<OpenApps>,
     launchers: u64,
+    workspaces: Arc<Vec<crate::hyalo::Workspace>>,
+    bars: HashMap<OutputId, BarHandle>,
+    region: crate::barmodel::Region,
+    widgets: crate::status::Status,
+    tray: Arc<Vec<crate::tray::TrayItem>>,
 }
 
 /// Which dock a keyboard-focus request goes to: the focused window's output's, else the
@@ -270,6 +299,11 @@ impl Hub {
             resize: Default::default(),
             launcher: None,
             launchers: 0,
+            workspaces: Arc::default(),
+            bars: HashMap::new(),
+            region: Default::default(),
+            widgets: Default::default(),
+            tray: Arc::default(),
         }
     }
 
@@ -359,9 +393,14 @@ impl Hub {
                 );
             }
             HubEvent::Trash(trash) => self.trash = trash,
-            HubEvent::Hyalo(HyaloUpdate::Windows { epoch, windows }) => {
+            HubEvent::Hyalo(HyaloUpdate::Windows {
+                epoch,
+                windows,
+                workspaces,
+            }) => {
                 self.hyalo_epoch = epoch;
                 self.windows = windows;
+                self.workspaces = Arc::new(workspaces);
                 // A window of an app that is not pinned brings that app into the dock: its
                 // art is fetched now, not at the next unrelated catalogue or settings change.
                 self.request_icons();
@@ -417,6 +456,27 @@ impl Hub {
                 }
                 self.request_icons();
             }
+            HubEvent::BarUp {
+                id,
+                name,
+                frames,
+                waker,
+            } => {
+                self.bars.insert(
+                    id,
+                    BarHandle {
+                        name,
+                        frames,
+                        waker,
+                    },
+                );
+            }
+            HubEvent::BarDown(id) => {
+                self.bars.remove(&id);
+            }
+            HubEvent::Region(r) => self.region = r,
+            HubEvent::Widgets(u) => self.widgets.apply(u),
+            HubEvent::Tray(items) => self.tray = items,
             HubEvent::DockDown(id) => {
                 self.docks.remove(&id);
                 self.status.docks.store(self.docks.len(), Ordering::Release);
@@ -439,8 +499,10 @@ impl Hub {
                 }
                 return false;
             }
-            HubEvent::Request(Request::ToggleApps) => {
-                self.toggle_apps();
+            // The bars show whether Apps is open.
+            HubEvent::Request(Request::ToggleApps) => self.toggle_apps(),
+            HubEvent::Request(Request::TrayActivate { item, at }) => {
+                self.tray_activate(item, at);
                 return false;
             }
             HubEvent::AppsClosed(n) => {
@@ -449,7 +511,6 @@ impl Hub {
                     self.status.apps.store(false, Ordering::Release);
                     self.state_changed();
                 }
-                return false;
             }
             HubEvent::Request(r) => {
                 self.act(r);
@@ -739,6 +800,62 @@ impl Hub {
                 let _ = dock.waker.wake();
             }
         }
+        for bar in self.bars.values() {
+            let mine = |w: &&HyaloWindow| w.output == bar.name;
+            // The app of the window that holds the focus, when it is on this output.
+            let app = self
+                .windows
+                .iter()
+                .filter(mine)
+                .find(|w| w.window.focused && !w.window.minimized)
+                .map(|w| match crate::model::match_window(apps, &w.window) {
+                    Some(i) if !apps[i].name.is_empty() => apps[i].name.clone(),
+                    _ => w.window.app_id.clone(),
+                });
+            let fullscreen = self
+                .windows
+                .iter()
+                .filter(mine)
+                .any(|w| w.fullscreen && !w.window.minimized);
+            let frame = Arc::new(crate::bar::BarFrame {
+                app,
+                workspaces: self.workspaces.clone(),
+                tokens: self.tokens.clone(),
+                reduce_transparency: self.prefs.reduce_transparency,
+                hidden: self.locked || fullscreen,
+                can_settings: self.can_settings,
+                region: self.region.clone(),
+                status: self.widgets,
+                tray: self.tray.clone(),
+            });
+            if bar.frames.send(frame).is_ok() {
+                let _ = bar.waker.wake();
+            }
+        }
+    }
+
+    fn tray_activate(&self, item: crate::tray::TrayItem, at: (i32, i32)) {
+        let windows: Vec<(u64, i32)> = self
+            .windows
+            .iter()
+            .filter_map(|w| Some((w.window.id, w.pid?)))
+            .collect();
+        let raise = item
+            .pid
+            .and_then(|pid| crate::tray::window_for(pid, &windows, crate::tray::parent_of));
+        match raise {
+            Some(id) => self.act(Request::Window {
+                verb: "focus-window",
+                id,
+                epoch: self.hyalo_epoch,
+            }),
+            None => {
+                let Some(conn) = self.apps_conn.clone() else {
+                    return;
+                };
+                worker(move || crate::tray::point(&conn, "Activate", &item, at));
+            }
+        }
     }
 
     fn act(&self, request: Request) {
@@ -928,8 +1045,57 @@ impl Hub {
                     .map_err(|e| format!("Settings: {e}"))
                 });
             }
+            Command::System {
+                action,
+                confirmed: true,
+            } => self.system(action, token),
             other => eprintln!("nidara-shell: {other:?} is not available now"),
         }
+    }
+
+    /// A system-menu action, as the TS bar runs it: Settings over its bus name, the rest
+    /// the session's own commands.
+    fn system(&self, action: crate::menu::System, token: Option<String>) {
+        use crate::menu::System;
+        let argv: &[&str] = match action {
+            System::About => return,
+            System::Settings => {
+                let Some(conn) = self.apps_conn.clone() else {
+                    return;
+                };
+                worker(move || {
+                    let mut args: Vec<String> = vec![];
+                    if let Some(t) = token {
+                        args.extend(["--xdg-activation-token".to_string(), t]);
+                    }
+                    conn.call_method(
+                        Some("org.nidara.Settings"),
+                        "/org/nidara/Settings",
+                        Some("org.nidara.Settings"),
+                        "Request",
+                        &(args,),
+                    )
+                    .map(|_| ())
+                    .map_err(|e| format!("Settings: {e}"))
+                });
+                return;
+            }
+            System::Lock => &["nidara-lock"],
+            System::Suspend => &["systemctl", "suspend"],
+            System::Logout => &["uwsm", "stop"],
+            System::Restart => &["systemctl", "reboot"],
+            System::Shutdown => &["systemctl", "poweroff"],
+        };
+        eprintln!("nidara-shell: system menu: {action:?}");
+        let argv: Vec<String> = argv.iter().map(|s| s.to_string()).collect();
+        worker(move || {
+            std::process::Command::new(&argv[0])
+                .args(&argv[1..])
+                // Waited for on this worker, so it never lingers as a zombie.
+                .status()
+                .map(drop)
+                .map_err(|e| format!("{}: {e}", argv[0]))
+        });
     }
 
     /// One EditLayout against the revision this hub last read: a concurrent edit is a
@@ -1063,6 +1229,7 @@ mod tests {
             },
             output: output.into(),
             fullscreen: false,
+            pid: None,
         }
     }
     #[test]
@@ -1101,6 +1268,7 @@ mod tests {
         hub.handle(HubEvent::Hyalo(HyaloUpdate::Windows {
             epoch: 1,
             windows: vec![w],
+            workspaces: vec![],
         }));
         let job = requested
             .try_recv()

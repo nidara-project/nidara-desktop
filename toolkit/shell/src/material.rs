@@ -82,12 +82,24 @@ pub fn dock(
     reduce_transparency: bool,
     capsule: Pane,
 ) -> Option<Material> {
+    piece(tokens, "dock", dark, reduce_transparency, capsule)
+}
+
+/// One exported piece's material (`dock`, `control` for the bar's capsules, `panel`…),
+/// stepped by `pane`'s short side.
+pub fn piece(
+    tokens: &Value,
+    name: &str,
+    dark: bool,
+    reduce_transparency: bool,
+    capsule: Pane,
+) -> Option<Material> {
     let variant = tokens["variants"].as_array()?.iter().find(|v| {
         v["dark"].as_bool() == Some(dark)
             && v["reduceTransparency"].as_bool() == Some(reduce_transparency)
     })?;
     let side = capsule.width.min(capsule.height);
-    let step = variant["pieces"]["dock"]
+    let step = variant["pieces"][name]
         .as_array()?
         .iter()
         .filter(|s| s["fromSide"].as_f64().is_some_and(|f| f <= side))

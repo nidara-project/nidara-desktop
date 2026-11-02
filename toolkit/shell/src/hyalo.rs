@@ -21,6 +21,24 @@ pub struct HyaloWindow {
     pub output: String,
     /// Over the whole output (not Maximized): that output's dock hides.
     pub fullscreen: bool,
+    /// Its client's process, when Hyalo knows it: a tray icon's click raises the window
+    /// of the process that owns it (tray.rs).
+    pub pid: Option<i32>,
+}
+
+/// A workspace as Hyalo reports it (`workspaces`): what the bar's dots and its desktop
+/// name need.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Workspace {
+    pub id: i32,
+    pub name: String,
+    pub output: String,
+    pub special: bool,
+    pub windows: usize,
+    /// Shown on its output.
+    pub active: bool,
+    /// On the output the user is on.
+    pub focused: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,6 +47,7 @@ pub enum HyaloUpdate {
     Windows {
         epoch: u64,
         windows: Vec<HyaloWindow>,
+        workspaces: Vec<Workspace>,
     },
     Lock(bool),
     Unavailable(String),
@@ -113,9 +132,41 @@ pub fn parse_windows(ok: &Value) -> Vec<HyaloWindow> {
                 },
                 output: s(w, "output"),
                 fullscreen: w["fullscreen"].as_str() == Some("fullscreen"),
+                pid: w["pid"]
+                    .as_i64()
+                    .and_then(|p| i32::try_from(p).ok())
+                    .filter(|p| *p > 0),
             })
         })
         .collect()
+}
+
+pub fn parse_workspaces(ok: &Value) -> Vec<Workspace> {
+    ok["workspaces"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|w| {
+            Some(Workspace {
+                id: i32::try_from(w["id"].as_i64()?).ok()?,
+                name: w["name"].as_str().unwrap_or_default().to_string(),
+                output: w["output"].as_str().unwrap_or_default().to_string(),
+                special: w["special"].as_bool().unwrap_or_default(),
+                windows: w["windows"].as_u64().unwrap_or_default() as usize,
+                active: w["active"].as_bool().unwrap_or_default(),
+                focused: w["focused"].as_bool().unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
+/// Windows and workspaces, read together.
+fn read(epoch: u64) -> Result<HyaloUpdate, String> {
+    Ok(HyaloUpdate::Windows {
+        epoch,
+        windows: parse_windows(&request(json!({"request": "windows"}))?),
+        workspaces: parse_workspaces(&request(json!({"request": "workspaces"}))?),
+    })
 }
 
 /// Runs forever on its own thread. A lost connection is reported and retried with
@@ -146,10 +197,7 @@ fn stream(epoch: u64, emit: &impl Fn(HyaloUpdate)) -> Result<(), String> {
         .as_bool()
         .unwrap_or(false);
     emit(HyaloUpdate::Lock(locked));
-    emit(HyaloUpdate::Windows {
-        epoch,
-        windows: parse_windows(&request(json!({"request": "windows"}))?),
-    });
+    emit(read(epoch)?);
     loop {
         events.set_read_timeout(None).map_err(|e| e.to_string())?;
         let mut stale = false;
@@ -186,10 +234,7 @@ fn stream(epoch: u64, emit: &impl Fn(HyaloUpdate)) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
         if stale {
-            emit(HyaloUpdate::Windows {
-                epoch,
-                windows: parse_windows(&request(json!({"request": "windows"}))?),
-            });
+            emit(read(epoch)?);
         }
     }
 }
@@ -232,7 +277,7 @@ mod tests {
 
     #[test]
     fn events_invalidate_and_a_closed_stream_is_an_error() {
-        // A private fake Hyalo: acknowledges the stream, answers lock/windows, sends
+        // A private fake Hyalo: acknowledges the stream, answers lock/windows/workspaces, sends
         // three close events (one read of the list), then closes.
         let dir = std::env::temp_dir().join(format!("nk-shell-hyalo-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -258,19 +303,23 @@ mod tests {
                         reads += 1;
                         json!({"ok": {"kind": "windows", "windows": [{"id": reads}]}})
                     }
+                    "workspaces" => json!({"ok": {"kind": "workspaces", "workspaces": [
+                        {"id": 1, "output": "A", "windows": reads, "active": true}
+                    ]}}),
                     _ => unreachable!(),
                 };
                 writeln!(conn, "{answer}").unwrap();
                 match req["request"].as_str().unwrap() {
                     "event_stream" => stream_conn = Some(conn),
-                    "windows" if reads == 1 => {
+                    // Each read is windows then workspaces: act once both are answered.
+                    "workspaces" if reads == 1 => {
                         let s = stream_conn.as_mut().unwrap();
                         for _ in 0..3 {
                             writeln!(s, "{}", json!({"event": "windows_changed", "windows": []}))
                                 .unwrap();
                         }
                     }
-                    "windows" => {
+                    "workspaces" => {
                         drop(stream_conn.take());
                         return reads;
                     }
