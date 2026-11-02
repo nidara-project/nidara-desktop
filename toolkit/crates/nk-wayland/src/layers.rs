@@ -296,6 +296,37 @@ impl Window {
         l.pending = true;
         Ok(())
     }
+    /// Where a layer takes the pointer, in its own coordinates: None is all of it, an empty
+    /// list none (a picture that follows the pointer must not catch it).
+    pub fn set_layer_input_region(
+        &mut self,
+        id: LayerId,
+        rects: Option<&[[i32; 4]]>,
+    ) -> Result<()> {
+        if rects.is_some_and(|r| r.len() > 256) {
+            return Err("input region has more than 256 rectangles".into());
+        }
+        let region = match rects {
+            None => None,
+            Some(rects) => {
+                let c = self.compositor.as_ref().ok_or("no compositor")?;
+                let region = c.create_region(&self.qh, ());
+                for [x, y, w, h] in rects {
+                    if *w > 0 && *h > 0 {
+                        region.add(*x, *y, *w, *h);
+                    }
+                }
+                Some(region)
+            }
+        };
+        let l = self.layer(id)?;
+        l.surface.set_input_region(region.as_ref());
+        if let Some(r) = region {
+            r.destroy();
+        }
+        l.pending = true;
+        Ok(())
+    }
     pub fn set_scale(&mut self, id: LayerId, scale: f64, anchor: (f64, f64)) -> Result<()> {
         fixed(&[scale, anchor.0, anchor.1])?;
         if scale < 0. {

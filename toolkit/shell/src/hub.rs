@@ -18,7 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, Sender};
 
 /// What one dock needs to draw and act; the same view for every dock.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Frame {
     pub view: View,
     pub prefs: Prefs,
@@ -726,7 +726,21 @@ impl Hub {
             Command::Pin { id } => {
                 self.edit_layout(&[("Operation", "insert-app"), ("DesktopId", &id)])
             }
+            Command::PinAt { id, before } => {
+                let mut edit = vec![("Operation", "insert-app"), ("DesktopId", id.as_str())];
+                if let Some(before) = before.as_deref() {
+                    edit.push(("BeforeKey", before));
+                }
+                self.edit_layout(&edit)
+            }
             Command::Unpin { key } => self.edit_layout(&[("Operation", "remove"), ("Key", &key)]),
+            Command::Move { key, before } => {
+                let mut edit = vec![("Operation", "move"), ("Key", key.as_str())];
+                if let Some(before) = before.as_deref() {
+                    edit.push(("BeforeKey", before));
+                }
+                self.edit_layout(&edit)
+            }
             Command::Autostart {
                 id,
                 generation,

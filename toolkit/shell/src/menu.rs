@@ -48,8 +48,19 @@ pub enum Command {
     Pin {
         id: String,
     },
+    /// Pin a running app at a place in the pinned section, before `before` (None: at its
+    /// end): a drag that drops it there.
+    PinAt {
+        id: String,
+        before: Option<String>,
+    },
     Unpin {
         key: String,
+    },
+    /// A pin moved before another (`None`: to the end of the pins), by a drag.
+    Move {
+        key: String,
+        before: Option<String>,
     },
     Autostart {
         id: String,

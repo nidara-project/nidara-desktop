@@ -534,6 +534,8 @@ export default {
     "dock.special.launcher.name": "Aplicaciones",
     "dock.special.trash.name": "Papelera",
     "dock.special.home.label": "Archivos",
+    "dock.drag.remove": "Quitar",
+    "dock.drag.remove-from-dock": "Quitar del Dock",
     "dock.menu.open": "Abrir",
     "dock.menu.close-window": "Cerrar ventana",
     "dock.menu.window-of": "Ventana de",

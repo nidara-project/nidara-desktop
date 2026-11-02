@@ -105,6 +105,29 @@ pub struct Dock {
     placed: Option<LayerPlacement>,
     /// A separator's drag resizing the dock, while the button is held (resize.rs).
     drag: Option<crate::resize::Drag>,
+    /// The latest frame from the hub; `frame` is it with a pin in the air or a dropped
+    /// order still held over it (reorder.rs).
+    source: Arc<Frame>,
+    /// A left press on a pin while it may still become a long press: slot, where, when.
+    long: Option<(usize, (f64, f64), Instant)>,
+    reorder: Option<crate::reorder::Reorder>,
+    /// The order a drop asked for, until the service's view has it.
+    held: Option<(Vec<String>, Instant)>,
+    /// A pin dropped off the strip: not drawn until the service's view has unpinned it.
+    gone: Option<(String, Instant)>,
+    /// The pin in the air, in a layer of its own so it can leave the strip.
+    float: Option<nk_wayland::LayerId>,
+    /// "Remove" over the pin in the air while a drop would unpin it.
+    remove_tip: Option<crate::tooltip::Tooltip>,
+    /// A running app dropped off the strip: its picture stays where it was let go until
+    /// the service's view has it as a running slot, then slides there.
+    landing: Option<Landing>,
+    /// A pin dropped off the strip that is not running: it goes up in a puff where it was
+    /// let go.
+    poof: Option<Poof>,
+    /// Each item's way still to go to its slot, after the order changed under it.
+    slides: HashMap<String, (f64, f64)>,
+    slides_at: Instant,
 }
 
 /// A window picture's longest side, in pixels: sharp in a 128 px slot (64 px icons at
@@ -173,6 +196,17 @@ impl Dock {
             hub,
             output_name,
             output_size,
+            source: frame.clone(),
+            long: None,
+            reorder: None,
+            held: None,
+            gone: None,
+            float: None,
+            remove_tip: None,
+            landing: None,
+            poof: None,
+            slides: HashMap::new(),
+            slides_at: Instant::now(),
             frame,
             shown: layout.clone(),
             presence: Spring::default(),
@@ -388,7 +422,32 @@ impl Dock {
                 self.output_name
             );
         }
-        self.frame = frame;
+        // Where everything is drawn, before the new frame moves it.
+        let before = self.positions();
+        let order: Vec<String> = self
+            .frame
+            .view
+            .items
+            .iter()
+            .map(|i| i.key.clone())
+            .collect();
+        let was = self.layout.size;
+        self.source = frame;
+        self.present();
+        let landing = self.landing.is_some();
+        if landing {
+            self.land(w, before.clone());
+        }
+        if let Some(r) = &self.reorder
+            && !self.frame.view.items.iter().any(|i| i.key == r.key)
+        {
+            // The service dropped the item in the air (uninstalled, edited elsewhere).
+            self.reorder = None;
+            self.remove_label(w, None);
+            if let Some(id) = self.float.take() {
+                let _ = w.destroy_layer(id);
+            }
+        }
         self.attention
             .update(&self.frame.view.items, Instant::now());
         if self
@@ -424,10 +483,48 @@ impl Dock {
         self.place(w)?;
         self.slide(w)?;
         self.reshape(w);
+        // The service moved things (a pin from a menu, an unpin, a window): they glide to
+        // their new slots instead of jumping there.
+        if !landing
+            && self.landing.is_none()
+            && !self.frame.prefs.reduce_motion
+            && !self
+                .frame
+                .view
+                .items
+                .iter()
+                .map(|i| &i.key)
+                .eq(order.iter())
+        {
+            self.glide(before, was);
+        }
         self.follow_tooltip(w);
         self.follow_popup(w);
         self.capture(w);
         self.apply(w)
+    }
+
+    /// Each item slides from `before` (drawn on a surface `was` long) to its slot now.
+    fn glide(&mut self, before: HashMap<String, (f64, f64)>, was: (u32, u32)) {
+        let half = |n: u32, o: u32| (f64::from(n) - f64::from(o)) / 2.;
+        let now = self.layout.size;
+        let (dx, dy) = if self.layout.position.horizontal() {
+            (half(now.0, was.0), 0.)
+        } else {
+            (0., half(now.1, was.1))
+        };
+        for (n, item) in self.frame.view.items.iter().enumerate() {
+            let (Some(&(bx, by)), Some(&[x, y, _, _])) =
+                (before.get(&item.key), self.shown.rects.get(n))
+            else {
+                continue;
+            };
+            let way = (bx + dx - x, by + dy - y);
+            if way.0.abs() > 0.01 || way.1.abs() > 0.01 {
+                self.slides.insert(item.key.clone(), way);
+            }
+        }
+        self.slides_at = Instant::now();
     }
 
     /// The popup follows its item to wherever it is now, or closes with it (gone, hidden).
@@ -878,6 +975,12 @@ impl Dock {
             }
             return Ok(());
         }
+        if self.reorder.is_some() {
+            if nav == Some(crate::keys::Nav::Leave) {
+                self.drop_pin(w, false);
+            }
+            return Ok(());
+        }
         let Some(slot) = self.focused_slot() else {
             return Ok(());
         };
@@ -1238,17 +1341,531 @@ impl Dock {
     }
 
     /// Slot `n` where it is drawn: lifted by attention.
+    /// The frame drawn: the hub's, with a dropped order held over it while the service
+    /// catches up, and the pin in the air moved to where it would land (reorder.rs).
+    fn present(&mut self) {
+        let mut view = None;
+        if let Some((order, at)) = &self.held {
+            view = (at.elapsed() < crate::reorder::HOLD)
+                .then(|| crate::reorder::hold(&self.source.view, order))
+                .flatten();
+            if view.is_none() {
+                self.held = None;
+            }
+        }
+        if let Some((key, at)) = &self.gone
+            && (at.elapsed() >= crate::reorder::HOLD
+                || !crate::reorder::pins(&self.source.view)
+                    .any(|n| self.source.view.items[n].key == *key))
+        {
+            self.gone = None;
+        }
+        if let Some(r) = &self.reorder {
+            view = Some(r.preview(view.as_ref().unwrap_or(&self.source.view)));
+        }
+        if let Some((key, _)) = &self.gone {
+            // Its slot closes at once: the pin is in the air (Landing) or a puff (Poof).
+            let mut v = view.unwrap_or_else(|| self.source.view.clone());
+            let pins = crate::reorder::pins(&v);
+            if let Some(n) = pins.clone().find(|&n| v.items[n].key == *key) {
+                v.items.remove(n);
+            }
+            view = Some(v);
+        }
+        self.frame = match view {
+            Some(view) => Arc::new(Frame {
+                view,
+                ..(*self.source).clone()
+            }),
+            None => self.source.clone(),
+        };
+    }
+
+    /// Not drawn on the strip: in the air, or dropped off it.
+    fn away(&self, key: &str) -> bool {
+        self.reorder.as_ref().is_some_and(|r| r.key == key)
+            || self.gone.as_ref().is_some_and(|(k, _)| k == key)
+    }
+
+    /// Where each item is drawn now, its slide included.
+    fn positions(&self) -> HashMap<String, (f64, f64)> {
+        self.frame
+            .view
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(n, i)| {
+                let [x, y, _, _] = *self.shown.rects.get(n)?;
+                let (sx, sy) = self.slides.get(&i.key).copied().unwrap_or_default();
+                Some((i.key.clone(), (x + sx, y + sy)))
+            })
+            .collect()
+    }
+
+    /// Present the frame again, each item sliding from where it was drawn to its slot
+    /// rather than jumping there. `from` names one that was drawn elsewhere (the pin
+    /// coming down from the air).
+    fn reslot(&mut self, w: &mut Window, from: Option<(&str, (f64, f64))>) {
+        let before = self.positions();
+        self.reslot_from(w, before, from);
+    }
+
+    /// `reslot`, from positions taken before the frame changed under them.
+    fn reslot_from(
+        &mut self,
+        w: &mut Window,
+        mut before: HashMap<String, (f64, f64)>,
+        from: Option<(&str, (f64, f64))>,
+    ) {
+        if let Some((key, at)) = from {
+            before.insert(key.to_string(), at);
+        }
+        let was = self.layout.size;
+        self.present();
+        // Laid out again for the new order, always: a slot more or fewer changes the strip's
+        // length, and a separator that changes place changes which slot is a 1 px line (with
+        // the old layout, the pin beside it was drawn in the separator's slot, shrunk to a
+        // dot). The surface, centred on its edge, grows or shrinks by half of a change on
+        // each side; what was drawn keeps its place on the screen.
+        let (dx, dy) = self.relayout(w, was);
+        for p in before.values_mut() {
+            (p.0, p.1) = (p.0 + dx, p.1 + dy);
+        }
+        self.reshape(w);
+        for (n, item) in self.frame.view.items.iter().enumerate() {
+            let (Some(&(bx, by)), Some(&[x, y, _, _])) =
+                (before.get(&item.key), self.shown.rects.get(n))
+            else {
+                continue;
+            };
+            let way = (bx - x, by - y);
+            if way.0.abs() > 0.01 || way.1.abs() > 0.01 {
+                self.slides.insert(item.key.clone(), way);
+            } else {
+                self.slides.remove(&item.key);
+            }
+        }
+        self.slides_at = Instant::now();
+        w.redraw();
+    }
+
+    /// The strip laid out again for the frame's slots; returns how far the surface's
+    /// origin moved, as a shift of everything in it, and moves the layers in the air
+    /// with it so they stay where they are on the screen.
+    fn relayout(&mut self, w: &mut Window, was: (u32, u32)) -> (f64, f64) {
+        self.layout = Self::lay(&self.frame, self.output_size);
+        if let Err(e) = self.place(w) {
+            eprintln!("nidara-shell: placing the dock: {e}");
+        }
+        let now = self.layout.size;
+        let half = |n: u32, o: u32| (f64::from(n) - f64::from(o)) / 2.;
+        let shift = if self.layout.position.horizontal() {
+            (half(now.0, was.0), 0.)
+        } else {
+            (0., half(now.1, was.1))
+        };
+        if let Some(l) = self.landing.as_mut() {
+            l.at = (l.at.0 + shift.0, l.at.1 + shift.1);
+            let _ = w.set_position(l.layer, l.at.0, l.at.1);
+        }
+        if let Some(p) = self.poof.as_mut() {
+            p.at = (p.at.0 + shift.0, p.at.1 + shift.1);
+            let _ = w.set_position(p.layer, p.at.0, p.at.1);
+        }
+        shift
+    }
+
+    /// The slides, a frame further on: each eases to its slot (`SLIDE`).
+    fn ease_slides(&mut self, now: Instant) {
+        let dt = now.saturating_duration_since(self.slides_at).as_secs_f64();
+        self.slides_at = now;
+        let keep = (-dt / SLIDE).exp();
+        self.slides.retain(|_, (x, y)| {
+            *x *= keep;
+            *y *= keep;
+            x.abs() > 0.05 || y.abs() > 0.05
+        });
+    }
+
+    /// The pin at `slot` is picked up: it leaves the strip for a layer of its own that
+    /// follows the pointer, and its slot stays open where it would land.
+    fn pick_up(&mut self, w: &mut Window, slot: usize) {
+        if self.popup.is_some() || self.frame.hidden || slot >= self.frame.view.items.len() {
+            return;
+        }
+        let item = self.frame.view.items[slot].clone();
+        let [x, y, size, _] = self.placed(slot, &item, Instant::now());
+        let grab = (self.pointer.0 - x, self.pointer.1 - y);
+        let Some(r) = crate::reorder::Reorder::new(&self.frame.view, slot, grab, size) else {
+            return;
+        };
+        self.pressed = None;
+        self.hover.press();
+        self.close_tooltip(w);
+        self.reorder = Some(r);
+        self.reslot(w, None);
+        let side = size.ceil().max(1.) as u32;
+        let id = match w.create_layer((side, side)) {
+            Ok(id) => id,
+            Err(e) => {
+                eprintln!("nidara-shell: no layer for the pin in the air: {e}");
+                self.reorder = None;
+                self.reslot(w, None);
+                return;
+            }
+        };
+        // A picture under the pointer must not catch it: the strip keeps the drag.
+        if let Err(e) = w.set_layer_input_region(id, Some(&[])) {
+            eprintln!("nidara-shell: the pin in the air's input region: {e}");
+        }
+        let art = match &item.kind {
+            Kind::App { id, .. } => self.art(id, size).cloned(),
+            _ => None,
+        };
+        let faint = if self.frame.dark {
+            rgba(255, 255, 255, 64)
+        } else {
+            rgba(0, 0, 0, 56)
+        };
+        let painted = w.paint_layer(id, |f| {
+            let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+            let r = Rect {
+                x: 0.,
+                y: 0.,
+                width: size as f32,
+                height: size as f32,
+            };
+            match &art {
+                Some(art) => c.image(art, r, ImageFit::Contain),
+                None => c.rounded_rect(r, size * 0.22, faint),
+            }
+            Ok(c.finish())
+        });
+        if let Err(e) = painted {
+            eprintln!("nidara-shell: the pin in the air: {e}");
+        }
+        self.float = Some(id);
+        self.move_float(w);
+    }
+
+    /// The pin in the air follows the pointer; half there once a drop would unpin it.
+    fn move_float(&mut self, w: &mut Window) {
+        let (Some(id), Some(r)) = (self.float, &self.reorder) else {
+            return;
+        };
+        let at = (self.pointer.0 - r.grab.0, self.pointer.1 - r.grab.1);
+        let (out, trash, size) = (r.unpins() && !r.trash, r.trash, r.size);
+        if let Err(e) = w.set_position(id, at.0, at.1) {
+            eprintln!("nidara-shell: moving the pin in the air: {e}");
+        }
+        let label = if trash {
+            self.frame
+                .view
+                .items
+                .iter()
+                .position(|i| i.kind == Kind::Trash)
+                .map(|n| (self.anchor_rect(n), "dock.drag.remove-from-dock"))
+        } else if out {
+            Some((self.over_icon(at, size), "dock.drag.remove"))
+        } else {
+            None
+        };
+        self.remove_label(w, label);
+        w.redraw();
+    }
+
+    /// The rect a label over the icon in the air is anchored to: the icon, and the gap
+    /// on its far side from the screen edge.
+    fn over_icon(&self, (x, y): (f64, f64), s: f64) -> [i32; 4] {
+        let g = f64::from(POPUP_GAP);
+        match self.layout.position {
+            Position::Bottom => [x, y - g, s, s + g],
+            Position::Left => [x, y, s + g, s],
+            Position::Right => [x - g, y, s + g, s],
+        }
+        .map(|v| v.round() as i32)
+    }
+
+    /// What a drop would do to the pin in the air, said over where it would happen:
+    /// "Remove" over the icon off the strip, "Remove from Dock" over the Trash (it is not
+    /// put in the Trash: only the pin goes). `(rect, key)`, or none.
+    fn remove_label(&mut self, w: &mut Window, label: Option<([i32; 4], &'static str)>) {
+        let Some((rect, key)) = label else {
+            if let Some(t) = self.remove_tip.take() {
+                t.close(w);
+            }
+            return;
+        };
+        // Another text: a new label.
+        if self.remove_tip.as_ref().is_some_and(|t| t.anchor != key)
+            && let Some(t) = self.remove_tip.take()
+        {
+            t.close(w);
+        }
+        let side = self.side();
+        if let Some(t) = self.remove_tip.as_mut() {
+            if let Err(e) = t.follow(w, rect, side) {
+                eprintln!("nidara-shell: \"Remove\" cannot follow the pin ({e})");
+                self.remove_label(w, None);
+                return;
+            }
+            self.sync_remove_label(w);
+            return;
+        }
+        if !self.ensure_look("no \"Remove\" label") {
+            return;
+        }
+        let look = self.look.as_mut().unwrap();
+        let text = look.text_of(&crate::menu::Label::Key(key));
+        match crate::tooltip::Tooltip::open(w, look, &text, key.to_string(), rect, side) {
+            Ok(t) => self.remove_tip = Some(t),
+            Err(e) => eprintln!("nidara-shell: no \"Remove\" label: {e}"),
+        }
+    }
+
+    /// Paints "Remove" once the compositor has placed it, as `sync_tooltip` does.
+    fn sync_remove_label(&mut self, w: &mut Window) {
+        if let (Some(t), Some(look)) = (self.remove_tip.as_mut(), self.look.as_ref())
+            && let Err(e) = t.sync(w, look)
+        {
+            eprintln!("nidara-shell: the \"Remove\" label: {e}");
+            if let Some(t) = self.remove_tip.take() {
+                t.close(w);
+            }
+        }
+    }
+
+    /// A drop off the strip: a running app's picture waits in the air for its new slot;
+    /// any other pin goes up in a puff (or just goes, with reduced motion).
+    fn let_go(
+        &mut self,
+        w: &mut Window,
+        key: &str,
+        layer: nk_wayland::LayerId,
+        at: (f64, f64),
+        size: f64,
+    ) {
+        let running = self
+            .source
+            .view
+            .items
+            .iter()
+            .any(|i| i.key == key && i.running());
+        if running {
+            self.landing = Some(Landing {
+                key: key.to_string(),
+                layer,
+                at,
+                since: Instant::now(),
+            });
+            return;
+        }
+        let _ = w.destroy_layer(layer);
+        if self.frame.prefs.reduce_motion {
+            return;
+        }
+        let art = self
+            .source
+            .view
+            .items
+            .iter()
+            .find(|i| i.key == key)
+            .and_then(|i| match &i.kind {
+                Kind::App { id, .. } => self.art(id, size).cloned(),
+                _ => None,
+            });
+        let side = (2. * size).ceil();
+        let corner = (at.0 + size / 2. - side / 2., at.1 + size / 2. - side / 2.);
+        let layer = match w.create_layer((side as u32, side as u32)) {
+            Ok(id) => id,
+            Err(e) => {
+                eprintln!("nidara-shell: no layer for the puff: {e}");
+                return;
+            }
+        };
+        let _ = w.set_layer_input_region(layer, Some(&[]));
+        if let Err(e) = w.set_position(layer, corner.0, corner.1) {
+            eprintln!("nidara-shell: the puff: {e}");
+        }
+        self.poof = Some(Poof {
+            layer,
+            at: corner,
+            side,
+            size,
+            art,
+            dark: self.frame.dark,
+            since: Instant::now(),
+        });
+        self.puff(w);
+    }
+
+    /// The puff, a frame further on; gone when it is over.
+    fn puff(&mut self, w: &mut Window) {
+        let Some(poof) = &self.poof else { return };
+        let p = poof.since.elapsed().as_secs_f64() / POOF.as_secs_f64();
+        if p >= 1. {
+            let _ = w.destroy_layer(poof.layer);
+            self.poof = None;
+            return;
+        }
+        let painted = w.paint_layer(poof.layer, |f| {
+            let mut c = Canvas::new(f.pixel_width, f.pixel_height, f.scale);
+            poof.paint(&mut c, p);
+            Ok(c.finish())
+        });
+        if let Err(e) = painted.and_then(|_| w.set_opacity(poof.layer, 1. - p * p)) {
+            eprintln!("nidara-shell: the puff: {e}");
+        }
+        w.redraw();
+    }
+
+    /// A running app's picture lands: in its new slot once the service's view has it
+    /// there (or back where it was if the unpin never came), sliding from the air.
+    fn land(&mut self, w: &mut Window, before: HashMap<String, (f64, f64)>) {
+        let Some(l) = &self.landing else { return };
+        let arrived = self.gone.is_none();
+        if !arrived && l.since.elapsed() < crate::reorder::HOLD {
+            return;
+        }
+        let l = self.landing.take().unwrap();
+        self.gone = None;
+        let _ = w.destroy_layer(l.layer);
+        self.reslot_from(w, before, Some((l.key.as_str(), l.at)));
+    }
+
+    /// The pointer moved with a pin in the air: the strip magnifies around it as ever,
+    /// the open slot moves to where it would land, and far enough off the strip a drop
+    /// would unpin it.
+    fn carry(&mut self, w: &mut Window) {
+        if self.layout.mag.is_some() {
+            if self.presence_target != 1. {
+                self.presence_target = 1.;
+                self.presence_at = Instant::now();
+            }
+            self.ease(w);
+            self.reshape(w);
+        }
+        let depth = self.depth(w);
+        let (sw, sh) = (w.size().0 as f64, w.size().1 as f64);
+        let [gx, gy, gw, _] = self.layout.glass;
+        let horizontal = self.layout.position.horizontal();
+        let far = match self.layout.position {
+            Position::Bottom => sh - gy,
+            Position::Left => gx + gw,
+            Position::Right => sw - gx,
+        };
+        let icon = f64::from(self.frame.prefs.icon_size) * self.layout.scale;
+        let out = depth > far + crate::reorder::OUT * icon;
+        let along = if horizontal {
+            self.pointer.0
+        } else {
+            self.pointer.1
+        };
+        let centres: Vec<f64> = crate::reorder::pins(&self.frame.view)
+            .map(|n| {
+                let [x, y, w, h] = self.shown.rects[n];
+                if horizontal { x + w / 2. } else { y + h / 2. }
+            })
+            .collect();
+        let to = crate::reorder::slot_at(&centres, along);
+        // A running app is over the pinned section up to a slot past its last pin.
+        let into = centres.last().is_none_or(|&last| along < last + icon);
+        let trash = self
+            .frame
+            .view
+            .items
+            .iter()
+            .position(|i| i.kind == Kind::Trash)
+            .and_then(|n| self.shown.hits.get(n))
+            .is_some_and(|&[x, y, w, h]| {
+                let (px, py) = self.pointer;
+                px >= x && px < x + w && py >= y && py < y + h
+            });
+        let Some(r) = self.reorder.as_mut() else {
+            return;
+        };
+        let was = (r.to, r.into, r.trash);
+        r.out = out;
+        r.trash = trash && r.running.is_none();
+        if r.running.is_some() {
+            r.into = into && !out;
+        }
+        if !out && !r.trash && (r.running.is_none() || r.into) {
+            r.to = to;
+        }
+        if (r.to, r.into, r.trash) != was {
+            self.reslot(w, None);
+        }
+        self.move_float(w);
+    }
+
+    /// The pin comes down: on the strip it moves there, off it it is unpinned, and
+    /// cancelled it goes back. It slides from where it was in the air to its slot.
+    fn drop_pin(&mut self, w: &mut Window, commit: bool) {
+        let Some(r) = self.reorder.take() else {
+            return;
+        };
+        let at = (self.pointer.0 - r.grab.0, self.pointer.1 - r.grab.1);
+        self.remove_label(w, None);
+        let float = self.float.take();
+        let unpin = commit && r.unpins();
+        if let Some(id) = float
+            && !unpin
+            && let Err(e) = w.destroy_layer(id)
+        {
+            eprintln!("nidara-shell: the pin in the air: {e}");
+        }
+        self.pressed = None;
+        self.long = None;
+        if unpin {
+            eprintln!("nidara-shell: {} unpinned by a drag", r.key);
+            self.gone = Some((r.key.clone(), Instant::now()));
+            if let Some(id) = float {
+                self.let_go(w, &r.key, id, at, r.size);
+            }
+            let _ = self.hub.send(Request::Menu {
+                command: Command::Unpin { key: r.key.clone() },
+                token: None,
+            });
+        } else if commit && let (Some(id), Some(before)) = (r.running.clone(), r.pins_at()) {
+            eprintln!("nidara-shell: {} pinned by a drag", r.key);
+            self.held = Some((r.order(), Instant::now()));
+            let _ = self.hub.send(Request::Menu {
+                command: Command::PinAt { id, before },
+                token: None,
+            });
+        } else if commit && let Some(before) = r.edit() {
+            self.held = Some((r.order(), Instant::now()));
+            let _ = self.hub.send(Request::Menu {
+                command: Command::Move {
+                    key: r.key.clone(),
+                    before,
+                },
+                token: None,
+            });
+        }
+        let from = (!unpin).then_some((r.key.as_str(), at));
+        self.reslot(w, from);
+    }
+
     fn placed(&self, n: usize, item: &Item, now: Instant) -> [f64; 4] {
         let [x, y, w, h] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
-        [x + dx, y + dy, w, h]
+        let (sx, sy) = self.slides.get(&item.key).copied().unwrap_or_default();
+        [x + dx + sx, y + dy + sy, w, h]
     }
 
     /// The running dot: on whole device pixels where it rests, carried from there exactly
     /// as far as its icon has moved (see `follow`).
     fn dot(&self, n: usize, d: f64, scale: f64) -> Rect {
         let rest = self.layout.dot(n);
+        let (sx, sy) = self
+            .slides
+            .get(&self.frame.view.items[n].key)
+            .copied()
+            .unwrap_or_default();
         let now = self.shown.dot(n);
+        let now = (now.0 + sx, now.1 + sy);
         let r = nk_render::snapped_dot(rest, d, scale);
         Rect {
             x: follow(r.x, rest.0, now.0),
@@ -1294,6 +1911,9 @@ impl Dock {
     }
 
     fn paint_item(&self, c: &mut Canvas, n: usize, item: &Item, now: Instant) {
+        if self.away(&item.key) {
+            return;
+        }
         let [x, y, w, h] = self.placed(n, item, now);
         let r = Rect {
             x: x as f32,
@@ -1516,8 +2136,21 @@ impl Application for Dock {
             Some(Overlay::Chooser(_)) => crate::chooser::REFRESH.as_millis() as u32,
             _ => 60_000,
         };
-        if self.presence.value != self.presence_target || self.settling {
+        if self.presence.value != self.presence_target
+            || self.settling
+            || !self.slides.is_empty()
+            || self.poof.is_some()
+        {
             return crate::attention::FRAME.as_millis() as u32;
+        }
+        // A press that may become a long press wakes the loop when it would; a held order
+        // or a dropped pin is given up on after a while.
+        if let Some((_, _, at)) = self.long {
+            let left = crate::reorder::LONG_PRESS.saturating_sub(at.elapsed());
+            return (left.as_millis() as u32).max(1);
+        }
+        if self.held.is_some() || self.gone.is_some() {
+            return 100;
         }
         // A minimized window the compositor has not listed yet is asked for again.
         let base = if self.thumbs.waiting() {
@@ -1553,13 +2186,40 @@ impl Application for Dock {
         {
             w.redraw();
         }
-        if self.settling {
+        if let Some((slot, _, at)) = self.long
+            && at.elapsed() >= crate::reorder::LONG_PRESS
+        {
+            self.long = None;
+            self.pick_up(w, slot);
+        }
+        if self
+            .held
+            .as_ref()
+            .is_some_and(|(_, at)| at.elapsed() >= crate::reorder::HOLD)
+            || self
+                .gone
+                .as_ref()
+                .is_some_and(|(_, at)| at.elapsed() >= crate::reorder::HOLD)
+        {
+            self.held = None;
+            if self.landing.is_some() {
+                let before = self.positions();
+                self.land(w, before);
+            } else {
+                self.gone = None;
+                self.present();
+                self.reshape(w);
+            }
+        }
+        self.puff(w);
+        if self.settling || !self.slides.is_empty() {
             w.redraw();
         }
         self.ease(w);
         self.slide(w)?;
         self.show_tooltip(w);
         self.sync_tooltip(w);
+        self.sync_remove_label(w);
         Ok(())
     }
     fn event(&mut self, event: Event, w: &mut Window) -> nk_wayland::Result<()> {
@@ -1575,6 +2235,10 @@ impl Application for Dock {
                 self.a11y(w)?;
             }
             Event::Configure => self.apply(w)?,
+            Event::Motion(x, y) if self.reorder.is_some() => {
+                self.pointer = (x, y);
+                self.carry(w);
+            }
             Event::Motion(x, y) if self.drag.is_some() => {
                 // Resizing: the size follows the pointer; nothing magnifies or names.
                 self.pointer = (x, y);
@@ -1585,6 +2249,11 @@ impl Application for Dock {
             }
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
+                if let Some((_, (px, py), _)) = self.long
+                    && (x - px).hypot(y - py) > crate::reorder::SLOP
+                {
+                    self.long = None;
+                }
                 if !self.frame.hidden {
                     self.hide.enter();
                     self.slide(w)?;
@@ -1614,6 +2283,7 @@ impl Application for Dock {
                 self.close_tooltip(w);
                 self.pressed = None;
                 self.middle = None;
+                self.long = None;
                 self.cycle.reset();
             }
             Event::Scroll(delta) if !self.frame.hidden && self.popup.is_none() => self.wheel(delta),
@@ -1628,12 +2298,31 @@ impl Application for Dock {
                     self.hover.press();
                 }
             }
+            Event::PopupOverlay { id, event }
+                if self.remove_tip.as_ref().is_some_and(|t| t.id == id) =>
+            {
+                if self.remove_tip.as_mut().unwrap().event(event) {
+                    self.sync_remove_label(w);
+                } else if let Some(t) = self.remove_tip.take() {
+                    t.close(w);
+                }
+            }
             Event::PopupOverlay { id, event } => {
                 if let Some(popup) = self.popup.as_mut().filter(|p| p.id() == id) {
                     let outcome = popup.event(w, event);
                     self.popup_event(w, outcome)?;
                 }
             }
+            // A pin in the air: another button puts it back, the left one's release drops it.
+            Event::Button { pressed: true, .. } if self.reorder.is_some() => {
+                self.drop_pin(w, false);
+                self.swallow = true;
+            }
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: false,
+                ..
+            } if self.reorder.is_some() => self.drop_pin(w, true),
             // Another button during a drag cancels it; its release ends it.
             Event::Button { pressed: true, .. } if self.drag.is_some() => self.cancel_drag(),
             Event::Button {
@@ -1688,6 +2377,16 @@ impl Application for Dock {
                 ..
             } if !self.frame.hidden => {
                 self.pressed = self.shown.hit(self.pointer.0, self.pointer.1);
+                // A pin, or a running app that is not pinned, held still long enough is
+                // picked up (idle, LONG_PRESS).
+                self.long = self
+                    .pressed
+                    .filter(|&n| {
+                        self.frame.can_edit_layout
+                            && crate::reorder::Reorder::new(&self.frame.view, n, (0., 0.), 0.)
+                                .is_some()
+                    })
+                    .map(|n| (n, self.pointer, Instant::now()));
                 // A separator's press starts the resize: the size follows the pointer
                 // away from the edge or toward it until the button comes up.
                 if let Some(n) = self.pressed
@@ -1708,6 +2407,7 @@ impl Application for Dock {
                 serial,
                 ..
             } => {
+                self.long = None;
                 let here = self.shown.hit(self.pointer.0, self.pointer.1);
                 if let Some(slot) = self.pressed.take().filter(|s| Some(*s) == here) {
                     self.click(slot, Some(serial), w);
@@ -1781,12 +2481,15 @@ impl Application for Dock {
             }
             let now = Instant::now();
             self.settle_rules(f.scale, now);
+            self.ease_slides(now);
             let frame = self.frame.clone();
             for (n, item) in frame.view.items.iter().enumerate() {
                 self.paint_item(&mut c, n, item, now);
             }
             for (n, item) in frame.view.items.iter().enumerate() {
-                if let Some(count) = item.signal.count {
+                if let Some(count) = item.signal.count
+                    && !self.away(&item.key)
+                {
                     self.paint_count(&mut c, n, item, count, now);
                 }
             }
@@ -1868,6 +2571,67 @@ fn hand_over(at: f64) -> (f64, f64) {
     (pixel, t * t * (3. - 2. * t))
 }
 
+/// The time constant an item slides to its new slot with, after the order changed.
+const SLIDE: f64 = 0.06;
+/// How long a pin dropped off the strip takes to go up in its puff.
+const POOF: Duration = Duration::from_millis(300);
+
+/// A running app unpinned by a drop, waiting in the air for its new slot.
+struct Landing {
+    key: String,
+    layer: nk_wayland::LayerId,
+    at: (f64, f64),
+    since: Instant,
+}
+
+/// A pin going up in a puff: the icon shrinks and fades as a ring of soft puffs spreads
+/// from it.
+struct Poof {
+    layer: nk_wayland::LayerId,
+    /// The layer's corner and side: twice the icon, centred on it.
+    at: (f64, f64),
+    side: f64,
+    size: f64,
+    art: Option<Arc<Raster>>,
+    dark: bool,
+    since: Instant,
+}
+
+impl Poof {
+    /// The frame `p` of the way (0..1): the icon at `1 - p/2` of its size, eight puffs
+    /// spreading from under it and growing; the layer fades as a whole.
+    fn paint(&self, c: &mut Canvas, p: f64) {
+        let mid = self.side / 2.;
+        let s = self.size * (1. - 0.5 * p);
+        let ink = if self.dark { 255 } else { 0 };
+        for k in 0..8 {
+            let a = std::f64::consts::FRAC_PI_4 * k as f64 + 0.3;
+            let d = self.size * (0.2 + 0.5 * p);
+            let r = self.size * (0.1 + 0.14 * p);
+            let (x, y) = (mid + d * a.cos(), mid + d * a.sin());
+            c.rounded_rect(
+                Rect {
+                    x: (x - r) as f32,
+                    y: (y - r) as f32,
+                    width: (2. * r) as f32,
+                    height: (2. * r) as f32,
+                },
+                r,
+                rgba(ink, ink, ink, (110. * (1. - p)) as u8),
+            );
+        }
+        let r = Rect {
+            x: (mid - s / 2.) as f32,
+            y: (mid - s / 2.) as f32,
+            width: s as f32,
+            height: s as f32,
+        };
+        match &self.art {
+            Some(art) => c.image(art, r, ImageFit::Contain),
+            None => c.rounded_rect(r, s * 0.22, rgba(ink, ink, ink, 60)),
+        }
+    }
+}
 /// How long the strip must not have moved to count as still.
 const STILL: Duration = Duration::from_millis(50);
 /// The time constant a separator settles onto (or leaves) a whole pixel with.
