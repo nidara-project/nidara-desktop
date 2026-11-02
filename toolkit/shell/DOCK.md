@@ -215,7 +215,13 @@ strip for a layer of its own (nk-wayland `create_layer`, an empty input region s
 keeps the pointer), follows the pointer, and the others slide to make room where it would
 land (`reslot`: each eases from where it was drawn, `SLIDE`; the strip is laid out again
 on every order change, or a pin beside a separator that moved is drawn in the
-separator's 1 px slot). Dropped:
+separator's 1 px slot). Where it would land is how many of the other pins have their centre
+behind the pointer, on the strip as drawn (`reorder::aim`): its own open slot sits between
+them, so the answer holds while the pointer stays in it, and past the last pin's centre it
+is the end of the section. A running app is over the pinned section up to half a slot past
+the last pin, as wide as that pin is drawn (magnified, it is wider than at rest). Until
+2026-11-02 it was the nearest centre, and a running app could never be pinned after the
+last pin (owner). Dropped:
 
 - **on the pinned section**, a pin moves there (`EditLayout move`, before the pin that
   follows it), and a running app is pinned there (`insert-app` with that `BeforeKey`). The
