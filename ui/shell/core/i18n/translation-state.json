@@ -717,6 +717,8 @@
     "dock.special.launcher.name": "76c74bd0",
     "dock.special.trash.name": "e3bf62bb",
     "dock.special.home.label": "6ce6c512",
+    "dock.drag.remove": "e963907d",
+    "dock.drag.remove-from-dock": "89c2236d",
     "dock.menu.open": "cf9b7706",
     "dock.menu.close-window": "e3896a93",
     "dock.menu.window-of": "9cba49b5",
@@ -906,7 +908,7 @@
   "locales": {
     "de": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -927,6 +929,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1034,14 +1038,14 @@
       "stale": []
     },
     "es": {
-      "translated": 901,
-      "of": 901,
+      "translated": 903,
+      "of": 903,
       "untranslated": [],
       "stale": []
     },
     "fr": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1062,6 +1066,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1170,7 +1176,7 @@
     },
     "it": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1191,6 +1197,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1299,7 +1307,7 @@
     },
     "ja": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1320,6 +1328,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1428,7 +1438,7 @@
     },
     "nl": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1449,6 +1459,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1557,7 +1569,7 @@
     },
     "pl": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1578,6 +1590,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1686,7 +1700,7 @@
     },
     "pt-BR": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1707,6 +1721,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1815,7 +1831,7 @@
     },
     "pt-PT": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1836,6 +1852,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -1944,7 +1962,7 @@
     },
     "ru": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -1965,6 +1983,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",
@@ -2073,7 +2093,7 @@
     },
     "zh-CN": {
       "translated": 779,
-      "of": 901,
+      "of": 903,
       "untranslated": [
         "bar.edit.done",
         "bar.edit.hint",
@@ -2094,6 +2114,8 @@
         "dev.log.critical.hint",
         "dev.log.critical.one",
         "dev.log.critical.other",
+        "dock.drag.remove",
+        "dock.drag.remove-from-dock",
         "dock.menu.dock-settings",
         "dock.menu.minimize",
         "dock.menu.new-window",

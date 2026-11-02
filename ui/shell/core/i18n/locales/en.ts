@@ -787,6 +787,8 @@ export default {
     "dock.special.launcher.name": "Applications",
     "dock.special.trash.name": "Trash",
     "dock.special.home.label": "Files",
+    "dock.drag.remove": "Remove",
+    "dock.drag.remove-from-dock": "Remove from Dock",
     "dock.menu.open": "Open",
     "dock.menu.close-window": "Close window",
     "dock.menu.window-of": "Window of",

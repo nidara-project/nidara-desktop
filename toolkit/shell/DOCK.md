@@ -15,8 +15,10 @@ D2 adds what the contract's D2 row lists: the app, window and dock menus; the bo
 window chooser; new window, middle click and scroll; indicators, attention, Unity counts
 and progress; tooltips; magnification; auto-hide; resizing from the separator, with its
 accessible adjuster; and the Dock page of the native Settings. Each has its paragraph
-below. Still to come: foreground usage and drag and drop (D3), and the Apps launcher
-(D4).
+below. D3's first part is in: reordering, pinning and unpinning by dragging within the
+dock (**Reorder**, below). Still to come in D3: foreground usage and drops from outside
+the dock (files, folders, apps from the launcher), and keyboard reordering; then the Apps
+launcher (D4).
 
 ## 1. Where it lives
 
@@ -206,6 +208,32 @@ preference. For the keyboard and readers the separator takes the roving focus (t
 focus never starts on one); there the arrow away from the edge grows the icons by 8 px
 and the arrow toward it shrinks them, and a reader's `SetValue` is clamped and sent the
 same way. No resize cursor yet: the toolkit has no cursor shapes.
+
+**Reorder (D3).** A long press (`reorder::LONG_PRESS`, 400 ms within `SLOP` 6 px) picks
+up a pin, or a running app that is not pinned (`reorder.rs`). The picked icon leaves the
+strip for a layer of its own (nk-wayland `create_layer`, an empty input region so the strip
+keeps the pointer), follows the pointer, and the others slide to make room where it would
+land (`reslot`: each eases from where it was drawn, `SLIDE`; the strip is laid out again
+on every order change, or a pin beside a separator that moved is drawn in the
+separator's 1 px slot). Dropped:
+
+- **on the pinned section**, a pin moves there (`EditLayout move`, before the pin that
+  follows it), and a running app is pinned there (`insert-app` with that `BeforeKey`). The
+  dropped order is held over the service's views until it has it (`reorder::hold`, at most
+  `HOLD` 2 s), so nothing jumps back meanwhile;
+- **off the strip**, past `OUT` (¾ of an icon) away from the screen edge, a pin is
+  unpinned (`remove`). "Remove" is shown over the icon while a drop would do it (owner,
+  2026-11-02: clearer than the faint icon that came before). A running app keeps its
+  windows: its icon waits in the air until the service's view has its running slot, then
+  slides there (`Landing`). Any other pin goes up in a puff where it was let go (`Poof`,
+  0.3 s; none with reduced motion);
+- **on the Trash**, a pin is unpinned the same way, with "Remove from Dock" over the Trash:
+  it only leaves the dock, the app is not uninstalled;
+- **anywhere else**, or with Escape or another button, it goes back with no edit.
+
+Changes that come from the service (a pin or unpin from a menu, a new window) glide too:
+`drain` slides every item from where it was drawn (`glide`), the surface's recentring
+included.
 
 **The Dock page (D2).** The native Settings draws `dock` from its manifest page alone
 (`routing::MANIFEST`, beside `appearance`): position, icon size, magnification and its
