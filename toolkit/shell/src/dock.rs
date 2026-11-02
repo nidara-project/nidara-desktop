@@ -1761,15 +1761,11 @@ impl Dock {
         } else {
             self.pointer.1
         };
-        let centres: Vec<f64> = crate::reorder::pins(&self.frame.view)
-            .map(|n| {
-                let [x, y, w, h] = self.shown.rects[n];
-                if horizontal { x + w / 2. } else { y + h / 2. }
-            })
-            .collect();
-        let to = crate::reorder::slot_at(&centres, along);
-        // A running app is over the pinned section up to a slot past its last pin.
-        let into = centres.last().is_none_or(|&last| along < last + icon);
+        let Some(key) = self.reorder.as_ref().map(|r| r.key.clone()) else {
+            return;
+        };
+        let (to, into) =
+            crate::reorder::aim(&self.frame.view, &self.shown.hits, horizontal, &key, along);
         let trash = self
             .frame
             .view

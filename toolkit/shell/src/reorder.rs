@@ -168,14 +168,42 @@ impl Reorder {
     }
 }
 
-/// The pinned slot a pin dropped at `along` lands in: the one whose centre (along the
-/// dock, in order) is nearest.
-pub fn slot_at(centres: &[f64], along: f64) -> usize {
-    centres
-        .iter()
-        .enumerate()
-        .min_by(|a, b| (a.1 - along).abs().total_cmp(&(b.1 - along).abs()))
-        .map_or(0, |(i, _)| i)
+/// Where the pin in the air (`key`) at `along` (main axis) would land in `view` as drawn
+/// (`hits`, each item's share of the main axis): `(to, into)`, the pinned slot and
+/// whether a running app is over the pinned section at all.
+///
+/// The slot is how many of the OTHER pins have their centre behind the pointer. Its own
+/// open slot sits between those and the rest, so the answer holds while the pointer stays
+/// in it, and past the last pin's centre it is the end of the section. The nearest
+/// centre, as it was, could never be the end for a running app coming in from the right,
+/// and with magnification it stuck one short of it (owner, 2026-11-02).
+pub fn aim(
+    view: &View,
+    hits: &[[f64; 4]],
+    horizontal: bool,
+    key: &str,
+    along: f64,
+) -> (usize, bool) {
+    let span = |n: usize| {
+        let [x, y, w, h] = hits[n];
+        if horizontal { (x, w) } else { (y, h) }
+    };
+    let range = pins(view);
+    let to = range
+        .clone()
+        .filter(|&n| view.items[n].key != key)
+        .filter(|&n| {
+            let (a, len) = span(n);
+            a + len / 2. < along
+        })
+        .count();
+    // A running app is over the pinned section up to half a slot past the last pin, as
+    // wide as that pin is drawn now (magnified, it is wider than at rest).
+    let into = range.last().is_none_or(|n| {
+        let (a, len) = span(n);
+        along < a + 1.5 * len
+    });
+    (to, into)
 }
 
 /// `view` with its pins in `order`, while the service has not caught up with a drop:
@@ -314,6 +342,86 @@ mod tests {
         assert_eq!(r.pins_at(), None);
     }
 
+    /// The strip as the dock draws `view` with the pointer at `p`: 64 px icons, magnified
+    /// to 128 when `mag`.
+    fn strip(view: &View, mag: bool, p: f64) -> crate::geometry::Layout {
+        use crate::geometry::{Position, Slot, envelope, layout};
+        let slots: Vec<_> = view
+            .items
+            .iter()
+            .map(|i| match i.kind {
+                Kind::Separator => Slot::Separator,
+                _ => Slot::Icon,
+            })
+            .collect();
+        let l = layout(&slots, 64, Position::Bottom, (2560, 1440), 0.);
+        if !mag {
+            return l;
+        }
+        envelope(l, &slots, 128, (2560, 1440), 0.).magnify(&slots, (p, 0.), 1.)
+    }
+
+    /// The centre of `view`'s item `n` at rest.
+    fn centre(view: &View, mag: bool, n: usize) -> f64 {
+        let [x, _, w, _] = strip(view, mag, -1e4).rects[n];
+        x + w / 2.
+    }
+
+    /// Carry `r` to `to` a pixel at a time, as the dock does: each step aims at the strip
+    /// as the preview draws it, magnified around the pointer.
+    fn carry(v: &View, r: &mut Reorder, mag: bool, from: f64, to: f64) {
+        let mut p = from;
+        while (p - to).abs() > 0.5 {
+            p += (to - p).signum();
+            let shown = r.preview(v);
+            let (at, into) = aim(&shown, &strip(&shown, mag, p).hits, true, &r.key, p);
+            if r.running.is_some() {
+                r.into = into;
+            }
+            if r.running.is_none() || r.into {
+                r.to = at;
+            }
+        }
+    }
+
+    #[test]
+    fn a_running_app_can_be_pinned_after_the_last_pin() {
+        let v = view();
+        for mag in [false, true] {
+            let (c, sep, run) = (centre(&v, mag, 3), centre(&v, mag, 4), centre(&v, mag, 5));
+            // Brought in from its slot to anywhere between the last pin's centre and the
+            // separator: it is pinned at the end.
+            let mut x = sep;
+            while x > c + 1. {
+                let mut r = Reorder::new(&v, 5, (0., 0.), 64.).unwrap();
+                carry(&v, &mut r, mag, run, x);
+                assert_eq!(r.pins_at(), Some(None), "mag {mag}, dropped at {x}");
+                x -= 1.;
+            }
+            // Further, past that pin's centre: before it.
+            let mut r = Reorder::new(&v, 5, (0., 0.), 64.).unwrap();
+            carry(&v, &mut r, mag, run, c - 8.);
+            assert_eq!(r.pins_at(), Some(Some("c".into())), "mag {mag}");
+            // And back out past the Trash: nothing.
+            let out = centre(&v, mag, 6) + 200.;
+            carry(&v, &mut r, mag, c - 8., out);
+            assert_eq!(r.pins_at(), None, "mag {mag}");
+        }
+    }
+
+    #[test]
+    fn a_pin_can_be_carried_to_the_end_and_back() {
+        let v = view();
+        for mag in [false, true] {
+            let (a, c, sep) = (centre(&v, mag, 0), centre(&v, mag, 3), centre(&v, mag, 4));
+            let mut r = Reorder::new(&v, 0, (0., 0.), 64.).unwrap();
+            carry(&v, &mut r, mag, a, (c + sep) / 2.);
+            assert_eq!(r.edit(), Some(None), "mag {mag}: to the end");
+            carry(&v, &mut r, mag, (c + sep) / 2., a - 200.);
+            assert_eq!(r.edit(), None, "mag {mag}: back where it was");
+        }
+    }
+
     #[test]
     fn a_pin_dropped_on_the_trash_is_unpinned() {
         let v = view();
@@ -357,15 +465,6 @@ mod tests {
         r.to = 0;
         assert_eq!(r.edit(), Some(Some("a".into())));
         assert_eq!(r.order(), ["c", "a", "b", "folder:x"]);
-    }
-
-    #[test]
-    fn it_lands_in_the_nearest_slot() {
-        let centres = [32., 100., 168., 236.];
-        assert_eq!(slot_at(&centres, -50.), 0);
-        assert_eq!(slot_at(&centres, 70.), 1);
-        assert_eq!(slot_at(&centres, 140.), 2);
-        assert_eq!(slot_at(&centres, 900.), 3);
     }
 
     #[test]
