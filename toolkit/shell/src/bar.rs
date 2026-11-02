@@ -28,14 +28,14 @@ use unicode_segmentation::UnicodeSegmentation;
 pub const NAMESPACE: &str = "nidara-bar";
 /// The surface: the strip it reserves and room below it for the glass's shadow.
 const HEIGHT: u32 = 48;
-const EXPONENT: f64 = 3.2;
+/// The capsules are true capsules: circular ends, not the dock's squircle.
+const EXPONENT: f64 = 2.;
 const LEFT_BUTTON: u32 = 0x110;
 const RIGHT_BUTTON: u32 = 0x111;
 const MIDDLE_BUTTON: u32 = 0x112;
 const TEXT_SIZE: f32 = 12.;
-/// The one hover, 8 % ink (owner, 2026-10-06), and the open item's, stronger.
+/// The one hover, 8 % ink (owner, 2026-10-06).
 const HOVER: f32 = 0.08;
-const OPEN: f32 = 0.16;
 /// Dot inks: the active one full, an occupied one dim, an empty one faint (the TS bar's
 /// text, text-dim and surface-hover in the dark skin).
 const DOT_OCCUPIED: f32 = 0.55;
@@ -52,7 +52,6 @@ pub struct BarFrame {
     /// Locked, or a fullscreen window on this output.
     pub hidden: bool,
     pub can_settings: bool,
-    pub apps_open: bool,
     pub region: m::Region,
     pub status: crate::status::Status,
     pub tray: Arc<Vec<crate::tray::TrayItem>>,
@@ -659,10 +658,8 @@ impl Bar {
                     self.open_menu(w, rows, serial, Item::Logo);
                 }
             }
-            Item::Island => {
-                // The dots' overview is not in the Rust shell yet; Apps is what it has.
-                let _ = self.requests.send(crate::hub::Request::ToggleApps);
-            }
+            // The dots open the desktops' overview, which the Rust shell does not have yet.
+            Item::Island => {}
             Item::Tray(i) => self.tray_click(i, LEFT_BUTTON, serial, w),
             Item::Widget(Widget::Focus) => {
                 let on = !self.frame.status.dnd;
@@ -871,6 +868,7 @@ fn tree(
             Item::Title => Node::new(id, Role::Label, &layout.title),
             Item::Island => {
                 let mut n = Node::new(id, Role::Button, "Desktops");
+                n.states.disabled = true;
                 n.description = active.map_or(String::new(), |a| {
                     format!("desktop {} of {}", a + 1, layout.dots.len())
                 });
@@ -903,7 +901,7 @@ fn tree(
         };
         if matches!(
             item,
-            Item::Logo | Item::Island | Item::Tray(_) | Item::Widget(Widget::Focus)
+            Item::Logo | Item::Tray(_) | Item::Widget(Widget::Focus)
         ) {
             node.actions = vec![Action::Activate];
         }
@@ -1109,19 +1107,14 @@ impl Application for Bar {
                 c.rounded_rect(rect(*g), g[3] / 2., base);
             }
         }
-        let open = |i: Item| i == Item::Island && self.frame.apps_open;
         for (item, b) in self.layout.items.clone() {
             if item == Item::Island {
                 continue;
             }
             let lit = self.hover == Some(item);
-            if lit || open(item) {
+            if lit {
                 let p = m::pill(b);
-                c.rounded_rect(
-                    rect(p),
-                    p[3] / 2.,
-                    ink(if open(item) { OPEN } else { HOVER }),
-                );
+                c.rounded_rect(rect(p), p[3] / 2., ink(HOVER));
             }
             let icon_box = |b: [f64; 4]| Rect {
                 x: (b[0] + m::ICON_PAD) as f32,

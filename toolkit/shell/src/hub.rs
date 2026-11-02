@@ -824,7 +824,6 @@ impl Hub {
                 reduce_transparency: self.prefs.reduce_transparency,
                 hidden: self.locked || fullscreen,
                 can_settings: self.can_settings,
-                apps_open: self.launcher.is_some(),
                 region: self.region.clone(),
                 status: self.widgets,
                 tray: self.tray.clone(),

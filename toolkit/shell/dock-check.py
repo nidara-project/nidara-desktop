@@ -432,7 +432,7 @@ try:
     result['shell1'] = {'state': list(state), 'refusals': 'bar Unavailable, Dock Invalid'}
     if with_bar:
         # The bar's tree (bar.rs): its items in the order drawn; the mark opens the system
-        # menu, whose ending rows ask first; the island opens Apps.
+        # menu, whose ending rows ask first; the island waits for the overview (disabled).
         bar = until('the bar in the reader', lambda: dock_node('Bar'))
         heard = [(n.get_role_name(), n.get_name()) for n in children(bar)]
         assert [h[1] for h in heard][:1] == ['System menu'], heard
@@ -467,13 +467,8 @@ try:
             until('the confirmation closes', lambda: not menu_rows('Bar'))
             assert 'uwsm' not in (LOG / 'shell.log').read_text()
         island = next(n for n in children(dock_node('Bar')) if n.get_name() == 'Desktops')
-        island.get_action_iface().do_action(0)
-        until('the island opens Apps', lambda: [l for l in ipc('layers').get('ok', {}).get('layers', [])
-                                                if l.get('namespace') == 'nidara-apps'])
-        shell1('ToggleSurface', GLib.Variant('(sb)', ('app-grid', False)), quiet=False)
-        until('and Apps closes', lambda: not [l for l in ipc('layers').get('ok', {}).get('layers', [])
-                                              if l.get('namespace') == 'nidara-apps'])
-        result['bar']['island'] = 'opens Apps'
+        assert not island.get_state_set().contains(Atspi.StateType.ENABLED), 'the island acts'
+        result['bar']['island'] = 'disabled until the overview'
         # The widgets (status.rs): Wi-Fi only with an adapter, the battery only with one;
         # focus only while Do Not Disturb is on, and its click turns it off.
         def bar_names():

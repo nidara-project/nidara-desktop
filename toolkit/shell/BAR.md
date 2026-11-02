@@ -9,12 +9,13 @@ preview, where the TS bar would sit under it.
 B1 is the bar's row, one layer along the top of each output, with the TS "B" bar's
 measures (owner, 2026-10-06: 36 strip, 32 capsule, one 4 px rhythm, 12 px text, 18 px
 icons). Three pieces of glass, declared to Hyalo as the `control` piece of the exported
-material (the shell is always dark: white ink):
+material (the shell is always dark: white ink). Each is a true capsule, circular ends
+(exponent 2), never the dock's squircle (owner, 2026-11-02):
 
 | Group | Items, left to right | A click |
 |---|---|---|
 | Left | Nidara's mark · the focused app's name, or the desktop's ("Desktop 3") | mark: the system menu |
-| Centre | the island: five workspace dots (active wide, occupied dim, empty faint) | Apps (the overview is not in the Rust shell) |
+| Centre | the island: five workspace dots (active wide, occupied dim, empty faint) | the desktops' overview, once the Rust shell has one; nothing until then |
 | Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; the rest open nothing until B2/B3 |
 
 Left out of B1 (the owner's list): the overflow `»`, editing and reordering, the island's
@@ -104,7 +105,7 @@ dock (#971). Activate does what a click does, without a token.
 `toolkit/shell/check-bar-headless.sh` runs the dock's nested check with the bar
 (`NK_SHELL_BAR=1`): a private sessiond with `--power-read-only --tray`, a stand-in Network1
 and a stand-in tray item. It checks the bar's layer and reader tree; the system menu, the
-log-out confirmation and Cancel (nothing ends); the island opening Apps; the widgets this
+log-out confirmation and Cancel (nothing ends); the island disabled; the widgets this
 machine has; Do Not Disturb on and its click turning it off; the Wi-Fi icon following
 `Updated`; and the tray item's icon, its click, its menu with a checkmark, the submenu in
 place and the row clicked through dbusmenu. Shots land in `$NK_WIDGETS_LOG` (`bar*.png`).
