@@ -155,7 +155,8 @@ WindowMatch: HyaloEpoch, WindowId, DesktopId (empty if unknown), AppGeneration,
 MatchKind and Candidates. A3 bounds ambiguity diagnostics to 16 candidates/8 KiB,
 with CandidateCount:t and CandidatesComplete:b; a partial diagnostic never picks
 a winner. Exact current app_id/desktop ID first, then exact
-StartupWMClass, verified Flatpak ID, then initial app_id. Bounded verified PID
+StartupWMClass, verified Flatpak ID, then the ID and StartupWMClass ignoring
+ASCII case (a unique hit only, owner 2026-11-02), then initial app_id. Bounded verified PID
 ancestry/systemd metadata can disambiguate; title and executable substring alone
 never choose an app. Ambiguous matches remain ambiguous. Same-executable web
 apps/Steam entries must not steal each other's icons. Matching is presentation,
