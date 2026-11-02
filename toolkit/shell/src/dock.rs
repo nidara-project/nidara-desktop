@@ -894,6 +894,7 @@ impl Dock {
         let starts = matches!(
             command,
             Command::Launch { .. }
+                | Command::OpenWith { .. }
                 | Command::OpenFolder(_)
                 | Command::OpenFile(_)
                 | Command::OpenTrash
@@ -908,7 +909,9 @@ impl Dock {
         };
         if starts && let Some(serial) = serial {
             let target = match &command {
-                Command::Launch { id, .. } => Some(id.trim_end_matches(".desktop").to_string()),
+                Command::Launch { id, .. } | Command::OpenWith { id, .. } => {
+                    Some(id.trim_end_matches(".desktop").to_string())
+                }
                 _ => None,
             };
             match w.request_activation_token(serial, target.as_deref()) {
@@ -1218,8 +1221,9 @@ impl Dock {
                 id,
                 epoch,
             },
+            // Restored AND focused: Hyalo's `unminimize` alone leaves the focus where it was.
             Action::Restore(id) => Request::Window {
-                verb: "unminimize",
+                verb: "focus-window",
                 id,
                 epoch,
             },
@@ -1447,9 +1451,9 @@ impl Dock {
     /// The drop: pinned where the slot opened, or opened by the app under it. What it
     /// asks of Applications1 is checked there again (a folder that is not one, an app that
     /// does not open these files is refused).
-    fn drop_in(&mut self, w: &mut Window, data: &[u8]) {
+    fn drop_in(&mut self, w: &mut Window, data: &[u8], serial: u32) -> nk_wayland::Result<()> {
         let Some(target) = self.dropping.take() else {
-            return;
+            return Ok(());
         };
         let uris = crate::drops::uris(data);
         let command = |c| Request::Menu {
@@ -1471,19 +1475,25 @@ impl Dock {
                     before: crate::drops::before(&self.source.view, to),
                 }));
             }
+            // With a token from the drop, as a click's: the app comes to the front.
             crate::drops::Target::Open { id, generation } if !uris.is_empty() => {
                 eprintln!("nidara-shell: {} files dropped on {id}", uris.len());
-                let _ = self.hub.send(command(Command::OpenWith {
-                    id,
-                    generation,
-                    uris,
-                }));
+                self.choose(
+                    Command::OpenWith {
+                        id,
+                        generation,
+                        uris,
+                    },
+                    Some(serial),
+                    w,
+                )?;
             }
             _ => {}
         }
         self.presence_target = 0.;
         self.presence_at = Instant::now();
         self.reslot(w, None);
+        Ok(())
     }
 
     /// Not drawn on the strip: in the air, or dropped off it.
@@ -2404,7 +2414,7 @@ impl Application for Dock {
                 self.presence_target = 0.;
                 self.presence_at = Instant::now();
             }
-            Event::Drop { data, .. } => self.drop_in(w, &data),
+            Event::Drop { data, serial, .. } => self.drop_in(w, &data, serial)?,
             Event::PointerLeave => {
                 self.hide.leave(self.hide_delay(), Instant::now());
                 self.presence_target = 0.;

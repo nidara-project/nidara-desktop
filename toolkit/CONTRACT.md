@@ -185,7 +185,9 @@ Owns everything between a string and positioned glyphs, and the editing model on
 - `nidara-layers-v1` (below).
 - **Drops from other clients** (`wl_data_device` v3, #959 D3): a drag over the root surface
   (never its layers or popups) is `Event::DragEnter { x, y, mimes }`, then `DragMotion`, and
-  ends in `DragLeave` or `Drop { mime, data }`. Nothing is taken until the app calls
+  ends in `DragLeave` or `Drop { mime, data, serial }`; `serial` is the drag's enter serial,
+  counted as delivered, so what the drop starts can carry an activation token
+  (`request_activation_token`; Hyalo honours it once, just after the drop). Nothing is taken until the app calls
   `Window::accept_drop(Some(mime))` (a copy); `accept_drop(None)` refuses, and the app says
   it again whenever the answer changes under the pointer. A drop with nothing accepted is a
   `DragLeave`. The data is read without blocking, at most 1 MiB (more, or a read error, is a

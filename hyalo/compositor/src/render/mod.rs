@@ -325,6 +325,13 @@ fn chrome_scrims(surface: &WlSurface, location: Point<i32, Physical>, scale: Sca
     out
 }
 
+/// A drag's picture: drawn at the pointer plus `offset`, which the client moves with each
+/// commit (`wl_surface.offset` / attach's x, y), under the pointer.
+pub struct DndIcon {
+    pub surface: WlSurface,
+    pub offset: Point<i32, Logical>,
+}
+
 /// What a frame is made from: the parts of the state rendering reads, borrowed apart from the
 /// backend (which renders them).
 pub struct Scene<'a> {
@@ -333,6 +340,7 @@ pub struct Scene<'a> {
     pub wm: &'a crate::wm::Wm,
     pub pointer: Point<f64, Logical>,
     pub cursor_status: &'a CursorImageStatus,
+    pub dnd_icon: Option<&'a DndIcon>,
     pub lock: &'a crate::lock::LockState,
     /// How windows are drawn: corners, the blur behind them (render/window.rs).
     pub windows: &'a crate::config::WindowsConfig,
@@ -349,6 +357,7 @@ impl<'a> Scene<'a> {
         wm: &'a crate::wm::Wm,
         seat: &Seat<Hyalo>,
         cursor_status: &'a CursorImageStatus,
+        dnd_icon: Option<&'a DndIcon>,
         lock: &'a crate::lock::LockState,
         windows: &'a crate::config::WindowsConfig,
         animations: bool,
@@ -356,7 +365,7 @@ impl<'a> Scene<'a> {
         dimmed:bool,
     ) -> Self {
         let pointer = seat.get_pointer().unwrap().current_location();
-        Self { dimmed,space, wm, pointer, cursor_status, lock, windows, when, reduce_motion: !animations }
+        Self { dimmed,space, wm, pointer, cursor_status, dnd_icon, lock, windows, when, reduce_motion: !animations }
     }
 }
 
@@ -739,5 +748,11 @@ fn push_cursor<R: HyaloRenderer>(
                 out.push(OutputElement::Cursor(e));
             }
         }
+    }
+    // A drag's picture, under the pointer (front to back: after it). Without it a file
+    // dragged from a file manager showed only the pointer.
+    if let Some(icon) = state.dnd_icon.filter(|i| smithay::utils::IsAlive::alive(&i.surface)) {
+        let loc = (pointer + icon.offset.to_f64()).to_physical(scale).to_i32_round();
+        out.extend(render_elements_from_surface_tree(renderer, &icon.surface, loc, scale, 1.0, Kind::Unspecified));
     }
 }

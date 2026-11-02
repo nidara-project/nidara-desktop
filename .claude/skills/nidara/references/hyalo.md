@@ -1306,7 +1306,8 @@ that picture and grows back out of it. `wm/minimize.rs`.
   (`xdg_toplevel.set_minimized`, `minimize_request`), `do minimize [ID]`. A dialog by itself is
   refused. **What brings it back**: `focus_window` — the one door to the focus (the dock's
   clicks, `focus-window`, xdg-activation, the overview) restores a hidden window first; `do
-  unminimize ID` restores without the focus. Commands that move, tile or size a window refuse a
+  unminimize ID` restores without the focus — so the dock restores with `focus-window` (owner:
+  a restored window takes the focus). Commands that move, tile or size a window refuse a
   minimized one (`target` vs `any_target` in actions.rs): it is in no layout.
 - **Where it shrinks to is the dock's to say** (`minimize_targets` over IPC: per output, the
   layer surface's namespace and a rectangle per window id, in that surface's coordinates;
@@ -2008,6 +2009,18 @@ Anything else does not take the focus: a shown window that asked is marked **dem
 instead (until it gets the focus), as GNOME does. A NEW window needs none of this — Hyalo
 focuses it when it maps. Tokens are remembered unused for 60 s (`TOKEN_KEPT`), so a late request
 is refused knowingly (attention), not ignored like a made-up one.
+
+**A drop counts as the user too** (`DropGrant`, #959 D3). During a drag the source's grab holds
+the pointer and the target has neither focus, so the rule above refused the dock's launch when
+files were dropped on an app. When a drop is taken (`DndGrabHandler::dropped`, validated), the
+client it landed in may make ONE token within 2 s (`DROP_GRANT`) with a serial no older than the
+drag's start (`dnd_started`, from `dnd_requested`); nk-wayland hands the app the drag's enter
+serial in `Event::Drop { serial }` and counts it as delivered.
+
+**The drag's picture is Hyalo's to draw.** `dnd_requested`'s icon surface is kept in
+`dnd_icon` and drawn under the pointer, at the pointer plus the offset each commit adds
+(`buffer_delta`, anvil's way), with its frame callbacks; gone at the drop or cancel. Until
+2026-11-02 Hyalo dropped it, and a file dragged from Nautilus showed only the pointer.
 
 The Hyprland session honours none (`misc:focus_on_activate` is off by default), so there a
 link clicked in a terminal leaves the browser behind; on Hyalo it comes forward.

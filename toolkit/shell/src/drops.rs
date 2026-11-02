@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Drops from other apps (D3, APPLICATIONS1-DOCK.md §9 "Drag sources, drops"): files and
 //! folders dragged from a file manager as `text/uri-list`. Over the right-hand side of the
-//! strip (past the last app or minimized window) they are pinned there, in the folders' and
-//! files' section, which opens a slot where they would land; over an app that opens files,
+//! strip (from the separator after the last app or minimized window on) they are pinned
+//! there, in the folders' and files' section, which opens a slot where they would land; over
+//! an app that opens files, the whole of its icon included,
 //! that app opens them. Anywhere else the drag is refused, and the source shows it. Nothing
 //! happens while hovering: the edit or the launch is made at the drop.
 use crate::model::{Item, Kind, Signal, View};
@@ -30,9 +31,10 @@ pub enum Target {
 }
 
 /// What the drop over `view` as drawn (`hits`) at `along` would do. `opens` says whether an
-/// app opens files. Past the centre of the last app, running app or minimized window, it
-/// pins: the slot that opens there leaves everything left of it where it was, so the
-/// answer holds while the pointer stays in it.
+/// app opens files. Past the end of the last app, running app or minimized window — over the
+/// separator that follows it — it pins; never over half an icon, as a pin being moved does,
+/// because a file over an app is the app's to open. The slot that opens there leaves
+/// everything left of it where it was, so the answer holds while the pointer stays in it.
 pub fn target(
     view: &View,
     hits: &[[f64; 4]],
@@ -55,7 +57,7 @@ pub fn target(
     });
     let pins = last.is_none_or(|n| {
         let (a, len) = span(n);
-        along > a + len / 2.
+        along >= a + len
     });
     if pins {
         return Target::Pin(aim(view, true, hits, horizontal, KEY, along).0);
@@ -227,16 +229,17 @@ mod tests {
             target(&v, &h, true, centre(&v, 0), |id| id == "b"),
             Target::None
         );
-        // The running app's left half too; past its centre, pinned.
+        // The last running app, all of it: past its centre too, it opens.
+        let r = Target::Open {
+            id: "r".into(),
+            generation: 1,
+        };
+        assert_eq!(target(&v, &h, true, centre(&v, 3) - 4., |_| true), r);
+        let [x, _, w, _] = h[3];
+        assert_eq!(target(&v, &h, true, x + w - 0.5, |_| true), r);
+        // Over the separator after it, pinned.
         assert_eq!(
-            target(&v, &h, true, centre(&v, 3) - 4., |_| true).clone(),
-            Target::Open {
-                id: "r".into(),
-                generation: 1
-            }
-        );
-        assert_eq!(
-            target(&v, &h, true, centre(&v, 3) + 4., |_| true),
+            target(&v, &h, true, centre(&v, 4), |_| true),
             Target::Pin(0)
         );
     }

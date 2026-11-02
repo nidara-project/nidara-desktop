@@ -9,6 +9,10 @@
 //! since it got that focus (niri's test). And it is used within ACTIVATION_TIMEOUT. Anything
 //! else changes nothing: a background app does not take the front by asking.
 //!
+//! One more source counts as the user: a DROP. The client a drop landed in may make a token
+//! with a serial from that drag, just after it (`DropGrant`) — the dock opening dropped files
+//! with an app brings that app to the front.
+//!
 //! (The Hyprland session never honours these at all — `misc:focus_on_activate` is off by
 //! default there — so the browser stays behind the terminal whose link opened it.)
 //!
@@ -35,6 +39,29 @@ pub const TOKEN_KEPT: Duration = Duration::from_secs(60);
 /// Attached to a token when it is made: whether the user was in the client that made it.
 struct FromTheUser(bool);
 
+/// How long after a drop the client it landed in may make a token from it: reading the
+/// dropped data and asking for the token take a moment, a late one is not the drop's.
+pub const DROP_GRANT: Duration = Duration::from_secs(2);
+
+/// A drop the user just made (handlers.rs `dropped`). The client it landed in has neither
+/// the keyboard nor, during the drag, the pointer — the source's grab holds it — so the rule
+/// above would refuse it; yet a file dropped on the dock's app is the user asking for that
+/// app. A token from that client, with a serial from this drag (no older than its start),
+/// within DROP_GRANT, is from the user. Once.
+pub struct DropGrant {
+    pub client: smithay::reexports::wayland_server::backend::ClientId,
+    pub since: smithay::utils::Serial,
+    pub at: std::time::Instant,
+}
+
+impl DropGrant {
+    fn covers(&self, maker: Option<&smithay::reexports::wayland_server::backend::ClientId>, serial: Option<smithay::utils::Serial>) -> bool {
+        maker == Some(&self.client)
+            && serial.is_some_and(|s| s.is_no_older_than(&self.since))
+            && self.at.elapsed() < DROP_GRANT
+    }
+}
+
 impl XdgActivationHandler for Hyalo {
     fn activation_state(&mut self) -> &mut XdgActivationState {
         &mut self.activation_state
@@ -53,8 +80,12 @@ impl XdgActivationHandler for Hyalo {
         };
         let keyboard = self.seat.get_keyboard();
         let pointer = self.seat.get_pointer();
-        let valid = keyboard.as_ref().is_some_and(|k| since(k.current_focus().and_then(|f| f.surface()), k.last_enter()))
+        let mut valid = keyboard.as_ref().is_some_and(|k| since(k.current_focus().and_then(|f| f.surface()), k.last_enter()))
             || pointer.as_ref().is_some_and(|p| since(p.current_focus(), p.last_enter()));
+        if !valid && self.drop_grant.as_ref().is_some_and(|g| g.covers(maker.as_ref(), data.serial.as_ref().map(|s| s.0))) {
+            self.drop_grant = None;
+            valid = true;
+        }
         data.user_data.insert_if_missing(|| FromTheUser(valid));
         // Smithay keeps every token until it is used: forget those long past their time. Not
         // at once: a late request must still be known to be refused, and ask for attention.

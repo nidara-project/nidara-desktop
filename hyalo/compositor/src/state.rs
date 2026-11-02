@@ -69,6 +69,12 @@ pub struct Hyalo {
     /// The cursor the client under the pointer last asked for, kept while Hyalo shows its own
     /// (`WindowManager::chrome_cursor`).
     pub client_cursor: CursorImageStatus,
+    /// The picture a drag carries under the pointer (start_drag's icon), while one does.
+    pub dnd_icon: Option<crate::render::DndIcon>,
+    /// The serial the drag under way began with (handlers.rs `dnd_requested`).
+    pub dnd_started: Option<smithay::utils::Serial>,
+    /// The drop just made: the client it landed in may raise what it starts (activation.rs).
+    pub drop_grant: Option<crate::activation::DropGrant>,
     pub focus_grab: Option<focus_grab::ActiveGrab>,
     /// The layer surface holding the keyboard because it asked for it exclusively
     /// (shell/layer.rs, `exclusive_keyboard_layer`); handed back when it stops asking.
@@ -269,6 +275,9 @@ impl Hyalo {
             seat,
             cursor_status: CursorImageStatus::default_named(),
             client_cursor: CursorImageStatus::default_named(),
+            dnd_icon: None,
+            dnd_started: None,
+            drop_grant: None,
             focus_grab: None,
             exclusive_keyboard: None,
             redraw_idle_queued: false,

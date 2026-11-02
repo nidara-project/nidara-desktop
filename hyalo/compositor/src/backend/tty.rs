@@ -1209,7 +1209,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
     let Some(output) = output else { return };
     let drives_scene = crate::mirror::drives_scene(state, &output);
     let display_events=state.loop_handle.clone();
-    let Hyalo { backend, space, seat, cursor_status, start_time, wm, lock, config, idle, .. } = state;
+    let Hyalo { backend, space, seat, cursor_status, dnd_icon, start_time, wm, lock, config, idle, .. } = state;
     let cursor_status = &*cursor_status;
     let Backend::Tty(tty) = backend else { return };
     if !tty.session.is_active() {
@@ -1236,7 +1236,7 @@ fn render_surface(state: &mut Hyalo, node: DrmNode, crtc: crtc::Handle) {
         Some(last) if !vrr => render::timing::next_vblank(last, period, begun),
         _ => begun,
     };
-    let scene = render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when, idle.dimmed);
+    let scene = render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, when, idle.dimmed);
     let icon = match cursor_status {
         smithay::input::pointer::CursorImageStatus::Named(icon) => *icon,
         _ => smithay::input::pointer::CursorIcon::Default,

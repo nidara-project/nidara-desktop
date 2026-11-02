@@ -5,7 +5,7 @@ use smithay::{
     backend::{allocator::dmabuf::Dmabuf, renderer::utils::on_commit_buffer_handler},
     input::{
         Seat, SeatHandler, SeatState,
-        dnd::{DnDGrab, DndGrabHandler, GrabType, Source},
+        dnd::{DnDGrab, DndGrabHandler, DndTarget, GrabType, Source},
         keyboard::LedState,
         pointer::{CursorImageStatus, Focus, PointerHandle},
     },
@@ -76,6 +76,20 @@ impl CompositorHandler for Hyalo {
         crate::protocols::window_controls::on_commit(self, surface);
         self.xdg_commit(surface);
         self.layer_commit(surface);
+        // A drag's picture moves by what each commit says, so the point it was grabbed by
+        // stays under the pointer (anvil's way).
+        if let Some(icon) = self.dnd_icon.as_mut().filter(|i| &i.surface == surface) {
+            smithay::wayland::compositor::with_states(surface, |s| {
+                let delta = s
+                    .cached_state
+                    .get::<smithay::wayland::compositor::SurfaceAttributes>()
+                    .current()
+                    .buffer_delta
+                    .take()
+                    .unwrap_or_default();
+                icon.offset += delta;
+            });
+        }
 
         let outputs = self.outputs_for_surface(surface);
         if outputs.is_empty() {
@@ -211,16 +225,40 @@ impl PrimarySelectionHandler for Hyalo {
     }
 }
 
-impl DndGrabHandler for Hyalo {}
+impl DndGrabHandler for Hyalo {
+    /// The drag's picture goes; a drop that was taken lets the client it landed in raise what
+    /// it starts with it (activation.rs, `DropGrant`).
+    fn dropped(&mut self, target: Option<DndTarget<'_, Self>>, validated: bool, _seat: Seat<Self>, _location: Point<f64, Logical>) {
+        self.dnd_icon = None;
+        let since = self.dnd_started.take();
+        self.drop_grant = match (target, since) {
+            (Some(target), Some(since)) if validated => target
+                .into_inner()
+                .client()
+                .map(|c| crate::activation::DropGrant { client: c.id(), since, at: std::time::Instant::now() }),
+            _ => None,
+        };
+        self.queue_redraw(None);
+    }
+
+    fn cancelled(&mut self, _seat: Seat<Self>, _location: Point<f64, Logical>) {
+        self.dnd_icon = None;
+        self.dnd_started = None;
+        self.queue_redraw(None);
+    }
+}
 impl WaylandDndGrabHandler for Hyalo {
     fn dnd_requested<S: Source>(
         &mut self,
         source: S,
-        _icon: Option<WlSurface>,
+        icon: Option<WlSurface>,
         seat: Seat<Self>,
         serial: Serial,
         type_: GrabType,
     ) {
+        // Drawn under the pointer until the drop (render/mod.rs `push_cursor`).
+        self.dnd_icon = icon.map(|surface| crate::render::DndIcon { surface, offset: (0, 0).into() });
+        self.dnd_started = Some(serial);
         match type_ {
             GrabType::Pointer => {
                 let ptr = seat.get_pointer().unwrap();

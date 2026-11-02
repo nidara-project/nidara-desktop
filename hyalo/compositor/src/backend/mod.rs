@@ -246,8 +246,8 @@ pub fn capture_output(state: &mut Hyalo, output: &Output, pointer: bool) -> Resu
 /// `capture_output`, everything drawn as it is `when`.
 fn capture_output_at(state: &mut Hyalo, output: &Output, pointer: bool, when: std::time::Instant) -> Result<(u32, u32, Vec<u8>), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, when, false);
+    let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, when, false);
     let captured = match backend {
         Backend::Winit(w) => crate::screenshot::capture(w.renderer(), &scene, output, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -274,8 +274,8 @@ pub fn draw_output_into(
     pointer: bool,
 ) -> Result<(), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
+    let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_into(w.renderer(), &scene, output, area, size, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -289,8 +289,8 @@ pub fn draw_output_into(
 /// (capture.rs, a screen being shared) — with the pointer when `pointer`.
 pub fn draw_upright_into(state: &mut Hyalo, output: &Output, dmabuf: &mut Dmabuf, pointer: bool) -> Result<(), String> {
     let cursor = if pointer { pointer_for(state, output) } else { None };
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
+    let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::screenshot::draw_upright_into(w.renderer(), &scene, output, dmabuf, cursor.as_ref()),
         Backend::Tty(t) => {
@@ -355,8 +355,8 @@ pub fn capture_window(state: &mut Hyalo, window: &smithay::desktop::Window, scal
 
 /// A picture of `window` as it is now, at `scale`, to draw after it is gone (render/snapshot.rs).
 pub fn snapshot_window(state: &mut Hyalo, window: &smithay::desktop::Window, scale: f64) -> Result<crate::render::snapshot::Snapshot, String> {
-    let Hyalo { backend, space, seat, cursor_status, wm, lock, config, .. } = state;
-    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
+    let Hyalo { backend, space, seat, cursor_status, dnd_icon, wm, lock, config, .. } = state;
+    let scene = crate::render::Scene::new(space, wm, seat, cursor_status, dnd_icon.as_ref(), lock, &config.windows, config.animations.enabled, std::time::Instant::now(), false);
     match backend {
         Backend::Winit(w) => crate::render::snapshot::take(w.renderer(), &scene, window, scale),
         Backend::Tty(t) => {
@@ -572,6 +572,11 @@ fn post_logical_repaint(
     if let CursorImageStatus::Surface(surface) = &state.cursor_status {
         with_surfaces_surface_tree(surface, |surface, s| update(surface, s));
         smithay::desktop::utils::send_frames_surface_tree(surface, output, time, throttle, surface_primary_scanout_output);
+    }
+    // A drag's picture animates too (GTK's grows into place): it needs its frames.
+    if let Some(icon) = &state.dnd_icon {
+        with_surfaces_surface_tree(&icon.surface, |surface, s| update(surface, s));
+        smithay::desktop::utils::send_frames_surface_tree(&icon.surface, output, time, throttle, surface_primary_scanout_output);
     }
     // A recorder waiting for this output's next frame gets it (protocols/screencopy.rs), and so
     // does a screen being shared (capture.rs).

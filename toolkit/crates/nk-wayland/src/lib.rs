@@ -146,6 +146,9 @@ pub enum Event {
     Drop {
         mime: String,
         data: Vec<u8>,
+        /// The drag's enter serial: what an activation token for what the drop starts
+        /// is made with (`request_activation_token`). A drop is something the user did.
+        serial: u32,
     },
     /// Told every time, also when unchanged; a change also sends Configure.
     PreferredScale(f64),
@@ -203,6 +206,7 @@ struct Drag {
 /// A drop being read: its offer is finished once the data is all in.
 struct Dropped {
     offer: wl_data_offer::WlDataOffer,
+    serial: u32,
     mime: String,
     transfer: Transfer,
 }
@@ -504,9 +508,11 @@ impl Window {
                         d.offer.finish();
                         self.offers.retain(|o| o.proxy != d.offer);
                         d.offer.destroy();
+                        self.tokens.delivered(d.serial);
                         self.events.push(Event::Drop {
                             mime: d.mime,
                             data: d.transfer.bytes,
+                            serial: d.serial,
                         });
                         break;
                     }
@@ -1969,6 +1975,7 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for Window {
                 drop(write);
                 w.dropped = Some(Dropped {
                     offer: d.offer,
+                    serial: d.serial,
                     mime,
                     transfer: Transfer {
                         file: read.into(),
