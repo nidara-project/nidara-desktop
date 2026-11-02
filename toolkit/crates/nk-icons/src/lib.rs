@@ -240,6 +240,7 @@ struct Theme {
     bases: Vec<PathBuf>,
     directories: Vec<Directory>,
     spec: u32,
+    inherits: Vec<String>,
 }
 
 impl Theme {
@@ -255,6 +256,17 @@ impl Theme {
             .find(|p| p.is_file())?;
         let text = std::fs::read_to_string(&index).ok()?;
         let (directories, spec) = parse_index(&text);
+        let inherits = text
+            .lines()
+            .map(str::trim)
+            .find_map(|l| l.strip_prefix("Inherits="))
+            .map(|v| {
+                v.split(',')
+                    .map(|t| t.trim().to_owned())
+                    .filter(|t| !t.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
         let bases = search
             .iter()
             .map(|d| d.join(name))
@@ -264,6 +276,7 @@ impl Theme {
             bases,
             directories,
             spec,
+            inherits,
         })
     }
 
@@ -348,6 +361,55 @@ fn parse_index(text: &str) -> (Vec<Directory>, u32) {
         })
         .unwrap_or_default();
     (directories, spec)
+}
+
+/// An application's icon file by `name`, as GTK finds one for `size` px: `theme`, the
+/// themes it inherits, hicolor, then each of `extra` and /usr/share/pixmaps as plain
+/// directories. `extra` also joins the theme search path (a tray item's IconThemePath may
+/// hold a theme of its own). An absolute `name` is the file itself. SVG or PNG.
+pub fn find_app_icon(
+    theme: &str,
+    name: &str,
+    size: u32,
+    search: &[PathBuf],
+    extra: &[PathBuf],
+) -> Option<PathBuf> {
+    if name.is_empty() {
+        return None;
+    }
+    let path = Path::new(name);
+    if path.is_absolute() {
+        return path.is_file().then(|| path.to_path_buf());
+    }
+    if name.contains('/') {
+        return None;
+    }
+    let search: Vec<PathBuf> = extra.iter().chain(search).cloned().collect();
+    let mut queue: Vec<String> = vec![theme.to_owned()];
+    let mut seen: Vec<String> = vec![];
+    while let Some(t) = (!queue.is_empty()).then(|| queue.remove(0)) {
+        if seen.contains(&t) || seen.len() > 16 {
+            continue;
+        }
+        seen.push(t.clone());
+        if let Some(found) = Theme::find(&t, &search) {
+            for ext in ["svg", "png"] {
+                if let Some(p) = found.lookup(&format!("{name}.{ext}"), size) {
+                    return Some(p);
+                }
+            }
+            queue.extend(found.inherits.iter().cloned());
+        }
+        if queue.is_empty() && !seen.iter().any(|s| s == "hicolor") {
+            queue.push("hicolor".to_owned());
+        }
+    }
+    extra
+        .iter()
+        .cloned()
+        .chain([PathBuf::from("/usr/share/pixmaps")])
+        .flat_map(|d| ["svg", "png"].map(|ext| d.join(format!("{name}.{ext}"))))
+        .find(|p| p.is_file())
 }
 
 /// Icons by name under one interface theme, falling back to the reference theme; cached.

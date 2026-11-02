@@ -15,3 +15,15 @@ pub fn icon_reference() -> PathBuf {
             }
         })
 }
+
+/// Nidara's mark, the bar's system-menu icon (the TS bar's `nidara` launcher preset).
+pub fn logo() -> PathBuf {
+    let installed =
+        PathBuf::from("/usr/share/nidara/ui/shell/assets/nidara/assets/nidara-symbolic.svg");
+    if installed.is_file() {
+        installed
+    } else {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../ui/shell/assets/nidara/assets/nidara-symbolic.svg")
+    }
+}

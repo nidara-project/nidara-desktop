@@ -166,3 +166,41 @@ fn the_repository_reference_draws_every_registered_name() {
         icons.get(name, 16).unwrap_or_else(|e| panic!("{e}"));
     }
 }
+
+#[test]
+fn an_app_icon_through_the_theme_what_it_inherits_hicolor_then_plain_directories() {
+    let s = Scratch::new("app");
+    let theme = s.theme("icons", "t", None);
+    let mut index = std::fs::read_to_string(theme.join("index.theme")).unwrap();
+    index = index.replace("Name=t\n", "Name=t\nInherits=parent\n");
+    std::fs::write(theme.join("index.theme"), index).unwrap();
+    let parent = s.theme("icons", "parent", None);
+    let hicolor = s.theme("icons", "hicolor", None);
+    let put = |dir: &Path, file: &str| {
+        let d = dir.join("scalable/actions");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join(file), PLUS).unwrap();
+    };
+    put(&theme, "own.svg");
+    put(&parent, "inherited.png");
+    put(&hicolor, "fallback.svg");
+    let flat = s.0.join("flat");
+    std::fs::create_dir_all(&flat).unwrap();
+    std::fs::write(flat.join("plain.png"), b"png").unwrap();
+    let search = vec![s.0.join("icons")];
+    let find = |name: &str| find_app_icon("t", name, 24, &search, std::slice::from_ref(&flat));
+    assert_eq!(find("own"), Some(theme.join("scalable/actions/own.svg")));
+    assert_eq!(
+        find("inherited"),
+        Some(parent.join("scalable/actions/inherited.png"))
+    );
+    assert_eq!(
+        find("fallback"),
+        Some(hicolor.join("scalable/actions/fallback.svg"))
+    );
+    assert_eq!(find("plain"), Some(flat.join("plain.png")));
+    assert_eq!(find("missing"), None);
+    assert_eq!(find("../escape"), None);
+    let absolute = flat.join("plain.png");
+    assert_eq!(find(absolute.to_str().unwrap()), Some(absolute));
+}

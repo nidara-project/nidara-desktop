@@ -359,6 +359,17 @@ with `NK_LAYER_CHECK`. Before acting, they wait for Hyalo's "Xwayland ready".
 
 The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1–D2 of #959). Read
 `toolkit/shell/DOCK.md` first: what each step of the series owns, and what is not there yet.
+The Rust bar (B1) is the same process, started with `--bar`: `toolkit/shell/BAR.md`. Its
+check is `toolkit/shell/check-bar-headless.sh` (the dock's check plus the bar).
+- A tray item that registers with a SYNCHRONOUS call blocks its own main loop while the
+  watcher reads its properties back: the registration fails with "No such interface".
+  Apps register asynchronously; a fake must too (`TRAY_ITEM` in `dock-check.py`).
+- Software Hyalo draws a state change a beat late: wait ~1.5 s before a screenshot, or it
+  shows the previous frame (the reader tree is already right).
+- A reader list read while it updates carries rows without names yet: wait for a settled
+  one (every name non-empty), not just a shorter one.
+- The bar's readers (`status.rs`, `tray.rs`) log one line per failure, "the bar shows no
+  …": start there when a widget or the tray is missing.
 - Look at it with `scripts/dev/rust-session.sh --applications nidara-shell`. Check it with
   `toolkit/shell/check-dock-headless.sh`; other scales take
   `NK_WIDGETS_HYALO_CONFIG` = a Hyalo config with `[outputs.winit] scale = 1.25`.

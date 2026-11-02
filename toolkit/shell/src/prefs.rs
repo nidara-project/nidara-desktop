@@ -151,6 +151,69 @@ pub fn watch(emit: impl Fn(Prefs) + 'static) {
     });
 }
 
+pub const REGION: &str = "org.nidara.region";
+
+/// How the clock reads (`org.nidara.region`), on its own thread like `watch`.
+pub fn watch_region(emit: impl Fn(crate::barmodel::Region) + 'static) {
+    let ctx = glib::MainContext::new();
+    let _guard = ctx.acquire();
+    let _ = ctx.with_thread_default(|| {
+        let region = settings(REGION, "time-format");
+        let get = {
+            let region = region.clone();
+            move || {
+                let d = crate::barmodel::Region::default();
+                region
+                    .as_ref()
+                    .map_or(d.clone(), |s| crate::barmodel::Region {
+                        twelve_hour: s.string("time-format") == "12h",
+                        seconds: s.boolean("show-seconds"),
+                        date: s.string("date-format").into(),
+                    })
+            }
+        };
+        emit(get());
+        if let Some(s) = &region {
+            s.connect_changed(None, move |_, key| {
+                if ["time-format", "date-format", "show-seconds"].contains(&key) {
+                    emit(get());
+                }
+            });
+        }
+        glib::MainLoop::new(Some(&ctx), false).run();
+        drop(region);
+    });
+}
+
+pub const NOTIFICATIONS: &str = "org.nidara.notifications";
+
+/// Do Not Disturb, the focus widget's: `do-not-disturb` is its only home (the TS
+/// NotifService's rule). Runs forever on its own thread.
+pub fn watch_dnd(emit: impl Fn(bool) + 'static) {
+    let ctx = glib::MainContext::new();
+    let _guard = ctx.acquire();
+    let _ = ctx.with_thread_default(|| {
+        let s = settings(NOTIFICATIONS, "do-not-disturb");
+        emit(s.as_ref().is_some_and(|s| s.boolean("do-not-disturb")));
+        if let Some(s) = &s {
+            s.connect_changed(Some("do-not-disturb"), move |s, _| {
+                emit(s.boolean("do-not-disturb"))
+            });
+        }
+        glib::MainLoop::new(Some(&ctx), false).run();
+        drop(s);
+    });
+}
+
+/// The focus widget's click: Do Not Disturb on or off, where every reader watches it.
+pub fn set_dnd(on: bool) -> Result<(), String> {
+    let s = settings(NOTIFICATIONS, "do-not-disturb").ok_or("no notifications schema")?;
+    s.set_boolean("do-not-disturb", on)
+        .map_err(|e| e.to_string())?;
+    gio::Settings::sync();
+    Ok(())
+}
+
 /// One Config1 Apply of a dock key. Its answer is the committed value, which the
 /// GSettings watcher above then reports: the menu never shows a value Config1 did not take.
 pub fn apply(

@@ -2,7 +2,7 @@
 //! `nidara-shell`: the supervisor (DOCK.md §2). It watches the outputs, gives each one a
 //! dock on its own thread and connection, and joins a dock before anything else happens
 //! to its output. The sources and the hub run on threads of their own.
-use nidara_shell::{apps, dock, hub, hyalo, material, prefs, shell1, trash};
+use nidara_shell::{apps, bar, dock, hub, hyalo, material, prefs, shell1, trash};
 use nk_wayland::{OutputEvent, OutputId, OutputInfo, Waker};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,6 +15,51 @@ const BIND_DEADLINE: Duration = Duration::from_secs(5);
 struct Running {
     waker: Waker,
     thread: JoinHandle<()>,
+    bar: Option<(Waker, JoinHandle<()>)>,
+}
+
+/// The bar is drawn only when asked (`--bar`, B1): until it has its panels, the TS bar
+/// stays the session's.
+fn bar_wanted() -> bool {
+    std::env::args().any(|a| a == "--bar")
+}
+
+/// A bar on `info`'s output, on its own thread and connection.
+fn start_bar(
+    watch: &mut nk_wayland::OutputWatch,
+    info: &OutputInfo,
+    hub: &Sender<hub::HubEvent>,
+    requests: &Sender<hub::Request>,
+    bus: &Option<zbus::blocking::Connection>,
+) -> Option<(Waker, JoinHandle<()>)> {
+    let output = match watch.bind_output(info.id, BIND_DEADLINE) {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("nidara-shell: no bar on {}: {e:?}", info.name);
+            return None;
+        }
+    };
+    let (waker, source) = nk_wayland::wake_channel()
+        .map_err(|e| eprintln!("nidara-shell: {e}"))
+        .ok()?;
+    let (frames_tx, frames_rx) = channel();
+    let name = info.name.clone();
+    let (requests, bus) = (requests.clone(), bus.clone());
+    let bar_waker = waker.clone();
+    let origin = info.logical.map_or((0, 0), |l| (l[0], l[1]));
+    let thread = spawn(&format!("bar-{name}"), move || {
+        let b = bar::Bar::new(name.clone(), frames_rx, requests, bus, bar_waker, origin);
+        if let Err(e) = bar::run(b, output, source) {
+            eprintln!("nidara-shell: the bar on {name} ended: {e}");
+        }
+    });
+    let _ = hub.send(hub::HubEvent::BarUp {
+        id: info.id,
+        name: info.name.clone(),
+        frames: frames_tx,
+        waker: waker.clone(),
+    });
+    Some((waker, thread))
 }
 
 fn size_of(info: &OutputInfo) -> (u32, u32) {
@@ -67,7 +112,14 @@ fn start(
     requests: &Sender<hub::Request>,
     tokens: &Option<Arc<serde_json::Value>>,
     trash: &Option<Arc<nk_icons::Icon>>,
+    bus: &Option<zbus::blocking::Connection>,
 ) -> Option<Running> {
+    // The bar first: the dock's room depends on the strip the bar reserves.
+    let bar = if bar_wanted() {
+        start_bar(watch, info, hub, requests, bus)
+    } else {
+        None
+    };
     let output = match watch.bind_output(info.id, BIND_DEADLINE) {
         Ok(o) => o,
         Err(e) => {
@@ -106,7 +158,7 @@ fn start(
         frames: frames_tx,
         waker: waker.clone(),
     });
-    Some(Running { waker, thread })
+    Some(Running { waker, thread, bar })
 }
 
 fn main() {
@@ -148,7 +200,46 @@ fn main() {
     let shell1 = shell1::serve(status.clone(), hub_tx.clone())
         .map_err(|e| eprintln!("nidara-shell: Shell1 not served: {e}"))
         .ok();
+    if bar_wanted() {
+        if let Some(conn) = &apps_conn {
+            let (tx, rx) = channel();
+            nidara_shell::status::watch(conn, tx);
+            let (tray_tx, tray_rx) = channel();
+            nidara_shell::tray::watch(conn, tray_tx);
+            let t = hub_tx.clone();
+            spawn("tray-items", move || {
+                for items in tray_rx {
+                    if t.send(hub::HubEvent::Tray(items)).is_err() {
+                        return;
+                    }
+                }
+            });
+            let t = hub_tx.clone();
+            spawn("widgets", move || {
+                for u in rx {
+                    if t.send(hub::HubEvent::Widgets(u)).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+        let t = hub_tx.clone();
+        spawn("dnd", move || {
+            prefs::watch_dnd(move |on| {
+                drop(
+                    t.send(hub::HubEvent::Widgets(nidara_shell::status::Update::Dnd(
+                        on,
+                    ))),
+                )
+            })
+        });
+    }
+    let t = hub_tx.clone();
+    spawn("region", move || {
+        prefs::watch_region(move |r| drop(t.send(hub::HubEvent::Region(r))))
+    });
     let settings = apps_conn.as_ref().is_some_and(settings_reachable);
+    let bus = apps_conn.clone();
     let hub = hub::Hub::new(
         prefs::Prefs::default(),
         icon_jobs,
@@ -196,7 +287,9 @@ fn main() {
         for event in events {
             match event {
                 OutputEvent::Added(info) => {
-                    if let Some(r) = start(&mut watch, &info, &hub_tx, &req_tx, &tokens, &trash) {
+                    if let Some(r) =
+                        start(&mut watch, &info, &hub_tx, &req_tx, &tokens, &trash, &bus)
+                    {
                         docks.insert(info.id, r);
                     }
                 }
@@ -212,10 +305,15 @@ fn main() {
                     // The hub lets go of its frames, the dock sees that on its wake and
                     // closes; joined before any later event is handled.
                     let _ = hub_tx.send(hub::HubEvent::DockDown(id));
+                    let _ = hub_tx.send(hub::HubEvent::BarDown(id));
                     if let Some(r) = docks.remove(&id) {
                         std::thread::sleep(Duration::from_millis(20));
                         let _ = r.waker.wake();
                         let _ = r.thread.join();
+                        if let Some((waker, thread)) = r.bar {
+                            let _ = waker.wake();
+                            let _ = thread.join();
+                        }
                     }
                 }
                 OutputEvent::Lost(why) => {

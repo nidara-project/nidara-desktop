@@ -90,6 +90,100 @@ pub enum Command {
         value: PrefValue,
     },
     DockSettings,
+    /// A row of the bar's system menu; `confirmed` once its confirmation was answered
+    /// (log out, restart and shut down ask first).
+    System {
+        action: System,
+        confirmed: bool,
+    },
+    /// A row of a tray item's menu (tray.rs), in the menu session `token` at `revision`:
+    /// a submenu opens in its place, any other row is clicked.
+    Tray {
+        token: String,
+        revision: u32,
+        id: i32,
+        submenu: bool,
+    },
+}
+
+/// What the bar's system menu does (the TS `SystemMenu.tsx`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum System {
+    About,
+    Settings,
+    Lock,
+    Suspend,
+    Logout,
+    Restart,
+    Shutdown,
+}
+impl System {
+    /// Ends the session or the machine: asked first.
+    pub fn asks(self) -> bool {
+        matches!(self, System::Logout | System::Restart | System::Shutdown)
+    }
+}
+
+/// The system menu: about, settings, lock and suspend, then the three that end
+/// something. About is the TS shell's own window, which the Rust shell has not got yet:
+/// shown, but not offered. Settings only when it can be reached.
+pub fn system_menu(can_settings: bool) -> Vec<Row> {
+    let sys = |key, action, enabled| Row {
+        enabled,
+        ..row(
+            Label::Key(key),
+            Command::System {
+                action,
+                confirmed: !action.asks(),
+            },
+        )
+    };
+    vec![
+        sys("bar.system-menu.about", System::About, false),
+        separator(),
+        sys("bar.system-menu.settings", System::Settings, can_settings),
+        separator(),
+        sys("bar.system-menu.lock", System::Lock, true),
+        sys("bar.system-menu.suspend", System::Suspend, true),
+        separator(),
+        sys("bar.system-menu.logout", System::Logout, true),
+        sys("bar.system-menu.restart", System::Restart, true),
+        sys("bar.system-menu.shutdown", System::Shutdown, true),
+    ]
+}
+
+/// The question before an action that ends something: the question itself (not a
+/// choice), then the action and Cancel.
+pub fn confirm_menu(action: System) -> Vec<Row> {
+    let (question, verb) = match action {
+        System::Logout => (
+            "bar.system-menu.confirm.logout",
+            "bar.system-menu.confirm.action.logout",
+        ),
+        System::Restart => (
+            "bar.system-menu.confirm.restart",
+            "bar.system-menu.confirm.action.restart",
+        ),
+        _ => (
+            "bar.system-menu.confirm.shutdown",
+            "bar.system-menu.confirm.action.shutdown",
+        ),
+    };
+    vec![
+        Row {
+            enabled: false,
+            ..row(Label::Key(question), Command::None)
+        },
+        separator(),
+        row(
+            Label::Key(verb),
+            Command::System {
+                action,
+                confirmed: true,
+            },
+        ),
+        row(Label::Key("bar.system-menu.confirm.cancel"), Command::None),
+    ]
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -399,6 +493,37 @@ pub fn dock_menu(prefs: &Prefs, can_settings: bool) -> Vec<Row> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_system_menu_asks_before_ending_anything() {
+        let rows = system_menu(true);
+        let chosen: Vec<_> = rows
+            .iter()
+            .filter_map(|r| match r.command {
+                Command::System { action, confirmed } => Some((action, confirmed, r.enabled)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(chosen[0], (System::About, true, false));
+        assert!(chosen.contains(&(System::Lock, true, true)));
+        assert!(chosen.contains(&(System::Shutdown, false, true)));
+        assert!(!system_menu(false).iter().any(|r| r.enabled
+            && r.command
+                == Command::System {
+                    action: System::Settings,
+                    confirmed: true
+                }));
+        let confirm = confirm_menu(System::Restart);
+        assert!(!confirm[0].enabled);
+        assert_eq!(
+            confirm[2].command,
+            Command::System {
+                action: System::Restart,
+                confirmed: true
+            }
+        );
+        assert_eq!(confirm[3].command, Command::None);
+    }
     use crate::model::{Autostart, DesktopAction};
 
     fn app() -> App {
