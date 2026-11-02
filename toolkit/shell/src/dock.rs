@@ -1494,9 +1494,8 @@ impl Dock {
                 .ok()
         });
         let size = layout.as_ref().map(|l| l.measured_size());
-        let width = size.map_or(pill, |s| (s.width as f64 + pill * 0.6).max(pill));
-        let bx = x + w - width;
-        let by = y;
+        let [bx, by, width, _] =
+            count_rect([x, y, w], pill, size.map_or(0., |s| f64::from(s.width)));
         let r = Rect {
             x: bx as f32,
             y: by as f32,
@@ -1893,6 +1892,14 @@ fn settle(was: f64, at: f64, still: bool, dt: f64) -> (f64, bool) {
     }
 }
 
+/// A count's pill for an icon at `x, y`, `w` across: `pill` high, wide enough for a figure
+/// `figure` across (a round end each side), in the icon's top-right corner and never out of
+/// its square, however long the figure.
+fn count_rect([x, y, w]: [f64; 3], pill: f64, figure: f64) -> [f64; 4] {
+    let width = (figure + pill * 0.6).clamp(pill, w);
+    [x + w - width, y, width, pill]
+}
+
 /// Along the dock, an even span centred on `start + len / 2` rounded: the compositor
 /// halves an anchor in whole pixels to find its centre (xdg_positioner), so the floor and
 /// ceil of its ends put a popup up to a pixel off to one side.
@@ -1971,6 +1978,22 @@ mod anchor_tests {
             back = settle(back, at, false, 0.016).0;
         }
         assert_eq!(back, 0.);
+    }
+
+    #[test]
+    fn a_count_stays_inside_its_icons_square() {
+        use super::count_rect;
+        let icon = [100., 10., 64.];
+        let inside = |[bx, by, bw, bh]: [f64; 4]| {
+            bx >= 100. && by >= 10. && bx + bw <= 164. && by + bh <= 74.
+        };
+        // A single figure: a round pill, in the top-right corner.
+        let one = count_rect(icon, 23., 8.);
+        assert_eq!(one, [141., 10., 23., 23.]);
+        // Any figure, even one wider than the icon: never out of the square.
+        for figure in [0., 8., 30., 50., 64., 200.] {
+            assert!(inside(count_rect(icon, 23., figure)), "{figure}");
+        }
     }
 
     #[test]
