@@ -108,7 +108,9 @@ in the bottom-right corner. Each dock captures only the minimized slots it shows
 pending and 32 MiB kept. A restored or closed window loses its picture; a lock or a
 fullscreen window hides the dock and wipes every picture (zeroed before it is freed). A
 failed capture keeps the app's icon for that minimize and is not retried; never an older
-picture.
+picture. A window Hyalo has not listed to the dock yet is not a failure: a dock started (or
+restarted) with windows already minimized asks before the list arrives, so it asks again
+every 100 ms for 2 s (`thumbs::LISTING`) before keeping the icon.
 
 Window → app matching before H1 is a pure lookup against the catalogue, in the
 contract's order: exact current app_id as DesktopId (with and without `.desktop`), exact

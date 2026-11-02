@@ -8,9 +8,15 @@ use nk_render::Raster;
 use nk_wayland::CaptureId;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub const BUDGET: usize = 32 << 20;
 pub const MAX_PENDING: usize = 8;
+/// How long a window the compositor has not listed to us yet is asked for again. A dock
+/// that starts with windows already minimized asks before Hyalo's list of them arrives.
+pub const LISTING: Duration = Duration::from_secs(2);
+/// How often it is asked meanwhile.
+pub const RETRY: Duration = Duration::from_millis(100);
 
 #[derive(Default)]
 pub struct Thumbs {
@@ -18,6 +24,8 @@ pub struct Thumbs {
     pending: HashMap<CaptureId, u64>,
     failed: HashSet<u64>,
     shown: HashSet<u64>,
+    /// Not in the compositor's list yet, since when.
+    unlisted: HashMap<u64, Instant>,
 }
 
 fn bytes(r: &Raster) -> usize {
@@ -41,6 +49,7 @@ impl Thumbs {
                 wipe(r);
             }
             self.failed.clear();
+            self.unlisted.clear();
             return vec![];
         }
         self.shown = shown.iter().copied().collect();
@@ -56,6 +65,7 @@ impl Thumbs {
             }
         }
         self.failed.retain(|w| self.shown.contains(w));
+        self.unlisted.retain(|w, _| self.shown.contains(w));
         let asked: HashSet<u64> = self.pending.values().copied().collect();
         let room = MAX_PENDING.saturating_sub(self.pending.len());
         shown
@@ -68,7 +78,23 @@ impl Thumbs {
             .collect()
     }
     pub fn started(&mut self, id: CaptureId, window: u64) {
+        self.unlisted.remove(&window);
         self.pending.insert(id, window);
+    }
+    /// The compositor has not listed the window to us (yet): asked again on the next sync
+    /// for LISTING, then it keeps the app's icon. True when it is given up on.
+    pub fn unlisted(&mut self, window: u64, now: Instant) -> bool {
+        let since = *self.unlisted.entry(window).or_insert(now);
+        if now.duration_since(since) < LISTING {
+            return false;
+        }
+        self.unlisted.remove(&window);
+        self.failed.insert(window);
+        true
+    }
+    /// A window is waiting to be listed: the dock asks again in RETRY.
+    pub fn waiting(&self) -> bool {
+        !self.unlisted.is_empty()
     }
     /// A capture could not start: the slot keeps the app's icon.
     pub fn refused(&mut self, window: u64) {
@@ -113,6 +139,26 @@ mod tests {
             vec![255; usize::from(side) * usize::from(side) * 4],
         )
         .ok()
+    }
+
+    #[test]
+    fn a_window_not_listed_yet_is_asked_again_for_a_while() {
+        let mut t = Thumbs::default();
+        let at = Instant::now();
+        assert_eq!(t.sync(&[1], false), [1]);
+        assert!(
+            !t.unlisted(1, at),
+            "a dock that just started has no list yet"
+        );
+        assert!(t.waiting());
+        assert_eq!(t.sync(&[1], false), [1], "asked again");
+        t.started(CaptureId(1), 1);
+        assert!(!t.waiting(), "listed now");
+        // One that never shows up keeps the app's icon after LISTING.
+        assert_eq!(t.sync(&[1, 2], false), [2]);
+        assert!(!t.unlisted(2, at));
+        assert!(t.unlisted(2, at + LISTING));
+        assert!(!t.waiting() && t.sync(&[1, 2], false).is_empty());
     }
 
     #[test]
