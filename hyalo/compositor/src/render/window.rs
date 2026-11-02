@@ -677,7 +677,7 @@ pub fn push<R: HyaloRenderer>(
     // A client-side frame with a shadow margin (Chrome's web apps, Telegram) is cut to its box,
     // the margin dropped, and its corners to the window's — as every desktop rounds a web page
     // (owner, 2026-10-04, over a ring of Hyalo's own: it stretched the client's edges, and what
-    // touched them streaked). What lies outside the window's corner (`rounding` 24) is not shown.
+    // touched them streaked). What lies outside the window's corner (`rounding`) is not shown.
     // A client may keep its minimum-size buffer in a smaller tile. The layout's
     // visible geometry, supplied by push_window, clips that buffer too.
     // A window whose layers Hyalo animates (protocols/layers.rs) shows them only inside its box:

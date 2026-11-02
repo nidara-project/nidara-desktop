@@ -998,7 +998,7 @@ the border and the shadow to the compositor (`window.nidara-app-window` in the k
 `_components.scss`) — Hyprland drew them. On Hyalo, until 2026-10-03, nothing did: Settings was a
 square box, and kitty at `background_opacity 0.5` showed the desktop SHARP behind it ("kitty
 looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/hyalo.toml`):
-- **Corners**: `rounding` 24, the desktop's one corner (design-system.md → "The corner";
+- **Corners**: `rounding` 16, the desktop's one corner (design-system.md → "The corner";
   `rounding_power` is still parsed and shapes nothing since 2026-11-02). Drawn by a texture
   shader of ours on the window's surfaces (`RoundedElement`, through Smithay's
   `override_default_tex_program` — public API, no patch), only inside the box's corner squares;
@@ -1065,7 +1065,7 @@ looks pale", 02-10). Now, with Hyprland's numbers (`[windows]` in `config/hyalo/
   BOTTOM even floating. Such a window (it does not `fits`) is drawn inside its own box only (the
   rounded shader's `clip`: its margin — its own shadow too; Hyalo's stands in for it, below — is
   never drawn), with the window's corners cut into it, as every desktop rounds a web page. What
-  lies in a corner's outer 4.7 px along the diagonal (`rounding` 24, power 3.2) is not shown.
+  lies outside the window's corner is not shown.
   ⛔ **Not a ring around it.** #727 laid such a window out inside a 4 px ring of Hyalo's that
   continued the client's edges, row by row, so nothing was hidden; seen live (2026-10-04) every
   image touching an edge streaked across it — "YouTube looks like glass on its left" — and the

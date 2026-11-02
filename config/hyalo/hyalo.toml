@@ -105,14 +105,15 @@ rounding = false
 animate = false
 
 # How windows are drawn (hyalo/compositor/src/render/window.rs): what Hyprland drew for Nidara.
-# Corners: `rounding` px, `rounding_power` the curve (2 a circle, higher a squircle); never on a
+# Corners: `rounding` px, the desktop's one corner (`rounding_power` is read and shapes nothing;
+# 16 covers what Hyprland's 24 did, the corner reaching 1.5 radii); never on a
 # fullscreen window, nor on one that draws its own decoration with a shadow. The backdrop: the
 # blur behind every translucent window — the WINDOW material, apart from the shell's glass:
 # Hyprland's `decoration:blur`, its numbers (size, passes, contrast, brightness, vibrancy,
 # noise). Settings → Appearance → Windows switches it (`backdrop.enabled`); a rule with
 # `backdrop = false` takes it from one app.
 [windows]
-rounding = 24
+rounding = 16
 rounding_power = 3.2
 
 # The window controls (close, minimize, maximize) Hyalo draws over an app's header, where the

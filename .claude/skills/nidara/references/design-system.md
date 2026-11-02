@@ -750,6 +750,9 @@ widget — has the same corner, defined ONCE in `crates/nidara-corner`. A shape 
   dock: icon corner (14/64 of the icon, not measured) + its air `PAD` 10 → 24 at icon 64
   (`capsule_radius` in `toolkit/shell/src/geometry.rs`, option "C" chosen by the owner).
 - **Circles** are a square with `r ≥ half its side` — exact.
+- **Radii read 1.5× larger than the same number on a circular arc.** Windows and menus are 16,
+  which covers what 24 did before (owner, 2026-11-02: "16, as before"); a radius carried over
+  from the old curve must be checked the same way.
 
 Who draws it: Hyalo's glass, window corners, title bars and the line/shadow (`corner_sdf`,
 injected by `glass_gl::with_corner`); the toolkit's CPU paint (`nk-render`, every

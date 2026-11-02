@@ -91,12 +91,12 @@ impl Look {
             ..appearance.clone()
         };
         let mut styles = Styles::new(exports, &skin)?;
-        // The dock's menus are the kit's bubble menu (menu.ts), not the settings dropdown's:
-        // the window radius, and no rim of our own: Hyalo draws the glass's edge, around the
-        // pointer too.
-        styles.menu.radius = exports.statics["ts"]["RADIUS"]["lg"]
+        // The shell's menus have the window's radius, the settings dropdown's: 16 (owner,
+        // 2026-11-02 — the continuous corner reaches 1.5 radii, so 24 read too round), and no
+        // rim of our own: Hyalo draws the glass's edge, around the pointer too.
+        styles.menu.radius = exports.statics["ts"]["RADIUS"]["md"]
             .as_f64()
-            .ok_or("tokens: RADIUS.lg missing")? as f32;
+            .ok_or("tokens: RADIUS.md missing")? as f32;
         styles.menu.border = 0.;
         let panel = PanelMaterial::load(exports.glass.clone(), true, skin.reduce_transparency)
             .map_err(|e| eprintln!("nidara-shell: no menu glass ({e}); an opaque menu instead"))
