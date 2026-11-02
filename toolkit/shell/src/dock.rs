@@ -838,6 +838,11 @@ impl Dock {
         for window in self.thumbs.sync(&shown, self.frame.hidden) {
             match w.capture_window(&format!("{window:x}"), (THUMB_SIDE, THUMB_SIDE)) {
                 Ok(id) => self.thumbs.started(id, window),
+                Err(nk_wayland::CaptureFailure::NotFound) => {
+                    if self.thumbs.unlisted(window, Instant::now()) {
+                        eprintln!("nidara-shell: window {window:x} was never listed: no picture");
+                    }
+                }
                 Err(e) => {
                     eprintln!("nidara-shell: no picture of window {window:x}: {e:?}");
                     self.thumbs.refused(window);
@@ -1532,6 +1537,12 @@ impl Application for Dock {
         if self.presence.value != self.presence_target || self.settling {
             return crate::attention::FRAME.as_millis() as u32;
         }
+        // A minimized window the compositor has not listed yet is asked for again.
+        let base = if self.thumbs.waiting() {
+            base.min(crate::thumbs::RETRY.as_millis() as u32)
+        } else {
+            base
+        };
         // Auto-hide: a frame while it slides, else wake when the hide is due.
         let base = match self.hide.wait(Instant::now(), crate::attention::FRAME) {
             Some(wait) => base.min(wait.as_millis() as u32 + 1),
@@ -1550,6 +1561,9 @@ impl Application for Dock {
     fn idle(&mut self, w: &mut Window) -> nk_wayland::Result<()> {
         if let Some(Overlay::Chooser(c)) = self.popup.as_mut() {
             c.refresh(w);
+        }
+        if self.thumbs.waiting() {
+            self.capture(w);
         }
         if self
             .attention
