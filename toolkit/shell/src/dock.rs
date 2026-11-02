@@ -117,10 +117,9 @@ const BADGE: f64 = 0.45;
 /// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
 /// count stay inside the capsule, so the surface never grows for it.
 const LIFT: f64 = 0.5;
-/// A count's pill, as a share of the icon: its height, and how far it sits out of the
-/// icon's top-right corner.
+/// A count's pill height, as a share of the icon. It sits inside the icon's square, in its
+/// top-right corner: out of it, it reached into the gap and up to the next slot.
 const COUNT: f64 = 0.36;
-const COUNT_OUT: f64 = 0.25;
 
 fn slots(view: &View) -> Vec<Slot> {
     view.items
@@ -1464,9 +1463,9 @@ impl Dock {
         }
     }
 
-    /// A count: a pill out of the icon's top-right corner, the danger colour with a white
-    /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
-    /// it reaches into the next slot's gap.
+    /// A count: a pill in the icon's top-right corner, inside its square (a long figure
+    /// grows it to the left), the danger colour with a white figure (ink with a dark one
+    /// when the tokens lack it). Drawn after every icon, over its own icon's art.
     fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
         let [x, y, w, _] = self.placed(n, item, now);
         let pill = w * COUNT;
@@ -1495,9 +1494,8 @@ impl Dock {
                 .ok()
         });
         let size = layout.as_ref().map(|l| l.measured_size());
-        let width = size.map_or(pill, |s| (s.width as f64 + pill * 0.6).max(pill));
-        let bx = x + w - width + pill * COUNT_OUT;
-        let by = y - pill * COUNT_OUT;
+        let [bx, by, width, _] =
+            count_rect([x, y, w], pill, size.map_or(0., |s| f64::from(s.width)));
         let r = Rect {
             x: bx as f32,
             y: by as f32,
@@ -1894,6 +1892,14 @@ fn settle(was: f64, at: f64, still: bool, dt: f64) -> (f64, bool) {
     }
 }
 
+/// A count's pill for an icon at `x, y`, `w` across: `pill` high, wide enough for a figure
+/// `figure` across (a round end each side), in the icon's top-right corner and never out of
+/// its square, however long the figure.
+fn count_rect([x, y, w]: [f64; 3], pill: f64, figure: f64) -> [f64; 4] {
+    let width = (figure + pill * 0.6).clamp(pill, w);
+    [x + w - width, y, width, pill]
+}
+
 /// Along the dock, an even span centred on `start + len / 2` rounded: the compositor
 /// halves an anchor in whole pixels to find its centre (xdg_positioner), so the floor and
 /// ceil of its ends put a popup up to a pixel off to one side.
@@ -1972,6 +1978,22 @@ mod anchor_tests {
             back = settle(back, at, false, 0.016).0;
         }
         assert_eq!(back, 0.);
+    }
+
+    #[test]
+    fn a_count_stays_inside_its_icons_square() {
+        use super::count_rect;
+        let icon = [100., 10., 64.];
+        let inside = |[bx, by, bw, bh]: [f64; 4]| {
+            bx >= 100. && by >= 10. && bx + bw <= 164. && by + bh <= 74.
+        };
+        // A single figure: a round pill, in the top-right corner.
+        let one = count_rect(icon, 23., 8.);
+        assert_eq!(one, [141., 10., 23., 23.]);
+        // Any figure, even one wider than the icon: never out of the square.
+        for figure in [0., 8., 30., 50., 64., 200.] {
+            assert!(inside(count_rect(icon, 23., figure)), "{figure}");
+        }
     }
 
     #[test]

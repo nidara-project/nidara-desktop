@@ -120,8 +120,9 @@ gets its own `window:<epoch>:<id>` group; title and executable never choose an a
 the app makes it visible; a zero count is no badge), and **attention**, true when Hyalo
 flags any of the slot's windows (`demands_attention`, refreshed on `attention_changed`)
 or the app's Unity `urgent` is set. Display only: attention never focuses anything. The
-count is a pill in `--nidara-danger` (carried into the glass tokens as `danger`) out of
-the icon's top-right corner, its figure in the menus' font and weight (the fonts have no
+count is a pill in `--nidara-danger` (carried into the glass tokens as `danger`) in the
+icon's top-right corner, inside its square (owner, 2026-11-02: out of it, it reached into
+the gap and touched the separator; a long figure grows it leftward), its figure in the menus' font and weight (the fonts have no
 bold, and the text engine refuses to fake one); the progress is a bar along the icon's
 foot, a dark rim around a faint ink track so it reads over light and dark art. Attention
 draws the dot out to a dash whatever the indicators preference, and each new false→true
