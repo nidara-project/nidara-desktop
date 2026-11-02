@@ -59,7 +59,9 @@ pub struct Layout {
     pub rects: Vec<[f64; 4]>,
     /// Per slot, its whole share of the main axis: what a click inside it hits.
     pub hits: Vec<[f64; 4]>,
-    /// The cross size and screen gap: the dock's exclusive zone.
+    /// The dock's exclusive zone: its cross size alone. The screen gap is the layer's margin
+    /// on that edge, and layer-shell adds the margin to the zone (Hyalo does): counted here
+    /// too, a tiled window sat 8 px from the dock instead of `gaps_out` (owner, 2026-11-02).
     pub exclusive_zone: i32,
     pub icon: f64,
     /// The capsule's glass in surface coordinates: the whole surface at rest, a part of it
@@ -157,7 +159,7 @@ pub fn layout(
         size,
         rects,
         hits,
-        exclusive_zone: (cross_px + SCREEN_GAP).ceil() as i32,
+        exclusive_zone: cross_px.ceil() as i32,
         icon: i * scale,
         glass: [0., 0., size.0 as f64, size.1 as f64],
         mag: None,
@@ -427,7 +429,10 @@ mod tests {
         assert_eq!(l.rects[1], [78., 10., 64., 64.]);
         assert_eq!(l.rects[2], [147.5, 10.5, 1., 63.]);
         assert_eq!(l.rects[3], [154., 10., 64., 64.]);
-        assert_eq!(l.exclusive_zone, 88);
+        assert_eq!(
+            l.exclusive_zone, 84,
+            "the 4 px gap is the margin, added by the compositor"
+        );
         // A side dock is the same strip, turned.
         let v = layout(&ICONS, 64, Position::Left, (1920, 1080), BAR_RESERVATION);
         assert_eq!(v.size, (84, 228));
