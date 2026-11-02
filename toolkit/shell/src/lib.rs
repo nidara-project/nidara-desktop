@@ -9,6 +9,7 @@ pub mod bubble;
 pub mod chooser;
 pub mod cycle;
 pub mod dock;
+pub mod drops;
 pub mod geometry;
 pub mod hub;
 pub mod hyalo;

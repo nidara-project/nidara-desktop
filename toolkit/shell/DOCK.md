@@ -217,6 +217,16 @@ each kind in its section and keeps its order. A click opens a folder with the fo
 the theme's icon for them, by layout key (`GetLayoutIcon`: a special folder's own icon, a
 file's content type).
 
+**Drops (D3).** Files and folders dragged from a file manager (`text/uri-list`, local
+`file:` URIs only, at most 128) are taken by the strip (`drops.rs`). Past the centre of the
+last app, running app or minimized window, a slot opens in the folders' and files' section
+where they would land, and the drop pins them there (`insert-folder`/`insert-file`, one after
+another, each against the revision the previous one made). Over an app that opens files
+(`SupportsOpen`), the drop opens them with it (Launch, `open` mode); Applications1 refuses
+types the app does not declare. Anywhere else the drag is refused, and the source shows it.
+Nothing is launched or written while hovering. Dragging an app from the Apps grid comes
+with the grid itself (D4).
+
 **Reorder (D3).** A long press (`reorder::LONG_PRESS`, 400 ms within `SLOP` 6 px) picks
 up a pin, or a running app that is not pinned (`reorder.rs`). A folder or file moves only
 among the folders and files (`reorder::section`), an app pin only among the apps. The picked icon leaves the

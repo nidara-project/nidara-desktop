@@ -115,6 +115,9 @@ pub struct Dock {
     held: Option<(Vec<String>, Instant)>,
     /// A pin dropped off the strip: not drawn until the service's view has unpinned it.
     gone: Option<(String, Instant)>,
+    /// Files or folders dragged over the strip from another app, and where a drop would
+    /// go now (drops.rs).
+    dropping: Option<crate::drops::Target>,
     /// The pin in the air, in a layer of its own so it can leave the strip.
     float: Option<nk_wayland::LayerId>,
     /// "Remove" over the pin in the air while a drop would unpin it.
@@ -201,6 +204,7 @@ impl Dock {
             reorder: None,
             held: None,
             gone: None,
+            dropping: None,
             float: None,
             remove_tip: None,
             landing: None,
@@ -1374,6 +1378,12 @@ impl Dock {
         if let Some(r) = &self.reorder {
             view = Some(r.preview(view.as_ref().unwrap_or(&self.source.view)));
         }
+        if let Some(crate::drops::Target::Pin(to)) = &self.dropping {
+            view = Some(crate::drops::preview(
+                view.as_ref().unwrap_or(&self.source.view),
+                *to,
+            ));
+        }
         if let Some((key, _)) = &self.gone {
             // Its slot closes at once: the pin is in the air (Landing) or a puff (Poof).
             let mut v = view.unwrap_or_else(|| self.source.view.clone());
@@ -1395,10 +1405,92 @@ impl Dock {
         };
     }
 
+    /// Files dragged over the strip: it shows itself and magnifies as for the pointer, and
+    /// the drop's target follows (drops.rs). The compositor is told whether a drop here
+    /// would be taken whenever that changes.
+    fn drop_over(&mut self, w: &mut Window, at: (f64, f64), first: bool) -> nk_wayland::Result<()> {
+        self.pointer = at;
+        if !self.frame.hidden {
+            self.hide.enter();
+            self.slide(w)?;
+        }
+        if self.layout.mag.is_some() {
+            if self.presence_target != 1. {
+                self.presence_target = 1.;
+                self.presence_at = Instant::now();
+            }
+            self.ease(w);
+            self.reshape(w);
+        }
+        let horizontal = self.layout.position.horizontal();
+        let along = if horizontal { at.0 } else { at.1 };
+        let catalogue = &self.frame.catalogue;
+        let mut target = crate::drops::target(
+            &self.frame.view,
+            &self.shown.hits,
+            horizontal,
+            along,
+            |id| self.frame.can_launch && catalogue.get(id).is_some_and(|a| a.opens),
+        );
+        if matches!(target, crate::drops::Target::Pin(_)) && !self.frame.can_edit_layout {
+            target = crate::drops::Target::None;
+        }
+        let was = self.dropping.replace(target.clone());
+        if first || was.as_ref() != Some(&target) {
+            let takes = target != crate::drops::Target::None;
+            w.accept_drop(takes.then_some(crate::drops::URI_LIST));
+            self.reslot(w, None);
+        }
+        Ok(())
+    }
+
+    /// The drop: pinned where the slot opened, or opened by the app under it. What it
+    /// asks of Applications1 is checked there again (a folder that is not one, an app that
+    /// does not open these files is refused).
+    fn drop_in(&mut self, w: &mut Window, data: &[u8]) {
+        let Some(target) = self.dropping.take() else {
+            return;
+        };
+        let uris = crate::drops::uris(data);
+        let command = |c| Request::Menu {
+            command: c,
+            token: None,
+        };
+        match target {
+            crate::drops::Target::Pin(to) if !uris.is_empty() => {
+                let places: Vec<(String, bool)> = uris
+                    .into_iter()
+                    .map(|uri| {
+                        let folder = crate::drops::path(&uri).is_some_and(|p| p.is_dir());
+                        (uri, folder)
+                    })
+                    .collect();
+                eprintln!("nidara-shell: {} dropped places pinned", places.len());
+                let _ = self.hub.send(command(Command::PinPlaces {
+                    places,
+                    before: crate::drops::before(&self.source.view, to),
+                }));
+            }
+            crate::drops::Target::Open { id, generation } if !uris.is_empty() => {
+                eprintln!("nidara-shell: {} files dropped on {id}", uris.len());
+                let _ = self.hub.send(command(Command::OpenWith {
+                    id,
+                    generation,
+                    uris,
+                }));
+            }
+            _ => {}
+        }
+        self.presence_target = 0.;
+        self.presence_at = Instant::now();
+        self.reslot(w, None);
+    }
+
     /// Not drawn on the strip: in the air, or dropped off it.
     fn away(&self, key: &str) -> bool {
         self.reorder.as_ref().is_some_and(|r| r.key == key)
             || self.gone.as_ref().is_some_and(|(k, _)| k == key)
+            || key == crate::drops::KEY
     }
 
     /// Where each item is drawn now, its slide included.
@@ -2293,6 +2385,26 @@ impl Application for Dock {
             // The compositor gave the keyboard elsewhere: the roving focus ends with it. Not
             // to the dock's own popup, which holds it for as long as it is open.
             Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
+            Event::DragEnter { x, y, mimes } => {
+                if mimes.iter().any(|m| m == crate::drops::URI_LIST) {
+                    self.dropping = Some(crate::drops::Target::None);
+                    self.drop_over(w, (x, y), true)?;
+                } else {
+                    w.accept_drop(None);
+                }
+            }
+            Event::DragMotion(x, y) if self.dropping.is_some() => {
+                self.drop_over(w, (x, y), false)?;
+            }
+            Event::DragLeave => {
+                if self.dropping.take().is_some() {
+                    self.reslot(w, None);
+                }
+                self.hide.leave(self.hide_delay(), Instant::now());
+                self.presence_target = 0.;
+                self.presence_at = Instant::now();
+            }
+            Event::Drop { data, .. } => self.drop_in(w, &data),
             Event::PointerLeave => {
                 self.hide.leave(self.hide_delay(), Instant::now());
                 self.presence_target = 0.;

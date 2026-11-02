@@ -752,6 +752,20 @@ impl Hub {
             Command::Pin { id } => {
                 self.edit_layout(&[("Operation", "insert-app"), ("DesktopId", &id)])
             }
+            Command::PinPlaces { places, before } => self.pin_places(places, before),
+            Command::OpenWith {
+                id,
+                generation,
+                uris,
+            } if self.can("launch") => {
+                let Some((conn, epoch)) = self.service() else {
+                    return;
+                };
+                worker(move || {
+                    let uris: Vec<&str> = uris.iter().map(String::as_str).collect();
+                    launch(&conn, epoch, &id, generation, "open", None, &uris, token)
+                });
+            }
             Command::PinAt { id, before } => {
                 let mut edit = vec![("Operation", "insert-app"), ("DesktopId", id.as_str())];
                 if let Some(before) = before.as_deref() {
@@ -820,6 +834,49 @@ impl Hub {
 
     /// One EditLayout against the revision this hub last read: a concurrent edit is a
     /// Conflict the service reports, never a silent overwrite.
+    /// Dropped folders and files, one EditLayout after another: each is checked against
+    /// the revision the one before it made, so sent together all but the first would be
+    /// refused as stale.
+    fn pin_places(&self, places: Vec<(String, bool)>, before: Option<String>) {
+        let (Some((conn, epoch)), Some(apps)) = (self.service(), self.apps.as_ref()) else {
+            return;
+        };
+        if !apps.can("layout-folders") {
+            return;
+        }
+        let mut revision = apps.layout_revision;
+        worker(move || {
+            for (uri, folder) in places {
+                let op = if folder {
+                    "insert-folder"
+                } else {
+                    "insert-file"
+                };
+                let mut edit: HashMap<&str, zbus::zvariant::Value> = HashMap::new();
+                edit.insert("Operation", op.into());
+                edit.insert("Uri", uri.as_str().into());
+                if let Some(before) = before.as_deref() {
+                    edit.insert("BeforeKey", before.into());
+                }
+                let reply = conn
+                    .call_method(
+                        Some(crate::apps::DEST),
+                        crate::apps::PATH,
+                        Some(crate::apps::IFACE),
+                        "EditLayout",
+                        &(epoch, revision, edit),
+                    )
+                    .map_err(|e| format!("EditLayout: {e}"))?;
+                let (next, _): (u64, Vec<HashMap<String, zbus::zvariant::OwnedValue>>) = reply
+                    .body()
+                    .deserialize()
+                    .map_err(|e| format!("EditLayout reply: {e}"))?;
+                revision = next;
+            }
+            Ok(())
+        });
+    }
+
     fn edit_layout(&self, edit: &[(&str, &str)]) {
         let (Some((conn, epoch)), Some(apps)) = (self.service(), self.apps.as_ref()) else {
             return;

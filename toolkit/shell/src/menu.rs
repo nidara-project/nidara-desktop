@@ -48,6 +48,18 @@ pub enum Command {
     Pin {
         id: String,
     },
+    /// Pin dropped folders and files (`(uri, is a folder)`, in order) before `before` in
+    /// their section (None: at its end).
+    PinPlaces {
+        places: Vec<(String, bool)>,
+        before: Option<String>,
+    },
+    /// Files dropped on an app: it opens them.
+    OpenWith {
+        id: String,
+        generation: u64,
+        uris: Vec<String>,
+    },
     /// Pin a running app at a place in the pinned section, before `before` (None: at its
     /// end): a drag that drops it there.
     PinAt {

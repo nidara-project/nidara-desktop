@@ -131,6 +131,22 @@ pub enum Event {
     HorizontalScroll(f64),
     Ime(ImeBatch),
     Paste(String),
+    /// A drag from any client came over the root surface, at (x, y) in its coordinates,
+    /// offering these types. Nothing is accepted until the app says so (`accept_drop`).
+    DragEnter {
+        x: f64,
+        y: f64,
+        mimes: Vec<String>,
+    },
+    DragMotion(f64, f64),
+    /// The drag left, was cancelled, or was dropped with nothing accepted.
+    DragLeave,
+    /// A drop the app accepted, with the data read in the type it accepted (at most
+    /// 1 MiB; more is refused as DragLeave).
+    Drop {
+        mime: String,
+        data: Vec<u8>,
+    },
     /// Told every time, also when unchanged; a change also sends Configure.
     PreferredScale(f64),
     /// `commit` numbers the root surface's commits, the initial empty one being 1.
@@ -174,6 +190,21 @@ struct Offer {
     proxy: wl_data_offer::WlDataOffer,
     utf8: bool,
     plain: bool,
+    /// Every type it offers, in order (a drag's offer is described by these).
+    mimes: Vec<String>,
+}
+/// A drag from any client over the root surface, until it leaves or its drop is read.
+struct Drag {
+    offer: wl_data_offer::WlDataOffer,
+    serial: u32,
+    /// The type the app accepts now (`accept_drop`), if any.
+    accepted: Option<String>,
+}
+/// A drop being read: its offer is finished once the data is all in.
+struct Dropped {
+    offer: wl_data_offer::WlDataOffer,
+    mime: String,
+    transfer: Transfer,
 }
 struct Transfer {
     file: File,
@@ -242,6 +273,8 @@ pub struct Window {
     sources: Vec<(wl_data_source::WlDataSource, String)>,
     receive: Option<Transfer>,
     sends: Vec<Send>,
+    drag: Option<Drag>,
+    dropped: Option<Dropped>,
     buffers: Vec<Buffer>,
     events: Vec<Event>,
     keyboard: Keyboard,
@@ -412,6 +445,31 @@ impl Window {
         d.set_selection(Some(&source), self.serial);
         self.sources.push((source, text));
     }
+    /// Whether a drop now would be taken, and as which of the drag's types: `Some(mime)`
+    /// accepts it as a copy, `None` refuses it (the source shows that). Said again at
+    /// every motion over a place that answers differently.
+    pub fn accept_drop(&mut self, mime: Option<&str>) {
+        let Some(d) = &mut self.drag else {
+            return;
+        };
+        let copy = wl_data_device_manager::DndAction::Copy;
+        let none = wl_data_device_manager::DndAction::empty();
+        d.offer.accept(d.serial, mime.map(str::to_owned));
+        if mime.is_some() {
+            d.offer.set_actions(copy, copy);
+        } else {
+            d.offer.set_actions(none, none);
+        }
+        d.accepted = mime.map(str::to_owned);
+    }
+    /// The drag over us ends here: its offer is no longer ours.
+    fn end_drag(&mut self) {
+        if let Some(d) = self.drag.take() {
+            self.offers.retain(|o| o.proxy != d.offer);
+            d.offer.destroy();
+            self.events.push(Event::DragLeave);
+        }
+    }
     pub fn paste(&mut self) -> Result<()> {
         let Some(selection) = self.selection.as_ref() else {
             return Ok(());
@@ -437,6 +495,42 @@ impl Window {
         Ok(())
     }
     fn transfers(&mut self) -> Result<()> {
+        if let Some(d) = &mut self.dropped {
+            let mut buf = [0; 8192];
+            loop {
+                match d.transfer.file.read(&mut buf) {
+                    Ok(0) => {
+                        let d = self.dropped.take().unwrap();
+                        d.offer.finish();
+                        self.offers.retain(|o| o.proxy != d.offer);
+                        d.offer.destroy();
+                        self.events.push(Event::Drop {
+                            mime: d.mime,
+                            data: d.transfer.bytes,
+                        });
+                        break;
+                    }
+                    Ok(n) => {
+                        d.transfer.bytes.extend_from_slice(&buf[..n]);
+                        if d.transfer.bytes.len() > 1024 * 1024 {
+                            let d = self.dropped.take().unwrap();
+                            self.offers.retain(|o| o.proxy != d.offer);
+                            d.offer.destroy();
+                            self.events.push(Event::DragLeave);
+                            break;
+                        }
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(_) => {
+                        let d = self.dropped.take().unwrap();
+                        self.offers.retain(|o| o.proxy != d.offer);
+                        d.offer.destroy();
+                        self.events.push(Event::DragLeave);
+                        break;
+                    }
+                }
+            }
+        }
         if let Some(t) = &mut self.receive {
             let mut buf = [0; 8192];
             loop {
@@ -853,6 +947,8 @@ fn run_inner(
         sources: Vec::new(),
         receive: None,
         sends: Vec::new(),
+        drag: None,
+        dropped: None,
         buffers: Vec::new(),
         events: Vec::new(),
         keyboard: Keyboard::new(),
@@ -1150,12 +1246,15 @@ fn run_inner(
             if let Some(wake) = &wake {
                 fds.push(PollFd::new(wake, PollFlags::IN));
             }
-            let mut ms =
-                if w.keyboard.repeat.is_some() || w.receive.is_some() || !w.sends.is_empty() {
-                    8
-                } else {
-                    i64::from(app.poll_interval_ms().clamp(1, 1000))
-                };
+            let mut ms = if w.keyboard.repeat.is_some()
+                || w.receive.is_some()
+                || w.dropped.is_some()
+                || !w.sends.is_empty()
+            {
+                8
+            } else {
+                i64::from(app.poll_interval_ms().clamp(1, 1000))
+            };
             // A pending token's deadline is an active timer only while it waits.
             if let Some(wait) = w.captures.wait(Instant::now()) {
                 ms = ms.min(wait.as_millis() as i64 + 1);
@@ -1800,15 +1899,81 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for Window {
                 proxy: id,
                 utf8: false,
                 plain: false,
+                mimes: Vec::new(),
             }),
             wl_data_device::Event::Selection { id } => {
                 w.selection = id;
+                // A drag's offer, or a drop being read, is not the selection's to drop.
+                let busy = [
+                    w.drag.as_ref().map(|d| &d.offer),
+                    w.dropped.as_ref().map(|d| &d.offer),
+                ];
                 w.offers.retain(|o| {
-                    let keep = Some(&o.proxy) == w.selection.as_ref();
+                    let keep =
+                        Some(&o.proxy) == w.selection.as_ref() || busy.contains(&Some(&o.proxy));
                     if !keep {
                         o.proxy.destroy();
                     }
                     keep
+                });
+            }
+            // Drag and drop: only over the root surface (its layers and popups take none).
+            wl_data_device::Event::Enter {
+                serial,
+                surface,
+                x,
+                y,
+                id,
+            } => {
+                w.end_drag();
+                let Some(offer) = id else { return };
+                if w.surface.as_ref() != Some(&surface) {
+                    return;
+                }
+                let mimes = w
+                    .offers
+                    .iter()
+                    .find(|o| o.proxy == offer)
+                    .map(|o| o.mimes.clone())
+                    .unwrap_or_default();
+                // Refused until the app accepts it.
+                offer.accept(serial, None);
+                w.drag = Some(Drag {
+                    offer,
+                    serial,
+                    accepted: None,
+                });
+                w.events.push(Event::DragEnter { x, y, mimes });
+            }
+            wl_data_device::Event::Motion { x, y, .. } if w.drag.is_some() => {
+                w.events.push(Event::DragMotion(x, y));
+            }
+            wl_data_device::Event::Leave => w.end_drag(),
+            wl_data_device::Event::Drop => {
+                let Some(d) = w.drag.take() else { return };
+                let Some(mime) = d.accepted.clone() else {
+                    w.drag = Some(d);
+                    w.end_drag();
+                    return;
+                };
+                let pipe = rustix::pipe::pipe().and_then(|(read, write)| {
+                    rustix::fs::fcntl_setfl(&read, rustix::fs::OFlags::NONBLOCK)?;
+                    Ok((read, write))
+                });
+                let Ok((read, write)) = pipe else {
+                    w.drag = Some(d);
+                    w.end_drag();
+                    return;
+                };
+                d.offer.receive(mime.clone(), write.as_fd());
+                drop(write);
+                w.dropped = Some(Dropped {
+                    offer: d.offer,
+                    mime,
+                    transfer: Transfer {
+                        file: read.into(),
+                        bytes: Vec::new(),
+                    },
                 });
             }
             _ => {}
@@ -1828,6 +1993,9 @@ impl Dispatch<wl_data_offer::WlDataOffer, ()> for Window {
         if let wl_data_offer::Event::Offer { mime_type } = e
             && let Some(o) = w.offers.iter_mut().find(|o| o.proxy == *p)
         {
+            if o.mimes.len() < 64 {
+                o.mimes.push(mime_type.clone());
+            }
             if mime_type == MIME {
                 o.utf8 = true;
             }

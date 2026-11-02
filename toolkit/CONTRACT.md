@@ -183,6 +183,14 @@ Owns everything between a string and positioned glyphs, and the editing model on
   frame's commit has been flushed (`Application::committed`, with the root commit's number —
   the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
+- **Drops from other clients** (`wl_data_device` v3, #959 D3): a drag over the root surface
+  (never its layers or popups) is `Event::DragEnter { x, y, mimes }`, then `DragMotion`, and
+  ends in `DragLeave` or `Drop { mime, data }`. Nothing is taken until the app calls
+  `Window::accept_drop(Some(mime))` (a copy); `accept_drop(None)` refuses, and the app says
+  it again whenever the answer changes under the pointer. A drop with nothing accepted is a
+  `DragLeave`. The data is read without blocking, at most 1 MiB (more, or a read error, is a
+  `DragLeave`); the offer is finished and destroyed once it is all in. A selection change
+  never destroys a drag's offer. Being a drag *source* is not there yet (the Apps grid, D4).
 
 ### Dropdown retained model (#882/#915)
 

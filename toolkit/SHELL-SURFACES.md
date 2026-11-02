@@ -234,6 +234,12 @@ window list and the capture managers: an app's window never sees the compositor'
 - Lock: Hyalo stops sessions under ext-session-lock; the dock still zeroes its own cache
   on lock (contract §8). Captures remain outside the socket ACL per the owner's decision.
 
+## 6. Drops from other apps
+
+A layer root takes drops like any window (`CONTRACT.md` → nk-wayland, "Drops from other
+clients"): `DragEnter`/`DragMotion`/`DragLeave`/`Drop`, and `accept_drop` to take one. The
+dock uses it for files and folders (`toolkit/shell/src/drops.rs`).
+
 ## Evidence for T1 (contract §10)
 
 All against a private Hyalo (headless cage / nested `rust-session.sh`), never the owner's
