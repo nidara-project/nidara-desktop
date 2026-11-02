@@ -803,6 +803,8 @@ impl Dock {
                 serial,
                 keyboard,
                 ordinal: self.popups,
+                pointer: true,
+                align_end: false,
             },
         );
         match opened {

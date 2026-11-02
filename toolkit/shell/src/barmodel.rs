@@ -27,6 +27,8 @@ pub const DOT_ACTIVE: f64 = 18.;
 pub const WORKSPACES: i32 = 5;
 /// The least room between a flank and the island.
 pub const ISLAND_GAP: f64 = 20.;
+/// Where the bar's menus hang: 12 below the strip (the TS bar's `PANEL_TOP`).
+pub const MENU_TOP: f64 = BAR_H + 12.;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Dot {

@@ -392,15 +392,17 @@ impl Bar {
         under: Item,
     ) {
         self.close_popup(w);
-        let Some(b) = self
-            .layout
-            .items
-            .iter()
-            .find(|(i, _)| *i == under)
-            .map(|(_, b)| *b)
-        else {
+        // No pointer: a menu hangs flush with its capsule's outer edge, the system menu
+        // from the left one's left, the tray's from the right one's right (the TS bar's).
+        let end = under != Item::Logo;
+        let Some(g) = (if end {
+            self.layout.glass.last()
+        } else {
+            self.layout.glass.first()
+        }) else {
             return;
         };
+        let x = if end { g[0] + g[2] } else { g[0] };
         let Some(look) = self.look.as_mut() else {
             return;
         };
@@ -417,11 +419,13 @@ impl Bar {
                     "Tray"
                 },
                 anchor: None,
-                rect: [b[0] as i32, (b[1] + b[3]) as i32, b[2] as i32, 1],
+                rect: [x.round() as i32, m::MENU_TOP as i32 - 1, 1, 1],
                 side: nk_wayland::PopupSide::Below,
                 serial,
                 keyboard: serial.is_none(),
                 ordinal: self.popups,
+                pointer: false,
+                align_end: end,
             },
         );
         match opened {

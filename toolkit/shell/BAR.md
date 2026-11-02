@@ -83,6 +83,13 @@ The host side of `session/daemon/src/tray/README.md` (Tray1 v1); read that first
 - Not yet: following `MenuChanged` while a menu is open (a stale row's click fails and the
   menu closes), the Ayatana label, the overlay icon, and the overflow.
 
+## Where menus hang
+
+The bar's menus have no pointer (the dock's do): they hang 12 below the strip
+(`MENU_TOP`, the TS bar's `PANEL_TOP`), flush with their capsule's outer edge — the
+system menu from the left capsule's left edge, the tray's from the right capsule's right
+edge (`popup::Request` `pointer: false`, `align_end`).
+
 ## The system menu
 
 The TS system menu's rows and strings (`bar.system-menu.*`): About this computer (disabled:
