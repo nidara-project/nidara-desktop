@@ -154,15 +154,27 @@ pub struct View {
 }
 
 /// Who a window belongs to, in the contract's order. `None` = no app or more than one.
+/// Last, when nothing matches exactly, the same names ignoring ASCII case (owner,
+/// 2026-11-02): an app whose window says `Chatgpt` for its `chatgpt.desktop` was left an
+/// unknown window beside its own pin. As GNOME's window tracker does, and as the TS dock
+/// did; still only a single match, so two apps that differ only in case stay ambiguous.
 pub fn match_window(apps: &[App], w: &Window) -> Option<usize> {
     fn exact(apps: &[App], app_id: &str) -> Option<usize> {
         if app_id.is_empty() {
             return None;
         }
-        let tiers: [&dyn Fn(&App) -> bool; 3] = [
+        let same = |a: &str, b: &str| a.eq_ignore_ascii_case(b);
+        let tiers: [&dyn Fn(&App) -> bool; 5] = [
             &|a| a.id == app_id || a.id.strip_suffix(".desktop") == Some(app_id),
             &|a| a.startup_wm_class == app_id,
             &|a| !a.flatpak_id.is_empty() && a.flatpak_id == app_id,
+            &|a| {
+                same(&a.id, app_id)
+                    || a.id
+                        .strip_suffix(".desktop")
+                        .is_some_and(|i| same(i, app_id))
+            },
+            &|a| !a.startup_wm_class.is_empty() && same(&a.startup_wm_class, app_id),
         ];
         for tier in tiers {
             let mut hits = apps.iter().enumerate().filter(|(_, a)| tier(a));
@@ -461,8 +473,16 @@ mod tests {
         assert_eq!(match_window(&apps, &win(1, "firefox.desktop")), Some(0));
         assert_eq!(match_window(&apps, &win(1, "steam")), Some(1));
         assert_eq!(match_window(&apps, &win(1, "org.gnome.Maps")), Some(2));
-        // Case is identity: "foot" is not "Foot".
-        assert_eq!(match_window(&apps, &win(1, "foot")), None);
+        // Case only when nothing matches exactly: "foot" is "Foot.desktop", and "Chatgpt"
+        // its "chatgpt.desktop"...
+        assert_eq!(match_window(&apps, &win(1, "foot")), Some(3));
+        let gpt = [app("chatgpt.desktop"), app("firefox.desktop")];
+        assert_eq!(match_window(&gpt, &win(1, "Chatgpt")), Some(0));
+        // ...but an exact match wins over one that differs in case,
+        let both = [app("foot.desktop"), app("Foot.desktop")];
+        assert_eq!(match_window(&both, &win(1, "Foot")), Some(1));
+        // and two that differ from it only in case stay ambiguous.
+        assert_eq!(match_window(&both, &win(1, "FOOT")), None);
         let mut w = win(1, "");
         w.initial_app_id = "firefox".into();
         assert_eq!(match_window(&apps, &w), Some(0));
