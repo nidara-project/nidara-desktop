@@ -192,7 +192,14 @@ Owns everything between a string and positioned glyphs, and the editing model on
   it again whenever the answer changes under the pointer. A drop with nothing accepted is a
   `DragLeave`. The data is read without blocking, at most 1 MiB (more, or a read error, is a
   `DragLeave`); the offer is finished and destroyed once it is all in. A selection change
-  never destroys a drag's offer. Being a drag *source* is not there yet (the Apps grid, D4).
+  never destroys a drag's offer.
+- **Being a drag source** (#959 D4, the Apps grid): `Window::start_drag(serial, offers, icon)`
+  offers `(mime, bytes)` pairs (a copy) from a button press's `serial`, with an optional
+  `DragIcon` — premultiplied ARGB8888 pixels at a logical size and a hotspot — drawn by the
+  compositor under the pointer. It answers `DragFailure::{Unsupported, Busy, Invalid}` at
+  once; otherwise the drag ends in exactly one `Event::DragEnded { dropped }`, after the
+  destination finished (or it was cancelled), and every request for the data is answered
+  from the offers. Closing the window ends a drag still going.
 
 ### Dropdown retained model (#882/#915)
 

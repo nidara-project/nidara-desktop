@@ -14,7 +14,7 @@ use nk_wayland::{OutputId, Waker};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 
 /// What one dock needs to draw and act; the same view for every dock.
@@ -121,6 +121,8 @@ pub enum Request {
     },
     /// The icon size a separator's drag, a key or a reader asked for (resize.rs).
     IconSize(u32),
+    /// Open Apps, or close it when it is open (Shell1 `surface:app-grid`).
+    ToggleApps,
 }
 
 pub enum HubEvent {
@@ -148,6 +150,15 @@ pub enum HubEvent {
     Request(Request),
     /// The icon-size Apply in flight answered, taken or refused.
     IconSizeDone,
+    /// Apps' layer number `n` ended.
+    AppsClosed(u64),
+}
+
+/// The Apps layer while it is up: its number, and what closes it.
+struct OpenApps {
+    n: u64,
+    close: Arc<AtomicBool>,
+    waker: Waker,
 }
 
 struct DockHandle {
@@ -192,6 +203,8 @@ pub struct Hub {
     /// Applies, one in flight and the latest waiting (resize.rs).
     inbox: Option<Sender<HubEvent>>,
     resize: crate::resize::Coalesce,
+    launcher: Option<OpenApps>,
+    launchers: u64,
 }
 
 /// Which dock a keyboard-focus request goes to: the focused window's output's, else the
@@ -255,6 +268,8 @@ impl Hub {
             can_settings: false,
             inbox: None,
             resize: Default::default(),
+            launcher: None,
+            launchers: 0,
         }
     }
 
@@ -354,11 +369,13 @@ impl Hub {
             HubEvent::Hyalo(HyaloUpdate::Lock(locked)) => {
                 if locked != self.locked {
                     self.status.locked.store(locked, Ordering::Release);
-                    if let Some(conn) = &self.shell1 {
-                        shell1::changed(conn, locked);
+                    self.locked = locked;
+                    if locked {
+                        // Nothing of the shell stays over the lock screen.
+                        self.close_apps();
                     }
+                    self.state_changed();
                 }
-                self.locked = locked;
             }
             HubEvent::Hyalo(HyaloUpdate::Unavailable(why)) => {
                 eprintln!("nidara-shell: Hyalo unavailable: {why}");
@@ -422,12 +439,95 @@ impl Hub {
                 }
                 return false;
             }
+            HubEvent::Request(Request::ToggleApps) => {
+                self.toggle_apps();
+                return false;
+            }
+            HubEvent::AppsClosed(n) => {
+                if self.launcher.as_ref().is_some_and(|l| l.n == n) {
+                    self.launcher = None;
+                    self.status.apps.store(false, Ordering::Release);
+                    self.state_changed();
+                }
+                return false;
+            }
             HubEvent::Request(r) => {
                 self.act(r);
                 return false;
             }
         }
         true
+    }
+
+    fn state_changed(&self) {
+        if let Some(conn) = &self.shell1 {
+            shell1::changed(conn, self.locked, self.launcher.is_some());
+        }
+    }
+
+    fn close_apps(&mut self) {
+        if let Some(l) = &self.launcher {
+            l.close.store(true, Ordering::SeqCst);
+            let _ = l.waker.wake();
+        }
+    }
+
+    /// Apps opens on its own thread and connection, from the catalogue as it is now;
+    /// asked again while it is up, it closes.
+    fn toggle_apps(&mut self) {
+        if self
+            .launcher
+            .as_ref()
+            .is_some_and(|l| !l.close.load(Ordering::SeqCst))
+        {
+            self.close_apps();
+            return;
+        }
+        if self.locked {
+            return;
+        }
+        let (Some(apps), Some(inbox)) = (&self.apps, &self.inbox) else {
+            eprintln!("nidara-shell: Apps not opened: no catalogue yet");
+            return;
+        };
+        let wake = match nk_wayland::wake_channel() {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("nidara-shell: Apps not opened: {e}");
+                return;
+            }
+        };
+        self.launchers += 1;
+        let n = self.launchers;
+        let close = Arc::new(AtomicBool::new(false));
+        let (epoch, list) = (apps.epoch, apps.apps.clone());
+        let (hub, bus, c, done) = (
+            inbox.clone(),
+            self.apps_conn.clone(),
+            close.clone(),
+            inbox.clone(),
+        );
+        self.launcher = Some(OpenApps {
+            n,
+            close,
+            waker: wake.0.clone(),
+        });
+        let started = std::thread::Builder::new()
+            .name("apps-layer".into())
+            .spawn(move || {
+                let l = crate::launcher::Launcher::new(hub, epoch, &list, bus, c);
+                if let Err(e) = crate::launcher::run(l, wake) {
+                    eprintln!("nidara-shell: Apps ended: {e}");
+                }
+                let _ = done.send(HubEvent::AppsClosed(n));
+            });
+        if let Err(e) = started {
+            eprintln!("nidara-shell: Apps not opened: {e}");
+            self.launcher = None;
+            return;
+        }
+        self.status.apps.store(true, Ordering::Release);
+        self.state_changed();
     }
 
     fn can(&self, capability: &str) -> bool {

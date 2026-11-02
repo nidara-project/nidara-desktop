@@ -141,6 +141,12 @@ pub enum Event {
     DragMotion(f64, f64),
     /// The drag left, was cancelled, or was dropped with nothing accepted.
     DragLeave,
+    /// A drag this window started (`start_drag`) is over: `dropped` when a client took
+    /// it, false when it was cancelled or dropped where nothing accepted it. Exactly
+    /// one per drag started.
+    DragEnded {
+        dropped: bool,
+    },
     /// A drop the app accepted, with the data read in the type it accepted (at most
     /// 1 MiB; more is refused as DragLeave).
     Drop {
@@ -219,6 +225,40 @@ struct Send {
     bytes: Vec<u8>,
     written: usize,
 }
+/// The picture a drag started here carries under the pointer: premultiplied ARGB8888 in
+/// the compositor's byte order (as a frame's), `pixel_width` × `pixel_height`, shown at
+/// `width` × `height` logical px with the point `hotspot` (logical) under the pointer.
+#[derive(Clone, Debug)]
+pub struct DragIcon {
+    pub pixel_width: u16,
+    pub pixel_height: u16,
+    pub width: u32,
+    pub height: u32,
+    pub hotspot: (i32, i32),
+    pub pixels: Vec<u8>,
+}
+/// Why `start_drag` started nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragFailure {
+    /// No wl_data_device on this connection.
+    Unsupported,
+    /// One is already under way.
+    Busy,
+    /// Nothing offered, or an icon whose pixels do not match its size.
+    Invalid,
+}
+/// A drag this window started: its source, what it offers, and its picture.
+struct DragOut {
+    source: wl_data_source::WlDataSource,
+    offers: Vec<(String, Vec<u8>)>,
+    icon: Option<(
+        wl_surface::WlSurface,
+        wl_buffer::WlBuffer,
+        Option<wp_viewport::WpViewport>,
+    )>,
+    /// The compositor said the drop was made; `dnd_finished` or `cancelled` ends it.
+    dropped: bool,
+}
 /// Small phase-0 window host, not a general widget library.
 pub struct Window {
     connection: Connection,
@@ -275,6 +315,7 @@ pub struct Window {
     offers: Vec<Offer>,
     selection: Option<wl_data_offer::WlDataOffer>,
     sources: Vec<(wl_data_source::WlDataSource, String)>,
+    drag_out: Option<DragOut>,
     receive: Option<Transfer>,
     sends: Vec<Send>,
     drag: Option<Drag>,
@@ -329,6 +370,8 @@ impl Window {
     /// After the loop: every request still open, or answered in a batch the app did not
     /// read, ends `Closed` exactly once (a success the app never saw becomes `Closed` too).
     fn end_requests(&mut self, rest: Vec<Event>, app: &mut impl Application) -> Result<()> {
+        // A drag still under way ends with the window, not dropped.
+        self.end_drag_out(false);
         let mut tail = terminals_on_close(rest.into_iter().chain(std::mem::take(&mut self.events)));
         self.tokens.close_all(&mut tail);
         self.captures.close_all(&mut tail);
@@ -465,6 +508,106 @@ impl Window {
             d.offer.set_actions(none, none);
         }
         d.accepted = mime.map(str::to_owned);
+    }
+    /// Start a drag from the root surface with the press `serial` (a button held now):
+    /// it offers each `(mime, data)` as a copy, and `icon` follows the pointer. The data
+    /// is handed to whoever asks for it while the drag lasts; `Event::DragEnded` says how
+    /// it ended. Ours, not a toolkit look: the app paints the icon.
+    pub fn start_drag(
+        &mut self,
+        serial: u32,
+        offers: Vec<(String, Vec<u8>)>,
+        icon: Option<DragIcon>,
+    ) -> std::result::Result<(), DragFailure> {
+        let (Some(m), Some(d), Some(origin), Some(compositor)) = (
+            &self.data_manager,
+            &self.data,
+            &self.surface,
+            &self.compositor,
+        ) else {
+            return Err(DragFailure::Unsupported);
+        };
+        if self.drag_out.is_some() {
+            return Err(DragFailure::Busy);
+        }
+        if offers.is_empty()
+            || icon.as_ref().is_some_and(|i| {
+                i.pixels.len() != i.pixel_width as usize * i.pixel_height as usize * 4
+                    || i.pixel_width == 0
+                    || i.pixel_height == 0
+            })
+        {
+            return Err(DragFailure::Invalid);
+        }
+        let source = m.create_data_source(&self.qh, ());
+        for (mime, _) in &offers {
+            source.offer(mime.clone());
+        }
+        source.set_actions(wl_data_device_manager::DndAction::Copy);
+        let icon = icon.and_then(|i| {
+            let shm = self.shm.as_ref()?;
+            let size = i.pixels.len();
+            let fd = rustix::fs::memfd_create("nk-drag", rustix::fs::MemfdFlags::CLOEXEC).ok()?;
+            let file = File::from(fd);
+            file.set_len(size as u64).ok()?;
+            // SAFETY: private memfd of this size, written once before it is attached.
+            let mut map = unsafe { MmapMut::map_mut(&file) }.ok()?;
+            map.copy_from_slice(&i.pixels);
+            let pool = shm.create_pool(file.as_fd(), size as i32, &self.qh, ());
+            let buffer = pool.create_buffer(
+                0,
+                i.pixel_width as i32,
+                i.pixel_height as i32,
+                i.pixel_width as i32 * 4,
+                wl_shm::Format::Argb8888,
+                &self.qh,
+                (),
+            );
+            pool.destroy();
+            let surface = compositor.create_surface(&self.qh, ());
+            let viewport = self.viewporter.as_ref().map(|v| {
+                let vp = v.get_viewport(&surface, &self.qh, ());
+                vp.set_destination(i.width as i32, i.height as i32);
+                vp
+            });
+            if viewport.is_none() {
+                surface.set_buffer_scale((i.pixel_width as u32 / i.width.max(1)).max(1) as i32);
+            }
+            surface.attach(Some(&buffer), 0, 0);
+            // Where the picture sits from the pointer: its hotspot under it.
+            if surface.version() >= 5 {
+                surface.offset(-i.hotspot.0, -i.hotspot.1);
+            }
+            surface.damage_buffer(0, 0, i.pixel_width as i32, i.pixel_height as i32);
+            Some((surface, buffer, viewport))
+        });
+        d.start_drag(Some(&source), origin, icon.as_ref().map(|i| &i.0), serial);
+        if let Some((surface, ..)) = &icon {
+            surface.commit();
+        }
+        self.drag_out = Some(DragOut {
+            source,
+            offers,
+            icon,
+            dropped: false,
+        });
+        let _ = self.connection.flush();
+        Ok(())
+    }
+    /// A drag started here is over: its source and picture go, and the app is told once.
+    fn end_drag_out(&mut self, dropped: bool) {
+        let Some(out) = self.drag_out.take() else {
+            return;
+        };
+        out.source.destroy();
+        if let Some((surface, buffer, viewport)) = out.icon {
+            if let Some(v) = viewport {
+                v.destroy();
+            }
+            surface.destroy();
+            buffer.destroy();
+        }
+        self.events.push(Event::DragEnded { dropped });
     }
     /// The drag over us ends here: its offer is no longer ours.
     fn end_drag(&mut self) {
@@ -725,7 +868,9 @@ fn terminals_on_close(events: impl IntoIterator<Item = Event>) -> Vec<Event> {
                 id,
                 result: Err(CaptureFailure::Closed),
             }),
-            e @ (Event::ActivationTokenFailed { .. } | Event::Capture { .. }) => Some(e),
+            e @ (Event::ActivationTokenFailed { .. }
+            | Event::Capture { .. }
+            | Event::DragEnded { .. }) => Some(e),
             _ => None,
         })
         .collect()
@@ -953,6 +1098,7 @@ fn run_inner(
         sources: Vec::new(),
         receive: None,
         sends: Vec::new(),
+        drag_out: None,
         drag: None,
         dropped: None,
         buffers: Vec::new(),
@@ -2021,6 +2167,36 @@ impl Dispatch<wl_data_source::WlDataSource, ()> for Window {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
+        if w.drag_out.as_ref().is_some_and(|d| d.source == *p) {
+            match e {
+                wl_data_source::Event::Send { mime_type, fd } => {
+                    let data = w
+                        .drag_out
+                        .as_ref()
+                        .and_then(|d| d.offers.iter().find(|(m, _)| *m == mime_type))
+                        .map(|(_, data)| data.clone());
+                    if let Some(bytes) = data
+                        && rustix::fs::fcntl_setfl(&fd, rustix::fs::OFlags::NONBLOCK).is_ok()
+                    {
+                        w.sends.push(Send {
+                            file: fd.into(),
+                            bytes,
+                            written: 0,
+                        });
+                    }
+                }
+                wl_data_source::Event::DndDropPerformed => {
+                    if let Some(d) = &mut w.drag_out {
+                        d.dropped = true;
+                    }
+                }
+                wl_data_source::Event::DndFinished => w.end_drag_out(true),
+                // Cancelled after the drop was performed: the target refused it in the end.
+                wl_data_source::Event::Cancelled => w.end_drag_out(false),
+                _ => {}
+            }
+            return;
+        }
         match e {
             wl_data_source::Event::Send { mime_type, fd }
                 if mime_type == MIME || mime_type == "text/plain" =>

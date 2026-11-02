@@ -54,8 +54,11 @@ def docks():
 def shot(path):
     """Hyalo's own screenshot needs a capture grant this checkout may not have; the
     private Cage under the nested Hyalo shows the same output, so grim reads Cage."""
-    if 'ok' in ipc('screenshot', path):
-        return
+    try:
+        if 'ok' in ipc('screenshot', path):
+            return
+    except subprocess.TimeoutExpired:
+        pass  # it waits for a frame, and an output where nothing moves may not draw one
     subprocess.run(['grim', str(path)], check=True, timeout=10, env={**os.environ, 'WAYLAND_DISPLAY': 'wayland-0'})
 
 
@@ -297,7 +300,7 @@ try:
     # and refuses what it cannot rather than doing nothing.
     until('Shell1 answering', lambda: shell1('GetState') is not None)
     state = shell1('GetState')
-    assert state == (False, [], ''), state
+    assert state == (False, [('app-grid', False)], ''), state
     for surface, error in [('bar', 'Unavailable'), ('Dock', 'Invalid')]:
         try:
             shell1('FocusSurface', GLib.Variant('(s)', (surface,)), quiet=False)
@@ -685,6 +688,54 @@ try:
         until('the chooser closes on a choice', lambda: not chooser())
         until('the chosen window is focused', lambda: focused_title() == other)
     result['chooser'] = sorted(offered)
+    # Apps (launcher.rs): Shell1 opens the layer, a reader finds the search and the apps,
+    # typing narrows them through Applications1's Search, Escape clears then closes, and
+    # a second toggle closes an open layer.
+    def apps_layers():
+        return [l for l in ipc('layers').get('ok', {}).get('layers', []) if l.get('namespace') == 'nidara-apps']
+
+    def apps_node():
+        for app in children(Atspi.get_desktop(0)):
+            try:
+                app.set_cache_mask(Atspi.Cache.NONE)
+                for node in children(app):
+                    if node and node.get_name() == 'Apps':
+                        return node
+            except GLib.Error:
+                continue
+        return None
+
+    def apps_shown():
+        root = apps_node()
+        if not root:
+            return None
+        lists = [c for c in children(root) if c.get_role_name() == 'list']
+        return [c.get_name() for c in children(lists[0])] if lists else None
+
+    shell1('ToggleSurface', GLib.Variant('(sb)', ('app-grid', True)), quiet=False)
+    until('the Apps layer', apps_layers)
+    assert shell1('GetState')[1] == [('app-grid', True)], shell1('GetState')
+    every = until('Apps in AT-SPI', lambda: (a := apps_shown()) and len(a) >= 3 and a)
+    assert every == sorted(every, key=str.lower), every
+    time.sleep(2)  # icons and glass (software Hyalo)
+    shot(LOG / 'apps.png')
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        for code in (37, 23, 20):  # k i t
+            pipe.write(f'key {code}\n')
+        narrowed = until('typing narrows Apps', lambda: (a := apps_shown()) and len(a) < len(every) and a)
+        assert narrowed[0] == 'kitty', narrowed
+        time.sleep(1.5)  # software Hyalo draws the answer late
+        shot(LOG / 'apps-search.png')
+        pipe.write('key 1\n')  # Escape: clears the search
+        until('Escape clears the search', lambda: apps_shown() == every)
+        pipe.write('key 1\n')  # Escape again: closes
+        until('Escape closes Apps', lambda: not apps_layers())
+    shell1('ToggleSurface', GLib.Variant('(sb)', ('app-grid', True)), quiet=False)
+    until('Apps again', apps_layers)
+    shell1('ToggleSurface', GLib.Variant('(sb)', ('app-grid', True)), quiet=False)
+    until('a second toggle closes Apps', lambda: not apps_layers())
+    until('Shell1 says Apps closed', lambda: shell1('GetState')[1] == [('app-grid', False)])
+    result['apps'] = {'listed': every, 'kit': narrowed}
     assert shell.poll() is None, 'the dock exited'
     (LOG / 'layers.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2))

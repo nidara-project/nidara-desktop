@@ -6,12 +6,46 @@
 //! an app that opens files, the whole of its icon included,
 //! that app opens them. Anywhere else the drag is refused, and the source shows it. Nothing
 //! happens while hovering: the edit or the launch is made at the drop.
+//!
+//! An app dragged from Apps (`nidara_shell_ipc::drag`, D4) opens a slot among the pinned
+//! apps, up to half a slot past the last one, and is pinned there at the drop; what it
+//! names is checked against the dock's own catalogue first. Already pinned, nothing
+//! changes (EditLayout's insert is a no-op).
 use crate::model::{Item, Kind, Signal, View};
 use crate::reorder::{aim, section};
 use std::path::PathBuf;
 
-/// The only type the dock takes.
+/// Files and folders.
 pub const URI_LIST: &str = "text/uri-list";
+/// An app from Apps.
+pub const APP: &str = nidara_shell_ipc::drag::APP_MIME;
+
+/// What a drag over the strip carries, of what the dock takes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Offer {
+    Files,
+    App,
+}
+
+/// The kind of drag offering `mimes`; an app first, when a source offers both.
+pub fn offer(mimes: &[String]) -> Option<Offer> {
+    if mimes.iter().any(|m| m == APP) {
+        Some(Offer::App)
+    } else if mimes.iter().any(|m| m == URI_LIST) {
+        Some(Offer::Files)
+    } else {
+        None
+    }
+}
+
+impl Offer {
+    pub fn mime(self) -> &'static str {
+        match self {
+            Offer::Files => URI_LIST,
+            Offer::App => APP,
+        }
+    }
+}
 /// The open slot's key: never a layout key.
 pub const KEY: &str = "drop:";
 /// At most this many URIs are taken from one drop (Applications1's bound for Open).
@@ -22,6 +56,8 @@ pub const MAX_URIS: usize = 128;
 pub enum Target {
     /// Pinned in the folders' and files' section, at this place in it.
     Pin(usize),
+    /// An app from Apps, pinned among the pinned apps at this place.
+    PinApp(usize),
     /// Opened by this app.
     Open {
         id: String,
@@ -78,6 +114,43 @@ pub fn target(
         },
         _ => Target::None,
     }
+}
+
+/// Where an app from Apps dropped at `along` would be pinned: among the pinned apps, up to
+/// half a slot past the last one (as a running app picked up from the strip).
+pub fn app_target(view: &View, hits: &[[f64; 4]], horizontal: bool, along: f64) -> Target {
+    match aim(view, false, hits, horizontal, KEY, along) {
+        (to, true) => Target::PinApp(to),
+        _ => Target::None,
+    }
+}
+
+/// `view` with an app's open slot at `to` among the pinned apps; with none pinned yet, the
+/// slot comes with the separator that ends that section.
+pub fn preview_app(view: &View, to: usize) -> View {
+    let mut items = view.items.clone();
+    let range = section(view, false);
+    let slot = item(KEY, Kind::MissingApp { id: String::new() });
+    if range.is_empty() {
+        let lone = items.first().is_none_or(|i| i.kind != Kind::Separator);
+        items.insert(0, slot);
+        if lone {
+            items.insert(1, item("drop:separator", Kind::Separator));
+        }
+    } else {
+        items.insert(range.start + to.min(range.len()), slot);
+    }
+    View { items }
+}
+
+/// The pinned app a drop at `to` goes before (None: at the end of the pinned apps).
+pub fn before_app(view: &View, to: usize) -> Option<String> {
+    let range = section(view, false);
+    view.items[range]
+        .iter()
+        .filter(|i| i.key != KEY)
+        .nth(to)
+        .map(|i| i.key.clone())
 }
 
 /// `view` with the open slot at `to` in the folders' and files' section; that section
@@ -297,6 +370,45 @@ mod tests {
             target(&p, &hits(&p), true, centre(&p, 5), |_| false),
             Target::Pin(0)
         );
+    }
+
+    #[test]
+    fn an_app_from_apps_opens_a_slot_among_the_pins() {
+        let v = view(true);
+        let h = hits(&v);
+        assert_eq!(
+            app_target(&v, &h, true, centre(&v, 0) - 8.),
+            Target::PinApp(0)
+        );
+        assert_eq!(
+            app_target(&v, &h, true, centre(&v, 0) + 8.),
+            Target::PinApp(1)
+        );
+        assert_eq!(
+            app_target(&v, &h, true, centre(&v, 1) + 8.),
+            Target::PinApp(2)
+        );
+        // Over the running app, past half a slot after the last pin: refused.
+        assert_eq!(app_target(&v, &h, true, centre(&v, 3)), Target::None);
+        assert_eq!(keys(&preview_app(&v, 1))[..4], ["a", "drop:", "b", "sep"]);
+        assert_eq!(before_app(&v, 1).as_deref(), Some("b"));
+        assert_eq!(before_app(&v, 2), None);
+        // Held: the pointer in the slot keeps it there.
+        let p = preview_app(&v, 1);
+        assert_eq!(
+            app_target(&p, &hits(&p), true, centre(&p, 1)),
+            Target::PinApp(1)
+        );
+        // With no pins, the section opens first, with its separator.
+        let bare = View {
+            items: v.items[3..].to_vec(),
+        };
+        assert_eq!(
+            keys(&preview_app(&bare, 0))[..3],
+            ["drop:", "drop:separator", "r"]
+        );
+        assert_eq!(offer(&[URI_LIST.into(), APP.into()]), Some(Offer::App));
+        assert_eq!(offer(&["text/plain".into()]), None);
     }
 
     #[test]

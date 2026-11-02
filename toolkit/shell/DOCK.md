@@ -20,6 +20,20 @@ dock (**Reorder**, below). Still to come in D3: foreground usage and drops from 
 the dock (files, folders, apps from the launcher), and keyboard reordering; then the Apps
 launcher (D4).
 
+**Apps (D4, `launcher.rs`) is a layer of this process, not a window** (owner, 2026-11-02):
+the TS grid's panel without its workspace strip, on an overlay layer that takes the
+keyboard, centred on the output the compositor picks. It opens like an app — its entry
+`org.nidara.Apps.desktop` runs `nidara-ipc toggleAppGrid`, so it is in its own grid, in
+search and pinnable — and from the launcher shortcut; both reach Shell1
+`ToggleSurface("app-grid")` (capability `surface:app-grid`, its visibility in GetState),
+which opens it or closes it when open. It lists the catalogue's visible apps A–Z (a dot on
+the new ones), asks Applications1's Search as you type, launches with a token from the
+click or key and closes; Escape clears the search, then closes; a click outside closes;
+locking closes it. A tile held and moved becomes a drag of that app: the panel steps aside
+(no input, nothing drawn) so the dock can take it, and closes when the drag ends. Its own
+AT-SPI tree: a window "Apps", the search field, a list of the apps shown. The nested check
+(§8) opens it, finds the apps, types, clears and closes it.
+
 ## 1. Where it lives
 
 `toolkit/shell`, package and binary **`nidara-shell`** (the contract's working name; the
@@ -227,8 +241,10 @@ Applications1 refuses types the app does not declare. Never half an icon for the
 pin being moved has: a file over an app is the app's to open (owner). The launch carries
 an activation token made with the drop's serial, so the app comes to the front; Hyalo
 honours it for the drop's target, once, shortly after the drop (`activation.rs`). Anywhere else the drag is refused, and the source shows it.
-Nothing is launched or written while hovering. Dragging an app from the Apps grid comes
-with the grid itself (D4).
+Nothing is launched or written while hovering. An app dragged from Apps
+(`application/x-nidara-app`, `nidara_shell_ipc::drag`: its DesktopId and generation) opens a
+pin's slot among the pins and is pinned there through EditLayout, once the dock finds the id
+in its own catalogue; the MIME data grants nothing by itself.
 
 **Reorder (D3).** A long press (`reorder::LONG_PRESS`, 400 ms within `SLOP` 6 px) picks
 up a pin, or a running app that is not pinned (`reorder.rs`). A folder or file moves only

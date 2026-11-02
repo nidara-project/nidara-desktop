@@ -25,7 +25,7 @@ is pulled into the dock's first block.
 | Applications module in `nidara-sessiond --applications` | desktop catalogue, search, app identity/matching, app icon resolution/overrides, default handlers, launch/actions/open, usage/new markers, pin layout, app autostart preferences, Unity launcher metadata | windows/focus/minimize, thumbnails, glass, dock geometry/input or Shell1 |
 | Config1 | ordinary dock preferences, existing GSettings validation/announcements | a second app catalogue or second pin-order cache |
 | Rust shell process, working binary `nidara-shell` | dock surface per output, ordered view, interactions, popups/chooser, trash UI, retained focus/a11y, Shell1 methods implemented by that process | acting as a privileged proxy for arbitrary clients |
-| `nidara-apps`, a normal toolkit application | app-grid/search window, own `.desktop` and app-id, launch/open and drag source | a fixed dock slot or a bar overlay |
+| Apps, a layer of the Rust shell process (owner, 2026-11-02; `toolkit/shell/src/launcher.rs`) | app-grid/search layer, own `.desktop` (opened through Shell1 `surface:app-grid`), launch and drag source | a fixed dock slot, a window, a workspace strip |
 | Hyalo | authoritative windows/workspaces/focus/lock/output/workarea, attention requests, activation validation, capture, minimize targets/motion, glass/material/controls | client content, application search, pin storage or client accessibility |
 | nk-wayland/nk-widgets | reusable layer-shell host, real input/serials, activation-token creation, capture client, DnD, compatible popup parent and bounded menus/chooser | a second Wayland host in the shell; app-specific launch policy |
 
@@ -33,9 +33,10 @@ Applications1 is opt-in on the nested Rust bus. It neither acquires the TS
 Shell name nor calls TS services. Shell1 belongs to the process which draws:
 when only the dock exists it advertises `focus:dock` and dock state, not an
 imaginary bar. OSD C can join that same process later; never two competing owners
-of `org.nidara.Shell`. Opening Apps becomes launching its desktop entry; the
-`toggleAppGrid` compatibility spelling maps to Activate/present Apps and does
-not invent a hide/toggle guarantee for a separate application's window.
+of `org.nidara.Shell`. Opening Apps becomes launching its desktop entry, whose Exec is the fixed
+`nidara-ipc toggleAppGrid`: Shell1 `ToggleSurface("app-grid")` on the process that
+draws it, which opens the layer or closes it when open. **Owner, 2026-11-02:** Apps is
+a layer that opens like an app, not an application window.
 
 Presentation handles lack of a service/capability explicitly. Disconnected
 Applications1 cannot reorder pins or claim a successful launch. Existing windows
@@ -404,9 +405,8 @@ The user can also pin an exact file-manager app separately. Resolve duplicate
 app targets to one visible slot deterministically, preserving both stored intent
 and a diagnostic; never delete a user's pin because two targets resolve equally.
 
-Apps uses binary `nidara-apps`, desktop entry `org.nidara.Apps.desktop`,
-app-id/bus name `org.nidara.Apps` and localized display name “Apps”; it implements
-org.freedesktop.Application for activate/opening its own window. It is an ordinary app pin. Neither Home nor
+Apps is the shell's layer (above), desktop entry `org.nidara.Apps.desktop` with the
+localized display name “Apps”; no binary, bus name or window of its own. It is an ordinary app pin. Neither Home nor
 Launcher is a magic dock element. Folder target is an absolute local file URI,
 with display name/icon and availability; click opens it through the current
 inode/directory handler. Invalid/missing folders remain identifiable and
@@ -502,13 +502,10 @@ specific missing permission. No role is granted merely by using Applications1.
 | focus/minimize/window close/capture | call Hyalo directly as the original actor | unchanged A policy and specific gates |
 
 Implement explicit operations, not `Shell → Configure everything` or
-`sessiond → Spawn anything`. The new installed `nidara-apps` executable gets a
-Launcher role which cannot close/control windows, change unrelated configuration
-or capture. Its dev identity needs the same administrator-managed access.d
-registration as A, never an environment-based trust exemption. That registration
-would be implementation code only; neither this design nor checkout tests run
-an installer or write /etc. The shared access crate and role inventory change in
-the corresponding authorized PR, with denial tests for every unrelated family.
+`sessiond → Spawn anything`. Apps runs inside the shell process (owner, 2026-11-02),
+so it launches with the shell's identity and needs no role of its own; what it asks
+Applications1 for is the dock's own set (launch, Search, icons, EditLayout through the
+dock's drop).
 
 A native dock can perform its own user's gesture through these scoped APIs.
 If it exposes a public D-Bus helper for arbitrary app launches/config edits, it
@@ -711,7 +708,7 @@ outside the app catalogue.
 | Capture | Hyalo capture.rs already implements foreign toplevel list + standard copy capture | native client handles, shm/dmabuf lifecycle, invalidation and bounded refresh/cache; do not redesign a screenshot service |
 | DnD | nk-wayland currently implements selection/clipboard offers, not full dock drag/drop | real wl_data_device drag source/destination, serial/action negotiation, MIME bounds and correct finish/cancel lifecycle |
 | Position/magnification | existing nidara-layers handles synchronized content layers | stable root surface and protocol-correct geometry; reuse compositor transforms, defer #966's additional shape morphs |
-| Ordinary Files/Apps | TS has fixed Home/Launcher and a hardcoded file-manager family | Applications1 default-directory target; real nidara-apps desktop app, no hardcoded file-manager name or alias class |
+| Ordinary Files/Apps | TS has fixed Home/Launcher and a hardcoded file-manager family | Applications1 default-directory target; Apps as a pinnable entry opening the shell's layer, no hardcoded file-manager name or alias class |
 
 Expose only the minimal required public transport capability; unsupported roles
 fail explicitly. A missing toolkit primitive extends nk-wayland once, never a

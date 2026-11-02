@@ -1,0 +1,15 @@
+[Desktop Entry]
+# Apps is a layer of the shell, not a window (#959 D4): this entry opens it like an app,
+# from the dock, from its own grid or from search. A second launch while it is open closes
+# it. The Exec is Shell1's fixed surface operation, never an arbitrary command.
+Name=Apps
+Name[es]=Aplicaciones
+Comment=Find and open your applications
+Comment[es]=Busca y abre tus aplicaciones
+Exec=nidara-ipc toggleAppGrid
+Icon=view-app-grid
+Type=Application
+Categories=System;
+Keywords=apps;applications;launcher;grid;
+Keywords[es]=apps;aplicaciones;lanzador;cuadrícula;
+StartupNotify=false

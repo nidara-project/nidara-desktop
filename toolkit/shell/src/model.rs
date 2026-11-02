@@ -21,6 +21,10 @@ pub struct App {
     pub actions: Vec<DesktopAction>,
     pub autostart: Autostart,
     pub launcher: Launcher,
+    /// Listed in Apps (not NoDisplay, Hidden or shown only elsewhere).
+    pub visible: bool,
+    /// Newly observed, not used or acknowledged yet: Apps marks it.
+    pub is_new: bool,
 }
 
 /// What the app says of itself through Unity (APPLICATIONS1-DOCK.md §5), as Applications1

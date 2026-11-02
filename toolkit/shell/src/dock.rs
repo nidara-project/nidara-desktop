@@ -118,6 +118,8 @@ pub struct Dock {
     /// Files or folders dragged over the strip from another app, and where a drop would
     /// go now (drops.rs).
     dropping: Option<crate::drops::Target>,
+    /// What the drag over the strip carries (files, or an app from Apps).
+    drop_offer: crate::drops::Offer,
     /// The pin in the air, in a layer of its own so it can leave the strip.
     float: Option<nk_wayland::LayerId>,
     /// "Remove" over the pin in the air while a drop would unpin it.
@@ -205,6 +207,7 @@ impl Dock {
             held: None,
             gone: None,
             dropping: None,
+            drop_offer: crate::drops::Offer::Files,
             float: None,
             remove_tip: None,
             landing: None,
@@ -1382,11 +1385,20 @@ impl Dock {
         if let Some(r) = &self.reorder {
             view = Some(r.preview(view.as_ref().unwrap_or(&self.source.view)));
         }
-        if let Some(crate::drops::Target::Pin(to)) = &self.dropping {
-            view = Some(crate::drops::preview(
-                view.as_ref().unwrap_or(&self.source.view),
-                *to,
-            ));
+        match &self.dropping {
+            Some(crate::drops::Target::Pin(to)) => {
+                view = Some(crate::drops::preview(
+                    view.as_ref().unwrap_or(&self.source.view),
+                    *to,
+                ));
+            }
+            Some(crate::drops::Target::PinApp(to)) => {
+                view = Some(crate::drops::preview_app(
+                    view.as_ref().unwrap_or(&self.source.view),
+                    *to,
+                ));
+            }
+            _ => {}
         }
         if let Some((key, _)) = &self.gone {
             // Its slot closes at once: the pin is in the air (Landing) or a puff (Poof).
@@ -1429,20 +1441,29 @@ impl Dock {
         let horizontal = self.layout.position.horizontal();
         let along = if horizontal { at.0 } else { at.1 };
         let catalogue = &self.frame.catalogue;
-        let mut target = crate::drops::target(
-            &self.frame.view,
-            &self.shown.hits,
-            horizontal,
-            along,
-            |id| self.frame.can_launch && catalogue.get(id).is_some_and(|a| a.opens),
-        );
-        if matches!(target, crate::drops::Target::Pin(_)) && !self.frame.can_edit_layout {
+        let mut target = match self.drop_offer {
+            crate::drops::Offer::Files => crate::drops::target(
+                &self.frame.view,
+                &self.shown.hits,
+                horizontal,
+                along,
+                |id| self.frame.can_launch && catalogue.get(id).is_some_and(|a| a.opens),
+            ),
+            crate::drops::Offer::App => {
+                crate::drops::app_target(&self.frame.view, &self.shown.hits, horizontal, along)
+            }
+        };
+        if matches!(
+            target,
+            crate::drops::Target::Pin(_) | crate::drops::Target::PinApp(_)
+        ) && !self.frame.can_edit_layout
+        {
             target = crate::drops::Target::None;
         }
         let was = self.dropping.replace(target.clone());
         if first || was.as_ref() != Some(&target) {
             let takes = target != crate::drops::Target::None;
-            w.accept_drop(takes.then_some(crate::drops::URI_LIST));
+            w.accept_drop(takes.then_some(self.drop_offer.mime()));
             self.reslot(w, None);
         }
         Ok(())
@@ -1455,6 +1476,29 @@ impl Dock {
         let Some(target) = self.dropping.take() else {
             return Ok(());
         };
+        if let crate::drops::Target::PinApp(to) = target {
+            // Named by the data, checked against our own catalogue: an app it does not
+            // have is not pinned, whoever offered it.
+            match nidara_shell_ipc::drag::decode(data)
+                .filter(|a| self.frame.catalogue.get(&a.id).is_some())
+            {
+                Some(app) => {
+                    eprintln!("nidara-shell: {} pinned from Apps", app.id);
+                    let _ = self.hub.send(Request::Menu {
+                        command: Command::PinAt {
+                            id: app.id,
+                            before: crate::drops::before_app(&self.source.view, to),
+                        },
+                        token: None,
+                    });
+                }
+                None => eprintln!("nidara-shell: an app drop named no app of the catalogue"),
+            }
+            self.presence_target = 0.;
+            self.presence_at = Instant::now();
+            self.reslot(w, None);
+            return Ok(());
+        }
         let uris = crate::drops::uris(data);
         let command = |c| Request::Menu {
             command: c,
@@ -2395,14 +2439,14 @@ impl Application for Dock {
             // The compositor gave the keyboard elsewhere: the roving focus ends with it. Not
             // to the dock's own popup, which holds it for as long as it is open.
             Event::Focus(false) if self.popup.is_none() => self.leave_keyboard(w)?,
-            Event::DragEnter { x, y, mimes } => {
-                if mimes.iter().any(|m| m == crate::drops::URI_LIST) {
+            Event::DragEnter { x, y, mimes } => match crate::drops::offer(&mimes) {
+                Some(offer) => {
+                    self.drop_offer = offer;
                     self.dropping = Some(crate::drops::Target::None);
                     self.drop_over(w, (x, y), true)?;
-                } else {
-                    w.accept_drop(None);
                 }
-            }
+                None => w.accept_drop(None),
+            },
             Event::DragMotion(x, y) if self.dropping.is_some() => {
                 self.drop_over(w, (x, y), false)?;
             }

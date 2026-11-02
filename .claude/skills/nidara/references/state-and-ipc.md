@@ -2019,6 +2019,15 @@ evidence stays in the source worktree's target/applications1. Other stages
 remain design until individually authorized.
 The existing TS model documented above is unchanged; IPC B is separate.
 
+**Apps (D4) is a LAYER of `nidara-shell`, not an app window** (owner, 2026-11-02, overriding
+the design's `nidara-apps` window): `toolkit/shell/src/launcher.rs`. Its entry
+`config/applications/org.nidara.Apps.desktop` runs `nidara-ipc toggleAppGrid`, i.e. Shell1
+`ToggleSurface("app-grid")`, which the Rust shell answers (`surface:app-grid`) by opening
+or closing the layer. Gotcha: in the Hyalo preview the TS shell owns `org.nidara.Shell`, so
+there the same entry opens the TS grid — only a Rust-only session (or the nested check,
+`toolkit/shell/check-dock-headless.sh`) reaches the Rust layer. Dragging from it uses
+nk-wayland's drag source (`Window::start_drag`, `Event::DragEnded`, `toolkit/CONTRACT.md`).
+
 ### Applications1 A3 observation rules
 
 A3 consumes H1 focus_transition at its monotonic boundary, preserving every

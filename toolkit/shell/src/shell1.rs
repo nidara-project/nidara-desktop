@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Shell1 (`crates/nidara-shell-ipc`), served by the process that paints the Rust shell.
-//! Today that is the dock alone, so the one capability is `focus:dock`; every other
-//! member answers Unavailable (or Invalid outside the vocabulary) and is never a no-op.
-//! The state is the hub's: locked, no surfaces yet, no island.
+//! Today that is the dock and Apps (launcher.rs), so the capabilities are `focus:dock`
+//! and `surface:app-grid`; every other member answers Unavailable (or Invalid outside
+//! the vocabulary) and is never a no-op. The state is the hub's: locked, Apps open or
+//! not, no island.
 //!
 //! Policy: FocusSurface is the common OpenSurface rule and GetState is Read, both open to
 //! any caller on the session bus (`nidara-access`), so no caller is identified here.
 use crate::hub::{HubEvent, Request};
-use nidara_shell_ipc::{Error, INTERFACE, NAME, PATH, State};
+use nidara_shell_ipc::{Error, INTERFACE, NAME, PATH, State, SurfaceState};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::Sender;
 use zbus::blocking::Connection;
 
-pub const CAPABILITIES: &[&str] = &["focus:dock"];
+pub const CAPABILITIES: &[&str] = &["focus:dock", "surface:app-grid"];
 const SURFACES: &[&str] = &[
     "cc",
     "nc",
@@ -31,13 +32,28 @@ const SURFACES: &[&str] = &[
 pub struct Status {
     pub locked: AtomicBool,
     pub docks: AtomicUsize,
+    /// Apps is open.
+    pub apps: AtomicBool,
 }
 
-pub fn state(locked: bool) -> State {
+pub fn state(locked: bool, apps: bool) -> State {
     State {
         locked,
-        surfaces: vec![],
+        surfaces: vec![SurfaceState {
+            name: "app-grid".into(),
+            visible: apps,
+        }],
         island: String::new(),
+    }
+}
+
+/// Whether a toggle request can be carried out now.
+pub fn toggle(surface: &str, locked: bool) -> Result<(), Error> {
+    match surface {
+        "app-grid" if locked => Err(Error::Unavailable("the session is locked".into())),
+        "app-grid" => Ok(()),
+        s if SURFACES.contains(&s) => Err(Error::Unavailable(format!("this shell has no {s} yet"))),
+        other => Err(Error::Invalid(format!("unknown surface {other:?}"))),
     }
 }
 
@@ -68,7 +84,10 @@ impl Shell1 {
         CAPABILITIES.to_vec()
     }
     fn get_state(&self) -> State {
-        state(self.status.locked.load(Ordering::Acquire))
+        state(
+            self.status.locked.load(Ordering::Acquire),
+            self.status.apps.load(Ordering::Acquire),
+        )
     }
     fn focus_surface(&self, surface: &str) -> Result<(), Error> {
         focus(
@@ -81,13 +100,10 @@ impl Shell1 {
             .map_err(|_| Error::Failed("the shell is shutting down".into()))
     }
     fn toggle_surface(&self, surface: &str, _keyboard: bool) -> Result<(), Error> {
-        if SURFACES.contains(&surface) {
-            Err(Error::Unavailable(format!(
-                "this shell has no {surface} yet"
-            )))
-        } else {
-            Err(Error::Invalid(format!("unknown surface {surface:?}")))
-        }
+        toggle(surface, self.status.locked.load(Ordering::Acquire))?;
+        self.hub
+            .send(HubEvent::Request(Request::ToggleApps))
+            .map_err(|_| Error::Failed("the shell is shutting down".into()))
     }
     fn set_island(&self, _mode: &str) -> Result<(), Error> {
         Err(Error::Unavailable("this shell has no island yet".into()))
@@ -117,13 +133,13 @@ pub fn serve(status: Arc<Status>, hub: Sender<HubEvent>) -> Result<Connection, S
         .map_err(|e| e.to_string())
 }
 
-pub fn changed(conn: &Connection, locked: bool) {
+pub fn changed(conn: &Connection, locked: bool, apps: bool) {
     if let Err(e) = conn.emit_signal(
         None::<&str>,
         PATH,
         INTERFACE,
         "StateChanged",
-        &(state(locked),),
+        &(state(locked, apps),),
     ) {
         eprintln!("nidara-shell: StateChanged not sent: {e}");
     }
@@ -142,5 +158,16 @@ mod tests {
         ));
         assert!(matches!(focus("bar", false, 1), Err(Error::Unavailable(_))));
         assert!(matches!(focus("Dock", false, 1), Err(Error::Invalid(_))));
+    }
+
+    #[test]
+    fn apps_toggles_unless_locked() {
+        assert!(toggle("app-grid", false).is_ok());
+        assert!(matches!(
+            toggle("app-grid", true),
+            Err(Error::Unavailable(_))
+        ));
+        assert!(matches!(toggle("cc", false), Err(Error::Unavailable(_))));
+        assert!(matches!(toggle("grid", false), Err(Error::Invalid(_))));
     }
 }
