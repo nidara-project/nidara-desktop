@@ -7,6 +7,11 @@ switch (#685) Hyprland is the session everybody gets**; Hyalo ships as a second 
 `install.sh` does not install. Build and run instructions are in `hyalo/README.md` — this file
 is the WHY and the traps.
 
+🔴 **Hyalo's Rust is NOT rustfmt-formatted: never run `cargo fmt` in `hyalo/`.** It is written with
+long lines on purpose, and `cargo fmt` rewrites ~70 files (2026-11-02, caught before commit). CI
+checks formatting only for `toolkit/` and `session/` (`ci.yml`, `cargo fmt … --check`); here,
+match the file you are in by hand.
+
 ## Where Hyalo's pieces are
 
 | Path | What |
@@ -1321,9 +1326,13 @@ that picture and grows back out of it. `wm/minimize.rs`.
   `setReduceMotion` writes it, and REMOVES it when not reducing). Everything of the window is
   drawn from one origin and one scale (`render/mod.rs`): its surfaces, corners, line, shadow,
   controls, title bar and popups shrink together; its dialogs move with it
-  (`Wm::placement`). Both ways it is drawn out of the stack (`moving`), right in front of the
-  dock's layer — Top, or Overlay when the dock is there (over a fullscreen window, with the app
-  grid) — so it lands ON its thumbnail, over the dock's glass, as the thumbnail sits on it. 🔑 The
+  (`Wm::placement`). Both ways it is drawn out of the stack (`moving`), between the dock
+  layer's glass and its content (`push_surface_over_glass`) — Top, or Overlay when the dock is
+  there (over a fullscreen window, with the app grid) — so it lands ON its thumbnail, over the
+  dock's glass, as the thumbnail sits on it, and under the icons. 🔑 Under the icons: owner,
+  2026-11-02 — in front of the whole layer, a window growing back out over a magnified dock
+  covered its icons, then dropped under them once back in the stack. With no dock layer it is
+  drawn in front of the chrome. 🔑 The
   owner's call (2026-10-04): #736 drew it going in under the shell's chrome, sinking into the
   glass, and the glass blurring a window that is supposed to become the thumbnail on top of it
   read wrong. Its dialogs are drawn in front of it (`Wm::within`), not by `wm.windows`' order. `post_repaint` keeps frames coming while one moves (`step_animations`).
