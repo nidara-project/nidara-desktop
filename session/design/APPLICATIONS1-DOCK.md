@@ -379,8 +379,9 @@ plus event with connection epoch/window ID. Rejected activation should be able
 to signal attention without stealing focus. The dock combines that with Unity
 urgent metadata for display only; focusing the app clears compositor attention
 according to Hyalo policy, not a fake local acknowledgement. Repeated urgent=true
-updates do not restart a bounce every frame. Reduced motion shows a static
-attention indication and stops travelling animation. Attention proposes three gentle cycles over at most 3 s per new false→true edge;
+updates do not restart a bounce every frame. The running indicator never changes
+for attention; reduced motion stops the bounce and leaves no static mark (owner,
+2026-11-02), only the accessible description. Attention proposes three gentle cycles over at most 3 s per new false→true edge;
 repeat true updates do not restart it. Launch bounce has the 10 s ceiling above;
 no sound or forced foreground.
 

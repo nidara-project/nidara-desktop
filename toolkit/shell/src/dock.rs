@@ -1435,26 +1435,8 @@ impl Dock {
             rgba(0, 0, 0, 230)
         };
         let d = DOT * self.layout.scale.max(0.4);
-        if item.signal.attention {
-            // Attention's still mark, with or without motion: the dot drawn out to a dash
-            // along the dock, whatever the indicators preference (it is not a running dot).
-            let dot = self.dot(n, d, c.scale());
-            let d = f64::from(dot.width);
-            let cx = f64::from(dot.x) + d / 2.;
-            let cy = f64::from(dot.y) + d / 2.;
-            let (lw, lh) = if self.layout.position.horizontal() {
-                (3. * d, d)
-            } else {
-                (d, 3. * d)
-            };
-            let dash = Rect {
-                x: (cx - lw / 2.) as f32,
-                y: (cy - lh / 2.) as f32,
-                width: lw as f32,
-                height: lh as f32,
-            };
-            c.rounded_rect(dash, d / 2., mark);
-        } else if self.frame.prefs.indicators
+        // Attention never changes the dot (owner, 2026-11-02): it only lifts the icon.
+        if self.frame.prefs.indicators
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
         {
