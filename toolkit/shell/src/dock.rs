@@ -117,10 +117,9 @@ const BADGE: f64 = 0.45;
 /// How far attention lifts an icon, as a share of the capsule's padding: the icon and its
 /// count stay inside the capsule, so the surface never grows for it.
 const LIFT: f64 = 0.5;
-/// A count's pill, as a share of the icon: its height, and how far it sits out of the
-/// icon's top-right corner.
+/// A count's pill height, as a share of the icon. It sits inside the icon's square, in its
+/// top-right corner: out of it, it reached into the gap and up to the next slot.
 const COUNT: f64 = 0.36;
-const COUNT_OUT: f64 = 0.25;
 
 fn slots(view: &View) -> Vec<Slot> {
     view.items
@@ -1464,9 +1463,9 @@ impl Dock {
         }
     }
 
-    /// A count: a pill out of the icon's top-right corner, the danger colour with a white
-    /// figure (ink with a dark one when the tokens lack it). Drawn over every icon, since
-    /// it reaches into the next slot's gap.
+    /// A count: a pill in the icon's top-right corner, inside its square (a long figure
+    /// grows it to the left), the danger colour with a white figure (ink with a dark one
+    /// when the tokens lack it). Drawn after every icon, over its own icon's art.
     fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
         let [x, y, w, _] = self.placed(n, item, now);
         let pill = w * COUNT;
@@ -1496,8 +1495,8 @@ impl Dock {
         });
         let size = layout.as_ref().map(|l| l.measured_size());
         let width = size.map_or(pill, |s| (s.width as f64 + pill * 0.6).max(pill));
-        let bx = x + w - width + pill * COUNT_OUT;
-        let by = y - pill * COUNT_OUT;
+        let bx = x + w - width;
+        let by = y;
         let r = Rect {
             x: bx as f32,
             y: by as f32,
