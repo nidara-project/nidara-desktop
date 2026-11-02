@@ -129,11 +129,11 @@ icon's top-right corner, inside its square (owner, 2026-11-02: out of it, it rea
 the gap and touched the separator; a long figure grows it leftward), its figure in the menus' font and weight (the fonts have no
 bold, and the text engine refuses to fake one); the progress is a bar along the icon's
 foot, a dark rim around a faint ink track so it reads over light and dark art. Attention
-draws the dot out to a dash whatever the indicators preference, and each new false→true
-edge lifts the icon three times in 3 s (`attention.rs`), by at most half the capsule's
+never changes the running dot (owner, 2026-11-02: the dash it used to draw broke the
+dock's look; the reference dock only bounces); each new false→true edge lifts the icon three times in 3 s (`attention.rs`), by at most half the capsule's
 padding so the icon and its count stay inside the surface; repeated `true` restarts
 nothing. Reduced motion (`org.gnome.desktop.interface` `enable-animations` off, the key
-the appearance portal reads) keeps the dash and drops the lift. A reader hears the
+the appearance portal reads) drops the lift, and with it the only visible sign. A reader hears the
 same: "3 pending, 50% done, wants attention". The private check sends a real
 `LauncherEntry.Update` signal and checks that all of it goes when the sender does.
 

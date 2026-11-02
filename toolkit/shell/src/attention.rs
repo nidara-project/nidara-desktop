@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! The attention bounce (APPLICATIONS1-DOCK.md §5): three gentle lifts over at most 3 s for
 //! each new false→true edge of a slot's attention; a slot that stays in attention, however
-//! often it is told so again, does not bounce again. Reduced motion has no bounce at all:
-//! the still mark the dock draws beside it is the whole indication. Pure: no clock of its
-//! own, no Wayland.
+//! often it is told so again, does not bounce again. Reduced motion has no bounce at all,
+//! and the dock draws no other mark (owner, 2026-11-02): only a reader still hears it. Pure:
+//! no clock of its own, no Wayland.
 use crate::model::Item;
 use std::collections::{HashMap, HashSet};
 use std::f64::consts::PI;
