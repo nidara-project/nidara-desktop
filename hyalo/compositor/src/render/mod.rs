@@ -190,7 +190,27 @@ fn push_surface<R: HyaloRenderer>(
     floor: bool,
     when: std::time::Instant,
 ) {
-    let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind| {
+    push_surface_over_glass(out, renderer, surface, location, scale, output_size, floor, when, &mut |_, _| {});
+}
+
+/// What is drawn between a surface's glass and its content.
+type Between<'a, R> = dyn FnMut(&mut Vec<OutputElement<R>>, &mut R) + 'a;
+
+/// `push_surface`, with `between` drawn in front of the surface's own glass and behind
+/// everything the surface draws on it (its content, its layers, its popups).
+#[allow(clippy::too_many_arguments)]
+fn push_surface_over_glass<R: HyaloRenderer>(
+    out: &mut Vec<OutputElement<R>>,
+    renderer: &mut R,
+    surface: &WlSurface,
+    location: Point<i32, Physical>,
+    scale: Scale<f64>,
+    output_size: smithay::utils::Size<i32, Physical>,
+    floor: bool,
+    when: std::time::Instant,
+    between: &mut Between<'_, R>,
+) {
+    let mut layer = |out: &mut Vec<OutputElement<R>>, s: &WlSurface, loc: Point<i32, Physical>, kind: Kind, between: Option<&mut Between<'_, R>>| {
         // Surfaces whose buffer is partly ink (nidara-material-v1 `add_ink_coverage`) are drawn
         // through the shader that recolours it.
         let inked = window::inked_surfaces(s);
@@ -224,6 +244,9 @@ fn push_surface<R: HyaloRenderer>(
                 }
             }
         }
+        if let Some(between) = between {
+            between(out, renderer);
+        }
         out.extend(GlassElement::for_surface(s, loc, scale, output_size, when).into_iter().map(OutputElement::Glass));
         // The veils under the shell's glass are its floor's (one element for all of them);
         // anything else draws its own.
@@ -236,9 +259,9 @@ fn push_surface<R: HyaloRenderer>(
     crate::protocols::layers::prepare_input_popups(surface, when);
     for (popup, offset) in PopupManager::popups_for_surface(surface) {
         let offset = (offset - popup.geometry().loc).to_f64().to_physical(scale).to_i32_round();
-        layer(out, popup.wl_surface(), location + offset, Kind::Unspecified);
+        layer(out, popup.wl_surface(), location + offset, Kind::Unspecified, None);
     }
-    layer(out, surface, location, Kind::ScanoutCandidate);
+    layer(out, surface, location, Kind::ScanoutCandidate, Some(between));
 }
 
 /// One surface tree with its glass right below it and that glass's shadow below the glass —
@@ -483,8 +506,10 @@ fn scene_elements<R: HyaloRenderer>(
         }
     };
     // Windows going into the dock or coming back out of it, their dialogs in front of them:
-    // drawn right in front of the dock's layer — a window lands where its thumbnail is, and
-    // that is over the dock's glass, not under it — and out of the stack while they move. A
+    // drawn right in front of the dock's glass — a window lands where its thumbnail is, and
+    // that is over the dock's glass, not under it — but behind its icons (owner, 2026-11-02:
+    // in front of the whole layer, a window growing back out over a magnified dock covered
+    // its icons, then went under them), and out of the stack while they move. A
     // window going in is out of the space already; one coming back is in it, and goes back to
     // its place in the stack when it gets there.
     let moving: Vec<Window> = state
@@ -506,12 +531,22 @@ fn scene_elements<R: HyaloRenderer>(
     };
     let (above, below) = (still(above), still(below));
     // The dock's layer here: Top, or Overlay over a fullscreen window and with the app grid.
-    let dock_on_overlay = state
+    let dock = state
         .wm
         .minimize_targets
         .get(&output.name())
         .and_then(|t| map.layers().find(|l| l.namespace() == t.namespace))
-        .is_some_and(|l| l.layer() == Layer::Overlay);
+        .cloned();
+    // A layer: the dock's with the moving windows between its glass and its icons.
+    let push_layer = |out: &mut Vec<OutputElement<R>>, renderer: &mut R, l: &smithay::desktop::LayerSurface| {
+        if dock.as_ref() == Some(l) && !moving.is_empty() {
+            push_surface_over_glass(out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, true, state.when, &mut |out, renderer| {
+                push_windows(out, renderer, &moving)
+            });
+        } else {
+            push_surface(out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, true, state.when);
+        }
+    };
     // The veils the shell's chrome (top and overlay layers) casts: one floor under all of it,
     // combined by their maximum like one surface's (two that overlap never darken twice).
     let floor: Vec<scrim::ScrimPx> = [Layer::Overlay, Layer::Top]
@@ -519,11 +554,8 @@ fn scene_elements<R: HyaloRenderer>(
         .flat_map(|layer| map.layers_on(layer).map(|l| chrome_scrims(l.wl_surface(), layer_loc(l), scale, now)).collect::<Vec<_>>())
         .flatten()
         .collect();
-    if dock_on_overlay {
-        push_windows(&mut out, renderer, &moving);
-    }
     for l in map.layers_on(Layer::Overlay).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, true, state.when);
+        push_layer(&mut out, renderer, l);
     }
     // X11 menus, tooltips and drop-downs (xwayland.rs): where their client puts them, over the
     // windows and the bar, the last one shown in front.
@@ -534,11 +566,12 @@ fn scene_elements<R: HyaloRenderer>(
     }
     push_closing(&mut out, true);
     push_windows(&mut out, renderer, &above);
-    if !dock_on_overlay {
+    // No dock to land in (it went away meanwhile): in front of the shell's chrome, as ever.
+    if dock.is_none() {
         push_windows(&mut out, renderer, &moving);
     }
     for l in map.layers_on(Layer::Top).rev() {
-        push_surface(&mut out, renderer, l.wl_surface(), layer_loc(l), scale, output_size, true, state.when);
+        push_layer(&mut out, renderer, l);
     }
     out.extend(ScrimElement::new(output.user_data(), floor, output_size).map(OutputElement::Scrim));
     push_closing(&mut out, false);
