@@ -1,6 +1,7 @@
 //! The TS dock's magnification spring (DockPhysics.ts `springStep`): it starts from rest and
 //! is nearly there in 300 ms of its time (125 ms of wall time), without overshoot, so the growth is seen as it happens.
 //! An exponential ease starts at full speed instead, and read as a jump (owner, 2026-11-01).
+//! Items sliding to a new slot (a reorder, a pin, a drop) ride it too.
 
 /// The TS dock's simulation runs 2.4× real time (DockCore.tsx `SIM_SPEED`): its springs
 /// were tuned by eye at 144 Hz stepping a fixed 1/60 s, and that feel is the approved one.
