@@ -840,11 +840,24 @@ try:
             pipe.write(f'rclick {x} {y}\n')
             return until(what, lambda: (r := menu_rows()) and r)
 
+        def settled_point(name):
+            # Aim where the item rests: a hand left over the dock from the step before
+            # keeps it magnified, and the item drawn there is not where it rests.
+            pipe.write('move 10 10\n')
+            last = None
+            for _ in range(50):
+                time.sleep(.1)
+                now = item_point(name)
+                if now == last:
+                    return now
+                last = now
+            raise AssertionError(f'{name} never came to rest')
+
         def close_menu():
             pipe.write('key 1\n')  # Escape
             until('the menu closes', lambda: not menu_rows())
 
-        rows = open_menu(*item_point('Trash'), 'the Trash menu')
+        rows = open_menu(*settled_point('Trash'), 'the Trash menu')
         shot(LOG / 'dock-menu-trash.png')
         heard = [r for _, r in rows]
         empty = next((r for r in heard if r["name"] in ("Vaciar papelera", "Empty trash", "Empty Trash")), None)
@@ -852,7 +865,7 @@ try:
         assert empty['enabled'], heard
         result['menus']['trash'] = heard
         close_menu()
-        rows = open_menu(*item_point('kitty'), 'the kitty menu')
+        rows = open_menu(*settled_point('kitty'), 'the kitty menu')
         shot(LOG / 'dock-menu-app.png')
         heard = [r for _, r in rows]
         names = [r['name'] for r in heard]

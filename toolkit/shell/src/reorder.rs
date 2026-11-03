@@ -449,9 +449,10 @@ mod tests {
         for mag in [false, true] {
             let (c, sep, run) = (centre(&v, mag, 3), centre(&v, mag, 4), centre(&v, mag, 5));
             // Brought in from its slot to anywhere between the last pin's centre and the
-            // separator: it is pinned at the end.
+            // separator: it is pinned at the end. Magnified, that centre is where the pin
+            // is drawn, a few pixels right of where it rests.
             let mut x = sep;
-            while x > c + 1. {
+            while x > c + if mag { 6. } else { 1. } {
                 let mut r = Reorder::new(&v, 5, (0., 0.), 64.).unwrap();
                 carry(&v, &mut r, mag, run, x);
                 assert_eq!(r.pins_at(), Some(None), "mag {mag}, dropped at {x}");
