@@ -6,6 +6,10 @@
 //! machine without Wi-Fi, a battery or an output never shows that widget.
 //!
 //! The icons are the TS widgets' rules (`ui/shell/widgets/{wifi,volume,battery}.ts`).
+//!
+//! The Control Center's tiles (B2.1) read more of the same services: the network's name,
+//! the display's brightness (DisplayBrightness1), Bluetooth's radio (Bluetooth1) and the
+//! selected player (Media1). Dark mode and Night Light are GSettings (prefs.rs).
 use serde_json::Value;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::time::{Duration, Instant};
@@ -20,6 +24,13 @@ const NETWORK_PATH: &str = "/org/nidara/Network";
 const NETWORK_IFACE: &str = "org.nidara.Network1";
 const AUDIO_PATH: &str = "/org/nidara/Audio";
 const POWER_PATH: &str = "/org/nidara/Power";
+const BRIGHTNESS_PATH: &str = "/org/nidara/DisplayBrightness";
+const BRIGHTNESS_IFACE: &str = "org.nidara.DisplayBrightness1";
+const BLUETOOTH: &str = "org.nidara.Bluetooth";
+const BLUETOOTH_PATH: &str = "/org/nidara/Bluetooth";
+const BLUETOOTH_IFACE: &str = "org.nidara.Bluetooth1";
+pub(crate) const MEDIA_PATH: &str = "/org/nidara/Media";
+pub(crate) const MEDIA_IFACE: &str = "org.nidara.Media1";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Wifi {
@@ -46,31 +57,102 @@ pub struct Battery {
     pub charging: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// The display brightness the Control Center's slider moves: one device's raw range.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Brightness {
+    pub device: String,
+    pub epoch: u64,
+    pub min: u32,
+    pub max: u32,
+    pub current: u32,
+}
+
+impl Brightness {
+    /// 0..1 across the device's range.
+    pub fn fraction(&self) -> f64 {
+        let span = self.max.saturating_sub(self.min);
+        if span == 0 {
+            return 0.;
+        }
+        (f64::from(self.current.saturating_sub(self.min)) / f64::from(span)).clamp(0., 1.)
+    }
+    /// The raw level for `fraction`.
+    pub fn raw(&self, fraction: f64) -> u32 {
+        let span = f64::from(self.max.saturating_sub(self.min));
+        self.min + (fraction.clamp(0., 1.) * span).round() as u32
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Bluetooth {
+    pub adapter: String,
+    pub powered: bool,
+}
+
+/// Night Light (`org.nidara.night-light`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Night {
+    pub enabled: bool,
+    pub temperature: i32,
+}
+
+/// The selected player (Media1's `Selected`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Media {
+    pub title: String,
+    pub artist: String,
+    pub playing: bool,
+    pub can_control: bool,
+    pub can_next: bool,
+    pub can_previous: bool,
+    /// The cover's file, once Media1 has fetched it.
+    pub art: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Status {
     pub wifi: Option<Wifi>,
+    /// The network joined or being joined.
+    pub wifi_name: String,
     pub volume: Option<Volume>,
     pub battery: Option<Battery>,
     /// Do Not Disturb (`org.nidara.notifications do-not-disturb`): the focus widget
     /// shows only while it is on.
     pub dnd: bool,
+    /// `org.gnome.desktop.interface color-scheme` is prefer-dark.
+    pub dark: bool,
+    pub night: Option<Night>,
+    pub brightness: Option<Brightness>,
+    pub bluetooth: Option<Bluetooth>,
+    /// None: no media service; Some with an empty title: nothing playing.
+    pub media: Option<std::sync::Arc<Media>>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Update {
-    Wifi(Option<Wifi>),
+    Wifi(Option<Wifi>, String),
     Volume(Option<Volume>),
     Battery(Option<Battery>),
     Dnd(bool),
+    Dark(bool),
+    Night(Option<Night>),
+    Brightness(Option<Brightness>),
+    Bluetooth(Option<Bluetooth>),
+    Media(Option<std::sync::Arc<Media>>),
 }
 
 impl Status {
     pub fn apply(&mut self, u: Update) {
         match u {
-            Update::Wifi(w) => self.wifi = w,
+            Update::Wifi(w, name) => (self.wifi, self.wifi_name) = (w, name),
             Update::Volume(v) => self.volume = v,
             Update::Battery(b) => self.battery = b,
             Update::Dnd(d) => self.dnd = d,
+            Update::Dark(d) => self.dark = d,
+            Update::Night(n) => self.night = n,
+            Update::Brightness(b) => self.brightness = b,
+            Update::Bluetooth(b) => self.bluetooth = b,
+            Update::Media(m) => self.media = m,
         }
     }
 }
@@ -118,6 +200,59 @@ pub fn wifi_of(snapshot: &Value) -> Option<Wifi> {
     })
 }
 
+/// The network the Wi-Fi adapter is on or joining: its access point's name.
+pub fn wifi_name(snapshot: &Value) -> String {
+    const WIFI: u64 = 2;
+    let Some(devices) = snapshot["devices"].as_array() else {
+        return String::new();
+    };
+    devices
+        .iter()
+        .filter(|d| d["kind"].as_u64() == Some(WIFI))
+        .find_map(|d| {
+            let active = d["activeAp"].as_str()?;
+            d["accessPoints"]
+                .as_array()?
+                .iter()
+                .find(|a| a["path"].as_str() == Some(active))?["label"]
+                .as_str()
+                .map(str::to_string)
+        })
+        .unwrap_or_default()
+}
+
+/// DisplayBrightness1's device: id, output, provider, min, max, current, available,
+/// writable, epoch.
+pub type DeviceRecord = (String, String, String, u32, u32, u32, bool, bool, u64);
+
+/// The device the Control Center's slider moves: an internal panel's first (logind's),
+/// else the first that can be written.
+pub fn brightness_of(devices: &[DeviceRecord]) -> Option<Brightness> {
+    let usable = || devices.iter().filter(|d| d.6 && d.7 && d.4 > d.3);
+    let (id, _, _, min, max, current, _, _, epoch) = usable()
+        .find(|d| d.2 == "logind")
+        .or_else(|| usable().next())?;
+    Some(Brightness {
+        device: id.clone(),
+        epoch: *epoch,
+        min: *min,
+        max: *max,
+        current: *current,
+    })
+}
+
+/// The first adapter's radio, from a Bluetooth1 snapshot; None without one.
+pub fn bluetooth_of(snapshot: &Value) -> Option<Bluetooth> {
+    if !snapshot["available"].as_bool().unwrap_or(false) {
+        return None;
+    }
+    let a = snapshot["adapters"].as_array()?.first()?;
+    Some(Bluetooth {
+        adapter: a["path"].as_str()?.to_string(),
+        powered: a["powered"].as_bool().unwrap_or(false),
+    })
+}
+
 pub fn wifi_icon(w: Wifi) -> &'static str {
     match w {
         Wifi::Off => "nd-network-wireless-disabled",
@@ -153,11 +288,11 @@ type Reader = fn(&Connection) -> Result<Update, String>;
 
 /// The three watchers, each on its own thread for as long as the shell lives.
 pub fn watch(conn: &Connection, emit: Sender<Update>) {
-    let watchers: [(&str, Reader, Update, _); 3] = [
+    let watchers: [(&str, Reader, Update, _); 6] = [
         (
             "network",
             read_wifi,
-            Update::Wifi(None),
+            Update::Wifi(None, String::new()),
             vec![
                 signal(NETWORK, NETWORK_IFACE, "Updated", NETWORK_PATH, false),
                 owner(NETWORK),
@@ -195,6 +330,39 @@ pub fn watch(conn: &Connection, emit: Sender<Update>) {
                     "org.freedesktop.DBus.Properties",
                     "PropertiesChanged",
                     POWER_PATH,
+                    true,
+                ),
+                owner(SESSION),
+            ],
+        ),
+        (
+            "brightness",
+            read_brightness,
+            Update::Brightness(None),
+            vec![
+                signal(SESSION, BRIGHTNESS_IFACE, "Changed", BRIGHTNESS_PATH, false),
+                owner(SESSION),
+            ],
+        ),
+        (
+            "bluetooth",
+            read_bluetooth,
+            Update::Bluetooth(None),
+            vec![
+                signal(BLUETOOTH, BLUETOOTH_IFACE, "Updated", BLUETOOTH_PATH, false),
+                owner(BLUETOOTH),
+            ],
+        ),
+        (
+            "media",
+            read_media,
+            Update::Media(None),
+            vec![
+                signal(
+                    SESSION,
+                    "org.freedesktop.DBus.Properties",
+                    "PropertiesChanged",
+                    MEDIA_PATH,
                     true,
                 ),
                 owner(SESSION),
@@ -356,7 +524,7 @@ fn read_wifi(conn: &Connection) -> Result<Update, String> {
         .map_err(|e| e.to_string())?;
     let (_, _, json): (u64, u64, String) = reply.body().deserialize().map_err(|e| e.to_string())?;
     let snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
-    Ok(Update::Wifi(wifi_of(&snapshot)))
+    Ok(Update::Wifi(wifi_of(&snapshot), wifi_name(&snapshot)))
 }
 
 fn read_volume(conn: &Connection) -> Result<Update, String> {
@@ -392,6 +560,63 @@ fn read_battery(conn: &Connection) -> Result<Update, String> {
     Ok(Update::Battery(battery_of(
         present, known, percentage, state,
     )))
+}
+
+fn read_brightness(conn: &Connection) -> Result<Update, String> {
+    let reply = conn
+        .call_method(
+            Some(SESSION),
+            BRIGHTNESS_PATH,
+            Some(BRIGHTNESS_IFACE),
+            "GetState",
+            &(),
+        )
+        .map_err(|e| e.to_string())?;
+    let (_, _, devices): (u64, u64, Vec<DeviceRecord>) =
+        reply.body().deserialize().map_err(|e| e.to_string())?;
+    Ok(Update::Brightness(brightness_of(&devices)))
+}
+
+fn read_bluetooth(conn: &Connection) -> Result<Update, String> {
+    let reply = conn
+        .call_method(
+            Some(BLUETOOTH),
+            BLUETOOTH_PATH,
+            Some(BLUETOOTH_IFACE),
+            "Snapshot",
+            &(),
+        )
+        .map_err(|e| e.to_string())?;
+    let (_, _, json): (u64, u64, String) = reply.body().deserialize().map_err(|e| e.to_string())?;
+    let snapshot: Value = serde_json::from_str(&json).map_err(|e| e.to_string())?;
+    Ok(Update::Bluetooth(bluetooth_of(&snapshot)))
+}
+
+fn read_media(conn: &Connection) -> Result<Update, String> {
+    let root = proxy(conn, SESSION, MEDIA_PATH, MEDIA_IFACE)?;
+    let selected: OwnedObjectPath = root.get_property("Selected").map_err(|e| e.to_string())?;
+    if selected.as_str() == "/" {
+        return Ok(Update::Media(Some(Default::default())));
+    }
+    let p = proxy(conn, SESSION, selected.as_str(), "org.nidara.MediaPlayer1")?;
+    let text =
+        |name: &str| -> Result<String, String> { p.get_property(name).map_err(|e| e.to_string()) };
+    let flag =
+        |name: &str| -> Result<bool, String> { p.get_property(name).map_err(|e| e.to_string()) };
+    let artists: Vec<String> = p.get_property("Artists").map_err(|e| e.to_string())?;
+    let art = (text("ArtState")? == "ready")
+        .then(|| text("ArtPath"))
+        .transpose()?
+        .filter(|a| !a.is_empty());
+    Ok(Update::Media(Some(std::sync::Arc::new(Media {
+        title: text("Title")?,
+        artist: artists.join(", "),
+        playing: text("PlaybackStatus")? == "Playing",
+        can_control: flag("CanControl")?,
+        can_next: flag("CanGoNext")?,
+        can_previous: flag("CanGoPrevious")?,
+        art,
+    }))))
 }
 
 #[cfg(test)]
@@ -466,10 +691,13 @@ mod tests {
                     Ok(Update::Dnd(true))
                 }
             },
-            Update::Wifi(None),
+            Update::Wifi(None, String::new()),
             |u| seen.borrow_mut().push(u),
         );
         assert_eq!(reads.get(), 2);
-        assert_eq!(*seen.borrow(), [Update::Wifi(None), Update::Dnd(true)]);
+        assert_eq!(
+            *seen.borrow(),
+            [Update::Wifi(None, String::new()), Update::Dnd(true)]
+        );
     }
 }

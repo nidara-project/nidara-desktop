@@ -68,6 +68,9 @@ impl PanelMaterial {
                         offset: number(s, "offset")?,
                     },
                     shapes: vec![],
+                    groups: vec![],
+                    veils: vec![],
+                    states: vec![],
                 },
             ));
         }

@@ -119,6 +119,9 @@ pub fn piece(
         tone: tone(&step["tone"])?,
         shadow: shadow(&step["shadow"]),
         shapes: vec![capsule],
+        groups: vec![],
+        veils: vec![],
+        states: vec![],
     })
 }
 

@@ -37,5 +37,8 @@ pub fn panel(width: f32, height: f32) -> Material {
             exponent: 2.,
             pointer: None,
         }],
+        groups: vec![],
+        veils: vec![],
+        states: vec![],
     }
 }

@@ -164,6 +164,8 @@ pub enum HubEvent {
     Region(crate::barmodel::Region),
     /// What the bar's widgets show (status.rs).
     Widgets(crate::status::Update),
+    /// The Control Center's grid as stored (cclayout.rs).
+    CcLayout(crate::cclayout::Stored),
     Tray(Arc<Vec<crate::tray::TrayItem>>),
     Request(Request),
     /// The icon-size Apply in flight answered, taken or refused.
@@ -233,6 +235,7 @@ pub struct Hub {
     bars: HashMap<OutputId, BarHandle>,
     region: crate::barmodel::Region,
     widgets: crate::status::Status,
+    cc_layout: Arc<crate::cclayout::Stored>,
     tray: Arc<Vec<crate::tray::TrayItem>>,
 }
 
@@ -303,6 +306,7 @@ impl Hub {
             bars: HashMap::new(),
             region: Default::default(),
             widgets: Default::default(),
+            cc_layout: Default::default(),
             tray: Arc::default(),
         }
     }
@@ -476,6 +480,7 @@ impl Hub {
             }
             HubEvent::Region(r) => self.region = r,
             HubEvent::Widgets(u) => self.widgets.apply(u),
+            HubEvent::CcLayout(l) => self.cc_layout = Arc::new(l),
             HubEvent::Tray(items) => self.tray = items,
             HubEvent::DockDown(id) => {
                 self.docks.remove(&id);
@@ -825,7 +830,8 @@ impl Hub {
                 hidden: self.locked || fullscreen,
                 can_settings: self.can_settings,
                 region: self.region.clone(),
-                status: self.widgets,
+                status: self.widgets.clone(),
+                cc_layout: self.cc_layout.clone(),
                 tray: self.tray.clone(),
             });
             if bar.frames.send(frame).is_ok() {

@@ -10,6 +10,7 @@ usage: settings-tokens-check.py OUT_DIR
 - The mode really changes the ink, and the accent really reaches --nidara-accent.
 - The static half carries the radius ladder and the type ramp.
 - The glass (glass.json, D7): one variant per dark/light × reduce transparency, each with the
+  Control Center's veil (none with reduce transparency) and the
   same pieces, `panel` among them; each piece's steps start at side 0 and grow; the sized
   pieces really follow the size in the dark face, reduce transparency really makes them solid,
   and the light face is not the dark one.
@@ -96,6 +97,14 @@ if all(variant(d, r) for d, r in product([True, False], [False, True])) and not 
         fail.append(f"glass: no ink thresholds a reader can apply ({variant(True, False).get('ink')})")
     if variant(True, True).get('ink') is not None:
         fail.append('glass: reduce transparency still measures the ink')
+    # The Control Center's veil (the Rust shell's cc.rs reads it; a reader has no defaults).
+    for d in (True, False):
+        veil = variant(d, False).get('veil') or {}
+        if not (0 < veil.get('strength', -1) <= 1 and veil.get('falloff', -1) > 0
+                and veil.get('exponent', -1) > 0 and veil.get('inset', -1) >= 0):
+            fail.append(f"glass: no veil a reader can apply (dark={d}: {variant(d, False).get('veil')})")
+        if variant(d, True).get('veil') is not None:
+            fail.append(f'glass: reduce transparency still casts the veil (dark={d})')
 
 rgba = lambda c: isinstance(c, dict) and all(isinstance(c.get(k), (int, float)) for k in 'rgba')
 for v in variants:

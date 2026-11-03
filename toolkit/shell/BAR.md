@@ -16,7 +16,7 @@ material (the shell is always dark: white ink). Each is a true capsule, circular
 |---|---|---|
 | Left | Nidara's mark · the focused app's name, or the desktop's ("Desktop 3") | mark: the system menu |
 | Centre | the island: five workspace dots (active wide, occupied dim, empty faint) | the desktops' overview, once the Rust shell has one; nothing until then |
-| Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; the rest open nothing until B2/B3 |
+| Right | tray icons · focus · battery · Wi-Fi · volume · Control Center · clock | tray: below; focus: Do Not Disturb off; Control Center: its panel (`CC.md`); the rest open nothing until B3 |
 
 Left out of B1 (the owner's list): the overflow `»`, editing and reordering, the island's
 other modes, the search icon (Prism is not in the Rust shell). The person's `bar-order`,
@@ -103,8 +103,8 @@ suspend`, `uwsm stop`, `systemctl reboot`, `systemctl poweroff`.
 
 A window "Bar" with its items in the order drawn: the mark ("System menu"), the title (a
 label), the island ("Desktops", "desktop N of 5"), each tray item by its title, each
-widget with its state ("Wi-Fi", "connected, signal 3 of 3"), the Control Center and the
-clock (disabled until their panels). An open menu's rows join under the root, as on the
+widget with its state ("Wi-Fi", "connected, signal 3 of 3"), the Control Center (its
+panel and tiles, `CC.md`) and the clock (disabled until its panel). An open menu's rows join under the root, as on the
 dock (#971). Activate does what a click does, without a token.
 
 ## Evidence

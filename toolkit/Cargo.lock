@@ -1167,6 +1167,7 @@ version = "0.1.0"
 dependencies = [
  "gio",
  "glib",
+ "image",
  "nidara-shell-ipc",
  "nk-a11y",
  "nk-icons",

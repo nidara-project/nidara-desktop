@@ -2107,6 +2107,9 @@ mod tests {
                         offset: 0.,
                     },
                     shapes: vec![],
+                    groups: vec![],
+                    veils: vec![],
+                    states: vec![],
                 },
                 blur: Blur {
                     size: 0.,

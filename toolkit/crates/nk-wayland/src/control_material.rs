@@ -170,7 +170,12 @@ impl ControlMaterial {
     }
     pub(crate) fn send(&self, m: &crate::nidara_material_v1::NidaraMaterialV1) {
         let mut base = self.base.clone();
+        // A control is one pane in one tone: its base's groups, veils and states are not
+        // its (its own states are `states`).
         base.shapes.clear();
+        base.groups.clear();
+        base.veils.clear();
+        base.states.clear();
         crate::material::send_material(m, Some(&base));
         m.set_blur(self.blur.size, self.blur.passes);
         let t = self.ink_tone;
@@ -268,6 +273,9 @@ mod tests {
                     exponent: 2.,
                     pointer: None,
                 }],
+                groups: vec![],
+                veils: vec![],
+                states: vec![],
             },
             blur: Blur {
                 size: 2.,
