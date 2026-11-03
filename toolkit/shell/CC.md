@@ -33,6 +33,9 @@ A press on a bar item closes it and clicks the item. A frame that hides the bar 
 
 It hangs 8 below the bar's glass, its right edge flush with the right capsule's.
 Grid: 4 columns × up to 8 rows of 76 with gaps of 20; padding 16.
+Shapes: a 1×1 a circle, a 2×1 or 1×2 a capsule, a 2×2 corner 38 (half a cell), and the
+4×1 the dock's shape, corner 24 — never a capsule. Every corner is the desktop's one
+continuous corner, drawn by Hyalo (and by `nk-render` in the fallback).
 
 ## Glass
 

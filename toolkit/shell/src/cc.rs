@@ -927,11 +927,13 @@ fn pane_of(p: &Placed) -> Pane {
     }
 }
 
-/// A 1×1 is a circle, a 2×1 or 1×2 a capsule, a 4×1 a pill, a 2×2 the corner.
+/// A 1×1 is a circle, a 2×1 or 1×2 a capsule, a 2×2 the corner; a 4×1 is not a capsule
+/// but the dock's shape, its corner at the dock's default icon (owner, 2026-11-03).
 fn radius_of(p: &Placed) -> f64 {
     let r = p.rect;
     match p.tile.size {
         Size::Square => SQUARE_RADIUS,
+        Size::FullWidth => crate::geometry::capsule_radius(64.),
         _ => r[2].min(r[3]) / 2.,
     }
 }
@@ -1352,7 +1354,8 @@ mod tests {
         assert_eq!(media.rect, [1520. + 16., 60., 172., 172.]);
         assert_eq!(radius_of(&media), 38.);
         let volume = placed(&cc, "volume");
-        assert_eq!(radius_of(&volume), 38.);
+        // The 4×1 is the dock's shape, not a capsule.
+        assert_eq!(radius_of(&volume), 24.);
         assert_eq!(volume.rect[2], 364.);
         let shot = placed(&cc, "screenshot");
         assert_eq!(radius_of(&shot), 38.);
