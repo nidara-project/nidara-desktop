@@ -205,6 +205,73 @@ pub fn watch_dnd(emit: impl Fn(bool) + 'static) {
     });
 }
 
+pub const NIGHT: &str = "org.nidara.night-light";
+pub const CONTROL_CENTER: &str = "org.nidara.control-center";
+pub const WIDGETS: &str = "org.nidara.widgets";
+
+/// What the Control Center reads from GSettings, on its own thread like `watch`: dark
+/// mode, Night Light, and the grid as stored (cclayout.rs).
+pub enum Cc {
+    Dark(bool),
+    Night(Option<crate::status::Night>),
+    Layout(crate::cclayout::Stored),
+}
+
+pub fn watch_cc(emit: impl Fn(Cc) + 'static) {
+    let ctx = glib::MainContext::new();
+    let _guard = ctx.acquire();
+    let _ = ctx.with_thread_default(|| {
+        let emit = std::rc::Rc::new(emit);
+        let interface = settings(INTERFACE, "color-scheme");
+        let night = settings(NIGHT, "enabled");
+        let cc = settings(CONTROL_CENTER, "positions");
+        let widgets = settings(WIDGETS, "placement");
+        let dark = |s: &gio::Settings| Cc::Dark(s.string("color-scheme") == "prefer-dark");
+        let lit = |s: &gio::Settings| {
+            Cc::Night(Some(crate::status::Night {
+                enabled: s.boolean("enabled"),
+                temperature: s.int("temperature"),
+            }))
+        };
+        let stored = {
+            let (cc, widgets) = (cc.clone(), widgets.clone());
+            move || {
+                let mut out = crate::cclayout::Stored::default();
+                if let Some(s) = &cc {
+                    out.positions = s.value("positions").get().unwrap_or_default();
+                    out.sizes = s.value("sizes").get().unwrap_or_default();
+                }
+                if let Some(s) = &widgets {
+                    out.placement = s.value("placement").get().unwrap_or_default();
+                }
+                Cc::Layout(out)
+            }
+        };
+        let stored = std::rc::Rc::new(stored);
+        emit(interface.as_ref().map_or(Cc::Dark(false), dark));
+        emit(night.as_ref().map_or(Cc::Night(None), lit));
+        emit(stored());
+        if let Some(s) = &interface {
+            let emit = emit.clone();
+            s.connect_changed(Some("color-scheme"), move |s, _| emit(dark(s)));
+        }
+        if let Some(s) = &night {
+            let emit = emit.clone();
+            s.connect_changed(None, move |s, key| {
+                if ["enabled", "temperature"].contains(&key) {
+                    emit(lit(s))
+                }
+            });
+        }
+        for s in [&cc, &widgets].into_iter().flatten() {
+            let (emit, stored) = (emit.clone(), stored.clone());
+            s.connect_changed(None, move |_, _| emit(stored()));
+        }
+        glib::MainLoop::new(Some(&ctx), false).run();
+        drop((interface, night, cc, widgets));
+    });
+}
+
 /// The focus widget's click: Do Not Disturb on or off, where every reader watches it.
 pub fn set_dnd(on: bool) -> Result<(), String> {
     let s = settings(NOTIFICATIONS, "do-not-disturb").ok_or("no notifications schema")?;

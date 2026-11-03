@@ -541,6 +541,50 @@ try:
             until('and the menu closed', lambda: not menu_rows('Bar'))
         result['bar']['tray'] = {'menu': [r['name'] for r in heard],
                                  'calls': [c[0] for c in tray_calls() if c[0] != 'registered']}
+        # The Control Center (cc.rs, B2.1): its button opens it on the bar's own surface,
+        # which grows to the output; its tiles are the TS grid's; a toggle tile toggles; a
+        # click outside the panel closes it and the surface goes back to its strip.
+        def bar_layer():
+            return next(l for l in ipc('layers').get('ok', {}).get('layers', [])
+                        if l.get('namespace') == 'nidara-bar')
+
+        def cc_tiles():
+            panel = next((n for n in children(dock_node('Bar'))
+                          if n.get_name() == 'Control Center' and n.get_role_name() == 'panel'), None)
+            return {n.get_name(): n for n in children(panel)} if panel else {}
+
+        with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+            x, y = bar_point('Control Center')
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+            time.sleep(.3)
+            pipe.write(f'click {x} {y}\n')
+            tiles = until('the Control Center', lambda: cc_tiles())
+            grown = until('the surface over the output', lambda: (l := bar_layer())['height'] > 48 and l)
+            time.sleep(1.5)  # software Hyalo draws the glass late
+            shot(LOG / 'cc.png')
+            names = sorted(tiles)
+            for wanted in [('Focus', 'Enfoque'), ('Appearance', 'Apariencia'), ('Screenshot', 'Captura')]:
+                assert any(w in names for w in wanted), (wanted, names)
+            assert 'Wi-Fi' in names, names
+            focus = next(n for k, n in tiles.items() if k in ('Focus', 'Enfoque'))
+            assert not focus.get_state_set().contains(Atspi.StateType.CHECKED), 'focus already on'
+            focus.get_action_iface().do_action(0)
+
+            def dnd():
+                return subprocess.run(['gsettings', 'get', 'org.nidara.notifications', 'do-not-disturb'],
+                                      capture_output=True, text=True, timeout=5).stdout.strip()
+            until('the Focus tile turns Do Not Disturb on', lambda: dnd() == 'true')
+            until('and the tile says so', lambda: any(
+                n.get_state_set().contains(Atspi.StateType.CHECKED)
+                for k, n in cc_tiles().items() if k in ('Focus', 'Enfoque')))
+            time.sleep(1.5)
+            shot(LOG / 'cc-focus-on.png')
+            subprocess.run(['gsettings', 'set', 'org.nidara.notifications', 'do-not-disturb', 'false'],
+                           check=True, timeout=5)
+            # Outside the panel and the bar's glass: it closes.
+            pipe.write(f'click {layer["x"] + 40} {layer["y"] + grown["height"] - 40}\n')
+            until('a click outside closes it', lambda: not cc_tiles() and bar_layer()['height'] == 48)
+        result['bar']['cc'] = {'tiles': names, 'grown': grown['height']}
     # Software Hyalo cannot take a GL client's dmabufs here (it crashes); draw on the CPU.
     start('client', ['gtk4-demo'], GDK_BACKEND='wayland', GSK_RENDERER='cairo', GDK_DISABLE='gl,vulkan')
     until('a client window', lambda: ipc('windows').get('ok', {}).get('windows'))

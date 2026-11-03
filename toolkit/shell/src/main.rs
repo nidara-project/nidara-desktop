@@ -47,8 +47,17 @@ fn start_bar(
     let (requests, bus) = (requests.clone(), bus.clone());
     let bar_waker = waker.clone();
     let origin = info.logical.map_or((0, 0), |l| (l[0], l[1]));
+    let height = size_of(info).1;
     let thread = spawn(&format!("bar-{name}"), move || {
-        let b = bar::Bar::new(name.clone(), frames_rx, requests, bus, bar_waker, origin);
+        let b = bar::Bar::new(
+            name.clone(),
+            frames_rx,
+            requests,
+            bus,
+            bar_waker,
+            origin,
+            height,
+        );
         if let Err(e) = bar::run(b, output, source) {
             eprintln!("nidara-shell: the bar on {name} ended: {e}");
         }
@@ -223,6 +232,17 @@ fn main() {
                 }
             });
         }
+        let t = hub_tx.clone();
+        spawn("control-center", move || {
+            prefs::watch_cc(move |c| {
+                use nidara_shell::status::Update;
+                drop(t.send(match c {
+                    prefs::Cc::Dark(d) => hub::HubEvent::Widgets(Update::Dark(d)),
+                    prefs::Cc::Night(n) => hub::HubEvent::Widgets(Update::Night(n)),
+                    prefs::Cc::Layout(l) => hub::HubEvent::CcLayout(l),
+                }))
+            })
+        });
         let t = hub_tx.clone();
         spawn("dnd", move || {
             prefs::watch_dnd(move |on| {

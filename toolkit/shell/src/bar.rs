@@ -9,6 +9,10 @@
 //! The model is the hub's (hub.rs): each bar gets a frame for its output — the focused
 //! app's name, the workspaces, whether it hides (locked, a fullscreen window) — and
 //! paints it. What only the bar needs it keeps itself: the clock, ticking in `idle`.
+//!
+//! The Control Center (cc.rs, B2.1) hangs from this same surface: while it is open the
+//! surface grows to the output's height — its strip reserved as before — takes the whole
+//! of its input, so a click outside the panel closes it, and the keyboard, for Escape.
 use crate::barmodel::{self as m, Content, Dot};
 use crate::menu::{Command, Label, System};
 use crate::popup::Look;
@@ -31,6 +35,7 @@ const HEIGHT: u32 = 48;
 const LEFT_BUTTON: u32 = 0x110;
 const RIGHT_BUTTON: u32 = 0x111;
 const MIDDLE_BUTTON: u32 = 0x112;
+const ESCAPE: u32 = 0xff1b;
 const TEXT_SIZE: f32 = 12.;
 /// The one hover, 8 % ink (owner, 2026-10-06).
 const HOVER: f32 = 0.08;
@@ -52,6 +57,8 @@ pub struct BarFrame {
     pub can_settings: bool,
     pub region: m::Region,
     pub status: crate::status::Status,
+    /// The Control Center's grid as stored.
+    pub cc_layout: Arc<crate::cclayout::Stored>,
     pub tray: Arc<Vec<crate::tray::TrayItem>>,
 }
 
@@ -129,7 +136,7 @@ pub struct Bar {
     look: Option<Look>,
     tried_look: bool,
     logo: Option<nk_icons::Icon>,
-    cc: Option<Arc<nk_icons::Icon>>,
+    cc_icon: Option<Arc<nk_icons::Icon>>,
     icons: Option<nk_icons::Icons>,
     glyphs: std::collections::HashMap<&'static str, Option<Arc<nk_icons::Icon>>>,
     width: f64,
@@ -157,6 +164,12 @@ pub struct Bar {
     /// The open tray menu's session and its item.
     tray_menu: Option<(String, usize)>,
     tray_replies: (Sender<TrayReply>, Receiver<TrayReply>),
+    /// The Control Center, drawn while `cc_open`.
+    cc: crate::cc::Cc,
+    cc_open: bool,
+    cc_writer: Option<crate::cc::Writer>,
+    /// The output's logical height: the surface's while the Control Center is open.
+    output_height: u32,
 }
 
 /// A tray menu level, read off the bar's thread.
@@ -176,6 +189,7 @@ impl Bar {
         bus: Option<zbus::blocking::Connection>,
         waker: nk_wayland::Waker,
         origin: (i32, i32),
+        output_height: u32,
     ) -> Self {
         let logo = std::fs::read(crate::paths::logo())
             .map_err(|e| e.to_string())
@@ -185,7 +199,7 @@ impl Bar {
         let mut icons = nk_icons::Icons::new("", &[], &crate::paths::icon_reference())
             .map_err(|e| eprintln!("nidara-shell: no interface icons for the bar: {e}"))
             .ok();
-        let cc = icons
+        let cc_icon = icons
             .as_mut()
             .and_then(|i| i.get("nd-control-center", 18).ok());
         let order = glib::DateTime::from_local(2001, 2, 3, 0, 0, 0.)
@@ -201,7 +215,7 @@ impl Bar {
             look: None,
             tried_look: false,
             logo,
-            cc,
+            cc_icon,
             icons,
             glyphs: Default::default(),
             width: 0.,
@@ -224,6 +238,10 @@ impl Bar {
             tray_seen: Arc::default(),
             tray_menu: None,
             tray_replies: std::sync::mpsc::channel(),
+            cc: crate::cc::Cc::new(),
+            cc_open: false,
+            cc_writer: None,
+            output_height,
         }
     }
 
@@ -336,6 +354,14 @@ impl Bar {
             clock,
             dots,
         };
+        if self.cc_open {
+            self.cc.place(
+                right[0] + right[2],
+                m::TOP + m::CAPSULE_H,
+                &self.frame.status,
+                &self.frame.cc_layout,
+            );
+        }
     }
 
     fn item_at(&self, (x, y): (f64, f64)) -> Option<Item> {
@@ -348,8 +374,12 @@ impl Bar {
 
     /// Only the glass takes input; nothing at all while hidden.
     fn sync_input(&mut self, w: &mut Window) {
+        // While the Control Center is open the whole surface takes input (None below).
+        const WHOLE: [i32; 4] = [-1; 4];
         let input: Vec<[i32; 4]> = if self.frame.hidden {
             vec![]
+        } else if self.cc_open {
+            vec![WHOLE]
         } else {
             self.layout
                 .glass
@@ -365,7 +395,8 @@ impl Bar {
                 .collect()
         };
         if input != self.input {
-            if let Err(e) = w.set_input_region(Some(&input)) {
+            let region = (input != [WHOLE]).then_some(&input[..]);
+            if let Err(e) = w.set_input_region(region) {
                 eprintln!("nidara-shell: the bar's input region: {e}");
             }
             self.input = input;
@@ -652,6 +683,9 @@ impl Bar {
     fn click(&mut self, item: Item, serial: Option<u32>, w: &mut Window) {
         match item {
             Item::Logo => {
+                if self.cc_open {
+                    self.toggle_cc(w);
+                }
                 let system = self.popup.is_some() && self.tray_menu.is_none();
                 self.close_popup(w);
                 self.end_tray_menu();
@@ -673,7 +707,39 @@ impl Bar {
                         }
                     });
             }
+            Item::ControlCenter => self.toggle_cc(w),
             other => eprintln!("nidara-shell: the bar's {other:?} opens nothing yet"),
+        }
+    }
+
+    /// The Control Center opens over the output and closes back to the strip.
+    fn toggle_cc(&mut self, w: &mut Window) {
+        let open = !self.cc_open && !self.frame.hidden;
+        if open == self.cc_open {
+            return;
+        }
+        if open {
+            self.close_popup(w);
+            self.end_tray_menu();
+        }
+        self.cc_open = open;
+        self.cc.release();
+        let placement = placement(if open { self.output_height } else { HEIGHT }, open);
+        if let Err(e) = w.set_layer_placement(placement) {
+            eprintln!("nidara-shell: the Control Center cannot open: {e}");
+            self.cc_open = false;
+        }
+        self.refresh(w);
+    }
+
+    /// A Control Center act, to its service off the bar's thread.
+    fn act(&mut self, act: crate::cc::Act) {
+        if self.cc_writer.is_none() {
+            self.cc_writer = self.bus.clone().map(crate::cc::Writer::new);
+        }
+        match &self.cc_writer {
+            Some(writer) => writer.send(act),
+            None => eprintln!("nidara-shell: no session bus for the Control Center's {act:?}"),
         }
     }
 
@@ -693,7 +759,29 @@ impl Bar {
             self.frame.hidden,
             &self.frame.status,
             &self.frame.tray,
+            self.cc_open,
         );
+        if self.cc_open {
+            let panel = self.cc.panel();
+            let mut group = Node::new(CC_PANEL, Role::Panel, "Control Center");
+            group.bounds = Bounds {
+                x: panel[0],
+                y: panel[1],
+                width: panel[2],
+                height: panel[3],
+            };
+            for (node, _) in self
+                .cc
+                .nodes(CC_TILES, &self.frame.status, self.look.as_ref())
+            {
+                group.children.push(node.id);
+                tree.nodes.insert(node.id, node);
+            }
+            if let Some(root) = tree.nodes.get_mut(&tree.root) {
+                root.children.push(CC_PANEL);
+            }
+            tree.nodes.insert(CC_PANEL, group);
+        }
         if let Some(menu) = self.popup.as_mut().and_then(|p| p.semantics(w)) {
             for node in tree.nodes.values_mut() {
                 node.actions.clear();
@@ -746,6 +834,18 @@ impl Bar {
         }
     }
 
+    /// The Control Center's target a semantic node stands for.
+    fn cc_target(&self, id: NodeId) -> Option<crate::cc::Target> {
+        if !self.cc_open || id < CC_TILES {
+            return None;
+        }
+        self.cc
+            .nodes(CC_TILES, &self.frame.status, None)
+            .into_iter()
+            .find(|(n, _)| n.id == id)
+            .map(|(_, t)| t)
+    }
+
     /// Requests made against an older tree are dropped.
     fn a11y(&mut self, w: &mut Window) {
         let Some(rx) = &self.a11y_requests else {
@@ -756,10 +856,25 @@ impl Bar {
             if revision != self.revision {
                 continue;
             }
+            if let nk_a11y::Request::SetValue(id, value) = request {
+                let target = self.cc_target(id);
+                if let Some(crate::cc::Target::Slider(slider)) = target
+                    && let Some(act) = self.cc.set_from_reader(slider, value, &self.frame.status)
+                {
+                    self.act(act);
+                }
+                continue;
+            }
             let (nk_a11y::Request::Activate(id) | nk_a11y::Request::Focus(id)) = request else {
                 continue;
             };
             let activate = matches!(request, nk_a11y::Request::Activate(_));
+            if let Some(target) = self.cc_target(id) {
+                if activate && let Some(act) = crate::cc::act_of(target, &self.frame.status) {
+                    self.act(act);
+                }
+                continue;
+            }
             if let Some(popup) = self.popup.as_mut().filter(|p| p.owns(id)) {
                 let outcome = popup.request(id, activate);
                 self.popup_outcome(w, outcome);
@@ -791,8 +906,14 @@ const ITEMS: [(Item, NodeId); 9] = [
 
 /// Tray items take the ids from here on, by their place.
 const TRAY_IDS: NodeId = 100;
+/// The Control Center's panel, and its tiles from here on, in reading order.
+const CC_PANEL: NodeId = 900;
+const CC_TILES: NodeId = 901;
 
 fn item_of(id: NodeId) -> Option<Item> {
+    if id >= CC_PANEL {
+        return None;
+    }
     if id >= TRAY_IDS {
         return usize::try_from(id - TRAY_IDS).ok().map(Item::Tray);
     }
@@ -850,6 +971,7 @@ fn tree(
     hidden: bool,
     status: &crate::status::Status,
     tray: &[crate::tray::TrayItem],
+    cc_open: bool,
 ) -> Tree {
     let mut root = Node::new(ROOT, Role::Window, "Bar");
     root.states.hidden = hidden;
@@ -876,12 +998,13 @@ fn tree(
                 });
                 n
             }
-            // B2 and B3 give these their panels; until then they do nothing.
             Item::ControlCenter => {
                 let mut n = Node::new(id, Role::Button, "Control Center");
-                n.states.disabled = true;
+                n.states.expandable = true;
+                n.states.expanded = cc_open;
                 n
             }
+            // B3 gives it the notifications; until then it does nothing.
             Item::Clock => {
                 let mut n = Node::new(id, Role::Button, &layout.clock);
                 n.states.disabled = true;
@@ -903,7 +1026,7 @@ fn tree(
         };
         if matches!(
             item,
-            Item::Logo | Item::Tray(_) | Item::Widget(Widget::Focus)
+            Item::Logo | Item::Tray(_) | Item::Widget(Widget::Focus) | Item::ControlCenter
         ) {
             node.actions = vec![Action::Activate];
         }
@@ -1006,6 +1129,10 @@ impl Application for Bar {
                 }
                 if let Some(f) = latest {
                     self.frame = f;
+                    // Locked, or a fullscreen window: the Control Center goes with the bar.
+                    if self.frame.hidden && self.cc_open {
+                        self.toggle_cc(w);
+                    }
                     self.sync_tray_pictures();
                     self.clock = self.now();
                     self.refresh(w);
@@ -1015,6 +1142,16 @@ impl Application for Bar {
             Event::Closed => w.close(),
             Event::Motion(x, y) => {
                 self.pointer = (x, y);
+                if self.cc_open {
+                    let (changed, act) = self.cc.motion((x, y), &self.frame.status);
+                    if let Some(act) = act {
+                        self.act(act);
+                    }
+                    if changed {
+                        w.redraw();
+                        self.publish_semantics(w);
+                    }
+                }
                 let hover = self.item_at((x, y));
                 if hover != self.hover {
                     self.hover = hover;
@@ -1022,7 +1159,8 @@ impl Application for Bar {
                 }
             }
             Event::PointerLeave => {
-                if self.hover.take().is_some() {
+                let cc = self.cc.leave();
+                if self.hover.take().is_some() || cc {
                     w.redraw();
                 }
             }
@@ -1032,10 +1170,32 @@ impl Application for Bar {
                 serial,
                 ..
             } => {
-                if let Some(item) = self.item_at(self.pointer) {
+                let p = self.pointer;
+                if self.cc_open && self.cc.contains(p) {
+                    if let Some(act) = self.cc.press(p, &self.frame.status) {
+                        self.act(act);
+                    }
+                    w.redraw();
+                } else if let Some(item) = self.item_at(p) {
+                    if self.cc_open && item != Item::ControlCenter {
+                        self.toggle_cc(w);
+                    }
                     self.click(item, Some(serial), w);
+                } else if self.cc_open {
+                    // Outside the panel and the bar's glass: the Control Center closes.
+                    self.toggle_cc(w);
                 }
             }
+            Event::Button {
+                button: LEFT_BUTTON,
+                pressed: false,
+                ..
+            } => {
+                if self.cc.release() {
+                    w.redraw();
+                }
+            }
+            Event::Key(key) if self.cc_open && key.sym == ESCAPE => self.toggle_cc(w),
             Event::Button {
                 button: button @ (RIGHT_BUTTON | MIDDLE_BUTTON),
                 pressed: true,
@@ -1131,7 +1291,7 @@ impl Application for Bar {
                     }
                 }
                 Item::ControlCenter => {
-                    if let Some(cc) = &self.cc {
+                    if let Some(cc) = &self.cc_icon {
                         c.icon(cc, icon_box(b), ink(1.));
                     }
                 }
@@ -1184,6 +1344,11 @@ impl Application for Bar {
                 }
             }
         }
+        if self.cc_open {
+            let fallback = (!f.material).then(|| self.look.as_ref().unwrap().style.row.background);
+            let look = self.look.as_mut().unwrap();
+            self.cc.paint(&mut c, look, &self.frame.status, fallback)?;
+        }
         // The dots, centred in the island's capsule.
         let island = self.layout.glass[1];
         let mut x = island[0] + m::PILL_PAD;
@@ -1227,7 +1392,30 @@ impl Application for Bar {
             panes[0],
         )?;
         material.shapes = panes;
+        if self.cc_open {
+            let (groups, veils) = self.cc.glass(tokens, self.frame.reduce_transparency);
+            material.groups = groups;
+            material.veils = veils;
+            material.states = self.cc.states(&self.frame.status);
+        }
         Some(material)
+    }
+}
+
+/// Along the top, reserving the strip, `height` tall: the strip and its shadow's room,
+/// or the whole output while the Control Center is open (and then the keyboard, for
+/// Escape).
+fn placement(height: u32, open: bool) -> LayerPlacement {
+    LayerPlacement {
+        anchor: Edges::TOP | Edges::LEFT | Edges::RIGHT,
+        size: (0, height),
+        exclusive_zone: m::BAR_H as i32,
+        margin: [0; 4],
+        keyboard: if open {
+            KeyboardMode::OnDemand
+        } else {
+            KeyboardMode::None
+        },
     }
 }
 
@@ -1247,13 +1435,7 @@ pub fn run(bar: Bar, output: LayerOutput, wake: WakeSource) -> nk_wayland::Resul
             namespace: NAMESPACE,
             output: Some(output),
             layer: LayerLevel::Top,
-            placement: LayerPlacement {
-                anchor: Edges::TOP | Edges::LEFT | Edges::RIGHT,
-                size: (0, HEIGHT),
-                exclusive_zone: m::BAR_H as i32,
-                margin: [0; 4],
-                keyboard: KeyboardMode::None,
-            },
+            placement: placement(HEIGHT, false),
         },
         Some(wake),
         Instant::now(),

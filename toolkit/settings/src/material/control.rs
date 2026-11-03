@@ -105,6 +105,9 @@ impl ControlRecipe {
                         offset: number(s, "offset")?,
                     },
                     shapes: vec![],
+                    groups: vec![],
+                    veils: vec![],
+                    states: vec![],
                 },
                 blur,
                 // Exported null means no alternate tone, as in Hyalo's Shape.

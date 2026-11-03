@@ -7,6 +7,31 @@ pub struct Material {
     pub tone: Tone,
     pub shadow: Shadow,
     pub shapes: Vec<Pane>,
+    /// Further panes on the same surface, after `shapes`, each group in its own tone and
+    /// shadow: one surface's glass holding pieces of different kinds (the bar's capsules
+    /// and the Control Center's tiles).
+    pub groups: Vec<Group>,
+    /// Fixed veils under the panes whose centre lies inside each (`add_veil_region`).
+    pub veils: Vec<Veil>,
+    /// Washes over the glass: a hover, a press, an "on" (`add_state_region`). Hyalo
+    /// draws them, so they stay glass (commandment 12).
+    pub states: Vec<crate::StateRegion>,
+}
+#[derive(Clone, Debug)]
+pub struct Group {
+    pub tone: Tone,
+    pub shadow: Shadow,
+    pub shapes: Vec<Pane>,
+}
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Veil {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub falloff: f64,
+    pub strength: f64,
+    pub exponent: f64,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Glass {
@@ -97,30 +122,47 @@ pub(super) fn send_material(
     let g = material.glass;
     m.set_glass(0., 0., 0., 0., 0., 0., g.refraction, g.rim, 0.);
     m.set_lensing(g.lensing);
-    let t = material.tone;
-    m.set_tone(
-        t.saturation,
-        t.ceiling,
-        t.lift,
-        t.gain,
-        t.wash[0],
-        t.wash[1],
-        t.wash[2],
-        t.wash[3],
-        t.ambient,
-        t.ambient_lift,
-        t.ambient_gain,
-    );
-    let s = material.shadow;
-    m.set_shadow(
-        s.opacity_small,
-        s.opacity_large,
-        s.blur_small,
-        s.blur_large,
-        s.offset,
-    );
-    for p in &material.shapes {
-        add_pane(m, p);
+    // Each group's tone and shadow hold for the shapes added after them.
+    let first = (material.tone, material.shadow, &material.shapes);
+    let rest = material
+        .groups
+        .iter()
+        .map(|g| (g.tone, g.shadow, &g.shapes));
+    for (t, s, shapes) in std::iter::once(first).chain(rest) {
+        m.set_tone(
+            t.saturation,
+            t.ceiling,
+            t.lift,
+            t.gain,
+            t.wash[0],
+            t.wash[1],
+            t.wash[2],
+            t.wash[3],
+            t.ambient,
+            t.ambient_lift,
+            t.ambient_gain,
+        );
+        m.set_shadow(
+            s.opacity_small,
+            s.opacity_large,
+            s.blur_small,
+            s.blur_large,
+            s.offset,
+        );
+        for p in shapes {
+            add_pane(m, p);
+        }
+    }
+    for v in &material.veils {
+        m.add_veil_region(
+            v.x, v.y, v.width, v.height, v.falloff, v.strength, v.exponent,
+        );
+    }
+    for r in &material.states {
+        let (b, [red, green, blue, alpha]) = (r.bounds, r.wash);
+        m.add_state_region(
+            r.id, b.x, b.y, b.width, b.height, r.radius, red, green, blue, alpha, r.fade_ms,
+        );
     }
 }
 

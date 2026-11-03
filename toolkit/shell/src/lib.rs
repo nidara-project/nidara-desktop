@@ -8,6 +8,8 @@ pub mod autohide;
 pub mod bar;
 pub mod barmodel;
 pub mod bubble;
+pub mod cc;
+pub mod cclayout;
 pub mod chooser;
 pub mod cycle;
 pub mod dock;

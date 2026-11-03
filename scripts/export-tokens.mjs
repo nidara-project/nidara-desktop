@@ -173,8 +173,10 @@ for (const dark of [true, false])
             pieces[piece] = steps.map(({ side, answer }) => ({ fromSide: side, ...JSON.parse(answer), ...extra }))
         }
         // The ink: when a pane's text turns dark (Hyalo measures the darkest point under it, WCAG
-        // luminance), as the shell asks it — null with reduce transparency (no ink).
-        variants.push({ dark, reduceTransparency, glass: source.glass(null), ink: source.ink(null), pieces })
+        // luminance), as the shell asks it — null with reduce transparency (no ink). The veil the
+        // Control Center's panes lie on (`trackVeilRegion`) — null with reduce transparency too.
+        variants.push({ dark, reduceTransparency, glass: source.glass(null), ink: source.ink(null),
+            veil: source.veil(null), pieces })
         const pixels = key => {
             const value = Number.parseFloat(scss[key])
             if (!Number.isFinite(value)) throw new Error(`missing component geometry: ${key}`)

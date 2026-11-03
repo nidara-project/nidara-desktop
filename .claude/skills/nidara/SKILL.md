@@ -361,6 +361,7 @@ The Rust dock is `toolkit/shell` (binary `nidara-shell`, D1–D2 of #959). Read
 `toolkit/shell/DOCK.md` first: what each step of the series owns, and what is not there yet.
 The Rust bar (B1) is the same process, started with `--bar`: `toolkit/shell/BAR.md`. Its
 check is `toolkit/shell/check-bar-headless.sh` (the dock's check plus the bar).
+Its Control Center (B2) is `toolkit/shell/CC.md`.
 - A tray item that registers with a SYNCHRONOUS call blocks its own main loop while the
   watcher reads its properties back: the registration fails with "No such interface".
   Apps register asynchronously; a fake must too (`TRAY_ITEM` in `dock-check.py`).
