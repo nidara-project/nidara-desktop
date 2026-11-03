@@ -17,6 +17,9 @@ pub const BAR_RESERVATION: f64 = 36.;
 /// the icon until then.
 pub const PAD: f64 = 10.;
 pub const GAP: f64 = 4.;
+/// The room from an icon's canvas to a separator's line, on each side (owner, 2026-11-03:
+/// 14; it was the gap, 4 + 2, once the gap was fixed at 4).
+pub const SEPARATOR_AIR: f64 = 14.;
 /// The corner of an app icon's own shape, in icons: 14 at icon 64 (not measured).
 pub const ICON_CORNER: f64 = 14. / 64.;
 /// The capsule's corner radius at `icon`: concentric with the icons' corners, their radius
@@ -109,7 +112,7 @@ pub fn layout(
     let (pad, gap) = (PAD, GAP);
     let main_of = |s: &Slot| match s {
         Slot::Icon => i + gap,
-        Slot::Separator => 2. * gap,
+        Slot::Separator => 2. * SEPARATOR_AIR - gap,
     };
     // Both ends: the padding, less the half gap every slot already carries.
     let whole = 2. * (pad - gap / 2.) + slots.iter().map(main_of).sum::<f64>();
@@ -429,19 +432,19 @@ mod tests {
     #[test]
     fn at_rest_it_keeps_the_ts_proportions() {
         let l = layout(&ICONS, 64, Position::Bottom, (1920, 1080), 0.);
-        // pad 10, gap 4: 2×(10−2) + 3×68 + 8 = 228 wide, 64 + 20 = 84 high.
-        assert_eq!((l.scale, l.size), (1., (228, 84)));
+        // pad 10, gap 4, the separator 2×14 − 4: 2×(10−2) + 3×68 + 24 = 244 wide, 84 high.
+        assert_eq!((l.scale, l.size), (1., (244, 84)));
         assert_eq!(l.rects[0], [10., 10., 64., 64.]);
         assert_eq!(l.rects[1], [78., 10., 64., 64.]);
-        assert_eq!(l.rects[2], [147.5, 10.5, 1., 63.]);
-        assert_eq!(l.rects[3], [154., 10., 64., 64.]);
+        assert_eq!(l.rects[2], [155.5, 10.5, 1., 63.]);
+        assert_eq!(l.rects[3], [170., 10., 64., 64.]);
         assert_eq!(
             l.exclusive_zone, 84,
             "the 4 px gap is the margin, added by the compositor"
         );
         // A side dock is the same strip, turned.
         let v = layout(&ICONS, 64, Position::Left, (1920, 1080), BAR_RESERVATION);
-        assert_eq!(v.size, (84, 228));
+        assert_eq!(v.size, (84, 244));
         assert_eq!(v.rects[1], [10., 78., 64., 64.]);
     }
 
@@ -491,9 +494,9 @@ mod tests {
         assert_eq!(l.hit(20., 50.), Some(0));
         assert_eq!(l.hit(148., 5.), Some(2));
         // The end padding is capsule, not an item.
-        assert_eq!(l.hit(225., 50.), None);
-        assert_eq!(l.hit(218., 83.), Some(3));
-        assert_eq!(l.hit(228., 50.), None);
+        assert_eq!(l.hit(241., 50.), None);
+        assert_eq!(l.hit(234., 83.), Some(3));
+        assert_eq!(l.hit(244., 50.), None);
         assert_eq!(l.dot(0), (42., 79.));
         let r = layout(&ICONS, 64, Position::Right, (1920, 1080), 0.);
         assert_eq!(r.dot(0).0, 79.);
@@ -512,7 +515,7 @@ mod tests {
         assert_eq!(head, 64.);
         assert_eq!(e.size.1 as f64, 84. + head);
         assert_eq!(e.exclusive_zone, rest.exclusive_zone);
-        assert_eq!([e.glass[2], e.glass[3]], [228., 84.]);
+        assert_eq!([e.glass[2], e.glass[3]], [244., 84.]);
         assert_eq!(e.rects[0], [10. + e.glass[0], 10. + head, 64., 64.]);
         // At presence 0, nothing moves.
         assert_eq!(e.magnify(&ICONS, (100., 100.), 0.), e);
