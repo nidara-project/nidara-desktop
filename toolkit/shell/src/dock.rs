@@ -118,6 +118,10 @@ pub struct Dock {
     /// Files or folders dragged over the strip from another app, and where a drop would
     /// go now (drops.rs).
     dropping: Option<crate::drops::Target>,
+    /// A drop just sent to pin: its slot stays open until the service's view has more pins
+    /// in that section than it had then (or `HOLD` passes), so the strip does not close
+    /// the gap and open it again a moment later.
+    dropped: Option<(crate::drops::Target, usize, Instant)>,
     /// What the drag over the strip carries (files, or an app from Apps).
     drop_offer: crate::drops::Offer,
     /// The pin in the air, in a layer of its own so it can leave the strip.
@@ -207,6 +211,7 @@ impl Dock {
             held: None,
             gone: None,
             dropping: None,
+            dropped: None,
             drop_offer: crate::drops::Offer::Files,
             float: None,
             remove_tip: None,
@@ -1387,7 +1392,17 @@ impl Dock {
         if let Some(r) = &self.reorder {
             view = Some(r.preview(view.as_ref().unwrap_or(&self.source.view)));
         }
-        match &self.dropping {
+        if let Some((target, pins, at)) = &self.dropped
+            && (at.elapsed() >= crate::reorder::HOLD
+                || crate::drops::landed(&self.source.view, target, *pins))
+        {
+            self.dropped = None;
+        }
+        let open = self
+            .dropping
+            .as_ref()
+            .or(self.dropped.as_ref().map(|(t, _, _)| t));
+        match open {
             Some(crate::drops::Target::Pin(to)) => {
                 view = Some(crate::drops::preview(
                     view.as_ref().unwrap_or(&self.source.view),
@@ -1486,6 +1501,7 @@ impl Dock {
             {
                 Some(app) => {
                     eprintln!("nidara-shell: {} pinned from Apps", app.id);
+                    self.hold_drop(&target);
                     let _ = self.hub.send(Request::Menu {
                         command: Command::PinAt {
                             id: app.id,
@@ -1516,6 +1532,7 @@ impl Dock {
                     })
                     .collect();
                 eprintln!("nidara-shell: {} dropped places pinned", places.len());
+                self.hold_drop(&target);
                 let _ = self.hub.send(command(Command::PinPlaces {
                     places,
                     before: crate::drops::before(&self.source.view, to),
@@ -1540,6 +1557,13 @@ impl Dock {
         self.presence_at = Instant::now();
         self.reslot(w, None);
         Ok(())
+    }
+
+    /// Keeps a pinning drop's slot open until the service's view has the pin.
+    fn hold_drop(&mut self, target: &crate::drops::Target) {
+        if let Some(pins) = crate::drops::pins(&self.source.view, target) {
+            self.dropped = Some((target.clone(), pins, Instant::now()));
+        }
     }
 
     /// Not drawn on the strip: in the air, or dropped off it.
@@ -2315,7 +2339,7 @@ impl Application for Dock {
             let left = crate::reorder::LONG_PRESS.saturating_sub(at.elapsed());
             return (left.as_millis() as u32).max(1);
         }
-        if self.held.is_some() || self.gone.is_some() {
+        if self.held.is_some() || self.gone.is_some() || self.dropped.is_some() {
             return 100;
         }
         // A minimized window the compositor has not listed yet is asked for again.
@@ -2366,6 +2390,10 @@ impl Application for Dock {
                 .gone
                 .as_ref()
                 .is_some_and(|(_, at)| at.elapsed() >= crate::reorder::HOLD)
+            || self
+                .dropped
+                .as_ref()
+                .is_some_and(|(_, _, at)| at.elapsed() >= crate::reorder::HOLD)
         {
             self.held = None;
             if self.landing.is_some() {
