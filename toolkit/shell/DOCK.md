@@ -246,6 +246,9 @@ Applications1 refuses types the app does not declare. Never half an icon for the
 pin being moved has: a file over an app is the app's to open (owner). The launch carries
 an activation token made with the drop's serial, so the app comes to the front; Hyalo
 honours it for the drop's target, once, shortly after the drop (`activation.rs`). Anywhere else the drag is refused, and the source shows it.
+A pinning drop's slot stays open after the drop until the service's view has one more pin
+in that section (`drops::landed`, at most `reorder::HOLD`): closing it at once and opening it
+again when the pin arrives read as a flicker.
 Nothing is launched or written while hovering. An app dragged from Apps
 (`application/x-nidara-app`, `nidara_shell_ipc::drag`: its DesktopId and generation) opens a
 pin's slot among the pins and is pinned there through EditLayout, once the dock finds the id

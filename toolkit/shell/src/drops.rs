@@ -143,6 +143,22 @@ pub fn preview_app(view: &View, to: usize) -> View {
     View { items }
 }
 
+/// How many pins the section a pinning drop goes into holds in `view`; None for a drop
+/// that pins nothing.
+pub fn pins(view: &View, target: &Target) -> Option<usize> {
+    match target {
+        Target::Pin(_) => Some(section(view, true).len()),
+        Target::PinApp(_) => Some(section(view, false).len()),
+        _ => None,
+    }
+}
+
+/// Whether the service's `view` has what a drop pinned: its section holds more pins than
+/// the `before` it held at the drop. Until then the dock keeps the slot open.
+pub fn landed(view: &View, target: &Target, before: usize) -> bool {
+    pins(view, target).is_none_or(|now| now > before)
+}
+
 /// The pinned app a drop at `to` goes before (None: at the end of the pinned apps).
 pub fn before_app(view: &View, to: usize) -> Option<String> {
     let range = section(view, false);
@@ -269,6 +285,41 @@ mod tests {
         items.push(item("trash", Kind::Trash));
         View { items }
     }
+    #[test]
+    fn a_drop_lands_once_its_section_has_one_more_pin() {
+        let v = view(true);
+        let places = Target::Pin(1);
+        let before = pins(&v, &places).unwrap();
+        assert_eq!(before, 1);
+        // The service has not answered yet: the slot stays open.
+        assert!(!landed(&v, &places, before));
+        let mut after = v.clone();
+        let at = after
+            .items
+            .iter()
+            .position(|i| i.key == "folder:x")
+            .unwrap();
+        after
+            .items
+            .insert(at + 1, item("file:y", Kind::File { uri: "y".into() }));
+        assert!(landed(&after, &places, before));
+        // A running app pinned from Apps moves into the pins: that section grows too.
+        let apps = Target::PinApp(2);
+        let before = pins(&v, &apps).unwrap();
+        let mut after = v.clone();
+        let r = after.items.iter().position(|i| i.key == "r").unwrap();
+        after.items.remove(r);
+        after.items.insert(2, app("r", true));
+        assert!(!landed(&v, &apps, before));
+        assert!(landed(&after, &apps, before));
+        // A drop that opens files pins nothing and holds nothing.
+        let open = Target::Open {
+            id: "a".into(),
+            generation: 1,
+        };
+        assert!(landed(&v, &open, 0));
+    }
+
     fn hits(v: &View) -> Vec<[f64; 4]> {
         let slots: Vec<_> = v
             .items
