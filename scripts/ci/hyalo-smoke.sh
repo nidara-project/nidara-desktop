@@ -62,6 +62,13 @@ phase_deps() {
     echo 'default_driver=null' > /etc/libao.conf
 }
 
+# The RUSTFLAGS makepkg exports to a PKGBUILD's build(): its config read as makepkg reads it.
+makepkg_rustflags() {
+    bash -c 'source /etc/makepkg.conf
+             for f in /etc/makepkg.conf.d/*.conf; do [ -f "$f" ] && source "$f"; done
+             printf %s "${RUSTFLAGS:-}"'
+}
+
 phase_build() {
     cd "$REPO/hyalo"
     # The release build is the package's (phase_package); here what a package does not run.
@@ -72,7 +79,13 @@ phase_build() {
 
     # The native toolkit client: its build/lint/tests are the toolkit job;
     # its real input/material/IME pixel checks run below on this vkms Hyalo.
-    cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice -p nk-widgets-demo
+    # Built with the RUSTFLAGS makepkg gives the package's own toolkit build (phase_package,
+    # Arch's /etc/makepkg.conf.d/rust.conf): with other flags the same crates in toolkit/target
+    # had other fingerprints, and each build threw the other's away — the toolkit compiled
+    # twice in release on every run, ≈ 5 minutes each (measured 2026-11-04).
+    local rustflags
+    rustflags="$(makepkg_rustflags)"
+    RUSTFLAGS="$rustflags" cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked -p nk-phase0 -p nk-settings-slice -p nk-widgets-demo
 
     # The checks' own clients below; everything of the product comes from the package.
     # The sandbox probe (what a Flatpak app sees, hyalo/compositor/src/sandbox.rs).
@@ -84,7 +97,7 @@ phase_build() {
         -I"$sc" $(pkg-config --cflags --libs wayland-client) -o /usr/local/bin/hyalo-sandbox-probe
     # New Settings fields: real engines only in schedule/manual jobs, no PR build cost.
     if [ "${HYALO_ANIMATION_CHECKS:-false}" = true ]; then
-        cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked \
+        RUSTFLAGS="$rustflags" cargo build --manifest-path "$REPO/toolkit/Cargo.toml" --release --locked \
             -p nk-settings --features ime-gates --bin nk-settings-ime
     fi
     # The idle-inhibit probe (a shown window holding idle off, hyalo/compositor/src/idle.rs).

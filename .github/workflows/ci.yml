@@ -619,11 +619,18 @@ jobs:
           restore-keys: |
             hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock', 'session/Cargo.lock') }}-
             hyalo-build-${{ runner.os }}-
+      # The toolkit's release build (the test windows and the package's display selector),
+      # saved by every run and warmed on main by hyalo-cache.yml, as the one above. Until
+      # 2026-11-04 its key had no run id: saved once per Cargo.lock, never again, and no run on
+      # main saved one at all, so every PR rebuilt it almost from nothing.
       - name: Restore toolkit test-window build cache
         uses: actions/cache@v4
         with:
           path: toolkit/target
-          key: nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}
+          key: nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}-
+            nk-phase0-arch-
       - name: Build + boot (Arch container on vkms)
         env:
           # The real fcitx5/Orca matrices (~35 min) only when the change touches what they
