@@ -412,3 +412,12 @@ same change**:
   delete outright — several resolved items still carry a rule that binds. The live file must
   read as what is still owed.
 - Fix any statement in `SKILL.md`/references that your change made wrong.
+
+### Native dock drag hold expiry (#1024)
+
+In `toolkit/shell/src/dock.rs`, expiring a local `held`/`gone`/`dropped` hold uses
+`reslot`, even when Applications1 has sent no new frame: presentation can add or
+remove slots. `present` + `reshape` leaves the resting layout stale and can panic
+when painting the restored last pin. Keep frame and geometry together through
+`present_layout`; missing drawing geometry is skipped defensively. See
+`toolkit/shell/DOCK.md`, Reorder, and `hold_expiry_tests` for the regression.

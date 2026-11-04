@@ -293,6 +293,13 @@ last pin (owner). Dropped:
   it only leaves the dock, the app is not uninstalled;
 - **anywhere else**, or with Escape or another button, it goes back with no edit.
 
+When a local `held`/`gone`/`dropped` hold expires without a service update, use
+`reslot` too: presentation, resting layout, magnification and slides must agree on
+one slot list. Restoring a suppressed pin adds a slot; closing a drop preview removes
+one. `present` + `reshape` alone leaves stale geometry and caused #1024's dock-thread
+panic. Drawing skips missing geometry defensively, including counts, dots and separators;
+that guard does not replace relayout.
+
 Changes that come from the service (a pin or unpin from a menu, a new window) glide too:
 `drain` slides every item from where it was drawn (`glide`), the surface's recentring
 included.
