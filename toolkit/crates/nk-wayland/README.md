@@ -100,6 +100,13 @@ the box in root coordinates with `place_window_controls`, atomically with its ne
 root commit. `window_action` supplies standard xdg fallback actions. No visual
 geometry, text or colour defaults live in the transport.
 
+## The pointer's shape
+
+On every `wl_pointer.enter` the transport asks for the plain arrow
+(`wp_cursor_shape_v1`, `Shape::Default`) when the compositor offers it. A surface
+that sets no cursor shows whatever the last client left there: a drag's "+" stayed
+over the dock after the drop. Without the protocol nothing is set, as before.
+
 ## Client title interaction
 
 Root and layer Button events preserve the exact wl_pointer serial and timestamp,

@@ -1757,6 +1757,15 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   a split (`Layout::can_resize_edge`), never its outer output boundary. Layers and popups keep
   precedence. The cursor follows the edge and stays there during the grab. Tiled drag deltas
   round the accumulated displacement, so subpixel pointer events are not lost.
+- **The cursor through a drag is Hyalo's** (owner, 2026-11-04). Smithay's drag grab takes the
+  pointer's focus from every Wayland client, so the source's `set_cursor` is refused and the
+  cursor it set as the drag began stayed: a "+" over everything, over a dock that refused the
+  drop too, and after the drop until another client set one. Hyalo now draws it from what the
+  client under the drag agreed to (`action_choice` → `dnd_action`, `dnd_cursor`): `copy` the
+  "+", `ask` the context-menu cursor, `move` and nothing the plain arrow. A new surface under
+  the drag resets it (`dnd_over`): its offer has agreed to nothing yet. At the drop or a cancel
+  it is the plain arrow until the client under the pointer sets its own (`end_dnd_cursor`);
+  ours set the arrow on every enter (nk-wayland, `wp_cursor_shape_v1`).
 - **The cursor over chrome is Hyalo's, not the client's** (owner, 2026-10-20). The client under a
   resize edge still has the pointer (the 3 px inside are its surface) and sets its own cursor,
   which used to win: kitty showed its text cursor on its edge. `cursor_image` now keeps the
