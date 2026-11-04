@@ -6,7 +6,8 @@
 # ≈ 6 minutes of compiling the same dependencies. This builds what that job builds, with the
 # same environment, in the same container — since 2026-10-18 the package (makepkg), whose
 # release builds of Hyalo and the session daemon are what it saves: hyalo/target and
-# session/target, under the same key family.
+# session/target, under the same key family; and toolkit/target, the toolkit's release build
+# (the job's test windows and the package's display selector), since 2026-11-04.
 # It tests nothing and gates nothing: the result is ci.yml's to prove.
 name: Hyalo build cache
 
@@ -16,6 +17,8 @@ on:
     paths:
       - "hyalo/**"
       - "session/**"
+      - "toolkit/**"
+      - "crates/**"
       - "packaging/nidara/PKGBUILD"
       - "scripts/ci/hyalo-smoke.sh"
       - ".github/workflows/hyalo-cache.yml"
@@ -41,6 +44,13 @@ jobs:
           restore-keys: |
             hyalo-build-${{ runner.os }}-${{ hashFiles('hyalo/Cargo.lock', 'session/Cargo.lock') }}-
             hyalo-build-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: toolkit/target
+          key: nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            nk-phase0-arch-${{ hashFiles('toolkit/Cargo.lock') }}-
+            nk-phase0-arch-
       - name: Build as ci.yml's hyalo job does (same container, same script, same environment)
         run: |
           docker run --rm \
