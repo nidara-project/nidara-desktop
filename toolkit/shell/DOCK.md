@@ -259,9 +259,10 @@ up a pin, or a running app that is not pinned (`reorder.rs`). A folder or file m
 among the folders and files (`reorder::section`), an app pin only among the apps. The picked icon leaves the
 strip for a layer of its own (nk-wayland `create_layer`, an empty input region so the strip
 keeps the pointer), follows the pointer, and the others slide to make room where it would
-land (`reslot`: each eases from where it was drawn, `SLIDE`; the strip is laid out again
-on every order change, or a pin beside a separator that moved is drawn in the
-separator's 1 px slot). Where it would land is how many of the other pins have their centre
+land (`reslot`: each slides from where it was drawn on the magnification's spring, which
+starts slowly — the 60 ms exponential before it started at full speed and read as a jump;
+the strip is laid out again on every order change, or a pin beside a separator that moved
+is drawn in the separator's 1 px slot). Where it would land is how many of the other pins have their centre
 behind the pointer, on the strip as drawn (`reorder::aim`): its own open slot sits between
 them, so the answer holds while the pointer stays in it, and past the last pin's centre it
 is the end of the section. A running app is over the pinned section up to half a slot past

@@ -135,7 +135,7 @@ pub struct Dock {
     /// let go.
     poof: Option<Poof>,
     /// Each item's way still to go to its slot, after the order changed under it.
-    slides: HashMap<String, (f64, f64)>,
+    slides: HashMap<String, Slide>,
     slides_at: Instant,
 }
 
@@ -533,7 +533,7 @@ impl Dock {
             };
             let way = (bx + dx - x, by + dy - y);
             if way.0.abs() > 0.01 || way.1.abs() > 0.01 {
-                self.slides.insert(item.key.clone(), way);
+                Slide::set(&mut self.slides, &item.key, way);
             }
         }
         self.slides_at = Instant::now();
@@ -1582,7 +1582,7 @@ impl Dock {
             .enumerate()
             .filter_map(|(n, i)| {
                 let [x, y, _, _] = *self.shown.rects.get(n)?;
-                let (sx, sy) = self.slides.get(&i.key).copied().unwrap_or_default();
+                let (sx, sy) = self.slides.get(&i.key).map_or((0., 0.), Slide::offset);
                 Some((i.key.clone(), (x + sx, y + sy)))
             })
             .collect()
@@ -1626,7 +1626,7 @@ impl Dock {
             };
             let way = (bx - x, by - y);
             if way.0.abs() > 0.01 || way.1.abs() > 0.01 {
-                self.slides.insert(item.key.clone(), way);
+                Slide::set(&mut self.slides, &item.key, way);
             } else {
                 self.slides.remove(&item.key);
             }
@@ -1661,15 +1661,16 @@ impl Dock {
         shift
     }
 
-    /// The slides, a frame further on: each eases to its slot (`SLIDE`).
+    /// The slides, a frame further on: each eases to its slot on the magnification's
+    /// spring, which starts slowly. The exponential before it (a 60 ms time constant)
+    /// started at full speed and read as a jump.
     fn ease_slides(&mut self, now: Instant) {
         let dt = now.saturating_duration_since(self.slides_at).as_secs_f64();
         self.slides_at = now;
-        let keep = (-dt / SLIDE).exp();
-        self.slides.retain(|_, (x, y)| {
-            *x *= keep;
-            *y *= keep;
-            x.abs() > 0.05 || y.abs() > 0.05
+        self.slides.retain(|_, s| {
+            let x = s.x.advance(0., dt);
+            let y = s.y.advance(0., dt);
+            x || y
         });
     }
 
@@ -2039,7 +2040,7 @@ impl Dock {
     fn placed(&self, n: usize, item: &Item, now: Instant) -> [f64; 4] {
         let [x, y, w, h] = self.shown.rects[n];
         let (dx, dy) = self.lift(item, now);
-        let (sx, sy) = self.slides.get(&item.key).copied().unwrap_or_default();
+        let (sx, sy) = self.slides.get(&item.key).map_or((0., 0.), Slide::offset);
         [x + dx + sx, y + dy + sy, w, h]
     }
 
@@ -2050,8 +2051,7 @@ impl Dock {
         let (sx, sy) = self
             .slides
             .get(&self.frame.view.items[n].key)
-            .copied()
-            .unwrap_or_default();
+            .map_or((0., 0.), Slide::offset);
         let now = self.shown.dot(n);
         let now = (now.0 + sx, now.1 + sy);
         let r = nk_render::snapped_dot(rest, d, scale);
@@ -2785,8 +2785,34 @@ fn hand_over(at: f64) -> (f64, f64) {
     (pixel, t * t * (3. - 2. * t))
 }
 
-/// The time constant an item slides to its new slot with, after the order changed.
-const SLIDE: f64 = 0.06;
+/// One item on its way to its slot: how far from it it is drawn, on each axis.
+#[derive(Clone, Copy, Debug)]
+struct Slide {
+    x: Spring,
+    y: Spring,
+}
+
+impl Slide {
+    fn offset(&self) -> (f64, f64) {
+        (self.x.value, self.y.value)
+    }
+
+    /// `key` is drawn `way` from its slot now: it slides there from wherever it was, at
+    /// the speed it already had, so a slide that changes course never jerks.
+    fn set(slides: &mut HashMap<String, Slide>, key: &str, way: (f64, f64)) {
+        let v = slides
+            .get(key)
+            .map_or((0., 0.), |s| (s.x.velocity, s.y.velocity));
+        let spring = |value, velocity| Spring { value, velocity };
+        slides.insert(
+            key.to_string(),
+            Slide {
+                x: spring(way.0, v.0),
+                y: spring(way.1, v.1),
+            },
+        );
+    }
+}
 /// How long a pin dropped off the strip takes to go up in its puff.
 const POOF: Duration = Duration::from_millis(300);
 
