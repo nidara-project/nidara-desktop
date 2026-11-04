@@ -61,6 +61,7 @@ use wayland_client::{
 };
 use wayland_protocols::{
     wp::{
+        cursor_shape::v1::client::{wp_cursor_shape_device_v1, wp_cursor_shape_manager_v1},
         fractional_scale::v1::client::{wp_fractional_scale_manager_v1, wp_fractional_scale_v1},
         presentation_time::client::{wp_presentation, wp_presentation_feedback},
         text_input::zv3::client::{zwp_text_input_manager_v3, zwp_text_input_v3},
@@ -299,6 +300,11 @@ pub struct Window {
     seat: Option<wl_seat::WlSeat>,
     keyboard_proxy: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
+    /// The pointer's shape over our surfaces (`wp_cursor_shape_v1`): the plain arrow, set on
+    /// every enter. Without it a surface shows whatever the last client left there — a
+    /// drag's "+" stayed over the dock after the drop until the pointer left it.
+    cursor_shape: Option<wp_cursor_shape_manager_v1::WpCursorShapeManagerV1>,
+    cursor_device: Option<wp_cursor_shape_device_v1::WpCursorShapeDeviceV1>,
     text_manager: Option<zwp_text_input_manager_v3::ZwpTextInputManagerV3>,
     text: Option<zwp_text_input_v3::ZwpTextInputV3>,
     material: Option<nidara_material_v1::NidaraMaterialV1>,
@@ -1093,6 +1099,8 @@ fn run_inner(
         app_id: options.app_id,
         presentation: None,
         data_manager: None,
+        cursor_shape: None,
+        cursor_device: None,
         data: None,
         offers: Vec::new(),
         selection: None,
@@ -1189,6 +1197,7 @@ fn run_inner(
     }
     w.text_manager = bind!(zwp_text_input_manager_v3::ZwpTextInputManagerV3, 1);
     w.data_manager = bind!(wl_data_device_manager::WlDataDeviceManager, 3);
+    w.cursor_shape = bind!(wp_cursor_shape_manager_v1::WpCursorShapeManagerV1, 1);
     w.presentation = bind!(wp_presentation::WpPresentation, 1);
     w.activation = bind!(activation::xdg_activation_v1::XdgActivationV1, 1);
     w.foreign.exporter = bind!(
@@ -1705,6 +1714,9 @@ impl Dispatch<wl_seat::WlSeat, ()> for Window {
                     w.pointer = Some(p.get_pointer(q, ()));
                 }
             } else if let Some(p) = w.pointer.take() {
+                if let Some(d) = w.cursor_device.take() {
+                    d.destroy();
+                }
                 p.release();
             }
         }
@@ -1843,7 +1855,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
         e: wl_pointer::Event,
         _: &(),
         _: &Connection,
-        _: &QueueHandle<Self>,
+        q: &QueueHandle<Self>,
     ) {
         match e {
             wl_pointer::Event::Enter {
@@ -1853,6 +1865,11 @@ impl Dispatch<wl_pointer::WlPointer, ()> for Window {
                 surface_y,
             } => {
                 w.serial = serial;
+                if let (Some(m), Some(p)) = (&w.cursor_shape, &w.pointer) {
+                    w.cursor_device
+                        .get_or_insert_with(|| m.get_pointer(p, q, ()))
+                        .set_shape(serial, wp_cursor_shape_device_v1::Shape::Default);
+                }
                 w.pointer_popup = w
                     .overlay
                     .iter()
@@ -2271,6 +2288,8 @@ delegate_noop!(Window: ignore wp_viewporter::WpViewporter);
 delegate_noop!(Window: ignore wp_viewport::WpViewport);
 delegate_noop!(Window: ignore wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1);
 delegate_noop!(Window: ignore wp_presentation::WpPresentation);
+delegate_noop!(Window: ignore wp_cursor_shape_manager_v1::WpCursorShapeManagerV1);
+delegate_noop!(Window: ignore wp_cursor_shape_device_v1::WpCursorShapeDeviceV1);
 delegate_noop!(Window: ignore zwp_text_input_manager_v3::ZwpTextInputManagerV3);
 delegate_noop!(Window: ignore nidara_material_manager_v1::NidaraMaterialManagerV1);
 delegate_noop!(Window: ignore nidara_material_v1::NidaraMaterialV1);

@@ -73,6 +73,13 @@ pub struct Hyalo {
     pub dnd_icon: Option<crate::render::DndIcon>,
     /// The serial the drag under way began with (handlers.rs `dnd_requested`).
     pub dnd_started: Option<smithay::utils::Serial>,
+    /// What the client under a drag agreed to do with it (handlers.rs `action_choice`), and
+    /// the surface that agreed: the pointer shows it (`dnd_cursor`). Smithay takes the
+    /// pointer's focus away from every client during a drag, so the source can no longer set
+    /// its cursor, and the one it set as the drag began stayed — a "+" over everything, a
+    /// dock that refused the drop included (owner, 2026-11-04).
+    pub dnd_action: smithay::reexports::wayland_server::protocol::wl_data_device_manager::DndAction,
+    pub dnd_over: Option<smithay::reexports::wayland_server::backend::ObjectId>,
     /// The drop just made: the client it landed in may raise what it starts (activation.rs).
     pub drop_grant: Option<crate::activation::DropGrant>,
     pub focus_grab: Option<focus_grab::ActiveGrab>,
@@ -277,6 +284,8 @@ impl Hyalo {
             client_cursor: CursorImageStatus::default_named(),
             dnd_icon: None,
             dnd_started: None,
+            dnd_action: smithay::reexports::wayland_server::protocol::wl_data_device_manager::DndAction::empty(),
+            dnd_over: None,
             drop_grant: None,
             focus_grab: None,
             exclusive_keyboard: None,
@@ -560,6 +569,32 @@ impl Hyalo {
 
     /// The pointer moved (or what is under it did): which control it is over, drawn hovered,
     /// with the arrow over Hyalo's chrome — the app under it set its own cursor last.
+    /// The pointer through a drag: a "+" only where the client under it takes a copy; the
+    /// plain arrow where nothing would happen, and for a move (the files stay files).
+    pub fn dnd_cursor(&self) -> CursorImageStatus {
+        use smithay::{input::pointer::CursorIcon, reexports::wayland_server::protocol::wl_data_device_manager::DndAction};
+        let icon = if self.dnd_action.contains(DndAction::Copy) {
+            CursorIcon::Copy
+        } else if self.dnd_action.contains(DndAction::Ask) {
+            CursorIcon::ContextMenu
+        } else {
+            CursorIcon::Default
+        };
+        CursorImageStatus::Named(icon)
+    }
+
+    /// The drag is over: the plain arrow until the client under the pointer sets its own (it
+    /// is entered again with the next motion); whatever the source set before the drag is
+    /// stale.
+    pub fn end_dnd_cursor(&mut self) {
+        self.dnd_action = smithay::reexports::wayland_server::protocol::wl_data_device_manager::DndAction::empty();
+        self.dnd_over = None;
+        self.client_cursor = CursorImageStatus::default_named();
+        self.cursor_status = CursorImageStatus::default_named();
+        self.wm.chrome_cursor = false;
+        self.queue_redraw(None);
+    }
+
     pub fn update_controls_hover(&mut self, pos: Point<f64, Logical>) {
         let chrome = self.chrome_under(pos);
         let under = match chrome {
@@ -576,7 +611,18 @@ impl Hyalo {
         // Hyalo's cursor over its chrome and through a resize; the client's (`client_cursor`)
         // everywhere else. The client under a resize edge still has the pointer and sets its own,
         // which won: kitty showed its text cursor on its edge (owner, 2026-10-20).
+        // A drag: Hyalo's cursor, from what the client under it agreed to. A new surface under
+        // the drag has agreed to nothing yet: its offer starts with no action.
+        if self.dnd_started.is_some() {
+            use smithay::reexports::wayland_server::Resource;
+            let over = self.surface_under(pos).map(|(s, _)| s.id());
+            if over != self.dnd_over {
+                self.dnd_over = over;
+                self.dnd_action = smithay::reexports::wayland_server::protocol::wl_data_device_manager::DndAction::empty();
+            }
+        }
         let ours = match (self.wm.grab, chrome) {
+            _ if self.dnd_started.is_some() => Some(self.dnd_cursor()),
             (Some(crate::wm::grabs::Active { id, kind: crate::wm::grabs::Kind::Resize(edges), tiled, .. }), _) => {
                 Some(CursorImageStatus::Named(edges.cursor(tiled, self.resize_room(id))))
             }

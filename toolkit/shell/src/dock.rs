@@ -1712,8 +1712,11 @@ impl Dock {
         if let Err(e) = w.set_layer_input_region(id, Some(&[])) {
             eprintln!("nidara-shell: the pin in the air's input region: {e}");
         }
+        // A pinned folder or file's art is fetched by its layout key, as on the strip:
+        // without it the pin in the air was an empty, see-through tile.
         let art = match &item.kind {
             Kind::App { id, .. } => self.art(id, size).cloned(),
+            Kind::Folder { .. } | Kind::File { .. } => self.art(&item.key, size).cloned(),
             _ => None,
         };
         let faint = if self.frame.dark {
@@ -1866,6 +1869,7 @@ impl Dock {
             .find(|i| i.key == key)
             .and_then(|i| match &i.kind {
                 Kind::App { id, .. } => self.art(id, size).cloned(),
+                Kind::Folder { .. } | Kind::File { .. } => self.art(&i.key, size).cloned(),
                 _ => None,
             });
         let side = (2. * size).ceil();

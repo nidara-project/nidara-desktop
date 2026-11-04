@@ -1,6 +1,7 @@
 //! The Smithay handler traits that are only wiring: the commit path, the seat, selections,
 //! dmabuf, outputs.
 
+use smithay::reexports::wayland_server::protocol::wl_data_device_manager::DndAction as WlDndAction;
 use smithay::{
     backend::{allocator::dmabuf::Dmabuf, renderer::utils::on_commit_buffer_handler},
     input::{
@@ -217,6 +218,19 @@ impl DataDeviceHandler for Hyalo {
     fn data_device_state(&mut self) -> &mut DataDeviceState {
         &mut self.data_device_state
     }
+
+    /// The client under a drag says what it would do with it: the pointer shows it at once
+    /// (state.rs `dnd_cursor`).
+    fn action_choice(&mut self, available: WlDndAction, preferred: WlDndAction) -> WlDndAction {
+        let chosen = smithay::wayland::selection::data_device::default_action_chooser(available, preferred);
+        if self.dnd_started.is_some() {
+            self.dnd_action = chosen;
+            self.cursor_status = self.dnd_cursor();
+            self.wm.chrome_cursor = true;
+            self.queue_redraw(None);
+        }
+        chosen
+    }
 }
 
 impl PrimarySelectionHandler for Hyalo {
@@ -231,6 +245,7 @@ impl DndGrabHandler for Hyalo {
     fn dropped(&mut self, target: Option<DndTarget<'_, Self>>, validated: bool, _seat: Seat<Self>, _location: Point<f64, Logical>) {
         self.dnd_icon = None;
         let since = self.dnd_started.take();
+        self.end_dnd_cursor();
         self.drop_grant = match (target, since) {
             (Some(target), Some(since)) if validated => target
                 .into_inner()
@@ -244,6 +259,7 @@ impl DndGrabHandler for Hyalo {
     fn cancelled(&mut self, _seat: Seat<Self>, _location: Point<f64, Logical>) {
         self.dnd_icon = None;
         self.dnd_started = None;
+        self.end_dnd_cursor();
         self.queue_redraw(None);
     }
 }
@@ -259,6 +275,10 @@ impl WaylandDndGrabHandler for Hyalo {
         // Drawn under the pointer until the drop (render/mod.rs `push_cursor`).
         self.dnd_icon = icon.map(|surface| crate::render::DndIcon { surface, offset: (0, 0).into() });
         self.dnd_started = Some(serial);
+        self.dnd_action = WlDndAction::empty();
+        self.dnd_over = None;
+        self.cursor_status = self.dnd_cursor();
+        self.wm.chrome_cursor = true;
         match type_ {
             GrabType::Pointer => {
                 let ptr = seat.get_pointer().unwrap();
