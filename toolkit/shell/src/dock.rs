@@ -353,6 +353,9 @@ impl Dock {
         if w.size() != self.layout.size {
             return;
         }
+        if moved {
+            self.publish_targets();
+        }
         let now = Instant::now();
         if moved
             && (self.presence.value == self.presence_target
@@ -1195,14 +1198,18 @@ impl Dock {
         }
     }
 
-    /// Where each minimized window this dock owns goes: its slot, in surface coordinates.
+    /// Where each minimized window this dock owns goes: its slot as drawn now, magnified
+    /// or not, in surface coordinates. Its slot at rest was wrong under the pointer: a
+    /// window minimized by a click on its app's icon flew to whichever icon magnification
+    /// had pushed over that place (the last pin, often). Sent again whenever the strip moves
+    /// (`reshape`), and Hyalo moves a window on its way along with it.
     fn publish_targets(&mut self) {
         let mut targets = BTreeMap::new();
         for (n, item) in self.frame.view.items.iter().enumerate() {
-            if let Kind::Minimized { window, .. } = item.kind
-                && self.frame.targets.contains(&window)
+            if let (Kind::Minimized { window, .. }, Some(r)) = (&item.kind, self.shown.rects.get(n))
+                && self.frame.targets.contains(window)
             {
-                targets.insert(window, self.layout.rects[n]);
+                targets.insert(*window, *r);
             }
         }
         if targets != self.published {
@@ -2173,6 +2180,10 @@ impl Dock {
                     }
                 }
             }
+            // A minimized window still on its way: nothing yet. Hyalo draws it shrinking into
+            // this slot, and the picture takes its place as it lands, so one picture travels
+            // and stays (owner, 2026-11-04: two read as a copy appearing).
+            Kind::Minimized { window, .. } if self.frame.flying.contains(window) => {}
             // A minimized window: its picture, proportions kept, with the app's icon small at
             // the bottom-right corner (the TS dock's BADGE share), so two windows of one app
             // tell which app and which window. The app's icon alone until the picture comes.

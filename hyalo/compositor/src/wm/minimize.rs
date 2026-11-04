@@ -14,7 +14,9 @@
 //!   (`minimize_targets` over IPC, rectangles in the dock's own surface): Hyalo cannot know a
 //!   layout of the shell's. A new thumbnail is laid out only after the dock hears of the
 //!   minimized window, so a window waits for its place, drawn where it was, at most `WAIT`; with
-//!   no place by then (no dock) it goes at once. `[animations] enabled = false` (reduce motion):
+//!   no place by then (no dock) it goes at once. A place that moves while the window is on its
+//!   way (the dock's magnification) takes the window with it, and the window is listed again
+//!   when it has gone in: the dock draws its picture in the slot only then. `[animations] enabled = false` (reduce motion):
 //!   always at once.
 //! - **What asks for it.** The minimize button of Hyalo's controls, an app's own button
 //!   (`xdg_toplevel.set_minimized`), `minimize` over IPC. Never a dialog by itself: it goes
@@ -296,18 +298,20 @@ impl Hyalo {
     }
 
     /// The places a dock gave its minimized windows (`minimize_targets` over IPC). A window
-    /// waiting for its place starts moving now.
+    /// waiting for its place starts moving now; one already on its way heads for its place
+    /// where it is now: the dock sends them again as its magnification moves them, and a
+    /// window minimized from the dock lands on the slot as drawn, not where it was.
     pub fn set_minimize_targets(&mut self, output: String, namespace: String, rects: HashMap<WindowId, Rectangle<f64, Logical>>) {
         self.wm.minimize_targets.insert(output, Targets { namespace, rects });
         let now = Instant::now();
-        let waiting: Vec<WindowId> = self.wm.animations.iter().filter(|a| a.out && a.start.is_none() && !a.done(now)).map(|a| a.id).collect();
-        for id in waiting {
+        let going: Vec<WindowId> = self.wm.animations.iter().filter(|a| a.out && !a.done(now)).map(|a| a.id).collect();
+        for id in going {
             let to = self.minimize_target(id);
             if let Some(a) = self.wm.animations.iter_mut().find(|a| a.id == id)
                 && to.is_some()
             {
                 a.to = to;
-                a.start = Some(now);
+                a.start.get_or_insert(now);
             }
         }
         self.queue_redraw(None);
@@ -319,6 +323,11 @@ impl Hyalo {
     pub fn step_animations(&mut self) -> bool {
         let now = Instant::now();
         let before = self.wm.animations.len();
+        // A window that has gone into the dock is listed again (its `drawn` is gone): the
+        // dock shows its picture in the slot only then, so one picture travels and stays.
+        if self.wm.animations.iter().any(|a| a.out && a.done(now)) {
+            self.wm.dirty_windows = true;
+        }
         self.wm.animations.retain(|a| !a.done(now));
         !self.wm.animations.is_empty() || self.wm.animations.len() < before
     }

@@ -44,6 +44,9 @@ pub struct Frame {
     pub hidden: bool,
     /// The minimized windows whose target this dock publishes.
     pub targets: HashSet<u64>,
+    /// Minimized windows Hyalo is still drawing on their way into the dock: their slot
+    /// stays empty until they land, so the window that travels is the picture that stays.
+    pub flying: HashSet<u64>,
     pub output_sizes: HashMap<String, (u32, u32)>,
     pub tokens: Option<Arc<Value>>,
     /// Always true: the shell wears the dark skin whatever the system mode (owner's
@@ -74,6 +77,7 @@ impl Frame {
             can_settings: false,
             hidden: false,
             targets: HashSet::new(),
+            flying: HashSet::new(),
             output_sizes: HashMap::new(),
             tokens,
             dark: true,
@@ -792,6 +796,12 @@ impl Hub {
                     .filter(|(_, o)| **o == dock.name)
                     .map(|(w, _)| *w)
                     .collect(),
+                flying: self
+                    .windows
+                    .iter()
+                    .filter(|w| w.window.minimized && w.moving)
+                    .map(|w| w.window.id)
+                    .collect(),
                 output_sizes: sizes.clone(),
                 tokens: self.tokens.clone(),
                 dark: true,
@@ -881,10 +891,7 @@ impl Hub {
                     .into_iter()
                     .map(|(id, r)| (id.to_string(), json!(r)))
                     .collect();
-                worker(move || {
-                    crate::hyalo::request(json!({"request": "minimize_targets", "output": output, "namespace": crate::dock::NAMESPACE, "targets": targets}))
-                        .map(|_| ())
-                });
+                send_targets(output, targets);
             }
             Request::Launch {
                 id,
@@ -1213,6 +1220,37 @@ fn launch(
     .map_err(|e| e.to_string())
 }
 
+/// The places of the minimized windows, to Hyalo, in order: they change with every frame
+/// magnification moves the strip, and a window on its way follows them, so an older list
+/// must never land after a newer one (a `worker` each could). One thread sends them, only
+/// the newest of each output when several are waiting.
+fn send_targets(output: String, targets: serde_json::Map<String, Value>) {
+    use std::sync::{Mutex, OnceLock, mpsc};
+    type Targets = (String, serde_json::Map<String, Value>);
+    static QUEUE: OnceLock<Mutex<mpsc::Sender<Targets>>> = OnceLock::new();
+    let queue = QUEUE.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<Targets>();
+        let _ = std::thread::Builder::new()
+            .name("dock-targets".into())
+            .spawn(move || {
+                while let Ok(first) = rx.recv() {
+                    let mut newest = BTreeMap::from([first]);
+                    newest.extend(rx.try_iter());
+                    for (output, targets) in newest {
+                        let sent = crate::hyalo::request(json!({"request": "minimize_targets", "output": output, "namespace": crate::dock::NAMESPACE, "targets": targets}));
+                        if let Err(e) = sent {
+                            eprintln!("nidara-shell: request failed: {e}");
+                        }
+                    }
+                }
+            });
+        Mutex::new(tx)
+    });
+    if let Ok(tx) = queue.lock() {
+        let _ = tx.send((output, targets));
+    }
+}
+
 fn worker(f: impl FnOnce() -> Result<(), String> + Send + 'static) {
     let _ = std::thread::Builder::new()
         .name("dock-request".into())
@@ -1236,6 +1274,7 @@ mod tests {
             output: output.into(),
             fullscreen: false,
             pid: None,
+            moving: false,
         }
     }
     #[test]
