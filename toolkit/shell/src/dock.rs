@@ -1614,7 +1614,6 @@ impl Dock {
             before.insert(key.to_string(), at);
         }
         let was = self.layout.size;
-        self.present();
         // Laid out again for the new order, always: a slot more or fewer changes the strip's
         // length, and a separator that changes place changes which slot is a 1 px line (with
         // the old layout, the pin beside it was drawn in the separator's slot, shrunk to a
@@ -1646,17 +1645,10 @@ impl Dock {
     /// origin moved, as a shift of everything in it, and moves the layers in the air
     /// with it so they stay where they are on the screen.
     fn relayout(&mut self, w: &mut Window, was: (u32, u32)) -> (f64, f64) {
-        self.layout = Self::lay(&self.frame, self.output_size);
+        let shift = self.present_layout(was);
         if let Err(e) = self.place(w) {
             eprintln!("nidara-shell: placing the dock: {e}");
         }
-        let now = self.layout.size;
-        let half = |n: u32, o: u32| (f64::from(n) - f64::from(o)) / 2.;
-        let shift = if self.layout.position.horizontal() {
-            (half(now.0, was.0), 0.)
-        } else {
-            (0., half(now.1, was.1))
-        };
         if let Some(l) = self.landing.as_mut() {
             l.at = (l.at.0 + shift.0, l.at.1 + shift.1);
             let _ = w.set_position(l.layer, l.at.0, l.at.1);
@@ -1666,6 +1658,20 @@ impl Dock {
             let _ = w.set_position(p.layer, p.at.0, p.at.1);
         }
         shift
+    }
+
+    /// Present and lay out one snapshot together, before magnifying or drawing it.
+    /// Expiring a local drag hold can add or remove a slot without a service update.
+    fn present_layout(&mut self, was: (u32, u32)) -> (f64, f64) {
+        self.present();
+        self.layout = Self::lay(&self.frame, self.output_size);
+        let now = self.layout.size;
+        let half = |n: u32, o: u32| (f64::from(n) - f64::from(o)) / 2.;
+        if self.layout.position.horizontal() {
+            (half(now.0, was.0), 0.)
+        } else {
+            (0., half(now.1, was.1))
+        }
     }
 
     /// The slides, a frame further on: each eases to its slot on the magnification's
@@ -1688,7 +1694,9 @@ impl Dock {
             return;
         }
         let item = self.frame.view.items[slot].clone();
-        let [x, y, size, _] = self.placed(slot, &item, Instant::now());
+        let Some([x, y, size, _]) = self.placed(slot, &item, Instant::now()) else {
+            return;
+        };
         let grab = (self.pointer.0 - x, self.pointer.1 - y);
         let Some(r) = crate::reorder::Reorder::new(&self.frame.view, slot, grab, size) else {
             return;
@@ -2048,42 +2056,42 @@ impl Dock {
         self.reslot(w, from);
     }
 
-    fn placed(&self, n: usize, item: &Item, now: Instant) -> [f64; 4] {
-        let [x, y, w, h] = self.shown.rects[n];
+    fn placed(&self, n: usize, item: &Item, now: Instant) -> Option<[f64; 4]> {
+        let [x, y, w, h] = *self.shown.rects.get(n)?;
         let (dx, dy) = self.lift(item, now);
         let (sx, sy) = self.slides.get(&item.key).map_or((0., 0.), Slide::offset);
-        [x + dx + sx, y + dy + sy, w, h]
+        Some([x + dx + sx, y + dy + sy, w, h])
     }
 
     /// The running dot: on whole device pixels where it rests, carried from there exactly
     /// as far as its icon has moved (see `follow`).
-    fn dot(&self, n: usize, d: f64, scale: f64) -> Rect {
+    fn dot(&self, n: usize, d: f64, scale: f64) -> Option<Rect> {
+        self.layout.rects.get(n)?;
+        self.shown.rects.get(n)?;
+        let item = self.frame.view.items.get(n)?;
         let rest = self.layout.dot(n);
-        let (sx, sy) = self
-            .slides
-            .get(&self.frame.view.items[n].key)
-            .map_or((0., 0.), Slide::offset);
+        let (sx, sy) = self.slides.get(&item.key).map_or((0., 0.), Slide::offset);
         let now = self.shown.dot(n);
         let now = (now.0 + sx, now.1 + sy);
         let r = nk_render::snapped_dot(rest, d, scale);
-        Rect {
+        Some(Rect {
             x: follow(r.x, rest.0, now.0),
             y: follow(r.y, rest.1, now.1),
             ..r
-        }
+        })
     }
 
     /// Where separator `n`, placed at `(x, y)`, starts along the dock in device pixels: on
     /// the grid where it rests, carried by what its neighbours moved (see `follow`).
-    fn rule_at(&self, n: usize, (x, y): (f64, f64), scale: f64) -> f64 {
-        let [rx, ry, _, _] = self.layout.rects[n];
+    fn rule_at(&self, n: usize, (x, y): (f64, f64), scale: f64) -> Option<f64> {
+        let [rx, ry, _, _] = *self.layout.rects.get(n)?;
         let grid = |v: f64| ((v * scale).round() / scale) as f32;
         let at = if self.layout.position.horizontal() {
             follow(grid(rx), rx, x)
         } else {
             follow(grid(ry), ry, y)
         };
-        f64::from(at) * scale
+        Some(f64::from(at) * scale)
     }
 
     /// Each separator's offset, a frame further on: none while the strip moves, and once it
@@ -2095,11 +2103,15 @@ impl Dock {
         let mut settling = !still;
         let mut rules = HashMap::new();
         for (n, item) in self.frame.view.items.iter().enumerate() {
-            if item.kind != Kind::Separator || n >= self.shown.rects.len() {
+            if item.kind != Kind::Separator {
                 continue;
             }
-            let [x, y, _, _] = self.shown.rects[n];
-            let at = self.rule_at(n, (x, y), scale);
+            let Some(&[x, y, _, _]) = self.shown.rects.get(n) else {
+                continue;
+            };
+            let Some(at) = self.rule_at(n, (x, y), scale) else {
+                continue;
+            };
             let was = self.rules.get(&n).copied().unwrap_or(0.);
             let (offset, done) = settle(was, at, still, dt);
             settling |= !done;
@@ -2113,7 +2125,9 @@ impl Dock {
         if self.away(&item.key) {
             return;
         }
-        let [x, y, w, h] = self.placed(n, item, now);
+        let Some([x, y, w, h]) = self.placed(n, item, now) else {
+            return;
+        };
         let r = Rect {
             x: x as f32,
             y: y as f32,
@@ -2139,7 +2153,10 @@ impl Dock {
                 let (v, alpha) = (if self.frame.dark { 255 } else { 0 }, 77.);
                 let s = c.scale();
                 let horizontal = self.layout.position.horizontal();
-                let at = self.rule_at(n, (x, y), s) + self.rules.get(&n).copied().unwrap_or(0.);
+                let Some(at) = self.rule_at(n, (x, y), s) else {
+                    return;
+                };
+                let at = at + self.rules.get(&n).copied().unwrap_or(0.);
                 let (pixel, next) = hand_over(at);
                 for (k, share) in [(pixel, 1. - next), (pixel + 1., next)] {
                     if share <= 0. {
@@ -2269,8 +2286,8 @@ impl Dock {
         if self.frame.prefs.indicators
             && item.running()
             && !matches!(item.kind, Kind::Minimized { .. })
+            && let Some(dot) = self.dot(n, d, c.scale())
         {
-            let dot = self.dot(n, d, c.scale());
             c.rounded_rect(dot, f64::from(dot.width) / 2., mark);
         }
     }
@@ -2279,7 +2296,9 @@ impl Dock {
     /// grows it to the left), the danger colour with a white figure (ink with a dark one
     /// when the tokens lack it). Drawn after every icon, over its own icon's art.
     fn paint_count(&mut self, c: &mut Canvas, n: usize, item: &Item, count: u64, now: Instant) {
-        let [x, y, w, _] = self.placed(n, item, now);
+        let Some([x, y, w, _]) = self.placed(n, item, now) else {
+            return;
+        };
         let pill = w * COUNT;
         let (back, figure) = match self.frame.tokens.as_ref().and_then(|t| {
             let c = t["danger"].as_array()?;
@@ -2416,8 +2435,7 @@ impl Application for Dock {
                 self.land(w, before);
             } else {
                 self.gone = None;
-                self.present();
-                self.reshape(w);
+                self.reslot(w, None);
             }
         }
         self.puff(w);
@@ -3023,5 +3041,138 @@ mod anchor_tests {
                 "{start} {len}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod hold_expiry_tests {
+    use super::*;
+
+    fn dock() -> Dock {
+        let mut frame = Frame::empty(crate::prefs::Prefs::default(), None);
+        frame.view.items = (0..13)
+            .map(|n| Item {
+                key: format!("folder:{n}"),
+                kind: Kind::Folder {
+                    uri: format!("file:///folder-{n}"),
+                },
+                label: format!("Folder {n}"),
+                windows: vec![],
+                minimized: vec![],
+                signal: Default::default(),
+            })
+            .collect();
+        let (_, frames) = std::sync::mpsc::channel();
+        let (hub, _) = std::sync::mpsc::channel();
+        let (waker, _) = nk_wayland::wake_channel().unwrap();
+        Dock::new(
+            frames,
+            hub,
+            "test".into(),
+            (1920, 1080),
+            Arc::new(frame),
+            None,
+            waker,
+        )
+    }
+
+    #[test]
+    fn gone_expiry_can_restore_a_thirteenth_item_before_geometry_catches_up() {
+        let mut dock = dock();
+        dock.gone = Some(("folder:0".into(), Instant::now()));
+        dock.present();
+        dock.layout = Dock::lay(&dock.frame, dock.output_size);
+        dock.shown = dock.layout.clone();
+        assert_eq!(dock.shown.rects.len(), 12);
+        // The service has not acknowledged the unpin when the local hold expires.
+        dock.gone.as_mut().unwrap().1 = Instant::now() - crate::reorder::HOLD;
+        dock.present();
+        assert!(dock.gone.is_none());
+        assert_eq!(dock.frame.view.items.len(), 13);
+        // A stale drawing snapshot must never kill the output's dock thread.
+        let mut canvas = Canvas::new(1920, 256, 1.);
+        for (n, item) in dock.frame.view.items.iter().enumerate() {
+            dock.paint_item(&mut canvas, n, item, Instant::now());
+        }
+    }
+
+    #[test]
+    fn expiry_relayouts_added_and_removed_slots_before_magnifying() {
+        for position in [Position::Bottom, Position::Left, Position::Right] {
+            for magnification in [false, true] {
+                for dropped in [false, true] {
+                    let mut dock = dock();
+                    let mut frame = (*dock.source).clone();
+                    frame.prefs.position = position;
+                    frame.prefs.magnification = magnification;
+                    dock.source = Arc::new(frame);
+                    if dropped {
+                        dock.dropped = Some((crate::drops::Target::Pin(0), 13, Instant::now()));
+                    } else {
+                        dock.gone = Some(("folder:0".into(), Instant::now()));
+                    }
+                    dock.present_layout(dock.layout.size);
+                    let old_count = dock.frame.view.items.len();
+                    let old_size = dock.layout.size;
+                    let expired = Instant::now() - crate::reorder::HOLD;
+                    if let Some((_, _, at)) = dock.dropped.as_mut() {
+                        *at = expired;
+                    }
+                    if let Some((_, at)) = dock.gone.as_mut() {
+                        *at = expired;
+                    }
+                    let shift = dock.present_layout(old_size);
+                    assert_eq!(dock.frame.view.items.len(), 13);
+                    assert_eq!(old_count, if dropped { 14 } else { 12 });
+                    assert!(dock.gone.is_none() && dock.dropped.is_none());
+                    dock.shown = dock
+                        .layout
+                        .magnify(&slots(&dock.frame.view), (200., 100.), 1.);
+                    assert_eq!(dock.layout.rects.len(), 13);
+                    assert_eq!(dock.shown.rects.len(), 13);
+                    assert_eq!(dock.shown.hits.len(), 13);
+                    let along = if position.horizontal() {
+                        shift.0
+                    } else {
+                        shift.1
+                    };
+                    let (old, new) = if position.horizontal() {
+                        (old_size.0, dock.layout.size.0)
+                    } else {
+                        (old_size.1, dock.layout.size.1)
+                    };
+                    assert_eq!(along, (f64::from(new) - f64::from(old)) / 2.);
+                    // The magnification envelope can reach the output's width cap.
+                    if !magnification {
+                        assert!(if dropped { along < 0. } else { along > 0. });
+                    }
+                    let mut canvas = Canvas::new(1920, 1080, 1.);
+                    for (n, item) in dock.frame.view.items.iter().enumerate() {
+                        assert!(dock.placed(n, item, Instant::now()).is_some());
+                        dock.paint_item(&mut canvas, n, item, Instant::now());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn stale_geometry_skips_counts_dots_and_separators() {
+        let mut dock = dock();
+        let item = dock.frame.view.items[12].clone();
+        dock.shown.rects.truncate(12);
+        let mut canvas = Canvas::new(1920, 256, 1.);
+        dock.paint_count(&mut canvas, 12, &item, 1, Instant::now());
+        assert!(dock.dot(12, DOT, 1.).is_none());
+        dock.shown = dock.layout.clone();
+        dock.layout.rects.truncate(12);
+        assert!(dock.dot(12, DOT, 1.).is_none());
+        assert!(dock.rule_at(12, (0., 0.), 1.).is_none());
+        let mut frame = (*dock.frame).clone();
+        frame.view.items[12].kind = Kind::Separator;
+        dock.frame = Arc::new(frame);
+        dock.settle_rules(1., Instant::now());
+        dock.paint_item(&mut canvas, 12, &dock.frame.view.items[12], Instant::now());
+        assert!(!dock.rules.contains_key(&12));
     }
 }
