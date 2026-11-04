@@ -130,6 +130,12 @@ picture. A window Hyalo has not listed to the dock yet is not a failure: a dock 
 restarted) with windows already minimized asks before the list arrives, so it asks again
 every 100 ms for 2 s (`thumbs::LISTING`) before keeping the icon.
 
+**One picture** (owner, 2026-11-04). While Hyalo draws the window shrinking into its slot
+(the window's `drawn`, `Frame::flying`), the slot stays open and draws nothing: the window
+that travels is the picture, and the dock's own picture replaces it where it lands. Hyalo
+lists the window again when its animation ends, which is how the dock knows. Before, the
+picture appeared at once and a second one flew into it.
+
 Window → app matching before H1 is a pure lookup against the catalogue, in the
 contract's order: exact current app_id as DesktopId (with and without `.desktop`), exact
 StartupWMClass, verified Flatpak ID; when none of those hits, the id and StartupWMClass
@@ -349,7 +355,12 @@ recreation. The input region is the resting capsule.
   only minimized → restore the most recently minimized; two or more visible → focus the
   most recently focused (the chooser is D2).
 - **Minimize targets.** `minimize_targets(output, "nidara-dock", {id: rect})` from the
-  laid-out slots, in layer-local logical coordinates. Every dock shows every app, so the
+  slots as drawn (magnified, `shown`), in layer-local logical coordinates, sent again
+  whenever magnification moves them, through one thread that sends only the newest
+  (`hub::send_targets`, so an older list never lands after a newer one). Hyalo moves a
+  window already on its way along with its slot. Until 2026-11-04 they were the slots at
+  rest: a window minimized by a click on its app's icon, the pointer magnifying the strip,
+  flew to whatever icon had been pushed over that place (the last pin, often). Every dock shows every app, so the
   HUB picks one dock per window (its current output's, else a fixed remaining one) and
   only that dock publishes it; docks never overwrite each other's targets.
 - **Folders.** Applications1 `OpenDirectory` (A2, `open-directory`), local directories only.

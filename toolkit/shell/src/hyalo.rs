@@ -24,6 +24,9 @@ pub struct HyaloWindow {
     /// Its client's process, when Hyalo knows it: a tray icon's click raises the window
     /// of the process that owns it (tray.rs).
     pub pid: Option<i32>,
+    /// Hyalo is drawing it on its way into the dock or back out (`drawn`): a minimized one
+    /// is still in the air, and its slot shows no picture until it lands.
+    pub moving: bool,
 }
 
 /// A workspace as Hyalo reports it (`workspaces`): what the bar's dots and its desktop
@@ -136,6 +139,7 @@ pub fn parse_windows(ok: &Value) -> Vec<HyaloWindow> {
                     .as_i64()
                     .and_then(|p| i32::try_from(p).ok())
                     .filter(|p| *p > 0),
+                moving: !w["drawn"].is_null(),
             })
         })
         .collect()
@@ -253,8 +257,8 @@ mod tests {
         let ok = json!({"kind": "windows", "windows": [
             {"id": 7, "app_id": "foot", "initial_app_id": "foot", "title": "~", "parent": null,
              "minimized": true, "minimized_order": 3, "focus_order": 9, "focused": false, "demands_attention": true,
-             "output": "HDMI-A-1", "fullscreen": "none"},
-            {"id": 8, "app_id": "mpv", "parent": 7, "fullscreen": "fullscreen", "output": "DP-1"},
+             "output": "HDMI-A-1", "fullscreen": "none", "drawn": [10.0, 20.0, 300.0, 200.0]},
+            {"id": 8, "app_id": "mpv", "parent": 7, "fullscreen": "fullscreen", "output": "DP-1", "drawn": null},
             {"app_id": "no id"}
         ]});
         let w = parse_windows(&ok);
@@ -273,6 +277,8 @@ mod tests {
             (w[0].window.attention, w[1].window.attention),
             (true, false)
         );
+        // On its way into the dock while Hyalo says where it is drawn.
+        assert_eq!((w[0].moving, w[1].moving), (true, false));
     }
 
     #[test]
