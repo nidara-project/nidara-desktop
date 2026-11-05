@@ -624,6 +624,7 @@ fn with_overlay<R: HyaloRenderer>(mut out: Vec<OutputElement<R>>, output: &Outpu
     if !stats::overlay_enabled() {
         return out;
     }
+    stats::scene_damage(output, &out);
     let regions: Vec<_> = out.iter().filter_map(|e| if let OutputElement::Glass(g) = e { Some(g.region()) } else { None }).collect();
     let overlay = stats::overlay(&output.name(), &regions);
     out.splice(0..0, overlay.into_iter().map(OutputElement::Debug));

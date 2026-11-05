@@ -2744,12 +2744,15 @@ screenshot, and check the value moved (a drag beside the slider still drew every
   while `build_to_shown` is most of a refresh.
 - **`nidara-hyalo msg debug-overlay on|off`** (or `HYALO_DEBUG_OVERLAY=1`): each glass element's
   capture region outlined (cyan), a flash where one re-captured, the frame's damage outlined
-  (magenta), fading over 400 ms. It is drawn with damage tracking like anything else, so it
-  leaves out of what it shows (1) damage inside its own elements of this frame and the last and
-  (2) frames drawn whole (and their re-captures) — or it would show its own redraws and never
-  settle. One entry per rectangle (a region re-captured every frame flashes once). It shows in
-  `msg screenshot` too. The smoke (`hyalo-smoke.sh`) requires a desktop at rest to draw no more
-  frames with the overlay on than without it.
+  (magenta), fading over 400 ms. Its diagnostic damage comes from a separate tracker
+  of the scene before debug elements, with buffer age 1, only while enabled. Do not
+  filter final framebuffer damage by overlay geometry: glass effects expand it and
+  buffer history combines it, feeding the overlay itself (Rust shell, #1033).
+  Only scene-driven captures renew flashes; the cost counters still report ALL real
+  rendered frames, damage and captures. Offscreen screenshots do not advance this
+  tracker. One entry per rectangle; it shows in `msg screenshot` too. The unchanged
+  smoke requires an idle desktop to settle with the overlay enabled.
+
 
 ## Testing Hyalo
 

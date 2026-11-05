@@ -21,10 +21,10 @@
 //!   output, every glass element's capture region outlined, a flash where one re-captured, and
 //!   the previous frame's damage outlined, fading.
 //!
-//! The overlay is drawn with damage tracking like anything else, so what it draws damages the
-//! frame: the damage it shows leaves out what lies inside its own elements (of this frame and
-//! the last), or it would chase its own tail. A flash and a damage outline fade out; once they
-//! have, an idle desktop draws nothing again.
+//! The overlay is drawn with damage tracking like anything else. Its diagnostics use a
+//! separate tracker of the scene BEFORE the overlay, with age 1: final framebuffer damage
+//! includes the overlay, effect expansion and buffer history, so filtering it by geometry
+//! cannot prevent feedback. Cost counters still measure what the real renderer drew.
 //!
 //! Frames are drawn one output at a time on this thread: `frame_start` names the output the
 //! counts that follow belong to.
@@ -39,9 +39,11 @@ use serde::Serialize;
 use smithay::{
     backend::renderer::{
         Color32F,
-        element::{Id, Kind, solid::SolidColorRenderElement},
+        element::{Element, Id, Kind, solid::SolidColorRenderElement},
+        damage::OutputDamageTracker,
         utils::CommitCounter,
     },
+    output::Output,
     utils::{Physical, Rectangle},
 };
 
@@ -86,15 +88,15 @@ struct OutputState {
     shown: VecDeque<Shown>,
     /// The output's size, output px.
     area: u64,
-    /// Overlay: the last frame's damage (minus the overlay's own), when it was taken.
+    /// Overlay: actual scene damage, before instrumentation and buffer history.
     damage: Vec<(Rectangle<i32, Physical>, Instant)>,
     /// Overlay: where a glass element re-captured, and when.
     flashes: Vec<(Rectangle<i32, Physical>, Instant)>,
-    /// Overlay: re-captures of the frame being drawn, shown once it is known not to have been
-    /// drawn whole (`frame_done`).
+    /// Re-captures from this real render; only scene-driven ones renew a flash.
     pending: Vec<Rectangle<i32, Physical>>,
-    /// Overlay: its own elements' geometry, this frame and the last.
-    drawn: [Vec<Rectangle<i32, Physical>>; 2],
+    scene_tracker: Option<OutputDamageTracker>,
+    /// Kept until a frame is rendered, so a failed/no-op render cannot eat scene damage.
+    scene_damage: Vec<Rectangle<i32, Physical>>,
     /// Overlay: one id per piece, stable while the piece stays, so an unchanged overlay
     /// damages nothing.
     slots: HashMap<(u8, i32, i32, i32, i32), Slot>,
@@ -149,7 +151,9 @@ pub fn set_overlay(on: bool) {
             for s in o.borrow_mut().values_mut() {
                 s.damage.clear();
                 s.flashes.clear();
-                s.drawn = Default::default();
+                s.scene_tracker = None;
+                s.scene_damage.clear();
+                s.pending.clear();
                 s.slots.clear();
             }
         });
@@ -162,6 +166,24 @@ pub fn frame_begin(output: &str, area: u64) {
     FRAME.with(|c| c.set(GlassCounts::default()));
     GPU.with(|g| g.borrow_mut().tick(Instant::now()));
     OUTPUTS.with(|o| o.borrow_mut().entry(output.to_string()).or_default().area = area);
+}
+
+/// Observe only the real scene, before debug elements are inserted. No GPU work and no
+/// second tracker when diagnostics are off. Offscreen screenshots must not advance it.
+pub fn scene_damage<E: Element>(output: &Output, elements: &[E]) {
+    let name = output.name();
+    if !overlay_enabled() || !CURRENT.with(|c| c.borrow().as_deref() == Some(name.as_str())) {
+        return;
+    }
+    OUTPUTS.with(|o| {
+        let mut o = o.borrow_mut();
+        let st = o.entry(name).or_default();
+        let tracker = st.scene_tracker.get_or_insert_with(|| OutputDamageTracker::from_output(output));
+        // Age 1 means only new scene damage; no rotating-framebuffer history.
+        if let Ok((Some(damage), _)) = tracker.damage_output(1, elements) {
+            st.scene_damage.extend_from_slice(damage);
+        }
+    });
 }
 
 /// The frame is done: what it cost on the CPU, whether anything was new, and its damage
@@ -182,23 +204,19 @@ pub fn frame_done(output: &str, rendered: bool, build: Duration, render: Duratio
             st.samples.pop_front();
         }
         let pending = std::mem::take(&mut st.pending);
-        // A frame drawn whole (a direct scan-out; in a window, a buffer age the host did not
-        // give) says nothing about what changed: showing it, and the re-captures it caused, would
-        // keep the overlay fading for ever, each fade a frame drawn whole again.
-        if overlay_enabled() && rendered && (damage_px as f64) < st.area as f64 * 0.99 {
-            // What the overlay drew itself is not the desktop's damage (see the header).
-            let own = |r: &Rectangle<i32, Physical>| st.drawn.iter().flatten().any(|o| o.contains_rect(*r));
-            if let Some(d) = damage {
-                let shown: Vec<_> = d.iter().filter(|r| !own(r)).copied().collect();
-                for r in shown {
-                    remember(&mut st.damage, r, now);
-                }
+        if overlay_enabled() && rendered {
+            let scene = std::mem::take(&mut st.scene_damage);
+            for r in &scene {
+                remember(&mut st.damage, *r, now);
             }
             for r in pending {
-                remember(&mut st.flashes, r, now);
+                if scene.iter().any(|d| d.overlaps(r)) {
+                    remember(&mut st.flashes, r, now);
+                }
             }
         }
     });
+    CURRENT.with(|c| *c.borrow_mut() = None);
 }
 
 /// A frame of `output`, begun at `begun` and predicted to show at `predicted`, was flipped at
@@ -292,7 +310,6 @@ pub fn overlay(output: &str, regions: &[Rectangle<i32, Physical>]) -> Vec<SolidC
             s.used = false;
         }
         let mut out = Vec::with_capacity(pieces.len());
-        let mut drawn = Vec::with_capacity(pieces.len());
         for (kind, r, color) in pieces {
             if r.size.w <= 0 || r.size.h <= 0 {
                 continue;
@@ -309,11 +326,8 @@ pub fn overlay(output: &str, regions: &[Rectangle<i32, Physical>]) -> Vec<SolidC
             }
             slot.used = true;
             out.push(SolidColorRenderElement::new(slot.id.clone(), r, slot.commit, color, Kind::Unspecified));
-            drawn.push(r);
         }
         st.slots.retain(|_, s| s.used);
-        st.drawn.swap(0, 1);
-        st.drawn[0] = drawn;
         out
     })
 }
@@ -615,5 +629,114 @@ mod gpu_tests {
         assert_eq!(client, 6556);
         assert_eq!(engines, vec![("gfx".to_string(), 37879210026), ("compute".to_string(), 141560541)], "the capacity is no time");
         assert!(read_fdinfo("pos:\t0\nflags:\t02\n").is_none(), "an fd that is not a DRM client");
+    }
+}
+
+#[cfg(test)]
+mod overlay_tests {
+    use super::*;
+    use smithay::{output::{Mode, PhysicalProperties, Subpixel}, utils::Transform};
+
+    fn output() -> Output {
+        set_overlay(false);
+        OUTPUTS.with(|o| o.borrow_mut().clear());
+        let output = Output::new("overlay-test".into(), PhysicalProperties {
+            size: (0, 0).into(), subpixel: Subpixel::Unknown,
+            make: "Test".into(), model: "Overlay".into(), serial_number: "0".into(),
+        });
+        output.change_current_state(Some(Mode { size: (400, 200).into(), refresh: 60_000 }), Some(Transform::Normal), None, None);
+        set_overlay(true);
+        output
+    }
+
+    fn pane(id: &Id, commit: CommitCounter) -> SolidColorRenderElement {
+        SolidColorRenderElement::new(id.clone(), Rectangle::new((20, 20).into(), (100, 40).into()), commit,
+            Color32F::new(0.2, 0.3, 0.4, 1.0), Kind::Unspecified)
+    }
+
+    fn expire(output: &Output) {
+        let old = Instant::now() - FADE - Duration::from_millis(1);
+        OUTPUTS.with(|o| {
+            let mut o = o.borrow_mut();
+            let st = o.get_mut(&output.name()).unwrap();
+            for (_, at) in st.damage.iter_mut().chain(&mut st.flashes) { *at = old; }
+        });
+    }
+
+    fn frame(output: &Output, scene: &[SolidColorRenderElement], rendered: bool) {
+        let capture = Rectangle::new((0, 0).into(), (160, 100).into());
+        frame_begin(&output.name(), 400 * 200);
+        // Exercise the real pre-overlay hook, using solid elements without a GPU.
+        let scene: Vec<crate::render::OutputElement<smithay::backend::renderer::gles::GlesRenderer>> =
+            scene.iter().cloned().map(crate::render::OutputElement::Debug).collect();
+        let _ = crate::render::with_overlay(scene, output);
+        // Real rendering can expand/merge damage and reuse old framebuffer damage,
+        // then recapture glass. Neither event is a new commit by this scene.
+        captured(capture);
+        count(|c| c.captures += 1);
+        let combined = [Rectangle::new((0, 0).into(), (300, 100).into())];
+        frame_done(&output.name(), rendered, Duration::ZERO, Duration::ZERO, Some(&combined));
+    }
+
+    #[test]
+    fn unchanged_scene_settles_despite_expanded_damage_and_recaptures() {
+        let output = output();
+        let scene = [pane(&Id::new(), CommitCounter::default())];
+        frame(&output, &scene, true);
+        assert!(overlay_animating(&output.name()), "initial scene is visible to diagnostics");
+        expire(&output);
+        for _ in 0..8 {
+            frame(&output, &scene, true);
+            assert!(!overlay_animating(&output.name()), "overlay-only redraw renewed its own fade");
+        }
+        let stats = snapshot();
+        let actual = &stats.outputs[0];
+        assert_eq!(actual.frames_drawn, 9, "actual rendered frames must still be counted");
+        assert!(actual.damage_px_avg > 0.0, "actual damage cost must not be hidden");
+        assert_eq!(actual.glass.captures, 9, "actual captures must still be counted");
+    }
+
+    #[test]
+    fn genuine_damage_inside_overlay_regions_is_reported_and_snapshots_cannot_consume_it() {
+        let output = output();
+        let id = Id::new();
+        let mut commit = CommitCounter::default();
+        frame(&output, &[pane(&id, commit)], true);
+        expire(&output);
+        commit.increment();
+        let changed = [pane(&id, commit)];
+        // Offscreen screenshots also build a scene, outside the real backend frame.
+        scene_damage(&output, &changed);
+        OUTPUTS.with(|o| assert!(o.borrow()[&output.name()].scene_damage.is_empty(),
+            "an offscreen snapshot advanced diagnostic tracking"));
+        frame(&output, &changed, true);
+        assert!(overlay_animating(&output.name()), "a real commit under an overlay must renew its fade");
+        OUTPUTS.with(|o| {
+            let o = o.borrow();
+            let st = o.get(&output.name()).unwrap();
+            assert!(st.damage.iter().any(|(_, t)| t.elapsed() < FADE));
+            assert!(st.flashes.iter().any(|(_, t)| t.elapsed() < FADE));
+        });
+    }
+
+    #[test]
+    fn undrawn_scene_damage_survives_until_a_render_and_disabling_releases_tracking() {
+        let output = output();
+        let id = Id::new();
+        let mut commit = CommitCounter::default();
+        frame(&output, &[pane(&id, commit)], true);
+        expire(&output);
+        commit.increment();
+        frame(&output, &[pane(&id, commit)], false);
+        frame(&output, &[pane(&id, commit)], true);
+        assert!(overlay_animating(&output.name()));
+        set_overlay(false);
+        scene_damage(&output, &[pane(&id, commit)]);
+        OUTPUTS.with(|o| {
+            let o = o.borrow();
+            let st = o.get(&output.name()).unwrap();
+            assert!(st.scene_tracker.is_none());
+            assert!(st.scene_damage.is_empty() && st.pending.is_empty());
+        });
     }
 }
