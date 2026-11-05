@@ -216,6 +216,7 @@ phase_package() {
     # prepare() — the crates fetch — is what -e skips: done here, where the network is.
     (cd "$REPO/hyalo" && cargo fetch --locked)
     (cd "$REPO/session" && cargo fetch --locked)
+    (cd "$REPO/toolkit" && cargo fetch --locked)
     # makepkg refuses root; it builds as the user the session runs as, and writes all over the
     # tree it builds in. Not .git: the runner's own cleanup writes there after this job.
     chown ci "$REPO" && chown -R ci "$b"
