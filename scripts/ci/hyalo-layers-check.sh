@@ -37,8 +37,19 @@ for side in bottom left right; do
         got=$(placed)
         echo "$got" | jq -e --argjson s "$size" 'length == 2 and all(.x == 0 and .y == 0 and .width == $s[0] and .height == $s[1])' >/dev/null \
             || fail "dock at the $side, $order: not both placed against the whole output ($size): $got"
+        protocol_state() {
+            $MSG layers | jq -e --argjson rect "$1" '
+              [.ok.layers[] | select(.namespace | startswith("probe-"))]
+              | length == 2 and all(.glass.fusion == [2] and .drawn == [$rect])' >/dev/null
+        }
+        for _ in $(seq 1 30); do protocol_state '[0,0,100,40]' && break; sleep .1; done
+        protocol_state '[0,0,100,40]' || fail "fusion or restricted drawn region did not reach Hyalo"
+        gdbus call --session --dest org.nidara.LayerProbe --object-path /org/nidara/LayerProbe \
+            --method org.nidara.LayerProbe.Expand >/dev/null
+        for _ in $(seq 1 30); do protocol_state '[0,0,200,80]' && break; sleep .1; done
+        protocol_state '[0,0,200,80]' || { $MSG layers >>"$log"; fail "the expanded drawn region did not reach Hyalo"; }
         kill $probe; wait $probe 2>/dev/null || true
         for _ in $(seq 1 20); do [ "$(placed | jq length)" = 0 ] && break; sleep 0.1; done
-        echo "ok    dock at the $side, $order: bar and dock both over the whole output"
+        echo "ok    dock at the $side, $order: bar and dock both over the whole output; fusion and drawn-region growth"
     done
 done

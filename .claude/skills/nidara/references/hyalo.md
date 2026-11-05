@@ -2837,6 +2837,11 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   owner-authorized install. Super+Shift+R restarts the Rust unit; nidara-ipc defaults
   to native routes without NIDARA_SESSION. Test logging A11Y_PUBLISHED remains
   opt-in via NK_A11Y_TRACE.
+- The Hyalo smoke boots the installed Rust shell and complete sessiond (#1033).
+  Readiness must prove Session/Shell1 and the process owner, never just listActions
+  (a local catalogue with no renderer); the absent-renderer control must fail.
+  CC uses real accessible button clicks until Shell1 exposes it. Fusion/drawn-region
+  coverage uses the layer-placement probe. Unported TS checks are itemized in #1033.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
   boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied
