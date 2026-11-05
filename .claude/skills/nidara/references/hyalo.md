@@ -2843,7 +2843,9 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
 - The Hyalo smoke boots the installed Rust shell and complete sessiond (#1033).
   Readiness must prove Session/Shell1 and the process owner, never just listActions
   (a local catalogue with no renderer); the absent-renderer control must fail.
-  CC uses real accessible button clicks until Shell1 exposes it. Fusion/drawn-region
+  CC uses real accessible button clicks until Shell1 exposes it. Its PNG capture has
+  one bounded 15 s request: vkms/llvmpipe takes about 3 s just to render it, before
+  encoding and IPC. Quick state reads stay at 3 s; captures are never retried. Fusion/drawn-region
   coverage uses the layer-placement probe. Unported TS checks are itemized in #1033.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then

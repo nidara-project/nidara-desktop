@@ -39,9 +39,18 @@ def ipc(*args):
     return subprocess.check_output([IPC, *args], text=True, timeout=3)
 
 
-def msg(*args):
+def msg(*args, timeout=3):
     return json.loads(subprocess.check_output(
-        ['nidara-hyalo', 'msg', *args], text=True, timeout=3))['ok']
+        ['nidara-hyalo', 'msg', *args], text=True, timeout=timeout))['ok']
+
+
+def screenshot(path):
+    # llvmpipe needs ~3 s just to render the CC on vkms, before PNG encoding/IPC.
+    # A capture is one bounded request, never retried. Keep state reads at 3 s.
+    started = time.monotonic()
+    msg('screenshot', str(path), timeout=15)
+    assert Path(path).read_bytes().startswith(b'\x89PNG\r\n\x1a\n'), 'capture did not produce a PNG'
+    print(f'ok screenshot in {time.monotonic() - started:.3f}s', flush=True)
 
 
 def owned_by(name, pid):
@@ -127,7 +136,7 @@ def panels():
                    and l['height'] > bar['height'] and glass(l) > glass(bar) and l)
     assert any(s['kind'] == 'veil' and s['shapes'] > 1 for s in opened['glass']['scrims']), opened
     time.sleep(1)
-    msg('screenshot', '/tmp/hyalo/control-center.png')
+    screenshot('/tmp/hyalo/control-center.png')
     cc()
     until('CC closed', lambda: layer('nidara-bar')['height'] == bar['height'])
     ipc('toggleAppGrid')
