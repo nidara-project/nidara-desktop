@@ -111,16 +111,34 @@ over_dock() {
 }
 # The other half of #1003: the dock's coloured icon must still cover the probe's
 # neutral-grey body. Search its overlap, not one fixed pixel: restoring removes a
-# minimized slot and neighbouring icons slide. Stay below the scaled headers
-# (window controls are coloured too), inside the moving frame and in the icon row.
+# minimized slot and neighbouring icons slide. Exclude each window's actual
+# controls, projected into the capture (the dialog's controls are coloured too).
+# Stay inside the moving frame and in the icon row.
 # A window incorrectly drawn above the whole dock leaves only grey here.
 icon_over_window() {
-    python3 - "$log/back-crossing.ppm" "$log/back-crossing.capture.json" "$id" "$target" "$scale" <<'PYICON' || fail "the dock's coloured icon is not in front of the restoring window"
+    python3 - "$log/back-crossing.ppm" "$log/back-crossing.capture.json" "$log/back-windows.json" "$id" "$target" "$scale" <<'PYICON' || fail "the dock's coloured icon is not in front of the restoring window"
 import json, math, sys
 from pathlib import Path
-picture, metadata, ident, target, scale = sys.argv[1:]
+picture, metadata, windows, ident, target, scale = sys.argv[1:]
 scale = float(scale)
-x, y, w, h = json.loads(Path(metadata).read_text())["drawn"][ident]
+drawn = json.loads(Path(metadata).read_text())["drawn"]
+x, y, w, h = drawn[ident]
+windows = json.loads(Path(windows).read_text())
+assert any(str(window["id"]) == ident for window in windows), "missing probe geometry"
+controls = []
+for window in windows:
+    rect = drawn.get(str(window["id"]))
+    box = window["controls"]
+    if rect is None or box is None:
+        continue
+    dx, dy, dw, dh = rect
+    kx, ky = dw / window["width"], dh / window["height"]
+    cx = dx + (box[0] - window["x"]) * kx
+    cy = dy + (box[1] - window["y"]) * ky
+    # Round outward and leave one device pixel for antialiasing at the capsule edge.
+    controls.append((math.floor(cx * scale) - 1, math.floor(cy * scale) - 1,
+                     math.ceil((cx + box[2] * kx) * scale) + 1,
+                     math.ceil((cy + box[3] * ky) * scale) + 1))
 tx, ty, tw, th = json.loads(target)
 header = Path(picture).read_bytes().split(b"\n", 3)
 assert header[0] == b"P6" and header[2] == b"255", "expected Hyalo RGB capture"
@@ -128,11 +146,13 @@ width, height = map(int, header[1].split())
 rgb = header[3]
 assert len(rgb) == width * height * 3
 left, right = math.ceil((x + 6) * scale), math.floor((x + w - 6) * scale)
-top = math.ceil(max(y + 12, ty + 8) * scale)
+top = math.ceil(max(y + 6, ty + 8) * scale)
 bottom = math.floor(min(y + h - 6, ty + th - 8) * scale)
 assert 0 <= left < right <= width and 0 <= top < bottom <= height, "no icon/body overlap captured"
 for py in range(top, bottom):
     for px in range(left, right):
+        if any(cx <= px < cr and cy <= py < cb for cx, cy, cr, cb in controls):
+            continue
         colour = rgb[(py * width + px) * 3:(py * width + px) * 3 + 3]
         if max(colour) - min(colour) >= 24:
             print(f"ok    dock icon over the restoring grey body at {px} {py}: {tuple(colour)}")
@@ -226,7 +246,10 @@ echo "ok    it is drawn shrinking toward its place (${k}% of its size crossing t
 
 # 6. Back from the dock: a click on its place.
 sleep 0.3
-target=$(win | jq -c .minimize_target)
+# Resting controls, before the click starts movement. Their size/offset is projected
+# using each window's drawn box IN the capture; do not query a later animation frame.
+$MSG windows | jq '[.ok.windows[] | select(.app_id == "hyalo-window-controls-probe")]' >"$log/back-windows.json"
+target=$(jq -c '.[] | select(.title == "window-controls-probe") | .minimize_target' "$log/back-windows.json")
 place=$(echo "$target" | jq -r '"\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"')
 # Coming back, the curve is fast out: it leaves the dock in the first 1% of its time (15 ms of
 # 6 s, missed in CI). Ten minutes give that part a second; step 7 minimizes it again, which
