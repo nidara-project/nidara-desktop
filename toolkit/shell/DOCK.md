@@ -212,6 +212,14 @@ and its first step was measured from the last settled frame, so it landed at onc
 100 ms while moving and exact once settled. Targets published to Hyalo stay the rest
 rects.
 
+Closing a menu or chooser reconciles presence with
+`Window::root_pointer_position()` **before** retiring the popup. Modal input
+filtering can hide the parent's motion/leave events while the transport still
+tracks focus. Outside uses the same pointer-leave cleanup (presence, auto-hide,
+hover, tooltip and pending presses); over the root keeps magnification at the
+fresh root-local position. Never treat a destroyed popup's local position as
+the dock's, and never wait for another enter/leave or add a timer (#1030).
+
 **Auto-hide (D2).** With `auto-hide` on the dock reserves nothing (exclusive zone 0)
 and slides out past its screen edge once the pointer has been gone `hide-delay` ms
 (`autohide.rs`). It slides as the TS dock did, by the layer's margin on its anchored
