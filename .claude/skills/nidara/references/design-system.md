@@ -4170,7 +4170,7 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
   revealed: the extra `BAR_TEXT_PAD − BAR_ITEM_PAD` rides on the label, inside the revealer.
 - **Concentric by construction.** The capsule is 32 of glass (radius 16); the pill sits 4 in from
   it on all sides (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends), radius 12, past the
-  rim's 3.2. A segmented control's thumb, which is the
+  rim's 2 px. A segmented control's thumb, which is the
   prior art.
 - **The veil is the capsule's old one, moved.** Same ink (`GLASS_SPECULAR` / `GLASS_TINT.dark`)
   at the same `GLASS_STATE_MIX` alphas, painted OVER the group's glass instead of folded into a
