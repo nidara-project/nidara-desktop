@@ -183,6 +183,12 @@ Owns everything between a string and positioned glyphs, and the editing model on
   frame's commit has been flushed (`Application::committed`, with the root commit's number —
   the initial empty commit is 1 — which `Event::Presented` carries back).
 - `nidara-layers-v1` (below).
+- `Window::root_pointer_position()` reports the latest dispatched pointer focus:
+  root-surface-local logical coordinates while the pointer is on that root,
+  otherwise `None` (including a child layer or popup). Modal menu input filtering
+  does not freeze this transport state. Query it before retiring a popup: destroying
+  a child does not make its last popup-local coordinates root-local. This is a
+  focus snapshot, not a global pointer query or a synthetic enter/motion event.
 - **Drops from other clients** (`wl_data_device` v3, #959 D3): a drag over the root surface
   (never its layers or popups) is `Event::DragEnter { x, y, mimes }`, then `DragMotion`, and
   ends in `DragLeave` or `Drop { mime, data, serial }`; `serial` is the drag's enter serial,
