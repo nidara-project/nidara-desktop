@@ -183,7 +183,9 @@ impl View {
                     return Err(format!("unexpected slice key {key}"));
                 }
                 let entry = &schema[&key];
-                let ui = &entry["ui"];
+                let ui = exports
+                    .localize_ui(&entry["ui"])
+                    .map_err(|e| format!("Snapshot {key} UI: {e}"))?;
                 let control_kind = data::string(&ui["control"])?;
                 let value = if control {
                     match key.as_str() {

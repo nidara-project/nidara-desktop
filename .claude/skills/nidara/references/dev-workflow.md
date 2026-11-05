@@ -4099,11 +4099,18 @@ Don't shortcut this. Every step is there for a reason (Hyprland reload-safety, I
 
 ### Settings slice startup diagnostics
 
-The slice smoke check retains stderr for its third (own-window-level) launch.
+The slice smoke check retains stderr for every launch, including exits before
+the first window is mapped.
 An early exit must report its status/log instead of waiting out the listing
 deadline; missing-window failures also include the log. Keep the original
 deadline and semantic/pixel assertions. Diagnostic improvement alone is not
 proof that a failed native startup was corrected.
+
+Native Config1 exports `ui.i18n` and `options[].i18n`, rather than translated
+`title`/`label` strings. The read-only settings slice resolves these against its
+exported settings-data language, falling back to English per key, just like native
+Settings. Keep authoritative preference values untouched and keep the default-value
+negative control: localizing metadata must not substitute preference defaults.
 
 ### Restarting the isolated IME harness
 
