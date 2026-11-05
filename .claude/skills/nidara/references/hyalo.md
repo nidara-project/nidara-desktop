@@ -423,8 +423,10 @@ drawn at the format's px. Measured (2026-10-06, a 378 px frame → 1080×1920 at
 file shrunk to the frame vs the preview, RMSE 0.9 % (promo) / 2.6 % (todas); at scale 1, as
 before, 3.0 % — the owner: "what I see in the lab is not what gets recorded, the size is
 different, so the effect looks different". For that the shader's own px widths (bevel cap 80,
-rim band 3.2) are LOGICAL: `px_scale` (the output's scale) multiplies them, as the client's
-radius and refraction already were; at scale 1, 0 px change. At a fractional scale the output's
+rim band 2) are LOGICAL: `px_scale` (the output's scale) multiplies them, as the client's
+radius and refraction already were; the scale conversion alone changes no pixels at scale 1.
+The rim fades inward over 2 logical px since the owner's 2026-11-05 choice (#1028),
+reduced from 3.2; the classic lab's thickness multiplier 1 therefore means 2 px. At a fractional scale the output's
 logical size rounds up and a capture comes out a few px larger (1083×1923): `cut` crops to
 `GLASS_LAB_SIZE` from the top-left. «promo: logo» leaves one round pane with the Nidara mark
 alone; its size is px of the FILE, shown scaled. «Exportar» makes the file in a second lab, headless, whose output IS the format (`glass-lab.sh --headless … --export

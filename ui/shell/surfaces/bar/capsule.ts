@@ -28,8 +28,8 @@ export const CAPSULE_BORDER = { r: 1, g: 1, b: 1, a: 0.2 }
 // Inside a GROUP (barGroup below, 2026-09-26) ONE rhythm, BAR_PILL_EDGE = 4: the
 // hover/open pill keeps 4 from the visible glass on every side and 4 from the next
 // pill. So the pill is 24 tall (32 − 2×4, radius 12, concentric with the glass), and
-// it clears Hyalo's rim, which fades in over 3.2 px from the edge — at 2 px from it,
-// as until 2026-10-06, the pill sat on the band of light. Items no longer touch:
+// it clears Hyalo's 2 px rim (3.2 px when this spacing was chosen) — at 2 px from it,
+// as until 2026-10-06, the pill sat on the then-wider band of light. Items no longer touch:
 // with the pills touching, an open item and a hovered neighbour (or edit mode, every
 // pill at once) read as one bar. Each item is its content plus its own air:
 // BAR_ITEM_PAD round an icon, BAR_TEXT_PAD round text (common/widget-kit/bar.ts).
