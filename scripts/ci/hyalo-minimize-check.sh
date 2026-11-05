@@ -64,7 +64,7 @@ wait_line() { for _ in $(seq 1 40); do grep -q "$1" "$2" && return 0; sleep 0.25
 grey() { set -- $1; [ "$1" -ge 56 ] && [ "$1" -le 104 ] && [ $(($1 - $2)) -le 4 ] && [ $(($2 - $1)) -le 4 ] && [ $(($1 - $3)) -le 4 ] && [ $(($3 - $1)) -le 4 ]; }
 # Over the dock's glass, under its icons (#1003). The icon-free top padding is
 # six logical pixels above the icon slot (PAD=10, four pixels inside the glass,
-# beyond its 3.2 px edge sheen): sampling eight pixels INSIDE the slot
+# beyond its 2 px edge sheen): sampling eight pixels INSIDE the slot
 # mistook a blue icon correctly covering the moving window for glass over it
 # (#958). Magnification is disabled for this fixture and restored on exit.
 # Read the moving edge from the capture's own metadata, never adjacent polls.

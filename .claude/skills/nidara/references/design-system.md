@@ -2043,8 +2043,10 @@ exclusion inside those two surfaces is a notification banner's ACTION buttons: t
 inside a card.
 
 ⚠️ **None of it is drawn on the compositor's glass (Hyalo).** There the edge belongs to Hyalo — its
-rim, a 3.2 px band of light — and the 2 px dark ring right outside it read as a drawn frame; the
-owner compared both in the glass lab and dropped it (2026-10-06: "3.2 without the halo looks best").
+rim, now a 2 logical px band of light (#1028, owner, 2026-11-05). The 2 px dark ring
+right outside it read as a drawn frame; the owner compared both in the glass lab and dropped
+it (2026-10-06: "3.2 without the halo looks best"). That older choice was narrowed from
+3.2 to 2 px on 2026-11-05.
 Every painter skips the shadow while `compositorPaintsGlass` is true: `SquircleContainer`, the
 dock on both axes (`DockAxis.ts`), `GlassCapsule` and `paintGlassBubble`. Since #762 the shell's panes
 carry no `shadow` at all (Hyalo casts each pane's own, `set_shadow`) and their box is their glass.
@@ -4100,7 +4102,7 @@ frame 0. A future island mode (player, agent) is a
 
 Every number is on the design system's **4px scale** (`$space-*`), by the owner's rule. The
 2026-10-06 numbers are "B" from a mockup the owner chose them in (measured live first: pills
-touching, a pill 2 px from the visible edge — on Hyalo's 3.2 px rim — text running into the
+touching, a pill 2 px from the visible edge — on Hyalo's then-3.2 px rim, now 2 px — text running into the
 pill's curved ends, icons at three sizes):
 
 | | px | where |
@@ -4134,7 +4136,8 @@ and `BAR_PILL_PAD` in `common/widget-kit/bar.ts` so widgets can reach them.
 
 **Why these (2026-10-06).** One distance, 4, between a pill and everything round it — the glass
 on every side and the next pill — so the hover is never cramped against either, and the pill
-(24, radius 12) clears the rim, which fades in over 3.2 px from the edge. The pills stopped
+(24, radius 12) clears the rim, which now fades in over 2 logical px from the edge
+(3.2 px when this spacing was chosen; #1028 narrows the rim without changing the spacing). The pills stopped
 touching because an open item next to a hovered one, or edit mode lighting every pill, read as
 one bar. Text gets the pill's radius as its air, or its first and last letter sit in the curve.
 None of it fits a 28 px glass with an 18 px icon, so the capsule grew 4 (and with it the strip:
@@ -4167,7 +4170,7 @@ Cairo pill painted ONLY on hover or while its panel is open. The group's glass n
   revealed: the extra `BAR_TEXT_PAD − BAR_ITEM_PAD` rides on the label, inside the revealer.
 - **Concentric by construction.** The capsule is 32 of glass (radius 16); the pill sits 4 in from
   it on all sides (`BAR_VEIL_INSET` top/bottom, `BAR_GROUP_PAD` at the ends), radius 12, past the
-  rim's 3.2. A segmented control's thumb, which is the
+  rim's 2 px. A segmented control's thumb, which is the
   prior art.
 - **The veil is the capsule's old one, moved.** Same ink (`GLASS_SPECULAR` / `GLASS_TINT.dark`)
   at the same `GLASS_STATE_MIX` alphas, painted OVER the group's glass instead of folded into a
