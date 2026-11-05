@@ -96,7 +96,7 @@ def inside(binary, out):
         p.write_text('[Desktop Entry]\nType=Application\nName='+name+'\nExec=/usr/bin/true %U\nIcon='+str(out/'red.svg')+'\n'+extra)
         return p
     try:
-        start()
+        start('--notifications-only')
         wait(lambda:bus.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','NameHasOwner',GLib.Variant('(s)',('org.nidara.Session',)),None,Gio.DBusCallFlags.NONE,1000,None).unpack()[0],'notification daemon ready')
         assert not bus.call_sync('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus','NameHasOwner',GLib.Variant('(s)',(NAME,)),None,Gio.DBusCallFlags.NONE,1000,None).unpack()[0]
         stop()

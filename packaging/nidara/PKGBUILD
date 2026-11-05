@@ -322,6 +322,9 @@ build() {
   cd "$srcdir/nidara-desktop-$pkgver/toolkit"
   cargo build --release --locked --offline -p nk-settings --bin nidara-display-selector
 
+  # The Hyalo session owns the Rust bar/dock/panels (#1017).
+  cargo build --release --locked --offline -p nidara-shell --bin nidara-shell
+
   # Hyalo (package nidara-hyalo). Offline: prepare() fetched everything.
   cd "$srcdir/nidara-desktop-$pkgver/hyalo"
   export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
@@ -471,6 +474,7 @@ package_nidara-desktop() {
   # see the unit's NOTE)
   install -Dm644 bin/nidara.service "$pkgdir/usr/lib/systemd/user/nidara.service"
   install -Dm644 bin/nidara-sessiond.service "$pkgdir/usr/lib/systemd/user/nidara-sessiond.service"
+  install -Dm644 bin/nidara-sessiond-legacy.service "$pkgdir/usr/lib/systemd/user/nidara-sessiond-legacy.service"
   # Only OPP asks our agent before receiving EACH file; FTP/PCSuite bypass it.
   install -Dm644 config/bluetooth/obex-opp-only.conf \
     "$pkgdir/usr/lib/systemd/user/obex.service.d/50-nidara-opp-only.conf"
@@ -634,8 +638,9 @@ package_nidara-hyalo() {
   install -Dm755 hyalo/target/release/nidara-hyalo "$pkgdir/usr/bin/nidara-hyalo"
   install -Dm755 bin/nidara-hyalo-session "$pkgdir/usr/bin/nidara-hyalo-session"
   install -Dm755 hyalo/session/restore-wallpaper "$pkgdir/usr/lib/nidara-hyalo/restore-wallpaper"
-  # Starts the shell. The native dock it can start instead of the TS one is not packaged:
-  # only hyalo/scripts/install-preview.sh installs it (#959, until D4).
+  install -Dm755 toolkit/target/release/nidara-shell "$pkgdir/usr/bin/nidara-shell"
+  install -Dm644 bin/nidara-rust-shell.service "$pkgdir/usr/lib/systemd/user/nidara-rust-shell.service"
+  # Starts the Rust shell; the TS unit belongs to the frozen Hyprland session.
   install -Dm755 hyalo/session/start-shell "$pkgdir/usr/lib/nidara-hyalo/start-shell"
   install -Dm644 config/hyalo/hyalo.toml "$pkgdir/usr/share/nidara/hyalo/hyalo.toml"
   install -Dm644 config/wayland-sessions/nidara-hyalo.desktop \

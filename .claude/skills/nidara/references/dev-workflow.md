@@ -129,9 +129,22 @@ so the dependency extraction in install.sh includes it without pulling Hyalo's
 extra build dependencies. Binary: `/usr/bin/nidara-sessiond`; unit:
 `/usr/lib/systemd/user/nidara-sessiond.service`, beside `nidara.service`, in
 `package_nidara-desktop()`. No enable step and no public D-Bus activation file.
-The two compositor configs start it explicitly; `Type=dbus` and shell ordering
-wait for the private name. Dev UI reloads do not rebuild or restart the daemon.
+Hyalo starts it explicitly; frozen Hyprland uses nidara-sessiond-legacy.service
+with only --media --power, avoiding duplicate TS/Rust agents. `Type=dbus` and shell ordering
+wait for readiness. The full unit uses org.nidara.Session after all services register;
+the legacy unit uses notification-ready org.freedesktop.Notifications. systemd
+rejects two units configured with the same BusName even if they conflict.
+Dev UI reloads do not rebuild or restart the daemon.
 After changing Rust, rebuild/install the binary and restart its unit deliberately.
+
+Hyalo's early Rust-only switch (#1017, 2026-11-05) starts
+`nidara-rust-shell.service` (`nidara-shell --bar`), never the TS nidara.service or
+separate dock. sessiond defaults to all services; explicit flags select a subset
+for private harnesses, with --notifications-only for the notification harness.
+The readiness name is acquired after selected services register. IPC defaults to
+Rust; --session=ts is explicit legacy compatibility. The Hyalo package and dev
+install ship the Rust shell/unit. See `toolkit/shell/SESSION.md` for gaps, live
+acceptance and removal of only temporary rust-only.conf files after installation.
 
 
 - `/usr/bin/{nidara, nidara-ui, nidara-greeter, nidara-lock, nidara-game-mode, nidara-setup, nidara-update, …}`

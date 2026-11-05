@@ -2829,14 +2829,14 @@ an unapplied mutation, infrastructure failure or previous utterance as evidence.
   without their glass, and nothing said so) — and `measure-session.sh`, run once per session, gives the
   like-for-like numbers #681 asks for. Running Hyalo on the maintainer's own GPU is the owner's
   step: it needs sudo, and the first boot on new hardware is the one most likely to fail.
-  It also installs the native dock at `/usr/bin/nidara-shell`; `org.nidara.dock
-  native-preview` swaps it in for the TS dock from the next login (`hyalo/session/start-shell`,
-  `toolkit/shell/DOCK.md` §1) — the only way to see the Rust dock outside a nested window
-  before #959 D4. 🔴 There the dock and the TS shell start together and both claim
-  `org.nidara.Shell`: the dock allows replacement and the TS shell replaces, so the name ends
-  with the TS shell (DOCK.md). An AT-SPI marker per update (`A11Y_PUBLISHED`) flooded the
-  journal there at hundreds of lines a second; it now prints only with `NK_A11Y_TRACE` set,
-  which the nk-* checks set.
+  Hyalo now starts one Rust shell with `--bar` (#1017, owner 2026-11-05), through
+  `nidara-rust-shell.service`, after all default sessiond services. No native-preview
+  key, TS shell, separate dock or TS fallback. The package ships the Rust shell too.
+  `toolkit/shell/SESSION.md` records pending panels, the installed MCP transition/acceptance
+  gap, and removal of only the three temporary rust-only.conf overrides after an
+  owner-authorized install. Super+Shift+R restarts the Rust unit; nidara-ipc defaults
+  to native routes without NIDARA_SESSION. Test logging A11Y_PUBLISHED remains
+  opt-in via NK_A11Y_TRACE.
 - CI's `hyalo` job (`scripts/ci/hyalo-smoke.sh`) runs clippy `-D warnings` and the unit tests,
   builds and installs THE PACKAGE (`phase_package`: makepkg -e in the checkout, pacman -U), then
   boots the tty backend on vkms with the installed shell on it. 🔴 Never add a hand-copied

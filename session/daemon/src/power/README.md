@@ -1,8 +1,7 @@
 # Power1
 
 `nidara-sessiond --power` serves `org.nidara.Power1` and ObjectManager at
-`/org/nidara/Power`, on `org.nidara.Session`. The packaged unit starts
-`--media --power`. `--power-read-only` publishes diagnostics and rejects mutations;
+`/org/nidara/Power`, on `org.nidara.Session`. The packaged unit starts all services with no flags (#1017). `--power-read-only` publishes diagnostics and rejects mutations;
 it produces no holds, hooks, notifications, charge/backlight writes, hardware-key
 inhibitors or logind actions. Config1 and Hyalo idle remain independent.
 

@@ -11,6 +11,8 @@ exec 1>/dev/null 2>&1
 # Wayland environment
 export GDK_BACKEND=wayland,x11
 export XDG_SESSION_TYPE=wayland
+# Frozen Hyprland boot only. Hyalo selects Rust in its own session launcher.
+export NIDARA_SESSION=ts
 export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export OZONE_PLATFORM=wayland

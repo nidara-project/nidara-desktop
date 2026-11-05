@@ -1,7 +1,7 @@
 # Bluetooth1
 
-The Bluetooth slice of #959 in `nidara-sessiond`. `--bluetooth` is an explicit Rust
-session opt-in. Normal startup does not export/register an agent or change radios.
+The Bluetooth slice of #959 in `nidara-sessiond`. No-argument startup enables Bluetooth by default (#1017); explicit
+`--bluetooth` selects it in a limited/private invocation.
 **Never enable it beside the daily TS shell's agent.** The nested runner accepts
 `--bluetooth` (and optionally `--network`), but tests must provide private system and
 session buses and fake BlueZ/obexd providers. No installed service is modified.

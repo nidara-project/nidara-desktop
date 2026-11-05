@@ -9,6 +9,7 @@ mod hyalo;
 mod media;
 mod model;
 mod network;
+mod options;
 mod power;
 mod store;
 mod tray;
@@ -254,6 +255,7 @@ fn failed(e: impl std::fmt::Display) -> zbus::fdo::Error {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let options = options::Options::parse(std::env::args().skip(1).collect())?;
     let store = store::Store::new()?;
     let notifications = store.restore();
     let next = notifications
@@ -276,43 +278,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .serve_at(PRIVATE_PATH, ShellNotifications(shared.clone()))?
         .build()
         .await?;
-    // Explicit flags: zbus builder defaults must not put a second daemon in a
-    // name queue (or claim readiness without actually owning either name).
-    for name in [PUBLIC_IFACE, "org.nidara.Session"] {
-        conn.request_name_with_flags(name, zbus::fdo::RequestNameFlags::DoNotQueue.into())
-            .await?;
-    }
-    eprintln!("[notifd] serving {PUBLIC_IFACE} and org.nidara.Session");
-    // The settings service, where this session asks for it (the Rust session): elsewhere the
-    // TypeScript shell serves it, and the daemon leaves it alone.
-    if std::env::args().any(|a| a == "--config") {
+    // Refuse a second notification server before initializing other services.
+    conn.request_name_with_flags(PUBLIC_IFACE, zbus::fdo::RequestNameFlags::DoNotQueue.into())
+        .await?;
+    eprintln!("[notifd] serving {PUBLIC_IFACE}");
+    // All services by default; explicit flags select an isolated subset.
+    if options.has("--config") {
         config::serve(&conn).await?;
     }
-    if std::env::args().any(|a| a == "--applications") {
+    if options.has("--applications") {
         applications::serve(&conn).await?;
     }
-    // Opt-in only; the normal TS shell already registers its own NM secret agent.
-    let read_only = std::env::args().any(|a| a == "--network-read-only");
-    if read_only || std::env::args().any(|a| a == "--network") {
+    let read_only = options.has("--network-read-only");
+    if read_only || options.has("--network") {
         network::serve(&conn, read_only).await?;
     }
-    let read_only = std::env::args().any(|a| a == "--bluetooth-read-only");
-    if read_only || std::env::args().any(|a| a == "--bluetooth") {
+    let read_only = options.has("--bluetooth-read-only");
+    if read_only || options.has("--bluetooth") {
         bluetooth::serve(&conn, read_only).await?;
     }
-    if std::env::args().any(|a| a == "--audio") {
+    if options.has("--audio") {
         audio::serve(&conn).await?;
     }
-    if std::env::args().any(|a| a == "--media") {
+    if options.has("--media") {
         media::serve(&conn).await?;
     }
-    if std::env::args().any(|a| a == "--tray") {
+    if options.has("--tray") {
         tray::serve(&conn).await?;
     }
-    let power_read_only = std::env::args().any(|a| a == "--power-read-only");
-    if power_read_only || std::env::args().any(|a| a == "--power") {
+    let power_read_only = options.has("--power-read-only");
+    if power_read_only || options.has("--power") {
         power::serve(&conn, power_read_only).await?;
     }
+    // Type=dbus readiness means every selected service has finished registering.
+    conn.request_name_with_flags(
+        "org.nidara.Session",
+        zbus::fdo::RequestNameFlags::DoNotQueue.into(),
+    )
+    .await?;
+    eprintln!("[sessiond] ready");
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! { _ = term.recv() => {}, _ = tokio::signal::ctrl_c() => {} }
     // systemd's SIGTERM must not lose the last 100 ms of a burst.

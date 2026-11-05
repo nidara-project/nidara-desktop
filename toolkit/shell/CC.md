@@ -1,15 +1,16 @@
 # The Rust Control Center, B2.1 (#959)
 
 **Status: B2.1 built, 2026-11-03.** The owner approved it in Claude's chat ("Yes, start
-B2.1"). Like the bar (`BAR.md`), it runs only with `--bar`; the TS Control Center stays the
-session's until B2.4.
+B2.1"). Like the bar (`BAR.md`), it runs with `--bar`. The early B2.4 switch
+(#1017, owner 2026-11-05) activates it in Hyalo: see `SESSION.md`.
+B2.2/B2.3 remain pending; activation does not imply their completion.
 
 | Step | What |
 |---|---|
 | **B2.1** (this) | the panel, the grid read from GSettings, the ten default tiles working, opened from the bar's Control Center button |
 | B2.2 | the detail panels (Wi-Fi's list, Bluetooth's devices, the 1×1 tiles' details), screenshot and recording |
 | B2.3 | edit mode (sizes, moves, add/remove) and the widgets not yet ported (battery, clipboard, CPU/memory, Ethernet, VPN) |
-| B2.4 | the switch: the TS Control Center goes |
+| B2.4 | early switch (#1017), without waiting for B2.2/B2.3 |
 
 🔑 Owner rules for what comes next (2026-11-03): **right click changes a tile's size only in
 edit mode** (the TS gets this wrong); outside edit mode a tile's menu offers only its own

@@ -1,8 +1,8 @@
 # Native session audio
 
 `nidara-sessiond --audio`, built with `--features audio-native`, serves
-`org.nidara.Audio1` at `/org/nidara/Audio` on `org.nidara.Session`. The normal daemon
-remains opt-in, alongside `--config`. The TypeScript shell is unchanged. A build
+`org.nidara.Audio1` at `/org/nidara/Audio` on `org.nidara.Session`. No-argument startup enables this service by default (#1017); explicit flags select
+a subset for private harnesses. A build
 without the native feature keeps the root interface available with `Unavailable`
 and an explicit build error; it never pretends an empty graph is working audio.
 

@@ -1,10 +1,9 @@
 # The Rust bar, B1 (#959)
 
 **Status: B1 built, 2026-11-02.** The owner approved B1's scope in Claude's chat ("Yes, start
-B1"), within the order he set: D4 → bar → notifications → Control Center → lock. The TS bar
-stays the daily one until B2/B3 give this bar its panels; until then this bar runs only
-when `nidara-shell` is started with `--bar` (the nested check does), never in the Hyalo
-preview, where the TS bar would sit under it.
+B1"). The early switch (#1017, owner 2026-11-05) activates it in Hyalo with
+`nidara-shell --bar`, together with the dock and implemented panels. See `SESSION.md`
+for remaining panels and installation limits.
 
 B1 is the bar's row, one layer along the top of each output, with the TS "B" bar's
 measures (owner, 2026-10-06: 36 strip, 32 capsule, one 4 px rhythm, 12 px text, 18 px

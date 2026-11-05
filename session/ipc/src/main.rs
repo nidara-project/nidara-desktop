@@ -5,7 +5,7 @@ use std::time::Duration;
 use zbus::blocking::{Connection, Proxy};
 use zbus::proxy::CacheProperties;
 
-const HELP: &str = "usage: nidara-ipc [--session=ts|rust] [--] <command> [args...]\n       nidara-ipc listActions\n\nOnly NIDARA_SESSION=rust selects native routes; other values select TS compatibility (unknown values warn).\nNo fallback between sessions. Native errors exit 1; bad usage exits 2.";
+const HELP: &str = "usage: nidara-ipc [--session=ts|rust] [--] <command> [args...]\n       nidara-ipc listActions\n\nNative routes are the default. NIDARA_SESSION=ts or --session=ts explicitly selects TS compatibility (unknown environment values warn and use Rust).\nNo fallback between sessions. Native errors exit 1; bad usage exits 2.";
 
 #[derive(Debug)]
 pub struct Fault {
@@ -138,11 +138,11 @@ fn parse(mut args: Vec<String>, env: Option<String>) -> Result<Option<(bool, Vec
         args.remove(0)[10..].to_string()
     } else {
         match env.as_deref() {
-            Some("rust") => "rust".into(),
-            None | Some("ts") => "ts".into(),
+            None | Some("rust") => "rust".into(),
+            Some("ts") => "ts".into(),
             Some(value) => {
-                eprintln!("nidara-ipc: unknown NIDARA_SESSION={value:?}; using ts compatibility");
-                "ts".into()
+                eprintln!("nidara-ipc: unknown NIDARA_SESSION={value:?}; using native routes");
+                "rust".into()
             }
         }
     };
@@ -221,10 +221,16 @@ mod tests {
         let (rust, a) = parse(a.map(str::to_owned).to_vec(), None).unwrap().unwrap();
         assert!(rust);
         assert_eq!(a, ["setConfig", "key", "value with spaces", "-1"]);
-        assert!(!parse(vec!["dumpState".into()], None).unwrap().unwrap().0);
+        assert!(parse(vec!["dumpState".into()], None).unwrap().unwrap().0);
+        assert!(
+            !parse(vec!["dumpState".into()], Some("ts".into()))
+                .unwrap()
+                .unwrap()
+                .0
+        );
         for value in ["", "bad", "Rust", "rust ", "hyalo"] {
             assert!(
-                !parse(vec!["dumpState".into()], Some(value.into()))
+                parse(vec!["dumpState".into()], Some(value.into()))
                     .unwrap()
                     .unwrap()
                     .0

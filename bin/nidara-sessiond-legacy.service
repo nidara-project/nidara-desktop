@@ -1,0 +1,22 @@
+[Unit]
+Description=Nidara legacy notification, media and power services (frozen Hyprland boot)
+PartOf=graphical-session.target
+After=graphical-session.target
+Before=nidara.service
+Conflicts=nidara-sessiond.service
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=dbus
+# Distinct readiness name: systemd cannot allocate one BusName to two units,
+# even when they conflict. This retains the legacy notification-ready boot order.
+BusName=org.freedesktop.Notifications
+# Boot floor only: never start the Rust NM/BlueZ agents beside the TS shell.
+ExecStart=/usr/bin/nidara-sessiond --media --power
+Restart=on-failure
+RestartSec=1
+TimeoutStopSec=3
+Slice=session-graphical.slice
+
+# No WantedBy; only the frozen Nidara Hyprland config starts this unit.
