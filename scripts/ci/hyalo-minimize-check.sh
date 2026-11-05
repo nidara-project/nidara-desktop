@@ -48,7 +48,11 @@ out2="$log/probe2.log"
 fail() { echo "FAIL: $*"; cat "$out" 2>/dev/null; $MSG windows | jq -c '.ok.windows[] | select(.app_id == "hyalo-window-controls-probe")' 2>/dev/null; exit 1; }
 pids=""
 ws=""
-trap 'kill $pids 2>/dev/null || true; $MSG settings "{\"windows\":null,\"animations\":null}" >/dev/null 2>&1 || true; [ -n "$ws" ] && $MSG do set-workspace-mode "$ws" default >/dev/null 2>&1 || true' EXIT
+# Keep a known icon-free strip in the dock's top padding. Hover magnification can
+# otherwise lift a neighbour into it as the restoring click enters the dock.
+magnification=$(gsettings get org.nidara.dock magnification)
+gsettings set org.nidara.dock magnification false
+trap 'gsettings set org.nidara.dock magnification "$magnification" 2>/dev/null || true; kill $pids 2>/dev/null || true; $MSG settings "{\"windows\":null,\"animations\":null}" >/dev/null 2>&1 || true; [ -n "$ws" ] && $MSG do set-workspace-mode "$ws" default >/dev/null 2>&1 || true' EXIT
 probe_pixel() { gjs -m "$here/hyalo-window-look-probe.js" pixel "$@"; }
 # The probe's main window (the dialog is titled …-dialog), and its dialog.
 win() { $MSG windows | jq -c '.ok.windows[] | select(.title == "window-controls-probe")' | head -n 1; }
@@ -58,22 +62,23 @@ at() { win | jq -r --argjson f "$1" '.controls | "\(.[0] + .[2] * $f) \(.[1] + .
 wait_line() { for _ in $(seq 1 40); do grep -q "$1" "$2" && return 0; sleep 0.25; done; return 1; }
 # The probe's greys: its window 64, its dialog 96 (drawn in front of it, moving with it).
 grey() { set -- $1; [ "$1" -ge 56 ] && [ "$1" -le 104 ] && [ $(($1 - $2)) -le 4 ] && [ $(($2 - $1)) -le 4 ] && [ $(($1 - $3)) -le 4 ] && [ $(($3 - $1)) -le 4 ]; }
-# Over the dock, not under it (render/mod.rs draws a moving window in front of the dock's
-# layer). Where the dock is glass — the height of its place's top, with the window's left edge
-# inside the dock — a pixel just inside that edge is the window's own grey when the window is
-# over the glass; under it, the glass's blur smears the edge with what is beside it. (Not a
-# pixel deep inside the window: blurred, a uniform grey is still that grey.) The edge moves, so
-# the point is taken from where the window is drawn IN the screenshot: Hyalo writes it beside
-# the picture (`<shot>.capture.json`, `drawn`, at the capture's own moment) — never from polls
-# before and after it, which a slow capture leaves far apart (CI's software GL: 63 px). $1 names
-# the screenshot, $2 is its place (read before a click: the dock drops a restored window's place),
-# $3 a further condition on the drawn box (jq, with $y and $dx), if the caller reads more of it.
+# Over the dock's glass, under its icons (#1003). The icon-free top padding is
+# six logical pixels above the icon slot (PAD=10, four pixels inside the glass,
+# beyond its 3.2 px edge sheen): sampling eight pixels INSIDE the slot
+# mistook a blue icon correctly covering the moving window for glass over it
+# (#958). Magnification is disabled for this fixture and restored on exit.
+# Read the moving edge from the capture's own metadata, never adjacent polls.
+# A pixel six pixels inside that edge must be the probe's grey; glass over it
+# blurs the edge, even though a pixel deep inside a uniform window stays grey.
+# $1 is the screenshot name, $2 its place (read before restoring drops the target),
+# $3 a further condition on the drawn box (jq, with $y and $dx).
 over_dock() {
     shot=$1
-    y=$(echo "$2" | jq '.[1] + 8')
+    y=$(echo "$2" | jq '.[1] - 6')
     dx=$(echo "$dock" | jq '.[0]')
     inside='select(. != null and .[1] < $y - 12 and .[1] + .[3] > $y + 12 and .[0] > $dx + 2 and .[2] > 60 and ('"${3:-true}"'))'
     seen=""
+    at=""
     # How late the watch began, after the click: what was slow, if it fails.
     echo "$(($(date +%s%N) / 1000000)) watching, $(( ($(date +%s%N) - t0) / 1000000 )) ms after the click" >>"$log/$shot-polled.log"
     for _ in $(seq 1 400); do
@@ -102,7 +107,58 @@ over_dock() {
         for c in "$1" "$2" "$3"; do [ $((c - g)) -le 2 ] && [ $((g - c)) -le 2 ] || ok=0; done
         [ $ok = 1 ] && return 0
     done
-    fail "($shot) crossing the dock (drawn at $at in the screenshot) the pixel at $px, just inside its edge, is '$got', not its own grey: the dock's glass is drawn over it"
+    fail "($shot) crossing the dock (drawn at $at in the screenshot) the pixel at $px, in the icon-free padding, just inside its edge, is '$got', not its own grey: the dock's glass is drawn over it"
+}
+# The other half of #1003: the dock's coloured icon must still cover the probe's
+# neutral-grey body. Search its overlap, not one fixed pixel: restoring removes a
+# minimized slot and neighbouring icons slide. Exclude each window's actual
+# controls, projected into the capture (the dialog's controls are coloured too).
+# Stay inside the moving frame and in the icon row.
+# A window incorrectly drawn above the whole dock leaves only grey here.
+icon_over_window() {
+    python3 - "$log/back-crossing.ppm" "$log/back-crossing.capture.json" "$log/back-windows.json" "$id" "$target" "$scale" <<'PYICON' || fail "the dock's coloured icon is not in front of the restoring window"
+import json, math, sys
+from pathlib import Path
+picture, metadata, windows, ident, target, scale = sys.argv[1:]
+scale = float(scale)
+drawn = json.loads(Path(metadata).read_text())["drawn"]
+x, y, w, h = drawn[ident]
+windows = json.loads(Path(windows).read_text())
+assert any(str(window["id"]) == ident for window in windows), "missing probe geometry"
+controls = []
+for window in windows:
+    rect = drawn.get(str(window["id"]))
+    box = window["controls"]
+    if rect is None or box is None:
+        continue
+    dx, dy, dw, dh = rect
+    kx, ky = dw / window["width"], dh / window["height"]
+    cx = dx + (box[0] - window["x"]) * kx
+    cy = dy + (box[1] - window["y"]) * ky
+    # Round outward and leave one device pixel for antialiasing at the capsule edge.
+    controls.append((math.floor(cx * scale) - 1, math.floor(cy * scale) - 1,
+                     math.ceil((cx + box[2] * kx) * scale) + 1,
+                     math.ceil((cy + box[3] * ky) * scale) + 1))
+tx, ty, tw, th = json.loads(target)
+header = Path(picture).read_bytes().split(b"\n", 3)
+assert header[0] == b"P6" and header[2] == b"255", "expected Hyalo RGB capture"
+width, height = map(int, header[1].split())
+rgb = header[3]
+assert len(rgb) == width * height * 3
+left, right = math.ceil((x + 6) * scale), math.floor((x + w - 6) * scale)
+top = math.ceil(max(y + 6, ty + 8) * scale)
+bottom = math.floor(min(y + h - 6, ty + th - 8) * scale)
+assert 0 <= left < right <= width and 0 <= top < bottom <= height, "no icon/body overlap captured"
+for py in range(top, bottom):
+    for px in range(left, right):
+        if any(cx <= px < cr and cy <= py < cb for cx, cy, cr, cb in controls):
+            continue
+        colour = rgb[(py * width + px) * 3:(py * width + px) * 3 + 3]
+        if max(colour) - min(colour) >= 24:
+            print(f"ok    dock icon over the restoring grey body at {px} {py}: {tuple(colour)}")
+            sys.exit(0)
+raise SystemExit("only neutral grey in the icon/body overlap")
+PYICON
 }
 scale=$($MSG outputs | jq '.ok.outputs[0].scale')
 
@@ -161,7 +217,7 @@ echo "ok    the dock gives it a place, inside the dock (listed after ${ms} ms, t
 #    (capture.json). Its top must be clear of the dock's glass, 20 above its place, for the
 #    point beside it (below) to be over the wallpaper; reading pixels (gjs, seconds on CI) waits
 #    until nothing moves.
-over_dock shrinking "$target" '.[1] < $y - 28'
+over_dock shrinking "$target" '.[1] < $y - 14'
 pic="$log/shrinking-crossing.ppm"
 drawn=$(jq -c --arg id "$id" '.drawn[$id]' "$log/shrinking-crossing.capture.json")
 ddrawn=$(jq -c --arg id "$did" '.drawn[$id]' "$log/shrinking-crossing.capture.json")
@@ -190,7 +246,10 @@ echo "ok    it is drawn shrinking toward its place (${k}% of its size crossing t
 
 # 6. Back from the dock: a click on its place.
 sleep 0.3
-target=$(win | jq -c .minimize_target)
+# Resting controls, before the click starts movement. Their size/offset is projected
+# using each window's drawn box IN the capture; do not query a later animation frame.
+$MSG windows | jq '[.ok.windows[] | select(.app_id == "hyalo-window-controls-probe")]' >"$log/back-windows.json"
+target=$(jq -c '.[] | select(.title == "window-controls-probe") | .minimize_target' "$log/back-windows.json")
 place=$(echo "$target" | jq -r '"\(.[0] + .[2] / 2) \(.[1] + .[3] / 2)"')
 # Coming back, the curve is fast out: it leaves the dock in the first 1% of its time (15 ms of
 # 6 s, missed in CI). Ten minutes give that part a second; step 7 minimizes it again, which
@@ -199,6 +258,7 @@ $MSG settings '{"animations":{"minimize":600000}}' >/dev/null
 t0=$(date +%s%N)
 echo "click $place" >"$C"
 over_dock back "$target"
+icon_over_window
 $MSG settings '{"animations":null}' >/dev/null
 sleep 0.3
 w=$(win); d=$(dialog)
