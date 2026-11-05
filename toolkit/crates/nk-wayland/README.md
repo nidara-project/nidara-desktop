@@ -235,6 +235,12 @@ anchors. `close_menu_popup(id)` retires that level and descendants topmost
 first; queued dead-ID events and dismissal input cannot act on the parent.
 Nonmodal Suggestions keeps its original API and keyboard behavior.
 
+`root_pointer_position()` reports the latest dispatched focus on the root as
+root-local logical coordinates, or `None` for a child layer/popup or no focus.
+This state follows raw pointer events even while a modal menu filters events
+delivered to the parent app. Read it **before** closing a popup; retiring its ID
+does not transform its last child-local coordinates into root coordinates.
+
 The app services popup events, paints only confirmed frames, updates its bounds
 hint on layout changes and restores a still-live trigger after close. Parent
 configure/repaint/idle and appearance polling continue. The parent is the

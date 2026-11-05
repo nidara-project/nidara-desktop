@@ -691,6 +691,50 @@ try:
         pipe.write(f'move {x} {layer["y"] - 300}\n')
         until('kitty back at rest', lambda: extent('kitty') == rest)
     result['magnification'] = {'rest': rest, 'grown': grown}
+    # #1030: a modal menu filters the root's motion/leave; closing it must
+    # reconcile the transport's actual pointer focus, without waiting for re-entry.
+    result['popup_presence'] = {}
+    with open(os.environ['HYALO_CONTROL'], 'w', buffering=1) as pipe:
+        def magnified_menu():
+            x, y = item_point('kitty')
+            pipe.write(f'move {x} {y}\nmove {x + 1} {y}\n')
+            until('kitty magnifies before its menu', lambda: extent('kitty') > rest + 4)
+            time.sleep(.5)
+            x, y = item_point('kitty')
+            pipe.write(f'rclick {x} {y}\n')
+            until('the magnified kitty menu opens', menu_rows)
+            return x, y
+
+        magnified_menu()
+        pipe.write('move 10 10\nclick 10 10\n')
+        until('outside click dismisses the menu', lambda: not menu_rows())
+        until('outside dismissal restores resting bounds', lambda: extent('kitty') == rest)
+        result['popup_presence']['outside'] = extent('kitty')
+        shot(LOG / 'dock-menu-dismissed-outside.png')
+
+        # Popup-local coordinates must not become root coordinates when its ID
+        # is retired. Escape with the pointer still on a menu above the dock.
+        magnified_menu()
+        row = menu_rows()[0][0]
+        r = row.get_component_iface().get_extents(Atspi.CoordType.WINDOW)
+        layer = docks()[0]
+        mx, my = layer['x'] + r.x + r.width // 2, layer['y'] + r.y + r.height // 2
+        pipe.write(f'move {mx} {my}\nmove {mx + 1} {my}\n')
+        time.sleep(.3)
+        pipe.write('key 1\n')
+        until('Escape closes the menu under the pointer', lambda: not menu_rows())
+        until('popup focus is not stale root focus', lambda: extent('kitty') == rest)
+        result['popup_presence']['popup_escape'] = extent('kitty')
+
+        for how in ('click', 'escape'):
+            x, y = magnified_menu()
+            pipe.write(f'click {x} {y}\n' if how == 'click' else 'key 1\n')
+            until(f'{how} dismisses the menu over the root', lambda: not menu_rows())
+            time.sleep(.5)
+            assert extent('kitty') > rest + 4, f'{how} shrank the dock under the pointer'
+            result['popup_presence'][how] = extent('kitty')
+            pipe.write('move 10 10\n')
+            until('leaving still restores resting bounds', lambda: extent('kitty') == rest)
     # Auto-hide (D2): on, the dock slides out past the screen edge once the pointer is
     # away; the pointer at that edge, along the dock, brings it back; away again, it hides
     # after the delay; off, it stays.

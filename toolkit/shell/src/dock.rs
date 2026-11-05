@@ -715,10 +715,44 @@ impl Dock {
         // One popup at a time: a menu or the chooser takes the tooltip's place.
         self.close_tooltip(w);
         if let Some(p) = self.popup.take() {
+            // Sample before close clears the transport's popup focus. Modal
+            // filtering can have hidden the parent's enter/motion/leave from us.
+            let pointer = w.root_pointer_position();
             p.close(w);
+            self.popup_pointer(pointer);
+            if pointer.is_some() && !self.frame.hidden {
+                self.hover(w);
+            }
+            self.reshape(w);
             self.publish_semantics(w);
-            self.hide.release(self.hide_delay(), Instant::now());
         }
+    }
+
+    fn popup_pointer(&mut self, pointer: Option<(f64, f64)>) {
+        if let Some(pointer) = pointer.filter(|_| !self.frame.hidden) {
+            self.pointer = pointer;
+            self.hide.enter();
+            let target = if self.layout.mag.is_some() { 1. } else { 0. };
+            if target != self.presence_target {
+                self.presence_target = target;
+                self.presence_at = Instant::now();
+            }
+        } else {
+            self.leave_pointer();
+        }
+    }
+
+    /// Shared with an ordinary root leave, including a leave hidden by a menu grab.
+    fn leave_pointer(&mut self) {
+        let now = Instant::now();
+        self.hide.leave(self.hide_delay(), now);
+        self.presence_target = 0.;
+        self.presence_at = now;
+        self.hover.over(None, now);
+        self.pressed = None;
+        self.middle = None;
+        self.long = None;
+        self.cycle.reset();
     }
 
     /// The menu of slot `n`, or the dock's own (None: the separator or empty space).
@@ -2523,15 +2557,8 @@ impl Application for Dock {
             }
             Event::Drop { data, serial, .. } => self.drop_in(w, &data, serial)?,
             Event::PointerLeave => {
-                self.hide.leave(self.hide_delay(), Instant::now());
-                self.presence_target = 0.;
-                self.presence_at = Instant::now();
-                self.hover.over(None, Instant::now());
+                self.leave_pointer();
                 self.close_tooltip(w);
-                self.pressed = None;
-                self.middle = None;
-                self.long = None;
-                self.cycle.reset();
             }
             Event::Scroll(delta) if !self.frame.hidden && self.popup.is_none() => self.wheel(delta),
             Event::PopupOverlay { id, event }
@@ -3048,7 +3075,7 @@ mod anchor_tests {
 mod hold_expiry_tests {
     use super::*;
 
-    fn dock() -> Dock {
+    pub(super) fn dock() -> Dock {
         let mut frame = Frame::empty(crate::prefs::Prefs::default(), None);
         frame.view.items = (0..13)
             .map(|n| Item {
@@ -3174,5 +3201,59 @@ mod hold_expiry_tests {
         dock.settle_rules(1., Instant::now());
         dock.paint_item(&mut canvas, 12, &dock.frame.view.items[12], Instant::now());
         assert!(!dock.rules.contains_key(&12));
+    }
+}
+
+#[cfg(test)]
+mod popup_presence_tests {
+    use super::*;
+
+    fn magnified() -> Dock {
+        let mut dock = super::hold_expiry_tests::dock();
+        dock.presence_target = 1.;
+        dock.presence.snap(1.);
+        dock.pointer = (10., 20.);
+        dock.hide = crate::autohide::Hide::new(true);
+        dock.hide.enter();
+        dock.hide.tick(Instant::now(), false, true);
+        dock.hover.over(Some("folder:0"), Instant::now());
+        dock.pressed = Some(0);
+        dock.middle = Some(0);
+        dock.long = Some((0, dock.pointer, Instant::now()));
+        dock
+    }
+
+    #[test]
+    fn popup_dismissed_outside_clears_presence_and_pointer_state() {
+        let mut dock = magnified();
+        // The modal grab filtered the parent's leave. Only the transport knows it left.
+        dock.popup_pointer(None);
+        assert_eq!(dock.presence_target, 0.);
+        assert!(dock.pressed.is_none() && dock.middle.is_none() && dock.long.is_none());
+        assert!(
+            dock.hover
+                .due(Instant::now() + crate::tooltip::DELAY)
+                .is_none()
+        );
+        dock.hide.tick(
+            Instant::now() + dock.hide_delay() + Duration::from_millis(1),
+            false,
+            true,
+        );
+        assert!(dock.hide.out());
+    }
+
+    #[test]
+    fn popup_dismissed_on_the_root_keeps_presence_at_the_fresh_position() {
+        let mut dock = magnified();
+        dock.popup_pointer(Some((25., 30.)));
+        assert_eq!(dock.presence_target, 1.);
+        assert_eq!(dock.pointer, (25., 30.));
+        dock.hide.tick(
+            Instant::now() + dock.hide_delay() + Duration::from_millis(1),
+            false,
+            true,
+        );
+        assert!(!dock.hide.out());
     }
 }

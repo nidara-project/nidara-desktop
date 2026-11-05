@@ -389,6 +389,10 @@ Its Control Center (B2) is `toolkit/shell/CC.md`.
   (`close_menu_popup`); a stale overlay makes the next menu fail with "menu parent must
   be the active popup". The tooltip is a passive popup (`open_passive_popup`): no grab,
   and only while no other popup is open.
+- Modal menus filter root motion/leave delivery. On close, sample
+  `Window::root_pointer_position()` before destroying the popup and reconcile
+  presence/auto-hide/hover; a retired popup's local coordinates are not the root's
+  (#1030). The dock shares its ordinary leave cleanup and adds no timer.
 - Never build while the headless check runs: on this machine the load alone makes
   `nidara-hyalo msg` time out and the check fail for no reason of its own.
 - The fonts have no bold and the text engine refuses to fake one: a figure that must

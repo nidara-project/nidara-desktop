@@ -390,6 +390,13 @@ impl Window {
     pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
+    /// Latest pointer focus on the root surface, in root-local logical coordinates.
+    /// Modal menu filtering does not freeze this state. Query before closing a
+    /// popup: its last child-local coordinates must not become root coordinates.
+    pub fn root_pointer_position(&self) -> Option<(f64, f64)> {
+        (self.pointer_inside && self.pointer_layer.is_none() && self.pointer_popup.is_none())
+            .then_some(self.pointer_position)
+    }
     /// Physical pixels per logical pixel on the window's current output.
     pub fn scale(&self) -> f64 {
         f64::from(self.scale) / 120.
