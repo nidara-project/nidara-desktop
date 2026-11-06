@@ -125,6 +125,12 @@ pub enum Request {
     },
     /// The icon size a separator's drag, a key or a reader asked for (resize.rs).
     IconSize(u32),
+    /// Remove a pin and place its surviving group in the shared running order.
+    UnpinAt {
+        key: String,
+        id: String,
+        before: Option<String>,
+    },
     /// Open Apps, or close it when it is open (Shell1 `surface:app-grid`).
     ToggleApps,
     /// A tray item's left click, at a global logical point: its owner's window comes
@@ -207,8 +213,17 @@ struct Cached {
     raster: Arc<Raster>,
 }
 
+struct PendingUnpin {
+    key: String,
+    id: String,
+    before: Option<String>,
+    epoch: u64,
+    at: std::time::Instant,
+}
+
 pub struct Hub {
     model: Model,
+    pending_unpins: Vec<PendingUnpin>,
     apps: Option<AppsState>,
     windows: Vec<HyaloWindow>,
     hyalo_epoch: u64,
@@ -285,6 +300,7 @@ impl Hub {
     ) -> Self {
         Hub {
             model: Model::default(),
+            pending_unpins: vec![],
             apps: None,
             windows: vec![],
             hyalo_epoch: 0,
@@ -364,12 +380,29 @@ impl Hub {
     fn handle(&mut self, event: HubEvent) -> bool {
         match event {
             HubEvent::Apps(AppsUpdate::State(s)) => {
+                let model = &mut self.model;
+                self.pending_unpins.retain(|p| {
+                    if p.epoch != s.epoch || p.at.elapsed() >= crate::reorder::HOLD {
+                        return false;
+                    }
+                    let still_pinned = s.pins.iter().any(|pin| match pin {
+                        crate::model::Pin::App { key, .. }
+                        | crate::model::Pin::DefaultDirectory { key }
+                        | crate::model::Pin::Folder { key, .. }
+                        | crate::model::Pin::File { key, .. } => key == &p.key,
+                    });
+                    if !still_pinned {
+                        model.place_running(&p.id, p.before.as_deref());
+                    }
+                    still_pinned
+                });
                 self.apps = Some(s);
                 self.request_icons();
             }
             HubEvent::Apps(AppsUpdate::Unavailable(why)) => {
                 eprintln!("nidara-shell: Applications1 unavailable: {why}");
                 self.apps = None;
+                self.pending_unpins.clear();
             }
             HubEvent::Icon(job, icon) => {
                 self.pending_icons
@@ -520,6 +553,20 @@ impl Hub {
                     self.status.apps.store(false, Ordering::Release);
                     self.state_changed();
                 }
+            }
+            HubEvent::Request(Request::UnpinAt { key, id, before }) => {
+                // Commit the shared running order only when Applications1 confirms
+                // removal. A refusal/expired preview must not reorder a later unpin.
+                self.pending_unpins
+                    .retain(|p| p.key != key && p.at.elapsed() < crate::reorder::HOLD);
+                self.pending_unpins.push(PendingUnpin {
+                    key: key.clone(),
+                    id,
+                    before,
+                    epoch: self.apps.as_ref().map_or(0, |s| s.epoch),
+                    at: std::time::Instant::now(),
+                });
+                self.menu(Command::Unpin { key }, None);
             }
             HubEvent::Request(r) => {
                 self.act(r);
@@ -1409,5 +1456,95 @@ mod tests {
         assert_eq!(owners.get(&3), Some(&"DP-1"));
         assert_eq!(owners.get(&4), None);
         assert!(target_owners(&windows, &[]).is_empty());
+    }
+    #[test]
+    fn a_running_drop_order_waits_for_removal_and_does_not_survive_expiry() {
+        for expired in [false, true] {
+            let mut hub = Hub::new(
+                Prefs::default(),
+                None,
+                None,
+                None,
+                Arc::new(Status::default()),
+                None,
+            );
+            let apps = vec!["a.desktop", "b.desktop", "c.desktop"]
+                .into_iter()
+                .map(|id| App {
+                    id: id.into(),
+                    ..Default::default()
+                })
+                .collect::<Vec<_>>();
+            let windows = vec![
+                Window {
+                    id: 1,
+                    app_id: "a".into(),
+                    ..Default::default()
+                },
+                Window {
+                    id: 2,
+                    app_id: "b".into(),
+                    ..Default::default()
+                },
+                Window {
+                    id: 3,
+                    app_id: "c".into(),
+                    ..Default::default()
+                },
+            ];
+            let pin = crate::model::Pin::App {
+                key: "app:a.desktop".into(),
+                id: "a.desktop".into(),
+            };
+            let mut state = AppsState {
+                epoch: 7,
+                apps: apps.clone(),
+                pins: vec![pin.clone()],
+                ..Default::default()
+            };
+            hub.apps = Some(state.clone());
+            hub.model.view(&Inputs {
+                apps: &apps,
+                pins: &[pin],
+                windows: &windows,
+                ..Default::default()
+            });
+            hub.handle(HubEvent::Request(Request::UnpinAt {
+                key: "app:a.desktop".into(),
+                id: "a.desktop".into(),
+                before: Some("app:c.desktop".into()),
+            }));
+            let order = |model: &mut Model| {
+                model
+                    .view(&Inputs {
+                        apps: &apps,
+                        windows: &windows,
+                        ..Default::default()
+                    })
+                    .items
+                    .into_iter()
+                    .filter(|i| crate::reorder::is_running(&i.kind))
+                    .map(|i| i.key)
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                order(&mut hub.model),
+                ["app:a.desktop", "app:b.desktop", "app:c.desktop"]
+            );
+            if expired {
+                hub.pending_unpins[0].at -= crate::reorder::HOLD;
+            }
+            state.pins.clear();
+            hub.handle(HubEvent::Apps(AppsUpdate::State(state)));
+            assert!(hub.pending_unpins.is_empty());
+            assert_eq!(
+                order(&mut hub.model),
+                if expired {
+                    ["app:a.desktop", "app:b.desktop", "app:c.desktop"]
+                } else {
+                    ["app:b.desktop", "app:a.desktop", "app:c.desktop"]
+                }
+            );
+        }
     }
 }

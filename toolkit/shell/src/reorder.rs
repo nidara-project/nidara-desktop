@@ -5,8 +5,8 @@
 //! before the pin that now follows it); released far enough from the strip, away from the
 //! screen edge, it is unpinned (`remove`): a running app keeps its windows and its slot.
 //! Pointer movement alone never launches anything, and another button or Escape puts it
-//! back with no edit. Only pins move: Trash, separators, running and minimized slots do
-//! not. The preview is local until the drop, and after it the strip keeps the dropped
+//! back with no edit. Pins and running apps can be picked up; Trash, separators and
+//! minimized slots cannot. The preview is local until the drop, and after it the strip keeps the dropped
 //! order until the service's view has it (`hold`), so nothing jumps back meanwhile.
 //!
 //! Pinned folders and files are a section of their own, before the Trash (owner,
@@ -67,6 +67,36 @@ pub fn pins(view: &View) -> std::ops::Range<usize> {
     section(view, false)
 }
 
+pub fn is_running(kind: &Kind) -> bool {
+    matches!(kind, Kind::App { pinned: false, .. } | Kind::Unknown { .. })
+}
+
+pub fn running(view: &View) -> std::ops::Range<usize> {
+    let start = view
+        .items
+        .iter()
+        .position(|i| is_running(&i.kind))
+        .unwrap_or_else(|| {
+            view.items
+                .iter()
+                .position(|i| {
+                    matches!(
+                        i.kind,
+                        Kind::Minimized { .. }
+                            | Kind::Folder { .. }
+                            | Kind::File { .. }
+                            | Kind::Trash
+                    )
+                })
+                .unwrap_or(view.items.len())
+        });
+    let len = view.items[start..]
+        .iter()
+        .take_while(|i| is_running(&i.kind))
+        .count();
+    start..start + len
+}
+
 /// One pin in the air.
 #[derive(Clone, Debug)]
 pub struct Reorder {
@@ -90,6 +120,11 @@ pub struct Reorder {
     pub into: bool,
     /// Over the Trash: a drop unpins it.
     pub trash: bool,
+    /// A pin over the running section: index among the other running items.
+    pub unpin_to: Option<usize>,
+    /// Folders/files dropped over apps go back instead of moving to the first place.
+    pub allowed: bool,
+    pub open: Vec<String>,
 }
 
 impl Reorder {
@@ -121,12 +156,81 @@ impl Reorder {
             places,
             into: false,
             trash: false,
+            unpin_to: None,
+            allowed: true,
+            open: view
+                .items
+                .iter()
+                .filter(|i| is_running(&i.kind))
+                .map(|i| i.key.clone())
+                .collect(),
         })
     }
 
-    /// A drop now would unpin it: off the strip, or on the Trash.
+    /// A drop now would unpin it: among running apps, off the strip, or on Trash.
     pub fn unpins(&self) -> bool {
-        self.running.is_none() && (self.out || self.trash)
+        self.running.is_none() && (self.out || self.trash || self.unpin_to.is_some())
+    }
+
+    /// Update from the actually drawn slots. A preview's own placeholder never
+    /// contributes to its insertion index or creates a target among minimized slots.
+    pub fn point(
+        &mut self,
+        view: &View,
+        hits: &[[f64; 4]],
+        horizontal: bool,
+        along: f64,
+        out: bool,
+        trash: bool,
+    ) {
+        let span = |n: usize| {
+            let [x, y, w, h] = hits[n];
+            if horizontal { (x, w) } else { (y, h) }
+        };
+        let (to, mut into) = aim(view, self.places, hits, horizontal, &self.key, along);
+        if !self.places && pins(view).is_empty() && self.unpin_to.is_some() {
+            into = view
+                .items
+                .iter()
+                .enumerate()
+                .find(|(_, i)| i.kind != Kind::Separator)
+                .is_some_and(|(n, _)| along < span(n).0 - span(n).1 * 0.5);
+        }
+        self.out = out;
+        self.trash = trash && self.running.is_none();
+        self.allowed = !self.places
+            || section(view, true)
+                .next()
+                .is_some_and(|n| along >= span(n).0);
+        let open = running(view);
+        let over_running = open.clone().next().is_some_and(|first| {
+            let last = open.end - 1;
+            along >= span(first).0 && along < span(last).0 + span(last).1
+        });
+        self.unpin_to =
+            (!self.places && self.running.is_none() && !out && !self.trash && over_running).then(
+                || {
+                    open.filter(|&n| {
+                        view.items[n].key != self.key && span(n).0 + span(n).1 / 2. < along
+                    })
+                    .count()
+                },
+            );
+        if self.running.is_some() {
+            self.into = into && !out;
+        }
+        if !out
+            && !self.trash
+            && self.unpin_to.is_none()
+            && self.allowed
+            && (self.running.is_none() || self.into)
+        {
+            self.to = to;
+        }
+    }
+
+    pub fn running_before(&self) -> Option<String> {
+        self.unpin_to.and_then(|to| self.open.get(to).cloned())
     }
 
     /// A running app a drop now would pin: `Some(before)`, the pin it goes before (None:
@@ -139,6 +243,40 @@ impl Reorder {
     /// `view` with this pin moved to where it would land; unchanged if it is no longer
     /// among the pins (the service dropped it meanwhile).
     pub fn preview(&self, view: &View) -> View {
+        if let Some(to) = self.unpin_to {
+            let mut items = view.items.clone();
+            if let Some(from) = items.iter().position(|i| i.key == self.key) {
+                let mut item = items.remove(from);
+                item.kind = match item.kind {
+                    Kind::App {
+                        id,
+                        generation,
+                        launchable,
+                        ..
+                    } => Kind::App {
+                        id,
+                        generation,
+                        launchable,
+                        pinned: false,
+                    },
+                    Kind::MissingApp { id } => Kind::App {
+                        id,
+                        generation: 0,
+                        launchable: false,
+                        pinned: false,
+                    },
+                    kind => kind,
+                };
+                let open = running(&View {
+                    items: items.clone(),
+                });
+                items.insert(open.start + to.min(open.len()), item);
+            }
+            return View { items };
+        }
+        if !self.allowed {
+            return view.clone();
+        }
         if self.running.is_some() {
             if self.pins_at().is_none() {
                 return view.clone();
@@ -174,7 +312,7 @@ impl Reorder {
     /// What a drop asks of the service: `Some(before)` to move it before that pin (None:
     /// to the end), or nothing if it lands where it was.
     pub fn edit(&self) -> Option<Option<String>> {
-        if self.running.is_some() {
+        if self.running.is_some() || !self.allowed || self.unpins() {
             return None;
         }
         let mut order = self.original.clone();
@@ -569,5 +707,226 @@ mod tests {
         // Another change to the pins: the service's view wins.
         let other: Vec<String> = ["c", "a", "b"].map(String::from).into();
         assert!(hold(&v, &other).is_none());
+    }
+}
+
+#[cfg(test)]
+mod section_tests {
+    use super::*;
+    use crate::model::{Item, Signal};
+    fn item(key: &str, kind: Kind) -> Item {
+        Item {
+            key: key.into(),
+            kind,
+            label: key.into(),
+            windows: vec![],
+            minimized: vec![],
+            signal: Signal::default(),
+        }
+    }
+    fn app(id: &str, pinned: bool, live: bool) -> Item {
+        let mut i = item(
+            id,
+            Kind::App {
+                id: id.into(),
+                generation: 1,
+                launchable: true,
+                pinned,
+            },
+        );
+        if live {
+            i.windows.push(1);
+        }
+        i
+    }
+    fn clean(v: &mut View) {
+        v.normalize_sections();
+        assert!(!v.items.first().is_some_and(|i| i.kind == Kind::Separator));
+        assert!(!v.items.last().is_some_and(|i| i.kind == Kind::Separator));
+        assert!(
+            v.items
+                .windows(2)
+                .all(|p| p[0].kind != Kind::Separator || p[1].kind != Kind::Separator)
+        );
+        assert!(v.items.iter().filter(|i| i.kind == Kind::Separator).count() <= 2);
+    }
+    fn hits(v: &View) -> Vec<[f64; 4]> {
+        let slots: Vec<_> = v
+            .items
+            .iter()
+            .map(|i| {
+                if i.kind == Kind::Separator {
+                    crate::geometry::Slot::Separator
+                } else {
+                    crate::geometry::Slot::Icon
+                }
+            })
+            .collect();
+        crate::geometry::layout(
+            &slots,
+            64,
+            crate::geometry::Position::Bottom,
+            (1920, 1080),
+            0.,
+        )
+        .hits
+    }
+    #[test]
+    fn lone_running_preview_and_service_hold_have_one_boundary() {
+        let mut v = View {
+            items: vec![
+                app("p", true, false),
+                app("r", false, true),
+                item("trash", Kind::Trash),
+            ],
+        };
+        clean(&mut v);
+        let n = v.items.iter().position(|i| i.key == "r").unwrap();
+        let mut r = Reorder::new(&v, n, (0., 0.), 64.).unwrap();
+        r.into = true;
+        for to in 0..=1 {
+            r.to = to;
+            let mut preview = r.preview(&v);
+            clean(&mut preview);
+            assert_eq!(
+                preview
+                    .items
+                    .iter()
+                    .filter(|i| i.kind == Kind::Separator)
+                    .count(),
+                1
+            );
+            let mut held = hold(&v, &r.order()).unwrap();
+            clean(&mut held);
+            assert_eq!(
+                held.items
+                    .iter()
+                    .filter(|i| i.kind == Kind::Separator)
+                    .count(),
+                1
+            );
+        }
+    }
+    #[test]
+    fn pin_to_running_previews_unpin_at_its_insertion_index_and_can_return() {
+        for (target, expected) in [("a", 0), ("b", 1)] {
+            for live in [false, true] {
+                let mut v = View {
+                    items: vec![
+                        app("p", true, live),
+                        app("a", false, true),
+                        app("b", false, true),
+                        item("trash", Kind::Trash),
+                    ],
+                };
+                clean(&mut v);
+                let mut r = Reorder::new(&v, 0, (0., 0.), 64.).unwrap();
+                let h = hits(&v);
+                let n = v.items.iter().position(|i| i.key == target).unwrap();
+                let along = h[n][0] + 4.;
+                r.point(&v, &h, true, along, false, false);
+                assert!(r.unpins());
+                assert_eq!(r.unpin_to, Some(expected));
+                assert_eq!(r.running_before().as_deref(), Some(target));
+                let mut preview = r.preview(&v);
+                clean(&mut preview);
+                assert_eq!(
+                    preview
+                        .items
+                        .iter()
+                        .filter(|i| is_running(&i.kind))
+                        .map(|i| i.key.as_str())
+                        .collect::<Vec<_>>(),
+                    if expected == 0 {
+                        ["p", "a", "b"]
+                    } else {
+                        ["a", "p", "b"]
+                    }
+                );
+                assert_eq!(
+                    preview
+                        .items
+                        .iter()
+                        .filter(|i| i.kind == Kind::Separator)
+                        .count(),
+                    1
+                );
+                for _ in 0..4 {
+                    let h = hits(&preview);
+                    let n = preview.items.iter().position(|i| i.key == "p").unwrap();
+                    r.point(&preview, &h, true, h[n][0] + h[n][2] / 2., false, false);
+                    assert_eq!(
+                        r.unpin_to,
+                        Some(expected),
+                        "its own gap must hold the target"
+                    );
+                    preview = r.preview(&v);
+                    clean(&mut preview);
+                }
+                let h = hits(&preview);
+                r.point(&preview, &h, true, h[0][0] - 100., false, false);
+                assert!(!r.unpins());
+                assert_eq!(r.unpin_to, None);
+                let mut back = r.preview(&v);
+                clean(&mut back);
+                assert_eq!(back, v);
+            }
+        }
+    }
+    #[test]
+    fn places_share_the_right_side_but_cannot_reorder_into_minimized_or_apps() {
+        let mut v = View {
+            items: vec![
+                app("p", true, true),
+                app("r", false, true),
+                item(
+                    "min",
+                    Kind::Minimized {
+                        window: 8,
+                        app: None,
+                    },
+                ),
+                item(
+                    "f",
+                    Kind::Folder {
+                        uri: "file:///f".into(),
+                    },
+                ),
+                item(
+                    "g",
+                    Kind::File {
+                        uri: "file:///g".into(),
+                    },
+                ),
+                item("trash", Kind::Trash),
+            ],
+        };
+        clean(&mut v);
+        let range = section(&v, true);
+        assert_eq!(range.len(), 2);
+        assert!(matches!(
+            v.items[range.start - 1].kind,
+            Kind::Minimized { .. }
+        ));
+        assert_eq!(
+            v.items.iter().filter(|i| i.kind == Kind::Separator).count(),
+            2
+        );
+        let mut r = Reorder::new(&v, range.start + 1, (0., 0.), 64.).unwrap();
+        let h = hits(&v);
+        r.point(&v, &h, true, h[0][0] + 20., false, false);
+        assert!(!r.allowed);
+        assert_eq!(r.edit(), None);
+        assert_eq!(r.preview(&v), v);
+        let n = range.start;
+        r.point(&v, &h, true, h[n][0] + 1., false, false);
+        assert!(r.allowed);
+        assert_eq!(r.edit(), Some(Some("f".into())));
+        let p = r.preview(&v);
+        assert!(matches!(
+            p.items[range.start - 1].kind,
+            Kind::Minimized { .. }
+        ));
+        assert_eq!(p.items[range.start].key, "g");
     }
 }

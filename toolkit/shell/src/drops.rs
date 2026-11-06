@@ -175,13 +175,12 @@ pub fn preview(view: &View, to: usize) -> View {
     let mut items = view.items.clone();
     let range = section(view, true);
     if range.is_empty() {
-        // [… section, separator, Trash] → [… section, separator, slot, separator, Trash].
+        // Places share the right-hand section with minimized windows and Trash.
         let at = items
             .iter()
             .position(|i| i.kind == Kind::Trash)
             .unwrap_or(items.len());
         items.insert(at, slot());
-        items.insert(at + 1, item("drop:separator", Kind::Separator));
     } else {
         items.insert(range.start + to.min(range.len()), slot());
     }
@@ -280,7 +279,6 @@ mod tests {
         ];
         if places {
             items.push(item("folder:x", Kind::Folder { uri: "x".into() }));
-            items.push(item("sep3", Kind::Separator));
         }
         items.push(item("trash", Kind::Trash));
         View { items }
@@ -382,13 +380,10 @@ mod tests {
             Target::Pin(1)
         );
         assert_eq!(
-            target(&v, &h, true, centre(&v, 7), |_| false),
+            target(&v, &h, true, centre(&v, 6), |_| false),
             Target::Pin(1)
         );
-        assert_eq!(
-            keys(&preview(&v, 0))[5..],
-            ["drop:", "folder:x", "sep3", "trash"]
-        );
+        assert_eq!(keys(&preview(&v, 0))[5..], ["drop:", "folder:x", "trash"]);
         assert_eq!(before(&v, 0).as_deref(), Some("folder:x"));
         assert_eq!(before(&v, 1), None);
         // Held where it opened: the pointer in the slot still lands there.
@@ -404,16 +399,7 @@ mod tests {
         let v = view(false);
         assert_eq!(
             keys(&preview(&v, 0)),
-            [
-                "a",
-                "b",
-                "sep",
-                "r",
-                "sep2",
-                "drop:",
-                "drop:separator",
-                "trash"
-            ]
+            ["a", "b", "sep", "r", "sep2", "drop:", "trash"]
         );
         assert_eq!(before(&v, 0), None);
         let p = preview(&v, 0);
@@ -460,6 +446,36 @@ mod tests {
         );
         assert_eq!(offer(&[URI_LIST.into(), APP.into()]), Some(Offer::App));
         assert_eq!(offer(&["text/plain".into()]), None);
+    }
+
+    #[test]
+    fn minimized_slots_are_not_place_drop_targets_or_internal_boundaries() {
+        let mut v = View {
+            items: vec![
+                app("a", true),
+                item(
+                    "min",
+                    Kind::Minimized {
+                        window: 1,
+                        app: None,
+                    },
+                ),
+                item("trash", Kind::Trash),
+            ],
+        };
+        v.normalize_sections();
+        let n = v.items.iter().position(|i| i.key == "min").unwrap();
+        assert_eq!(
+            target(&v, &hits(&v), true, centre(&v, n), |_| false),
+            Target::None
+        );
+        let p = preview(&v, 0);
+        assert_eq!(keys(&p), ["a", "separator:2", "min", "drop:", "trash"]);
+        assert_eq!(before(&v, 0), None);
+        assert_eq!(
+            target(&p, &hits(&p), true, centre(&p, n + 1), |_| false),
+            Target::Pin(0)
+        );
     }
 
     #[test]

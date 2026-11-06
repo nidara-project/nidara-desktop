@@ -394,8 +394,8 @@ no sound or forced foreground.
 The ordered layout stores **typed entries with stable keys**: app, folder or file.
 A file target is an absolute local file URI (`file:<uri>`); a click opens it with the
 default app for its content type (`OpenFile`), and a file that is gone stays,
-unavailable, until removed. **The dock shows folders and files in their own section,
-after the minimized windows and before the Trash** (owner, 2026-11-02); the stored
+unavailable, until removed. **The dock shows folders and files after minimized windows and before Trash,
+sharing one right-hand section without internal separators** (#1026, owner 2026-11-05); the stored
 list stays one ordered list, the dock splits it by kind and keeps each kind's order.
 App target is an exact DesktopId or `default-handler:inode/directory`; the latter
 resolves to the current default app and otherwise behaves as an ordinary app
@@ -526,13 +526,17 @@ No new polkit rule, secret store access or privileged system mutation is needed.
 
 The retained dock view is a projection of shared layout + current Hyalo windows
 + Applications1 matching. It contains ordered pinned apps, running unpinned app
-groups after a separator, minimized-window slots in their own section, pinned
-folders and files in theirs, and Trash last. Empty section separators vanish. A minimized
+groups after a separator, then one right-hand section containing minimized-window
+slots, pinned folders/files and Trash last (#1026). At most two separators; empty
+sections, adjacent separators and end separators never appear, including in previews. A minimized
 window is not simultaneously a normal group-choice item; dialogs minimized with
 their parent do not produce duplicate slots. App running dots still mean the app
 has live windows, including its minimized windows. Maintain one deterministic
 running order by first observed live window until its last window disappears;
-focus changes do not reorder icons. No file-manager family collapse remains.
+focus changes do not reorder icons. Dropping an app pin among running groups unpins
+it and places the surviving group at that position in the shared session order; a
+non-running pin disappears. Folders/files never enter the running group. No
+file-manager family collapse remains.
 
 All outputs show all apps and all workspaces by default. Future filters
 only-this-output and only-current-workspace are independent preferences with

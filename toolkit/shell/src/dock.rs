@@ -115,6 +115,7 @@ pub struct Dock {
     held: Option<(Vec<String>, Instant)>,
     /// A pin dropped off the strip: not drawn until the service's view has unpinned it.
     gone: Option<(String, Instant)>,
+    unpin_preview: Option<crate::reorder::Reorder>,
     /// Files or folders dragged over the strip from another app, and where a drop would
     /// go now (drops.rs).
     dropping: Option<crate::drops::Target>,
@@ -210,6 +211,7 @@ impl Dock {
             reorder: None,
             held: None,
             gone: None,
+            unpin_preview: None,
             dropping: None,
             dropped: None,
             drop_offer: crate::drops::Offer::Files,
@@ -1430,6 +1432,12 @@ impl Dock {
         {
             self.gone = None;
         }
+        if self.gone.is_none() {
+            self.unpin_preview = None;
+        }
+        if let Some(r) = &self.unpin_preview {
+            view = Some(r.preview(view.as_ref().unwrap_or(&self.source.view)));
+        }
         if let Some(r) = &self.reorder {
             view = Some(r.preview(view.as_ref().unwrap_or(&self.source.view)));
         }
@@ -1470,6 +1478,9 @@ impl Dock {
             }
             view = Some(v);
         }
+        let mut composed = view.unwrap_or_else(|| self.source.view.clone());
+        composed.normalize_sections();
+        let view = (composed != self.source.view).then_some(composed);
         self.frame = match view {
             Some(view) => Arc::new(Frame {
                 view,
@@ -1892,7 +1903,17 @@ impl Dock {
             .any(|i| i.key == key && i.running());
         if running {
             self.landing = Some(Landing {
-                key: key.to_string(),
+                key: self
+                    .source
+                    .view
+                    .items
+                    .iter()
+                    .find(|i| i.key == key)
+                    .and_then(|i| match &i.kind {
+                        Kind::App { id, .. } => Some(format!("app:{id}")),
+                        _ => None,
+                    })
+                    .unwrap_or_else(|| key.to_string()),
                 layer,
                 at,
                 since: Instant::now(),
@@ -2001,17 +2022,9 @@ impl Dock {
         } else {
             self.pointer.1
         };
-        let Some((key, places)) = self.reorder.as_ref().map(|r| (r.key.clone(), r.places)) else {
+        let Some(_) = self.reorder.as_ref() else {
             return;
         };
-        let (to, into) = crate::reorder::aim(
-            &self.frame.view,
-            places,
-            &self.shown.hits,
-            horizontal,
-            &key,
-            along,
-        );
         let trash = self
             .frame
             .view
@@ -2026,16 +2039,16 @@ impl Dock {
         let Some(r) = self.reorder.as_mut() else {
             return;
         };
-        let was = (r.to, r.into, r.trash);
-        r.out = out;
-        r.trash = trash && r.running.is_none();
-        if r.running.is_some() {
-            r.into = into && !out;
-        }
-        if !out && !r.trash && (r.running.is_none() || r.into) {
-            r.to = to;
-        }
-        if (r.to, r.into, r.trash) != was {
+        let was = (r.to, r.into, r.trash, r.unpin_to, r.allowed);
+        r.point(
+            &self.frame.view,
+            &self.shown.hits,
+            horizontal,
+            along,
+            out,
+            trash,
+        );
+        if (r.to, r.into, r.trash, r.unpin_to, r.allowed) != was {
             self.reslot(w, None);
         }
         self.move_float(w);
@@ -2065,10 +2078,27 @@ impl Dock {
             if let Some(id) = float {
                 self.let_go(w, &r.key, id, at, r.size);
             }
-            let _ = self.hub.send(Request::Menu {
-                command: Command::Unpin { key: r.key.clone() },
-                token: None,
-            });
+            let item = self.source.view.items.iter().find(|i| i.key == r.key);
+            if r.unpin_to.is_some()
+                && let Some(Item {
+                    kind: Kind::App { id, .. },
+                    ..
+                }) = item
+            {
+                if item.is_some_and(Item::running) {
+                    self.unpin_preview = Some(r.clone());
+                }
+                let _ = self.hub.send(Request::UnpinAt {
+                    key: r.key.clone(),
+                    id: id.clone(),
+                    before: r.running_before(),
+                });
+            } else {
+                let _ = self.hub.send(Request::Menu {
+                    command: Command::Unpin { key: r.key.clone() },
+                    token: None,
+                });
+            }
         } else if commit && let (Some(id), Some(before)) = (r.running.clone(), r.pins_at()) {
             eprintln!("nidara-shell: {} pinned by a drag", r.key);
             self.held = Some((r.order(), Instant::now()));
@@ -3255,5 +3285,149 @@ mod popup_presence_tests {
             true,
         );
         assert!(!dock.hide.out());
+    }
+}
+
+#[cfg(test)]
+mod sections_tests {
+    use super::*;
+    fn item(key: &str, kind: Kind) -> Item {
+        Item {
+            key: key.into(),
+            kind,
+            label: key.into(),
+            windows: vec![],
+            minimized: vec![],
+            signal: Default::default(),
+        }
+    }
+    fn app(key: &str, pinned: bool) -> Item {
+        item(
+            key,
+            Kind::App {
+                id: key.into(),
+                generation: 1,
+                launchable: true,
+                pinned,
+            },
+        )
+    }
+    fn dock(position: Position, mag: bool) -> Dock {
+        let mut dock = super::hold_expiry_tests::dock();
+        let mut f = (*dock.source).clone();
+        f.prefs.position = position;
+        f.prefs.magnification = mag;
+        f.view.items = vec![
+            app("p", true),
+            app("r", false),
+            item(
+                "m",
+                Kind::Minimized {
+                    window: 1,
+                    app: None,
+                },
+            ),
+            item(
+                "f",
+                Kind::Folder {
+                    uri: "file:///f".into(),
+                },
+            ),
+            item("trash", Kind::Trash),
+        ];
+        f.view.normalize_sections();
+        dock.source = Arc::new(f);
+        dock.present_layout(dock.layout.size);
+        reshape(&mut dock);
+        dock
+    }
+    fn reshape(d: &mut Dock) {
+        d.shown = d
+            .layout
+            .magnify(&slots(&d.frame.view), d.pointer, d.presence.value.max(0.));
+    }
+    fn assert_sections(d: &Dock, count: usize) {
+        let v = &d.frame.view.items;
+        assert!(
+            v.windows(2)
+                .all(|p| p[0].kind != Kind::Separator || p[1].kind != Kind::Separator)
+        );
+        assert_eq!(
+            v.iter().filter(|i| i.kind == Kind::Separator).count(),
+            count
+        );
+        assert_eq!(d.shown.rects.len(), v.len());
+    }
+    #[test]
+    fn composed_previews_holds_gone_and_drops_never_leave_an_empty_section() {
+        for position in [Position::Bottom, Position::Left, Position::Right] {
+            for mag in [false, true] {
+                let mut d = dock(position, mag);
+                let n = d
+                    .source
+                    .view
+                    .items
+                    .iter()
+                    .position(|i| i.key == "r")
+                    .unwrap();
+                let mut r = crate::reorder::Reorder::new(&d.source.view, n, (0., 0.), 64.).unwrap();
+                r.into = true;
+                d.reorder = Some(r.clone());
+                d.present_layout(d.layout.size);
+                reshape(&mut d);
+                assert_sections(&d, 1);
+                d.reorder = None;
+                d.held = Some((r.order(), Instant::now()));
+                d.present_layout(d.layout.size);
+                reshape(&mut d);
+                assert_sections(&d, 1);
+                d.held = None;
+                d.gone = Some(("f".into(), Instant::now()));
+                d.present_layout(d.layout.size);
+                reshape(&mut d);
+                assert_sections(&d, 2);
+                d.dropping = Some(crate::drops::Target::Pin(0));
+                d.present_layout(d.layout.size);
+                reshape(&mut d);
+                assert_sections(&d, 2);
+            }
+        }
+    }
+    #[test]
+    fn surviving_boundary_glides_from_its_drawn_position_on_the_icon_spring() {
+        for position in [Position::Bottom, Position::Left, Position::Right] {
+            let mut d = dock(position, false);
+            let key = "separator:2";
+            let before = d.positions();
+            let start = before[key];
+            let was = d.layout.size;
+            let n = d
+                .frame
+                .view
+                .items
+                .iter()
+                .position(|i| i.key == "r")
+                .unwrap();
+            let mut r = crate::reorder::Reorder::new(&d.source.view, n, (0., 0.), 64.).unwrap();
+            r.into = true;
+            d.reorder = Some(r);
+            let shift = d.present_layout(was);
+            reshape(&mut d);
+            d.glide(before, was);
+            let first = d.positions()[key];
+            assert!(
+                (first.0 - start.0 - shift.0).abs() < 0.001
+                    && (first.1 - start.1 - shift.1).abs() < 0.001
+            );
+            assert!(d.slides.contains_key(key));
+            assert_sections(&d, 1);
+            let mut now = d.slides_at;
+            for _ in 0..180 {
+                now += Duration::from_secs_f64(1. / 144.);
+                d.ease_slides(now);
+                assert_sections(&d, 1);
+            }
+            assert!(!d.slides.contains_key(key));
+        }
     }
 }
