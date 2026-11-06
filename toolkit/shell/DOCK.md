@@ -266,8 +266,13 @@ Applications1 rechecks types on open admission, including D-Bus Open, while
 pin being moved has: a file over an app is the app's to open (owner). The launch carries
 an activation token made with the drop's serial, so the app comes to the front; Hyalo
 honours it for the drop's target, once, shortly after the drop (`activation.rs`). Anywhere else the drag is refused,
-and the pointer shows it: Hyalo draws the "+" only while the dock takes a copy, the plain
-arrow elsewhere (hyalo.md, "The cursor through a drag is Hyalo's"). Until 2026-11-04 the
+and the pointer shows it. Both pin and open negotiate Wayland Copy: the wire has
+no Link (GTK maps GDK Link to Copy). The optional `nidara-drag-feedback-v1`
+intent makes pinning show Alias (link arrow), opening Copy ("+"), and a refused
+slot the plain arrow. The SDK sends the root surface and this visit's drag-enter
+serial; Hyalo rejects foreign/stale feedback and clears it on leave/drop/cancel.
+Without that optional protocol, pinning safely keeps Copy/"+". See hyalo.md,
+"The cursor through a drag is Hyalo's". Until 2026-11-04 the
 "+" the file manager set as the drag began stayed over the whole dock, and after the drop.
 A pinning drop's slot stays open after the drop until the service's view has one more pin
 in that section (`drops::landed`, at most `reorder::HOLD`): closing it at once and opening it
@@ -480,3 +485,14 @@ when the variable is absent.
 Local software rendering and unit spring checks do not establish the owner's
 visual acceptance at the physical display's refresh rate. That remains a live
 Rust-only check; do not silently switch back to the TS shell for it.
+
+### Private file-drop check (#1031)
+
+`check-drops-headless.sh` uses the existing private Cage/Hyalo harness and real
+Nautilus. Set `HYALO_BIN`, `NK_DOCK_BIN` and `NK_SESSIOND_BIN` to this branch's
+builds. It checks folder refusals over PDF/scheme-only apps, accepted PDF
+handoff through a private D-Bus receiver, one URI pre-read per offer, Pin/Alias
+versus Open/Copy, refused/finished cursors and a reference to the original
+folder with unchanged source data. Its fixture catalogue and settings never
+reach the installed session. Physical-session Nautilus visual acceptance is
+still the owner's check, not a conclusion from this harness.

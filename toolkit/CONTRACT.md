@@ -205,6 +205,12 @@ Owns everything between a string and positioned glyphs, and the editing model on
   data grants nothing: acceptance stays refused until the requested preview succeeds,
   and only that same MIME can then be accepted. Successful bytes are cached and reused by Drop, with one
   finish after Drop only; a departed offer cannot deliver into its replacement.
+  `accept_drop_with_feedback(mime, DragFeedback::{None,Open,Pin})` adds optional
+  `nidara-drag-feedback-v1` destination intent. Open and Pin still negotiate Copy;
+  None refuses. Hyalo shows Copy/Alias only for the accepted current visit's
+  enter serial; without `Capabilities::drag_feedback`, both use ordinary Copy.
+  Leaving, dropping, cancellation and feedback-resource destruction clear the
+  cursor hint. No hint authorizes data, launch, focus or configuration effects.
 
 - **Being a drag source** (#959 D4, the Apps grid): `Window::start_drag(serial, offers, icon)`
   offers `(mime, bytes)` pairs (a copy) from a button press's `serial`, with an optional

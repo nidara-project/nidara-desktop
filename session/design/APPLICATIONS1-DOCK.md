@@ -677,6 +677,13 @@ matching. `x-scheme-handler/*` never matches a local file. No partial launch.
 The daemon revalidates the current desktop declaration and every local URI type
 on open admission; hover classification is advisory, never launch authority.
 
+The negotiated Wayland action for both pinning and opening is Copy. An optional
+`nidara-drag-feedback-v1` global carries only destination intent (none/open/pin)
+with its surface and drag-enter serial: Hyalo shows Default/Copy/Alias while
+leaving negotiation and all effect permissions unchanged. Missing support falls
+back to the standard Copy cursor. Hints are scoped to the caller's current
+surface visit and disappear on leave, drop, cancel or writer destruction.
+
 The dock pre-reads an offer's URI list once, with a size and time bound, and
 classifies off the UI thread. Until both complete it offers no open target. A
 late result from a departed/replaced drag cannot accept the new offer. Hover

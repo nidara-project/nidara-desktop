@@ -405,6 +405,9 @@ Its Control Center (B2) is `toolkit/shell/CC.md`.
   `inode/directory`); scheme handlers do not authorize local files. The transport
   pre-reads once, with byte/time bounds and no finish until Drop; UI classification
   is off-loop and a late result belongs only to its original offer. See DOCK.md.
+  Pin/Open both negotiate Copy. Optional `nidara-drag-feedback-v1` conveys only
+  cursor intent (Alias/Copy/Default), scoped to the destination surface and its
+  current drag-enter serial; unsupported compositors keep standard Copy.
 - Never build while the headless check runs: on this machine the load alone makes
   `nidara-hyalo msg` time out and the check fail for no reason of its own.
 - The fonts have no bold and the text engine refuses to fake one: a figure that must

@@ -66,6 +66,17 @@ pub enum Target {
     None,
 }
 
+impl Target {
+    /// Cursor intent only; both accepted operations still negotiate Wayland Copy.
+    pub fn feedback(&self) -> nk_wayland::DragFeedback {
+        match self {
+            Self::Pin(_) | Self::PinApp(_) => nk_wayland::DragFeedback::Pin,
+            Self::Open { .. } => nk_wayland::DragFeedback::Open,
+            Self::None => nk_wayland::DragFeedback::None,
+        }
+    }
+}
+
 /// What the drop over `view` as drawn (`hits`) at `along` would do. `opens` says whether an
 /// app opens files. Past the end of the last app, running app or minimized window — over the
 /// separator that follows it — it pins; never over half an icon, as a pin being moved does,
@@ -295,6 +306,21 @@ mod tests {
         items.push(item("trash", Kind::Trash));
         View { items }
     }
+    #[test]
+    fn cursor_intent_distinguishes_pinning_opening_and_refusal() {
+        assert_eq!(Target::Pin(0).feedback(), nk_wayland::DragFeedback::Pin);
+        assert_eq!(Target::PinApp(0).feedback(), nk_wayland::DragFeedback::Pin);
+        assert_eq!(
+            Target::Open {
+                id: "app".into(),
+                generation: 1
+            }
+            .feedback(),
+            nk_wayland::DragFeedback::Open
+        );
+        assert_eq!(Target::None.feedback(), nk_wayland::DragFeedback::None);
+    }
+
     #[test]
     fn a_drop_lands_once_its_section_has_one_more_pin() {
         let v = view(true);

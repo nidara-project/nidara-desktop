@@ -1771,11 +1771,20 @@ trait that only knows window ids and rectangles, so a new layout is a file plus 
   pointer's focus from every Wayland client, so the source's `set_cursor` is refused and the
   cursor it set as the drag began stayed: a "+" over everything, over a dock that refused the
   drop too, and after the drop until another client set one. Hyalo now draws it from what the
-  client under the drag agreed to (`action_choice` → `dnd_action`, `dnd_cursor`): `copy` the
-  "+", `ask` the context-menu cursor, `move` and nothing the plain arrow. A new surface under
-  the drag resets it (`dnd_over`): its offer has agreed to nothing yet. At the drop or a cancel
-  it is the plain arrow until the client under the pointer sets its own (`end_dnd_cursor`);
-  ours set the arrow on every enter (nk-wayland, `wp_cursor_shape_v1`).
+  client under the drag agreed to (`action_choice` → `dnd_feedback`, `dnd_cursor`):
+  Copy the "+", Ask the context-menu cursor, Move and nothing the plain arrow.
+  `nidara-drag-feedback-v1` is an optional cursor-only intent from the current
+  destination: Pin shows Alias, Open Copy, None the arrow. Both accepted intents
+  still negotiate Copy; Wayland has no Link and GTK maps GDK Link to Copy.
+  The surface must belong to the caller and match the current target; its
+  drag-enter serial must fall within this visit's motion serials (wrapping-safe,
+  including an enter delayed until source MIME metadata is ready). A new surface
+  visit resets intent/action; old serials cannot affect reentry. Drop, cancel or
+  writer destruction clears Alias. Without the global, ordinary Copy remains.
+  XML, Hyalo, nk-wayland and lib/nidara-wl ship together; it grants no effect
+  permission and changes no negotiated data action. At the end `end_dnd_cursor`
+  restores the arrow until the client sets its own; nk-wayland sets it on enter.
+
 - **The cursor over chrome is Hyalo's, not the client's** (owner, 2026-10-20). The client under a
   resize edge still has the pointer (the 3 px inside are its surface) and sets its own cursor,
   which used to win: kitty showed its text cursor on its edge. `cursor_image` now keeps the

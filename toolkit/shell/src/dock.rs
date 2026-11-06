@@ -1553,7 +1553,7 @@ impl Dock {
         let was = self.dropping.replace(target.clone());
         if first || was.as_ref() != Some(&target) {
             let takes = target != crate::drops::Target::None;
-            w.accept_drop(takes.then_some(self.drop_offer.mime()));
+            w.accept_drop_with_feedback(takes.then_some(self.drop_offer.mime()), target.feedback());
             self.reslot(w, None);
         }
         Ok(())

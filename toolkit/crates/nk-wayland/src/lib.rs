@@ -44,6 +44,7 @@ pub use material::{
 };
 use material::{send_background, send_material};
 use memmap2::MmapMut;
+use protocol::drag_feedback::nidara_drag_feedback_v1;
 use protocol::layers::{nidara_layer_v1, nidara_layers_manager_v1};
 use protocol::material::{nidara_material_manager_v1, nidara_material_v1};
 use std::{
@@ -175,6 +176,31 @@ pub enum Event {
     },
     Error(String),
 }
+/// Destination intent, separate from Wayland's Copy negotiation. Pin requests
+/// Alias on Hyalo; another compositor without the optional protocol shows Copy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DragFeedback {
+    None,
+    Open,
+    Pin,
+}
+impl DragFeedback {
+    fn wire(self) -> nidara_drag_feedback_v1::Intent {
+        match self {
+            Self::None => nidara_drag_feedback_v1::Intent::None,
+            Self::Open => nidara_drag_feedback_v1::Intent::Open,
+            Self::Pin => nidara_drag_feedback_v1::Intent::Pin,
+        }
+    }
+    fn action(self, accepted: bool) -> wl_data_device_manager::DndAction {
+        if accepted && self != Self::None {
+            wl_data_device_manager::DndAction::Copy
+        } else {
+            wl_data_device_manager::DndAction::empty()
+        }
+    }
+}
+
 /// App callbacks run on the connection's thread; no callbacks survive run().
 pub trait Application {
     /// Request server control layout before the first configure (fallback if absent).
@@ -285,6 +311,7 @@ pub struct Window {
     wm: Option<xdg_wm_base::XdgWmBase>,
     fractional_manager: Option<wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1>,
     materials: Option<nidara_material_manager_v1::NidaraMaterialManagerV1>,
+    drag_feedback: Option<nidara_drag_feedback_v1::NidaraDragFeedbackV1>,
     compositor: Option<wl_compositor::WlCompositor>,
     subcompositor: Option<wl_subcompositor::WlSubcompositor>,
     layers_manager: Option<nidara_layers_manager_v1::NidaraLayersManagerV1>,
@@ -520,22 +547,39 @@ impl Window {
     /// accepts it as a copy, `None` refuses it (the source shows that). Said again at
     /// every motion over a place that answers differently.
     pub fn accept_drop(&mut self, mime: Option<&str>) {
+        self.accept_drop_with_feedback(mime, DragFeedback::Open);
+    }
+    /// Accept/refuse the same bounded offer, describing only what its Copy does.
+    /// None intent refuses; the optional feedback never grants an action itself.
+    pub fn accept_drop_with_feedback(&mut self, mime: Option<&str>, feedback: DragFeedback) {
         let Some(d) = &mut self.drag else {
             return;
         };
         let mime = mime.filter(|mime| {
-            !d.preview_requested || d.cached.as_ref().is_some_and(|(cached, _)| cached == mime)
+            feedback != DragFeedback::None
+                && (!d.preview_requested
+                    || d.cached.as_ref().is_some_and(|(cached, _)| cached == mime))
         });
-        let copy = wl_data_device_manager::DndAction::Copy;
-        let none = wl_data_device_manager::DndAction::empty();
+        let action = feedback.action(mime.is_some());
         d.offer.accept(d.serial, mime.map(str::to_owned));
-        if mime.is_some() {
-            d.offer.set_actions(copy, copy);
-        } else {
-            d.offer.set_actions(none, none);
-        }
+        d.offer.set_actions(action, action);
         d.accepted = mime.map(str::to_owned);
+        let serial = d.serial;
+        self.send_drag_feedback(
+            serial,
+            if mime.is_some() {
+                feedback
+            } else {
+                DragFeedback::None
+            },
+        );
     }
+    fn send_drag_feedback(&self, serial: u32, intent: DragFeedback) {
+        if let (Some(feedback), Some(surface)) = (&self.drag_feedback, &self.surface) {
+            feedback.set_feedback(surface, serial, intent.wire());
+        }
+    }
+
     /// Read one offered type during hover, once per offer. This does not accept
     /// an action or finish the drag. The cached bytes are reused if it is dropped.
     pub fn preview_drop(&mut self, mime: &str) -> bool {
@@ -678,6 +722,7 @@ impl Window {
     /// The drag over us ends here: its offer is no longer ours.
     fn end_drag(&mut self) {
         if let Some(d) = self.drag.take() {
+            self.send_drag_feedback(d.serial, DragFeedback::None);
             self.offers.retain(|o| o.proxy != d.offer);
             d.offer.destroy();
             self.events.push(Event::DragLeave);
@@ -1025,6 +1070,8 @@ pub struct Capabilities {
     pub foreign_parent: bool,
     /// xdg_activation_v1; consumes caller tokens without guaranteeing focus.
     pub activation: bool,
+    /// nidara-drag-feedback-v1; otherwise standard negotiated drag cursors.
+    pub drag_feedback: bool,
 }
 const REQUIRED: [&str; 4] = ["wl_compositor", "wl_shm", "xdg_wm_base", "wl_seat"];
 pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Capabilities> {
@@ -1045,6 +1092,7 @@ pub fn capabilities<'a>(globals: impl IntoIterator<Item = &'a str>) -> Result<Ca
         presentation: has("wp_presentation"),
         foreign_parent: has("zxdg_exporter_v2"),
         activation: has("xdg_activation_v1"),
+        drag_feedback: has("nidara_drag_feedback_v1"),
     })
 }
 pub fn run(app: impl Application, options: Options, start: Instant) -> Result<()> {
@@ -1136,6 +1184,7 @@ fn run_inner(
         wm: None,
         fractional_manager: None,
         materials: None,
+        drag_feedback: None,
         compositor: None,
         subcompositor: None,
         layers_manager: None,
@@ -1230,6 +1279,7 @@ fn run_inner(
     let compositor = bind!(wl_compositor::WlCompositor, 6).unwrap();
     let base = bind!(xdg_wm_base::XdgWmBase, 3).unwrap();
     let materials = bind!(nidara_material_manager_v1::NidaraMaterialManagerV1, 1);
+    w.drag_feedback = bind!(nidara_drag_feedback_v1::NidaraDragFeedbackV1, 1);
     let viewporter = bind!(wp_viewporter::WpViewporter, 1);
     let fraction = bind!(
         wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
@@ -2394,13 +2444,14 @@ delegate_noop!(Window: ignore wp_cursor_shape_manager_v1::WpCursorShapeManagerV1
 delegate_noop!(Window: ignore wp_cursor_shape_device_v1::WpCursorShapeDeviceV1);
 delegate_noop!(Window: ignore zwp_text_input_manager_v3::ZwpTextInputManagerV3);
 delegate_noop!(Window: ignore nidara_material_manager_v1::NidaraMaterialManagerV1);
+delegate_noop!(Window: ignore nidara_drag_feedback_v1::NidaraDragFeedbackV1);
 delegate_noop!(Window: ignore nidara_material_v1::NidaraMaterialV1);
 delegate_noop!(Window: ignore wl_data_device_manager::WlDataDeviceManager);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    const ALL: [&str; 11] = [
+    const ALL: [&str; 12] = [
         "wl_compositor",
         "wl_shm",
         "xdg_wm_base",
@@ -2410,11 +2461,25 @@ mod tests {
         "nidara_material_manager_v1",
         "wl_subcompositor",
         "nidara_layers_manager_v1",
+        "nidara_drag_feedback_v1",
         "zwp_text_input_manager_v3",
         "wp_presentation",
     ];
     fn without(missing: &str) -> Result<Capabilities> {
         capabilities(ALL.iter().copied().filter(|n| *n != missing))
+    }
+    #[test]
+    fn drag_feedback_is_optional_and_never_a_link_wire_action() {
+        assert!(capabilities(ALL).unwrap().drag_feedback);
+        assert!(!without("nidara_drag_feedback_v1").unwrap().drag_feedback);
+        for feedback in [DragFeedback::Pin, DragFeedback::Open] {
+            assert_eq!(
+                feedback.action(true),
+                wl_data_device_manager::DndAction::Copy
+            );
+            assert!(feedback.action(false).is_empty());
+        }
+        assert!(DragFeedback::None.action(true).is_empty());
     }
     #[test]
     fn every_protocol_on_hyalo() {

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="nidara_drag_feedback_v1">
+  <copyright>SPDX-License-Identifier: MIT</copyright>
+  <description summary="destination intent for the compositor's drag cursor">
+    Wayland negotiates Copy, Move and Ask, but has no Link action. A destination
+    that makes a reference can describe that intent without pretending to move
+    or copy the source's files. This extension changes only the cursor; it
+    grants no acceptance, transfer, launch, focus or layout permission.
+  </description>
+  <interface name="nidara_drag_feedback_v1" version="1">
+    <enum name="intent">
+      <entry name="none" value="0" summary="no accepted target, plain arrow"/>
+      <entry name="open" value="1" summary="open with the target, Copy cursor"/>
+      <entry name="pin" value="2" summary="create a reference, Alias cursor"/>
+    </enum>
+    <request name="destroy" type="destructor"/>
+    <request name="set_feedback">
+      <description summary="describe the active destination's intent">
+        surface must be the caller's current drag destination. serial is the
+        wl_data_device.enter serial for this visit, not a pointer-enter serial.
+        Requests from another surface, an earlier visit or an ended drag are
+        ignored. The hint never survives leaving the surface, drop, cancel or
+        destruction of the object that supplied it. Open and Pin apply only
+        while the negotiated action is Copy. Without this optional global,
+        destinations continue using the standard negotiated cursor.
+      </description>
+      <arg name="surface" type="object" interface="wl_surface"/>
+      <arg name="serial" type="uint"/>
+      <arg name="intent" type="uint" enum="intent"/>
+    </request>
+  </interface>
+</protocol>

@@ -35,3 +35,16 @@ pub mod controls {
     use self::__interfaces::*;
     wayland_scanner::generate_client_code!("../../../protocols/nidara-window-controls-v1.xml");
 }
+
+#[allow(clippy::all)]
+pub mod drag_feedback {
+    const _: &[u8] = include_bytes!("../../../../protocols/nidara-drag-feedback-v1.xml");
+    use wayland_client;
+    use wayland_client::protocol::*;
+    pub mod __interfaces {
+        use wayland_client::protocol::__interfaces::*;
+        wayland_scanner::generate_interfaces!("../../../protocols/nidara-drag-feedback-v1.xml");
+    }
+    use self::__interfaces::*;
+    wayland_scanner::generate_client_code!("../../../protocols/nidara-drag-feedback-v1.xml");
+}
